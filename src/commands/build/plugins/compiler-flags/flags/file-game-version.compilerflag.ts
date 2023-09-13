@@ -1,12 +1,13 @@
-import { GameVersion } from "../../../util/game-version";
-import { Macro } from "../macro";
-import { SourceFile } from "../source-file";
+import { GameVersion } from "../../../../../util/game-version"
+import { BuildContext } from "../../../build-context"
+import { SourceFile } from "../../../source-file"
+import { CompilerFlag } from "./compilerflag"
 
-export class FileGameVersionMacro implements Macro {
+export class FileGameVersionCompilerFlag implements CompilerFlag {
 
-    public parse(sourceFiles: SourceFile[], sourceFile: SourceFile, args: string[], lineNumberStart: number, lineNumberEnd: number): string[] {
-        if (args.length !== 1) {
-            throw new Error("Invalid number of arguments for @fileGameVersion: " + args.length + " (expected 1)")
+    public parse(buildContext: BuildContext, sourceFile: SourceFile, args: string[], lineNumberStart: number, lineNumberEnd: number): string[] {
+        if (args.length < 1) {
+            throw new Error("Invalid number of arguments for FileGameVersion: " + args.length + " (expected at least 1)")
         }
         sourceFile.gameVersionSpecific = true
         sourceFile.gameVersions = this.getIncludedGameVersions(args)

@@ -9,16 +9,20 @@ import { INTERFACE_VERSION } from "../../util/interface-version";
 import { TOC_NAME } from "../../util/toc-names";
 import { SourceFile } from "./source-file";
 import { writeFileSyncRecursive } from "../../util/file-write-sync";
-import { FileGameVersionMacro } from "./macros/file-game-version.macro";
-import { GameVersionMacro } from "./macros/game-version.macro";
-import { Macro } from "./macro";
-import * as luaparse from "luaparse"
+import { parse } from "luaparse"
 import { JsonParser } from "cli-program-lib/properties/json.parser"
 import { GLOBALS_FILE } from "../../util/wowglobals/globals";
 import * as dependencyGraph from "dependency-graph"
-import { SkipMacro } from "./macros/skip.macro";
 import { GLOBAL_LUA_FUNCTIONS } from "../../util/global-lua-function";
 import { readDirSyncRecursive } from "../../util/ready-directory-recursive";
+import { VariableAssignment, getVariableAssignments } from "../../util/luaparse-util";
+import { BuildContext } from "./build-context";
+import { BuildPlugin } from "./plugins/build-plugin";
+import { DecoratorBuildPlugin } from "./plugins/decorator.plugin";
+import { CompilerFlagsPlugin } from "./plugins/compiler-flags/compiler-flags.plugin";
+import { UnknownGlobalsPlugin } from "./plugins/unknown-globals.plugin";
+import { injector } from "cli-program-lib/dependency-injection/injector"
+import { Performance } from "../../util/performance";
 
 
 @Command({
@@ -36,17 +40,20 @@ export class BuildCommand {
     @Inject(JsonParser)
     private jsonParser: JsonParser
 
+    @Inject(Performance)
+    private performance: Performance
+
     private globals = {
         [GameVersion.CLASSIC]: {},
         [GameVersion.RETAIL]: {},
         [GameVersion.WOTLK]: {}
     }
 
-    private macros = {
-        FileGameVersion: new FileGameVersionMacro(),
-        GameVersion: new GameVersionMacro(),
-        Skip: new SkipMacro(),
-    }
+    private buildPlugins: BuildPlugin[] = [
+        injector.getInstance(CompilerFlagsPlugin),
+        injector.getInstance(DecoratorBuildPlugin),
+        injector.getInstance(UnknownGlobalsPlugin)
+    ]
 
     public async execute(args: String[]): Promise<void> {
         const watch: boolean = args.includes("--watch")
@@ -69,84 +76,71 @@ export class BuildCommand {
 
     public build(): void {
         this.logger.info("Building project...")
-        let startTime = performance.now()
-        let sourceFiles = this.scanSourceFiles()
-        let libFiles = this.scanLibFIles()
+        this.performance.measureStart("Build")
+        let buildContext: BuildContext = this.generateBuildContext()
         try {
-            this.logger.debug("Parsing source files...")
-            this.parseSourceFiles(sourceFiles)
-            this.parseSourceFiles(libFiles)
-            this.parseDecorators(sourceFiles)
-            this.parseDecorators(libFiles)
-            this.generateAsts(sourceFiles)
-            this.generateAsts(libFiles)
+            // Parse all source files for metadata and transform into valid lua code
+            this.performance.measureStart("ParseBuildContext")
+            this.parseBuildContext(buildContext)
+            this.performance.measureEnd("ParseBuildContext")
+
+            // Generate AST to enable code analysis
+            // Note: luaparse expects valid lua and will fail otherwise
+            this.performance.measureStart("GenerateAst")
+            this.generateAsts(buildContext)
+            this.performance.measureEnd("GenerateAst")
+
+            // Clear and create the build directory
             this.deleteBuildDirectory()
             this.createBuildDirectory()
+
+            // Build the project for all targeted game versions
             this.config.gameVersions.forEach((gameVersion: GameVersion) => {
+                this.performance.measureStart("BuildGameVersion" + gameVersion)
                 this.logger.debug("Building for game version: " + gameVersion)
+                buildContext.outputFiles = this.generateDependencies(buildContext)
+                this.performance.measureStart("BuildPlugins" + gameVersion)
+                this.runBuildPlugins(buildContext, gameVersion)
+                this.performance.measureEnd("BuildPlugins" + gameVersion)
                 this.generateTocFile(gameVersion)
-                let dependencies = this.generateDependencies(sourceFiles, libFiles)
-                this.detectUnknownGlobals(dependencies)
-                this.generateImportFile(gameVersion, dependencies)
-                this.generateSourceFiles(gameVersion, dependencies)
+                this.generateImportFile(gameVersion, buildContext.outputFiles)
+                this.generateSourceFiles(gameVersion, buildContext.outputFiles)
+                this.performance.measureEnd("BuildGameVersion" + gameVersion)
             })
-            let endTime = performance.now()
-            this.logger.info("Finished building project. (" + (endTime - startTime).toFixed(2) + "ms)")
+            this.logger.info("Finished building project.")
+            this.performance.measureEnd("Build")
+            this.performance.logMeasures()
         } catch (error) {
             this.logger.error("Failed to build project: " + error.message)
         }
     }
 
-    public scanLibFIles(): SourceFile[] {
-        this.logger.debug("Scanning lib files...")
-        let sourceFiles: SourceFile[] = []
-        if (fs.existsSync(this.config.getLibPath()) === true) {
-            let files = readDirSyncRecursive(this.config.getLibPath())
-            for (let file of files) {
-                const fileName = file
-                if (fileName.endsWith(".lua")) {
-                    let fileContent = fs.readFileSync(file, "utf-8")
-                    fileContent = fileContent.replace(/\r\n/g, "\n")
-                    let fileLines = fileContent.split("\n")
-                    sourceFiles.push({
-                        path: this.config.getLibPath(),
-                        fileName: fileName.replace(this.config.getLibPath() + "/", ""),
-                        originalCode: fileLines,
-                        gameVersionSpecific: false,
-                        parsedCode: [],
-                        usedGlobals: [],
-                        declaredGlobals: [],
-                        importedGlobals: []
-                    })
-                }
-            }
+    public generateBuildContext(): BuildContext {
+        let context: BuildContext = {
+            sourceFiles: this.loadSourceFiles(this.config.getSrcPath()),
+            libFiles: this.loadSourceFiles(this.config.getLibPath()),
         }
-        return sourceFiles
+        return context
     }
 
-    public detectUnknownGlobals(sourceFiles: SourceFile[]): void {
-        this.logger.debug("Detecting missing globals...")
-        for (let sourceFile of sourceFiles) {
-            for (let importedGlobal of sourceFile.importedGlobals) {
-                let found = false
-                for (let otherSourceFile of sourceFiles) {
-                    if (otherSourceFile.declaredGlobals.includes(importedGlobal)) {
-                        found = true
-                        break
-                    }
-                }
-                if (found === false) {
-                    this.logger.warning("Using potentially undefined global: " + importedGlobal + " in file: " + sourceFile.path + "/" + sourceFile.fileName + "")
-                }
+    public parseBuildContext(buildContext: BuildContext): void {
+        this.logger.debug("Parsing source files...")
+        for (let buildPlugin of this.buildPlugins) {
+            for (let sourceFile of buildContext.sourceFiles) {
+                buildPlugin.parse(buildContext, sourceFile)
+            }
+            for (let sourceFile of buildContext.libFiles) {
+                buildPlugin.parse(buildContext, sourceFile)
             }
         }
     }
 
-    public generateAsts(sourceFiles: SourceFile[]): boolean {
+    public generateAsts(buildContext: BuildContext): boolean {
         this.logger.debug("Generating ASTs...")
+        let sourceFiles = buildContext.sourceFiles.concat(buildContext.libFiles)
         for (let sourceFile of sourceFiles) {
             try {
-                sourceFile.ast = luaparse.parse(sourceFile.parsedCode.join("\n"), {
+                sourceFile.ast = parse(sourceFile.parsedCode.join("\n"), {
                     locations: true,
                     scope: true,
                     ranges: true
@@ -164,6 +158,12 @@ export class BuildCommand {
         return true
     }
 
+    public runBuildPlugins(buildContext: BuildContext, gameVersion: GameVersion) {
+        for (let plugin of this.buildPlugins) {
+            plugin.build(buildContext, gameVersion)
+        }
+    }
+
     public calculateGlobals(sourceFile: SourceFile): void {
         this.logger.debug("Calculating used globals in file", sourceFile.fileName)
         sourceFile.usedGlobals = sourceFile.ast.globals.map((global) => global.name)
@@ -176,17 +176,25 @@ export class BuildCommand {
                 return node.identifier.name
             }
         })
+
+        let indexedGlobals = getVariableAssignments(sourceFile.ast)
+        let resolvedGlobals = indexedGlobals
+            .filter((assignment: VariableAssignment) => assignment.target === "_G" && (assignment.indexLookupType === "StringLiteral" || assignment.indexLookupType === "Identifier" || assignment.indexLookupType === "NumericLiteral"))
+            .map((assignment: VariableAssignment) => {
+                if (assignment.indexLookupType === "StringLiteral") {
+                    return assignment.index
+                } else if (assignment.indexLookupType === "Identifier") {
+                    return indexedGlobals.find((findValue: VariableAssignment) => findValue.target === assignment.index)?.value
+                } else if (assignment.indexLookupType === "NumericLiteral") {
+                    return assignment.index
+                }
+            })
+        sourceFile.declaredGlobals = sourceFile.declaredGlobals.concat(resolvedGlobals)
+        
         sourceFile.importedGlobals = sourceFile.usedGlobals
             .filter((global) => this.globals[GameVersion.WOTLK][global] === undefined)
             .filter((global) => GLOBAL_LUA_FUNCTIONS.includes(global) === false)
             .filter((global) => sourceFile.declaredGlobals.includes(global) === false)
-    }
-
-    public parseSourceFiles(sourceFiles: SourceFile[]): void {
-        this.logger.debug("Parsing source files...")
-        for (let i = 0; i < sourceFiles.length; i++) {
-            this.parseSourceFile(sourceFiles, sourceFiles[i])
-        }
     }
 
     public parseDecorators(sourceFiles: SourceFile[]): void {
@@ -210,50 +218,6 @@ export class BuildCommand {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    public parseSourceFile(sourceFiles: SourceFile[], sourceFile: SourceFile): void {
-        sourceFile.parsedCode = []
-        for (let lineNumber = 0; lineNumber < sourceFile.originalCode.length; lineNumber++) {
-            let line = sourceFile.originalCode[lineNumber].replace("\n", "").replace("\r", "")
-            if (line.startsWith("--@")) {
-                let flag = line.split(" ")[0].replace("--@", "")
-                let args = line.split(" ").slice(1)
-                if (this.macros[flag] !== undefined) {
-                    let parsedCode = (this.macros[flag] as Macro).parse(sourceFiles, sourceFile, args, lineNumber, lineNumber)
-                    sourceFile.parsedCode = sourceFile.parsedCode.concat(parsedCode)
-                }
-            } else if (line.startsWith("--{@")) {
-                let flag = line.split(" ")[0].replace("--{@", "")
-                let args = line.split(" ").slice(1)
-                let lineNumberEnd = lineNumber
-                let flagCounter = 0;
-                for (let i = lineNumber + 1; i < sourceFile.originalCode.length; i++) {
-                    let line = sourceFile.originalCode[i].replace("\n", "").replace("\r", "")
-                    if (line.startsWith("--{@")) {
-                        let nestedFlag = line.split(" ")[0].replace("--{@", "")
-                        if (nestedFlag === flag) {
-                            flagCounter++
-                        }
-                    }
-                    if (line.startsWith("--}@" + flag)) {
-                        if (flagCounter === 0) {
-                            lineNumberEnd = i
-                            break
-                        } else {
-                            flagCounter--
-                        }
-                    }
-                }
-                if (this.macros[flag] !== undefined) {
-                    let parsedCode = (this.macros[flag] as Macro).parse(sourceFiles, sourceFile, args, lineNumber, lineNumberEnd)
-                    sourceFile.parsedCode = sourceFile.parsedCode.concat(parsedCode)
-                }
-                lineNumber = lineNumberEnd
-            } else {
-                sourceFile.parsedCode.push(line)
             }
         }
     }
@@ -284,15 +248,15 @@ export class BuildCommand {
         Bun.write(this.config.getBuildPath() + "/source" + TOC_NAME.get(gameVersion) + ".xml", importContent)
     }
 
-    public generateDependencies(sourceFiles: SourceFile[], libFiles: SourceFile[]): SourceFile[] {
+    public generateDependencies(buildContext: BuildContext): SourceFile[] {
         this.logger.debug("Generating dependency graph...")
         let graph = new dependencyGraph.DepGraph()
-        for (let sourceFile of sourceFiles) {
+        for (let sourceFile of buildContext.sourceFiles) {
             graph.addNode(sourceFile.path + "/" + sourceFile.fileName, sourceFile)
         }
-        for (let sourceFile of sourceFiles) {
+        for (let sourceFile of buildContext.sourceFiles) {
             for (let importedGlobal of sourceFile.importedGlobals) {
-                let importedSourceFile = sourceFiles.find(sourceFile => sourceFile.declaredGlobals.includes(importedGlobal)) || libFiles.find(sourceFile => sourceFile.declaredGlobals.includes(importedGlobal))
+                let importedSourceFile = buildContext.sourceFiles.find(sourceFile => sourceFile.declaredGlobals.includes(importedGlobal)) || buildContext.libFiles.find(sourceFile => sourceFile.declaredGlobals.includes(importedGlobal))
                 if (importedSourceFile !== undefined) {
                     // Add source file from lib folder to graph
                     if (!graph.hasNode(importedSourceFile.path + "/" + importedSourceFile.fileName)) {
@@ -324,10 +288,10 @@ export class BuildCommand {
         Bun.write(this.config.getBuildPath() + "/" + this.config.name + "_" + TOC_NAME.get(gameVersion) + ".toc", tocContent)
     }
 
-    public scanSourceFiles(): SourceFile[] {
-        this.logger.debug("Scanning source files...")
+    public loadSourceFiles(path: string): SourceFile[] {
+        this.logger.debug(`Scanning for source files in ${path} ...`)
         let sourceFiles: SourceFile[] = []
-        let files = readDirSyncRecursive(this.config.getSrcPath())
+        let files = readDirSyncRecursive(path)
         for (let file of files) {
             const fileName = file
             if (fileName.endsWith(".lua")) {
@@ -335,11 +299,14 @@ export class BuildCommand {
                 fileContent = fileContent.replace(/\r\n/g, "\n")
                 let fileLines = fileContent.split("\n")
                 sourceFiles.push({
-                    path: this.config.getSrcPath(),
-                    fileName: fileName.replace(this.config.getSrcPath() + "/", ""),
+                    path: path,
+                    fileName: fileName.replace(path + "/", ""),
                     originalCode: fileLines,
+                    parsedCode: JSON.parse(JSON.stringify(fileLines)),
+                    compilerFlags: [],
+                    gameVersions: [],
+                    definedGlobals: [],
                     gameVersionSpecific: false,
-                    parsedCode: [],
                     usedGlobals: [],
                     declaredGlobals: [],
                     importedGlobals: []

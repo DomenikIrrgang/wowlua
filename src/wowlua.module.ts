@@ -4,6 +4,7 @@ import { InitCommand } from "./commands/init.command";
 import { WowluaConfig } from "./config/wowlua.config";
 import { BuildCommand } from "./commands/build/build.command";
 import { InstallCommand } from "./commands/install/install.command";
+import { Performance } from "./util/performance";
 
 @Module({
     commands: [
@@ -13,7 +14,8 @@ import { InstallCommand } from "./commands/install/install.command";
     ],
     providers: [
         WowluaConfig,
-        JsonParser
+        JsonParser,
+        Performance
     ],
 })
 export class WowLuaModule {}
