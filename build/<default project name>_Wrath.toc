@@ -1,8 +1,0 @@
-## Interface: 30300
-## Title: <default project name>
-## Notes: <default description>
-## Author: <default author>
-## Version: <default version>
-
-            
-sourceWrath.xml
