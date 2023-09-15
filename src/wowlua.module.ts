@@ -1,10 +1,11 @@
 import { Module } from "cli-program-lib/decorators/module.decorator"
 import { JsonParser } from "cli-program-lib/properties/json.parser"
-import { InitCommand } from "./commands/init.command";
+import { InitCommand } from "./commands/init/init.command";
 import { WowluaConfig } from "./config/wowlua.config";
-import { BuildCommand } from "./commands/build/build.command";
-import { InstallCommand } from "./commands/install/install.command";
+import { BuildCommand } from "./commands/build.command";
+import { InstallCommand } from "./commands/install.command";
 import { Performance } from "./util/performance";
+import { BuildSystem } from "./build-system/build-system";
 
 @Module({
     commands: [
@@ -15,7 +16,8 @@ import { Performance } from "./util/performance";
     providers: [
         WowluaConfig,
         JsonParser,
-        Performance
+        Performance,
+        BuildSystem
     ],
 })
 export class WowLuaModule {}

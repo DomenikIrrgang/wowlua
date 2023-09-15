@@ -2,7 +2,7 @@ import { Command } from "cli-program-lib/decorators/command.decorator";
 import { Inject } from "cli-program-lib/decorators/inject.decorator";
 import * as svn from "node-svn-ultimate"
 import { simpleGit } from "simple-git"
-import { Dependency, DependencyType, WowluaConfig } from "../../config/wowlua.config";
+import { Dependency, DependencyType, WowluaConfig } from "../config/wowlua.config";
 import { Logger } from "cli-program-lib/logging/logger";
 import * as fs from "fs";
 

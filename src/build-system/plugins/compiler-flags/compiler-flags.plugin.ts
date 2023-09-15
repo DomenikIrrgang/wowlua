@@ -1,5 +1,4 @@
 import { Injectable } from "cli-program-lib/decorators/injectable.decorator";
-import { GameVersion } from "../../../../util/game-version";
 import { BuildContext } from "../../build-context";
 import { SourceFile } from "../../source-file";
 import { BuildPlugin } from "../build-plugin";
@@ -8,6 +7,7 @@ import { FileGameVersionCompilerFlag } from "./flags/file-game-version.compilerf
 import { SkipCompilerFlag } from "./flags/skip.compilerflag";
 import { Inject } from "cli-program-lib/decorators/inject.decorator";
 import { Logger } from "cli-program-lib/logging/logger";
+import { GameVersion } from "../../../util/game-version";
 
 @Injectable()
 export class CompilerFlagsPlugin implements BuildPlugin {
@@ -29,11 +29,9 @@ export class CompilerFlagsPlugin implements BuildPlugin {
                 let flag = line.split(" ")[0].replace(this.COMPILER_FLAG_PREFIX, "")
                 let args = line.split(" ").slice(1)
                 if (this.flags[flag] !== undefined) {
-                    let parsedCode = (this.flags[flag] as CompilerFlag).parse(buildContext, sourceFile, args, lineNumber, lineNumber)
-                    sourceFile.parsedCode = sourceFile.parsedCode.concat(parsedCode)
+                    let parsedFlag = (this.flags[flag] as CompilerFlag).parse(buildContext, sourceFile, args, lineNumber, lineNumber)
+                    sourceFile.parsedCode[lineNumber] = parsedFlag
                 }
-            } else {
-                sourceFile.parsedCode.push(line)
             }
         }
     }

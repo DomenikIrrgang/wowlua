@@ -21,9 +21,21 @@ export class Performance {
     public logMeasures(): void {
         this.logger.debug("Performance measures:")
         for (let name in this.measures) {
-            let measure = this.measures[name]
-            this.logger.debug(name + ": " + (measure.end - measure.start) + "ms")
+            this.logger.debug(name + ": " + this.getMeasure(name) + "ms")
         }
+    }
+
+    public getMeasure(name: string): number {
+        let measure = this.measures[name]
+        return measure.end - measure.start
+    }
+
+    public getMeasures(): { [name: string]: number } {
+        let result: { [name: string]: number } = {}
+        for (let name in this.measures) {
+            result[name] = this.getMeasure(name)
+        }
+        return result
     }
 
 }

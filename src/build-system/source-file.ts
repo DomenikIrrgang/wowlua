@@ -1,5 +1,5 @@
-import { GameVersion } from "../../util/game-version";
 import { Chunk } from "luaparse";
+import { GameVersion } from "../util/game-version";
 
 export interface SourceFile {
     path: string,

@@ -1,8 +1,8 @@
 import { Injectable } from "cli-program-lib/decorators/injectable.decorator";
-import { GameVersion } from "../../../util/game-version";
 import { BuildContext } from "../build-context";
 import { SourceFile } from "../source-file";
 import { BuildPlugin } from "./build-plugin";
+import { GameVersion } from "../../util/game-version";
 
 @Injectable()
 export class DecoratorBuildPlugin implements BuildPlugin {

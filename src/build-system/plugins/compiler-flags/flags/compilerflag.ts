@@ -8,5 +8,5 @@ export interface CompilerFlag {
         args: string[],
         lineNumberStart: number,
         lineNumberEnd: number,
-    ): string[]
+    ): string
 }

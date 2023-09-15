@@ -1,4 +1,4 @@
-import { GameVersion } from "../../../util/game-version";
+import { GameVersion } from "../../util/game-version";
 import { BuildContext } from "../build-context";
 import { SourceFile } from "../source-file";
 

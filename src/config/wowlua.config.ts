@@ -24,28 +24,28 @@ export class WowluaConfig {
     @Json({
         filePath: "wowlua.json",
         jsonPath: "$.name",
-        default: "<default project name>"
+        default: "WowluaProject"
     })
     public name: string
 
     @Json({
         filePath: "wowlua.json",
         jsonPath: "$.version",
-        default: "<default version>"
+        default: "0.0.1"
     })
     public version: string
 
     @Json({
         filePath: "wowlua.json",
         jsonPath: "$.author",
-        default: "<default author>"
+        default: "Wowlua"
     })
     public author: string
 
     @Json({
         filePath: "wowlua.json",
         jsonPath: "$.description",
-        default: "<default description>"
+        default: "Addon created using wowlua."
     })
     public description: string
 
@@ -83,13 +83,6 @@ export class WowluaConfig {
         default: []
     })
     public dependencies: Dependency[]
-
-    @Json({
-        filePath: "wowlua.json",
-        jsonPath: "$.devDependencies",
-        default: []
-    })
-    public devDependencies: string[]
 
     @Json({
         filePath: "wowlua.json",
@@ -138,6 +131,10 @@ export class WowluaConfig {
 
     public getLibPath(): string {
         return process.cwd() + "/" + this.libPath
+    }
+
+    public save(): void {
+        Bun.write("wowlua.json", JSON.stringify(this, null, 4))
     }
 
 }
