@@ -61,6 +61,10 @@ export class BuildSystem {
         this.performance.measureStart("Build")
         let buildContext: BuildContext = this.generateBuildContext()
         try {
+            if (buildContext.sourceFiles.length === 0) {
+                throw new Error("No source files found in path: " + this.config.getSrcPath())
+            }
+
             // Parse all source files for metadata and transform into valid lua code
             this.performance.measureStart("ParseBuildContext")
             this.parseBuildContext(buildContext)

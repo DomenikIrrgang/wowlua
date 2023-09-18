@@ -3,9 +3,8 @@ import { Inject } from "cli-program-lib/decorators/inject.decorator";
 import { Logger } from "cli-program-lib/logging/logger";
 import { WowluaConfig } from "../config/wowlua.config";
 import * as chokidar from "chokidar"
-import { JsonParser } from "cli-program-lib/properties/json.parser"
 import { BuildSystem } from "../build-system/build-system";
-
+import { getPath } from "../util/trim-path";
 
 @Command({
     name: "build",
@@ -24,6 +23,14 @@ export class BuildCommand {
 
     public async execute(args: String[]): Promise<void> {
         const watch: boolean = args.includes("--watch")
+        const srcPath: string = args.includes("--srcPath") ?  getPath(args[args.indexOf("--srcPath") + 1].toString()) : undefined
+        const libPath: string = args.includes("--libPath") ?  getPath(args[args.indexOf("--libPath") + 1].toString()) : undefined
+        if (srcPath !== undefined) {
+            this.config.srcPath = srcPath
+        }
+        if (libPath !== undefined) {
+            this.config.libPath = libPath
+        }
         this.buildSystem.init()
         this.buildSystem.build()
         if (watch) {

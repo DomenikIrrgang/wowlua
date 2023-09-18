@@ -1,23 +1,11 @@
 import { Injectable } from "cli-program-lib/decorators/injectable.decorator"
 import { Json } from "cli-program-lib/decorators/json.decorator"
 import { GameVersion } from "../util/game-version"
-
-export enum DependencyType {
-    SVN = "svn",
-    GIT = "git",
-    LOCAL = "local"
-}
-
-export interface Dependency {
-    name: string,
-    source: string,
-    type: DependencyType,
-    version?: string,
-    path?: string
-}
+import { Dependency } from "../dependency-manager/dependency"
+import { getPath } from "../util/trim-path"
 
 @Injectable({
-    unique: true
+    unique: true,
 })
 export class WowluaConfig {
 
@@ -126,11 +114,11 @@ export class WowluaConfig {
     }
 
     public getSrcPath(): string {
-        return process.cwd() + "/" + this.srcPath
+        return getPath(this.srcPath)
     }
 
     public getLibPath(): string {
-        return process.cwd() + "/" + this.libPath
+        return getPath(this.libPath)
     }
 
     public save(): void {

@@ -1,9 +1,9 @@
 import { Command } from "cli-program-lib/decorators/command.decorator"
-import { WowluaConfig } from "../../config/wowlua.config"
+import { WowluaConfig } from "../config/wowlua.config"
 import { Inject } from "cli-program-lib/decorators/inject.decorator"
 import { Logger } from "cli-program-lib/logging/logger"
-import { GameVersion } from "../../util/game-version"
-import { writeFileSyncRecursive } from "../../util/file-write-sync"
+import { GameVersion } from "../util/game-version"
+import { writeFileSyncRecursive } from "../util/file-write-sync"
 
 @Command({
     name: "init",
@@ -16,6 +16,8 @@ export class InitCommand {
 
     @Inject(Logger)
     private logger: Logger
+
+    private templatesPath = import.meta.dir + "/../../templates"
 
     public execute(... args: String[]): void {
         this.createProjectConfigFile()
@@ -45,7 +47,7 @@ export class InitCommand {
 
     private async createReadmeFile(): Promise<void> {
         this.logger.info("Writing README.md...")
-        let readme = await Bun.file(import.meta.dir + "/../../../templates/README.md").text()
+        let readme = await Bun.file(this.templatesPath +  "/README.md").text()
         readme = readme.replace("{{ name }}", this.config.name)
         readme = readme.replace("{{ description }}", this.config.description)
         Bun.write("README.md", readme)
