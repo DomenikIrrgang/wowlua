@@ -8,9 +8,10 @@ import { SkipCompilerFlag } from "./flags/skip.compilerflag";
 import { Inject } from "cli-program-lib/decorators/inject.decorator";
 import { Logger } from "cli-program-lib/logging/logger";
 import { GameVersion } from "../../../util/game-version";
+import { WowluaConfig } from "../../../config/wowlua.config";
 
 @Injectable()
-export class CompilerFlagsPlugin implements BuildPlugin {
+export class CompilerFlagsPlugin extends BuildPlugin {
 
     @Inject(Logger)
     private logger: Logger

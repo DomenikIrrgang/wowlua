@@ -3,9 +3,11 @@ import { Json } from "cli-program-lib/decorators/json.decorator"
 import { GameVersion } from "../util/game-version"
 import { Dependency } from "../dependency-manager/dependency"
 import { getPath } from "../util/trim-path"
+import { PluginOptions } from "../build-system/plugins/plugin-options"
 
 @Injectable({
     unique: true,
+    global: true
 })
 export class WowluaConfig {
 
@@ -100,6 +102,13 @@ export class WowluaConfig {
     })
     public savedVariables: string
 
+    @Json({
+        filePath: "wowlua.json",
+        jsonPath: "$.pluginSettings",
+        default: {}
+    })
+    public pluginOptions: { [pluginName: string]: PluginOptions }
+
     public getBuildPath(): string {
         if (this.buildPath.startsWith("/")) {
             return this.buildPath
@@ -123,6 +132,15 @@ export class WowluaConfig {
 
     public save(): void {
         Bun.write("wowlua.json", JSON.stringify(this, null, 4))
+    }
+
+    public getPluginOptions(pluginName: string): PluginOptions {
+        if (this.pluginOptions[pluginName] === undefined) {
+            return {
+                enabled: true
+            }
+        }
+        return this.pluginOptions[pluginName]
     }
 
 }

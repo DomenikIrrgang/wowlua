@@ -7,7 +7,6 @@ import { WowluaConfig } from "../config/wowlua.config";
 import simpleGit, { gitP } from "simple-git";
 import * as fs from "fs";
 import * as svn from "node-svn-ultimate"
-import { readDirSyncRecursive } from "../util/ready-directory-recursive";
 
 @Injectable()
 export class DependencyManager {

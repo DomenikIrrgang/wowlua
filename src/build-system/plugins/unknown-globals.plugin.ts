@@ -7,7 +7,7 @@ import { Logger } from "cli-program-lib/logging/logger";
 import { GameVersion } from "../../util/game-version";
 
 @Injectable()
-export class UnknownGlobalsPlugin implements BuildPlugin {
+export class UnknownGlobalsPlugin extends BuildPlugin {
 
     @Inject(Logger)
     private logger: Logger

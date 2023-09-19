@@ -8,7 +8,7 @@ import { BuildContext } from "./build-context";
 import { GameVersion } from "../util/game-version";
 import { BuildPlugin } from "./plugins/build-plugin";
 import { CompilerFlagsPlugin } from "./plugins/compiler-flags/compiler-flags.plugin";
-import { DecoratorBuildPlugin } from "./plugins/decorator.plugin";
+import { DecoratorPlugin } from "./plugins/decorator.plugin";
 import { UnknownGlobalsPlugin } from "./plugins/unknown-globals.plugin";
 import { injector } from "cli-program-lib/dependency-injection/injector";
 import { parse } from "luaparse";
@@ -46,7 +46,7 @@ export class BuildSystem {
 
     private buildPlugins: BuildPlugin[] = [
         injector.getInstance(CompilerFlagsPlugin),
-        injector.getInstance(DecoratorBuildPlugin),
+        injector.getInstance(DecoratorPlugin),
         injector.getInstance(UnknownGlobalsPlugin)
     ]
 
@@ -112,12 +112,14 @@ export class BuildSystem {
     public parseBuildContext(buildContext: BuildContext): void {
         this.logger.debug("Parsing source files...")
         for (let buildPlugin of this.buildPlugins) {
-            for (let sourceFile of buildContext.sourceFiles) {
-                buildPlugin.parse(buildContext, sourceFile)
-            }
-            
-            for (let sourceFile of buildContext.libFiles) {
-                buildPlugin.parse(buildContext, sourceFile)
+            if (true === true) {
+                for (let sourceFile of buildContext.sourceFiles) {
+                    buildPlugin.parse(buildContext, sourceFile)
+                }
+                
+                for (let sourceFile of buildContext.libFiles) {
+                    buildPlugin.parse(buildContext, sourceFile)
+                }
             }
         }
     }
@@ -147,7 +149,9 @@ export class BuildSystem {
 
     public runBuildPlugins(buildContext: BuildContext, gameVersion: GameVersion) {
         for (let plugin of this.buildPlugins) {
-            plugin.build(buildContext, gameVersion)
+            if (true === true) {
+                plugin.build(buildContext, gameVersion)
+            }
         }
     }
 

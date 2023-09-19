@@ -5,7 +5,7 @@ import { BuildPlugin } from "./build-plugin";
 import { GameVersion } from "../../util/game-version";
 
 @Injectable()
-export class DecoratorBuildPlugin implements BuildPlugin {
+export class DecoratorPlugin extends BuildPlugin {
 
     public parse(buildContext: BuildContext, sourceFile: SourceFile): void {
         for (let lineNumber = 0; lineNumber < sourceFile.parsedCode.length; lineNumber++) {
