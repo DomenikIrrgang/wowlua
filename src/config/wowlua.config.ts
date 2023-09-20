@@ -104,7 +104,7 @@ export class WowluaConfig {
 
     @Json({
         filePath: "wowlua.json",
-        jsonPath: "$.pluginSettings",
+        jsonPath: "$.pluginOptions",
         default: {}
     })
     public pluginOptions: { [pluginName: string]: PluginOptions }
@@ -135,12 +135,14 @@ export class WowluaConfig {
     }
 
     public getPluginOptions(pluginName: string): PluginOptions {
-        if (this.pluginOptions[pluginName] === undefined) {
-            return {
-                enabled: true
+        let result: PluginOptions = { enabled: true}
+        if (this.pluginOptions[pluginName] !== undefined) {
+            result = this.pluginOptions[pluginName]
+            if (result.enabled === undefined) {
+                result.enabled = true
             }
         }
-        return this.pluginOptions[pluginName]
+        return result
     }
 
 }

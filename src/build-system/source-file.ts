@@ -1,5 +1,6 @@
 import { Chunk } from "luaparse";
 import { GameVersion } from "../util/game-version";
+import { Variable } from "./variable";
 
 export interface SourceFile {
     path: string,
@@ -13,5 +14,6 @@ export interface SourceFile {
     parsedCode?: string[],
     definedGlobals?: string[],
     compilerFlags?: { lineNumberStart: number, lineNumberEnd: number, flag: string, args: string[] }[]
-    ast?: any
+    ast?: any,
+    variables: { [name: string]: Variable },
 }

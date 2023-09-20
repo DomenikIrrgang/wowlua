@@ -29,4 +29,5 @@ export class DecoratorPlugin extends BuildPlugin {
     }
 
     public build(buildContext: BuildContext, gameVersion: GameVersion): void {}
+    public ast(sourceFile: SourceFile, node): void {}
 }

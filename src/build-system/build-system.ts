@@ -11,7 +11,7 @@ import { CompilerFlagsPlugin } from "./plugins/compiler-flags/compiler-flags.plu
 import { DecoratorPlugin } from "./plugins/decorator.plugin";
 import { UnknownGlobalsPlugin } from "./plugins/unknown-globals.plugin";
 import { injector } from "cli-program-lib/dependency-injection/injector";
-import { parse } from "luaparse";
+import * as luaparse from "luaparse";
 import { VariableAssignment, getVariableAssignments } from "../util/luaparse-util";
 import { GLOBAL_LUA_FUNCTIONS } from "../util/global-lua-function";
 import { SourceFile } from "./source-file";
@@ -22,6 +22,7 @@ import { INTERFACE_VERSION } from "../util/interface-version";
 import { TOC_NAME } from "../util/toc-names";
 import { readDirSyncRecursive } from "../util/ready-directory-recursive";
 import { GLOBALS_FILE } from "../util/wowglobals/globals";
+import { GlobalsDetectionPlugin } from "./plugins/globals-detection.plugin";
 
 @Injectable()
 export class BuildSystem {
@@ -47,13 +48,37 @@ export class BuildSystem {
     private buildPlugins: BuildPlugin[] = [
         injector.getInstance(CompilerFlagsPlugin),
         injector.getInstance(DecoratorPlugin),
+        injector.getInstance(GlobalsDetectionPlugin),
         injector.getInstance(UnknownGlobalsPlugin)
     ]
+
+    private currentSourceFile: SourceFile
 
     public init(): void {
         this.globals[GameVersion.CLASSIC] = this.jsonParser.parseFile(__dirname + "/../../" + GLOBALS_FILE.get(GameVersion.CLASSIC))
         this.globals[GameVersion.RETAIL] = this.jsonParser.parseFile(__dirname + "/../../" + GLOBALS_FILE.get(GameVersion.RETAIL))
         this.globals[GameVersion.WOTLK] = this.jsonParser.parseFile(__dirname + "/../../" + GLOBALS_FILE.get(GameVersion.WOTLK))
+        this.setupLuaparse()
+    }
+
+    private setupLuaparse(): void {
+        let instance = this
+        Object.keys(luaparse["ast"]).forEach((key) => {
+            let originalFunction = luaparse["ast"][key]
+            luaparse["ast"][key] = function() {
+                let node = originalFunction.apply(null, arguments)
+                instance.onLuaparseNode(node)
+                return node
+            }
+        })
+    }
+
+    private onLuaparseNode(node): void {
+        for (let plugin of this.buildPlugins) {
+            if (plugin.options.enabled === true) {
+                plugin.ast(this.currentSourceFile, node)
+            }
+        }
     }
 
     public build(): void {
@@ -112,7 +137,7 @@ export class BuildSystem {
     public parseBuildContext(buildContext: BuildContext): void {
         this.logger.debug("Parsing source files...")
         for (let buildPlugin of this.buildPlugins) {
-            if (true === true) {
+            if (buildPlugin.options.enabled === true) {
                 for (let sourceFile of buildContext.sourceFiles) {
                     buildPlugin.parse(buildContext, sourceFile)
                 }
@@ -124,32 +149,36 @@ export class BuildSystem {
         }
     }
 
-    public generateAsts(buildContext: BuildContext): boolean {
+    public generateAsts(buildContext: BuildContext): void {
         this.logger.debug("Generating ASTs...")
         let sourceFiles = buildContext.sourceFiles.concat(buildContext.libFiles)
         for (let sourceFile of sourceFiles) {
             try {
-                sourceFile.ast = parse(sourceFile.parsedCode.join("\n"), {
+                this.currentSourceFile = sourceFile
+                sourceFile.ast = luaparse.parse(sourceFile.parsedCode.join("\n"), {
                     locations: true,
                     scope: true,
-                    ranges: true
+                    ranges: true,
                 })
-                this.calculateGlobals(sourceFile)
+                sourceFile.declaredGlobals = Object.keys(sourceFile.variables).filter((variable) => sourceFile.variables[variable].global)
+                sourceFile.usedGlobals = sourceFile.ast.globals.map((global) => global.name)
+                sourceFile.importedGlobals = sourceFile.usedGlobals
+                    .filter((global) => this.globals[GameVersion.WOTLK][global] === undefined)
+                    .filter((global) => GLOBAL_LUA_FUNCTIONS.includes(global) === false)
+                    .filter((global) => sourceFile.declaredGlobals.includes(global) === false)
             } catch (error) {
                 if (error.name === "SyntaxError") {
-                    this.logger.error("Syntax error in file: " + sourceFile.path + " at line: " + error.line + " column: " + error.column + " message: " + error.message)
+                    throw new Error("Syntax error in file: " + sourceFile.path + "/" + sourceFile.fileName + " at line: " + error.line + " column: " + error.column + " message: " + error.message)
                 } else {
-                    this.logger.error("Error in file: " + sourceFile.path + " message: " + error.message)
+                    throw new Error("Error in file: " + sourceFile.path + "/" + sourceFile.fileName + " message: " + error.message)
                 }
-                return false
             }
         }
-        return true
     }
 
     public runBuildPlugins(buildContext: BuildContext, gameVersion: GameVersion) {
         for (let plugin of this.buildPlugins) {
-            if (true === true) {
+            if (plugin.options.enabled === true) {
                 plugin.build(buildContext, gameVersion)
             }
         }
@@ -269,7 +298,8 @@ export class BuildSystem {
                         gameVersionSpecific: false,
                         usedGlobals: [],
                         declaredGlobals: [],
-                        importedGlobals: []
+                        importedGlobals: [],
+                        variables: {},
                     })
                 }
             }

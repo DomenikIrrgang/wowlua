@@ -31,4 +31,7 @@ export class UnknownGlobalsPlugin extends BuildPlugin {
             }
         }
     }
+
+    public ast(sourceFile: SourceFile, node): void {}
+    
 }
