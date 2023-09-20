@@ -34,6 +34,13 @@ export class WowluaConfig {
 
     @Json({
         filePath: "wowlua.json",
+        jsonPath: "$.buildVars",
+        default: ""
+    })
+    public buildVars: { [variableName: string]: string | number | boolean }
+
+    @Json({
+        filePath: "wowlua.json",
         jsonPath: "$.description",
         default: "Addon created using wowlua."
     })
@@ -98,9 +105,9 @@ export class WowluaConfig {
     @Json({
         filePath: "wowlua.json",
         jsonPath: "$.savedVariables",
-        default: ""
+        default: []
     })
-    public savedVariables: string
+    public savedVariables: string[]
 
     @Json({
         filePath: "wowlua.json",

@@ -23,6 +23,7 @@ import { TOC_NAME } from "../util/toc-names";
 import { readDirSyncRecursive } from "../util/ready-directory-recursive";
 import { GLOBALS_FILE } from "../util/wowglobals/globals";
 import { GlobalsDetectionPlugin } from "./plugins/globals-detection.plugin";
+import { BuildVarReplacementPlugin } from "./plugins/build-var-replacements/build-var-replacements.plugin";
 
 @Injectable()
 export class BuildSystem {
@@ -49,7 +50,8 @@ export class BuildSystem {
         injector.getInstance(CompilerFlagsPlugin),
         injector.getInstance(DecoratorPlugin),
         injector.getInstance(GlobalsDetectionPlugin),
-        injector.getInstance(UnknownGlobalsPlugin)
+        injector.getInstance(UnknownGlobalsPlugin),
+        injector.getInstance(BuildVarReplacementPlugin)
     ]
 
     private currentSourceFile: SourceFile
@@ -130,6 +132,14 @@ export class BuildSystem {
         let context: BuildContext = {
             sourceFiles: this.loadSourceFiles(this.config.getSrcPath()),
             libFiles: this.loadSourceFiles(this.config.getLibPath()),
+            variables: {}
+        }
+        for (let key of Object.keys(this.config)) {
+            context.variables[key] = this.config[key]
+        }
+        for (let key of Object.keys(this.config.buildVars)) {
+            console.log(key, this.config.buildVars[key])
+            context.variables[key] = this.config.buildVars[key]
         }
         return context
     }
@@ -271,7 +281,7 @@ export class BuildSystem {
 
     public generateTocFile(gameVersion: GameVersion): void {
         this.logger.debug("Generating toc file for game version: " + gameVersion)
-        let tocContent = `## Interface: ${INTERFACE_VERSION.get(gameVersion)}\n## Title: ${this.config.name}\n## Notes: ${this.config.description}\n## Author: ${this.config.author}\n## Version: ${this.config.version}\n${(this.config.savedVariables !== "") ? "## SavedVariables: " + this.config.savedVariables + "\n" : "\n"}            `
+        let tocContent = `## Interface: ${INTERFACE_VERSION.get(gameVersion)}\n## Title: ${this.config.name}\n## Notes: ${this.config.description}\n## Author: ${this.config.author}\n## Version: ${this.config.version}\n${(this.config.savedVariables.length > 0) ? "## SavedVariables: " + this.config.savedVariables.join(",") + "\n" : "\n"}            `
         tocContent += "\nsource" + TOC_NAME.get(gameVersion) + ".xml"
         Bun.write(this.config.getBuildPath() + "/" + this.config.name + "_" + TOC_NAME.get(gameVersion) + ".toc", tocContent)
     }
