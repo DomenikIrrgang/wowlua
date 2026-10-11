@@ -49,6 +49,8 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+# Diagnostics are rich values that only travel on the error path.
+result_large_err = "allow"
 
 [profile.release]
 lto = "thin"

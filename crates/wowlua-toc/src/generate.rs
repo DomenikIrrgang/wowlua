@@ -182,7 +182,11 @@ fn targeted_clients<'t>(table: &'t FlavorTable, input: &'t TocInput) -> Vec<&'t 
 /// The load-directive names for a flavor subset (§14.9.1, decision T44): a
 /// family name when the subset contains every targeted flavor of that
 /// family, otherwise the game-type names.
-fn directive_names(table: &FlavorTable, subset: &[String], targets: &[FlavorTarget]) -> Vec<String> {
+fn directive_names(
+    table: &FlavorTable,
+    subset: &[String],
+    targets: &[FlavorTarget],
+) -> Vec<String> {
     let mut names = Vec::new();
     let mut families: Vec<Family> = Vec::new();
     for id in subset {
@@ -284,7 +288,11 @@ fn render_single(table: &FlavorTable, input: &TocInput) -> TocFile {
         let mut line = file.path.replace('/', "\\");
         if let Some(subset) = &file.flavors {
             line.push(' ');
-            line.push_str(&game_type_condition(&directive_names(table, subset, &input.flavors)));
+            line.push_str(&game_type_condition(&directive_names(
+                table,
+                subset,
+                &input.flavors,
+            )));
         }
         if let Some(locale) = &file.locale {
             line.push_str(&format!(" [AllowLoadTextLocale {locale}]"));
@@ -299,7 +307,9 @@ fn render_single(table: &FlavorTable, input: &TocInput) -> TocFile {
 }
 
 fn applies(flavors: &Option<Vec<String>>, id: &str) -> bool {
-    flavors.as_ref().is_none_or(|list| list.iter().any(|f| f == id))
+    flavors
+        .as_ref()
+        .is_none_or(|list| list.iter().any(|f| f == id))
 }
 
 fn render_per_flavor(table: &FlavorTable, input: &TocInput) -> Result<Vec<TocFile>, Vec<TocError>> {
@@ -311,10 +321,18 @@ fn render_per_flavor(table: &FlavorTable, input: &TocInput) -> Result<Vec<TocFil
             .all(|c| c.features.allow_load_text_locale);
         let interfaces: Vec<String> = target.interfaces.iter().map(u32::to_string).collect();
         let mut lines = vec![format!("## Interface: {}", interfaces.join(", "))];
-        for d in input.directives.iter().filter(|d| applies(&d.flavors, &target.id)) {
+        for d in input
+            .directives
+            .iter()
+            .filter(|d| applies(&d.flavors, &target.id))
+        {
             lines.extend(split_directive(&d.key, &d.value, None));
         }
-        for file in input.files.iter().filter(|f| applies(&f.flavors, &target.id)) {
+        for file in input
+            .files
+            .iter()
+            .filter(|f| applies(&f.flavors, &target.id))
+        {
             let mut line = file.path.replace('/', "\\");
             if let (Some(locale), true) = (&file.locale, text_locale) {
                 line.push_str(&format!(" [AllowLoadTextLocale {locale}]"));
@@ -433,7 +451,10 @@ mod tests {
                 Directive::new("Title", "My Addon"),
                 Directive::new("Version", "1.0.0"),
             ],
-            files: vec![FileEntry::new("src/core.lua"), FileEntry::new("src/ui/frames.xml")],
+            files: vec![
+                FileEntry::new("src/core.lua"),
+                FileEntry::new("src/ui/frames.xml"),
+            ],
             layout: Layout::Auto,
         }
     }
@@ -453,7 +474,11 @@ mod tests {
     fn shared_files_use_a_single_toc_with_all_interfaces() {
         let generated = generate(&input(&["standard", "mists", "vanilla"])).unwrap();
         assert_eq!(generated.layout, Layout::Single);
-        assert!(generated.files[0].content.starts_with("## Interface: 120100, 50504, 11509\n"));
+        assert!(
+            generated.files[0]
+                .content
+                .starts_with("## Interface: 120100, 50504, 11509\n")
+        );
     }
 
     #[test]
@@ -466,7 +491,11 @@ mod tests {
         });
         let generated = generate(&i).unwrap();
         assert_eq!(generated.layout, Layout::Single);
-        assert!(generated.files[0].content.contains("src\\retail.lua [AllowLoadGameType mainline]\n"));
+        assert!(
+            generated.files[0]
+                .content
+                .contains("src\\retail.lua [AllowLoadGameType mainline]\n")
+        );
     }
 
     #[test]
@@ -501,7 +530,14 @@ mod tests {
         let generated = generate(&i).unwrap();
         assert_eq!(generated.layout, Layout::PerFlavor);
         let names: Vec<&str> = generated.files.iter().map(|f| f.name.as_str()).collect();
-        assert_eq!(names, ["MyAddon_Mainline.toc", "MyAddon_Camelot.toc", "MyAddon_Classic.toc"]);
+        assert_eq!(
+            names,
+            [
+                "MyAddon_Mainline.toc",
+                "MyAddon_Camelot.toc",
+                "MyAddon_Classic.toc"
+            ]
+        );
         assert!(generated.files[0].content.contains("src\\retail.lua\n"));
         assert!(!generated.files[2].content.contains("retail.lua"));
 
@@ -516,7 +552,12 @@ mod tests {
     fn per_flavor_suffixes_for_one_flavor_per_family() {
         let mut i = input(&["standard", "mists"]);
         i.layout = Layout::PerFlavor;
-        let names: Vec<String> = generate(&i).unwrap().files.into_iter().map(|f| f.name).collect();
+        let names: Vec<String> = generate(&i)
+            .unwrap()
+            .files
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
         assert_eq!(names, ["MyAddon_Mainline.toc", "MyAddon_Classic.toc"]);
     }
 
@@ -524,8 +565,20 @@ mod tests {
     fn classic_flavors_use_game_suffixes() {
         let mut i = input(&["mists", "vanilla", "tbc"]);
         i.layout = Layout::PerFlavor;
-        let names: Vec<String> = generate(&i).unwrap().files.into_iter().map(|f| f.name).collect();
-        assert_eq!(names, ["MyAddon_Mists.toc", "MyAddon_Vanilla.toc", "MyAddon_TBC.toc"]);
+        let names: Vec<String> = generate(&i)
+            .unwrap()
+            .files
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "MyAddon_Mists.toc",
+                "MyAddon_Vanilla.toc",
+                "MyAddon_TBC.toc"
+            ]
+        );
     }
 
     #[test]
@@ -543,14 +596,18 @@ mod tests {
     fn appendable_directives_are_split_and_others_error() {
         let many: Vec<String> = (0..200).map(|i| format!("SavedVariable{i}")).collect();
         let mut i = input(&["standard"]);
-        i.directives.push(Directive::new("SavedVariables", many.join(", ")));
+        i.directives
+            .push(Directive::new("SavedVariables", many.join(", ")));
         let content = generate(&i).unwrap().files.remove(0).content;
         assert!(content.matches("## SavedVariables:").count() > 1);
         assert!(content.lines().all(|l| l.len() <= MAX_LINE_LENGTH));
 
         let mut i = input(&["standard"]);
         i.directives.push(Directive::new("Notes", "x".repeat(2000)));
-        assert!(matches!(generate(&i).unwrap_err()[0], TocError::LineTooLong { .. }));
+        assert!(matches!(
+            generate(&i).unwrap_err()[0],
+            TocError::LineTooLong { .. }
+        ));
     }
 
     #[test]
@@ -566,7 +623,11 @@ mod tests {
         // directive only appears in the Retail TOC.
         let generated = generate(&i).unwrap();
         assert_eq!(generated.layout, Layout::PerFlavor);
-        assert!(generated.files[0].content.contains("## OptionalDeps: Details\n"));
+        assert!(
+            generated.files[0]
+                .content
+                .contains("## OptionalDeps: Details\n")
+        );
         assert!(!generated.files[1].content.contains("OptionalDeps"));
     }
 }

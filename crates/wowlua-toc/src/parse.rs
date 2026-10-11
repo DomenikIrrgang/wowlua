@@ -112,7 +112,11 @@ fn split_conditions(line: &str) -> (String, Vec<InlineDirective>) {
         let mut words = inner.split([' ', ',']).filter(|w| !w.is_empty());
         let Some(name) = words.next() else { break };
         let preceded_by_space = rest[..open].ends_with([' ', '\t']);
-        if !preceded_by_space || !INLINE_DIRECTIVES.iter().any(|d| d.eq_ignore_ascii_case(name)) {
+        if !preceded_by_space
+            || !INLINE_DIRECTIVES
+                .iter()
+                .any(|d| d.eq_ignore_ascii_case(name))
+        {
             break;
         }
         conditions.push(InlineDirective {
@@ -129,7 +133,9 @@ fn split_conditions(line: &str) -> (String, Vec<InlineDirective>) {
 /// `MyAddon_Classic.toc` → (`MyAddon`, `Some("_Classic")`). Suffixes are
 /// recognized from the flavor table, including legacy `-BCC` forms.
 pub fn split_file_name(file_name: &str) -> Option<(String, Option<String>)> {
-    let stem = file_name.strip_suffix(".toc").or_else(|| file_name.strip_suffix(".TOC"))?;
+    let stem = file_name
+        .strip_suffix(".toc")
+        .or_else(|| file_name.strip_suffix(".TOC"))?;
     let table = wowlua_flavors::table();
     for (i, c) in stem.char_indices().rev() {
         if c == '_' || c == '-' {
@@ -155,18 +161,41 @@ mod tests {
         assert_eq!(toc.directives[2].value, "Blizzard_X");
         assert_eq!(toc.directives[2].conditions[0].values, vec!["mainline"]);
         let paths: Vec<&str> = toc.files.iter().map(|f| f.path.as_str()).collect();
-        assert_eq!(paths, ["embeds.xml", "Locales/[TextLocale].lua", "retail/Edit.lua", "locales/deDE.lua"]);
-        assert_eq!(toc.files[2].conditions[0].values, vec!["standard", "camelot"]);
+        assert_eq!(
+            paths,
+            [
+                "embeds.xml",
+                "Locales/[TextLocale].lua",
+                "retail/Edit.lua",
+                "locales/deDE.lua"
+            ]
+        );
+        assert_eq!(
+            toc.files[2].conditions[0].values,
+            vec!["standard", "camelot"]
+        );
         assert_eq!(toc.files[3].conditions.len(), 2);
         assert_eq!(toc.files[3].conditions[0].name, "AllowLoadTextLocale");
     }
 
     #[test]
     fn splits_file_names() {
-        assert_eq!(split_file_name("MyAddon.toc"), Some(("MyAddon".into(), None)));
-        assert_eq!(split_file_name("My_Addon_Classic.toc"), Some(("My_Addon".into(), Some("_Classic".into()))));
-        assert_eq!(split_file_name("MyAddon-BCC.toc"), Some(("MyAddon".into(), Some("-BCC".into()))));
-        assert_eq!(split_file_name("MyAddon_Mists.toc"), Some(("MyAddon".into(), Some("_Mists".into()))));
+        assert_eq!(
+            split_file_name("MyAddon.toc"),
+            Some(("MyAddon".into(), None))
+        );
+        assert_eq!(
+            split_file_name("My_Addon_Classic.toc"),
+            Some(("My_Addon".into(), Some("_Classic".into())))
+        );
+        assert_eq!(
+            split_file_name("MyAddon-BCC.toc"),
+            Some(("MyAddon".into(), Some("-BCC".into())))
+        );
+        assert_eq!(
+            split_file_name("MyAddon_Mists.toc"),
+            Some(("MyAddon".into(), Some("_Mists".into())))
+        );
         assert_eq!(split_file_name("readme.md"), None);
     }
 

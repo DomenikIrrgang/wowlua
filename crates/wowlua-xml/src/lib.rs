@@ -147,7 +147,14 @@ mod tests {
     fn finds_references_with_spans() {
         let refs = references(DOC).unwrap();
         let files: Vec<&str> = refs.iter().map(|r| r.file.as_str()).collect();
-        assert_eq!(files, ["core.lua", "Libs\\LibStub\\LibStub.xml", "ui\\window.wowlua"]);
+        assert_eq!(
+            files,
+            [
+                "core.lua",
+                "Libs\\LibStub\\LibStub.xml",
+                "ui\\window.wowlua"
+            ]
+        );
         assert_eq!(refs[1].kind, RefKind::Include);
         assert_eq!(refs[1].normalized(), "Libs/LibStub/LibStub.xml");
         for r in &refs {
@@ -166,7 +173,11 @@ mod tests {
     #[test]
     fn reports_malformed_xml() {
         let error = references("<Ui><Frame></Ui>").unwrap_err();
-        assert!(error.message.contains("Frame") || error.message.contains("Ui"), "{}", error.message);
+        assert!(
+            error.message.contains("Frame") || error.message.contains("Ui"),
+            "{}",
+            error.message
+        );
         assert!(references("<Ui>").is_err());
     }
 }
