@@ -1,2 +1,14 @@
-node_modules
-test
+# Rust / Cargo
+/target/
+**/*.rs.bk
+
+# wowlua build output
+dist/
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db

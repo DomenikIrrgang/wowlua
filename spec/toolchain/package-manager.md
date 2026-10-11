@@ -1,0 +1,352 @@
+# 10. Package Manager
+
+The package manager is part of the `wowlua` binary. It resolves, fetches,
+locks and embeds dependencies, and manages workspaces. Publishing is covered
+in [Publishing](publishing.md), and the manifest format in [Manifest](manifest.md).
+
+## 10.1 Packages
+
+A **package** is a directory with a `wowlua.json`. Its `kind` determines how it
+is built and consumed:
+
+| Kind | Produces | Consumed as |
+|------|----------|-------------|
+| `addon` | An installable AddOn folder | Not a dependency. Other addons reference it at runtime through `addon-dependencies`. |
+| `library` | wowlua modules | Compiled **into** each dependent addon (private copy, tree-shaken) |
+| `lua-library` | Plain Lua/XML files (e.g. LibStub-based libraries) | Copied into each dependent addon under `<libs-dir>/<install-path>/` (default `libs/<name>/`), loaded in their declared order |
+| `types` | `.d.wowlua` declarations only | Used by the type checker. Never emitted. |
+
+Plain Lua libraries without a `wowlua.json` (most existing WoW libraries)
+can be used directly: the dependency declaration supplies `kind:
+"lua-library"` and, if needed, the file list (§10.5).
+
+## 10.2 Dependency kinds
+
+| Manifest section | Meaning |
+|------------------|---------|
+| `dependencies` | Libraries embedded into the build output |
+| `dev-dependencies` | Only for checking, testing and tooling: type packages, mocks, test helpers. Never embedded. |
+| `addon-dependencies` | Other AddOns that must or may be installed in the game. Written to the TOC. Never fetched or embedded. |
+
+## 10.3 Sources
+
+```json
+"dependencies": {
+  "libstub":      { "git": "https://github.com/example/LibStub", "tag": "1.0.3", "kind": "lua-library" },
+  "ace3":         { "git": "https://github.com/WoWUIDev/Ace3", "rev": "8d2a1c0", "kind": "lua-library",
+                    "files": ["AceAddon-3.0/AceAddon-3.0.xml", "AceEvent-3.0/AceEvent-3.0.xml"] },
+  "shared-utils": { "path": "../shared-utils" },
+  "libdeflate":   { "archive": "https://example.com/LibDeflate-1.0.2.zip",
+                    "sha256": "9f2c…", "kind": "lua-library", "strip-prefix": "LibDeflate/" },
+  "wowlua-ui":    "^0.4.0"
+}
+```
+
+| Source | Fields | Notes |
+|--------|--------|-------|
+| Registry | `"<semver req>"` or `{ "version": "…", "registry": "…" }` | Default registry: `https://registry.wowlua.dev` ([§10.10](#1010-registry)) |
+| Git | `git`, plus one of `tag`, `branch`, `rev`; optional `subdir`, `submodules` (default `false`) | Locked to a commit hash. Uses the system `git`, so credentials and SSH work as usual. Submodules are only fetched with `"submodules": true`; their commits are fixed by the locked parent commit. |
+| Path | `path` | Relative to the manifest. Never locked by checksum. For workspaces and local development. |
+| Archive | `archive` (URL to `.zip` / `.tar.gz`), `sha256` (required), optional `strip-prefix` | For release downloads |
+
+Common fields:
+
+| Field | Meaning |
+|-------|---------|
+| `kind` | Overrides or supplies the package kind (required for sources without a `wowlua.json`) |
+| `optional` | Only included when a feature enables it ([Manifest §features](manifest.md#96-features)) |
+| `flavors` | Only included for these flavors |
+| `bundle` | `false` keeps the library as separate files even in bundled builds |
+| `files` | `lua-library` only: explicit ordered list of `.lua` / `.xml` / `.toc` entry files |
+| `types` | A `types` package or a path to `.d.wowlua` files describing this library |
+| `install-path` | Folder under `build.libs-dir` (default: the dependency key) |
+| `features`, `default-features` | Features of the dependency to enable ([Manifest §9.5](manifest.md#95-dependencies)) |
+| `curseforge-slug` | Slug used for CurseForge relations |
+
+## 10.4 Versions and resolution
+
+- Versions follow **SemVer 2.0**. Requirement syntax is Cargo's: `^1.2` (the
+  default for bare versions), `~1.2.3`, `=1.2.3`, `>=1.0, <2.0`, `*`.
+- **Resolution covers the union.** The resolver resolves all members of a
+  workspace together, over the union of all features, all flavors and all
+  `dev-dependencies`. Enabling features, building another flavor, or running
+  tests therefore never changes the lockfile.
+- **One version per package per addon.** Every dependency is embedded into a
+  single AddOn, so each addon, across all of its flavors, uses exactly one
+  version of each package. Across a workspace, the resolver prefers one version
+  for everyone. Addons with incompatible requirements may end up on different
+  versions; lock entries record which addons use them (`used-by`). Conflicting
+  requirements within one addon are error E4101, explained by the resolver's
+  derivation tree. `dev-dependencies` are resolved but never embedded.
+- **Identity.** A package is identified by its name **and** source. The same
+  name coming from two different sources in one addon's graph (e.g. git and
+  registry) is error E4321.
+- The resolver uses the **PubGrub** algorithm (`pubgrub` crate) and prefers the
+  highest compatible version, or the locked version if one exists and still
+  satisfies all requirements. Yanked versions are never chosen by a new
+  resolution. A locked yanked version keeps working with warning W4322.
+- Git and archive dependencies without a `wowlua.json` have version
+  `0.0.0+<commit or sha>`. With a manifest, they have its version.
+
+## 10.5 Embedding
+
+### 10.5.1 wowlua libraries
+
+Library modules are compiled together with the addon:
+
+- Module IDs are prefixed with the package name (`wowlua-ui/widgets/button`).
+- Only modules reachable from the addon's imports are included (tree-shaking at
+  module granularity, plus dead-code removal inside modules when enabled).
+- Every addon gets its **own private copy** in its addon table. Two addons
+  using different versions of the same library never interfere.
+- The library is type-checked against its own manifest's check settings. The
+  consumer sees its exported types.
+- **`wowlua:meta` inside a library.** `addon`, `build` and `flavor` describe the
+  consuming addon's build. `features` and `config` are the library's own: its
+  features are enabled through the consumer's dependency entry (`features`,
+  `default-features`), and its `config` defaults (the library manifest's
+  top-level `config`) can be overridden by the dependency entry's `config`
+  object.
+- **Flavors.** A library supports all flavors unless its manifest lists
+  `flavors`. Depending on a library for a flavor it does not support is error
+  E4327, unless the dependency entry restricts itself with `flavors`.
+
+### 10.5.2 Plain Lua libraries
+
+`lua-library` dependencies are placed in `<libs-dir>/<install-path>/`
+(default `libs/<dependency key>/`), keeping their relative layout. The files to
+load, in order, are determined by the first of these that applies:
+
+1. the `files` field of the dependency declaration (entries may be `.lua`,
+   `.xml`, or a `.toc` whose file list is used);
+2. the `lua-library.files` field of the library's own `wowlua.json`, if
+   present;
+3. a single `.toc` file in the library root (its file list, ignoring
+   `## Interface` and metadata). Flavor-suffixed TOCs are matched to the build
+   flavor;
+4. a single `lib.xml`, `embeds.xml` or `<name>.xml` in the library root.
+
+Otherwise the dependency is error E4110 and asks for `files`. Only the entry
+files appear in the TOC.
+
+**Copied files.** Only what the addon can load is copied: the entry files,
+every file reachable from them through XML `<Script>` / `<Include>` chains
+(which must resolve), and the library's license files (`LICENSE*`, `COPYING*`,
+or `lua-library.license-files`). Tests, docs and other files of the library
+repository are not copied.
+
+These libraries keep their own runtime versioning (LibStub). wowlua does not
+rename or rewrite them, except when the minification level applies to bundled
+libraries (`minify-libraries`, default `false`). License header comments are
+always preserved ([Code generation §14.8.6](codegen.md#1486-licenses)).
+
+### 10.5.3 Nested dependencies
+
+Dependencies of dependencies are embedded as well, deduplicated per addon. A
+`lua-library` that itself embeds a copy of a library (e.g. a bundled `LibStub`)
+is left untouched. LibStub resolves duplicates at runtime.
+
+## 10.6 Lockfile
+
+`wowlua.lock` is generated JSON. It is committed for addons and ignored for
+libraries.
+
+```json
+{
+  "version": 1,
+  "flavor-table": {
+    "version": "2026.10.11",
+    "interfaces": { "standard": [120100], "mists": [50504], "vanilla": [11509] }
+  },
+  "packages": [
+    {
+      "name": "ace3",
+      "version": "0.0.0+8d2a1c0e9f…",
+      "source": "git+https://github.com/WoWUIDev/Ace3?rev=8d2a1c0#8d2a1c0e9f…",
+      "checksum": "sha256-3b4f…",
+      "dependencies": [],
+      "used-by": ["my-addon"]
+    },
+    {
+      "name": "wow-api-standard",
+      "version": "12.1.0+gen.3",
+      "source": "registry+https://registry.wowlua.dev",
+      "checksum": "sha256-77e0…",
+      "dependencies": [],
+      "used-by": ["my-addon"]
+    }
+  ]
+}
+```
+
+- **Flavor table.** The lockfile pins the flavor-table version and the
+  resolved interface numbers of every targeted flavor, so every machine
+  generates identical TOCs. `wowlua types sync` updates them deliberately; the
+  change shows up in the lockfile diff.
+- Checksums cover the normalized file tree of the package (sorted paths,
+  contents, executable bit ignored) and are verified on every fetch (E4103).
+- `--locked` fails if the lockfile would change (E4104). `--offline` uses only
+  the cache: resolution may still run and update the lockfile, but nothing is
+  downloaded (E4105 if something is missing). `--frozen` means `--locked` plus
+  `--offline`. `--locked` and `--frozen` are meant for CI.
+- Packages are sorted by name, and keys are written in a fixed order, so diffs
+  stay minimal.
+- Lockfile versions: see [Manifest §9.16](manifest.md#916-schema-versions-and-migration).
+
+## 10.7 Cache
+
+| Path | Content |
+|------|---------|
+| `$WOWLUA_HOME` (default `~/.wowlua`) | Root |
+| `…/cache/git/<hash>/` | Bare clones. Checkouts are exported per commit. |
+| `…/cache/archives/<sha256>` | Downloaded archives |
+| `…/cache/registry/<registry>/<name>/<version>/` | Unpacked registry packages and index cache |
+| `…/maps/<build id>/` | Archived source maps of published builds ([Code generation §14.6](codegen.md#146-source-maps)) |
+| `…/config.json` | Global configuration: WoW install paths, registries (see [CLI](cli.md#127-configuration)). Tokens are not stored here unless the OS keychain is unavailable (§10.11). |
+
+`wowlua cache clean` removes unused entries. All cache writes are atomic
+(write to a temp location, then rename), so concurrent builds are safe.
+
+## 10.8 Workspaces
+
+A workspace groups several packages, typically an addon suite such as a core
+addon plus load-on-demand modules, together with shared libraries.
+
+```json
+{
+  "workspace": {
+    "members": ["addons/*", "libs/*"],
+    "default-members": ["addons/core"]
+  }
+}
+```
+
+- One `wowlua.lock` and one `dist/` at the workspace root.
+- Commands run for all members, or for one with `-p <package>`.
+- An addon may list another workspace addon in `addon-dependencies`. The
+  compiler then type-checks against that addon's **generated declaration file**,
+  which describes its `@global` API. The file is generated from the other
+  addon's collected declarations, not from a full build
+  ([Compiler §13.3.1](compiler.md#1331-stages), stage 12), so two addons that
+  list each other as optional dependencies still build.
+- A cycle of `required` addon dependencies within the workspace is error E4324.
+  Two members with the same `addon.name` are error E4325.
+- SavedVariables names must be unique across the workspace (E4120).
+- `wowlua package` can produce one zip containing several AddOn folders
+  (`publish.bundle-addons`).
+
+## 10.9 Types packages
+
+The WoW API is typed by **pre-generated `types` packages**, one per flavor:
+
+| Package | Content |
+|---------|---------|
+| `wow-api-<flavor>` (e.g. `wow-api-standard`, `wow-api-mists`) | Global API functions, `C_*` namespaces, enums, structures, events with typed payloads, widget classes, FrameXML globals and mixins, and WoW's Lua environment additions, as `.d.wowlua` |
+
+**Generation.** The packages are produced in the wowlua project's CI by
+`wowlua-types-gen`:
+
+1. **Primary source: Blizzard's API documentation**
+   (`Blizzard_APIDocumentationGenerated`), read per flavor from the public
+   `wow-ui-source` mirror branches (`live`, `ptr`, `classic`, `classic_era`,
+   `classic_anniversary`, `classic_titan`, `forever`, …). It provides functions
+   with `Nilable`/`Default` parameters, multiple returns, structures, enums,
+   events with payloads, and secret-value annotations (→ `Secret<T>`, see
+   [Types §2.11](../language/02-types.md#211-secret-values)). It is loaded by
+   executing the documentation tables in a sandboxed Lua VM, as existing
+   community tools do.
+2. **Enrichment: Ketho's vscode-wow-api annotations** (MIT). They are
+   converted from LuaLS `---@` annotations and merged where they add
+   information that Blizzard's documentation lacks: widget class hierarchies
+   and methods, hand-written structures and string-literal unions (unit tokens,
+   frame types, templates), FrameXML globals and mixins, documentation links,
+   and deprecations. On conflict, Blizzard's data wins for signatures, and the
+   enrichment wins only where Blizzard's data is missing or untyped (`any`).
+3. **Flavor availability** from per-flavor global name dumps, used to verify
+   that every declared global exists in that flavor.
+
+Package versions follow the game version: `wow-api-standard@12.1.0` for build
+12.1.0, and pre-releases for test clients (`12.1.5-ptr.70077`). Generator fixes
+are released as `+gen.N` build metadata. SemVer ignores build metadata for
+precedence; for `types` packages only, wowlua deliberately deviates and orders
+versions that are otherwise equal by `N`, numerically, so the newest generator
+output wins. The packages are published to the wowlua registry and as GitHub
+release assets of the wowlua project, and include the MIT notice of the
+enrichment source.
+
+**Use.** For every flavor in the manifest, the matching `wow-api-<flavor>`
+package is an implicit dev-dependency with the requirement `=X.Y.Z`, derived
+from the flavor's pinned interface number (120100 → `=12.1.0`), using the
+newest `+gen.N`. It can be pinned in `dev-dependencies` or per flavor
+(`flavors.<id>.types`). `wowlua types sync` updates the flavor table and the
+locked type package versions after a game patch.
+
+**Converter.** `wowlua-types-gen` is also exposed as `wowlua types convert
+<path>` and converts any LuaLS-annotated library (e.g. a library's `---@meta`
+files) into `.d.wowlua`. Supported LuaLS tags: `@meta`, `@class` (with multiple
+inheritance, which becomes an intersection for non-primary parents), `@field`, `@param`,
+`@return`, `@overload`, `@alias` (including `---|` literal unions), `@enum`,
+`@generic` (including backtick captures, which become literal-type generics),
+`@type`, `@deprecated`, plus the type syntax `fun(...)`, `table<K,V>`, `T[]`,
+tuples, literals and dotted names. Other tags are ignored.
+
+## 10.10 Registry
+
+The wowlua registry hosts `library`, `lua-library` and `types` packages.
+Addons are distributed through addon sites instead. It is a later
+milestone ([Roadmap](../roadmap.md)). The protocol is specified now so that
+clients and servers can be built independently.
+
+### 10.10.1 Index (sparse HTTP)
+
+- `GET {registry}/config.json` returns `{ "api": "<api base>", "dl": "<download base>" }`.
+- `GET {registry}/index/<name>` returns newline-delimited JSON, one line per
+  published version:
+  `{"name":"wowlua-ui","vers":"0.4.2","deps":[{"name":"libstub","req":"^1.0","kind":"normal"}],"cksum":"sha256-…","features":{},"yanked":false,"wowlua":">=0.3"}`
+- Index files are cacheable and support `ETag` / `If-None-Match`.
+
+### 10.10.2 Download and publish
+
+All registry traffic uses HTTPS. Authenticated requests send
+`Authorization: Bearer <token>`.
+
+| Request | Meaning | Success |
+|---------|---------|---------|
+| `GET {dl}/<name>/<version>.tar.gz` | Download a package archive | 200 |
+| `PUT {api}/v1/packages/<name>/<version>` | Publish. `multipart/form-data` with `manifest` (the package's `wowlua.json`, normalized) and `archive` (the `.tar.gz`). The server checks that name and version match the manifest and computes the checksum. | 201 `{"name":…,"vers":…,"cksum":…}` |
+| `DELETE {api}/v1/packages/<name>/<version>` | Yank: the version stays downloadable for existing lockfiles but is never chosen by new resolutions | 200 |
+| `PUT {api}/v1/packages/<name>/<version>/unyank` | Undo a yank | 200 |
+| `GET` / `PUT` / `DELETE {api}/v1/packages/<name>/owners` | List, add, remove owners (body: `{"users": [...]}`) | 200 |
+
+Errors use HTTP status 400 (invalid package), 401 (missing or bad token), 403
+(not an owner), 404 (unknown package), 409 (version already exists) and 413
+(archive too large), with the body
+`{"errors": [{"code": "<machine code>", "detail": "<message>"}]}`.
+
+- Versions are immutable. A published version can be yanked, never replaced.
+- Package names: lowercase `[a-z0-9-]`, 2–64 characters, first come first served.
+  Names of well-known WoW libraries are reserved for their authors.
+
+### 10.10.3 Package archive
+
+`wowlua package --registry` (or `wowlua publish --target registry`) creates a
+`.tar.gz` containing `wowlua.json`, sources, `.d.wowlua` files and license
+files, but no `dist/`, tests or dev files.
+
+## 10.11 Security
+
+- **No code runs at fetch or build time.** Packages have no build scripts,
+  install hooks or plugins. Dependency Lua is only compiled or copied. It runs
+  in the game, or in the sandboxed test VM (no `io`, `os`, `loadfile`,
+  `dofile`, `require`).
+- **Archive and checkout safety.** Extraction rejects absolute paths, paths
+  containing `..`, and symlinks or hardlinks that point outside the package
+  (E4323). Git submodules are only fetched when opted in (§10.3).
+- **Integrity.** Checksums are verified on every fetch (E4103). Registry and
+  archive downloads require HTTPS.
+- **Tokens.** `wowlua login <target>` stores tokens in the OS credential store
+  (macOS Keychain, Windows Credential Manager, Secret Service on Linux).
+  Environment variables take precedence. Only when no credential store is
+  available are tokens written to `config.json`, created with permissions
+  `0600`, with warning W4326. Tokens are redacted in all output, including
+  `-v` and `--dry-run`.
