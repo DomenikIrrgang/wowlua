@@ -571,7 +571,19 @@ fn check_and_fmt() {
 /// TOC's Lua files in order, each with `(addonName, addonTable)` as `...`.
 /// Returns what it printed.
 fn run_addon(dir: &Path, name: &str) -> String {
-    let toc = fs::read_to_string(dir.join(format!("{name}.toc"))).unwrap();
+    run_addon_as(dir, name, None)
+}
+
+/// Like [`run_addon`], as the client of `flavor` (game type, family) would
+/// load a single TOC: lines whose `[AllowLoadGameType …]` excludes the
+/// flavor are skipped.
+fn run_addon_as(dir: &Path, name: &str, flavor: Option<(&str, &str)>) -> String {
+    run_toc(dir, &format!("{name}.toc"), name, flavor)
+}
+
+/// Loads the Lua files of one TOC file (see [`run_addon`]).
+fn run_toc(dir: &Path, toc_file: &str, name: &str, flavor: Option<(&str, &str)>) -> String {
+    let toc = fs::read_to_string(dir.join(toc_file)).unwrap();
     let lua = mlua::Lua::new();
     lua.load(
         r##"__out = {}
@@ -588,6 +600,18 @@ fn run_addon(dir: &Path, name: &str) -> String {
         .lines()
         .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
     {
+        if let (Some((game, family)), Some(cond)) =
+            (flavor, line.split("[AllowLoadGameType ").nth(1))
+        {
+            let allowed: Vec<&str> = cond
+                .trim_end_matches(']')
+                .split(',')
+                .map(str::trim)
+                .collect();
+            if !allowed.contains(&game) && !allowed.contains(&family) {
+                continue;
+            }
+        }
         let path = line.split(" [").next().unwrap().replace('\\', "/");
         if !path.ends_with(".lua") {
             continue;
@@ -712,4 +736,182 @@ fn module_errors() {
             .code(1)
             .stderr(predicate::str::contains(format!("error[{code}]")));
     }
+}
+
+/// Build metadata, static conditions, `@if` and per-flavor output (spec
+/// chapter 6, codegen §14.8.3).
+#[test]
+fn build_metadata_and_flavor_split_builds() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"import addon, build, flavor, config, features, asset from "wowlua:meta"
+@if(flavor == "standard")
+import * as retail from "./retail"
+if flavor == "standard" then
+	print("retail", retail.name)
+elseif flavor == "vanilla" then
+	print("classic")
+end
+print(addon.name, build.debug, config.maxHistory, features.minimap, features.comms)
+print(asset("media/icon.tga"))
+local function nameOf(t) return t.name end
+print(#addon.authors, addon.flavors[2], nameOf(addon), addon.interface[1])
+@if(build.debug)
+local function debugOnly() return "dbg" end
+print(build.debug and debugOnly() or "release")
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "meta-demo", "version": "1.2.3", "authors": ["Jane <j@x.org>"] },
+  "flavors": { "standard": {}, "vanilla": {} },
+  "build": { "assets": ["media/**"] },
+  "config": { "maxHistory": 50 },
+  "features": { "default": ["minimap"], "minimap": [], "comms": [] },
+  "profiles": { "dev": { "config": { "maxHistory": 100 } } } }
+"#,
+            ),
+            ("src/main.wowlua", main),
+            ("src/retail.wowlua", "export local name = \"Retail!\"\n"),
+            ("media/icon.tga", "tga"),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let dist = dir.path().join("dist/dev/MetaDemo");
+    let toc = fs::read_to_string(dist.join("MetaDemo.toc")).unwrap();
+    assert!(
+        toc.contains(r"wowlua\flavors\standard\src\main.lua [AllowLoadGameType mainline]"),
+        "{toc}"
+    );
+    assert!(
+        toc.contains(r"wowlua\flavors\vanilla\src\main.lua [AllowLoadGameType classic]"),
+        "{toc}"
+    );
+    assert!(
+        toc.contains("src\\retail.lua\n"),
+        "identical files are stored once: {toc}"
+    );
+    let standard = run_addon_as(&dist, "MetaDemo", Some(("standard", "mainline")));
+    let vanilla = run_addon_as(&dist, "MetaDemo", Some(("vanilla", "classic")));
+    let icon = r"Interface\AddOns\MetaDemo\media\icon.tga";
+    assert_eq!(
+        standard,
+        format!(
+            "retail Retail!\nMetaDemo true 100 true false\n{icon}\n1 vanilla MetaDemo 120100\ndbg"
+        )
+    );
+    assert_eq!(
+        vanilla,
+        format!("classic\nMetaDemo true 100 true false\n{icon}\n1 vanilla MetaDemo 11509\ndbg")
+    );
+    let main_out = fs::read_to_string(dist.join("wowlua/flavors/vanilla/src/main.lua")).unwrap();
+    assert_eq!(
+        main_out.lines().count(),
+        15,
+        "lines are preserved:\n{main_out}"
+    );
+    assert!(
+        !main_out.contains("retail"),
+        "removed branches are not emitted:\n{main_out}"
+    );
+
+    // Release: the debug-only function and its use are gone.
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let release = dir.path().join("dist/release/MetaDemo");
+    let out = run_addon_as(&release, "MetaDemo", Some(("standard", "mainline")));
+    assert!(out.ends_with("release"), "{out}");
+}
+
+#[test]
+fn build_metadata_errors() {
+    let cases: &[(&str, &str, &str)] = &[
+        ("@if(false)\nlocal x = 1\nprint(x)\n", "", "E1020"),
+        ("@if(someGlobal)\nlocal x = 1\n", "", "E1040"),
+        (
+            "import config from \"wowlua:meta\"\nprint(config.missing)\n",
+            "",
+            "E2003",
+        ),
+        (
+            "import build from \"wowlua:meta\"\nbuild.debug = true\n",
+            "",
+            "E2010",
+        ),
+        (
+            "import asset from \"wowlua:meta\"\nprint(asset(\"nope.tga\"))\n",
+            "",
+            "E1038",
+        ),
+        ("import nope from \"wowlua:meta\"\n", "", "E1012"),
+        (
+            "import flavor from \"wowlua:meta\"\n@if(flavor == \"standard\")\nlocal x = 1\n",
+            ", \"build\": { \"flavor-mode\": \"shared\" }",
+            "E1039",
+        ),
+    ];
+    for (main, extra, code) in cases {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = format!(
+            "{{ \"package\": {{ \"name\": \"err\", \"version\": \"1.0.0\" }}, \"flavors\": {{ \"standard\": {{}}, \"vanilla\": {{}} }}{extra} }}\n"
+        );
+        write(
+            dir.path(),
+            &[
+                ("wowlua.json", manifest.as_str()),
+                ("src/main.wowlua", *main),
+            ],
+        );
+        wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains(format!("error[{code}]")));
+    }
+}
+
+/// Flavors that need opposite orders get per-flavor TOC files (spec §5.4.6).
+#[test]
+fn incompatible_flavor_orders() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "orders", "version": "1.0.0" }, "flavors": { "standard": {}, "vanilla": {} } }
+"#,
+            ),
+            (
+                "src/a.wowlua",
+                "import flavor from \"wowlua:meta\"\n@if(flavor == \"standard\")\nimport bv from \"./b\"\nexport local av = \"a\"\nprint(\"a\", flavor)\n",
+            ),
+            (
+                "src/b.wowlua",
+                "import flavor from \"wowlua:meta\"\n@if(flavor == \"vanilla\")\nimport av from \"./a\"\nexport local bv = \"b\"\nprint(\"b\", flavor)\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let dist = dir.path().join("dist/dev/Orders");
+    assert_eq!(
+        run_toc(&dist, "Orders_Mainline.toc", "Orders", None),
+        "b standard\na standard"
+    );
+    assert_eq!(
+        run_toc(&dist, "Orders_Classic.toc", "Orders", None),
+        "a vanilla\nb vanilla"
+    );
+    let manifest = fs::read_to_string(dir.path().join("wowlua.json"))
+        .unwrap()
+        .replace("} }\n", "}, \"build\": { \"toc-layout\": \"single\" } }\n");
+    fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
+    wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("error[E1036]"));
 }

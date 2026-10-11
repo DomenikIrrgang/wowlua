@@ -110,7 +110,12 @@ fn func(f: &FuncBody, out: &mut Out) {
 }
 
 fn stmt(s: &Stmt, out: &mut Out) {
-    if let Some(d) = s.decorators.first() {
+    // `@if` is conditional compilation (milestone M2); other decorators M3.
+    if let Some(d) = s
+        .decorators
+        .iter()
+        .find(|d| !(d.path.len() == 1 && d.path[0].text.as_ref() == "if"))
+    {
         out.push((Feature::Decorator, d.span));
     }
     match &s.kind {

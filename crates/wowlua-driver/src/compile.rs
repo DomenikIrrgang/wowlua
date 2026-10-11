@@ -1,17 +1,20 @@
 //! Checking and compiling sources (spec compiler §13.3.1): every Lua and
-//! wowlua file is parsed with the compiler's own parser, the package's
-//! modules are analyzed together (imports, exports, order), `.wowlua` files
-//! are lowered and emitted, and Lua 5.1's code-generation limits are checked
-//! with the embedded VM.
+//! wowlua file is parsed once with the compiler's own parser; then, per
+//! build configuration and flavor, the package's modules are analyzed
+//! together (imports, exports, `@if`), `.wowlua` files are lowered and
+//! emitted, and Lua 5.1's code-generation limits are checked with the
+//! embedded VM.
 
 use crate::luacheck;
 use crate::sources::{Source, SourceKind};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
+use std::sync::Arc;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_lower::{Context, ImportContext};
 use wowlua_luair::{CommentMode, EmitOptions, LineMode};
 use wowlua_manifest::Profile;
 use wowlua_manifest::model::LineMode as ManifestLineMode;
+use wowlua_sema::meta::{Meta, MetaKind};
 use wowlua_sema::{Export, FileInput, FileKind, Target};
 use wowlua_span::{FileId, SourceDb};
 use wowlua_syntax::Parse;
@@ -29,10 +32,11 @@ pub struct CompileOutput {
     pub compiled: HashMap<String, Compiled>,
     /// `(a, b)`: source `a` must load before source `b` (by `Source::rel`).
     pub edges: Vec<(String, String)>,
-    /// Module IDs registered with the runtime; empty when no runtime is
-    /// needed.
+    /// Module IDs registered with the runtime.
     pub modules: Vec<String>,
     pub needs_runtime: bool,
+    /// `wowlua:meta` paths used as runtime values.
+    pub meta_used: BTreeSet<(MetaKind, Vec<String>)>,
 }
 
 /// A declaration file with its contents.
@@ -40,6 +44,13 @@ pub struct Declaration {
     pub source: Source,
     pub file: FileId,
     pub bytes: Vec<u8>,
+}
+
+/// The parsed sources of a package (shared by all flavors).
+pub struct Parsed {
+    parses: Vec<Option<Parse>>,
+    ok: Vec<bool>,
+    declarations: Vec<Parse>,
 }
 
 /// The line mode for unbundled output: `preserve` unless the profile sets
@@ -52,107 +63,27 @@ fn line_mode(profile: &Profile) -> LineMode {
     }
 }
 
-/// Checks and compiles the package's sources.
-pub fn compile_sources(
+/// Parses every source once and checks the plain Lua files.
+pub fn parse_sources(
     db: &SourceDb,
     diagnostics: &mut Vec<Diagnostic>,
     files: &[(Source, FileId)],
     declarations: &[Declaration],
     raw: &HashMap<String, Vec<u8>>,
-    profile: &Profile,
-) -> CompileOutput {
-    let options = EmitOptions {
-        line_mode: line_mode(profile),
-        // Minification (which strips comments) is not available yet.
-        comments: CommentMode::All,
-        indent: "\t".into(),
-    };
-    let mut out = CompileOutput::default();
-
-    // Parse every Lua and wowlua file.
-    let mut parses: Vec<Option<Parse>> = Vec::with_capacity(files.len());
+) -> Parsed {
+    let mut parses = Vec::with_capacity(files.len());
     let mut ok = vec![true; files.len()];
     for (i, (source, file)) in files.iter().enumerate() {
         if source.kind == SourceKind::Xml {
             parses.push(None);
             continue;
         }
-        let parsed = wowlua_syntax::parse(&raw[&source.rel], *file);
+        let bytes = &raw[&source.rel];
+        let parsed = wowlua_syntax::parse(bytes, *file);
         if parsed.has_errors() {
             diagnostics.extend(parsed.diagnostics.clone());
             ok[i] = false;
-        }
-        parses.push(Some(parsed));
-    }
-    let decl_parses: Vec<Parse> = declarations
-        .iter()
-        .map(|d| {
-            let parsed = wowlua_syntax::parse(&d.bytes, d.file);
-            if parsed.has_errors() {
-                diagnostics.extend(parsed.diagnostics.clone());
-            }
-            parsed
-        })
-        .collect();
-
-    // Analyze the package's modules together.
-    let mut inputs: Vec<FileInput> = files
-        .iter()
-        .zip(&parses)
-        .map(|((source, _), parse)| FileInput {
-            src_rel: source.src_rel.clone(),
-            kind: match source.kind {
-                SourceKind::Wowlua => FileKind::Wowlua,
-                SourceKind::Lua => FileKind::Lua,
-                SourceKind::Xml => FileKind::Xml,
-            },
-            parse: parse.as_ref(),
-        })
-        .collect();
-    for (d, parse) in declarations.iter().zip(&decl_parses) {
-        inputs.push(FileInput {
-            src_rel: d.source.src_rel.clone(),
-            kind: FileKind::Declaration,
-            parse: Some(parse),
-        });
-    }
-    let analysis = wowlua_sema::analyze(&inputs);
-    diagnostics.extend(analysis.diagnostics.iter().cloned());
-    for &(a, b) in &analysis.edges {
-        if a < files.len() && b < files.len() {
-            out.edges
-                .push((files[a].0.rel.clone(), files[b].0.rel.clone()));
-        }
-    }
-    for (i, info) in analysis.modules.iter().enumerate() {
-        if let Some(info) = info
-            && info.is_module
-        {
-            out.needs_runtime = true;
-            out.modules.push(info.id.clone());
-            for import in &info.imports {
-                if let Target::Lua {
-                    file,
-                    declared: true,
-                } = import.target
-                {
-                    out.modules
-                        .push(wowlua_sema::module_id(&inputs[file].src_rel));
-                }
-            }
-        }
-        let _ = i;
-    }
-    out.modules.sort();
-    out.modules.dedup();
-
-    for (i, (source, file)) in files.iter().enumerate() {
-        if source.kind == SourceKind::Xml || !ok[i] {
-            continue;
-        }
-        let parsed = parses[i].as_ref().expect("parsed");
-        let bytes = &raw[&source.rel];
-        if source.kind == SourceKind::Lua {
+        } else if source.kind == SourceKind::Lua {
             if let Some((feature, span)) = wowlua_syntax::features::features(&parsed.chunk).first()
             {
                 diagnostics.push(
@@ -166,22 +97,114 @@ pub fn compile_sources(
                     .with_label(*span, "not Lua 5.1")
                     .with_help("rename the file to `.wowlua`"),
                 );
-                continue;
-            }
-            if let Some(d) = luacheck::check(db, *file, bytes) {
+                ok[i] = false;
+            } else if let Some(d) = luacheck::check(db, *file, bytes) {
                 diagnostics.push(d);
             }
+        }
+        parses.push(Some(parsed));
+    }
+    let declarations = declarations
+        .iter()
+        .map(|d| {
+            let parsed = wowlua_syntax::parse(&d.bytes, d.file);
+            if parsed.has_errors() {
+                diagnostics.extend(parsed.diagnostics.clone());
+            }
+            parsed
+        })
+        .collect();
+    Parsed {
+        parses,
+        ok,
+        declarations,
+    }
+}
+
+/// Compiles the package for one build configuration and flavor.
+#[allow(clippy::too_many_arguments)]
+pub fn compile_flavor(
+    db: &SourceDb,
+    diagnostics: &mut Vec<Diagnostic>,
+    files: &[(Source, FileId)],
+    declarations: &[Declaration],
+    raw: &HashMap<String, Vec<u8>>,
+    parsed: &Parsed,
+    profile: &Profile,
+    meta: Arc<Meta>,
+) -> CompileOutput {
+    let options = EmitOptions {
+        line_mode: line_mode(profile),
+        // Minification (which strips comments) is not available yet.
+        comments: CommentMode::All,
+        indent: "\t".into(),
+    };
+    let mut out = CompileOutput::default();
+
+    let mut inputs: Vec<FileInput> = files
+        .iter()
+        .zip(&parsed.parses)
+        .map(|((source, _), parse)| FileInput {
+            src_rel: source.src_rel.clone(),
+            kind: match source.kind {
+                SourceKind::Wowlua => FileKind::Wowlua,
+                SourceKind::Lua => FileKind::Lua,
+                SourceKind::Xml => FileKind::Xml,
+            },
+            parse: parse.as_ref(),
+        })
+        .collect();
+    for (d, parse) in declarations.iter().zip(&parsed.declarations) {
+        inputs.push(FileInput {
+            src_rel: d.source.src_rel.clone(),
+            kind: FileKind::Declaration,
+            parse: Some(parse),
+        });
+    }
+    let analysis = wowlua_sema::analyze(&inputs, Some(&meta));
+    diagnostics.extend(analysis.diagnostics.iter().cloned());
+    for &(a, b) in &analysis.edges {
+        if a < files.len() && b < files.len() {
+            out.edges
+                .push((files[a].0.rel.clone(), files[b].0.rel.clone()));
+        }
+    }
+    for info in analysis.modules.iter().flatten() {
+        if info.is_module {
+            out.needs_runtime = true;
+            out.modules.push(info.id.clone());
+            for import in &info.imports {
+                if let Target::Lua {
+                    file,
+                    declared: true,
+                } = import.target
+                {
+                    out.modules
+                        .push(wowlua_sema::module_id(&inputs[file].src_rel));
+                }
+            }
+        }
+    }
+    out.modules.sort();
+    out.modules.dedup();
+
+    for (i, (source, file)) in files.iter().enumerate() {
+        if source.kind != SourceKind::Wowlua || !parsed.ok[i] {
             continue;
         }
-        let ctx = context(&analysis, i, &inputs);
-        let chunk = match wowlua_lower::lower_with(parsed, bytes, &ctx) {
-            Ok(chunk) => chunk,
+        let parse = parsed.parses[i].as_ref().expect("parsed");
+        let bytes = &raw[&source.rel];
+        let ctx = context(&analysis, i, &inputs, meta.clone());
+        let lowered = match wowlua_lower::lower_module(parse, bytes, &ctx) {
+            Ok(lowered) => lowered,
             Err(errors) => {
                 diagnostics.extend(errors);
                 continue;
             }
         };
-        let emitted = wowlua_luair::emit(&chunk, &options);
+        out.needs_runtime |= lowered.uses_runtime;
+        out.meta_used.extend(lowered.meta_used);
+        let emitted = wowlua_luair::emit(&lowered.chunk, &options);
         // The output must parse (spec compiler §13.8, item 2).
         let reparsed = wowlua_syntax::parse(&emitted.text, *file);
         if reparsed.has_errors() {
@@ -214,14 +237,21 @@ pub fn compile_sources(
 }
 
 /// The lowering context of input `i` from the package analysis.
-fn context(analysis: &wowlua_sema::Analysis, i: usize, inputs: &[FileInput]) -> Context {
-    let Some(info) = &analysis.modules[i] else {
-        return Context::default();
-    };
+fn context(
+    analysis: &wowlua_sema::Analysis,
+    i: usize,
+    inputs: &[FileInput],
+    meta: Arc<Meta>,
+) -> Context {
     let mut ctx = Context {
-        module: info.is_module.then(|| info.id.clone()),
+        module: None,
         imports: HashMap::new(),
+        meta: Some(meta),
     };
+    let Some(info) = &analysis.modules[i] else {
+        return ctx;
+    };
+    ctx.module = info.is_module.then(|| info.id.clone());
     for import in &info.imports {
         let target = match &import.target {
             Target::Module(m) => {

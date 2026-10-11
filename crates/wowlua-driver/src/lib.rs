@@ -11,6 +11,7 @@ mod fsutil;
 pub mod install;
 pub mod lockfile;
 mod luacheck;
+mod meta;
 pub mod project;
 pub mod scaffold;
 mod sources;

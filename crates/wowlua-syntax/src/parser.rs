@@ -281,6 +281,15 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// A decorator name may be a reserved word (`@if`).
+    fn decorator_name(&mut self) -> PResult<Name> {
+        if self.kind().is_keyword() {
+            let t = self.advance();
+            return Ok(self.make_name(&t));
+        }
+        self.name()
+    }
+
     fn make_name(&self, t: &Token) -> Name {
         Name {
             text: String::from_utf8_lossy(self.text_of(t)).into(),
@@ -648,10 +657,10 @@ impl<'a> Parser<'a> {
         let mut out = Vec::new();
         while self.check(T::At) {
             let at = self.advance();
-            let mut path = vec![self.name()?];
+            let mut path = vec![self.decorator_name()?];
             while self.check(T::Dot) {
                 self.advance();
-                path.push(self.name()?);
+                path.push(self.decorator_name()?);
             }
             // Arguments must start on the decorator's line.
             let same_line = self.tok(0).line == self.prev().end_line;

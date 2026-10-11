@@ -3,10 +3,12 @@
 //! across modules, and the dependency order of files.
 
 pub mod constant;
+pub mod meta;
 pub mod order;
 
 use constant::Const;
 use indexmap::IndexMap;
+use meta::{Meta, MetaKind};
 use std::collections::HashMap;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
@@ -69,6 +71,8 @@ pub struct ModuleInfo {
     pub is_module: bool,
     pub exports: IndexMap<String, Export>,
     pub imports: Vec<Import>,
+    /// Names bound to `wowlua:meta` exports.
+    pub meta_bindings: HashMap<String, MetaKind>,
 }
 
 #[derive(Debug, Default)]
@@ -90,8 +94,9 @@ pub fn module_id(src_rel: &str) -> String {
     src_rel.to_string()
 }
 
-/// Analyzes the modules of a package.
-pub fn analyze(files: &[FileInput]) -> Analysis {
+/// Analyzes the modules of a package, for one build configuration and
+/// flavor (`meta`: `@if` on imports changes a flavor's import graph).
+pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
     let mut analysis = Analysis {
         modules: vec![None; files.len()],
         ..Analysis::default()
@@ -130,10 +135,16 @@ pub fn analyze(files: &[FileInput]) -> Analysis {
                             .with_label(s.span, "this import follows other code"),
                         );
                     }
+                    if import_removed(s, &info, meta, &mut analysis.diagnostics) {
+                        continue;
+                    }
                     let resolved = resolve(&import.from, &f.src_rel, &exact, &folded, files);
                     match resolved {
                         Ok(target) => {
                             check_names(import, &target, files, &mut analysis.diagnostics);
+                            if target == Target::Meta {
+                                bind_meta(import, &mut info.meta_bindings);
+                            }
                             if !import.type_only
                                 && let Some(dep) = target_file(&target)
                             {
@@ -220,7 +231,16 @@ pub fn analyze(files: &[FileInput]) -> Analysis {
                     _ => continue,
                 };
                 let Some(value) = value else { continue };
-                if let Some(c) = constant::eval(value, &|n| env.get(n).cloned()) {
+                let kinds = &info.meta_bindings;
+                let folded = match meta {
+                    Some(meta) => {
+                        meta::static_value(value, meta, &|n| kinds.get(n).copied(), &|n| {
+                            env.get(n).cloned()
+                        })
+                    }
+                    None => constant::eval(value, &|n| env.get(n).cloned()),
+                };
+                if let Some(c) = folded {
                     env.insert(name.text.to_string(), c.clone());
                     if exported {
                         updates.push((name.text.to_string(), c));
@@ -271,6 +291,58 @@ fn imported_consts(
         }
     }
     env
+}
+
+/// Names bound by an import of `wowlua:meta`.
+fn bind_meta(import: &wowlua_syntax::ast::Import, out: &mut HashMap<String, MetaKind>) {
+    if let ImportClause::Names(specs) = &import.clause {
+        for spec in specs {
+            if let Some(kind) = MetaKind::from_export(&spec.name.text) {
+                let local = spec.alias.as_ref().unwrap_or(&spec.name);
+                out.insert(local.text.to_string(), kind);
+            }
+        }
+    }
+}
+
+/// An `@if(condition)` on the import is false for this build (spec §6.4.3).
+/// The condition may only use `wowlua:meta` paths and literals (E1040);
+/// `flavor` is not static in shared mode (E1039).
+fn import_removed(
+    stmt: &Stmt,
+    info: &ModuleInfo,
+    meta: Option<&Meta>,
+    out: &mut Vec<Diagnostic>,
+) -> bool {
+    let Some(meta) = meta else { return false };
+    let kind_of = |n: &str| info.meta_bindings.get(n).copied();
+    let mut removed = false;
+    for d in &stmt.decorators {
+        let Some(cond) = meta::if_condition(d) else {
+            continue;
+        };
+        let Some(cond) = cond else {
+            out.push(
+                Diagnostic::error("E1040", "`@if` takes one condition").with_label(d.span, "here"),
+            );
+            continue;
+        };
+        match meta::static_value(cond, meta, &kind_of, &|_| None) {
+            Some(c) => removed |= !c.truthy(),
+            None if meta.flavor.is_none() && meta::uses_flavor(cond, &kind_of) => out.push(
+                Diagnostic::error("E1039", "`flavor` is not a constant in shared flavor mode")
+                    .with_label(cond.span, "use a runtime check instead"),
+            ),
+            None => out.push(
+                Diagnostic::error(
+                    "E1040",
+                    "an `@if` on an import may only use `wowlua:meta` paths and literals",
+                )
+                .with_label(cond.span, "not static"),
+            ),
+        }
+    }
+    removed
 }
 
 fn target_file(target: &Target) -> Option<usize> {
@@ -437,7 +509,12 @@ fn check_names(
             declared: false, ..
         }
         | Target::Xml(_) => Some(Vec::new()),
-        Target::Meta => None,
+        Target::Meta => Some(
+            ["addon", "build", "flavor", "config", "features", "asset"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        ),
     };
     let Some(available) = available else { return };
     for spec in specs {

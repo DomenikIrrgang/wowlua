@@ -61,6 +61,56 @@ pub struct BuildOutput {
     pub files: BTreeMap<String, Content>,
 }
 
+/// The dependency edges of one compilation's flavor (`None` in shared mode).
+type FlavorEdges = (Option<String>, Vec<(String, String)>);
+
+/// One compilation (per flavor in split mode).
+struct FlavorBuild {
+    flavor: Option<String>,
+    meta: wowlua_sema::meta::Meta,
+    output: crate::compile::CompileOutput,
+}
+
+/// A per-flavor copy of an XML file (spec codegen §14.8.4): references to
+/// per-flavor files stay relative (they sit in the same flavor tree);
+/// references to shared files become absolute in-game paths. Returns the
+/// content and the shared files it loads.
+fn flavor_xml(
+    text: &str,
+    rel: &str,
+    xml: &XmlInfo,
+    files: &[(Source, FileId)],
+    per_flavor: &BTreeSet<String>,
+    xml_per_flavor: &BTreeSet<String>,
+    addon: &str,
+) -> (String, Vec<String>) {
+    let Ok(refs) = wowlua_xml::references(text) else {
+        return (text.to_string(), Vec::new());
+    };
+    let targets = xml.edges.get(rel).cloned().unwrap_or_default();
+    let mut replacements = Vec::new();
+    let mut shared = Vec::new();
+    for (reference, target) in refs.iter().zip(&targets) {
+        if per_flavor.contains(target) || xml_per_flavor.contains(target) {
+            continue;
+        }
+        let Some((source, _)) = files.iter().find(|(s, _)| &s.rel == target) else {
+            continue;
+        };
+        let output = source.output_path();
+        shared.push(output.clone());
+        let conditions = reference.file[reference.path().len()..].to_string();
+        replacements.push((
+            reference,
+            format!(
+                "Interface\\AddOns\\{addon}\\{}{conditions}",
+                output.replace('/', "\\")
+            ),
+        ));
+    }
+    (wowlua_xml::rewrite(text, &replacements), shared)
+}
+
 /// The runtime's output path (spec codegen §14.8).
 const RUNTIME_PATH: &str = "wowlua/runtime.lua";
 
@@ -173,17 +223,105 @@ pub fn build(
             ),
         }
     }
+    // Version and build id (`wowlua:meta` needs them while compiling).
+    let vcs = vcs::info(&root);
+    let version = build_version(session, project, &profile, vcs.as_ref())?;
+    let build_id = build_id(session, project, &profile.name, &flavors, &files, &assets);
+    let asset_rels: Vec<String> = assets.iter().map(|a| a.rel.clone()).collect();
+
+    // Compile: once per flavor in split mode, once in shared mode (spec
+    // §6.3). Sources are parsed once.
     let mut diagnostics = Vec::new();
-    let compile_output = crate::compile::compile_sources(
-        &session.db,
-        &mut diagnostics,
-        &files,
-        &declarations,
-        &raw,
-        &profile,
-    );
-    session.diagnostics.extend(diagnostics);
-    let compiled = &compile_output.compiled;
+    let parsed =
+        crate::compile::parse_sources(&session.db, &mut diagnostics, &files, &declarations, &raw);
+    let split = build_cfg.flavor_mode == wowlua_manifest::model::FlavorMode::Split;
+    let compile_flavors: Vec<Option<String>> = if split {
+        flavors.iter().cloned().map(Some).collect()
+    } else {
+        vec![None]
+    };
+    let mut builds: Vec<FlavorBuild> = Vec::new();
+    for flavor in &compile_flavors {
+        let meta = crate::meta::build_meta(
+            project,
+            &crate::meta::MetaInput {
+                profile: &profile,
+                flavor: flavor.as_deref(),
+                flavors: &flavors,
+                version: &version,
+                build_id: &build_id,
+                vcs: vcs.as_ref(),
+                assets: &asset_rels,
+                addon_name: &addon_name,
+            },
+        );
+        let output = crate::compile::compile_flavor(
+            &session.db,
+            &mut diagnostics,
+            &files,
+            &declarations,
+            &raw,
+            &parsed,
+            &profile,
+            std::sync::Arc::new(meta.clone()),
+        );
+        builds.push(FlavorBuild {
+            flavor: flavor.clone(),
+            meta,
+            output,
+        });
+    }
+    // One message per problem, not one per flavor.
+    let mut seen = BTreeSet::new();
+    for d in diagnostics {
+        let key = format!(
+            "{:?}|{}|{:?}",
+            d.code,
+            d.message,
+            d.labels.first().map(|l| (l.span.start, l.span.end))
+        );
+        if seen.insert(key) {
+            session.push(d);
+        }
+    }
+    // Compiled code that differs between flavors is stored per flavor
+    // (spec codegen §14.8.3).
+    let mut per_flavor: BTreeSet<String> = BTreeSet::new();
+    for (source, _) in &files {
+        let codes: Vec<Option<&Vec<u8>>> = builds
+            .iter()
+            .map(|b| b.output.compiled.get(&source.rel).map(|c| &c.code))
+            .collect();
+        if codes.windows(2).any(|w| w[0] != w[1]) {
+            per_flavor.insert(source.rel.clone());
+        }
+    }
+    let mut edges: Vec<(String, String)> = builds
+        .iter()
+        .flat_map(|b| b.output.edges.iter().cloned())
+        .collect();
+    edges.sort();
+    edges.dedup();
+    let needs_runtime = builds
+        .iter()
+        .any(|b| b.output.needs_runtime || !b.output.meta_used.is_empty());
+    let runtimes: Vec<String> = builds
+        .iter()
+        .map(|b| {
+            wowlua_runtime::runtime(&wowlua_runtime::RuntimeOptions {
+                modules: b.output.modules.clone(),
+                debug: profile.debug,
+                meta: crate::meta::runtime_tables(
+                    &b.meta,
+                    &b.output.meta_used,
+                    manifest.manifest.meta.runtime == wowlua_manifest::model::MetaRuntime::Full,
+                    &flavors,
+                    &project.interfaces,
+                ),
+            })
+        })
+        .collect();
+    let runtime_per_flavor = runtimes.windows(2).any(|w| w[0] != w[1]);
 
     // XML references.
     let xml = resolve_xml(session, &files);
@@ -280,22 +418,36 @@ pub fn build(
         });
     }
     order_by_load_order(&mut toc_items, &build_cfg.load_order);
-    order_by_dependencies(
+    let flavor_edges: Vec<FlavorEdges> = builds
+        .iter()
+        .map(|b| (b.flavor.clone(), b.output.edges.clone()))
+        .collect();
+    let rel_orders = order_by_dependencies(
         session,
         &mut toc_items,
-        &compile_output.edges,
+        &edges,
+        &flavor_edges,
         &xml,
         &build_cfg.load_order,
     );
+    // XML files that load per-flavor code are emitted per flavor too.
+    let mut xml_per_flavor: BTreeSet<String> = BTreeSet::new();
+    loop {
+        let before = xml_per_flavor.len();
+        for (x, targets) in &xml.edges {
+            if targets
+                .iter()
+                .any(|t| per_flavor.contains(t) || xml_per_flavor.contains(t))
+            {
+                xml_per_flavor.insert(x.clone());
+            }
+        }
+        if xml_per_flavor.len() == before {
+            break;
+        }
+    }
     // The runtime loads before every module (spec §5.4.1).
-    let runtime = compile_output.needs_runtime.then(|| {
-        wowlua_runtime::runtime(&wowlua_runtime::RuntimeOptions {
-            modules: compile_output.modules.clone(),
-            debug: profile.debug,
-            meta: None,
-        })
-    });
-    if runtime.is_some() {
+    if needs_runtime {
         toc_items.insert(
             0,
             TocItem {
@@ -306,16 +458,63 @@ pub fn build(
             },
         );
     }
+    // Per-flavor variants take the place of the shared file in the order.
+    let flavor_paths = |rel: &str| -> bool {
+        per_flavor.contains(rel)
+            || xml_per_flavor.contains(rel)
+            || (rel == RUNTIME_PATH && runtime_per_flavor)
+    };
+    let toc_items: Vec<TocItem> = toc_items
+        .into_iter()
+        .flat_map(|item| {
+            if !flavor_paths(&item.rel) {
+                return vec![item];
+            }
+            builds
+                .iter()
+                .filter_map(|b| b.flavor.clone())
+                .filter(|f| item.flavors.as_ref().is_none_or(|list| list.contains(f)))
+                .map(|f| TocItem {
+                    rel: item.rel.clone(),
+                    path: format!("wowlua/flavors/{f}/{}", item.path),
+                    flavors: Some(vec![f]),
+                    locales: item.locales.clone(),
+                })
+                .collect()
+        })
+        .collect();
+    // Flavors that need incompatible orders get per-flavor TOC files, each
+    // in its own order (spec §5.4.6).
+    let flavor_orders = rel_orders.map(|orders| {
+        orders
+            .into_iter()
+            .map(|(flavor, rels)| {
+                let applies =
+                    |item: &TocItem| item.flavors.as_ref().is_none_or(|l| l.contains(&flavor));
+                let mut indices: Vec<usize> = toc_items
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, item)| item.rel == RUNTIME_PATH && applies(item))
+                    .map(|(i, _)| i)
+                    .collect();
+                for rel in &rels {
+                    indices.extend(
+                        toc_items
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, item)| &item.rel == rel && applies(item))
+                            .map(|(i, _)| i),
+                    );
+                }
+                (flavor, indices)
+            })
+            .collect()
+    });
     let toc_data = read_toc_data(session, project, &flavors);
 
     if session.has_errors() {
         return None;
     }
-
-    // Version and build id.
-    let vcs = vcs::info(&root);
-    let version = build_version(session, project, &profile, vcs.as_ref())?;
-    let build_id = build_id(session, project, &profile.name, &flavors, &files, &assets);
 
     // TOC files.
     let toc_input = TocInput {
@@ -348,6 +547,7 @@ pub fn build(
             TocLayout::Single => Layout::Single,
             TocLayout::PerFlavor => Layout::PerFlavor,
         },
+        flavor_orders,
     };
     let tocs = match wowlua_toc::generate(&toc_input) {
         Ok(generated) => generated.files,
@@ -367,11 +567,59 @@ pub fn build(
             Content::Bytes(toc.content.clone().into_bytes()),
         );
     }
+    let mut flavor_roots: BTreeSet<String> = BTreeSet::new();
+    let mut maps: BTreeMap<String, String> = BTreeMap::new();
     for source in &emitted {
-        let original = compiled
-            .get(&source.rel)
-            .map(|c| &c.code)
-            .unwrap_or(&raw[&source.rel]);
+        if per_flavor.contains(&source.rel) {
+            for b in &builds {
+                let (Some(f), Some(c)) = (&b.flavor, b.output.compiled.get(&source.rel)) else {
+                    continue;
+                };
+                let path = format!("wowlua/flavors/{f}/{}", source.output_path());
+                if xml.loaded_by_xml.contains(&source.rel) {
+                    flavor_roots.insert(path.clone());
+                }
+                if let Some(map) = &c.map {
+                    maps.insert(format!("{f}/{}.map", source.output_path()), map.clone());
+                }
+                out.insert(path, Content::Bytes(c.code.clone()));
+            }
+            continue;
+        }
+        let compiled = builds
+            .iter()
+            .find_map(|b| b.output.compiled.get(&source.rel));
+        if let Some(map) = compiled.and_then(|c| c.map.clone()) {
+            maps.insert(format!("{}.map", source.output_path()), map);
+        }
+        let original = compiled.map(|c| &c.code).unwrap_or(&raw[&source.rel]);
+        if xml_per_flavor.contains(&source.rel) {
+            let text = match xml.rewrites.get(&source.rel) {
+                Some(rewritten) => rewritten.clone(),
+                None => String::from_utf8_lossy(original).into_owned(),
+            };
+            for b in &builds {
+                let Some(f) = &b.flavor else { continue };
+                let (content, shared_targets) = flavor_xml(
+                    &text,
+                    &source.rel,
+                    &xml,
+                    &files,
+                    &per_flavor,
+                    &xml_per_flavor,
+                    &addon_name,
+                );
+                for t in shared_targets {
+                    flavor_roots.insert(t);
+                }
+                let path = format!("wowlua/flavors/{f}/{}", source.output_path());
+                if xml.loaded_by_xml.contains(&source.rel) {
+                    flavor_roots.insert(path.clone());
+                }
+                out.insert(path, Content::Bytes(content.into_bytes()));
+            }
+            continue;
+        }
         let content = match xml.rewrites.get(&source.rel) {
             Some(rewritten) if std::str::from_utf8(original).is_ok() => {
                 rewritten.clone().into_bytes()
@@ -397,11 +645,22 @@ pub fn build(
     for (name, bytes) in bindings_files(session, &root) {
         out.insert(name, Content::Bytes(bytes));
     }
-    if let Some(runtime) = &runtime {
-        out.insert(
-            RUNTIME_PATH.into(),
-            Content::Bytes(runtime.clone().into_bytes()),
-        );
+    if needs_runtime {
+        if runtime_per_flavor {
+            for (b, text) in builds.iter().zip(&runtimes) {
+                if let Some(f) = &b.flavor {
+                    out.insert(
+                        format!("wowlua/flavors/{f}/{RUNTIME_PATH}"),
+                        Content::Bytes(text.clone().into_bytes()),
+                    );
+                }
+            }
+        } else if let Some(text) = runtimes.first() {
+            out.insert(
+                RUNTIME_PATH.into(),
+                Content::Bytes(text.clone().into_bytes()),
+            );
+        }
     }
     for asset in &assets {
         let first = asset.rel.split('/').next().unwrap_or_default();
@@ -434,11 +693,12 @@ pub fn build(
         .filter(|s| loaded_by_variable.contains(&s.rel))
         .map(|s| s.output_path())
         .collect();
-    let roots: BTreeSet<String> = emitted
+    let mut roots: BTreeSet<String> = emitted
         .iter()
         .filter(|s| shared.contains(&s.rel))
         .map(|s| s.output_path())
         .collect();
+    roots.extend(flavor_roots);
     validate_output(
         session,
         &out,
@@ -456,13 +716,6 @@ pub fn build(
         .out_dir
         .clone()
         .unwrap_or_else(|| manifest.out_dir().join(&profile.name).join(&addon_name));
-    let maps: BTreeMap<String, String> = emitted
-        .iter()
-        .filter_map(|s| {
-            let map = compiled.get(&s.rel)?.map.clone()?;
-            Some((format!("{}.map", s.output_path()), map))
-        })
-        .collect();
     if request.write
         && let Err(error) =
             write_tree(&dir, &out).and_then(|()| write_maps(&dir, &addon_name, &maps))
@@ -662,15 +915,19 @@ struct TocItem {
 /// Applies dependency edges between sources (imports; spec §5.4) to the TOC
 /// order, keeping the current order wherever the edges allow. A file loaded
 /// through XML is represented by the TOC-listed XML file that loads it.
+/// When the flavors' edges together form a cycle although each flavor's
+/// own edges do not, the flavors need different orders: returns them (by
+/// `TocItem::rel`) and leaves `entries` unchanged.
 fn order_by_dependencies(
     session: &mut Session,
     entries: &mut Vec<TocItem>,
     edges: &[(String, String)],
+    flavor_edges: &[FlavorEdges],
     xml: &XmlInfo,
     load_order: &[String],
-) {
+) -> Option<HashMap<String, Vec<String>>> {
     if edges.is_empty() {
-        return;
+        return None;
     }
     let index: HashMap<&str, usize> = entries
         .iter()
@@ -693,44 +950,69 @@ fn order_by_dependencies(
         }
         None
     };
-    let mut item_edges = Vec::new();
-    for (a, b) in edges {
-        if let (Some(x), Some(y)) = (item_of(a), item_of(b))
-            && x != y
+    let item_edges = |edges: &[(String, String)]| -> Vec<(usize, usize)> {
+        edges
+            .iter()
+            .filter_map(|(a, b)| Some((item_of(a)?, item_of(b)?)))
+            .filter(|(x, y)| x != y)
+            .collect()
+    };
+    let union = item_edges(edges);
+    let pos = |rel: &str| load_order.iter().position(|l| l == rel);
+    for &(x, y) in &union {
+        // A `build.load-order` that lists b before a contradicts it.
+        if let (Some(pa), Some(pb)) = (pos(&entries[x].rel), pos(&entries[y].rel))
+            && pb < pa
         {
-            item_edges.push((x, y));
-            // A `build.load-order` that lists b before a contradicts it.
-            let pos = |rel: &str| load_order.iter().position(|l| l == rel);
-            if let (Some(pa), Some(pb)) = (pos(&entries[x].rel), pos(&entries[y].rel))
-                && pb < pa
-            {
-                session.push(Diagnostic::error(
-                    "E1035",
-                    format!(
-                        "`build.load-order` lists `{}` before `{}`, but it imports it",
-                        entries[y].rel, entries[x].rel
-                    ),
-                ));
-            }
+            session.push(Diagnostic::error(
+                "E1035",
+                format!(
+                    "`build.load-order` lists `{}` before `{}`, but it imports it",
+                    entries[y].rel, entries[x].rel
+                ),
+            ));
         }
     }
     let rank: Vec<usize> = (0..entries.len()).collect();
-    match wowlua_sema::order::stable_topo(entries.len(), &rank, &item_edges) {
+    let report_cycle = |session: &mut Session, entries: &[TocItem], cycle: &[usize]| {
+        let names: Vec<&str> = cycle.iter().map(|&i| entries[i].rel.as_str()).collect();
+        let mut shown = names.join(" → ");
+        if let Some(first) = names.first() {
+            shown.push_str(&format!(" → {first}"));
+        }
+        session.push(
+            Diagnostic::error("E1014", format!("import cycle: {shown}"))
+                .with_help("move the use into a function that runs later, or split a module"),
+        );
+    };
+    match wowlua_sema::order::stable_topo(entries.len(), &rank, &union) {
         Ok(order) => {
             let mut old: Vec<Option<TocItem>> =
                 std::mem::take(entries).into_iter().map(Some).collect();
             *entries = order.into_iter().filter_map(|i| old[i].take()).collect();
+            None
         }
         Err(cycle) => {
-            let names: Vec<&str> = cycle.iter().map(|&i| entries[i].rel.as_str()).collect();
-            let mut shown = names.join(" → ");
-            if let Some(first) = names.first() {
-                shown.push_str(&format!(" → {first}"));
+            let mut orders = HashMap::new();
+            for (flavor, own) in flavor_edges {
+                let Some(flavor) = flavor else {
+                    report_cycle(session, entries, &cycle);
+                    return None;
+                };
+                match wowlua_sema::order::stable_topo(entries.len(), &rank, &item_edges(own)) {
+                    Ok(order) => {
+                        orders.insert(
+                            flavor.clone(),
+                            order.into_iter().map(|i| entries[i].rel.clone()).collect(),
+                        );
+                    }
+                    Err(own_cycle) => {
+                        report_cycle(session, entries, &own_cycle);
+                        return None;
+                    }
+                }
             }
-            session.push(
-                Diagnostic::error("E1014", format!("import cycle: {shown}"))
-                    .with_help("move the use into a function that runs later, or split a module"),
-            );
+            Some(orders)
         }
     }
 }
@@ -1335,6 +1617,12 @@ fn toc_error(error: TocError, manifest: &Path) -> Diagnostic {
         )
         .with_path(manifest)
         .with_help("use the single TOC layout or drop a flavor"),
+        TocError::IncompatibleOrders => Diagnostic::error(
+            "E1036",
+            "the flavors need incompatible load orders, but `build.toc-layout` is `single`",
+        )
+        .with_path(manifest)
+        .with_help("use `\"toc-layout\": \"auto\"` to get per-flavor TOC files"),
         TocError::LineTooLong { toc, line } => Diagnostic::error(
             "E4303",
             format!("a line in {toc} is longer than 1024 characters: `{line}…`"),

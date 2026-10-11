@@ -68,6 +68,9 @@ pub struct TocInput {
     /// Files in load order.
     pub files: Vec<FileEntry>,
     pub layout: Layout,
+    /// Per-flavor orders (indices into `files`) when the flavors need
+    /// incompatible orders (spec §5.4.6): forces per-flavor TOC files.
+    pub flavor_orders: Option<std::collections::HashMap<String, Vec<usize>>>,
 }
 
 /// One generated TOC file.
@@ -96,6 +99,9 @@ pub enum TocError {
     Indistinguishable { flavors: Vec<String> },
     /// A line longer than the client reads that cannot be split (E4303).
     LineTooLong { toc: String, line: String },
+    /// `toc-layout = "single"` is forced, but the flavors need incompatible
+    /// load orders (E1036).
+    IncompatibleOrders,
 }
 
 /// Generates the TOC file(s) for one build.
@@ -103,6 +109,13 @@ pub fn generate(input: &TocInput) -> Result<Generated, Vec<TocError>> {
     let table = wowlua_flavors::table();
     let input = normalized(input);
     let single_problem = single_layout_problem(table, &input);
+    if input.flavor_orders.is_some() && input.layout == Layout::Single && input.flavors.len() > 1 {
+        return Err(vec![TocError::IncompatibleOrders]);
+    }
+    let single_problem = match (&input.flavor_orders, single_problem) {
+        (Some(_), None) => Some(("".to_string(), "".to_string())),
+        (_, problem) => problem,
+    };
     let layout = match (input.layout, single_problem) {
         (Layout::Single, Some((client, feature))) => {
             return Err(vec![TocError::SingleUnsupported { client, feature }]);
@@ -162,6 +175,7 @@ fn normalized(input: &TocInput) -> TocInput {
             })
             .collect(),
         layout: input.layout,
+        flavor_orders: input.flavor_orders.clone(),
     }
 }
 
@@ -328,9 +342,13 @@ fn render_per_flavor(table: &FlavorTable, input: &TocInput) -> Result<Vec<TocFil
         {
             lines.extend(split_directive(&d.key, &d.value, None));
         }
-        for file in input
-            .files
+        let order: Vec<usize> = match input.flavor_orders.as_ref().and_then(|o| o.get(&target.id)) {
+            Some(order) => order.clone(),
+            None => (0..input.files.len()).collect(),
+        };
+        for file in order
             .iter()
+            .filter_map(|&i| input.files.get(i))
             .filter(|f| applies(&f.flavors, &target.id))
         {
             let mut line = file.path.replace('/', "\\");
@@ -456,6 +474,7 @@ mod tests {
                 FileEntry::new("src/ui/frames.xml"),
             ],
             layout: Layout::Auto,
+            flavor_orders: None,
         }
     }
 
@@ -546,6 +565,37 @@ mod tests {
             generate(&i).unwrap_err()[0],
             TocError::SingleUnsupported { .. }
         ));
+    }
+
+    #[test]
+    fn incompatible_orders_force_per_flavor_files() {
+        let mut i = input(&["standard", "vanilla"]);
+        i.files = vec![FileEntry::new("a.lua"), FileEntry::new("b.lua")];
+        i.flavor_orders = Some(
+            [
+                ("standard".to_string(), vec![0, 1]),
+                ("vanilla".to_string(), vec![1, 0]),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let generated = generate(&i).unwrap();
+        assert_eq!(generated.layout, Layout::PerFlavor);
+        let classic = generated
+            .files
+            .iter()
+            .find(|f| f.flavors == ["vanilla"])
+            .unwrap();
+        assert!(
+            classic.content.ends_with("b.lua\na.lua\n"),
+            "{}",
+            classic.content
+        );
+        i.layout = Layout::Single;
+        assert_eq!(
+            generate(&i).unwrap_err(),
+            vec![TocError::IncompatibleOrders]
+        );
     }
 
     #[test]

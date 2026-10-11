@@ -3,10 +3,12 @@
 //! "preceding statements" mechanism of codegen §14.4. Without type
 //! information (milestone M4), every file uses the basic-mode forms.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::sync::Arc;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_luair::ir::{self, Pos};
 use wowlua_sema::constant::{self, Const, quote};
+use wowlua_sema::meta::{Lookup, Meta, MetaKind};
 use wowlua_span::Span;
 use wowlua_syntax::Parse;
 use wowlua_syntax::ast::*;
@@ -27,6 +29,18 @@ pub struct Context {
     pub module: Option<String>,
     /// Resolved imports, by the start offset of the import statement.
     pub imports: HashMap<u32, ImportContext>,
+    /// `wowlua:meta` values of the build configuration and flavor.
+    pub meta: Option<Arc<Meta>>,
+}
+
+/// A lowered file.
+#[derive(Debug)]
+pub struct Lowered {
+    pub chunk: ir::Chunk,
+    /// `wowlua:meta` paths used as runtime values (spec §6.2).
+    pub meta_used: BTreeSet<(MetaKind, Vec<String>)>,
+    /// The file uses the runtime (`__wl`).
+    pub uses_runtime: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -52,6 +66,12 @@ pub fn lower(parse: &Parse, src: &[u8]) -> Result<ir::Chunk, Vec<Diagnostic>> {
 
 /// Lowers a parsed file without errors. `src` is the file's bytes.
 pub fn lower_with(parse: &Parse, src: &[u8], ctx: &Context) -> Result<ir::Chunk, Vec<Diagnostic>> {
+    lower_module(parse, src, ctx).map(|l| l.chunk)
+}
+
+/// Lowers a parsed file without errors, with what the build needs to know
+/// about it.
+pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered, Vec<Diagnostic>> {
     let mut found: BTreeMap<Feature, (Span, usize)> = BTreeMap::new();
     for (feature, span) in features(&parse.chunk) {
         if unsupported(feature) {
@@ -93,6 +113,7 @@ pub fn lower_with(parse: &Parse, src: &[u8], ctx: &Context) -> Result<ir::Chunk,
         pending_functions: HashSet::new(),
         uses_runtime: false,
         has_exports: false,
+        meta_used: BTreeSet::new(),
     };
     // Exported functions are hoisted (spec §5.1, decision L24).
     let mut hoisted = Vec::new();
@@ -180,7 +201,11 @@ pub fn lower_with(parse: &Parse, src: &[u8], ctx: &Context) -> Result<ir::Chunk,
         comments: lowerer.comments(),
     };
     wowlua_luair::hygiene::apply(&mut chunk);
-    Ok(chunk)
+    Ok(Lowered {
+        chunk,
+        meta_used: lowerer.meta_used,
+        uses_runtime: lowerer.uses_runtime,
+    })
 }
 
 fn grow<R>(f: impl FnOnce() -> R) -> R {
@@ -332,6 +357,12 @@ enum Binding {
     },
     /// An exported binding (immutable, spec §5.1).
     Export,
+    /// A `wowlua:meta` export.
+    Meta(MetaKind),
+    /// `import * as M from "wowlua:meta"`.
+    MetaNamespace,
+    /// A declaration removed by `@if` (E1020 when used).
+    Removed(Span),
     /// A `const` folded to a value: references are replaced by it.
     Const(Const),
     /// A `const` that is a normal local at run time.
@@ -362,6 +393,7 @@ struct Lowerer<'a> {
     pending_functions: HashSet<String>,
     uses_runtime: bool,
     has_exports: bool,
+    meta_used: BTreeSet<(MetaKind, Vec<String>)>,
     scopes: Vec<Scope>,
     /// Statements that must run before the statement being lowered.
     prelude: Vec<ir::Stmt>,
@@ -571,7 +603,63 @@ impl<'a> Lowerer<'a> {
     }
 
     fn stmt(&mut self, s: &Stmt) -> Vec<ir::Stmt> {
+        if !s.decorators.is_empty() && !self.kept_by_if(s) {
+            return Vec::new();
+        }
         grow(|| self.stmt_inner(s))
+    }
+
+    /// `@if(condition)` (spec §6.4.3): a declaration whose static condition
+    /// is false is removed; its names are remembered for E1020.
+    fn kept_by_if(&mut self, s: &Stmt) -> bool {
+        let import = matches!(s.kind, StmtKind::Import(_));
+        let mut keep = true;
+        for d in &s.decorators {
+            let Some(cond) = wowlua_sema::meta::if_condition(d) else {
+                continue;
+            };
+            let Some(cond) = cond else {
+                if !import {
+                    self.error("E1040", d.span, "`@if` takes one condition");
+                }
+                continue;
+            };
+            match self.static_value_with(cond, !import) {
+                Some(c) => keep &= c.truthy(),
+                // Conditions on imports are checked by the module analysis.
+                None if import => {}
+                None if self.ctx.meta.as_ref().is_some_and(|m| m.flavor.is_none())
+                    && self.uses_flavor(cond) =>
+                {
+                    self.error(
+                        "E1039",
+                        cond.span,
+                        "`flavor` is not a constant in shared flavor mode; use a runtime check",
+                    )
+                }
+                None => self.error(
+                    "E1040",
+                    cond.span,
+                    "`@if` conditions must be static: `wowlua:meta` paths, constants and literals",
+                ),
+            }
+        }
+        if !keep {
+            for name in declared_names(s) {
+                self.declare(&name, Binding::Removed(s.span));
+            }
+        }
+        keep
+    }
+
+    fn uses_flavor(&self, e: &Expr) -> bool {
+        let mut found = false;
+        wowlua_syntax::visit::walk_expr(e, &mut |x| {
+            if let Some((MetaKind::Flavor, _)) = self.meta_path(x) {
+                found = true;
+            }
+        });
+        found
     }
 
     fn stmt_inner(&mut self, s: &Stmt) -> Vec<ir::Stmt> {
@@ -837,7 +925,7 @@ impl<'a> Lowerer<'a> {
                 name.span,
                 format!("cannot assign to the constant `{}`", name.text),
             ),
-            Some(Binding::Import | Binding::LazyImport { .. }) => self.error(
+            Some(Binding::Import | Binding::LazyImport { .. } | Binding::Meta(_) | Binding::MetaNamespace) => self.error(
                 "E1010",
                 name.span,
                 format!("cannot assign to the imported binding `{}`", name.text),
@@ -926,6 +1014,28 @@ impl<'a> Lowerer<'a> {
         else_block: Option<&Block>,
         pos: Pos,
     ) -> Vec<ir::Stmt> {
+        // Static conditions (spec §6.4.2): a false branch is removed (not
+        // lowered); a true branch becomes the final one.
+        let mut kept: Vec<(&Expr, &Block)> = Vec::new();
+        let mut last = else_block;
+        for &(c, b) in clauses {
+            match self.static_value(c) {
+                Some(v) if v.truthy() => {
+                    last = Some(b);
+                    break;
+                }
+                Some(_) => {}
+                None => kept.push((c, b)),
+            }
+        }
+        if kept.is_empty() {
+            return match last {
+                Some(b) => vec![stmt(ir::StmtKind::Do(self.block(b)), pos)],
+                None => Vec::new(),
+            };
+        }
+        let clauses = &kept[..];
+        let else_block = last;
         let first = self.isolated(|l| l.expr(clauses[0].0));
         let (pre, s) = self.if_rest(first, clauses, else_block, pos);
         if pre.is_empty() {
@@ -1083,7 +1193,20 @@ impl<'a> Lowerer<'a> {
         let (id, lazy, exports) = match target {
             ImportContext::Module { id, lazy, exports } => (id, lazy, exports),
             ImportContext::Meta => {
-                self.error("E1015", span, "`wowlua:meta` is not available yet");
+                match &import.clause {
+                    ImportClause::Names(specs) => {
+                        for spec in specs {
+                            if let Some(kind) = MetaKind::from_export(&spec.name.text) {
+                                let local_name = spec.alias.as_ref().unwrap_or(&spec.name);
+                                self.declare(&local_name.text, Binding::Meta(kind));
+                            }
+                        }
+                    }
+                    ImportClause::Namespace(name) => {
+                        self.declare(&name.text, Binding::MetaNamespace)
+                    }
+                    ImportClause::SideEffect => {}
+                }
                 return Vec::new();
             }
             ImportContext::LoadOnly => return Vec::new(),
@@ -1222,6 +1345,7 @@ impl<'a> Lowerer<'a> {
 
     fn assignment(&mut self, targets: &[Expr], values: &[Expr], pos: Pos) -> Vec<ir::Stmt> {
         for t in targets {
+            self.check_meta_target(t);
             if let ExprKind::Name(n) = &t.kind {
                 self.check_assignable(n);
             }
@@ -1272,6 +1396,7 @@ impl<'a> Lowerer<'a> {
     /// `a op= e` (spec §1.3.4): every subexpression of the target that
     /// contains a call is evaluated once.
     fn compound(&mut self, target: &Expr, op: CompoundOp, value: &Expr, pos: Pos) -> Vec<ir::Stmt> {
+        self.check_meta_target(target);
         let tpos = self.span_pos(target.span);
         let (write, read) = match &target.kind {
             ExprKind::Name(n) => {
@@ -1410,6 +1535,15 @@ impl<'a> Lowerer<'a> {
     fn expr_inner(&mut self, e: &Expr) -> ir::Expr {
         use ir::ExprKind as K;
         let pos = self.span_pos(e.span);
+        if let Some((kind, path)) = self.meta_path(e) {
+            return self.meta_expr(kind, path, e);
+        }
+        if let ExprKind::Call { callee, args } = &e.kind
+            && let Some((MetaKind::Asset, path)) = self.meta_path(callee)
+            && path.is_empty()
+        {
+            return self.asset(args, e);
+        }
         if chain_has_optional(e) {
             return self
                 .optional_chain(e, false)
@@ -1434,6 +1568,17 @@ impl<'a> Lowerer<'a> {
                 Some(Binding::Const(c)) => return c.to_expr(pos),
                 Some(Binding::LazyImport { table, name }) => {
                     return field(name_expr(generated(&table, pos)), &name, pos);
+                }
+                Some(Binding::Removed(decl)) => {
+                    self.errors.push(
+                        Diagnostic::error(
+                            "E1020",
+                            format!("`{}` was removed by `@if` for this build", n.text),
+                        )
+                        .with_label(n.span, "used here")
+                        .with_label(decl, "removed here"),
+                    );
+                    K::Name(self.ident(n))
                 }
                 Some(Binding::Export)
                     if self.func_depth == 0 && self.pending_functions.contains(n.text.as_ref()) =>
@@ -1597,6 +1742,20 @@ impl<'a> Lowerer<'a> {
         let op_pos = self.next_token_pos(lhs.span.end);
         match op {
             BinOp::And | BinOp::Or | BinOp::Coalesce => {
+                // A static left operand simplifies the expression (spec
+                // §6.4.2); a static right operand does not.
+                if let Some(c) = self.static_value(lhs) {
+                    let use_rhs = match op {
+                        BinOp::And => c.truthy(),
+                        BinOp::Or => !c.truthy(),
+                        _ => c == Const::Nil,
+                    };
+                    return if use_rhs {
+                        self.expr(rhs)
+                    } else {
+                        c.to_expr(pos)
+                    };
+                }
                 let l = self.expr(lhs);
                 let (pre, r) = self.isolated(|lw| lw.expr(rhs));
                 if pre.is_empty() && op != BinOp::Coalesce {
@@ -1843,12 +2002,205 @@ impl<'a> Lowerer<'a> {
 
     // ---------------------------------------------------------- constants --
 
-    /// The value of a constant expression (spec §1.3.2), if it is one.
+    /// The value of a constant expression (spec §1.3.2), if it is one:
+    /// literals, folded constants and scalar `wowlua:meta` values.
     fn const_value(&self, e: &Expr) -> Option<Const> {
-        constant::eval(e, &|name| match self.lookup(name) {
-            Some(Binding::Const(c)) => Some(c.clone()),
-            _ => None,
+        self.static_value(e)
+    }
+
+    fn static_value(&self, e: &Expr) -> Option<Const> {
+        self.static_value_with(e, true)
+    }
+
+    /// A static condition (spec §6.4.1); `consts` allows folded constants
+    /// (not in `@if` on imports).
+    fn static_value_with(&self, e: &Expr, consts: bool) -> Option<Const> {
+        constant::eval_with(e, &|leaf| {
+            if let Some((kind, path)) = self.meta_path(leaf) {
+                let meta = self.ctx.meta.as_ref()?;
+                return match meta.lookup(kind, &path) {
+                    Lookup::Const(c) => Some(c),
+                    _ => None,
+                };
+            }
+            if !consts {
+                return None;
+            }
+            match &leaf.kind {
+                ExprKind::Name(n) => match self.lookup(&n.text) {
+                    Some(Binding::Const(c)) => Some(c.clone()),
+                    _ => None,
+                },
+                _ => None,
+            }
         })
+    }
+
+    /// A constant access path into `wowlua:meta` (spec §6.2).
+    fn meta_path(&self, e: &Expr) -> Option<(MetaKind, Vec<String>)> {
+        let mut namespace = false;
+        let found = wowlua_sema::meta::access_path(e, &|name| match self.lookup(name) {
+            Some(Binding::Meta(k)) => Some(*k),
+            // `M.build…`: the first path element names the export; it is
+            // resolved below.
+            Some(Binding::MetaNamespace) => Some(MetaKind::Addon),
+            _ => None,
+        })?;
+        let mut base = e;
+        while let ExprKind::Field { obj, .. } | ExprKind::Index { obj, .. } | ExprKind::Paren(obj) =
+            &base.kind
+        {
+            base = obj;
+        }
+        if let ExprKind::Name(n) = &base.kind
+            && matches!(self.lookup(&n.text), Some(Binding::MetaNamespace))
+        {
+            namespace = true;
+        }
+        if namespace {
+            let (_, path) = found;
+            let kind = MetaKind::from_export(path.first()?)?;
+            return Some((kind, path[1..].to_vec()));
+        }
+        Some(found)
+    }
+
+    /// A `wowlua:meta` access: a literal for scalars, the runtime tables
+    /// otherwise (spec §6.2).
+    fn meta_expr(&mut self, kind: MetaKind, path: Vec<String>, e: &Expr) -> ir::Expr {
+        let pos = self.span_pos(e.span);
+        let Some(meta) = self.ctx.meta.clone() else {
+            self.error(
+                "E1015",
+                e.span,
+                "`wowlua:meta` needs the package context (build the package with `wowlua build`)",
+            );
+            return lit(ir::ExprKind::Nil, pos);
+        };
+        if kind == MetaKind::Asset {
+            self.error(
+                "E2003",
+                e.span,
+                "`asset` is a function: call it with an asset path",
+            );
+            return lit(ir::ExprKind::Nil, pos);
+        }
+        match meta.lookup(kind, &path) {
+            Lookup::Const(c) => c.to_expr(pos),
+            Lookup::Missing(message) => {
+                self.error("E2003", e.span, message);
+                lit(ir::ExprKind::Nil, pos)
+            }
+            Lookup::Runtime => {
+                self.meta_used.insert((kind, path.clone()));
+                let wl = self.runtime_ref(pos);
+                let mut value = field(field(wl, "meta", pos), kind.name(), pos);
+                for key in &path {
+                    let is_name = key
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                        && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                        && wowlua_syntax::token::TokenKind::keyword(key.as_bytes()).is_none();
+                    value = if is_name {
+                        field(value, key, pos)
+                    } else if let Ok(n) = key.parse::<f64>() {
+                        ir::Expr::new(
+                            ir::ExprKind::Index {
+                                obj: Box::new(value),
+                                key: Box::new(constant::number_expr(n, pos)),
+                            },
+                            pos,
+                        )
+                    } else {
+                        ir::Expr::new(
+                            ir::ExprKind::Index {
+                                obj: Box::new(value),
+                                key: Box::new(lit(
+                                    ir::ExprKind::String(quote(key.as_bytes())),
+                                    pos,
+                                )),
+                            },
+                            pos,
+                        )
+                    };
+                }
+                value
+            }
+        }
+    }
+
+    /// `asset("path")` (spec §6.2.1): the full in-game path of an asset.
+    fn asset(&mut self, args: &Args, e: &Expr) -> ir::Expr {
+        let pos = self.span_pos(e.span);
+        let arg = match args {
+            Args::Parens { args, .. } if args.len() == 1 => Some(&args[0]),
+            Args::String(s) => Some(s.as_ref()),
+            _ => None,
+        };
+        let path = match arg.and_then(|a| self.static_value(a)) {
+            Some(Const::String(p)) => String::from_utf8_lossy(&p).into_owned(),
+            _ => {
+                self.error("E1038", e.span, "`asset()` takes a constant path string");
+                return lit(ir::ExprKind::Nil, pos);
+            }
+        };
+        let Some(meta) = self.ctx.meta.clone() else {
+            self.error("E1015", e.span, "`wowlua:meta` needs the package context");
+            return lit(ir::ExprKind::Nil, pos);
+        };
+        if let Some(full) = meta.assets.get(&path) {
+            return lit(ir::ExprKind::String(quote(full.as_bytes())), pos);
+        }
+        let lower = path.to_ascii_lowercase();
+        let message = match meta.assets.keys().find(|k| k.to_ascii_lowercase() == lower) {
+            Some(actual) => format!("`{path}` differs in case from the asset `{actual}`"),
+            None => format!("`{path}` is not an asset of the package (`build.assets`)"),
+        };
+        self.error("E1038", e.span, message);
+        lit(ir::ExprKind::Nil, pos)
+    }
+
+    /// `wowlua:meta` values are read-only (E2010).
+    fn check_meta_target(&mut self, target: &Expr) {
+        if matches!(target.kind, ExprKind::Field { .. } | ExprKind::Index { .. })
+            && let Some((kind, path)) = self.meta_path(target)
+        {
+            let shown: Vec<&str> = std::iter::once(kind.name())
+                .chain(path.iter().map(String::as_str))
+                .collect();
+            self.error(
+                "E2010",
+                target.span,
+                format!("`{}` is a read-only `wowlua:meta` value", shown.join(".")),
+            );
+        }
+    }
+}
+
+/// The names a declaration statement binds (for `@if`).
+fn declared_names(s: &Stmt) -> Vec<String> {
+    match &s.kind {
+        StmtKind::Local { names, .. } => names.iter().map(|n| n.name.text.to_string()).collect(),
+        StmtKind::LocalDestructure { fields, .. } => {
+            fields.iter().map(|f| f.name.text.to_string()).collect()
+        }
+        StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
+            vec![name.text.to_string()]
+        }
+        StmtKind::Function { name, .. } if name.path.len() == 1 && name.method.is_none() => {
+            vec![name.path[0].text.to_string()]
+        }
+        StmtKind::Import(import) => match &import.clause {
+            ImportClause::Names(specs) => specs
+                .iter()
+                .map(|s| s.alias.as_ref().unwrap_or(&s.name).text.to_string())
+                .collect(),
+            ImportClause::Namespace(n) => vec![n.text.to_string()],
+            ImportClause::SideEffect => Vec::new(),
+        },
+        StmtKind::Export(inner) => declared_names(inner),
+        _ => Vec::new(),
     }
 }
 

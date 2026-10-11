@@ -223,3 +223,12 @@ fn deep_nesting_is_an_error_not_a_crash() {
     let src = "do ".repeat(3000) + &"end ".repeat(3000);
     assert!(parse_str(&src).has_errors());
 }
+
+#[test]
+fn decorator_names_may_be_keywords() {
+    let chunk = ok("@if(flavor == 'standard')\nlocal x = 1\n");
+    assert_eq!(
+        chunk.block.stmts[0].decorators[0].path[0].text.as_ref(),
+        "if"
+    );
+}

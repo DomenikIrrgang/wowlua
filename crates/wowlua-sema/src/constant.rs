@@ -280,6 +280,18 @@ pub fn fold_binary(op: wowlua_syntax::ast::BinOp, a: &Const, b: &Const) -> Optio
 /// The value of a constant expression (spec §1.3.2), if it is one; `lookup`
 /// gives the values of folded constants by name.
 pub fn eval(e: &wowlua_syntax::ast::Expr, lookup: &dyn Fn(&str) -> Option<Const>) -> Option<Const> {
+    eval_with(e, &|leaf| match &leaf.kind {
+        wowlua_syntax::ast::ExprKind::Name(n) => lookup(&n.text),
+        _ => None,
+    })
+}
+
+/// Like [`eval`], with `leaf` resolving names and access paths (fields,
+/// indexes) to constants.
+pub fn eval_with(
+    e: &wowlua_syntax::ast::Expr,
+    leaf: &dyn Fn(&wowlua_syntax::ast::Expr) -> Option<Const>,
+) -> Option<Const> {
     use wowlua_syntax::ast::{ExprKind, UnOp};
     match &e.kind {
         ExprKind::Nil => Some(Const::Nil),
@@ -287,11 +299,10 @@ pub fn eval(e: &wowlua_syntax::ast::Expr, lookup: &dyn Fn(&str) -> Option<Const>
         ExprKind::False => Some(Const::Bool(false)),
         ExprKind::Number(n) => n.value.map(Const::Number),
         ExprKind::String(s) => Some(Const::String(s.value.to_vec())),
-        ExprKind::Name(n) => lookup(&n.text),
-        ExprKind::Paren(inner) => eval(inner, lookup),
-        ExprKind::Cast { expr, .. } => eval(expr, lookup),
+        ExprKind::Paren(inner) => eval_with(inner, leaf),
+        ExprKind::Cast { expr, .. } => eval_with(expr, leaf),
         ExprKind::Unary { op, operand } => {
-            let v = eval(operand, lookup)?;
+            let v = eval_with(operand, leaf)?;
             match (op, v) {
                 (UnOp::Neg, Const::Number(n)) => Some(Const::Number(-n)),
                 (UnOp::Not, v) => Some(Const::Bool(!v.truthy())),
@@ -300,11 +311,11 @@ pub fn eval(e: &wowlua_syntax::ast::Expr, lookup: &dyn Fn(&str) -> Option<Const>
             }
         }
         ExprKind::Binary { op, lhs, rhs } => {
-            let a = eval(lhs, lookup)?;
-            let b = eval(rhs, lookup)?;
+            let a = eval_with(lhs, leaf)?;
+            let b = eval_with(rhs, leaf)?;
             fold_binary(*op, &a, &b)
         }
-        _ => None,
+        _ => leaf(e),
     }
 }
 
