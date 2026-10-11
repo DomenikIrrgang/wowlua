@@ -236,8 +236,11 @@ local function buildDevWindow(console, reg)
 	local addonButton = CreateFrame("Button", nil, titleBar)
 	addonButton:SetSize(200, 24)
 	addonButton:SetPoint("RIGHT", close, "LEFT", -12, 0)
+	-- A small diamond after the name: more addons to pick from.
+	local addonHint = diamond(addonButton, 5, C.inkMuted)
+	addonHint:SetPoint("RIGHT", -2, 0)
 	local addonLabel = text(addonButton, "display", 13, C.giltText)
-	addonLabel:SetPoint("RIGHT")
+	addonLabel:SetPoint("RIGHT", -14, 0)
 	addonLabel:SetJustifyH("RIGHT")
 	local selected = reg.order[1]
 	local function current()
@@ -510,7 +513,7 @@ local function buildDevWindow(console, reg)
 			end
 			local active = c.sort and c.sort == state.sort
 			fs:SetTextColor(unpack(active and C.arcane or C.inkMuted))
-			fs:SetText(c.title .. (active and " ▼" or ""))
+			fs:SetText(c.title)
 			fs:ClearAllPoints()
 			fs:SetPoint("LEFT", hr, "LEFT", x0(j), 0)
 			fs:SetWidth(colWidth(j))
@@ -825,7 +828,7 @@ local function buildDevWindow(console, reg)
 			for _, e in ipairs(errors.list) do
 				local open = openError == e
 				data[#data + 1] = {
-					cells = { (open and "▼ " or "▶ ") .. e.message, "×" .. e.count, e.time },
+					cells = { (open and "- " or "+ ") .. e.message, "×" .. e.count, e.time },
 					colors = { C.emberText, C.ink, C.inkMuted },
 					onClick = function()
 						openError = open and nil or e
@@ -935,11 +938,11 @@ local function buildDevWindow(console, reg)
 			local isTable = type(value) == "table" and not (issecretvalue and issecretvalue(value))
 			local shown, color = valueText(true, value)
 			if isTable and seen[value] then
-				shown, color = "↺ cycle", C.inkMuted
+				shown, color = "(cycle)", C.inkMuted
 				isTable = false
 			end
 			data[#data + 1] = {
-				cells = { (isTable and (open and "▼ " or "▶ ") or "   ") .. label, shown, type(value) },
+				cells = { (isTable and (open and "- " or "+ ") or "   ") .. label, shown, type(value) },
 				colors = { label:sub(1, 1) == "<" and C.inkMuted or C.ink, color, C.inkMuted },
 				fonts = { "label", "numeric", "body" },
 				indent = depth * 18,
@@ -1003,7 +1006,8 @@ local function buildDevWindow(console, reg)
 			return
 		end
 		selected = d.name
-		addonLabel:SetText(d.name .. (#reg.order > 1 and "  ▾" or ""))
+		addonLabel:SetText(d.name)
+		addonHint:SetShown(#reg.order > 1)
 		for i, b in ipairs(tabButtons) do
 			local active = i == state.tab
 			b.fs:SetTextColor(unpack(active and C.giltText or C.inkMuted))

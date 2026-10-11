@@ -6,11 +6,17 @@ local folder = ("addons/" .. addonName .. "/"):lower()
 local function normal(s)
 	return tostring(s or ""):gsub("\\", "/"):lower()
 end
--- The message's own location decides (`path:line: text`); without one,
--- the stack.
+-- The runtime's own errors start with the addon's name; otherwise the
+-- message's location decides (`path:line: text`), and without a path in
+-- it, the stack.
+local prefix = (addonName .. ": "):lower()
 local function mine(message, stack)
-	local location = normal(message):match("^(.-):%d+:")
-	if location then
+	local m = normal(message)
+	if m:sub(1, #prefix) == prefix then
+		return true
+	end
+	local location = m:match("^(.-):%d+:")
+	if location and location:find("/", 1, true) then
 		return location:find(folder, 1, true) ~= nil
 	end
 	return normal(stack):find(folder, 1, true) ~= nil
@@ -44,6 +50,12 @@ function errors.record(message, stack)
 	}
 	errors.byMessage[short] = e
 	table.insert(errors.list, 1, e)
+	-- The client hides Lua errors unless "Display Lua errors" is on.
+	local chat = DEFAULT_CHAT_FRAME
+	if chat then
+		chat:AddMessage("|cff33ff99" .. addonName .. "|r |cffff9a80error captured:|r " .. short
+			.. " |cffa39b8b(/wl errors " .. addonName .. ")|r")
+	end
 	if #errors.list > 50 then
 		local old = table.remove(errors.list)
 		errors.byMessage[old.message] = nil

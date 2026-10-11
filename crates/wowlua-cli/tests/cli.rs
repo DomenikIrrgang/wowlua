@@ -1521,6 +1521,7 @@ __fire("PLAYER_LOGIN")
 geterrorhandler()("Interface/AddOns/Mon/src/main.lua:9: boom")
 geterrorhandler()("Interface/AddOns/Mon/src/main.lua:9: boom")
 geterrorhandler()("Interface/AddOns/Other/x.lua:1: not mine")
+geterrorhandler()("Mon: src/main.lua:10: bad argument #1 'n' to 'work' (number expected, got nil)")
 SlashCmdList.WOWLUA("list")
 SlashCmdList.WOWLUA("mon mon")
 SlashCmdList.WOWLUA("prof Mon top 2")
@@ -1565,6 +1566,14 @@ for _, line in ipairs(__chat) do print((line:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub
     assert!(has("work") && has("Mon profiler (ms), by total:"), "{out}");
     assert!(has("src/main.lua:9: boom ×2"), "{out}");
     assert!(!has("not mine ×"), "{out}");
+    assert!(
+        has("bad argument #1 'n' to 'work' (number expected, got nil) ×1"),
+        "{out}"
+    );
+    assert!(
+        has("Mon error captured: src/main.lua:9: boom (/wl errors Mon)"),
+        "{out}"
+    );
     assert!(has("wowlua Mon watch ns.answer + 1 = 43"), "{out}");
 }
 

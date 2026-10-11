@@ -37,10 +37,19 @@ end
 -- Installs the `@script` handlers on a frame (after its constructor, or
 -- before the class's OnLoad for frames created from XML).
 local function installScripts(frame, cls)
+	-- Dev builds: through the monitor (spec §7.9).
+	local mon = wl.mon
 	for _, entry in ipairs(rawget(cls, "__scriptList") or scriptList(cls)) do
 		local handler = frame[entry[2]]
+		local where = tostring(rawget(cls, "__name")) .. ":" .. entry[2]
 		if entry[3] then
-			frame:HookScript(entry[1], handler)
+			if mon then
+				mon.hookScript(frame, entry[1], handler, where)
+			else
+				frame:HookScript(entry[1], handler)
+			end
+		elseif mon then
+			mon.setScript(frame, entry[1], handler, where)
 		else
 			frame:SetScript(entry[1], handler)
 		end
