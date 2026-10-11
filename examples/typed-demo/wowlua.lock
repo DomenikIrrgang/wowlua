@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "flavor-table": {
+    "version": "2026.10.11",
+    "interfaces": {
+      "standard": [
+        120100
+      ],
+      "vanilla": [
+        11509
+      ]
+    }
+  },
+  "packages": []
+}

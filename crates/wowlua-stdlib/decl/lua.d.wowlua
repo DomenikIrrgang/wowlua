@@ -51,7 +51,7 @@ declare namespace string
 end
 
 declare namespace table
-    function concat(t: (string | number)[], separator: string?, i: number?, j: number?): string
+    function concat<T extends string | number>(t: T[], separator: string?, i: number?, j: number?): string
     function foreach<K, V>(t: { [K]: V }, f: (key: K, value: V) -> any): any
     function foreachi<V>(t: V[], f: (index: number, value: V) -> any): any
     function getn(t: any[]): number

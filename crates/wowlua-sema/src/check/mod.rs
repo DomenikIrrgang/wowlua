@@ -513,6 +513,52 @@ mod tests {
         );
     }
 
+    /// Checker gaps found by the typed sample addon.
+    #[test]
+    fn sample_addon_rules() {
+        // A generic class used before its declaration.
+        strict_ok(
+            "class Holder\n    ring: Ring<number>\n    constructor() self.ring = Ring.new() end\nend\nclass Ring<T>\n    items: T[] = {}\nend\nlocal h = Holder.new()\nprint(h.ring.items[1] + 1)\n",
+        );
+        // Top-level module functions are hoisted locals, not globals.
+        strict_ok(
+            "export function format(n: number): string return tostring(n) end\nfunction helper(): number return 1 end\nprint(format(helper()))\n",
+        );
+        // A function passed as an argument is a callback (no E2050).
+        strict_ok("local function run(f: function) end\nrun(function(a, b) print(a, b) end)\n");
+        strict_err("local f = function(a) print(a) end\nf(1)\n", "E2050");
+        // `local x: T` without a value: `nil` until assigned.
+        strict_ok(
+            "local function f(b: boolean): number\n    local x: number\n    if b then x = 1 else x = 2 end\n    return x\nend\nprint(f(true))\n",
+        );
+        strict_err(
+            "local function f(b: boolean): number\n    local x: number\n    if b then x = 1 end\n    return x\nend\nprint(f(true))\n",
+            "E2001",
+        );
+        // Forward declarations with a type are usable in closures.
+        strict_ok(
+            "local update: () -> ()\nlocal function tick() update() end\nupdate = function() end\ntick()\n",
+        );
+        // A literal for a union of table types picks the member it fits.
+        strict_ok(
+            "type A = { kind: \"a\", n: number }\ntype B = { kind: \"b\" }\nlocal v: A | B = { kind = \"a\", n = 1 }\nv = { kind = \"b\" }\nprint(v)\n",
+        );
+        // Literal arrays take the expected element type.
+        strict_ok(
+            "local a: string[] = { \"x\", \"y\" }\nlocal m: { [string]: number } = { [\"k\"] = 1 }\nprint(table.concat(a, \",\"), m)\n",
+        );
+        // Constraints of inferred type arguments (E2014).
+        err(
+            "local function f<T extends string | number>(x: T): T return x end\nf(true)\n",
+            "E2014",
+        );
+        ok("local function f<T extends string | number>(x: T): T return x end\nf(1)\n");
+        // Array reads are `T` in strict mode too.
+        strict_ok(
+            "local function first(xs: number[]): number return xs[1] end\nprint(first({ 1 }))\n",
+        );
+    }
+
     #[test]
     fn unreachable_code() {
         let count = |src: &str| {

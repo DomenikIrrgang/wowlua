@@ -1,0 +1,36 @@
+-- Money changes and their display.
+export const COPPER_PER_GOLD = 10000
+
+export enum Source {
+    Loot = "loot",
+    Vendor = "vendor",
+    Other = "other",
+}
+
+export interface Earned
+    kind: "earned"
+    time: number
+    amount: number
+    source: Source
+end
+
+export interface Spent
+    kind: "spent"
+    time: number
+    amount: number
+end
+
+export type Change = Earned | Spent
+
+export function isEarned(change: Change): change is Earned
+    return change.kind == "earned"
+end
+
+-- `12g 34s 56c`, with a sign for negative amounts.
+export function format(copper: number): string
+    local sign = copper < 0 and "-" or ""
+    local abs = math.abs(copper)
+    local gold = math.floor(abs / COPPER_PER_GOLD)
+    local silver = math.floor(abs / 100) % 100
+    return `{sign}{gold}g {silver}s {abs % 100}c`
+end

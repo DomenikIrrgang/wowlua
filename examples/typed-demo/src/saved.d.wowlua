@@ -1,0 +1,3 @@
+-- The saved variable listed in wowlua.json, typed (`nil` before the first
+-- login with the addon).
+declare global TypedDemoDB: { sessions: number }?

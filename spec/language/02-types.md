@@ -13,6 +13,11 @@ reflection.
 | `basic` | default | Annotated and inferred types are checked. Unannotated parameters are `any`. `nil` is assignable to every type. Undefined globals are warnings. |
 | `strict` | `--!strict`, manifest | Everything in `basic`, plus: **nil safety** (`T` excludes `nil`, use `T?`), implicit global reads/writes are errors, parameters of non-callback functions need annotations (E2050), adding unknown fields to sealed tables is an error (E2051), and non-optional class fields must be definitely assigned in the constructor (E2052). |
 
+A **callback** (exempt from E2050) is a function expression passed directly
+as a call argument or written where a type is expected, even when that type
+is only `function` (as for `SetScript` handlers in the generated
+declarations).
+
 The project default is set in the manifest (`check.mode`, plus `check.strict`
 globs). A file directive overrides both for that file.
 
@@ -97,6 +102,10 @@ type Anchor =
 | `{ x: number, [string]: any }` | Record with an indexer for other keys |
 | `{ [number]: string, n: number }` | Table used both as an array and a record (e.g. the result of `{ ..., n = select("#", ...) }`) |
 
+Reading an element of an array (`xs[i]`) gives `T` in every mode, although
+reading past the end gives `nil` at run time (decision T95). Reads through a
+map or an indexer give `V?`.
+
 Records are **structural**: any table with at least the required fields of
 compatible types is assignable. Extra fields are allowed, except that an
 object literal assigned directly to a record type with an unknown field is
@@ -140,7 +149,8 @@ end
 function largest<T extends { size: number }>(xs: T[]): T? … end
 ```
 
-Type arguments are **always inferred at call sites**. There is no explicit
+Type arguments are **always inferred at call sites**. An inferred type
+argument that does not satisfy its constraint is error E2014. There is no explicit
 call syntax like `f<number>(x)`, because in Lua `f < number > (x)` is a valid
 comparison expression. Expected types also drive inference:
 `local s: Stack<number> = Stack.new()`.
@@ -281,6 +291,10 @@ A local declared without a value and assigned later (a forward declaration,
 `local f` … `f = function() … end`) reads as `any` inside closures, which may
 run after any of its assignments.
 
+An annotated local without a value (`local x: T`) is `nil` until assigned:
+its narrowed type follows the assignments, so where some path did not assign
+it, it reads as `T?` and strict mode reports the use. Closures see `T`.
+
 ### 2.4.2 Open and sealed tables
 
 A table literal assigned to an unannotated local is **open** while it stays in
@@ -308,7 +322,13 @@ expression:
 - function expressions get parameter and return types from the expected
   function type,
 - table literals are checked against the expected record or array type, and
-  nested literals get their field types,
+  nested literals get their field types; a literal whose elements all have
+  the expected element type gets that type (`local xs: string[] = { "a" }` is a
+  `string[]`, not a `"a"[]`, which matters because arrays are invariant in
+  strict mode),
+- a table literal for a union of table types is checked against the first
+  member it fits, so literal fields can discriminate
+  (`local c: Earned | Spent = { kind = "spent", amount = 1 }`),
 - empty table literals take the expected type (`local xs: string[] = {}`),
 - generic calls use the expected return type to infer type arguments.
 

@@ -1183,6 +1183,98 @@ print(GetTime())
         );
 }
 
+/// The typed sample addon checks in strict mode without diagnostics
+/// (milestone M4 exit criterion) and runs on both of its flavors: the
+/// mainline-only API is behind a flavor guard.
+#[test]
+fn typed_demo_example_runs() {
+    let example = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/typed-demo");
+    let dir = tempfile::tempdir().unwrap();
+    for entry in [
+        "wowlua.json",
+        "src/main.wowlua",
+        "src/ring.wowlua",
+        "src/money.wowlua",
+        "src/ledger.wowlua",
+        "src/saved.d.wowlua",
+    ] {
+        let target = dir.path().join(entry);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::copy(example.join(entry), &target).unwrap();
+    }
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(!stderr.contains("warning"), "{stderr}");
+    let dist = dir.path().join("dist/dev/TypedDemo");
+    let toc = fs::read_to_string(dist.join("TypedDemo.toc")).unwrap();
+    let mock = |project: u32, bank: bool| {
+        format!(
+            r#"WOW_PROJECT_MAINLINE = 1
+WOW_PROJECT_ID = {project}
+local money = 10000
+function GetMoney() return money end
+function __setMoney(m) money = m end
+local now = 0
+function GetTime() now = now + 1 return now end
+SlashCmdList = {{}}
+local frames = {{}}
+function CreateFrame()
+  local f = {{ events = {{}} }}
+  function f:RegisterEvent(e) self.events[e] = true end
+  function f:SetScript(name, handler) self[name] = handler end
+  frames[#frames + 1] = f
+  return f
+end
+function __fire(event, ...)
+  for _, f in ipairs(frames) do
+    if f.events[event] and f.OnEvent then f.OnEvent(f, event, ...) end
+  end
+end
+if {bank} then
+  C_Bank = {{ FetchDepositedMoney = function(t) return t == 2 and 1234567 or 0 end }}
+  Enum = {{ BankType = {{ Account = 2 }} }}
+end
+"#
+        )
+    };
+    fs::write(dist.join("mock_standard.lua"), mock(1, true)).unwrap();
+    fs::write(dist.join("mock_vanilla.lua"), mock(2, false)).unwrap();
+    fs::write(
+        dist.join("sim.lua"),
+        r#"__fire("PLAYER_LOGIN")
+__fire("LOOT_OPENED"); __setMoney(10550); __fire("PLAYER_MONEY"); __fire("LOOT_CLOSED")
+__fire("MERCHANT_SHOW"); __setMoney(8000); __fire("PLAYER_MONEY")
+__setMoney(9000); __fire("PLAYER_MONEY"); __fire("MERCHANT_CLOSED")
+SlashCmdList.TYPEDDEMO()
+"#,
+    )
+    .unwrap();
+    let summary = [
+        "Typed Demo: session 1, 1g 0s 0c. Type /tdemo.",
+        "earned 0g 15s 50c, spent 0g 25s 50c, net -0g 10s 0c",
+        "  + 0g 5s 50c (loot)",
+        "  - 0g 25s 50c",
+        "  + 0g 10s 0c (vendor)",
+    ]
+    .join("\n");
+    for (flavor, expected) in [
+        ("standard", format!("{summary}\nwarband bank: 123g 45s 67c")),
+        ("vanilla", summary.clone()),
+    ] {
+        let toc_file = format!("TypedDemo_{flavor}_test.toc");
+        fs::write(
+            dist.join(&toc_file),
+            format!("mock_{flavor}.lua\n{toc}\nsim.lua\n"),
+        )
+        .unwrap();
+        assert_eq!(
+            run_toc(&dist, &toc_file, "TypedDemo", None),
+            expected,
+            "{flavor}"
+        );
+    }
+}
+
 /// A mock of the frame API for widget classes in the VM.
 const MOCK_FRAMES: &str = r##"UIParent = {}
 local methods = {}

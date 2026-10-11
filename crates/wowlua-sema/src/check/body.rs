@@ -95,6 +95,11 @@ pub struct Checker<'e> {
     pub(crate) probes: HashSet<wowlua_span::Span>,
     /// Inside code already reported as unreachable (W1005).
     in_dead: bool,
+    is_module: bool,
+    /// Function expressions passed as call arguments (callbacks: no E2050).
+    pub(crate) callbacks: HashSet<wowlua_span::Span>,
+    /// The next `function_body` checks a callback.
+    pub(crate) callback_next: bool,
 }
 
 impl<'e> Checker<'e> {
@@ -127,6 +132,9 @@ impl<'e> Checker<'e> {
             meta_flavor: info.meta_flavor.clone(),
             probes: HashSet::new(),
             in_dead: false,
+            is_module: info.is_module,
+            callbacks: HashSet::new(),
+            callback_next: false,
         };
         for (name, &t) in &info.imports {
             c.declare(name, Some(t), t, true, None);
@@ -310,7 +318,8 @@ impl<'e> Checker<'e> {
         self.fns.pop();
     }
 
-    /// Top-level classes and enums are hoisted (decision T76).
+    /// Top-level classes and enums are hoisted (decision T76), and so are
+    /// the top-level functions of a module (spec §5.1).
     fn hoist(&mut self, b: &Block) {
         for s in &b.stmts {
             let kind = match &s.kind {
@@ -318,6 +327,13 @@ impl<'e> Checker<'e> {
                 k => k,
             };
             match kind {
+                StmtKind::Function { name, func }
+                    if self.is_module && name.path.len() == 1 && name.method.is_none() =>
+                {
+                    let sig = self.env.func_sig(func, &self.scope.clone(), false);
+                    let t = self.env.types.intern(Ty::Func(sig));
+                    self.declare(&name.path[0].text, Some(t), t, false, None);
+                }
                 StmtKind::Class(c) => {
                     if let Some(def) = self.env.lookup_type(&c.name.text, &self.scope) {
                         let t = self.env.types.intern(Ty::ClassOf(def));
@@ -367,15 +383,22 @@ impl<'e> Checker<'e> {
                     .map(|n| n.ty.as_ref().map(|t| self.annotation(t)))
                     .collect();
                 let values = self.expr_list(values, &expected);
+                let no_values = values.is_empty();
                 for (i, n) in names.iter().enumerate() {
                     let value = values.get(i).copied().unwrap_or(Types::NIL);
                     let declared = expected[i];
-                    if let Some(d) = declared {
+                    // `local x: T` without a value: `nil` until assigned,
+                    // checked where it is read.
+                    if let Some(d) = declared
+                        && !no_values
+                    {
                         let span = n.name.span;
                         self.check_assignable(span, value, d);
                     }
                     let id = self.declare(&n.name.text, declared, value, false, Some(n.name.span));
-                    if let Some(d) = declared {
+                    if declared.is_some() && no_values {
+                        self.flow.insert(id, Types::NIL);
+                    } else if let Some(d) = declared {
                         let narrowed = if self.env.assignable(value, d, self.mode)
                             && value != Types::ANY
                             && value != Types::NIL
@@ -716,7 +739,8 @@ impl<'e> Checker<'e> {
         let mut sig = self.env.func_sig(f, &self.scope.clone(), false);
         // Strict mode: parameters of non-callback functions need
         // annotations (E2050).
-        if self.mode == Mode::Strict && expected.is_none() {
+        let callback = std::mem::take(&mut self.callback_next);
+        if self.mode == Mode::Strict && expected.is_none() && !callback {
             for p in f
                 .params
                 .iter()

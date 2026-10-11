@@ -1,0 +1,34 @@
+-- A fixed-size buffer that keeps the newest values.
+export class Ring<T>
+    private values: T[] = {}
+    private first: number = 1
+    private count: number = 0
+    readonly capacity: number
+
+    constructor(capacity: number)
+        self.capacity = capacity
+    end
+
+    function push(value: T)
+        local index = (self.first + self.count - 1) % self.capacity + 1
+        self.values[index] = value
+        if self.count < self.capacity then
+            self.count += 1
+        else
+            self.first = self.first % self.capacity + 1
+        end
+    end
+
+    get size(): number
+        return self.count
+    end
+
+    -- The values from the oldest to the newest.
+    function toArray(): T[]
+        local out: T[] = {}
+        for i = 0, self.count - 1 do
+            out[#out + 1] = self.values[(self.first + i - 1) % self.capacity + 1]
+        end
+        return out
+    end
+end

@@ -221,6 +221,24 @@ impl Env {
             env.module_namespaces
                 .insert(src.index, src.namespaces.iter().cloned().collect());
         }
+        // Type parameters exist before any body refers to a definition
+        // (a generic class of another module may be resolved later).
+        for (def, p) in &pending {
+            let tps: &[TypeParam] = match p {
+                Pending::Alias(a, _) => &a.type_params,
+                Pending::Interface(i, _) => &i.type_params,
+                Pending::Class(c, _) => &c.type_params,
+                Pending::DeclClass(tps, ..) => tps,
+                _ => continue,
+            };
+            if env.def(*def).params.is_empty() && !tps.is_empty() {
+                let ids = tps
+                    .iter()
+                    .map(|t| env.new_param(&t.name.text, t.pack))
+                    .collect();
+                env.def_mut(*def).params = ids;
+            }
+        }
         // Pass 2: bodies.
         for (def, p) in &pending {
             env.resolve_pending(*def, p, sources);
@@ -404,17 +422,13 @@ impl Env {
         match p {
             Pending::Alias(a, m) => {
                 let mut scope = self.scope_of(*m, sources);
-                let params = self.type_params(&a.type_params, &mut scope);
-                self.def_mut(def).params = params;
+                self.def_type_params(def, &a.type_params, &mut scope);
                 let body = self.resolve(&a.ty, &scope);
                 self.def_mut(def).alias = Some(body);
             }
             Pending::Interface(i, m) => {
                 let mut scope = self.scope_of(*m, sources);
-                let params = self.type_params(&i.type_params, &mut scope);
-                if self.def(def).params.is_empty() {
-                    self.def_mut(def).params = params;
-                }
+                self.def_type_params(def, &i.type_params, &mut scope);
                 scope.self_ty = Some(self.instance(def));
                 for e in &i.extends {
                     let t = self.resolve(e, &scope);
@@ -464,8 +478,7 @@ impl Env {
             Pending::Class(c, m) => self.resolve_class(def, c, *m, sources),
             Pending::DeclClass(type_params, extends, members, m) => {
                 let mut scope = self.scope_of(*m, sources);
-                let params = self.type_params(type_params, &mut scope);
-                self.def_mut(def).params = params;
+                self.def_type_params(def, type_params, &mut scope);
                 scope.self_ty = Some(self.instance(def));
                 if let Some(e) = extends {
                     let t = self.resolve(e, &scope);
@@ -616,8 +629,7 @@ impl Env {
 
     fn resolve_class(&mut self, def: DefId, c: &ClassDecl, module: usize, sources: &[Source]) {
         let mut scope = self.scope_of(module, sources);
-        let params = self.type_params(&c.type_params, &mut scope);
-        self.def_mut(def).params = params;
+        self.def_type_params(def, &c.type_params, &mut scope);
         let instance = self.instance(def);
         scope.self_ty = Some(instance);
         if let Some(e) = &c.extends {
@@ -837,6 +849,28 @@ impl Env {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// The type parameters of a definition (created before pass 2) in
+    /// scope, with their constraints resolved.
+    fn def_type_params(&mut self, def: DefId, params: &[TypeParam], scope: &mut Scope) {
+        let ids = self.def(def).params.clone();
+        if ids.len() != params.len() {
+            let ids = self.type_params(params, scope);
+            if self.def(def).params.is_empty() {
+                self.def_mut(def).params = ids;
+            }
+            return;
+        }
+        for (p, &id) in params.iter().zip(&ids) {
+            scope.params.push((p.name.text.clone(), id));
+        }
+        for (p, &id) in params.iter().zip(&ids) {
+            if let Some(c) = &p.constraint {
+                let t = self.resolve(c, scope);
+                self.params[id.0 as usize].constraint = Some(t);
+            }
         }
     }
 

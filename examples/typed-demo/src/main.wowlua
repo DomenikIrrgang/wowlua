@@ -1,0 +1,55 @@
+-- Typed Demo: the gold earned and spent this session. Type /tdemo.
+import Ledger from "./ledger"
+import Source, format from "./money"
+
+const KEEP = 5
+
+local ledger: Ledger? = nil
+local source: Source = Source.Other
+
+-- The warband bank exists only on the mainline client. The build is shared
+-- between flavors, so the API needs a flavor guard (E2030 without it).
+local function warbandGold(): number?
+    if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
+        return C_Bank.FetchDepositedMoney(Enum.BankType.Account)
+    end
+    return nil
+end
+
+local frame = CreateFrame("Frame")
+frame:RegisterEvent("PLAYER_LOGIN")
+frame:RegisterEvent("PLAYER_MONEY")
+frame:RegisterEvent("MERCHANT_SHOW")
+frame:RegisterEvent("MERCHANT_CLOSED")
+frame:RegisterEvent("LOOT_OPENED")
+frame:RegisterEvent("LOOT_CLOSED")
+frame:SetScript("OnEvent", function(_, event: string)
+    if event == "PLAYER_LOGIN" then
+        local db = TypedDemoDB ?? { sessions = 0 }
+        db.sessions += 1
+        TypedDemoDB = db
+        ledger = Ledger.new(GetMoney(), KEEP)
+        print(`Typed Demo: session {db.sessions}, {format(GetMoney())}. Type /tdemo.`)
+    elseif event == "MERCHANT_SHOW" then
+        source = Source.Vendor
+    elseif event == "LOOT_OPENED" then
+        source = Source.Loot
+    elseif event == "MERCHANT_CLOSED" or event == "LOOT_CLOSED" then
+        source = Source.Other
+    elseif event == "PLAYER_MONEY" and ledger then
+        ledger:update(GetMoney(), GetTime(), source)
+    end
+end)
+
+_G.SLASH_TYPEDDEMO1 = "/tdemo"
+SlashCmdList.TYPEDDEMO = function()
+    if not ledger then
+        print("Typed Demo: not loaded yet")
+        return
+    end
+    print(ledger:summary())
+    local bank = warbandGold()
+    if bank then
+        print(`warband bank: {format(bank)}`)
+    end
+end

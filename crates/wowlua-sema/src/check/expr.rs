@@ -104,6 +104,9 @@ impl Checker<'_> {
             ExprKind::Vararg => self.vararg_pack(),
             ExprKind::Function(f) => {
                 let exp = expected.and_then(|t| self.contextual_func(t));
+                // A function passed as an argument or with an expected type
+                // is a callback.
+                self.callback_next = expected.is_some() || self.callbacks.contains(&e.span);
                 single(self.function_body(f, exp, None))
             }
             ExprKind::Table(fields) => single(self.table(fields, expected)),
@@ -194,6 +197,7 @@ impl Checker<'_> {
                 single(self.index_type(o, k, key, e.span))
             }
             ExprKind::Call { callee, args } | ExprKind::OptCall { callee, args } => {
+                self.mark_callbacks(args);
                 if let ExprKind::Name(n) = &callee.kind
                     && n.text.as_ref() == "super"
                     && !self.classes.is_empty()
@@ -232,6 +236,7 @@ impl Checker<'_> {
                 results
             }
             ExprKind::Method { obj, name, args } | ExprKind::OptMethod { obj, name, args } => {
+                self.mark_callbacks(args);
                 if self.is_super(obj) {
                     let m = self.super_member(&name.text, name.span);
                     let instance = self.scope.self_ty.unwrap_or(Types::ANY);
@@ -325,6 +330,19 @@ impl Checker<'_> {
     }
 
     // ------------------------------------------------------------ names --
+
+    /// Records the function expressions among call arguments (callbacks).
+    fn mark_callbacks(&mut self, args: &Args) {
+        for a in args.exprs() {
+            let mut a = a;
+            while let ExprKind::Paren(inner) = &a.kind {
+                a = inner;
+            }
+            if matches!(a.kind, ExprKind::Function(_)) {
+                self.callbacks.insert(a.span);
+            }
+        }
+    }
 
     /// The type of a name: a local, an import, or a global.
     pub fn name_type(&mut self, n: &Name) -> TypeId {
@@ -566,6 +584,31 @@ impl Checker<'_> {
     fn table(&mut self, fields: &[TableField], expected: Option<TypeId>) -> TypeId {
         // The expected record, array or map gives field types.
         let exp = expected.map(|t| self.env.types.non_nil(t));
+        // An expected union of table types (`Earned | Spent`): the first
+        // member the literal fits.
+        if let Some(e) = exp
+            && let Ty::Union(members) = self.env.types.get(e).clone()
+        {
+            let tables: Vec<TypeId> = members
+                .into_iter()
+                .filter(|&m| {
+                    matches!(
+                        self.env.types.get(m),
+                        Ty::Record(_) | Ty::Named(..) | Ty::Array(_) | Ty::Map(..)
+                    )
+                })
+                .collect();
+            if tables.len() >= 2 {
+                for m in tables {
+                    let mark = self.diagnostics.len();
+                    let t = self.table(fields, Some(m));
+                    if self.diagnostics.len() == mark && self.env.assignable(t, m, self.mode) {
+                        return t;
+                    }
+                    self.diagnostics.truncate(mark);
+                }
+            }
+        }
         let exp_ty = exp.map(|t| self.env.types.get(t).clone());
         let mut record = Record {
             open: exp.is_none(),
@@ -662,10 +705,29 @@ impl Checker<'_> {
         if !keys.is_empty() {
             let k = self.env.types.union(&keys);
             let v = self.env.types.union(&values);
-            record.indexer = Some((k, v));
+            record.indexer = match &exp_ty {
+                Some(Ty::Map(ek, ev))
+                    if self.env.assignable(k, *ek, self.mode)
+                        && self.env.assignable(v, *ev, self.mode) =>
+                {
+                    Some((*ek, *ev))
+                }
+                _ => Some((k, v)),
+            };
         }
+        // The expected element type, when every element has it (arrays are
+        // invariant in strict mode, so `"x"[]` would not be a `string[]`).
+        let want_elem = match &exp_ty {
+            Some(Ty::Array(e)) => Some(*e),
+            Some(Ty::Map(_, v)) => Some(*v),
+            _ => None,
+        };
         let elem = if array.is_empty() {
             None
+        } else if let Some(w) = want_elem
+            && array.iter().all(|&t| self.env.assignable(t, w, self.mode))
+        {
+            Some(w)
         } else {
             let widened: Vec<TypeId> = array
                 .iter()
@@ -1001,12 +1063,9 @@ impl Checker<'_> {
             let t = match self.env.types.get(m).clone() {
                 Ty::Array(e) => {
                     self.check_assignable(key.span, k, Types::NUMBER);
-                    // Reading past the end gives `nil`; basic mode trusts it.
-                    if self.mode == super::query::Mode::Strict {
-                        self.env.types.optional(e)
-                    } else {
-                        e
-                    }
+                    // Array reads are `T` in every mode, although reading past
+                    // the end gives `nil` (decision T95).
+                    e
                 }
                 Ty::Map(_, v) => self.env.types.optional(v),
                 Ty::Record(r) => match r.indexer {
@@ -1520,6 +1579,23 @@ impl Checker<'_> {
                     s.packs.entry(*p).or_insert_with(Pack::any);
                 } else {
                     s.types.entry(*p).or_insert(Types::ANY);
+                }
+            }
+            // Inferred type arguments must satisfy their constraints (E2014).
+            for p in &f.type_params {
+                let info = &self.env.params[p.0 as usize];
+                let (Some(c), Some(&t)) = (info.constraint, s.types.get(p)) else {
+                    continue;
+                };
+                let name = info.name.clone();
+                let c = subst::apply(&mut self.env.types, c, &s);
+                if report && !self.env.assignable(t, c, self.mode) {
+                    let msg = format!(
+                        "`{}` does not satisfy the constraint `{}` of `{name}`",
+                        self.env.display(t),
+                        self.env.display(c)
+                    );
+                    self.report("E2014", span, msg);
                 }
             }
         }

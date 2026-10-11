@@ -1,0 +1,53 @@
+-- The money earned and spent in this session.
+import Ring from "./ring"
+import Source, isEarned, format from "./money"
+import type Change from "./money"
+
+export class Ledger
+    private history: Ring<Change>
+    private earned: number = 0
+    private spent: number = 0
+    private balance: number
+
+    constructor(balance: number, keep: number)
+        self.history = Ring.new(keep)
+        self.balance = balance
+    end
+
+    -- Records a new balance and returns the change, if any.
+    function update(balance: number, time: number, source: Source): Change?
+        local delta = balance - self.balance
+        self.balance = balance
+        if delta == 0 then
+            return nil
+        end
+        local change: Change
+        if delta > 0 then
+            self.earned += delta
+            change = { kind = "earned", time = time, amount = delta, source = source }
+        else
+            self.spent -= delta
+            change = { kind = "spent", time = time, amount = -delta }
+        end
+        self.history:push(change)
+        return change
+    end
+
+    get net(): number
+        return self.earned - self.spent
+    end
+
+    function summary(): string
+        local lines = {
+            `earned {format(self.earned)}, spent {format(self.spent)}, net {format(self.net)}`,
+        }
+        for _, change in ipairs(self.history:toArray()) do
+            if isEarned(change) then
+                lines[#lines + 1] = `  + {format(change.amount)} ({change.source})`
+            else
+                lines[#lines + 1] = `  - {format(change.amount)}`
+            end
+        end
+        return table.concat(lines, "\n")
+    end
+end
