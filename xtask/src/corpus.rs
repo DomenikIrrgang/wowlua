@@ -362,6 +362,13 @@ pub fn addons(dir: &Path) -> Result<()> {
             failures.push(format!("{rel}: init failed: {}", e.message));
             continue;
         }
+        // Type-check the plain Lua files too (basic mode, warnings only):
+        // the corpus must check with zero errors (spec compiler §13.5.3).
+        let manifest_path = work.join("wowlua.json");
+        let mut manifest: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&manifest_path)?)?;
+        manifest["check"] = serde_json::json!({ "lua": true });
+        std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest)?)?;
         let mut session = wowlua_driver::Session::new();
         let options = wowlua_driver::LoadOptions {
             manifest: None,

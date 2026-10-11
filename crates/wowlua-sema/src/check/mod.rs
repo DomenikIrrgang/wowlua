@@ -106,6 +106,14 @@ pub fn check_package(
     }
     let mut env = env::Env::build(&sources);
     let mut diagnostics = std::mem::take(&mut env.diagnostics);
+    // Globals created with `@global` are declared (spec §4.3).
+    let mut extra_globals = extra_globals.clone();
+    for f in files.iter().filter(|f| f.kind == FileKind::Wowlua) {
+        if let Some(parse) = f.parse {
+            global_decorated(&parse.chunk.block, &mut extra_globals);
+        }
+    }
+    let extra_globals = &extra_globals;
 
     // Modules before their importers, so export types are known.
     let order = check_order(files.len(), &analysis.edges);
@@ -135,6 +143,57 @@ pub fn check_package(
         exports.insert(i, file_exports);
     }
     diagnostics
+}
+
+/// Names of declarations decorated with `@global`.
+fn global_decorated(block: &wowlua_syntax::ast::Block, out: &mut HashSet<String>) {
+    use wowlua_syntax::ast::ExprKind;
+    for s in &block.stmts {
+        let Some(d) = s.decorators.iter().find(|d| d.is_named("global")) else {
+            continue;
+        };
+        let explicit = d
+            .args
+            .as_ref()
+            .and_then(|a| match a.exprs().first().map(|e| &e.kind) {
+                Some(ExprKind::String(lit)) => {
+                    Some(String::from_utf8_lossy(&lit.value).into_owned())
+                }
+                _ => None,
+            });
+        if let Some(name) = explicit {
+            out.insert(name);
+            continue;
+        }
+        let inner = match &s.kind {
+            StmtKind::Export(i) => &i.kind,
+            k => k,
+        };
+        match inner {
+            StmtKind::Local { names, .. } => {
+                out.extend(names.iter().map(|n| n.name.text.to_string()))
+            }
+            StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
+                out.insert(name.text.to_string());
+            }
+            StmtKind::Function { name, .. } => {
+                out.insert(
+                    name.method
+                        .as_ref()
+                        .unwrap_or_else(|| name.path.last().expect("a name"))
+                        .text
+                        .to_string(),
+                );
+            }
+            StmtKind::Class(c) => {
+                out.insert(c.name.text.to_string());
+            }
+            StmtKind::Enum(e) => {
+                out.insert(e.name.text.to_string());
+            }
+            _ => {}
+        }
+    }
 }
 
 /// A topological order of the files over import edges, source order for
@@ -287,16 +346,10 @@ mod tests {
     }
 
     fn wowlua_stdlib_files() -> Vec<(&'static str, &'static str)> {
-        vec![
-            (
-                "<wowlua>/lua.d.wowlua",
-                include_str!("../../../wowlua-stdlib/decl/lua.d.wowlua"),
-            ),
-            (
-                "<wowlua>/widgets.d.wowlua",
-                include_str!("../../../wowlua-stdlib/decl/widgets.d.wowlua"),
-            ),
-        ]
+        vec![(
+            "<wowlua>/lua.d.wowlua",
+            include_str!("../../../wowlua-stdlib/decl/lua.d.wowlua"),
+        )]
     }
 
     fn codes(d: &[Diagnostic]) -> Vec<String> {

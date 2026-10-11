@@ -223,7 +223,7 @@ pub fn build(
             ),
         }
     }
-    // The compiler's implicit declarations (native widget types).
+    // The compiler's implicit declarations (Lua 5.1 and WoW's Lua).
     for builtin in wowlua_stdlib::declarations() {
         let file = session.db.add(builtin.path, builtin.text.to_string());
         declarations.push(crate::compile::Declaration {
@@ -292,6 +292,26 @@ pub fn build(
     // Compile: once per flavor in split mode, once in shared mode (spec
     // §6.3). Sources are parsed once.
     let mut diagnostics = Vec::new();
+    // The checker's settings and the wow-api declarations of each flavor
+    // (embedded until the package manager provides them, decision T83).
+    let check_cfg = crate::compile::CheckConfig {
+        mode: manifest.manifest.check.mode,
+        strict: sources::glob_set(&manifest.manifest.check.strict),
+        lua: manifest.manifest.check.lua,
+        globals: manifest
+            .manifest
+            .check
+            .globals
+            .iter()
+            .chain(manifest.manifest.addon.iter().flat_map(|a| {
+                a.saved_variables
+                    .iter()
+                    .chain(&a.saved_variables_per_character)
+            }))
+            .cloned()
+            .collect(),
+    };
+    let mut api_cache: HashMap<String, Vec<crate::compile::ParsedDeclaration>> = HashMap::new();
     let mut parsed =
         crate::compile::parse_sources(&session.db, &mut diagnostics, &files, &declarations, &raw);
     crate::compile::add_stdlib(
@@ -331,6 +351,28 @@ pub fn build(
                     .is_none_or(|f| restriction(&source.rel).is_none_or(|list| list.contains(f)))
             })
             .collect();
+        // Shared mode checks against the first flavor's API until flavor
+        // guards arrive.
+        let api_flavor = flavor
+            .clone()
+            .or_else(|| flavors.first().cloned())
+            .unwrap_or_default();
+        if !api_cache.contains_key(&api_flavor) {
+            let mut list = Vec::new();
+            for f in wowlua_api::declarations(&api_flavor).into_iter().flatten() {
+                let file = session.db.add(f.path, f.text.to_string());
+                list.push(crate::compile::ParsedDeclaration {
+                    source: sources::Source {
+                        rel: f.path.to_string(),
+                        src_rel: f.path.to_string(),
+                        abs: PathBuf::new(),
+                        kind: SourceKind::Wowlua,
+                    },
+                    parse: wowlua_syntax::parse(f.text.as_bytes(), file),
+                });
+            }
+            api_cache.insert(api_flavor.clone(), list);
+        }
         let output = crate::compile::compile_flavor(
             &session.db,
             &mut diagnostics,
@@ -345,6 +387,8 @@ pub fn build(
                 active: &active,
                 loaded_by: &loaded_by,
             },
+            &api_cache[&api_flavor],
+            &check_cfg,
         );
         builds.push(FlavorBuild {
             flavor: flavor.clone(),

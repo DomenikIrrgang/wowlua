@@ -5,12 +5,14 @@
 //! - `cargo xtask schema`: regenerate the manifest JSON schema in `schema/`.
 //! - `cargo xtask check`: fail if generated files are out of date (used in CI).
 //! - `cargo xtask corpus fetch|run [dir]`: the conformance corpus.
+//! - `cargo xtask types fetch|gen [dir]`: the embedded wow-api declarations.
 
 use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 mod corpus;
+mod types;
 
 fn main() -> Result<()> {
     let task = std::env::args().nth(1).unwrap_or_default();
@@ -38,7 +40,18 @@ fn main() -> Result<()> {
                 _ => bail!("usage: cargo xtask corpus <fetch|run|addons> [dir]"),
             }
         }
-        _ => bail!("usage: cargo xtask <codes|schema|check|corpus>"),
+        "types" => {
+            let dir = std::env::args()
+                .nth(3)
+                .map(PathBuf::from)
+                .unwrap_or_else(|| root.join("target/types-src"));
+            match std::env::args().nth(2).as_deref() {
+                Some("fetch") => types::fetch(&dir),
+                Some("gen") => types::generate(&root, &dir),
+                _ => bail!("usage: cargo xtask types <fetch|gen> [dir]"),
+            }
+        }
+        _ => bail!("usage: cargo xtask <codes|schema|check|corpus|types>"),
     }
 }
 

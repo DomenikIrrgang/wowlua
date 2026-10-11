@@ -50,6 +50,71 @@ pub struct Declaration {
     pub bytes: Vec<u8>,
 }
 
+/// The `check` settings of the manifest (spec §9.8).
+pub struct CheckConfig {
+    pub mode: wowlua_manifest::model::CheckMode,
+    pub strict: globset::GlobSet,
+    pub lua: bool,
+    /// `check.globals` and the SavedVariables.
+    pub globals: std::collections::HashSet<String>,
+}
+
+/// A declaration file of one flavor (the wow-api types), parsed.
+pub struct ParsedDeclaration {
+    pub source: Source,
+    pub parse: Parse,
+}
+
+/// How a source is checked (spec §2.1), or `None`.
+fn check_settings(
+    source: &Source,
+    parse: &Parse,
+    cfg: &CheckConfig,
+) -> Option<wowlua_sema::check::FileSettings> {
+    use wowlua_manifest::model::CheckMode;
+    use wowlua_sema::check::{FileSettings, query::Mode};
+    let directive = |n: &str| parse.chunk.directives.iter().any(|d| d.name.as_ref() == n);
+    if directive("nocheck") {
+        return None;
+    }
+    let opted_strict = directive("strict")
+        || cfg.strict.is_match(&source.rel)
+        || cfg.strict.is_match(&source.src_rel);
+    match source.kind {
+        SourceKind::Wowlua => {
+            let pure = wowlua_syntax::features::features(&parse.chunk).is_empty();
+            if opted_strict {
+                Some(FileSettings {
+                    mode: Mode::Strict,
+                    pure_lua: false,
+                })
+            } else {
+                match cfg.mode {
+                    CheckMode::Nocheck => None,
+                    // A project-wide strict mode does not apply to pure Lua.
+                    CheckMode::Strict if !pure => Some(FileSettings {
+                        mode: Mode::Strict,
+                        pure_lua: false,
+                    }),
+                    _ => Some(FileSettings {
+                        mode: Mode::Basic,
+                        pure_lua: pure,
+                    }),
+                }
+            }
+        }
+        SourceKind::Lua if opted_strict => Some(FileSettings {
+            mode: Mode::Strict,
+            pure_lua: false,
+        }),
+        SourceKind::Lua if cfg.lua && cfg.mode != CheckMode::Nocheck => Some(FileSettings {
+            mode: Mode::Basic,
+            pure_lua: true,
+        }),
+        _ => None,
+    }
+}
+
 /// The parsed sources of a package (shared by all flavors).
 pub struct Parsed {
     parses: Vec<Option<Parse>>,
@@ -216,6 +281,8 @@ pub fn compile_flavor(
     profile: &Profile,
     meta: Arc<Meta>,
     layout: wowlua_sema::loadorder::Layout,
+    api: &[ParsedDeclaration],
+    check: &CheckConfig,
 ) -> CompileOutput {
     let options = EmitOptions {
         line_mode: line_mode(profile),
@@ -253,6 +320,14 @@ pub fn compile_flavor(
             xml: None,
         });
     }
+    for d in api {
+        inputs.push(FileInput {
+            src_rel: d.source.src_rel.clone(),
+            kind: FileKind::Declaration,
+            parse: Some(&d.parse),
+            xml: None,
+        });
+    }
     let analysis = wowlua_sema::analyze(&inputs, Some(&meta));
     diagnostics.extend(analysis.diagnostics.iter().cloned());
     // Load order (spec §5.4): files listed in `build.load-order` keep their
@@ -268,6 +343,27 @@ pub fn compile_flavor(
             }
             out.edges.push(pair);
         }
+    }
+    // Type checking (spec chapter 2).
+    let settings: Vec<Option<wowlua_sema::check::FileSettings>> = (0..inputs.len())
+        .map(
+            |i| match (files.get(i), parsed.parses.get(i).and_then(Option::as_ref)) {
+                (Some((source, _)), Some(parse))
+                    if parsed.ok[i] && !wowlua_sema::is_compiler_known(&source.src_rel) =>
+                {
+                    check_settings(source, parse, check)
+                }
+                _ => None,
+            },
+        )
+        .collect();
+    if settings.iter().any(Option::is_some) {
+        diagnostics.extend(wowlua_sema::check::check_package(
+            &inputs,
+            &analysis,
+            &settings,
+            &check.globals,
+        ));
     }
     for info in analysis.modules.iter().flatten() {
         if info.is_module {

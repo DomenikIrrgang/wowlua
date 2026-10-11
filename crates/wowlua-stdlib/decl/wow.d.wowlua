@@ -1,0 +1,16 @@
+-- FrameXML globals that the generated wow-api declarations do not cover.
+
+declare global SlashCmdList: { [string]: (msg: string, editBox: EditBox?) -> () }
+declare global hash_SlashCmdList: { [string]: (msg: string, editBox: EditBox?) -> () }
+declare global UISpecialFrames: string[]
+declare global StaticPopupDialogs: { [string]: table }
+declare global UIDROPDOWNMENU_MENU_LEVEL: number
+declare global UIDROPDOWNMENU_MENU_VALUE: any
+declare global UIDROPDOWNMENU_OPEN_MENU: any
+declare global WOW_PROJECT_ID: number
+declare global WOW_PROJECT_MAINLINE: number
+declare global WOW_PROJECT_CLASSIC: number
+declare global WOW_PROJECT_BURNING_CRUSADE_CLASSIC: number
+declare global WOW_PROJECT_WRATH_CLASSIC: number
+declare global WOW_PROJECT_CATACLYSM_CLASSIC: number
+declare global WOW_PROJECT_MISTS_CLASSIC: number

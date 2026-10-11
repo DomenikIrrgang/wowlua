@@ -1258,6 +1258,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
+name = "wowlua-api"
+version = "0.4.0"
+
+[[package]]
 name = "wowlua-cli"
 version = "0.4.0"
 dependencies = [
@@ -1299,6 +1303,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "walkdir",
+ "wowlua-api",
  "wowlua-diagnostics",
  "wowlua-flavors",
  "wowlua-fmt",
@@ -1418,6 +1423,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wowlua-types-gen"
+version = "0.4.0"
+dependencies = [
+ "indexmap",
+ "mlua",
+ "wowlua-span",
+ "wowlua-syntax",
+]
+
+[[package]]
 name = "wowlua-xml"
 version = "0.4.0"
 dependencies = [
@@ -1436,12 +1451,15 @@ dependencies = [
  "tempfile",
  "wowlua-diagnostics",
  "wowlua-driver",
+ "wowlua-flavors",
  "wowlua-fmt",
  "wowlua-lower",
  "wowlua-luair",
  "wowlua-manifest",
+ "wowlua-sema",
  "wowlua-span",
  "wowlua-syntax",
+ "wowlua-types-gen",
 ]
 
 [[package]]

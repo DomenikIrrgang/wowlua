@@ -10,8 +10,9 @@ pub struct File {
     pub text: &'static str,
 }
 
-/// Declarations in scope in every package (until the generated `wow-api`
-/// packages of milestone M4 provide them).
+/// Declarations in scope in every package: Lua 5.1 and WoW's Lua
+/// environment, the language's own types, and FrameXML globals the
+/// generated wow-api declarations lack.
 pub fn declarations() -> &'static [File] {
     &[
         File {
@@ -19,8 +20,12 @@ pub fn declarations() -> &'static [File] {
             text: include_str!("../decl/lua.d.wowlua"),
         },
         File {
-            path: "<wowlua>/widgets.d.wowlua",
-            text: include_str!("../decl/widgets.d.wowlua"),
+            path: "<wowlua>/wowlua.d.wowlua",
+            text: include_str!("../decl/wowlua.d.wowlua"),
+        },
+        File {
+            path: "<wowlua>/wow.d.wowlua",
+            text: include_str!("../decl/wow.d.wowlua"),
         },
     ]
 }
@@ -86,6 +91,6 @@ mod tests {
         assert!(module("../etc").is_none());
         assert!(module("").is_none());
         assert_eq!(src_rel("events"), "@wowlua/events.wowlua");
-        assert!(declarations()[1].text.contains("@widget(\"Button\")"));
+        assert!(declarations()[0].text.contains("declare function print"));
     }
 }

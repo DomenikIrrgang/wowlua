@@ -216,13 +216,17 @@ impl Env {
         None
     }
 
-    /// The indexer of a named type (`AddonNamespace` has `[string]: any`).
+    /// The indexer of a named type (`AddonNamespace` has `[string]: any`;
+    /// frames are open tables: XML templates add children by `parentKey`).
     pub fn indexer_of(&self, def: DefId) -> Option<(TypeId, TypeId)> {
         let mut current = Some(def);
         let mut guard = 0;
         while let Some(d) = current {
             if let Some(i) = self.def(d).indexer {
                 return Some(i);
+            }
+            if self.def(d).widget.is_some() {
+                return Some((Types::STRING, Types::ANY));
             }
             guard += 1;
             if guard > 64 {

@@ -1,0 +1,14 @@
+-- Types of the wowlua language itself (spec §4.5).
+
+type DecoratorContext = {
+    kind: "function" | "method" | "constructor" | "getter" | "setter" | "class" | "field",
+    name: string,
+    static: boolean,
+    class: table?,
+    file: string,
+    line: number,
+}
+
+type FunctionDecorator<F> = (fn: F, ctx: DecoratorContext) -> F?
+type ClassDecorator<C> = (cls: C, ctx: DecoratorContext) -> C?
+type FieldDecorator = (target: nil, ctx: DecoratorContext) -> any

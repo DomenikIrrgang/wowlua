@@ -1,0 +1,317 @@
+//! `cargo xtask types fetch|gen [dir]`: the embedded wow-api declarations
+//! (spec package manager §10.9, decision T83). `fetch` checks out Blizzard's
+//! API documentation per flavor (the `wow-ui-source` mirror, at the tag of
+//! the flavor's newest client version) and Ketho's annotations (pinned);
+//! `gen` writes `crates/wowlua-api/data/`.
+
+use anyhow::{Context, Result, bail};
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+const UI_REPO: &str = "https://github.com/Gethe/wow-ui-source.git";
+const DOCS_DIR: &str = "Interface/AddOns/Blizzard_APIDocumentationGenerated";
+const KETHO_REPO: &str = "https://github.com/Ketho/vscode-wow-api.git";
+/// Ketho's vscode-wow-api (MIT) at a reviewed commit.
+const KETHO_COMMIT: &str = "d0b5b51fac4c52c493371b9b18e66ce604ea4326";
+/// The annotations used: widget classes, script objects, type aliases,
+/// FrameXML, and the undocumented globals (Lua and enum data come from
+/// elsewhere).
+const KETHO_DIRS: &[&str] = &["Widget", "ScriptObject", "Type", "FrameXML"];
+const KETHO_FILES: &[&str] = &[
+    "Data/Wiki.lua",
+    "Data/Classic.lua",
+    "Data/Event.lua",
+    "Data/CVar.lua",
+];
+
+fn git(args: &[&str], dir: Option<&Path>) -> Result<String> {
+    let mut cmd = Command::new("git");
+    if let Some(d) = dir {
+        cmd.current_dir(d);
+    }
+    let out = cmd.args(args).output().context("running git")?;
+    if !out.status.success() {
+        bail!(
+            "git {}: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// The flavors and the documentation tag of each: the newest version of
+/// the flavor's live clients that the mirror has a tag for.
+fn flavor_tags() -> Result<Vec<(String, String)>> {
+    let tags_out = git(&["ls-remote", "--tags", UI_REPO], None)?;
+    let tags: HashSet<String> = tags_out
+        .lines()
+        .filter_map(|l| l.split("refs/tags/").nth(1))
+        .map(|t| t.trim_end_matches("^{}").to_string())
+        .collect();
+    let table = wowlua_flavors::table();
+    let mut out = Vec::new();
+    for flavor in &table.flavors {
+        let mut versions: Vec<&str> = table
+            .clients
+            .iter()
+            .filter(|c| c.flavor == flavor.id)
+            // Test clients do not define the flavor's API.
+            .filter(|c| {
+                !["-ptr", "-xptr", "-beta"]
+                    .iter()
+                    .any(|t| c.name.ends_with(t))
+            })
+            .map(|c| c.version.as_str())
+            .collect();
+        versions.sort_by_key(|v| std::cmp::Reverse(version_key(v)));
+        match versions.iter().find(|v| tags.contains(**v)) {
+            Some(v) => out.push((flavor.id.clone(), v.to_string())),
+            None => bail!(
+                "no wow-ui-source tag for flavor {} (clients {:?})",
+                flavor.id,
+                versions
+            ),
+        }
+    }
+    Ok(out)
+}
+
+fn version_key(v: &str) -> Vec<u32> {
+    v.split('.').filter_map(|p| p.parse().ok()).collect()
+}
+
+pub fn fetch(dir: &Path) -> Result<()> {
+    fs::create_dir_all(dir)?;
+    for (flavor, tag) in flavor_tags()? {
+        let target = dir.join(&flavor);
+        let marker = target.join(".wowlua-tag");
+        if fs::read_to_string(&marker).ok().as_deref() == Some(tag.as_str()) {
+            println!("{flavor}: {tag} (cached)");
+            continue;
+        }
+        if target.exists() {
+            fs::remove_dir_all(&target)?;
+        }
+        println!("{flavor}: fetching wow-ui-source {tag}");
+        let t = target.to_string_lossy().into_owned();
+        git(
+            &[
+                "clone",
+                "-q",
+                "--depth",
+                "1",
+                "--branch",
+                &tag,
+                "--filter=blob:none",
+                "--sparse",
+                UI_REPO,
+                &t,
+            ],
+            None,
+        )?;
+        git(&["sparse-checkout", "set", DOCS_DIR], Some(&target))?;
+        fs::write(&marker, &tag)?;
+    }
+    let ketho = dir.join("ketho");
+    let marker = ketho.join(".wowlua-commit");
+    if fs::read_to_string(&marker).ok().as_deref() != Some(KETHO_COMMIT) {
+        if ketho.exists() {
+            fs::remove_dir_all(&ketho)?;
+        }
+        println!("ketho: fetching vscode-wow-api {KETHO_COMMIT}");
+        let k = ketho.to_string_lossy().into_owned();
+        git(
+            &[
+                "clone",
+                "-q",
+                "--filter=blob:none",
+                "--no-checkout",
+                "--sparse",
+                KETHO_REPO,
+                &k,
+            ],
+            None,
+        )?;
+        git(
+            &["sparse-checkout", "set", "Annotations/Core"],
+            Some(&ketho),
+        )?;
+        git(&["checkout", "-q", KETHO_COMMIT], Some(&ketho))?;
+        fs::write(&marker, KETHO_COMMIT)?;
+    }
+    Ok(())
+}
+
+fn lua_files(dir: &Path, out: &mut Vec<(String, String)>) -> Result<()> {
+    let mut entries: Vec<PathBuf> = fs::read_dir(dir)?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .collect();
+    entries.sort();
+    for p in entries {
+        if p.is_dir() {
+            lua_files(&p, out)?;
+        } else if p.extension().is_some_and(|e| e == "lua") {
+            let text = String::from_utf8_lossy(&fs::read(&p)?).into_owned();
+            out.push((p.to_string_lossy().into_owned(), text));
+        }
+    }
+    Ok(())
+}
+
+/// Global names the compiler's own declarations define
+/// (`crates/wowlua-stdlib/decl/`).
+fn compiler_globals(root: &Path) -> Result<HashSet<String>> {
+    let mut text = String::new();
+    for entry in fs::read_dir(root.join("crates/wowlua-stdlib/decl"))? {
+        text.push_str(&fs::read_to_string(entry?.path())?);
+        text.push('\n');
+    }
+    let mut out = HashSet::new();
+    for line in text.lines() {
+        for prefix in ["declare function ", "declare namespace ", "declare global "] {
+            if let Some(rest) = line.strip_prefix(prefix) {
+                let name: String = rest
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                    .collect();
+                out.insert(name);
+            }
+        }
+    }
+    Ok(out)
+}
+
+pub fn generate(root: &Path, dir: &Path) -> Result<()> {
+    let mut flavors = Vec::new();
+    for (flavor, tag) in flavor_tags()? {
+        let docs = dir.join(&flavor).join(DOCS_DIR);
+        if !docs.exists() {
+            bail!(
+                "{} is missing: run `cargo xtask types fetch` first",
+                docs.display()
+            );
+        }
+        let mut files = Vec::new();
+        lua_files(&docs, &mut files)?;
+        flavors.push(wowlua_types_gen::FlavorDocs {
+            id: flavor,
+            source: format!("wow-ui-source {tag}"),
+            files,
+        });
+    }
+    let mut annotations = Vec::new();
+    let core = dir.join("ketho/Annotations/Core");
+    for d in KETHO_DIRS {
+        lua_files(&core.join(d), &mut annotations)?;
+    }
+    for f in KETHO_FILES {
+        let path = core.join(f);
+        let text =
+            String::from_utf8_lossy(&fs::read(&path).with_context(|| path.display().to_string())?)
+                .into_owned();
+        annotations.push((path.to_string_lossy().into_owned(), text));
+    }
+    let skip = compiler_globals(root)?;
+    let source = format!("Ketho's vscode-wow-api annotations (MIT License, commit {KETHO_COMMIT})");
+    let output = wowlua_types_gen::generate(&flavors, &annotations, &source, &skip)
+        .map_err(anyhow::Error::msg)?;
+    let data = root.join("crates/wowlua-api/data");
+    fs::create_dir_all(&data)?;
+    // The MIT notice of the annotations goes with the generated files.
+    let license = git(&["show", &format!("{KETHO_COMMIT}:LICENSE")], Some(&dir.join("ketho")))?;
+    crate::write_if_changed(
+        &data.join("LICENSE-vscode-wow-api.txt"),
+        &format!("The declarations in this directory include information converted from\nKetho's vscode-wow-api (https://github.com/Ketho/vscode-wow-api), commit\n{KETHO_COMMIT}, under this license:\n\n{license}"),
+    )?;
+    let mut written = vec![("shared".to_string(), output.shared)];
+    written.extend(output.flavors);
+    for (name, text) in &written {
+        // The output must parse.
+        let mut db = wowlua_span::SourceDb::new();
+        let file = db.add(format!("{name}.d.wowlua"), text.clone());
+        let parse = wowlua_syntax::parse(text.as_bytes(), file);
+        if parse.has_errors() {
+            let first = &parse.diagnostics[0];
+            let at = first
+                .labels
+                .first()
+                .map(|l| l.span.start as usize)
+                .unwrap_or(0);
+            let line = text[..at.min(text.len())].matches('\n').count() + 1;
+            let context: Vec<&str> = text.lines().skip(line.saturating_sub(3)).take(5).collect();
+            bail!(
+                "{name}.d.wowlua:{line}: {} ({} errors)\n{}",
+                first.message,
+                parse.diagnostics.len(),
+                context.join("\n")
+            );
+        }
+        let path = data.join(format!("{name}.d.wowlua"));
+        crate::write_if_changed(&path, text)?;
+        println!("{name}: {} KB", text.len() / 1024);
+    }
+    // Every flavor's declarations resolve with the compiler's own.
+    let lua = fs::read_to_string(root.join("crates/wowlua-stdlib/decl/lua.d.wowlua"))?;
+    let wow = fs::read_to_string(root.join("crates/wowlua-stdlib/decl/wow.d.wowlua"))?;
+    for (name, text) in written.iter().skip(1) {
+        let diagnostics = validate(&[
+            ("lua", &lua),
+            ("wow", &wow),
+            ("shared", &written[0].1),
+            (name, text),
+        ]);
+        if !diagnostics.is_empty() {
+            for d in diagnostics.iter().take(10) {
+                println!("  {name}: {d}");
+            }
+            bail!(
+                "{name}: {} problems in the generated declarations",
+                diagnostics.len()
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Builds the type environment from declaration files; its diagnostics.
+fn validate(files: &[(&str, &String)]) -> Vec<String> {
+    let mut db = wowlua_span::SourceDb::new();
+    let parses: Vec<(String, wowlua_syntax::Parse)> = files
+        .iter()
+        .map(|(n, t)| {
+            let file = db.add(format!("{n}.d.wowlua"), (*t).clone());
+            (
+                format!("{n}.d.wowlua"),
+                wowlua_syntax::parse(t.as_bytes(), file),
+            )
+        })
+        .collect();
+    let inputs: Vec<wowlua_sema::FileInput> = parses
+        .iter()
+        .map(|(n, p)| wowlua_sema::FileInput {
+            src_rel: n.clone(),
+            kind: wowlua_sema::FileKind::Declaration,
+            parse: Some(p),
+            xml: None,
+        })
+        .collect();
+    let analysis = wowlua_sema::analyze(&inputs, None);
+    let settings = vec![None; inputs.len()];
+    wowlua_sema::check::check_package(&inputs, &analysis, &settings, &Default::default())
+        .into_iter()
+        .map(|d| {
+            let at = d.labels.first().map(|l| {
+                let (path, text) = files[l.span.file.index()];
+                let line = text[..(l.span.start as usize).min(text.len())]
+                    .matches('\n')
+                    .count()
+                    + 1;
+                format!("{path}:{line}: ")
+            });
+            format!("{}{}", at.unwrap_or_default(), d.message)
+        })
+        .collect()
+}
