@@ -378,15 +378,22 @@ global is hooked, so no other addon or Blizzard frame is affected.
 | Timers | Per creation location: callbacks run, total, max |
 | Memory | The addon's memory (`GetAddOnMemoryUsage`) sampled every 5 s, last 10 minutes |
 
-Handlers set in XML files are not monitored. The data is shown in the
-Monitor tab and by `/wl mon`.
+Handlers set in XML files, and calls through a local alias of `C_Timer`,
+are not monitored. Memory is not sampled in combat
+(`UpdateAddOnMemoryUsage` is expensive). The data is shown in the Monitor tab
+and by `/wl mon`.
 
 ## 7.10 Error capture
 
 With `capture-errors = true`, the runtime chains itself into the global
-error handler (`seterrorhandler`): errors whose stack contains the addon's
-folder are recorded (message, first location, stack from `debugstack()`, time,
-count of repeats), and the previous handler is always called afterwards, so
-BugSack and the default error frame still see every error (decision T100).
-Recorded errors are shown in the Errors tab and by `/wl errors`.
+error handler (`seterrorhandler`): errors raised in the addon's folder are
+recorded (message, stack from `debugstack()`, time, count of repeats), and the
+previous handler is always called afterwards, so BugSack and the default error
+frame still see every error (decision T100). The location at the start of
+the message decides whose error it is; a message without one is the addon's
+when its stack passes through the addon's folder. When BugGrabber is loaded
+(it keeps the handler to itself), the runtime listens to its
+`BugGrabber_BugGrabbed` callback instead. Paths are shown relative to the
+AddOn folder. The last 50 distinct errors are kept. Recorded errors are shown
+in the Errors tab and by `/wl errors`.
 

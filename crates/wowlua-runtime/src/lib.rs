@@ -26,6 +26,10 @@ pub enum Slice {
     Check,
     /// Reflection metadata (spec §7.8).
     Reflect,
+    /// The event, script and timer monitor (spec §7.9).
+    Monitor,
+    /// Error capture (spec §7.10).
+    Errors,
     /// The dev console and window (spec §7.7).
     DevConsole,
 }
@@ -41,6 +45,8 @@ impl Slice {
             Slice::Trace => include_str!("../lua/trace.lua"),
             Slice::Check => include_str!("../lua/check.lua"),
             Slice::Reflect => include_str!("../lua/reflect.lua"),
+            Slice::Monitor => include_str!("../lua/monitor.lua"),
+            Slice::Errors => include_str!("../lua/errors.lua"),
             Slice::DevConsole => include_str!("../lua/devconsole.lua"),
         }
     }
@@ -67,6 +73,10 @@ pub struct RuntimeOptions {
     pub log_history: u32,
     /// `profile-errors`: profiled functions count their errors.
     pub profile_errors: bool,
+    /// Dev builds: what the dev console shows about this build, as
+    /// `(key, value)` strings, and the runtime version number.
+    pub dev_info: Vec<(String, String)>,
+    pub runtime_version: u32,
     /// Lua statements filling `wl.meta` (build metadata runtime tables).
     pub meta: Option<String>,
     /// Slices the compiled code uses.
@@ -100,6 +110,18 @@ pub fn runtime(options: &RuntimeOptions) -> String {
     placeholders.push_str(&format!("wl.debug = {}\n", options.debug));
     if options.profile_errors {
         placeholders.push_str("wl.profErrors = true\n");
+    }
+    if !options.dev_info.is_empty() {
+        let fields: Vec<String> = options
+            .dev_info
+            .iter()
+            .map(|(k, v)| format!("{k} = {}", lua_string(v)))
+            .collect();
+        placeholders.push_str(&format!(
+            "wl.devInfo = {{ {}, runtime = {} }}\n",
+            fields.join(", "),
+            options.runtime_version
+        ));
     }
     if !options.log_level.is_empty() {
         placeholders.push_str(&format!(
@@ -161,6 +183,38 @@ mod tests {
         )
         .exec()
         .unwrap();
+    }
+
+    /// Dev builds share one `/wl` console: the newest runtime serves it,
+    /// every addon registers (spec §7.7, decision T98).
+    #[test]
+    fn dev_console_registry_newest_wins() {
+        let lua = mlua::Lua::new();
+        lua.load("SlashCmdList = {}").exec().unwrap();
+        let build = |version: u32| {
+            runtime(&RuntimeOptions {
+                slices: [Slice::DevConsole].into_iter().collect(),
+                dev_info: vec![("version".into(), "1.0.0".into())],
+                runtime_version: version,
+                ..RuntimeOptions::default()
+            })
+        };
+        for (name, version) in [("Old", 5_000), ("New", 6_000), ("Older", 4_000)] {
+            let ns = lua.create_table().unwrap();
+            lua.load(build(version)).call::<()>((name, ns)).unwrap();
+        }
+        let (version, owner, order): (u32, String, String) = lua
+            .load(
+                r#"return WOWLUA_DEV.version, (function()
+                    for n, d in pairs(WOWLUA_DEV.addons) do if d.console then return n end end
+                end)(), table.concat(WOWLUA_DEV.order, ",")"#,
+            )
+            .eval()
+            .unwrap();
+        assert_eq!(
+            (version, owner.as_str(), order.as_str()),
+            (6_000, "New", "Old,New,Older")
+        );
     }
 
     #[test]

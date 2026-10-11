@@ -512,11 +512,7 @@ fn wowlua_sources_compile_with_types_erased() {
         "maps stay outside the AddOn"
     );
 
-    fs::write(
-        dir.path().join("src/main.wowlua"),
-        "@trace\nclass C\nend\n",
-    )
-    .unwrap();
+    fs::write(dir.path().join("src/main.wowlua"), "@trace\nclass C\nend\n").unwrap();
     wowlua(dir.path())
         .args(["build", "--message-format", "short"])
         .assert()
@@ -1477,6 +1473,99 @@ print(info.name, info.location, info.params[2].optional, info.returns)
         .assert()
         .success()
         .stderr(predicate::str::contains("warning[W7010]"));
+}
+
+/// The dev console (spec §7.7), monitor (§7.9) and error capture (§7.10)
+/// are built into dev builds without code changes.
+#[test]
+fn dev_console_monitor_and_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"local addonName, ns = ...
+ns.answer = 42
+local frame = CreateFrame("Frame", "MonFrame")
+frame:RegisterEvent("PLAYER_LOGIN")
+frame:SetScript("OnEvent", function(self, event)
+    ns.seen = event
+end)
+frame:HookScript("OnShow", function() end)
+C_Timer.After(1, function() ns.timer = true end)
+local function work(n) return n * 2 end
+work(1)
+work(2)
+"#;
+    let mock = r#"__chat = {}
+DEFAULT_CHAT_FRAME = { AddMessage = function(_, text) __chat[#__chat + 1] = text end }
+SlashCmdList = {}
+local handler = function(message) __chat[#__chat + 1] = "default handler: " .. message end
+function geterrorhandler() return handler end
+function seterrorhandler(h) handler = h end
+function debugstack() return "Interface/AddOns/Mon/src/main.lua:12: in main chunk" end
+function date() return "12:00:00" end
+local now = 0
+function debugprofilestop() now = now + 1 return now end
+C_Timer = { After = function(_, fn) fn() end, NewTicker = function() end }
+local frames = {}
+function CreateFrame(_, name)
+  local f = { scripts = {}, name = name }
+  function f:GetName() return self.name end
+  function f:RegisterEvent() end
+  function f:SetScript(s, fn) self.scripts[s] = fn end
+  function f:HookScript(s, fn) self.scripts[s] = fn end
+  frames[#frames + 1] = f
+  return f
+end
+function __fire(event) for _, f in ipairs(frames) do if f.scripts.OnEvent then f.scripts.OnEvent(f, event) end end end
+"#;
+    let sim = r#"__fire("PLAYER_LOGIN")
+__fire("PLAYER_LOGIN")
+geterrorhandler()("Interface/AddOns/Mon/src/main.lua:9: boom")
+geterrorhandler()("Interface/AddOns/Mon/src/main.lua:9: boom")
+geterrorhandler()("Interface/AddOns/Other/x.lua:1: not mine")
+SlashCmdList.WOWLUA("list")
+SlashCmdList.WOWLUA("mon mon")
+SlashCmdList.WOWLUA("prof Mon top 2")
+SlashCmdList.WOWLUA("errors")
+SlashCmdList.WOWLUA("watch Mon ns.answer + 1")
+for _, line in ipairs(__chat) do print((line:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))) end
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"mon\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.lua", main),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let dist = dir.path().join("dist/dev/Mon");
+    let toc = fs::read_to_string(dist.join("Mon.toc")).unwrap();
+    fs::write(dist.join("mock.lua"), mock).unwrap();
+    fs::write(dist.join("sim.lua"), sim).unwrap();
+    fs::write(dist.join("Mon.toc"), format!("mock.lua\n{toc}\nsim.lua\n")).unwrap();
+    let out = run_addon(&dist, "Mon");
+    let lines: Vec<&str> = out.lines().collect();
+    let has = |needle: &str| lines.iter().any(|l| l.contains(needle));
+    assert!(
+        has("default handler: Interface/AddOns/Mon/src/main.lua:9: boom"),
+        "{out}"
+    );
+    assert!(has("wowlua Mon 1.0.0-dev"), "{out}");
+    assert!(
+        has("wowlua Mon events:")
+            && has("PLAYER_LOGIN")
+            && lines
+                .iter()
+                .any(|l| l.contains("PLAYER_LOGIN") && l.contains(" 2 ")),
+        "{out}"
+    );
+    assert!(has("MonFrame · OnShow") || has("Mon scripts:"), "{out}");
+    assert!(has("C_Timer.After at src/main.lua:9"), "{out}");
+    assert!(has("work") && has("Mon profiler (ms), by total:"), "{out}");
+    assert!(has("src/main.lua:9: boom ×2"), "{out}");
+    assert!(!has("not mine ×"), "{out}");
+    assert!(has("wowlua Mon watch ns.answer + 1 = 43"), "{out}");
 }
 
 /// `wowlua lint` reports the lints only; `--fix` applies their fixes;

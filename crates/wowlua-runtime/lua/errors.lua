@@ -1,0 +1,70 @@
+-- wowlua runtime: error capture (spec §7.10). Errors raised by this
+-- addon's code are recorded; the previous handler always runs as well.
+local errors = { list = {}, byMessage = {} }
+wl.errors = errors
+local folder = ("addons/" .. addonName .. "/"):lower()
+local function normal(s)
+	return tostring(s or ""):gsub("\\", "/"):lower()
+end
+-- The message's own location decides (`path:line: text`); without one,
+-- the stack.
+local function mine(message, stack)
+	local location = normal(message):match("^(.-):%d+:")
+	if location then
+		return location:find(folder, 1, true) ~= nil
+	end
+	return normal(stack):find(folder, 1, true) ~= nil
+end
+-- `Interface/AddOns/<Name>/src/a.lua:12` → `src/a.lua:12`.
+local function shorten(s)
+	s = tostring(s or "")
+	local i, j = normal(s):find(folder, 1, true)
+	if i then
+		return s:sub(1, i - 1):gsub("[Ii]nterface[/\\]$", "") .. s:sub(j + 1)
+	end
+	return s
+end
+function errors.record(message, stack)
+	message = tostring(message)
+	if not mine(message, stack) then
+		return
+	end
+	local short = shorten(message)
+	local e = errors.byMessage[short]
+	if e then
+		e.count = e.count + 1
+		e.time = date and date("%H:%M:%S") or e.time
+		return
+	end
+	e = {
+		message = short,
+		stack = shorten(stack),
+		count = 1,
+		time = date and date("%H:%M:%S") or "",
+	}
+	errors.byMessage[short] = e
+	table.insert(errors.list, 1, e)
+	if #errors.list > 50 then
+		local old = table.remove(errors.list)
+		errors.byMessage[old.message] = nil
+	end
+end
+function errors.clear()
+	errors.list = {}
+	errors.byMessage = {}
+end
+-- BugGrabber keeps the error handler to itself: listen to it instead.
+local grabber = BugGrabber
+if type(grabber) == "table" and type(grabber.RegisterCallback) == "function" then
+	grabber.RegisterCallback(errors, "BugGrabber_BugGrabbed", function(_, e)
+		errors.record(e.message, e.stack)
+	end)
+elseif type(seterrorhandler) == "function" and type(geterrorhandler) == "function" then
+	local previous = geterrorhandler()
+	seterrorhandler(function(message, ...)
+		errors.record(message, debugstack and debugstack(2) or "")
+		if previous then
+			return previous(message, ...)
+		end
+	end)
+end

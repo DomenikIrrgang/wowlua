@@ -74,6 +74,8 @@ pub struct Tools {
     pub reflection: u8,
     /// The package imports `wowlua:reflect` (enums register their order).
     pub reflect_used: bool,
+    /// `monitor`: handler installations go through the monitor.
+    pub monitor: bool,
 }
 
 /// A lowered file.
@@ -1809,6 +1811,9 @@ impl<'a> Lowerer<'a> {
             return self
                 .optional_chain(e, false)
                 .expect("an expression chain has a value");
+        }
+        if let Some(routed) = self.monitor_call(e) {
+            return routed;
         }
         let kind = match &e.kind {
             ExprKind::Nil => K::Nil,

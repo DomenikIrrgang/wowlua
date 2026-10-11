@@ -548,7 +548,9 @@ pub fn build(
         }
     }
     let needs_runtime = builds.iter().any(|b| {
-        b.output.needs_runtime || !b.output.meta_used.is_empty() || !b.output.slices.is_empty()
+        b.output.needs_runtime
+            || !b.output.meta_used.is_empty()
+            || !tool_slices(&profile, &b.output.slices).is_empty()
     });
     let runtimes: Vec<String> = builds
         .iter()
@@ -562,6 +564,20 @@ pub fn build(
                     .unwrap_or_default(),
                 log_history: manifest.manifest.stdlib.log.history_size,
                 profile_errors: profile.profile_errors,
+                dev_info: if profile.dev_console {
+                    vec![
+                        ("version".into(), version.to_string()),
+                        ("profile".into(), profile.name.clone()),
+                        ("build".into(), build_id.clone()),
+                        // The same in every flavor's runtime, so one TOC
+                        // can load it.
+                        ("flavors".into(), flavors.join(", ")),
+                        ("compiler".into(), crate::COMPILER_VERSION.to_string()),
+                    ]
+                } else {
+                    Vec::new()
+                },
+                runtime_version: runtime_version(),
                 meta: crate::meta::runtime_tables(
                     &b.meta,
                     &b.output.meta_used,
@@ -569,7 +585,7 @@ pub fn build(
                     &flavors,
                     &project.interfaces,
                 ),
-                slices: b.output.slices.clone(),
+                slices: tool_slices(&profile, &b.output.slices),
             })
         })
         .collect();
@@ -2105,6 +2121,43 @@ fn write_tree(dir: &Path, out: &BTreeMap<String, Content>) -> std::io::Result<()
         }
     }
     fsutil::replace_dir(&staged, dir)
+}
+
+/// The runtime slices of a build: those the compiled code uses, plus the
+/// tools the profile builds in (decision T96).
+fn tool_slices(
+    profile: &wowlua_manifest::profile::Profile,
+    used: &BTreeSet<wowlua_runtime::Slice>,
+) -> BTreeSet<wowlua_runtime::Slice> {
+    use wowlua_runtime::Slice;
+    let mut out = used.clone();
+    if profile.dev_console {
+        out.insert(Slice::DevConsole);
+    }
+    if profile.monitor {
+        out.insert(Slice::Monitor);
+    }
+    if profile.capture_errors {
+        out.insert(Slice::Errors);
+    }
+    if profile.instrument != wowlua_manifest::model::Instrument::None && profile.dev_console {
+        out.insert(Slice::Prof);
+    }
+    out
+}
+
+/// The runtime's version number (`0.6.0` → 600): the newest runtime among
+/// the loaded dev builds serves the dev console (decision T98).
+fn runtime_version() -> u32 {
+    let mut parts = crate::COMPILER_VERSION
+        .split('.')
+        .map(|p| p.parse::<u32>().unwrap_or(0));
+    let (major, minor, patch) = (
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+    );
+    major * 1_000_000 + minor * 1_000 + patch
 }
 
 #[cfg(test)]

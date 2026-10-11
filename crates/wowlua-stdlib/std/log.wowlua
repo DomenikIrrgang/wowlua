@@ -101,6 +101,10 @@ end
 
 export const log = { trace = trace, debug = debug, info = info, warn = warn, error = error }
 
+-- The dev console's view of the log.
+wl.logs.history = history
+wl.logs.setLevel = setLevel
+
 local function say(frame: any, message: string)
     local line = "|cff33ff99" .. addonName .. "|r: " .. message
     if frame then

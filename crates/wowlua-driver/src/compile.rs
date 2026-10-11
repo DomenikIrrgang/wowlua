@@ -420,6 +420,7 @@ pub fn compile_flavor(
             runtime_checks: profile.runtime_checks as u8,
             reflection: profile.reflection as u8,
             reflect_used,
+            monitor: profile.monitor,
         };
         ctx.value_checks = out
             .value_checks

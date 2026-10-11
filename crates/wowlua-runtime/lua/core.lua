@@ -4,6 +4,8 @@ local addonName, ns = ...
 local wl = ns.__wowlua or {}
 ns.__wowlua = wl
 local modules, loaded = {}, {}
+-- The addon table and the module export tables (dev console watches).
+wl.ns, wl.modules = ns, modules
 --@placeholders
 local function fail(message)
 	error(addonName .. ": " .. message, 3)

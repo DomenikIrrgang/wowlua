@@ -259,3 +259,68 @@ fn path_label(e: &ir::Expr) -> Option<String> {
         _ => None,
     }
 }
+
+impl Lowerer<'_> {
+    /// The monitor's routing of a call (spec §7.9): `frame:SetScript(…)`,
+    /// `frame:HookScript(…)` and the global `C_Timer` functions become calls
+    /// of `__wl.mon` helpers with the call's location.
+    pub(crate) fn monitor_call(&mut self, e: &Expr) -> Option<ir::Expr> {
+        if !self.ctx.tools.monitor || self.ctx.compiler_known {
+            return None;
+        }
+        let (helper, items, arity): (&str, Vec<&Expr>, usize) = match &e.kind {
+            ExprKind::Method {
+                obj,
+                name,
+                args: Args::Parens { args, .. },
+            } if args.len() == 2 && matches!(name.text.as_ref(), "SetScript" | "HookScript") => {
+                let helper = if name.text.as_ref() == "SetScript" {
+                    "setScript"
+                } else {
+                    "hookScript"
+                };
+                let mut items = vec![&**obj];
+                items.extend(args.iter());
+                (helper, items, 3)
+            }
+            ExprKind::Call {
+                callee,
+                args: Args::Parens { args, .. },
+            } => {
+                let ExprKind::Field { obj, name } = &callee.kind else {
+                    return None;
+                };
+                if !matches!(&obj.kind, ExprKind::Name(n) if n.text.as_ref() == "C_Timer")
+                    || self.is_local("C_Timer")
+                {
+                    return None;
+                }
+                let (helper, arity) = match name.text.as_ref() {
+                    "After" => ("after", 2),
+                    "NewTimer" => ("newTimer", 2),
+                    "NewTicker" => ("newTicker", 3),
+                    _ => return None,
+                };
+                if args.len() < 2 || args.len() > arity {
+                    return None;
+                }
+                (helper, args.iter().collect(), arity)
+            }
+            _ => return None,
+        };
+        let pos = self.span_pos(e.span);
+        let mut lowered = self.seq(&items);
+        while lowered.len() < arity {
+            lowered.push(lit(ir::ExprKind::Nil, pos));
+        }
+        lowered.push(self.string(&self.location(e.span), pos));
+        self.uses_runtime = true;
+        self.slices.insert(Slice::Monitor);
+        let wl = self.runtime_ref(pos);
+        Some(call(
+            field(field(wl, "mon", pos), helper, pos),
+            lowered,
+            pos,
+        ))
+    }
+}
