@@ -45,8 +45,8 @@ pub struct FileEntry {
     pub path: String,
     /// `None` means every targeted flavor.
     pub flavors: Option<Vec<String>>,
-    /// `Some(code)`: load only for that client locale.
-    pub locale: Option<String>,
+    /// `Some(codes)`: load only for these client locales.
+    pub locales: Option<Vec<String>>,
 }
 
 impl FileEntry {
@@ -54,7 +54,7 @@ impl FileEntry {
         FileEntry {
             path: path.into(),
             flavors: None,
-            locale: None,
+            locales: None,
         }
     }
 }
@@ -220,9 +220,9 @@ fn single_layout_problem(table: &FlavorTable, input: &TocInput) -> Option<(Strin
     let needs_file_directives = input
         .files
         .iter()
-        .any(|f| f.flavors.is_some() || f.locale.is_some());
+        .any(|f| f.flavors.is_some() || f.locales.is_some());
     let needs_directive_lines = input.directives.iter().any(|d| d.flavors.is_some());
-    let needs_text_locale = input.files.iter().any(|f| f.locale.is_some());
+    let needs_text_locale = input.files.iter().any(|f| f.locales.is_some());
     let mut names: Vec<String> = Vec::new();
     for subset in input
         .files
@@ -294,8 +294,8 @@ fn render_single(table: &FlavorTable, input: &TocInput) -> TocFile {
                 &input.flavors,
             )));
         }
-        if let Some(locale) = &file.locale {
-            line.push_str(&format!(" [AllowLoadTextLocale {locale}]"));
+        if let Some(locales) = &file.locales {
+            line.push_str(&format!(" [AllowLoadTextLocale {}]", locales.join(", ")));
         }
         lines.push(line);
     }
@@ -334,8 +334,8 @@ fn render_per_flavor(table: &FlavorTable, input: &TocInput) -> Result<Vec<TocFil
             .filter(|f| applies(&f.flavors, &target.id))
         {
             let mut line = file.path.replace('/', "\\");
-            if let (Some(locale), true) = (&file.locale, text_locale) {
-                line.push_str(&format!(" [AllowLoadTextLocale {locale}]"));
+            if let (Some(locales), true) = (&file.locales, text_locale) {
+                line.push_str(&format!(" [AllowLoadTextLocale {}]", locales.join(", ")));
             }
             lines.push(line);
         }
@@ -487,7 +487,7 @@ mod tests {
         i.files.push(FileEntry {
             path: "src/retail.lua".into(),
             flavors: Some(vec!["standard".into()]),
-            locale: None,
+            locales: None,
         });
         let generated = generate(&i).unwrap();
         assert_eq!(generated.layout, Layout::Single);
@@ -504,12 +504,12 @@ mod tests {
         i.files.push(FileEntry {
             path: "src/classic.lua".into(),
             flavors: Some(vec!["mists".into(), "vanilla".into()]),
-            locale: None,
+            locales: None,
         });
         i.files.push(FileEntry {
             path: "src/era.lua".into(),
             flavors: Some(vec!["vanilla".into()]),
-            locale: None,
+            locales: None,
         });
         let content = &generate(&i).unwrap().files[0].content;
         assert!(content.contains("src\\classic.lua [AllowLoadGameType classic]\n"));
@@ -525,7 +525,7 @@ mod tests {
         i.files.push(FileEntry {
             path: "src/retail.lua".into(),
             flavors: Some(vec!["standard".into()]),
-            locale: None,
+            locales: None,
         });
         let generated = generate(&i).unwrap();
         assert_eq!(generated.layout, Layout::PerFlavor);
@@ -582,14 +582,35 @@ mod tests {
     }
 
     #[test]
-    fn cata_needs_per_flavor_tocs_for_flavor_files() {
+    fn cata_supports_single_tocs_with_flavor_files() {
         let mut i = input(&["standard", "cata"]);
         i.files.push(FileEntry {
             path: "src/cata.lua".into(),
             flavors: Some(vec!["cata".into()]),
-            locale: None,
+            locales: None,
         });
-        assert_eq!(generate(&i).unwrap().layout, Layout::PerFlavor);
+        let generated = generate(&i).unwrap();
+        assert_eq!(generated.layout, Layout::Single);
+        assert!(
+            generated.files[0]
+                .content
+                .contains("src\\cata.lua [AllowLoadGameType classic]\n")
+        );
+    }
+
+    #[test]
+    fn several_locales_on_one_line() {
+        let mut i = input(&["standard"]);
+        i.files.push(FileEntry {
+            path: "src/Locales/[TextLocale].lua".into(),
+            flavors: None,
+            locales: Some(vec!["deDE".into(), "frFR".into()]),
+        });
+        let content = generate(&i).unwrap().files.remove(0).content;
+        assert!(
+            content.contains("src\\Locales\\[TextLocale].lua [AllowLoadTextLocale deDE, frFR]\n"),
+            "{content}"
+        );
     }
 
     #[test]

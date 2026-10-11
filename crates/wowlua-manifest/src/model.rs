@@ -183,6 +183,10 @@ pub struct Addon {
     /// field for that flavor (§9.3.1).
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub flavor_overrides: IndexMap<String, AddonOverride>,
+    /// Files of verbatim `## Key: Value` lines appended to a flavor's TOC, for
+    /// bulk or generated metadata (§9.3.2): flavor → files.
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub toc_data: IndexMap<String, Vec<String>>,
 }
 
 /// Per-flavor overrides of addon metadata. An absent field keeps the base
@@ -443,6 +447,9 @@ pub struct Build {
     /// Restricts matching source files to the listed flavors (glob → flavors).
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub flavor_files: IndexMap<String, Vec<String>>,
+    /// TOC file lines with variables (`[Game]`, `[Family]`, `[TextLocale]`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variable_files: Vec<VariableFile>,
     #[serde(default)]
     pub flavor_mode: FlavorMode,
     #[serde(default)]
@@ -476,6 +483,7 @@ impl Build {
 impl Default for Build {
     fn default() -> Self {
         Build {
+            variable_files: Vec::new(),
             src: Self::default_src(),
             out: Self::default_out(),
             assets: Vec::new(),
@@ -492,6 +500,28 @@ impl Default for Build {
         }
     }
 }
+
+/// A TOC file line with variables (§9.7.1).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct VariableFile {
+    /// Path relative to the package root, e.g. `src/Locales/[TextLocale].lua`.
+    pub path: String,
+    /// `[TextLocale]` only: the locales this line loads for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locales: Option<Vec<String>>,
+    /// Restricts the line to these flavors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flavors: Option<Vec<String>>,
+}
+
+/// The variables a TOC file line may contain.
+pub const TOC_VARIABLES: &[&str] = &["[Game]", "[Family]", "[TextLocale]"];
+
+/// Client locale codes, as `GetLocale()` reports them.
+pub const LOCALES: &[&str] = &[
+    "enUS", "enGB", "deDE", "esES", "esMX", "frFR", "itIT", "koKR", "ptBR", "ruRU", "zhCN", "zhTW",
+];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]

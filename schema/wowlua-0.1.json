@@ -386,6 +386,16 @@
           "additionalProperties": {
             "$ref": "#/$defs/AddonOverride"
           }
+        },
+        "toc-data": {
+          "description": "Files of verbatim `## Key: Value` lines appended to a flavor's TOC, for\nbulk or generated metadata (§9.3.2): flavor → files.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "additionalProperties": false
@@ -831,6 +841,13 @@
             }
           }
         },
+        "variable-files": {
+          "description": "TOC file lines with variables (`[Game]`, `[Family]`, `[TextLocale]`).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/VariableFile"
+          }
+        },
         "flavor-mode": {
           "$ref": "#/$defs/FlavorMode",
           "default": "split"
@@ -853,6 +870,40 @@
         }
       },
       "additionalProperties": false
+    },
+    "VariableFile": {
+      "description": "A TOC file line with variables (§9.7.1).",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "Path relative to the package root, e.g. `src/Locales/[TextLocale].lua`.",
+          "type": "string"
+        },
+        "locales": {
+          "description": "`[TextLocale]` only: the locales this line loads for.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "flavors": {
+          "description": "Restricts the line to these flavors.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ]
     },
     "FlavorMode": {
       "type": "string",

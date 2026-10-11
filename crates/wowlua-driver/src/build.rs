@@ -128,14 +128,7 @@ pub fn build(
         &sources::glob_set(&build_cfg.assets),
         &exclude,
     );
-    if sources.is_empty() {
-        session.push(
-            Diagnostic::plain_error(format!("no source files found in `{}`", build_cfg.src))
-                .with_path(&manifest.path)
-                .with_help("add .lua, .wowlua or .xml files, or set `build.src`"),
-        );
-        return None;
-    }
+    // An addon without code is valid (voice packs, saved-variable stores).
 
     // Load and check every source.
     // Raw bytes are kept: plain Lua passes through byte for byte (Lua strings
@@ -196,22 +189,38 @@ pub fn build(
         (!matching.is_empty()).then(|| matching.into_iter().cloned().collect())
     };
 
-    let mut toc_sources: Vec<(&Source, Option<Vec<String>>)> = Vec::new();
+    // TOC lines with variables, and the files they expand to.
+    let (variable_items, loaded_by_variable) = variable_items(
+        session,
+        &build_cfg.src,
+        &build_cfg.variable_files,
+        &flavors,
+        &files,
+    );
+
+    let mut toc_items: Vec<TocItem> = Vec::new();
     let mut emitted: Vec<&Source> = Vec::new();
     for (source, _) in &files {
         let flavors_of = restriction(&source.rel);
         let included = flavors_of
             .as_ref()
             .is_none_or(|list| list.iter().any(|f| flavors.contains(f)));
-        if !included {
+        if !included && !loaded_by_variable.contains(&source.rel) {
             continue;
         }
         emitted.push(source);
-        if !xml.loaded_by_xml.contains(&source.rel) {
-            toc_sources.push((source, flavors_of));
+        if !xml.loaded_by_xml.contains(&source.rel) && !loaded_by_variable.contains(&source.rel) {
+            toc_items.push(TocItem {
+                rel: source.rel.clone(),
+                path: source.output_path(),
+                flavors: flavors_of,
+                locales: None,
+            });
         }
     }
-    order_by_load_order(&mut toc_sources, &build_cfg.load_order);
+    toc_items.extend(variable_items);
+    order_by_load_order(&mut toc_items, &build_cfg.load_order);
+    let toc_data = read_toc_data(session, project, &flavors);
 
     if session.has_errors() {
         return None;
@@ -232,13 +241,20 @@ pub fn build(
                 interfaces: project.interfaces.get(id).cloned().unwrap_or_default(),
             })
             .collect(),
-        directives: directives(project, &flavors, &profile.name, &version, &build_id),
-        files: toc_sources
+        directives: directives(
+            project,
+            &flavors,
+            &profile.name,
+            &version,
+            &build_id,
+            toc_data,
+        ),
+        files: toc_items
             .iter()
-            .map(|(source, flavors_of)| FileEntry {
-                path: source.output_path(),
-                flavors: flavors_of.clone(),
-                locale: None,
+            .map(|item| FileEntry {
+                path: item.path.clone(),
+                flavors: item.flavors.clone(),
+                locales: item.locales.clone(),
             })
             .collect(),
         layout: match build_cfg.toc_layout {
@@ -318,7 +334,12 @@ pub fn build(
         .iter()
         .map(|s| (s.rel.clone(), s.output_path()))
         .collect();
-    validate_output(session, &out, &tocs, &xml, &output_paths);
+    let variable_outputs: BTreeSet<String> = emitted
+        .iter()
+        .filter(|s| loaded_by_variable.contains(&s.rel))
+        .map(|s| s.output_path())
+        .collect();
+    validate_output(session, &out, &tocs, &xml, &output_paths, &variable_outputs);
     if session.has_errors() {
         return None;
     }
@@ -505,25 +526,230 @@ fn normalize(path: &str) -> String {
     parts.join("/")
 }
 
-/// Orders TOC entries: `build.load-order` entries first, in their order (globs
-/// expand in path order), then everything else by path (spec §5.4; the
-/// load-order analysis of milestone M2 refines this).
-fn order_by_load_order(entries: &mut Vec<(&Source, Option<Vec<String>>)>, load_order: &[String]) {
+/// One TOC file line: a source file or a variable line.
+#[derive(Debug, Clone)]
+struct TocItem {
+    /// Path relative to the package root (may contain TOC variables).
+    rel: String,
+    /// Path inside the AddOn folder.
+    path: String,
+    flavors: Option<Vec<String>>,
+    locales: Option<Vec<String>>,
+}
+
+/// Orders TOC entries: `build.load-order` entries first, in their order (an
+/// entry naming an item exactly matches it, even when it contains `[…]`;
+/// other entries are globs expanding in path order), then everything else by
+/// path (spec §5.4; the load-order analysis of milestone M2 refines this).
+fn order_by_load_order(entries: &mut Vec<TocItem>, load_order: &[String]) {
     let mut ordered = Vec::with_capacity(entries.len());
-    let mut remaining: Vec<_> = std::mem::take(entries);
+    let mut remaining: Vec<TocItem> = std::mem::take(entries);
     for pattern in load_order {
-        let Ok(glob) = globset::Glob::new(pattern) else {
-            continue;
+        let (matched, rest): (Vec<_>, Vec<_>) = if remaining.iter().any(|i| i.rel == *pattern) {
+            remaining.into_iter().partition(|i| i.rel == *pattern)
+        } else {
+            let Ok(glob) = globset::Glob::new(pattern) else {
+                continue;
+            };
+            let matcher = glob.compile_matcher();
+            remaining
+                .into_iter()
+                .partition(|i| matcher.is_match(&i.rel))
         };
-        let matcher = glob.compile_matcher();
-        let (matched, rest): (Vec<_>, Vec<_>) = remaining
-            .into_iter()
-            .partition(|(s, _)| matcher.is_match(&s.rel));
         ordered.extend(matched);
         remaining = rest;
     }
+    remaining.sort_by(|a, b| a.rel.cmp(&b.rel));
     ordered.extend(remaining);
     *entries = ordered;
+}
+
+/// `[Game]` values per flavor.
+fn game_name(flavor: &str) -> &'static str {
+    match flavor {
+        "standard" => "Standard",
+        "camelot" => "Camelot",
+        "mists" => "Mists",
+        "cata" => "Cata",
+        "wrath" => "Wrath",
+        "tbc" => "TBC",
+        _ => "Vanilla",
+    }
+}
+
+fn family_name(flavor: &str) -> &'static str {
+    match wowlua_flavors::table().flavor(flavor).map(|f| f.family) {
+        Some(wowlua_flavors::Family::Mainline) => "Mainline",
+        _ => "Classic",
+    }
+}
+
+/// Replaces TOC variables in `path` (case-insensitive).
+pub(crate) fn substitute(path: &str, flavor: &str, locale: &str) -> String {
+    let mut out = path.to_string();
+    for (var, value) in [
+        ("[game]", game_name(flavor)),
+        ("[family]", family_name(flavor)),
+        ("[textlocale]", locale),
+    ] {
+        while let Some(i) = out.to_ascii_lowercase().find(var) {
+            out.replace_range(i..i + var.len(), value);
+        }
+    }
+    out
+}
+
+/// TOC items for `build.variable-files`, and the source files they load.
+/// Every expansion for the targeted flavors (and listed locales) must exist.
+fn variable_items(
+    session: &mut Session,
+    src: &str,
+    entries: &[wowlua_manifest::model::VariableFile],
+    flavors: &[String],
+    files: &[(Source, FileId)],
+) -> (Vec<TocItem>, BTreeSet<String>) {
+    let by_lower: HashMap<String, &Source> = files
+        .iter()
+        .map(|(s, _)| (s.rel.to_ascii_lowercase(), s))
+        .collect();
+    let table = wowlua_flavors::table();
+    let mut items = Vec::new();
+    let mut loaded = BTreeSet::new();
+    for entry in entries {
+        let entry_flavors: Vec<String> = match &entry.flavors {
+            Some(list) => list
+                .iter()
+                .filter_map(|f| table.resolve(f).map(|f| f.id.clone()))
+                .filter(|f| flavors.contains(f))
+                .collect(),
+            None => flavors.to_vec(),
+        };
+        if entry_flavors.is_empty() {
+            continue;
+        }
+        let has_locale = entry.path.to_ascii_lowercase().contains("[textlocale]");
+        let locales: Vec<String> = match (&entry.locales, has_locale) {
+            (Some(list), _) => list.clone(),
+            (None, true) => wowlua_manifest::model::LOCALES
+                .iter()
+                .map(|l| l.to_string())
+                .collect(),
+            (None, false) => vec![String::new()],
+        };
+        let explicit_locales = entry.locales.is_some() || !has_locale;
+        for flavor in &entry_flavors {
+            for locale in &locales {
+                let concrete = substitute(&entry.path, flavor, locale);
+                match by_lower.get(&concrete.to_ascii_lowercase()) {
+                    Some(source) => {
+                        loaded.insert(source.rel.clone());
+                    }
+                    None if explicit_locales => session.push(
+                        Diagnostic::error(
+                            "E5002",
+                            format!(
+                                "`{}` expands to `{concrete}`, which does not exist",
+                                entry.path
+                            ),
+                        )
+                        .with_help(
+                            "add the file, or restrict `flavors` / `locales` of this variable file",
+                        ),
+                    ),
+                    None => {}
+                }
+            }
+        }
+        let restricted = (entry_flavors.len() < flavors.len()).then(|| entry_flavors.clone());
+        let line_locales = entry.locales.clone();
+        let supported = entry_flavors
+            .iter()
+            .flat_map(|f| table.clients_of(f))
+            .all(|c| c.features.file_variables);
+        let output = |path: &str| {
+            let relative = path.strip_prefix(&format!("{src}/")).unwrap_or(path);
+            format!("src/{relative}")
+        };
+        if supported {
+            items.push(TocItem {
+                rel: entry.path.clone(),
+                path: output(&entry.path),
+                flavors: restricted,
+                locales: line_locales,
+            });
+        } else {
+            // Expand per flavor (and per locale through [AllowLoadTextLocale]).
+            for flavor in &entry_flavors {
+                for locale in &locales {
+                    let concrete = substitute(&entry.path, flavor, locale);
+                    if let Some(source) = by_lower.get(&concrete.to_ascii_lowercase()) {
+                        items.push(TocItem {
+                            rel: entry.path.clone(),
+                            path: source.output_path(),
+                            flavors: Some(vec![flavor.clone()]),
+                            locales: has_locale.then(|| vec![locale.clone()]),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    (items, loaded)
+}
+
+/// Per-flavor `## Key: Value` lines from `addon.toc-data` files.
+type TocData = Vec<(String, Vec<(String, String)>)>;
+
+fn read_toc_data(session: &mut Session, project: &Project, flavors: &[String]) -> TocData {
+    let Some(addon) = &project.manifest.manifest.addon else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for (name, paths) in &addon.toc_data {
+        let Some(flavor) = wowlua_flavors::table().resolve(name).map(|f| f.id.clone()) else {
+            continue;
+        };
+        if !flavors.contains(&flavor) {
+            continue;
+        }
+        let mut lines = Vec::new();
+        for rel in paths {
+            let path = project.root().join(rel);
+            let text = match std::fs::read_to_string(&path) {
+                Ok(text) => text,
+                Err(error) => {
+                    session.push(
+                        Diagnostic::plain_error(format!("cannot read TOC data file: {error}"))
+                            .with_path(rel),
+                    );
+                    continue;
+                }
+            };
+            for (number, line) in text.lines().enumerate() {
+                let line = line.trim_end();
+                if line.trim().is_empty() || (line.starts_with('#') && !line.starts_with("##")) {
+                    continue;
+                }
+                let parsed = line
+                    .strip_prefix("##")
+                    .and_then(|rest| rest.split_once(':'))
+                    .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()));
+                match parsed {
+                    Some((key, value)) if !wowlua_manifest::is_generated_directive(&key) => lines.push((key, value)),
+                    Some((key, _)) => session.push(
+                        Diagnostic::error("E4002", format!("TOC directive `{key}` is generated by wowlua and cannot come from TOC data"))
+                            .with_path(format!("{rel}:{}", number + 1)),
+                    ),
+                    None => session.push(
+                        Diagnostic::error("E4002", "TOC data files may only contain `## Key: Value` lines")
+                            .with_path(format!("{rel}:{}", number + 1)),
+                    ),
+                }
+            }
+        }
+        out.push((flavor, lines));
+    }
+    out
 }
 
 /// `build.version` (spec §9.9.2).
@@ -638,6 +864,7 @@ fn directives(
     profile: &str,
     version: &str,
     build_id: &str,
+    toc_data: TocData,
 ) -> Vec<Directive> {
     let manifest = &project.manifest;
     let addon = manifest.manifest.addon.clone().unwrap_or_default();
@@ -812,13 +1039,11 @@ fn directives(
     if addon.allow_table_access {
         out.push(Directive::new("AllowAddOnTableAccess", "1"));
     }
-    let mut extra_keys: Vec<String> = addon.toc_extra.keys().cloned().collect();
+    // Ordered set: addons may carry very many `X-` directives (QuestieDB
+    // stores its database in TOC metadata).
+    let mut extra_keys: indexmap::IndexSet<String> = addon.toc_extra.keys().cloned().collect();
     for (_, o) in &overrides {
-        for key in o.toc_extra.keys() {
-            if !extra_keys.contains(key) {
-                extra_keys.push(key.clone());
-            }
-        }
+        extra_keys.extend(o.toc_extra.keys().cloned());
     }
     for key in extra_keys {
         let per_flavor: Vec<(String, Option<Option<String>>)> = overrides
@@ -832,6 +1057,26 @@ fn directives(
             &per_flavor,
             flavors,
         );
+    }
+    // TOC data: lines shared by several flavors become one directive.
+    let mut data: indexmap::IndexMap<String, Vec<(String, String)>> = indexmap::IndexMap::new();
+    for (flavor, lines) in toc_data {
+        for (key, value) in lines {
+            data.entry(key).or_default().push((flavor.clone(), value));
+        }
+    }
+    for (key, per_flavor) in data {
+        let mut groups: indexmap::IndexMap<String, Vec<String>> = indexmap::IndexMap::new();
+        for (flavor, value) in per_flavor {
+            groups.entry(value).or_default().push(flavor);
+        }
+        for (value, group) in groups {
+            out.push(Directive {
+                key: key.clone(),
+                value,
+                flavors: (group.len() < flavors.len()).then_some(group),
+            });
+        }
     }
     out.push(Directive::new(
         "X-Wowlua-Build",
@@ -948,6 +1193,7 @@ fn validate_output(
     tocs: &[TocFile],
     xml: &XmlInfo,
     output_paths: &HashMap<String, String>,
+    variable_outputs: &BTreeSet<String>,
 ) {
     // Paths must not collide case-insensitively (E4308).
     let mut lower: HashMap<String, &str> = HashMap::new();
@@ -969,6 +1215,11 @@ fn validate_output(
             .filter(|l| !l.starts_with('#') && !l.is_empty())
         {
             let path = line.split(" [").next().unwrap_or(line).replace('\\', "/");
+            if path.contains('[') {
+                // A variable line: its expansions were checked when it was built.
+                reachable.extend(variable_outputs.iter().cloned());
+                continue;
+            }
             if !out.contains_key(&path) {
                 session.push(Diagnostic::error(
                     "E5002",

@@ -127,6 +127,25 @@ fn split_conditions(line: &str) -> (String, Vec<InlineDirective>) {
         rest = rest[..open].trim_end();
     }
     conditions.reverse();
+    // Leading directives (`## OptionalDeps: [AllowLoadGameType vanilla] Ace3`).
+    let mut rest = rest.trim_start();
+    while rest.starts_with('[') {
+        let Some(close) = rest.find(']') else { break };
+        let inner = &rest[1..close];
+        let mut words = inner.split([' ', ',']).filter(|w| !w.is_empty());
+        let Some(name) = words.next() else { break };
+        if !INLINE_DIRECTIVES
+            .iter()
+            .any(|d| d.eq_ignore_ascii_case(name))
+        {
+            break;
+        }
+        conditions.push(InlineDirective {
+            name: name.to_string(),
+            values: words.map(str::to_string).collect(),
+        });
+        rest = rest[close + 1..].trim_start();
+    }
     (rest.to_string(), conditions)
 }
 
@@ -177,6 +196,14 @@ mod tests {
         );
         assert_eq!(toc.files[3].conditions.len(), 2);
         assert_eq!(toc.files[3].conditions[0].name, "AllowLoadTextLocale");
+    }
+
+    #[test]
+    fn leading_inline_directives() {
+        let toc = parse("## OptionalDeps: [ExcludeLoadGameType vanilla] Ace3, Masque\n");
+        assert_eq!(toc.directives[0].value, "Ace3, Masque");
+        assert_eq!(toc.directives[0].conditions[0].name, "ExcludeLoadGameType");
+        assert_eq!(toc.directives[0].conditions[0].values, vec!["vanilla"]);
     }
 
     #[test]

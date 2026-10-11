@@ -135,6 +135,7 @@ Only for `kind: "addon"`. Every key maps to a TOC directive and/or `wowlua:meta`
 | `toc-extra` | `{string: string}` | `{}` | verbatim | Extra directives. Keys must start with `X-` unless they are known directives (W4001). |
 | `meta` | `{string: string\|number\|bool}` | `{}` | (none) | Custom values in `addon.meta` of `wowlua:meta` |
 | `flavor-overrides` | `{flavor: Override}` | `{}` | per-flavor directives | Metadata that differs per flavor (§9.3.1) |
+| `toc-data` | `{flavor: path[]}` | `{}` | verbatim, per flavor | Files of bulk `## Key: Value` lines (§9.3.2) |
 
 The TOC `## Version:` is always `build.version` (§9.9.2) and is not
 configurable. The Addon Compartment entry is registered at runtime by
@@ -173,6 +174,39 @@ the field for that flavor.
 - `wowlua init` writes overrides automatically when the adopted addon's TOCs
   differ per flavor: the value most flavors use becomes the base.
 
+### 9.3.2 TOC data files
+
+Some addons use the TOC as a data store: QuestieDB, for example, carries about
+100,000 `X-` directives per flavor, read at runtime with
+`C_AddOns.GetAddOnMetadata`. Such data does not belong in the manifest.
+`addon.toc-data` maps a flavor to files whose lines are appended verbatim to
+that flavor's TOC (decision T54):
+
+```json
+"addon": {
+  "toc-data": {
+    "standard": ["tocdata/standard.tocdata"],
+    "mists": ["tocdata/mists.tocdata"]
+  }
+}
+```
+
+- Paths are relative to the package root. The files are build inputs, not
+  assets, and are not copied to the output.
+- Each non-empty line must be a `## Key: Value` directive. Lines starting with a
+  single `#` are comments and are skipped. Any other line is error E4002.
+- A key the compiler generates itself (`Interface`, `Title`, `Title-<locale>`,
+  `Notes`, `Version`, `SavedVariables`, `Dependencies`, the publish IDs, …) is
+  error E4002. Only `Title-`, `Notes-` and `Category-` have localized forms, so
+  a key such as `IconTexture-blank` is ordinary data.
+- Keys must be flavors listed in `flavors` (E4002 otherwise).
+- Lines that are identical across flavors are emitted once in a single TOC and
+  get an inline `[AllowLoadGameType …]` condition otherwise, like
+  `flavor-overrides` (§9.3.1).
+- `wowlua init` writes `tocdata/<flavor>.tocdata` when a TOC has more than 200
+  `X-` directives (the publish IDs excluded). Flavors whose data is identical
+  share one file.
+
 ## 9.4 `flavors`
 
 The flavors the package supports: an object whose keys are flavor IDs or
@@ -200,8 +234,8 @@ so every machine builds identical TOCs. The values below are as of 2026-10-11.
 | `standard` | `retail`, `mainline` | Mainline | Retail (Midnight) 12.1.0 | 120100 | 1 | `_retail_`, `_ptr_`, `_xptr_`, `_beta_` | `_Standard`, 12.1.5+ only (`_Mainline`) |
 | `camelot` | `forever` | Mainline | WoW: Forever (launch 2026-11-04) | 16001 (beta) | 18 | `_classic_beta_` (beta). Live folder pending. | `_Camelot` / `_Forever` (`_Mainline`) |
 | `mists` | | Classic | MoP Classic 5.5.4 | 50504 | 19 | `_classic_`, `_classic_ptr_` | `_Mists` (`_Classic`) |
-| `cata` | | Classic | Cataclysm Classic 4.4.2 (frozen) | 40402 | 14 | — | `_Cata` (`_Classic`) |
-| `wrath` | `titan` | Classic | Titan Reforged 3.80.2 (China) | 38002 | 11 | pending | `_Wrath` (`_Classic`) |
+| `cata` | | Classic | Cataclysm Classic 4.4.2 (closed) | 40402 | 14 | — | `_Cata` (`_Classic`) |
+| `wrath` | `titan` | Classic | Titan Reforged 3.80.2 (China); Wrath Classic 3.4.5 (closed) | 38002 | 11 | pending | `_Wrath` (`_Classic`) |
 | `tbc` | `anniversary` | Classic | TBC Anniversary 2.5.6 | 20506 | 5 | `_anniversary_`, `_classic_era_ptr_` | `_TBC` (`_Classic`) |
 | `vanilla` | `classic-era` | Classic | Classic Era 1.15.9 | 11509 | 2 | `_classic_era_` | `_Vanilla` (`_Classic`) |
 
@@ -221,6 +255,13 @@ suffixes), the deferred/immediate API markers used by load-order analysis
 site-specific identifiers used when publishing
 ([Publishing §11.3](publishing.md#113-game-version-mapping)). A flavor without
 a types package or pinned interface is error E4318.
+
+Closed clients such as Cataclysm Classic 4.4.2 and Wrath Classic 3.4.5 have no
+client folders. They stay in the table so the TOC features of their last build
+are known to `auto` layout decisions. Both support every TOC feature listed
+above, including file variables, and recognize the game types of their own
+expansion and all older ones (decision T56). The evidence is that BigWigs and
+DBM ship single TOCs with these features for them.
 
 ## 9.5 Dependencies
 
@@ -290,12 +331,45 @@ TOCs.
 | `load-order` | (path\|glob)[] | `[]` | Explicit order, written by `wowlua init`: files without load-time dependencies between them keep this order, and it breaks ties in the computed order ([Modules §5.4](../language/05-modules.md#54-load-order)) |
 | `keep` | string[] | `[]` | Module IDs never removed by tree-shaking (for plain-Lua consumers, [Optimization §15.1](optimization.md#151-always-on-optimizations)) |
 | `libs-dir` | path | `"libs"` | Output folder for dependencies. Migrated projects may use e.g. `"Libs"`. |
+| `variable-files` | `VariableFile[]` | `[]` | TOC file lines with `[Game]`, `[Family]` or `[TextLocale]` variables (§9.7.1) |
 | `flavor-files` | `{glob: flavor[]}` | `{}` | Restricts matching source files (Lua, `.wowlua`, XML) to the listed flavors. Files not matched belong to every flavor. A file matched by several globs belongs to the union of their flavors. A file whose flavors are all untargeted is left out of the build. Mainly for plain Lua files, which cannot use `@if`; written by `wowlua init` from flavor-specific TOCs (decision T43). |
 | `flavor-mode` | `"split"` `"shared"` | `"split"` | [Build metadata §6.3](../language/06-meta.md#63-flavors) |
 | `toc-layout` | `"auto"` `"single"` `"per-flavor"` | `"auto"` | [Code generation §14.9](codegen.md#149-toc-generation) |
 | `locales` | `"client"` `"all"` | `"client"` | Load only the player's language, or all ([Standard library: locale](../stdlib/ui.md#locale)) |
 | `locales-dir` | path | `"locales"` | Directory of locale JSON files |
 | `locale-base` | locale code | `"enUS"` | Locale that defines the keys and provides fallbacks |
+
+### 9.7.1 File variables
+
+WoW clients substitute variables in TOC file lines: `[Game]` becomes the game
+type's name (`Standard`, `Mists`, `Vanilla`, …), `[Family]` becomes `Mainline`
+or `Classic`, and `[TextLocale]` becomes the client locale. BigWigs, for
+example, loads `Locales\[TextLocale].lua`. `build.variable-files` keeps such
+lines (decision T55):
+
+```json
+"build": {
+  "variable-files": [
+    { "path": "src/Init_[Game].lua" },
+    { "path": "src/Locales/[TextLocale].lua", "locales": ["deDE", "frFR"] },
+    { "path": "src/Classic_[Family].lua", "flavors": ["mists", "vanilla"] }
+  ]
+}
+```
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `path` | path | required | Path relative to the package root. Must contain at least one variable (E4002). |
+| `locales` | locale code[] | all | `[TextLocale]` only (E4002 otherwise): the locales the line loads for, emitted as `[AllowLoadTextLocale …]` |
+| `flavors` | flavor[] | all targeted | Restricts the line to these flavors |
+
+- Every expansion for a targeted flavor and listed locale must exist after the
+  build (E5002). Expansions are compiled or copied like other source files.
+- If every targeted client supports file variables, the line is emitted
+  verbatim, in its `build.load-order` position. Otherwise it is expanded into
+  one line per flavor and locale, each with the matching inline directive or
+  in the matching per-flavor TOC.
+- `wowlua init` writes this list from TOC lines that contain variables.
 
 ## 9.8 `check`
 

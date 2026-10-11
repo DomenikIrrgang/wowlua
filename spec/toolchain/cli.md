@@ -122,12 +122,31 @@ available.
    fonts) stay where they are and are added to `build.assets`, so their in-game
    paths do not change.
 3. Files loaded by only some flavors' TOCs, or by lines with
-   `[AllowLoadGameType …]`, are recorded in `build.flavor-files`.
-4. Records the existing file order in `build.load-order`. The compiler keeps
-   this order wherever load-order analysis finds no reason to change it
+   `[AllowLoadGameType …]`, are recorded in `build.flavor-files`. Inline
+   directives may stand before or after the value of a `##` line, and several
+   may follow each other. File lines with variables (`[Game]`, `[Family]`,
+   `[TextLocale]`) go to `build.variable-files`, and all their expansions are
+   moved ([Manifest §9.7.1](manifest.md#971-file-variables)).
+4. Records the existing file order in `build.load-order`. Each flavor's order
+   comes from the TOC its client reads (decision T53). The orders are merged
+   topologically, so files keep their relative order in every flavor. A
+   conflict (A before B in one flavor, B before A in another) is reported as a
+   warning, and the conflicting files keep the order in which they first
+   appear. The compiler keeps this order
+   wherever load-order analysis finds no reason to change it
    ([Modules §5.4](../language/05-modules.md#54-load-order)), so the build
    loads files as before.
-5. With `--from-pkgmeta` (or automatically if `.pkgmeta` / `pkgmeta.yaml` exists):
+5. Takes per-flavor metadata from the flavors' TOCs: the value most flavors use
+   becomes the base and the others become `addon.flavor-overrides`. Structural
+   fields cannot vary per flavor (§9.3.1). `Version`, the load flags and the
+   publish IDs take the value used by the most flavors among the TOCs that set
+   them. `SavedVariables` and
+   `SavedVariablesPerCharacter` take the union of all TOCs, so no flavor loses
+   saved data (decision T57). TOCs with more than 200 `X-` directives get
+   `addon.toc-data` files ([Manifest §9.3.2](manifest.md#932-toc-data-files)).
+   Addons that load no code at all (data or archive addons) are valid. Lua and
+   XML files that no TOC loads are listed in a warning and left in place.
+6. With `--from-pkgmeta` (or automatically if `.pkgmeta` / `pkgmeta.yaml` exists):
    - `externals` become `dependencies`: git, SVN and zip-archive externals are
      converted (decision T51); hg externals are listed with warning W4333 and
      must be replaced by a git mirror or archive. The common parent folder of the
@@ -142,9 +161,9 @@ available.
    - `enable-nolib-creation: yes` adds a GitHub target with `"nolib": true`.
    - The relation lists (`required-dependencies`, `optional-dependencies`,
      `embedded-libraries`, `tools-used`) become CurseForge relations.
-6. Reads `## X-Curse-Project-ID`, `## X-Wago-ID` and `## X-WoWI-ID` into publish
+7. Reads `## X-Curse-Project-ID`, `## X-Wago-ID` and `## X-WoWI-ID` into publish
    targets.
-7. Leaves the contents of all `.lua` files untouched except for the path
+8. Leaves the contents of all `.lua` files untouched except for the path
    rewrites of step 2. They build as-is, and can be renamed to `.wowlua` one at a
    time.
 

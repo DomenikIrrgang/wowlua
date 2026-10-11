@@ -442,7 +442,8 @@ Each TOC contains, in order:
    get an inline directive in single layout or go only into that flavor's TOC,
 4. `## SavedVariables:` / `## SavedVariablesPerCharacter:`,
    `## LoadSavedVariablesFirst:`, `## AllowAddOnTableAccess:`,
-5. verbatim `addon.toc-extra` fields,
+5. verbatim `addon.toc-extra` fields, then the lines of the flavor's
+   `addon.toc-data` files ([Manifest §9.3.2](manifest.md#932-toc-data-files)),
 6. `## X-Wowlua-Build: <profile> <build id>` and the publish-target ID fields
    (`## X-Curse-Project-ID`, `## X-Wago-ID`, `## X-WoWI-ID`) when configured,
 7. the file list (§14.9.2), using `\` separators.

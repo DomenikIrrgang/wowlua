@@ -72,61 +72,67 @@
     {
       "name": "retail", "flavor": "standard", "version": "12.1.0", "interface": 120100,
       "folders": ["_retail_"], "suffixes": ["_Mainline"],
-      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true },
+      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true, "file-variables": true },
       "game-types": ["standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla"]
     },
     {
       "name": "retail-ptr", "flavor": "standard", "version": "12.1.0", "interface": 120100,
       "folders": ["_ptr_"], "suffixes": ["_Mainline"],
-      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true },
+      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true, "file-variables": true },
       "game-types": ["standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla"]
     },
     {
       "name": "retail-xptr", "flavor": "standard", "version": "12.1.5", "interface": 120105,
       "folders": ["_xptr_"], "suffixes": ["_Standard", "_Mainline"],
-      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true },
+      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true, "file-variables": true },
       "game-types": ["standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla"]
     },
     {
       "name": "retail-beta", "flavor": "standard", "version": "12.0.1", "interface": 120001,
       "folders": ["_beta_"], "suffixes": ["_Mainline"],
-      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": false, "allow-load-text-locale": true },
+      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": false, "allow-load-text-locale": true, "file-variables": true },
       "game-types": ["mists", "cata", "wrath", "tbc", "vanilla"]
     },
     {
       "name": "forever", "flavor": "camelot", "version": "1.60.1", "interface": 16001,
       "folders": ["_classic_beta_"], "suffixes": ["_Camelot", "_Forever", "_Mainline"],
-      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true },
+      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true, "file-variables": true },
       "game-types": ["standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla"]
     },
     {
       "name": "mists-classic", "flavor": "mists", "version": "5.5.4", "interface": 50504,
       "folders": ["_classic_", "_classic_ptr_"], "suffixes": ["_Mists", "_Classic"],
-      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true },
+      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true, "file-variables": true },
       "game-types": ["mists", "cata", "wrath", "tbc", "vanilla"]
     },
     {
       "name": "cata-classic", "flavor": "cata", "version": "4.4.2", "interface": 40402,
       "folders": [], "suffixes": ["_Cata", "_Classic"],
-      "features": { "comma-interfaces": true, "inline-file-directives": false, "inline-directive-lines": false, "allow-load-text-locale": false },
-      "game-types": []
+      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true, "file-variables": true },
+      "game-types": ["cata", "wrath", "tbc", "vanilla"]
+    },
+    {
+      "name": "wrath-classic", "flavor": "wrath", "version": "3.4.5", "interface": 30405,
+      "folders": [], "suffixes": ["_Wrath", "_Classic"],
+      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true, "file-variables": true },
+      "game-types": ["cata", "wrath", "tbc", "vanilla"]
     },
     {
       "name": "titan-reforged", "flavor": "wrath", "version": "3.80.2", "interface": 38002,
       "folders": [], "suffixes": ["_Wrath", "_Classic"],
-      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true },
+      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true, "file-variables": true },
       "game-types": ["mists", "cata", "wrath", "tbc", "vanilla"]
     },
     {
       "name": "tbc-anniversary", "flavor": "tbc", "version": "2.5.6", "interface": 20506,
       "folders": ["_anniversary_", "_classic_era_ptr_"], "suffixes": ["_TBC", "_Classic"],
-      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true },
+      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true, "file-variables": true },
       "game-types": ["mists", "cata", "wrath", "tbc", "vanilla"]
     },
     {
       "name": "classic-era", "flavor": "vanilla", "version": "1.15.9", "interface": 11509,
       "folders": ["_classic_era_"], "suffixes": ["_Vanilla", "_Classic"],
-      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true },
+      "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true, "file-variables": true },
       "game-types": ["mists", "cata", "wrath", "tbc", "vanilla"]
     }
   ],

@@ -292,3 +292,60 @@ fn explain_and_clean() {
     wowlua(dir.path()).arg("clean").assert().success();
     assert!(!dir.path().join("dist").exists());
 }
+
+/// TOC file variables and bulk TOC metadata (seen in BigWigs and QuestieDB).
+#[test]
+fn init_handles_file_variables_and_toc_data() {
+    let dir = tempfile::tempdir().unwrap();
+    let addon = dir.path().join("DataAddon");
+    let mut toc =
+        String::from("## Interface: 120100, 11509\n## Title: Data Addon\n## Version: 2.0\n");
+    for i in 0..250 {
+        toc.push_str(&format!("## X-Entry-{i}: value{i}\n"));
+    }
+    toc.push_str("Init_[Game].lua\nLocales\\enUS.lua\nLocales\\[TextLocale].lua [AllowLoadTextLocale deDE, frFR]\n");
+    write(
+        &addon,
+        &[
+            ("DataAddon.toc", toc.as_str()),
+            ("Init_Standard.lua", "print('retail')\n"),
+            ("Init_Vanilla.lua", "print('era')\n"),
+            ("Locales/enUS.lua", "L = {}\n"),
+            ("Locales/deDE.lua", "L.x = 1\n"),
+            ("Locales/frFR.lua", "L.x = 2\n"),
+        ],
+    );
+
+    wowlua(&addon).arg("init").assert().success();
+    let manifest = fs::read_to_string(addon.join("wowlua.json")).unwrap();
+    assert!(manifest.contains("\"variable-files\""), "{manifest}");
+    assert!(
+        manifest.contains("src/Locales/[TextLocale].lua"),
+        "{manifest}"
+    );
+    assert!(manifest.contains("\"toc-data\""), "{manifest}");
+    assert!(
+        !manifest.contains("X-Entry-1"),
+        "bulk data stays out of the manifest"
+    );
+    assert!(addon.join("src/Init_Vanilla.lua").exists());
+    assert!(addon.join("src/Locales/frFR.lua").exists());
+
+    wowlua(&addon).arg("build").assert().success();
+    let dist = addon.join("dist/dev/DataAddon");
+    let built = fs::read_to_string(dist.join("DataAddon.toc")).unwrap();
+    assert!(built.contains("## X-Entry-249: value249\n"), "{built}");
+    assert!(built.contains("src\\Init_[Game].lua\n"), "{built}");
+    assert!(
+        built.contains("src\\Locales\\[TextLocale].lua [AllowLoadTextLocale deDE, frFR]\n"),
+        "{built}"
+    );
+    for file in [
+        "src/Init_Standard.lua",
+        "src/Init_Vanilla.lua",
+        "src/Locales/deDE.lua",
+        "src/Locales/frFR.lua",
+    ] {
+        assert!(dist.join(file).exists(), "{file}");
+    }
+}

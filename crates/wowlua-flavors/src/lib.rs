@@ -112,6 +112,9 @@ pub struct ClientFeatures {
     pub inline_file_directives: bool,
     pub inline_directive_lines: bool,
     pub allow_load_text_locale: bool,
+    /// `[Game]`, `[Family]` and `[TextLocale]` in TOC file lines.
+    #[serde(default)]
+    pub file_variables: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -278,7 +281,10 @@ mod tests {
         assert!(era.recognizes_game_type("mainline"));
         assert!(era.recognizes_game_type("vanilla"));
         assert!(!era.recognizes_game_type("standard"));
+        // BigWigs and DBM rely on inline directives and file variables in
+        // Cata Classic 4.4.2 (decision T56).
         let cata = t.clients.iter().find(|c| c.name == "cata-classic").unwrap();
-        assert!(!cata.recognizes_game_type("classic"));
+        assert!(cata.recognizes_game_type("classic"));
+        assert!(cata.features.file_variables);
     }
 }

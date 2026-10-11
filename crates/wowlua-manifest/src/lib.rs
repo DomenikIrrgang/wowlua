@@ -15,6 +15,7 @@ use wowlua_span::FileId;
 pub use load::{load, parse};
 pub use model::Manifest;
 pub use profile::{BuiltinProfile, Profile, ProfileError};
+pub use validate::is_generated_directive;
 
 /// File name of the manifest.
 pub const MANIFEST_FILE: &str = "wowlua.json";

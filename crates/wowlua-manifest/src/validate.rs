@@ -250,16 +250,43 @@ fn addon(manifest: &Manifest, raw: &Value, ctx: &mut Ctx) {
     for key in addon.toc_extra.keys() {
         check_toc_extra_key(key, &path.clone().key("toc-extra").key(key), ctx);
     }
+
+    for flavor in addon.toc_data.keys() {
+        let fpath = path.clone().key("toc-data").key(flavor);
+        if let Some(id) = check_flavor(flavor, &fpath, ctx) {
+            let listed = if manifest.flavors.is_some() {
+                targeted.contains(&id)
+            } else {
+                id == "standard"
+            };
+            if !listed {
+                ctx.error(
+                    "E4002",
+                    &fpath,
+                    format!("`toc-data` names `{id}`, which is not listed in `flavors`"),
+                    "not a targeted flavor",
+                );
+            }
+        }
+    }
+}
+
+/// Whether wowlua generates this TOC directive itself (so it must not come
+/// from `toc-extra` or `toc-data`). Localized variants count for the
+/// localizable directives only (`Title-deDE`, not `IconTexture-blank`).
+pub fn is_generated_directive(key: &str) -> bool {
+    let lower = key.to_ascii_lowercase();
+    GENERATED_DIRECTIVES
+        .iter()
+        .any(|d| lower == d.to_ascii_lowercase())
+        || ["title-", "notes-", "category-"]
+            .iter()
+            .any(|p| lower.starts_with(p))
 }
 
 fn check_toc_extra_key(key: &str, item: &JsonPath, ctx: &mut Ctx) {
     {
-        let generated = GENERATED_DIRECTIVES.iter().any(|d| {
-            key.eq_ignore_ascii_case(d)
-                || key
-                    .to_ascii_lowercase()
-                    .starts_with(&format!("{}-", d.to_ascii_lowercase()))
-        });
+        let generated = is_generated_directive(key);
         if generated {
             ctx.error(
                 "E4002",
@@ -368,6 +395,53 @@ fn flavor_references(manifest: &Manifest, ctx: &mut Ctx) {
                     check_flavor(flavor, &path, ctx);
                 }
             }
+        }
+    }
+    for (i, entry) in manifest.build.variable_files.iter().enumerate() {
+        let epath = root().key("build").key("variable-files").index(i);
+        let variables: Vec<&&str> = crate::model::TOC_VARIABLES
+            .iter()
+            .filter(|v| {
+                entry
+                    .path
+                    .to_ascii_lowercase()
+                    .contains(&v.to_ascii_lowercase())
+            })
+            .collect();
+        if variables.is_empty() {
+            ctx.error(
+                "E4002",
+                &epath.clone().key("path"),
+                format!(
+                    "`{}` contains no TOC variable ([Game], [Family] or [TextLocale])",
+                    entry.path
+                ),
+                "no variable",
+            );
+        }
+        if let Some(locales) = &entry.locales {
+            let has_locale_var = entry.path.to_ascii_lowercase().contains("[textlocale]");
+            if !has_locale_var {
+                ctx.error(
+                    "E4002",
+                    &epath.clone().key("locales"),
+                    "`locales` requires `[TextLocale]` in the path".into(),
+                    "unused locales",
+                );
+            }
+            for (j, locale) in locales.iter().enumerate() {
+                if !crate::model::LOCALES.contains(&locale.as_str()) {
+                    ctx.error(
+                        "E4002",
+                        &epath.clone().key("locales").index(j),
+                        format!("unknown locale `{locale}`"),
+                        "unknown locale",
+                    );
+                }
+            }
+        }
+        for (j, flavor) in entry.flavors.iter().flatten().enumerate() {
+            check_flavor(flavor, &epath.clone().key("flavors").index(j), ctx);
         }
     }
     for (glob, flavors) in &manifest.build.flavor_files {

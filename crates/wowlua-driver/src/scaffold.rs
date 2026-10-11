@@ -6,7 +6,7 @@ use crate::vcs;
 use indexmap::IndexMap;
 use regex::Regex;
 use serde_json::{Map, Value, json};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_manifest::model::PackageKind;
@@ -360,36 +360,78 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         )));
     }
 
-    let mut order: Vec<String> = Vec::new();
+    // Per-flavor file sequences (from the TOC each client reads), merged into
+    // one order that respects every flavor's order. Variable lines
+    // (`Locales\[TextLocale].lua`) take part like files.
+    let mut sequences: Vec<Vec<String>> = Vec::new();
+    let mut canonical: HashMap<String, String> = HashMap::new();
     let mut file_flavors: IndexMap<String, BTreeSet<String>> = IndexMap::new();
-    for (toc, flavors) in views.iter().filter(|(_, f)| !f.is_empty()) {
+    let mut variable_lines: IndexMap<String, (BTreeSet<String>, Option<Vec<String>>)> =
+        IndexMap::new();
+    for flavor in &all_flavors {
+        let Some((toc, _)) = views.iter().find(|(_, f)| f.contains(flavor)) else {
+            continue;
+        };
+        let mut sequence = Vec::new();
         for file in &toc.files {
-            if file.path.contains('[') {
-                report.warnings.push(Diagnostic::plain_warning(format!(
-                    "TOC line `{}` uses a file variable, which `wowlua init` cannot convert; add the file to the manifest by hand",
-                    file.path
-                )));
+            if apply_conditions(std::slice::from_ref(flavor), &file.conditions).is_empty() {
                 continue;
             }
-            let applicable = apply_conditions(flavors, &file.conditions);
-            if applicable.is_empty() {
-                continue;
+            let key = canonical
+                .entry(file.path.to_ascii_lowercase())
+                .or_insert_with(|| file.path.clone())
+                .clone();
+            if key.contains('[') {
+                let locales = file
+                    .conditions
+                    .iter()
+                    .find(|c| c.name.eq_ignore_ascii_case("AllowLoadTextLocale"))
+                    .map(|c| c.values.clone());
+                let entry = variable_lines
+                    .entry(key.clone())
+                    .or_insert_with(|| (BTreeSet::new(), locales));
+                entry.0.insert(flavor.clone());
+            } else {
+                file_flavors
+                    .entry(key.clone())
+                    .or_default()
+                    .insert(flavor.clone());
             }
-            if !order.iter().any(|p| p.eq_ignore_ascii_case(&file.path)) {
-                order.push(file.path.clone());
+            if !sequence.contains(&key) {
+                sequence.push(key);
             }
-            let key = order
-                .iter()
-                .find(|p| p.eq_ignore_ascii_case(&file.path))
-                .cloned()
-                .unwrap();
-            file_flavors.entry(key).or_default().extend(applicable);
         }
+        sequences.push(sequence);
+    }
+    let (order, conflict) = merge_orders(&sequences);
+    if conflict {
+        report.warnings.push(Diagnostic::plain_warning(
+            "the flavors' TOCs load some files in contradicting orders; `build.load-order` follows the first flavor",
+        ));
     }
 
-    // Files to move: TOC files and everything they include through XML.
+    // Files to move: TOC files, expansions of variable lines, and everything
+    // they include through XML.
+    let mut queue: Vec<String> = order.iter().filter(|p| !p.contains('[')).cloned().collect();
+    for (path, (flavors, locales)) in &variable_lines {
+        let candidates: Vec<String> = match locales {
+            Some(list) => list.clone(),
+            None => wowlua_manifest::model::LOCALES
+                .iter()
+                .map(|l| l.to_string())
+                .collect(),
+        };
+        for flavor in flavors {
+            for locale in &candidates {
+                let concrete = crate::build::substitute(path, flavor, locale);
+                if existing_case(dir, &concrete).is_some() {
+                    queue.push(concrete);
+                }
+            }
+        }
+    }
     let mut to_move: Vec<String> = Vec::new();
-    let mut queue: Vec<String> = order.clone();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
     while let Some(rel) = queue.pop() {
         let Some(actual) = existing_case(dir, &rel) else {
             report.warnings.push(Diagnostic::plain_warning(format!(
@@ -397,7 +439,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             )));
             continue;
         };
-        if to_move.contains(&actual) {
+        if !seen.insert(actual.clone()) {
             continue;
         }
         if actual.to_ascii_lowercase().ends_with(".xml")
@@ -462,18 +504,15 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     // Assets stay in place.
     let assets = asset_globs(dir);
 
-    // Manifest. Flags and saved variables come from the most general TOC;
-    // metadata that differs per flavor becomes `addon.flavor-overrides`.
-    let primary_index = infos
-        .iter()
-        .enumerate()
-        .min_by_key(|(i, (_, suffix, _))| (rank(suffix), *i))
-        .map(|(i, _)| i)
-        .unwrap_or(0);
-    let metadata = flavor_metadata(&views, &all_flavors);
+    // Manifest. Structural fields are agreed across the TOCs clients read
+    // (majority, saved variables united); bulk `X-` data goes to TOC data
+    // files; metadata that differs per flavor becomes `flavor-overrides`.
+    let structural = structural_toc(&views);
+    let toc_data = extract_toc_data(dir, &views)?;
+    let metadata = flavor_metadata(&views, &all_flavors, toc_data.is_some());
     let mut warnings = Vec::new();
-    let manifest = adopted_manifest(
-        &infos[primary_index].0,
+    let mut manifest = adopted_manifest(
+        &structural,
         &views,
         &metadata,
         &addon_name,
@@ -484,6 +523,37 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         assets,
         &mut warnings,
     );
+    if let Some(addon) = manifest.get_mut("addon").and_then(Value::as_object_mut)
+        && let Some(files) = &toc_data
+    {
+        addon.insert("toc-data".into(), json!(files));
+    }
+    if !variable_lines.is_empty()
+        && let Some(build) = manifest
+            .as_object_mut()
+            .map(|m| m.entry("build").or_insert_with(|| json!({})))
+            .and_then(Value::as_object_mut)
+    {
+        let entries: Vec<Value> = variable_lines
+            .iter()
+            .map(|(path, (flavors, locales))| {
+                let mut entry = Map::new();
+                entry.insert("path".into(), format!("src/{path}").into());
+                if let Some(locales) = locales {
+                    entry.insert("locales".into(), json!(locales));
+                }
+                if flavors.len() < all_flavors.len() {
+                    let ordered: Vec<&String> = all_flavors
+                        .iter()
+                        .filter(|f| flavors.contains(*f))
+                        .collect();
+                    entry.insert("flavors".into(), json!(ordered));
+                }
+                Value::Object(entry)
+            })
+            .collect();
+        build.insert("variable-files".into(), Value::Array(entries));
+    }
     report.warnings.extend(warnings);
 
     // Lua/XML files no TOC loads stay where they are; say so.
@@ -731,6 +801,166 @@ fn asset_globs(dir: &Path) -> Vec<String> {
     globs.into_iter().collect()
 }
 
+/// Merges per-flavor file sequences into one order that keeps every
+/// sequence's relative order (a topological merge; ties keep the order of
+/// first appearance). Returns `true` as second value when the sequences
+/// contradict each other; the remaining files then follow first appearance.
+fn merge_orders(sequences: &[Vec<String>]) -> (Vec<String>, bool) {
+    let mut first_seen: IndexMap<String, usize> = IndexMap::new();
+    for sequence in sequences {
+        for item in sequence {
+            let next = first_seen.len();
+            first_seen.entry(item.clone()).or_insert(next);
+        }
+    }
+    let mut successors: HashMap<&str, BTreeSet<&str>> = HashMap::new();
+    let mut indegree: HashMap<&str, usize> = first_seen.keys().map(|k| (k.as_str(), 0)).collect();
+    for sequence in sequences {
+        for pair in sequence.windows(2) {
+            if successors
+                .entry(pair[0].as_str())
+                .or_default()
+                .insert(pair[1].as_str())
+            {
+                *indegree.get_mut(pair[1].as_str()).expect("known") += 1;
+            }
+        }
+    }
+    let rank = |item: &str| first_seen[item];
+    let mut ready: BTreeSet<(usize, &str)> = indegree
+        .iter()
+        .filter(|(_, d)| **d == 0)
+        .map(|(k, _)| (rank(k), *k))
+        .collect();
+    let mut order: Vec<String> = Vec::new();
+    while let Some(&(r, item)) = ready.iter().next() {
+        ready.remove(&(r, item));
+        order.push(item.to_string());
+        for next in successors.get(item).into_iter().flatten() {
+            let d = indegree.get_mut(next).expect("known");
+            *d -= 1;
+            if *d == 0 {
+                ready.insert((rank(next), next));
+            }
+        }
+    }
+    let conflict = order.len() < first_seen.len();
+    if conflict {
+        for item in first_seen.keys() {
+            if !order.contains(item) {
+                order.push(item.clone());
+            }
+        }
+    }
+    (order, conflict)
+}
+
+/// A synthetic TOC with the structural directives the flavors agree on:
+/// version, flags and publish IDs by the most flavors among the TOCs that set
+/// them, saved variables united.
+fn structural_toc(views: &[(wowlua_toc::ParsedToc, Vec<String>)]) -> wowlua_toc::ParsedToc {
+    let used: Vec<(&wowlua_toc::ParsedToc, usize)> = views
+        .iter()
+        .filter(|(_, f)| !f.is_empty())
+        .map(|(t, f)| (t, f.len()))
+        .collect();
+    let mut directives = Vec::new();
+    let majority = |key: &str| -> Option<String> {
+        let mut counts: IndexMap<String, usize> = IndexMap::new();
+        for (toc, weight) in &used {
+            if let Some(v) = toc.get(key) {
+                *counts.entry(v.to_string()).or_default() += weight;
+            }
+        }
+        counts.into_iter().max_by_key(|(_, n)| *n).map(|(v, _)| v)
+    };
+    for key in [
+        "Version",
+        "LoadOnDemand",
+        "DefaultState",
+        "LoadSavedVariablesFirst",
+        "AllowAddOnTableAccess",
+        "OnlyBetaAndPTR",
+        "X-Curse-Project-ID",
+        "X-Wago-ID",
+        "X-WoWI-ID",
+    ] {
+        if let Some(value) = majority(key) {
+            directives.push(wowlua_toc::ParsedDirective {
+                key: key.into(),
+                value,
+                conditions: Vec::new(),
+            });
+        }
+    }
+    for key in ["SavedVariables", "SavedVariablesPerCharacter"] {
+        let mut names: indexmap::IndexSet<String> = indexmap::IndexSet::new();
+        for (toc, _) in &used {
+            names.extend(toc.list(|k| k.eq_ignore_ascii_case(key)));
+        }
+        if !names.is_empty() {
+            let value = names.into_iter().collect::<Vec<_>>().join(", ");
+            directives.push(wowlua_toc::ParsedDirective {
+                key: key.into(),
+                value,
+                conditions: Vec::new(),
+            });
+        }
+    }
+    wowlua_toc::ParsedToc {
+        directives,
+        files: Vec::new(),
+    }
+}
+
+/// More `X-` directives than this in one TOC count as bulk data (§9.3.2).
+const TOC_DATA_THRESHOLD: usize = 200;
+
+/// When a client's TOC carries bulk `X-` data (QuestieDB stores its database
+/// this way), writes it to `tocdata/<flavor>.tocdata` (flavors with identical
+/// data share a file) and returns `addon.toc-data`.
+fn extract_toc_data(
+    dir: &Path,
+    views: &[(wowlua_toc::ParsedToc, Vec<String>)],
+) -> Result<Option<IndexMap<String, Vec<String>>>, Diagnostic> {
+    let is_data = |key: &str| key.to_ascii_lowercase().starts_with("x-") && is_metadata(key);
+    let bulk = views.iter().any(|(toc, flavors)| {
+        !flavors.is_empty()
+            && toc.directives.iter().filter(|d| is_data(&d.key)).count() > TOC_DATA_THRESHOLD
+    });
+    if !bulk {
+        return Ok(None);
+    }
+    let mut files: IndexMap<String, Vec<String>> = IndexMap::new();
+    let mut written: Vec<(String, String)> = Vec::new(); // (content, file)
+    for (toc, flavors) in views.iter().filter(|(_, f)| !f.is_empty()) {
+        for flavor in flavors {
+            let mut content = String::new();
+            for d in toc.directives.iter().filter(|d| is_data(&d.key)) {
+                if !apply_conditions(std::slice::from_ref(flavor), &d.conditions).is_empty() {
+                    content.push_str(&format!("## {}: {}\n", d.key, d.value));
+                }
+            }
+            if content.is_empty() {
+                continue;
+            }
+            let file = match written.iter().find(|(c, _)| *c == content) {
+                Some((_, file)) => file.clone(),
+                None => {
+                    let file = format!("tocdata/{flavor}.tocdata");
+                    fsutil::write_file(&dir.join(&file), content.as_bytes()).map_err(|e| {
+                        Diagnostic::plain_error(format!("cannot write `{file}`: {e}"))
+                    })?;
+                    written.push((content, file.clone()));
+                    file
+                }
+            };
+            files.insert(flavor.clone(), vec![file]);
+        }
+    }
+    Ok(Some(files))
+}
+
 /// TOC metadata (title, notes, icon, `X-` fields, …) resolved per flavor:
 /// `base` holds the value most flavors use; `overrides` the deviations
 /// (`None` = the flavor has no such directive).
@@ -768,21 +998,23 @@ fn is_metadata(key: &str) -> bool {
 fn flavor_metadata(
     views: &[(wowlua_toc::ParsedToc, Vec<String>)],
     all_flavors: &[String],
+    exclude_x: bool,
 ) -> FlavorMetadata {
     // key -> value for each flavor, from the TOC its client reads.
     let mut per_flavor: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
-    let mut keys: Vec<String> = Vec::new();
+    let mut keys: indexmap::IndexSet<String> = indexmap::IndexSet::new();
     for (toc, flavors) in views {
         for flavor in flavors {
             let entry = per_flavor.entry(flavor.clone()).or_default();
-            for d in toc.directives.iter().filter(|d| is_metadata(&d.key)) {
+            let wanted = |key: &str| {
+                is_metadata(key) && !(exclude_x && key.to_ascii_lowercase().starts_with("x-"))
+            };
+            for d in toc.directives.iter().filter(|d| wanted(&d.key)) {
                 let applies =
                     !apply_conditions(std::slice::from_ref(flavor), &d.conditions).is_empty();
                 if applies && !entry.contains_key(&d.key) {
                     entry.insert(d.key.clone(), d.value.clone());
-                    if !keys.contains(&d.key) {
-                        keys.push(d.key.clone());
-                    }
+                    keys.insert(d.key.clone());
                 }
             }
         }
@@ -1055,8 +1287,16 @@ fn adopted_manifest(
     }
     let load_order: Vec<String> = order
         .iter()
-        .filter_map(|p| moved.iter().find(|m| m.eq_ignore_ascii_case(p)))
-        .map(|p| format!("src/{p}"))
+        .filter_map(|p| {
+            if p.contains('[') {
+                Some(format!("src/{p}"))
+            } else {
+                moved
+                    .iter()
+                    .find(|m| m.eq_ignore_ascii_case(p))
+                    .map(|m| format!("src/{m}"))
+            }
+        })
         .collect();
     if !load_order.is_empty() {
         build.insert("load-order".into(), json!(load_order));
