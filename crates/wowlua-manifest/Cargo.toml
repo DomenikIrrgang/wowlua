@@ -1,6 +1,25 @@
 [package]
 name = "wowlua-manifest"
-version = "0.1.0"
-edition = "2024"
+description = "The wowlua.json manifest: model, validation, profiles and JSON schema"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
 
 [dependencies]
+wowlua-span.workspace = true
+wowlua-diagnostics.workspace = true
+wowlua-flavors.workspace = true
+globset.workspace = true
+indexmap.workspace = true
+regex.workspace = true
+schemars.workspace = true
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_path_to_error.workspace = true
+
+[lints]
+workspace = true

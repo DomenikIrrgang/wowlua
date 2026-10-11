@@ -2,821 +2,210 @@
 
 use crate::CodeInfo;
 
+#[rustfmt::skip]
 pub(crate) static CODES: &[CodeInfo] = &[
-    CodeInfo {
-        code: "E0101",
-        summary: "Unexpected token",
-    },
-    CodeInfo {
-        code: "E0102",
-        summary: "Unterminated string or long bracket",
-    },
-    CodeInfo {
-        code: "E0103",
-        summary: "Malformed number, including any misuse of `_` digit separators",
-    },
-    CodeInfo {
-        code: "E0104",
-        summary: "Ambiguous syntax (function call vs. new statement), as in Lua 5.1",
-    },
-    CodeInfo {
-        code: "E0105",
-        summary: "Invalid escape in a backtick string",
-    },
-    CodeInfo {
-        code: "E0106",
-        summary: "`continue` or `break` outside a loop",
-    },
-    CodeInfo {
-        code: "E0107",
-        summary: "`continue` in a `repeat` loop whose `until` condition uses a body local",
-    },
-    CodeInfo {
-        code: "E0108",
-        summary: "`import` / `export` not at the top level of a module",
-    },
-    CodeInfo {
-        code: "E0109",
-        summary: "Decorator not followed by a decoratable declaration",
-    },
-    CodeInfo {
-        code: "E0110",
-        summary: "`??` mixed with `and`/`or` without parentheses",
-    },
-    CodeInfo {
-        code: "E0111",
-        summary: "Compound assignment with multiple targets",
-    },
-    CodeInfo {
-        code: "E0112",
-        summary: "`const` without an initializer, or declaring several names",
-    },
-    CodeInfo {
-        code: "E0113",
-        summary: "Optional chain used as an assignment or compound-assignment target",
-    },
-    CodeInfo {
-        code: "E0114",
-        summary: "`continue` is not the last statement of its block",
-    },
-    CodeInfo {
-        code: "E0115",
-        summary: "`class`, `enum` or `declare` not at the top level of a file",
-    },
-    CodeInfo {
-        code: "E0116",
-        summary: "Unbalanced `}` in an interpolated string",
-    },
-    CodeInfo {
-        code: "E0117",
-        summary: "`import _` combined with other names",
-    },
-    CodeInfo {
-        code: "E0118",
-        summary: "`export function` with a dotted or method name",
-    },
-    CodeInfo {
-        code: "E0119",
-        summary: "`export local` without an initializer",
-    },
-    CodeInfo {
-        code: "E1001",
-        summary: "Undefined global read (strict mode)",
-    },
-    CodeInfo {
-        code: "W1001",
-        summary: "Undefined global read (basic mode)",
-    },
-    CodeInfo {
-        code: "E1002",
-        summary: "Implicit global assignment (strict mode)",
-    },
-    CodeInfo {
-        code: "W1002",
-        summary: "Implicit global assignment (basic mode)",
-    },
-    CodeInfo {
-        code: "E1003",
-        summary: "Undefined local or upvalue in a `wowlua` construct (e.g. a decorator argument)",
-    },
-    CodeInfo {
-        code: "W1003",
-        summary: "Unused local, parameter or import",
-    },
-    CodeInfo {
-        code: "W1004",
-        summary: "Local shadows another local",
-    },
-    CodeInfo {
-        code: "W1005",
-        summary: "Unreachable code",
-    },
-    CodeInfo {
-        code: "E1010",
-        summary: "Assignment to an exported or imported binding",
-    },
-    CodeInfo {
-        code: "E1011",
-        summary: "Top-level `import` after another (non-import) statement",
-    },
-    CodeInfo {
-        code: "E1012",
-        summary: "Module has no export with this name",
-    },
-    CodeInfo {
-        code: "E1013",
-        summary: "Module specifier case does not match the file on disk",
-    },
-    CodeInfo {
-        code: "E1014",
-        summary: "Import or usage cycle containing a load-time edge (run-time-only cycles are allowed)",
-    },
-    CodeInfo {
-        code: "E1015",
-        summary: "Module not found",
-    },
-    CodeInfo {
-        code: "E1020",
-        summary: "Reference to a declaration removed by `@if` or static elimination",
-    },
-    CodeInfo {
-        code: "E1031",
-        summary: "Duplicate (non-ambient) interface in the same scope",
-    },
-    CodeInfo {
-        code: "E1032",
-        summary: "Top-level `return` in a module",
-    },
-    CodeInfo {
-        code: "W1033",
-        summary: "Load order cannot be determined (dynamic names, several writers, external names); files keep their source order",
-    },
-    CodeInfo {
-        code: "W1034",
-        summary: "Name read at load time but only defined at run time",
-    },
-    CodeInfo {
-        code: "E1035",
-        summary: "`build.load-order` contradicts a computed load-time dependency",
-    },
-    CodeInfo {
-        code: "E1036",
-        summary: "Flavors need incompatible load orders and `toc-layout = \"single\"` is forced",
-    },
-    CodeInfo {
-        code: "E1037",
-        summary: "Hoisted declaration used at load time before its definition has executed",
-    },
-    CodeInfo {
-        code: "E1038",
-        summary: "`asset()` path is not a package asset (or case mismatch)",
-    },
-    CodeInfo {
-        code: "E1039",
-        summary: "`@if(flavor …)` in a `.wowlua` file in shared flavor mode",
-    },
-    CodeInfo {
-        code: "E1040",
-        summary: "`@if` condition is not a static condition",
-    },
-    CodeInfo {
-        code: "E2001",
-        summary: "Type mismatch: `S` is not assignable to `T`",
-    },
-    CodeInfo {
-        code: "E2002",
-        summary: "Unknown type name",
-    },
-    CodeInfo {
-        code: "E2003",
-        summary: "Unknown field or method (also: method defined outside its class body, assignment to the reserved `__wowlua` key)",
-    },
-    CodeInfo {
-        code: "E2004",
-        summary: "Value is not callable",
-    },
-    CodeInfo {
-        code: "E2005",
-        summary: "Value may be `nil` (strict mode)",
-    },
-    CodeInfo {
-        code: "E2006",
-        summary: "Too many arguments",
-    },
-    CodeInfo {
-        code: "E2007",
-        summary: "Missing argument",
-    },
-    CodeInfo {
-        code: "E2008",
-        summary: "Method called without `self` (use `:`)",
-    },
-    CodeInfo {
-        code: "E2009",
-        summary: "Not all code paths return a value",
-    },
-    CodeInfo {
-        code: "E2010",
-        summary: "Assignment to a `const`, `readonly` field, read-only accessor, enum member or `wowlua:meta` field",
-    },
-    CodeInfo {
-        code: "E2011",
-        summary: "Access to a `private` / `protected` member",
-    },
-    CodeInfo {
-        code: "E2012",
-        summary: "No overload matches the call",
-    },
-    CodeInfo {
-        code: "E2013",
-        summary: "Wrong number of type arguments",
-    },
-    CodeInfo {
-        code: "E2014",
-        summary: "Type argument does not satisfy its constraint",
-    },
-    CodeInfo {
-        code: "E2015",
-        summary: "Type assertion between incomparable types",
-    },
-    CodeInfo {
-        code: "E2030",
-        summary: "API not available in every flavor (shared flavor mode), missing a flavor guard",
-    },
-    CodeInfo {
-        code: "E2040",
-        summary: "Forbidden operation on a possibly secret value (strict mode)",
-    },
-    CodeInfo {
-        code: "W2040",
-        summary: "Forbidden operation on a possibly secret value (basic mode)",
-    },
-    CodeInfo {
-        code: "E2050",
-        summary: "Missing parameter type annotation (strict mode)",
-    },
-    CodeInfo {
-        code: "E2051",
-        summary: "Unknown field added to a sealed table (strict mode)",
-    },
-    CodeInfo {
-        code: "E2052",
-        summary: "Non-optional class field not definitely assigned in the constructor (strict mode)",
-    },
-    CodeInfo {
-        code: "E2053",
-        summary: "Recursive type alias not guarded by a table or function type",
-    },
-    CodeInfo {
-        code: "E2054",
-        summary: "Conflicting field types in merged `declare interface` declarations",
-    },
-    CodeInfo {
-        code: "W2055",
-        summary: "Too many arguments to an unannotated function (basic mode). Replaces the second meaning of W2006.",
-    },
-    CodeInfo {
-        code: "E2056",
-        summary: "Type pack used in an invalid position",
-    },
-    CodeInfo {
-        code: "W2057",
-        summary: "`coroutine.yield` inside a function passed to `pcall`/`xpcall`/a C callback (cannot yield across that boundary in Lua 5.1)",
-    },
-    CodeInfo {
-        code: "E2058",
-        summary: "Name declared both as `declare event` and `declare message`",
-    },
-    CodeInfo {
-        code: "E2059",
-        summary: "Default value in a `declare event` / `declare message` parameter",
-    },
-    CodeInfo {
-        code: "E3001",
-        summary: "`super(...)` missing, repeated, or after use of `self`",
-    },
-    CodeInfo {
-        code: "E3002",
-        summary: "Cannot instantiate an abstract class",
-    },
-    CodeInfo {
-        code: "E3003",
-        summary: "Abstract method not implemented",
-    },
-    CodeInfo {
-        code: "E3004",
-        summary: "Reserved member name",
-    },
-    CodeInfo {
-        code: "E3005",
-        summary: "`override` problem: missing `override`, or nothing to override",
-    },
-    CodeInfo {
-        code: "E3006",
-        summary: "Class does not satisfy an implemented interface",
-    },
-    CodeInfo {
-        code: "E3007",
-        summary: "Metamethod on a widget class",
-    },
-    CodeInfo {
-        code: "E3008",
-        summary: "Class extends a non-class value",
-    },
-    CodeInfo {
-        code: "E3010",
-        summary: "Enum mixes numeric and string values",
-    },
-    CodeInfo {
-        code: "E3011",
-        summary: "Duplicate enum value",
-    },
-    CodeInfo {
-        code: "E3020",
-        summary: "Unknown decorator",
-    },
-    CodeInfo {
-        code: "E3021",
-        summary: "Decorator not applicable to this target (including user decorators on enums, interfaces and aliases)",
-    },
-    CodeInfo {
-        code: "W3021",
-        summary: "Lexical binding named like a core decorator is not a re-export of it (ignored in decorator position)",
-    },
-    CodeInfo {
-        code: "E3022",
-        summary: "User decorator signature does not accept the target",
-    },
-    CodeInfo {
-        code: "W3030",
-        summary: "Use of a `@deprecated` declaration",
-    },
-    CodeInfo {
-        code: "W3031",
-        summary: "`@inline` ignored",
-    },
-    CodeInfo {
-        code: "E3032",
-        summary: "Invalid `@debugOnly` function (returns values, or a call is used as an expression)",
-    },
-    CodeInfo {
-        code: "E3033",
-        summary: "`@intrinsic` used outside compiler-known modules",
-    },
-    CodeInfo {
-        code: "E3040",
-        summary: "Local or parameter named `super` inside a class body",
-    },
-    CodeInfo {
-        code: "E3041",
-        summary: "`...` used in a field or static initializer",
-    },
-    CodeInfo {
-        code: "E3042",
-        summary: "Field and method/accessor with the same name (in a class or across its superclass)",
-    },
-    CodeInfo {
-        code: "E3043",
-        summary: "Accessor declared on a widget class",
-    },
-    CodeInfo {
-        code: "E3044",
-        summary: "Overload implementation does not accept every overload signature",
-    },
-    CodeInfo {
-        code: "E3045",
-        summary: "Statement-only `wowlua:debug` helper used as a value",
-    },
-    CodeInfo {
-        code: "E4001",
-        summary: "Manifest is not valid JSON",
-    },
-    CodeInfo {
-        code: "W4001",
-        summary: "Unknown TOC directive in `addon.toc-extra`",
-    },
-    CodeInfo {
-        code: "E4002",
-        summary: "Manifest does not match the schema (unknown key, wrong type)",
-    },
-    CodeInfo {
-        code: "E4003",
-        summary: "Invalid package name or version",
-    },
-    CodeInfo {
-        code: "E4004",
-        summary: "Unknown flavor",
-    },
-    CodeInfo {
-        code: "E4005",
-        summary: "Conflicting setting between `.pkgmeta` and `wowlua.json` in compatibility mode",
-    },
-    CodeInfo {
-        code: "E4006",
-        summary: "Unknown profile, minification level or publish target referenced",
-    },
-    CodeInfo {
-        code: "E4007",
-        summary: "Cyclic profile or minification-level inheritance (`inherits` / `extends`)",
-    },
-    CodeInfo {
-        code: "E4012",
-        summary: "Profile `config` key missing from the top-level `config`, or with an incompatible type",
-    },
-    CodeInfo {
-        code: "W4030",
-        summary: "Unsupported packager keyword",
-    },
-    CodeInfo {
-        code: "E4101",
-        summary: "Version conflict in dependency resolution",
-    },
-    CodeInfo {
-        code: "E4102",
-        summary: "Dependency not found (registry, git ref, path)",
-    },
-    CodeInfo {
-        code: "E4103",
-        summary: "Checksum mismatch",
-    },
-    CodeInfo {
-        code: "E4104",
-        summary: "Lockfile out of date (`--locked`)",
-    },
-    CodeInfo {
-        code: "E4105",
-        summary: "Network access required (`--frozen` / `--offline`)",
-    },
-    CodeInfo {
-        code: "E4110",
-        summary: "Cannot determine the load order of a `lua-library`. Specify `files`.",
-    },
-    CodeInfo {
-        code: "E4120",
-        summary: "SavedVariables name used by several addons in the workspace",
-    },
-    CodeInfo {
-        code: "E4201",
-        summary: "Missing API token for a publish target",
-    },
-    CodeInfo {
-        code: "E4202",
-        summary: "Upload rejected by the site (the site's response is included)",
-    },
-    CodeInfo {
-        code: "E4210",
-        summary: "CurseForge upload without a changelog",
-    },
-    CodeInfo {
-        code: "W4220",
-        summary: "Flavor unknown to a publish site and omitted from that upload",
-    },
-    CodeInfo {
-        code: "E4230",
-        summary: "Addons cannot be published to the wowlua registry",
-    },
-    CodeInfo {
-        code: "E4300",
-        summary: "Running compiler does not satisfy `package.wowlua` (checked before schema validation)",
-    },
-    CodeInfo {
-        code: "E4301",
-        summary: "`toc-layout: \"single\"` forced, but a targeted client lacks a needed TOC feature",
-    },
-    CodeInfo {
-        code: "E4302",
-        summary: "Per-flavor TOC names cannot distinguish the targeted flavors",
-    },
-    CodeInfo {
-        code: "E4303",
-        summary: "TOC line longer than 1024 characters that cannot be split (non-appendable directive or file line)",
-    },
-    CodeInfo {
-        code: "W4304",
-        summary: "Flavors' load orders conflict; falling back to per-flavor TOC layout",
-    },
-    CodeInfo {
-        code: "W4306",
-        summary: "Embedded library without a recognizable license file or header",
-    },
-    CodeInfo {
-        code: "E4307",
-        summary: "`asset()` path does not name an asset of the build",
-    },
-    CodeInfo {
-        code: "E4308",
-        summary: "Output paths differ only in case",
-    },
-    CodeInfo {
-        code: "W4309",
-        summary: "`--link` could not create a symlink/junction; copying instead",
-    },
-    CodeInfo {
-        code: "E4311",
-        summary: "Output path collides with a reserved top-level name or another output file",
-    },
-    CodeInfo {
-        code: "E4312",
-        summary: "`addon.load-on-demand: false` together with `addon-dependencies.load-with`",
-    },
-    CodeInfo {
-        code: "W4313",
-        summary: "`types sync` moved a client alias (`anniversary`, `titan`, `forever`) to another ruleset",
-    },
-    CodeInfo {
-        code: "E4314",
-        summary: "Feature entry names an unknown feature, unknown dependency, or non-optional dependency",
-    },
-    CodeInfo {
-        code: "E4315",
-        summary: "Custom profile without `inherits`",
-    },
-    CodeInfo {
-        code: "E4316",
-        summary: "Workspace member sets its own `build.out`",
-    },
-    CodeInfo {
-        code: "E4317",
-        summary: "`addon` section in a non-addon package",
-    },
-    CodeInfo {
-        code: "E4318",
-        summary: "Targeted flavor has no types package or pinned interface",
-    },
-    CodeInfo {
-        code: "E4319",
-        summary: "VCS tag does not match `package.version` (tagged release build / `--tag`)",
-    },
-    CodeInfo {
-        code: "E4320",
-        summary: "Lockfile written by a newer compiler (unsupported lockfile version)",
-    },
-    CodeInfo {
-        code: "E4321",
-        summary: "Same package name from two different sources in one addon's graph",
-    },
-    CodeInfo {
-        code: "W4322",
-        summary: "Locked version has been yanked",
-    },
-    CodeInfo {
-        code: "E4323",
-        summary: "Unsafe archive/checkout content (absolute path, `..`, escaping symlink or hardlink)",
-    },
-    CodeInfo {
-        code: "E4324",
-        summary: "Cycle of `required` addon dependencies within a workspace",
-    },
-    CodeInfo {
-        code: "E4325",
-        summary: "Two workspace members with the same `addon.name`",
-    },
-    CodeInfo {
-        code: "W4326",
-        summary: "No OS credential store; token stored in `config.json` (mode 0600)",
-    },
-    CodeInfo {
-        code: "E4327",
-        summary: "Library does not support a targeted flavor (and the dependency is not restricted with `flavors`)",
-    },
-    CodeInfo {
-        code: "W4328",
-        summary: "Site does not know the exact game version; fell back to a lower/highest version",
-    },
-    CodeInfo {
-        code: "W4329",
-        summary: "GitHub target skipped: build is not on a tag and no `--tag` given",
-    },
-    CodeInfo {
-        code: "E4330",
-        summary: "`--tag` names an existing tag that points at another commit",
-    },
-    CodeInfo {
-        code: "E4331",
-        summary: "`dev`/`install` refuses to overwrite an AddOn folder not installed by wowlua (no `X-Wowlua-Build`); use `--force`",
-    },
-    CodeInfo {
-        code: "W4332",
-        summary: "`.pkgmeta` `move-folders` use that cannot be converted",
-    },
-    CodeInfo {
-        code: "W4333",
-        summary: "`.pkgmeta` svn/hg external cannot be converted",
-    },
-    CodeInfo {
-        code: "E5001",
-        summary: "Lua 5.1 limit exceeded (locals, upvalues, registers, constants, syntax levels, jump distance), including generated locals",
-    },
-    CodeInfo {
-        code: "E5002",
-        summary: "Output validation failed (missing or unreachable file, unresolvable XML reference, invalid TOC or XML)",
-    },
-    CodeInfo {
-        code: "W6001",
-        summary: "Code inspects its own file name (`debugstack`, `debuglocals`), which changes when bundled",
-    },
-    CodeInfo {
-        code: "W6002",
-        summary: "Side-effect-free, unused module removed by dead-code elimination",
-    },
-    CodeInfo {
-        code: "E6003",
-        summary: "Unknown minification pass name",
-    },
-    CodeInfo {
-        code: "W6010",
-        summary: "Publish target uses a renaming minification level (Blizzard AddOn policy: code must not be hidden or obfuscated)",
-    },
-    CodeInfo {
-        code: "W7001",
-        summary: "`todo()` in a release build",
-    },
-    CodeInfo {
-        code: "W7010",
-        summary: "Reflection metadata requested but `reflection = \"none\"`",
-    },
-    CodeInfo {
-        code: "E8001",
-        summary: "`send` used with a WoW event (only messages can be sent)",
-    },
-    CodeInfo {
-        code: "E8002",
-        summary: "`@event` on an instance method",
-    },
-    CodeInfo {
-        code: "E8003",
-        summary: "Unknown event or message name",
-    },
-    CodeInfo {
-        code: "E8010",
-        summary: "Duplicate slash command",
-    },
-    CodeInfo {
-        code: "W8011",
-        summary: "Slash command collides with a Blizzard command",
-    },
-    CodeInfo {
-        code: "E8020",
-        summary: "`saved.bind` on a SavedVariable not declared in the manifest",
-    },
-    CodeInfo {
-        code: "E8021",
-        summary: "Profiles enabled without the per-character profile SavedVariable (`<name>PerChar`)",
-    },
-    CodeInfo {
-        code: "E8030",
-        summary: "Deferred-call decorator on a function that returns values",
-    },
-    CodeInfo {
-        code: "W8040",
-        summary: "Hook target not declared",
-    },
-    CodeInfo {
-        code: "E8050",
-        summary: "Addon message prefix too long",
-    },
-    CodeInfo {
-        code: "E8060",
-        summary: "Invalid locale key",
-    },
-    CodeInfo {
-        code: "E8061",
-        summary: "Locale file defines a key unknown to the base locale",
-    },
-    CodeInfo {
-        code: "W8062",
-        summary: "Locale is missing translations (summary per locale)",
-    },
-    CodeInfo {
-        code: "E8063",
-        summary: "Locale string uses different placeholders than the base locale",
-    },
-    CodeInfo {
-        code: "E8070",
-        summary: "Settings control bound to a field of the wrong type",
-    },
-    CodeInfo {
-        code: "E8080",
-        summary: "`launcher.register` called more than once (compile time for top-level calls, otherwise at runtime)",
-    },
-    CodeInfo {
-        code: "E8100",
-        summary: "`@unitEvent` with more than two units (`RegisterUnitEvent` limit)",
-    },
-    CodeInfo {
-        code: "E8101",
-        summary: "Invalid slash command name (must start with `/`, no whitespace)",
-    },
-    CodeInfo {
-        code: "W8101",
-        summary: "Event not available in every selected flavor (shared flavor mode); registered with a runtime validity check",
-    },
-    CodeInfo {
-        code: "E8102",
-        summary: "`saved.bind` name is not a string literal",
-    },
-    CodeInfo {
-        code: "W8102",
-        summary: "Hook target belongs to a load-on-demand addon but `opts.addon` is missing",
-    },
-    CodeInfo {
-        code: "E8103",
-        summary: "SavedVariable bound twice with `saved.bind`",
-    },
-    CodeInfo {
-        code: "E8104",
-        summary: "`saved.bind` defaults type contains `Secret<…>`",
-    },
-    CodeInfo {
-        code: "E8105",
-        summary: "Invalid locale file name or unknown locale code",
-    },
-    CodeInfo {
-        code: "E8106",
-        summary: "Base locale file missing",
-    },
-    CodeInfo {
-        code: "E8107",
-        summary: "Settings dropdown option value not in the field's type",
-    },
-    CodeInfo {
-        code: "E8108",
-        summary: "`wowlua:test` / `wowlua:mock` imported outside a test file",
-    },
-    CodeInfo {
-        code: "E8112",
-        summary: "Slash router: invalid `ArgSpec`, or `run` parameters don't match `args`/`flags`",
-    },
-    CodeInfo {
-        code: "E8113",
-        summary: "Settings control key not found in the store's type",
-    },
-    CodeInfo {
-        code: "E8114",
-        summary: "`settings.register` called more than once",
-    },
-    CodeInfo {
-        code: "E8117",
-        summary: "`profiles = true` on a per-character SavedVariable",
-    },
-    CodeInfo {
-        code: "E8118",
-        summary: "`wowlua:log` level function used as a value (cannot be stripped)",
-    },
-    CodeInfo {
-        code: "E8300",
-        summary: "Standard-library function unavailable on a targeted flavor (no fallback)",
-    },
-    CodeInfo {
-        code: "W8301",
-        summary: "Standard-library function uses a reduced fallback on a targeted flavor (lists missing fields or features)",
-    },
-    CodeInfo {
-        code: "E8310",
-        summary: "Invalid token in a literal aura filter",
-    },
-    CodeInfo {
-        code: "E8330",
-        summary: "Unknown tooltip kind",
-    },
-    CodeInfo {
-        code: "E8340",
-        summary: "Movable frame store field is not of type `FramePosition?`",
-    },
-    CodeInfo {
-        code: "E8350",
-        summary: "`@binding` / `header` not at module top level, or with non-constant arguments",
-    },
-    CodeInfo {
-        code: "E8351",
-        summary: "Duplicate keybinding name in the addon",
-    },
-    CodeInfo {
-        code: "E8352",
-        summary: "Invalid keybinding name (must match `[A-Z][A-Z0-9_]*`)",
-    },
-    CodeInfo {
-        code: "E8353",
-        summary: "`settings.keybinding` references a binding not declared with `@binding`",
-    },
-    CodeInfo {
-        code: "W8354",
-        summary: "Binding `default` key ignored on a flavor without default-key support",
-    },
-    CodeInfo {
-        code: "E8390",
-        summary: "Invalid color hex literal",
-    },
-    CodeInfo {
-        code: "E8400",
-        summary: "Unknown media kind",
-    },
-    CodeInfo {
-        code: "E8420",
-        summary: "Unknown callback event name for the registry's event type",
-    },
-    CodeInfo {
-        code: "W8430",
-        summary: "Job yield call (`check`/`yield`/`sleep`/`waitFor`) inside `pcall`/`xpcall`/`securecall*`, a metamethod or a C-function callback",
-    },
+    CodeInfo { code: "E0101", summary: "Unexpected token" },
+    CodeInfo { code: "E0102", summary: "Unterminated string or long bracket" },
+    CodeInfo { code: "E0103", summary: "Malformed number, including any misuse of `_` digit separators" },
+    CodeInfo { code: "E0104", summary: "Ambiguous syntax (function call vs. new statement), as in Lua 5.1" },
+    CodeInfo { code: "E0105", summary: "Invalid escape in a backtick string" },
+    CodeInfo { code: "E0106", summary: "`continue` or `break` outside a loop" },
+    CodeInfo { code: "E0107", summary: "`continue` in a `repeat` loop whose `until` condition uses a body local" },
+    CodeInfo { code: "E0108", summary: "`import` / `export` not at the top level of a module" },
+    CodeInfo { code: "E0109", summary: "Decorator not followed by a decoratable declaration" },
+    CodeInfo { code: "E0110", summary: "`??` mixed with `and`/`or` without parentheses" },
+    CodeInfo { code: "E0111", summary: "Compound assignment with multiple targets" },
+    CodeInfo { code: "E0112", summary: "`const` without an initializer, or declaring several names" },
+    CodeInfo { code: "E0113", summary: "Optional chain used as an assignment or compound-assignment target" },
+    CodeInfo { code: "E0114", summary: "`continue` is not the last statement of its block" },
+    CodeInfo { code: "E0115", summary: "`class`, `enum` or `declare` not at the top level of a file" },
+    CodeInfo { code: "E0116", summary: "Unbalanced `}` in an interpolated string" },
+    CodeInfo { code: "E0117", summary: "`import _` combined with other names" },
+    CodeInfo { code: "E0118", summary: "`export function` with a dotted or method name" },
+    CodeInfo { code: "E0119", summary: "`export local` without an initializer" },
+    CodeInfo { code: "E1001", summary: "Undefined global read (strict mode)" },
+    CodeInfo { code: "W1001", summary: "Undefined global read (basic mode)" },
+    CodeInfo { code: "E1002", summary: "Implicit global assignment (strict mode)" },
+    CodeInfo { code: "W1002", summary: "Implicit global assignment (basic mode)" },
+    CodeInfo { code: "E1003", summary: "Undefined local or upvalue in a `wowlua` construct (e.g. a decorator argument)" },
+    CodeInfo { code: "W1003", summary: "Unused local, parameter or import" },
+    CodeInfo { code: "W1004", summary: "Local shadows another local" },
+    CodeInfo { code: "W1005", summary: "Unreachable code" },
+    CodeInfo { code: "E1010", summary: "Assignment to an exported or imported binding" },
+    CodeInfo { code: "E1011", summary: "Top-level `import` after another (non-import) statement" },
+    CodeInfo { code: "E1012", summary: "Module has no export with this name" },
+    CodeInfo { code: "E1013", summary: "Module specifier case does not match the file on disk" },
+    CodeInfo { code: "E1014", summary: "Import or usage cycle containing a load-time edge (run-time-only cycles are allowed)" },
+    CodeInfo { code: "E1015", summary: "Module not found" },
+    CodeInfo { code: "E1020", summary: "Reference to a declaration removed by `@if` or static elimination" },
+    CodeInfo { code: "E1031", summary: "Duplicate (non-ambient) interface in the same scope" },
+    CodeInfo { code: "E1032", summary: "Top-level `return` in a module" },
+    CodeInfo { code: "W1033", summary: "Load order cannot be determined (dynamic names, several writers, external names); files keep their source order" },
+    CodeInfo { code: "W1034", summary: "Name read at load time but only defined at run time" },
+    CodeInfo { code: "E1035", summary: "`build.load-order` contradicts a computed load-time dependency" },
+    CodeInfo { code: "E1036", summary: "Flavors need incompatible load orders and `toc-layout = \"single\"` is forced" },
+    CodeInfo { code: "E1037", summary: "Hoisted declaration used at load time before its definition has executed" },
+    CodeInfo { code: "E1038", summary: "`asset()` path is not a package asset (or case mismatch)" },
+    CodeInfo { code: "E1039", summary: "`@if(flavor …)` in a `.wowlua` file in shared flavor mode" },
+    CodeInfo { code: "E1040", summary: "`@if` condition is not a static condition" },
+    CodeInfo { code: "E2001", summary: "Type mismatch: `S` is not assignable to `T`" },
+    CodeInfo { code: "E2002", summary: "Unknown type name" },
+    CodeInfo { code: "E2003", summary: "Unknown field or method (also: method defined outside its class body, assignment to the reserved `__wowlua` key)" },
+    CodeInfo { code: "E2004", summary: "Value is not callable" },
+    CodeInfo { code: "E2005", summary: "Value may be `nil` (strict mode)" },
+    CodeInfo { code: "E2006", summary: "Too many arguments" },
+    CodeInfo { code: "E2007", summary: "Missing argument" },
+    CodeInfo { code: "E2008", summary: "Method called without `self` (use `:`)" },
+    CodeInfo { code: "E2009", summary: "Not all code paths return a value" },
+    CodeInfo { code: "E2010", summary: "Assignment to a `const`, `readonly` field, read-only accessor, enum member or `wowlua:meta` field" },
+    CodeInfo { code: "E2011", summary: "Access to a `private` / `protected` member" },
+    CodeInfo { code: "E2012", summary: "No overload matches the call" },
+    CodeInfo { code: "E2013", summary: "Wrong number of type arguments" },
+    CodeInfo { code: "E2014", summary: "Type argument does not satisfy its constraint" },
+    CodeInfo { code: "E2015", summary: "Type assertion between incomparable types" },
+    CodeInfo { code: "E2030", summary: "API not available in every flavor (shared flavor mode), missing a flavor guard" },
+    CodeInfo { code: "E2040", summary: "Forbidden operation on a possibly secret value (strict mode)" },
+    CodeInfo { code: "W2040", summary: "Forbidden operation on a possibly secret value (basic mode)" },
+    CodeInfo { code: "E2050", summary: "Missing parameter type annotation (strict mode)" },
+    CodeInfo { code: "E2051", summary: "Unknown field added to a sealed table (strict mode)" },
+    CodeInfo { code: "E2052", summary: "Non-optional class field not definitely assigned in the constructor (strict mode)" },
+    CodeInfo { code: "E2053", summary: "Recursive type alias not guarded by a table or function type" },
+    CodeInfo { code: "E2054", summary: "Conflicting field types in merged `declare interface` declarations" },
+    CodeInfo { code: "W2055", summary: "Too many arguments to an unannotated function (basic mode). Replaces the second meaning of W2006." },
+    CodeInfo { code: "E2056", summary: "Type pack used in an invalid position" },
+    CodeInfo { code: "W2057", summary: "`coroutine.yield` inside a function passed to `pcall`/`xpcall`/a C callback (cannot yield across that boundary in Lua 5.1)" },
+    CodeInfo { code: "E2058", summary: "Name declared both as `declare event` and `declare message`" },
+    CodeInfo { code: "E2059", summary: "Default value in a `declare event` / `declare message` parameter" },
+    CodeInfo { code: "E3001", summary: "`super(...)` missing, repeated, or after use of `self`" },
+    CodeInfo { code: "E3002", summary: "Cannot instantiate an abstract class" },
+    CodeInfo { code: "E3003", summary: "Abstract method not implemented" },
+    CodeInfo { code: "E3004", summary: "Reserved member name" },
+    CodeInfo { code: "E3005", summary: "`override` problem: missing `override`, or nothing to override" },
+    CodeInfo { code: "E3006", summary: "Class does not satisfy an implemented interface" },
+    CodeInfo { code: "E3007", summary: "Metamethod on a widget class" },
+    CodeInfo { code: "E3008", summary: "Class extends a non-class value" },
+    CodeInfo { code: "E3010", summary: "Enum mixes numeric and string values" },
+    CodeInfo { code: "E3011", summary: "Duplicate enum value" },
+    CodeInfo { code: "E3020", summary: "Unknown decorator" },
+    CodeInfo { code: "E3021", summary: "Decorator not applicable to this target (including user decorators on enums, interfaces and aliases)" },
+    CodeInfo { code: "W3021", summary: "Lexical binding named like a core decorator is not a re-export of it (ignored in decorator position)" },
+    CodeInfo { code: "E3022", summary: "User decorator signature does not accept the target" },
+    CodeInfo { code: "W3030", summary: "Use of a `@deprecated` declaration" },
+    CodeInfo { code: "W3031", summary: "`@inline` ignored" },
+    CodeInfo { code: "E3032", summary: "Invalid `@debugOnly` function (returns values, or a call is used as an expression)" },
+    CodeInfo { code: "E3033", summary: "`@intrinsic` used outside compiler-known modules" },
+    CodeInfo { code: "E3040", summary: "Local or parameter named `super` inside a class body" },
+    CodeInfo { code: "E3041", summary: "`...` used in a field or static initializer" },
+    CodeInfo { code: "E3042", summary: "Field and method/accessor with the same name (in a class or across its superclass)" },
+    CodeInfo { code: "E3043", summary: "Accessor declared on a widget class" },
+    CodeInfo { code: "E3044", summary: "Overload implementation does not accept every overload signature" },
+    CodeInfo { code: "E3045", summary: "Statement-only `wowlua:debug` helper used as a value" },
+    CodeInfo { code: "E4001", summary: "Manifest is not valid JSON" },
+    CodeInfo { code: "W4001", summary: "Unknown TOC directive in `addon.toc-extra`" },
+    CodeInfo { code: "E4002", summary: "Manifest does not match the schema (unknown key, wrong type)" },
+    CodeInfo { code: "E4003", summary: "Invalid package name or version" },
+    CodeInfo { code: "E4004", summary: "Unknown flavor" },
+    CodeInfo { code: "E4005", summary: "Conflicting setting between `.pkgmeta` and `wowlua.json` in compatibility mode" },
+    CodeInfo { code: "E4006", summary: "Unknown profile, minification level or publish target referenced" },
+    CodeInfo { code: "E4007", summary: "Cyclic profile or minification-level inheritance (`inherits` / `extends`)" },
+    CodeInfo { code: "E4012", summary: "Profile `config` key missing from the top-level `config`, or with an incompatible type" },
+    CodeInfo { code: "W4030", summary: "Unsupported packager keyword" },
+    CodeInfo { code: "E4101", summary: "Version conflict in dependency resolution" },
+    CodeInfo { code: "E4102", summary: "Dependency not found (registry, git ref, path)" },
+    CodeInfo { code: "E4103", summary: "Checksum mismatch" },
+    CodeInfo { code: "E4104", summary: "Lockfile out of date (`--locked`)" },
+    CodeInfo { code: "E4105", summary: "Network access required (`--frozen` / `--offline`)" },
+    CodeInfo { code: "E4110", summary: "Cannot determine the load order of a `lua-library`. Specify `files`." },
+    CodeInfo { code: "E4120", summary: "SavedVariables name used by several addons in the workspace" },
+    CodeInfo { code: "E4201", summary: "Missing API token for a publish target" },
+    CodeInfo { code: "E4202", summary: "Upload rejected by the site (the site's response is included)" },
+    CodeInfo { code: "E4210", summary: "CurseForge upload without a changelog" },
+    CodeInfo { code: "W4220", summary: "Flavor unknown to a publish site and omitted from that upload" },
+    CodeInfo { code: "E4230", summary: "Addons cannot be published to the wowlua registry" },
+    CodeInfo { code: "E4300", summary: "Running compiler does not satisfy `package.wowlua` (checked before schema validation)" },
+    CodeInfo { code: "E4301", summary: "`toc-layout: \"single\"` forced, but a targeted client lacks a needed TOC feature" },
+    CodeInfo { code: "E4302", summary: "Per-flavor TOC names cannot distinguish the targeted flavors" },
+    CodeInfo { code: "E4303", summary: "TOC line longer than 1024 characters that cannot be split (non-appendable directive or file line)" },
+    CodeInfo { code: "W4304", summary: "Flavors' load orders conflict; falling back to per-flavor TOC layout" },
+    CodeInfo { code: "W4306", summary: "Embedded library without a recognizable license file or header" },
+    CodeInfo { code: "E4307", summary: "`asset()` path does not name an asset of the build" },
+    CodeInfo { code: "E4308", summary: "Output paths differ only in case" },
+    CodeInfo { code: "W4309", summary: "`--link` could not create a symlink/junction; copying instead" },
+    CodeInfo { code: "E4311", summary: "Output path collides with a reserved top-level name or another output file" },
+    CodeInfo { code: "E4312", summary: "`addon.load-on-demand: false` together with `addon-dependencies.load-with`" },
+    CodeInfo { code: "W4313", summary: "`types sync` moved a client alias (`anniversary`, `titan`, `forever`) to another ruleset" },
+    CodeInfo { code: "E4314", summary: "Feature entry names an unknown feature, unknown dependency, or non-optional dependency" },
+    CodeInfo { code: "E4315", summary: "Custom profile without `inherits`" },
+    CodeInfo { code: "E4316", summary: "Workspace member sets its own `build.out`" },
+    CodeInfo { code: "E4317", summary: "`addon` section in a non-addon package" },
+    CodeInfo { code: "E4318", summary: "Targeted flavor has no types package or pinned interface" },
+    CodeInfo { code: "E4319", summary: "VCS tag does not match `package.version` (tagged release build / `--tag`)" },
+    CodeInfo { code: "E4320", summary: "Lockfile written by a newer compiler (unsupported lockfile version)" },
+    CodeInfo { code: "E4321", summary: "Same package name from two different sources in one addon's graph" },
+    CodeInfo { code: "W4322", summary: "Locked version has been yanked" },
+    CodeInfo { code: "E4323", summary: "Unsafe archive/checkout content (absolute path, `..`, escaping symlink or hardlink)" },
+    CodeInfo { code: "E4324", summary: "Cycle of `required` addon dependencies within a workspace" },
+    CodeInfo { code: "E4325", summary: "Two workspace members with the same `addon.name`" },
+    CodeInfo { code: "W4326", summary: "No OS credential store; token stored in `config.json` (mode 0600)" },
+    CodeInfo { code: "E4327", summary: "Library does not support a targeted flavor (and the dependency is not restricted with `flavors`)" },
+    CodeInfo { code: "W4328", summary: "Site does not know the exact game version; fell back to a lower/highest version" },
+    CodeInfo { code: "W4329", summary: "GitHub target skipped: build is not on a tag and no `--tag` given" },
+    CodeInfo { code: "E4330", summary: "`--tag` names an existing tag that points at another commit" },
+    CodeInfo { code: "E4331", summary: "`dev`/`install` refuses to overwrite an AddOn folder not installed by wowlua (no `X-Wowlua-Build`); use `--force`" },
+    CodeInfo { code: "W4332", summary: "`.pkgmeta` `move-folders` use that cannot be converted" },
+    CodeInfo { code: "W4333", summary: "`.pkgmeta` svn/hg external cannot be converted" },
+    CodeInfo { code: "E5001", summary: "Lua 5.1 limit exceeded (locals, upvalues, registers, constants, syntax levels, jump distance), including generated locals" },
+    CodeInfo { code: "E5002", summary: "Output validation failed (missing or unreachable file, unresolvable XML reference, invalid TOC or XML)" },
+    CodeInfo { code: "W6001", summary: "Code inspects its own file name (`debugstack`, `debuglocals`), which changes when bundled" },
+    CodeInfo { code: "W6002", summary: "Side-effect-free, unused module removed by dead-code elimination" },
+    CodeInfo { code: "E6003", summary: "Unknown minification pass name" },
+    CodeInfo { code: "W6010", summary: "Publish target uses a renaming minification level (Blizzard AddOn policy: code must not be hidden or obfuscated)" },
+    CodeInfo { code: "W7001", summary: "`todo()` in a release build" },
+    CodeInfo { code: "W7010", summary: "Reflection metadata requested but `reflection = \"none\"`" },
+    CodeInfo { code: "E8001", summary: "`send` used with a WoW event (only messages can be sent)" },
+    CodeInfo { code: "E8002", summary: "`@event` on an instance method" },
+    CodeInfo { code: "E8003", summary: "Unknown event or message name" },
+    CodeInfo { code: "E8010", summary: "Duplicate slash command" },
+    CodeInfo { code: "W8011", summary: "Slash command collides with a Blizzard command" },
+    CodeInfo { code: "E8020", summary: "`saved.bind` on a SavedVariable not declared in the manifest" },
+    CodeInfo { code: "E8021", summary: "Profiles enabled without the per-character profile SavedVariable (`<name>PerChar`)" },
+    CodeInfo { code: "E8030", summary: "Deferred-call decorator on a function that returns values" },
+    CodeInfo { code: "W8040", summary: "Hook target not declared" },
+    CodeInfo { code: "E8050", summary: "Addon message prefix too long" },
+    CodeInfo { code: "E8060", summary: "Invalid locale key" },
+    CodeInfo { code: "E8061", summary: "Locale file defines a key unknown to the base locale" },
+    CodeInfo { code: "W8062", summary: "Locale is missing translations (summary per locale)" },
+    CodeInfo { code: "E8063", summary: "Locale string uses different placeholders than the base locale" },
+    CodeInfo { code: "E8070", summary: "Settings control bound to a field of the wrong type" },
+    CodeInfo { code: "E8080", summary: "`launcher.register` called more than once (compile time for top-level calls, otherwise at runtime)" },
+    CodeInfo { code: "E8100", summary: "`@unitEvent` with more than two units (`RegisterUnitEvent` limit)" },
+    CodeInfo { code: "E8101", summary: "Invalid slash command name (must start with `/`, no whitespace)" },
+    CodeInfo { code: "W8101", summary: "Event not available in every selected flavor (shared flavor mode); registered with a runtime validity check" },
+    CodeInfo { code: "E8102", summary: "`saved.bind` name is not a string literal" },
+    CodeInfo { code: "W8102", summary: "Hook target belongs to a load-on-demand addon but `opts.addon` is missing" },
+    CodeInfo { code: "E8103", summary: "SavedVariable bound twice with `saved.bind`" },
+    CodeInfo { code: "E8104", summary: "`saved.bind` defaults type contains `Secret<…>`" },
+    CodeInfo { code: "E8105", summary: "Invalid locale file name or unknown locale code" },
+    CodeInfo { code: "E8106", summary: "Base locale file missing" },
+    CodeInfo { code: "E8107", summary: "Settings dropdown option value not in the field's type" },
+    CodeInfo { code: "E8108", summary: "`wowlua:test` / `wowlua:mock` imported outside a test file" },
+    CodeInfo { code: "E8112", summary: "Slash router: invalid `ArgSpec`, or `run` parameters don't match `args`/`flags`" },
+    CodeInfo { code: "E8113", summary: "Settings control key not found in the store's type" },
+    CodeInfo { code: "E8114", summary: "`settings.register` called more than once" },
+    CodeInfo { code: "E8117", summary: "`profiles = true` on a per-character SavedVariable" },
+    CodeInfo { code: "E8118", summary: "`wowlua:log` level function used as a value (cannot be stripped)" },
+    CodeInfo { code: "E8300", summary: "Standard-library function unavailable on a targeted flavor (no fallback)" },
+    CodeInfo { code: "W8301", summary: "Standard-library function uses a reduced fallback on a targeted flavor (lists missing fields or features)" },
+    CodeInfo { code: "E8310", summary: "Invalid token in a literal aura filter" },
+    CodeInfo { code: "E8330", summary: "Unknown tooltip kind" },
+    CodeInfo { code: "E8340", summary: "Movable frame store field is not of type `FramePosition?`" },
+    CodeInfo { code: "E8350", summary: "`@binding` / `header` not at module top level, or with non-constant arguments" },
+    CodeInfo { code: "E8351", summary: "Duplicate keybinding name in the addon" },
+    CodeInfo { code: "E8352", summary: "Invalid keybinding name (must match `[A-Z][A-Z0-9_]*`)" },
+    CodeInfo { code: "E8353", summary: "`settings.keybinding` references a binding not declared with `@binding`" },
+    CodeInfo { code: "W8354", summary: "Binding `default` key ignored on a flavor without default-key support" },
+    CodeInfo { code: "E8390", summary: "Invalid color hex literal" },
+    CodeInfo { code: "E8400", summary: "Unknown media kind" },
+    CodeInfo { code: "E8420", summary: "Unknown callback event name for the registry's event type" },
+    CodeInfo { code: "W8430", summary: "Job yield call (`check`/`yield`/`sleep`/`waitFor`) inside `pcall`/`xpcall`/`securecall*`, a metamethod or a C-function callback" },
 ];

@@ -1,0 +1,1501 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "wowlua.json",
+  "description": "Manifest of a wowlua package",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "package": {
+      "description": "Required, except in a workspace root manifest.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Package"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "addon": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Addon"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lua-library": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LuaLibrarySection"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "types": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TypesSection"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "flavors": {
+      "description": "Supported flavors: flavor IDs or aliases mapped to their settings.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/$defs/FlavorSettings"
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Dependency"
+      }
+    },
+    "dev-dependencies": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Dependency"
+      }
+    },
+    "addon-dependencies": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AddonDependencies"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "build": {
+      "$ref": "#/$defs/Build",
+      "default": {
+        "src": "src",
+        "out": "dist",
+        "libs-dir": "libs",
+        "flavor-mode": "split",
+        "toc-layout": "auto",
+        "locales": "client",
+        "locales-dir": "locales",
+        "locale-base": "enUS"
+      }
+    },
+    "check": {
+      "$ref": "#/$defs/Check",
+      "default": {
+        "mode": "basic"
+      }
+    },
+    "config": {
+      "description": "User configuration keys with their default values (§9.9.1).",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ProfileSettings"
+      }
+    },
+    "minify-levels": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/MinifyLevel"
+      }
+    },
+    "publish": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Publish"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "meta": {
+      "$ref": "#/$defs/MetaSettings",
+      "default": {
+        "runtime": "used"
+      }
+    },
+    "fmt": {
+      "$ref": "#/$defs/Fmt",
+      "default": {
+        "indent": "tab",
+        "line-width": 100,
+        "quote-style": "double",
+        "lua": false
+      }
+    },
+    "compat": {
+      "$ref": "#/$defs/Compat",
+      "default": {
+        "pkgmeta": false,
+        "packager-keywords": false
+      }
+    },
+    "workspace": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Workspace"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stdlib": {
+      "$ref": "#/$defs/Stdlib",
+      "default": {
+        "log": {
+          "history-size": 500
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Package": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Package ID: lowercase `[a-z0-9-]`, 2–64 characters.",
+          "type": "string"
+        },
+        "version": {
+          "description": "SemVer 2.0 version.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/PackageKind",
+          "default": "addon"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "authors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "license": {
+          "description": "SPDX license expression.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repository": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "homepage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "wowlua": {
+          "description": "Required compiler version (semver requirement).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "main": {
+          "description": "Main module of a library (default `src/init.wowlua`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "PackageKind": {
+      "type": "string",
+      "enum": [
+        "addon",
+        "library",
+        "lua-library",
+        "types"
+      ]
+    },
+    "Addon": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "AddOn folder and TOC name. Default: PascalCase of `package.name`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title-localized": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes-localized": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category-localized": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon-texture": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon-atlas": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "load-on-demand": {
+          "type": "boolean"
+        },
+        "default-state": {
+          "$ref": "#/$defs/DefaultState",
+          "default": "enabled"
+        },
+        "saved-variables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "saved-variables-per-character": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "load-saved-variables-first": {
+          "type": "boolean"
+        },
+        "allow-table-access": {
+          "type": "boolean"
+        },
+        "only-beta-and-ptr": {
+          "type": "boolean"
+        },
+        "expose-meta": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "toc-extra": {
+          "description": "Extra TOC directives, emitted verbatim.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "meta": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/MetaValue"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "DefaultState": {
+      "type": "string",
+      "enum": [
+        "enabled",
+        "disabled"
+      ]
+    },
+    "MetaValue": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "LuaLibrarySection": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "description": "Ordered entry files (`.lua`, `.xml` or a `.toc`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "license-files": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "TypesSection": {
+      "type": "object",
+      "properties": {
+        "declarations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "FlavorSettings": {
+      "type": "object",
+      "properties": {
+        "interface": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "client-folders": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "types": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Dependency": {
+      "description": "A dependency: a version requirement string or a source object.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/DependencyDetail"
+        }
+      ]
+    },
+    "DependencyDetail": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "registry": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "git": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rev": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subdir": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "submodules": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "archive": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "strip-prefix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PackageKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "flavors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bundle": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "types": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "install-path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "addon-name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "default-features": {
+          "type": "boolean",
+          "default": true
+        },
+        "curseforge-slug": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "AddonDependencies": {
+      "type": "object",
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AddonDependency"
+          }
+        },
+        "optional": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AddonDependency"
+          }
+        },
+        "load-with": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "load-managers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "AddonDependency": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/AddonDependencyDetail"
+        }
+      ]
+    },
+    "AddonDependencyDetail": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "curseforge-slug": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "flavors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ]
+    },
+    "Build": {
+      "type": "object",
+      "properties": {
+        "src": {
+          "type": "string",
+          "default": "src"
+        },
+        "out": {
+          "type": "string",
+          "default": "dist"
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "load-order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "keep": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "libs-dir": {
+          "type": "string",
+          "default": "libs"
+        },
+        "flavor-files": {
+          "description": "Restricts matching source files to the listed flavors (glob → flavors).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "flavor-mode": {
+          "$ref": "#/$defs/FlavorMode",
+          "default": "split"
+        },
+        "toc-layout": {
+          "$ref": "#/$defs/TocLayout",
+          "default": "auto"
+        },
+        "locales": {
+          "$ref": "#/$defs/LocaleLoading",
+          "default": "client"
+        },
+        "locales-dir": {
+          "type": "string",
+          "default": "locales"
+        },
+        "locale-base": {
+          "type": "string",
+          "default": "enUS"
+        }
+      },
+      "additionalProperties": false
+    },
+    "FlavorMode": {
+      "type": "string",
+      "enum": [
+        "split",
+        "shared"
+      ]
+    },
+    "TocLayout": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "single",
+        "per-flavor"
+      ]
+    },
+    "LocaleLoading": {
+      "type": "string",
+      "enum": [
+        "client",
+        "all"
+      ]
+    },
+    "Check": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/CheckMode",
+          "default": "basic"
+        },
+        "strict": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "lua": {
+          "type": "boolean"
+        },
+        "globals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "lints": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/LintSetting"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CheckMode": {
+      "type": "string",
+      "enum": [
+        "nocheck",
+        "basic",
+        "strict"
+      ]
+    },
+    "LintSetting": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "warn",
+        "deny"
+      ]
+    },
+    "ProfileSettings": {
+      "description": "Settings of one profile as written in the manifest. Unset values are\ninherited (§9.9).",
+      "type": "object",
+      "properties": {
+        "inherits": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "debug": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "assertions": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "log-level": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "instrument": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Instrument"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runtime-checks": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeChecks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profile-errors": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "reflection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reflection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dev-console": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "source-maps": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "bundle": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "minify": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "minify-libraries": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "optimize": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OptimizeSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "line-mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LineMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "config": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "LogLevel": {
+      "type": "string",
+      "enum": [
+        "trace",
+        "debug",
+        "info",
+        "warn",
+        "error",
+        "off"
+      ]
+    },
+    "Instrument": {
+      "type": "string",
+      "enum": [
+        "none",
+        "decorated",
+        "exports",
+        "all"
+      ]
+    },
+    "RuntimeChecks": {
+      "type": "string",
+      "enum": [
+        "none",
+        "exports",
+        "all"
+      ]
+    },
+    "Reflection": {
+      "type": "string",
+      "enum": [
+        "none",
+        "decorated",
+        "all"
+      ]
+    },
+    "OptimizeSettings": {
+      "type": "object",
+      "properties": {
+        "inline": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cache-globals": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CacheGlobals"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dead-code": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CacheGlobals": {
+      "type": "string",
+      "enum": [
+        "off",
+        "safe"
+      ]
+    },
+    "LineMode": {
+      "type": "string",
+      "enum": [
+        "preserve",
+        "statement",
+        "pretty"
+      ]
+    },
+    "MinifyLevel": {
+      "type": "object",
+      "properties": {
+        "extends": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "passes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "Publish": {
+      "type": "object",
+      "properties": {
+        "changelog": {
+          "description": "Path, `\"git\"`, or `null` for no changelog.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "changelog-format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangelogFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "release-type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReleaseType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "archive-maps": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "bundle-addons": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BundleAddons"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "targets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Target"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ChangelogFormat": {
+      "type": "string",
+      "enum": [
+        "markdown",
+        "text",
+        "html"
+      ]
+    },
+    "ReleaseType": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "release",
+        "beta",
+        "alpha"
+      ]
+    },
+    "BundleAddons": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "Target": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/TargetType"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "minify": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bundle": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "flavors": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "split-flavors": {
+          "type": "boolean"
+        },
+        "nolib": {
+          "type": "boolean"
+        },
+        "release-type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReleaseType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "changelog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "changelog-format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangelogFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "changelog-output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangelogOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "token-env": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "api-url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project-id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relations": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/Relation"
+          }
+        },
+        "archive-previous": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "upload-untagged": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "repository": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "release-json": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "draft": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "prerelease": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Prerelease"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "registry": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ]
+    },
+    "TargetType": {
+      "type": "string",
+      "enum": [
+        "curseforge",
+        "wago",
+        "wowinterface",
+        "github",
+        "registry"
+      ]
+    },
+    "ChangelogOutput": {
+      "type": "string",
+      "enum": [
+        "bbcode",
+        "markdown"
+      ]
+    },
+    "ProjectId": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "Relation": {
+      "type": "object",
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "slug",
+        "type"
+      ]
+    },
+    "Prerelease": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "$ref": "#/$defs/AutoKeyword"
+        }
+      ]
+    },
+    "AutoKeyword": {
+      "type": "string",
+      "enum": [
+        "auto"
+      ]
+    },
+    "MetaSettings": {
+      "type": "object",
+      "properties": {
+        "runtime": {
+          "$ref": "#/$defs/MetaRuntime",
+          "default": "used"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MetaRuntime": {
+      "type": "string",
+      "enum": [
+        "used",
+        "full"
+      ]
+    },
+    "Fmt": {
+      "type": "object",
+      "properties": {
+        "indent": {
+          "$ref": "#/$defs/Indent",
+          "default": "tab"
+        },
+        "line-width": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 100
+        },
+        "quote-style": {
+          "$ref": "#/$defs/QuoteStyle",
+          "default": "double"
+        },
+        "lua": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "Indent": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TabKeyword"
+        },
+        {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        }
+      ]
+    },
+    "TabKeyword": {
+      "type": "string",
+      "enum": [
+        "tab"
+      ]
+    },
+    "QuoteStyle": {
+      "type": "string",
+      "enum": [
+        "double",
+        "single",
+        "preserve"
+      ]
+    },
+    "Compat": {
+      "type": "object",
+      "properties": {
+        "pkgmeta": {
+          "type": "boolean",
+          "default": false
+        },
+        "packager-keywords": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "Workspace": {
+      "type": "object",
+      "properties": {
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "default-members": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Stdlib": {
+      "type": "object",
+      "properties": {
+        "log": {
+          "$ref": "#/$defs/StdlibLog",
+          "default": {
+            "history-size": 500
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "StdlibLog": {
+      "type": "object",
+      "properties": {
+        "history-size": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 500
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$id": "https://raw.githubusercontent.com/DomenikIrrgang/wowlua/main/schema/wowlua-0.1.json"
+}
