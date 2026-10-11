@@ -1,0 +1,56 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+license = "MIT"
+repository = "https://github.com/DomenikIrrgang/wowlua"
+authors = ["Domenik Irrgang"]
+
+[workspace.dependencies]
+wowlua-span = { path = "crates/wowlua-span" }
+wowlua-diagnostics = { path = "crates/wowlua-diagnostics" }
+wowlua-flavors = { path = "crates/wowlua-flavors" }
+wowlua-manifest = { path = "crates/wowlua-manifest" }
+wowlua-toc = { path = "crates/wowlua-toc" }
+wowlua-xml = { path = "crates/wowlua-xml" }
+wowlua-driver = { path = "crates/wowlua-driver" }
+
+anyhow = "1.0"
+assert_cmd = "2.2"
+blake3 = "1.8"
+clap = { version = "4.6", features = ["derive", "env"] }
+codespan-reporting = "0.13"
+dirs = "7.0"
+globset = "0.4"
+ignore = "0.4"
+indexmap = { version = "2.14", features = ["serde"] }
+insta = "1.49"
+junction = "2.1"
+mlua = { version = "0.12", features = ["lua51", "vendored"] }
+notify-debouncer-mini = "0.7"
+predicates = "3.1"
+quick-xml = "0.42"
+regex = "1.13"
+schemars = { version = "1.2", features = ["indexmap2"] }
+semver = { version = "1.0", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+serde_path_to_error = "0.1"
+tempfile = "3.27"
+thiserror = "2.0"
+walkdir = "2.5"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

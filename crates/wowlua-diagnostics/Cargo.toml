@@ -1,0 +1,17 @@
+[package]
+name = "wowlua-diagnostics"
+description = "Diagnostics model, code registry and rendering for the wowlua toolchain"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+wowlua-span.workspace = true
+codespan-reporting.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
