@@ -32,6 +32,8 @@ pub struct CompileOutput {
     pub compiled: HashMap<String, Compiled>,
     /// `(a, b)`: source `a` must load before source `b` (by `Source::rel`).
     pub edges: Vec<(String, String)>,
+    /// Why each edge exists (the use and a description).
+    pub edge_reasons: HashMap<(String, String), (wowlua_span::Span, String)>,
     /// Module IDs registered with the runtime.
     pub modules: Vec<String>,
     pub needs_runtime: bool,
@@ -132,6 +134,7 @@ pub fn compile_flavor(
     parsed: &Parsed,
     profile: &Profile,
     meta: Arc<Meta>,
+    layout: wowlua_sema::loadorder::Layout,
 ) -> CompileOutput {
     let options = EmitOptions {
         line_mode: line_mode(profile),
@@ -144,7 +147,7 @@ pub fn compile_flavor(
     let mut inputs: Vec<FileInput> = files
         .iter()
         .zip(&parsed.parses)
-        .map(|((source, _), parse)| FileInput {
+        .map(|((source, file), parse)| FileInput {
             src_rel: source.src_rel.clone(),
             kind: match source.kind {
                 SourceKind::Wowlua => FileKind::Wowlua,
@@ -152,6 +155,13 @@ pub fn compile_flavor(
                 SourceKind::Xml => FileKind::Xml,
             },
             parse: parse.as_ref(),
+            xml: (source.kind == SourceKind::Xml)
+                .then(|| {
+                    std::str::from_utf8(&raw[&source.rel])
+                        .ok()
+                        .map(|t| (t, *file))
+                })
+                .flatten(),
         })
         .collect();
     for (d, parse) in declarations.iter().zip(&parsed.declarations) {
@@ -159,14 +169,23 @@ pub fn compile_flavor(
             src_rel: d.source.src_rel.clone(),
             kind: FileKind::Declaration,
             parse: Some(parse),
+            xml: None,
         });
     }
     let analysis = wowlua_sema::analyze(&inputs, Some(&meta));
     diagnostics.extend(analysis.diagnostics.iter().cloned());
-    for &(a, b) in &analysis.edges {
+    // Load order (spec §5.4): files listed in `build.load-order` keep their
+    // listed order; files outside this flavor do not take part.
+    let markers = wowlua_sema::usage::Markers::from_table();
+    let order = wowlua_sema::loadorder::analyze(&inputs, &analysis, layout, &markers);
+    diagnostics.extend(order.diagnostics.iter().cloned());
+    for &(a, b) in &order.constraints {
         if a < files.len() && b < files.len() {
-            out.edges
-                .push((files[a].0.rel.clone(), files[b].0.rel.clone()));
+            let pair = (files[a].0.rel.clone(), files[b].0.rel.clone());
+            if let Some(reason) = order.reasons.get(&(a, b)) {
+                out.edge_reasons.insert(pair.clone(), reason.clone());
+            }
+            out.edges.push(pair);
         }
     }
     for info in analysis.modules.iter().flatten() {
@@ -194,7 +213,7 @@ pub fn compile_flavor(
         }
         let parse = parsed.parses[i].as_ref().expect("parsed");
         let bytes = &raw[&source.rel];
-        let ctx = context(&analysis, i, &inputs, meta.clone());
+        let ctx = context(&analysis, i, &inputs, meta.clone(), &order.lazy);
         let lowered = match wowlua_lower::lower_module(parse, bytes, &ctx) {
             Ok(lowered) => lowered,
             Err(errors) => {
@@ -242,6 +261,7 @@ fn context(
     i: usize,
     inputs: &[FileInput],
     meta: Arc<Meta>,
+    lazy: &std::collections::HashSet<(usize, u32)>,
 ) -> Context {
     let mut ctx = Context {
         module: None,
@@ -266,7 +286,7 @@ fn context(
                     .unwrap_or_default();
                 ImportContext::Module {
                     id: wowlua_sema::module_id(&inputs[*m].src_rel),
-                    lazy: false,
+                    lazy: lazy.contains(&(i, import.start)),
                     exports,
                 }
             }
@@ -275,7 +295,7 @@ fn context(
                 declared: true,
             } => ImportContext::Module {
                 id: wowlua_sema::module_id(&inputs[*file].src_rel),
-                lazy: false,
+                lazy: lazy.contains(&(i, import.start)),
                 exports: HashMap::<String, Export>::new(),
             },
             Target::Lua {

@@ -1019,7 +1019,7 @@ impl<'a> Lowerer<'a> {
         let mut kept: Vec<(&Expr, &Block)> = Vec::new();
         let mut last = else_block;
         for &(c, b) in clauses {
-            match self.static_value(c) {
+            match self.static_condition(c) {
                 Some(v) if v.truthy() => {
                     last = Some(b);
                     break;
@@ -1744,7 +1744,7 @@ impl<'a> Lowerer<'a> {
             BinOp::And | BinOp::Or | BinOp::Coalesce => {
                 // A static left operand simplifies the expression (spec
                 // §6.4.2); a static right operand does not.
-                if let Some(c) = self.static_value(lhs) {
+                if let Some(c) = self.static_condition(lhs) {
                     let use_rhs = match op {
                         BinOp::And => c.truthy(),
                         BinOp::Or => !c.truthy(),
@@ -2012,28 +2012,44 @@ impl<'a> Lowerer<'a> {
         self.static_value_with(e, true)
     }
 
+    /// A static condition that simplifies `if` chains and `and`/`or`: it
+    /// must read a `wowlua:meta` value or a `const` (decision T71), so plain
+    /// Lua such as `if true then` is emitted as written.
+    fn static_condition(&self, e: &Expr) -> Option<Const> {
+        let found = std::cell::Cell::new(false);
+        let value = constant::eval_with(e, &|leaf| {
+            let v = self.leaf_value(leaf, true);
+            found.set(found.get() || v.is_some());
+            v
+        })?;
+        found.get().then_some(value)
+    }
+
     /// A static condition (spec §6.4.1); `consts` allows folded constants
     /// (not in `@if` on imports).
     fn static_value_with(&self, e: &Expr, consts: bool) -> Option<Const> {
-        constant::eval_with(e, &|leaf| {
-            if let Some((kind, path)) = self.meta_path(leaf) {
-                let meta = self.ctx.meta.as_ref()?;
-                return match meta.lookup(kind, &path) {
-                    Lookup::Const(c) => Some(c),
-                    _ => None,
-                };
-            }
-            if !consts {
-                return None;
-            }
-            match &leaf.kind {
-                ExprKind::Name(n) => match self.lookup(&n.text) {
-                    Some(Binding::Const(c)) => Some(c.clone()),
-                    _ => None,
-                },
+        constant::eval_with(e, &|leaf| self.leaf_value(leaf, consts))
+    }
+
+    /// The value of a `wowlua:meta` path or (with `consts`) a `const`.
+    fn leaf_value(&self, leaf: &Expr, consts: bool) -> Option<Const> {
+        if let Some((kind, path)) = self.meta_path(leaf) {
+            let meta = self.ctx.meta.as_ref()?;
+            return match meta.lookup(kind, &path) {
+                Lookup::Const(c) => Some(c),
                 _ => None,
-            }
-        })
+            };
+        }
+        if !consts {
+            return None;
+        }
+        match &leaf.kind {
+            ExprKind::Name(n) => match self.lookup(&n.text) {
+                Some(Binding::Const(c)) => Some(c.clone()),
+                _ => None,
+            },
+            _ => None,
+        }
     }
 
     /// A constant access path into `wowlua:meta` (spec §6.2).

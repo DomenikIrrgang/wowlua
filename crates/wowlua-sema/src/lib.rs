@@ -3,8 +3,10 @@
 //! across modules, and the dependency order of files.
 
 pub mod constant;
+pub mod loadorder;
 pub mod meta;
 pub mod order;
+pub mod usage;
 
 use constant::Const;
 use indexmap::IndexMap;
@@ -30,6 +32,8 @@ pub struct FileInput<'a> {
     pub src_rel: String,
     pub kind: FileKind,
     pub parse: Option<&'a Parse>,
+    /// The text of an XML file, for the load order.
+    pub xml: Option<(&'a str, wowlua_span::FileId)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

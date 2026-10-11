@@ -174,11 +174,28 @@ Each edge is classified by **when** the use happens:
     `@onLoad`, `@onLogin`, `@hook`, …);
   - functions only stored (in tables, fields, upvalues) and never called at load
     time.
-- A function passed to an **unknown** callee, or to a parameter not marked
-  `@deferred`, counts as **called at load time**. `pcall`, `xpcall`,
-  `securecallfunction` and `table.sort` comparators run immediately anyway.
-  Wrongly assuming load-time at worst reports a cycle that isn't real. Wrongly
-  assuming run-time would produce an addon that breaks in game.
+- A function passed to a **package function** counts as called only if that
+  function calls the parameter, or passes it on to a callee that does
+  (per-function parameter summaries). Passed to an **unknown** callee, or to a
+  parameter not marked `@deferred`, it counts as **called at load time**.
+  `pcall`, `xpcall`, `securecallfunction` and `table.sort` comparators run
+  immediately anyway. Wrongly assuming load-time at worst reports a cycle that
+  isn't real. Wrongly assuming run-time would produce an addon that breaks in
+  game. The deferred APIs are a curated list in the flavor table (until the
+  `wow-api` declarations mark them); `X.Name(…)` matches a deferred method
+  name like `X:Name(…)`.
+- **Guarded uses** do not order files (decision T70): a name tested for
+  existence (`if X then`, `X and …`, `X or …`, `not X`, `X ~= nil`,
+  `type(X) == "table"`), and the uses that test guards (the `then` branch, the
+  right operand of `and`). If `X` is not defined yet, the guarded code is
+  skipped, so the file still loads.
+- **XML**: creating an element reads its `mixin`, `secureMixin`, `parent` and
+  `relativeTo` globals and its handlers' `function` attributes, runs its
+  `<OnLoad>` code and instantiates the templates it `inherits`. That happens
+  while the XML file loads, except inside templates (`virtual` or
+  `intrinsic`), whose needs apply where they are instantiated. Named elements
+  outside templates define globals; templates define template names. Inline
+  `<Script>` code runs while the file loads; other handlers run later.
 
 Definitions are classified the same way. If a name is **read at load time** but
 only **defined at run time**, that is warning W1034.
@@ -210,7 +227,12 @@ Type-only imports never create edges.
   time, or names that other addons provide. An import or a `build.load-order`
   entry resolves it.
 - **`build.load-order`** adds load-time edges between consecutive listed files.
-  If a listed order contradicts a computed load-time edge, that is error E1035.
+  If a listed order contradicts an **import**, that is error E1035. If it
+  contradicts an edge found by **usage analysis**, the listed order wins with
+  warning W1035 (decision T70): without types the analysis over-approximates,
+  and `wowlua init` writes the order of a TOC that works. Files listed there
+  get no W1033. Edges between an XML file and the files it loads are ignored;
+  they load interleaved in document order.
 
 ### 5.4.6 Several flavors
 

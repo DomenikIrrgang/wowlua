@@ -136,6 +136,31 @@
       "game-types": ["mists", "cata", "wrath", "tbc", "vanilla"]
     }
   ],
+  "load-order-markers": {
+    "deferred-functions": [
+      "C_Timer.After", "C_Timer.NewTimer", "C_Timer.NewTicker", "hooksecurefunc", "RunNextFrame",
+      "EventRegistry.RegisterCallback", "EventRegistry.RegisterFrameEventAndCallback",
+      "MenuUtil.CreateContextMenu", "MenuUtil.CreateButtonMenu", "Menu.ModifyMenu",
+      "Settings.RegisterProxySetting", "ScrollUtil.AddInitializedFrameCallback",
+      "TooltipDataProcessor.AddTooltipPostCall", "TooltipDataProcessor.AddLinePreCall",
+      "TooltipDataProcessor.AddLinePostCall", "TooltipDataProcessor.AddTooltipPreCall",
+      "EventUtil.ContinueOnAddOnLoaded", "EventUtil.ContinueOnPlayerLogin",
+      "EventUtil.RegisterOnceFrameEventAndCallback", "EventUtil.ContinueAfterAllEvents"
+    ],
+    "deferred-methods": [
+      "SetScript", "HookScript", "SetOnClickHandler", "RegisterCallback", "RegisterCallbackWithHandle",
+      "SetCallback", "AddInitializer", "SetInitializer", "SetElementInitializer",
+      "RegisterEvent", "RegisterUnitEvent", "RegisterMessage", "RegisterBucketEvent", "RegisterBucketMessage",
+      "RegisterChatCommand", "RegisterComm", "ScheduleTimer", "ScheduleRepeatingTimer",
+      "Hook", "SecureHook", "RawHook", "HookScript", "SecureHookScript", "RawHookScript",
+      "NewTimer", "NewTicker"
+    ],
+    "immediate-functions": [
+      "pcall", "xpcall", "securecall", "securecallfunction", "securecallfunctionwithargs",
+      "table.sort", "sort", "string.gsub", "gsub", "table.foreach", "foreach", "table.foreachi",
+      "coroutine.wrap", "coroutine.create", "Mixin", "CreateFromMixins"
+    ]
+  },
   "legacy-toc-suffixes": {
     "-Classic": "vanilla",
     "-BCC": "tbc",

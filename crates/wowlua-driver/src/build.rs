@@ -8,7 +8,7 @@
 use crate::project::Project;
 use crate::sources::{self, Source, SourceKind};
 use crate::{Session, fsutil, vcs};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_manifest::BuiltinProfile;
@@ -229,6 +229,52 @@ pub fn build(
     let build_id = build_id(session, project, &profile.name, &flavors, &files, &assets);
     let asset_rels: Vec<String> = assets.iter().map(|a| a.rel.clone()).collect();
 
+    // XML references.
+    let xml = resolve_xml(session, &files);
+
+    // Flavor restrictions (`build.flavor-files`) and the TOC file list.
+    let flavor_globs: Vec<(globset::GlobMatcher, Vec<String>)> = build_cfg
+        .flavor_files
+        .iter()
+        .filter_map(|(pattern, list)| {
+            let matcher = globset::Glob::new(pattern).ok()?.compile_matcher();
+            let ids = list
+                .iter()
+                .filter_map(|f| wowlua_flavors::table().resolve(f).map(|f| f.id.clone()))
+                .collect();
+            Some((matcher, ids))
+        })
+        .collect();
+    let restriction = |rel: &str| -> Option<Vec<String>> {
+        let matching: BTreeSet<&String> = flavor_globs
+            .iter()
+            .filter(|(m, _)| m.is_match(rel))
+            .flat_map(|(_, ids)| ids)
+            .collect();
+        (!matching.is_empty()).then(|| matching.into_iter().cloned().collect())
+    };
+
+    // Where each listed source loads by `build.load-order` (sources an XML
+    // file loads load in its place).
+    let listed = listed_positions(&files, &build_cfg.load_order, &xml);
+    let loaded_by: Vec<Option<usize>> = {
+        let index: HashMap<&str, usize> = files
+            .iter()
+            .enumerate()
+            .map(|(i, (s, _))| (s.rel.as_str(), i))
+            .collect();
+        let mut parent = vec![None; files.len()];
+        for (xml_file, targets) in &xml.edges {
+            for t in targets {
+                if let (Some(&p), Some(&c)) = (index.get(xml_file.as_str()), index.get(t.as_str()))
+                {
+                    parent[c].get_or_insert(p);
+                }
+            }
+        }
+        parent
+    };
+
     // Compile: once per flavor in split mode, once in shared mode (spec
     // §6.3). Sources are parsed once.
     let mut diagnostics = Vec::new();
@@ -255,6 +301,14 @@ pub fn build(
                 addon_name: &addon_name,
             },
         );
+        let active: Vec<bool> = files
+            .iter()
+            .map(|(source, _)| {
+                flavor
+                    .as_ref()
+                    .is_none_or(|f| restriction(&source.rel).is_none_or(|list| list.contains(f)))
+            })
+            .collect();
         let output = crate::compile::compile_flavor(
             &session.db,
             &mut diagnostics,
@@ -264,6 +318,11 @@ pub fn build(
             &parsed,
             &profile,
             std::sync::Arc::new(meta.clone()),
+            wowlua_sema::loadorder::Layout {
+                listed: &listed,
+                active: &active,
+                loaded_by: &loaded_by,
+            },
         );
         builds.push(FlavorBuild {
             flavor: flavor.clone(),
@@ -302,6 +361,14 @@ pub fn build(
         .collect();
     edges.sort();
     edges.dedup();
+    let mut edge_reasons = HashMap::new();
+    for b in &builds {
+        for (pair, reason) in &b.output.edge_reasons {
+            edge_reasons
+                .entry(pair.clone())
+                .or_insert_with(|| reason.clone());
+        }
+    }
     let needs_runtime = builds
         .iter()
         .any(|b| b.output.needs_runtime || !b.output.meta_used.is_empty());
@@ -322,31 +389,6 @@ pub fn build(
         })
         .collect();
     let runtime_per_flavor = runtimes.windows(2).any(|w| w[0] != w[1]);
-
-    // XML references.
-    let xml = resolve_xml(session, &files);
-
-    // Flavor restrictions (`build.flavor-files`) and the TOC file list.
-    let flavor_globs: Vec<(globset::GlobMatcher, Vec<String>)> = build_cfg
-        .flavor_files
-        .iter()
-        .filter_map(|(pattern, list)| {
-            let matcher = globset::Glob::new(pattern).ok()?.compile_matcher();
-            let ids = list
-                .iter()
-                .filter_map(|f| wowlua_flavors::table().resolve(f).map(|f| f.id.clone()))
-                .collect();
-            Some((matcher, ids))
-        })
-        .collect();
-    let restriction = |rel: &str| -> Option<Vec<String>> {
-        let matching: BTreeSet<&String> = flavor_globs
-            .iter()
-            .filter(|(m, _)| m.is_match(rel))
-            .flat_map(|(_, ids)| ids)
-            .collect();
-        (!matching.is_empty()).then(|| matching.into_iter().cloned().collect())
-    };
 
     // TOC lines with variables, and the files they expand to.
     let (variable_items, loaded_by_variable) = variable_items(
@@ -426,6 +468,7 @@ pub fn build(
         session,
         &mut toc_items,
         &edges,
+        &edge_reasons,
         &flavor_edges,
         &xml,
         &build_cfg.load_order,
@@ -485,6 +528,15 @@ pub fn build(
         .collect();
     // Flavors that need incompatible orders get per-flavor TOC files, each
     // in its own order (spec §5.4.6).
+    if rel_orders.is_some() && build_cfg.toc_layout == TocLayout::Auto {
+        session.push(
+            Diagnostic::warning(
+                "W4304",
+                "the flavors need different load orders; using per-flavor TOC files",
+            )
+            .with_path(&manifest.path),
+        );
+    }
     let flavor_orders = rel_orders.map(|orders| {
         orders
             .into_iter()
@@ -922,6 +974,7 @@ fn order_by_dependencies(
     session: &mut Session,
     entries: &mut Vec<TocItem>,
     edges: &[(String, String)],
+    reasons: &HashMap<(String, String), (wowlua_span::Span, String)>,
     flavor_edges: &[FlavorEdges],
     xml: &XmlInfo,
     load_order: &[String],
@@ -959,18 +1012,27 @@ fn order_by_dependencies(
     };
     let union = item_edges(edges);
     let pos = |rel: &str| load_order.iter().position(|l| l == rel);
-    for &(x, y) in &union {
+    let mut reported = HashSet::new();
+    for (a, b) in edges {
+        let (Some(x), Some(y)) = (item_of(a), item_of(b)) else {
+            continue;
+        };
         // A `build.load-order` that lists b before a contradicts it.
         if let (Some(pa), Some(pb)) = (pos(&entries[x].rel), pos(&entries[y].rel))
             && pb < pa
+            && reported.insert((x, y))
         {
-            session.push(Diagnostic::error(
+            let mut d = Diagnostic::error(
                 "E1035",
                 format!(
-                    "`build.load-order` lists `{}` before `{}`, but it imports it",
+                    "`build.load-order` lists `{}` before `{}`, but it depends on it",
                     entries[y].rel, entries[x].rel
                 ),
-            ));
+            );
+            if let Some((span, text)) = reasons.get(&(a.clone(), b.clone())) {
+                d = d.with_label(*span, text.clone());
+            }
+            session.push(d);
         }
     }
     let rank: Vec<usize> = (0..entries.len()).collect();
@@ -981,8 +1043,12 @@ fn order_by_dependencies(
             shown.push_str(&format!(" → {first}"));
         }
         session.push(
-            Diagnostic::error("E1014", format!("import cycle: {shown}"))
-                .with_help("move the use into a function that runs later, or split a module"),
+            Diagnostic::error(
+                "E1014",
+                format!("the TOC entries cannot be ordered by their dependencies: {shown}"),
+            )
+            .with_note("files loaded by one XML file load together")
+            .with_help("move the use into a function that runs later, or split a module"),
         );
     };
     match wowlua_sema::order::stable_topo(entries.len(), &rank, &union) {
@@ -1015,6 +1081,61 @@ fn order_by_dependencies(
             Some(orders)
         }
     }
+}
+
+/// The load position of each source listed in `build.load-order`: listed
+/// entries in order (a glob's matches by path), each followed by the
+/// sources its XML loads, depth first. Unlisted sources have none.
+fn listed_positions(
+    files: &[(Source, FileId)],
+    load_order: &[String],
+    xml: &XmlInfo,
+) -> Vec<Option<usize>> {
+    let index: HashMap<&str, usize> = files
+        .iter()
+        .enumerate()
+        .map(|(i, (s, _))| (s.rel.as_str(), i))
+        .collect();
+    let mut positions = vec![None; files.len()];
+    let mut next = 0;
+    fn visit(
+        rel: &str,
+        index: &HashMap<&str, usize>,
+        xml: &XmlInfo,
+        positions: &mut [Option<usize>],
+        next: &mut usize,
+    ) {
+        let Some(&i) = index.get(rel) else {
+            return;
+        };
+        if positions[i].is_some() {
+            return;
+        }
+        positions[i] = Some(*next);
+        *next += 1;
+        for target in xml.edges.get(rel).into_iter().flatten() {
+            visit(target, index, xml, positions, next);
+        }
+    }
+    for pattern in load_order {
+        let mut matched: Vec<&str> = if index.contains_key(pattern.as_str()) {
+            vec![pattern.as_str()]
+        } else if let Ok(glob) = globset::Glob::new(pattern) {
+            let matcher = glob.compile_matcher();
+            files
+                .iter()
+                .map(|(s, _)| s.rel.as_str())
+                .filter(|rel| matcher.is_match(rel) && !xml.loaded_by_xml.contains(*rel))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        matched.sort();
+        for rel in matched {
+            visit(rel, &index, xml, &mut positions, &mut next);
+        }
+    }
+    positions
 }
 
 fn order_by_load_order(entries: &mut Vec<TocItem>, load_order: &[String]) {

@@ -8,6 +8,7 @@
 
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use wowlua_luair::bytecode::{Strip, strip};
@@ -298,6 +299,176 @@ fn report_line_diff(rel: &str, src: &[u8], out: &[u8], original: &[u8], new: &[u
             return;
         }
     }
+}
+
+/// `cargo xtask corpus addons [dir]`: adopts every addon of the corpus with
+/// `init` and builds it (spec roadmap M2: a migrated plain-Lua addon keeps
+/// its working load order). Checks that each generated TOC lists the
+/// sources in the order `init` recorded from the original TOCs.
+pub fn addons(dir: &Path) -> Result<()> {
+    let mut addon_dirs = Vec::new();
+    for pkg in std::fs::read_dir(dir)?.flatten() {
+        for addon in std::fs::read_dir(pkg.path())
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            let path = addon.path();
+            let name = addon.file_name().to_string_lossy().into_owned();
+            let has_toc = std::fs::read_dir(&path)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .any(|e| {
+                    let f = e.file_name().to_string_lossy().to_ascii_lowercase();
+                    f.ends_with(".toc") && f.starts_with(&name.to_ascii_lowercase())
+                });
+            if path.is_dir() && has_toc {
+                addon_dirs.push(path);
+            }
+        }
+    }
+    addon_dirs.sort();
+    let mut failures = Vec::new();
+    let mut codes: BTreeMap<String, usize> = BTreeMap::new();
+    let started = std::time::Instant::now();
+    // Whole packages are copied: addons may load files of their siblings.
+    let mut copies: BTreeMap<PathBuf, tempfile::TempDir> = BTreeMap::new();
+    // `WOWLUA_CORPUS_ONLY=<text>` checks only matching addons;
+    // `WOWLUA_CORPUS_VERBOSE=1` prints the errors of failing builds, `=all`
+    // every diagnostic.
+    let only = std::env::var("WOWLUA_CORPUS_ONLY").ok();
+    let verbose = std::env::var_os("WOWLUA_CORPUS_VERBOSE").is_some();
+    addon_dirs.retain(|d| {
+        only.as_ref()
+            .is_none_or(|o| d.display().to_string().contains(o.as_str()))
+    });
+    for src in &addon_dirs {
+        let rel = src.strip_prefix(dir).unwrap_or(src).display().to_string();
+        let pkg = src.parent().expect("a package folder").to_path_buf();
+        if !copies.contains_key(&pkg) {
+            let temp = tempfile::tempdir()?;
+            copy_dir(&pkg, temp.path())?;
+            copies.insert(pkg.clone(), temp);
+        }
+        let work = copies[&pkg]
+            .path()
+            .join(src.file_name().expect("a folder name"));
+        let report = wowlua_driver::scaffold::init_package(&wowlua_driver::scaffold::InitRequest {
+            dir: work.clone(),
+            from_toc: None,
+        });
+        if let Err(e) = report {
+            failures.push(format!("{rel}: init failed: {}", e.message));
+            continue;
+        }
+        let mut session = wowlua_driver::Session::new();
+        let options = wowlua_driver::LoadOptions {
+            manifest: None,
+            cwd: work.clone(),
+            locked: false,
+        };
+        let Some(project) = wowlua_driver::load_project(&mut session, &options) else {
+            failures.push(format!("{rel}: the adopted manifest does not load"));
+            continue;
+        };
+        let mut request = wowlua_driver::BuildRequest::new("dev");
+        request.write = false;
+        let build = wowlua_driver::build(&mut session, &project, &request);
+        for d in session.diagnostics.iter() {
+            *codes.entry(d.code.unwrap_or("-").to_string()).or_default() += 1;
+        }
+        if std::env::var("WOWLUA_CORPUS_VERBOSE").as_deref() == Ok("all") {
+            let renderer = wowlua_diagnostics::Renderer::new(
+                wowlua_diagnostics::MessageFormat::Human,
+                wowlua_diagnostics::ColorChoice::Never,
+            );
+            println!("== {rel}");
+            for d in session.diagnostics.iter() {
+                println!("{}", renderer.render_to_string(&session.db, d));
+            }
+        }
+        let Some(build) = build else {
+            if verbose {
+                let renderer = wowlua_diagnostics::Renderer::new(
+                    wowlua_diagnostics::MessageFormat::Human,
+                    wowlua_diagnostics::ColorChoice::Never,
+                );
+                println!("== {rel}");
+                for d in session.diagnostics.iter().filter(|d| d.is_error()) {
+                    println!("{}", renderer.render_to_string(&session.db, d));
+                }
+            }
+            let first = session.diagnostics.iter().find(|d| d.is_error());
+            failures.push(format!(
+                "{rel}: build failed: {} {}",
+                first.and_then(|d| d.code).unwrap_or(""),
+                first.map(|d| d.message.as_str()).unwrap_or("")
+            ));
+            continue;
+        };
+        let manifest: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(work.join("wowlua.json"))?)?;
+        let order: Vec<String> = manifest
+            .pointer("/build/load-order")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for toc in &build.tocs {
+            let listed: Vec<String> = toc
+                .content
+                .lines()
+                .filter(|l| !l.starts_with('#') && !l.is_empty())
+                .map(|l| l.split(" [").next().unwrap_or(l).replace('\\', "/"))
+                .collect();
+            let positions: Vec<(usize, &String)> = listed
+                .iter()
+                .filter_map(|f| order.iter().position(|o| o == f).map(|p| (p, f)))
+                .collect();
+            if let Some(w) = positions.windows(2).find(|w| w[1].0 < w[0].0) {
+                failures.push(format!(
+                    "{rel}: {} loads {} before {}",
+                    toc.name, w[1].1, w[0].1
+                ));
+                break;
+            }
+        }
+    }
+    println!(
+        "{} addons in {:.1?}; diagnostics by code: {:?}; {} failures",
+        addon_dirs.len(),
+        started.elapsed(),
+        codes,
+        failures.len()
+    );
+    for f in failures.iter().take(40) {
+        println!("  {f}");
+    }
+    if !failures.is_empty() {
+        bail!(
+            "{} addons changed their load order or failed",
+            failures.len()
+        );
+    }
+    Ok(())
+}
+
+fn copy_dir(from: &Path, to: &Path) -> Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)?.flatten() {
+        let path = entry.path();
+        let target = to.join(entry.file_name());
+        if path.is_dir() {
+            copy_dir(&path, &target)?;
+        } else {
+            std::fs::copy(&path, &target)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

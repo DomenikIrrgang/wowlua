@@ -204,7 +204,12 @@ An expression is a **static condition** if it consists only of:
 - folded `const` constants (including imported ones) and literals,
 - the operators `not`, `and`, `or`, `==`, `~=`, arithmetic, `..`, and the
   ordering comparisons `<`, `<=`, `>`, `>=` on **numbers** (not on strings,
-  whose order depends on the runtime locale).
+  whose order depends on the runtime locale),
+
+and reads at least one `wowlua:meta` value or `const` constant (decision T71).
+Literal-only conditions such as `if true then` are plain Lua and are emitted
+as written, so plain Lua compiles to identical bytecode. In `@if` a
+literal-only condition is allowed.
 
 ### 6.4.2 `if` elimination
 

@@ -29,6 +29,22 @@ pub struct FlavorTable {
     pub flavors: Vec<Flavor>,
     pub clients: Vec<Client>,
     legacy_toc_suffixes: BTreeMap<String, String>,
+    /// APIs that call a passed function later (deferred) or right away
+    /// (immediate), for load-order analysis (spec §5.4.3).
+    #[serde(default)]
+    pub load_order_markers: LoadOrderMarkers,
+}
+
+/// Load-order markers (decision M2: curated in the flavor table until the
+/// declaration files mark parameters `@deferred`).
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct LoadOrderMarkers {
+    /// Global functions by path (`C_Timer.After`).
+    pub deferred_functions: Vec<String>,
+    /// Method names on any object (`SetScript`).
+    pub deferred_methods: Vec<String>,
+    pub immediate_functions: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]

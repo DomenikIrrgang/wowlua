@@ -165,6 +165,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W1005 | Unreachable code |
 | W1033 | Load order cannot be determined (dynamic names, several writers, external names); files keep their source order |
 | W1034 | Name read at load time but only defined at run time |
+| W1035 | Usage-analysis dependency contradicts `build.load-order`; the listed order is kept (contradicting imports are E1035) |
 | W2040 | Forbidden operation on a possibly secret value (basic mode) |
 | W2055 | Too many arguments to an unannotated function (basic mode). Replaces the second meaning of W2006. |
 | W2057 | `coroutine.yield` inside a function passed to `pcall`/`xpcall`/a C callback (cannot yield across that boundary in Lua 5.1) |

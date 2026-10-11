@@ -57,6 +57,8 @@ Notes on the delivered state:
 
 ## M2: Lowering of syntax sugar and modules
 
+**Status: done (2026-10-11).**
+
 - `+=`, `continue`, `?.`, `??`, interpolation, bitwise, `//`, literals, `const`,
   defaults, destructuring, preceding-statement linearization.
 - Modules: `import`/`export`, resolution, declaration hoisting, runtime `core`
@@ -70,6 +72,17 @@ Notes on the delivered state:
 **Exit:** multi-module example addons build for all flavors and run in the
 embedded Lua VM with identical behavior to hand-written Lua. A migrated
 plain-Lua addon keeps its working load order.
+
+Notes on the delivered state:
+
+- Lowering is checked by differential tests that run compiled `.wowlua` and
+  hand-written Lua in the embedded VM; multi-module and split-flavor packages
+  are built and run per flavor in the CLI tests.
+- `cargo xtask corpus addons` adopts every corpus addon with `wowlua init`
+  and builds it: all 108 keep their TOC order. The usage analysis
+  over-approximates without types; where it contradicts the listed order the
+  listed order wins with W1035 (decision T70).
+- Classes, enums and decorators other than `@if` report M3.
 
 ## M3: Classes, enums, decorators and stdlib infrastructure
 

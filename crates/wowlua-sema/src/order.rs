@@ -41,26 +41,39 @@ pub fn stable_topo(
     Err(find_cycle(n, &next, &indegree))
 }
 
-/// One cycle among the nodes left with incoming edges.
+/// One cycle among the nodes left with incoming edges. Every such node has
+/// a predecessor that is also left, so walking predecessors finds a cycle.
 fn find_cycle(n: usize, next: &[Vec<usize>], indegree: &[usize]) -> Vec<usize> {
     let remaining: Vec<bool> = (0..n).map(|i| indegree[i] > 0).collect();
-    let start = (0..n).find(|&i| remaining[i]).unwrap_or(0);
-    let mut path = vec![start];
-    let mut on_path = vec![false; n];
-    on_path[start] = true;
-    let mut current = start;
-    loop {
-        let Some(&step) = next[current].iter().find(|&&j| remaining[j]) else {
-            return path;
-        };
-        if on_path[step] {
-            let from = path.iter().position(|&p| p == step).unwrap_or(0);
-            return path[from..].to_vec();
+    let mut prev: Vec<Option<usize>> = vec![None; n];
+    for (a, targets) in next.iter().enumerate() {
+        for &b in targets {
+            if remaining[a] && remaining[b] && prev[b].is_none() {
+                prev[b] = Some(a);
+            }
         }
-        on_path[step] = true;
-        path.push(step);
-        current = step;
     }
+    let Some(start) = (0..n).find(|&i| remaining[i]) else {
+        return Vec::new();
+    };
+    let mut seen = vec![false; n];
+    let mut current = start;
+    while !seen[current] {
+        seen[current] = true;
+        match prev[current] {
+            Some(p) => current = p,
+            None => return vec![current],
+        }
+    }
+    // `current` is on the cycle; collect it backwards, then reverse.
+    let mut cycle = vec![current];
+    let mut p = prev[current].expect("cycle");
+    while p != current {
+        cycle.push(p);
+        p = prev[p].expect("cycle");
+    }
+    cycle.reverse();
+    cycle
 }
 
 #[cfg(test)]
@@ -77,5 +90,9 @@ mod tests {
         assert_eq!(stable_topo(3, &[2, 1, 0], &[]), Ok(vec![2, 1, 0]));
         let cycle = stable_topo(3, &[0, 1, 2], &[(0, 1), (1, 2), (2, 1)]).unwrap_err();
         assert_eq!(cycle.len(), 2);
+        // A node downstream of the cycle is not reported as one.
+        let cycle = stable_topo(4, &[0, 1, 2, 3], &[(1, 0), (2, 1), (1, 2)]).unwrap_err();
+        assert_eq!(cycle.len(), 2);
+        assert!(!cycle.contains(&0));
     }
 }

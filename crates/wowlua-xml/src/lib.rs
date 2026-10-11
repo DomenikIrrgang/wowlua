@@ -1,9 +1,12 @@
 //! WoW UI XML (spec §14.8.4): well-formedness checks and the `<Script>` /
-//! `<Include>` references that load further files.
+//! `<Include>` references that load further files, and what a file defines
+//! and uses for the load order ([`usage`]).
 
 use quick_xml::Reader;
 use quick_xml::events::Event;
 use std::ops::Range;
+
+pub mod usage;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RefKind {

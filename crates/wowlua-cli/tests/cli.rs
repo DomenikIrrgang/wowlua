@@ -707,7 +707,7 @@ fn module_errors() {
         ("export local v = 1\nreturn v\n", "", "E1032"),
         (
             "import a from \"/b\"\nexport local m = a\n",
-            "import m from \"/main\"\nexport local a = 1\n",
+            "import m from \"/main\"\nexport local a = m\n",
             "E1014",
         ),
         ("import _ from \"wowlua:events\"\n", "", "E1015"),
@@ -895,7 +895,11 @@ fn incompatible_flavor_orders() {
             ),
         ],
     );
-    wowlua(dir.path()).arg("build").assert().success();
+    wowlua(dir.path())
+        .arg("build")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("W4304"));
     let dist = dir.path().join("dist/dev/Orders");
     assert_eq!(
         run_toc(&dist, "Orders_Mainline.toc", "Orders", None),
@@ -914,4 +918,305 @@ fn incompatible_flavor_orders() {
         .assert()
         .code(1)
         .stderr(predicate::str::contains("error[E1036]"));
+}
+
+/// XML files take part in the load order (spec §5.4.2).
+#[test]
+fn load_order_with_xml() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"xmlorder\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/a_early.lua", "print(MyAddonFrame)\n"),
+            (
+                "src/b_ui.xml",
+                "<Ui>\n  <Frame name=\"MyAddonFrame\" mixin=\"MyMixin\" inherits=\"MyTemplate\">\n    <Scripts><OnLoad>MyAddon_Init(self)</OnLoad><OnShow>print(Later)</OnShow></Scripts>\n  </Frame>\n</Ui>\n",
+            ),
+            (
+                "src/c_templates.xml",
+                "<Ui>\n  <Frame name=\"MyTemplate\" virtual=\"true\"><Scripts><OnLoad>TemplateSetup(self)</OnLoad></Scripts></Frame>\n</Ui>\n",
+            ),
+            ("src/d_mixin.lua", "MyMixin = {}\n"),
+            (
+                "src/e_init.lua",
+                "function MyAddon_Init(f) return Config end\n",
+            ),
+            ("src/f_setup.lua", "function TemplateSetup(f) end\n"),
+            ("src/g_config.lua", "Config = {}\n"),
+            ("src/h_later.lua", "Later = 1\n"),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    let toc = fs::read_to_string(dir.path().join("dist/dev/Xmlorder/Xmlorder.toc")).unwrap();
+    let files: Vec<&str> = toc
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
+    let pos = |name: &str| {
+        files
+            .iter()
+            .position(|f| f.ends_with(name))
+            .unwrap_or_else(|| panic!("{name}: {toc}"))
+    };
+    for before in [
+        "c_templates.xml",
+        "d_mixin.lua",
+        "e_init.lua",
+        "f_setup.lua",
+        "g_config.lua",
+    ] {
+        assert!(pos(before) < pos("b_ui.xml"), "{before}: {toc}\n{stderr}");
+    }
+    assert!(
+        pos("b_ui.xml") < pos("a_early.lua"),
+        "a named frame is a global: {toc}"
+    );
+    assert!(
+        pos("b_ui.xml") < pos("h_later.lua"),
+        "OnShow runs later: {toc}"
+    );
+}
+
+/// Files of different flavors never order each other.
+#[test]
+fn load_order_per_flavor_files() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "split", "version": "1.0.0" }, "flavors": { "standard": {}, "vanilla": {} },
+  "build": { "flavor-files": { "src/a_retail.lua": ["standard"], "src/b_classic.lua": ["vanilla"] } } }
+"#,
+            ),
+            ("src/a_retail.lua", "print(Loader)\n"),
+            ("src/b_classic.lua", "Loader = 1\n"),
+            ("src/c_both.lua", "print(Loader)\n"),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(
+        !stderr.contains("W1035") && !stderr.contains("E1014"),
+        "{stderr}"
+    );
+    let toc = fs::read_to_string(dir.path().join("dist/dev/Split/Split.toc")).unwrap();
+    let files: Vec<&str> = toc
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
+    let pos = |name: &str| {
+        files
+            .iter()
+            .position(|f| f.contains(name))
+            .unwrap_or_else(|| panic!("{name}: {toc}"))
+    };
+    assert!(pos("a_retail.lua") < pos("b_classic.lua"), "{toc}");
+    assert!(pos("b_classic.lua") < pos("c_both.lua"), "{toc}");
+}
+
+/// Usage analysis orders files without imports (spec §5.4.2–§5.4.4).
+#[test]
+fn load_order_from_usage_analysis() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"usage\", \"version\": \"1.0.0\" } }\n",
+            ),
+            // Path order would load these first; they use what later files define.
+            (
+                "src/a_main.lua",
+                "local _, ns = ...\nlocal function init() return ns.Config.greeting end\nprint(ns.Util.round(2.6), MyGlobal.ok, init())\n",
+            ),
+            (
+                "src/b_late.lua",
+                "local _, ns = ...\nlocal f = CreateFrame(\"Frame\")\nf:SetScript(\"OnEvent\", function() print(ns.Later.x) end)\n",
+            ),
+            (
+                "src/c_config.lua",
+                "local _, ns = ...\nns.Config = { greeting = \"hi\" }\n",
+            ),
+            (
+                "src/d_util.lua",
+                "local _, ns = ...\nns.Util = { round = function(x) return math.floor(x + 0.5) end }\nMyGlobal = { ok = true }\n",
+            ),
+            (
+                "src/z_later.lua",
+                "local _, ns = ...\nns.Later = { x = 1 }\n",
+            ),
+            // Modules that import each other, using the imports only later.
+            (
+                "src/m/a.wowlua",
+                "import b from \"./b\"\nexport function a() return \"a\" .. b() end\n",
+            ),
+            (
+                "src/m/b.wowlua",
+                "import a from \"./a\"\nexport function b() return \"b\" end\nexport function both() return a() end\n",
+            ),
+            (
+                "src/m/main.wowlua",
+                "import a from \"./a\"\nimport both from \"./b\"\nprint(a(), both())\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let dist = dir.path().join("dist/dev/Usage");
+    let toc = fs::read_to_string(dist.join("Usage.toc")).unwrap();
+    let files: Vec<&str> = toc
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
+    let pos = |name: &str| {
+        files
+            .iter()
+            .position(|f| f.ends_with(name))
+            .unwrap_or_else(|| panic!("{name}: {toc}"))
+    };
+    assert!(
+        pos("c_config.lua") < pos("a_main.lua"),
+        "a call at load time is followed: {toc}"
+    );
+    assert!(pos("d_util.lua") < pos("a_main.lua"), "{toc}");
+    assert!(
+        pos("b_late.lua") < pos("z_later.lua"),
+        "deferred handlers do not order files: {toc}"
+    );
+    // A mock `CreateFrame` for the deferred handler file.
+    fs::write(
+        dist.join("mock.lua"),
+        "CreateFrame = function() return { SetScript = function() end } end\n",
+    )
+    .unwrap();
+    fs::write(dist.join("Usage.toc"), format!("mock.lua\n{toc}")).unwrap();
+    assert_eq!(run_addon(&dist, "Usage"), "3 true hi\nab ab");
+}
+
+#[test]
+fn load_order_guards_callbacks_and_listed_order() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"guards\", \"version\": \"1.0.0\" },\n  \"build\": { \"load-order\": [\"src/p_first.lua\", \"src/q_second.lua\"] } }\n",
+            ),
+            // Existence tests and the uses they guard do not order files.
+            (
+                "src/a_guarded.lua",
+                "if Later and Later.x then print(Later.x) end\nlocal y = Later and Later.y\nif type(Later) == \"table\" then print(Later.z) end\n",
+            ),
+            // `ns.On` only stores the handler; `ns.Run` calls it.
+            (
+                "src/b_register.lua",
+                "local _, ns = ...\nns.On(\"x\", function() print(ns.Late1) end)\nns.Run(function() return ns.Late2 end)\n",
+            ),
+            (
+                "src/c_api.lua",
+                "local _, ns = ...\nlocal handlers = {}\nfunction ns.On(name, fn) handlers[name] = fn end\nlocal function call(f) return f() end\nfunction ns.Run(fn) return call(fn) end\n",
+            ),
+            (
+                "src/d_late.lua",
+                "local _, ns = ...\nns.Late1 = 1\nns.Late2 = 2\n",
+            ),
+            ("src/z_later.lua", "Later = { x = 1, y = 2, z = 3 }\n"),
+            // The listed order wins over a usage edge (W1035).
+            ("src/p_first.lua", "print(Second)\n"),
+            ("src/q_second.lua", "Second = 1\n"),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(
+        stderr.contains("W1035") && stderr.contains("keeping the listed order"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("W1034"), "{stderr}");
+    let toc = fs::read_to_string(dir.path().join("dist/dev/Guards/Guards.toc")).unwrap();
+    let files: Vec<&str> = toc
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
+    let pos = |name: &str| {
+        files
+            .iter()
+            .position(|f| f.ends_with(name))
+            .unwrap_or_else(|| panic!("{name}: {toc}"))
+    };
+    assert!(
+        pos("a_guarded.lua") < pos("z_later.lua"),
+        "guarded uses do not order: {toc}"
+    );
+    assert!(pos("c_api.lua") < pos("b_register.lua"), "{toc}");
+    assert!(
+        pos("d_late.lua") < pos("b_register.lua"),
+        "a called callback is load-time: {toc}"
+    );
+    assert!(
+        pos("p_first.lua") < pos("q_second.lua"),
+        "the listed order wins: {toc}"
+    );
+}
+
+#[test]
+fn load_order_diagnostics() {
+    type Case<'a> = (&'a [(&'a str, &'a str)], &'a str, &'a str);
+    let cases: &[Case] = &[
+        (
+            &[
+                ("src/a.lua", "local _, ns = ...\nprint(ns.Late)\n"),
+                (
+                    "src/b.lua",
+                    "local _, ns = ...\nfunction ns_init() ns.Late = 1 end\n",
+                ),
+            ],
+            "W1034",
+            "only defined later",
+        ),
+        (
+            &[
+                ("src/a.lua", "Shared = 1\n"),
+                ("src/b.lua", "Shared = 2\n"),
+                ("src/c.lua", "print(Shared)\n"),
+            ],
+            "W1033",
+            "cannot be determined",
+        ),
+        (
+            &[
+                (
+                    "src/a.lua",
+                    "A = 1\nlocal function check() return B end\nprint(check())\n",
+                ),
+                ("src/b.lua", "B = 2\nprint(A)\n"),
+            ],
+            "E1014",
+            "called from top-level code",
+        ),
+    ];
+    for (files, code, text) in cases {
+        let dir = tempfile::tempdir().unwrap();
+        let mut all = vec![(
+            "wowlua.json",
+            "{ \"package\": { \"name\": \"diag\", \"version\": \"1.0.0\" } }\n",
+        )];
+        all.extend(files.iter().copied());
+        write(dir.path(), &all);
+        let assert = wowlua(dir.path()).arg("build").assert();
+        let assert = if code.starts_with('E') {
+            assert.code(1)
+        } else {
+            assert.success()
+        };
+        assert.stderr(predicate::str::contains(*code).and(predicate::str::contains(*text)));
+    }
 }

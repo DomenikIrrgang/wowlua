@@ -34,7 +34,8 @@ fn main() -> Result<()> {
             match std::env::args().nth(2).as_deref() {
                 Some("fetch") => corpus::fetch(&root, &dir),
                 Some("run") => corpus::run(&dir),
-                _ => bail!("usage: cargo xtask corpus <fetch|run> [dir]"),
+                Some("addons") => corpus::addons(&dir),
+                _ => bail!("usage: cargo xtask corpus <fetch|run|addons> [dir]"),
             }
         }
         _ => bail!("usage: cargo xtask <codes|schema|check|corpus>"),

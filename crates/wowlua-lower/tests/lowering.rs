@@ -221,3 +221,17 @@ fn constants_cannot_be_reassigned() {
     let errors = wowlua_lower::lower(&parsed, src.as_bytes()).unwrap_err();
     assert_eq!(errors[0].code, Some("E2010"));
 }
+
+/// Only conditions that read a `const` (or `wowlua:meta`) are static; plain
+/// Lua conditions are emitted as written (decision T71).
+#[test]
+fn static_conditions_need_a_constant() {
+    let compiled = compile(
+        "const DEBUG = false\nif DEBUG then print('debug') else print('release') end\nprint(DEBUG and f() or 'x')\nif true then print(1) end\nprint(1 == 1 and 2)\n",
+    );
+    assert!(!compiled.contains("debug"), "{compiled}");
+    assert!(!compiled.contains("f()"), "{compiled}");
+    assert!(compiled.contains("if true then"), "{compiled}");
+    assert!(compiled.contains("1 == 1 and 2"), "{compiled}");
+    assert_eq!(run(compiled.as_bytes()), "release\nx\n1\n2");
+}

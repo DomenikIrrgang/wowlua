@@ -229,7 +229,8 @@ This implements the load-order rules of
    - an `import` in B of module A (the import's bindings mark which uses count),
    - usage analysis: B reads a global or an addon-table field (`ns.Foo`,
      including through locals aliasing `ns`) that A assigns at its top level.
-     This also covers plain `.lua` files.
+     This also covers plain `.lua` files and XML (globals and templates an
+     element needs when it is created, named frames as definitions).
 2. **Classification.** Each use is **load-time** if it can execute while B's
    file loads: in a top-level statement, or in a function that is reachable
    from top-level code through the call graph, followed **across modules** using
@@ -239,17 +240,22 @@ This implements the load-order rules of
    `@slash` / lifecycle handlers) does not make its body load-time. A function
    passed to a parameter marked *immediate* (e.g. `pcall`, `xpcall`,
    `securecallfunction`, `table.sort` comparators) does. A function passed to
-   an **unknown** callee is treated as load-time. The deferred/immediate
-   markers come from the flavor table and the declarations.
+   a package function is load-time only if the callee's summary says it calls
+   (or forwards) that parameter; passed to an **unknown** callee it is treated
+   as load-time. The deferred/immediate markers come from the flavor table and
+   the declarations. Guarded uses (existence tests and the code they guard)
+   do not create edges (decision T70).
 3. **Order.** A deterministic topological sort over load-time edges. Among
    ready files, the order of `build.load-order` (into which `wowlua init` writes
    the old TOC order), then byte-wise path order, breaks ties.
-4. **Cycles.** Strongly connected components (Tarjan's algorithm) over all
-   edges. A component that contains only run-time edges is allowed: imports
-   inside it become **lazy bindings**, lowered as field reads on the imported
-   module's export table (`__wl_m3.Foo`) instead of local copies. A component
-   that contains a load-time edge is error E1014; the diagnostic shows every
-   edge of the cycle and the use that makes it load-time.
+4. **Cycles.** Strongly connected components (Tarjan's algorithm). A cycle of
+   load-time edges alone is error E1014; the diagnostic shows every edge of the
+   cycle and the call chain that makes it load-time. Over all edges, a run-time
+   import inside a component becomes a **lazy binding**, lowered as a field
+   read on the imported module's export table (`__wl_m3.Foo`) instead of a
+   local copy; outside cycles, run-time imports still order the files
+   (decision T72). Usage edges that contradict `build.load-order` are dropped
+   with W1035 before cycles are searched.
 5. **Ambiguity.** Dynamic names (`_G["x" .. i]`), several writers of the same
    global or field, or `setfenv` make an edge undecidable. The files involved
    keep their relative source order and warning W1033 names the cause.

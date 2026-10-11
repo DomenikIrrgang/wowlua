@@ -59,10 +59,15 @@ wowlua publish           # package and upload to every configured addon site
 The specification lives in [`spec/`](spec/README.md). Implementation follows
 the [roadmap](spec/roadmap.md).
 
-**Milestones M0 and M1 are done**: the toolchain builds and installs plain
-Lua addons, and compiles `.wowlua` files that use Lua syntax with type
-annotations (erased). The other language features shown above arrive with M2
-and later; using them reports the milestone that adds them.
+**Milestones M0–M2 are done**: the toolchain builds and installs plain Lua
+addons and compiles `.wowlua` files with type annotations (erased), syntax
+sugar (`+=`, `continue`, `?.`, `??`, string interpolation, bitwise operators,
+`//`, `const`, default parameters, destructuring), modules
+(`import`/`export`), `wowlua:meta` with static conditions and `@if`, and
+per-flavor builds. The load order is computed from imports and usage analysis
+of Lua, `.wowlua` and XML files. Classes, enums, decorators and the type
+checker arrive with M3 and later; using them reports the milestone that adds
+them.
 
 What works today:
 

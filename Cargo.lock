@@ -1381,10 +1381,13 @@ name = "wowlua-sema"
 version = "0.2.0"
 dependencies = [
  "indexmap",
+ "stacker",
  "wowlua-diagnostics",
+ "wowlua-flavors",
  "wowlua-luair",
  "wowlua-span",
  "wowlua-syntax",
+ "wowlua-xml",
 ]
 
 [[package]]
@@ -1422,7 +1425,11 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "mlua",
+ "serde_json",
  "sha2",
+ "tempfile",
+ "wowlua-diagnostics",
+ "wowlua-driver",
  "wowlua-fmt",
  "wowlua-lower",
  "wowlua-luair",
