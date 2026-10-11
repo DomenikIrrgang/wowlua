@@ -41,8 +41,20 @@ frame:SetScript("OnEvent", function(_, event: string)
     end
 end)
 
+-- Runtime checks (dev builds): a value from the WoW API that does not match
+-- its declared type is caught where it enters a checked function.
+@checked
+local function greet(name: string)
+    print(`Typed Demo: hello, {name}`)
+end
+
 _G.SLASH_TYPEDDEMO1 = "/tdemo"
-SlashCmdList.TYPEDDEMO = function()
+SlashCmdList.TYPEDDEMO = function(message: string)
+    if message == "check" then
+        -- `UnitName` is nil without a target; the cast only asserts the type.
+        greet(UnitName("target") :: string)
+        return
+    end
     if not ledger then
         print("Typed Demo: not loaded yet")
         return

@@ -21,6 +21,7 @@
   },
   "flavors": {
     "standard": {},
+    "camelot": {},
     "vanilla": {}
   }
 }
