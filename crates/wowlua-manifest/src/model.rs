@@ -179,6 +179,67 @@ pub struct Addon {
     pub toc_extra: IndexMap<String, String>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub meta: IndexMap<String, MetaValue>,
+    /// Metadata that differs per flavor: flavor → fields. `null` removes a
+    /// field for that flavor (§9.3.1).
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub flavor_overrides: IndexMap<String, AddonOverride>,
+}
+
+/// Per-flavor overrides of addon metadata. An absent field keeps the base
+/// value; `null` removes the field for the flavor.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct AddonOverride {
+    #[serde(
+        default,
+        deserialize_with = "explicit_null",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub title: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub title_localized: IndexMap<String, Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "explicit_null",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub notes: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub notes_localized: IndexMap<String, Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "explicit_null",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub author: Option<Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "explicit_null",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub category: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub category_localized: IndexMap<String, Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "explicit_null",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub group: Option<Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "explicit_null",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub icon_texture: Option<Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "explicit_null",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub icon_atlas: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub toc_extra: IndexMap<String, Option<String>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]

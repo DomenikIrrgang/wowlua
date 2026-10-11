@@ -379,6 +379,13 @@
           "additionalProperties": {
             "$ref": "#/$defs/MetaValue"
           }
+        },
+        "flavor-overrides": {
+          "description": "Metadata that differs per flavor: flavor → fields. `null` removes a\nfield for that flavor (§9.3.1).",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/AddonOverride"
+          }
         }
       },
       "additionalProperties": false
@@ -402,6 +409,91 @@
           "type": "string"
         }
       ]
+    },
+    "AddonOverride": {
+      "description": "Per-flavor overrides of addon metadata. An absent field keeps the base\nvalue; `null` removes the field for the flavor.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title-localized": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes-localized": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category-localized": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon-texture": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon-atlas": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "toc-extra": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "LuaLibrarySection": {
       "type": "object",

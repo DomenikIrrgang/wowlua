@@ -23,16 +23,15 @@ const LIMIT_MESSAGES: &[&str] = &[
 static LINE_PREFIX: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"^.*?:(\d+): (.*)$").expect("valid pattern"));
 
-/// Compiles `file` as Lua 5.1. Returns `None` if it compiles, otherwise a
-/// diagnostic pointing at the reported line.
-pub fn check(db: &SourceDb, file: FileId, wowlua_source: bool) -> Option<Diagnostic> {
+/// Compiles `code` (the raw bytes of `file`) as Lua 5.1. A leading UTF-8 byte
+/// order mark is skipped, as WoW does. Returns `None` if it compiles,
+/// otherwise a diagnostic pointing at the reported line.
+pub fn check(db: &SourceDb, file: FileId, code: &[u8], wowlua_source: bool) -> Option<Diagnostic> {
     let source = db.get(file);
+    let code = code.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(code);
     let lua = Lua::new();
     let chunk_name = format!("={}", source.path().to_string_lossy());
-    let result = lua
-        .load(source.text().as_bytes())
-        .set_name(chunk_name)
-        .into_function();
+    let result = lua.load(code).set_name(chunk_name).into_function();
     let error = result.err()?;
     let raw = match &error {
         mlua::Error::SyntaxError { message, .. } => message.clone(),
@@ -71,7 +70,15 @@ mod tests {
     fn run(text: &str, wowlua: bool) -> Option<Diagnostic> {
         let mut db = SourceDb::new();
         let file = db.add("src/a.lua", text);
-        check(&db, file, wowlua)
+        check(&db, file, text.as_bytes(), wowlua)
+    }
+
+    #[test]
+    fn byte_order_marks_and_non_utf8_strings_are_accepted() {
+        let mut db = SourceDb::new();
+        let file = db.add("src/a.lua", "");
+        assert!(check(&db, file, b"\xEF\xBB\xBFlocal a = 1\n", false).is_none());
+        assert!(check(&db, file, b"local s = \"caf\xE9\"\n", false).is_none());
     }
 
     #[test]

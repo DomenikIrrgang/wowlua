@@ -128,9 +128,9 @@ available.
    ([Modules §5.4](../language/05-modules.md#54-load-order)), so the build
    loads files as before.
 5. With `--from-pkgmeta` (or automatically if `.pkgmeta` / `pkgmeta.yaml` exists):
-   - `externals` become `dependencies`: git externals and zip archives are
-     converted; svn and hg externals are listed with warning W4333 and must be
-     replaced by a git mirror or archive. The common parent folder of the
+   - `externals` become `dependencies`: git, SVN and zip-archive externals are
+     converted (decision T51); hg externals are listed with warning W4333 and
+     must be replaced by a git mirror or archive. The common parent folder of the
      externals' paths (e.g. `Libs`) becomes `build.libs-dir`, and each
      remaining path becomes the dependency's `install-path`, so the addon's
      existing XML (`embeds.xml`) keeps working.

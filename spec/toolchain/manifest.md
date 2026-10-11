@@ -134,12 +134,44 @@ Only for `kind: "addon"`. Every key maps to a TOC directive and/or `wowlua:meta`
 | `expose-meta` | string | none | (none) | Also store `wowlua:meta` runtime tables in this global (an explicit `@global`-style write, see [Code generation §14.1.1](codegen.md#1411-global-writes)) |
 | `toc-extra` | `{string: string}` | `{}` | verbatim | Extra directives. Keys must start with `X-` unless they are known directives (W4001). |
 | `meta` | `{string: string\|number\|bool}` | `{}` | (none) | Custom values in `addon.meta` of `wowlua:meta` |
+| `flavor-overrides` | `{flavor: Override}` | `{}` | per-flavor directives | Metadata that differs per flavor (§9.3.1) |
 
 The TOC `## Version:` is always `build.version` (§9.9.2) and is not
 configurable. The Addon Compartment entry is registered at runtime by
-`wowlua:launcher` and needs no manifest key and no TOC directive. Per-flavor
-overrides of `addon` fields are not supported, because a single TOC cannot vary
-them.
+`wowlua:launcher` and needs no manifest key and no TOC directive.
+
+### 9.3.1 Per-flavor metadata
+
+`addon.flavor-overrides` maps a flavor to the metadata fields that differ for
+it (decision T50). A field that is absent keeps the base value. `null` removes
+the field for that flavor.
+
+```json
+"addon": {
+  "title": "|cff1784d1ElvUI|r",
+  "icon-texture": "Interface\\AddOns\\ElvUI\\Media\\LogoAddon",
+  "group": "ElvUI",
+  "flavor-overrides": {
+    "mists": { "title": "|cff1784d1ElvUI|r Mists" },
+    "wrath": { "title": "|cff1784d1ElvUI|r Wrath", "icon-texture": null, "group": null },
+    "standard": { "toc-extra": { "AddonCompartmentFunc": "ElvUI_AddonCompartmentFunc" } }
+  }
+}
+```
+
+- Overridable fields: `title`, `title-localized`, `notes`, `notes-localized`,
+  `author`, `category`, `category-localized`, `group`, `icon-texture`,
+  `icon-atlas` and `toc-extra`. Localized maps and `toc-extra` override per
+  key. Structural fields (saved variables, load behavior) cannot vary per
+  flavor, because the game data they describe must not depend on the client.
+- Keys must be flavors listed in `flavors` (E4002 otherwise).
+- In the TOC, flavors that share a value share one directive. A value used by
+  only some flavors gets an inline `[AllowLoadGameType …]` condition in the
+  single layout. That needs inline directives on `##` lines (12.0.7+ clients),
+  so `toc-layout: "auto"` falls back to per-flavor TOCs when a targeted client
+  lacks them ([Code generation §14.9](codegen.md#149-toc-generation)).
+- `wowlua init` writes overrides automatically when the adopted addon's TOCs
+  differ per flavor: the value most flavors use becomes the base.
 
 ## 9.4 `flavors`
 

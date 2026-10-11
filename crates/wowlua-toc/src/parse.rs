@@ -111,8 +111,9 @@ fn split_conditions(line: &str) -> (String, Vec<InlineDirective>) {
         let inner = &rest[open + 1..rest.len() - 1];
         let mut words = inner.split([' ', ',']).filter(|w| !w.is_empty());
         let Some(name) = words.next() else { break };
-        let preceded_by_space = rest[..open].ends_with([' ', '\t']);
-        if !preceded_by_space
+        // Directives follow whitespace or another directive (`[A x][B y]`).
+        let preceded = rest[..open].ends_with([' ', '\t', ']']);
+        if !preceded
             || !INLINE_DIRECTIVES
                 .iter()
                 .any(|d| d.eq_ignore_ascii_case(name))
@@ -176,6 +177,19 @@ mod tests {
         );
         assert_eq!(toc.files[3].conditions.len(), 2);
         assert_eq!(toc.files[3].conditions[0].name, "AllowLoadTextLocale");
+    }
+
+    #[test]
+    fn adjacent_inline_directives() {
+        let toc = parse(
+            "Game\\load_forever.xml [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]\n",
+        );
+        assert_eq!(toc.files[0].path, "Game/load_forever.xml");
+        assert_eq!(toc.files[0].conditions.len(), 2);
+        assert_eq!(
+            toc.files[0].conditions[1].values,
+            vec!["standard", "classic"]
+        );
     }
 
     #[test]

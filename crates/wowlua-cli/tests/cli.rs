@@ -36,7 +36,7 @@ fn legacy_addon(root: &Path) {
             ),
             (
                 "MyAddon_Vanilla.toc",
-                "## Interface: 11507\n## Title: My Addon\n## Version: v1.2.3\nembeds.xml\nCore.lua\nClassic.lua\n",
+                "## Interface: 11507\n## Title: My Addon Classic\n## Version: v1.2.3\nembeds.xml\nCore.lua\nClassic.lua\n",
             ),
             (
                 "embeds.xml",
@@ -54,6 +54,10 @@ fn legacy_addon(root: &Path) {
             ("UI/Frames.lua", "local _, ns = ...\nns.ready = true\n"),
             ("Classic.lua", "local _, ns = ...\nns.classic = true\n"),
             ("Media/icon.tga", "TGA"),
+            (
+                "Bindings.xml",
+                "<Bindings>\n  <Binding name=\"MYADDON_TOGGLE\">MyAddon_Toggle()</Binding>\n</Bindings>\n",
+            ),
         ],
     );
 }
@@ -98,33 +102,54 @@ fn init_adopts_an_existing_addon() {
     assert!(core.contains(r"MyAddon\\src\\UI\\Frames.lua"));
     assert!(core.contains(r"MyAddon\\Media\\icon.tga"));
 
-    let toc = wowlua(&addon)
-        .arg("toc")
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    let toc = String::from_utf8(toc).unwrap();
-    assert!(toc.contains("## Interface: 120100, 11509\n"), "{toc}");
-    assert!(toc.contains("## Version: 1.2.3-dev\n"));
-    assert!(toc.contains("## X-Curse-Project-ID: 12345\n"));
-    assert!(toc.contains("src\\UI\\Frames.xml [AllowLoadGameType mainline]\n"));
-    assert!(toc.contains("src\\Classic.lua [AllowLoadGameType classic]\n"));
-    assert!(
-        !toc.contains("LibStub"),
-        "XML-loaded files are not listed in the TOC"
-    );
+    // `OptionalDeps: Details` only appears in the Retail TOC, so it becomes a
+    // flavor-specific dependency. Conditions on `##` lines need 12.0.7+
+    // clients, which the Retail beta client is not, so auto picks per-flavor
+    // TOCs.
+    let manifest = fs::read_to_string(addon.join("wowlua.json")).unwrap();
+    assert!(manifest.contains("\"name\": \"Details\""), "{manifest}");
 
     wowlua(&addon).arg("build").assert().success();
+    let dist = addon.join("dist/dev/MyAddon");
+    let mainline = fs::read_to_string(dist.join("MyAddon_Mainline.toc")).unwrap();
+    let classic = fs::read_to_string(dist.join("MyAddon_Classic.toc")).unwrap();
+    assert!(mainline.starts_with("## Interface: 120100\n"), "{mainline}");
+    assert!(mainline.contains("## Version: 1.2.3-dev\n"));
+    assert!(mainline.contains("## OptionalDeps: Details\n"));
+    assert!(mainline.contains("## X-Curse-Project-ID: 12345\n"));
+    assert!(
+        mainline.ends_with("src\\embeds.xml\nsrc\\Core.lua\nsrc\\UI\\Frames.xml\n"),
+        "{mainline}"
+    );
+    assert!(classic.starts_with("## Interface: 11509\n"), "{classic}");
+    assert!(
+        classic.contains("## Title: My Addon Classic\n"),
+        "{classic}"
+    );
+    assert!(mainline.contains("## Title: My Addon\n"), "{mainline}");
+    assert!(manifest.contains("\"flavor-overrides\""), "{manifest}");
+    // Keybinding files are loaded by the client from the AddOn root.
+    assert!(
+        addon.join("Bindings.xml").exists(),
+        "init leaves Bindings.xml in place"
+    );
+    assert!(dist.join("Bindings.xml").exists());
+    assert!(!classic.contains("OptionalDeps"));
+    assert!(
+        classic.ends_with("src\\embeds.xml\nsrc\\Core.lua\nsrc\\Classic.lua\n"),
+        "{classic}"
+    );
+    assert!(
+        !mainline.contains("LibStub"),
+        "XML-loaded files are not listed in the TOC"
+    );
     for file in [
-        "MyAddon.toc",
         "src/embeds.xml",
         "src/Libs/LibStub/LibStub.lua",
         "src/UI/Frames.lua",
         "Media/icon.tga",
     ] {
-        assert!(addon.join("dist/dev/MyAddon").join(file).exists(), "{file}");
+        assert!(dist.join(file).exists(), "{file}");
     }
 }
 
@@ -144,9 +169,9 @@ fn install_is_safe_and_uninstall_removes_only_own_folders() {
         .assert()
         .success();
     let retail = wow.join("_retail_/Interface/AddOns/MyAddon");
-    assert!(retail.join("MyAddon.toc").exists());
+    assert!(retail.join("MyAddon_Mainline.toc").exists());
     assert!(
-        wow.join("_classic_era_/Interface/AddOns/MyAddon/MyAddon.toc")
+        wow.join("_classic_era_/Interface/AddOns/MyAddon/MyAddon_Classic.toc")
             .exists()
     );
 

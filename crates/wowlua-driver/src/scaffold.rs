@@ -72,7 +72,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - uses: DomenikIrrgang/wowlua/.github/actions/setup-wowlua@main
       - uses: actions/cache@v4
@@ -273,42 +273,96 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         ..Default::default()
     };
 
-    // Parse every TOC and work out which flavors load which files.
+    // Parse every TOC. Each flavor's client reads exactly one of them: the
+    // game-suffixed TOC, else the family-suffixed one, else the plain one.
     let table = wowlua_flavors::table();
-    let mut parsed = Vec::new();
+    let mut infos: Vec<(wowlua_toc::ParsedToc, Option<String>, Vec<String>)> = Vec::new();
     let mut all_flavors: Vec<String> = Vec::new();
     for (path, _, suffix) in &tocs {
         let text = std::fs::read_to_string(path).map_err(|e| {
             Diagnostic::plain_error(format!("cannot read `{}`: {e}", path.display()))
         })?;
         let toc = wowlua_toc::parse(&text);
-        let mut flavors: Vec<String> = toc
-            .interfaces()
-            .iter()
-            .filter_map(|i| table.by_interface(*i).map(|f| f.id.clone()))
-            .collect();
-        if flavors.is_empty()
-            && let Some(wowlua_flavors::SuffixMeaning::Flavor(f)) =
-                suffix.as_deref().and_then(|s| table.suffix_meaning(s))
-        {
-            flavors.push(f.id.clone());
+        let meaning = suffix.as_deref().and_then(|s| table.suffix_meaning(s));
+        let mut candidates: Vec<String> = Vec::new();
+        for interface in toc.interfaces() {
+            if let Some(f) = table.by_interface(interface)
+                && !candidates.contains(&f.id)
+            {
+                candidates.push(f.id.clone());
+            }
         }
-        flavors.dedup();
-        for f in &flavors {
+        if candidates.is_empty() {
+            candidates = match meaning {
+                Some(wowlua_flavors::SuffixMeaning::Flavor(f)) => vec![f.id.clone()],
+                Some(wowlua_flavors::SuffixMeaning::Family(family)) => table
+                    .flavors
+                    .iter()
+                    .filter(|f| f.family == family)
+                    .map(|f| f.id.clone())
+                    .collect(),
+                None => vec!["standard".to_string()],
+            };
+        }
+        // A suffixed TOC only serves the flavors its suffix names.
+        candidates.retain(|id| match meaning {
+            Some(wowlua_flavors::SuffixMeaning::Flavor(f)) => f.id == *id,
+            Some(wowlua_flavors::SuffixMeaning::Family(family)) => {
+                table.flavor(id).is_some_and(|f| f.family == family)
+            }
+            None => true,
+        });
+        for f in &candidates {
             if !all_flavors.contains(f) {
                 all_flavors.push(f.clone());
             }
         }
-        parsed.push((toc, flavors));
+        infos.push((toc, suffix.clone(), candidates));
     }
     if all_flavors.is_empty() {
         all_flavors.push("standard".into());
     }
     report.flavors = all_flavors.clone();
 
+    // `views`: every TOC with the flavors whose client reads it.
+    let rank =
+        |suffix: &Option<String>| match suffix.as_deref().and_then(|s| table.suffix_meaning(s)) {
+            Some(wowlua_flavors::SuffixMeaning::Flavor(_)) => 3,
+            Some(wowlua_flavors::SuffixMeaning::Family(_)) => 2,
+            None => 1,
+        };
+    let mut views: Vec<(wowlua_toc::ParsedToc, Vec<String>)> = infos
+        .iter()
+        .map(|(toc, _, _)| (toc.clone(), Vec::new()))
+        .collect();
+    for flavor in &all_flavors {
+        let chosen = infos
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, _, candidates))| candidates.contains(flavor))
+            .max_by_key(|(i, (_, suffix, _))| (rank(suffix), std::cmp::Reverse(*i)))
+            .map(|(i, _)| i);
+        if let Some(i) = chosen {
+            views[i].1.push(flavor.clone());
+        }
+    }
+    let unused: Vec<String> = tocs
+        .iter()
+        .zip(&views)
+        .filter(|(_, (_, flavors))| flavors.is_empty())
+        .filter_map(|((path, _, _), _)| path.file_name())
+        .map(|name| name.to_string_lossy().into_owned())
+        .collect();
+    if !unused.is_empty() {
+        report.warnings.push(Diagnostic::plain_warning(format!(
+            "no client reads {} (a more specific TOC wins for every flavor); ignored",
+            unused.join(", ")
+        )));
+    }
+
     let mut order: Vec<String> = Vec::new();
     let mut file_flavors: IndexMap<String, BTreeSet<String>> = IndexMap::new();
-    for (toc, flavors) in &parsed {
+    for (toc, flavors) in views.iter().filter(|(_, f)| !f.is_empty()) {
         for file in &toc.files {
             if file.path.contains('[') {
                 report.warnings.push(Diagnostic::plain_warning(format!(
@@ -317,7 +371,10 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
                 )));
                 continue;
             }
-            let applicable = apply_conditions(flavors, &file.conditions, &all_flavors);
+            let applicable = apply_conditions(flavors, &file.conditions);
+            if applicable.is_empty() {
+                continue;
+            }
             if !order.iter().any(|p| p.eq_ignore_ascii_case(&file.path)) {
                 order.push(file.path.clone());
             }
@@ -405,16 +462,20 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     // Assets stay in place.
     let assets = asset_globs(dir);
 
-    // Manifest.
-    let primary = parsed
+    // Manifest. Flags and saved variables come from the most general TOC;
+    // metadata that differs per flavor becomes `addon.flavor-overrides`.
+    let primary_index = infos
         .iter()
-        .zip(&tocs)
-        .find(|(_, (_, _, suffix))| suffix.is_none())
-        .map(|((toc, _), _)| toc)
-        .unwrap_or(&parsed[0].0);
+        .enumerate()
+        .min_by_key(|(i, (_, suffix, _))| (rank(suffix), *i))
+        .map(|(i, _)| i)
+        .unwrap_or(0);
+    let metadata = flavor_metadata(&views, &all_flavors);
     let mut warnings = Vec::new();
     let manifest = adopted_manifest(
-        primary,
+        &infos[primary_index].0,
+        &views,
+        &metadata,
         &addon_name,
         &all_flavors,
         &order,
@@ -424,6 +485,36 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         &mut warnings,
     );
     report.warnings.extend(warnings);
+
+    // Lua/XML files no TOC loads stay where they are; say so.
+    let left: Vec<String> = ignore::WalkBuilder::new(dir)
+        .hidden(true)
+        .require_git(false)
+        .build()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
+        .filter_map(|e| fsutil::relative_slash(e.path(), dir))
+        .filter(|rel| !rel.starts_with("src/") && !rel.starts_with("dist/"))
+        .filter(|rel| !crate::build::is_bindings_file(rel))
+        .filter(|rel| {
+            let lower = rel.to_ascii_lowercase();
+            lower.ends_with(".lua") || lower.ends_with(".xml")
+        })
+        .collect();
+    if !left.is_empty() {
+        let shown: Vec<&str> = left.iter().take(5).map(String::as_str).collect();
+        let more = if left.len() > 5 {
+            format!(" and {} more", left.len() - 5)
+        } else {
+            String::new()
+        };
+        report.warnings.push(Diagnostic::plain_warning(format!(
+            "{} Lua/XML file(s) are not loaded by any TOC and were left in place: {}{more}",
+            left.len(),
+            shown.join(", ")
+        )));
+    }
+
     std::fs::write(dir.join(MANIFEST_FILE), pretty(&manifest))
         .map_err(|e| Diagnostic::plain_error(format!("cannot write `{MANIFEST_FILE}`: {e}")))?;
     Ok(report)
@@ -486,14 +577,10 @@ fn find_tocs(
 fn apply_conditions(
     toc_flavors: &[String],
     conditions: &[wowlua_toc::InlineDirective],
-    all: &[String],
 ) -> Vec<String> {
     let table = wowlua_flavors::table();
-    let base: Vec<String> = if toc_flavors.is_empty() {
-        all.to_vec()
-    } else {
-        toc_flavors.to_vec()
-    };
+    // Only the flavors that read this TOC (an unread TOC loads nothing).
+    let base: Vec<String> = toc_flavors.to_vec();
     let expand = |values: &[String]| -> Vec<String> {
         values
             .iter()
@@ -644,9 +731,169 @@ fn asset_globs(dir: &Path) -> Vec<String> {
     globs.into_iter().collect()
 }
 
+/// TOC metadata (title, notes, icon, `X-` fields, …) resolved per flavor:
+/// `base` holds the value most flavors use; `overrides` the deviations
+/// (`None` = the flavor has no such directive).
+#[derive(Debug, Default)]
+struct FlavorMetadata {
+    base: IndexMap<String, String>,
+    overrides: IndexMap<String, IndexMap<String, Option<String>>>,
+}
+
+/// Directives that are not per-flavor metadata (handled elsewhere).
+fn is_metadata(key: &str) -> bool {
+    let lower = key.to_ascii_lowercase();
+    let structural = [
+        "interface",
+        "version",
+        "loadondemand",
+        "defaultstate",
+        "savedvariables",
+        "savedvariablespercharacter",
+        "loadsavedvariablesfirst",
+        "allowaddontableaccess",
+        "onlybetaandptr",
+        "requireddeps",
+        "loadwith",
+        "loadmanagers",
+        "x-curse-project-id",
+        "x-wago-id",
+        "x-wowi-id",
+    ];
+    !(structural.contains(&lower.as_str())
+        || lower.starts_with("dep")
+        || lower.starts_with("optionaldep"))
+}
+
+fn flavor_metadata(
+    views: &[(wowlua_toc::ParsedToc, Vec<String>)],
+    all_flavors: &[String],
+) -> FlavorMetadata {
+    // key -> value for each flavor, from the TOC its client reads.
+    let mut per_flavor: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+    let mut keys: Vec<String> = Vec::new();
+    for (toc, flavors) in views {
+        for flavor in flavors {
+            let entry = per_flavor.entry(flavor.clone()).or_default();
+            for d in toc.directives.iter().filter(|d| is_metadata(&d.key)) {
+                let applies =
+                    !apply_conditions(std::slice::from_ref(flavor), &d.conditions).is_empty();
+                if applies && !entry.contains_key(&d.key) {
+                    entry.insert(d.key.clone(), d.value.clone());
+                    if !keys.contains(&d.key) {
+                        keys.push(d.key.clone());
+                    }
+                }
+            }
+        }
+    }
+    let flavors: Vec<&String> = all_flavors
+        .iter()
+        .filter(|f| per_flavor.contains_key(*f))
+        .collect();
+    let mut metadata = FlavorMetadata::default();
+    for key in keys {
+        let values: Vec<Option<String>> = flavors
+            .iter()
+            .map(|f| per_flavor[*f].get(&key).cloned())
+            .collect();
+        // Most common value; ties go to the first flavor's value.
+        let mut counts: IndexMap<Option<String>, usize> = IndexMap::new();
+        for v in &values {
+            *counts.entry(v.clone()).or_default() += 1;
+        }
+        let base = counts
+            .iter()
+            .max_by_key(|(v, n)| (**n, std::cmp::Reverse(values.iter().position(|x| x == *v))))
+            .map(|(v, _)| v.clone())
+            .unwrap_or(None);
+        if let Some(value) = &base {
+            metadata.base.insert(key.clone(), value.clone());
+        }
+        for (flavor, value) in flavors.iter().zip(values) {
+            if value != base {
+                metadata
+                    .overrides
+                    .entry((*flavor).clone())
+                    .or_default()
+                    .insert(key.clone(), value);
+            }
+        }
+    }
+    metadata
+}
+
+/// Writes one TOC metadata directive into an `addon` (or override) object.
+fn insert_metadata(object: &mut Map<String, Value>, key: &str, value: Option<String>) {
+    let value = value.map(Value::from).unwrap_or(Value::Null);
+    let scalar = [
+        ("title", "title"),
+        ("notes", "notes"),
+        ("author", "author"),
+        ("icontexture", "icon-texture"),
+        ("iconatlas", "icon-atlas"),
+        ("category", "category"),
+        ("group", "group"),
+    ];
+    let lower = key.to_ascii_lowercase();
+    if let Some((_, field)) = scalar.iter().find(|(k, _)| *k == lower) {
+        object.insert((*field).into(), value);
+        return;
+    }
+    for (prefix, field) in [
+        ("title-", "title-localized"),
+        ("notes-", "notes-localized"),
+        ("category-", "category-localized"),
+    ] {
+        if lower.starts_with(prefix) {
+            let locale = &key[prefix.len()..];
+            let map = object
+                .entry(field)
+                .or_insert_with(|| Value::Object(Map::new()));
+            if let Value::Object(map) = map {
+                map.insert(locale.to_string(), value);
+            }
+            return;
+        }
+    }
+    let map = object
+        .entry("toc-extra")
+        .or_insert_with(|| Value::Object(Map::new()));
+    if let Value::Object(map) = map {
+        map.insert(key.to_string(), value);
+    }
+}
+
+/// Turns a TOC version into SemVer: `v15.26` → `15.26.0`, `2` → `2.0.0`.
+/// Returns `None` for values such as `@project-version@`.
+pub fn normalize_version(raw: &str) -> Option<String> {
+    let trimmed = raw.trim().trim_start_matches(['v', 'V']);
+    if semver::Version::parse(trimmed).is_ok() {
+        return Some(trimmed.to_string());
+    }
+    let parts: Vec<&str> = trimmed.split('.').collect();
+    let numeric = !parts.is_empty()
+        && parts.len() <= 3
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
+    if !numeric {
+        return None;
+    }
+    let mut padded: Vec<String> = parts
+        .iter()
+        .map(|p| p.trim_start_matches('0').to_string())
+        .map(|p| if p.is_empty() { "0".into() } else { p })
+        .collect();
+    padded.resize(3, "0".into());
+    Some(padded.join("."))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn adopted_manifest(
     toc: &wowlua_toc::ParsedToc,
+    all_tocs: &[(wowlua_toc::ParsedToc, Vec<String>)],
+    metadata: &FlavorMetadata,
     addon_name: &str,
     flavors: &[String],
     order: &[String],
@@ -658,8 +905,7 @@ fn adopted_manifest(
     let package_name = kebab_case(addon_name);
     let version = toc
         .get("Version")
-        .map(|v| v.trim_start_matches(['v', 'V']).to_string())
-        .filter(|v| semver::Version::parse(v).is_ok())
+        .and_then(normalize_version)
         .unwrap_or_else(|| {
             warnings.push(Diagnostic::plain_warning(format!(
                 "the TOC version `{}` is not a SemVer version; using 0.1.0",
@@ -671,7 +917,7 @@ fn adopted_manifest(
     let mut package = Map::new();
     package.insert("name".into(), package_name.clone().into());
     package.insert("version".into(), version.into());
-    if let Some(author) = toc.get("Author") {
+    if let Some(author) = metadata.base.get("Author") {
         package.insert("authors".into(), json!([author]));
     }
     package.insert("wowlua".into(), format!("^{}", minor_requirement()).into());
@@ -680,36 +926,12 @@ fn adopted_manifest(
     if pascal_case(&package_name) != addon_name {
         addon.insert("name".into(), addon_name.into());
     }
-    let simple = [
-        ("Title", "title"),
-        ("Notes", "notes"),
-        ("IconTexture", "icon-texture"),
-        ("IconAtlas", "icon-atlas"),
-        ("Category", "category"),
-        ("Group", "group"),
-    ];
-    for (directive, key) in simple {
-        if let Some(value) = toc.get(directive) {
-            addon.insert(key.into(), value.into());
+    // Base metadata (the value most flavors use).
+    for (key, value) in &metadata.base {
+        if key.eq_ignore_ascii_case("Author") {
+            continue; // `package.authors`
         }
-    }
-    for (prefix, key) in [
-        ("Title-", "title-localized"),
-        ("Notes-", "notes-localized"),
-        ("Category-", "category-localized"),
-    ] {
-        let localized: Map<String, Value> = toc
-            .directives
-            .iter()
-            .filter_map(|d| {
-                d.key
-                    .strip_prefix(prefix)
-                    .map(|loc| (loc.to_string(), Value::from(d.value.clone())))
-            })
-            .collect();
-        if !localized.is_empty() {
-            addon.insert(key.into(), Value::Object(localized));
-        }
+        insert_metadata(&mut addon, key, Some(value.clone()));
     }
     let flag = |name: &str| toc.get(name).is_some_and(|v| v.trim() == "1");
     if flag("LoadOnDemand") {
@@ -743,49 +965,16 @@ fn adopted_manifest(
         }
     }
 
-    let handled = |key: &str| {
-        let lower = key.to_ascii_lowercase();
-        [
-            "interface",
-            "title",
-            "notes",
-            "author",
-            "version",
-            "icontexture",
-            "iconatlas",
-            "category",
-            "group",
-            "loadondemand",
-            "defaultstate",
-            "savedvariables",
-            "savedvariablespercharacter",
-            "loadsavedvariablesfirst",
-            "allowaddontableaccess",
-            "onlybetaandptr",
-            "dependencies",
-            "requireddeps",
-            "optionaldeps",
-            "loadwith",
-            "loadmanagers",
-            "x-curse-project-id",
-            "x-wago-id",
-            "x-wowi-id",
-        ]
-        .contains(&lower.as_str())
-            || lower.starts_with("title-")
-            || lower.starts_with("notes-")
-            || lower.starts_with("category-")
-            || lower.starts_with("dep")
-            || lower.starts_with("optionaldep")
-    };
-    let extra: Map<String, Value> = toc
-        .directives
-        .iter()
-        .filter(|d| !handled(&d.key))
-        .map(|d| (d.key.clone(), Value::from(d.value.clone())))
-        .collect();
-    if !extra.is_empty() {
-        addon.insert("toc-extra".into(), Value::Object(extra));
+    if !metadata.overrides.is_empty() {
+        let mut overrides = Map::new();
+        for (flavor, fields) in &metadata.overrides {
+            let mut object = Map::new();
+            for (key, value) in fields {
+                insert_metadata(&mut object, key, value.clone());
+            }
+            overrides.insert(flavor.clone(), Value::Object(object));
+        }
+        addon.insert("flavor-overrides".into(), Value::Object(overrides));
     }
 
     let mut manifest = Map::new();
@@ -797,28 +986,63 @@ fn adopted_manifest(
         Value::Object(flavors.iter().map(|f| (f.clone(), json!({}))).collect()),
     );
 
-    let mut deps = Map::new();
-    let required = toc.list(|k| {
+    // Dependencies from every TOC: an entry that only some flavors' TOCs (or
+    // inline conditions) load gets a `flavors` restriction.
+    let is_required = |k: &str| {
         let k = k.to_ascii_lowercase();
         k == "requireddeps" || (k.starts_with("dep") && !k.starts_with("dependson"))
-    });
-    for (key, list) in [
-        ("required", required),
-        (
-            "optional",
-            toc.list(|k| k.to_ascii_lowercase().starts_with("optionaldep")),
-        ),
+    };
+    let is_optional = |k: &str| k.to_ascii_lowercase().starts_with("optionaldep");
+    let collect = |matches: &dyn Fn(&str) -> bool| -> IndexMap<String, BTreeSet<String>> {
+        let mut entries: IndexMap<String, BTreeSet<String>> = IndexMap::new();
+        for (parsed, toc_flavors) in all_tocs {
+            for directive in parsed.directives.iter().filter(|d| matches(&d.key)) {
+                let applicable = apply_conditions(toc_flavors, &directive.conditions);
+                for name in directive
+                    .value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|n| !n.is_empty())
+                {
+                    entries
+                        .entry(name.to_string())
+                        .or_default()
+                        .extend(applicable.iter().cloned());
+                }
+            }
+        }
+        entries
+    };
+    let mut deps = Map::new();
+    for (key, entries, restrictable) in [
+        ("required", collect(&is_required), true),
+        ("optional", collect(&is_optional), true),
         (
             "load-with",
-            toc.list(|k| k.eq_ignore_ascii_case("LoadWith")),
+            collect(&|k: &str| k.eq_ignore_ascii_case("LoadWith")),
+            false,
         ),
         (
             "load-managers",
-            toc.list(|k| k.eq_ignore_ascii_case("LoadManagers")),
+            collect(&|k: &str| k.eq_ignore_ascii_case("LoadManagers")),
+            false,
         ),
     ] {
+        let list: Vec<Value> = entries
+            .iter()
+            .filter(|(_, set)| !set.is_empty())
+            .map(|(name, set)| {
+                if !restrictable || set.len() >= flavors.len() {
+                    Value::from(name.clone())
+                } else {
+                    let ordered: Vec<&String> =
+                        flavors.iter().filter(|f| set.contains(*f)).collect();
+                    json!({ "name": name, "flavors": ordered })
+                }
+            })
+            .collect();
         if !list.is_empty() {
-            deps.insert(key.into(), json!(list));
+            deps.insert(key.into(), Value::Array(list));
         }
     }
     if !deps.is_empty() {
@@ -876,6 +1100,19 @@ fn adopted_manifest(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalizes_toc_versions() {
+        assert_eq!(normalize_version("v15.26").as_deref(), Some("15.26.0"));
+        assert_eq!(normalize_version("2").as_deref(), Some("2.0.0"));
+        assert_eq!(
+            normalize_version("1.2.3-beta.1").as_deref(),
+            Some("1.2.3-beta.1")
+        );
+        assert_eq!(normalize_version("1.02.3").as_deref(), Some("1.2.3"));
+        assert_eq!(normalize_version("@project-version@"), None);
+        assert_eq!(normalize_version("1.2.3.4"), None);
+    }
 
     #[test]
     fn kebab_case_names() {

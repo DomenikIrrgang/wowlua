@@ -183,7 +183,8 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W4328 | Site does not know the exact game version; fell back to a lower/highest version |
 | W4329 | GitHub target skipped: build is not on a tag and no `--tag` given |
 | W4332 | `.pkgmeta` `move-folders` use that cannot be converted |
-| W4333 | `.pkgmeta` svn/hg external cannot be converted |
+| E4334 | Both a hand-written `Bindings.xml` and `wowlua:bindings` declarations |
+| W4333 | `.pkgmeta` hg external cannot be converted |
 | W6001 | Code inspects its own file name (`debugstack`, `debuglocals`), which changes when bundled |
 | W6002 | Side-effect-free, unused module removed by dead-code elimination |
 | W6010 | Publish target uses a renaming minification level (Blizzard AddOn policy: code must not be hidden or obfuscated) |

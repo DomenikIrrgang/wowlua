@@ -204,7 +204,7 @@ The output tree has a fixed top level:
 |-----------------|---------|
 | `<Name>.toc` / `<Name>_<Suffix>.toc` | Generated TOC file(s) (§14.9) |
 | `<Name>.lua`, `<Name>.<n>.lua`, `<Name>.<flavor>[.<n>].lua` | Bundles and bundle segments (bundled builds) |
-| `Bindings.xml` | Generated keybindings (§14.8.5), only when keybindings are declared |
+| `Bindings.xml`, `Bindings_<Suffix>.xml` | Keybindings (§14.8.5): generated from `wowlua:bindings`, or the package's own files copied from the package root |
 | `LICENSES.txt` | Licenses of embedded code (§14.8.6) |
 | `wowlua/` | Everything generated: `runtime.lua`, `std/` (standard-library modules), `locales/`, `flavors/<flavor>/` (per-flavor variants) |
 | `libs/<name>/` | Dependencies: lua-libraries in their original layout, wowlua libraries compiled |
@@ -300,6 +300,14 @@ automatically. Each `<Binding>` element's body calls the dispatch table
 binding header and display names become `BINDING_HEADER_*` /
 `BINDING_NAME_*` globals (localized through `wowlua:locale` when the names are
 locale keys). These globals are listed in §14.1.1.
+
+**The package's own keybinding files** (decision T52). `Bindings.xml` and
+flavor variants such as `Bindings_Mainline.xml` in the **package root** are
+copied to the AddOn root unchanged, because the client loads them
+automatically, not through the TOC. They must be well-formed XML (E5002).
+`wowlua init` leaves them where they are. A package that declares keybindings
+through `wowlua:bindings` and also has its own `Bindings.xml` gets error
+E4334, because the client would read only one of them.
 
 ### 14.8.6 Licenses
 

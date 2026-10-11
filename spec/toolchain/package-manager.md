@@ -48,6 +48,7 @@ can be used directly: the dependency declaration supplies `kind:
 | Git | `git`, plus one of `tag`, `branch`, `rev`; optional `subdir`, `submodules` (default `false`) | Locked to a commit hash. Uses the system `git`, so credentials and SSH work as usual. Submodules are only fetched with `"submodules": true`; their commits are fixed by the locked parent commit. |
 | Path | `path` | Relative to the manifest. Never locked by checksum. For workspaces and local development. |
 | Archive | `archive` (URL to `.zip` / `.tar.gz`), `sha256` (required), optional `strip-prefix` | For release downloads |
+| SVN | `svn` (repository URL, may include a path such as `…/trunk/AceAddon-3.0`), optional `rev` | Locked to a revision number. Uses the system `svn` client. Many WoW libraries (Ace3, LibStub, CallbackHandler, LibSharedMedia on `repos.curseforge.com`) are only published this way (decision T51). |
 
 Common fields:
 

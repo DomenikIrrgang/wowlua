@@ -98,6 +98,10 @@ open for review.
 | T47 | M0 accepts `.wowlua` files that are pure Lua 5.1. M0 includes a release pipeline to GitHub Releases. M0 creates only the crates it needs **(user, M0)** | |
 | T48 | Releases are built by a hand-written GitHub Actions workflow (six targets, checksums, install scripts) instead of cargo-dist. `setup-wowlua` is a composite action inside the wowlua repository **(proposal, M0)** | Transparent and easy to extend with Homebrew, winget and Scoop. No separate `wowlua` GitHub organization is needed. |
 | T49 | A file matched by several `build.flavor-files` globs belongs to the union of their flavors **(proposal, M0)** | Predictable, order-independent. |
+| T50 | `addon.flavor-overrides` expresses per-flavor metadata (title, notes, author, category, group, icon, `toc-extra`). `null` removes a field for a flavor **(user, ElvUI test)** | Real addons (ElvUI) vary titles, icons and compartment entries per flavor. One TOC can do this with inline conditions on `##` lines. |
+| T51 | The package manager supports **SVN** sources, locked to a revision, using the system `svn` client **(user, ElvUI test)** | Ace3, LibStub and other core libraries are published on CurseForge's SVN repositories. `.pkgmeta` projects convert without manual work. |
+| T52 | `Bindings.xml` / `Bindings_<Suffix>.xml` in the package root are passed through to the AddOn root **(user, ElvUI test)** | The client loads them automatically; dropping them loses keybindings. |
+| T53 | `wowlua init` determines, per flavor, the one TOC that flavor's client reads (game suffix, then family suffix, then the plain name) and takes files, dependencies and metadata only from it **(proposal, ElvUI test)** | Matches the client. Combining TOCs would load files a client never loads. |
 
 ## Standard library
 

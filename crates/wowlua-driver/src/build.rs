@@ -138,12 +138,17 @@ pub fn build(
     }
 
     // Load and check every source.
+    // Raw bytes are kept: plain Lua passes through byte for byte (Lua strings
+    // may contain any bytes). The source database holds a lossy text copy for
+    // diagnostics.
     let mut files: Vec<(Source, FileId)> = Vec::new();
+    let mut raw: HashMap<String, Vec<u8>> = HashMap::new();
     for source in sources {
         match std::fs::read(&source.abs) {
             Ok(bytes) => {
                 let text = String::from_utf8_lossy(&bytes).into_owned();
                 let file = session.db.add(&source.rel, text);
+                raw.insert(source.rel.clone(), bytes);
                 files.push((source, file));
             }
             Err(error) => session.push(
@@ -155,7 +160,14 @@ pub fn build(
     let checks: Vec<Diagnostic> = files
         .iter()
         .filter(|(s, _)| s.kind != SourceKind::Xml)
-        .filter_map(|(s, file)| luacheck::check(&session.db, *file, s.kind == SourceKind::Wowlua))
+        .filter_map(|(s, file)| {
+            luacheck::check(
+                &session.db,
+                *file,
+                &raw[&s.rel],
+                s.kind == SourceKind::Wowlua,
+            )
+        })
         .collect();
     session.diagnostics.extend(checks);
 
@@ -220,7 +232,7 @@ pub fn build(
                 interfaces: project.interfaces.get(id).cloned().unwrap_or_default(),
             })
             .collect(),
-        directives: directives(project, &profile.name, &version, &build_id),
+        directives: directives(project, &flavors, &profile.name, &version, &build_id),
         files: toc_sources
             .iter()
             .map(|(source, flavors_of)| FileEntry {
@@ -254,23 +266,32 @@ pub fn build(
         );
     }
     for source in &emitted {
-        let file = files
-            .iter()
-            .find(|(s, _)| s.rel == source.rel)
-            .map(|(_, f)| *f)
-            .expect("loaded");
-        let text = session.db.get(file).text();
-        let content = xml
-            .rewrites
-            .get(&source.rel)
-            .cloned()
-            .unwrap_or_else(|| text.to_string());
-        out.insert(source.output_path(), Content::Bytes(content.into_bytes()));
+        let original = &raw[&source.rel];
+        let content = match xml.rewrites.get(&source.rel) {
+            Some(rewritten) if std::str::from_utf8(original).is_ok() => {
+                rewritten.clone().into_bytes()
+            }
+            Some(_) => {
+                session.push(
+                    Diagnostic::error(
+                        "E5002",
+                        "cannot rewrite `.wowlua` references in an XML file that is not valid UTF-8",
+                    )
+                    .with_path(&source.rel),
+                );
+                continue;
+            }
+            None => original.clone(),
+        };
+        out.insert(source.output_path(), Content::Bytes(content));
     }
     out.insert(
         "LICENSES.txt".into(),
         Content::Bytes(licenses_text().into_bytes()),
     );
+    for (name, bytes) in bindings_files(session, &root) {
+        out.insert(name, Content::Bytes(bytes));
+    }
     for asset in &assets {
         let first = asset.rel.split('/').next().unwrap_or_default();
         let reserved = RESERVED_DIRS.contains(&first) && asset.rel.contains('/')
@@ -582,38 +603,149 @@ fn build_id(
 }
 
 /// TOC metadata directives in the order of spec §14.9.4.
-fn directives(project: &Project, profile: &str, version: &str, build_id: &str) -> Vec<Directive> {
+/// Emits one metadata field, honoring `addon.flavor-overrides`: flavors that
+/// share a value share one directive, restricted to those flavors when not all
+/// targeted flavors use it. A flavor whose override is `null` gets none.
+fn push_field(
+    out: &mut Vec<Directive>,
+    key: &str,
+    base: Option<String>,
+    overrides: &[(String, Option<Option<String>>)],
+    flavors: &[String],
+) {
+    let mut groups: indexmap::IndexMap<Option<String>, Vec<String>> = indexmap::IndexMap::new();
+    for flavor in flavors {
+        let value = overrides
+            .iter()
+            .find(|(f, _)| f == flavor)
+            .map(|(_, v)| v.clone().flatten())
+            .unwrap_or_else(|| base.clone());
+        groups.entry(value).or_default().push(flavor.clone());
+    }
+    for (value, group) in groups {
+        let Some(value) = value else { continue };
+        out.push(Directive {
+            key: key.to_string(),
+            value,
+            flavors: (group.len() < flavors.len()).then_some(group),
+        });
+    }
+}
+
+fn directives(
+    project: &Project,
+    flavors: &[String],
+    profile: &str,
+    version: &str,
+    build_id: &str,
+) -> Vec<Directive> {
     let manifest = &project.manifest;
     let addon = manifest.manifest.addon.clone().unwrap_or_default();
-    let mut out = vec![Directive::new("Title", manifest.title())];
-    for (locale, title) in &addon.title_localized {
-        out.push(Directive::new(format!("Title-{locale}"), title));
-    }
-    if let Some(notes) = &addon.notes {
-        out.push(Directive::new("Notes", notes));
-    }
-    for (locale, notes) in &addon.notes_localized {
-        out.push(Directive::new(format!("Notes-{locale}"), notes));
-    }
-    if let Some(author) = manifest.author() {
-        out.push(Directive::new("Author", author));
-    }
+    // Overrides keyed by normalized flavor ID.
+    let overrides: Vec<(String, wowlua_manifest::model::AddonOverride)> = addon
+        .flavor_overrides
+        .iter()
+        .filter_map(|(name, o)| {
+            wowlua_flavors::table()
+                .resolve(name)
+                .map(|f| (f.id.clone(), o.clone()))
+        })
+        .collect();
+    let scalar = |get: fn(&wowlua_manifest::model::AddonOverride) -> &Option<Option<String>>| {
+        overrides
+            .iter()
+            .filter_map(|(f, o)| get(o).clone().map(|v| (f.clone(), Some(v))))
+            .collect::<Vec<_>>()
+    };
+    let localized = |out: &mut Vec<Directive>,
+                     prefix: &str,
+                     base: &indexmap::IndexMap<String, String>,
+                     get: fn(
+        &wowlua_manifest::model::AddonOverride,
+    ) -> &indexmap::IndexMap<String, Option<String>>| {
+        let mut locales: Vec<String> = base.keys().cloned().collect();
+        for (_, o) in &overrides {
+            for locale in get(o).keys() {
+                if !locales.contains(locale) {
+                    locales.push(locale.clone());
+                }
+            }
+        }
+        for locale in locales {
+            let per_flavor: Vec<(String, Option<Option<String>>)> = overrides
+                .iter()
+                .filter_map(|(f, o)| get(o).get(&locale).map(|v| (f.clone(), Some(v.clone()))))
+                .collect();
+            push_field(
+                out,
+                &format!("{prefix}-{locale}"),
+                base.get(&locale).cloned(),
+                &per_flavor,
+                flavors,
+            );
+        }
+    };
+
+    let mut out = Vec::new();
+    push_field(
+        &mut out,
+        "Title",
+        Some(manifest.title()),
+        &scalar(|o| &o.title),
+        flavors,
+    );
+    localized(&mut out, "Title", &addon.title_localized, |o| {
+        &o.title_localized
+    });
+    push_field(
+        &mut out,
+        "Notes",
+        addon.notes.clone(),
+        &scalar(|o| &o.notes),
+        flavors,
+    );
+    localized(&mut out, "Notes", &addon.notes_localized, |o| {
+        &o.notes_localized
+    });
+    push_field(
+        &mut out,
+        "Author",
+        manifest.author(),
+        &scalar(|o| &o.author),
+        flavors,
+    );
     out.push(Directive::new("Version", version));
-    if let Some(icon) = &addon.icon_texture {
-        out.push(Directive::new("IconTexture", icon));
-    }
-    if let Some(atlas) = &addon.icon_atlas {
-        out.push(Directive::new("IconAtlas", atlas));
-    }
-    if let Some(category) = &addon.category {
-        out.push(Directive::new("Category", category));
-    }
-    for (locale, category) in &addon.category_localized {
-        out.push(Directive::new(format!("Category-{locale}"), category));
-    }
-    if let Some(group) = &addon.group {
-        out.push(Directive::new("Group", group));
-    }
+    push_field(
+        &mut out,
+        "IconTexture",
+        addon.icon_texture.clone(),
+        &scalar(|o| &o.icon_texture),
+        flavors,
+    );
+    push_field(
+        &mut out,
+        "IconAtlas",
+        addon.icon_atlas.clone(),
+        &scalar(|o| &o.icon_atlas),
+        flavors,
+    );
+    push_field(
+        &mut out,
+        "Category",
+        addon.category.clone(),
+        &scalar(|o| &o.category),
+        flavors,
+    );
+    localized(&mut out, "Category", &addon.category_localized, |o| {
+        &o.category_localized
+    });
+    push_field(
+        &mut out,
+        "Group",
+        addon.group.clone(),
+        &scalar(|o| &o.group),
+        flavors,
+    );
     if addon.load_on_demand {
         out.push(Directive::new("LoadOnDemand", "1"));
     }
@@ -680,8 +812,26 @@ fn directives(project: &Project, profile: &str, version: &str, build_id: &str) -
     if addon.allow_table_access {
         out.push(Directive::new("AllowAddOnTableAccess", "1"));
     }
-    for (key, value) in &addon.toc_extra {
-        out.push(Directive::new(key, value));
+    let mut extra_keys: Vec<String> = addon.toc_extra.keys().cloned().collect();
+    for (_, o) in &overrides {
+        for key in o.toc_extra.keys() {
+            if !extra_keys.contains(key) {
+                extra_keys.push(key.clone());
+            }
+        }
+    }
+    for key in extra_keys {
+        let per_flavor: Vec<(String, Option<Option<String>>)> = overrides
+            .iter()
+            .filter_map(|(f, o)| o.toc_extra.get(&key).map(|v| (f.clone(), Some(v.clone()))))
+            .collect();
+        push_field(
+            &mut out,
+            &key,
+            addon.toc_extra.get(&key).cloned(),
+            &per_flavor,
+            flavors,
+        );
     }
     out.push(Directive::new(
         "X-Wowlua-Build",
@@ -737,6 +887,49 @@ fn toc_error(error: TocError, manifest: &Path) -> Diagnostic {
         )
         .with_path(manifest),
     }
+}
+
+/// Whether `name` is a keybinding file the client loads automatically from
+/// the AddOn root: `Bindings.xml` or `Bindings_<Suffix>.xml`.
+pub fn is_bindings_file(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower == "bindings.xml"
+        || lower
+            .strip_prefix("bindings_")
+            .and_then(|rest| rest.strip_suffix(".xml"))
+            .is_some_and(|suffix| {
+                !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_alphanumeric())
+            })
+}
+
+/// Keybinding files in the package root, passed through unchanged (they are
+/// loaded by the client, not by the TOC). Each must be well-formed XML.
+fn bindings_files(session: &mut Session, root: &Path) -> Vec<(String, Vec<u8>)> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut files: Vec<(String, Vec<u8>)> = entries
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            is_bindings_file(&name).then(|| std::fs::read(e.path()).ok().map(|b| (name, b)))?
+        })
+        .collect();
+    files.sort();
+    for (name, bytes) in &files {
+        let text = String::from_utf8_lossy(bytes);
+        if let Err(error) = wowlua_xml::references(&text) {
+            session.push(
+                Diagnostic::error(
+                    "E5002",
+                    format!("invalid XML in `{name}`: {}", error.message),
+                )
+                .with_path(name),
+            );
+        }
+    }
+    files
 }
 
 fn licenses_text() -> String {
@@ -832,4 +1025,48 @@ fn write_tree(dir: &Path, out: &BTreeMap<String, Content>) -> std::io::Result<()
         }
     }
     fsutil::replace_dir(&staged, dir)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn flavors(ids: &[&str]) -> Vec<String> {
+        ids.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn fields_group_flavors_by_value() {
+        let all = flavors(&["standard", "mists", "wrath"]);
+        let mut out = Vec::new();
+        let overrides = vec![
+            ("mists".to_string(), Some(Some("Mists".to_string()))),
+            ("wrath".to_string(), Some(None)),
+        ];
+        push_field(&mut out, "Title", Some("Base".into()), &overrides, &all);
+        assert_eq!(out.len(), 2);
+        assert_eq!(
+            (out[0].value.as_str(), out[0].flavors.clone()),
+            ("Base", Some(flavors(&["standard"])))
+        );
+        assert_eq!(
+            (out[1].value.as_str(), out[1].flavors.clone()),
+            ("Mists", Some(flavors(&["mists"])))
+        );
+
+        let mut out = Vec::new();
+        push_field(&mut out, "Group", Some("G".into()), &[], &all);
+        assert_eq!(
+            out[0].flavors, None,
+            "a value every flavor shares needs no condition"
+        );
+    }
+
+    #[test]
+    fn recognizes_bindings_files() {
+        assert!(is_bindings_file("Bindings.xml"));
+        assert!(is_bindings_file("bindings_Mainline.xml"));
+        assert!(!is_bindings_file("Bindings_.xml"));
+        assert!(!is_bindings_file("MyBindings.xml"));
+    }
 }
