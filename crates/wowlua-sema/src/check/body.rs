@@ -100,6 +100,8 @@ pub struct Checker<'e> {
     pub(crate) callbacks: HashSet<wowlua_span::Span>,
     /// The next `function_body` checks a callback.
     pub(crate) callback_next: bool,
+    /// Runtime checks of annotated parameters, `...: T` and `::`, by span.
+    pub(crate) value_checks: HashMap<wowlua_span::Span, super::runtime::ValueCheck>,
 }
 
 impl<'e> Checker<'e> {
@@ -135,6 +137,7 @@ impl<'e> Checker<'e> {
             is_module: info.is_module,
             callbacks: HashSet::new(),
             callback_next: false,
+            value_checks: HashMap::new(),
         };
         for (name, &t) in &info.imports {
             c.declare(name, Some(t), t, true, None);
@@ -796,6 +799,13 @@ impl<'e> Checker<'e> {
                 }
                 None => sp.ty,
             };
+            // Runtime checks of annotated parameters (spec §7.5), after
+            // defaults: a parameter with a default is checked against `T`.
+            if p.ty.is_some()
+                && let Some(c) = self.value_check(t)
+            {
+                self.value_checks.insert(p.name.span, c);
+            }
             let id = self.declare(
                 &p.name.text,
                 declared.or(Some(sp.ty)),
@@ -809,6 +819,12 @@ impl<'e> Checker<'e> {
             Rest::Variadic(t) => *t,
             Rest::Pack(_) => Types::ANY,
         });
+        if let (Some(v), Some(t)) = (&f.vararg, vararg)
+            && v.ty.is_some()
+            && let Some(c) = self.value_check(t)
+        {
+            self.value_checks.insert(v.span, c);
+        }
         self.fns.push(FnCtx {
             expected: annotated_ret.then(|| sig.ret.clone()),
             returns: Vec::new(),

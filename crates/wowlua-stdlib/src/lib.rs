@@ -52,6 +52,11 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         include_str!("../std/log.wowlua"),
         Some(include_str!("../std/log.d.wowlua")),
     ),
+    (
+        "reflect",
+        include_str!("../std/reflect.wowlua"),
+        Some(include_str!("../std/reflect.d.wowlua")),
+    ),
 ];
 
 /// A standard-library module by name (`events` for `wowlua:events`).

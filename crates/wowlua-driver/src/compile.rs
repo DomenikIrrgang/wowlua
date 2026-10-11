@@ -43,6 +43,8 @@ pub struct CompileOutput {
     pub slices: BTreeSet<wowlua_runtime::Slice>,
     /// Static types of `typeName(expr)` arguments (from the checker).
     pub type_names: HashMap<wowlua_span::Span, String>,
+    /// Runtime checks (from the checker, spec §7.5).
+    pub value_checks: HashMap<wowlua_span::Span, wowlua_sema::check::runtime::ValueCheck>,
 }
 
 /// A declaration file with its contents.
@@ -286,6 +288,7 @@ pub fn compile_flavor(
     api: &[ParsedDeclaration],
     check: &CheckConfig,
     shared: Option<&wowlua_sema::check::flavors::SharedFlavors>,
+    lower_lua: &std::collections::HashSet<String>,
 ) -> CompileOutput {
     let options = EmitOptions {
         line_mode: line_mode(profile),
@@ -370,6 +373,7 @@ pub fn compile_flavor(
         );
         diagnostics.extend(checked.diagnostics);
         out.type_names = checked.type_names;
+        out.value_checks = checked.value_checks;
     }
     for info in analysis.modules.iter().flatten() {
         if info.is_module {
@@ -390,8 +394,16 @@ pub fn compile_flavor(
     out.modules.sort();
     out.modules.dedup();
 
+    // Enums register their order when the package uses `wowlua:reflect`.
+    let reflect_used = analysis.modules.iter().flatten().any(|m| {
+        m.imports.iter().any(|imp| {
+            matches!(imp.target, Target::Module(t)
+                if analysis.modules[t].as_ref().is_some_and(|x| x.id == "wowlua:reflect"))
+        })
+    });
     for (i, (source, file)) in files.iter().enumerate() {
-        if source.kind != SourceKind::Wowlua || !parsed.ok[i] {
+        let plain_lua = source.kind == SourceKind::Lua && lower_lua.contains(&source.rel);
+        if (source.kind != SourceKind::Wowlua && !plain_lua) || !parsed.ok[i] {
             continue;
         }
         let parse = parsed.parses[i].as_ref().expect("parsed");
@@ -404,7 +416,17 @@ pub fn compile_flavor(
             dev_console: profile.dev_console,
             profiling: profile.instrument != wowlua_manifest::model::Instrument::None,
             log_level: profile.log_level as u8,
+            instrument: profile.instrument as u8,
+            runtime_checks: profile.runtime_checks as u8,
+            reflection: profile.reflection as u8,
+            reflect_used,
         };
+        ctx.value_checks = out
+            .value_checks
+            .iter()
+            .filter(|(span, _)| span.file == *file)
+            .map(|(span, c)| ((span.start, span.end), c.clone()))
+            .collect();
         ctx.type_names = out
             .type_names
             .iter()

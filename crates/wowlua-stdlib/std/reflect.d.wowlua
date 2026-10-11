@@ -1,0 +1,18 @@
+-- Compiler behavior of `wowlua:reflect` (spec §7.8.2): full-metadata
+-- functions warn (W7010) in profiles without reflection.
+@intrinsic("reflect.fields")
+declare function fields(cls: any): any
+@intrinsic("reflect.methods")
+declare function methods(cls: any): any
+@intrinsic("reflect.properties")
+declare function properties(cls: any): any
+@intrinsic("reflect.decorators")
+declare function decorators(cls: any, member: string?): any
+@intrinsic("reflect.interfaces")
+declare function interfaces(cls: any): any
+@intrinsic("reflect.functionInfo")
+declare function functionInfo(fn: any): any
+@intrinsic("reflect.getClass")
+declare function getClass(name: string): any
+@intrinsic("reflect.classes")
+declare function classes(): any

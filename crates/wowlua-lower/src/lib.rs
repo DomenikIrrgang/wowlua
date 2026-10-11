@@ -4,9 +4,14 @@
 //! information (milestone M4), every file uses the basic-mode forms.
 //! Classes and enums are in [`class`], decorators in [`decorate`].
 
+mod checks;
 mod class;
 mod debug;
 mod decorate;
+mod instrument;
+mod reflect;
+
+pub(crate) use instrument::FnMarks;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
@@ -45,6 +50,9 @@ pub struct Context {
     pub tools: Tools,
     /// The static types of `typeName(expr)` arguments, by span.
     pub type_names: HashMap<(u32, u32), String>,
+    /// Runtime checks of annotated parameters, `...: T` and `::`, by span
+    /// (from the type checker, spec §7.5).
+    pub value_checks: HashMap<(u32, u32), wowlua_sema::check::runtime::ValueCheck>,
 }
 
 /// The debugging settings of the build profile (spec chapter 7).
@@ -58,6 +66,14 @@ pub struct Tools {
     pub profiling: bool,
     /// `log-level` as a rank: 0 `trace` … 4 `error`, 5 `off`.
     pub log_level: u8,
+    /// `instrument`: 0 `none`, 1 `decorated`, 2 `exports`, 3 `all`.
+    pub instrument: u8,
+    /// `runtime-checks`: 0 `none`, 1 `exports`, 2 `all`.
+    pub runtime_checks: u8,
+    /// `reflection`: 0 `none`, 1 `decorated`, 2 `all`.
+    pub reflection: u8,
+    /// The package imports `wowlua:reflect` (enums register their order).
+    pub reflect_used: bool,
 }
 
 /// A lowered file.
@@ -128,6 +144,9 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         fn_names: Vec::new(),
         next_fn_name: None,
         module_tables: HashMap::new(),
+        next_fn_marks: FnMarks::default(),
+        class_marks: None,
+        fn_marks: HashMap::new(),
     };
     // Exported functions, classes and enums are hoisted (spec §5.1,
     // decisions L24 and T76).
@@ -136,6 +155,8 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
     if !lowerer.errors.is_empty() {
         return Err(lowerer.errors);
     }
+    // Profiling and tracing wrappers (spec §7.3, §7.4).
+    lowerer.instrument(&mut stmts);
     // Prologue (spec codegen §14.2), on line 1: the runtime, the export
     // table, hoisted declarations and aliases of shadowed globals.
     let line1 = Pos::new(1, 0);
@@ -461,6 +482,12 @@ struct Lowerer<'a> {
     /// Imported modules → the local holding their export table, and
     /// whether that local is a generated name (else the user's binding).
     module_tables: HashMap<String, (String, bool)>,
+    /// Profiling and tracing marks of the next function `func` lowers.
+    next_fn_marks: FnMarks,
+    /// Marks of the class being lowered (`@profile` on a class).
+    class_marks: Option<FnMarks>,
+    /// Marks of lowered functions, by the position of their `(`.
+    fn_marks: HashMap<Pos, FnMarks>,
 }
 
 const LICENSE_WORDS: &[&str] = &["license", "copyright", "spdx-license-identifier"];
@@ -1229,13 +1256,21 @@ impl<'a> Lowerer<'a> {
 
     fn func(&mut self, f: &FuncBody, method: bool) -> ir::Func {
         let name = self.next_fn_name.take();
+        let mut marks = std::mem::take(&mut self.next_fn_marks);
+        marks.label = name.clone();
+        let checks = self.checks_function(&marks);
+        if marks.reflect && self.ctx.tools.reflection > 0 {
+            let label = name.clone().unwrap_or_else(|| "?".into());
+            marks.reflect_meta = Some(self.function_meta(f, &label));
+        }
         self.fn_names.push(name);
-        let lowered = self.func_inner(f, method);
+        let lowered = self.func_inner(f, method, checks);
         self.fn_names.pop();
+        self.fn_marks.insert(lowered.pos, marks);
         lowered
     }
 
-    fn func_inner(&mut self, f: &FuncBody, method: bool) -> ir::Func {
+    fn func_inner(&mut self, f: &FuncBody, method: bool, checks: bool) -> ir::Func {
         self.func_depth += 1;
         let saved_loops = std::mem::take(&mut self.loops);
         let saved_prelude = std::mem::take(&mut self.prelude);
@@ -1248,6 +1283,16 @@ impl<'a> Lowerer<'a> {
         }
         let pos = self.span_pos(f.params_span);
         let mut stmts = self.default_params(f);
+        if checks {
+            // Entry checks (spec §7.5), after default values.
+            let label = self
+                .fn_names
+                .last()
+                .cloned()
+                .flatten()
+                .unwrap_or_else(|| "?".into());
+            stmts.extend(self.entry_checks(f, &label));
+        }
         stmts.extend(self.stmts(&f.body.stmts));
         self.pop_scope();
         self.loops = saved_loops;
@@ -1495,6 +1540,7 @@ impl<'a> Lowerer<'a> {
                 let n = &name.path[0];
                 let fpos = self.span_pos(inner.span);
                 self.next_fn_name = Some(func_name(name));
+                self.next_fn_marks.exported = true;
                 let f = self.func(func, false);
                 self.pending.remove(n.text.as_ref());
                 let target = name_expr(self.ident(n));
@@ -1903,7 +1949,10 @@ impl<'a> Lowerer<'a> {
                     operand: Box::new(self.expr(operand)),
                 }
             }
-            ExprKind::Cast { expr, .. } => return self.expr(expr),
+            ExprKind::Cast { expr, .. } => {
+                let value = self.expr(expr);
+                return self.checked_cast(e, value);
+            }
             ExprKind::Interp(parts) => return self.interp(parts, pos),
             // Handled by `optional_chain`, or rejected by the parser.
             ExprKind::OptField { .. }

@@ -57,17 +57,9 @@ pub(crate) struct Decorations<'d> {
     /// `@script(name, opts?)` on widget class methods.
     pub scripts: Vec<&'d Decorator>,
     pub debug_only: bool,
+    /// `@reflect` (spec §7.8.2).
+    pub reflect: bool,
 }
-
-/// Core decorators of milestone M5 (debugging).
-const M5: &[&str] = &[
-    "profile",
-    "noprofile",
-    "trace",
-    "reflect",
-    "checked",
-    "unchecked",
-];
 
 fn string_arg(d: &Decorator) -> Option<String> {
     match d.args.as_ref()?.exprs().first().map(|e| &e.kind) {
@@ -147,15 +139,6 @@ impl<'a> Lowerer<'a> {
             let name = d.path[0].text.as_ref();
             let allowed = match name {
                 "if" => continue,
-                n if M5.contains(&n) => {
-                    self.errors.push(
-                        Diagnostic::plain_error(format!(
-                            "not available yet: `@{n}` (arrives with milestone M5)"
-                        ))
-                        .with_label(d.span, "needs a newer wowlua compiler"),
-                    );
-                    continue;
-                }
                 "global" => matches!(target, T::Function | T::Class | T::Local | T::Enum),
                 "deprecated" => true,
                 "inline" | "debugOnly" => matches!(target, T::Function | T::Method),
@@ -165,6 +148,13 @@ impl<'a> Lowerer<'a> {
                     T::Function | T::Method | T::Constructor | T::Accessor | T::Class
                 ),
                 "widget" | "intrinsic" | "deferred" => target == T::Declare,
+                "profile" | "noprofile" => {
+                    matches!(target, T::Function | T::Method | T::Constructor | T::Class)
+                }
+                "trace" | "checked" | "unchecked" => {
+                    matches!(target, T::Function | T::Method | T::Constructor)
+                }
+                "reflect" => matches!(target, T::Function | T::Class | T::Enum),
                 _ => true,
             };
             if !allowed {
@@ -179,10 +169,40 @@ impl<'a> Lowerer<'a> {
                 "global" => {
                     out.has_global = true;
                     out.global = string_arg(d);
+                    if target == T::Function {
+                        self.next_fn_marks.global = true;
+                    }
                 }
+                "checked" => self.next_fn_marks.checked = true,
+                "reflect" => {
+                    out.reflect = true;
+                    if target == T::Function {
+                        self.next_fn_marks.reflect = true;
+                    }
+                }
+                "unchecked" => self.next_fn_marks.unchecked = true,
                 "deprecated" => out.deprecated = Some(string_arg(d)),
                 "debugOnly" => out.debug_only = true,
                 "script" => out.scripts.push(d),
+                // Profiling and tracing (spec §7.3, §7.4): marks for the
+                // function lowered next, or for every method of a class.
+                "profile" | "noprofile" | "trace" => {
+                    let args = d
+                        .args
+                        .as_ref()
+                        .map(|a| self.args_list(a))
+                        .unwrap_or_default();
+                    let marks = if target == T::Class {
+                        self.class_marks.get_or_insert_with(FnMarks::default)
+                    } else {
+                        &mut self.next_fn_marks
+                    };
+                    match name {
+                        "profile" => marks.profile = Some(args),
+                        "noprofile" => marks.noprofile = true,
+                        _ => marks.trace = Some(args),
+                    }
+                }
                 "intrinsic" if !self.ctx.compiler_known => self.error(
                     "E3033",
                     d.span,

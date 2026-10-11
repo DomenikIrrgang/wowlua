@@ -68,6 +68,9 @@ export function emitAt(level: string, location: string?, ...: any)
     end
 end
 
+-- Tracing wrappers (`@trace`) log through here when this module is loaded.
+wl.logEmit = emitAt
+
 export function trace(...: any) emitAt("trace", nil, ...) end
 export function debug(...: any) emitAt("debug", nil, ...) end
 export function info(...: any) emitAt("info", nil, ...) end

@@ -399,6 +399,28 @@ pub fn build(
             diagnostics.extend(wowlua_sema::lint::lint(parse, &raw[&source.rel]));
         }
     }
+    // Plain Lua files compiled for instrumentation (decision T97): not
+    // embedded libraries, nor files another AddOn loads.
+    let lower_lua: HashSet<String> = if profile.instrument
+        == wowlua_manifest::model::Instrument::All
+        || profile.monitor
+    {
+        files
+            .iter()
+            .map(|(s, _)| s)
+            .filter(|s| s.kind == SourceKind::Lua && !wowlua_sema::is_compiler_known(&s.src_rel))
+            .filter(|s| {
+                !s.src_rel
+                    .split('/')
+                    .next()
+                    .is_some_and(|first| first.eq_ignore_ascii_case(&build_cfg.libs_dir))
+            })
+            .filter(|s| !build_cfg.shared_files.contains(&s.rel))
+            .map(|s| s.rel.clone())
+            .collect()
+    } else {
+        HashSet::new()
+    };
     let split = build_cfg.flavor_mode == wowlua_manifest::model::FlavorMode::Split;
     let compile_flavors: Vec<Option<String>> = if split {
         flavors.iter().cloned().map(Some).collect()
@@ -471,6 +493,7 @@ pub fn build(
             } else {
                 None
             },
+            &lower_lua,
         );
         builds.push(FlavorBuild {
             flavor: flavor.clone(),
@@ -538,6 +561,7 @@ pub fn build(
                     .and_then(|v| v.as_str().map(str::to_string))
                     .unwrap_or_default(),
                 log_history: manifest.manifest.stdlib.log.history_size,
+                profile_errors: profile.profile_errors,
                 meta: crate::meta::runtime_tables(
                     &b.meta,
                     &b.output.meta_used,

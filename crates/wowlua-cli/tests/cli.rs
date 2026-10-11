@@ -491,7 +491,7 @@ fn wowlua_sources_compile_with_types_erased() {
         &[
             (
                 "wowlua.json",
-                "{ \"package\": { \"name\": \"typed\", \"version\": \"1.0.0\" },\n  \"profiles\": { \"dev\": { \"source-maps\": true } } }\n",
+                "{ \"package\": { \"name\": \"typed\", \"version\": \"1.0.0\" },\n  \"profiles\": { \"dev\": { \"source-maps\": true, \"instrument\": \"none\" } } }\n",
             ),
             (
                 "src/main.wowlua",
@@ -514,7 +514,7 @@ fn wowlua_sources_compile_with_types_erased() {
 
     fs::write(
         dir.path().join("src/main.wowlua"),
-        "@profile\nlocal function f() end\n",
+        "@trace\nclass C\nend\n",
     )
     .unwrap();
     wowlua(dir.path())
@@ -522,7 +522,7 @@ fn wowlua_sources_compile_with_types_erased() {
         .assert()
         .code(1)
         .stderr(predicate::str::contains(
-            "src/main.wowlua:1:1: error: not available yet: `@profile` (arrives with milestone M5)",
+            "src/main.wowlua:1:1: error[E3021]: `@trace` cannot be applied to classes",
         ));
 }
 
@@ -1206,6 +1206,277 @@ chat("Hello")
         .assert()
         .code(1)
         .stderr(predicate::str::contains("error[E8118]"));
+}
+
+/// Profiling and tracing (spec §7.3, §7.4): instrument levels, `@profile`,
+/// `@noprofile`, class methods, plain Lua files in instrumented profiles,
+/// error counting and `@trace`.
+#[test]
+fn profiling_and_tracing() {
+    let dir = tempfile::tempdir().unwrap();
+    let manifest = r#"{ "package": { "name": "prof", "version": "1.0.0" },
+  "profiles": {
+    "decorated": { "inherits": "dev", "instrument": "decorated" },
+    "exports": { "inherits": "dev", "instrument": "exports" },
+    "traced": { "inherits": "test", "instrument": "none" }
+  } }
+"#;
+    let main = r#"import stats from "wowlua:debug"
+import add from "./math"
+
+class Counter
+    n: number = 0
+    function bump(): number
+        self.n += 1
+        return self.n
+    end
+end
+
+local function helper(x: number): number return x + 1 end
+
+@noprofile
+local function hidden() end
+
+@profile({ errors = true })
+local function risky(fail: boolean)
+    if fail then error("boom", 0) end
+end
+
+@trace
+local function traced(a: number, b: string): number return a * 2 end
+
+local c = Counter.new()
+c:bump()
+c:bump()
+print(helper(1), add(2, 3), hidden(), traced(4, "x"))
+risky(false)
+print(pcall(risky, true))
+legacy()
+local names = {}
+for name, s in pairs(stats()) do
+    names[#names + 1] = name .. "=" .. s.calls .. (s.errors > 0 and ("!" .. s.errors) or "")
+end
+table.sort(names)
+print(table.concat(names, " "))
+"#;
+    write(
+        dir.path(),
+        &[
+            ("wowlua.json", manifest),
+            (
+                "src/math.wowlua",
+                "export function add(a: number, b: number): number return a + b end\nexport function unused() end\n",
+            ),
+            ("src/main.wowlua", main),
+            ("src/legacy.lua", "function legacy() return 1 end\n"),
+        ],
+    );
+    let run = |profile: &str, dist: &str| -> String {
+        wowlua(dir.path())
+            .args(["build", "--profile", profile])
+            .assert()
+            .success();
+        run_addon(&dir.path().join(format!("dist/{dist}/Prof")), "Prof")
+    };
+    // dev: every named function, plain Lua too; `@noprofile` excluded.
+    assert_eq!(
+        run("dev", "dev"),
+        "2 5 nil 8\nfalse boom\nCounter.new=1 Counter:bump=2 add=1 helper=1 legacy=1 risky=2!1 traced=1"
+    );
+    // decorated: only `@profile`.
+    assert_eq!(
+        run("decorated", "decorated"),
+        "2 5 nil 8\nfalse boom\nrisky=2!1"
+    );
+    // exports: plus exported functions and public methods of exported classes.
+    assert_eq!(
+        run("exports", "exports"),
+        "2 5 nil 8\nfalse boom\nadd=1 risky=2!1"
+    );
+    // A trace-level profile: `@trace` logs entry and exit.
+    assert_eq!(
+        run("traced", "traced"),
+        "Prof: > traced(4, \"x\")\nProf: < traced = 8\n2 5 nil 8\nfalse boom\n"
+    );
+    // The plain Lua file keeps its lines and gets its wrapper on its `end` line.
+    wowlua(dir.path()).arg("build").assert().success();
+    let legacy = fs::read_to_string(dir.path().join("dist/dev/Prof/src/legacy.lua")).unwrap();
+    assert!(
+        legacy.ends_with("function legacy() return 1 end legacy = __wl.prof.wrap(legacy, \"legacy\", \"src/legacy.lua:1\")\n"),
+        "{legacy}"
+    );
+}
+
+/// Runtime type checks (spec §7.5): entry checks of exported functions,
+/// public methods of exported classes and `@checked` functions in `dev`
+/// (`exports`), every annotated function and `::` in `test` (`all`).
+#[test]
+fn runtime_checks() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"export class Tracker
+    total: number = 0
+    function record(amount: number, note: string?)
+        self.total += amount
+    end
+end
+
+export enum Side { Left = "LEFT", Right = "RIGHT" }
+
+export interface Point
+    x: number
+    y: number
+end
+
+export function place(side: Side, p: Point, count: number = 1, ...: number): Side
+    return side
+end
+
+@checked
+local function strict(t: Tracker) end
+
+@unchecked
+export function loose(x: number) end
+
+local function inner(x: number) end
+
+local function show(ok: boolean, message: any)
+    print(ok, message)
+end
+local t = Tracker.new()
+show(pcall(t.record, t, "5"))
+show(pcall(t.record, t, 5, 7))
+show(pcall(place, "UP", { x = 1, y = 2 }))
+show(pcall(place, "LEFT", { x = 1 }))
+show(pcall(place, "LEFT", { x = 1, y = 2 }, nil, 1, "two"))
+show(pcall(place, "RIGHT", { x = 1, y = 2 }))
+show(pcall(strict, {}))
+show(pcall(loose, "x"))
+show(pcall(inner, "x"))
+show(pcall(function() return (_G.missing :: number) end))
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"chk\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", main),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    assert_eq!(
+        run_addon(&dir.path().join("dist/dev/Chk"), "Chk"),
+        [
+            "false Chk: src/main.wowlua:3: bad argument #1 'amount' to 'Tracker:record' (number expected, got string)",
+            "false Chk: src/main.wowlua:3: bad argument #2 'note' to 'Tracker:record' (string? expected, got number)",
+            "false Chk: src/main.wowlua:15: bad argument #1 'side' to 'place' (Side expected, got string)",
+            "false Chk: src/main.wowlua:15: bad argument #2 'p' to 'place' (Point expected, got table)",
+            "false Chk: src/main.wowlua:15: bad argument #5 '...' to 'place' (number expected, got string)",
+            "true RIGHT",
+            "false Chk: src/main.wowlua:20: bad argument #1 't' to 'strict' (Tracker expected, got table)",
+            "true nil",
+            "true nil",
+            "true nil",
+        ]
+        .join("\n")
+    );
+    // `test` checks every annotated function and `::` assertions.
+    wowlua(dir.path())
+        .args(["build", "--profile", "test"])
+        .assert()
+        .success();
+    let out = run_addon(&dir.path().join("dist/test/Chk"), "Chk");
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[7], "true nil", "{out}");
+    assert_eq!(
+        lines[8],
+        "false Chk: src/main.wowlua:25: bad argument #1 'x' to 'inner' (number expected, got string)"
+    );
+    assert_eq!(
+        lines[9],
+        "false Chk: src/main.wowlua:40: bad value for '::' (number expected, got nil)"
+    );
+}
+
+/// `wowlua:reflect` (spec §7.8): class identity, enum order, and the full
+/// metadata of `@reflect` classes and functions.
+#[test]
+fn reflection() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"import * as reflect from "wowlua:reflect"
+
+interface Named
+    name: string
+end
+
+class Animal
+    name: string = "?"
+end
+
+@reflect
+class Dog extends Animal implements Named
+    scale: number = 1
+    private locked: boolean = false
+    nickname?: string
+    get label(): string return self.name end
+    function bark(times: number, loud: boolean?): string return "woof" end
+end
+
+enum Direction { Up, Down, Left, Right }
+
+@reflect
+local function greet(who: string, times: number = 1): string return "hi " .. who end
+
+local d = Dog.new()
+print(reflect.isInstance(d, Dog), reflect.isInstance(d, Animal), reflect.className(d), reflect.className(reflect.superclass(Dog)))
+print(reflect.isSubclass(Dog, Animal), reflect.isSubclass(Animal, Dog), reflect.classOf(d) == Dog)
+print(reflect.enumName(Direction, 2), reflect.enumFrom(Direction, 9), reflect.enumFrom(Direction, 4))
+local order = {}
+for _, e in ipairs(reflect.enumEntries(Direction)) do order[#order + 1] = e.name .. "=" .. e.value end
+print(table.concat(order, " "))
+for _, f in ipairs(reflect.fields(Dog)) do
+    print(f.name, f.type, f.visibility, f.optional, f.hasDefault)
+end
+local m = reflect.methods(Dog)[1]
+print(m.name, m.params[1].name, m.params[2].type, m.params[2].optional, m.returns)
+print(reflect.properties(Dog)[1].name, reflect.interfaces(Dog)[1], reflect.getClass("Dog") == Dog, reflect.fields(Animal))
+local info = reflect.functionInfo(greet)
+print(info.name, info.location, info.params[2].optional, info.returns)
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"refl\", \"version\": \"1.0.0\" }, \"profiles\": { \"bare\": { \"inherits\": \"dev\", \"reflection\": \"none\" } } }\n",
+            ),
+            ("src/main.wowlua", main),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    assert_eq!(
+        run_addon(&dir.path().join("dist/dev/Refl"), "Refl"),
+        [
+            "true true Dog Animal",
+            "true false true",
+            "Down nil 4",
+            "Up=1 Down=2 Left=3 Right=4",
+            "scale number public false true",
+            "locked boolean private false true",
+            "nickname string public true false",
+            "bark times boolean? true string",
+            "label Named true nil",
+            "greet src/main.wowlua:23 true string",
+        ]
+        .join("\n")
+    );
+    // Without reflection, full-metadata calls warn (W7010) and return nil.
+    wowlua(dir.path())
+        .args(["build", "--profile", "bare", "--message-format", "short"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("warning[W7010]"));
 }
 
 /// `wowlua lint` reports the lints only; `--fix` applies their fixes;

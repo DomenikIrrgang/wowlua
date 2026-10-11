@@ -139,6 +139,9 @@ impl Checker<'_> {
             ExprKind::Cast { expr, ty } => {
                 let from = self.infer(expr);
                 let to = self.annotation(ty);
+                if let Some(c) = self.value_check(to) {
+                    self.value_checks.insert(e.span, c);
+                }
                 // Assertions between incomparable types (E2015).
                 if !self.env.assignable(from, to, self.mode)
                     && !self.env.assignable(to, from, self.mode)

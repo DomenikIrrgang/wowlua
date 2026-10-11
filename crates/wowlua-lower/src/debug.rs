@@ -39,7 +39,8 @@ impl Lowerer<'_> {
             },
             _ => return None,
         };
-        (id.starts_with("debug.") || log_rank(&id).is_some()).then_some(id)
+        (id.starts_with("debug.") || id.starts_with("reflect.") || log_rank(&id).is_some())
+            .then_some(id)
     }
 
     /// A call of a `wowlua:log` level function: removed below the
@@ -181,6 +182,15 @@ impl Lowerer<'_> {
             return self
                 .log_call(id, callee, args, e)
                 .unwrap_or_else(|| lit(ir::ExprKind::Nil, pos));
+        }
+        if id.starts_with("reflect.") && self.ctx.tools.reflection == 0 {
+            self.warnings.push(
+                Diagnostic::warning(
+                    "W7010",
+                    "reflection metadata is requested, but this profile has `reflection = \"none\"`",
+                )
+                .with_label(e.span, "returns nil"),
+            );
         }
         match id {
             _ if STATEMENT_ONLY.contains(&id) => {

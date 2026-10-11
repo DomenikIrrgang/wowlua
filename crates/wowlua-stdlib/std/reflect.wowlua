@@ -1,0 +1,152 @@
+-- wowlua:reflect (spec §7.8): class identity (always available) and the
+-- full metadata of `@reflect` classes and functions.
+local _, ns = ...
+local wl = ns.__wowlua
+
+local function registry(): any
+    return wl.reflect
+end
+
+local function super(cls: any): any
+    return type(cls) == "table" and rawget(cls, "__super") or nil
+end
+
+export function isInstance(value: any, cls: any): boolean
+    return wl.isInstance ~= nil and wl.isInstance(value, cls)
+end
+
+export function classOf(value: any): any
+    return wl.classOf and wl.classOf(value) or nil
+end
+
+-- The class name of an instance or a class.
+export function className(value: any): string?
+    local cls = classOf(value)
+    if cls == nil and type(value) == "table" and rawget(value, "__name") then
+        cls = value
+    end
+    return cls and rawget(cls, "__name") or nil
+end
+
+export function superclass(cls: any): any
+    return super(cls)
+end
+
+export function isSubclass(cls: any, base: any): boolean
+    local c = cls
+    while c do
+        if c == base then
+            return true
+        end
+        c = super(c)
+    end
+    return false
+end
+
+-- Member names in declaration order (registered), else sorted by value.
+local function order(e: any): { [number]: string }
+    local reg = registry()
+    local known = reg and reg.enums[e]
+    if known then
+        return known
+    end
+    local names = {}
+    for name in pairs(e) do
+        names[#names + 1] = name
+    end
+    table.sort(names, function(a: any, b: any): boolean
+        local x, y = rawget(e, a), rawget(e, b)
+        if type(x) == type(y) then
+            return x < y
+        end
+        return tostring(x) < tostring(y)
+    end)
+    return names
+end
+
+export function enumName(e: any, value: any): string?
+    for _, name in ipairs(order(e)) do
+        if rawget(e, name) == value then
+            return name
+        end
+    end
+    return nil
+end
+
+export function enumEntries(e: any): { [number]: { name: string, value: any } }
+    local out = {}
+    for _, name in ipairs(order(e)) do
+        out[#out + 1] = { name = name, value = rawget(e, name) }
+    end
+    return out
+end
+
+-- `raw` as a member of `e`, or nil.
+export function enumFrom(e: any, raw: any): any
+    return enumName(e, raw) and raw or nil
+end
+
+local function meta(cls: any): any
+    local reg = registry()
+    return reg and reg.classes[cls] or nil
+end
+
+export function fields(cls: any): any
+    local m = meta(cls)
+    return m and m.fields or nil
+end
+
+export function methods(cls: any): any
+    local m = meta(cls)
+    return m and m.methods or nil
+end
+
+export function properties(cls: any): any
+    local m = meta(cls)
+    return m and m.properties or nil
+end
+
+export function interfaces(cls: any): any
+    local m = meta(cls)
+    return m and m.interfaces or nil
+end
+
+-- The class's decorators, or a member's.
+export function decorators(cls: any, member: string?): any
+    local m = meta(cls)
+    if not m then
+        return nil
+    end
+    if member == nil then
+        return m.decorators
+    end
+    for _, list in ipairs({ m.fields, m.methods, m.properties }) do
+        for _, entry in ipairs(list) do
+            if entry.name == member then
+                return entry.decorators
+            end
+        end
+    end
+    return nil
+end
+
+export function functionInfo(fn: any): any
+    local reg = registry()
+    return reg and reg.functions[fn] or nil
+end
+
+export function getClass(name: string): any
+    local reg = registry()
+    return reg and reg.byName[name] or nil
+end
+
+export function classes(): { [number]: any }
+    local out = {}
+    local reg = registry()
+    if reg then
+        for _, cls in pairs(reg.byName) do
+            out[#out + 1] = cls
+        end
+    end
+    return out
+end

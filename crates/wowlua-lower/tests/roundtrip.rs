@@ -132,9 +132,9 @@ fn type_annotations_are_erased() {
 }
 
 #[test]
-fn unsupported_syntax_names_the_milestone() {
+fn debugging_decorators_check_their_targets() {
     let mut db = SourceDb::new();
-    let src = "class A\nend\n@trace\nlocal function f() end\n@profile\nlocal function g() end\n";
+    let src = "class A\nend\n@trace\nclass B\nend\n@reflect\nlocal x = 1\n";
     let file = db.add("t.wowlua", src.to_string());
     let parsed = wowlua_syntax::parse(src.as_bytes(), file);
     let errors = wowlua_lower::lower(&parsed, src.as_bytes()).unwrap_err();
@@ -142,8 +142,8 @@ fn unsupported_syntax_names_the_milestone() {
     assert_eq!(
         messages,
         [
-            "not available yet: `@trace` (arrives with milestone M5)",
-            "not available yet: `@profile` (arrives with milestone M5)"
+            "`@trace` cannot be applied to classes",
+            "`@reflect` cannot be applied to `local` and `const` declarations"
         ]
     );
 }

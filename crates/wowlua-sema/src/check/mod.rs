@@ -8,6 +8,7 @@ pub mod expr;
 pub mod flavors;
 pub mod narrow;
 pub mod query;
+pub mod runtime;
 pub mod subst;
 pub mod types;
 
@@ -48,6 +49,9 @@ pub struct CheckOutput {
     /// The static types of `typeName(expr)` arguments (`wowlua:debug`,
     /// spec §7.1), by the argument's span.
     pub type_names: HashMap<wowlua_span::Span, String>,
+    /// Runtime checks (spec §7.5) of annotated parameters (by the name's
+    /// span), `...: T` (by the `...` span) and `::` (by the expression's).
+    pub value_checks: HashMap<wowlua_span::Span, runtime::ValueCheck>,
 }
 
 /// Like [`check_package`], with the type information lowering uses.
@@ -59,6 +63,7 @@ pub fn check_package_full(
     shared: Option<&flavors::SharedFlavors>,
 ) -> CheckOutput {
     let mut type_names = HashMap::new();
+    let mut value_checks = HashMap::new();
     // Declaration sources: declaration files first, then modules.
     let mut sources: Vec<env::Source> = Vec::new();
     for (i, f) in files.iter().enumerate() {
@@ -226,6 +231,7 @@ pub fn check_package_full(
                 type_names.insert(arg.span, checker.env.display(t));
             }
         });
+        value_checks.extend(std::mem::take(&mut checker.value_checks));
         let file_exports = std::mem::take(&mut checker.exports);
         diagnostics.append(&mut checker.diagnostics);
         diagnostics.append(&mut env.diagnostics);
@@ -234,6 +240,7 @@ pub fn check_package_full(
     CheckOutput {
         diagnostics,
         type_names,
+        value_checks,
     }
 }
 

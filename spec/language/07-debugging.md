@@ -125,11 +125,24 @@ result through a vararg helper, so every return value is passed through
 unchanged. Recursive calls of a `local function` go through the wrapper because
 the local is reassigned (as for decorators).
 
+A **named function** is a `function` statement (`function M.f()`,
+`function M:f()`, `function f()`), a `local function`, a method or
+constructor, and a function literal assigned to one name or field
+(`local f = function … end`, `M.f = function … end`). Statistics are keyed by
+the function's name as written: `Tracker:record` for methods, `Tracker.new`
+for constructors, `M.f`, `f`. Wrappers are added after decorators run on the
+function's own value, so a decorator wraps the profiled function. The
+standard library's own modules are never instrumented.
+
 **Limits of wrappers** (profiling and tracing):
 
 - **Tail calls.** A wrapped function's `return f(...)` is no longer a tail call
   from the caller's perspective. Deep tail recursion through wrapped functions
   uses stack space.
+- **Stack levels.** The wrapper is one more stack frame: `error(msg, 2)`,
+  `getfenv(2)` and `debugstack()` inside a wrapped function see the wrapper
+  where they would see the caller. Mark such functions `@noprofile`, or use a
+  profile with `instrument = "decorated"`.
 - **Error tracking** needs `xpcall`. Lua 5.1's `xpcall` cannot pass arguments,
   so each call allocates a closure, which is why tracking is opt-in. The error is
   re-raised with its original message. The original stack trace is captured with
@@ -155,6 +168,11 @@ end
 at `trace` level. Output is indented by call depth. Large tables are summarized.
 `@trace({ args = false })` logs calls without arguments. Tracing is removed
 entirely when the profile's `log-level` is above `trace`.
+
+The lines go through `wowlua:log` when the addon uses it (into its ring
+buffer and sinks), otherwise to `print` with the addon's name. The wrapper
+calls the function with `pcall` to see errors, so a traced function must not
+yield (Lua 5.1 cannot yield across `pcall`); the error is re-raised unchanged.
 
 ## 7.5 Runtime type checks
 
@@ -193,6 +211,13 @@ A failed check raises:
 ```
 MyAddon: src/tracker.wowlua:14: bad argument #1 'amount' to 'Tracker:record' (number expected, got string)
 ```
+
+Arguments are numbered from the first declared parameter (a method's `self`
+is not counted), values of `...` after the declared ones. A failed `::`
+assertion raises `MyAddon: src/a.wowlua:9: bad value for '::' (number expected,
+got nil)`. A class instance check needs the class in scope in that file;
+where only its type is imported, the check is `type(v) == "table"`. The
+standard library's own functions are never checked.
 
 ## 7.6 Error locations
 

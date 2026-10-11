@@ -116,7 +116,7 @@ impl<'a> Lowerer<'a> {
         Arc::new(info)
     }
 
-    fn wl_call(&mut self, function: &str, args: Vec<ir::Expr>, pos: Pos) -> ir::Expr {
+    pub(crate) fn wl_call(&mut self, function: &str, args: Vec<ir::Expr>, pos: Pos) -> ir::Expr {
         let wl = self.runtime_ref(pos);
         call(field(wl, function, pos), args, pos)
     }
@@ -160,6 +160,17 @@ impl<'a> Lowerer<'a> {
     }
 
     /// A class declaration (spec §3.1.9).
+    /// The marks of a class member's function: its own decorators, else the
+    /// class's (spec §7.3).
+    fn member_marks(&mut self, class: &FnMarks, exported: bool) {
+        let marks = &mut self.next_fn_marks;
+        if marks.profile.is_none() && !marks.noprofile {
+            marks.profile = class.profile.clone();
+            marks.noprofile = class.noprofile;
+        }
+        marks.exported = exported;
+    }
+
     pub(crate) fn class_decl(
         &mut self,
         c: &ClassDecl,
@@ -167,6 +178,8 @@ impl<'a> Lowerer<'a> {
         exported: bool,
     ) -> Vec<ir::Stmt> {
         let name = c.name.text.to_string();
+        // `@profile` / `@noprofile` on the class apply to its methods.
+        let class_marks = self.class_marks.take().unwrap_or_default();
         // On the `class` line, not on a decorator's.
         let pos = self.span_pos(c.name.span);
         let end = self.span_pos(c.end_span);
@@ -273,6 +286,8 @@ impl<'a> Lowerer<'a> {
                     } else {
                         let sep = if is_static { "." } else { ":" };
                         self.next_fn_name = Some(format!("{name}{sep}{}", mname.text));
+                        let public = !has(m, Modifier::Private) && !has(m, Modifier::Protected);
+                        self.member_marks(&class_marks, exported && public);
                         self.func(func, !is_static)
                     };
                     let (path, method) = if is_static {
@@ -359,6 +374,8 @@ impl<'a> Lowerer<'a> {
                     }
                     has_ctor = true;
                     let d = self.decorations(&m.decorators, Target::Constructor);
+                    self.next_fn_name = Some(format!("{name}.new"));
+                    self.member_marks(&class_marks, exported);
                     let own_inits = widget.is_some() && !field_inits_of(c).is_empty();
                     let s = match &widget {
                         Some(w) => self.widget_ctor(
@@ -439,6 +456,14 @@ impl<'a> Lowerer<'a> {
         if !deco.user.is_empty() {
             let s =
                 self.apply_decorators(cls.clone(), &deco.user, "class", &name, false, None, end);
+            out.push(s);
+        }
+        // Full reflection metadata (spec §7.8.2).
+        let reflection = self.ctx.tools.reflection;
+        if reflection == 2 || (reflection == 1 && deco.reflect) {
+            let mut decorators: Vec<&Decorator> = deco.user.clone();
+            decorators.extend(deco.register.iter().copied());
+            let s = self.class_meta(c, &decorators, cls.clone(), end);
             out.push(s);
         }
         if deco.has_global {
@@ -1028,6 +1053,10 @@ impl<'a> Lowerer<'a> {
         }
         let target = name_expr(ident(&name, pos));
         let mut out = vec![assign(target.clone(), value, pos)];
+        if self.ctx.tools.reflect_used {
+            let names: Vec<String> = info.members.iter().map(|(m, _)| m.to_string()).collect();
+            out.push(self.enum_order(&names, target.clone(), pos));
+        }
         self.pending.remove(&name);
         if deco.has_global {
             let global = deco.global.clone().unwrap_or_else(|| name.clone());

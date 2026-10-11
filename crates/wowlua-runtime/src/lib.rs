@@ -20,6 +20,12 @@ pub enum Slice {
     Decorate,
     /// The profiler (spec §7.3).
     Prof,
+    /// Tracing wrappers (spec §7.4).
+    Trace,
+    /// Runtime type checks (spec §7.5).
+    Check,
+    /// Reflection metadata (spec §7.8).
+    Reflect,
     /// The dev console and window (spec §7.7).
     DevConsole,
 }
@@ -32,6 +38,9 @@ impl Slice {
             Slice::Enum => include_str!("../lua/enum.lua"),
             Slice::Decorate => include_str!("../lua/decorate.lua"),
             Slice::Prof => include_str!("../lua/prof.lua"),
+            Slice::Trace => include_str!("../lua/trace.lua"),
+            Slice::Check => include_str!("../lua/check.lua"),
+            Slice::Reflect => include_str!("../lua/reflect.lua"),
             Slice::DevConsole => include_str!("../lua/devconsole.lua"),
         }
     }
@@ -56,6 +65,8 @@ pub struct RuntimeOptions {
     pub log_level: String,
     /// Entries `wowlua:log` keeps in its ring buffer.
     pub log_history: u32,
+    /// `profile-errors`: profiled functions count their errors.
+    pub profile_errors: bool,
     /// Lua statements filling `wl.meta` (build metadata runtime tables).
     pub meta: Option<String>,
     /// Slices the compiled code uses.
@@ -87,6 +98,9 @@ pub fn runtime(options: &RuntimeOptions) -> String {
         ));
     }
     placeholders.push_str(&format!("wl.debug = {}\n", options.debug));
+    if options.profile_errors {
+        placeholders.push_str("wl.profErrors = true\n");
+    }
     if !options.log_level.is_empty() {
         placeholders.push_str(&format!(
             "wl.logLevel = {}\nwl.logHistory = {}\n",
