@@ -134,14 +134,14 @@ fn type_annotations_are_erased() {
 #[test]
 fn unsupported_syntax_names_the_milestone() {
     let mut db = SourceDb::new();
-    let src = "local a = b?.c\nx += 1\nx += 2\n";
+    let src = "class A\nend\n@trace\nlocal function f() end\n@trace\nlocal function g() end\n";
     let file = db.add("t.wowlua", src.to_string());
     let parsed = wowlua_syntax::parse(src.as_bytes(), file);
     let errors = wowlua_lower::lower(&parsed, src.as_bytes()).unwrap_err();
     assert_eq!(errors.len(), 2);
     assert_eq!(
         errors[0].message,
-        "not available yet: optional chaining (arrives with milestone M2)"
+        "not available yet: classes (arrives with milestone M3)"
     );
     assert!(
         errors[1].message.contains("used 2 times"),

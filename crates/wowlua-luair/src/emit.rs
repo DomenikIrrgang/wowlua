@@ -264,8 +264,12 @@ impl<'a> Emitter<'a> {
         };
     }
 
-    /// A keyword token.
+    /// A keyword token, separated from what precedes it except after an
+    /// opening bracket.
     fn kw(&mut self, text: &str, pos: Pos) {
+        if !matches!(self.last, Last::None | Last::Symbol(b'(' | b'[' | b'{')) {
+            self.space();
+        }
         self.token(text.as_bytes(), pos);
         self.last = Last::Keyword;
     }

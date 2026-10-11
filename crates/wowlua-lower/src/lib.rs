@@ -1,31 +1,41 @@
 //! Lowering: wowlua syntax tree → Lua 5.1 IR (spec compiler §13.3.1, stage
-//! 14). Milestone M1 lowers every Lua 5.1 construct and erases type-only
-//! syntax (annotations, casts, `type`, `interface`, `declare`, `import type`);
-//! other wowlua syntax reports the milestone that implements it.
+//! 14). Implements the syntax-sugar lowerings of spec chapter 1 with the
+//! "preceding statements" mechanism of codegen §14.4. Without type
+//! information (milestone M4), every file uses the basic-mode forms.
 
-use std::collections::BTreeMap;
+mod constant;
+
+use constant::{Const, quote};
+use std::collections::{BTreeMap, HashMap};
 use wowlua_diagnostics::Diagnostic;
-use wowlua_luair::ir;
-use wowlua_luair::ir::Pos;
+use wowlua_luair::ir::{self, Pos};
 use wowlua_span::Span;
 use wowlua_syntax::Parse;
 use wowlua_syntax::ast::*;
 use wowlua_syntax::features::{Feature, features};
 use wowlua_syntax::token::TriviaKind;
 
+pub use constant::{format_g14, format_number};
+
+/// Features this compiler version cannot lower yet.
+fn unsupported(feature: Feature) -> bool {
+    matches!(
+        feature,
+        Feature::Decorator | Feature::Class | Feature::Enum | Feature::Module
+    )
+}
+
 /// Lowers a parsed file without errors. `src` is the file's bytes.
 pub fn lower(parse: &Parse, src: &[u8]) -> Result<ir::Chunk, Vec<Diagnostic>> {
-    let mut unsupported: BTreeMap<Feature, (Span, usize)> = BTreeMap::new();
+    let mut found: BTreeMap<Feature, (Span, usize)> = BTreeMap::new();
     for (feature, span) in features(&parse.chunk) {
-        if !feature.is_type_only() {
-            unsupported.entry(feature).or_insert((span, 0)).1 += 1;
+        if unsupported(feature) {
+            found.entry(feature).or_insert((span, 0)).1 += 1;
         }
     }
-    if !unsupported.is_empty() {
-        let mut first: Vec<(Feature, Span, usize)> = unsupported
-            .into_iter()
-            .map(|(f, (span, n))| (f, span, n))
-            .collect();
+    if !found.is_empty() {
+        let mut first: Vec<(Feature, Span, usize)> =
+            found.into_iter().map(|(f, (s, n))| (f, s, n)).collect();
         first.sort_by_key(|(_, span, _)| span.start);
         return Err(first
             .into_iter()
@@ -41,29 +51,232 @@ pub fn lower(parse: &Parse, src: &[u8]) -> Result<ir::Chunk, Vec<Diagnostic>> {
                     feature.milestone()
                 ))
                 .with_label(span, "needs a newer wowlua compiler")
-                .with_note("this compiler version builds plain Lua 5.1 and erases type annotations")
             })
             .collect());
     }
-    let lowerer = Lowerer { parse, src };
-    Ok(ir::Chunk {
-        block: lowerer.chunk_block(&parse.chunk.block),
+    let mut lowerer = Lowerer {
+        parse,
+        src,
+        scopes: vec![Scope::default()],
+        prelude: Vec::new(),
+        temps: 0,
+        aliases: BTreeMap::new(),
+        errors: Vec::new(),
+        loops: Vec::new(),
+    };
+    let mut stmts = lowerer.stmts(&parse.chunk.block.stmts);
+    if !lowerer.errors.is_empty() {
+        return Err(lowerer.errors);
+    }
+    // Prologue (spec codegen §14.2): aliases of shadowed globals, on line 1.
+    let line1 = Pos::new(1, 0);
+    let prologue: Vec<ir::Stmt> = lowerer
+        .aliases
+        .iter()
+        .map(|(alias, (global, member))| {
+            let mut value = ir::Expr::new(ir::ExprKind::Name(ident(global, line1)), line1);
+            if let Some(m) = member {
+                value = field(value, m, line1);
+            }
+            ir::Stmt {
+                pos: line1,
+                kind: ir::StmtKind::Local {
+                    names: vec![generated(alias, line1)],
+                    values: vec![value],
+                },
+            }
+        })
+        .collect();
+    stmts.splice(0..0, prologue);
+    let mut chunk = ir::Chunk {
+        block: ir::Block {
+            stmts,
+            end: Pos::NONE,
+        },
         comments: lowerer.comments(),
-    })
+    };
+    wowlua_luair::hygiene::apply(&mut chunk);
+    Ok(chunk)
 }
 
 fn grow<R>(f: impl FnOnce() -> R) -> R {
     stacker::maybe_grow(64 * 1024, 1024 * 1024, f)
 }
 
+// ------------------------------------------------------------- helpers --
+
+fn ident(name: &str, pos: Pos) -> ir::Ident {
+    ir::Ident::new(name, pos)
+}
+
+fn generated(name: &str, pos: Pos) -> ir::Ident {
+    ir::Ident {
+        name: name.to_string(),
+        generated: true,
+        pos,
+    }
+}
+
+fn name_expr(id: ir::Ident) -> ir::Expr {
+    let pos = id.pos;
+    ir::Expr::new(ir::ExprKind::Name(id), pos)
+}
+
+fn field(obj: ir::Expr, name: &str, pos: Pos) -> ir::Expr {
+    ir::Expr::new(
+        ir::ExprKind::Field {
+            obj: Box::new(obj),
+            name: ident(name, Pos::NONE),
+        },
+        pos,
+    )
+}
+
+fn call(callee: ir::Expr, args: Vec<ir::Expr>, pos: Pos) -> ir::Expr {
+    ir::Expr::new(
+        ir::ExprKind::Call {
+            callee: Box::new(callee),
+            args: ir::Args::Parens {
+                args,
+                close: Pos::NONE,
+            },
+        },
+        pos,
+    )
+}
+
+fn binary(op: ir::BinOp, lhs: ir::Expr, rhs: ir::Expr, pos: Pos) -> ir::Expr {
+    ir::Expr::new(
+        ir::ExprKind::Binary {
+            op,
+            op_pos: Pos::NONE,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+        },
+        pos,
+    )
+}
+
+fn lit(kind: ir::ExprKind, pos: Pos) -> ir::Expr {
+    ir::Expr::new(kind, pos)
+}
+
+fn stmt(kind: ir::StmtKind, pos: Pos) -> ir::Stmt {
+    ir::Stmt { pos, kind }
+}
+
+fn local(name: ir::Ident, value: ir::Expr, pos: Pos) -> ir::Stmt {
+    stmt(
+        ir::StmtKind::Local {
+            names: vec![name],
+            values: vec![value],
+        },
+        pos,
+    )
+}
+
+fn assign(target: ir::Expr, value: ir::Expr, pos: Pos) -> ir::Stmt {
+    stmt(
+        ir::StmtKind::Assign {
+            targets: vec![target],
+            values: vec![value],
+        },
+        pos,
+    )
+}
+
+fn if_stmt(cond: ir::Expr, body: Vec<ir::Stmt>, pos: Pos) -> ir::Stmt {
+    stmt(
+        ir::StmtKind::If {
+            clauses: vec![ir::IfClause {
+                cond,
+                then_pos: Pos::NONE,
+                body: ir::Block {
+                    stmts: body,
+                    end: Pos::NONE,
+                },
+            }],
+            else_block: None,
+        },
+        pos,
+    )
+}
+
+fn do_block(stmts: Vec<ir::Stmt>, pos: Pos) -> ir::Stmt {
+    stmt(
+        ir::StmtKind::Do(ir::Block {
+            stmts,
+            end: Pos::NONE,
+        }),
+        pos,
+    )
+}
+
+/// The expression may call a function or read `...` when evaluated.
+fn has_side_effects(e: &ir::Expr) -> bool {
+    use ir::ExprKind as K;
+    match &e.kind {
+        K::Call { .. } | K::Method { .. } | K::Vararg => true,
+        K::Nil | K::True | K::False | K::Number(_) | K::String(_) | K::Function(_) | K::Name(_) => {
+            false
+        }
+        K::Table { fields, .. } => fields.iter().any(|f| match f {
+            ir::Field::Keyed { key, value, .. } => has_side_effects(key) || has_side_effects(value),
+            ir::Field::Named { value, .. } | ir::Field::Positional(value) => {
+                has_side_effects(value)
+            }
+        }),
+        K::Index { obj, key } => has_side_effects(obj) || has_side_effects(key),
+        K::Field { obj, .. } => has_side_effects(obj),
+        K::Paren { inner, .. } => has_side_effects(inner),
+        K::Binary { lhs, rhs, .. } => has_side_effects(lhs) || has_side_effects(rhs),
+        K::Unary { operand, .. } => has_side_effects(operand),
+    }
+}
+
+// --------------------------------------------------------------- scopes --
+
+#[derive(Clone, Debug)]
+enum Binding {
+    Local,
+    /// A `const` folded to a value: references are replaced by it.
+    Const(Const),
+    /// A `const` that is a normal local at run time.
+    ConstLocal,
+}
+
+#[derive(Default)]
+struct Scope {
+    names: HashMap<Box<str>, Binding>,
+}
+
+/// How the body of the loop being lowered handles `continue` (spec §1.3.6).
+#[derive(Clone)]
+struct LoopInfo {
+    /// The body is wrapped in `repeat … until true`.
+    wrapped: bool,
+    /// The flag that carries a `break` out of the wrapper.
+    break_flag: Option<String>,
+}
+
 struct Lowerer<'a> {
     parse: &'a Parse,
     src: &'a [u8],
+    scopes: Vec<Scope>,
+    /// Statements that must run before the statement being lowered.
+    prelude: Vec<ir::Stmt>,
+    temps: u32,
+    /// Hygienic aliases of shadowed globals: alias → (global, member).
+    aliases: BTreeMap<String, (String, Option<String>)>,
+    errors: Vec<Diagnostic>,
+    loops: Vec<LoopInfo>,
 }
 
 const LICENSE_WORDS: &[&str] = &["license", "copyright", "spdx-license-identifier"];
 
 impl<'a> Lowerer<'a> {
+    // ---------------------------------------------------------- positions --
+
     fn pos(&self, offset: u32) -> Pos {
         let lexed = &self.parse.lexed;
         Pos::new(lexed.line_of(offset), lexed.column_of(offset))
@@ -73,8 +286,6 @@ impl<'a> Lowerer<'a> {
         self.pos(span.start)
     }
 
-    /// Position of the first token at or after `offset` (a block's closing
-    /// keyword).
     fn next_token_pos(&self, offset: u32) -> Pos {
         let tokens = &self.parse.lexed.tokens;
         let i = tokens.partition_point(|t| t.start < offset);
@@ -84,8 +295,10 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    /// The source comments; the leading block is a license header when it
-    /// mentions a license (spec codegen §14.8.6).
+    fn close_pos(&self, span: Span) -> Pos {
+        self.pos(span.end.saturating_sub(1))
+    }
+
     fn comments(&self) -> Vec<ir::Comment> {
         let lexed = &self.parse.lexed;
         let first = lexed.tokens.first().map(|t| t.trivia_end).unwrap_or(0) as usize;
@@ -120,69 +333,247 @@ impl<'a> Lowerer<'a> {
             .collect()
     }
 
-    fn chunk_block(&self, b: &Block) -> ir::Block {
-        ir::Block {
-            stmts: self.stmts(&b.stmts),
-            end: Pos::NONE,
+    // ------------------------------------------------------------- scopes --
+
+    fn push_scope(&mut self) {
+        self.scopes.push(Scope::default());
+    }
+
+    fn pop_scope(&mut self) {
+        self.scopes.pop();
+    }
+
+    fn declare(&mut self, name: &str, binding: Binding) {
+        self.scopes
+            .last_mut()
+            .expect("a scope")
+            .names
+            .insert(name.into(), binding);
+    }
+
+    fn lookup(&self, name: &str) -> Option<&Binding> {
+        self.scopes.iter().rev().find_map(|s| s.names.get(name))
+    }
+
+    fn is_local(&self, name: &str) -> bool {
+        self.lookup(name).is_some()
+    }
+
+    /// A fresh hygienic temporary.
+    fn temp(&mut self, base: &str) -> String {
+        self.temps += 1;
+        format!("__wl_{base}{}", self.temps)
+    }
+
+    /// A reference to a standard global (`tostring`, `bit.band`, …), through
+    /// a hygienic alias when a user binding shadows it (spec §1.4.7).
+    fn global(&mut self, name: &str, member: Option<&str>, pos: Pos) -> ir::Expr {
+        if self.is_local(name) {
+            let alias = match member {
+                Some(m) => format!("__wl_{name}_{m}"),
+                None => format!("__wl_{name}"),
+            };
+            self.aliases.insert(
+                alias.clone(),
+                (name.to_string(), member.map(str::to_string)),
+            );
+            return name_expr(generated(&alias, pos));
+        }
+        let base = name_expr(ident(name, pos));
+        match member {
+            Some(m) => field(base, m, pos),
+            None => base,
         }
     }
 
-    fn block(&self, b: &Block) -> ir::Block {
+    fn error(&mut self, code: &'static str, span: Span, message: impl Into<String>) {
+        self.errors
+            .push(Diagnostic::error(code, message).with_label(span, "here"));
+    }
+
+    // ------------------------------------------------------------ prelude --
+
+    /// Runs `f` with a fresh prelude and returns its statements, wrapped in
+    /// `do … end` with the prelude when there is one (codegen §14.4).
+    fn wrapped(&mut self, pos: Pos, f: impl FnOnce(&mut Self) -> Vec<ir::Stmt>) -> Vec<ir::Stmt> {
+        let saved = std::mem::take(&mut self.prelude);
+        let stmts = f(self);
+        let pre = std::mem::replace(&mut self.prelude, saved);
+        if pre.is_empty() {
+            stmts
+        } else {
+            let mut all = pre;
+            all.extend(stmts);
+            vec![do_block(all, pos)]
+        }
+    }
+
+    /// Lowers `f` into a separate prelude buffer (for code that must only
+    /// run conditionally) and returns (buffer, result).
+    fn isolated<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> (Vec<ir::Stmt>, R) {
+        let saved = std::mem::take(&mut self.prelude);
+        let result = f(self);
+        let pre = std::mem::replace(&mut self.prelude, saved);
+        (pre, result)
+    }
+
+    /// Lowers operands left to right. When one needs preceding statements,
+    /// earlier operands with side effects are moved into temporaries first,
+    /// so Lua's evaluation order is kept (codegen §14.4).
+    fn seq(&mut self, items: &[&Expr]) -> Vec<ir::Expr> {
+        let mut out: Vec<ir::Expr> = Vec::with_capacity(items.len());
+        for e in items {
+            let start = self.prelude.len();
+            let lowered = self.expr(e);
+            if self.prelude.len() > start {
+                let mut hoisted = Vec::new();
+                for prev in out.iter_mut() {
+                    if has_side_effects(prev) {
+                        let pos = prev.pos;
+                        let t = self.temp("t");
+                        let value = std::mem::replace(prev, name_expr(generated(&t, pos)));
+                        hoisted.push(local(generated(&t, pos), value, pos));
+                    }
+                }
+                self.prelude.splice(start..start, hoisted);
+            }
+            out.push(lowered);
+        }
+        out
+    }
+
+    /// Stores `e` in a temporary in the prelude and returns a reference.
+    fn store_temp(&mut self, e: ir::Expr, base: &str) -> ir::Expr {
+        let pos = e.pos;
+        let t = self.temp(base);
+        self.prelude.push(local(generated(&t, pos), e, pos));
+        name_expr(generated(&t, pos))
+    }
+
+    // ------------------------------------------------------------- blocks --
+
+    fn stmts(&mut self, stmts: &[Stmt]) -> Vec<ir::Stmt> {
+        let mut out = Vec::new();
+        for s in stmts {
+            out.extend(self.stmt(s));
+        }
+        out
+    }
+
+    fn block(&mut self, b: &Block) -> ir::Block {
+        self.push_scope();
+        let stmts = self.stmts(&b.stmts);
+        self.pop_scope();
         ir::Block {
-            stmts: self.stmts(&b.stmts),
+            stmts,
             end: self.next_token_pos(b.span.end),
         }
     }
 
-    fn stmts(&self, stmts: &[Stmt]) -> Vec<ir::Stmt> {
-        stmts.iter().filter_map(|s| self.stmt(s)).collect()
-    }
-
-    fn ident(&self, n: &Name) -> ir::Ident {
-        ir::Ident::new(n.text.to_string(), self.span_pos(n.span))
-    }
-
-    fn stmt(&self, s: &Stmt) -> Option<ir::Stmt> {
+    fn stmt(&mut self, s: &Stmt) -> Vec<ir::Stmt> {
         grow(|| self.stmt_inner(s))
     }
 
-    fn stmt_inner(&self, s: &Stmt) -> Option<ir::Stmt> {
+    fn stmt_inner(&mut self, s: &Stmt) -> Vec<ir::Stmt> {
         use ir::StmtKind as K;
-        let kind = match &s.kind {
-            StmtKind::Assign { targets, values } => K::Assign {
-                targets: self.exprs(targets),
-                values: self.exprs(values),
-            },
-            StmtKind::Call(e) => K::Call(self.expr(e)),
-            StmtKind::Do(b) => K::Do(self.block(b)),
-            StmtKind::While { cond, body } => K::While {
-                cond: self.expr(cond),
-                do_pos: self.next_token_pos(cond.span.end),
-                body: self.block(body),
-            },
-            StmtKind::Repeat { body, cond } => K::Repeat {
-                body: self.block(body),
-                cond: self.expr(cond),
-            },
+        let pos = self.span_pos(s.span);
+        match &s.kind {
+            StmtKind::Local { names, values } => {
+                let saved = std::mem::take(&mut self.prelude);
+                let refs: Vec<&Expr> = values.iter().collect();
+                let mut lowered = self.seq(&refs);
+                self.set_separators(values, &mut lowered);
+                let mut out = std::mem::replace(&mut self.prelude, saved);
+                for n in names {
+                    self.declare(&n.name.text, Binding::Local);
+                }
+                out.push(stmt(
+                    K::Local {
+                        names: names.iter().map(|n| self.ident(&n.name)).collect(),
+                        values: lowered,
+                    },
+                    pos,
+                ));
+                out
+            }
+            StmtKind::Assign { targets, values } => {
+                self.wrapped(pos, |l| l.assignment(targets, values, pos))
+            }
+            StmtKind::Compound { target, op, value } => {
+                self.wrapped(pos, |l| l.compound(target, *op, value, pos))
+            }
+            StmtKind::Call(e) => self.wrapped(pos, |l| {
+                if chain_has_optional(e) {
+                    l.optional_chain(e, true);
+                    Vec::new()
+                } else {
+                    vec![stmt(K::Call(l.expr(e)), pos)]
+                }
+            }),
+            StmtKind::Do(b) => vec![stmt(K::Do(self.block(b)), pos)],
+            StmtKind::While { cond, body } => {
+                let do_pos = self.next_token_pos(cond.span.end);
+                let (pre, c) = self.isolated(|l| l.expr(cond));
+                let end = self.next_token_pos(body.span.end);
+                if pre.is_empty() {
+                    let body = self.loop_body(body, do_pos, end, None);
+                    vec![stmt(
+                        K::While {
+                            cond: c,
+                            do_pos,
+                            body,
+                        },
+                        pos,
+                    )]
+                } else {
+                    // `while true do <pre>; if not (c) then break end; body end`
+                    let mut check = pre;
+                    let negated = ir::Expr::new(
+                        ir::ExprKind::Unary {
+                            op: ir::UnOp::Not,
+                            operand: Box::new(paren(c)),
+                        },
+                        pos,
+                    );
+                    check.push(if_stmt(negated, vec![stmt(K::Break, pos)], pos));
+                    let body = self.loop_body(body, do_pos, end, Some(check));
+                    vec![stmt(
+                        K::While {
+                            cond: lit(ir::ExprKind::True, pos),
+                            do_pos,
+                            body,
+                        },
+                        pos,
+                    )]
+                }
+            }
+            StmtKind::Repeat { body, cond } => {
+                let until = self.next_token_pos(body.span.end);
+                self.push_scope();
+                let mut lowered = self.loop_body_stmts(body, pos, until);
+                let (pre, c) = self.isolated(|l| l.expr(cond));
+                lowered.extend(pre);
+                self.pop_scope();
+                vec![stmt(
+                    K::Repeat {
+                        body: ir::Block {
+                            stmts: lowered,
+                            end: until,
+                        },
+                        cond: c,
+                    },
+                    pos,
+                )]
+            }
             StmtKind::If {
                 cond,
                 then_block,
                 elseifs,
                 else_block,
             } => {
-                let clause = |c: &Expr, b: &Block| ir::IfClause {
-                    cond: self.expr(c),
-                    then_pos: self.next_token_pos(c.span.end),
-                    body: self.block(b),
-                };
-                let mut clauses = vec![clause(cond, then_block)];
-                for (c, b) in elseifs {
-                    clauses.push(clause(c, b));
-                }
-                K::If {
-                    clauses,
-                    else_block: else_block.as_ref().map(|b| self.block(b)),
-                }
+                let mut clauses: Vec<(&Expr, &Block)> = vec![(cond, then_block)];
+                clauses.extend(elseifs.iter().map(|(c, b)| (c, b)));
+                self.if_chain(&clauses, else_block.as_ref(), pos)
             }
             StmtKind::NumericFor {
                 var,
@@ -190,189 +581,631 @@ impl<'a> Lowerer<'a> {
                 limit,
                 step,
                 body,
-            } => K::NumericFor {
-                var: self.ident(&var.name),
-                start: self.expr(start),
-                limit: self.expr(limit),
-                step: step.as_ref().map(|e| self.expr(e)),
-                do_pos: self.next_token_pos(step.as_ref().unwrap_or(limit).span.end),
-                body: self.block(body),
-            },
-            StmtKind::GenericFor { vars, exprs, body } => K::GenericFor {
-                vars: vars.iter().map(|v| self.ident(&v.name)).collect(),
-                exprs: self.exprs(exprs),
-                do_pos: exprs
+            } => self.wrapped(pos, |l| {
+                let mut items = vec![start, limit];
+                if let Some(s) = step {
+                    items.push(s);
+                }
+                let mut header = l.seq(&items);
+                let step = (header.len() == 3).then(|| header.pop().expect("step"));
+                let limit_ir = header.pop().expect("limit");
+                let start_ir = header.pop().expect("start");
+                let last_end = match &step {
+                    Some(_) => items.last().map(|e| e.span.end).unwrap_or(limit.span.end),
+                    None => limit.span.end,
+                };
+                let do_pos = l.next_token_pos(last_end);
+                let end = l.next_token_pos(body.span.end);
+                l.push_scope();
+                l.declare(&var.name.text, Binding::Local);
+                let body_ir = l.loop_body(body, do_pos, end, None);
+                l.pop_scope();
+                vec![stmt(
+                    K::NumericFor {
+                        var: l.ident(&var.name),
+                        start: start_ir,
+                        limit: limit_ir,
+                        step,
+                        do_pos,
+                        body: body_ir,
+                    },
+                    pos,
+                )]
+            }),
+            StmtKind::GenericFor { vars, exprs, body } => self.wrapped(pos, |l| {
+                let refs: Vec<&Expr> = exprs.iter().collect();
+                let mut lowered = l.seq(&refs);
+                l.set_separators(exprs, &mut lowered);
+                let do_pos = exprs
                     .last()
-                    .map(|e| self.next_token_pos(e.span.end))
-                    .unwrap_or(Pos::NONE),
-                body: self.block(body),
+                    .map(|e| l.next_token_pos(e.span.end))
+                    .unwrap_or(Pos::NONE);
+                let end = l.next_token_pos(body.span.end);
+                l.push_scope();
+                for v in vars {
+                    l.declare(&v.name.text, Binding::Local);
+                }
+                let body_ir = l.loop_body(body, do_pos, end, None);
+                l.pop_scope();
+                vec![stmt(
+                    K::GenericFor {
+                        vars: vars.iter().map(|v| l.ident(&v.name)).collect(),
+                        exprs: lowered,
+                        do_pos,
+                        body: body_ir,
+                    },
+                    pos,
+                )]
+            }),
+            StmtKind::Function { name, func } => {
+                if name.path.len() == 1 && name.method.is_none() {
+                    self.check_assignable(&name.path[0]);
+                }
+                let method = name.method.is_some();
+                vec![stmt(
+                    K::Function {
+                        path: name.path.iter().map(|n| self.ident(n)).collect(),
+                        method: name.method.as_ref().map(|n| self.ident(n)),
+                        func: self.func(func, method),
+                    },
+                    pos,
+                )]
+            }
+            StmtKind::LocalFunction { name, func } => {
+                self.declare(&name.text, Binding::Local);
+                vec![stmt(
+                    K::LocalFunction {
+                        name: self.ident(name),
+                        func: self.func(func, false),
+                    },
+                    pos,
+                )]
+            }
+            StmtKind::Return(values) => self.wrapped(pos, |l| {
+                let refs: Vec<&Expr> = values.iter().collect();
+                let mut lowered = l.seq(&refs);
+                l.set_separators(values, &mut lowered);
+                vec![stmt(K::Return(lowered), pos)]
+            }),
+            StmtKind::Break => match self.loops.last().cloned() {
+                Some(LoopInfo {
+                    wrapped: true,
+                    break_flag: Some(flag),
+                }) => vec![
+                    assign(
+                        name_expr(generated(&flag, pos)),
+                        lit(ir::ExprKind::True, pos),
+                        pos,
+                    ),
+                    stmt(K::Break, pos),
+                ],
+                _ => vec![stmt(K::Break, pos)],
             },
-            StmtKind::Function { name, func } => K::Function {
-                path: name.path.iter().map(|n| self.ident(n)).collect(),
-                method: name.method.as_ref().map(|n| self.ident(n)),
-                func: self.func(func),
-            },
-            StmtKind::LocalFunction { name, func } => K::LocalFunction {
-                name: self.ident(name),
-                func: self.func(func),
-            },
-            StmtKind::Local { names, values } => K::Local {
-                names: names.iter().map(|n| self.ident(&n.name)).collect(),
-                values: self.exprs(values),
-            },
-            StmtKind::Return(values) => K::Return(self.exprs(values)),
-            StmtKind::Break => K::Break,
+            // `continue` leaves the `repeat … until true` wrapper.
+            StmtKind::Continue => vec![stmt(K::Break, pos)],
+            StmtKind::LocalDestructure { fields, value, .. } => {
+                self.destructure(fields, value.as_ref(), s.span, pos)
+            }
+            StmtKind::Const { name, value, .. } => {
+                let Some(value) = value else {
+                    return Vec::new();
+                };
+                if let Some(c) = self.const_value(value) {
+                    self.declare(&name.text, Binding::Const(c));
+                    return Vec::new();
+                }
+                let saved = std::mem::take(&mut self.prelude);
+                let lowered = self.expr(value);
+                let mut out = std::mem::replace(&mut self.prelude, saved);
+                self.declare(&name.text, Binding::ConstLocal);
+                out.push(stmt(
+                    K::Local {
+                        names: vec![self.ident(name)],
+                        values: vec![lowered],
+                    },
+                    pos,
+                ));
+                out
+            }
             // Type-only declarations are erased.
-            StmtKind::TypeAlias(_)
-            | StmtKind::Interface(_)
-            | StmtKind::Declare(_)
-            | StmtKind::Import(_)
-            | StmtKind::Export(_) => return None,
-            // Rejected before lowering (`features`) or by the parser.
-            StmtKind::Compound { .. }
-            | StmtKind::LocalDestructure { .. }
-            | StmtKind::Const { .. }
-            | StmtKind::Continue
-            | StmtKind::Class(_)
-            | StmtKind::Enum(_)
-            | StmtKind::Error => return None,
-        };
-        Some(ir::Stmt {
-            pos: self.span_pos(s.span),
-            kind,
-        })
+            StmtKind::TypeAlias(_) | StmtKind::Interface(_) | StmtKind::Declare(_) => Vec::new(),
+            StmtKind::Import(_) | StmtKind::Export(_) => Vec::new(),
+            // Rejected before lowering.
+            StmtKind::Class(_) | StmtKind::Enum(_) | StmtKind::Error => Vec::new(),
+        }
     }
 
-    fn func(&self, f: &FuncBody) -> ir::Func {
+    fn ident(&self, n: &Name) -> ir::Ident {
+        ir::Ident::new(n.text.to_string(), self.span_pos(n.span))
+    }
+
+    fn set_separators(&self, es: &[Expr], out: &mut [ir::Expr]) {
+        for (i, e) in es.iter().enumerate().take(es.len().saturating_sub(1)) {
+            if let Some(x) = out.get_mut(i) {
+                x.sep = self.next_token_pos(e.span.end);
+            }
+        }
+    }
+
+    /// Assignment to a constant is an error (E2010).
+    fn check_assignable(&mut self, name: &Name) {
+        if matches!(
+            self.lookup(&name.text),
+            Some(Binding::Const(_) | Binding::ConstLocal)
+        ) {
+            self.error(
+                "E2010",
+                name.span,
+                format!("cannot assign to the constant `{}`", name.text),
+            );
+        }
+    }
+
+    // -------------------------------------------------------------- loops --
+
+    /// The statements of a loop body, wrapped for `continue` when needed
+    /// (spec §1.3.6). The body's own scope is opened by the caller for
+    /// `repeat` (its `until` sees the body's locals).
+    fn loop_body_stmts(&mut self, body: &Block, anchor: Pos, end: Pos) -> Vec<ir::Stmt> {
+        let (has_continue, has_break) = loop_flags(&body.stmts);
+        if !has_continue {
+            self.loops.push(LoopInfo {
+                wrapped: false,
+                break_flag: None,
+            });
+            let stmts = self.stmts(&body.stmts);
+            self.loops.pop();
+            return stmts;
+        }
+        let flag = has_break.then(|| self.temp("brk"));
+        self.loops.push(LoopInfo {
+            wrapped: true,
+            break_flag: flag.clone(),
+        });
+        self.push_scope();
+        let inner = self.stmts(&body.stmts);
+        self.pop_scope();
+        self.loops.pop();
+        let mut out = Vec::new();
+        if let Some(flag) = &flag {
+            out.push(local(
+                generated(flag, anchor),
+                lit(ir::ExprKind::False, anchor),
+                anchor,
+            ));
+        }
+        out.push(stmt(
+            ir::StmtKind::Repeat {
+                body: ir::Block { stmts: inner, end },
+                cond: lit(ir::ExprKind::True, end),
+            },
+            anchor,
+        ));
+        if let Some(flag) = &flag {
+            out.push(if_stmt(
+                name_expr(generated(flag, end)),
+                vec![stmt(ir::StmtKind::Break, end)],
+                end,
+            ));
+        }
+        out
+    }
+
+    fn loop_body(
+        &mut self,
+        body: &Block,
+        anchor: Pos,
+        end: Pos,
+        check: Option<Vec<ir::Stmt>>,
+    ) -> ir::Block {
+        self.push_scope();
+        let mut stmts = check.unwrap_or_default();
+        stmts.extend(self.loop_body_stmts(body, anchor, end));
+        self.pop_scope();
+        ir::Block { stmts, end }
+    }
+
+    // ----------------------------------------------------------------- if --
+
+    fn if_chain(
+        &mut self,
+        clauses: &[(&Expr, &Block)],
+        else_block: Option<&Block>,
+        pos: Pos,
+    ) -> Vec<ir::Stmt> {
+        let first = self.isolated(|l| l.expr(clauses[0].0));
+        let (pre, s) = self.if_rest(first, clauses, else_block, pos);
+        if pre.is_empty() {
+            vec![s]
+        } else {
+            let mut all = pre;
+            all.push(s);
+            vec![do_block(all, pos)]
+        }
+    }
+
+    /// An `if` whose first condition is already lowered (`first`: its
+    /// preceding statements and value). An `elseif` with preceding
+    /// statements becomes `else` + a nested `if` (codegen §14.4).
+    fn if_rest(
+        &mut self,
+        first: (Vec<ir::Stmt>, ir::Expr),
+        clauses: &[(&Expr, &Block)],
+        else_block: Option<&Block>,
+        pos: Pos,
+    ) -> (Vec<ir::Stmt>, ir::Stmt) {
+        let (pre, cond) = first;
+        let then_pos = self.next_token_pos(clauses[0].0.span.end);
+        let mut ir_clauses = vec![ir::IfClause {
+            cond,
+            then_pos,
+            body: self.block(clauses[0].1),
+        }];
+        let mut else_ir = None;
+        let mut i = 1;
+        while i < clauses.len() {
+            let (c, b) = clauses[i];
+            let (cpre, cond) = self.isolated(|l| l.expr(c));
+            if !cpre.is_empty() {
+                let cpos = self.span_pos(c.span);
+                let (npre, nested) = self.if_rest((cpre, cond), &clauses[i..], else_block, cpos);
+                let mut stmts = npre;
+                stmts.push(nested);
+                else_ir = Some(ir::Block {
+                    stmts,
+                    end: Pos::NONE,
+                });
+                return (
+                    pre,
+                    stmt(
+                        ir::StmtKind::If {
+                            clauses: ir_clauses,
+                            else_block: else_ir,
+                        },
+                        pos,
+                    ),
+                );
+            }
+            let then_pos = self.next_token_pos(c.span.end);
+            ir_clauses.push(ir::IfClause {
+                cond,
+                then_pos,
+                body: self.block(b),
+            });
+            i += 1;
+        }
+        if let Some(e) = else_block {
+            else_ir = Some(self.block(e));
+        }
+        (
+            pre,
+            stmt(
+                ir::StmtKind::If {
+                    clauses: ir_clauses,
+                    else_block: else_ir,
+                },
+                pos,
+            ),
+        )
+    }
+
+    // ---------------------------------------------------------- functions --
+
+    fn func(&mut self, f: &FuncBody, method: bool) -> ir::Func {
+        let saved_loops = std::mem::take(&mut self.loops);
+        let saved_prelude = std::mem::take(&mut self.prelude);
+        self.push_scope();
+        if method {
+            self.declare("self", Binding::Local);
+        }
+        for p in &f.params {
+            self.declare(&p.name.text, Binding::Local);
+        }
+        let pos = self.span_pos(f.params_span);
+        // Default parameter values (spec §1.3.5), on the parameter line.
+        let mut stmts = Vec::new();
+        for p in &f.params {
+            if let Some(default) = &p.default {
+                let (pre, value) = self.isolated(|l| l.expr(default));
+                let name = self.ident(&p.name);
+                let mut body = pre;
+                body.push(assign(name_expr(name.clone()), value, pos));
+                let cond = binary(
+                    ir::BinOp::Eq,
+                    name_expr(name),
+                    lit(ir::ExprKind::Nil, pos),
+                    pos,
+                );
+                stmts.push(if_stmt(cond, body, pos));
+            }
+        }
+        stmts.extend(self.stmts(&f.body.stmts));
+        self.pop_scope();
+        self.loops = saved_loops;
+        self.prelude = saved_prelude;
         ir::Func {
-            pos: self.span_pos(f.params_span),
+            pos,
             params: f.params.iter().map(|p| self.ident(&p.name)).collect(),
             vararg: f.vararg.is_some(),
             body: ir::Block {
-                stmts: self.stmts(&f.body.stmts),
+                stmts,
                 end: self.span_pos(f.end_span),
             },
         }
     }
 
-    /// A list of expressions, with the positions of the separators.
-    fn exprs(&self, es: &[Expr]) -> Vec<ir::Expr> {
-        let mut out: Vec<ir::Expr> = es.iter().map(|e| self.expr(e)).collect();
-        for (i, e) in es.iter().enumerate().take(es.len().saturating_sub(1)) {
-            out[i].sep = self.next_token_pos(e.span.end);
+    // -------------------------------------------------------- assignments --
+
+    /// The parts of an assignment target, lowered: `(object, key)` for
+    /// fields and indexes, `(name, None)` for names.
+    fn target_parts(t: &Expr) -> Vec<&Expr> {
+        match &t.kind {
+            ExprKind::Index { obj, key } => vec![obj, key],
+            ExprKind::Field { obj, .. } => vec![obj],
+            _ => Vec::new(),
+        }
+    }
+
+    fn assignment(&mut self, targets: &[Expr], values: &[Expr], pos: Pos) -> Vec<ir::Stmt> {
+        for t in targets {
+            if let ExprKind::Name(n) = &t.kind {
+                self.check_assignable(n);
+            }
+        }
+        // Lua evaluates the targets' subexpressions, then the values.
+        let mut operands: Vec<&Expr> = Vec::new();
+        let mut counts = Vec::new();
+        for t in targets {
+            let parts = Self::target_parts(t);
+            counts.push(parts.len());
+            operands.extend(parts);
+        }
+        operands.extend(values.iter());
+        let mut lowered = self.seq(&operands).into_iter();
+        let mut ir_targets = Vec::new();
+        for (t, n) in targets.iter().zip(counts) {
+            let tpos = self.span_pos(t.span);
+            let kind = match (&t.kind, n) {
+                (ExprKind::Index { .. }, 2) => {
+                    let obj = lowered.next().expect("object");
+                    let key = lowered.next().expect("key");
+                    ir::ExprKind::Index {
+                        obj: Box::new(obj),
+                        key: Box::new(key),
+                    }
+                }
+                (ExprKind::Field { name, .. }, 1) => ir::ExprKind::Field {
+                    obj: Box::new(lowered.next().expect("object")),
+                    name: self.ident(name),
+                },
+                (ExprKind::Name(n), _) => ir::ExprKind::Name(self.ident(n)),
+                _ => ir::ExprKind::Nil,
+            };
+            ir_targets.push(ir::Expr::new(kind, tpos));
+        }
+        let mut ir_values: Vec<ir::Expr> = lowered.collect();
+        self.set_separators(values, &mut ir_values);
+        self.set_separators(targets, &mut ir_targets);
+        vec![stmt(
+            ir::StmtKind::Assign {
+                targets: ir_targets,
+                values: ir_values,
+            },
+            pos,
+        )]
+    }
+
+    /// `a op= e` (spec §1.3.4): every subexpression of the target that
+    /// contains a call is evaluated once.
+    fn compound(&mut self, target: &Expr, op: CompoundOp, value: &Expr, pos: Pos) -> Vec<ir::Stmt> {
+        let tpos = self.span_pos(target.span);
+        let (write, read) = match &target.kind {
+            ExprKind::Name(n) => {
+                self.check_assignable(n);
+                let e = name_expr(self.ident(n));
+                (e.clone(), e)
+            }
+            ExprKind::Field { obj, name } => {
+                let o = self.expr(obj);
+                let o = if is_name(&o) { o } else { self.store_temp(o, "o") };
+                let e = ir::Expr::new(
+                    ir::ExprKind::Field {
+                        obj: Box::new(o),
+                        name: self.ident(name),
+                    },
+                    tpos,
+                );
+                (e.clone(), e)
+            }
+            ExprKind::Index { obj, key } => {
+                let o = self.expr(obj);
+                let o = if is_name(&o) { o } else { self.store_temp(o, "o") };
+                let k = self.expr(key);
+                let k = if is_simple(&k) {
+                    k
+                } else {
+                    self.store_temp(k, "k")
+                };
+                let e = ir::Expr::new(
+                    ir::ExprKind::Index {
+                        obj: Box::new(o),
+                        key: Box::new(k),
+                    },
+                    tpos,
+                );
+                (e.clone(), e)
+            }
+            _ => return Vec::new(),
+        };
+        if op == CompoundOp::Coalesce {
+            // `if a == nil then a = e end`: e only runs when needed.
+            let (pre, v) = self.isolated(|l| l.expr(value));
+            let mut body = pre;
+            body.push(assign(write, v, pos));
+            let cond = binary(ir::BinOp::Eq, read, lit(ir::ExprKind::Nil, pos), pos);
+            return vec![if_stmt(cond, body, pos)];
+        }
+        let v = self.expr(value);
+        let combined = match op {
+            CompoundOp::Add => binary(ir::BinOp::Add, read, v, pos),
+            CompoundOp::Sub => binary(ir::BinOp::Sub, read, v, pos),
+            CompoundOp::Mul => binary(ir::BinOp::Mul, read, v, pos),
+            CompoundOp::Div => binary(ir::BinOp::Div, read, v, pos),
+            CompoundOp::Mod => binary(ir::BinOp::Mod, read, v, pos),
+            CompoundOp::Pow => binary(ir::BinOp::Pow, read, v, pos),
+            CompoundOp::Concat => binary(ir::BinOp::Concat, read, v, pos),
+            CompoundOp::IDiv => self.idiv(read, v, pos),
+            CompoundOp::BAnd => self.bit_call("band", vec![read, v], pos),
+            CompoundOp::BOr => self.bit_call("bor", vec![read, v], pos),
+            CompoundOp::Shl => self.bit_call("lshift", vec![read, v], pos),
+            CompoundOp::Shr => self.bit_call("rshift", vec![read, v], pos),
+            CompoundOp::Coalesce => unreachable!("handled above"),
+        };
+        vec![assign(write, combined, pos)]
+    }
+
+    /// `local { a, b = 1 } = e` (spec §1.3.3).
+    fn destructure(
+        &mut self,
+        fields: &[DestructField],
+        value: Option<&Expr>,
+        span: Span,
+        pos: Pos,
+    ) -> Vec<ir::Stmt> {
+        let Some(value) = value else {
+            self.error("E0101", span, "`local { … }` needs a value to destructure");
+            return Vec::new();
+        };
+        let saved = std::mem::take(&mut self.prelude);
+        let v = self.expr(value);
+        // A local or upvalue name is read directly; anything else once, into
+        // a temporary that stays in scope until the end of the block.
+        let source = match &v.kind {
+            ir::ExprKind::Name(id) if !id.generated && self.is_local(&id.name) => v,
+            _ => self.store_temp(v, "t"),
+        };
+        let mut out = std::mem::replace(&mut self.prelude, saved);
+        let names: Vec<ir::Ident> = fields.iter().map(|f| self.ident(&f.name)).collect();
+        let values: Vec<ir::Expr> = fields
+            .iter()
+            .map(|f| field(source.clone(), &f.name.text, self.span_pos(f.name.span)))
+            .collect();
+        for f in fields {
+            self.declare(&f.name.text, Binding::Local);
+        }
+        out.push(stmt(ir::StmtKind::Local { names, values }, pos));
+        for f in fields {
+            if let Some(default) = &f.default {
+                let (pre, d) = self.isolated(|l| l.expr(default));
+                let name = self.ident(&f.name);
+                let mut body = pre;
+                body.push(assign(name_expr(name.clone()), d, pos));
+                let cond = binary(
+                    ir::BinOp::Eq,
+                    name_expr(name),
+                    lit(ir::ExprKind::Nil, pos),
+                    pos,
+                );
+                out.push(if_stmt(cond, body, pos));
+            }
         }
         out
     }
 
-    fn close_pos(&self, span: Span) -> Pos {
-        self.pos(span.end.saturating_sub(1))
+    // -------------------------------------------------------- expressions --
+
+    fn exprs(&mut self, es: &[Expr]) -> Vec<ir::Expr> {
+        let refs: Vec<&Expr> = es.iter().collect();
+        let mut out = self.seq(&refs);
+        self.set_separators(es, &mut out);
+        out
     }
 
-    fn args(&self, a: &Args) -> ir::Args {
-        match a {
-            Args::Parens { args, span } => ir::Args::Parens {
-                args: self.exprs(args),
-                close: self.close_pos(*span),
-            },
-            Args::Table(e) => ir::Args::Table(Box::new(self.expr(e))),
-            Args::String(e) => ir::Args::String(Box::new(self.expr(e))),
-        }
-    }
-
-    fn expr(&self, e: &Expr) -> ir::Expr {
+    fn expr(&mut self, e: &Expr) -> ir::Expr {
         grow(|| self.expr_inner(e))
     }
 
-    fn expr_inner(&self, e: &Expr) -> ir::Expr {
+    fn expr_inner(&mut self, e: &Expr) -> ir::Expr {
         use ir::ExprKind as K;
         let pos = self.span_pos(e.span);
+        if chain_has_optional(e) {
+            return self
+                .optional_chain(e, false)
+                .expect("an expression chain has a value");
+        }
         let kind = match &e.kind {
             ExprKind::Nil => K::Nil,
             ExprKind::True => K::True,
             ExprKind::False => K::False,
-            ExprKind::Number(n) => K::Number(n.raw.to_string()),
-            ExprKind::String(s) => K::String(s.raw.to_vec()),
-            ExprKind::Vararg => K::Vararg,
-            ExprKind::Function(f) => K::Function(Box::new(self.func(f))),
-            ExprKind::Table(fields) => {
-                let mut lowered: Vec<ir::Field> = fields
-                    .iter()
-                    .map(|f| match f {
-                        TableField::Keyed { key, value, span } => ir::Field::Keyed {
-                            open: self.span_pos(*span),
-                            key: self.expr(key),
-                            value: self.expr(value),
-                        },
-                        TableField::Named { name, value, .. } => ir::Field::Named {
-                            name: self.ident(name),
-                            value: self.expr(value),
-                        },
-                        TableField::Positional(v) => ir::Field::Positional(self.expr(v)),
-                    })
-                    .collect();
-                for (i, f) in fields
-                    .iter()
-                    .enumerate()
-                    .take(fields.len().saturating_sub(1))
-                {
-                    let end = match f {
-                        TableField::Keyed { value, .. }
-                        | TableField::Named { value, .. }
-                        | TableField::Positional(value) => value.span.end,
-                    };
-                    let sep = self.next_token_pos(end);
-                    match &mut lowered[i] {
-                        ir::Field::Keyed { value, .. }
-                        | ir::Field::Named { value, .. }
-                        | ir::Field::Positional(value) => value.sep = sep,
-                    }
-                }
-                K::Table {
-                    fields: lowered,
-                    close: self.close_pos(e.span),
+            ExprKind::Number(n) => {
+                if n.raw.contains('_') || n.raw.to_ascii_lowercase().starts_with("0b") {
+                    K::Number(format_number(n.value.unwrap_or(0.0)))
+                } else {
+                    K::Number(n.raw.to_string())
                 }
             }
-            ExprKind::Name(n) => K::Name(self.ident(n)),
-            ExprKind::Index { obj, key } => K::Index {
-                obj: Box::new(self.expr(obj)),
-                key: Box::new(self.expr(key)),
+            ExprKind::String(s) => K::String(s.raw.to_vec()),
+            ExprKind::Vararg => K::Vararg,
+            ExprKind::Function(f) => K::Function(Box::new(self.func(f, false))),
+            ExprKind::Table(fields) => self.table(fields, e.span),
+            ExprKind::Name(n) => match self.lookup(&n.text) {
+                Some(Binding::Const(c)) => return c.clone().to_expr(pos),
+                _ => K::Name(self.ident(n)),
             },
+            ExprKind::Index { obj, key } => {
+                let mut parts = self.seq(&[obj, key]).into_iter();
+                K::Index {
+                    obj: Box::new(parts.next().expect("object")),
+                    key: Box::new(parts.next().expect("key")),
+                }
+            }
             ExprKind::Field { obj, name } => K::Field {
                 obj: Box::new(self.expr(obj)),
                 name: self.ident(name),
             },
-            ExprKind::Call { callee, args } => K::Call {
-                callee: Box::new(self.expr(callee)),
-                args: self.args(args),
-            },
-            ExprKind::Method { obj, name, args } => K::Method {
-                obj: Box::new(self.expr(obj)),
-                name: self.ident(name),
-                args: self.args(args),
-            },
+            ExprKind::Call { callee, args } => {
+                let (callee, args) = self.call_parts(callee, args);
+                K::Call {
+                    callee: Box::new(callee),
+                    args,
+                }
+            }
+            ExprKind::Method { obj, name, args } => {
+                let (obj, args) = self.call_parts(obj, args);
+                K::Method {
+                    obj: Box::new(obj),
+                    name: self.ident(name),
+                    args,
+                }
+            }
             ExprKind::Paren(inner) => K::Paren {
                 inner: Box::new(self.expr(inner)),
                 close: self.close_pos(e.span),
             },
-            ExprKind::Binary { op, lhs, rhs } => K::Binary {
-                op: lua_binop(*op),
-                op_pos: self.next_token_pos(lhs.span.end),
-                lhs: Box::new(self.expr(lhs)),
-                rhs: Box::new(self.expr(rhs)),
-            },
-            ExprKind::Unary { op, operand } => K::Unary {
-                op: match op {
-                    UnOp::Neg => ir::UnOp::Neg,
-                    UnOp::Not => ir::UnOp::Not,
-                    _ => ir::UnOp::Len,
-                },
-                operand: Box::new(self.expr(operand)),
-            },
-            // A cast has no runtime effect.
+            ExprKind::Binary { op, lhs, rhs } => return self.binary_expr(*op, lhs, rhs, e),
+            ExprKind::Unary { op, operand } => {
+                if *op == UnOp::BNot {
+                    if let Some(Const::Number(n)) = self.const_value(operand)
+                        && let Some(v) = constant::fold_bnot(n)
+                    {
+                        return constant::number_expr(v, pos);
+                    }
+                    let x = self.expr(operand);
+                    return self.bit_call("bnot", vec![x], pos);
+                }
+                K::Unary {
+                    op: match op {
+                        UnOp::Neg => ir::UnOp::Neg,
+                        UnOp::Not => ir::UnOp::Not,
+                        _ => ir::UnOp::Len,
+                    },
+                    operand: Box::new(self.expr(operand)),
+                }
+            }
             ExprKind::Cast { expr, .. } => return self.expr(expr),
-            // Rejected before lowering.
-            ExprKind::Interp(_)
-            | ExprKind::OptField { .. }
+            ExprKind::Interp(parts) => return self.interp(parts, pos),
+            // Handled by `optional_chain`, or rejected by the parser.
+            ExprKind::OptField { .. }
             | ExprKind::OptIndex { .. }
             | ExprKind::OptMethod { .. }
             | ExprKind::OptCall { .. }
@@ -380,6 +1213,397 @@ impl<'a> Lowerer<'a> {
         };
         ir::Expr::new(kind, pos)
     }
+
+    fn call_parts(&mut self, callee: &Expr, args: &Args) -> (ir::Expr, ir::Args) {
+        match args {
+            Args::Parens { args, span } => {
+                let mut items: Vec<&Expr> = vec![callee];
+                items.extend(args.iter());
+                let mut lowered = self.seq(&items);
+                let callee = lowered.remove(0);
+                self.set_separators(args, &mut lowered);
+                (
+                    callee,
+                    ir::Args::Parens {
+                        args: lowered,
+                        close: self.close_pos(*span),
+                    },
+                )
+            }
+            Args::Table(t) => {
+                let mut lowered = self.seq(&[callee, t]);
+                let table = lowered.pop().expect("table");
+                (
+                    lowered.pop().expect("callee"),
+                    ir::Args::Table(Box::new(table)),
+                )
+            }
+            Args::String(s) => {
+                let c = self.expr(callee);
+                (c, ir::Args::String(Box::new(self.expr(s))))
+            }
+        }
+    }
+
+    fn table(&mut self, fields: &[TableField], span: Span) -> ir::ExprKind {
+        let mut operands: Vec<&Expr> = Vec::new();
+        for f in fields {
+            match f {
+                TableField::Keyed { key, value, .. } => {
+                    operands.push(key);
+                    operands.push(value);
+                }
+                TableField::Named { value, .. } | TableField::Positional(value) => {
+                    operands.push(value)
+                }
+            }
+        }
+        let mut lowered = self.seq(&operands).into_iter();
+        let mut out = Vec::new();
+        for (i, f) in fields.iter().enumerate() {
+            let mut lowered_field = match f {
+                TableField::Keyed { span, .. } => ir::Field::Keyed {
+                    open: self.span_pos(*span),
+                    key: lowered.next().expect("key"),
+                    value: lowered.next().expect("value"),
+                },
+                TableField::Named { name, .. } => ir::Field::Named {
+                    name: self.ident(name),
+                    value: lowered.next().expect("value"),
+                },
+                TableField::Positional(_) => ir::Field::Positional(lowered.next().expect("value")),
+            };
+            if i + 1 < fields.len() {
+                let end = match f {
+                    TableField::Keyed { value, .. }
+                    | TableField::Named { value, .. }
+                    | TableField::Positional(value) => value.span.end,
+                };
+                let sep = self.next_token_pos(end);
+                match &mut lowered_field {
+                    ir::Field::Keyed { value, .. }
+                    | ir::Field::Named { value, .. }
+                    | ir::Field::Positional(value) => value.sep = sep,
+                }
+            }
+            out.push(lowered_field);
+        }
+        ir::ExprKind::Table {
+            fields: out,
+            close: self.close_pos(span),
+        }
+    }
+
+    fn binary_expr(&mut self, op: BinOp, lhs: &Expr, rhs: &Expr, e: &Expr) -> ir::Expr {
+        let pos = self.span_pos(e.span);
+        let op_pos = self.next_token_pos(lhs.span.end);
+        match op {
+            BinOp::And | BinOp::Or | BinOp::Coalesce => {
+                let l = self.expr(lhs);
+                let (pre, r) = self.isolated(|lw| lw.expr(rhs));
+                if pre.is_empty() && op != BinOp::Coalesce {
+                    let ir_op = if op == BinOp::And {
+                        ir::BinOp::And
+                    } else {
+                        ir::BinOp::Or
+                    };
+                    return ir::Expr::new(
+                        ir::ExprKind::Binary {
+                            op: ir_op,
+                            op_pos,
+                            lhs: Box::new(l),
+                            rhs: Box::new(r),
+                        },
+                        pos,
+                    );
+                }
+                // An `if` on a temporary: the right operand's statements
+                // run only when it is evaluated (codegen §14.4).
+                let t = self.store_temp(l, "t");
+                let cond = match op {
+                    BinOp::And => t.clone(),
+                    BinOp::Or => ir::Expr::new(
+                        ir::ExprKind::Unary {
+                            op: ir::UnOp::Not,
+                            operand: Box::new(t.clone()),
+                        },
+                        pos,
+                    ),
+                    _ => binary(ir::BinOp::Eq, t.clone(), lit(ir::ExprKind::Nil, pos), pos),
+                };
+                let mut body = pre;
+                body.push(assign(t.clone(), r, pos));
+                self.prelude.push(if_stmt(cond, body, pos));
+                t
+            }
+            BinOp::BAnd | BinOp::BOr | BinOp::BXor | BinOp::Shl | BinOp::Shr => {
+                if let (Some(Const::Number(a)), Some(Const::Number(b))) =
+                    (self.const_value(lhs), self.const_value(rhs))
+                    && let Some(Const::Number(v)) =
+                        constant::fold_binary(op, &Const::Number(a), &Const::Number(b))
+                {
+                    return constant::number_expr(v, pos);
+                }
+                let name = match op {
+                    BinOp::BAnd => "band",
+                    BinOp::BOr => "bor",
+                    BinOp::BXor => "bxor",
+                    BinOp::Shl => "lshift",
+                    _ => "rshift",
+                };
+                // `a | b | c` becomes `bit.bor(a, b, c)`.
+                let mut operands = vec![rhs];
+                let mut left = lhs;
+                if matches!(op, BinOp::BAnd | BinOp::BOr | BinOp::BXor) {
+                    while let ExprKind::Binary {
+                        op: inner,
+                        lhs: l,
+                        rhs: r,
+                    } = &left.kind
+                        && *inner == op
+                    {
+                        operands.push(r);
+                        left = l;
+                    }
+                }
+                operands.push(left);
+                operands.reverse();
+                let args = self.seq(&operands);
+                self.bit_call(name, args, pos)
+            }
+            BinOp::IDiv => {
+                if let (Some(Const::Number(a)), Some(Const::Number(b))) =
+                    (self.const_value(lhs), self.const_value(rhs))
+                {
+                    return constant::number_expr((a / b).floor(), pos);
+                }
+                let mut parts = self.seq(&[lhs, rhs]).into_iter();
+                let (a, b) = (parts.next().expect("lhs"), parts.next().expect("rhs"));
+                self.idiv(a, b, pos)
+            }
+            _ => {
+                let mut parts = self.seq(&[lhs, rhs]).into_iter();
+                ir::Expr::new(
+                    ir::ExprKind::Binary {
+                        op: lua_binop(op),
+                        op_pos,
+                        lhs: Box::new(parts.next().expect("lhs")),
+                        rhs: Box::new(parts.next().expect("rhs")),
+                    },
+                    pos,
+                )
+            }
+        }
+    }
+
+    fn bit_call(&mut self, name: &str, args: Vec<ir::Expr>, pos: Pos) -> ir::Expr {
+        let f = self.global("bit", Some(name), pos);
+        call(f, args, pos)
+    }
+
+    /// `a // b` → `math.floor(a / b)` (spec §1.4.4).
+    fn idiv(&mut self, a: ir::Expr, b: ir::Expr, pos: Pos) -> ir::Expr {
+        let floor = self.global("math", Some("floor"), pos);
+        call(floor, vec![binary(ir::BinOp::Div, a, b, pos)], pos)
+    }
+
+    /// A backtick string (spec §1.2.4): parts joined with `..`, every
+    /// embedded value through `tostring`, at most 50 operands per group.
+    fn interp(&mut self, parts: &[InterpPart], pos: Pos) -> ir::Expr {
+        let exprs: Vec<&Expr> = parts
+            .iter()
+            .filter_map(|p| match p {
+                InterpPart::Expr(e) => Some(e),
+                InterpPart::Text { .. } => None,
+            })
+            .collect();
+        let mut values = self.seq(&exprs).into_iter();
+        let mut operands: Vec<ir::Expr> = Vec::new();
+        for part in parts {
+            match part {
+                InterpPart::Text { value, span, .. } => {
+                    if !value.is_empty() {
+                        operands.push(lit(
+                            ir::ExprKind::String(quote(value)),
+                            self.span_pos(*span),
+                        ));
+                    }
+                }
+                InterpPart::Expr(e) => {
+                    let v = values.next().expect("a value per part");
+                    let tostring = self.global("tostring", None, self.span_pos(e.span));
+                    operands.push(call(tostring, vec![v], self.span_pos(e.span)));
+                }
+            }
+        }
+        if operands.is_empty() {
+            return lit(ir::ExprKind::String(b"\"\"".to_vec()), pos);
+        }
+        let concat = |items: Vec<ir::Expr>| -> ir::Expr {
+            let mut iter = items.into_iter().rev();
+            let mut acc = iter.next().expect("at least one");
+            for item in iter {
+                acc = binary(ir::BinOp::Concat, item, acc, pos);
+            }
+            acc
+        };
+        if operands.len() <= 50 {
+            return concat(operands);
+        }
+        let groups: Vec<ir::Expr> = operands
+            .chunks(50)
+            .map(|chunk| paren(concat(chunk.to_vec())))
+            .collect();
+        concat(groups)
+    }
+
+    /// An optional chain (spec §1.4.1), basic-mode form: the chain is
+    /// evaluated into a temporary step by step, and each `?.` guards the
+    /// rest with `if t ~= nil then … end`. As a statement, the final call
+    /// is a call statement. Returns the temporary (expression form).
+    fn optional_chain(&mut self, e: &Expr, statement: bool) -> Option<ir::Expr> {
+        let pos = self.span_pos(e.span);
+        let (base, links) = flatten_chain(e);
+        let first_opt = links
+            .iter()
+            .position(|l| l.optional)
+            .expect("an optional link");
+        // Everything before the first `?.` evaluates normally.
+        let mut value = self.expr(base);
+        for link in &links[..first_opt] {
+            value = self.apply_link(value, link);
+        }
+        let t = self.temp("t");
+        let tref = || name_expr(generated(&t, pos));
+        self.prelude.push(local(generated(&t, pos), value, pos));
+        // Segments between optional links, innermost last.
+        let mut segments: Vec<&[Link]> = Vec::new();
+        let mut start = first_opt;
+        for i in first_opt + 1..=links.len() {
+            if i == links.len() || links[i].optional {
+                segments.push(&links[start..i]);
+                start = i;
+            }
+        }
+        let mut inner: Vec<ir::Stmt> = Vec::new();
+        for (index, segment) in segments.iter().enumerate().rev() {
+            let last = index + 1 == segments.len();
+            let (mut body, applied) = self.isolated(|l| {
+                let mut v = tref();
+                for link in segment.iter() {
+                    v = l.apply_link(v, link);
+                }
+                v
+            });
+            if statement && last {
+                body.push(stmt(ir::StmtKind::Call(applied), pos));
+            } else {
+                body.push(assign(tref(), applied, pos));
+            }
+            body.append(&mut inner);
+            let cond = binary(ir::BinOp::Ne, tref(), lit(ir::ExprKind::Nil, pos), pos);
+            inner = vec![if_stmt(cond, body, pos)];
+        }
+        self.prelude.extend(inner);
+        (!statement).then(tref)
+    }
+
+    fn apply_link(&mut self, obj: ir::Expr, link: &Link) -> ir::Expr {
+        let pos = obj.pos;
+        let kind = match &link.kind {
+            LinkKind::Field(name) => ir::ExprKind::Field {
+                obj: Box::new(obj),
+                name: self.ident(name),
+            },
+            LinkKind::Index(key) => ir::ExprKind::Index {
+                obj: Box::new(obj),
+                key: Box::new(self.expr(key)),
+            },
+            LinkKind::Call(args) => ir::ExprKind::Call {
+                callee: Box::new(obj),
+                args: self.args_only(args),
+            },
+            LinkKind::Method(name, args) => ir::ExprKind::Method {
+                obj: Box::new(obj),
+                name: self.ident(name),
+                args: self.args_only(args),
+            },
+        };
+        ir::Expr::new(kind, pos)
+    }
+
+    fn args_only(&mut self, args: &Args) -> ir::Args {
+        match args {
+            Args::Parens { args, span } => ir::Args::Parens {
+                args: self.exprs(args),
+                close: self.close_pos(*span),
+            },
+            Args::Table(t) => ir::Args::Table(Box::new(self.expr(t))),
+            Args::String(s) => ir::Args::String(Box::new(self.expr(s))),
+        }
+    }
+
+    // ---------------------------------------------------------- constants --
+
+    /// The value of a constant expression (spec §1.3.2), if it is one.
+    fn const_value(&self, e: &Expr) -> Option<Const> {
+        match &e.kind {
+            ExprKind::Nil => Some(Const::Nil),
+            ExprKind::True => Some(Const::Bool(true)),
+            ExprKind::False => Some(Const::Bool(false)),
+            ExprKind::Number(n) => n.value.map(Const::Number),
+            ExprKind::String(s) => Some(Const::String(s.value.to_vec())),
+            ExprKind::Name(n) => match self.lookup(&n.text) {
+                Some(Binding::Const(c)) => Some(c.clone()),
+                _ => None,
+            },
+            ExprKind::Paren(inner) => self.const_value(inner),
+            ExprKind::Cast { expr, .. } => self.const_value(expr),
+            ExprKind::Unary { op, operand } => {
+                let v = self.const_value(operand)?;
+                match (op, v) {
+                    (UnOp::Neg, Const::Number(n)) => Some(Const::Number(-n)),
+                    (UnOp::Not, v) => Some(Const::Bool(!v.truthy())),
+                    (UnOp::BNot, Const::Number(n)) => constant::fold_bnot(n).map(Const::Number),
+                    _ => None,
+                }
+            }
+            ExprKind::Binary { op, lhs, rhs } => {
+                let a = self.const_value(lhs)?;
+                let b = self.const_value(rhs)?;
+                constant::fold_binary(*op, &a, &b)
+            }
+            _ => None,
+        }
+    }
+}
+
+fn paren(inner: ir::Expr) -> ir::Expr {
+    let pos = inner.pos;
+    ir::Expr::new(
+        ir::ExprKind::Paren {
+            inner: Box::new(inner),
+            close: Pos::NONE,
+        },
+        pos,
+    )
+}
+
+fn is_name(e: &ir::Expr) -> bool {
+    matches!(e.kind, ir::ExprKind::Name(_))
+}
+
+/// Safe to evaluate twice: a name or a literal.
+fn is_simple(e: &ir::Expr) -> bool {
+    matches!(
+        e.kind,
+        ir::ExprKind::Name(_)
+            | ir::ExprKind::Number(_)
+            | ir::ExprKind::String(_)
+            | ir::ExprKind::True
+            | ir::ExprKind::False
+            | ir::ExprKind::Nil
+    )
 }
 
 fn lua_binop(op: BinOp) -> ir::BinOp {
@@ -398,7 +1622,140 @@ fn lua_binop(op: BinOp) -> ir::BinOp {
         BinOp::Gt => ir::BinOp::Gt,
         BinOp::Ge => ir::BinOp::Ge,
         BinOp::And => ir::BinOp::And,
-        // `??` and the bitwise operators were rejected before lowering.
         _ => ir::BinOp::Or,
     }
+}
+
+/// Whether the body of the loop being lowered uses `continue` and `break`
+/// for this loop (nested loops and functions have their own).
+fn loop_flags(stmts: &[Stmt]) -> (bool, bool) {
+    let mut cont = false;
+    let mut brk = false;
+    fn walk(stmts: &[Stmt], cont: &mut bool, brk: &mut bool) {
+        for s in stmts {
+            match &s.kind {
+                StmtKind::Continue => *cont = true,
+                StmtKind::Break => *brk = true,
+                StmtKind::Do(b) => walk(&b.stmts, cont, brk),
+                StmtKind::If {
+                    then_block,
+                    elseifs,
+                    else_block,
+                    ..
+                } => {
+                    walk(&then_block.stmts, cont, brk);
+                    for (_, b) in elseifs {
+                        walk(&b.stmts, cont, brk);
+                    }
+                    if let Some(b) = else_block {
+                        walk(&b.stmts, cont, brk);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    walk(stmts, &mut cont, &mut brk);
+    (cont, brk)
+}
+
+// ------------------------------------------------------- optional chains --
+
+struct Link<'a> {
+    optional: bool,
+    kind: LinkKind<'a>,
+}
+
+enum LinkKind<'a> {
+    Field(&'a Name),
+    Index(&'a Expr),
+    Call(&'a Args),
+    Method(&'a Name, &'a Args),
+}
+
+/// `e` is a chain (field, index, call or method access) that contains a
+/// `?.` link (spec §1.4.1: short-circuiting covers the rest of the chain).
+fn chain_has_optional(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::OptField { .. }
+        | ExprKind::OptIndex { .. }
+        | ExprKind::OptMethod { .. }
+        | ExprKind::OptCall { .. } => true,
+        ExprKind::Field { obj, .. }
+        | ExprKind::Index { obj, .. }
+        | ExprKind::Method { obj, .. } => chain_has_optional(obj),
+        ExprKind::Call { callee, .. } => chain_has_optional(callee),
+        _ => false,
+    }
+}
+
+/// Splits a chain into its base expression and links, outermost last.
+fn flatten_chain(e: &Expr) -> (&Expr, Vec<Link<'_>>) {
+    let mut links = Vec::new();
+    let mut current = e;
+    loop {
+        let (next, link) = match &current.kind {
+            ExprKind::Field { obj, name } => (
+                obj,
+                Link {
+                    optional: false,
+                    kind: LinkKind::Field(name),
+                },
+            ),
+            ExprKind::OptField { obj, name } => (
+                obj,
+                Link {
+                    optional: true,
+                    kind: LinkKind::Field(name),
+                },
+            ),
+            ExprKind::Index { obj, key } => (
+                obj,
+                Link {
+                    optional: false,
+                    kind: LinkKind::Index(key),
+                },
+            ),
+            ExprKind::OptIndex { obj, key } => (
+                obj,
+                Link {
+                    optional: true,
+                    kind: LinkKind::Index(key),
+                },
+            ),
+            ExprKind::Call { callee, args } => (
+                callee,
+                Link {
+                    optional: false,
+                    kind: LinkKind::Call(args),
+                },
+            ),
+            ExprKind::OptCall { callee, args } => (
+                callee,
+                Link {
+                    optional: true,
+                    kind: LinkKind::Call(args),
+                },
+            ),
+            ExprKind::Method { obj, name, args } => (
+                obj,
+                Link {
+                    optional: false,
+                    kind: LinkKind::Method(name, args),
+                },
+            ),
+            ExprKind::OptMethod { obj, name, args } => (
+                obj,
+                Link {
+                    optional: true,
+                    kind: LinkKind::Method(name, args),
+                },
+            ),
+            _ => break,
+        };
+        links.push(link);
+        current = next;
+    }
+    links.reverse();
+    (current, links)
 }

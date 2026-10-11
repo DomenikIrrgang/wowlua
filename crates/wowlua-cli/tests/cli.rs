@@ -512,13 +512,13 @@ fn wowlua_sources_compile_with_types_erased() {
         "maps stay outside the AddOn"
     );
 
-    fs::write(dir.path().join("src/main.wowlua"), "local a = b?.c\n").unwrap();
+    fs::write(dir.path().join("src/main.wowlua"), "class A\nend\n").unwrap();
     wowlua(dir.path())
         .args(["build", "--message-format", "short"])
         .assert()
         .code(1)
         .stderr(predicate::str::contains(
-            "src/main.wowlua:1:11: error: not available yet: optional chaining (arrives with milestone M2)",
+            "src/main.wowlua:1:1: error: not available yet: classes (arrives with milestone M3)",
         ));
 }
 
