@@ -1,8 +1,9 @@
 //! `cargo xtask types fetch|gen [dir]`: the embedded wow-api declarations
-//! (spec package manager §10.9, decision T83). `fetch` checks out Blizzard's
-//! API documentation per flavor (the `wow-ui-source` mirror, at the tag of
-//! the flavor's newest client version) and Ketho's annotations (pinned);
-//! `gen` writes `crates/wowlua-api/data/`.
+//! (spec package manager §10.9, decisions T83, T84). `fetch` checks out
+//! Blizzard's UI code with its API documentation per flavor (the
+//! `wow-ui-source` mirror, at the tag of the flavor's newest client
+//! version), Ketho's annotations and the names of the global strings
+//! (pinned); `gen` writes `crates/wowlua-api/data/`.
 
 use anyhow::{Context, Result, bail};
 use std::collections::HashSet;
@@ -24,6 +25,45 @@ const KETHO_FILES: &[&str] = &[
     "Data/Classic.lua",
     "Data/Event.lua",
     "Data/CVar.lua",
+];
+/// Global string names (client dumps of Ketho's BlizzardInterfaceResources,
+/// names only): flavor → (branch, pinned commit).
+const STRINGS: &[(&str, &str, &str)] = &[
+    (
+        "standard",
+        "live",
+        "36dd01db2d8fa5086dffda5cbfb3d55f4a70e526",
+    ),
+    (
+        "camelot",
+        "forever",
+        "c5a49d394564f20c508c71014d6f60d9cd240c71",
+    ),
+    (
+        "mists",
+        "classic",
+        "877c67e9e0a64b5daae348a7b72b7a64bfaab90f",
+    ),
+    (
+        "cata",
+        "classic",
+        "877c67e9e0a64b5daae348a7b72b7a64bfaab90f",
+    ),
+    (
+        "wrath",
+        "classic",
+        "877c67e9e0a64b5daae348a7b72b7a64bfaab90f",
+    ),
+    (
+        "tbc",
+        "classic_anniversary",
+        "d6d4a8f445f198c5c73ff5f8f5002ad8f04451e4",
+    ),
+    (
+        "vanilla",
+        "classic_era",
+        "1f1dec331d23927fefe3d50c3d7f6e0915cda96f",
+    ),
 ];
 
 fn git(args: &[&str], dir: Option<&Path>) -> Result<String> {
@@ -88,7 +128,8 @@ pub fn fetch(dir: &Path) -> Result<()> {
     for (flavor, tag) in flavor_tags()? {
         let target = dir.join(&flavor);
         let marker = target.join(".wowlua-tag");
-        if fs::read_to_string(&marker).ok().as_deref() == Some(tag.as_str()) {
+        let stamp = format!("{tag} addons");
+        if fs::read_to_string(&marker).ok().as_deref() == Some(stamp.as_str()) {
             println!("{flavor}: {tag} (cached)");
             continue;
         }
@@ -112,8 +153,31 @@ pub fn fetch(dir: &Path) -> Result<()> {
             ],
             None,
         )?;
-        git(&["sparse-checkout", "set", DOCS_DIR], Some(&target))?;
-        fs::write(&marker, &tag)?;
+        git(
+            &["sparse-checkout", "set", "Interface/AddOns"],
+            Some(&target),
+        )?;
+        fs::write(&marker, &stamp)?;
+    }
+    for (_, branch, commit) in STRINGS {
+        let path = dir.join("strings").join(format!("{commit}.lua"));
+        if path.exists() {
+            continue;
+        }
+        fs::create_dir_all(path.parent().expect("a directory"))?;
+        println!("strings: fetching {branch} {commit}");
+        let url = format!(
+            "https://raw.githubusercontent.com/Ketho/BlizzardInterfaceResources/{commit}/Resources/GlobalStrings/enUS.lua"
+        );
+        let status = Command::new("curl")
+            .args(["-fsSL", "-o"])
+            .arg(&path)
+            .arg(&url)
+            .status()
+            .context("running curl")?;
+        if !status.success() {
+            bail!("downloading {url} failed");
+        }
     }
     let ketho = dir.join("ketho");
     let marker = ketho.join(".wowlua-commit");
@@ -141,6 +205,37 @@ pub fn fetch(dir: &Path) -> Result<()> {
         )?;
         git(&["checkout", "-q", KETHO_COMMIT], Some(&ketho))?;
         fs::write(&marker, KETHO_COMMIT)?;
+    }
+    Ok(())
+}
+
+/// The Lua and XML files of Blizzard's UI code, without the documentation.
+fn ui_files(
+    dir: &Path,
+    lua: &mut Vec<(String, String)>,
+    xml: &mut Vec<(String, String)>,
+) -> Result<()> {
+    let mut entries: Vec<PathBuf> = fs::read_dir(dir)?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .collect();
+    entries.sort();
+    for p in entries {
+        if p.ends_with("Blizzard_APIDocumentationGenerated")
+            || p.ends_with("Blizzard_APIDocumentation")
+        {
+            continue;
+        }
+        if p.is_dir() {
+            ui_files(&p, lua, xml)?;
+            continue;
+        }
+        let target = match p.extension().and_then(|e| e.to_str()) {
+            Some("lua") => &mut *lua,
+            Some("xml") => &mut *xml,
+            _ => continue,
+        };
+        let text = String::from_utf8_lossy(&fs::read(&p)?).into_owned();
+        target.push((p.to_string_lossy().into_owned(), text));
     }
     Ok(())
 }
@@ -196,10 +291,28 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
         }
         let mut files = Vec::new();
         lua_files(&docs, &mut files)?;
+        // Blizzard's UI code (the documentation excluded).
+        let mut ui_lua = Vec::new();
+        let mut ui_xml = Vec::new();
+        ui_files(
+            &dir.join(&flavor).join("Interface/AddOns"),
+            &mut ui_lua,
+            &mut ui_xml,
+        )?;
+        let (branch, commit) = STRINGS
+            .iter()
+            .find(|(f, _, _)| *f == flavor)
+            .map(|(_, b, c)| (*b, *c))
+            .with_context(|| format!("no global strings for {flavor}"))?;
+        let strings_text = fs::read_to_string(dir.join("strings").join(format!("{commit}.lua")))
+            .context("global strings missing: run `cargo xtask types fetch`")?;
         flavors.push(wowlua_types_gen::FlavorDocs {
             id: flavor,
-            source: format!("wow-ui-source {tag}"),
+            source: format!("wow-ui-source {tag}; global string names from Ketho's BlizzardInterfaceResources {branch} {commit}"),
             files,
+            ui_lua,
+            ui_xml,
+            strings: wowlua_types_gen::framexml::global_strings(&strings_text),
         });
     }
     let mut annotations = Vec::new();
@@ -221,10 +334,15 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
     let data = root.join("crates/wowlua-api/data");
     fs::create_dir_all(&data)?;
     // The MIT notice of the annotations goes with the generated files.
-    let license = git(&["show", &format!("{KETHO_COMMIT}:LICENSE")], Some(&dir.join("ketho")))?;
+    let license = git(
+        &["show", &format!("{KETHO_COMMIT}:LICENSE")],
+        Some(&dir.join("ketho")),
+    )?;
     crate::write_if_changed(
         &data.join("LICENSE-vscode-wow-api.txt"),
-        &format!("The declarations in this directory include information converted from\nKetho's vscode-wow-api (https://github.com/Ketho/vscode-wow-api), commit\n{KETHO_COMMIT}, under this license:\n\n{license}"),
+        &format!(
+            "The declarations in this directory include information converted from\nKetho's vscode-wow-api (https://github.com/Ketho/vscode-wow-api), commit\n{KETHO_COMMIT}, under this license:\n\n{license}"
+        ),
     )?;
     let mut written = vec![("shared".to_string(), output.shared)];
     written.extend(output.flavors);

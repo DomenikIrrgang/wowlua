@@ -345,6 +345,17 @@ impl Converter {
                 && !lhs.contains('.')
             {
                 self.out.namespaces.entry(lhs.to_string()).or_default();
+            } else if !line.starts_with("local ") && is_global_name(lhs) && !lhs.contains('.') {
+                // Unannotated globals (`GlobalColors`): colors, else `any`.
+                let ty = if rhs.starts_with("CreateColor(") {
+                    "ColorMixin"
+                } else {
+                    "any"
+                };
+                self.out
+                    .globals
+                    .entry(lhs.to_string())
+                    .or_insert_with(|| ty.into());
             }
         } else if let Some((n, p)) = class {
             self.declare_class(&n, p, std::mem::take(&mut block.fields));

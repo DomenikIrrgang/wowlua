@@ -209,15 +209,30 @@ pub fn script_object_class(name: &str) -> String {
 }
 
 fn function_sig(f: &Table) -> Sig {
-    let params: Vec<ParamDecl> = list(f, "Arguments").iter().map(param).collect();
+    // Entries with `StrideIndex` repeat: they become the variadic tail.
+    let args = list(f, "Arguments");
+    let fixed_args: Vec<&Table> = args.iter().take_while(|a| !has(a, "StrideIndex")).collect();
+    let stride_args: Vec<String> = args.iter().skip(fixed_args.len()).map(field_type).collect();
+    let params: Vec<ParamDecl> = fixed_args.iter().map(|a| param(a)).collect();
+    let vararg = (!stride_args.is_empty()).then(|| stride_args.join(" | "));
     let secret = b(f, "SecretReturns")
         || has(f, "SecretReturnsForAspect")
         || f.pairs::<String, Value>()
             .filter_map(Result::ok)
             .any(|(k, v)| k.starts_with("SecretWhen") && matches!(v, Value::Boolean(true)));
     let may_return_nothing = b(f, "MayReturnNothing");
-    let returns: Vec<String> = list(f, "Returns")
+    let all_returns = list(f, "Returns");
+    let ret_vararg = all_returns.iter().any(|r| has(r, "StrideIndex")).then(|| {
+        all_returns
+            .iter()
+            .filter(|r| has(r, "StrideIndex"))
+            .map(field_type)
+            .collect::<Vec<_>>()
+            .join(" | ")
+    });
+    let returns: Vec<String> = all_returns
         .iter()
+        .take_while(|r| !has(r, "StrideIndex"))
         .map(|r| {
             let mut ty = field_type(r);
             if secret {
@@ -231,7 +246,9 @@ fn function_sig(f: &Table) -> Sig {
         .collect();
     Sig {
         params,
+        vararg,
         returns,
+        ret_vararg,
         ..Sig::default()
     }
 }

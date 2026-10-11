@@ -106,14 +106,26 @@ pub fn check_package(
     }
     let mut env = env::Env::build(&sources);
     let mut diagnostics = std::mem::take(&mut env.diagnostics);
-    // Globals created with `@global` are declared (spec §4.3).
+    // Globals created with `@global` are declared (spec §4.3); globals the
+    // package assigns are known (their assignments are W1002).
     let mut extra_globals = extra_globals.clone();
-    for f in files.iter().filter(|f| f.kind == FileKind::Wowlua) {
-        if let Some(parse) = f.parse {
+    let mut assigned_globals = HashSet::new();
+    let markers = crate::usage::Markers::default();
+    for (i, f) in files.iter().enumerate() {
+        let Some(parse) = f.parse else { continue };
+        if f.kind == FileKind::Wowlua {
             global_decorated(&parse.chunk.block, &mut extra_globals);
+        }
+        if settings.get(i).copied().flatten().is_some() {
+            for d in crate::usage::file_usage(parse, &markers).defs {
+                if let crate::usage::Key::Global(name) = d.key {
+                    assigned_globals.insert(name);
+                }
+            }
         }
     }
     let extra_globals = &extra_globals;
+    let assigned_globals = &assigned_globals;
 
     // Modules before their importers, so export types are known.
     let order = check_order(files.len(), &analysis.edges);
@@ -132,6 +144,7 @@ pub fn check_package(
             mode: settings.mode,
             pure_lua: settings.pure_lua,
             extra_globals,
+            assigned_globals,
             imports,
             is_module: analysis.modules[i].as_ref().is_some_and(|m| m.is_module),
         };
@@ -395,6 +408,13 @@ mod tests {
         ok("local t = {}\nt.x = 1\nprint(t.x + 1)\n");
         ok(
             "for k, v in pairs({ a = 1 }) do print(k:upper(), v + 1) end\nfor i, v in ipairs({ \"a\" }) do print(i + 1, v:upper()) end\n",
+        );
+    }
+
+    #[test]
+    fn predicates() {
+        ok(
+            "local v: string | Secret<string> = \"x\"\nif issecretvalue(v) then return end\nprint(v:upper())\n",
         );
     }
 

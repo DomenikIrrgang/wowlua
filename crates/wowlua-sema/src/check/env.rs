@@ -895,13 +895,17 @@ impl Env {
             None => (Pack::any(), None),
             Some(r) => self.ret_type(r, &scope, &params),
         };
+        // A function without any annotation is unannotated too.
+        let bare = f.params.iter().all(|p| p.ty.is_none())
+            && f.ret.is_none()
+            && f.vararg.as_ref().is_none_or(|v| v.ty.is_none());
         Func {
             type_params,
             params,
             rest,
             ret,
             predicate,
-            unannotated: unannotated && !declared,
+            unannotated: (unannotated || bare) && !declared,
         }
     }
 

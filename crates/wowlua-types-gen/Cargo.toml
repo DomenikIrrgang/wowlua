@@ -11,8 +11,7 @@ authors.workspace = true
 [dependencies]
 indexmap.workspace = true
 mlua.workspace = true
-
-[dev-dependencies]
+quick-xml.workspace = true
 wowlua-syntax.workspace = true
 wowlua-span.workspace = true
 

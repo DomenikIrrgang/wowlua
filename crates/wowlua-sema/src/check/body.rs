@@ -45,8 +45,11 @@ pub struct FileInfo<'a> {
     /// A pure Lua file not opted into strict mode: diagnostics of the name
     /// and type ranges are warnings (spec §2.1).
     pub pure_lua: bool,
-    /// Extra allowed globals (`check.globals`, SavedVariables).
+    /// Extra allowed globals (`check.globals`, SavedVariables, `@global`).
     pub extra_globals: &'a HashSet<String>,
+    /// Globals the package assigns: reading them is fine (the assignments
+    /// themselves are W1002).
+    pub assigned_globals: &'a HashSet<String>,
     /// Imported bindings: local name → type.
     pub imports: HashMap<Box<str>, TypeId>,
     /// The file is a module (top-level `...` is not the addon arguments
@@ -67,6 +70,7 @@ pub struct Checker<'e> {
     pub depth: u32,
     pub diagnostics: Vec<Diagnostic>,
     pub extra_globals: HashSet<String>,
+    pub assigned_globals: HashSet<String>,
     /// Types of expressions already checked, by span.
     pub(crate) expr_types: HashMap<(u32, u32), TypeId>,
     /// Classes whose bodies are being checked: (def, static member).
@@ -77,6 +81,9 @@ pub struct Checker<'e> {
     pure_lua: bool,
     /// `...` at the top level: (addon name, addon table).
     pub(crate) top_vararg: Option<(TypeId, TypeId)>,
+    /// The file calls `setfenv`: global names resolve in environments the
+    /// checker cannot see (no W1001/W1002).
+    pub(crate) dynamic_env: bool,
 }
 
 impl<'e> Checker<'e> {
@@ -96,12 +103,14 @@ impl<'e> Checker<'e> {
             depth: 0,
             diagnostics: Vec::new(),
             extra_globals: info.extra_globals.clone(),
+            assigned_globals: info.assigned_globals.clone(),
             expr_types: HashMap::new(),
             classes: Vec::new(),
             exports: HashMap::new(),
             reassigned: reassigned_in_closures(&parse.chunk.block),
             pure_lua: info.pure_lua,
             top_vararg: None,
+            dynamic_env: calls_setfenv(&parse.chunk.block),
         };
         for (name, &t) in &info.imports {
             c.declare(name, Some(t), t, true, None);
@@ -626,7 +635,9 @@ impl<'e> Checker<'e> {
                 .method
                 .as_ref()
                 .unwrap_or_else(|| name.path.last().expect("a name"));
-            self.extend_open(o, &last.text, t);
+            // A method stored in a table takes `self` first.
+            let stored = if method { self.env.with_self(t, o) } else { t };
+            self.extend_open(o, &last.text, stored);
         }
     }
 
@@ -941,6 +952,18 @@ impl<'e> Checker<'e> {
     }
 }
 
+fn calls_setfenv(b: &Block) -> bool {
+    let mut found = false;
+    wowlua_syntax::visit::walk_block(b, &mut |e| {
+        if let ExprKind::Call { callee, .. } = &e.kind
+            && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "setfenv")
+        {
+            found = true;
+        }
+    });
+    found
+}
+
 /// `E2001` → `W2001` (spec §2.1).
 fn warning_code(code: &'static str) -> &'static str {
     use std::sync::{Mutex, OnceLock};
@@ -986,6 +1009,10 @@ fn reassigned_in_closures(b: &Block) -> HashSet<u32> {
         scopes: Vec<HashMap<Box<str>, (u32, u32)>>,
         depth: u32,
         out: HashSet<u32>,
+        /// Locals captured by a nested function.
+        captured: HashSet<u32>,
+        /// Locals assigned after their declaration.
+        assigned: HashSet<u32>,
     }
     impl Walk {
         fn lookup(&self, n: &str) -> Option<(u32, u32)> {
@@ -999,10 +1026,18 @@ fn reassigned_in_closures(b: &Block) -> HashSet<u32> {
                 .insert(n.text.clone(), (n.span.start, d));
         }
         fn assign(&mut self, n: &Name) {
+            if let Some((start, d)) = self.lookup(&n.text) {
+                self.assigned.insert(start);
+                if d < self.depth {
+                    self.out.insert(start);
+                }
+            }
+        }
+        fn read(&mut self, n: &Name) {
             if let Some((start, d)) = self.lookup(&n.text)
                 && d < self.depth
             {
-                self.out.insert(start);
+                self.captured.insert(start);
             }
         }
         fn block(&mut self, b: &Block) {
@@ -1117,6 +1152,15 @@ fn reassigned_in_closures(b: &Block) -> HashSet<u32> {
             }
         }
         fn expr(&mut self, e: &Expr) {
+            let mut names: Vec<&Name> = Vec::new();
+            wowlua_syntax::visit::walk_expr_shallow(e, &mut |x| {
+                if let ExprKind::Name(n) = &x.kind {
+                    names.push(n);
+                }
+            });
+            for n in names {
+                self.read(n);
+            }
             let mut funcs: Vec<&FuncBody> = Vec::new();
             wowlua_syntax::visit::walk_expr_shallow(e, &mut |x| {
                 if let ExprKind::Function(f) = &x.kind {
@@ -1132,7 +1176,13 @@ fn reassigned_in_closures(b: &Block) -> HashSet<u32> {
         scopes: vec![HashMap::new()],
         depth: 0,
         out: HashSet::new(),
+        captured: HashSet::new(),
+        assigned: HashSet::new(),
     };
     w.block(b);
-    w.out
+    // A captured local assigned later (a forward declaration) may hold
+    // any of its values when the closure runs.
+    let mut out = w.out;
+    out.extend(w.captured.intersection(&w.assigned).copied());
+    out
 }

@@ -225,7 +225,11 @@ impl Env {
             if let Some(i) = self.def(d).indexer {
                 return Some(i);
             }
-            if self.def(d).widget.is_some() {
+            // Declared (native) classes are open: frames and mixins get
+            // fields at run time, and the declarations are incomplete.
+            if self.def(d).widget.is_some()
+                || (self.def(d).native && self.def(d).kind == DefKind::Class)
+            {
                 return Some((Types::STRING, Types::ANY));
             }
             guard += 1;
@@ -332,6 +336,12 @@ impl Env {
         match (st, tt) {
             (Ty::Bool(_), Ty::Boolean) | (Ty::Num(_), Ty::Number) | (Ty::Str(_), Ty::String) => {
                 true
+            }
+            // WoW uppercases enum strings (`"topleft"` is `"TOPLEFT"`).
+            (Ty::Str(a), Ty::Str(b)) => {
+                b.chars().any(|c| c.is_ascii_uppercase())
+                    && !b.chars().any(|c| c.is_ascii_lowercase())
+                    && a.to_ascii_uppercase() == *b.as_ref()
             }
             (Ty::Secret(a), Ty::Secret(b)) => self.assignable_in(a, b, mode, assuming),
             (Ty::Secret(_), _) | (_, Ty::Secret(_)) => false,

@@ -270,7 +270,12 @@ impl Checker<'_> {
         match self.env.globals.get(n.text.as_ref()) {
             Some(&t) => t,
             None if n.text.as_ref() == "_G" => Types::TABLE,
-            None if self.extra_globals.contains(n.text.as_ref()) => Types::ANY,
+            None if self.dynamic_env
+                || self.extra_globals.contains(n.text.as_ref())
+                || self.assigned_globals.contains(n.text.as_ref()) =>
+            {
+                Types::ANY
+            }
             None => {
                 let (code, msg) = match self.mode {
                     super::query::Mode::Strict => {
@@ -290,7 +295,7 @@ impl Checker<'_> {
     pub fn assign_global(&mut self, n: &Name, value: TypeId) {
         match self.env.globals.get(n.text.as_ref()).copied() {
             Some(t) => self.check_assignable(n.span, value, t),
-            None if self.extra_globals.contains(n.text.as_ref()) => {}
+            None if self.dynamic_env || self.extra_globals.contains(n.text.as_ref()) => {}
             None => {
                 let code = match self.mode {
                     super::query::Mode::Strict => "E1002",
@@ -517,7 +522,9 @@ impl Checker<'_> {
                     record.fields.insert(
                         name.text.clone(),
                         Field {
-                            ty: if exp.is_some() {
+                            // Literals stay only where the expected type
+                            // gives the field a type.
+                            ty: if want.is_some() {
                                 t
                             } else {
                                 self.env.types.widen(t)
@@ -642,7 +649,8 @@ impl Checker<'_> {
                                 Some(Types::ANY)
                             }
                         }
-                        None if r.open => Some(Types::NIL),
+                        // Fields of open tables may be assigned later.
+                        None if r.open => Some(Types::ANY),
                         None if self.mode == super::query::Mode::Strict && !quiet => {
                             let msg = format!("`{}` has no field `{name}`", self.env.display(m));
                             self.report("E2003", span, msg);
@@ -693,6 +701,23 @@ impl Checker<'_> {
                 Ty::ClassOf(d) => self.static_type(d, name, span, quiet),
                 Ty::EnumMember(..) => Some(Types::ANY),
                 Ty::Module(_) => Some(Types::ANY),
+                Ty::Never | Ty::Param(_) => Some(Types::ANY),
+                // A callable table (`LibStub`): the first part with the member.
+                Ty::Intersection(parts) => {
+                    let found = parts.iter().find_map(|&p| match self.env.types.get(p) {
+                        Ty::Func(_) => None,
+                        _ => self
+                            .member_type(p, name, span, true)
+                            .filter(|&t| t != Types::ERROR),
+                    });
+                    Some(found.unwrap_or(Types::ANY))
+                }
+                Ty::Secret(_) => {
+                    if !quiet {
+                        self.check_secret(m, span);
+                    }
+                    Some(Types::ANY)
+                }
                 _ => {
                     if !quiet {
                         let msg = format!("cannot index a value of type `{}`", self.env.display(m));
@@ -997,10 +1022,13 @@ impl Checker<'_> {
                 let l = self.infer(lhs);
                 let r = self.infer(rhs);
                 for (t, e) in [(l, lhs), (r, rhs)] {
-                    let ok = self.env.assignable(t, Types::STRING, self.mode)
-                        || self.env.assignable(t, Types::NUMBER, self.mode)
-                        || self.is_secret(t)
-                        || self.has_metamethods(t);
+                    // Every member must be a string, number or secret.
+                    let members = self.env.types.members(t);
+                    let ok = members.iter().all(|&m| {
+                        self.env.assignable(m, Types::STRING, self.mode)
+                            || self.env.assignable(m, Types::NUMBER, self.mode)
+                            || matches!(self.env.types.get(m), Ty::Secret(_))
+                    }) || self.has_metamethods(t);
                     if !ok {
                         let msg = format!(
                             "cannot concatenate a value of type `{}`",
@@ -1179,6 +1207,7 @@ impl Checker<'_> {
             | Ty::Table
             | Ty::Named(..)
             | Ty::Record(_)
+            | Ty::Never
             | Ty::Param(_) => {
                 self.args_types(args, &[]);
                 Pack::any()
@@ -1591,6 +1620,8 @@ impl Checker<'_> {
         };
         match self.env.types.get(iter).clone() {
             Ty::Func(f) => {
+                // A generic iterator (`next`): its parameters are `any`.
+                let f = self.instantiate_any(&f);
                 let mut out: Vec<TypeId> = f.ret.types.clone();
                 if let Some(Rest::Variadic(t)) = f.ret.rest {
                     out.push(t);

@@ -14,3 +14,14 @@ declare global WOW_PROJECT_BURNING_CRUSADE_CLASSIC: number
 declare global WOW_PROJECT_WRATH_CLASSIC: number
 declare global WOW_PROJECT_CATACLYSM_CLASSIC: number
 declare global WOW_PROJECT_MISTS_CLASSIC: number
+
+-- LibStub: embedded by nearly every addon; it registers itself through
+-- `_G[...]`, which the analysis cannot see.
+declare class LibStubLibrary
+    libs: { [string]: table }
+    minors: { [string]: number }
+    function NewLibrary(major: string, minor: number | string): (table?, number?)
+    function GetLibrary(major: string, silent: boolean?): (table?, number?)
+    function IterateLibraries(): ((t: table, key: string?) -> (string?, table), table, nil)
+end
+declare global LibStub: LibStubLibrary & ((major: string, silent: boolean?) -> any)

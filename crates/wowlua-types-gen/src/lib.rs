@@ -3,6 +3,7 @@
 //! annotations (Ketho's vscode-wow-api), written as `.d.wowlua`.
 
 pub mod blizzard;
+pub mod framexml;
 pub mod luals;
 pub mod model;
 
@@ -16,12 +17,16 @@ pub struct Output {
     pub flavors: Vec<(String, String)>,
 }
 
-/// One flavor's input: its ID, a description of the source (for the
-/// header) and the documentation files.
+/// One flavor's input: its ID, a description of the sources (for the
+/// header), the documentation files, Blizzard's UI code (Lua and XML) and
+/// the names of its global strings.
 pub struct FlavorDocs {
     pub id: String,
     pub source: String,
     pub files: Vec<(String, String)>,
+    pub ui_lua: Vec<(String, String)>,
+    pub ui_xml: Vec<(String, String)>,
+    pub strings: Vec<String>,
 }
 
 /// Generates the declarations. `skip`: global names the compiler declares
@@ -121,6 +126,42 @@ pub fn generate(
     for (_, _, d) in per_flavor.iter_mut() {
         d.classes.retain(|n, _| !shared.classes.contains_key(n));
         blizzard::mark_widgets(&mut d.classes);
+    }
+    // Globals of Blizzard's UI code and global strings, where nothing else
+    // declares them; those of every flavor go into the shared file.
+    let widget_classes: HashSet<String> = shared.classes.keys().cloned().collect();
+    let mut ui_globals: Vec<indexmap::IndexMap<String, String>> = Vec::new();
+    for (f, (_, _, d)) in flavors.iter().zip(&per_flavor) {
+        let mut g = framexml::globals(&f.ui_lua, &f.ui_xml, &widget_classes);
+        for s in &f.strings {
+            g.entry(s.clone()).or_insert_with(|| "string".into());
+        }
+        g.retain(|n, _| {
+            !skip.contains(n)
+                && !d.functions.contains_key(n)
+                && !d.namespaces.contains_key(n)
+                && !d.globals.contains_key(n)
+                && !shared.functions.contains_key(n)
+                && !shared.namespaces.contains_key(n)
+                && !shared.globals.contains_key(n)
+                && !shared.classes.contains_key(n)
+        });
+        ui_globals.push(g);
+    }
+    if let Some(first) = ui_globals.first().cloned() {
+        for (name, ty) in first {
+            if ui_globals.iter().all(|g| g.get(&name) == Some(&ty)) {
+                shared.globals.insert(name.clone(), ty);
+                for g in ui_globals.iter_mut() {
+                    g.shift_remove(&name);
+                }
+            }
+        }
+    }
+    for ((_, _, d), g) in per_flavor.iter_mut().zip(ui_globals) {
+        for (name, ty) in g {
+            d.globals.entry(name).or_insert(ty);
+        }
     }
     let shared_defs = shared.defined_types();
     let shared_refs = shared.referenced_types();
