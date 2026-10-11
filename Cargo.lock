@@ -1316,6 +1316,7 @@ dependencies = [
  "wowlua-stdlib",
  "wowlua-syntax",
  "wowlua-toc",
+ "wowlua-types-gen",
  "wowlua-xml",
 ]
 

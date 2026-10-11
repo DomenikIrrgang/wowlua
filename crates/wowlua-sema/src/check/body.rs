@@ -93,6 +93,8 @@ pub struct Checker<'e> {
     pub(crate) meta_flavor: HashSet<String>,
     /// Expressions that are existence tests (`if C_X then`): no E2030.
     pub(crate) probes: HashSet<wowlua_span::Span>,
+    /// Inside code already reported as unreachable (W1005).
+    in_dead: bool,
 }
 
 impl<'e> Checker<'e> {
@@ -124,6 +126,7 @@ impl<'e> Checker<'e> {
             guard: super::flavors::Guard::default(),
             meta_flavor: info.meta_flavor.clone(),
             probes: HashSet::new(),
+            in_dead: false,
         };
         for (name, &t) in &info.imports {
             c.declare(name, Some(t), t, true, None);
@@ -339,9 +342,17 @@ impl<'e> Checker<'e> {
     }
 
     fn block_stmts(&mut self, b: &Block) {
+        let outer = self.in_dead;
         for s in &b.stmts {
+            // The first statement after a `return`, `break`, `continue` or
+            // a call that never returns (W1005), once per region.
+            if !self.live && !self.in_dead {
+                self.report("W1005", s.span, "unreachable code");
+                self.in_dead = true;
+            }
             self.stmt(s);
         }
+        self.in_dead = outer;
     }
 
     fn stmt(&mut self, s: &Stmt) {
@@ -884,7 +895,7 @@ impl<'e> Checker<'e> {
         }
         self.scope.self_ty = Some(instance);
         if self.mode == Mode::Strict {
-            self.definite_assignment(c);
+            self.definite_assignment(c, def);
         }
         for m in &c.members {
             let is_static = m.modifiers.contains(&Modifier::Static);
@@ -974,7 +985,7 @@ impl<'e> Checker<'e> {
     /// Strict mode: non-optional instance fields without an initializer
     /// must be assigned by the constructor before it returns or calls a
     /// method on `self` (E2052).
-    fn definite_assignment(&mut self, c: &ClassDecl) {
+    fn definite_assignment(&mut self, c: &ClassDecl, def: DefId) {
         let required: Vec<&Name> = c
             .members
             .iter()
@@ -1011,9 +1022,24 @@ impl<'e> Checker<'e> {
                         }
                     }
                 }
-                // A method call on `self` or a return ends the check.
-                let calls_self = matches!(&s.kind, StmtKind::Call(e) if matches!(&e.kind, ExprKind::Method { obj, .. } if matches!(&obj.kind, ExprKind::Name(n) if n.text.as_ref() == "self")));
-                if calls_self || matches!(s.kind, StmtKind::Return(_)) {
+                // A call of a method of wowlua code on `self` (which may read
+                // the fields) or a return ends the check; native methods
+                // (`self:SetSize(…)`) cannot read them.
+                let method = match &s.kind {
+                    StmtKind::Call(e) => match &e.kind {
+                        ExprKind::Method { obj, name, .. } if matches!(&obj.kind, ExprKind::Name(n) if n.text.as_ref() == "self") => {
+                            Some(name.text.clone())
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                let calls_own = method.is_some_and(|m| {
+                    self.env
+                        .instance_member(def, &[], &m)
+                        .is_none_or(|(_, owner)| !self.env.def(owner).native)
+                });
+                if calls_own || matches!(s.kind, StmtKind::Return(_)) {
                     break;
                 }
             }

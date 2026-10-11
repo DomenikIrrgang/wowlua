@@ -5,6 +5,7 @@
 pub mod check;
 pub mod classes;
 pub mod constant;
+pub mod lint;
 pub mod loadorder;
 pub mod meta;
 pub mod order;

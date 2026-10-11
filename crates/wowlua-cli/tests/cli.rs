@@ -1052,6 +1052,88 @@ fn standard_library_modules_and_intrinsics() {
         .stderr(predicate::str::contains("E3033"));
 }
 
+/// `wowlua lint` reports the lints only; `--fix` applies their fixes;
+/// `--!nolint` and `check.lints` turn them off.
+#[test]
+fn lint_and_fix() {
+    let dir = tempfile::tempdir().unwrap();
+    let manifest = "{ \"package\": { \"name\": \"lints\", \"version\": \"1.0.0\" }, \"check\": { \"lints\": { \"W1004\": \"deny\" } } }\n";
+    let main = "local unused = 1\nlocal n: number = \"type error\"\nlocal function f(a, b)\n    return a\nend\nprint(f(n))\n";
+    let quiet = "--!nolint\nlocal unused = 1\n";
+    write(
+        dir.path(),
+        &[
+            ("wowlua.json", manifest),
+            ("src/main.wowlua", main),
+            ("src/quiet.wowlua", quiet),
+        ],
+    );
+    // Lints only: the type error (E2001) is not shown.
+    let assert = wowlua(dir.path())
+        .args(["lint", "--message-format", "short"])
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(
+        stderr.contains("main.wowlua:1:7: warning[W1003]: unused local `unused`"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("main.wowlua:3:21: warning[W1003]: unused parameter `b`"),
+        "{stderr}"
+    );
+    assert!(
+        !stderr.contains("E2001") && !stderr.contains("quiet.wowlua"),
+        "{stderr}"
+    );
+    wowlua(dir.path())
+        .args(["lint", "--fix"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Fixed 2 problems in 1 file"));
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/main.wowlua")).unwrap(),
+        "local n: number = \"type error\"\nlocal function f(a, _b)\n    return a\nend\nprint(f(n))\n"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/quiet.wowlua")).unwrap(),
+        quiet
+    );
+    // `check.lints` severities.
+    fs::write(
+        dir.path().join("src/main.wowlua"),
+        "local x = 1\ndo local x = 2 print(x) end\nprint(x)\n",
+    )
+    .unwrap();
+    wowlua(dir.path())
+        .args(["lint", "--message-format", "short"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("error[W1004]"));
+}
+
+/// `wowlua types convert` turns LuaLS annotations into declarations.
+#[test]
+fn types_convert() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = "---@meta\n---@class MyLib\n---@field version number\nlocal MyLib = {}\n\n---@param name string\n---@return boolean\nfunction MyLib:Register(name) end\n";
+    write(dir.path(), &[("annotations/MyLib.lua", lib)]);
+    wowlua(dir.path())
+        .args(["types", "convert", "annotations", "--out", "types"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "Converted 1 file → types/annotations.d.wowlua",
+        ));
+    let out = fs::read_to_string(dir.path().join("types/annotations.d.wowlua")).unwrap();
+    assert!(
+        out.contains("declare class MyLib")
+            && out.contains("version: number")
+            && out.contains("Register(name: string): boolean"),
+        "{out}"
+    );
+}
+
 /// Shared flavor mode: APIs some flavor lacks need a flavor guard (spec
 /// §6.5, E2030).
 #[test]
@@ -1383,7 +1465,8 @@ f:GetScript("OnEnter")(f)
     }
 }
 
-/// The UI sample addon builds for its flavors and works against the mock
+/// The UI sample addon checks in strict mode without diagnostics (milestone
+/// M4 exit criterion), builds for its flavors and works against the mock
 /// frame API (the milestone M3 exit criterion is checked in game).
 #[test]
 fn widget_demo_example_runs() {

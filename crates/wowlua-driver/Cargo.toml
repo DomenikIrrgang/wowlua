@@ -21,6 +21,7 @@ wowlua-sema.workspace = true
 wowlua-runtime.workspace = true
 wowlua-stdlib.workspace = true
 wowlua-api.workspace = true
+wowlua-types-gen.workspace = true
 wowlua-luair.workspace = true
 wowlua-fmt.workspace = true
 blake3.workspace = true

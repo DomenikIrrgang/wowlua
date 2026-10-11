@@ -492,3 +492,150 @@ pub fn dev(out: &Output, global: &GlobalArgs, target: &InstallTarget, link: bool
     }
     true
 }
+
+/// Whether `wowlua lint` shows a diagnostic: lints, and errors that stop
+/// the analysis (syntax, manifest, I/O).
+fn shown_by_lint(d: &Diagnostic) -> bool {
+    d.is_lint()
+        || (d.is_error()
+            && d.code
+                .is_none_or(|c| c.starts_with("E0") || c.starts_with("E4")))
+}
+
+/// Applies machine-applicable fixes until none is left (at most 10 rounds,
+/// as a fix can make another one possible). `lints_only`: only fixes of
+/// lint diagnostics. `None` when the project does not load.
+fn apply_fixes(out: &Output, global: &GlobalArgs, lints_only: bool) -> Option<usize> {
+    let request = BuildRequest {
+        profile: "dev".into(),
+        flavors: None,
+        out_dir: None,
+        write: false,
+    };
+    let mut total = 0;
+    let mut files: std::collections::BTreeSet<PathBuf> = Default::default();
+    for _ in 0..10 {
+        let mut session = Session::new();
+        let Some(project) = wowlua_driver::load_project(&mut session, &load_options(global)) else {
+            out.flush(&mut session);
+            return None;
+        };
+        let _ = wowlua_driver::build(&mut session, &project, &request);
+        apply_lints(&mut session, &project);
+        let diagnostics = session.take_diagnostics().into_vec();
+        let with_fixes: Vec<&Diagnostic> = diagnostics
+            .iter()
+            .filter(|d| !d.fixes.is_empty() && (!lints_only || d.is_lint()))
+            .collect();
+        match wowlua_driver::fix::apply(&session.db, &with_fixes, project.root()) {
+            Ok(applied) if applied.fixes > 0 => {
+                total += applied.fixes;
+                files.extend(applied.files);
+            }
+            Ok(_) => break,
+            Err(e) => {
+                session.push(Diagnostic::plain_error(format!("cannot apply fixes: {e}")));
+                out.flush(&mut session);
+                return None;
+            }
+        }
+    }
+    if total > 0 {
+        let s = if total == 1 { "" } else { "s" };
+        let f = if files.len() == 1 { "" } else { "s" };
+        out.status(
+            "Fixed",
+            format!("{total} problem{s} in {} file{f}", files.len()),
+        );
+    }
+    Some(total)
+}
+
+/// `wowlua lint [--fix]`.
+pub fn lint(out: &Output, global: &GlobalArgs, fix: bool) -> bool {
+    if fix && apply_fixes(out, global, true).is_none() {
+        return false;
+    }
+    let started = Instant::now();
+    let mut session = Session::new();
+    let request = BuildRequest {
+        profile: "dev".into(),
+        flavors: None,
+        out_dir: None,
+        write: false,
+    };
+    let Some(project) = wowlua_driver::load_project(&mut session, &load_options(global)) else {
+        out.flush(&mut session);
+        return false;
+    };
+    let build = wowlua_driver::build(&mut session, &project, &request);
+    apply_lints(&mut session, &project);
+    session.diagnostics.retain(shown_by_lint);
+    let ok = out.flush(&mut session);
+    if ok {
+        let name = build.map_or_else(String::new, |b| format!("{} ", describe(&b)));
+        out.status(
+            "Linted",
+            format!("{name}in {:.2}s", started.elapsed().as_secs_f64()),
+        );
+    }
+    ok
+}
+
+/// `wowlua fix [--manifest]`.
+pub fn fix(out: &Output, global: &GlobalArgs, manifest: bool) -> bool {
+    if manifest {
+        let mut session = Session::new();
+        let Some(project) = wowlua_driver::load_project(&mut session, &load_options(global)) else {
+            out.flush(&mut session);
+            return false;
+        };
+        // There is one manifest schema so far: nothing to migrate.
+        out.status(
+            "Fresh",
+            format!(
+                "{} uses the current schema",
+                relative(&project.manifest.path)
+            ),
+        );
+        return out.flush(&mut session);
+    }
+    let Some(total) = apply_fixes(out, global, false) else {
+        return false;
+    };
+    if total == 0 {
+        out.status("Fresh", "nothing to fix");
+    }
+    // What is left.
+    let mut session = Session::new();
+    let request = BuildRequest {
+        profile: "dev".into(),
+        flavors: None,
+        out_dir: None,
+        write: false,
+    };
+    let _ = load_and_build(&mut session, global, &request);
+    out.flush(&mut session)
+}
+
+/// `wowlua types convert <path> [--out <dir>]`.
+pub fn types_convert(out: &Output, path: &Path, out_dir: Option<&Path>) -> bool {
+    let cwd = cwd();
+    let out_dir = out_dir.map_or_else(|| cwd.clone(), |d| cwd.join(d));
+    match wowlua_driver::types::convert(&cwd.join(path), &out_dir) {
+        Ok((written, inputs)) => {
+            let s = if inputs == 1 { "" } else { "s" };
+            out.status(
+                "Converted",
+                format!("{inputs} file{s} → {}", relative(&written)),
+            );
+            true
+        }
+        Err(e) => {
+            let mut session = Session::new();
+            session.push(Diagnostic::plain_error(e));
+            out.flush(&mut session);
+            false
+        }
+    }
+}

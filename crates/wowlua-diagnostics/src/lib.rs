@@ -52,6 +52,23 @@ pub struct Label {
     pub message: String,
 }
 
+/// A text replacement in one file.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Edit {
+    pub span: Span,
+    pub replacement: String,
+}
+
+/// A machine-applicable fix (used by `wowlua fix` and the LSP).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Fix {
+    pub message: String,
+    pub edits: Vec<Edit>,
+}
+
+/// The lint codes (`wowlua lint`, `--!nolint`).
+pub const LINT_CODES: &[&str] = &["W1003", "W1004", "W1005"];
+
 /// One error, warning or note.
 ///
 /// The first label is the primary location. A diagnostic without labels may
@@ -65,6 +82,7 @@ pub struct Diagnostic {
     pub path: Option<PathBuf>,
     pub notes: Vec<String>,
     pub help: Option<String>,
+    pub fixes: Vec<Fix>,
 }
 
 impl Diagnostic {
@@ -102,6 +120,7 @@ impl Diagnostic {
             path: None,
             notes: Vec::new(),
             help: None,
+            fixes: Vec::new(),
         }
     }
 
@@ -121,6 +140,19 @@ impl Diagnostic {
     pub fn with_note(mut self, note: impl Into<String>) -> Self {
         self.notes.push(note.into());
         self
+    }
+
+    pub fn with_fix(mut self, message: impl Into<String>, edits: Vec<Edit>) -> Self {
+        self.fixes.push(Fix {
+            message: message.into(),
+            edits,
+        });
+        self
+    }
+
+    /// A lint diagnostic (W1003, W1004, W1005).
+    pub fn is_lint(&self) -> bool {
+        self.code.is_some_and(|c| LINT_CODES.contains(&c))
     }
 
     pub fn with_help(mut self, help: impl Into<String>) -> Self {
@@ -206,6 +238,10 @@ impl Diagnostics {
                 Some(LintLevel::Warn) | None => true,
             }
         });
+    }
+
+    pub fn retain(&mut self, keep: impl FnMut(&Diagnostic) -> bool) {
+        self.items.retain(keep);
     }
 
     pub fn into_vec(self) -> Vec<Diagnostic> {

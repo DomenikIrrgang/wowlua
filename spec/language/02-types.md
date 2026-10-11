@@ -277,6 +277,10 @@ valid Lua patterns valid, and a local may hold different types over time,
 while still catching misuse such as calling `:upper()` on a value that is a
 number at that point.
 
+A local declared without a value and assigned later (a forward declaration,
+`local f` … `f = function() … end`) reads as `any` inside closures, which may
+run after any of its assignments.
+
 ### 2.4.2 Open and sealed tables
 
 A table literal assigned to an unannotated local is **open** while it stays in
@@ -485,7 +489,9 @@ assignments inside closures that capture it.
 | Calling a method with `.` instead of `:` (missing `self`) | error E2008 | error E2008 |
 
 In basic mode `nil` is assignable to every type, so passing an explicit `nil`
-is accepted, but **omitting** a non-optional argument is still E2007.
+is accepted, but **omitting** a non-optional argument is still E2007. A
+function is **unannotated** when none of its parameters and not its return
+type are annotated; its parameters are then all optional.
 
 **Overload resolution** tries overloads in declaration order and picks the
 first whose parameters accept the arguments. Function-expression arguments
@@ -502,9 +508,15 @@ When no overload matches, the error (E2012) lists every overload.
 
 The global environment (`_G`) is modelled as a set of **declared globals**:
 
-- the WoW API and FrameXML (from the `wow-api-<flavor>` types package for the current
-  flavor; see [Package manager](../toolchain/package-manager.md#109-types-packages)),
-- the Lua 5.1 standard library as available in WoW,
+- the WoW API (from the `wow-api-<flavor>` declarations of the current flavor,
+  embedded in the compiler until the package manager provides them as types
+  packages; see [Package manager](../toolchain/package-manager.md#109-types-packages)
+  and decision T83). A function is declared for a flavor only when that
+  flavor's client has it (decision T85),
+- the globals of Blizzard's UI code (FrameXML functions, tables, mixins and
+  named frames) and its global strings (decision T84),
+- the Lua 5.1 standard library as available in WoW, and `LibStub`
+  (decision T86),
 - `declare global` declarations in the project and its dependencies,
 - SavedVariables listed in the manifest (typed `any` unless declared),
 - names listed in the manifest under `check.globals`.
@@ -515,6 +527,14 @@ in strict mode. **Assigning** an undeclared global, including through
 strict mode. In pure Lua files both are always warnings (§2.1). Accidental
 globals are a common source of addon bugs and taint. Explicit
 `_G.name = value` or `_G["name"]` is always allowed.
+
+A global that any file of the package assigns can be read everywhere (typed
+`any`); the assignment itself is still W1002/E1002 unless declared. A file
+that calls `setfenv` gets no global diagnostics, because its names resolve in
+an environment the checker cannot see. Existence tests (`if GetPetHappiness
+then … end`) never report the tested name, and the guarded code may use it
+(feature detection, [Build metadata §6.5](06-meta.md#65-runtime-flavor-checks-shared-mode),
+decision T89).
 
 ## 2.9 Declaration files
 

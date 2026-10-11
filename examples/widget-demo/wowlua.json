@@ -12,6 +12,9 @@
     "title": "Widget Demo",
     "notes": "wowlua sample addon. Type /wdemo."
   },
+  "check": {
+    "mode": "strict"
+  },
   "flavors": {
     "standard": {},
     "camelot": {},

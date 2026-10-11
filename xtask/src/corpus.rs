@@ -332,6 +332,7 @@ pub fn addons(dir: &Path) -> Result<()> {
     let mut failures = Vec::new();
     let mut codes: BTreeMap<String, usize> = BTreeMap::new();
     let started = std::time::Instant::now();
+    let mut fixed = 0;
     // Whole packages are copied: addons may load files of their siblings.
     let mut copies: BTreeMap<PathBuf, tempfile::TempDir> = BTreeMap::new();
     // `WOWLUA_CORPUS_ONLY=<text>` checks only matching addons;
@@ -444,6 +445,45 @@ pub fn addons(dir: &Path) -> Result<()> {
                 break;
             }
         }
+        // `WOWLUA_CORPUS_FIX=1`: apply the lint fixes, then the addon must
+        // still build without errors.
+        if std::env::var_os("WOWLUA_CORPUS_FIX").is_some() {
+            for _ in 0..5 {
+                let mut session = wowlua_driver::Session::new();
+                let Some(project) = wowlua_driver::load_project(&mut session, &options) else {
+                    break;
+                };
+                let _ = wowlua_driver::build(&mut session, &project, &request);
+                let diagnostics: Vec<wowlua_diagnostics::Diagnostic> =
+                    session.take_diagnostics().into_vec();
+                let lints: Vec<&wowlua_diagnostics::Diagnostic> =
+                    diagnostics.iter().filter(|d| d.is_lint()).collect();
+                let applied = wowlua_driver::fix::apply(&session.db, &lints, project.root())?;
+                if applied.fixes == 0 {
+                    break;
+                }
+                fixed += applied.fixes;
+            }
+            let mut session = wowlua_driver::Session::new();
+            let rebuilt = wowlua_driver::load_project(&mut session, &options)
+                .and_then(|project| wowlua_driver::build(&mut session, &project, &request));
+            if rebuilt.is_none() {
+                let first = session.diagnostics.iter().find(|d| d.is_error());
+                let renderer = wowlua_diagnostics::Renderer::new(
+                    wowlua_diagnostics::MessageFormat::Short,
+                    wowlua_diagnostics::ColorChoice::Never,
+                );
+                failures.push(format!(
+                    "{rel}: the fixed sources fail: {}",
+                    first
+                        .map(|d| renderer.render_to_string(&session.db, d))
+                        .unwrap_or_default()
+                ));
+            }
+        }
+    }
+    if fixed > 0 {
+        println!("applied {fixed} lint fixes");
     }
     println!(
         "{} addons in {:.1?}; diagnostics by code: {:?}; {} failures",

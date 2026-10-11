@@ -371,6 +371,34 @@ pub fn build(
         &mut raw,
         &mut parsed,
     );
+    // Lints (spec appendix B), once per file: `.wowlua` files, and `.lua`
+    // files with `check.lua`. `--!nolint` turns them off for a file.
+    let mut nolint: HashSet<wowlua_span::FileId> = HashSet::new();
+    for (i, (source, file)) in files.iter().enumerate() {
+        let Some(parse) = parsed.parses.get(i).and_then(Option::as_ref) else {
+            continue;
+        };
+        if !parsed.ok[i] || wowlua_sema::is_compiler_known(&source.src_rel) {
+            continue;
+        }
+        if parse
+            .chunk
+            .directives
+            .iter()
+            .any(|d| d.name.as_ref() == "nolint")
+        {
+            nolint.insert(*file);
+            continue;
+        }
+        let lintable = match source.kind {
+            SourceKind::Wowlua => true,
+            SourceKind::Lua => check_cfg.lua,
+            _ => false,
+        };
+        if lintable {
+            diagnostics.extend(wowlua_sema::lint::lint(parse, &raw[&source.rel]));
+        }
+    }
     let split = build_cfg.flavor_mode == wowlua_manifest::model::FlavorMode::Split;
     let compile_flavors: Vec<Option<String>> = if split {
         flavors.iter().cloned().map(Some).collect()
@@ -400,8 +428,8 @@ pub fn build(
                     .is_none_or(|f| restriction(&source.rel).is_none_or(|list| list.contains(f)))
             })
             .collect();
-        // Shared mode checks against the first flavor's API until flavor
-        // guards arrive.
+        // Shared mode types against the first flavor's API; flavor guards
+        // (E2030) cover what other flavors lack.
         let api_flavor = flavor
             .clone()
             .or_else(|| flavors.first().cloned())
@@ -453,6 +481,13 @@ pub fn build(
     // One message per problem, not one per flavor.
     let mut seen = BTreeSet::new();
     for d in diagnostics {
+        if d.is_lint()
+            && d.labels
+                .first()
+                .is_some_and(|l| nolint.contains(&l.span.file))
+        {
+            continue;
+        }
         let key = format!(
             "{:?}|{}|{:?}",
             d.code,

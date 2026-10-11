@@ -514,6 +514,36 @@ mod tests {
     }
 
     #[test]
+    fn unreachable_code() {
+        let count = |src: &str| {
+            check_source(src, Mode::Basic)
+                .iter()
+                .filter(|d| d.code == Some("W1005"))
+                .count()
+        };
+        assert_eq!(
+            count("local function f()\n    error(\"x\")\n    print(1)\n    print(2)\nend\n"),
+            1
+        );
+        assert_eq!(
+            count("do return end\nprint(1)\nif x then print(2) end\n"),
+            1
+        );
+        assert_eq!(
+            count(
+                "local function f(x: boolean)\n    if x then return 1 else return 2 end\n    print(1)\nend\n"
+            ),
+            1
+        );
+        assert_eq!(
+            count(
+                "for i = 1, 2 do\n    if i then break end\n    print(i)\nend\nwhile true do end\nprint(1)\n"
+            ),
+            0
+        );
+    }
+
+    #[test]
     fn basics() {
         ok("local x: number = 1\nlocal s = tostring(x)\nprint(s:upper(), #s, math.floor(1.5))\n");
         err("local x: number = \"a\"\n", "E2001");
@@ -564,6 +594,14 @@ mod tests {
         strict_err("local x: number = nil\n", "E2001");
         strict_err("local p: { x: number } = { x = 1, y = 2 }\n", "E2003");
         strict_err("class A\n x: number\n constructor() end\nend\n", "E2052");
+        // A method of the class may read the field; a native one cannot.
+        strict_err(
+            "class A\n x: number\n constructor()\n  self:m()\n  self.x = 1\n end\n function m() print(self.x) end\nend\n",
+            "E2052",
+        );
+        strict_ok(
+            "declare class N\n    function SetSize(w: number, h: number)\nend\nclass A extends N\n x: number\n constructor()\n  super()\n  self:SetSize(1, 2)\n  self.x = 1\n end\nend\n",
+        );
         strict_ok("class A\n x: number\n constructor() self.x = 1 end\nend\n");
         strict_err("print(undefinedGlobal)\n", "E1001");
         let d = check_source("pcall(function() coroutine.yield(1) end)\n", Mode::Basic);

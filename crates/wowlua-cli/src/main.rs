@@ -156,10 +156,39 @@ enum Command {
         #[arg(long, value_delimiter = ',')]
         flavor: Vec<String>,
     },
+    /// Run the lints only (W1003 unused, W1004 shadowing, W1005 unreachable)
+    Lint {
+        /// Apply machine-applicable fixes
+        #[arg(long)]
+        fix: bool,
+    },
+    /// Apply all machine-applicable fixes from diagnostics
+    Fix {
+        /// Migrate wowlua.json to the current schema
+        #[arg(long)]
+        manifest: bool,
+    },
+    /// Type declaration tools
+    Types {
+        #[command(subcommand)]
+        command: TypesCommand,
+    },
     /// Explain a diagnostic code
     Explain {
         /// For example E4002
         code: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum TypesCommand {
+    /// Convert LuaLS `---@` annotations into a .d.wowlua declaration file
+    Convert {
+        /// An annotated .lua file, or a directory of them
+        path: PathBuf,
+        /// Directory to write <name>.d.wowlua into (default: current directory)
+        #[arg(long, value_name = "DIR")]
+        out: Option<PathBuf>,
     },
 }
 
@@ -245,6 +274,11 @@ fn main() -> ExitCode {
         Command::Toc { profile, flavor } => {
             commands::toc(&out, &cli.global, &profile.name("dev"), flavor)
         }
+        Command::Lint { fix } => commands::lint(&out, &cli.global, fix),
+        Command::Fix { manifest } => commands::fix(&out, &cli.global, manifest),
+        Command::Types {
+            command: TypesCommand::Convert { path, out: dir },
+        } => commands::types_convert(&out, &path, dir.as_deref()),
         Command::Explain { code } => commands::explain(&out, &code),
     };
     if ok {

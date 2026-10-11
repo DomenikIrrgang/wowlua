@@ -117,8 +117,8 @@ fn check_settings(
 
 /// The parsed sources of a package (shared by all flavors).
 pub struct Parsed {
-    parses: Vec<Option<Parse>>,
-    ok: Vec<bool>,
+    pub(crate) parses: Vec<Option<Parse>>,
+    pub(crate) ok: Vec<bool>,
     declarations: Vec<Parse>,
 }
 

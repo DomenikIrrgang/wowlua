@@ -167,6 +167,33 @@ fn json_line(db: &SourceDb, diagnostic: &Diagnostic) -> String {
     if let Some(help) = &diagnostic.help {
         object.insert("help".into(), help.clone().into());
     }
+    let fixes: Vec<serde_json::Value> = diagnostic
+        .fixes
+        .iter()
+        .map(|fix| {
+            let edits: Vec<serde_json::Value> = fix
+                .edits
+                .iter()
+                .map(|edit| {
+                    let file = db.get(edit.span.file);
+                    let start = file.line_col(edit.span.start as usize);
+                    let end = file.line_col(edit.span.end as usize);
+                    serde_json::json!({
+                        "file": display_path(file.path()),
+                        "line": start.line,
+                        "column": start.column,
+                        "end_line": end.line,
+                        "end_column": end.column,
+                        "replacement": edit.replacement,
+                    })
+                })
+                .collect();
+            serde_json::json!({ "message": fix.message, "edits": edits })
+        })
+        .collect();
+    if !fixes.is_empty() {
+        object.insert("fixes".into(), fixes.into());
+    }
     serde_json::Value::Object(object).to_string()
 }
 

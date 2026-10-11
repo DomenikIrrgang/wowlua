@@ -97,7 +97,9 @@ initializers (E3041).
 
 **Definite assignment.** In strict mode, every non-optional instance field
 without an initializer must be assigned on every path through the constructor
-before the constructor returns or calls a method on `self` (E2052).
+before the constructor returns or calls a method of a wowlua class on `self`
+(E2052). Calls of native methods (`self:SetSize(…)` in a widget class) do not
+end the check, because they cannot read the fields.
 
 ### 3.1.3 Methods and `self`
 

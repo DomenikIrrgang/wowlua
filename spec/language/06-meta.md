@@ -305,17 +305,26 @@ is inside a **flavor guard**. These forms are recognized as guards:
 |-------|-----------|
 | `flavor == "standard"`, `flavor ~= "vanilla"` | The matching flavors |
 | `WOW_PROJECT_ID == WOW_PROJECT_MAINLINE`, `WOW_PROJECT_ID == 2`, `WOW_PROJECT_ID ~= …` | The flavors with that project ID (constant names and literal numbers, from the flavor table) |
-| Existence checks: `if C_EditMode then`, `if C_EditMode and C_EditMode.GetLayouts then` | The API is usable inside the branch, whichever flavors provide it |
+| Existence checks: `if C_Garrison then`, `C_Garrison and C_Garrison.GetGarrisonInfo(…)`, `if C_Garrison ~= nil then`, `if not C_Garrison then return end` | The API is usable where the check holds. A namespace that exists narrows to the flavors that have it, so its members that some of those flavors lack still need a guard |
+
+Guards combine through `and`, `or` and `not`, hold in the branch they guard
+and after an `if` whose other branches all end (`return`, `error`), and are
+joined where paths meet. Availability comes from each flavor's own
+declarations; the code is typed against the first selected flavor's API.
 
 ```wowlua
 if flavor == "standard" then
-    C_EditMode.GetLayouts()      -- ok: narrowed to "standard"
+    C_Garrison.GetGarrisonInfo(1)    -- ok: narrowed to "standard"
 end
-if C_EditMode then
-    C_EditMode.GetLayouts()      -- ok: existence check
+if C_Garrison then
+    C_Garrison.GetGarrisonInfo(1)    -- ok: existence check
 end
-C_EditMode.GetLayouts()          -- E2030: C_EditMode is not available in "vanilla"
+C_Garrison.GetGarrisonInfo(1)        -- E2030: C_Garrison is not available in "vanilla"
 ```
+
+The existence check itself is never reported, in any build mode: an
+undeclared global or a member the type lacks reads as `nil` in an existence
+test and as `any` in the code it guards (feature detection, decision T89).
 
 Existing multi-flavor code, which typically guards with `WOW_PROJECT_ID` or
 existence checks, therefore compiles without changes.

@@ -6,6 +6,7 @@
 
 pub mod build;
 mod compile;
+pub mod fix;
 pub mod format;
 mod fsutil;
 pub mod install;
@@ -15,6 +16,7 @@ mod meta;
 pub mod project;
 pub mod scaffold;
 mod sources;
+pub mod types;
 pub mod vcs;
 
 use wowlua_diagnostics::{Diagnostic, Diagnostics};

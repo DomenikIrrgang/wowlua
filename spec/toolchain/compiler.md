@@ -265,6 +265,41 @@ This implements the load-order rules of
    global or field, or `setfenv` make an edge undecidable. The files involved
    keep their relative source order and warning W1033 names the cause.
 
+### 13.6.2 Lints
+
+Lints run in `wowlua check`, `wowlua build` and `wowlua lint` (which reports
+only lints, and errors that stop the analysis) on `.wowlua` files, and on
+`.lua` files when `check.lua` is set. `--!nolint` turns them off for a file;
+`check.lints` changes their level (decisions T90–T93).
+
+- **W1003, unused binding.** A local, `const`, local function, destructured
+  field, import, parameter or loop variable that is never read. Assigning a
+  local is not a read. Names starting with `_` and `self` are exempt, as are
+  exported and decorated declarations. A use in a type position (an imported
+  type) or in a conditionally eliminated branch counts. Parameters and loop
+  variables are positional: only those after the last used one of the same
+  list are reported. Top-level `function f()` declarations of a module are
+  hoisted locals and are reported like local functions.
+- **W1004, shadowing.** A local, local function, loop variable or parameter
+  (also of a nested function) that reuses the name of a visible local of an
+  enclosing scope. Redeclaring a local in the same block (`local x = f(x)`)
+  is not reported.
+- **W1005, unreachable code.** The first statement after `return`, `break`,
+  `continue`, or a call whose type returns `never` (`error`), or after an `if`
+  whose branches all end that way; once per region. Reported by the type
+  checker, so not in `--!nocheck` files.
+
+**Fixes** (`wowlua fix`, `wowlua lint --fix`, the LSP). A statement whose
+names are all unused is removed when its values have no side effects
+(literals, names, functions, and tables of those); its line goes with it when
+nothing else is on it. Other unused locals, parameters and loop variables are
+renamed `_name`, unless the file already uses `_name`. An unused import name
+is removed; an import without used names is removed when it has no load-order
+effect (`import type`, `wowlua:` modules), and otherwise becomes
+`import _ from "…"`, which keeps the load order. Destructured fields, W1004 and
+W1005 get no fix. Fixes are applied in rounds until none is left, because one
+fix can make another one possible.
+
 ## 13.7 Back end
 
 Covered in detail by [Code generation](codegen.md) and
