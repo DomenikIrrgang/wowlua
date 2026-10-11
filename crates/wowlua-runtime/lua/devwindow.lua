@@ -232,28 +232,105 @@ local function buildDevWindow(console, reg)
 		win:Hide()
 	end)
 
-	-- Addon selector: cycles through the loaded dev builds.
+	-- Addon selector: a dropdown field (SuuUI `Select`) with the loaded
+	-- dev builds.
 	local addonButton = CreateFrame("Button", nil, titleBar)
-	addonButton:SetSize(200, 24)
-	addonButton:SetPoint("RIGHT", close, "LEFT", -12, 0)
-	-- A small diamond after the name: more addons to pick from.
-	local addonHint = diamond(addonButton, 5, C.inkMuted)
-	addonHint:SetPoint("RIGHT", -2, 0)
-	local addonLabel = text(addonButton, "display", 13, C.giltText)
-	addonLabel:SetPoint("RIGHT", -14, 0)
-	addonLabel:SetJustifyH("RIGHT")
+	addonButton:SetSize(200, 26)
+	addonButton:SetPoint("RIGHT", close, "LEFT", -10, 0)
+	local addonBg = fill(addonButton, C.sunk)
+	addonBg:SetAllPoints()
+	local addonEdges = border(addonButton, C.giltLine)
+	local addonLabel = text(addonButton, "label", 12, C.ink)
+	addonLabel:SetPoint("LEFT", 10, 0)
+	addonLabel:SetPoint("RIGHT", -26, 0)
+	-- The chevron: two short rotated strokes.
+	local chevron = {}
+	for i, angle in ipairs({ -45, 45 }) do
+		local stroke = fill(addonButton, C.inkMuted, "OVERLAY")
+		stroke:SetSize(6, 1.5)
+		if stroke.SetRotation then
+			stroke:SetRotation(math.rad(angle))
+		end
+		stroke:SetPoint("RIGHT", addonButton, "RIGHT", i == 1 and -15 or -11, 0)
+		chevron[i] = stroke
+	end
 	local selected = reg.order[1]
 	local function current()
 		return reg.addons[selected] or reg.addons[reg.order[1]]
 	end
-	addonButton:SetScript("OnClick", function()
-		for i, n in ipairs(reg.order) do
-			if n == selected then
-				selected = reg.order[i % #reg.order + 1]
-				break
+	-- The open list, directly under the field.
+	local addonList = CreateFrame("Frame", nil, win)
+	addonList:SetFrameStrata("FULLSCREEN_DIALOG")
+	addonList:SetPoint("TOPRIGHT", addonButton, "BOTTOMRIGHT", 0, -2)
+	addonList:Hide()
+	local listBg = fill(addonList, C.surface)
+	listBg:SetAllPoints()
+	border(addonList, C.giltLine)
+	local addonRows = {}
+	local function openAddonList()
+		local y = -4
+		for i, name in ipairs(reg.order) do
+			local b = addonRows[i]
+			if not b then
+				b = CreateFrame("Button", nil, addonList)
+				b:SetHeight(24)
+				b.hover = fill(b, C.raised)
+				b.hover:SetAllPoints()
+				b.hover:Hide()
+				b.mark = diamond(b, 5, C.arcane)
+				b.mark:SetPoint("LEFT", 10, 0)
+				b.fs = text(b, "label", 12, C.ink)
+				b.fs:SetPoint("LEFT", 24, 0)
+				b.info = text(b, "body", 11, C.inkMuted)
+				b.info:SetPoint("RIGHT", -10, 0)
+				b.info:SetJustifyH("RIGHT")
+				b:SetScript("OnEnter", function(self)
+					self.hover:Show()
+				end)
+				b:SetScript("OnLeave", function(self)
+					self.hover:Hide()
+				end)
+				addonRows[i] = b
 			end
+			local chosen = name == selected
+			b.fs:SetText(name)
+			b.fs:SetTextColor(unpack(chosen and C.ink or C.inkMuted))
+			b.mark:SetShown(chosen)
+			b.info:SetText(reg.addons[name].info.version or "")
+			b:SetScript("OnClick", function()
+				selected = name
+				addonList:Hide()
+				console.saveState()
+				console.refresh(true)
+			end)
+			b:ClearAllPoints()
+			b:SetPoint("TOPLEFT", 1, y)
+			b:SetPoint("TOPRIGHT", -1, y)
+			b:Show()
+			y = y - 24
 		end
-		console.refresh(true)
+		for i = #reg.order + 1, #addonRows do
+			addonRows[i]:Hide()
+		end
+		addonList:SetSize(math.max(addonButton:GetWidth() or 200, 240), -y + 4)
+		addonList:Show()
+	end
+	addonButton:SetScript("OnClick", function()
+		if addonList:IsShown() then
+			addonList:Hide()
+		else
+			openAddonList()
+		end
+	end)
+	addonButton:SetScript("OnEnter", function()
+		for _, e in ipairs(addonEdges) do
+			e:SetColorTexture(unpack(C.gilt))
+		end
+	end)
+	addonButton:SetScript("OnLeave", function()
+		for _, e in ipairs(addonEdges) do
+			e:SetColorTexture(unpack(C.giltLine))
+		end
 	end)
 
 	-- Tabs.
@@ -1007,7 +1084,6 @@ local function buildDevWindow(console, reg)
 		end
 		selected = d.name
 		addonLabel:SetText(d.name)
-		addonHint:SetShown(#reg.order > 1)
 		for i, b in ipairs(tabButtons) do
 			local active = i == state.tab
 			b.fs:SetTextColor(unpack(active and C.giltText or C.inkMuted))
@@ -1068,6 +1144,7 @@ local function buildDevWindow(console, reg)
 	end)
 	win:SetScript("OnHide", function()
 		menu:Hide()
+		addonList:Hide()
 		console.saveState()
 	end)
 	return win
