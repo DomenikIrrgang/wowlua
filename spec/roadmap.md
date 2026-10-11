@@ -86,6 +86,8 @@ Notes on the delivered state:
 
 ## M3: Classes, enums, decorators and stdlib infrastructure
 
+**Status: done (2026-10-11).**
+
 - Classes (including abstract and generic), widget classes, interfaces (parsed;
   checked in M4), enums.
 - Core decorators (`@global`, `@deprecated`, `@if`, `@inline`) and user
@@ -100,7 +102,8 @@ Notes on the delivered state:
 Notes on the delivered state:
 
 - The sample addon is `examples/widget-demo` (decision T80); CI builds it and
-  runs it against a mock frame API.
+  runs it against a mock frame API. It was checked in game on the WoW: Forever
+  beta client (1.60.1).
 - Class, enum and decorator checks that need only declarations are reported
   now (decision T75); type-based ones come with M4.
 - Native widget types are declared by the compiler until M4 (decision T77).
