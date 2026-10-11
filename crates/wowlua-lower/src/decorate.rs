@@ -360,8 +360,8 @@ impl<'a> Lowerer<'a> {
         let deco = self.decorations(&s.decorators, target);
         let pos = self.span_pos(s.span);
         match &inner.kind {
-            StmtKind::Class(c) => self.class_decl(c, &deco, exported, s.span),
-            StmtKind::Enum(e) => self.enum_decl(e, &deco, exported, s.span),
+            StmtKind::Class(c) => self.class_decl(c, &deco, exported),
+            StmtKind::Enum(e) => self.enum_decl(e, &deco, exported),
             StmtKind::Function { name, func } => {
                 let label = name
                     .method
@@ -409,6 +409,8 @@ impl<'a> Lowerer<'a> {
                     }
                 }
                 let end = self.span_pos(func.end_span);
+                // On the `local function` line, not on a decorator's.
+                let pos = self.span_pos(name.span);
                 let mut out = if deco.user.is_empty() {
                     self.stmt_inner(inner)
                 } else {

@@ -165,10 +165,10 @@ impl<'a> Lowerer<'a> {
         c: &ClassDecl,
         deco: &Decorations,
         exported: bool,
-        span: Span,
     ) -> Vec<ir::Stmt> {
         let name = c.name.text.to_string();
-        let pos = self.span_pos(span);
+        // On the `class` line, not on a decorator's.
+        let pos = self.span_pos(c.name.span);
         let end = self.span_pos(c.end_span);
         let info = match self.lookup(&name).cloned() {
             Some(Binding::Class { info, .. }) => info,
@@ -897,7 +897,6 @@ impl<'a> Lowerer<'a> {
         e: &EnumDecl,
         deco: &Decorations,
         exported: bool,
-        span: Span,
     ) -> Vec<ir::Stmt> {
         let name = e.name.text.to_string();
         if let Some(message) = &deco.deprecated {
@@ -909,7 +908,7 @@ impl<'a> Lowerer<'a> {
         else {
             return Vec::new();
         };
-        let pos = self.span_pos(span);
+        let pos = self.span_pos(e.name.span);
         let fields = info
             .members
             .iter()
@@ -941,6 +940,22 @@ impl<'a> Lowerer<'a> {
             out.push(self.export_assign(&name, target, pos));
         }
         out
+    }
+
+    /// `obj` names an enum.
+    pub(crate) fn is_enum_object(&self, obj: &Expr) -> bool {
+        matches!(&obj.kind, ExprKind::Name(n) if matches!(self.lookup(&n.text), Some(Binding::Enum { .. } | Binding::ImportedEnum(_))))
+    }
+
+    /// The value of an enum member, if `obj` names an enum that has it.
+    pub(crate) fn enum_value(&self, obj: &Expr, key: &str) -> Option<Const> {
+        let ExprKind::Name(n) = &obj.kind else {
+            return None;
+        };
+        match self.lookup(&n.text)? {
+            Binding::Enum { info, .. } | Binding::ImportedEnum(info) => info.value(key).cloned(),
+            _ => None,
+        }
     }
 
     /// An enum member read with a constant key: its value (spec §3.4.3).

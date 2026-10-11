@@ -97,6 +97,16 @@ Notes on the delivered state:
 
 **Exit:** a UI-heavy sample addon written with widget classes works in game.
 
+Notes on the delivered state:
+
+- The sample addon is `examples/widget-demo` (decision T80); CI builds it and
+  runs it against a mock frame API.
+- Class, enum and decorator checks that need only declarations are reported
+  now (decision T75); type-based ones come with M4.
+- Native widget types are declared by the compiler until M4 (decision T77).
+- No public standard-library modules yet: the infrastructure is checked with
+  test modules through `WOWLUA_STDLIB_DIR` (decision T79).
+
 ## M4: Type checker
 
 - Basic mode: inference, narrowing, assignability, arity, globals, classes,

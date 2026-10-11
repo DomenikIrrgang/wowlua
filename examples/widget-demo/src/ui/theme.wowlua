@@ -1,0 +1,9 @@
+-- Colors and sizes. Enum members are inlined where they are used.
+export enum Palette {
+    Accent = "33ff99",
+    Muted = "9d9d9d",
+}
+
+export const PADDING = 16
+export const ROW_HEIGHT = 20
+export const MAX_ROWS = 8

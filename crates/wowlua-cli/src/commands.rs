@@ -120,8 +120,8 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
     true
 }
 
-/// `wowlua check`: the build pipeline without writing (milestone M1 checks
-/// syntax; type checking arrives with M4).
+/// `wowlua check`: the build pipeline without writing (type checking
+/// arrives with M4).
 pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String>) -> bool {
     let started = Instant::now();
     let mut session = Session::new();

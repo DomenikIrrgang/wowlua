@@ -58,7 +58,7 @@ end
 | `static` | fields, methods | Belongs to the class table, not to instances. |
 | `readonly` | fields | Assignable only in its initializer or the constructor. |
 | `abstract` | methods (abstract classes only) | No body. Subclasses must implement it. |
-| `override` | methods, accessors | Required when overriding a superclass member, and an error when nothing is overridden (E3005). |
+| `override` | methods, accessors | Required when overriding a superclass member (implementing an abstract method included), and an error when nothing is overridden (E3005). |
 | `overload` | method and constructor signatures | Declares an overload signature without a body (§3.1.11). |
 
 Access modifiers and `readonly` are **compile-time only**. They produce no
@@ -255,7 +255,9 @@ __wl.finalize(Dog); Dog.created = 0; __wl_exports.Dog = Dog
 
 `__wl.class(name, super)` creates the class table (with `__index` pointing to
 itself, a metatable chaining to `super` and providing `__call`), and defines
-`new`:
+`new`. Accessors are registered with `__wl.accessor(cls, kind, name, fn)`
+(`kind` is `get`, `set`, `sget` or `sset`), and abstract methods of debug builds
+with `__wl.abstract(cls, name)`:
 
 ```lua
 cls.new = function(...)
@@ -362,7 +364,11 @@ Rules:
 - For the first class in the chain that extends a native widget, `super(name?,
   parent?, template?, id?)` creates the frame with
   `CreateFrame(<widgetType>, name, parent, template, id)`. Before that call,
-  `self` does not exist (E3001).
+  `self` does not exist (E3001). In that class, `super:m(args)` calls the
+  native widget method (`getmetatable(self).__index.m(self, args)`).
+- Native widget types are the classes declared with `@widget("…")`. Until the
+  generated `wow-api` packages provide them (milestone M4), the compiler
+  declares every frame type `CreateFrame` creates (decision T77).
 - At finalization, all methods of the class and its wowlua superclasses are
   flattened into one mixin table. Construction applies the **most-derived**
   class's flattened mixin with a raw copy, so overrides work and virtual calls
@@ -454,7 +460,9 @@ around, used with `reflect`, or exported to plain Lua):
 local Direction = { Up = 1, Down = 2, Left = 3, Right = 4 }
 ```
 
-The emitted table contains exactly the members, in every profile. Debug builds
+An exported enum always gets its table until tree-shaking removes unused
+ones (milestone M7, decision T81). The emitted table contains exactly the
+members, in every profile. Debug builds
 attach a metatable to that same table (no proxy) that raises an error when an
 unknown member is read or a new key is assigned. `pairs` therefore behaves
 identically in debug and release builds, and plain Lua code sees the same

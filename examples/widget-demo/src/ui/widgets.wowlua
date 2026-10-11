@@ -1,0 +1,91 @@
+-- Reusable widget classes. Each extends a native widget type, so `new`
+-- creates the frame with CreateFrame and applies the class as a mixin.
+
+-- A button that counts its clicks.
+export class CounterButton extends Button
+    count: number = 0
+    label: string
+    onCount: (number) -> ()
+
+    constructor(parent: Frame, label: string, onCount: (number) -> ())
+        super(nil, parent, "UIPanelButtonTemplate")
+        self.label = label
+        self.onCount = onCount
+        self:SetSize(140, 24)
+        self:SetScript("OnClick", function() self:increment() end)
+        self:refresh()
+    end
+
+    function increment()
+        self.count += 1
+        self:refresh()
+        self.onCount(self.count)
+    end
+
+    function refresh()
+        self:SetText(`{self.label}: {self.count}`)
+    end
+end
+
+-- A counter button that resets after `limit` clicks.
+export class LimitedCounterButton extends CounterButton
+    limit: number = 10
+
+    override function increment()
+        if self.count >= self.limit then
+            self.count = 0
+        end
+        super:increment()
+    end
+end
+
+-- A progress bar with a dark background.
+export class ProgressBar extends StatusBar
+    constructor(parent: Frame, max: number)
+        super(nil, parent)
+        self:SetSize(260, 14)
+        self:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+        self:SetStatusBarColor(0.2, 0.8, 0.4)
+        self:SetMinMaxValues(0, max)
+        self:SetValue(0)
+        local background = self:CreateTexture(nil, "BACKGROUND")
+        background:SetAllPoints()
+        background:SetColorTexture(0, 0, 0, 0.5)
+    end
+
+    function setProgress(value: number)
+        self:SetValue(value)
+    end
+end
+
+-- A check button with a label.
+export class Toggle extends CheckButton
+    constructor(parent: Frame, label: string, onChange: (boolean) -> ())
+        super(nil, parent, "UICheckButtonTemplate")
+        local text = self.text ?? self.Text
+        if text then
+            text:SetText(label)
+        end
+        self:SetScript("OnClick", function()
+            onChange(self:GetChecked() == true)
+        end)
+    end
+end
+
+-- A single-line input that reports what was entered.
+export class InputBox extends EditBox
+    constructor(parent: Frame, onSubmit: (string) -> ())
+        super(nil, parent, "InputBoxTemplate")
+        self:SetSize(180, 20)
+        self:SetAutoFocus(false)
+        self:SetScript("OnEnterPressed", function()
+            local text = self:GetText()
+            if text ~= "" then
+                onSubmit(text)
+            end
+            self:SetText("")
+            self:ClearFocus()
+        end)
+        self:SetScript("OnEscapePressed", function() self:ClearFocus() end)
+    end
+end

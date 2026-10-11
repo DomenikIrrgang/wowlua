@@ -943,12 +943,8 @@ impl<'a> Lowerer<'a> {
             StmtKind::TypeAlias(_) | StmtKind::Interface(_) | StmtKind::Declare(_) => Vec::new(),
             StmtKind::Import(import) => self.import(import, s.span, pos),
             StmtKind::Export(inner) => self.export(inner, pos),
-            StmtKind::Class(c) => {
-                self.class_decl(c, &decorate::Decorations::default(), false, s.span)
-            }
-            StmtKind::Enum(e) => {
-                self.enum_decl(e, &decorate::Decorations::default(), false, s.span)
-            }
+            StmtKind::Class(c) => self.class_decl(c, &decorate::Decorations::default(), false),
+            StmtKind::Enum(e) => self.enum_decl(e, &decorate::Decorations::default(), false),
             StmtKind::Error => Vec::new(),
         }
     }
@@ -1449,12 +1445,8 @@ impl<'a> Lowerer<'a> {
                 }
                 out
             }
-            StmtKind::Class(c) => {
-                self.class_decl(c, &decorate::Decorations::default(), true, inner.span)
-            }
-            StmtKind::Enum(e) => {
-                self.enum_decl(e, &decorate::Decorations::default(), true, inner.span)
-            }
+            StmtKind::Class(c) => self.class_decl(c, &decorate::Decorations::default(), true),
+            StmtKind::Enum(e) => self.enum_decl(e, &decorate::Decorations::default(), true),
             // `export type`, `export interface`: types only.
             _ => Vec::new(),
         }
@@ -2053,32 +2045,56 @@ impl<'a> Lowerer<'a> {
     /// A backtick string (spec §1.2.4): parts joined with `..`, every
     /// embedded value through `tostring`, at most 50 operands per group.
     fn interp(&mut self, parts: &[InterpPart], pos: Pos) -> ir::Expr {
+        // Constant parts (literals, `const`s, `wowlua:meta` scalars, enum
+        // members) are folded into the text: their type is known.
+        let constants: Vec<Option<Vec<u8>>> = parts
+            .iter()
+            .map(|p| match p {
+                InterpPart::Expr(e) => self.constant_text(e),
+                InterpPart::Text { .. } => None,
+            })
+            .collect();
         let exprs: Vec<&Expr> = parts
             .iter()
-            .filter_map(|p| match p {
-                InterpPart::Expr(e) => Some(e),
-                InterpPart::Text { .. } => None,
+            .zip(&constants)
+            .filter_map(|(p, c)| match (p, c) {
+                (InterpPart::Expr(e), None) => Some(e),
+                _ => None,
             })
             .collect();
         let mut values = self.seq(&exprs).into_iter();
         let mut operands: Vec<ir::Expr> = Vec::new();
-        for part in parts {
-            match part {
-                InterpPart::Text { value, span, .. } => {
-                    if !value.is_empty() {
-                        operands.push(lit(
-                            ir::ExprKind::String(quote(value)),
-                            self.span_pos(*span),
-                        ));
+        let mut text: Vec<u8> = Vec::new();
+        let mut text_pos = Pos::NONE;
+        let flush = |text: &mut Vec<u8>, text_pos: Pos, operands: &mut Vec<ir::Expr>| {
+            if !text.is_empty() {
+                operands.push(lit(ir::ExprKind::String(quote(text)), text_pos));
+                text.clear();
+            }
+        };
+        for (part, constant) in parts.iter().zip(constants) {
+            match (part, constant) {
+                (InterpPart::Text { value, span, .. }, _) => {
+                    if text.is_empty() {
+                        text_pos = self.span_pos(*span);
                     }
+                    text.extend_from_slice(value);
                 }
-                InterpPart::Expr(e) => {
+                (InterpPart::Expr(e), Some(value)) => {
+                    if text.is_empty() {
+                        text_pos = self.span_pos(e.span);
+                    }
+                    text.extend_from_slice(&value);
+                }
+                (InterpPart::Expr(e), None) => {
+                    flush(&mut text, text_pos, &mut operands);
                     let v = values.next().expect("a value per part");
                     let tostring = self.global("tostring", None, self.span_pos(e.span));
                     operands.push(call(tostring, vec![v], self.span_pos(e.span)));
                 }
             }
         }
+        flush(&mut text, text_pos, &mut operands);
         if operands.is_empty() {
             return lit(ir::ExprKind::String(b"\"\"".to_vec()), pos);
         }
@@ -2098,6 +2114,23 @@ impl<'a> Lowerer<'a> {
             .map(|chunk| paren(concat(chunk.to_vec())))
             .collect();
         concat(groups)
+    }
+
+    /// The text of a constant embedded value, as `tostring` would make it.
+    fn constant_text(&mut self, e: &Expr) -> Option<Vec<u8>> {
+        let value = match &e.kind {
+            ExprKind::Field { obj, name } if self.is_enum_object(obj) => {
+                self.enum_value(obj, &name.text)?
+            }
+            _ => self.static_value(e)?,
+        };
+        Some(match value {
+            Const::String(s) => s,
+            Const::Number(n) if n.is_finite() => format_g14(n).into_bytes(),
+            Const::Bool(b) => b.to_string().into_bytes(),
+            Const::Nil => b"nil".to_vec(),
+            _ => return None,
+        })
     }
 
     /// An optional chain (spec §1.4.1), basic-mode form: the chain is

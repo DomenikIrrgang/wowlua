@@ -1,0 +1,25 @@
+-- Entry point: the `/wdemo` slash command toggles the demo window.
+import addon from "wowlua:meta"
+import DemoWindow from "./ui/window"
+import Palette from "./ui/theme"
+
+-- A user decorator (spec §4.5): announces every call of the function.
+local function announced(fn: () -> (), ctx: DecoratorContext): () -> ()
+    return function()
+        print(`|cff{Palette.Accent}{addon.title}|r {ctx.name}`)
+        fn()
+    end
+end
+
+local window: DemoWindow? = nil
+
+@announced
+local function toggleWindow()
+    window ??= DemoWindow.new()
+    window:toggle()
+end
+
+_G.SLASH_WIDGETDEMO1 = "/wdemo"
+SlashCmdList.WIDGETDEMO = toggleWindow
+
+print(`|cff{Palette.Accent}{addon.title}|r {addon.version} loaded. Type /wdemo.`)

@@ -127,6 +127,8 @@ Rules:
   **strict** mode, `tostring` is omitted when the static type is a non-optional
   `string` or `number` (decision L28: type-based fast forms only where types are
   trustworthy).
+- Constant embedded values (literals, `const`s, scalar `wowlua:meta` values,
+  enum members) are folded into the surrounding text (decision T81).
 - Lua 5.1 limits nesting to 200 syntax levels, and `..` chains nest. A string
   with more than 50 parts is emitted as parenthesized groups of at most 50
   operands.

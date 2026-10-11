@@ -1,0 +1,19 @@
+-- A list row. `@global` exposes the class as the mixin the XML template
+-- `WidgetDemoRowTemplate` (templates.xml) uses; its OnLoad runs after the
+-- field initializers.
+import ROW_HEIGHT from "./theme"
+
+@global("WidgetDemoRowMixin")
+export class Row extends Frame
+    index: number = 0
+
+    function OnLoad()
+        self:SetHeight(ROW_HEIGHT)
+        self.Label:SetText("(empty)")
+    end
+
+    function setEntry(index: number, text: string)
+        self.index = index
+        self.Label:SetText(`{index}. {text}`)
+    end
+end

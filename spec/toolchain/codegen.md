@@ -186,6 +186,11 @@ compiled code uses are included. It stores itself in the addon table as
 | `reflect` | metadata registry | `@reflect`, `reflection = "all"` |
 | `devconsole` | `/wl` command, cross-addon registry | `dev-console` |
 
+The `class` slice provides `class`, `accessor`, `finalize`, `abstract`,
+`classOf` and `isInstance`; `widget` provides `widgetClass`, `mixin`,
+`finalizeWidget` and `xmlMixin`; `enum` provides `enum`; `decorate` provides
+`decorate`, `decorateField`, `register` and `deprecated`.
+
 The runtime is written in Lua in `crates/wowlua-runtime/lua/`. Each slice
 declares its dependencies on other slices. The driver computes the closure from
 the features recorded during lowering. **Standard-library modules** are not part

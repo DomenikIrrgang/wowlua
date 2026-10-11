@@ -79,7 +79,7 @@ Always available without import.
 | `@profile(opts?)` | functions, methods, constructors, accessors, classes (all methods) | Measure call count and time. Removed unless the profile enables instrumentation. See [Debugging](07-debugging.md#73-profiling). |
 | `@noprofile` | functions, methods, classes | Exclude from `instrument = "all"`. |
 | `@trace(opts?)` | functions, methods, constructors, classes | Log entry, arguments, return values and errors at `trace` level. Removed when `trace` logging is compiled out. |
-| `@debugOnly` | functions, methods | In non-debug builds, removes the declaration and every call statement to it. The function must return nothing, and calls must be statements (E3032). |
+| `@debugOnly` | functions, methods | In non-debug builds, removes the declaration and every call statement to it. The function must return nothing, and calls must be statements (E3032). A method becomes a no-op in non-debug builds, because calls through `obj:m()` cannot be found without types (decision T81). |
 | `@checked` / `@unchecked` | functions, methods, constructors | Force or suppress runtime parameter type checks regardless of profile. |
 | `@nocheck` | functions, methods, classes | Skip static type checking of the body. |
 | `@widget(type)` | `declare class` only | Marks a native widget type for widget classes ([Classes](03-classes.md#32-widget-classes)). Used by type packages. |
@@ -117,6 +117,12 @@ groups:
 |-------|----------|----------|
 | **Wrapping** | `@throttle`, `@debounce`, `@nextFrame`, `@outOfCombat` | Replace the function with a wrapper, like a user decorator, in source position |
 | **Registering** | `@event`, `@unitEvent`, `@slash`, `@hook`, `@hookScript`, `@onLoad`, `@onLogin`, `@test` | Register the **final** function value with the game or the runtime |
+
+At run time, a framework decorator is a function exported by its module, with
+the calling convention of user decorators. Wrapping decorators are applied
+like user decorators; registering decorators are called as
+`decorator(final, ctx)` after every transformation, in source order, and their
+results are ignored (`__wl.register`, decision T79).
 
 The full list is in the [Standard library](../stdlib/README.md#83-decorator-index).
 

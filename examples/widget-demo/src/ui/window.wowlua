@@ -1,0 +1,103 @@
+-- The demo window: a movable frame composed of the widget classes.
+import CounterButton, LimitedCounterButton, ProgressBar, Toggle, InputBox from "./widgets"
+import Palette, PADDING, ROW_HEIGHT, MAX_ROWS from "./theme"
+import Row from "./row"
+import _ from "./templates.xml"
+
+export class DemoWindow extends Frame
+    entries: string[] = {}
+    rows: Row[] = {}
+    list: Frame
+    progress: ProgressBar
+    status: FontString
+
+    constructor()
+        super("WidgetDemoWindow", UIParent)
+        self:SetSize(300, 380)
+        self:SetPoint("CENTER")
+        self:SetFrameStrata("DIALOG")
+        self:EnableMouse(true)
+        self:SetMovable(true)
+        self:RegisterForDrag("LeftButton")
+        self:SetScript("OnDragStart", self.StartMoving)
+        self:SetScript("OnDragStop", self.StopMovingOrSizing)
+        -- Escape closes the window.
+        tinsert(UISpecialFrames, "WidgetDemoWindow")
+
+        local background = self:CreateTexture(nil, "BACKGROUND")
+        background:SetAllPoints()
+        background:SetColorTexture(0.05, 0.05, 0.08, 0.92)
+
+        local title = self:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        title:SetPoint("TOP", 0, -12)
+        title:SetText(`|cff{Palette.Accent}wowlua|r widget demo`)
+
+        local close = CreateFrame("Button", nil, self, "UIPanelCloseButton")
+        close:SetPoint("TOPRIGHT", -2, -2)
+
+        self.progress = ProgressBar.new(self, 10)
+        self.progress:SetPoint("TOPLEFT", PADDING, -48)
+
+        local counter = LimitedCounterButton.new(self, "Clicks", function(count)
+            self.progress:setProgress(count)
+            self:setStatus(`clicked {count} time{count == 1 and "" or "s"}`)
+        end)
+        counter:SetPoint("TOPLEFT", PADDING, -70)
+
+        local plain = CounterButton.new(self, "Plain", function(count)
+            self:setStatus(`plain counter at {count}`)
+        end)
+        plain:SetPoint("LEFT", counter, "RIGHT", 4, 0)
+
+        local toggle = Toggle.new(self, "Show list", function(shown)
+            self.list:SetShown(shown)
+        end)
+        toggle:SetPoint("TOPLEFT", PADDING - 4, -100)
+        toggle:SetChecked(true)
+
+        local input = InputBox.new(self, function(text) self:addEntry(text) end)
+        input:SetPoint("TOPLEFT", PADDING + 6, -134)
+
+        local hint = self:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        hint:SetPoint("LEFT", input, "RIGHT", 8, 0)
+        hint:SetText("Enter adds a row")
+
+        self.list = CreateFrame("Frame", nil, self)
+        self.list:SetPoint("TOPLEFT", PADDING, -164)
+        self.list:SetSize(260, ROW_HEIGHT * MAX_ROWS)
+
+        self.status = self:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        self.status:SetPoint("BOTTOM", 0, 12)
+        self:setStatus("ready")
+        self:Hide()
+    end
+
+    function setStatus(text: string)
+        self.status:SetText(`|cff{Palette.Muted}{text}|r`)
+    end
+
+    function addEntry(text: string)
+        table.insert(self.entries, 1, text)
+        while #self.entries > MAX_ROWS do
+            table.remove(self.entries)
+        end
+        for i, entry in ipairs(self.entries) do
+            local row = self.rows[i]
+            if not row then
+                row = CreateFrame("Frame", nil, self.list, "WidgetDemoRowTemplate") :: Row
+                row:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_HEIGHT)
+                self.rows[i] = row
+            end
+            row:setEntry(i, entry)
+        end
+        self:setStatus(`{#self.entries} row{#self.entries == 1 and "" or "s"}`)
+    end
+
+    function toggle()
+        if self:IsShown() then
+            self:Hide()
+        else
+            self:Show()
+        end
+    end
+end

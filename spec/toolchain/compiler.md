@@ -71,7 +71,12 @@ runtime, stdlib, flavors                  (data crates, no dependencies)
 `sema` does not depend on `stdlib`: the driver loads the standard library's
 `.d.wowlua` declarations and sources from `wowlua-stdlib` and passes them to
 `sema` as ordinary inputs, together with the compiler-known semantics of
-framework decorators (a table keyed by `@intrinsic` id).
+framework decorators (a table keyed by `@intrinsic` id). Only the modules an
+addon imports (transitively) are loaded; each compiles to
+`wowlua/std/<name>.lua` with the module ID `wowlua:<name>`. The environment
+variable `WOWLUA_STDLIB_DIR` replaces the shipped modules with a directory of
+`<name>.wowlua` / `<name>.d.wowlua` files, for developing the standard library
+(decision T79).
 
 ## 13.3 Pipeline
 

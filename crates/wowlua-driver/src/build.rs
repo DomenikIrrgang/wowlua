@@ -1,8 +1,8 @@
 //! Building a project into a complete AddOn folder (spec chapter 14).
 //!
 //! Lua sources are syntax-checked and passed through byte for byte;
-//! `.wowlua` sources are compiled (milestone M1: Lua syntax with types
-//! erased). XML references are rewritten, TOC files are generated, and the
+//! `.wowlua` sources and the standard-library modules they import are
+//! compiled. XML references are rewritten, TOC files are generated, and the
 //! assembled output is validated before it is written atomically.
 
 use crate::project::Project;

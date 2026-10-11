@@ -1198,6 +1198,138 @@ fn class_inheritance_orders_modules() {
     assert_eq!(run_addon(&dist, "Cycle"), "a");
 }
 
+/// A fuller mock of the frame API: unknown methods are no-ops; the XML
+/// template of the widget demo is simulated.
+const MOCK_UI: &str = r##"UIParent = {}
+UISpecialFrames = {}
+SlashCmdList = {}
+tinsert = table.insert
+__frames = {}
+local function noop() end
+local methods = {}
+local function object(t)
+  return setmetatable(t, { __index = function(_, k)
+    if methods[k] then return methods[k] end
+    if type(k) == "string" and k:match("^%u") then return noop end
+  end })
+end
+function methods:SetText(t) self._text = t end
+function methods:GetText() return self._text or "" end
+function methods:SetScript(name, fn) self._scripts = self._scripts or {}; self._scripts[name] = fn end
+function methods:GetScript(name) return self._scripts and self._scripts[name] end
+function methods:Click() local f = self:GetScript("OnClick"); if f then f(self) end end
+function methods:SetValue(v) self._value = v end
+function methods:GetValue() return self._value end
+function methods:SetChecked(v) self._checked = v end
+function methods:GetChecked() return self._checked end
+function methods:Show() self._shown = true end
+function methods:Hide() self._shown = false end
+function methods:SetShown(v) self._shown = v end
+function methods:IsShown() return self._shown ~= false end
+function methods:CreateTexture() return object({}) end
+function methods:CreateFontString() return object({}) end
+function methods:GetObjectType() return self._type end
+function CreateFrame(kind, name, parent, template)
+  local f = object({ _type = kind, _template = template, _parent = parent })
+  if template == "UICheckButtonTemplate" then f.text = object({}) end
+  if template == "WidgetDemoRowTemplate" then
+    f.Label = object({})
+    Mixin(f, WidgetDemoRowMixin)
+    f:OnLoad()
+  end
+  if name then _G[name] = f end
+  __frames[#__frames + 1] = f
+  return f
+end
+function Mixin(obj, ...)
+  for i = 1, select("#", ...) do for k, v in pairs((select(i, ...))) do obj[k] = v end end
+  return obj
+end
+"##;
+
+/// The UI sample addon builds for its flavors and works against the mock
+/// frame API (the milestone M3 exit criterion is checked in game).
+#[test]
+fn widget_demo_example_runs() {
+    let example = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/widget-demo");
+    let dir = tempfile::tempdir().unwrap();
+    for entry in [
+        "wowlua.json",
+        "src/main.wowlua",
+        "src/ui/theme.wowlua",
+        "src/ui/widgets.wowlua",
+        "src/ui/row.wowlua",
+        "src/ui/window.wowlua",
+        "src/ui/templates.xml",
+    ] {
+        let target = dir.path().join(entry);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::copy(example.join(entry), &target).unwrap();
+    }
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(!stderr.contains("warning"), "{stderr}");
+    let dist = dir.path().join("dist/dev/WidgetDemo");
+    let toc = fs::read_to_string(dist.join("WidgetDemo.toc")).unwrap();
+    assert!(toc.contains("## Interface: 120100, 16001, 11509"), "{toc}");
+    fs::write(dist.join("mock.lua"), MOCK_UI).unwrap();
+    fs::write(
+        dist.join("sim.lua"),
+        r#"local function find(template, n)
+  local seen = 0
+  for _, f in ipairs(__frames) do
+    if f._template == template then seen = seen + 1; if seen == (n or 1) then return f end end
+  end
+end
+SlashCmdList.WIDGETDEMO()
+local w = WidgetDemoWindow
+print("shown", w:IsShown(), w.__class ~= nil)
+local limited = find("UIPanelButtonTemplate", 1)
+for _ = 1, 3 do limited:Click() end
+print(limited:GetText(), w.progress:GetValue(), w.status:GetText())
+find("UIPanelButtonTemplate", 2):Click()
+print(w.status:GetText())
+local input = find("InputBoxTemplate")
+input:SetText("hello")
+input:GetScript("OnEnterPressed")(input)
+input:SetText("world")
+input:GetScript("OnEnterPressed")(input)
+print(w.rows[1].Label:GetText(), w.rows[2].Label:GetText(), w.rows[1].index, w.status:GetText())
+local toggle = find("UICheckButtonTemplate")
+toggle:SetChecked(false)
+toggle:Click()
+print("list", w.list:IsShown(), toggle.text:GetText())
+for _ = 1, 8 do limited:Click() end
+print(limited:GetText())
+SlashCmdList.WIDGETDEMO()
+print("shown", w:IsShown())
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dist.join("WidgetDemo.toc"),
+        format!("mock.lua\n{toc}\nsim.lua\n"),
+    )
+    .unwrap();
+    let out = run_addon(&dist, "WidgetDemo");
+    assert_eq!(
+        out,
+        [
+            "|cff33ff99Widget Demo|r 0.1.0 loaded. Type /wdemo.",
+            "|cff33ff99Widget Demo|r toggleWindow",
+            "shown true true",
+            "Clicks: 3 3 |cff9d9d9dclicked 3 times|r",
+            "|cff9d9d9dplain counter at 1|r",
+            "1. world 2. hello 1 |cff9d9d9d2 rows|r",
+            "list false Show list",
+            "Clicks: 1",
+            "|cff33ff99Widget Demo|r toggleWindow",
+            "shown false",
+        ]
+        .join("\n")
+    );
+}
+
 /// Structural class, enum and decorator checks (spec chapters 3 and 4,
 /// decision T75).
 #[test]

@@ -1,0 +1,17 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Frame name="WidgetDemoRowTemplate" virtual="true" mixin="WidgetDemoRowMixin">
+    <Size x="260" y="20"/>
+    <Layers>
+      <Layer level="ARTWORK">
+        <FontString parentKey="Label" inherits="GameFontHighlight" justifyH="LEFT">
+          <Anchors>
+            <Anchor point="LEFT" x="4" y="0"/>
+          </Anchors>
+        </FontString>
+      </Layer>
+    </Layers>
+    <Scripts>
+      <OnLoad method="OnLoad"/>
+    </Scripts>
+  </Frame>
+</Ui>
