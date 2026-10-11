@@ -41,7 +41,10 @@ pub fn runtime(options: &RuntimeOptions) -> String {
         ));
     }
     placeholders.push_str(&format!("wl.debug = {}\n", options.debug));
-    let mut text = CORE.replace("--@placeholders\n", &placeholders);
+    // A checkout with CRLF line endings must give the same runtime.
+    let mut text = CORE
+        .replace("\r\n", "\n")
+        .replace("--@placeholders\n", &placeholders);
     if let Some(meta) = &options.meta {
         text.push_str(meta);
         if !text.ends_with('\n') {

@@ -1,2 +1,4 @@
 # Conformance samples must stay byte-exact (CRLF, non-UTF-8 bytes).
 tests/corpus-sample/** -text
+# Embedded Lua sources are emitted byte for byte on every platform.
+crates/wowlua-runtime/lua/** text eol=lf
