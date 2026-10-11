@@ -6,7 +6,7 @@
     "description": "wowlua sample addon: a typed gold-per-session tracker",
     "authors": ["wowlua contributors"],
     "license": "MIT",
-    "wowlua": "^0.5"
+    "wowlua": "^0.6"
   },
   "addon": {
     "title": "Typed Demo",

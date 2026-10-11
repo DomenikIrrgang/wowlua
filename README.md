@@ -59,7 +59,7 @@ wowlua publish           # package and upload to every configured addon site
 The specification lives in [`spec/`](spec/README.md). Implementation follows
 the [roadmap](spec/roadmap.md).
 
-**Milestones M0–M4 are done**: the toolchain builds and installs plain Lua
+**Milestones M0–M5 are done**: the toolchain builds and installs plain Lua
 addons and compiles `.wowlua` files with type annotations (erased), syntax
 sugar (`+=`, `continue`, `?.`, `??`, string interpolation, bitwise operators,
 `//`, `const`, default parameters, destructuring), modules
@@ -69,9 +69,13 @@ that extend native frame types, enums, core and user decorators,
 load order is computed from imports and usage analysis of Lua, `.wowlua` and
 XML files. The type checker (basic and strict mode, generics, narrowing,
 flavor guards for shared multi-flavor builds) checks against the WoW API of
-every flavor, generated from Blizzard's documentation. The standard-library
-modules arrive with later milestones; using a feature of a later milestone
-reports that milestone. [`examples/widget-demo`](examples/widget-demo) and
+every flavor, generated from Blizzard's documentation. Dev builds have
+debugging tools built in: a profiler for every function, an event, script
+and timer monitor, error capture, runtime type checks and an in-game dev
+window (`/wl`) with watches and a table inspector; `wowlua:debug`,
+`wowlua:log` and `wowlua:reflect` are the first standard-library modules.
+The other standard-library modules arrive with later milestones; using a
+feature of a later milestone reports that milestone. [`examples/widget-demo`](examples/widget-demo) and
 [`examples/typed-demo`](examples/typed-demo) are sample addons.
 
 What works today:
@@ -90,6 +94,11 @@ What works today:
   unreachable code, with machine-applicable fixes.
 - `wowlua types convert <path>`: turn LuaLS `---@` annotations into
   `.d.wowlua` declarations.
+- `wowlua trace [file] [--clipboard]`: map error messages and stacks from
+  the game (error frame, BugSack) back to source lines and functions.
+- In game, dev builds: `/wl` opens the dev window (profiler, monitor, log,
+  errors, watches, inspector); `/wl prof|mon|errors|log|watch <addon>` print
+  to chat.
 - `wowlua fmt [--check]`: a StyLua-like, comment-preserving formatter
   (plain Lua syntax for now).
 - `wowlua dev [--link]` / `install` / `uninstall`: sync builds into every WoW

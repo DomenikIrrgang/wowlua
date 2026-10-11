@@ -141,6 +141,8 @@ Notes on the delivered state:
 
 ## M5: Debugging
 
+**Status: done (2026-10-12).**
+
 - `wowlua:debug`, `wowlua:reflect`, `wowlua:log` (on the M3 stdlib
   infrastructure).
 - Profiling, tracing, runtime checks, dev console.
@@ -148,6 +150,20 @@ Notes on the delivered state:
 
 **Exit:** a profiling report appears in game, and runtime checks catch bad
 values from the WoW API in a dev build.
+
+Notes on the delivered state:
+
+- Checked in game on the WoW: Forever client with `examples/typed-demo` and
+  `examples/widget-demo`: the dev window's profiler, monitor (events,
+  scripts, timers), log and errors tabs, and `/tdemo check`, whose runtime
+  check catches a `nil` from `UnitName`.
+- Dev builds have every tool built in without code changes (decision T96):
+  every function is profiled, plain `.lua` files included (T97), handlers
+  are monitored, errors are captured, and `/wl` opens the dev window, drawn
+  in the SuuUI design with its fonts shipped (T101–T103). The corpus builds
+  this way with zero failures.
+- `wowlua trace` maps locations of line-preserved builds; decoding bundled
+  builds through source maps arrives with bundling (M7).
 
 ## M6: Package manager
 
