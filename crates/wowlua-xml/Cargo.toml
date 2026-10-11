@@ -10,6 +10,7 @@ authors.workspace = true
 
 [dependencies]
 quick-xml.workspace = true
+wowlua-toc.workspace = true
 
 [lints]
 workspace = true

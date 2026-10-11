@@ -6,7 +6,10 @@ mod parse;
 pub use generate::{
     Directive, FileEntry, FlavorTarget, Layout, TocError, TocFile, TocInput, generate,
 };
-pub use parse::{InlineDirective, ParsedDirective, ParsedFile, ParsedToc, parse, split_file_name};
+pub use parse::{
+    InlineDirective, ParsedDirective, ParsedFile, ParsedToc, parse, split_conditions,
+    split_file_name,
+};
 
 /// The client reads only the first 1024 characters of each TOC line.
 pub const MAX_LINE_LENGTH: usize = 1024;

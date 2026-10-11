@@ -106,25 +106,39 @@ available.
 
 `wowlua init` in a folder containing an existing addon:
 
-1. Reads the `.toc` file(s), including flavor-suffixed variants (current
-   suffixes and the legacy `-Classic`, `-BCC`, `_BCC`, `-WOTLKC`, `_WOTLKC`,
-   `_TBC`, `_Vanilla`, `_Mainline` forms). It takes the metadata (`Title`,
-   `Notes`, `Author`, `Version`, `IconTexture`, `Category`, …), interface
-   versions (giving the flavors), SavedVariables, dependencies and `X-` fields
-   into `wowlua.json`.
+1. Reads the `.toc` file(s) the client finds in the folder: `<Folder>.toc` and
+   `<Folder><suffix>.toc`, compared case-insensitively, so the addon name is
+   the folder name (`LittleWigs_Classic.toc` in `LittleWigs_Classic/` is the
+   plain TOC, not a `_Classic` variant). Suffixes are the current ones and the
+   legacy `-Classic`, `-BCC`, `_BCC`, `-WOTLKC`, `_WOTLKC`, `_TBC`, `_Vanilla`
+   and `_Mainline` forms. It takes the metadata (`Title`, `Notes`, `Author`,
+   `Version`, `IconTexture`, `Category`, …), interface versions (giving the
+   flavors), SavedVariables, dependencies and `X-` fields into `wowlua.json`.
+   Addon-wide `## AllowLoadGameType:` and `## ExcludeLoadGameType:` lines
+   narrow the flavors. Boolean directives count as set when their value is `1`
+   or `true`, as in the client (decision T62).
 2. **Moves** every Lua and XML file the TOCs load (directly or through XML
    includes) into `src/`, keeping relative paths (`git mv` inside a Git
-   repository), so the project gets the standard layout (decision T42). All
+   repository), so the project gets the standard layout (decision T42). If the
+   addon already has a `src` folder of its own, the sources go to
+   `wowlua-src/` and `build.src` is set accordingly, so nothing is nested in
+   the old folder (decision T60). Paths keep their on-disk spelling, even if a
+   TOC spells them differently. Files that AddOns next to this one load
+   through `..\<this>\…` lines move too
+   ([Manifest §9.7.2](manifest.md#972-files-shared-between-addons)). All
    references are updated: relative `<Script>`/`<Include>` paths stay valid
    because files move together, and absolute in-game paths to moved files
    (`Interface\AddOns\<Name>\<path>`) in Lua and XML files are rewritten to the
-   new output location (`…\<Name>\src\<path>`). Other files (textures, sounds,
+   new output location (`…\<Name>\src\<path>`, also when the sources are in
+   `wowlua-src/`). Other files (textures, sounds,
    fonts) stay where they are and are added to `build.assets`, so their in-game
    paths do not change.
 3. Files loaded by only some flavors' TOCs, or by lines with
    `[AllowLoadGameType …]`, are recorded in `build.flavor-files`. Inline
-   directives may stand before or after the value of a `##` line, and several
-   may follow each other. File lines with variables (`[Game]`, `[Family]`,
+   directives may stand anywhere in a line, may be written with a colon
+   (`[AllowLoadGameType: tbc]`), and several may follow each other. Lines
+   loading files of another AddOn (`..\Other\file.lua`) go to
+   `build.external-files`. File lines with variables (`[Game]`, `[Family]`,
    `[TextLocale]`) go to `build.variable-files`, and all their expansions are
    moved ([Manifest §9.7.1](manifest.md#971-file-variables)).
 4. Records the existing file order in `build.load-order`. Each flavor's order

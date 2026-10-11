@@ -198,6 +198,21 @@ pub fn build(
         &files,
     );
 
+    // Sources another AddOn's TOC loads (`build.shared-files`): shipped, but
+    // not listed in this AddOn's TOC.
+    let shared: BTreeSet<String> = build_cfg.shared_files.iter().cloned().collect();
+    for path in &shared {
+        if !files.iter().any(|(s, _)| s.rel == *path) {
+            session.push(
+                Diagnostic::error(
+                    "E5002",
+                    format!("shared file `{path}` is not a source file of this package"),
+                )
+                .with_path(&manifest.path),
+            );
+        }
+    }
+
     let mut toc_items: Vec<TocItem> = Vec::new();
     let mut emitted: Vec<&Source> = Vec::new();
     for (source, _) in &files {
@@ -209,7 +224,10 @@ pub fn build(
             continue;
         }
         emitted.push(source);
-        if !xml.loaded_by_xml.contains(&source.rel) && !loaded_by_variable.contains(&source.rel) {
+        if !xml.loaded_by_xml.contains(&source.rel)
+            && !loaded_by_variable.contains(&source.rel)
+            && !shared.contains(&source.rel)
+        {
             toc_items.push(TocItem {
                 rel: source.rel.clone(),
                 path: source.output_path(),
@@ -219,6 +237,27 @@ pub fn build(
         }
     }
     toc_items.extend(variable_items);
+    // Files of other AddOns (`../<AddOn>/<path>`), listed verbatim. Their
+    // owner ships them (`build.shared-files`), so they are not checked here.
+    for entry in &build_cfg.external_files {
+        let flavors_of = entry.flavors.as_ref().map(|list| {
+            list.iter()
+                .filter_map(|f| wowlua_flavors::table().resolve(f).map(|f| f.id.clone()))
+                .collect::<Vec<_>>()
+        });
+        if flavors_of
+            .as_ref()
+            .is_some_and(|list| !list.iter().any(|f| flavors.contains(f)))
+        {
+            continue;
+        }
+        toc_items.push(TocItem {
+            rel: entry.path.clone(),
+            path: entry.path.clone(),
+            flavors: flavors_of,
+            locales: None,
+        });
+    }
     order_by_load_order(&mut toc_items, &build_cfg.load_order);
     let toc_data = read_toc_data(session, project, &flavors);
 
@@ -339,7 +378,20 @@ pub fn build(
         .filter(|s| loaded_by_variable.contains(&s.rel))
         .map(|s| s.output_path())
         .collect();
-    validate_output(session, &out, &tocs, &xml, &output_paths, &variable_outputs);
+    let roots: BTreeSet<String> = emitted
+        .iter()
+        .filter(|s| shared.contains(&s.rel))
+        .map(|s| s.output_path())
+        .collect();
+    validate_output(
+        session,
+        &out,
+        &tocs,
+        &xml,
+        &output_paths,
+        &variable_outputs,
+        &roots,
+    );
     if session.has_errors() {
         return None;
     }
@@ -467,10 +519,11 @@ fn resolve_xml(session: &mut Session, files: &[(Source, FileId)]) -> XmlInfo {
                     } else {
                         target.src_rel.clone()
                     };
+                    // The client resolves references case-insensitively (W4310).
                     if expected != joined {
                         diagnostics.push(
-                            Diagnostic::error(
-                                "E4308",
+                            Diagnostic::warning(
+                                "W4310",
                                 format!(
                                     "XML reference `{}` differs in case from the file `{}`",
                                     reference.file, target.src_rel
@@ -480,9 +533,10 @@ fn resolve_xml(session: &mut Session, files: &[(Source, FileId)]) -> XmlInfo {
                         );
                     }
                     if target.kind == SourceKind::Wowlua && !via_lua {
-                        let stem_len = reference.file.len() - ".wowlua".len();
-                        replacements
-                            .push((reference, format!("{}.lua", &reference.file[..stem_len])));
+                        // Keep inline directives (`x.wowlua [AllowLoadGameType tbc]`).
+                        let path = reference.path();
+                        let lua = format!("{}.lua", &path[..path.len() - ".wowlua".len()]);
+                        replacements.push((reference, reference.file.replacen(&path, &lua, 1)));
                     }
                     info.loaded_by_xml.insert(target.rel.clone());
                     info.edges
@@ -495,7 +549,7 @@ fn resolve_xml(session: &mut Session, files: &[(Source, FileId)]) -> XmlInfo {
                         "E5002",
                         format!(
                             "XML reference `{}` does not resolve to a source file",
-                            reference.file
+                            reference.path()
                         ),
                     )
                     .with_label(Span::new(*file, reference.span.clone()), "not found"),
@@ -988,25 +1042,40 @@ fn directives(
             ("Dependencies", &deps.required),
             ("OptionalDeps", &deps.optional),
         ] {
-            // Unrestricted entries share one directive; flavor-specific ones get their own.
-            let common: Vec<&str> = list
-                .iter()
-                .filter(|d| d.flavors().is_empty())
-                .map(|d| d.name())
-                .collect();
-            if !common.is_empty() {
-                out.push(Directive::new(key, common.join(", ")));
+            // Consecutive entries for the same flavors share one directive.
+            // The lines keep the manifest order, which may influence which
+            // dependency the client loads first.
+            let mut runs: Vec<(Option<Vec<String>>, Vec<&str>)> = Vec::new();
+            for dep in list {
+                let restriction = if dep.flavors().is_empty() {
+                    None
+                } else {
+                    let ids: Vec<String> = flavors
+                        .iter()
+                        .filter(|id| {
+                            dep.flavors().iter().any(|f| {
+                                wowlua_flavors::table()
+                                    .resolve(f)
+                                    .is_some_and(|f| f.id == **id)
+                            })
+                        })
+                        .cloned()
+                        .collect();
+                    if ids.is_empty() {
+                        continue; // only for untargeted flavors
+                    }
+                    (ids.len() < flavors.len()).then_some(ids)
+                };
+                match runs.last_mut() {
+                    Some((last, names)) if *last == restriction => names.push(dep.name()),
+                    _ => runs.push((restriction, vec![dep.name()])),
+                }
             }
-            for dep in list.iter().filter(|d| !d.flavors().is_empty()) {
-                let flavors = dep
-                    .flavors()
-                    .iter()
-                    .filter_map(|f| wowlua_flavors::table().resolve(f).map(|f| f.id.clone()))
-                    .collect();
+            for (restriction, names) in runs {
                 out.push(Directive {
                     key: key.to_string(),
-                    value: dep.name().to_string(),
-                    flavors: Some(flavors),
+                    value: names.join(", "),
+                    flavors: restriction,
                 });
             }
         }
@@ -1194,6 +1263,7 @@ fn validate_output(
     xml: &XmlInfo,
     output_paths: &HashMap<String, String>,
     variable_outputs: &BTreeSet<String>,
+    roots: &BTreeSet<String>,
 ) {
     // Paths must not collide case-insensitively (E4308).
     let mut lower: HashMap<String, &str> = HashMap::new();
@@ -1207,7 +1277,8 @@ fn validate_output(
     }
 
     // Every TOC entry exists, and every Lua/XML file is reachable (E5002).
-    let mut reachable: BTreeSet<String> = BTreeSet::new();
+    // Shared files are loaded by another AddOn's TOC.
+    let mut reachable: BTreeSet<String> = roots.clone();
     for toc in tocs {
         for line in toc
             .content
@@ -1215,6 +1286,9 @@ fn validate_output(
             .filter(|l| !l.starts_with('#') && !l.is_empty())
         {
             let path = line.split(" [").next().unwrap_or(line).replace('\\', "/");
+            if path.starts_with("../") {
+                continue; // a file of another AddOn
+            }
             if path.contains('[') {
                 // A variable line: its expansions were checked when it was built.
                 reachable.extend(variable_outputs.iter().cloned());

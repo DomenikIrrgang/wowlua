@@ -264,6 +264,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     }
     let tocs = find_tocs(dir, request.from_toc.as_deref())?;
     let addon_name = tocs[0].1.clone();
+    let src_dir = source_dir_for(dir);
     let mut report = InitReport {
         addon_name: addon_name.clone(),
         old_tocs: tocs
@@ -304,6 +305,42 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
                 None => vec!["standard".to_string()],
             };
         }
+        // `## AllowLoadGameType:` / `## ExcludeLoadGameType:` restrict the
+        // whole addon (repeated lines append).
+        let addon_wide: Vec<wowlua_toc::InlineDirective> = toc
+            .directives
+            .iter()
+            .filter(|d| {
+                d.key.eq_ignore_ascii_case("AllowLoadGameType")
+                    || d.key.eq_ignore_ascii_case("ExcludeLoadGameType")
+            })
+            .map(|d| wowlua_toc::InlineDirective {
+                name: d.key.clone(),
+                values: d
+                    .value
+                    .split(',')
+                    .map(|v| v.trim().to_string())
+                    .filter(|v| !v.is_empty())
+                    .collect(),
+            })
+            .collect();
+        let allowed: Vec<wowlua_toc::InlineDirective> = addon_wide
+            .iter()
+            .filter(|d| d.name.eq_ignore_ascii_case("AllowLoadGameType"))
+            .cloned()
+            .reduce(|mut a, b| {
+                a.values.extend(b.values);
+                a
+            })
+            .into_iter()
+            .chain(
+                addon_wide
+                    .iter()
+                    .filter(|d| d.name.eq_ignore_ascii_case("ExcludeLoadGameType"))
+                    .cloned(),
+            )
+            .collect();
+        candidates = apply_conditions(&candidates, &allowed);
         // A suffixed TOC only serves the flavors its suffix names.
         candidates.retain(|id| match meaning {
             Some(wowlua_flavors::SuffixMeaning::Flavor(f)) => f.id == *id,
@@ -368,6 +405,8 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     let mut file_flavors: IndexMap<String, BTreeSet<String>> = IndexMap::new();
     let mut variable_lines: IndexMap<String, (BTreeSet<String>, Option<Vec<String>>)> =
         IndexMap::new();
+    // Lines loading files of another AddOn (`..\Other\file.lua`).
+    let mut external_lines: IndexMap<String, BTreeSet<String>> = IndexMap::new();
     for flavor in &all_flavors {
         let Some((toc, _)) = views.iter().find(|(_, f)| f.contains(flavor)) else {
             continue;
@@ -381,7 +420,12 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
                 .entry(file.path.to_ascii_lowercase())
                 .or_insert_with(|| file.path.clone())
                 .clone();
-            if key.contains('[') {
+            if key.starts_with("../") {
+                external_lines
+                    .entry(key.clone())
+                    .or_default()
+                    .insert(flavor.clone());
+            } else if key.contains('[') {
                 let locales = file
                     .conditions
                     .iter()
@@ -412,7 +456,11 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
 
     // Files to move: TOC files, expansions of variable lines, and everything
     // they include through XML.
-    let mut queue: Vec<String> = order.iter().filter(|p| !p.contains('[')).cloned().collect();
+    let mut queue: Vec<String> = order
+        .iter()
+        .filter(|p| !p.contains('[') && !p.starts_with("../"))
+        .cloned()
+        .collect();
     for (path, (flavors, locales)) in &variable_lines {
         let candidates: Vec<String> = match locales {
             Some(list) => list.clone(),
@@ -430,43 +478,28 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             }
         }
     }
-    let mut to_move: Vec<String> = Vec::new();
     let mut seen: BTreeSet<String> = BTreeSet::new();
-    while let Some(rel) = queue.pop() {
-        let Some(actual) = existing_case(dir, &rel) else {
-            report.warnings.push(Diagnostic::plain_warning(format!(
-                "the TOC lists `{rel}`, which does not exist"
-            )));
-            continue;
-        };
-        if !seen.insert(actual.clone()) {
-            continue;
-        }
-        if actual.to_ascii_lowercase().ends_with(".xml")
-            && let Ok(text) = std::fs::read_to_string(dir.join(&actual))
-            && let Ok(refs) = wowlua_xml::references(&text)
-        {
-            let base = actual
-                .rsplit_once('/')
-                .map(|(d, _)| d.to_string())
-                .unwrap_or_default();
-            for r in refs {
-                let joined = if base.is_empty() {
-                    r.normalized()
-                } else {
-                    format!("{base}/{}", r.normalized())
-                };
-                queue.push(normalize_rel(&joined));
-            }
-        }
-        to_move.push(actual);
-    }
+    let mut to_move = closure(dir, queue, &mut seen, &mut report.warnings);
+    // Files other AddOns next to this one load (`..\<this>\file.lua`) move
+    // too and are shipped as `build.shared-files` (unless loaded here anyway).
+    let referenced = sibling_references(dir);
+    let shared: Vec<String> = referenced
+        .iter()
+        .filter_map(|rel| existing_case(dir, rel))
+        .filter(|actual| !seen.contains(actual))
+        .collect();
+    to_move.extend(closure(
+        dir,
+        shared.clone(),
+        &mut seen,
+        &mut report.warnings,
+    ));
     to_move.sort();
 
     // Move into src/ (git mv inside a repository).
     let in_git = vcs::inside_work_tree(dir);
     for rel in &to_move {
-        let dest = format!("src/{rel}");
+        let dest = format!("{src_dir}/{rel}");
         if let Some(parent) = dir.join(&dest).parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
                 Diagnostic::plain_error(format!("cannot create `{}`: {e}", parent.display()))
@@ -488,7 +521,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         if !(lower.ends_with(".lua") || lower.ends_with(".xml")) {
             continue;
         }
-        let path = dir.join("src").join(rel);
+        let path = dir.join(src_dir).join(rel);
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
         };
@@ -502,7 +535,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     }
 
     // Assets stay in place.
-    let assets = asset_globs(dir);
+    let assets = asset_globs(dir, src_dir);
 
     // Manifest. Structural fields are agreed across the TOCs clients read
     // (majority, saved variables united); bulk `X-` data goes to TOC data
@@ -511,6 +544,15 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     let toc_data = extract_toc_data(dir, &views)?;
     let metadata = flavor_metadata(&views, &all_flavors, toc_data.is_some());
     let mut warnings = Vec::new();
+    // Paths of external lines in the other AddOn's output.
+    let mut external_paths: HashMap<String, String> = HashMap::new();
+    for line in external_lines.keys() {
+        let (path, warning) = resolve_external(dir, line);
+        if let Some(warning) = warning {
+            warnings.push(warning);
+        }
+        external_paths.insert(line.clone(), path);
+    }
     let mut manifest = adopted_manifest(
         &structural,
         &views,
@@ -522,6 +564,8 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         &file_flavors,
         assets,
         &mut warnings,
+        src_dir,
+        &external_paths,
     );
     if let Some(addon) = manifest.get_mut("addon").and_then(Value::as_object_mut)
         && let Some(files) = &toc_data
@@ -538,7 +582,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             .iter()
             .map(|(path, (flavors, locales))| {
                 let mut entry = Map::new();
-                entry.insert("path".into(), format!("src/{path}").into());
+                entry.insert("path".into(), format!("{src_dir}/{path}").into());
                 if let Some(locales) = locales {
                     entry.insert("locales".into(), json!(locales));
                 }
@@ -554,6 +598,37 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             .collect();
         build.insert("variable-files".into(), Value::Array(entries));
     }
+    if let Some(build) = manifest
+        .as_object_mut()
+        .map(|m| m.entry("build").or_insert_with(|| json!({})))
+        .and_then(Value::as_object_mut)
+    {
+        if !external_lines.is_empty() {
+            let entries: Vec<Value> = external_lines
+                .iter()
+                .map(|(line, flavors)| {
+                    let mut entry = Map::new();
+                    entry.insert("path".into(), external_paths[line].clone().into());
+                    if flavors.len() < all_flavors.len() {
+                        let ordered: Vec<&String> = all_flavors
+                            .iter()
+                            .filter(|f| flavors.contains(*f))
+                            .collect();
+                        entry.insert("flavors".into(), json!(ordered));
+                    }
+                    Value::Object(entry)
+                })
+                .collect();
+            build.insert("external-files".into(), Value::Array(entries));
+        }
+        if !shared.is_empty() {
+            let paths: Vec<String> = shared.iter().map(|p| format!("{src_dir}/{p}")).collect();
+            build.insert("shared-files".into(), json!(paths));
+        }
+        if build.is_empty() {
+            manifest.as_object_mut().map(|m| m.shift_remove("build"));
+        }
+    }
     report.warnings.extend(warnings);
 
     // Lua/XML files no TOC loads stay where they are; say so.
@@ -564,7 +639,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
         .filter_map(|e| fsutil::relative_slash(e.path(), dir))
-        .filter(|rel| !rel.starts_with("src/") && !rel.starts_with("dist/"))
+        .filter(|rel| !rel.starts_with(&format!("{src_dir}/")) && !rel.starts_with("dist/"))
         .filter(|rel| !crate::build::is_bindings_file(rel))
         .filter(|rel| {
             let lower = rel.to_ascii_lowercase();
@@ -595,12 +670,16 @@ fn find_tocs(
     dir: &Path,
     explicit: Option<&Path>,
 ) -> Result<Vec<(PathBuf, String, Option<String>)>, Diagnostic> {
+    let folder = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let mut found: Vec<(PathBuf, String, Option<String>)> = std::fs::read_dir(dir)
         .map_err(|e| Diagnostic::plain_error(format!("cannot read `{}`: {e}", dir.display())))?
         .filter_map(Result::ok)
         .filter_map(|entry| {
             let file_name = entry.file_name().to_string_lossy().into_owned();
-            let (base, suffix) = wowlua_toc::split_file_name(&file_name)?;
+            let (base, suffix) = split_toc_name(&file_name, &folder)?;
             Some((entry.path(), base, suffix))
         })
         .collect();
@@ -620,18 +699,12 @@ fn find_tocs(
                     Diagnostic::plain_error(format!("`{}` is not a TOC file", path.display()))
                 })?
         }
-        None => {
-            let folder = dir
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            found
-                .iter()
-                .find(|(_, base, _)| *base == folder)
-                .or_else(|| found.first())
-                .map(|(_, base, _)| base.clone())
-                .expect("found is not empty")
-        }
+        None => found
+            .iter()
+            .find(|(_, base, _)| *base == folder)
+            .or_else(|| found.first())
+            .map(|(_, base, _)| base.clone())
+            .expect("found is not empty"),
     };
     let mut selected: Vec<_> = found
         .into_iter()
@@ -640,6 +713,201 @@ fn find_tocs(
     // The plain TOC first, so it provides the metadata.
     selected.sort_by_key(|(_, _, suffix)| suffix.is_some());
     Ok(selected)
+}
+
+/// The folder `init` moves sources into: `src`, or `wowlua-src` when the
+/// addon already has a `src` folder of its own (AllTheThings).
+fn source_dir_for(dir: &Path) -> &'static str {
+    let taken = std::fs::read_dir(dir).ok().is_some_and(|entries| {
+        entries
+            .filter_map(Result::ok)
+            .any(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case("src"))
+    });
+    if taken { "wowlua-src" } else { "src" }
+}
+
+/// Follows XML includes from `queue` and returns the files found (on-disk
+/// spelling), skipping those already in `seen`.
+fn closure(
+    dir: &Path,
+    mut queue: Vec<String>,
+    seen: &mut BTreeSet<String>,
+    warnings: &mut Vec<Diagnostic>,
+) -> Vec<String> {
+    let mut found = Vec::new();
+    while let Some(rel) = queue.pop() {
+        let Some(actual) = existing_case(dir, &rel) else {
+            warnings.push(Diagnostic::plain_warning(format!(
+                "the TOC lists `{rel}`, which does not exist"
+            )));
+            continue;
+        };
+        if !seen.insert(actual.clone()) {
+            continue;
+        }
+        if actual.to_ascii_lowercase().ends_with(".xml")
+            && let Ok(text) = std::fs::read_to_string(dir.join(&actual))
+            && let Ok(refs) = wowlua_xml::references(&text)
+        {
+            let base = actual
+                .rsplit_once('/')
+                .map(|(d, _)| d.to_string())
+                .unwrap_or_default();
+            for r in refs {
+                let joined = if base.is_empty() {
+                    r.normalized()
+                } else {
+                    format!("{base}/{}", r.normalized())
+                };
+                queue.push(normalize_rel(&joined));
+            }
+        }
+        found.push(actual);
+    }
+    found
+}
+
+/// Files of the addon in `dir` that other AddOns next to it load through
+/// `..\<addon>\<path>` lines: from their TOCs, and from the
+/// `build.external-files` of those already adopted. Paths are relative to
+/// `dir`, before moving.
+fn sibling_references(dir: &Path) -> Vec<String> {
+    let (Some(parent), Some(folder)) = (dir.parent(), dir.file_name()) else {
+        return Vec::new();
+    };
+    let prefix = format!("../{}/", folder.to_string_lossy().to_ascii_lowercase());
+    let strip = |path: &str| -> Option<String> {
+        let lower = path.to_ascii_lowercase();
+        lower
+            .starts_with(&prefix)
+            .then(|| path[prefix.len()..].to_string())
+    };
+    let mut found: Vec<String> = Vec::new();
+    let Ok(siblings) = std::fs::read_dir(parent) else {
+        return found;
+    };
+    let mut siblings: Vec<PathBuf> = siblings
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.is_dir() && p.as_path() != dir)
+        .collect();
+    siblings.sort();
+    for sibling in siblings {
+        let Ok(entries) = std::fs::read_dir(&sibling) else {
+            continue;
+        };
+        let mut tocs: Vec<PathBuf> = entries
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("toc")))
+            .collect();
+        tocs.sort();
+        for toc in tocs {
+            let Ok(bytes) = std::fs::read(&toc) else {
+                continue;
+            };
+            for file in wowlua_toc::parse(&String::from_utf8_lossy(&bytes)).files {
+                if let Some(rel) = strip(&file.path) {
+                    found.push(rel);
+                }
+            }
+        }
+        let manifest = std::fs::read_to_string(sibling.join(MANIFEST_FILE))
+            .ok()
+            .and_then(|text| serde_json::from_str::<Value>(&text).ok());
+        let externals = manifest
+            .as_ref()
+            .and_then(|m| m.pointer("/build/external-files"))
+            .and_then(Value::as_array);
+        for entry in externals.into_iter().flatten() {
+            if let Some(rel) = entry.get("path").and_then(Value::as_str).and_then(strip) {
+                // The sibling already points at the output location (`src/…`).
+                let rel = rel.strip_prefix("src/").map(str::to_string).unwrap_or(rel);
+                found.push(rel);
+            }
+        }
+    }
+    let mut unique = BTreeSet::new();
+    found.retain(|rel| unique.insert(rel.to_ascii_lowercase()));
+    found
+}
+
+/// The path of an external line (`../Other/file.lua`) in the other AddOn's
+/// output: `../Other/src/file.lua` once that AddOn is (or will be) adopted,
+/// since its `init` moves the files its siblings load into its sources.
+fn resolve_external(dir: &Path, line: &str) -> (String, Option<Diagnostic>) {
+    let Some((owner, file)) = line.strip_prefix("../").and_then(|r| r.split_once('/')) else {
+        return (line.to_string(), None);
+    };
+    let owner_dir = dir.parent().and_then(|parent| {
+        std::fs::read_dir(parent)
+            .ok()?
+            .filter_map(Result::ok)
+            .find(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case(owner))
+            .map(|e| e.path())
+    });
+    let Some(owner_dir) = owner_dir else {
+        return (
+            line.to_string(),
+            Some(Diagnostic::plain_warning(format!(
+                "the TOC loads `{line}`, but there is no AddOn `{owner}` next to this one; kept as written"
+            ))),
+        );
+    };
+    let owner_name = owner_dir
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    let adopted = std::fs::read_to_string(owner_dir.join(MANIFEST_FILE))
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok());
+    let owner_src = match &adopted {
+        Some(manifest) => manifest
+            .pointer("/build/src")
+            .and_then(Value::as_str)
+            .unwrap_or("src")
+            .to_string(),
+        None => source_dir_for(&owner_dir).to_string(),
+    };
+    if let Some(actual) = existing_case(&owner_dir.join(&owner_src), file) {
+        return (format!("../{owner_name}/src/{actual}"), None);
+    }
+    match existing_case(&owner_dir, file) {
+        Some(actual) if adopted.is_none() => (format!("../{owner_name}/src/{actual}"), None),
+        Some(actual) => (
+            format!("../{owner_name}/{actual}"),
+            Some(Diagnostic::plain_warning(format!(
+                "`{line}` was not moved when `{owner_name}` was adopted, so its build does not ship it; add it to that package's `build.shared-files`"
+            ))),
+        ),
+        None => (
+            line.to_string(),
+            Some(Diagnostic::plain_warning(format!(
+                "the TOC loads `{line}`, which does not exist"
+            ))),
+        ),
+    }
+}
+
+/// Splits a TOC file name into addon name and suffix, relative to the folder
+/// the client finds it in: `LittleWigs_Classic.toc` in `LittleWigs_Classic/`
+/// is the plain TOC, and `!RealUI_PreLoads.toc` in `!RealUI_Preloads/`
+/// belongs to that folder (names compare case-insensitively).
+fn split_toc_name(file_name: &str, folder: &str) -> Option<(String, Option<String>)> {
+    let (generic_base, generic_suffix) = wowlua_toc::split_file_name(file_name)?;
+    let stem = &file_name[..file_name.len() - ".toc".len()];
+    if stem.eq_ignore_ascii_case(folder) {
+        return Some((folder.to_string(), None));
+    }
+    if let Some(suffix) = stem.get(folder.len()..)
+        && stem.is_char_boundary(folder.len())
+        && stem[..folder.len()].eq_ignore_ascii_case(folder)
+        && wowlua_flavors::table().suffix_meaning(suffix).is_some()
+    {
+        return Some((folder.to_string(), Some(suffix.to_string())));
+    }
+    Some((generic_base, generic_suffix))
 }
 
 /// Flavors that load a file: the TOC's flavors filtered by the line's inline
@@ -683,16 +951,18 @@ fn existing_case(dir: &Path, rel: &str) -> Option<String> {
     let mut current = dir.to_path_buf();
     let mut parts = Vec::new();
     for part in rel.split('/').filter(|p| !p.is_empty()) {
-        let exact = current.join(part);
-        let name = if exact.exists() {
-            part.to_string()
-        } else {
-            std::fs::read_dir(&current)
-                .ok()?
-                .filter_map(Result::ok)
-                .map(|e| e.file_name().to_string_lossy().into_owned())
-                .find(|n| n.eq_ignore_ascii_case(part))?
-        };
+        // Listing the directory gives the real spelling, also on
+        // case-insensitive file systems where `exists()` accepts any case.
+        let names: Vec<String> = std::fs::read_dir(&current)
+            .ok()?
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        let name = names
+            .iter()
+            .find(|n| *n == part)
+            .or_else(|| names.iter().find(|n| n.eq_ignore_ascii_case(part)))?
+            .clone();
         current = current.join(&name);
         parts.push(name);
     }
@@ -732,8 +1002,9 @@ fn remove_empty_dirs(dir: &Path, moved: &[String]) {
 }
 
 /// Rewrites `Interface\AddOns\<Name>\<path>` references to moved files so they
-/// point at `…\<Name>\src\<path>`. Handles `\`, `\\` (escaped in Lua strings)
-/// and `/` separators. Returns the new text and the number of rewrites.
+/// point at their output location `…\<Name>\src\<path>` (whatever the
+/// package's source folder is called). Handles `\`, `\\` (escaped in Lua
+/// strings) and `/` separators. Returns the new text and the number of rewrites.
 pub fn rewrite_ingame_paths(
     text: &str,
     addon: &str,
@@ -766,7 +1037,7 @@ pub fn rewrite_ingame_paths(
 }
 
 /// Globs for the asset files left in the addon folder after moving sources.
-fn asset_globs(dir: &Path) -> Vec<String> {
+fn asset_globs(dir: &Path, src_dir: &str) -> Vec<String> {
     let mut globs: BTreeSet<String> = BTreeSet::new();
     let walker = ignore::WalkBuilder::new(dir)
         .hidden(true)
@@ -779,7 +1050,7 @@ fn asset_globs(dir: &Path) -> Vec<String> {
         let Some(rel) = fsutil::relative_slash(entry.path(), dir) else {
             continue;
         };
-        if rel.starts_with("src/") || rel.starts_with("dist/") {
+        if rel.starts_with(&format!("{src_dir}/")) || rel.starts_with("dist/") {
             continue;
         }
         let ext = rel
@@ -989,6 +1260,8 @@ fn is_metadata(key: &str) -> bool {
         "x-curse-project-id",
         "x-wago-id",
         "x-wowi-id",
+        "allowloadgametype",
+        "excludeloadgametype",
     ];
     !(structural.contains(&lower.as_str())
         || lower.starts_with("dep")
@@ -1133,6 +1406,8 @@ fn adopted_manifest(
     file_flavors: &IndexMap<String, BTreeSet<String>>,
     assets: Vec<String>,
     warnings: &mut Vec<Diagnostic>,
+    src_dir: &str,
+    external_paths: &HashMap<String, String>,
 ) -> Value {
     let package_name = kebab_case(addon_name);
     let version = toc
@@ -1165,7 +1440,11 @@ fn adopted_manifest(
         }
         insert_metadata(&mut addon, key, Some(value.clone()));
     }
-    let flag = |name: &str| toc.get(name).is_some_and(|v| v.trim() == "1");
+    // The client accepts `1` and `true` (verified in game).
+    let flag = |name: &str| {
+        toc.get(name)
+            .is_some_and(|v| v.trim() == "1" || v.trim().eq_ignore_ascii_case("true"))
+    };
     if flag("LoadOnDemand") {
         addon.insert("load-on-demand".into(), true.into());
     }
@@ -1225,9 +1504,12 @@ fn adopted_manifest(
         k == "requireddeps" || (k.starts_with("dep") && !k.starts_with("dependson"))
     };
     let is_optional = |k: &str| k.to_ascii_lowercase().starts_with("optionaldep");
+    // Entries keep every TOC's order (merged like file orders).
     let collect = |matches: &dyn Fn(&str) -> bool| -> IndexMap<String, BTreeSet<String>> {
         let mut entries: IndexMap<String, BTreeSet<String>> = IndexMap::new();
-        for (parsed, toc_flavors) in all_tocs {
+        let mut sequences: Vec<Vec<String>> = Vec::new();
+        for (parsed, toc_flavors) in all_tocs.iter().filter(|(_, f)| !f.is_empty()) {
+            let mut sequence = Vec::new();
             for directive in parsed.directives.iter().filter(|d| matches(&d.key)) {
                 let applicable = apply_conditions(toc_flavors, &directive.conditions);
                 for name in directive
@@ -1240,9 +1522,15 @@ fn adopted_manifest(
                         .entry(name.to_string())
                         .or_default()
                         .extend(applicable.iter().cloned());
+                    if !applicable.is_empty() && !sequence.iter().any(|n| n == name) {
+                        sequence.push(name.to_string());
+                    }
                 }
             }
+            sequences.push(sequence);
         }
+        let (order, _) = merge_orders(&sequences);
+        entries.sort_by_key(|name, _| order.iter().position(|n| n == name).unwrap_or(usize::MAX));
         entries
     };
     let mut deps = Map::new();
@@ -1282,19 +1570,24 @@ fn adopted_manifest(
     }
 
     let mut build = Map::new();
+    if src_dir != "src" {
+        build.insert("src".into(), src_dir.into());
+    }
     if !assets.is_empty() {
         build.insert("assets".into(), json!(assets));
     }
     let load_order: Vec<String> = order
         .iter()
         .filter_map(|p| {
-            if p.contains('[') {
-                Some(format!("src/{p}"))
+            if let Some(external) = external_paths.get(p) {
+                Some(external.clone())
+            } else if p.contains('[') {
+                Some(format!("{src_dir}/{p}"))
             } else {
                 moved
                     .iter()
                     .find(|m| m.eq_ignore_ascii_case(p))
-                    .map(|m| format!("src/{m}"))
+                    .map(|m| format!("{src_dir}/{m}"))
             }
         })
         .collect();
@@ -1307,7 +1600,7 @@ fn adopted_manifest(
         .filter_map(|(path, set)| {
             let actual = moved.iter().find(|m| m.eq_ignore_ascii_case(path))?;
             let ordered: Vec<&String> = flavors.iter().filter(|f| set.contains(*f)).collect();
-            Some((format!("src/{actual}"), json!(ordered)))
+            Some((format!("{src_dir}/{actual}"), json!(ordered)))
         })
         .collect();
     if !restricted.is_empty() {

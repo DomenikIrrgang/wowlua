@@ -177,6 +177,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W4304 | Flavors' load orders conflict; falling back to per-flavor TOC layout |
 | W4306 | Embedded library without a recognizable license file or header |
 | W4309 | `--link` could not create a symlink/junction; copying instead |
+| W4310 | XML reference differs in case from the referenced file (the client resolves it case-insensitively) |
 | W4313 | `types sync` moved a client alias (`anniversary`, `titan`, `forever`) to another ruleset |
 | W4322 | Locked version has been yanked |
 | W4326 | No OS credential store; token stored in `config.json` (mode 0600) |

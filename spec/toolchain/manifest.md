@@ -116,7 +116,7 @@ Only for `kind: "addon"`. Every key maps to a TOC directive and/or `wowlua:meta`
 
 | Key | Type | Default | TOC directive | Notes |
 |-----|------|---------|---------------|-------|
-| `name` | string | PascalCase of `package.name` | file and folder name | Must match `[A-Za-z0-9_-]+`. |
+| `name` | string | PascalCase of `package.name` | file and folder name | Any valid folder name: none of `\ / : * ? " < > \|`, no control characters, no leading or trailing space or dot (decision T59). Load-order prefixes such as `!BugGrabber` are allowed. |
 | `title` | string | `name` | `Title` | May contain color codes. |
 | `title-localized` | `{locale: string}` | `{}` | `Title-<locale>` | Emitted after `Title`, as the client requires |
 | `notes`, `notes-localized` | string / map | none | `Notes`, `Notes-<locale>` | |
@@ -332,6 +332,8 @@ TOCs.
 | `keep` | string[] | `[]` | Module IDs never removed by tree-shaking (for plain-Lua consumers, [Optimization §15.1](optimization.md#151-always-on-optimizations)) |
 | `libs-dir` | path | `"libs"` | Output folder for dependencies. Migrated projects may use e.g. `"Libs"`. |
 | `variable-files` | `VariableFile[]` | `[]` | TOC file lines with `[Game]`, `[Family]` or `[TextLocale]` variables (§9.7.1) |
+| `external-files` | `ExternalFile[]` | `[]` | TOC lines loading files of another AddOn (§9.7.2) |
+| `shared-files` | path[] | `[]` | Sources shipped for another AddOn's TOC, not listed in this one (§9.7.2) |
 | `flavor-files` | `{glob: flavor[]}` | `{}` | Restricts matching source files (Lua, `.wowlua`, XML) to the listed flavors. Files not matched belong to every flavor. A file matched by several globs belongs to the union of their flavors. A file whose flavors are all untargeted is left out of the build. Mainly for plain Lua files, which cannot use `@if`; written by `wowlua init` from flavor-specific TOCs (decision T43). |
 | `flavor-mode` | `"split"` `"shared"` | `"split"` | [Build metadata §6.3](../language/06-meta.md#63-flavors) |
 | `toc-layout` | `"auto"` `"single"` `"per-flavor"` | `"auto"` | [Code generation §14.9](codegen.md#149-toc-generation) |
@@ -370,6 +372,45 @@ lines (decision T55):
   one line per flavor and locale, each with the matching inline directive or
   in the matching per-flavor TOC.
 - `wowlua init` writes this list from TOC lines that contain variables.
+
+### 9.7.2 Files shared between addons
+
+Some load-on-demand addons load files stored in their main addon's folder:
+TellMeWhen_Options lists `..\TellMeWhen\Options\*.lua`, and
+MythicDungeonTools_UI loads most of MythicDungeonTools' code that way. Two
+keys express this (decision T58):
+
+```json
+// MythicDungeonTools_UI
+"build": {
+  "external-files": [
+    { "path": "../MythicDungeonTools/src/libs/load_libs.xml" },
+    { "path": "../MythicDungeonTools/src/Midnight/load_midnight.xml", "flavors": ["standard"] }
+  ],
+  "load-order": ["../MythicDungeonTools/src/libs/load_libs.xml", "src/Bootstrap.lua"]
+}
+// MythicDungeonTools
+"build": { "shared-files": ["src/libs/load_libs.xml", "src/MythicDungeonTools.lua"] }
+```
+
+- **`external-files`** (on the loading addon): TOC lines naming a file of
+  another AddOn by its path in that AddOn's output, relative to this AddOn's
+  folder: `../<AddOn>/<path>` (E4002 otherwise). They are emitted verbatim at
+  their `build.load-order` position, restricted to `flavors` if given. The
+  build does not check that the file exists, because the other AddOn ships it.
+- **`shared-files`** (on the owning addon): source files that are built and
+  shipped although this AddOn's TOC does not list them. Files they include
+  through XML are shipped as well. A path that is not a source file of the
+  package is error E5002.
+- The files belong to the owner, so they are compiled and checked with the
+  owner's sources. They are never bundled into the owner's own output files,
+  because another TOC loads them. A file both addons load exists once.
+- `wowlua init` writes both keys: the owner's `init` finds the files its
+  siblings' TOCs (or already adopted siblings' `external-files`) reference,
+  moves them into its sources with their XML includes, and lists those it
+  does not load itself in `shared-files`. The loader's `init` writes the
+  files' new output paths (`../<AddOn>/src/…`). Either addon may be adopted
+  first.
 
 ## 9.8 `check`
 

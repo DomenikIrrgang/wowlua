@@ -1235,6 +1235,7 @@ name = "wowlua-xml"
 version = "0.1.0"
 dependencies = [
  "quick-xml",
+ "wowlua-toc",
 ]
 
 [[package]]

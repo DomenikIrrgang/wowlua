@@ -13,7 +13,11 @@ use wowlua_diagnostics::{Diagnostic, Diagnostics};
 use wowlua_span::FileId;
 
 static PACKAGE_NAME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[a-z0-9-]{2,64}$").unwrap());
-static ADDON_NAME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_-]+$").unwrap());
+/// Any valid folder name: printable, none of the characters Windows forbids
+/// in file names, no leading or trailing space or dot (`!BugGrabber`).
+static ADDON_NAME: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^[^\s.\\/:*?"<>|\p{Cc}]([^\\/:*?"<>|\p{Cc}]*[^\s.\\/:*?"<>|\p{Cc}])?$"#).unwrap()
+});
 static LUA_IDENT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*$").unwrap());
 
@@ -159,7 +163,9 @@ fn addon(manifest: &Manifest, raw: &Value, ctx: &mut Ctx) {
         ctx.error(
             "E4002",
             &path.clone().key("name"),
-            format!("invalid AddOn name `{name}`: use letters, digits, `_` and `-`"),
+            format!(
+                "invalid AddOn name `{name}`: it must be a valid folder name (no \\ / : * ? \" < > |, no leading or trailing space or dot)"
+            ),
             "invalid name",
         );
     }
@@ -442,6 +448,40 @@ fn flavor_references(manifest: &Manifest, ctx: &mut Ctx) {
         }
         for (j, flavor) in entry.flavors.iter().flatten().enumerate() {
             check_flavor(flavor, &epath.clone().key("flavors").index(j), ctx);
+        }
+    }
+    for (i, entry) in manifest.build.external_files.iter().enumerate() {
+        let epath = root().key("build").key("external-files").index(i);
+        let valid = entry
+            .path
+            .strip_prefix("../")
+            .and_then(|rest| rest.split_once('/'))
+            .is_some_and(|(addon, file)| {
+                !addon.is_empty()
+                    && ADDON_NAME.is_match(addon)
+                    && !file.is_empty()
+                    && !file.split('/').any(|p| p == "..")
+            });
+        if !valid {
+            ctx.error(
+                "E4002",
+                &epath.clone().key("path"),
+                format!("`{}` must have the form `../<AddOn>/<path>`", entry.path),
+                "not a file of another AddOn",
+            );
+        }
+        for (j, flavor) in entry.flavors.iter().flatten().enumerate() {
+            check_flavor(flavor, &epath.clone().key("flavors").index(j), ctx);
+        }
+    }
+    for (i, path) in manifest.build.shared_files.iter().enumerate() {
+        if path.starts_with('/') || path.split('/').any(|p| p == "..") {
+            ctx.error(
+                "E4002",
+                &root().key("build").key("shared-files").index(i),
+                format!("`{path}` must be a path inside the package"),
+                "outside the package",
+            );
         }
     }
     for (glob, flavors) in &manifest.build.flavor_files {

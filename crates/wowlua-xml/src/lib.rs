@@ -22,9 +22,21 @@ pub struct XmlRef {
 }
 
 impl XmlRef {
-    /// The referenced path with `/` separators.
+    /// The referenced path with `/` separators, without inline directives.
     pub fn normalized(&self) -> String {
-        self.file.replace('\\', "/")
+        self.path().replace('\\', "/")
+    }
+
+    /// The referenced path as written, without inline directives
+    /// (`file="Data.lua [AllowLoadGameType tbc]"` → `Data.lua`).
+    pub fn path(&self) -> String {
+        wowlua_toc::split_conditions(&self.file).0
+    }
+
+    /// Inline load directives of the reference, which clients evaluate like
+    /// those on TOC file lines.
+    pub fn conditions(&self) -> Vec<wowlua_toc::InlineDirective> {
+        wowlua_toc::split_conditions(&self.file).1
     }
 }
 
@@ -168,6 +180,15 @@ mod tests {
         let out = rewrite(DOC, &[(&refs[2], "ui\\window.lua".into())]);
         assert!(out.contains(r#"<Script   file = "ui\window.lua"></Script>"#));
         assert!(out.contains(r#"<Script file="core.lua"/>"#));
+    }
+
+    #[test]
+    fn separates_inline_directives_from_paths() {
+        let text = r#"<Ui><Include file="Data\TBC.lua [AllowLoadGameType: tbc]"/></Ui>"#;
+        let refs = references(text).unwrap();
+        assert_eq!(refs[0].path(), "Data\\TBC.lua");
+        assert_eq!(refs[0].normalized(), "Data/TBC.lua");
+        assert_eq!(refs[0].conditions()[0].values, ["tbc"]);
     }
 
     #[test]

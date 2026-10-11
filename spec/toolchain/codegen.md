@@ -282,6 +282,12 @@ dist/release/MyAddon/
 - **Reference rewriting.** `<Script file="…">` and `<Include file="…">` paths
   are resolved relative to the XML file. References to `.wowlua` sources are
   rewritten to the compiled `.lua` path. Unresolvable references are E5002.
+- **Inline directives.** A `file` attribute may carry inline load directives
+  like a TOC file line (`file="Data_TBC.lua [AllowLoadGameType tbc]"`), which
+  the client evaluates (decision T62). The path is resolved without them, and
+  they are kept unchanged in the output.
+- **Case.** References resolve case-insensitively, like the client. A
+  reference whose case differs from the file is warning W4310 (decision T61).
 - **XML-referenced modules stay separate.** A module loaded through `<Script>`
   is not bundled and not listed in the TOC: the XML file loads it, at the
   position the XML file has in the load order.
@@ -438,7 +444,10 @@ Each TOC contains, in order:
 2. `## Title:` followed by localized `## Title-<locale>:` lines (the fallback
    must come first), then notes, author, version (`build.version`), icon,
    category and group,
-3. dependency directives from `addon-dependencies`. Flavor-specific entries
+3. dependency directives from `addon-dependencies`, in manifest order (the
+   order may influence which dependency the client loads first). Consecutive
+   entries for the same flavors share one directive (decision T63).
+   Flavor-specific entries
    get an inline directive in single layout or go only into that flavor's TOC,
 4. `## SavedVariables:` / `## SavedVariablesPerCharacter:`,
    `## LoadSavedVariablesFirst:`, `## AllowAddOnTableAccess:`,
@@ -446,7 +455,10 @@ Each TOC contains, in order:
    `addon.toc-data` files ([Manifest §9.3.2](manifest.md#932-toc-data-files)),
 6. `## X-Wowlua-Build: <profile> <build id>` and the publish-target ID fields
    (`## X-Curse-Project-ID`, `## X-Wago-ID`, `## X-WoWI-ID`) when configured,
-7. the file list (§14.9.2), using `\` separators.
+7. the file list (§14.9.2), using `\` separators. `build.external-files`
+   lines (`..\<AddOn>\src\…`) are listed verbatim at their load-order
+   position; `build.shared-files` are shipped but not listed
+   ([Manifest §9.7.2](manifest.md#972-files-shared-between-addons)).
 
 **Line length.** The client reads only the first 1024 characters of each line.
 Only the appendable directives `Dependencies`, `OptionalDeps`, `LoadWith`,

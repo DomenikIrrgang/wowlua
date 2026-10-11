@@ -349,3 +349,134 @@ fn init_handles_file_variables_and_toc_data() {
         assert!(dist.join(file).exists(), "{file}");
     }
 }
+
+/// A load-on-demand addon whose TOC loads files stored in its main addon's
+/// folder (TellMeWhen_Options, MythicDungeonTools_UI).
+#[test]
+fn init_handles_files_loaded_from_a_sibling_addon() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = dir.path().join("Main");
+    let options = dir.path().join("Main_Options");
+    write(
+        &main,
+        &[
+            (
+                "Main.toc",
+                "## Interface: 120100\n## Title: Main\n## Version: 1.0\nlibs\\libs.xml\nCore.lua\n",
+            ),
+            (
+                "libs/libs.xml",
+                "<Ui>\n  <Script file=\"LibStub.lua\"/>\n</Ui>\n",
+            ),
+            ("libs/LibStub.lua", "LibStub = {}\n"),
+            (
+                "libs/options_libs.xml",
+                "<Ui>\n  <Script file=\"LibStub.lua\"/>\n  <Script file=\"AceGUI.lua\"/>\n</Ui>\n",
+            ),
+            ("libs/AceGUI.lua", "AceGUI = {}\n"),
+            ("Core.lua", "print('core')\n"),
+            ("Options/Config.lua", "print('config')\n"),
+        ],
+    );
+    write(
+        &options,
+        &[
+            (
+                "Main_Options.toc",
+                "## Interface: 120100\n## Title: Main Options\n## Version: 1.0\n## LoadOnDemand: true\n## Dependencies: Main\n..\\Main\\libs\\options_libs.xml\nBoot.lua\n..\\Main\\Options\\Config.lua\n",
+            ),
+            ("Boot.lua", "print('boot')\n"),
+        ],
+    );
+
+    wowlua(&main).arg("init").assert().success();
+    wowlua(&options).arg("init").assert().success();
+    let manifest = fs::read_to_string(main.join("wowlua.json")).unwrap();
+    assert!(manifest.contains("\"shared-files\""), "{manifest}");
+    assert!(manifest.contains("src/Options/Config.lua"), "{manifest}");
+    assert!(main.join("src/libs/options_libs.xml").exists());
+    assert!(main.join("src/libs/AceGUI.lua").exists());
+    let manifest = fs::read_to_string(options.join("wowlua.json")).unwrap();
+    assert!(manifest.contains("\"external-files\""), "{manifest}");
+    assert!(manifest.contains("\"load-on-demand\": true"), "{manifest}");
+
+    wowlua(&main).arg("build").assert().success();
+    wowlua(&options).arg("build").assert().success();
+    let toc = fs::read_to_string(main.join("dist/dev/Main/Main.toc")).unwrap();
+    assert!(
+        !toc.contains("Config.lua") && !toc.contains("options_libs"),
+        "{toc}"
+    );
+    assert!(main.join("dist/dev/Main/src/Options/Config.lua").exists());
+    assert!(main.join("dist/dev/Main/src/libs/AceGUI.lua").exists());
+    let toc = fs::read_to_string(options.join("dist/dev/Main_Options/Main_Options.toc")).unwrap();
+    assert!(
+        toc.contains("..\\Main\\src\\libs\\options_libs.xml\nsrc\\Boot.lua\n..\\Main\\src\\Options\\Config.lua\n"),
+        "{toc}"
+    );
+}
+
+/// Folder names decide the addon name; an existing `src/` folder, `true`
+/// flags, addon-wide game types, the `[Directive: values]` form and inline
+/// directives in XML (seen in LittleWigs, RealUI, AllTheThings, Total RP 3).
+#[test]
+fn init_handles_unusual_layouts() {
+    let dir = tempfile::tempdir().unwrap();
+    let addon = dir.path().join("!Pack_Classic");
+    write(
+        &addon,
+        &[
+            (
+                "!pack_classic.toc",
+                "## Interface: 120100, 11509, 50504\n## AllowLoadGameType: classic\n## Title: Pack\n## Version: 1.0\n## LoadOnDemand: true\nsrc\\Core.lua\ndata.xml\nEra.lua [AllowLoadGameType: vanilla]\n",
+            ),
+            ("src/Core.lua", "print('core')\n"),
+            ("src/Unused.lua", "error('never loaded')\n"),
+            (
+                "data.xml",
+                "<Ui>\n  <Script file=\"Data_Mists.lua [AllowLoadGameType mists]\"/>\n  <Script file=\"data_era.lua [AllowLoadGameType: vanilla]\"/>\n</Ui>\n",
+            ),
+            ("Data_Mists.lua", "print('mists')\n"),
+            ("Data_Era.lua", "print('era')\n"),
+            ("Era.lua", "print('era')\n"),
+        ],
+    );
+
+    wowlua(&addon).arg("init").assert().success();
+    let manifest = fs::read_to_string(addon.join("wowlua.json")).unwrap();
+    assert!(
+        manifest.contains("\"name\": \"!Pack_Classic\""),
+        "{manifest}"
+    );
+    assert!(manifest.contains("\"src\": \"wowlua-src\""), "{manifest}");
+    assert!(manifest.contains("\"load-on-demand\": true"), "{manifest}");
+    assert!(
+        !manifest.contains("\"standard\""),
+        "classic only: {manifest}"
+    );
+    assert!(!manifest.contains("AllowLoadGameType"), "{manifest}");
+    assert!(addon.join("wowlua-src/src/Core.lua").exists());
+    assert!(addon.join("wowlua-src/Data_Era.lua").exists());
+    assert!(addon.join("src/Unused.lua").exists(), "unloaded files stay");
+
+    wowlua(&addon)
+        .arg("build")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("W4310"));
+    let dist = addon.join("dist/dev/!Pack_Classic");
+    let toc = fs::read_to_string(dist.join("!Pack_Classic.toc")).unwrap();
+    assert!(toc.contains("## Interface: 11509, 50504\n"), "{toc}");
+    // The output layout is always `src/…`.
+    assert!(toc.contains("src\\src\\Core.lua\n"), "{toc}");
+    assert!(
+        toc.contains("src\\Era.lua [AllowLoadGameType vanilla]"),
+        "{toc}"
+    );
+    assert!(!dist.join("src/src/Unused.lua").exists());
+    let xml = fs::read_to_string(dist.join("src/data.xml")).unwrap();
+    assert!(
+        xml.contains("Data_Mists.lua [AllowLoadGameType mists]"),
+        "kept verbatim: {xml}"
+    );
+}

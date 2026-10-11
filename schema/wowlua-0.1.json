@@ -848,6 +848,20 @@
             "$ref": "#/$defs/VariableFile"
           }
         },
+        "external-files": {
+          "description": "TOC file lines loading files of another AddOn (`../<AddOn>/<path>`).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExternalFile"
+          }
+        },
+        "shared-files": {
+          "description": "Sources that are built and shipped but loaded by another AddOn's TOC\ninstead of this one's.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "flavor-mode": {
           "$ref": "#/$defs/FlavorMode",
           "default": "split"
@@ -888,6 +902,30 @@
           "items": {
             "type": "string"
           }
+        },
+        "flavors": {
+          "description": "Restricts the line to these flavors.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ]
+    },
+    "ExternalFile": {
+      "description": "A TOC file line loading a file of another AddOn (§9.7.2).",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "`../<AddOn>/<path>`: the file's path in that AddOn's output, relative\nto this AddOn's folder.",
+          "type": "string"
         },
         "flavors": {
           "description": "Restricts the line to these flavors.",

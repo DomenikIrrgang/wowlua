@@ -450,6 +450,13 @@ pub struct Build {
     /// TOC file lines with variables (`[Game]`, `[Family]`, `[TextLocale]`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub variable_files: Vec<VariableFile>,
+    /// TOC file lines loading files of another AddOn (`../<AddOn>/<path>`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub external_files: Vec<ExternalFile>,
+    /// Sources that are built and shipped but loaded by another AddOn's TOC
+    /// instead of this one's.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub shared_files: Vec<String>,
     #[serde(default)]
     pub flavor_mode: FlavorMode,
     #[serde(default)]
@@ -484,6 +491,8 @@ impl Default for Build {
     fn default() -> Self {
         Build {
             variable_files: Vec::new(),
+            external_files: Vec::new(),
+            shared_files: Vec::new(),
             src: Self::default_src(),
             out: Self::default_out(),
             assets: Vec::new(),
@@ -510,6 +519,18 @@ pub struct VariableFile {
     /// `[TextLocale]` only: the locales this line loads for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub locales: Option<Vec<String>>,
+    /// Restricts the line to these flavors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flavors: Option<Vec<String>>,
+}
+
+/// A TOC file line loading a file of another AddOn (§9.7.2).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct ExternalFile {
+    /// `../<AddOn>/<path>`: the file's path in that AddOn's output, relative
+    /// to this AddOn's folder.
+    pub path: String,
     /// Restricts the line to these flavors.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flavors: Option<Vec<String>>,

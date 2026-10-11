@@ -131,6 +131,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E4307", summary: "`asset()` path does not name an asset of the build" },
     CodeInfo { code: "E4308", summary: "Output paths differ only in case" },
     CodeInfo { code: "W4309", summary: "`--link` could not create a symlink/junction; copying instead" },
+    CodeInfo { code: "W4310", summary: "XML reference differs in case from the referenced file (the client resolves it case-insensitively)" },
     CodeInfo { code: "E4311", summary: "Output path collides with a reserved top-level name or another output file" },
     CodeInfo { code: "E4312", summary: "`addon.load-on-demand: false` together with `addon-dependencies.load-with`" },
     CodeInfo { code: "W4313", summary: "`types sync` moved a client alias (`anniversary`, `titan`, `forever`) to another ruleset" },

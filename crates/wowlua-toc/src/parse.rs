@@ -101,52 +101,40 @@ pub fn parse(text: &str) -> ParsedToc {
     toc
 }
 
-/// Splits trailing inline directives (` [Name values]`) off a line. Brackets
-/// that are part of a path (`Locales\[TextLocale].lua`) are kept.
-fn split_conditions(line: &str) -> (String, Vec<InlineDirective>) {
-    let mut rest = line.trim_end();
+/// Splits inline directives (`[Name values]`, also written `[Name: values]`)
+/// off a TOC line or an XML `file` attribute. They may stand anywhere in the
+/// line. Brackets that are not directives (`Locales\[TextLocale].lua`) are
+/// kept.
+pub fn split_conditions(line: &str) -> (String, Vec<InlineDirective>) {
+    let mut kept = String::new();
     let mut conditions = Vec::new();
-    while rest.ends_with(']') {
-        let Some(open) = rest.rfind('[') else { break };
-        let inner = &rest[open + 1..rest.len() - 1];
-        let mut words = inner.split([' ', ',']).filter(|w| !w.is_empty());
-        let Some(name) = words.next() else { break };
-        // Directives follow whitespace or another directive (`[A x][B y]`).
-        let preceded = rest[..open].ends_with([' ', '\t', ']']);
-        if !preceded
-            || !INLINE_DIRECTIVES
-                .iter()
-                .any(|d| d.eq_ignore_ascii_case(name))
-        {
+    let mut rest = line;
+    while let Some(open) = rest.find('[') {
+        let Some(len) = rest[open..].find(']') else {
             break;
+        };
+        let close = open + len;
+        let mut words = rest[open + 1..close]
+            .split([' ', '\t', ',', ':'])
+            .filter(|w| !w.is_empty());
+        match words.next() {
+            Some(name)
+                if INLINE_DIRECTIVES
+                    .iter()
+                    .any(|d| d.eq_ignore_ascii_case(name)) =>
+            {
+                conditions.push(InlineDirective {
+                    name: name.to_string(),
+                    values: words.map(str::to_string).collect(),
+                });
+                kept.push_str(rest[..open].trim_end());
+            }
+            _ => kept.push_str(&rest[..=close]),
         }
-        conditions.push(InlineDirective {
-            name: name.to_string(),
-            values: words.map(str::to_string).collect(),
-        });
-        rest = rest[..open].trim_end();
+        rest = &rest[close + 1..];
     }
-    conditions.reverse();
-    // Leading directives (`## OptionalDeps: [AllowLoadGameType vanilla] Ace3`).
-    let mut rest = rest.trim_start();
-    while rest.starts_with('[') {
-        let Some(close) = rest.find(']') else { break };
-        let inner = &rest[1..close];
-        let mut words = inner.split([' ', ',']).filter(|w| !w.is_empty());
-        let Some(name) = words.next() else { break };
-        if !INLINE_DIRECTIVES
-            .iter()
-            .any(|d| d.eq_ignore_ascii_case(name))
-        {
-            break;
-        }
-        conditions.push(InlineDirective {
-            name: name.to_string(),
-            values: words.map(str::to_string).collect(),
-        });
-        rest = rest[close + 1..].trim_start();
-    }
-    (rest.to_string(), conditions)
+    kept.push_str(rest);
+    (kept.trim().to_string(), conditions)
 }
 
 /// Splits a TOC file name into the addon name and its flavor suffix:
@@ -171,6 +159,20 @@ pub fn split_file_name(file_name: &str) -> Option<(String, Option<String>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn colon_form_and_any_position() {
+        let (path, conditions) = split_conditions("Data_TBC.lua [AllowLoadGameType: tbc]");
+        assert_eq!(path, "Data_TBC.lua");
+        assert_eq!(conditions[0].name, "AllowLoadGameType");
+        assert_eq!(conditions[0].values, ["tbc"]);
+        let (value, conditions) = split_conditions("A [AllowLoadGameType:vanilla] B");
+        assert_eq!(value, "A B");
+        assert_eq!(conditions[0].values, ["vanilla"]);
+        let (path, conditions) = split_conditions("Locales\\[TextLocale].lua");
+        assert_eq!(path, "Locales\\[TextLocale].lua");
+        assert!(conditions.is_empty());
+    }
 
     #[test]
     fn parses_directives_files_and_conditions() {
