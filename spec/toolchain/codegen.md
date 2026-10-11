@@ -370,6 +370,12 @@ MyAddon.vanilla.lua [AllowLoadGameType vanilla]
 src\ui\frames.xml
 ```
 
+**Directive names.** A flavor that is the only targeted flavor of its family is
+written as the **family name** (`mainline` or `classic`), which every client
+with inline directives recognizes. Game-type names (`standard`, `mists`, …) are
+used only when several targeted flavors share a family (decision T44). This
+mirrors rule 1 of the suffix algorithm (§14.9.3).
+
 **Directive safety.** A client that recognizes none of the game types listed in
 `[AllowLoadGameType …]` treats the condition as passed and loads the file. That
 is why `auto` checks, using the flavor table, that every targeted client

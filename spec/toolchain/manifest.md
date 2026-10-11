@@ -6,7 +6,7 @@ Schema, and the manifest should reference it through `$schema` so editors
 offer completion and validation:
 
 ```json
-{ "$schema": "https://wowlua.dev/schema/wowlua-0.1.json" }
+{ "$schema": "https://raw.githubusercontent.com/DomenikIrrgang/wowlua/main/schema/wowlua-0.1.json" }
 ```
 
 `wowlua add`, `remove` and `update` edit the file in place, preserving key order
@@ -17,7 +17,7 @@ and indentation. Unknown keys are error E4002, so typos are caught. Keys are
 
 ```json
 {
-  "$schema": "https://wowlua.dev/schema/wowlua-0.1.json",
+  "$schema": "https://raw.githubusercontent.com/DomenikIrrgang/wowlua/main/schema/wowlua-0.1.json",
   "package": {
     "name": "my-addon",
     "version": "1.4.2",
@@ -258,6 +258,7 @@ TOCs.
 | `load-order` | (path\|glob)[] | `[]` | Explicit order, written by `wowlua init`: files without load-time dependencies between them keep this order, and it breaks ties in the computed order ([Modules §5.4](../language/05-modules.md#54-load-order)) |
 | `keep` | string[] | `[]` | Module IDs never removed by tree-shaking (for plain-Lua consumers, [Optimization §15.1](optimization.md#151-always-on-optimizations)) |
 | `libs-dir` | path | `"libs"` | Output folder for dependencies. Migrated projects may use e.g. `"Libs"`. |
+| `flavor-files` | `{glob: flavor[]}` | `{}` | Restricts matching source files (Lua, `.wowlua`, XML) to the listed flavors. Files not matched belong to every flavor. Mainly for plain Lua files, which cannot use `@if`; written by `wowlua init` from flavor-specific TOCs (decision T43). |
 | `flavor-mode` | `"split"` `"shared"` | `"split"` | [Build metadata §6.3](../language/06-meta.md#63-flavors) |
 | `toc-layout` | `"auto"` `"single"` `"per-flavor"` | `"auto"` | [Code generation §14.9](codegen.md#149-toc-generation) |
 | `locales` | `"client"` `"all"` | `"client"` | Load only the player's language, or all ([Standard library: locale](../stdlib/ui.md#locale)) |
@@ -418,7 +419,9 @@ to that member automatically, without a `path` entry.
 ## 9.16 Schema versions and migration
 
 - The `$schema` URL names the manifest schema version
-  (`wowlua-<major>.<minor>.json`). Editors use it. The compiler does not need
+  (`wowlua-<major>.<minor>.json`). Schema files live in the repository's
+  `schema/` directory and are referenced through their GitHub raw URL
+  (decision T46). Editors use it. The compiler does not need
   it.
 - `package.wowlua` (the required compiler version) is read **first**, before
   any other validation. If the running compiler does not satisfy it, the build

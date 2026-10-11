@@ -30,7 +30,7 @@ wowlua <command> [options]
 | `wowlua check [--flavor <f>…] [--watch]` | Parse and type-check without emitting |
 | `wowlua build [--profile <p> \| --release] [--flavor <f>…] [--watch] [--out <dir>] [--stats] [--reproducible]` | Build the AddOn into `dist/<profile>/<Name>/` |
 | `wowlua dev [--flavor <f>…] [--client <folder>…] [--link] [--wow <install>] [--force]` | Watch, build with the `dev` profile, and sync the AddOn into WoW (§12.5) |
-| `wowlua install [--profile <p>] [--flavor <f>…] [--client <folder>…] [--wow <install>] [--force]` | Build once and install into WoW (§12.5) |
+| `wowlua install [--profile <p> \| --release] [--flavor <f>…] [--client <folder>…] [--wow <install>] [--force]` | Build once (default profile `dev`, decision T45) and install into WoW (§12.5) |
 | `wowlua uninstall [--client <folder>…] [--wow <install>]` | Remove installed builds of this addon (§12.5) |
 | `wowlua test [filter] [--flavor <f>] [--watch] [--coverage] [--reporter <r>]` | Run tests ([Tooling §16.1](tooling.md#161-test-runner-wowlua-test)) |
 | `wowlua fmt [--check] [paths…]` | Format sources |
@@ -112,11 +112,22 @@ available.
    `Notes`, `Author`, `Version`, `IconTexture`, `Category`, …), interface
    versions (giving the flavors), SavedVariables, dependencies and `X-` fields
    into `wowlua.json`.
-2. Records the existing file order in `build.load-order`. The compiler keeps
+2. **Moves** every Lua and XML file the TOCs load (directly or through XML
+   includes) into `src/`, keeping relative paths (`git mv` inside a Git
+   repository), so the project gets the standard layout (decision T42). All
+   references are updated: relative `<Script>`/`<Include>` paths stay valid
+   because files move together, and absolute in-game paths to moved files
+   (`Interface\AddOns\<Name>\<path>`) in Lua and XML files are rewritten to the
+   new output location (`…\<Name>\src\<path>`). Other files (textures, sounds,
+   fonts) stay where they are and are added to `build.assets`, so their in-game
+   paths do not change.
+3. Files loaded by only some flavors' TOCs, or by lines with
+   `[AllowLoadGameType …]`, are recorded in `build.flavor-files`.
+4. Records the existing file order in `build.load-order`. The compiler keeps
    this order wherever load-order analysis finds no reason to change it
    ([Modules §5.4](../language/05-modules.md#54-load-order)), so the build
    loads files as before.
-3. With `--from-pkgmeta` (or automatically if `.pkgmeta` / `pkgmeta.yaml` exists):
+5. With `--from-pkgmeta` (or automatically if `.pkgmeta` / `pkgmeta.yaml` exists):
    - `externals` become `dependencies`: git externals and zip archives are
      converted; svn and hg externals are listed with warning W4333 and must be
      replaced by a git mirror or archive. The common parent folder of the
@@ -131,10 +142,11 @@ available.
    - `enable-nolib-creation: yes` adds a GitHub target with `"nolib": true`.
    - The relation lists (`required-dependencies`, `optional-dependencies`,
      `embedded-libraries`, `tools-used`) become CurseForge relations.
-4. Reads `## X-Curse-Project-ID`, `## X-Wago-ID` and `## X-WoWI-ID` into publish
+6. Reads `## X-Curse-Project-ID`, `## X-Wago-ID` and `## X-WoWI-ID` into publish
    targets.
-5. Leaves all `.lua` files untouched. They build as-is, and can be renamed to
-   `.wowlua` one at a time.
+7. Leaves the contents of all `.lua` files untouched except for the path
+   rewrites of step 2. They build as-is, and can be renamed to `.wowlua` one at a
+   time.
 
 As an alternative to converting, a project may keep its `.pkgmeta` as the source
 of truth for dependencies and publishing with `"compat": { "pkgmeta": true }`.

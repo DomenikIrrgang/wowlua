@@ -6,7 +6,8 @@ lists its exit criteria.
 ## M0: Foundation
 
 - Cargo workspace, CI (fmt, clippy, tests on macOS, Windows, Linux), release
-  pipeline for binaries.
+  pipeline publishing binaries to GitHub Releases on tags (Homebrew, winget and
+  Scoop follow later).
 - `wowlua-span`, `wowlua-diagnostics`, `wowlua-flavors` (flavor table),
   `wowlua-manifest` (JSON schema generation, profile merging, `package.wowlua`
   check), `wowlua-toc` (layouts, suffix algorithm, line-length rules),
@@ -15,6 +16,10 @@ lists its exit criteria.
   (passthrough, TOC generation, assets, `LICENSES.txt`, output validation),
   `install`, `uninstall`, `dev` (copy and link modes, safe installs), `clean`,
   `toc`, `explain`.
+- `.wowlua` files are accepted when they are pure Lua 5.1 and passed through as
+  `.lua`; files using wowlua syntax report that they need the M1 compiler.
+  Bundling and minification are not available yet (release builds are
+  unbundled, with a note).
 - Output validation of Lua syntax uses the embedded Lua 5.1 VM (`mlua`,
   compiling without running) until the compiler's own parser exists in M1.
 - Lockfile with the pinned flavor table.

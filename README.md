@@ -20,7 +20,7 @@ World of Warcraft AddOns.
   are resolved, locked and embedded. Finished addons are packaged and uploaded
   to CurseForge, Wago, WoWInterface and GitHub Releases with one command.
 
-```wowlua
+```lua
 -- src/main.wowlua
 import addon, build from "wowlua:meta"
 import event from "wowlua:events"

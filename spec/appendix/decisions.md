@@ -90,6 +90,12 @@ open for review.
 | T39 | Dependencies never run code at fetch or build time. Path traversal and escaping symlinks are rejected. Tokens are stored in the OS keychain where available **(user, R1)** | |
 | T40 | The wowlua runtime and standard library embedded in addons are **MIT-licensed** **(user, R1)** | Permissive. Addon authors keep any license for their own code. |
 | T41 | Distribution through **GitHub Releases binaries** (plus install script and a `setup-wowlua` GitHub Action), **Homebrew, winget and Scoop** **(user, R1)** | |
+| T42 | `wowlua init` **moves** Lua and XML files into `src/` and rewrites absolute in-game paths to them. Assets stay in place **(user, M0)** | Standard layout for adopted addons, without breaking references. |
+| T43 | `build.flavor-files` restricts source files to flavors (glob → flavors) **(user, M0)** | Plain Lua files cannot use `@if`. `init` writes it from flavor-specific TOCs. |
+| T44 | In single TOCs, a flavor that is the only targeted one of its family is written as the family name (`mainline`/`classic`) in load directives **(user, M0)** | Recognized by every client with inline directives. |
+| T45 | `wowlua install` defaults to the `dev` profile **(user, M0)** | Same as `wowlua dev`, without watching. |
+| T46 | Manifest schema URL: the GitHub raw URL of `schema/wowlua-<version>.json` in the repository **(user, M0)** | Works without a website. |
+| T47 | M0 accepts `.wowlua` files that are pure Lua 5.1. M0 includes a release pipeline to GitHub Releases. M0 creates only the crates it needs **(user, M0)** | |
 
 ## Standard library
 
