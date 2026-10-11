@@ -1568,6 +1568,101 @@ for _, line in ipairs(__chat) do print((line:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub
     assert!(has("wowlua Mon watch ns.answer + 1 = 43"), "{out}");
 }
 
+/// The dev window (spec §7.7.1) opens with `/wl` and renders every tab
+/// against a permissive mock of the frame API; dev builds ship its fonts
+/// and save its state per addon.
+#[test]
+fn dev_window_renders() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"import watch from "wowlua:debug"
+import info, warn from "wowlua:log"
+local addonName, ns = ...
+ns.db = { profile = { scale = 1.25 }, list = { 1, 2, 3 } }
+ns.db.self = ns.db
+local function work(n: number): number return n * 2 end
+work(1)
+info("ready")
+warn("careful")
+watch("scale", function() return ns.db.profile.scale end)
+"#;
+    let mock = r#"local function object(kind)
+  local o = { __kind = kind, __shown = true, __scripts = {}, __text = "" }
+  return setmetatable(o, { __index = function(self, key)
+    if key == "GetWidth" or key == "GetHeight" then return function() return 400 end end
+    if key == "GetStringWidth" then return function() return 50 end end
+    if key == "GetPoint" then return function() return "CENTER", nil, "CENTER", 0, 0 end end
+    if key == "GetLeft" or key == "GetVerticalScroll" then return function() return 0 end end
+    if key == "GetEffectiveScale" then return function() return 1 end end
+    if key == "SetFont" then return function() return true end end
+    if key == "IsShown" then return function(s) return s.__shown end end
+    if key == "Show" then return function(s) s.__shown = true end end
+    if key == "Hide" then return function(s)
+      local was = s.__shown
+      s.__shown = false
+      if was and s.__scripts.OnHide then s.__scripts.OnHide(s) end
+    end end
+    if key == "SetShown" then return function(s, v) s.__shown = v and true or false end end
+    if key == "SetScript" then return function(s, name, fn) s.__scripts[name] = fn end end
+    if key == "GetScript" then return function(s, name) return s.__scripts[name] end end
+    if key == "SetText" then return function(s, t) s.__text = t end end
+    if key == "GetText" then return function(s) return s.__text end end
+    if key == "CreateFontString" or key == "CreateTexture" then return function() return object(key) end end
+    return function() end
+  end })
+end
+UIParent = object("UIParent")
+function CreateFrame(kind) return object(kind) end
+function GetCursorPosition() return 10, 10 end
+SlashCmdList = {}
+UISpecialFrames = {}
+DEFAULT_CHAT_FRAME = { AddMessage = function() end }
+"#;
+    let sim = r#"SlashCmdList.WOWLUA("")
+local console = WOWLUA_DEV.console
+assert(console.window and console.window:IsShown(), "the window opens")
+for tab = 1, 7 do console.setTab(tab) end
+console.window:GetScript("OnUpdate")(console.window, 1)
+SlashCmdList.WOWLUA("")
+print("shown", console.window:IsShown(), type(WowluaDevDB_Win))
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"win\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", main),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let dist = dir.path().join("dist/dev/Win");
+    let toc = fs::read_to_string(dist.join("Win.toc")).unwrap();
+    assert!(toc.contains("## SavedVariables: WowluaDevDB_Win"), "{toc}");
+    assert!(dist.join("wowlua/fonts/MarcellusSC-Regular.ttf").exists());
+    assert!(dist.join("wowlua/fonts/Figtree-OFL.txt").exists());
+    let licenses = fs::read_to_string(dist.join("LICENSES.txt")).unwrap();
+    assert!(
+        licenses.contains("Marcellus SC") && licenses.contains("Figtree"),
+        "{licenses}"
+    );
+    fs::write(dist.join("mock.lua"), mock).unwrap();
+    fs::write(dist.join("sim.lua"), sim).unwrap();
+    fs::write(dist.join("Win.toc"), format!("mock.lua\n{toc}\nsim.lua\n")).unwrap();
+    assert_eq!(run_addon(&dist, "Win"), "shown false table");
+    // Release builds have none of it.
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let release = dir.path().join("dist/release/Win");
+    let toc = fs::read_to_string(release.join("Win.toc")).unwrap();
+    assert!(
+        !toc.contains("WowluaDevDB") && !release.join("wowlua/fonts").exists(),
+        "{toc}"
+    );
+}
+
 /// `wowlua lint` reports the lints only; `--fix` applies their fixes;
 /// `--!nolint` and `check.lints` turn them off.
 #[test]

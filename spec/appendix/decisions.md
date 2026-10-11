@@ -150,6 +150,8 @@ open for review.
 | T99 | The monitor rewrites the addon's own `SetScript`, `HookScript` and `C_Timer` calls at compile time instead of hooking frame methods globally **(M5)** | Global hooks would taint Blizzard frames and other addons. |
 | T100 | Error capture chains into `seterrorhandler`, records errors from the addon's folder and always calls the previous handler **(user, M5)** | Works for all code, including XML handlers and libraries, and keeps BugSack working. |
 | T101 | A dev window (tabs: overview, profiler, monitor, log, errors, watch, inspector) is part of the dev console; watches come from `debug.watch`, typed expressions (window or `/wl watch`), and right-clicking values; tables open in a live tree inspector **(user, M5)** | A normal debugging workflow inside the game. |
+| T102 | Dev builds ship the dev window's fonts (Marcellus SC, Figtree; SIL OFL) in `wowlua/fonts/`, with their licences in `LICENSES.txt`; release builds never do **(user, M5)** | The window matches the SuuUI design; the client has neither font. |
+| T103 | The dev window's state (position, size, tab, addon) is saved per addon in the SavedVariables `WowluaDevDB_<Addon>`, added to dev builds' TOC and written to every loaded dev build **(user, M5)** | The window comes back where it was after a reload, whichever runtime draws it. |
 
 ## Standard library
 

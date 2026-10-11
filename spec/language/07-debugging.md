@@ -278,7 +278,12 @@ total, self, max, avg).
 | Inspector | A table tree view (§7.7.3) |
 
 The window refreshes only while it is visible (default every 0.25 s for
-watches and the inspector, every second for the other tabs).
+watches and the inspector, every second for the other tabs). It follows the
+SuuUI design system; dev builds ship its fonts (Marcellus SC and Figtree,
+SIL Open Font License, listed in `LICENSES.txt`) in `wowlua/fonts/`
+(decision T102). Its position, size, tab and addon are saved in the
+SavedVariables `WowluaDevDB_<Addon>`, which dev builds add to the TOC
+(decision T103). Escape closes it.
 
 ### 7.7.2 Watches
 

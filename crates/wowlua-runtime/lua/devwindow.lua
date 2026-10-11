@@ -1,0 +1,1070 @@
+-- wowlua runtime: the dev window (spec §7.7.1), drawn by the newest
+-- console loaded. Its look follows the SuuUI design system: neutral
+-- surfaces, gilt hairlines, `arcane` for what is chosen, `amber` and
+-- `ember` only for warnings and errors.
+local function buildDevWindow(console, reg)
+	local C = {
+		glass = { 0.075, 0.067, 0.086, 0.94 },
+		sunk = { 0.082, 0.071, 0.059, 1 },
+		raised = { 0.110, 0.094, 0.082, 1 },
+		surface = { 0.075, 0.067, 0.086, 1 },
+		gilt = { 0.788, 0.655, 0.353, 1 },
+		giltText = { 0.902, 0.800, 0.541, 1 },
+		giltLine = { 0.788, 0.655, 0.353, 0.38 },
+		giltFaint = { 0.788, 0.655, 0.353, 0.14 },
+		ink = { 0.945, 0.918, 0.859, 1 },
+		inkMuted = { 0.639, 0.608, 0.545, 1 },
+		inkFaint = { 0.478, 0.447, 0.392, 1 },
+		arcane = { 0.247, 0.816, 1, 1 },
+		arcaneSoft = { 0.059, 0.102, 0.122, 1 },
+		emberText = { 1, 0.604, 0.502, 1 },
+		amber = { 1, 0.698, 0.247, 1 },
+		onSignal = { 0.071, 0.055, 0.043, 1 },
+		progress = { 0.549, 0.482, 0.369, 1 },
+	}
+	local DIR = "Interface\\AddOns\\" .. addonName .. "\\wowlua\\fonts\\"
+	local FONTS = {
+		display = DIR .. "MarcellusSC-Regular.ttf",
+		body = DIR .. "Figtree-Regular.ttf",
+		label = DIR .. "Figtree-SemiBold.ttf",
+		numeric = DIR .. "Figtree-Bold.ttf",
+	}
+	local FALLBACK = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
+	local W, H = 880, 640
+	local REFRESH_FAST, REFRESH_SLOW = 0.25, 1
+
+	local function text(parent, kind, size, color)
+		local fs = parent:CreateFontString(nil, "OVERLAY")
+		if not fs:SetFont(FONTS[kind] or FONTS.body, size, "") then
+			fs:SetFont(FALLBACK, size, "")
+		end
+		fs:SetTextColor(unpack(color or C.ink))
+		fs:SetJustifyH("LEFT")
+		fs:SetWordWrap(false)
+		return fs
+	end
+	local function fill(parent, color, layer)
+		local t = parent:CreateTexture(nil, layer or "BACKGROUND")
+		t:SetColorTexture(unpack(color))
+		return t
+	end
+	-- A 1px border inside `frame`.
+	local function border(frame, color)
+		local edges = {}
+		for i = 1, 4 do
+			edges[i] = fill(frame, color, "BORDER")
+		end
+		edges[1]:SetPoint("TOPLEFT")
+		edges[1]:SetPoint("TOPRIGHT")
+		edges[1]:SetHeight(1)
+		edges[2]:SetPoint("BOTTOMLEFT")
+		edges[2]:SetPoint("BOTTOMRIGHT")
+		edges[2]:SetHeight(1)
+		edges[3]:SetPoint("TOPLEFT")
+		edges[3]:SetPoint("BOTTOMLEFT")
+		edges[3]:SetWidth(1)
+		edges[4]:SetPoint("TOPRIGHT")
+		edges[4]:SetPoint("BOTTOMRIGHT")
+		edges[4]:SetWidth(1)
+		return edges
+	end
+	local function hairline(parent, color)
+		local t = fill(parent, color or C.giltFaint, "ARTWORK")
+		t:SetHeight(1)
+		return t
+	end
+	-- The Jewel: a small rotated square.
+	local function diamond(parent, size, color)
+		local t = fill(parent, color or C.gilt, "OVERLAY")
+		t:SetSize(size, size)
+		if t.SetRotation then
+			t:SetRotation(math.rad(45))
+		end
+		return t
+	end
+	-- A quiet button (or `primary`, the one action of a view).
+	local function button(parent, label, onClick, primary)
+		local b = CreateFrame("Button", nil, parent)
+		b:SetHeight(26)
+		local bg = fill(b, primary and C.arcane or C.raised)
+		bg:SetAllPoints()
+		local edges = border(b, primary and C.arcane or C.giltLine)
+		local fs = text(b, "label", 12, primary and C.onSignal or C.ink)
+		fs:SetPoint("CENTER")
+		fs:SetText(label)
+		b:SetWidth(math.max(64, (fs:GetStringWidth() or 40) + 24))
+		b:SetScript("OnEnter", function()
+			if not primary then
+				for _, e in ipairs(edges) do
+					e:SetColorTexture(unpack(C.gilt))
+				end
+			end
+		end)
+		b:SetScript("OnLeave", function()
+			for _, e in ipairs(edges) do
+				e:SetColorTexture(unpack(primary and C.arcane or C.giltLine))
+			end
+		end)
+		b:SetScript("OnClick", onClick)
+		b.label = fs
+		return b
+	end
+	-- A field on `surface-sunk`.
+	local function field(parent, width, placeholder, onEnter)
+		local box = CreateFrame("EditBox", nil, parent)
+		box:SetSize(width, 26)
+		box:SetAutoFocus(false)
+		local bg = fill(box, C.sunk)
+		bg:SetAllPoints()
+		border(box, C.giltLine)
+		if not box:SetFont(FONTS.body, 12, "") then
+			box:SetFont(FALLBACK, 12, "")
+		end
+		box:SetTextColor(unpack(C.ink))
+		box:SetTextInsets(8, 8, 0, 0)
+		local hint = text(box, "body", 12, C.inkMuted)
+		hint:SetPoint("LEFT", 8, 0)
+		hint:SetText(placeholder)
+		box:SetScript("OnTextChanged", function(self)
+			hint:SetShown(self:GetText() == "")
+			if self.onChange then
+				self.onChange(self:GetText())
+			end
+		end)
+		box:SetScript("OnEscapePressed", box.ClearFocus)
+		box:SetScript("OnEnterPressed", function(self)
+			if onEnter then
+				onEnter(self:GetText())
+			end
+			self:ClearFocus()
+		end)
+		return box
+	end
+	-- Two to five named options; the chosen one in `arcane`.
+	local function segmented(parent, options, onPick)
+		local f = CreateFrame("Frame", nil, parent)
+		f:SetHeight(26)
+		local bg = fill(f, C.sunk)
+		bg:SetAllPoints()
+		border(f, C.giltLine)
+		local x = 1
+		f.buttons = {}
+		for _, opt in ipairs(options) do
+			local b = CreateFrame("Button", nil, f)
+			local fs = text(b, "label", 12, C.inkMuted)
+			fs:SetPoint("CENTER")
+			fs:SetText(opt.label)
+			local w = math.max(56, (fs:GetStringWidth() or 40) + 20)
+			b:SetSize(w, 24)
+			b:SetPoint("TOPLEFT", x, -1)
+			x = x + w
+			local on = fill(b, C.arcaneSoft)
+			on:SetAllPoints()
+			b.on, b.fs, b.value = on, fs, opt.value
+			b:SetScript("OnClick", function()
+				f:Select(opt.value)
+				onPick(opt.value)
+			end)
+			f.buttons[#f.buttons + 1] = b
+		end
+		f:SetWidth(x + 1)
+		function f:Select(value)
+			for _, b in ipairs(self.buttons) do
+				local chosen = b.value == value
+				b.on:SetShown(chosen)
+				b.fs:SetTextColor(unpack(chosen and C.arcane or C.inkMuted))
+			end
+		end
+		return f
+	end
+
+	-- The window.
+	local win = CreateFrame("Frame", "WowluaDevWindow", UIParent)
+	win:SetSize(W, H)
+	win:SetPoint("CENTER")
+	win:SetFrameStrata("DIALOG")
+	win:SetClampedToScreen(true)
+	win:SetMovable(true)
+	win:SetResizable(true)
+	win:EnableMouse(true)
+	win:Hide()
+	if win.SetResizeBounds then
+		win:SetResizeBounds(720, 480)
+	end
+	local ground = fill(win, C.glass)
+	ground:SetAllPoints()
+	border(win, C.giltLine)
+	if UISpecialFrames then
+		table.insert(UISpecialFrames, "WowluaDevWindow")
+	end
+
+	local state = { tab = 2, sort = "total", monitor = "events", level = "all", filter = "", expanded = {} }
+
+	-- Title bar: the Jewel, the title, the key chip, close.
+	local titleBar = CreateFrame("Frame", nil, win)
+	titleBar:SetPoint("TOPLEFT")
+	titleBar:SetPoint("TOPRIGHT")
+	titleBar:SetHeight(40)
+	titleBar:EnableMouse(true)
+	titleBar:RegisterForDrag("LeftButton")
+	titleBar:SetScript("OnDragStart", function()
+		win:StartMoving()
+	end)
+	titleBar:SetScript("OnDragStop", function()
+		win:StopMovingOrSizing()
+		console.saveState()
+	end)
+	local jewel = diamond(titleBar, 7)
+	jewel:SetPoint("TOPLEFT", win, "TOPLEFT", -3, 3)
+	local title = text(titleBar, "display", 13, C.giltText)
+	title:SetPoint("LEFT", 14, 0)
+	title:SetText("wowlua dev")
+	local chip = text(titleBar, "numeric", 10, C.inkMuted)
+	chip:SetPoint("LEFT", title, "RIGHT", 10, 0)
+	chip:SetText("/wl")
+	local close = CreateFrame("Button", nil, titleBar)
+	close:SetSize(24, 24)
+	close:SetPoint("RIGHT", -8, 0)
+	local x = text(close, "label", 14, C.inkMuted)
+	x:SetPoint("CENTER")
+	x:SetText("×")
+	close:SetScript("OnClick", function()
+		win:Hide()
+	end)
+
+	-- Addon selector: cycles through the loaded dev builds.
+	local addonButton = CreateFrame("Button", nil, titleBar)
+	addonButton:SetSize(200, 24)
+	addonButton:SetPoint("RIGHT", close, "LEFT", -12, 0)
+	local addonLabel = text(addonButton, "display", 13, C.giltText)
+	addonLabel:SetPoint("RIGHT")
+	addonLabel:SetJustifyH("RIGHT")
+	local selected = reg.order[1]
+	local function current()
+		return reg.addons[selected] or reg.addons[reg.order[1]]
+	end
+	addonButton:SetScript("OnClick", function()
+		for i, n in ipairs(reg.order) do
+			if n == selected then
+				selected = reg.order[i % #reg.order + 1]
+				break
+			end
+		end
+		console.refresh(true)
+	end)
+
+	-- Tabs.
+	local TABS = { "Overview", "Profiler", "Monitor", "Log", "Errors", "Watch", "Inspector" }
+	local tabBar = CreateFrame("Frame", nil, win)
+	tabBar:SetPoint("TOPLEFT", 14, -40)
+	tabBar:SetPoint("TOPRIGHT", -14, -40)
+	tabBar:SetHeight(26)
+	local tabRule = hairline(tabBar, C.giltFaint)
+	tabRule:SetPoint("BOTTOMLEFT")
+	tabRule:SetPoint("BOTTOMRIGHT")
+	local tabButtons = {}
+	local tx = 0
+	for i, name in ipairs(TABS) do
+		local b = CreateFrame("Button", nil, tabBar)
+		local fs = text(b, "display", 13, C.inkMuted)
+		fs:SetPoint("LEFT")
+		fs:SetText(name)
+		local w = (fs:GetStringWidth() or 60) + 4
+		b:SetSize(w, 26)
+		b:SetPoint("LEFT", tx, 0)
+		tx = tx + w + 12
+		local line = hairline(b, C.gilt)
+		line:SetPoint("BOTTOMLEFT")
+		line:SetPoint("BOTTOMRIGHT")
+		local gem = diamond(b, 5)
+		gem:SetPoint("BOTTOM", 0, -2)
+		b.fs, b.line, b.gem = fs, line, gem
+		b:SetScript("OnClick", function()
+			state.tab = i
+			console.saveState()
+			console.refresh(true)
+		end)
+		tabButtons[i] = b
+	end
+
+	-- Body: a toolbar row, then a scrolling list.
+	local body = CreateFrame("Frame", nil, win)
+	body:SetPoint("TOPLEFT", 14, -76)
+	body:SetPoint("BOTTOMRIGHT", -14, 48)
+	local toolbar = CreateFrame("Frame", nil, body)
+	toolbar:SetPoint("TOPLEFT")
+	toolbar:SetPoint("TOPRIGHT")
+	toolbar:SetHeight(28)
+	local scroll = CreateFrame("ScrollFrame", nil, body)
+	scroll:SetPoint("TOPLEFT", 0, -36)
+	scroll:SetPoint("BOTTOMRIGHT", -6, 0)
+	local list = CreateFrame("Frame", nil, scroll)
+	list:SetSize(W - 40, 10)
+	scroll:SetScrollChild(list)
+	scroll:EnableMouseWheel(true)
+	local thumb = fill(body, C.giltLine, "OVERLAY")
+	thumb:SetWidth(3)
+	local function layoutThumb()
+		local view, total = scroll:GetHeight() or 1, list:GetHeight() or 1
+		if total <= view + 1 then
+			thumb:Hide()
+			return
+		end
+		thumb:Show()
+		local h = math.max(20, view * view / total)
+		local offset = (scroll:GetVerticalScroll() or 0) / (total - view) * (view - h)
+		thumb:ClearAllPoints()
+		thumb:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 6, -offset)
+		thumb:SetHeight(h)
+	end
+	scroll:SetScript("OnMouseWheel", function(self, delta)
+		local max = math.max(0, (list:GetHeight() or 0) - (self:GetHeight() or 0))
+		self:SetVerticalScroll(math.min(max, math.max(0, (self:GetVerticalScroll() or 0) - delta * 40)))
+		layoutThumb()
+	end)
+
+	-- Footer.
+	local footer = CreateFrame("Frame", nil, win)
+	footer:SetPoint("BOTTOMLEFT", 14, 10)
+	footer:SetPoint("BOTTOMRIGHT", -14, 10)
+	footer:SetHeight(28)
+	local footRule = hairline(footer, C.giltFaint)
+	footRule:SetPoint("TOPLEFT", 0, 4)
+	footRule:SetPoint("TOPRIGHT", 0, 4)
+	local footText = text(footer, "body", 11, C.inkMuted)
+	footText:SetPoint("LEFT")
+	local reload = button(footer, "Reload UI", function()
+		ReloadUI()
+	end)
+	reload:SetPoint("RIGHT")
+
+	-- Resize grip.
+	local grip = CreateFrame("Button", nil, win)
+	grip:SetSize(14, 14)
+	grip:SetPoint("BOTTOMRIGHT", -2, 2)
+	local gripGem = diamond(grip, 5, C.giltLine)
+	gripGem:SetPoint("CENTER")
+	grip:SetScript("OnMouseDown", function()
+		win:StartSizing("BOTTOMRIGHT")
+	end)
+	grip:SetScript("OnMouseUp", function()
+		win:StopMovingOrSizing()
+		console.saveState()
+		console.refresh(true)
+	end)
+
+	-- Context menu (right-click on a value).
+	local menu = CreateFrame("Frame", nil, win)
+	menu:SetFrameStrata("FULLSCREEN_DIALOG")
+	menu:SetSize(180, 10)
+	menu:Hide()
+	local menuBg = fill(menu, C.surface)
+	menuBg:SetAllPoints()
+	border(menu, C.giltLine)
+	local menuItems = {}
+	local function openMenu(items)
+		for _, b in ipairs(menuItems) do
+			b:Hide()
+		end
+		local y = -4
+		for i, item in ipairs(items) do
+			local b = menuItems[i]
+			if not b then
+				b = CreateFrame("Button", nil, menu)
+				b:SetSize(178, 24)
+				local hover = fill(b, C.raised)
+				hover:SetAllPoints()
+				hover:Hide()
+				b.fs = text(b, "label", 12, C.ink)
+				b.fs:SetPoint("LEFT", 12, 0)
+				b:SetScript("OnEnter", function()
+					hover:Show()
+				end)
+				b:SetScript("OnLeave", function()
+					hover:Hide()
+				end)
+				menuItems[i] = b
+			end
+			b.fs:SetText(item.label)
+			b:SetScript("OnClick", function()
+				menu:Hide()
+				item.run()
+			end)
+			b:ClearAllPoints()
+			b:SetPoint("TOPLEFT", 1, y)
+			b:Show()
+			y = y - 24
+		end
+		menu:SetHeight(-y + 4)
+		local cx, cy = GetCursorPosition()
+		local scale = UIParent:GetEffectiveScale()
+		menu:ClearAllPoints()
+		menu:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", cx / scale, cy / scale)
+		menu:Show()
+	end
+
+	-- A box to copy a value from (the client has no clipboard API).
+	local copyBox = field(win, 420, "", nil)
+	copyBox:SetFrameStrata("FULLSCREEN_DIALOG")
+	copyBox:SetPoint("BOTTOM", footer, "TOP", 0, 8)
+	copyBox:Hide()
+	copyBox:SetScript("OnEditFocusLost", function(self)
+		self:Hide()
+	end)
+	local function copy(value)
+		copyBox:SetText(value)
+		copyBox:Show()
+		copyBox:SetFocus()
+		copyBox:HighlightText()
+	end
+
+	-- Rows: a pool of frames with cells at column offsets.
+	local rows = {}
+	local function row(i)
+		local r = rows[i]
+		if not r then
+			r = CreateFrame("Button", nil, list)
+			r:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+			r.hover = fill(r, C.raised)
+			r.hover:SetAllPoints()
+			r.hover:Hide()
+			r.rule = hairline(r, C.giltFaint)
+			r.rule:SetPoint("BOTTOMLEFT")
+			r.rule:SetPoint("BOTTOMRIGHT")
+			r.cells, r.subs = {}, {}
+			r.badge = CreateFrame("Frame", nil, r)
+			r.badge:SetSize(40, 15)
+			r.badge.bg = fill(r.badge, C.amber)
+			r.badge.bg:SetAllPoints()
+			r.badge.fs = text(r.badge, "display", 10.5, C.onSignal)
+			r.badge.fs:SetPoint("CENTER")
+			r:SetScript("OnEnter", function(self)
+				self.hover:Show()
+			end)
+			r:SetScript("OnLeave", function(self)
+				self.hover:Hide()
+			end)
+			r:SetScript("OnClick", function(self, mouse)
+				if mouse == "RightButton" and self.onRightClick then
+					self.onRightClick()
+				elseif mouse ~= "RightButton" and self.onClick then
+					self.onClick()
+				end
+			end)
+			rows[i] = r
+		end
+		return r
+	end
+	local function cell(r, j)
+		local fs = r.cells[j]
+		if not fs then
+			fs = text(r, "numeric", 12, C.ink)
+			r.cells[j] = fs
+		end
+		return fs
+	end
+	local function sub(r, j)
+		local fs = r.subs[j]
+		if not fs then
+			fs = text(r, "body", 11, C.inkMuted)
+			r.subs[j] = fs
+		end
+		return fs
+	end
+	local width = W - 40
+	-- columns: { title, width (0 = rest), align, sort key }; data rows:
+	-- { cells = {}, subs = {}, colors = {}, fonts = {}, badge, indent,
+	--   tall, onClick, onRightClick }.
+	local header = CreateFrame("Frame", nil, body)
+	local function render(columns, data)
+		width = scroll:GetWidth() or (W - 40)
+		list:SetWidth(width)
+		local fixed = 0
+		for _, c in ipairs(columns) do
+			fixed = fixed + (c.width or 0) + 12
+		end
+		local y = 0
+		local function x0(j)
+			local xpos = 8
+			for k = 1, j - 1 do
+				local w = columns[k].width
+				xpos = xpos + ((w and w > 0) and w or (width - fixed - 16)) + 12
+			end
+			return xpos
+		end
+		local function colWidth(j)
+			local w = columns[j].width
+			return (w and w > 0) and w or (width - fixed - 16)
+		end
+		-- Header row.
+		local hr = row(1)
+		hr:SetPoint("TOPLEFT", 0, 0)
+		hr:SetSize(width, 24)
+		hr.onClick, hr.onRightClick = nil, nil
+		hr.badge:Hide()
+		hr.rule:SetColorTexture(unpack(C.giltLine))
+		for j, c in ipairs(columns) do
+			local fs = cell(hr, j)
+			if not fs:SetFont(FONTS.body, 11, "") then
+				fs:SetFont(FALLBACK, 11, "")
+			end
+			local active = c.sort and c.sort == state.sort
+			fs:SetTextColor(unpack(active and C.arcane or C.inkMuted))
+			fs:SetText(c.title .. (active and " ▼" or ""))
+			fs:ClearAllPoints()
+			fs:SetPoint("LEFT", hr, "LEFT", x0(j), 0)
+			fs:SetWidth(colWidth(j))
+			fs:SetJustifyH(c.align or "LEFT")
+			fs:Show()
+		end
+		for j = #columns + 1, #hr.cells do
+			hr.cells[j]:Hide()
+		end
+		for j = 1, #hr.subs do
+			hr.subs[j]:Hide()
+		end
+		hr.onClick = function()
+			-- Sorting: the column under the cursor.
+			local cx = GetCursorPosition() / UIParent:GetEffectiveScale() - (hr:GetLeft() or 0)
+			for j, c in ipairs(columns) do
+				if c.sort and cx >= x0(j) and cx <= x0(j) + colWidth(j) then
+					state.sort = c.sort
+					console.refresh(true)
+				end
+			end
+		end
+		hr:Show()
+		y = 24
+		for i, d in ipairs(data) do
+			local r = row(i + 1)
+			local h = d.tall and 34 or 24
+			r:ClearAllPoints()
+			r:SetPoint("TOPLEFT", 0, -y)
+			r:SetSize(width, h)
+			r.rule:SetColorTexture(unpack(C.giltFaint))
+			r.onClick, r.onRightClick = d.onClick, d.onRightClick
+			for j = 1, #columns do
+				local fs = cell(r, j)
+				local font = (d.fonts and d.fonts[j]) or (j == 1 and "label" or "numeric")
+				if not fs:SetFont(FONTS[font], 12, "") then
+					fs:SetFont(FALLBACK, 12, "")
+				end
+				fs:SetTextColor(unpack((d.colors and d.colors[j]) or C.ink))
+				fs:SetText(d.cells[j] or "")
+				fs:ClearAllPoints()
+				local indent = (j == 1 and d.indent) or 0
+				fs:SetPoint("TOPLEFT", r, "TOPLEFT", x0(j) + indent, d.tall and -4 or -5)
+				fs:SetWidth(colWidth(j) - indent)
+				fs:SetJustifyH(columns[j].align or "LEFT")
+				fs:Show()
+				local s = sub(r, j)
+				if d.subs and d.subs[j] then
+					s:SetText(d.subs[j])
+					s:ClearAllPoints()
+					s:SetPoint("TOPLEFT", fs, "BOTTOMLEFT", 0, -2)
+					s:SetWidth(colWidth(j) - indent)
+					s:Show()
+				else
+					s:Hide()
+				end
+			end
+			for j = #columns + 1, #r.cells do
+				r.cells[j]:Hide()
+			end
+			if d.badge then
+				r.badge.fs:SetText(d.badge.text)
+				r.badge.bg:SetColorTexture(unpack(d.badge.color or C.amber))
+				r.badge:SetWidth((r.badge.fs:GetStringWidth() or 30) + 10)
+				r.badge:ClearAllPoints()
+				r.badge:SetPoint("RIGHT", r, "RIGHT", -8, 0)
+				r.badge:Show()
+			else
+				r.badge:Hide()
+			end
+			r:Show()
+			y = y + h
+		end
+		for i = #data + 2, #rows do
+			rows[i]:Hide()
+		end
+		list:SetHeight(math.max(y, 1))
+		layoutThumb()
+	end
+
+	-- Toolbar widgets per tab (created once, shown when their tab is open).
+	local tools = {}
+	local function tool(name, make)
+		if not tools[name] then
+			tools[name] = make()
+		end
+		return tools[name]
+	end
+	local function showTools(names)
+		for name, w in pairs(tools) do
+			local shown = false
+			for _, n in ipairs(names) do
+				shown = shown or n == name
+			end
+			w:SetShown(shown)
+		end
+	end
+
+	local function ms(v)
+		return string.format((v or 0) >= 10 and "%.1f" or "%.2f", v or 0)
+	end
+	local function count(n)
+		local s = tostring(math.floor(n or 0))
+		local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+		return (out:gsub("^,", ""))
+	end
+
+	-- Inspector: the value shown and how to reach it again.
+	local inspected = { label = "ns", get = function()
+		local d = current()
+		return d and d.runtime.ns
+	end }
+	local function inspect(label, get)
+		inspected = { label = label, get = get }
+		state.expanded = { [""] = true }
+		state.tab = 7
+		console.refresh(true)
+	end
+	local function addWatch(label, fn, source)
+		local d = current()
+		if d then
+			d.watches[#d.watches + 1] = { label = label, fn = fn, source = source }
+		end
+		state.tab = 6
+		console.refresh(true)
+	end
+
+	local views = {}
+	function views.overview(d)
+		showTools({})
+		local data = {}
+		for _, k in ipairs({ "version", "profile", "build", "flavors", "compiler" }) do
+			data[#data + 1] = { cells = { k, tostring(d.info[k] or "?") }, colors = { C.inkMuted, C.ink } }
+		end
+		local rt = d.runtime
+		local toolRows = {
+			{ "Profiler", rt.prof and "on" or "off" },
+			{ "Monitor", rt.mon and "events, scripts, timers, memory" or "off" },
+			{ "Error capture", rt.errors and "on" or "off" },
+			{ "Log", rt.logs and "wowlua:log" or "not used" },
+		}
+		for _, t in ipairs(toolRows) do
+			data[#data + 1] = { cells = { t[1], t[2] }, colors = { C.ink, C.inkMuted }, fonts = { "label", "body" } }
+		end
+		local mem = rt.mon and rt.mon.memory or {}
+		local last = mem[#mem]
+		data[#data + 1] = {
+			cells = { "Memory", last and string.format("%.2f MB · %d samples", last / 1024, #mem) or "no samples yet" },
+			colors = { C.ink, C.ink },
+		}
+		render({ { title = "Build", width = 200 }, { title = "", width = 0 } }, data)
+	end
+	function views.profiler(d)
+		local filter = tool("filter", function()
+			local f = field(toolbar, 260, "Filter functions")
+			f:SetPoint("LEFT")
+			f.onChange = function(text)
+				state.filter = text:lower()
+				console.refresh(true)
+			end
+			return f
+		end)
+		local reset = tool("profReset", function()
+			local b = button(toolbar, "Reset", function()
+				local cur = current()
+				if cur and cur.runtime.prof then
+					cur.runtime.prof.reset()
+				end
+				console.refresh(true)
+			end)
+			b:SetPoint("RIGHT")
+			return b
+		end)
+		showTools({ "filter", "profReset" })
+		local _ = filter, reset
+		local prof = d.runtime.prof
+		local data = {}
+		for _, r in ipairs(console.sorted(prof and prof.stats or {}, state.sort)) do
+			if state.filter == "" or r.name:lower():find(state.filter, 1, true) then
+				local s = r.s
+				local slow = (s.max or 0) > 16.7
+				data[#data + 1] = {
+					cells = { r.name, count(s.calls), ms(s.total), ms(s.self), ms(s.max), ms(s.total / math.max(s.calls, 1)) },
+					subs = { s.location },
+					colors = { C.ink, C.ink, C.ink, C.ink, slow and C.amber or C.ink, C.ink },
+					badge = slow and { text = "Slow", color = C.amber } or nil,
+					tall = s.location ~= nil,
+				}
+			end
+		end
+		if not prof then
+			data[1] = { cells = { "The profiler is off in this build" }, colors = { C.inkMuted } }
+		end
+		render({
+			{ title = "Function", width = 0 },
+			{ title = "Calls", width = 64, align = "RIGHT", sort = "calls" },
+			{ title = "Total", width = 72, align = "RIGHT", sort = "total" },
+			{ title = "Self", width = 72, align = "RIGHT", sort = "self" },
+			{ title = "Max", width = 72, align = "RIGHT", sort = "max" },
+			{ title = "Avg", width = 64, align = "RIGHT", sort = "avg" },
+			{ title = "", width = 44 },
+		}, data)
+	end
+	function views.monitor(d)
+		local seg = tool("monSeg", function()
+			local s = segmented(toolbar, {
+				{ value = "events", label = "Events" },
+				{ value = "scripts", label = "Scripts" },
+				{ value = "timers", label = "Timers" },
+			}, function(v)
+				state.monitor = v
+				console.refresh(true)
+			end)
+			s:SetPoint("LEFT")
+			return s
+		end)
+		seg:Select(state.monitor)
+		tool("monReset", function()
+			local b = button(toolbar, "Reset", function()
+				local cur = current()
+				if cur and cur.runtime.mon then
+					cur.runtime.mon.reset()
+				end
+				console.refresh(true)
+			end)
+			b:SetPoint("RIGHT")
+			return b
+		end)
+		showTools({ "monSeg", "monReset" })
+		local mon = d.runtime.mon
+		local data = {}
+		if mon then
+			for _, r in ipairs(console.sorted(mon[state.monitor], "total")) do
+				local s = r.s
+				local slow = (s.max or 0) > 16.7
+				data[#data + 1] = {
+					cells = { r.name, count(s.count), ms(s.total), ms(s.max) },
+					subs = { s.detail },
+					colors = { C.ink, C.ink, C.ink, slow and C.amber or C.ink },
+					tall = s.detail ~= nil,
+				}
+			end
+		else
+			data[1] = { cells = { "The monitor is off in this build" }, colors = { C.inkMuted } }
+		end
+		local head = ({ events = "Event", scripts = "Frame · script", timers = "Timer" })[state.monitor]
+		render({
+			{ title = head, width = 0 },
+			{ title = state.monitor == "events" and "Count" or "Runs", width = 72, align = "RIGHT" },
+			{ title = "Total", width = 84, align = "RIGHT" },
+			{ title = "Max", width = 84, align = "RIGHT" },
+		}, data)
+	end
+	local LEVEL_RANK = { trace = 0, debug = 1, info = 2, warn = 3, error = 4 }
+	function views.log(d)
+		local seg = tool("logSeg", function()
+			local s = segmented(toolbar, {
+				{ value = "all", label = "All" },
+				{ value = "info", label = "Info" },
+				{ value = "warn", label = "Warn" },
+				{ value = "error", label = "Error" },
+			}, function(v)
+				state.level = v
+				console.refresh(true)
+			end)
+			s:SetPoint("LEFT")
+			return s
+		end)
+		seg:Select(state.level)
+		showTools({ "logSeg" })
+		local logs = d.runtime.logs
+		local data = {}
+		if logs then
+			local min = state.level == "all" and -1 or LEVEL_RANK[state.level]
+			for _, e in ipairs(logs.history()) do
+				if (LEVEL_RANK[e.level] or 0) >= min then
+					local tone = e.level == "error" and C.emberText or (e.level == "warn" and C.amber or C.inkMuted)
+					data[#data + 1] = {
+						cells = { string.format("%.1f", e.time or 0), e.level, e.message, e.location or "" },
+						colors = { C.inkMuted, tone, C.ink, C.inkMuted },
+						fonts = { "numeric", "display", "body", "body" },
+					}
+				end
+			end
+		else
+			data[1] = { cells = { "", "", "This addon does not use wowlua:log" }, colors = { C.ink, C.ink, C.inkMuted } }
+		end
+		render({
+			{ title = "Time", width = 64 },
+			{ title = "Level", width = 56 },
+			{ title = "Message", width = 0 },
+			{ title = "Location", width = 180 },
+		}, data)
+	end
+	local openError
+	function views.errors(d)
+		tool("errClear", function()
+			local b = button(toolbar, "Clear", function()
+				local cur = current()
+				if cur and cur.runtime.errors then
+					cur.runtime.errors.clear()
+				end
+				console.refresh(true)
+			end)
+			b:SetPoint("RIGHT")
+			return b
+		end)
+		showTools({ "errClear" })
+		local errors = d.runtime.errors
+		local data = {}
+		if errors then
+			for _, e in ipairs(errors.list) do
+				local open = openError == e
+				data[#data + 1] = {
+					cells = { (open and "▼ " or "▶ ") .. e.message, "×" .. e.count, e.time },
+					colors = { C.emberText, C.ink, C.inkMuted },
+					onClick = function()
+						openError = open and nil or e
+						console.refresh(true)
+					end,
+					onRightClick = function()
+						openMenu({ { label = "Copy", run = function()
+							copy(e.message .. "\n" .. (e.stack or ""))
+						end } })
+					end,
+				}
+				if open then
+					for line in tostring(e.stack or ""):gmatch("[^\n]+") do
+						data[#data + 1] = { cells = { line }, colors = { C.ink }, fonts = { "body" }, indent = 20 }
+					end
+				end
+			end
+			if #errors.list == 0 then
+				data[1] = { cells = { "No errors" }, colors = { C.inkMuted } }
+			end
+		else
+			data[1] = { cells = { "Error capture is off in this build" }, colors = { C.inkMuted } }
+		end
+		render({ { title = "Error", width = 0 }, { title = "", width = 48, align = "RIGHT" }, { title = "", width = 70, align = "RIGHT" } }, data)
+	end
+	local function valueText(ok, v)
+		if not ok then
+			return tostring(v), C.emberText
+		end
+		if type(v) == "table" and not (issecretvalue and issecretvalue(v)) then
+			local n = 0
+			for _ in pairs(v) do
+				n = n + 1
+			end
+			return "table: " .. n .. " fields", C.arcane
+		end
+		local shown = console.show(v)
+		return shown, shown == "<secret>" and C.inkMuted or C.ink
+	end
+	function views.watch(d)
+		local input = tool("watchInput", function()
+			local f = field(toolbar, 520, "Lua expression: ns.db.profile.scale, UnitHealth(\"player\")", function(expression)
+				local cur = current()
+				if not cur or expression == "" then
+					return
+				end
+				local fn, problem = console.compile(cur, expression)
+				if fn then
+					addWatch(expression, fn, "typed")
+				else
+					console.say(tostring(problem))
+				end
+			end)
+			f:SetPoint("LEFT")
+			return f
+		end)
+		tool("watchAdd", function()
+			local b = button(toolbar, "Watch", function()
+				input:GetScript("OnEnterPressed")(input)
+			end, true)
+			b:SetPoint("LEFT", input, "RIGHT", 8, 0)
+			return b
+		end)
+		showTools({ "watchInput", "watchAdd" })
+		local data = {}
+		for i, w in ipairs(d.watches) do
+			local ok, v = pcall(w.fn)
+			local shown, color = valueText(ok, v)
+			local function remove()
+				table.remove(d.watches, i)
+				console.refresh(true)
+			end
+			data[#data + 1] = {
+				cells = { w.label, shown, w.source },
+				colors = { C.ink, color, C.inkMuted },
+				fonts = { "label", "numeric", "body" },
+				onClick = function()
+					if ok and type(v) == "table" then
+						inspect(w.label, w.fn)
+					end
+				end,
+				onRightClick = function()
+					openMenu({
+						{ label = "Inspect", run = function()
+							inspect(w.label, w.fn)
+						end },
+						{ label = "Copy value", run = function()
+							copy(shown)
+						end },
+						{ label = "Remove", run = remove },
+					})
+				end,
+			}
+		end
+		if #data == 0 then
+			data[1] = { cells = { "No watches. Add one above, with debug.watch, or /wl watch." }, colors = { C.inkMuted }, fonts = { "body" } }
+		end
+		render({ { title = "Watch", width = 0 }, { title = "Value", width = 280 }, { title = "From", width = 120 } }, data)
+	end
+	function views.inspector(d)
+		local _ = d
+		showTools({})
+		local data = {}
+		local ok, root = pcall(inspected.get)
+		local function walk(value, path, label, depth, seen, getter)
+			local open = state.expanded[path]
+			local isTable = type(value) == "table" and not (issecretvalue and issecretvalue(value))
+			local shown, color = valueText(true, value)
+			if isTable and seen[value] then
+				shown, color = "↺ cycle", C.inkMuted
+				isTable = false
+			end
+			data[#data + 1] = {
+				cells = { (isTable and (open and "▼ " or "▶ ") or "   ") .. label, shown, type(value) },
+				colors = { label:sub(1, 1) == "<" and C.inkMuted or C.ink, color, C.inkMuted },
+				fonts = { "label", "numeric", "body" },
+				indent = depth * 18,
+				onClick = function()
+					if isTable then
+						state.expanded[path] = not open
+						console.refresh(true)
+					end
+				end,
+				onRightClick = function()
+					openMenu({
+						{ label = "Watch", run = function()
+							addWatch(inspected.label .. path, getter, "from inspector")
+						end },
+						{ label = "Copy value", run = function()
+							copy(shown)
+						end },
+					})
+				end,
+			}
+			if isTable and open and depth < 8 then
+				seen[value] = true
+				local keys = {}
+				for k in pairs(value) do
+					keys[#keys + 1] = k
+				end
+				table.sort(keys, function(a, b)
+					return tostring(a) < tostring(b)
+				end)
+				for _, k in ipairs(keys) do
+					local key = k
+					local sub = type(k) == "string" and k:match("^[%a_][%w_]*$") and ("." .. k) or ("[" .. tostring(k) .. "]")
+					walk(value[k], path .. sub, tostring(k), depth + 1, seen, function()
+						return getter()[key]
+					end)
+				end
+				local mt = getmetatable(value)
+				if type(mt) == "table" then
+					walk(mt, path .. "<metatable>", "<metatable>", depth + 1, seen, function()
+						return getmetatable(getter())
+					end)
+				end
+				seen[value] = nil
+			end
+		end
+		if ok then
+			if state.expanded[""] == nil then
+				state.expanded[""] = true
+			end
+			walk(root, "", inspected.label, 0, {}, inspected.get)
+		else
+			data[1] = { cells = { inspected.label, tostring(root) }, colors = { C.ink, C.emberText } }
+		end
+		render({ { title = "Key", width = 0 }, { title = "Value", width = 300 }, { title = "Type", width = 80 } }, data)
+	end
+	local VIEW_KEYS = { "overview", "profiler", "monitor", "log", "errors", "watch", "inspector" }
+
+	function console.refresh()
+		local d = current()
+		if not d then
+			return
+		end
+		selected = d.name
+		addonLabel:SetText(d.name .. (#reg.order > 1 and "  ▾" or ""))
+		for i, b in ipairs(tabButtons) do
+			local active = i == state.tab
+			b.fs:SetTextColor(unpack(active and C.giltText or C.inkMuted))
+			b.line:SetShown(active)
+			b.gem:SetShown(active)
+		end
+		local info = d.info
+		footText:SetText((info.version or "?") .. " · " .. (info.profile or "?") .. " · build " .. (info.build or "?")
+			.. " · wowlua " .. (info.compiler or "?"))
+		views[VIEW_KEYS[state.tab]](d)
+	end
+
+	function console.setTab(i)
+		state.tab = i
+		console.refresh()
+	end
+
+	-- Saved per addon (`WowluaDevDB_<Addon>`), written to every loaded one.
+	local function savedName(name)
+		return "WowluaDevDB_" .. name:gsub("[^%w_]", "_")
+	end
+	function console.saveState()
+		local point, _, _, px, py = win:GetPoint(1)
+		local saved = {
+			point = point, x = px, y = py,
+			width = win:GetWidth(), height = win:GetHeight(),
+			tab = state.tab, addon = selected,
+		}
+		for _, n in ipairs(reg.order) do
+			_G[savedName(n)] = saved
+		end
+	end
+	for _, n in ipairs(reg.order) do
+		local saved = _G[savedName(n)]
+		if type(saved) == "table" then
+			state.tab = saved.tab or state.tab
+			selected = (saved.addon and reg.addons[saved.addon]) and saved.addon or selected
+			if saved.point then
+				win:ClearAllPoints()
+				win:SetPoint(saved.point, UIParent, saved.point, saved.x or 0, saved.y or 0)
+			end
+			if saved.width and saved.height then
+				win:SetSize(saved.width, saved.height)
+			end
+			break
+		end
+	end
+
+	-- Refreshed only while visible: watches and the inspector often.
+	local elapsed = 0
+	win:SetScript("OnUpdate", function(_, dt)
+		elapsed = elapsed + (dt or 0)
+		local every = (state.tab == 6 or state.tab == 7) and REFRESH_FAST or REFRESH_SLOW
+		if elapsed >= every and not menu:IsShown() then
+			elapsed = 0
+			console.refresh()
+		end
+	end)
+	win:SetScript("OnHide", function()
+		menu:Hide()
+		console.saveState()
+	end)
+	return win
+end

@@ -305,6 +305,21 @@ if type(SlashCmdList) == "table" then
 		reg.console.command(msg)
 	end
 end
+-- `/wl`: the dev window, built when first opened.
+if type(CreateFrame) == "function" then
+	function console.toggle()
+		if not console.window then
+			console.window = buildDevWindow(console, reg)
+		end
+		local w = console.window
+		if w:IsShown() then
+			w:Hide()
+		else
+			w:Show()
+			console.refresh()
+		end
+	end
+end
 dev.console = console
 end
 if (reg.version or -1) < VERSION then

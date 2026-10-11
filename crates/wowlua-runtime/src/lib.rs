@@ -47,7 +47,11 @@ impl Slice {
             Slice::Reflect => include_str!("../lua/reflect.lua"),
             Slice::Monitor => include_str!("../lua/monitor.lua"),
             Slice::Errors => include_str!("../lua/errors.lua"),
-            Slice::DevConsole => include_str!("../lua/devconsole.lua"),
+            // The window's builder first: the console calls it.
+            Slice::DevConsole => concat!(
+                include_str!("../lua/devwindow.lua"),
+                include_str!("../lua/devconsole.lua")
+            ),
         }
     }
 
@@ -58,6 +62,35 @@ impl Slice {
         }
     }
 }
+
+/// The fonts of the dev window (SuuUI: Marcellus SC, Figtree; SIL Open
+/// Font License), written to `wowlua/fonts/` in dev builds.
+pub const DEV_FONTS: &[(&str, &[u8])] = &[
+    (
+        "MarcellusSC-Regular.ttf",
+        include_bytes!("../fonts/MarcellusSC-Regular.ttf"),
+    ),
+    (
+        "Figtree-Regular.ttf",
+        include_bytes!("../fonts/Figtree-Regular.ttf"),
+    ),
+    (
+        "Figtree-SemiBold.ttf",
+        include_bytes!("../fonts/Figtree-SemiBold.ttf"),
+    ),
+    (
+        "Figtree-Bold.ttf",
+        include_bytes!("../fonts/Figtree-Bold.ttf"),
+    ),
+    (
+        "MarcellusSC-OFL.txt",
+        include_bytes!("../fonts/MarcellusSC-OFL.txt"),
+    ),
+    (
+        "Figtree-OFL.txt",
+        include_bytes!("../fonts/Figtree-OFL.txt"),
+    ),
+];
 
 /// What the generated runtime contains.
 #[derive(Clone, Debug, Default)]
