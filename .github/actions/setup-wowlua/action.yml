@@ -1,0 +1,27 @@
+name: setup-wowlua
+description: Install the wowlua compiler from GitHub Releases
+inputs:
+  version:
+    description: Release tag to install (default `latest`)
+    default: latest
+runs:
+  using: composite
+  steps:
+    - name: Install wowlua (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        WOWLUA_VERSION: ${{ inputs.version }}
+        WOWLUA_INSTALL_DIR: ${{ runner.temp }}/wowlua/bin
+      run: |
+        sh "${{ github.action_path }}/../../../scripts/install.sh"
+        echo "$WOWLUA_INSTALL_DIR" >> "$GITHUB_PATH"
+    - name: Install wowlua (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        WOWLUA_VERSION: ${{ inputs.version }}
+        WOWLUA_INSTALL_DIR: ${{ runner.temp }}\wowlua\bin
+      run: |
+        & "${{ github.action_path }}\..\..\..\scripts\install.ps1"
+        Add-Content $env:GITHUB_PATH $env:WOWLUA_INSTALL_DIR

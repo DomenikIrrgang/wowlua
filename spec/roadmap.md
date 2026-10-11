@@ -1,9 +1,11 @@
 # Roadmap
 
 Milestones are ordered so that every milestone produces a usable tool. Each
-lists its exit criteria.
+lists its exit criteria and, once reached, its status.
 
 ## M0: Foundation
+
+**Status: done (2026-10-11).**
 
 - Cargo workspace, CI (fmt, clippy, tests on macOS, Windows, Linux), release
   pipeline publishing binaries to GitHub Releases on tags (Homebrew, winget and

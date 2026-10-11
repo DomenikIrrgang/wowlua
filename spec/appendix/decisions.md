@@ -96,6 +96,8 @@ open for review.
 | T45 | `wowlua install` defaults to the `dev` profile **(user, M0)** | Same as `wowlua dev`, without watching. |
 | T46 | Manifest schema URL: the GitHub raw URL of `schema/wowlua-<version>.json` in the repository **(user, M0)** | Works without a website. |
 | T47 | M0 accepts `.wowlua` files that are pure Lua 5.1. M0 includes a release pipeline to GitHub Releases. M0 creates only the crates it needs **(user, M0)** | |
+| T48 | Releases are built by a hand-written GitHub Actions workflow (six targets, checksums, install scripts) instead of cargo-dist. `setup-wowlua` is a composite action inside the wowlua repository **(proposal, M0)** | Transparent and easy to extend with Homebrew, winget and Scoop. No separate `wowlua` GitHub organization is needed. |
+| T49 | A file matched by several `build.flavor-files` globs belongs to the union of their flavors **(proposal, M0)** | Predictable, order-independent. |
 
 ## Standard library
 

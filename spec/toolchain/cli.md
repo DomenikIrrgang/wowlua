@@ -244,7 +244,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }          # tags and history for build.version and changelogs
-      - uses: wowlua/setup-wowlua@v1     # installs the release binary for the runner's platform
+      - uses: DomenikIrrgang/wowlua/.github/actions/setup-wowlua@main   # installs the release binary
       - uses: actions/cache@v4
         with:
           path: ~/.wowlua/cache
@@ -265,6 +265,8 @@ jobs:
   changelogs.
 - Caching `~/.wowlua/cache` keyed by the lockfile hash avoids refetching
   dependencies and types packages.
-- `setup-wowlua` downloads the prebuilt binary from the project's GitHub
-  Releases (decision T41). Other ways to install: the install script, or
+- `setup-wowlua` (a composite action in the wowlua repository) downloads the
+  prebuilt binary from the project's GitHub Releases (decision T41). Other ways
+  to install: the install scripts attached to every release
+  (`install.sh` for macOS and Linux, `install.ps1` for Windows), and later
   Homebrew (macOS), winget and Scoop (Windows).

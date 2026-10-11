@@ -56,8 +56,53 @@ wowlua publish           # package and upload to every configured addon site
 
 ## Status
 
-Design phase. The specification lives in [`spec/`](spec/README.md). The
-implementation follows the [roadmap](spec/roadmap.md).
+The specification lives in [`spec/`](spec/README.md). Implementation follows
+the [roadmap](spec/roadmap.md).
+
+**Milestone M0 is done**: the toolchain builds and installs **plain Lua**
+addons. The wowlua language features shown above arrive with M1 and later.
+
+What works today:
+
+- `wowlua new <path>`: create a package (`--kind`, `--flavors`, `--ci github`).
+- `wowlua init`: adopt an existing addon. Its TOC(s) become `wowlua.json`,
+  Lua/XML files move into `src/` and in-game paths to them are updated.
+- `wowlua build [--release] [--flavor …]`: a complete AddOn in
+  `dist/<profile>/<Name>/` with generated TOC(s) for every flavor, Lua 5.1
+  syntax checks, XML reference checks and output validation.
+- `wowlua dev [--link]` / `install` / `uninstall`: sync builds into every WoW
+  client folder (`_retail_`, `_classic_era_`, …), never overwriting folders
+  that wowlua did not install.
+- `wowlua toc`, `wowlua clean`, `wowlua explain <code>`.
+
+### Installing
+
+From a release (macOS, Linux):
+
+```sh
+curl -fsSL https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.ps1 | iex
+```
+
+From source (Rust 1.96+):
+
+```sh
+cargo install --path crates/wowlua-cli
+```
+
+### Developing
+
+```sh
+cargo test --workspace
+cargo xtask codes    # regenerate diagnostic codes from spec/appendix/diagnostics.md
+cargo xtask schema   # regenerate schema/wowlua-<version>.json
+cargo xtask check    # verify generated files (CI)
+```
 
 ## License
 
