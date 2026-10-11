@@ -639,3 +639,69 @@ pub fn types_convert(out: &Output, path: &Path, out_dir: Option<&Path>) -> bool 
         }
     }
 }
+
+/// The text of the clipboard, through the platform's tool.
+fn clipboard_text() -> Result<String, String> {
+    let attempts: &[(&str, &[&str])] = if cfg!(target_os = "macos") {
+        &[("pbpaste", &[])]
+    } else if cfg!(windows) {
+        &[("powershell", &["-NoProfile", "-Command", "Get-Clipboard"])]
+    } else {
+        &[
+            ("wl-paste", &["--no-newline"]),
+            ("xclip", &["-selection", "clipboard", "-o"]),
+            ("xsel", &["--clipboard", "--output"]),
+        ]
+    };
+    for (program, args) in attempts {
+        if let Ok(output) = std::process::Command::new(program).args(*args).output()
+            && output.status.success()
+        {
+            return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
+        }
+    }
+    Err("cannot read the clipboard (no clipboard tool found)".into())
+}
+
+/// `wowlua trace [file] [--clipboard] [--build <id>]`.
+pub fn trace(
+    out: &Output,
+    global: &GlobalArgs,
+    file: Option<&Path>,
+    clipboard: bool,
+    build: Option<&str>,
+) -> bool {
+    let mut session = Session::new();
+    let input = if clipboard {
+        clipboard_text()
+    } else if let Some(path) = file {
+        std::fs::read_to_string(cwd().join(path))
+            .map_err(|e| format!("cannot read `{}`: {e}", path.display()))
+    } else {
+        let mut text = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)
+            .map(|_| text)
+            .map_err(|e| format!("cannot read standard input: {e}"))
+    };
+    let input = match input {
+        Ok(text) => text,
+        Err(e) => {
+            session.push(Diagnostic::plain_error(e));
+            out.flush(&mut session);
+            return false;
+        }
+    };
+    let Some(project) = wowlua_driver::load_project(&mut session, &load_options(global)) else {
+        out.flush(&mut session);
+        return false;
+    };
+    if build.is_some() {
+        // Every build keeps its source lines until bundling (milestone M7):
+        // locations decode without the build's source maps.
+        session.push(Diagnostic::note(
+            "builds are line-preserved: `--build` is not needed yet",
+        ));
+    }
+    out.print(wowlua_driver::trace::decode(&project, &input));
+    out.flush(&mut session)
+}

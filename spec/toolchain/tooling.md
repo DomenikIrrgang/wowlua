@@ -217,4 +217,7 @@ MyAddon/MyAddon.lua:4821: attempt to index local 'a' (a nil value)
   minified name.
 - Line-preserved dev builds need no decoding. `wowlua trace` passes their
   locations through, rewriting the output path (including any flavor directory)
-  to the `.wowlua` source file.
+  to the `.wowlua` source file, and names the enclosing function found in the
+  source (`in Window:refresh`). Until bundling exists (milestone M7) every
+  build is line-preserved, and `--build` is accepted but not needed.
+- Locations of other addons are left as they are.

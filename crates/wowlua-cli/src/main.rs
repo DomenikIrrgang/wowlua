@@ -168,6 +168,17 @@ enum Command {
         #[arg(long)]
         manifest: bool,
     },
+    /// Map error messages and stacks from the game back to source locations
+    Trace {
+        /// A file with the error text (default: standard input)
+        file: Option<PathBuf>,
+        /// Read the error text from the clipboard
+        #[arg(long, conflicts_with = "file")]
+        clipboard: bool,
+        /// The build id the error came from (`X-Wowlua-Build`)
+        #[arg(long)]
+        build: Option<String>,
+    },
     /// Type declaration tools
     Types {
         #[command(subcommand)]
@@ -275,6 +286,17 @@ fn main() -> ExitCode {
             commands::toc(&out, &cli.global, &profile.name("dev"), flavor)
         }
         Command::Lint { fix } => commands::lint(&out, &cli.global, fix),
+        Command::Trace {
+            file,
+            clipboard,
+            build,
+        } => commands::trace(
+            &out,
+            &cli.global,
+            file.as_deref(),
+            clipboard,
+            build.as_deref(),
+        ),
         Command::Fix { manifest } => commands::fix(&out, &cli.global, manifest),
         Command::Types {
             command: TypesCommand::Convert { path, out: dir },

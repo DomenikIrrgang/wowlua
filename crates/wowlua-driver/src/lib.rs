@@ -16,6 +16,7 @@ mod meta;
 pub mod project;
 pub mod scaffold;
 mod sources;
+pub mod trace;
 pub mod types;
 pub mod vcs;
 

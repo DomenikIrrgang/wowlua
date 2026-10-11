@@ -1663,6 +1663,55 @@ print("shown", console.window:IsShown(), type(WowluaDevDB_Win))
     );
 }
 
+/// `wowlua trace` (spec tooling §16.4): locations from the game mapped to
+/// source files, with the enclosing function.
+#[test]
+fn trace_decodes_locations() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"tr\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/ui/window.wowlua",
+                "class Window\n    frame: any = nil\n    function refresh()\n        print(self.frame.x)\n    end\nend\nlocal function onLogin()\n    Window.new():refresh()\nend\nonLogin()\n",
+            ),
+            (
+                "src/legacy.lua",
+                "local t = {}\nfunction t.load()\n  error(\"x\")\nend\n",
+            ),
+        ],
+    );
+    let input = "Message: Interface/AddOns/Tr/src/ui/window.lua:4: attempt to index field 'frame' (a nil value)\n\
+[string \"@Interface/AddOns/Tr/src/ui/window.lua\"]:8: in function <Interface/AddOns/Tr/src/ui/window.lua:7>\n\
+Interface\\AddOns\\Tr\\src\\legacy.lua:3: x\n\
+Interface/AddOns/Other/x.lua:1: not ours\n";
+    let assert = wowlua(dir.path())
+        .arg("trace")
+        .write_stdin(input)
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+    assert!(stdout.contains("window.lua:4: attempt to index field 'frame' (a nil value)\n  → src/ui/window.wowlua:4 in Window:refresh\n"), "{stdout}");
+    assert!(
+        stdout.contains(
+            "  → src/ui/window.wowlua:8 in onLogin\n  → src/ui/window.wowlua:7 in onLogin\n"
+        ),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("  → src/legacy.lua:3 in t.load\n"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("not ours\n") && !stdout.contains("x.lua:1\n  →"),
+        "{stdout}"
+    );
+}
+
 /// `wowlua lint` reports the lints only; `--fix` applies their fixes;
 /// `--!nolint` and `check.lints` turn them off.
 #[test]
