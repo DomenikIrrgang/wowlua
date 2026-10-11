@@ -308,6 +308,16 @@ impl<'a> Lowerer<'a> {
                             fend,
                         ));
                     }
+                    if !d.scripts.is_empty() && !removed {
+                        let scripts = d.scripts.clone();
+                        out.extend(self.script_handlers(
+                            &cls,
+                            &scripts,
+                            &mname.text,
+                            widget.is_some() && !is_static,
+                            fend,
+                        ));
+                    }
                     if !d.register.is_empty() && !removed {
                         let s = self.apply_registering(
                             target,
@@ -455,6 +465,91 @@ impl<'a> Lowerer<'a> {
         }
         if exported {
             out.push(self.export_assign(&name, cls, end));
+        }
+        out
+    }
+
+    /// `@script("OnClick")` / `@script("OnShow", { hook = true })`: the
+    /// method handles a script of every frame of the class (spec §3.2.1).
+    fn script_handlers(
+        &mut self,
+        cls: &ir::Expr,
+        scripts: &[&Decorator],
+        method: &str,
+        allowed: bool,
+        pos: Pos,
+    ) -> Vec<ir::Stmt> {
+        let mut out = Vec::new();
+        for d in scripts {
+            if !allowed {
+                self.error(
+                    "E3021",
+                    d.span,
+                    "`@script` applies to instance methods of widget classes",
+                );
+                continue;
+            }
+            let args = d.args.as_ref().map(|a| a.exprs()).unwrap_or_default();
+            let name = match args.first().map(|e| &e.kind) {
+                Some(ExprKind::String(s)) => String::from_utf8_lossy(&s.value).into_owned(),
+                _ => {
+                    self.error(
+                        "E3021",
+                        d.span,
+                        "`@script` takes a script name: `@script(\"OnClick\")`",
+                    );
+                    continue;
+                }
+            };
+            let hook = match args.get(1).map(|e| &e.kind) {
+                None => false,
+                Some(ExprKind::Table(fields)) => {
+                    let mut hook = None;
+                    for f in fields {
+                        match f {
+                            TableField::Named { name, value, .. }
+                                if name.text.as_ref() == "hook" =>
+                            {
+                                hook = match value.kind {
+                                    ExprKind::True => Some(true),
+                                    ExprKind::False => Some(false),
+                                    _ => None,
+                                }
+                            }
+                            _ => hook = None,
+                        }
+                    }
+                    match hook {
+                        Some(h) => h,
+                        None => {
+                            self.error(
+                                "E3021",
+                                d.span,
+                                "`@script` options are `{ hook = true }` or `{ hook = false }`",
+                            );
+                            continue;
+                        }
+                    }
+                }
+                Some(_) => {
+                    self.error(
+                        "E3021",
+                        d.span,
+                        "`@script` options are `{ hook = true }` or `{ hook = false }`",
+                    );
+                    continue;
+                }
+            };
+            let mut values = vec![
+                cls.clone(),
+                self.string(&name, pos),
+                self.string(method, pos),
+            ];
+            if hook {
+                values.push(lit(ir::ExprKind::True, pos));
+            }
+            let c = self.wl_call("script", values, pos);
+            out.push(stmt(ir::StmtKind::Call(c), pos));
         }
         out
     }

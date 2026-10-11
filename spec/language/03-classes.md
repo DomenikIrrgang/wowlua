@@ -386,6 +386,46 @@ Rules:
   XML-created frames run in a generated `__initFields(self)`, which the
   generated mixin calls before the user's `OnLoad`.
 
+### 3.2.1 Script handlers
+
+The core decorator `@script(name, opts?)` makes an instance method of a widget
+class the handler of one of the frame's scripts:
+
+```wowlua
+export class InputBox extends EditBox
+    onSubmit: (string) -> ()
+
+    constructor(parent: Frame, onSubmit: (string) -> ())
+        super(nil, parent, "InputBoxTemplate")
+        self.onSubmit = onSubmit
+    end
+
+    @script("OnEnterPressed")
+    function submit()
+        self.onSubmit(self:GetText())
+        self:ClearFocus()
+    end
+
+    @script("OnShow", { hook = true })    -- keeps the template's OnShow
+    function shown() … end
+end
+```
+
+- The handler is set with `SetScript`, replacing any other handler of that
+  script; with `{ hook = true }` it is added with `HookScript`.
+- Handlers are installed **after** the most-derived constructor has finished,
+  so the constructor cannot trigger them early (a handler the constructor sets
+  for the same script is replaced). For frames created from XML, they are
+  installed by the generated mixin's `OnLoad`, after the field initializers and
+  before the class's own `OnLoad`.
+- `self` is the frame; the script's arguments are the method's parameters
+  (`function clicked(button: string, down: boolean)`).
+- Registrations are inherited: a subclass that overrides a decorated method
+  keeps the registration, and its override is called. A `SetScript` handler of
+  a subclass for the same script replaces the superclass's; hooks add up.
+- `@script` applies only to instance methods of widget classes (E3021). The
+  checker (milestone M4) also checks the script name against the widget type.
+
 ## 3.3 Interfaces
 
 ```wowlua

@@ -1,5 +1,6 @@
 -- Reusable widget classes. Each extends a native widget type, so `new`
 -- creates the frame with CreateFrame and applies the class as a mixin.
+-- `@script` makes a method the handler of one of the frame's scripts.
 
 -- A button that counts its clicks.
 export class CounterButton extends Button
@@ -12,10 +13,10 @@ export class CounterButton extends Button
         self.label = label
         self.onCount = onCount
         self:SetSize(140, 24)
-        self:SetScript("OnClick", function() self:increment() end)
         self:refresh()
     end
 
+    @script("OnClick")
     function increment()
         self.count += 1
         self:refresh()
@@ -74,18 +75,27 @@ end
 
 -- A single-line input that reports what was entered.
 export class InputBox extends EditBox
+    onSubmit: (string) -> ()
+
     constructor(parent: Frame, onSubmit: (string) -> ())
         super(nil, parent, "InputBoxTemplate")
+        self.onSubmit = onSubmit
         self:SetSize(180, 20)
         self:SetAutoFocus(false)
-        self:SetScript("OnEnterPressed", function()
-            local text = self:GetText()
-            if text ~= "" then
-                onSubmit(text)
-            end
-            self:SetText("")
-            self:ClearFocus()
-        end)
-        self:SetScript("OnEscapePressed", function() self:ClearFocus() end)
+    end
+
+    @script("OnEnterPressed")
+    function submit()
+        local text = self:GetText()
+        if text ~= "" then
+            self.onSubmit(text)
+        end
+        self:SetText("")
+        self:ClearFocus()
+    end
+
+    @script("OnEscapePressed")
+    function cancel()
+        self:ClearFocus()
     end
 end

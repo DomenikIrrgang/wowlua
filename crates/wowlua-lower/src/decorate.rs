@@ -54,6 +54,8 @@ pub(crate) struct Decorations<'d> {
     pub global: Option<String>,
     /// `@deprecated(msg?)`.
     pub deprecated: Option<Option<String>>,
+    /// `@script(name, opts?)` on widget class methods.
+    pub scripts: Vec<&'d Decorator>,
     pub debug_only: bool,
 }
 
@@ -157,6 +159,7 @@ impl<'a> Lowerer<'a> {
                 "global" => matches!(target, T::Function | T::Class | T::Local | T::Enum),
                 "deprecated" => true,
                 "inline" | "debugOnly" => matches!(target, T::Function | T::Method),
+                "script" => target == T::Method,
                 "nocheck" => matches!(
                     target,
                     T::Function | T::Method | T::Constructor | T::Accessor | T::Class
@@ -179,6 +182,7 @@ impl<'a> Lowerer<'a> {
                 }
                 "deprecated" => out.deprecated = Some(string_arg(d)),
                 "debugOnly" => out.debug_only = true,
+                "script" => out.scripts.push(d),
                 "intrinsic" if !self.ctx.compiler_known => self.error(
                     "E3033",
                     d.span,

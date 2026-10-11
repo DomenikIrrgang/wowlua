@@ -1217,6 +1217,10 @@ function methods:SetText(t) self._text = t end
 function methods:GetText() return self._text or "" end
 function methods:SetScript(name, fn) self._scripts = self._scripts or {}; self._scripts[name] = fn end
 function methods:GetScript(name) return self._scripts and self._scripts[name] end
+function methods:HookScript(name, fn)
+  local old = self:GetScript(name)
+  self:SetScript(name, function(...) if old then old(...) end fn(...) end)
+end
 function methods:Click() local f = self:GetScript("OnClick"); if f then f(self) end end
 function methods:SetValue(v) self._value = v end
 function methods:GetValue() return self._value end
@@ -1246,6 +1250,89 @@ function Mixin(obj, ...)
   return obj
 end
 "##;
+
+/// `@script` registers widget class methods as script handlers (spec
+/// §3.2.1).
+#[test]
+fn script_decorator_registers_handlers() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"scripts\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                r#"class Clicker extends Button
+    clicks: number = 0
+    constructor()
+        super(nil, UIParent)
+        -- Replaced: handlers are installed after the constructor.
+        self:SetScript("OnClick", function() print("constructor handler") end)
+        self:SetScript("OnShow", function() print("template OnShow") end)
+    end
+    @script("OnClick")
+    function clicked(button: string)
+        self.clicks += 1
+        print("clicked", button, self.clicks)
+    end
+    @script("OnShow", { hook = true })
+    function shown()
+        print("hooked OnShow")
+    end
+end
+class Loud extends Clicker
+    override function clicked(button: string)
+        super:clicked(button)
+        print("loud")
+    end
+end
+@global("ScriptsRowMixin")
+class Row extends Frame
+    label: string = "row"
+    @script("OnEnter")
+    function enter() print("enter", self.label) end
+    function OnLoad() print("onload", self:GetScript("OnEnter") ~= nil) end
+end
+local c = Clicker.new()
+c:GetScript("OnClick")(c, "LeftButton")
+c:GetScript("OnShow")(c)
+local l = Loud.new()
+l:GetScript("OnClick")(l, "RightButton")
+local f = CreateFrame("Frame")
+Mixin(f, ScriptsRowMixin)
+f:OnLoad()
+f:GetScript("OnEnter")(f)
+"#,
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let dist = dir.path().join("dist/dev/Scripts");
+    let toc = fs::read_to_string(dist.join("Scripts.toc")).unwrap();
+    fs::write(dist.join("mock.lua"), MOCK_UI).unwrap();
+    fs::write(dist.join("Scripts.toc"), format!("mock.lua\n{toc}")).unwrap();
+    assert_eq!(
+        run_addon(&dist, "Scripts"),
+        "clicked LeftButton 1\ntemplate OnShow\nhooked OnShow\nclicked RightButton 1\nloud\nonload true\nenter row"
+    );
+    for src in [
+        "class A\n @script(\"OnClick\")\n function f() end\nend\n",
+        "class A extends Button\n @script(\"OnClick\")\n static function f() end\nend\n",
+        "class A extends Button\n @script\n function f() end\nend\n",
+        "class A extends Button\n @script(\"OnShow\", { hook = 1 })\n function f() end\nend\n",
+        "@script(\"OnClick\")\nlocal function f() end\n",
+    ] {
+        fs::write(dir.path().join("src/main.wowlua"), src).unwrap();
+        wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("E3021"));
+    }
+}
 
 /// The UI sample addon builds for its flavors and works against the mock
 /// frame API (the milestone M3 exit criterion is checked in game).

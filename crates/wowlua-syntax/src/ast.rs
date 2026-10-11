@@ -210,6 +210,7 @@ pub const CORE_DECORATORS: &[&str] = &[
     "inline",
     "debugOnly",
     "nocheck",
+    "script",
     "widget",
     "intrinsic",
     "deferred",

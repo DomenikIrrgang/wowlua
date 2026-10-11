@@ -74,6 +74,7 @@ Always available without import.
 | `@deprecated(msg?)` | any declaration | Warning W3030 at every use site. In debug builds, a one-time runtime warning on first use. |
 | `@global(name?)` | functions, classes, `local`/`const`, enums | Also assigns the **final** (fully decorated) value to global `name`, which defaults to the declaration's name. The sanctioned way to create globals for XML scripts, key bindings and other addons. The global is declared for the type checker. A later reassignment of a `local` does not update the global. |
 | `@if(condition)` | any declaration, `import` | Conditional compilation. The declaration is removed when the compile-time condition is false. See [Build metadata](06-meta.md#643-conditional-declarations). |
+| `@script(name, opts?)` | instance methods of widget classes | The method handles the frame script `name` (`SetScript`; `{ hook = true }`: `HookScript`) on every frame of the class ([Classes §3.2.1](03-classes.md#321-script-handlers)). |
 | `@inline` | `local function`, private methods | Hint to inline at call sites in optimized builds. Ignored for recursive or escaping functions (W3031). |
 | `@reflect(opts?)` | classes, enums, functions | Emit full reflection metadata. See [Debugging](07-debugging.md#78-reflection). |
 | `@profile(opts?)` | functions, methods, constructors, accessors, classes (all methods) | Measure call count and time. Removed unless the profile enables instrumentation. See [Debugging](07-debugging.md#73-profiling). |

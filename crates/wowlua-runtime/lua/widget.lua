@@ -4,6 +4,57 @@ local SKIP = {
 	new = true, __index = true, __name = true, __super = true, __init = true,
 	__ctor = true, __initFields = true, __mixin = true,
 }
+-- The `@script` handlers of a widget class and its superclasses: a handler
+-- set with SetScript replaces one for the same script from a superclass;
+-- hooks add up.
+local function scriptList(cls)
+	local chain, c = {}, cls
+	while c do
+		chain[#chain + 1] = c
+		c = rawget(c, "__super")
+	end
+	local list = {}
+	for i = #chain, 1, -1 do
+		for _, entry in ipairs(rawget(chain[i], "__scripts") or {}) do
+			local replaced = false
+			if not entry[3] then
+				for j, other in ipairs(list) do
+					if other[1] == entry[1] and not other[3] then
+						list[j] = entry
+						replaced = true
+						break
+					end
+				end
+			end
+			if not replaced then
+				list[#list + 1] = entry
+			end
+		end
+	end
+	rawset(cls, "__scriptList", list)
+	return list
+end
+-- Installs the `@script` handlers on a frame (after its constructor, or
+-- before the class's OnLoad for frames created from XML).
+local function installScripts(frame, cls)
+	for _, entry in ipairs(rawget(cls, "__scriptList") or scriptList(cls)) do
+		local handler = frame[entry[2]]
+		if entry[3] then
+			frame:HookScript(entry[1], handler)
+		else
+			frame:SetScript(entry[1], handler)
+		end
+	end
+end
+-- Registers an `@script` method: script name, method name, hook.
+function wl.script(cls, script, method, hook)
+	local list = rawget(cls, "__scripts")
+	if not list then
+		list = {}
+		rawset(cls, "__scripts", list)
+	end
+	list[#list + 1] = { script, method, hook or false }
+end
 -- The methods of a widget class and its superclasses, flattened.
 local function flatten(cls)
 	local list, c = {}, cls
@@ -25,13 +76,16 @@ end
 function wl.widgetClass(name, super)
 	local cls = wl.class(name, super)
 	cls.new = function(...)
-		return cls.__ctor(cls, ...)
+		local self = cls.__ctor(cls, ...)
+		installScripts(self, cls)
+		return self
 	end
 	return cls
 end
 function wl.finalizeWidget(cls)
 	wl.finalize(cls)
 	flatten(cls)
+	scriptList(cls)
 	return cls
 end
 -- Applies the most-derived class's methods to a new frame.
@@ -64,6 +118,7 @@ function wl.xmlMixin(cls)
 			end
 		end
 		self.__class = cls
+		installScripts(self, cls)
 		if onLoad then
 			return onLoad(self, ...)
 		end
