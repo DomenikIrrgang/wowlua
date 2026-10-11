@@ -1,0 +1,122 @@
+-- wowlua:log (spec stdlib "log", §7.2): leveled logging. Calls below the
+-- profile's log level are removed at compile time; kept ones reach
+-- `emitAt` with their source location in debug builds.
+local addonName, ns = ...
+local wl = ns.__wowlua
+
+const RANKS = { trace = 0, debug = 1, info = 2, warn = 3, error = 4, off = 5 }
+const COLORS = { trace = "7a7264", debug = "a39b8b", info = "f1eadb", warn = "ffb23f", error = "ff9a80" }
+
+local compiled = RANKS[wl.logLevel ?? "trace"] ?? 0
+local current = compiled
+local capacity = wl.logHistory ?? 500
+local buffer = {}
+local first = 1
+local count = 0
+local sinks = {}
+
+-- The ring buffer, shared with the dev console.
+wl.logs = { entries = buffer, first = function() return first end, count = function() return count end }
+
+local function text(...: any): string
+    local parts = {}
+    for i = 1, select("#", ...) do
+        local v = select(i, ...)
+        if issecretvalue and issecretvalue(v) then
+            parts[i] = "<secret>"
+        else
+            parts[i] = tostring(v)
+        end
+    end
+    return table.concat(parts, " ")
+end
+
+local function chatFrame(): any
+    return DEFAULT_CHAT_FRAME
+end
+
+-- The default sink: warn and above to the chat frame.
+local function chatSink(level: string, message: string, location: string?)
+    if RANKS[level] < RANKS.warn then
+        return
+    end
+    local frame = chatFrame()
+    local line = "|cff33ff99" .. addonName .. "|r |cff" .. COLORS[level] .. "[" .. level .. "]|r " .. message
+    if frame then
+        frame:AddMessage(line)
+    else
+        print(line)
+    end
+end
+
+export function emitAt(level: string, location: string?, ...: any)
+    local rank = RANKS[level] ?? 0
+    if rank < current then
+        return
+    end
+    local message = text(...)
+    local index = (first + count - 1) % capacity + 1
+    buffer[index] = { time = GetTime and GetTime() or 0, level = level, message = message, location = location }
+    if count < capacity then
+        count += 1
+    else
+        first = first % capacity + 1
+    end
+    chatSink(level, message, location)
+    for _, sink in ipairs(sinks) do
+        sink(level, message)
+    end
+end
+
+export function trace(...: any) emitAt("trace", nil, ...) end
+export function debug(...: any) emitAt("debug", nil, ...) end
+export function info(...: any) emitAt("info", nil, ...) end
+export function warn(...: any) emitAt("warn", nil, ...) end
+export function error(...: any) emitAt("error", nil, ...) end
+
+-- The runtime level, never below the compiled one.
+export function setLevel(level: string)
+    local rank = RANKS[level]
+    if rank then
+        current = math.max(rank, compiled)
+    end
+end
+
+export function sink(fn: (level: string, message: string) -> ())
+    sinks[#sinks + 1] = fn
+end
+
+-- The newest `n` entries (all by default), oldest first.
+export function history(n: number?): { [number]: any }
+    local take = math.min(n ?? count, count)
+    local out = {}
+    for i = count - take, count - 1 do
+        out[#out + 1] = buffer[(first + i - 1) % capacity + 1]
+    end
+    return out
+end
+
+export const log = { trace = trace, debug = debug, info = info, warn = warn, error = error }
+
+local function say(frame: any, message: string)
+    local line = "|cff33ff99" .. addonName .. "|r: " .. message
+    if frame then
+        frame:AddMessage(line)
+    else
+        _G.print(line)
+    end
+end
+
+-- `print(...)`: chat output with the addon's coloured name.
+export const print = setmetatable({
+    color = function(hex: string, ...: any)
+        say(chatFrame(), "|cff" .. hex .. text(...) .. "|r")
+    end,
+    to = function(frame: any, ...: any)
+        say(frame, text(...))
+    end,
+}, {
+    __call = function(_, ...: any)
+        say(chatFrame(), text(...))
+    end,
+})

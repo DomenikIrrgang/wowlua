@@ -56,6 +56,8 @@ pub struct Tools {
     pub dev_console: bool,
     /// `instrument` is not `"none"`: profiler statistics exist.
     pub profiling: bool,
+    /// `log-level` as a rank: 0 `trace` … 4 `error`, 5 `off`.
+    pub log_level: u8,
 }
 
 /// A lowered file.
@@ -125,6 +127,7 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         meta_used: BTreeSet::new(),
         fn_names: Vec::new(),
         next_fn_name: None,
+        module_tables: HashMap::new(),
     };
     // Exported functions, classes and enums are hoisted (spec §5.1,
     // decisions L24 and T76).
@@ -455,6 +458,9 @@ struct Lowerer<'a> {
     fn_names: Vec<Option<String>>,
     /// The name of the next function `func` lowers.
     next_fn_name: Option<String>,
+    /// Imported modules → the local holding their export table, and
+    /// whether that local is a generated name (else the user's binding).
+    module_tables: HashMap<String, (String, bool)>,
 }
 
 const LICENSE_WORDS: &[&str] = &["license", "copyright", "spdx-license-identifier"];
@@ -1361,6 +1367,8 @@ impl<'a> Lowerer<'a> {
                     Binding::IntrinsicNamespace(Arc::new(intrinsics.clone()))
                 };
                 self.declare(&name.text, binding);
+                self.module_tables
+                    .insert(id.clone(), (name.text.to_string(), false));
                 let value = self.require(&id, lazy, pos);
                 vec![local(self.ident(name), value, pos)]
             }
@@ -1412,6 +1420,7 @@ impl<'a> Lowerer<'a> {
                 }
                 if lazy {
                     let table = self.temp("m");
+                    self.module_tables.insert(id.clone(), (table.clone(), true));
                     let value = self.require(&id, true, pos);
                     for spec in &values {
                         let local_name = spec.alias.as_ref().unwrap_or(&spec.name);
@@ -1426,12 +1435,13 @@ impl<'a> Lowerer<'a> {
                     return vec![local(generated(&table, pos), value, pos)];
                 }
                 let mut out = Vec::new();
-                let source = if values.len() == 1 {
+                let source = if values.len() == 1 && intrinsics.is_empty() {
                     self.require(&id, false, pos)
                 } else {
                     let table = self.temp("m");
                     let value = self.require(&id, false, pos);
                     out.push(local(generated(&table, pos), value, pos));
+                    self.module_tables.insert(id.clone(), (table.clone(), true));
                     name_expr(generated(&table, pos))
                 };
                 let names: Vec<ir::Ident> = values
@@ -1774,6 +1784,10 @@ impl<'a> Lowerer<'a> {
             }
             ExprKind::Name(n) => match self.name_binding(n) {
                 Some(Binding::Const(c)) => return c.to_expr(pos),
+                Some(Binding::Intrinsic(id)) => {
+                    self.check_intrinsic_value(&id, n.span);
+                    K::Name(self.ident(n))
+                }
                 Some(Binding::DebugOnlyRemoved) => {
                     self.error(
                         "E3032",

@@ -41,11 +41,18 @@ pub struct Module {
 
 /// The modules shipped with this compiler version: name, source and
 /// `@intrinsic` declarations.
-const MODULES: &[(&str, &str, Option<&str>)] = &[(
-    "debug",
-    include_str!("../std/debug.wowlua"),
-    Some(include_str!("../std/debug.d.wowlua")),
-)];
+const MODULES: &[(&str, &str, Option<&str>)] = &[
+    (
+        "debug",
+        include_str!("../std/debug.wowlua"),
+        Some(include_str!("../std/debug.d.wowlua")),
+    ),
+    (
+        "log",
+        include_str!("../std/log.wowlua"),
+        Some(include_str!("../std/log.d.wowlua")),
+    ),
+];
 
 /// A standard-library module by name (`events` for `wowlua:events`).
 ///

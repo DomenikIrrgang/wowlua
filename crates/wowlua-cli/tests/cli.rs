@@ -1129,6 +1129,85 @@ onLogin(3)
         );
 }
 
+/// `wowlua:log` (spec stdlib "log", §7.2): level calls below the profile's
+/// log level are removed with their arguments; kept ones carry their
+/// source location in debug builds and go to the ring buffer and sinks.
+#[test]
+fn log_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"import log, warn, history, setLevel, sink, print as chat from "wowlua:log"
+import * as Log from "wowlua:log"
+
+local function costly(): string
+    _G.print("evaluated")
+    return "state"
+end
+sink(function(level: string, message: string) _G.print("sink", level, message) end)
+log.trace(costly())
+log.debug("cache", 42, true)
+Log.info("ready")
+warn("low", "mana")
+setLevel("error")
+log.info("hidden")
+for _, e in ipairs(history()) do
+    _G.print(e.level, e.message, e.location)
+end
+chat("Hello")
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"logs\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", main),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    // dev: log-level "debug" (trace calls removed, `costly()` never runs).
+    assert_eq!(
+        run_addon(&dir.path().join("dist/dev/Logs"), "Logs"),
+        [
+            "sink debug cache 42 true",
+            "sink info ready",
+            "|cff33ff99Logs|r |cffffb23f[warn]|r low mana",
+            "sink warn low mana",
+            "debug cache 42 true src/main.wowlua:10",
+            "info ready src/main.wowlua:11",
+            "warn low mana src/main.wowlua:12",
+            "|cff33ff99Logs|r: Hello",
+        ]
+        .join("\n")
+    );
+    // release: log-level "warn", no locations.
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    assert_eq!(
+        run_addon(&dir.path().join("dist/release/Logs"), "Logs"),
+        [
+            "|cff33ff99Logs|r |cffffb23f[warn]|r low mana",
+            "sink warn low mana",
+            "warn low mana nil",
+            "|cff33ff99Logs|r: Hello",
+        ]
+        .join("\n")
+    );
+    // A level function as a value cannot be stripped (E8118).
+    fs::write(
+        dir.path().join("src/main.wowlua"),
+        "import info from \"wowlua:log\"\nlocal f = info\nf(\"x\")\n",
+    )
+    .unwrap();
+    wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("error[E8118]"));
+}
+
 /// `wowlua lint` reports the lints only; `--fix` applies their fixes;
 /// `--!nolint` and `check.lints` turn them off.
 #[test]

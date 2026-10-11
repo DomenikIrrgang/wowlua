@@ -403,6 +403,7 @@ pub fn compile_flavor(
             assertions: profile.assertions,
             dev_console: profile.dev_console,
             profiling: profile.instrument != wowlua_manifest::model::Instrument::None,
+            log_level: profile.log_level as u8,
         };
         ctx.type_names = out
             .type_names

@@ -533,6 +533,11 @@ pub fn build(
             wowlua_runtime::runtime(&wowlua_runtime::RuntimeOptions {
                 modules: b.output.modules.clone(),
                 debug: profile.debug,
+                log_level: serde_json::to_value(profile.log_level)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_string))
+                    .unwrap_or_default(),
+                log_history: manifest.manifest.stdlib.log.history_size,
                 meta: crate::meta::runtime_tables(
                     &b.meta,
                     &b.output.meta_used,

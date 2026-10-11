@@ -52,6 +52,10 @@ pub struct RuntimeOptions {
     pub modules: Vec<String>,
     /// Debug builds check that `require` finds loaded modules.
     pub debug: bool,
+    /// The profile's `log-level` (`wowlua:log` cannot go below it).
+    pub log_level: String,
+    /// Entries `wowlua:log` keeps in its ring buffer.
+    pub log_history: u32,
     /// Lua statements filling `wl.meta` (build metadata runtime tables).
     pub meta: Option<String>,
     /// Slices the compiled code uses.
@@ -83,6 +87,13 @@ pub fn runtime(options: &RuntimeOptions) -> String {
         ));
     }
     placeholders.push_str(&format!("wl.debug = {}\n", options.debug));
+    if !options.log_level.is_empty() {
+        placeholders.push_str(&format!(
+            "wl.logLevel = {}\nwl.logHistory = {}\n",
+            lua_string(&options.log_level),
+            options.log_history
+        ));
+    }
     // A checkout with CRLF line endings must give the same runtime.
     let mut text = CORE
         .replace("\r\n", "\n")
@@ -116,6 +127,7 @@ mod tests {
             debug: true,
             meta: None,
             slices: BTreeSet::new(),
+            ..RuntimeOptions::default()
         });
         let ns = lua.create_table().unwrap();
         lua.load(&code).call::<()>(("Addon", ns.clone())).unwrap();

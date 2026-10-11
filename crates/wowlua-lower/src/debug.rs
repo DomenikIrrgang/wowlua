@@ -29,13 +29,67 @@ impl Lowerer<'_> {
             ExprKind::Field { obj, name } => match &obj.kind {
                 ExprKind::Name(m) => match self.lookup(&m.text) {
                     Some(Binding::IntrinsicNamespace(map)) => map.get(name.text.as_ref())?.clone(),
+                    // `log.info(…)` through the `log` object.
+                    Some(Binding::Intrinsic(obj_id)) if obj_id == "log.object" => {
+                        format!("log.{}", name.text)
+                    }
                     _ => return None,
                 },
                 _ => return None,
             },
             _ => return None,
         };
-        id.starts_with("debug.").then_some(id)
+        (id.starts_with("debug.") || log_rank(&id).is_some()).then_some(id)
+    }
+
+    /// A call of a `wowlua:log` level function: removed below the
+    /// compiled level, else `emitAt(level, location, …)` on the module.
+    fn log_call(&mut self, id: &str, callee: &Expr, args: &Args, e: &Expr) -> Option<ir::Expr> {
+        let rank = log_rank(id)?;
+        if rank < self.ctx.tools.log_level {
+            return None;
+        }
+        let pos = self.span_pos(e.span);
+        let level = id.trim_start_matches("log.");
+        let Some((table, generated_name)) = self.module_tables.get("wowlua:log").cloned() else {
+            let f = self.intrinsic_callee(callee);
+            let a = self.args_list(args);
+            return Some(call(f, a, pos));
+        };
+        let location = if self.ctx.debug {
+            self.string(&self.location(e.span), pos)
+        } else {
+            lit(ir::ExprKind::Nil, pos)
+        };
+        let mut a = vec![self.string(level, pos), location];
+        a.extend(self.args_list(args));
+        let module = if generated_name {
+            name_expr(generated(&table, pos))
+        } else {
+            name_expr(ident(&table, pos))
+        };
+        Some(call(field(module, "emitAt", pos), a, pos))
+    }
+
+    /// E3045 / E8118: a helper the compiler must see called is used as a
+    /// value.
+    pub(crate) fn check_intrinsic_value(&mut self, id: &str, span: Span) {
+        if STATEMENT_ONLY.contains(&id) {
+            let name = id.trim_start_matches("debug.");
+            self.error(
+                "E3045",
+                span,
+                format!(
+                    "`{name}` can only be called as a statement, because the call may be removed"
+                ),
+            );
+        } else if log_rank(id).is_some() {
+            self.error(
+                "E8118",
+                span,
+                "a log level function can only be called directly, so that the compiler can remove it; wrap it in a function",
+            );
+        }
     }
 
     /// `"src/a.wowlua:12 (onLogin)"`: the source location of `span` and the
@@ -70,10 +124,16 @@ impl Lowerer<'_> {
         if removed {
             return Vec::new();
         }
+        if log_rank(id).is_some() {
+            return match self.log_call(id, callee, args, e) {
+                Some(c) => vec![stmt(ir::StmtKind::Call(c), pos)],
+                None => Vec::new(),
+            };
+        }
         self.intrinsic_slices(id);
         let call_ir = match id {
             "debug.assert" => {
-                let f = self.expr(callee);
+                let f = self.intrinsic_callee(callee);
                 let mut a = self.args_list(args);
                 a.truncate(2);
                 while a.len() < 2 {
@@ -83,7 +143,7 @@ impl Lowerer<'_> {
                 call(f, a, pos)
             }
             "debug.dump" => {
-                let f = self.expr(callee);
+                let f = self.intrinsic_callee(callee);
                 let mut a = vec![self.string(&self.location(e.span), pos)];
                 for x in args.exprs() {
                     a.push(self.string(&self.source_text(x.span), pos));
@@ -92,7 +152,7 @@ impl Lowerer<'_> {
                 call(f, a, pos)
             }
             _ if STATEMENT_ONLY.contains(&id) => {
-                let f = self.expr(callee);
+                let f = self.intrinsic_callee(callee);
                 let a = self.args_list(args);
                 call(f, a, pos)
             }
@@ -117,6 +177,11 @@ impl Lowerer<'_> {
     ) -> ir::Expr {
         let pos = self.span_pos(e.span);
         let exprs = args.exprs();
+        if log_rank(id).is_some() {
+            return self
+                .log_call(id, callee, args, e)
+                .unwrap_or_else(|| lit(ir::ExprKind::Nil, pos));
+        }
         match id {
             _ if STATEMENT_ONLY.contains(&id) => {
                 let name = id.trim_start_matches("debug.");
@@ -156,7 +221,7 @@ impl Lowerer<'_> {
                             .with_label(e.span, "raises \"not implemented\" when it runs"),
                     );
                 }
-                let f = self.expr(callee);
+                let f = self.intrinsic_callee(callee);
                 let mut a = match exprs.first() {
                     Some(x) => vec![self.expr(x)],
                     None => vec![lit(ir::ExprKind::Nil, pos)],
@@ -179,10 +244,18 @@ impl Lowerer<'_> {
             ),
             _ => {
                 self.intrinsic_slices(id);
-                let f = self.expr(callee);
+                let f = self.intrinsic_callee(callee);
                 let a = self.args_list(args);
                 call(f, a, pos)
             }
+        }
+    }
+
+    /// The callee of an intrinsic call (a direct call is not a value use).
+    fn intrinsic_callee(&mut self, callee: &Expr) -> ir::Expr {
+        match &callee.kind {
+            ExprKind::Name(n) => name_expr(self.ident(n)),
+            _ => self.expr(callee),
         }
     }
 
@@ -197,6 +270,18 @@ impl Lowerer<'_> {
         self.uses_runtime = true;
         self.slices.insert(slice);
     }
+}
+
+/// The rank of a `wowlua:log` level function (`log.info` → 2).
+fn log_rank(id: &str) -> Option<u8> {
+    Some(match id {
+        "log.trace" => 0,
+        "log.debug" => 1,
+        "log.info" => 2,
+        "log.warn" => 3,
+        "log.error" => 4,
+        _ => return None,
+    })
 }
 
 /// The final identifier of `nameof(expr)`.
