@@ -1,0 +1,1628 @@
+//! Expressions (spec chapter 2): inference and contextual checking, names
+//! and globals, tables, fields, operators and calls (arity, generics,
+//! overloads).
+
+use super::body::Checker;
+use super::env::{DefKind, MemberKind, Visibility};
+use super::subst::{self, Subst};
+use super::types::Field;
+use super::types::*;
+use wowlua_span::Span;
+use wowlua_syntax::ast::*;
+
+impl Checker<'_> {
+    /// The type of an expression.
+    pub fn infer(&mut self, e: &Expr) -> TypeId {
+        self.check(e, None)
+    }
+
+    /// The type of an expression where `expected` is wanted (contextual
+    /// typing, spec §2.4.3). Mismatches are reported by the caller.
+    pub fn check(&mut self, e: &Expr, expected: Option<TypeId>) -> TypeId {
+        let pack = stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.expr_inner(e, expected));
+        let t = pack
+            .types
+            .first()
+            .copied()
+            .unwrap_or_else(|| match &pack.rest {
+                Some(Rest::Variadic(t)) => self.env.types.optional(*t),
+                _ => Types::NIL,
+            });
+        self.expr_types.insert((e.span.start, e.span.end), t);
+        t
+    }
+
+    /// All values of a multi-value expression (calls, `...`).
+    pub fn infer_multi(&mut self, e: &Expr) -> Pack {
+        let pack = stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.expr_inner(e, None));
+        let first = pack.types.first().copied().unwrap_or(Types::NIL);
+        self.expr_types.insert((e.span.start, e.span.end), first);
+        pack
+    }
+
+    /// The type an expression was checked with (for predicates).
+    pub fn peek_type(&self, e: &Expr) -> TypeId {
+        self.expr_types
+            .get(&(e.span.start, e.span.end))
+            .copied()
+            .unwrap_or(Types::ANY)
+    }
+
+    /// A list of expressions as values (the last one expands).
+    pub fn expr_list(&mut self, es: &[Expr], expected: &[Option<TypeId>]) -> Vec<TypeId> {
+        let pack = self.expr_pack(es, expected);
+        let mut out = pack.types.clone();
+        if let Some(Rest::Variadic(t)) = pack.rest {
+            while out.len() < expected.len().max(es.len()) {
+                let o = self.env.types.optional(t);
+                out.push(o);
+            }
+        }
+        out
+    }
+
+    pub fn expr_pack(&mut self, es: &[Expr], expected: &[Option<TypeId>]) -> Pack {
+        let mut types = Vec::new();
+        let mut rest = None;
+        for (i, e) in es.iter().enumerate() {
+            let want = expected.get(i).copied().flatten();
+            if i + 1 == es.len() && is_multi(e) {
+                let mut p = self.expr_inner(e, want);
+                if let (Some(w), Some(&first)) = (want, p.types.first()) {
+                    let _ = (w, first);
+                }
+                let first = p.types.first().copied().unwrap_or(Types::NIL);
+                self.expr_types.insert((e.span.start, e.span.end), first);
+                types.append(&mut p.types);
+                rest = p.rest;
+            } else {
+                types.push(self.check(e, want));
+            }
+        }
+        Pack { types, rest }
+    }
+
+    fn expr_inner(&mut self, e: &Expr, expected: Option<TypeId>) -> Pack {
+        let single = |t: TypeId| Pack::single(t);
+        match &e.kind {
+            ExprKind::Nil => single(Types::NIL),
+            ExprKind::True => single(Types::TRUE),
+            ExprKind::False => single(Types::FALSE),
+            ExprKind::Number(n) => single(match n.value {
+                Some(v) => self.env.types.num(v),
+                None => Types::NUMBER,
+            }),
+            ExprKind::String(s) => single(self.env.types.str(&String::from_utf8_lossy(&s.value))),
+            ExprKind::Interp(parts) => {
+                for p in parts {
+                    if let InterpPart::Expr(x) = p {
+                        self.infer(x);
+                    }
+                }
+                single(Types::STRING)
+            }
+            ExprKind::Vararg => self.vararg_pack(),
+            ExprKind::Function(f) => {
+                let exp = expected.and_then(|t| self.contextual_func(t));
+                single(self.function_body(f, exp, None))
+            }
+            ExprKind::Table(fields) => single(self.table(fields, expected)),
+            ExprKind::Name(n) => single(self.name_type(n)),
+            ExprKind::Paren(inner) => single(self.check(inner, expected)),
+            ExprKind::Cast { expr, ty } => {
+                let from = self.infer(expr);
+                let to = self.env.resolve(ty, &self.scope.clone());
+                // Assertions between incomparable types (E2015).
+                if !self.env.assignable(from, to, self.mode)
+                    && !self.env.assignable(to, from, self.mode)
+                    && !self.comparable(from, to)
+                {
+                    let msg = format!(
+                        "cannot assert `{}` as `{}`",
+                        self.env.display(from),
+                        self.env.display(to)
+                    );
+                    self.report("E2015", e.span, msg);
+                }
+                single(to)
+            }
+            ExprKind::Field { obj, name } | ExprKind::OptField { obj, name } => {
+                if self.is_super(obj) {
+                    return single(self.super_member(&name.text, name.span));
+                }
+                let o = self.infer(obj);
+                let o = if matches!(e.kind, ExprKind::OptField { .. }) {
+                    self.env.types.non_nil(o)
+                } else {
+                    o
+                };
+                let t = self
+                    .member_type(o, &name.text, name.span, false)
+                    .unwrap_or(Types::ANY);
+                let t = if matches!(e.kind, ExprKind::OptField { .. }) {
+                    self.env.types.optional(t)
+                } else {
+                    t
+                };
+                single(t)
+            }
+            ExprKind::Index { obj, key } | ExprKind::OptIndex { obj, key } => {
+                let o = self.infer(obj);
+                let k = self.infer(key);
+                single(self.index_type(o, k, key, e.span))
+            }
+            ExprKind::Call { callee, args } | ExprKind::OptCall { callee, args } => {
+                if let ExprKind::Name(n) = &callee.kind
+                    && n.text.as_ref() == "super"
+                    && !self.classes.is_empty()
+                {
+                    self.args_types(args, &[]);
+                    return Pack::empty();
+                }
+                let c = self.infer(callee);
+                let c = if matches!(e.kind, ExprKind::OptCall { .. }) {
+                    self.env.types.non_nil(c)
+                } else {
+                    c
+                };
+                self.call(c, None, args, e.span, expected)
+            }
+            ExprKind::Method { obj, name, args } | ExprKind::OptMethod { obj, name, args } => {
+                if self.is_super(obj) {
+                    let m = self.super_member(&name.text, name.span);
+                    let instance = self.scope.self_ty.unwrap_or(Types::ANY);
+                    return self.call(m, Some(instance), args, e.span, expected);
+                }
+                let o = self.infer(obj);
+                let o = if matches!(e.kind, ExprKind::OptMethod { .. }) {
+                    self.env.types.non_nil(o)
+                } else {
+                    o
+                };
+                let m = self.method_type(o, &name.text, name.span);
+                self.call(m, Some(o), args, e.span, expected)
+            }
+            ExprKind::Binary { op, lhs, rhs } => {
+                single(self.binary(*op, lhs, rhs, e.span, expected))
+            }
+            ExprKind::Unary { op, operand } => {
+                let t = self.infer(operand);
+                single(match op {
+                    UnOp::Not => Types::BOOLEAN,
+                    UnOp::Len => {
+                        self.check_secret(t, operand.span);
+                        Types::NUMBER
+                    }
+                    UnOp::Neg | UnOp::BNot => {
+                        self.check_secret(t, operand.span);
+                        self.arith_operand(t, operand.span);
+                        Types::NUMBER
+                    }
+                })
+            }
+            ExprKind::Error => single(Types::ERROR),
+        }
+    }
+
+    fn comparable(&self, a: TypeId, b: TypeId) -> bool {
+        // Tables are comparable with tables (casts between shapes).
+        let tableish = |t: &Ty| {
+            matches!(
+                t,
+                Ty::Table
+                    | Ty::Record(_)
+                    | Ty::Array(_)
+                    | Ty::Map(..)
+                    | Ty::Named(..)
+                    | Ty::ClassOf(_)
+            )
+        };
+        tableish(self.env.types.get(a)) && tableish(self.env.types.get(b))
+    }
+
+    fn vararg_pack(&mut self) -> Pack {
+        if self.depth == 0 {
+            if let Some((name, ns)) = self.top_vararg {
+                return Pack {
+                    types: vec![name, ns],
+                    rest: None,
+                };
+            }
+            return Pack::any();
+        }
+        match self.current_vararg() {
+            Some(t) => Pack {
+                types: Vec::new(),
+                rest: Some(Rest::Variadic(t)),
+            },
+            None => Pack::any(),
+        }
+    }
+
+    /// The function type an expected type offers to a function expression.
+    fn contextual_func(&mut self, t: TypeId) -> Option<Func> {
+        for m in self.env.types.members(t) {
+            match self.env.types.get(m).clone() {
+                Ty::Func(f) => return Some(f),
+                Ty::Intersection(ms) => {
+                    for x in ms {
+                        if let Ty::Func(f) = self.env.types.get(x).clone() {
+                            return Some(f);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    // ------------------------------------------------------------ names --
+
+    /// The type of a name: a local, an import, or a global.
+    pub fn name_type(&mut self, n: &Name) -> TypeId {
+        if let Some(v) = self.lookup_var(&n.text) {
+            return self.var_type(v);
+        }
+        if n.text.as_ref() == "super" && !self.classes.is_empty() {
+            return self.super_member("", n.span);
+        }
+        match self.env.globals.get(n.text.as_ref()) {
+            Some(&t) => t,
+            None if n.text.as_ref() == "_G" => Types::TABLE,
+            None if self.extra_globals.contains(n.text.as_ref()) => Types::ANY,
+            None => {
+                let (code, msg) = match self.mode {
+                    super::query::Mode::Strict => {
+                        ("E1001", format!("`{}` is not a declared global", n.text))
+                    }
+                    super::query::Mode::Basic => {
+                        ("W1001", format!("`{}` is not a declared global", n.text))
+                    }
+                };
+                self.report(code, n.span, msg);
+                Types::ANY
+            }
+        }
+    }
+
+    /// Assigning a global (W1002 / E1002 unless declared).
+    pub fn assign_global(&mut self, n: &Name, value: TypeId) {
+        match self.env.globals.get(n.text.as_ref()).copied() {
+            Some(t) => self.check_assignable(n.span, value, t),
+            None if self.extra_globals.contains(n.text.as_ref()) => {}
+            None => {
+                let code = match self.mode {
+                    super::query::Mode::Strict => "E1002",
+                    super::query::Mode::Basic => "W1002",
+                };
+                self.report(
+                    code,
+                    n.span,
+                    format!("assigns the undeclared global `{}` (declare it, use `_G.{}`, or make it `local`)", n.text, n.text),
+                );
+            }
+        }
+    }
+
+    /// The type an assignment target expects (for contextual typing).
+    pub fn target_type(&mut self, t: &Expr) -> Option<TypeId> {
+        match &t.kind {
+            ExprKind::Name(n) => match self.lookup_var(&n.text) {
+                Some(v) => self.vars[v.0 as usize].declared,
+                None => self.env.globals.get(n.text.as_ref()).copied(),
+            },
+            ExprKind::Field { obj, name } => {
+                let o = self.peek_or_infer(obj);
+                self.field_type_quiet(o, &name.text)
+            }
+            _ => None,
+        }
+    }
+
+    fn peek_or_infer(&mut self, e: &Expr) -> TypeId {
+        match &e.kind {
+            ExprKind::Name(n) => match self.lookup_var(&n.text) {
+                Some(v) => self.var_type(v),
+                None => self
+                    .env
+                    .globals
+                    .get(n.text.as_ref())
+                    .copied()
+                    .unwrap_or(Types::ANY),
+            },
+            _ => self.infer(e),
+        }
+    }
+
+    /// A field's declared type, without diagnostics.
+    fn field_type_quiet(&mut self, o: TypeId, name: &str) -> Option<TypeId> {
+        match self.env.types.get(o).clone() {
+            Ty::Record(r) => r.fields.get(name).map(|f| f.ty),
+            Ty::Named(d, args) => self.env.instance_member(d, &args, name).map(|(m, _)| m.ty),
+            Ty::ClassOf(d) => self
+                .env
+                .static_member(d, name)
+                .map(|m| m.ty)
+                .or_else(|| self.env.def(d).members.get(name).map(|m| m.ty)),
+            _ => None,
+        }
+    }
+
+    pub fn assign_target(&mut self, t: &Expr, value: TypeId) {
+        match &t.kind {
+            ExprKind::Name(n) => match self.lookup_var(&n.text) {
+                Some(v) => {
+                    if self.vars[v.0 as usize].is_const {
+                        self.report("E2010", n.span, format!("cannot assign to `{}`", n.text));
+                    }
+                    self.assign_var(v, value, n.span)
+                }
+                None => self.assign_global(n, value),
+            },
+            ExprKind::Field { obj, name } => {
+                let o = self.infer(obj);
+                self.assign_field(o, &name.text, name.span, value);
+            }
+            ExprKind::Index { obj, key } => {
+                let o = self.infer(obj);
+                let k = self.infer(key);
+                if let ExprKind::String(s) = &key.kind {
+                    let name = String::from_utf8_lossy(&s.value).into_owned();
+                    self.assign_field(o, &name, key.span, value);
+                    return;
+                }
+                match self.env.types.get(o).clone() {
+                    Ty::Array(e) => {
+                        self.check_assignable(key.span, k, Types::NUMBER);
+                        self.check_assignable(t.span, value, e);
+                    }
+                    Ty::Map(kt, vt) => {
+                        self.check_assignable(key.span, k, kt);
+                        let opt = self.env.types.optional(vt);
+                        self.check_assignable(t.span, value, opt);
+                    }
+                    _ => {}
+                }
+            }
+            _ => {
+                self.infer(t);
+            }
+        }
+    }
+
+    fn assign_field(&mut self, o: TypeId, name: &str, span: Span, value: TypeId) {
+        let members = self.env.types.members(o);
+        for m in members {
+            match self.env.types.get(m).clone() {
+                Ty::Record(r) => match r.fields.get(name) {
+                    Some(f) => {
+                        if f.readonly {
+                            self.report("E2010", span, format!("`{name}` is read-only"));
+                        }
+                        self.check_assignable(span, value, f.ty)
+                    }
+                    None => match r.indexer {
+                        Some((_, v)) => self.check_assignable(span, value, v),
+                        None if r.open => self.extend_open(m, name, value),
+                        None if self.mode == super::query::Mode::Strict => {
+                            self.report(
+                                "E2051",
+                                span,
+                                format!("cannot add the field `{name}` to a sealed table"),
+                            );
+                        }
+                        None => {}
+                    },
+                },
+                Ty::Named(d, args) => match self.env.instance_member(d, &args, name) {
+                    Some((mem, _)) => {
+                        let in_ctor_or_class = self
+                            .classes
+                            .iter()
+                            .any(|(cd, _)| *cd == d || self.env.derives(*cd, d));
+                        if (mem.kind == MemberKind::Getter && mem.readonly)
+                            || (mem.readonly && mem.kind == MemberKind::Field && !in_ctor_or_class)
+                        {
+                            self.report("E2010", span, format!("`{name}` is read-only"));
+                        }
+                        self.check_assignable(span, value, mem.ty);
+                    }
+                    None => {
+                        if self.env.indexer_of(d).is_none() && self.env.def(d).kind != DefKind::Enum
+                        {
+                            if name == "__wowlua" {
+                                self.report(
+                                    "E2003",
+                                    span,
+                                    "`__wowlua` is reserved for the wowlua runtime",
+                                );
+                            } else if !self.env.def(d).native || self.env.def(d).widget.is_none() {
+                                let msg =
+                                    format!("`{}` has no field `{name}`", self.env.display(m));
+                                self.report("E2003", span, msg);
+                            }
+                        } else if name == "__wowlua" {
+                            self.report(
+                                "E2003",
+                                span,
+                                "`__wowlua` is reserved for the wowlua runtime",
+                            );
+                        }
+                    }
+                },
+                Ty::ClassOf(d) => {
+                    if self.env.def(d).kind == DefKind::Enum {
+                        self.report(
+                            "E2010",
+                            span,
+                            format!("cannot assign to the enum member `{name}`"),
+                        );
+                    } else if let Some(mem) = self.env.static_member(d, name) {
+                        self.check_assignable(span, value, mem.ty);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    pub fn compound_result(
+        &mut self,
+        op: CompoundOp,
+        current: TypeId,
+        value: TypeId,
+        span: Span,
+    ) -> TypeId {
+        match op {
+            CompoundOp::Concat => Types::STRING,
+            CompoundOp::Coalesce => {
+                let non_nil = self.env.types.non_nil(current);
+                self.env.types.union(&[non_nil, value])
+            }
+            _ => {
+                self.arith_operand(current, span);
+                self.arith_operand(value, span);
+                Types::NUMBER
+            }
+        }
+    }
+
+    // ----------------------------------------------------------- tables --
+
+    fn table(&mut self, fields: &[TableField], expected: Option<TypeId>) -> TypeId {
+        // The expected record, array or map gives field types.
+        let exp = expected.map(|t| self.env.types.non_nil(t));
+        let exp_ty = exp.map(|t| self.env.types.get(t).clone());
+        let mut record = Record {
+            open: exp.is_none(),
+            ..Record::default()
+        };
+        let mut array: Vec<TypeId> = Vec::new();
+        let mut keys: Vec<TypeId> = Vec::new();
+        let mut values: Vec<TypeId> = Vec::new();
+        for (i, f) in fields.iter().enumerate() {
+            match f {
+                TableField::Named { name, value, .. } => {
+                    let want =
+                        exp.and_then(|t| self.field_type_quiet(t, &name.text))
+                            .or(match &exp_ty {
+                                Some(Ty::Map(_, v)) => Some(*v),
+                                _ => None,
+                            });
+                    let t = self.check(value, want);
+                    if let Some(w) = want {
+                        self.check_assignable(value.span, t, w);
+                    }
+                    record.fields.insert(
+                        name.text.clone(),
+                        Field {
+                            ty: if exp.is_some() {
+                                t
+                            } else {
+                                self.env.types.widen(t)
+                            },
+                            optional: false,
+                            readonly: false,
+                        },
+                    );
+                }
+                TableField::Keyed { key, value, .. } => {
+                    let k = self.infer(key);
+                    let want = match &exp_ty {
+                        Some(Ty::Map(_, v)) => Some(*v),
+                        Some(Ty::Array(e)) => Some(*e),
+                        _ => None,
+                    };
+                    let v = self.check(value, want);
+                    if let ExprKind::String(s) = &key.kind {
+                        record.fields.insert(
+                            String::from_utf8_lossy(&s.value).into(),
+                            Field {
+                                ty: self.env.types.widen(v),
+                                optional: false,
+                                readonly: false,
+                            },
+                        );
+                    } else {
+                        keys.push(self.env.types.widen(k));
+                        values.push(self.env.types.widen(v));
+                    }
+                }
+                TableField::Positional(value) => {
+                    let want = match &exp_ty {
+                        Some(Ty::Array(e)) => Some(*e),
+                        Some(Ty::Map(_, v)) => Some(*v),
+                        _ => None,
+                    };
+                    if i + 1 == fields.len() && is_multi(value) {
+                        let p = self.expr_inner(value, want);
+                        for t in p.types {
+                            array.push(t);
+                        }
+                        if let Some(Rest::Variadic(t)) = p.rest {
+                            array.push(t);
+                        }
+                    } else {
+                        let t = self.check(value, want);
+                        array.push(t);
+                    }
+                }
+            }
+        }
+        if !keys.is_empty() {
+            let k = self.env.types.union(&keys);
+            let v = self.env.types.union(&values);
+            record.indexer = Some((k, v));
+        }
+        let elem = if array.is_empty() {
+            None
+        } else {
+            let widened: Vec<TypeId> = array
+                .iter()
+                .map(|&t| {
+                    if exp.is_some() {
+                        t
+                    } else {
+                        self.env.types.widen(t)
+                    }
+                })
+                .collect();
+            Some(self.env.types.union(&widened))
+        };
+        // An empty literal takes the expected type (spec §2.4.3).
+        if fields.is_empty()
+            && let Some(t) = exp
+            && !matches!(self.env.types.get(t), Ty::Any | Ty::Unknown | Ty::Error)
+        {
+            return t;
+        }
+        match (elem, record.fields.is_empty(), record.indexer) {
+            (Some(e), true, None) => self.env.types.array(e),
+            (Some(e), _, None) => {
+                record.indexer = Some((Types::NUMBER, e));
+                self.env.types.record(record)
+            }
+            _ => self.env.types.record(record),
+        }
+    }
+
+    // ------------------------------------------------------- members --
+
+    /// The type of `o.name`; unknown members of declared types are E2003.
+    /// `quiet`: no diagnostics (for contextual lookups).
+    pub fn member_type(
+        &mut self,
+        o: TypeId,
+        name: &str,
+        span: Span,
+        quiet: bool,
+    ) -> Option<TypeId> {
+        let members = self.env.types.members(o);
+        let mut out = Vec::new();
+        for m in members {
+            let t = match self.env.types.get(m).clone() {
+                Ty::Any | Ty::Error | Ty::Table | Ty::Unknown => Some(Types::ANY),
+                Ty::Nil => {
+                    if self.mode == super::query::Mode::Strict && !quiet {
+                        let msg = format!("`{}` may be `nil`", self.env.display(o));
+                        self.report("E2005", span, msg);
+                    }
+                    continue;
+                }
+                Ty::String | Ty::Str(_) => self.string_member(name),
+                Ty::Record(r) => match r.fields.get(name) {
+                    Some(f) => Some(f.ty),
+                    None => match r.indexer {
+                        Some((k, v)) => {
+                            let key = self.env.types.str(name);
+                            if self.env.assignable(key, k, super::query::Mode::Basic) {
+                                Some(self.env.types.optional(v))
+                            } else {
+                                Some(Types::ANY)
+                            }
+                        }
+                        None if r.open => Some(Types::NIL),
+                        None if self.mode == super::query::Mode::Strict && !quiet => {
+                            let msg = format!("`{}` has no field `{name}`", self.env.display(m));
+                            self.report("E2003", span, msg);
+                            Some(Types::ERROR)
+                        }
+                        None => Some(Types::ANY),
+                    },
+                },
+                Ty::Array(e) => {
+                    if name == "n" {
+                        Some(Types::NUMBER)
+                    } else {
+                        let _ = e;
+                        Some(Types::ANY)
+                    }
+                }
+                Ty::Map(_, v) => Some(self.env.types.optional(v)),
+                Ty::Named(d, args) => {
+                    if self.env.def(d).kind == DefKind::Enum {
+                        Some(Types::ANY)
+                    } else {
+                        match self.env.instance_member(d, &args, name) {
+                            Some((mem, owner)) => {
+                                if !quiet {
+                                    self.check_visibility(mem.visibility, owner, name, span);
+                                }
+                                Some(match mem.kind {
+                                    MemberKind::Method => self.env.with_self(mem.ty, m),
+                                    _ => mem.ty,
+                                })
+                            }
+                            None => match self.env.indexer_of(d) {
+                                Some((_, v)) => Some(v),
+                                None => {
+                                    if !quiet {
+                                        let msg = format!(
+                                            "`{}` has no field or method `{name}`",
+                                            self.env.display(m)
+                                        );
+                                        self.report("E2003", span, msg);
+                                    }
+                                    Some(Types::ERROR)
+                                }
+                            },
+                        }
+                    }
+                }
+                Ty::ClassOf(d) => self.static_type(d, name, span, quiet),
+                Ty::EnumMember(..) => Some(Types::ANY),
+                Ty::Module(_) => Some(Types::ANY),
+                _ => {
+                    if !quiet {
+                        let msg = format!("cannot index a value of type `{}`", self.env.display(m));
+                        self.report("E2003", span, msg);
+                    }
+                    Some(Types::ERROR)
+                }
+            };
+            if let Some(t) = t {
+                out.push(t);
+            }
+        }
+        if out.is_empty() {
+            return Some(Types::NIL);
+        }
+        Some(self.env.types.union(&out))
+    }
+
+    fn check_visibility(&mut self, v: Visibility, owner: DefId, name: &str, span: Span) {
+        let inside = |c: &Checker, d: DefId| c.classes.iter().any(|(cd, _)| *cd == d);
+        let ok = match v {
+            Visibility::Public => true,
+            Visibility::Private => inside(self, owner),
+            Visibility::Protected => self
+                .classes
+                .iter()
+                .any(|(cd, _)| *cd == owner || self.env.derives(*cd, owner)),
+        };
+        if !ok {
+            let kind = if v == Visibility::Private {
+                "private"
+            } else {
+                "protected"
+            };
+            self.report("E2011", span, format!("`{name}` is {kind}"));
+        }
+    }
+
+    /// `C.name` for a class value, namespace or enum.
+    fn static_type(&mut self, d: DefId, name: &str, span: Span, quiet: bool) -> Option<TypeId> {
+        match self.env.def(d).kind {
+            DefKind::Enum => {
+                let idx = self
+                    .env
+                    .def(d)
+                    .enum_members
+                    .iter()
+                    .position(|(n, _)| n.as_ref() == name);
+                match idx {
+                    Some(i) => Some(self.env.types.intern(Ty::EnumMember(d, i as u32))),
+                    None => {
+                        if !quiet {
+                            let msg =
+                                format!("enum `{}` has no member `{name}`", self.env.def(d).name);
+                            self.report("E2003", span, msg);
+                        }
+                        Some(Types::ERROR)
+                    }
+                }
+            }
+            DefKind::Namespace => match self.env.def(d).members.get(name).map(|m| m.ty) {
+                Some(t) => Some(t),
+                None => {
+                    if !quiet {
+                        let msg = format!("`{}` has no member `{name}`", self.env.def(d).name);
+                        self.report("E2003", span, msg);
+                    }
+                    Some(Types::ERROR)
+                }
+            },
+            _ => match self.env.static_member(d, name) {
+                Some(m) => Some(m.ty),
+                None => {
+                    // Instance methods through the class (`C.method(self, …)`).
+                    let args: Vec<TypeId> =
+                        self.env.def(d).params.iter().map(|_| Types::ANY).collect();
+                    match self.env.instance_member(d, &args, name) {
+                        Some((m, _)) if m.kind == MemberKind::Method => {
+                            let inst = self.env.instance(d);
+                            Some(self.env.with_self(m.ty, inst))
+                        }
+                        _ => {
+                            if !quiet && !self.env.def(d).native {
+                                let msg = format!(
+                                    "class `{}` has no static member `{name}`",
+                                    self.env.def(d).name
+                                );
+                                self.report("E2003", span, msg);
+                            }
+                            Some(Types::ANY)
+                        }
+                    }
+                }
+            },
+        }
+    }
+
+    /// `o:name(…)`: the method without `self`.
+    fn method_type(&mut self, o: TypeId, name: &str, span: Span) -> TypeId {
+        let mut out = Vec::new();
+        for m in self.env.types.members(o) {
+            let t = match self.env.types.get(m).clone() {
+                Ty::Nil => {
+                    if self.mode == super::query::Mode::Strict {
+                        let msg = format!("`{}` may be `nil`", self.env.display(o));
+                        self.report("E2005", span, msg);
+                    }
+                    continue;
+                }
+                Ty::String | Ty::Str(_) => self
+                    .string_member(name)
+                    .map(|f| self.drop_first(f))
+                    .unwrap_or(Types::ANY),
+                Ty::Named(d, args) if self.env.def(d).kind != DefKind::Enum => {
+                    match self.env.instance_member(d, &args, name) {
+                        Some((mem, owner)) => {
+                            self.check_visibility(mem.visibility, owner, name, span);
+                            match mem.kind {
+                                MemberKind::Method => mem.ty,
+                                // A function field called with `:` gets the
+                                // object as its first argument.
+                                _ => self.drop_first(mem.ty),
+                            }
+                        }
+                        None => match self.env.indexer_of(d) {
+                            Some(_) => Types::ANY,
+                            None => {
+                                let msg =
+                                    format!("`{}` has no method `{name}`", self.env.display(m));
+                                self.report("E2003", span, msg);
+                                Types::ERROR
+                            }
+                        },
+                    }
+                }
+                _ => {
+                    let f = self.member_type(m, name, span, false).unwrap_or(Types::ANY);
+                    self.drop_first(f)
+                }
+            };
+            out.push(t);
+        }
+        if out.is_empty() {
+            return Types::ANY;
+        }
+        self.env.types.union(&out)
+    }
+
+    /// A function type without its first parameter (`self`).
+    fn drop_first(&mut self, t: TypeId) -> TypeId {
+        match self.env.types.get(t).clone() {
+            Ty::Func(mut f) => {
+                if !f.params.is_empty() {
+                    f.params.remove(0);
+                } else if matches!(f.rest, Some(Rest::Variadic(_))) {
+                    // `(...any)` stays.
+                } else {
+                    return t;
+                }
+                if let Some((i, p)) = f.predicate {
+                    f.predicate = i.checked_sub(1).map(|i| (i, p));
+                }
+                self.env.types.func(f)
+            }
+            Ty::Intersection(ms) => {
+                let ms: Vec<TypeId> = ms.iter().map(|&x| self.drop_first(x)).collect();
+                self.env.types.intern(Ty::Intersection(ms))
+            }
+            _ => t,
+        }
+    }
+
+    /// `s:upper()` is `string.upper(s)` (spec §2.4.5).
+    fn string_member(&mut self, name: &str) -> Option<TypeId> {
+        let string_ns = self.env.globals.get("string").copied()?;
+        match self.env.types.get(string_ns).clone() {
+            Ty::ClassOf(d) => self
+                .env
+                .def(d)
+                .members
+                .get(name)
+                .map(|m| m.ty)
+                .or(Some(Types::ANY)),
+            Ty::Record(r) => r.fields.get(name).map(|f| f.ty).or(Some(Types::ANY)),
+            _ => Some(Types::ANY),
+        }
+    }
+
+    fn index_type(&mut self, o: TypeId, k: TypeId, key: &Expr, span: Span) -> TypeId {
+        if let ExprKind::String(s) = &key.kind {
+            let name = String::from_utf8_lossy(&s.value).into_owned();
+            return self
+                .member_type(o, &name, key.span, false)
+                .unwrap_or(Types::ANY);
+        }
+        self.check_secret(k, key.span);
+        let mut out = Vec::new();
+        for m in self.env.types.members(o) {
+            let t = match self.env.types.get(m).clone() {
+                Ty::Array(e) => {
+                    self.check_assignable(key.span, k, Types::NUMBER);
+                    // Reading past the end gives `nil`; basic mode trusts it.
+                    if self.mode == super::query::Mode::Strict {
+                        self.env.types.optional(e)
+                    } else {
+                        e
+                    }
+                }
+                Ty::Map(_, v) => self.env.types.optional(v),
+                Ty::Record(r) => match r.indexer {
+                    Some((_, v)) => self.env.types.optional(v),
+                    None => Types::ANY,
+                },
+                Ty::Nil => {
+                    if self.mode == super::query::Mode::Strict {
+                        let msg = format!("`{}` may be `nil`", self.env.display(o));
+                        self.report("E2005", span, msg);
+                    }
+                    continue;
+                }
+                Ty::Named(d, _) => match self.env.indexer_of(d) {
+                    Some((_, v)) => v,
+                    None => Types::ANY,
+                },
+                Ty::Secret(_) => {
+                    self.check_secret(m, span);
+                    Types::ANY
+                }
+                _ => Types::ANY,
+            };
+            out.push(t);
+        }
+        if out.is_empty() {
+            return Types::NIL;
+        }
+        self.env.types.union(&out)
+    }
+
+    // --------------------------------------------------------- operators --
+
+    fn binary(
+        &mut self,
+        op: BinOp,
+        lhs: &Expr,
+        rhs: &Expr,
+        span: Span,
+        expected: Option<TypeId>,
+    ) -> TypeId {
+        match op {
+            BinOp::And => {
+                let l = self.check(lhs, expected);
+                let (t_flow, f_flow) = self.narrow(lhs, &self.flow.clone());
+                let saved = std::mem::replace(&mut self.flow, t_flow);
+                let r = self.check(rhs, expected);
+                self.flow = saved;
+                let _ = f_flow;
+                let lf = self.falsy(l);
+                self.env.types.union(&[lf, r])
+            }
+            BinOp::Or => {
+                let l = self.check(lhs, expected);
+                let (_, f_flow) = self.narrow(lhs, &self.flow.clone());
+                let saved = std::mem::replace(&mut self.flow, f_flow);
+                let r = self.check(rhs, expected);
+                self.flow = saved;
+                let lt = self.truthy(l);
+                self.env.types.union(&[lt, r])
+            }
+            BinOp::Coalesce => {
+                let l = self.check(lhs, expected);
+                let r = self.check(rhs, expected);
+                let non_nil = self.env.types.non_nil(l);
+                self.env.types.union(&[non_nil, r])
+            }
+            BinOp::Eq | BinOp::Ne => {
+                let l = self.infer(lhs);
+                let r = self.infer(rhs);
+                self.check_secret(l, lhs.span);
+                self.check_secret(r, rhs.span);
+                Types::BOOLEAN
+            }
+            BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
+                let l = self.infer(lhs);
+                let r = self.infer(rhs);
+                self.check_secret(l, lhs.span);
+                self.check_secret(r, rhs.span);
+                let ln = self.env.assignable(l, Types::NUMBER, self.mode);
+                let ls = self.env.assignable(l, Types::STRING, self.mode);
+                let rn = self.env.assignable(r, Types::NUMBER, self.mode);
+                let rs = self.env.assignable(r, Types::STRING, self.mode);
+                if !((ln && rn) || (ls && rs)) && !self.has_metamethods(l) {
+                    let msg = format!(
+                        "cannot compare `{}` with `{}`",
+                        self.env.display(l),
+                        self.env.display(r)
+                    );
+                    self.report("E2001", span, msg);
+                }
+                Types::BOOLEAN
+            }
+            BinOp::Concat => {
+                let l = self.infer(lhs);
+                let r = self.infer(rhs);
+                for (t, e) in [(l, lhs), (r, rhs)] {
+                    let ok = self.env.assignable(t, Types::STRING, self.mode)
+                        || self.env.assignable(t, Types::NUMBER, self.mode)
+                        || self.is_secret(t)
+                        || self.has_metamethods(t);
+                    if !ok {
+                        let msg = format!(
+                            "cannot concatenate a value of type `{}`",
+                            self.env.display(t)
+                        );
+                        self.report("E2001", e.span, msg);
+                    }
+                }
+                if self.is_secret(l) || self.is_secret(r) {
+                    let secret = self.env.types.intern(Ty::Secret(Types::STRING));
+                    return self.env.types.union(&[Types::STRING, secret]);
+                }
+                Types::STRING
+            }
+            _ => {
+                let l = self.infer(lhs);
+                let r = self.infer(rhs);
+                self.check_secret(l, lhs.span);
+                self.check_secret(r, rhs.span);
+                self.arith_operand(l, lhs.span);
+                self.arith_operand(r, rhs.span);
+                Types::NUMBER
+            }
+        }
+    }
+
+    /// Classes and tables with metatables may define operators.
+    fn has_metamethods(&self, t: TypeId) -> bool {
+        self.env.types.members(t).iter().any(|&m| {
+            matches!(
+                self.env.types.get(m),
+                Ty::Named(..)
+                    | Ty::Table
+                    | Ty::Record(_)
+                    | Ty::Any
+                    | Ty::Error
+                    | Ty::Unknown
+                    | Ty::Param(_)
+            )
+        })
+    }
+
+    /// Arithmetic needs numbers (strings coerce in Lua).
+    pub fn arith_operand(&mut self, t: TypeId, span: Span) {
+        let ok = self.env.assignable(t, Types::NUMBER, self.mode)
+            || self.env.assignable(t, Types::STRING, self.mode)
+            || self.has_metamethods(t)
+            || self.is_secret(t);
+        if !ok {
+            let msg = format!("arithmetic on a value of type `{}`", self.env.display(t));
+            self.report("E2001", span, msg);
+        }
+    }
+
+    pub fn is_secret(&self, t: TypeId) -> bool {
+        self.env
+            .types
+            .members(t)
+            .iter()
+            .any(|&m| matches!(self.env.types.get(m), Ty::Secret(_)))
+    }
+
+    /// A forbidden operation on a possibly secret value (spec §2.11).
+    pub fn check_secret(&mut self, t: TypeId, span: Span) {
+        if self.is_secret(t) {
+            let code = if self.mode == super::query::Mode::Strict {
+                "E2040"
+            } else {
+                "W2040"
+            };
+            let msg = format!(
+                "`{}` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first",
+                self.env.display(t)
+            );
+            self.report(code, span, msg);
+        }
+    }
+
+    // -------------------------------------------------------------- calls --
+
+    fn args_types(&mut self, args: &Args, expected: &[Option<TypeId>]) -> Pack {
+        match args {
+            Args::Parens { args, .. } => self.expr_pack(args, expected),
+            Args::Table(e) | Args::String(e) => {
+                Pack::single(self.check(e, expected.first().copied().flatten()))
+            }
+        }
+    }
+
+    fn arg_exprs(args: &Args) -> Vec<&Expr> {
+        args.exprs()
+    }
+
+    /// A call of `callee` (with `receiver` for `:` calls on non-method
+    /// members already handled). Returns the results.
+    pub fn call(
+        &mut self,
+        callee: TypeId,
+        receiver: Option<TypeId>,
+        args: &Args,
+        span: Span,
+        expected: Option<TypeId>,
+    ) -> Pack {
+        let _ = receiver;
+        let members = self.env.types.members(callee);
+        if members.len() > 1 {
+            // A union of callables: each must accept the call.
+            let mut results = Vec::new();
+            let mut first = true;
+            for m in members {
+                if m == Types::NIL {
+                    if self.mode == super::query::Mode::Strict {
+                        let msg = format!("`{}` may be `nil`", self.env.display(callee));
+                        self.report("E2005", span, msg);
+                    }
+                    continue;
+                }
+                let p = if first {
+                    self.call_one(m, args, span, expected)
+                } else {
+                    self.call_quiet(m, args)
+                };
+                first = false;
+                results.push(p.types.first().copied().unwrap_or(Types::NIL));
+            }
+            let u = self.env.types.union(&results);
+            return Pack::single(u);
+        }
+        self.call_one(callee, args, span, expected)
+    }
+
+    /// The results of a call without checking (other union members).
+    fn call_quiet(&mut self, callee: TypeId, _args: &Args) -> Pack {
+        match self.env.types.get(callee).clone() {
+            Ty::Func(f) => f.ret,
+            _ => Pack::any(),
+        }
+    }
+
+    fn call_one(
+        &mut self,
+        callee: TypeId,
+        args: &Args,
+        span: Span,
+        expected: Option<TypeId>,
+    ) -> Pack {
+        match self.env.types.get(callee).clone() {
+            Ty::Func(f) => self
+                .call_func(&f, args, span, expected, true)
+                .unwrap_or_else(Pack::any),
+            Ty::Intersection(overloads) => self.call_overloads(&overloads, args, span, expected),
+            Ty::ClassOf(d) => {
+                if self.env.def(d).kind == DefKind::Class {
+                    if self.env.def(d).is_abstract {
+                        let msg = format!(
+                            "cannot instantiate the abstract class `{}`",
+                            self.env.def(d).name
+                        );
+                        self.report("E3002", span, msg);
+                    }
+                    match self.env.static_member(d, "new").map(|m| m.ty) {
+                        Some(new) => self.call_one(new, args, span, expected),
+                        None => {
+                            self.args_types(args, &[]);
+                            Pack::any()
+                        }
+                    }
+                } else {
+                    self.args_types(args, &[]);
+                    Pack::any()
+                }
+            }
+            Ty::Any
+            | Ty::Error
+            | Ty::Function
+            | Ty::Table
+            | Ty::Named(..)
+            | Ty::Record(_)
+            | Ty::Param(_) => {
+                self.args_types(args, &[]);
+                Pack::any()
+            }
+            Ty::Unknown => {
+                self.args_types(args, &[]);
+                self.report(
+                    "E2004",
+                    span,
+                    "`unknown` must be narrowed before it is called",
+                );
+                Pack::any()
+            }
+            Ty::Secret(_) => {
+                self.args_types(args, &[]);
+                self.check_secret(callee, span);
+                Pack::any()
+            }
+            _ => {
+                self.args_types(args, &[]);
+                let msg = format!(
+                    "a value of type `{}` is not callable",
+                    self.env.display(callee)
+                );
+                self.report("E2004", span, msg);
+                Pack::any()
+            }
+        }
+    }
+
+    /// Overload resolution (spec §2.7): the first overload whose parameters
+    /// accept the non-function arguments.
+    fn call_overloads(
+        &mut self,
+        overloads: &[TypeId],
+        args: &Args,
+        span: Span,
+        expected: Option<TypeId>,
+    ) -> Pack {
+        let exprs = Self::arg_exprs(args);
+        // Argument types without contextual typing (function expressions
+        // match any function type).
+        let saved_diags = self.diagnostics.len();
+        let arg_types: Vec<TypeId> = exprs
+            .iter()
+            .map(|e| {
+                if matches!(e.kind, ExprKind::Function(_)) {
+                    Types::FUNCTION
+                } else {
+                    self.peek_or_check(e)
+                }
+            })
+            .collect();
+        self.diagnostics.truncate(saved_diags);
+        for &o in overloads {
+            let Ty::Func(f) = self.env.types.get(o).clone() else {
+                continue;
+            };
+            if self.accepts(&f, &arg_types) {
+                return self
+                    .call_func(&f, args, span, expected, true)
+                    .unwrap_or_else(Pack::any);
+            }
+        }
+        // No overload matches (E2012).
+        self.args_types(args, &[]);
+        let list: Vec<String> = overloads.iter().map(|&o| self.env.display(o)).collect();
+        let got: Vec<String> = arg_types.iter().map(|&t| self.env.display(t)).collect();
+        let msg = format!(
+            "no overload matches the arguments ({}); overloads:\n  {}",
+            got.join(", "),
+            list.join("\n  ")
+        );
+        self.report("E2012", span, msg);
+        Pack::any()
+    }
+
+    fn peek_or_check(&mut self, e: &Expr) -> TypeId {
+        match self.expr_types.get(&(e.span.start, e.span.end)) {
+            Some(&t) => t,
+            None => {
+                // A check without lasting effects on the flow.
+                let saved = self.flow.clone();
+                let t = self.infer(e);
+                self.flow = saved;
+                t
+            }
+        }
+    }
+
+    /// Whether `f` accepts arguments of these types (overload filtering).
+    fn accepts(&mut self, f: &Func, args: &[TypeId]) -> bool {
+        let f = self.instantiate_any(f);
+        for (i, &a) in args.iter().enumerate() {
+            let p = match f.params.get(i) {
+                Some(p) => p.ty,
+                None => match &f.rest {
+                    Some(Rest::Variadic(t)) => *t,
+                    Some(Rest::Pack(_)) => Types::ANY,
+                    None => return false,
+                },
+            };
+            if a == Types::FUNCTION
+                && matches!(
+                    self.env.types.get(p),
+                    Ty::Func(_) | Ty::Function | Ty::Any | Ty::Union(_)
+                )
+            {
+                continue;
+            }
+            if !self.env.assignable(a, p, self.mode) {
+                return false;
+            }
+        }
+        f.params.iter().skip(args.len()).all(|p| p.optional)
+    }
+
+    /// `f` with its type parameters as `any`.
+    fn instantiate_any(&mut self, f: &Func) -> Func {
+        if f.type_params.is_empty() {
+            return f.clone();
+        }
+        let mut s = Subst::default();
+        for p in &f.type_params {
+            if self.env.params[p.0 as usize].pack {
+                s.packs.insert(*p, Pack::any());
+            } else {
+                s.types.insert(*p, Types::ANY);
+            }
+        }
+        subst::apply_func(&mut self.env.types, f, &s)
+    }
+
+    /// Checks a call of `f`: arity (E2006, W2055, E2007), argument types
+    /// (E2001), generic inference. Returns the results.
+    fn call_func(
+        &mut self,
+        f: &Func,
+        args: &Args,
+        span: Span,
+        expected: Option<TypeId>,
+        report: bool,
+    ) -> Option<Pack> {
+        let exprs = Self::arg_exprs(args);
+        let generic = !f.type_params.is_empty();
+        // First pass: infer type arguments from the non-function arguments.
+        let mut s = Subst::default();
+        let mut arg_types: Vec<Option<TypeId>> = vec![None; exprs.len()];
+        if generic {
+            for (i, e) in exprs.iter().enumerate() {
+                if matches!(e.kind, ExprKind::Function(_)) {
+                    continue;
+                }
+                let t = self.infer(e);
+                arg_types[i] = Some(t);
+                if let Some(p) = self.param_at(f, i) {
+                    self.unify(p, t, &mut s);
+                }
+            }
+            // Expected results give type arguments too.
+            if let (Some(exp), Some(&r)) = (expected, f.ret.types.first()) {
+                self.unify(r, exp, &mut s);
+            }
+            // The variadic tail binds a pack parameter.
+            if let Some(Rest::Pack(p)) = &f.rest {
+                let fixed = f.params.len();
+                let mut pack = Pack::default();
+                for t in arg_types.iter().skip(fixed).flatten() {
+                    pack.types.push(*t);
+                }
+                s.packs.insert(*p, pack);
+            }
+            // Unbound parameters are `any`.
+            for p in &f.type_params {
+                if self.env.params[p.0 as usize].pack {
+                    s.packs.entry(*p).or_insert_with(Pack::any);
+                } else {
+                    s.types.entry(*p).or_insert(Types::ANY);
+                }
+            }
+        }
+        let f = if generic {
+            subst::apply_func(&mut self.env.types, f, &s)
+        } else {
+            f.clone()
+        };
+        // Second pass: check every argument against its parameter.
+        let n_args = exprs.len();
+        for (i, e) in exprs.iter().enumerate() {
+            let p = self.param_at(&f, i);
+            let multi = i + 1 == n_args && is_multi(e);
+            let t = match arg_types[i] {
+                Some(t) if !matches!(e.kind, ExprKind::Function(_)) => t,
+                _ => {
+                    if multi {
+                        let pack = self.expr_inner(e, p);
+                        let first = pack.types.first().copied().unwrap_or(Types::NIL);
+                        self.expr_types.insert((e.span.start, e.span.end), first);
+                        // The extra values of a final multi-value argument.
+                        for (j, &extra) in pack.types.iter().enumerate().skip(1) {
+                            if let Some(pt) = self.param_at(&f, i + j)
+                                && report
+                            {
+                                self.check_assignable(e.span, extra, pt);
+                            }
+                        }
+                        first
+                    } else {
+                        self.check(e, p)
+                    }
+                }
+            };
+            match p {
+                Some(pt) => {
+                    if report {
+                        self.check_assignable(e.span, t, pt);
+                    }
+                }
+                None if report => {
+                    let code = if f.unannotated && self.mode == super::query::Mode::Basic {
+                        "W2055"
+                    } else {
+                        "E2006"
+                    };
+                    let msg = format!(
+                        "too many arguments: expected {}, got {}",
+                        f.params.len(),
+                        n_args
+                    );
+                    self.report(code, e.span, msg);
+                    break;
+                }
+                None => {}
+            }
+        }
+        // Missing arguments (E2007): a final multi-value argument may supply them.
+        let supplied = if exprs.last().is_some_and(|e| is_multi(e)) {
+            usize::MAX
+        } else {
+            n_args
+        };
+        if report && supplied != usize::MAX {
+            for p in f.params.iter().skip(supplied) {
+                if !p.optional {
+                    let name = p
+                        .name
+                        .as_deref()
+                        .map(|n| format!(" `{n}`"))
+                        .unwrap_or_default();
+                    let msg = format!(
+                        "missing argument{name} of type `{}`",
+                        self.env.display(p.ty)
+                    );
+                    self.report("E2007", span, msg);
+                    break;
+                }
+            }
+        }
+        Some(f.ret)
+    }
+
+    /// The parameter type at argument position `i`.
+    fn param_at(&self, f: &Func, i: usize) -> Option<TypeId> {
+        match f.params.get(i) {
+            Some(p) => Some(p.ty),
+            None => match &f.rest {
+                Some(Rest::Variadic(t)) => Some(*t),
+                Some(Rest::Pack(_)) => Some(Types::ANY),
+                None => None,
+            },
+        }
+    }
+
+    /// Infers type arguments: binds parameters in `pattern` to the
+    /// corresponding parts of `actual`.
+    pub fn unify(&mut self, pattern: TypeId, actual: TypeId, s: &mut Subst) {
+        match (
+            self.env.types.get(pattern).clone(),
+            self.env.types.get(actual).clone(),
+        ) {
+            (Ty::Param(p), _) => {
+                let widened = self.env.types.widen(actual);
+                match s.types.get(&p).copied() {
+                    Some(existing) if existing != widened => {
+                        let u = self.env.types.union(&[existing, widened]);
+                        s.types.insert(p, u);
+                    }
+                    Some(_) => {}
+                    None => {
+                        s.types.insert(p, widened);
+                    }
+                }
+            }
+            (Ty::Array(a), Ty::Array(b)) => self.unify(a, b, s),
+            (Ty::Map(k1, v1), Ty::Map(k2, v2)) => {
+                self.unify(k1, k2, s);
+                self.unify(v1, v2, s);
+            }
+            (Ty::Map(k, v), Ty::Array(e)) => {
+                self.unify(k, Types::NUMBER, s);
+                self.unify(v, e, s);
+            }
+            (Ty::Map(k, v), Ty::Record(r)) => {
+                if let Some((rk, rv)) = r.indexer {
+                    self.unify(k, rk, s);
+                    self.unify(v, rv, s);
+                } else if !r.fields.is_empty() {
+                    let keys: Vec<TypeId> =
+                        r.fields.keys().map(|n| self.env.types.str(n)).collect();
+                    let vals: Vec<TypeId> = r.fields.values().map(|f| f.ty).collect();
+                    let ku = self.env.types.union(&keys);
+                    let ku = self.env.types.widen(ku);
+                    let vu = self.env.types.union(&vals);
+                    self.unify(k, ku, s);
+                    self.unify(v, vu, s);
+                }
+            }
+            (Ty::Union(ps), _) => {
+                // `T?` against `X?`: bind T to the non-nil part.
+                let non_nil: Vec<TypeId> =
+                    ps.iter().copied().filter(|&x| x != Types::NIL).collect();
+                if non_nil.len() == 1 {
+                    let a = self.env.types.non_nil(actual);
+                    self.unify(non_nil[0], a, s);
+                }
+            }
+            (Ty::Named(d1, a1), Ty::Named(d2, a2)) if d1 == d2 => {
+                for (x, y) in a1.iter().zip(&a2) {
+                    self.unify(*x, *y, s);
+                }
+            }
+            (Ty::Func(pf), Ty::Func(af)) => {
+                for (pp, ap) in pf.params.iter().zip(&af.params) {
+                    self.unify(pp.ty, ap.ty, s);
+                }
+                for (pr, ar) in pf.ret.types.iter().zip(&af.ret.types) {
+                    self.unify(*pr, *ar, s);
+                }
+                if let Some(Rest::Pack(p)) = &pf.ret.rest {
+                    s.packs.insert(*p, af.ret.clone());
+                }
+            }
+            (Ty::Record(pr), Ty::Record(ar)) => {
+                for (n, f) in &pr.fields {
+                    if let Some(af) = ar.fields.get(n) {
+                        self.unify(f.ty, af.ty, s);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // -------------------------------------------------------------- super --
+
+    /// `super.name` / `super:name` inside a class body.
+    fn super_member(&mut self, name: &str, span: Span) -> TypeId {
+        let Some((def, is_static)) = self.classes.last().copied() else {
+            return Types::ANY;
+        };
+        let bases = self.env.def(def).bases.clone();
+        let Some(&base) = bases.first() else {
+            self.report(
+                "E3001",
+                span,
+                format!("class `{}` has no superclass", self.env.def(def).name),
+            );
+            return Types::ERROR;
+        };
+        if name.is_empty() {
+            return base;
+        }
+        match self.env.types.get(base).clone() {
+            Ty::Named(bd, args) => {
+                if is_static {
+                    self.env
+                        .static_member(bd, name)
+                        .map(|m| m.ty)
+                        .unwrap_or(Types::ANY)
+                } else {
+                    match self.env.instance_member(bd, &args, name) {
+                        Some((m, _)) => m.ty,
+                        None => {
+                            if !self.env.def(bd).native {
+                                let msg =
+                                    format!("`{}` has no member `{name}`", self.env.def(bd).name);
+                                self.report("E2003", span, msg);
+                            }
+                            Types::ANY
+                        }
+                    }
+                }
+            }
+            _ => Types::ANY,
+        }
+    }
+
+    pub fn is_super(&self, e: &Expr) -> bool {
+        matches!(&e.kind, ExprKind::Name(n) if n.text.as_ref() == "super")
+            && !self.classes.is_empty()
+            && self.lookup_var("super").is_none()
+    }
+
+    // ---------------------------------------------------------- iteration --
+
+    /// The loop variable types of a generic `for` (spec §2.4.4).
+    pub fn iteration_types(&mut self, values: &[TypeId], span: Span) -> Vec<TypeId> {
+        let Some(&iter) = values.first() else {
+            return Vec::new();
+        };
+        match self.env.types.get(iter).clone() {
+            Ty::Func(f) => {
+                let mut out: Vec<TypeId> = f.ret.types.clone();
+                if let Some(Rest::Variadic(t)) = f.ret.rest {
+                    out.push(t);
+                }
+                if let Some(first) = out.first_mut() {
+                    *first = self.env.types.non_nil(*first);
+                }
+                out
+            }
+            Ty::Any
+            | Ty::Error
+            | Ty::Function
+            | Ty::Intersection(_)
+            | Ty::Table
+            | Ty::Named(..) => Vec::new(),
+            Ty::Nil => {
+                self.report("E2004", span, "the iterator of this `for` is `nil`");
+                Vec::new()
+            }
+            _ => Vec::new(),
+        }
+    }
+}
+
+/// Expressions that may produce several values.
+pub fn is_multi(e: &Expr) -> bool {
+    matches!(
+        e.kind,
+        ExprKind::Call { .. }
+            | ExprKind::Method { .. }
+            | ExprKind::OptCall { .. }
+            | ExprKind::OptMethod { .. }
+            | ExprKind::Vararg
+    )
+}

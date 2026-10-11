@@ -2,6 +2,7 @@
 //! package (exports, imports, specifier resolution), constant evaluation
 //! across modules, and the dependency order of files.
 
+pub mod check;
 pub mod classes;
 pub mod constant;
 pub mod loadorder;

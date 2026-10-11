@@ -1,0 +1,197 @@
+-- Lua 5.1 as WoW provides it (spec §2.8): the base library, string, table,
+-- math, coroutine, the parts of os that WoW keeps, bit, and WoW's global
+-- aliases and helpers of its Lua environment.
+
+declare function assert<T>(value: T, message: any?, ...: any): T
+declare function collectgarbage(option: string?, arg: number?): any
+declare function error(message: any, level: number?): never
+declare function gcinfo(): number
+declare function getfenv(f: (function | number)?): table
+declare function getmetatable(object: any): table?
+declare function ipairs<V>(t: V[]): ((t: V[], i: number) -> (number?, V), V[], number)
+declare function loadstring(source: string, chunkname: string?): (((...any) -> ...any)?, string?)
+declare function newproxy(addMetatable: boolean?): userdata
+declare function next<K, V>(t: { [K]: V }, index: K?): (K?, V)
+declare function pairs<K, V>(t: { [K]: V }): ((t: { [K]: V }, key: K?) -> (K?, V), { [K]: V }, nil)
+declare function pcall<A..., R...>(f: (A...) -> R..., ...: A...): (boolean, R...)
+declare function print(...: any)
+declare function rawequal(a: any, b: any): boolean
+declare function rawget(t: table, key: any): any
+declare function rawset<T>(t: T, key: any, value: any): T
+declare function select(index: "#", ...: any): number
+declare function select(index: number, ...: any): ...any
+declare function setfenv<F>(f: F, env: table): F
+declare function setmetatable<T>(t: T, metatable: table?): T
+declare function tonumber(value: any, base: number?): number?
+declare function tostring(value: any): string
+declare function type(value: any): "nil" | "number" | "string" | "boolean" | "table" | "function" | "thread" | "userdata"
+declare function unpack<V>(t: V[], i: number?, j: number?): ...V
+declare function xpcall<R...>(f: () -> R..., handler: (err: any) -> any): (boolean, R...)
+
+declare global _G: { [string]: any }
+declare global _VERSION: string
+
+declare namespace string
+    function byte(s: string, i: number?, j: number?): ...number
+    function char(...: number): string
+    function find(s: string, pattern: string, init: number?, plain: boolean?): (number?, number?, ...string)
+    function format(format: string, ...: any): string
+    function gmatch(s: string, pattern: string): () -> ...string
+    function gsub(s: string, pattern: string, replacement: string | table | ((...string) -> any), n: number?): (string, number)
+    function join(separator: string, ...: any): string
+    function len(s: string): number
+    function lower(s: string): string
+    function match(s: string, pattern: string, init: number?): ...string
+    function rep(s: string, n: number): string
+    function reverse(s: string): string
+    function split(separator: string, s: string, limit: number?): ...string
+    function sub(s: string, i: number, j: number?): string
+    function trim(s: string, chars: string?): string
+    function upper(s: string): string
+end
+
+declare namespace table
+    function concat(t: (string | number)[], separator: string?, i: number?, j: number?): string
+    function foreach<K, V>(t: { [K]: V }, f: (key: K, value: V) -> any): any
+    function foreachi<V>(t: V[], f: (index: number, value: V) -> any): any
+    function getn(t: any[]): number
+    function insert<V>(t: V[], value: V)
+    function insert<V>(t: V[], position: number, value: V)
+    function maxn(t: table): number
+    function remove<V>(t: V[], position: number?): V?
+    function removemulti(t: any[], position: number, count: number?): ...any
+    function sort<V>(t: V[], comparator: ((a: V, b: V) -> boolean)?)
+    function wipe<T>(t: T): T
+end
+
+declare namespace math
+    function abs(x: number): number
+    function acos(x: number): number
+    function asin(x: number): number
+    function atan(x: number): number
+    function atan2(y: number, x: number): number
+    function ceil(x: number): number
+    function cos(x: number): number
+    function cosh(x: number): number
+    function deg(x: number): number
+    function exp(x: number): number
+    function floor(x: number): number
+    function fmod(x: number, y: number): number
+    function frexp(x: number): (number, number)
+    const huge: number
+    function ldexp(m: number, e: number): number
+    function log(x: number): number
+    function log10(x: number): number
+    function max(x: number, ...: number): number
+    function min(x: number, ...: number): number
+    function modf(x: number): (number, number)
+    const pi: number
+    function pow(x: number, y: number): number
+    function rad(x: number): number
+    function random(m: number?, n: number?): number
+    function randomseed(seed: number)
+    function sin(x: number): number
+    function sinh(x: number): number
+    function sqrt(x: number): number
+    function tan(x: number): number
+    function tanh(x: number): number
+end
+
+declare namespace coroutine
+    function create(f: (...any) -> ...any): thread
+    function isyieldable(): boolean
+    function resume(co: thread, ...: any): (boolean, ...any)
+    function running(): thread?
+    function status(co: thread): "running" | "suspended" | "normal" | "dead"
+    function wrap(f: (...any) -> ...any): (...any) -> ...any
+    function yield(...: any): ...any
+end
+
+declare namespace os
+    function clock(): number
+    function date(format: string?, time: number?): any
+    function difftime(t2: number, t1: number): number
+    function time(t: table?): number
+end
+
+declare namespace bit
+    function arshift(x: number, n: number): number
+    function band(x: number, ...: number): number
+    function bnot(x: number): number
+    function bor(x: number, ...: number): number
+    function bxor(x: number, ...: number): number
+    function lshift(x: number, n: number): number
+    function mod(x: number, y: number): number
+    function rshift(x: number, n: number): number
+    function tobit(x: number): number
+    function tohex(x: number, n: number?): string
+end
+
+-- WoW's global aliases of library functions.
+declare function strbyte(s: string, i: number?, j: number?): ...number
+declare function strchar(...: number): string
+declare function strfind(s: string, pattern: string, init: number?, plain: boolean?): (number?, number?, ...string)
+declare function format(format: string, ...: any): string
+declare function gsub(s: string, pattern: string, replacement: string | table | ((...string) -> any), n: number?): (string, number)
+declare function strlen(s: string): number
+declare function strlower(s: string): string
+declare function strmatch(s: string, pattern: string, init: number?): ...string
+declare function gmatch(s: string, pattern: string): () -> ...string
+declare function strrep(s: string, n: number): string
+declare function strrev(s: string): string
+declare function strsub(s: string, i: number, j: number?): string
+declare function strupper(s: string): string
+declare function strsplit(separator: string, s: string, limit: number?): ...string
+declare function strsplittable(separator: string, s: string, limit: number?): string[]
+declare function strjoin(separator: string, ...: any): string
+declare function strtrim(s: string, chars: string?): string
+declare function strconcat(...: any): string
+declare function strlenutf8(s: string): number
+declare function strcmputf8i(a: string, b: string): number
+declare function tinsert<V>(t: V[], value: V)
+declare function tinsert<V>(t: V[], position: number, value: V)
+declare function tremove<V>(t: V[], position: number?): V?
+declare function sort<V>(t: V[], comparator: ((a: V, b: V) -> boolean)?)
+declare function wipe<T>(t: T): T
+declare function foreach<K, V>(t: { [K]: V }, f: (key: K, value: V) -> any): any
+declare function foreachi<V>(t: V[], f: (index: number, value: V) -> any): any
+declare function getn(t: any[]): number
+declare function abs(x: number): number
+declare function ceil(x: number): number
+declare function floor(x: number): number
+declare function max(x: number, ...: number): number
+declare function min(x: number, ...: number): number
+declare function mod(x: number, y: number): number
+declare function sqrt(x: number): number
+declare function exp(x: number): number
+declare function log(x: number): number
+declare function log10(x: number): number
+declare function frexp(x: number): (number, number)
+declare function ldexp(m: number, e: number): number
+declare function deg(x: number): number
+declare function rad(x: number): number
+declare function random(m: number?, n: number?): number
+declare function fastrandom(m: number?, n: number?): number
+declare function date(format: string?, time: number?): any
+declare function time(t: table?): number
+declare function difftime(t2: number, t1: number): number
+
+-- WoW's helpers of its Lua environment.
+declare function tostringall(...: any): ...string
+declare function debugstack(thread: (thread | number)?, start: number?, count1: number?, count2: number?): string
+declare function debuglocals(level: number?): string
+declare function debugprofilestart()
+declare function debugprofilestop(): number
+declare function geterrorhandler(): (err: any) -> any
+declare function seterrorhandler(handler: (err: any) -> any)
+declare function securecall<A..., R...>(f: ((A...) -> R...) | string, ...: A...): R...
+declare function securecallfunction<A..., R...>(f: (A...) -> R..., ...: A...): R...
+declare function secureexecuterange(t: table, f: (key: any, value: any, ...any) -> any, ...: any)
+declare function issecure(): boolean
+declare function issecurevariable(t: table | string, name: string?): (boolean, string?)
+declare function forceinsecure()
+declare function hooksecurefunc(name: string, hook: (...any) -> any)
+declare function hooksecurefunc(t: table, name: string, hook: (...any) -> any)
+declare function scrub(...: any): ...any
+declare function issecretvalue(value: unknown): value is Secret<unknown>
+declare function canaccessvalue(value: unknown): boolean

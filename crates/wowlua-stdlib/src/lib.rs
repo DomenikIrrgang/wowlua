@@ -13,10 +13,16 @@ pub struct File {
 /// Declarations in scope in every package (until the generated `wow-api`
 /// packages of milestone M4 provide them).
 pub fn declarations() -> &'static [File] {
-    &[File {
-        path: "<wowlua>/widgets.d.wowlua",
-        text: include_str!("../decl/widgets.d.wowlua"),
-    }]
+    &[
+        File {
+            path: "<wowlua>/lua.d.wowlua",
+            text: include_str!("../decl/lua.d.wowlua"),
+        },
+        File {
+            path: "<wowlua>/widgets.d.wowlua",
+            text: include_str!("../decl/widgets.d.wowlua"),
+        },
+    ]
 }
 
 /// A `wowlua:*` module: its wowlua source and, optionally, a declaration
@@ -80,6 +86,6 @@ mod tests {
         assert!(module("../etc").is_none());
         assert!(module("").is_none());
         assert_eq!(src_rel("events"), "@wowlua/events.wowlua");
-        assert!(declarations()[0].text.contains("@widget(\"Button\")"));
+        assert!(declarations()[1].text.contains("@widget(\"Button\")"));
     }
 }
