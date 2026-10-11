@@ -1,0 +1,19 @@
+[package]
+name = "wowlua-sema"
+description = "Semantic analysis: modules, resolution, load order, constant evaluation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+indexmap.workspace = true
+wowlua-diagnostics.workspace = true
+wowlua-luair.workspace = true
+wowlua-span.workspace = true
+wowlua-syntax.workspace = true
+
+[lints]
+workspace = true

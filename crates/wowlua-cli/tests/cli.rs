@@ -566,3 +566,150 @@ fn check_and_fmt() {
         .assert()
         .success();
 }
+
+/// Loads a built AddOn into the embedded Lua 5.1 VM like WoW does: the
+/// TOC's Lua files in order, each with `(addonName, addonTable)` as `...`.
+/// Returns what it printed.
+fn run_addon(dir: &Path, name: &str) -> String {
+    let toc = fs::read_to_string(dir.join(format!("{name}.toc"))).unwrap();
+    let lua = mlua::Lua::new();
+    lua.load(
+        r##"__out = {}
+        print = function(...)
+          local parts = {}
+          for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+          __out[#__out + 1] = table.concat(parts, " ")
+        end"##,
+    )
+    .exec()
+    .unwrap();
+    let ns = lua.create_table().unwrap();
+    for line in toc
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+    {
+        let path = line.split(" [").next().unwrap().replace('\\', "/");
+        if !path.ends_with(".lua") {
+            continue;
+        }
+        let code = fs::read(dir.join(&path)).unwrap();
+        let chunk = lua.load(code).set_name(format!("@{path}"));
+        if let Err(e) = chunk.call::<()>((name, ns.clone())) {
+            panic!("{path}: {e}");
+        }
+    }
+    let out: mlua::Table = lua.globals().get("__out").unwrap();
+    out.sequence_values::<String>()
+        .map(Result::unwrap)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn modules_build_and_run_in_load_order() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"mods\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/core/math.wowlua",
+                "export const SCALE = 2\nexport function clamp(v: number, lo: number, hi: number): number\n\treturn math.max(lo, math.min(hi, v))\nend\nexport local counter = { n = 0 }\nexport type Num = number\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import clamp, SCALE as S, counter from \"/core/math\"\nimport type Num from \"/core/math\"\nimport * as Str from \"./util/str\"\nimport round from \"/legacy\"\ncounter.n += 1\nlocal x: Num = clamp(5, 0, 1)\nprint(x, S, Str.shout(\"hi\"), counter.n, round(2.6))\n",
+            ),
+            (
+                "src/util/str.wowlua",
+                "import counter from \"/core/math\"\nexport function shout(s: string): string\n\tcounter.n += 1\n\treturn s:upper() .. \"!\"\nend\n",
+            ),
+            (
+                "src/legacy.lua",
+                "local _, ns = ...\nns.__wowlua.define(\"legacy\", { round = function(x) return math.floor(x + 0.5) end })\n",
+            ),
+            (
+                "src/legacy.d.wowlua",
+                "declare module \"/legacy\"\n\tfunction round(x: number): number\nend\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let dist = dir.path().join("dist/dev/Mods");
+    let toc = fs::read_to_string(dist.join("Mods.toc")).unwrap();
+    let files: Vec<&str> = toc
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
+    assert_eq!(
+        files,
+        [
+            "wowlua\\runtime.lua",
+            "src\\core\\math.lua",
+            "src\\legacy.lua",
+            "src\\util\\str.lua",
+            "src\\main.lua"
+        ],
+        "{toc}"
+    );
+    assert_eq!(run_addon(&dist, "Mods"), "1 2 HI! 2 3");
+    let main = fs::read_to_string(dist.join("src/main.lua")).unwrap();
+    assert_eq!(main.lines().count(), 7, "lines are preserved:\n{main}");
+    assert!(
+        main.contains("print(x, 2, "),
+        "constants are inlined:\n{main}"
+    );
+}
+
+#[test]
+fn module_errors() {
+    let cases: &[(&str, &str, &str)] = &[
+        ("import nope from \"/b\"\n", "export local a = 1\n", "E1012"),
+        ("import a from \"/missing\"\n", "", "E1015"),
+        ("import a from \"/B\"\n", "export local a = 1\n", "E1013"),
+        (
+            "import a from \"/b\"\na = 2\n",
+            "export local a = 1\n",
+            "E1010",
+        ),
+        (
+            "local x = 1\nimport a from \"/b\"\n",
+            "export local a = 1\n",
+            "E1011",
+        ),
+        ("export local v = 1\nreturn v\n", "", "E1032"),
+        (
+            "import a from \"/b\"\nexport local m = a\n",
+            "import m from \"/main\"\nexport local a = 1\n",
+            "E1014",
+        ),
+        ("import _ from \"wowlua:events\"\n", "", "E1015"),
+        (
+            "print(f())\nexport function f() return 1 end\n",
+            "",
+            "E1037",
+        ),
+    ];
+    for (main, b, code) in cases {
+        let dir = tempfile::tempdir().unwrap();
+        let mut files = vec![
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"err\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", *main),
+        ];
+        if !b.is_empty() {
+            files.push(("src/b.wowlua", *b));
+        }
+        write(dir.path(), &files);
+        wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains(format!("error[{code}]")));
+    }
+}

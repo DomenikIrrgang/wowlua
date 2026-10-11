@@ -1263,6 +1263,7 @@ version = "0.2.0"
 dependencies = [
  "assert_cmd",
  "clap",
+ "mlua",
  "notify-debouncer-mini",
  "predicates",
  "tempfile",
@@ -1304,6 +1305,8 @@ dependencies = [
  "wowlua-lower",
  "wowlua-luair",
  "wowlua-manifest",
+ "wowlua-runtime",
+ "wowlua-sema",
  "wowlua-span",
  "wowlua-syntax",
  "wowlua-toc",
@@ -1336,6 +1339,7 @@ dependencies = [
  "stacker",
  "wowlua-diagnostics",
  "wowlua-luair",
+ "wowlua-sema",
  "wowlua-span",
  "wowlua-syntax",
 ]
@@ -1363,6 +1367,24 @@ dependencies = [
  "wowlua-diagnostics",
  "wowlua-flavors",
  "wowlua-span",
+]
+
+[[package]]
+name = "wowlua-runtime"
+version = "0.2.0"
+dependencies = [
+ "mlua",
+]
+
+[[package]]
+name = "wowlua-sema"
+version = "0.2.0"
+dependencies = [
+ "indexmap",
+ "wowlua-diagnostics",
+ "wowlua-luair",
+ "wowlua-span",
+ "wowlua-syntax",
 ]
 
 [[package]]

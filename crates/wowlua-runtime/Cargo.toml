@@ -1,0 +1,17 @@
+[package]
+name = "wowlua-runtime"
+description = "Lua sources of the wowlua runtime (__wl), sliced by feature"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+mlua.workspace = true
+
+[lints]
+workspace = true

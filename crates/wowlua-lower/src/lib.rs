@@ -3,30 +3,55 @@
 //! "preceding statements" mechanism of codegen §14.4. Without type
 //! information (milestone M4), every file uses the basic-mode forms.
 
-mod constant;
-
-use constant::{Const, quote};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_luair::ir::{self, Pos};
+use wowlua_sema::constant::{self, Const, quote};
 use wowlua_span::Span;
 use wowlua_syntax::Parse;
 use wowlua_syntax::ast::*;
 use wowlua_syntax::features::{Feature, features};
 use wowlua_syntax::token::TriviaKind;
 
-pub use constant::{format_g14, format_number};
+pub use wowlua_sema::constant::{format_g14, format_number};
 
 /// Features this compiler version cannot lower yet.
 fn unsupported(feature: Feature) -> bool {
-    matches!(
-        feature,
-        Feature::Decorator | Feature::Class | Feature::Enum | Feature::Module
-    )
+    matches!(feature, Feature::Decorator | Feature::Class | Feature::Enum)
+}
+
+/// What the lowering of one file needs to know about the package.
+#[derive(Clone, Debug, Default)]
+pub struct Context {
+    /// The module ID when the file is a module (it imports or exports).
+    pub module: Option<String>,
+    /// Resolved imports, by the start offset of the import statement.
+    pub imports: HashMap<u32, ImportContext>,
+}
+
+#[derive(Clone, Debug)]
+pub enum ImportContext {
+    /// A wowlua module, or a plain Lua file registering one.
+    Module {
+        id: String,
+        /// The module loads after this file (a run-time cycle): bindings
+        /// are read through the module table (spec §5.5).
+        lazy: bool,
+        exports: HashMap<String, wowlua_sema::Export>,
+    },
+    /// `wowlua:meta`.
+    Meta,
+    /// XML or plain Lua: load order only.
+    LoadOnly,
+}
+
+/// Lowers a parsed file without errors, as a script (no package context).
+pub fn lower(parse: &Parse, src: &[u8]) -> Result<ir::Chunk, Vec<Diagnostic>> {
+    lower_with(parse, src, &Context::default())
 }
 
 /// Lowers a parsed file without errors. `src` is the file's bytes.
-pub fn lower(parse: &Parse, src: &[u8]) -> Result<ir::Chunk, Vec<Diagnostic>> {
+pub fn lower_with(parse: &Parse, src: &[u8], ctx: &Context) -> Result<ir::Chunk, Vec<Diagnostic>> {
     let mut found: BTreeMap<Feature, (Span, usize)> = BTreeMap::new();
     for (feature, span) in features(&parse.chunk) {
         if unsupported(feature) {
@@ -57,20 +82,78 @@ pub fn lower(parse: &Parse, src: &[u8]) -> Result<ir::Chunk, Vec<Diagnostic>> {
     let mut lowerer = Lowerer {
         parse,
         src,
+        ctx,
         scopes: vec![Scope::default()],
         prelude: Vec::new(),
         temps: 0,
         aliases: BTreeMap::new(),
         errors: Vec::new(),
         loops: Vec::new(),
+        func_depth: 0,
+        pending_functions: HashSet::new(),
+        uses_runtime: false,
+        has_exports: false,
     };
+    // Exported functions are hoisted (spec §5.1, decision L24).
+    let mut hoisted = Vec::new();
+    if ctx.module.is_some() {
+        for s in &parse.chunk.block.stmts {
+            if let StmtKind::Export(inner) = &s.kind
+                && let StmtKind::Function { name, .. } = &inner.kind
+            {
+                let n = name.path[0].text.to_string();
+                lowerer.declare(&n, Binding::Export);
+                lowerer.pending_functions.insert(n.clone());
+                hoisted.push(n);
+            }
+        }
+    }
     let mut stmts = lowerer.stmts(&parse.chunk.block.stmts);
     if !lowerer.errors.is_empty() {
         return Err(lowerer.errors);
     }
-    // Prologue (spec codegen §14.2): aliases of shadowed globals, on line 1.
+    // Prologue (spec codegen §14.2), on line 1: the runtime, the export
+    // table, hoisted declarations and aliases of shadowed globals.
     let line1 = Pos::new(1, 0);
-    let prologue: Vec<ir::Stmt> = lowerer
+    let mut prologue: Vec<ir::Stmt> = Vec::new();
+    if ctx.module.is_some() {
+        lowerer.uses_runtime = true;
+    }
+    if lowerer.uses_runtime {
+        let select = name_expr(ident("select", line1));
+        let addon_table = call(
+            select,
+            vec![
+                lit(ir::ExprKind::Number("2".into()), line1),
+                lit(ir::ExprKind::Vararg, line1),
+            ],
+            line1,
+        );
+        prologue.push(local(
+            generated("__wl", line1),
+            field(addon_table, "__wowlua", line1),
+            line1,
+        ));
+    }
+    if let (Some(id), true) = (&ctx.module, lowerer.has_exports) {
+        let module = field(name_expr(generated("__wl", line1)), "module", line1);
+        let value = call(
+            module,
+            vec![lit(ir::ExprKind::String(quote(id.as_bytes())), line1)],
+            line1,
+        );
+        prologue.push(local(generated("__wl_exports", line1), value, line1));
+    }
+    if !hoisted.is_empty() {
+        prologue.push(stmt(
+            ir::StmtKind::Local {
+                names: hoisted.iter().map(|n| ident(n, line1)).collect(),
+                values: Vec::new(),
+            },
+            line1,
+        ));
+    }
+    let aliases: Vec<ir::Stmt> = lowerer
         .aliases
         .iter()
         .map(|(alias, (global, member))| {
@@ -87,6 +170,7 @@ pub fn lower(parse: &Parse, src: &[u8]) -> Result<ir::Chunk, Vec<Diagnostic>> {
             }
         })
         .collect();
+    prologue.extend(aliases);
     stmts.splice(0..0, prologue);
     let mut chunk = ir::Chunk {
         block: ir::Block {
@@ -239,6 +323,15 @@ fn has_side_effects(e: &ir::Expr) -> bool {
 #[derive(Clone, Debug)]
 enum Binding {
     Local,
+    /// An imported binding (immutable, spec §5.2).
+    Import,
+    /// An import read through its module table (`__wl_m1.Name`).
+    LazyImport {
+        table: String,
+        name: String,
+    },
+    /// An exported binding (immutable, spec §5.1).
+    Export,
     /// A `const` folded to a value: references are replaced by it.
     Const(Const),
     /// A `const` that is a normal local at run time.
@@ -262,6 +355,13 @@ struct LoopInfo {
 struct Lowerer<'a> {
     parse: &'a Parse,
     src: &'a [u8],
+    ctx: &'a Context,
+    /// Nesting of function bodies (0 = top level of the file).
+    func_depth: u32,
+    /// Hoisted exported functions not defined yet (E1037).
+    pending_functions: HashSet<String>,
+    uses_runtime: bool,
+    has_exports: bool,
     scopes: Vec<Scope>,
     /// Statements that must run before the statement being lowered.
     prelude: Vec<ir::Stmt>,
@@ -709,7 +809,8 @@ impl<'a> Lowerer<'a> {
             }
             // Type-only declarations are erased.
             StmtKind::TypeAlias(_) | StmtKind::Interface(_) | StmtKind::Declare(_) => Vec::new(),
-            StmtKind::Import(_) | StmtKind::Export(_) => Vec::new(),
+            StmtKind::Import(import) => self.import(import, s.span, pos),
+            StmtKind::Export(inner) => self.export(inner, pos),
             // Rejected before lowering.
             StmtKind::Class(_) | StmtKind::Enum(_) | StmtKind::Error => Vec::new(),
         }
@@ -727,17 +828,29 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    /// Assignment to a constant is an error (E2010).
+    /// Assignment to a constant (E2010) or to an imported or exported
+    /// binding (E1010) is an error.
     fn check_assignable(&mut self, name: &Name) {
-        if matches!(
-            self.lookup(&name.text),
-            Some(Binding::Const(_) | Binding::ConstLocal)
-        ) {
-            self.error(
+        match self.lookup(&name.text) {
+            Some(Binding::Const(_) | Binding::ConstLocal) => self.error(
                 "E2010",
                 name.span,
                 format!("cannot assign to the constant `{}`", name.text),
-            );
+            ),
+            Some(Binding::Import | Binding::LazyImport { .. }) => self.error(
+                "E1010",
+                name.span,
+                format!("cannot assign to the imported binding `{}`", name.text),
+            ),
+            Some(Binding::Export) => self.error(
+                "E1010",
+                name.span,
+                format!(
+                    "cannot assign to the exported binding `{}`; mutate a table's contents or export accessor functions",
+                    name.text
+                ),
+            ),
+            _ => {}
         }
     }
 
@@ -892,6 +1005,7 @@ impl<'a> Lowerer<'a> {
     // ---------------------------------------------------------- functions --
 
     fn func(&mut self, f: &FuncBody, method: bool) -> ir::Func {
+        self.func_depth += 1;
         let saved_loops = std::mem::take(&mut self.loops);
         let saved_prelude = std::mem::take(&mut self.prelude);
         self.push_scope();
@@ -923,6 +1037,7 @@ impl<'a> Lowerer<'a> {
         self.pop_scope();
         self.loops = saved_loops;
         self.prelude = saved_prelude;
+        self.func_depth -= 1;
         ir::Func {
             pos,
             params: f.params.iter().map(|p| self.ident(&p.name)).collect(),
@@ -931,6 +1046,165 @@ impl<'a> Lowerer<'a> {
                 stmts,
                 end: self.span_pos(f.end_span),
             },
+        }
+    }
+
+    // ------------------------------------------------------------ modules --
+
+    fn runtime_ref(&mut self, pos: Pos) -> ir::Expr {
+        self.uses_runtime = true;
+        name_expr(generated("__wl", pos))
+    }
+
+    /// `__wl.require("id")` (`, true` for lazy bindings).
+    fn require(&mut self, id: &str, lazy: bool, pos: Pos) -> ir::Expr {
+        let wl = self.runtime_ref(pos);
+        let mut args = vec![lit(ir::ExprKind::String(quote(id.as_bytes())), pos)];
+        if lazy {
+            args.push(lit(ir::ExprKind::True, pos));
+        }
+        call(field(wl, "require", pos), args, pos)
+    }
+
+    /// An import (spec §5.2, §5.5): one local per binding, on the import's
+    /// line; folded constants are inlined; types are erased.
+    fn import(&mut self, import: &Import, span: Span, pos: Pos) -> Vec<ir::Stmt> {
+        if import.type_only {
+            return Vec::new();
+        }
+        let Some(target) = self.ctx.imports.get(&span.start).cloned() else {
+            self.error(
+                "E1015",
+                span,
+                "imports need the package context (build the package with `wowlua build`)",
+            );
+            return Vec::new();
+        };
+        let (id, lazy, exports) = match target {
+            ImportContext::Module { id, lazy, exports } => (id, lazy, exports),
+            ImportContext::Meta => {
+                self.error("E1015", span, "`wowlua:meta` is not available yet");
+                return Vec::new();
+            }
+            ImportContext::LoadOnly => return Vec::new(),
+        };
+        match &import.clause {
+            ImportClause::SideEffect => Vec::new(),
+            ImportClause::Namespace(name) => {
+                self.declare(&name.text, Binding::Import);
+                let value = self.require(&id, lazy, pos);
+                vec![local(self.ident(name), value, pos)]
+            }
+            ImportClause::Names(specs) => {
+                let mut values: Vec<&ImportSpec> = Vec::new();
+                for spec in specs {
+                    let local_name = spec.alias.as_ref().unwrap_or(&spec.name);
+                    match exports.get(spec.name.text.as_ref()) {
+                        Some(wowlua_sema::Export::Const(Some(c))) => {
+                            self.declare(&local_name.text, Binding::Const(c.clone()))
+                        }
+                        Some(wowlua_sema::Export::Type) => {}
+                        _ => values.push(spec),
+                    }
+                }
+                if values.is_empty() {
+                    return Vec::new();
+                }
+                if lazy {
+                    let table = self.temp("m");
+                    let value = self.require(&id, true, pos);
+                    for spec in &values {
+                        let local_name = spec.alias.as_ref().unwrap_or(&spec.name);
+                        self.declare(
+                            &local_name.text,
+                            Binding::LazyImport {
+                                table: table.clone(),
+                                name: spec.name.text.to_string(),
+                            },
+                        );
+                    }
+                    return vec![local(generated(&table, pos), value, pos)];
+                }
+                let mut out = Vec::new();
+                let source = if values.len() == 1 {
+                    self.require(&id, false, pos)
+                } else {
+                    let table = self.temp("m");
+                    let value = self.require(&id, false, pos);
+                    out.push(local(generated(&table, pos), value, pos));
+                    name_expr(generated(&table, pos))
+                };
+                let names: Vec<ir::Ident> = values
+                    .iter()
+                    .map(|spec| self.ident(spec.alias.as_ref().unwrap_or(&spec.name)))
+                    .collect();
+                let fields: Vec<ir::Expr> = values
+                    .iter()
+                    .map(|spec| field(source.clone(), &spec.name.text, pos))
+                    .collect();
+                for spec in &values {
+                    let local_name = spec.alias.as_ref().unwrap_or(&spec.name);
+                    self.declare(&local_name.text, Binding::Import);
+                }
+                out.push(stmt(
+                    ir::StmtKind::Local {
+                        names,
+                        values: fields,
+                    },
+                    pos,
+                ));
+                out
+            }
+        }
+    }
+
+    fn export_assign(&mut self, name: &str, value: ir::Expr, pos: Pos) -> ir::Stmt {
+        self.has_exports = true;
+        let table = name_expr(generated("__wl_exports", pos));
+        assign(field(table, name, pos), value, pos)
+    }
+
+    /// `export <declaration>` (spec §5.1): the declaration, then its values
+    /// stored in the module's export table.
+    fn export(&mut self, inner: &Stmt, pos: Pos) -> Vec<ir::Stmt> {
+        match &inner.kind {
+            StmtKind::Local { names, .. } => {
+                let mut out = self.stmt(inner);
+                for n in names {
+                    self.declare(&n.name.text, Binding::Export);
+                    let value = name_expr(self.ident(&n.name));
+                    let s = self.export_assign(&n.name.text, value, pos);
+                    out.push(s);
+                }
+                out
+            }
+            StmtKind::Function { name, func } => {
+                let n = &name.path[0];
+                let fpos = self.span_pos(inner.span);
+                let f = self.func(func, false);
+                self.pending_functions.remove(n.text.as_ref());
+                let target = name_expr(self.ident(n));
+                let value = ir::Expr::new(ir::ExprKind::Function(Box::new(f)), fpos);
+                let export = self.export_assign(&n.text, name_expr(self.ident(n)), pos);
+                vec![assign(target, value, fpos), export]
+            }
+            StmtKind::Const { name, value, .. } => {
+                let mut out = self.stmt(inner);
+                let exported = match self.lookup(&name.text).cloned() {
+                    Some(Binding::Const(c)) => c.to_expr(pos),
+                    _ => {
+                        self.declare(&name.text, Binding::Export);
+                        name_expr(self.ident(name))
+                    }
+                };
+                if value.is_some() {
+                    let s = self.export_assign(&name.text, exported, pos);
+                    out.push(s);
+                }
+                out
+            }
+            // `export type`, `export interface`: types only.
+            _ => Vec::new(),
         }
     }
 
@@ -1007,7 +1281,11 @@ impl<'a> Lowerer<'a> {
             }
             ExprKind::Field { obj, name } => {
                 let o = self.expr(obj);
-                let o = if is_name(&o) { o } else { self.store_temp(o, "o") };
+                let o = if is_name(&o) {
+                    o
+                } else {
+                    self.store_temp(o, "o")
+                };
                 let e = ir::Expr::new(
                     ir::ExprKind::Field {
                         obj: Box::new(o),
@@ -1019,7 +1297,11 @@ impl<'a> Lowerer<'a> {
             }
             ExprKind::Index { obj, key } => {
                 let o = self.expr(obj);
-                let o = if is_name(&o) { o } else { self.store_temp(o, "o") };
+                let o = if is_name(&o) {
+                    o
+                } else {
+                    self.store_temp(o, "o")
+                };
                 let k = self.expr(key);
                 let k = if is_simple(&k) {
                     k
@@ -1148,8 +1430,24 @@ impl<'a> Lowerer<'a> {
             ExprKind::Vararg => K::Vararg,
             ExprKind::Function(f) => K::Function(Box::new(self.func(f, false))),
             ExprKind::Table(fields) => self.table(fields, e.span),
-            ExprKind::Name(n) => match self.lookup(&n.text) {
-                Some(Binding::Const(c)) => return c.clone().to_expr(pos),
+            ExprKind::Name(n) => match self.lookup(&n.text).cloned() {
+                Some(Binding::Const(c)) => return c.to_expr(pos),
+                Some(Binding::LazyImport { table, name }) => {
+                    return field(name_expr(generated(&table, pos)), &name, pos);
+                }
+                Some(Binding::Export)
+                    if self.func_depth == 0 && self.pending_functions.contains(n.text.as_ref()) =>
+                {
+                    self.error(
+                        "E1037",
+                        n.span,
+                        format!(
+                            "`{}` is used before its definition runs (hoisted functions are `nil` until then)",
+                            n.text
+                        ),
+                    );
+                    K::Name(self.ident(n))
+                }
                 _ => K::Name(self.ident(n)),
             },
             ExprKind::Index { obj, key } => {
@@ -1547,34 +1845,10 @@ impl<'a> Lowerer<'a> {
 
     /// The value of a constant expression (spec §1.3.2), if it is one.
     fn const_value(&self, e: &Expr) -> Option<Const> {
-        match &e.kind {
-            ExprKind::Nil => Some(Const::Nil),
-            ExprKind::True => Some(Const::Bool(true)),
-            ExprKind::False => Some(Const::Bool(false)),
-            ExprKind::Number(n) => n.value.map(Const::Number),
-            ExprKind::String(s) => Some(Const::String(s.value.to_vec())),
-            ExprKind::Name(n) => match self.lookup(&n.text) {
-                Some(Binding::Const(c)) => Some(c.clone()),
-                _ => None,
-            },
-            ExprKind::Paren(inner) => self.const_value(inner),
-            ExprKind::Cast { expr, .. } => self.const_value(expr),
-            ExprKind::Unary { op, operand } => {
-                let v = self.const_value(operand)?;
-                match (op, v) {
-                    (UnOp::Neg, Const::Number(n)) => Some(Const::Number(-n)),
-                    (UnOp::Not, v) => Some(Const::Bool(!v.truthy())),
-                    (UnOp::BNot, Const::Number(n)) => constant::fold_bnot(n).map(Const::Number),
-                    _ => None,
-                }
-            }
-            ExprKind::Binary { op, lhs, rhs } => {
-                let a = self.const_value(lhs)?;
-                let b = self.const_value(rhs)?;
-                constant::fold_binary(*op, &a, &b)
-            }
+        constant::eval(e, &|name| match self.lookup(name) {
+            Some(Binding::Const(c)) => Some(c.clone()),
             _ => None,
-        }
+        })
     }
 }
 

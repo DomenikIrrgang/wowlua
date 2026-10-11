@@ -277,6 +277,37 @@ pub fn fold_binary(op: wowlua_syntax::ast::BinOp, a: &Const, b: &Const) -> Optio
     })
 }
 
+/// The value of a constant expression (spec §1.3.2), if it is one; `lookup`
+/// gives the values of folded constants by name.
+pub fn eval(e: &wowlua_syntax::ast::Expr, lookup: &dyn Fn(&str) -> Option<Const>) -> Option<Const> {
+    use wowlua_syntax::ast::{ExprKind, UnOp};
+    match &e.kind {
+        ExprKind::Nil => Some(Const::Nil),
+        ExprKind::True => Some(Const::Bool(true)),
+        ExprKind::False => Some(Const::Bool(false)),
+        ExprKind::Number(n) => n.value.map(Const::Number),
+        ExprKind::String(s) => Some(Const::String(s.value.to_vec())),
+        ExprKind::Name(n) => lookup(&n.text),
+        ExprKind::Paren(inner) => eval(inner, lookup),
+        ExprKind::Cast { expr, .. } => eval(expr, lookup),
+        ExprKind::Unary { op, operand } => {
+            let v = eval(operand, lookup)?;
+            match (op, v) {
+                (UnOp::Neg, Const::Number(n)) => Some(Const::Number(-n)),
+                (UnOp::Not, v) => Some(Const::Bool(!v.truthy())),
+                (UnOp::BNot, Const::Number(n)) => fold_bnot(n).map(Const::Number),
+                _ => None,
+            }
+        }
+        ExprKind::Binary { op, lhs, rhs } => {
+            let a = eval(lhs, lookup)?;
+            let b = eval(rhs, lookup)?;
+            fold_binary(*op, &a, &b)
+        }
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

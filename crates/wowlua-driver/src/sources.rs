@@ -128,6 +128,27 @@ pub fn discover_sources(root: &Path, src: &str, out: &str, exclude: &GlobSet) ->
         .collect()
 }
 
+/// Declaration files (`.d.wowlua`) under `src`: types only, never part of
+/// the output; they type plain-Lua modules for imports (spec §5.3).
+pub fn discover_declarations(root: &Path, src: &str, out: &str, exclude: &GlobSet) -> Vec<Source> {
+    let src_dir = root.join(src);
+    walk(root, &src_dir, &skip_dirs(root, out))
+        .into_iter()
+        .filter(|(rel, _)| {
+            !exclude.is_match(rel) && rel.to_ascii_lowercase().ends_with(".d.wowlua")
+        })
+        .filter_map(|(rel, abs)| {
+            let src_rel = crate::fsutil::relative_slash(&abs, &src_dir)?;
+            Some(Source {
+                rel,
+                src_rel,
+                abs,
+                kind: SourceKind::Wowlua,
+            })
+        })
+        .collect()
+}
+
 /// Files matched by `build.assets`, sorted by path.
 pub fn discover_assets(root: &Path, out: &str, assets: &GlobSet, exclude: &GlobSet) -> Vec<Asset> {
     if assets.is_empty() {

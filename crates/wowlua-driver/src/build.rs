@@ -61,6 +61,9 @@ pub struct BuildOutput {
     pub files: BTreeMap<String, Content>,
 }
 
+/// The runtime's output path (spec codegen §14.8).
+const RUNTIME_PATH: &str = "wowlua/runtime.lua";
+
 /// Output entries that are reserved at the top level of the AddOn (§14.8).
 const RESERVED_DIRS: &[&str] = &["src", "wowlua", "libs"];
 const RESERVED_FILES: &[&str] = &["Bindings.xml", "LICENSES.txt"];
@@ -151,10 +154,36 @@ pub fn build(
             ),
         }
     }
+    let mut declarations = Vec::new();
+    for source in sources::discover_declarations(&root, &build_cfg.src, &build_cfg.out, &exclude) {
+        match std::fs::read(&source.abs) {
+            Ok(bytes) => {
+                let file = session
+                    .db
+                    .add(&source.rel, String::from_utf8_lossy(&bytes).into_owned());
+                declarations.push(crate::compile::Declaration {
+                    source,
+                    file,
+                    bytes,
+                });
+            }
+            Err(error) => session.push(
+                Diagnostic::plain_error(format!("cannot read declaration file: {error}"))
+                    .with_path(&source.rel),
+            ),
+        }
+    }
     let mut diagnostics = Vec::new();
-    let compiled =
-        crate::compile::compile_sources(&session.db, &mut diagnostics, &files, &raw, &profile);
+    let compile_output = crate::compile::compile_sources(
+        &session.db,
+        &mut diagnostics,
+        &files,
+        &declarations,
+        &raw,
+        &profile,
+    );
     session.diagnostics.extend(diagnostics);
+    let compiled = &compile_output.compiled;
 
     // XML references.
     let xml = resolve_xml(session, &files);
@@ -251,6 +280,32 @@ pub fn build(
         });
     }
     order_by_load_order(&mut toc_items, &build_cfg.load_order);
+    order_by_dependencies(
+        session,
+        &mut toc_items,
+        &compile_output.edges,
+        &xml,
+        &build_cfg.load_order,
+    );
+    // The runtime loads before every module (spec §5.4.1).
+    let runtime = compile_output.needs_runtime.then(|| {
+        wowlua_runtime::runtime(&wowlua_runtime::RuntimeOptions {
+            modules: compile_output.modules.clone(),
+            debug: profile.debug,
+            meta: None,
+        })
+    });
+    if runtime.is_some() {
+        toc_items.insert(
+            0,
+            TocItem {
+                rel: RUNTIME_PATH.into(),
+                path: RUNTIME_PATH.into(),
+                flavors: None,
+                locales: None,
+            },
+        );
+    }
     let toc_data = read_toc_data(session, project, &flavors);
 
     if session.has_errors() {
@@ -341,6 +396,12 @@ pub fn build(
     );
     for (name, bytes) in bindings_files(session, &root) {
         out.insert(name, Content::Bytes(bytes));
+    }
+    if let Some(runtime) = &runtime {
+        out.insert(
+            RUNTIME_PATH.into(),
+            Content::Bytes(runtime.clone().into_bytes()),
+        );
     }
     for asset in &assets {
         let first = asset.rel.split('/').next().unwrap_or_default();
@@ -598,6 +659,82 @@ struct TocItem {
 /// entry naming an item exactly matches it, even when it contains `[…]`;
 /// other entries are globs expanding in path order), then everything else by
 /// path (spec §5.4; the load-order analysis of milestone M2 refines this).
+/// Applies dependency edges between sources (imports; spec §5.4) to the TOC
+/// order, keeping the current order wherever the edges allow. A file loaded
+/// through XML is represented by the TOC-listed XML file that loads it.
+fn order_by_dependencies(
+    session: &mut Session,
+    entries: &mut Vec<TocItem>,
+    edges: &[(String, String)],
+    xml: &XmlInfo,
+    load_order: &[String],
+) {
+    if edges.is_empty() {
+        return;
+    }
+    let index: HashMap<&str, usize> = entries
+        .iter()
+        .enumerate()
+        .map(|(i, e)| (e.rel.as_str(), i))
+        .collect();
+    let mut parent: HashMap<&str, &str> = HashMap::new();
+    for (xml_file, targets) in &xml.edges {
+        for t in targets {
+            parent.entry(t.as_str()).or_insert(xml_file.as_str());
+        }
+    }
+    let item_of = |rel: &str| -> Option<usize> {
+        let mut current = rel;
+        for _ in 0..64 {
+            if let Some(&i) = index.get(current) {
+                return Some(i);
+            }
+            current = parent.get(current)?;
+        }
+        None
+    };
+    let mut item_edges = Vec::new();
+    for (a, b) in edges {
+        if let (Some(x), Some(y)) = (item_of(a), item_of(b))
+            && x != y
+        {
+            item_edges.push((x, y));
+            // A `build.load-order` that lists b before a contradicts it.
+            let pos = |rel: &str| load_order.iter().position(|l| l == rel);
+            if let (Some(pa), Some(pb)) = (pos(&entries[x].rel), pos(&entries[y].rel))
+                && pb < pa
+            {
+                session.push(Diagnostic::error(
+                    "E1035",
+                    format!(
+                        "`build.load-order` lists `{}` before `{}`, but it imports it",
+                        entries[y].rel, entries[x].rel
+                    ),
+                ));
+            }
+        }
+    }
+    let rank: Vec<usize> = (0..entries.len()).collect();
+    match wowlua_sema::order::stable_topo(entries.len(), &rank, &item_edges) {
+        Ok(order) => {
+            let mut old: Vec<Option<TocItem>> =
+                std::mem::take(entries).into_iter().map(Some).collect();
+            *entries = order.into_iter().filter_map(|i| old[i].take()).collect();
+        }
+        Err(cycle) => {
+            let names: Vec<&str> = cycle.iter().map(|&i| entries[i].rel.as_str()).collect();
+            let mut shown = names.join(" → ");
+            if let Some(first) = names.first() {
+                shown.push_str(&format!(" → {first}"));
+            }
+            session.push(
+                Diagnostic::error("E1014", format!("import cycle: {shown}"))
+                    .with_help("move the use into a function that runs later, or split a module"),
+            );
+        }
+    }
+}
+
 fn order_by_load_order(entries: &mut Vec<TocItem>, load_order: &[String]) {
     let mut ordered = Vec::with_capacity(entries.len());
     let mut remaining: Vec<TocItem> = std::mem::take(entries);
