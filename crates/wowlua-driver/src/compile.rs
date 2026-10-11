@@ -41,6 +41,8 @@ pub struct CompileOutput {
     pub meta_used: BTreeSet<(MetaKind, Vec<String>)>,
     /// Runtime slices the compiled files use.
     pub slices: BTreeSet<wowlua_runtime::Slice>,
+    /// Static types of `typeName(expr)` arguments (from the checker).
+    pub type_names: HashMap<wowlua_span::Span, String>,
 }
 
 /// A declaration file with its contents.
@@ -359,13 +361,15 @@ pub fn compile_flavor(
         )
         .collect();
     if settings.iter().any(Option::is_some) {
-        diagnostics.extend(wowlua_sema::check::check_package(
+        let checked = wowlua_sema::check::check_package_full(
             &inputs,
             &analysis,
             &settings,
             &check.globals,
             shared,
-        ));
+        );
+        diagnostics.extend(checked.diagnostics);
+        out.type_names = checked.type_names;
     }
     for info in analysis.modules.iter().flatten() {
         if info.is_module {
@@ -395,6 +399,17 @@ pub fn compile_flavor(
         let mut ctx = context(&analysis, i, &inputs, meta.clone(), &order.lazy);
         ctx.file = source.rel.clone();
         ctx.debug = profile.debug;
+        ctx.tools = wowlua_lower::Tools {
+            assertions: profile.assertions,
+            dev_console: profile.dev_console,
+            profiling: profile.instrument != wowlua_manifest::model::Instrument::None,
+        };
+        ctx.type_names = out
+            .type_names
+            .iter()
+            .filter(|(span, _)| span.file == *file)
+            .map(|(span, name)| ((span.start, span.end), name.clone()))
+            .collect();
         ctx.compiler_known = wowlua_sema::is_compiler_known(&source.src_rel);
         let lowered = match wowlua_lower::lower_module(parse, bytes, &ctx) {
             Ok(lowered) => lowered,

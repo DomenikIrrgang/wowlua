@@ -1052,6 +1052,83 @@ fn standard_library_modules_and_intrinsics() {
         .stderr(predicate::str::contains("E3033"));
 }
 
+/// `wowlua:debug` (spec §7.1): folded helpers, source locations and text,
+/// profiler-backed timing, and removal with the arguments by profile.
+#[test]
+fn debug_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"import assert, dump, location, nameof, typeName, measure, stats, watch from "wowlua:debug"
+import * as debug from "wowlua:debug"
+
+local Tracker = { total = 0 }
+local function sideEffect(): number
+    print("evaluated")
+    return 1
+end
+local function onLogin(amount: number)
+    assert(amount > 0, "positive")
+    dump(amount + 1, Tracker)
+    print(location(), nameof(Tracker.total), typeName(amount), debug.typeName(Tracker))
+    local doubled = measure("double", function(x: number): number return x * 2 end, amount)
+    print(doubled, stats().double ~= nil)
+    watch("total", function() return sideEffect() end)
+    print(pcall(function() debug.assert(sideEffect() > 1, "boom") end))
+end
+onLogin(3)
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"dbg\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", main),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    assert_eq!(
+        run_addon(&dir.path().join("dist/dev/Dbg"), "Dbg"),
+        [
+            "src/main.wowlua:11 (onLogin) amount + 1 = 4",
+            "src/main.wowlua:11 (onLogin) Tracker = { total = 0 }",
+            "src/main.wowlua:12 (onLogin) total number { total: number }",
+            "6 true",
+            "evaluated",
+            "false Dbg: src/main.wowlua:16 (onLogin): assertion failed: boom",
+        ]
+        .join("\n")
+    );
+    // Release: assertions, dumps and watches are removed with their
+    // arguments (`sideEffect()` never runs), `measure` is a direct call.
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    assert_eq!(
+        run_addon(&dir.path().join("dist/release/Dbg"), "Dbg"),
+        [
+            "src/main.wowlua:12 (onLogin) total number { total: number }",
+            "6 false",
+            "true"
+        ]
+        .join("\n")
+    );
+    // Statement-only helpers as values, `nameof` of an expression, `todo`.
+    fs::write(
+        dir.path().join("src/main.wowlua"),
+        "import assert, nameof, todo from \"wowlua:debug\"\nlocal ok = assert(true)\nprint(ok, nameof(1 + 2))\nlocal function f() todo() end\nf()\n",
+    )
+    .unwrap();
+    wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .code(1)
+        .stderr(
+            predicate::str::contains("error[E3045]").and(predicate::str::contains("error[E7001]")),
+        );
+}
+
 /// `wowlua lint` reports the lints only; `--fix` applies their fixes;
 /// `--!nolint` and `check.lints` turn them off.
 #[test]

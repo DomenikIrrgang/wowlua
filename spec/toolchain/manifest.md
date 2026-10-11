@@ -444,7 +444,7 @@ on with `inherits` (E4315 if missing).
 | `runtime-checks` | `"none"` `"exports"` `"all"` | [Debugging](../language/07-debugging.md) |
 | `profile-errors` | bool, default `false` | Count errors in profiled functions ([Debugging §7.3](../language/07-debugging.md#73-profiling)) |
 | `reflection` | `"none"` `"decorated"` `"all"` | [Debugging](../language/07-debugging.md) |
-| `dev-console`, `source-maps` | bool | [Debugging](../language/07-debugging.md) |
+| `dev-console`, `monitor`, `capture-errors`, `source-maps` | bool | [Debugging](../language/07-debugging.md) |
 | `bundle` | bool | `false` (dev, test), `true` (release). [Optimization](optimization.md) |
 | `minify` | level name | `"none"` (dev, test), `"strip"` (release) |
 | `minify-libraries` | bool | `false`. Apply the minification level to lua-library dependencies too. |

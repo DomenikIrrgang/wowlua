@@ -662,6 +662,10 @@ pub struct ProfileSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dev_console: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub monitor: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capture_errors: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_maps: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bundle: Option<bool>,

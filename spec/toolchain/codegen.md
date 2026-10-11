@@ -39,7 +39,7 @@ Other chapters refer to it.
 | `<Addon>Dialog<N>` (named frames, also added to `UISpecialFrames`) | `wowlua:dialog`, so Escape closes dialogs | All |
 | The name in `addon.expose-meta` (the `wowlua:meta` runtime tables) | Manifest opt-in ([Manifest §9.3](manifest.md#93-addon)) | All |
 | SavedVariables globals (`_G[name]` is pointed at the table bound by `saved.bind`, so WoW saves it) | `wowlua:saved`, for names declared in the manifest | All |
-| `WOWLUA_DEV`, `SLASH_WOWLUA1`, `SlashCmdList["WOWLUA"]` | Dev console ([Debugging §7.7](../language/07-debugging.md#77-dev-console)) | Dev builds with `dev-console` |
+| `WOWLUA_DEV`, `SLASH_WOWLUA1`, `SlashCmdList["WOWLUA"]`, `WowluaDevWindow` (a named frame) | Dev console ([Debugging §7.7](../language/07-debugging.md#77-dev-console)) | Dev builds with `dev-console` |
 | Anything written by user code through `_G`, to a `declare global`d name, or by plain Lua | User code | All |
 
 `<Addon>` is `addon.name` with characters outside `[A-Za-z0-9_]` replaced by
@@ -184,7 +184,9 @@ compiled code uses are included. It stores itself in the addon table as
 | `prof` | profiler wrappers, statistics | `@profile`, `instrument` |
 | `trace` | trace wrappers and formatting | `@trace` |
 | `reflect` | metadata registry | `@reflect`, `reflection = "all"` |
-| `devconsole` | `/wl` command, cross-addon registry | `dev-console` |
+| `devconsole` | `/wl` command, cross-addon registry, dev window | `dev-console` |
+| `monitor` | event, script and timer wrappers, memory samples | `monitor` |
+| `errors` | error handler chaining and the error log | `capture-errors` |
 
 The `class` slice provides `class`, `accessor`, `finalize`, `abstract`,
 `classOf` and `isInstance`; `widget` provides `widgetClass`, `mixin`,

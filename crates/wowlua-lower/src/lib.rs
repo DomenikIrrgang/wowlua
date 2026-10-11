@@ -5,6 +5,7 @@
 //! Classes and enums are in [`class`], decorators in [`decorate`].
 
 mod class;
+mod debug;
 mod decorate;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -40,6 +41,21 @@ pub struct Context {
     pub debug: bool,
     /// A compiler-known module (the standard library may use `@intrinsic`).
     pub compiler_known: bool,
+    /// The profile's debugging settings (spec chapter 7).
+    pub tools: Tools,
+    /// The static types of `typeName(expr)` arguments, by span.
+    pub type_names: HashMap<(u32, u32), String>,
+}
+
+/// The debugging settings of the build profile (spec chapter 7).
+#[derive(Clone, Debug, Default)]
+pub struct Tools {
+    /// `assertions`: `wowlua:debug` assertions are kept.
+    pub assertions: bool,
+    /// `dev-console`: the dev console and window (watches).
+    pub dev_console: bool,
+    /// `instrument` is not `"none"`: profiler statistics exist.
+    pub profiling: bool,
 }
 
 /// A lowered file.
@@ -107,6 +123,8 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         widget_ctor: None,
         has_exports: false,
         meta_used: BTreeSet::new(),
+        fn_names: Vec::new(),
+        next_fn_name: None,
     };
     // Exported functions, classes and enums are hoisted (spec §5.1,
     // decisions L24 and T76).
@@ -190,6 +208,21 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         slices: lowerer.slices,
         warnings: lowerer.warnings,
     })
+}
+
+/// The display name of a function declaration (`Tracker.record`, `M:load`).
+fn func_name(name: &FuncName) -> String {
+    let mut out = name
+        .path
+        .iter()
+        .map(|n| n.text.as_ref())
+        .collect::<Vec<_>>()
+        .join(".");
+    if let Some(m) = &name.method {
+        out.push(':');
+        out.push_str(&m.text);
+    }
+    out
 }
 
 fn grow<R>(f: impl FnOnce() -> R) -> R {
@@ -370,6 +403,9 @@ enum Binding {
     /// An imported export with compiler behavior (`@intrinsic(id)`); a
     /// normal import as a value.
     Intrinsic(String),
+    /// A namespace import of a module with intrinsics (`import * as debug
+    /// from "wowlua:debug"`): member name → `@intrinsic` id.
+    IntrinsicNamespace(Arc<HashMap<String, String>>),
 }
 
 #[derive(Default)]
@@ -414,6 +450,11 @@ struct Lowerer<'a> {
     aliases: BTreeMap<String, (String, Option<String>)>,
     errors: Vec<Diagnostic>,
     loops: Vec<LoopInfo>,
+    /// Names of the functions being lowered (innermost last; `None` for
+    /// anonymous ones), for `location()` and the profiler.
+    fn_names: Vec<Option<String>>,
+    /// The name of the next function `func` lowers.
+    next_fn_name: Option<String>,
 }
 
 const LICENSE_WORDS: &[&str] = &["license", "copyright", "spdx-license-identifier"];
@@ -728,6 +769,10 @@ impl<'a> Lowerer<'a> {
                 self.wrapped(pos, |l| l.compound(target, *op, value, pos))
             }
             StmtKind::Call(e) if self.is_removed_call(e) => Vec::new(),
+            StmtKind::Call(e) if self.call_intrinsic(e).is_some() => {
+                let id = self.call_intrinsic(e).expect("an intrinsic");
+                self.wrapped(pos, |l| l.intrinsic_stmt(&id, e, pos))
+            }
             StmtKind::Call(e) => self.wrapped(pos, |l| {
                 if chain_has_optional(e) {
                     l.optional_chain(e, true);
@@ -868,6 +913,7 @@ impl<'a> Lowerer<'a> {
                     self.check_assignable(&name.path[0]);
                 }
                 let method = name.method.is_some();
+                self.next_fn_name = Some(func_name(name));
                 vec![stmt(
                     K::Function {
                         path: name.path.iter().map(|n| self.ident(n)).collect(),
@@ -879,6 +925,7 @@ impl<'a> Lowerer<'a> {
             }
             StmtKind::LocalFunction { name, func } => {
                 self.declare(&name.text, Binding::Local);
+                self.next_fn_name = Some(name.text.to_string());
                 vec![stmt(
                     K::LocalFunction {
                         name: self.ident(name),
@@ -983,6 +1030,7 @@ impl<'a> Lowerer<'a> {
                 | Binding::ImportedClass(_)
                 | Binding::ImportedEnum(_)
                 | Binding::Intrinsic(_)
+                | Binding::IntrinsicNamespace(_)
                 | Binding::DebugOnlyRemoved,
             ) => self.error(
                 "E1010",
@@ -1174,6 +1222,14 @@ impl<'a> Lowerer<'a> {
     // ---------------------------------------------------------- functions --
 
     fn func(&mut self, f: &FuncBody, method: bool) -> ir::Func {
+        let name = self.next_fn_name.take();
+        self.fn_names.push(name);
+        let lowered = self.func_inner(f, method);
+        self.fn_names.pop();
+        lowered
+    }
+
+    fn func_inner(&mut self, f: &FuncBody, method: bool) -> ir::Func {
         self.func_depth += 1;
         let saved_loops = std::mem::take(&mut self.loops);
         let saved_prelude = std::mem::take(&mut self.prelude);
@@ -1299,7 +1355,12 @@ impl<'a> Lowerer<'a> {
         match &import.clause {
             ImportClause::SideEffect => Vec::new(),
             ImportClause::Namespace(name) => {
-                self.declare(&name.text, Binding::Import);
+                let binding = if intrinsics.is_empty() {
+                    Binding::Import
+                } else {
+                    Binding::IntrinsicNamespace(Arc::new(intrinsics.clone()))
+                };
+                self.declare(&name.text, binding);
                 let value = self.require(&id, lazy, pos);
                 vec![local(self.ident(name), value, pos)]
             }
@@ -1423,6 +1484,7 @@ impl<'a> Lowerer<'a> {
             StmtKind::Function { name, func } => {
                 let n = &name.path[0];
                 let fpos = self.span_pos(inner.span);
+                self.next_fn_name = Some(func_name(name));
                 let f = self.func(func, false);
                 self.pending.remove(n.text.as_ref());
                 let target = name_expr(self.ident(n));
@@ -1782,6 +1844,10 @@ impl<'a> Lowerer<'a> {
             }
             ExprKind::Method { obj, name, args } if self.is_super(obj) => {
                 return self.super_method(obj, name, args, pos);
+            }
+            ExprKind::Call { callee, args } if self.call_intrinsic(e).is_some() => {
+                let id = self.call_intrinsic(e).expect("an intrinsic");
+                return self.intrinsic_expr(&id, callee, args, e);
             }
             ExprKind::Call { callee, args } => {
                 self.check_instantiation(callee);

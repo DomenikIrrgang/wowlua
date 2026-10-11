@@ -421,6 +421,7 @@ impl<'a> Lowerer<'a> {
                     // `local f; f = function … end`: recursive calls go
                     // through the decorated value (spec §4.5.3).
                     self.declare(&name.text, Binding::Local);
+                    self.next_fn_name = Some(name.text.to_string());
                     let f = self.func(func, false);
                     vec![
                         stmt(

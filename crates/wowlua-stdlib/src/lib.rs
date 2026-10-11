@@ -39,9 +39,13 @@ pub struct Module {
     pub declaration: Option<String>,
 }
 
-/// The modules shipped with this compiler version (none yet: they arrive
-/// with milestones M5 and M8).
-const MODULES: &[(&str, &str, Option<&str>)] = &[];
+/// The modules shipped with this compiler version: name, source and
+/// `@intrinsic` declarations.
+const MODULES: &[(&str, &str, Option<&str>)] = &[(
+    "debug",
+    include_str!("../std/debug.wowlua"),
+    Some(include_str!("../std/debug.d.wowlua")),
+)];
 
 /// A standard-library module by name (`events` for `wowlua:events`).
 ///

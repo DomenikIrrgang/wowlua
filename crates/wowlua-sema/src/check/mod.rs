@@ -17,7 +17,7 @@ use query::Mode;
 use std::collections::{HashMap, HashSet};
 use types::{Field, Record, Ty, TypeId, Types};
 use wowlua_diagnostics::Diagnostic;
-use wowlua_syntax::ast::{ImportClause, StmtKind};
+use wowlua_syntax::ast::{ExprKind, ImportClause, StmtKind};
 
 /// How one file is checked (spec §2.1).
 #[derive(Clone, Copy, Debug)]
@@ -38,6 +38,27 @@ pub fn check_package(
     extra_globals: &HashSet<String>,
     shared: Option<&flavors::SharedFlavors>,
 ) -> Vec<Diagnostic> {
+    check_package_full(files, analysis, settings, extra_globals, shared).diagnostics
+}
+
+/// What checking a package produces.
+#[derive(Debug, Default)]
+pub struct CheckOutput {
+    pub diagnostics: Vec<Diagnostic>,
+    /// The static types of `typeName(expr)` arguments (`wowlua:debug`,
+    /// spec §7.1), by the argument's span.
+    pub type_names: HashMap<wowlua_span::Span, String>,
+}
+
+/// Like [`check_package`], with the type information lowering uses.
+pub fn check_package_full(
+    files: &[FileInput],
+    analysis: &Analysis,
+    settings: &[Option<FileSettings>],
+    extra_globals: &HashSet<String>,
+    shared: Option<&flavors::SharedFlavors>,
+) -> CheckOutput {
+    let mut type_names = HashMap::new();
     // Declaration sources: declaration files first, then modules.
     let mut sources: Vec<env::Source> = Vec::new();
     for (i, f) in files.iter().enumerate() {
@@ -193,12 +214,27 @@ pub fn check_package(
         };
         let mut checker = Checker::new(&mut env, &info, parse);
         checker.check_file(parse);
+        // `typeName(x)` arguments (the callee's name decides; lowering only
+        // uses entries of `wowlua:debug` intrinsics).
+        wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
+            if let ExprKind::Call { callee, args } = &e.kind
+                && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "typeName")
+                    | matches!(&callee.kind, ExprKind::Field { name, .. } if name.text.as_ref() == "typeName")
+                && let Some(arg) = args.exprs().first()
+                && let Some(&t) = checker.expr_types.get(&(arg.span.start, arg.span.end))
+            {
+                type_names.insert(arg.span, checker.env.display(t));
+            }
+        });
         let file_exports = std::mem::take(&mut checker.exports);
         diagnostics.append(&mut checker.diagnostics);
         diagnostics.append(&mut env.diagnostics);
         exports.insert(i, file_exports);
     }
-    diagnostics
+    CheckOutput {
+        diagnostics,
+        type_names,
+    }
 }
 
 /// Names of declarations decorated with `@global`.

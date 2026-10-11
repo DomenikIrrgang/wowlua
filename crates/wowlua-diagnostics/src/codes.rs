@@ -163,6 +163,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "W6002", summary: "Side-effect-free, unused module removed by dead-code elimination" },
     CodeInfo { code: "E6003", summary: "Unknown minification pass name" },
     CodeInfo { code: "W6010", summary: "Publish target uses a renaming minification level (Blizzard AddOn policy: code must not be hidden or obfuscated)" },
+    CodeInfo { code: "E7001", summary: "`nameof` argument is not a name, field access or string-keyed index" },
     CodeInfo { code: "W7001", summary: "`todo()` in a release build" },
     CodeInfo { code: "W7010", summary: "Reflection metadata requested but `reflection = \"none\"`" },
     CodeInfo { code: "E8001", summary: "`send` used with a WoW event (only messages can be sent)" },

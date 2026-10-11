@@ -18,6 +18,10 @@ pub enum Slice {
     Enum,
     /// User decorators (spec §4.5).
     Decorate,
+    /// The profiler (spec §7.3).
+    Prof,
+    /// The dev console and window (spec §7.7).
+    DevConsole,
 }
 
 impl Slice {
@@ -27,6 +31,8 @@ impl Slice {
             Slice::Widget => include_str!("../lua/widget.lua"),
             Slice::Enum => include_str!("../lua/enum.lua"),
             Slice::Decorate => include_str!("../lua/decorate.lua"),
+            Slice::Prof => include_str!("../lua/prof.lua"),
+            Slice::DevConsole => include_str!("../lua/devconsole.lua"),
         }
     }
 

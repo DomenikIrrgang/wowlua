@@ -1,0 +1,114 @@
+-- wowlua:debug (spec §7.1): the run-time parts of the debugging helpers.
+-- The compiler folds most calls to constants, adds their source location,
+-- or removes them with their arguments, depending on the build profile.
+local addonName, ns = ...
+local wl = ns.__wowlua
+
+-- A value for `dump`: tables one level deep, secret values hidden.
+local function show(v: any, deep: boolean): string
+    if issecretvalue and issecretvalue(v) then
+        return "<secret>"
+    end
+    if type(v) == "string" then
+        return string.format("%q", v)
+    end
+    if type(v) ~= "table" or not deep then
+        return tostring(v)
+    end
+    local parts = {}
+    for k, x in pairs(v) do
+        if #parts == 20 then
+            parts[#parts + 1] = "..."
+            break
+        end
+        parts[#parts + 1] = tostring(k) .. " = " .. show(x, false)
+    end
+    return "{ " .. table.concat(parts, ", ") .. " }"
+end
+
+local function fail(message: string)
+    error(addonName .. ": " .. message, 0)
+end
+
+export function assert(condition: any, message: string?, location: string?)
+    if not condition then
+        fail((location ?? "?") .. ": assertion failed" .. (message and (": " .. message) or ""))
+    end
+end
+
+-- `dump(location, text1, value1, text2, value2, …)`.
+export function dump(location: string, ...: any)
+    local n = select("#", ...)
+    for i = 1, n, 2 do
+        local text, value = select(i, ...)
+        print(location .. " " .. tostring(text) .. " = " .. show(value, true))
+    end
+end
+
+export function todo(message: string?, location: string?): never
+    fail((location ?? "?") .. ": not implemented" .. (message and (": " .. message) or ""))
+    error("unreachable")
+end
+
+export function unreachable(message: string?, location: string?): never
+    fail((location ?? "?") .. ": unreachable code reached" .. (message and (": " .. message) or ""))
+    error("unreachable")
+end
+
+-- Folded by the compiler; these run only when called through a value.
+export function location(): string
+    return "?"
+end
+
+export function nameof(value: any): string
+    return "?"
+end
+
+export function typeName(value: any): string
+    return type(value)
+end
+
+export function measure(label: string, fn: (...any) -> ...any, ...: any): ...any
+    local prof = wl.prof
+    if prof then
+        return prof.measure(label, fn, ...)
+    end
+    return fn(...)
+end
+
+export function time(label: string)
+    if wl.prof then
+        wl.prof.time(label)
+    end
+end
+
+export function timeEnd(label: string)
+    if wl.prof then
+        wl.prof.timeEnd(label)
+    end
+end
+
+export function stats(): { [string]: any }
+    return wl.prof and wl.prof.stats or {}
+end
+
+export function resetStats()
+    if wl.prof then
+        wl.prof.reset()
+    end
+end
+
+export function watch(label: string, fn: () -> any)
+    if wl.dev then
+        wl.dev.watch(label, fn)
+    end
+end
+
+-- Re-exports of the core decorators (`@profile` and friends resolve to the
+-- core decorators whatever is imported, spec §4.2).
+local function decoratorValue()
+    fail("core decorators cannot be used as values")
+end
+export local profile = decoratorValue
+export local trace = decoratorValue
+export local debugOnly = decoratorValue

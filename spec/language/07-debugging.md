@@ -9,11 +9,22 @@ controlled by the active **profile**
 | `debug` | bool | `true` | `false` | `true` |
 | `assertions` | bool | `true` | `false` | `true` |
 | `log-level` | `"trace"` `"debug"` `"info"` `"warn"` `"error"` `"off"` | `"debug"` | `"warn"` | `"trace"` |
-| `instrument` | `"none"` `"decorated"` `"exports"` `"all"` | `"decorated"` | `"none"` | `"none"` |
+| `instrument` | `"none"` `"decorated"` `"exports"` `"all"` | `"all"` | `"none"` | `"none"` |
 | `runtime-checks` | `"none"` `"exports"` `"all"` | `"exports"` | `"none"` | `"all"` |
 | `reflection` | `"none"` `"decorated"` `"all"` | `"decorated"` | `"decorated"` | `"all"` |
 | `dev-console` | bool | `true` | `false` | `false` |
+| `monitor` | bool | `true` | `false` | `false` |
+| `capture-errors` | bool | `true` | `false` | `false` |
 | `source-maps` | bool | `true` | `true` | `true` |
+
+A dev build therefore has every tool of this chapter built in without any
+change to the code (decision T96): every function is profiled, events,
+scripts and timers are monitored, errors are captured, and the dev window
+(§7.7) shows all of it. Instrumentation and the monitor rewrite code at
+compile time; in profiles that use them, plain `.lua` files are compiled too
+(line numbers preserved) instead of copied byte for byte, except embedded
+libraries under `build.libs-dir` (decision T97). Release builds contain none
+of it.
 
 ## 7.1 `wowlua:debug`
 
@@ -39,6 +50,7 @@ import * as debug from "wowlua:debug"
 | `time(label)` / `timeEnd(label)` | statement | Manual timing spans. | Removed (`debug = false`) |
 | `stats()` | expression | Returns the profiler statistics table (see §7.3). | Returns `{}` (`instrument = "none"` and `debug = false`) |
 | `resetStats()` | statement | Clears profiler statistics. | Removed (`debug = false`) |
+| `watch(label, fn)` | statement | Shows `fn()` live in the dev window's watch list (§7.7.2), refreshed while the window is visible. The closure may read locals. | Removed (`dev-console = false`) |
 | `profile`, `trace`, `debugOnly` | decorators | Re-exported core decorators, for explicitness. | See §7.3, §7.4 |
 
 `assert` from `wowlua:debug` deliberately shadows Lua's global `assert` when
@@ -201,17 +213,70 @@ MyAddon: src/tracker.wowlua:14: bad argument #1 'amount' to 'Tracker:record' (nu
 
 With `dev-console = true`, the build includes a small in-game console shared by
 all wowlua dev builds that are loaded. Its slash command is `/wl`. It creates the
-globals `WOWLUA_DEV` and the slash registration, only in dev builds (see the
-normative list in [Code generation §14.1.1](../toolchain/codegen.md#1411-global-writes)).
+globals `WOWLUA_DEV`, the slash registration and the dev window
+`WowluaDevWindow`, only in dev builds (see the normative list in
+[Code generation §14.1.1](../toolchain/codegen.md#1411-global-writes)).
+
+Every loaded dev build registers itself in the `WOWLUA_DEV` registry. The
+console of the **newest** runtime version among them serves `/wl` and the
+window; older addons still answer through the registry's versioned interface
+(decision T98).
 
 | Command | Effect |
 |---------|--------|
-| `/wl` | List loaded wowlua addons with version, profile and build id |
+| `/wl` | Toggle the dev window |
+| `/wl list` | List loaded wowlua addons with version, profile and build id |
+| `/wl errors <addon> [clear]` | Captured errors (§7.10) |
+| `/wl mon <addon> [reset]` | Event, script and timer monitor report (§7.9) |
+| `/wl watch <addon> <expression>` | Add a watch (§7.7.2) |
 | `/wl prof <addon> [top N] [sort calls\|total\|self\|max] [reset]` | Profiler report |
 | `/wl log <addon> [level]` | Show or set the runtime log level. Also opens the log ring buffer. |
 | `/wl meta <addon>` | Print `wowlua:meta` information |
 | `/wl inspect <addon> <module>` | Print a module's exports |
 | `/wl reload` | `ReloadUI()` |
+
+Chat output of `/wl prof` and `/wl mon` is an aligned table (name, calls,
+total, self, max, avg).
+
+### 7.7.1 Dev window
+
+`/wl` opens a movable, resizable window with an addon selector and these tabs:
+
+| Tab | Contents |
+|-----|----------|
+| Overview | Version, profile, build id, `wowlua:meta` values, memory use over time |
+| Profiler | The profiler statistics (§7.3), sortable by any column, with reset |
+| Monitor | Events, scripts and timers (§7.9) |
+| Log | The `wowlua:log` ring buffer, filterable by level |
+| Errors | Captured errors with count, location and stack (§7.10) |
+| Watch | Watched values (§7.7.2) |
+| Inspector | A table tree view (§7.7.3) |
+
+The window refreshes only while it is visible (default every 0.25 s for
+watches and the inspector, every second for the other tabs).
+
+### 7.7.2 Watches
+
+A watch is a live value with a label. Watches come from:
+
+- code: `debug.watch(label, fn)` (§7.1);
+- the window: an expression typed into the Watch tab's input;
+- chat: `/wl watch <addon> <expression>`;
+- other values: right-clicking a value in the Watch or Inspector tab offers
+  *Watch* (adds the value's path as a new watch) and *Inspect*.
+
+Typed expressions are Lua expressions compiled with `loadstring` and run in
+an environment where `ns` is the addon table, `modules` maps module IDs to
+their export tables, and every other name is a global. File-local variables
+are not reachable this way; `debug.watch` closures can read them. An
+expression that raises shows its error as the value. Secret values show as
+`<secret>`.
+
+### 7.7.3 Inspector
+
+The Inspector tab shows a table as an expandable tree (keys sorted, cycles
+marked, metatables shown as a `<metatable>` node), refreshed live. A watch
+value, `/wl inspect <addon> <module>` or *Inspect* on a value opens it.
 
 ## 7.8 Reflection
 
@@ -271,3 +336,32 @@ With `reflection = "none"`, it is warning W7010 at compile time.
 Metadata is stored in a weak-keyed registry in the runtime, not on the class
 table, so class tables contain only their members. Type strings use wowlua type
 syntax (`"string[]"`, `"Frame?"`).
+
+## 7.9 Monitor
+
+With `monitor = true`, the compiler routes the addon's own handler
+installations through the runtime's monitor (decision T99):
+`frame:SetScript(name, fn)`, `frame:HookScript(name, fn)`, `C_Timer.After`,
+`C_Timer.NewTimer` and `C_Timer.NewTicker` calls in the addon's sources become
+calls of monitor helpers that install a timing wrapper around `fn`. Nothing
+global is hooked, so no other addon or Blizzard frame is affected.
+
+| Monitored | Recorded per entry |
+|-----------|--------------------|
+| Events (`OnEvent` handlers) | Per event name: count, total and max handler time |
+| Scripts | Per frame (name, or widget class and creation location) and script: count, total, max |
+| Timers | Per creation location: callbacks run, total, max |
+| Memory | The addon's memory (`GetAddOnMemoryUsage`) sampled every 5 s, last 10 minutes |
+
+Handlers set in XML files are not monitored. The data is shown in the
+Monitor tab and by `/wl mon`.
+
+## 7.10 Error capture
+
+With `capture-errors = true`, the runtime chains itself into the global
+error handler (`seterrorhandler`): errors whose stack contains the addon's
+folder are recorded (message, first location, stack from `debugstack()`, time,
+count of repeats), and the previous handler is always called afterwards, so
+BugSack and the default error frame still see every error (decision T100).
+Recorded errors are shown in the Errors tab and by `/wl errors`.
+

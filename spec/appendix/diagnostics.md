@@ -205,6 +205,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 
 | Code | Message (summary) |
 |------|-------------------|
+| E7001 | `nameof` argument is not a name, field access or string-keyed index |
 | E8001 | `send` used with a WoW event (only messages can be sent) |
 | E8002 | `@event` on an instance method |
 | E8003 | Unknown event or message name |

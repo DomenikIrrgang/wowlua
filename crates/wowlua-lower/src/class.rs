@@ -121,7 +121,7 @@ impl<'a> Lowerer<'a> {
         call(field(wl, function, pos), args, pos)
     }
 
-    fn string(&self, s: &str, pos: Pos) -> ir::Expr {
+    pub(crate) fn string(&self, s: &str, pos: Pos) -> ir::Expr {
         lit(ir::ExprKind::String(quote(s.as_bytes())), pos)
     }
 
@@ -271,6 +271,8 @@ impl<'a> Lowerer<'a> {
                             },
                         }
                     } else {
+                        let sep = if is_static { "." } else { ":" };
+                        self.next_fn_name = Some(format!("{name}{sep}{}", mname.text));
                         self.func(func, !is_static)
                     };
                     let (path, method) = if is_static {

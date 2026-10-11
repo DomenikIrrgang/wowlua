@@ -1,0 +1,27 @@
+-- Compiler behavior of `wowlua:debug` (spec §7.1).
+@intrinsic("debug.assert")
+declare function assert(condition: any, message: string?)
+@intrinsic("debug.dump")
+declare function dump(...: any)
+@intrinsic("debug.todo")
+declare function todo(message: string?): never
+@intrinsic("debug.unreachable")
+declare function unreachable(message: string?): never
+@intrinsic("debug.location")
+declare function location(): string
+@intrinsic("debug.nameof")
+declare function nameof(value: any): string
+@intrinsic("debug.typeName")
+declare function typeName(value: any): string
+@intrinsic("debug.measure")
+declare function measure(label: string, fn: (...any) -> ...any, ...: any): ...any
+@intrinsic("debug.time")
+declare function time(label: string)
+@intrinsic("debug.timeEnd")
+declare function timeEnd(label: string)
+@intrinsic("debug.stats")
+declare function stats(): { [string]: any }
+@intrinsic("debug.resetStats")
+declare function resetStats()
+@intrinsic("debug.watch")
+declare function watch(label: string, fn: () -> any)
