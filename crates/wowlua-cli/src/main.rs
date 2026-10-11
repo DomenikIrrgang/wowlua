@@ -106,6 +106,22 @@ enum Command {
     },
     /// Build the AddOn into dist/<profile>/<Name>/
     Build(BuildArgs),
+    /// Check the sources without writing a build
+    Check {
+        #[command(flatten)]
+        profile: ProfileArgs,
+        /// Restrict to these flavors
+        #[arg(long, value_delimiter = ',')]
+        flavor: Vec<String>,
+    },
+    /// Format .wowlua files (and .lua files with `fmt.lua`)
+    Fmt {
+        /// Exit with status 1 if any file would change, without writing
+        #[arg(long)]
+        check: bool,
+        /// Files or directories (default: the whole package)
+        paths: Vec<PathBuf>,
+    },
     /// Watch, build with the dev profile and sync the AddOn into WoW
     Dev {
         #[command(flatten)]
@@ -216,6 +232,10 @@ fn main() -> ExitCode {
             from_pkgmeta,
         } => commands::init(&out, from_toc, from_pkgmeta),
         Command::Build(args) => commands::build(&out, &cli.global, &args),
+        Command::Check { profile, flavor } => {
+            commands::check(&out, &cli.global, &profile.name("dev"), flavor)
+        }
+        Command::Fmt { check, paths } => commands::fmt(&out, &cli.global, check, paths),
         Command::Dev { target, link } => commands::dev(&out, &cli.global, &target, link),
         Command::Install { profile, target } => {
             commands::install(&out, &cli.global, &profile.name("dev"), &target)

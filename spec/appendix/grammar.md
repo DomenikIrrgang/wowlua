@@ -201,11 +201,14 @@ paramtypes   ::= paramtype { "," paramtype } [ "," varargtype ] | varargtype
 paramtype    ::= [ Name ":" ] type
 varargtype   ::= "..." [ ":" ] type
                | "..." ":" Name "..."                         (* pack *)
+               | type "..."                                   (* pack expansion: (A...), (Args<E>...) *)
 
 typepack     ::= Name "..."                                   (* a pack parameter *)
                | "(" [ type { "," type } [ "," varargtype ] ] ")"   (* pack literal *)
 
 rettype      ::= type
+               | type "..."                                   (* pack expansion *)
+               | "..." [ ":" ] type                           (* any number of results: -> ...any *)
                | "(" ")"
                | "(" type "," type { "," type } [ "," varargtype ] ")"
                | "(" type { "," type } "," varargtype ")"

@@ -120,6 +120,75 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
     true
 }
 
+/// `wowlua check`: the build pipeline without writing (milestone M1 checks
+/// syntax; type checking arrives with M4).
+pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String>) -> bool {
+    let started = Instant::now();
+    let mut session = Session::new();
+    let request = BuildRequest {
+        profile: profile.into(),
+        flavors: (!flavors.is_empty()).then_some(flavors),
+        out_dir: None,
+        write: false,
+    };
+    let result = load_and_build(&mut session, global, &request);
+    let ok = out.flush(&mut session);
+    match result {
+        Some((_, build)) if ok => {
+            out.status(
+                "Checked",
+                format!(
+                    "{} in {:.2}s",
+                    describe(&build),
+                    started.elapsed().as_secs_f64()
+                ),
+            );
+            true
+        }
+        _ => false,
+    }
+}
+
+/// `wowlua fmt [--check] [paths…]`.
+pub fn fmt(out: &Output, global: &GlobalArgs, check: bool, paths: Vec<PathBuf>) -> bool {
+    let mut session = Session::new();
+    let Some(project) = wowlua_driver::load_project(&mut session, &load_options(global)) else {
+        out.flush(&mut session);
+        return false;
+    };
+    let cwd = cwd();
+    let request = wowlua_driver::format::FormatRequest {
+        paths: paths.iter().map(|p| cwd.join(p)).collect(),
+        check,
+    };
+    let report = wowlua_driver::format::format(&mut session, &project, &request);
+    let ok = out.flush(&mut session);
+    for file in &report.changed {
+        if check {
+            out.print(format!("would reformat {file}\n"));
+        } else {
+            out.status("Formatted", file);
+        }
+    }
+    let total = report.changed.len() + report.unchanged;
+    let skipped = if report.skipped > 0 {
+        format!(", {} skipped", report.skipped)
+    } else {
+        String::new()
+    };
+    let verb = if check { "would change" } else { "changed" };
+    out.status(
+        "Finished",
+        format!(
+            "{} of {} {} {verb}{skipped}",
+            report.changed.len(),
+            total,
+            plural(total, "file", "files")
+        ),
+    );
+    ok && !(check && !report.changed.is_empty())
+}
+
 fn install_request(target: &InstallTarget, link: bool) -> InstallRequest {
     InstallRequest {
         wow: target.wow.as_ref().map(|w| cwd().join(w)),

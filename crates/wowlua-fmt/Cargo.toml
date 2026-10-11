@@ -1,0 +1,18 @@
+[package]
+name = "wowlua-fmt"
+description = "The wowlua formatter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+stacker.workspace = true
+wowlua-diagnostics.workspace = true
+wowlua-span.workspace = true
+wowlua-syntax.workspace = true
+
+[lints]
+workspace = true

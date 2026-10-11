@@ -210,9 +210,9 @@ fn minor_requirement() -> String {
 fn main_template() -> String {
     "-- Entry point of the addon.\n\
      --\n\
-     -- This compiler version (milestone M0) builds plain Lua: wowlua syntax such as\n\
-     -- types, classes and imports becomes available with the wowlua compiler (M1+).\n\
-     local addonName, ns = ...\n\
+     -- This compiler version (milestone M1) builds Lua and erases type annotations.\n\
+     -- Classes, imports and the other wowlua features arrive with later milestones.\n\
+     local addonName: string, ns = ...\n\
      \n\
      local frame = CreateFrame(\"Frame\")\n\
      frame:RegisterEvent(\"PLAYER_LOGIN\")\n\

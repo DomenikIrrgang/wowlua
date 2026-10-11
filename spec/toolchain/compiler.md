@@ -13,7 +13,7 @@ for module boundaries and pipeline order, and advisory for library choices.
 | Distribution | Single self-contained binary. No runtime dependencies besides an optional system `git`. |
 | Performance | Full check + build of 100k lines of wowlua in under 1 s on a 2024 laptop. Incremental rebuild of one changed file in under 100 ms. |
 | Determinism | Byte-identical output for identical inputs, compiler version and options. No hash-map iteration order leaks into output. |
-| Robustness | Never panics on any input. Parser fuzzing is part of CI. |
+| Robustness | Never panics on any input. Randomized robustness tests (random bytes, token soup, mutated sources) through parser, lowering, emitter and formatter are part of CI. Deeply nested input is an error (E5001), never a stack overflow. |
 
 ## 13.2 Workspace layout
 
@@ -190,7 +190,13 @@ The parser has a **Lua 5.1 compatibility suite**:
    corpus`) must parse, check in basic mode with **zero errors**, and
 3. round-trip: for every corpus file, `emit(lower(parse(file)))` compiled by a
    reference Lua 5.1 compiler with debug info stripped must produce **the same
-   bytecode** as the original file.
+   bytecode** as the original file. In `preserve` line mode the line info must
+   be identical as well, so in-game error lines match the source.
+
+`cargo xtask corpus fetch` downloads the pinned corpus (`xtask/corpus.txt`,
+checked by SHA-256) and `cargo xtask corpus run` runs these checks plus the
+formatter's (meaning preserved, idempotent). A scheduled CI job runs the full
+corpus; regular CI runs `tests/corpus-sample/` (decision T66).
 
 ## 13.6 Semantic analysis
 
@@ -331,14 +337,14 @@ user error otherwise:
 | Embedded Lua 5.1 (tests, validation) | `mlua` with features `lua51`, `vendored` |
 | LSP | `tower-lsp` (or `lsp-server`) |
 | Snapshot tests | `insta` |
-| Fuzzing | `cargo-fuzz` |
+| Deep recursion | `stacker` (grows the stack per nesting level) |
 | Logging | `tracing` |
 
 ## 13.11 Testing the compiler
 
 | Layer | Method |
 |-------|--------|
-| Lexer and parser | Unit tests, `insta` AST snapshots, fuzzing (no panics, recovery terminates) |
+| Lexer and parser | Unit tests, accept/reject parity with the embedded Lua 5.1 on hand-picked and randomized inputs, randomized robustness tests (no panics, recovery terminates) |
 | Superset | Lua 5.1 test suite, addon corpus, bytecode round-trip (§13.5.3) |
 | Type checker | `.wowlua` test files with inline expectations (`--~ E2001` on the offending line) |
 | Lowering | Snapshot tests of emitted Lua per feature, plus **differential execution**: run the wowlua source's expected behavior as embedded Lua and compare printed output |

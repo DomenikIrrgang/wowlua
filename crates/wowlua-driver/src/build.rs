@@ -1,12 +1,13 @@
 //! Building a project into a complete AddOn folder (spec chapter 14).
 //!
-//! Milestone M0 builds plain Lua projects: sources are syntax-checked and
-//! passed through, XML references are rewritten, TOC files are generated, and
-//! the assembled output is validated before it is written atomically.
+//! Lua sources are syntax-checked and passed through byte for byte;
+//! `.wowlua` sources are compiled (milestone M1: Lua syntax with types
+//! erased). XML references are rewritten, TOC files are generated, and the
+//! assembled output is validated before it is written atomically.
 
 use crate::project::Project;
 use crate::sources::{self, Source, SourceKind};
-use crate::{Session, fsutil, luacheck, vcs};
+use crate::{Session, fsutil, vcs};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use wowlua_diagnostics::Diagnostic;
@@ -150,19 +151,10 @@ pub fn build(
             ),
         }
     }
-    let checks: Vec<Diagnostic> = files
-        .iter()
-        .filter(|(s, _)| s.kind != SourceKind::Xml)
-        .filter_map(|(s, file)| {
-            luacheck::check(
-                &session.db,
-                *file,
-                &raw[&s.rel],
-                s.kind == SourceKind::Wowlua,
-            )
-        })
-        .collect();
-    session.diagnostics.extend(checks);
+    let mut diagnostics = Vec::new();
+    let compiled =
+        crate::compile::compile_sources(&session.db, &mut diagnostics, &files, &raw, &profile);
+    session.diagnostics.extend(diagnostics);
 
     // XML references.
     let xml = resolve_xml(session, &files);
@@ -321,7 +313,10 @@ pub fn build(
         );
     }
     for source in &emitted {
-        let original = &raw[&source.rel];
+        let original = compiled
+            .get(&source.rel)
+            .map(|c| &c.code)
+            .unwrap_or(&raw[&source.rel]);
         let content = match xml.rewrites.get(&source.rel) {
             Some(rewritten) if std::str::from_utf8(original).is_ok() => {
                 rewritten.clone().into_bytes()
@@ -400,8 +395,16 @@ pub fn build(
         .out_dir
         .clone()
         .unwrap_or_else(|| manifest.out_dir().join(&profile.name).join(&addon_name));
+    let maps: BTreeMap<String, String> = emitted
+        .iter()
+        .filter_map(|s| {
+            let map = compiled.get(&s.rel)?.map.clone()?;
+            Some((format!("{}.map", s.output_path()), map))
+        })
+        .collect();
     if request.write
-        && let Err(error) = write_tree(&dir, &out)
+        && let Err(error) =
+            write_tree(&dir, &out).and_then(|()| write_maps(&dir, &addon_name, &maps))
     {
         session.push(
             Diagnostic::plain_error(format!("cannot write the build output: {error}"))
@@ -1335,6 +1338,27 @@ fn validate_output(
 }
 
 /// Writes the output tree to a temporary directory and swaps it into place.
+/// Writes source maps outside the AddOn folder (spec codegen §14.6):
+/// `<parent>/.maps/<Addon>/<output path>.map`. Maps of per-flavor files
+/// (milestone M2) add a `<flavor>/` level.
+fn write_maps(dir: &Path, addon: &str, maps: &BTreeMap<String, String>) -> std::io::Result<()> {
+    let Some(parent) = dir.parent() else {
+        return Ok(());
+    };
+    let root = parent.join(".maps").join(addon);
+    if root.exists() {
+        std::fs::remove_dir_all(&root)?;
+    }
+    for (rel, map) in maps {
+        let path = root.join(rel);
+        if let Some(p) = path.parent() {
+            std::fs::create_dir_all(p)?;
+        }
+        std::fs::write(path, map)?;
+    }
+    Ok(())
+}
+
 fn write_tree(dir: &Path, out: &BTreeMap<String, Content>) -> std::io::Result<()> {
     let staged = fsutil::temp_sibling(dir)?;
     for (path, content) in out {

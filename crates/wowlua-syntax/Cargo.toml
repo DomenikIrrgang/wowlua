@@ -1,0 +1,20 @@
+[package]
+name = "wowlua-syntax"
+description = "Lexer, parser and syntax tree for Lua 5.1 and wowlua"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+wowlua-diagnostics.workspace = true
+wowlua-span.workspace = true
+stacker.workspace = true
+
+[dev-dependencies]
+mlua.workspace = true
+
+[lints]
+workspace = true

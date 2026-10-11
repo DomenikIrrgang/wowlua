@@ -5,6 +5,8 @@
 //! the CLI renders them.
 
 pub mod build;
+mod compile;
+pub mod format;
 mod fsutil;
 pub mod install;
 pub mod lockfile;

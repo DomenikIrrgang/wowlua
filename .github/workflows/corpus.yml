@@ -1,0 +1,28 @@
+name: corpus
+
+# The full conformance corpus (spec compiler §13.5.3): parse parity with
+# Lua 5.1, bytecode round trip and formatter checks on the pinned addon
+# releases and the Lua 5.1 test suite. Regular CI runs the same checks on
+# tests/corpus-sample/.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: target/corpus
+          key: corpus-${{ hashFiles('xtask/corpus.txt') }}
+      - run: cargo run --release -p xtask -- corpus fetch
+      - run: cargo run --release -p xtask -- corpus run

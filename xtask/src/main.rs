@@ -4,10 +4,13 @@
 //!   `spec/appendix/diagnostics.md`.
 //! - `cargo xtask schema`: regenerate the manifest JSON schema in `schema/`.
 //! - `cargo xtask check`: fail if generated files are out of date (used in CI).
+//! - `cargo xtask corpus fetch|run [dir]`: the conformance corpus.
 
 use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+mod corpus;
 
 fn main() -> Result<()> {
     let task = std::env::args().nth(1).unwrap_or_default();
@@ -23,7 +26,18 @@ fn main() -> Result<()> {
                 "schema",
             )
         }
-        _ => bail!("usage: cargo xtask <codes|schema|check>"),
+        "corpus" => {
+            let dir = std::env::args()
+                .nth(3)
+                .map(PathBuf::from)
+                .unwrap_or_else(|| root.join("target/corpus"));
+            match std::env::args().nth(2).as_deref() {
+                Some("fetch") => corpus::fetch(&root, &dir),
+                Some("run") => corpus::run(&dir),
+                _ => bail!("usage: cargo xtask corpus <fetch|run> [dir]"),
+            }
+        }
+        _ => bail!("usage: cargo xtask <codes|schema|check|corpus>"),
     }
 }
 

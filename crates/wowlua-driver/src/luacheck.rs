@@ -1,6 +1,7 @@
-//! Lua 5.1 syntax validation with the embedded Lua 5.1 VM (spec roadmap M0):
-//! every file is compiled, never run. Compile errors include Lua 5.1's limit
-//! errors (too many locals, upvalues, constants, …), which map to E5001.
+//! Lua 5.1 limit checks with the embedded Lua 5.1 VM: files that parse are
+//! compiled (never run), which reports the limits Lua checks while
+//! generating code (too many locals, upvalues, constants, registers) as
+//! E5001. Syntax is checked by the compiler's own parser before this.
 
 use mlua::Lua;
 use std::sync::LazyLock;
@@ -26,7 +27,7 @@ static LINE_PREFIX: LazyLock<regex::Regex> =
 /// Compiles `code` (the raw bytes of `file`) as Lua 5.1. A leading UTF-8 byte
 /// order mark is skipped, as WoW does. Returns `None` if it compiles,
 /// otherwise a diagnostic pointing at the reported line.
-pub fn check(db: &SourceDb, file: FileId, code: &[u8], wowlua_source: bool) -> Option<Diagnostic> {
+pub fn check(db: &SourceDb, file: FileId, code: &[u8]) -> Option<Diagnostic> {
     let source = db.get(file);
     let code = code.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(code);
     let lua = Lua::new();
@@ -49,16 +50,10 @@ pub fn check(db: &SourceDb, file: FileId, code: &[u8], wowlua_source: bool) -> O
             .with_label(span, "in the function containing this line")
             .with_help("split the function or move locals into a table")
     } else {
-        let diagnostic = Diagnostic::error("E0101", format!("Lua syntax error: {message}"))
-            .with_label(span, "here");
-        if wowlua_source {
-            diagnostic.with_note(
-                "this compiler version (milestone M0) accepts .wowlua files only when they are \
-                 plain Lua 5.1; wowlua syntax needs the wowlua compiler (milestone M1)",
-            )
-        } else {
-            diagnostic
-        }
+        // The compiler's parser accepted the file, Lua 5.1 did not.
+        Diagnostic::error("E0101", format!("Lua syntax error: {message}"))
+            .with_label(span, "here")
+            .with_note("wowlua's parser accepted this file; please report this as a bug")
     };
     Some(diagnostic)
 }
@@ -67,49 +62,29 @@ pub fn check(db: &SourceDb, file: FileId, code: &[u8], wowlua_source: bool) -> O
 mod tests {
     use super::*;
 
-    fn run(text: &str, wowlua: bool) -> Option<Diagnostic> {
+    fn run(text: &str) -> Option<Diagnostic> {
         let mut db = SourceDb::new();
         let file = db.add("src/a.lua", text);
-        check(&db, file, text.as_bytes(), wowlua)
+        check(&db, file, text.as_bytes())
     }
 
     #[test]
     fn byte_order_marks_and_non_utf8_strings_are_accepted() {
         let mut db = SourceDb::new();
         let file = db.add("src/a.lua", "");
-        assert!(check(&db, file, b"\xEF\xBB\xBFlocal a = 1\n", false).is_none());
-        assert!(check(&db, file, b"local s = \"caf\xE9\"\n", false).is_none());
+        assert!(check(&db, file, b"\xEF\xBB\xBFlocal a = 1\n").is_none());
+        assert!(check(&db, file, b"local s = \"caf\xE9\"\n").is_none());
     }
 
     #[test]
     fn valid_lua_51_passes() {
-        assert!(run("local a = 1\nprint(a .. 'x')\n", false).is_none());
-    }
-
-    #[test]
-    fn syntax_errors_point_at_their_line() {
-        let d = run("local a = 1\nlocal = 2\n", false).unwrap();
-        assert_eq!(d.code, Some("E0101"));
-        assert!(d.message.contains("near '='"), "{}", d.message);
-        assert_eq!(d.labels[0].span.start, 12);
-    }
-
-    #[test]
-    fn lua_52_syntax_is_rejected() {
-        assert!(run("goto done\n::done::\n", false).is_some());
-        assert!(run("local x = 7 // 2\n", false).is_some());
-    }
-
-    #[test]
-    fn wowlua_syntax_gets_a_note() {
-        let d = run("local x: number = 1\n", true).unwrap();
-        assert!(d.notes[0].contains("milestone M1"));
+        assert!(run("local a = 1\nprint(a .. 'x')\n").is_none());
     }
 
     #[test]
     fn limit_errors_are_e5001() {
         let locals: String = (0..210).map(|i| format!("local v{i} = {i}\n")).collect();
-        let d = run(&locals, false).unwrap();
+        let d = run(&locals).unwrap();
         assert_eq!(d.code, Some("E5001"), "{}", d.message);
     }
 }

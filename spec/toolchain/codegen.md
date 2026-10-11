@@ -155,7 +155,7 @@ no columns).
 
 | Build | Location |
 |-------|----------|
-| Profile builds | `dist/<profile>/.maps/<Addon>/<flavor>/<output path>.map` |
+| Profile builds | `dist/<profile>/.maps/<Addon>/<flavor>/<output path>.map` for per-flavor files, `dist/<profile>/.maps/<Addon>/<output path>.map` for files shared by all flavors (decision T68) |
 | Publish builds | `dist/targets/<target>/.maps/<Addon>/<flavor>/<output path>.map` |
 | Published builds (archive) | `$WOWLUA_HOME/maps/<build id>/`, plus the `archive-maps` upload ([Publishing §11.7](publishing.md#117-github-releases)) |
 

@@ -175,6 +175,16 @@ An opinionated formatter for `.wowlua` and `.d.wowlua`. It can optionally format
   Defaults: `indent` `"tab"`, `line-width` 100, `quote-style` `"double"`
   ([Manifest §9.13](manifest.md#913-fmt)).
 - `wowlua fmt --check` exits 1 if any file would change (for CI).
+- Style (decision T65), following StyLua: lines are reflowed at `line-width`;
+  call arguments are always parenthesized (`f "x"` becomes `f("x")`); tables
+  print as `{ a = 1, b = 2 }` when they fit, otherwise one field per line with
+  a trailing comma; a single table or function argument, or a function as the
+  last argument, hugs the parentheses; long binary expressions break after
+  the operator with a hanging indent; blocks are never kept on one line,
+  except an empty function body (`function() end`); at most one blank line is
+  kept; `;` is written only before a statement that starts with `(`.
+  Trailing comments stay on their line, comments on their own line stay on
+  their own line.
 - Formatting never changes semantics. Every formatted file is verified to
   produce the same AST.
 

@@ -233,7 +233,7 @@ fn lua_syntax_errors_fail_the_build() {
         .args(["build", "--message-format", "short"])
         .assert()
         .code(1)
-        .stderr(predicate::str::contains("src/main.lua:1:1: error[E0101]"));
+        .stderr(predicate::str::contains("src/main.lua:1:7: error[E0101]"));
     assert!(
         !dir.path().join("dist").exists(),
         "failed builds write nothing"
@@ -479,4 +479,90 @@ fn init_handles_unusual_layouts() {
         xml.contains("Data_Mists.lua [AllowLoadGameType mists]"),
         "kept verbatim: {xml}"
     );
+}
+
+/// Milestone M1: `.wowlua` files compile (types erased, lines preserved),
+/// with source maps; other wowlua syntax names its milestone.
+#[test]
+fn wowlua_sources_compile_with_types_erased() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"typed\", \"version\": \"1.0.0\" },\n  \"profiles\": { \"dev\": { \"source-maps\": true } } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                "-- greeting\ntype Name = string\nlocal function greet(who: Name, times: number?): string\n\treturn \"hi \" .. (who :: string)\nend\nprint(greet(\"you\"))\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let out = fs::read_to_string(dir.path().join("dist/dev/Typed/src/main.lua")).unwrap();
+    assert_eq!(
+        out,
+        "-- greeting\n\nlocal function greet(who, times)\n\treturn \"hi \" .. (who)\nend\nprint(greet(\"you\"))\n"
+    );
+    let map = fs::read_to_string(dir.path().join("dist/dev/.maps/Typed/src/main.lua.map")).unwrap();
+    assert!(map.contains("\"sources\":[\"src/main.wowlua\"]"), "{map}");
+    assert!(
+        !dir.path().join("dist/dev/Typed/.maps").exists(),
+        "maps stay outside the AddOn"
+    );
+
+    fs::write(dir.path().join("src/main.wowlua"), "local a = b?.c\n").unwrap();
+    wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains(
+            "src/main.wowlua:1:11: error: not available yet: optional chaining (arrives with milestone M2)",
+        ));
+}
+
+#[test]
+fn check_and_fmt() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"fmt-me\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                "local t={a=1,b='x'} -- keep\nif t.a then print( t.b ) end\n",
+            ),
+            ("src/plain.lua", "local   x=1\n"),
+        ],
+    );
+    wowlua(dir.path())
+        .arg("check")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Checked"));
+    assert!(!dir.path().join("dist").exists(), "check writes nothing");
+
+    wowlua(dir.path())
+        .args(["fmt", "--check"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("would reformat src/main.wowlua"));
+    wowlua(dir.path()).arg("fmt").assert().success();
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/main.wowlua")).unwrap(),
+        "local t = { a = 1, b = \"x\" } -- keep\nif t.a then\n\tprint(t.b)\nend\n"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/plain.lua")).unwrap(),
+        "local   x=1\n",
+        ".lua files are formatted only with fmt.lua"
+    );
+    wowlua(dir.path())
+        .args(["fmt", "--check"])
+        .assert()
+        .success();
 }

@@ -17,6 +17,10 @@ wowlua-flavors = { path = "crates/wowlua-flavors" }
 wowlua-manifest = { path = "crates/wowlua-manifest" }
 wowlua-toc = { path = "crates/wowlua-toc" }
 wowlua-xml = { path = "crates/wowlua-xml" }
+wowlua-syntax = { path = "crates/wowlua-syntax" }
+wowlua-luair = { path = "crates/wowlua-luair" }
+wowlua-lower = { path = "crates/wowlua-lower" }
+wowlua-fmt = { path = "crates/wowlua-fmt" }
 wowlua-driver = { path = "crates/wowlua-driver" }
 
 anyhow = "1.0"
@@ -40,6 +44,8 @@ semver = { version = "1.0", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 serde_path_to_error = "0.1"
+sha2 = "0.10"
+stacker = "0.1"
 tempfile = "3.27"
 thiserror = "2.0"
 walkdir = "2.5"

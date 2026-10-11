@@ -31,6 +31,8 @@ with generated TOCs for several flavors.
 
 ## M1: Parser and emitter
 
+**Status: done (2026-10-11).**
+
 - Lexer and parser for full Lua 5.1 plus all wowlua syntax, with error recovery.
 - Lua IR and emitter with line modes, hygiene and source maps.
 - Superset conformance suite: Lua 5.1 tests, addon corpus, bytecode round-trip.
@@ -39,6 +41,19 @@ with generated TOCs for several flavors.
 
 **Exit:** the corpus parses with zero errors, and round-trip bytecode is
 identical for every corpus file.
+
+Notes on the delivered state:
+
+- `.wowlua` files are compiled with type-only syntax erased (decision T64);
+  other wowlua syntax reports the milestone that implements it.
+- The corpus (28 pinned addon releases and the Lua 5.1 test suite, 7,179
+  files, 4.8 million lines) parses with the same accept/reject result as Lua
+  5.1, and every file round-trips to identical bytecode in all line modes; in
+  `preserve` mode even the line info is identical. The formatter formats every
+  corpus file idempotently without changing its meaning.
+- Fuzzing is done with deterministic randomized tests on stable Rust
+  (decision T67). `wowlua check --watch` follows with incremental checking
+  (M4).
 
 ## M2: Lowering of syntax sugar and modules
 

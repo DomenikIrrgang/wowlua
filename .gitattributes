@@ -1,0 +1,2 @@
+# Conformance samples must stay byte-exact (CRLF, non-UTF-8 bytes).
+tests/corpus-sample/** -text

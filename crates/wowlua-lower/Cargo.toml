@@ -1,0 +1,22 @@
+[package]
+name = "wowlua-lower"
+description = "Lowering of the wowlua syntax tree to the Lua 5.1 IR"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+stacker.workspace = true
+wowlua-diagnostics.workspace = true
+wowlua-luair.workspace = true
+wowlua-span.workspace = true
+wowlua-syntax.workspace = true
+
+[dev-dependencies]
+mlua.workspace = true
+
+[lints]
+workspace = true

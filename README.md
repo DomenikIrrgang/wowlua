@@ -59,8 +59,10 @@ wowlua publish           # package and upload to every configured addon site
 The specification lives in [`spec/`](spec/README.md). Implementation follows
 the [roadmap](spec/roadmap.md).
 
-**Milestone M0 is done**: the toolchain builds and installs **plain Lua**
-addons. The wowlua language features shown above arrive with M1 and later.
+**Milestones M0 and M1 are done**: the toolchain builds and installs plain
+Lua addons, and compiles `.wowlua` files that use Lua syntax with type
+annotations (erased). The other language features shown above arrive with M2
+and later; using them reports the milestone that adds them.
 
 What works today:
 
@@ -69,7 +71,12 @@ What works today:
   Lua/XML files move into `src/` and in-game paths to them are updated.
 - `wowlua build [--release] [--flavor …]`: a complete AddOn in
   `dist/<profile>/<Name>/` with generated TOC(s) for every flavor, Lua 5.1
-  syntax checks, XML reference checks and output validation.
+  syntax checks, XML reference checks and output validation. `.wowlua` files
+  are compiled with their line numbers preserved (in-game errors point at the
+  source line); source maps on request.
+- `wowlua check`: the same checks without writing a build.
+- `wowlua fmt [--check]`: a StyLua-like, comment-preserving formatter
+  (plain Lua syntax for now).
 - `wowlua dev [--link]` / `install` / `uninstall`: sync builds into every WoW
   client folder (`_retail_`, `_classic_era_`, …), never overwriting folders
   that wowlua did not install.
@@ -102,6 +109,8 @@ cargo test --workspace
 cargo xtask codes    # regenerate diagnostic codes from spec/appendix/diagnostics.md
 cargo xtask schema   # regenerate schema/wowlua-<version>.json
 cargo xtask check    # verify generated files (CI)
+cargo xtask corpus fetch && cargo run --release -p xtask -- corpus run
+                     # conformance corpus: Lua 5.1 parity, bytecode round trip, formatter
 ```
 
 ## License

@@ -1,0 +1,31 @@
+# Conformance corpus (spec compiler §13.5.3): name, URL, SHA-256.
+# Fetched by `cargo xtask corpus fetch` into target/corpus/.
+lua51-tests https://www.lua.org/tests/lua5.1-tests.tar.gz 49e4ca6561f82ea605908c5041ab5fad66ed9930fa0686675bd51b02767f18ad
+aio https://github.com/Stanzilla/AdvancedInterfaceOptions/releases/download/2.1.14/AdvancedInterfaceOptions-2.1.14.zip 189fcbd1e5033f311d5359dfc86ddda5fdf1230b0b4849f29a0a179fd1567f28
+allthethings https://github.com/ATTWoWAddon/AllTheThings/releases/download/5.3.15/AllTheThings-5.3.15.zip df7d8c3a4f0175e87bbd2a73194b635b2c112c9557e15de0f521312f157f0a33
+atlasloot https://github.com/Hoizame/AtlasLootClassic/releases/download/v3.2.0/AtlasLootClassic-v3.2.0.zip 06aa9fa4c3de314422f45c67f2a555849e9f90657a980a8c7b922107b6aa90af
+bartender4 https://github.com/Nevcairiel/Bartender4/releases/download/4.18.3.1/Bartender4-4.18.3.1.zip 30ac5a1d281154a50b82be898a97d91661090a5cbaaa79f8d34e276e80f45c09
+betterbags https://github.com/Cidan/BetterBags/releases/download/v0.5.14/BetterBags-v0.5.14.zip 16c1ac70c4de2e7f2cfdbf4d2b5f3d3f44514a3f9ecf1040e29c790e8be8c0d7
+bigwigs https://github.com/BigWigsMods/BigWigs/releases/download/v426.3/BigWigs-v426.3.zip 663ef00663a63e6970820e358e58c5cabcef4247637f8f31aed43aa992614b2f
+cell https://github.com/enderneko/Cell/releases/download/r274-release/Cell-r274-release.zip 55a3b7d44d82eca4ce17535f1680d651fdba42bef9ea6b793407f64b92fb5a39
+dbm https://github.com/DeadlyBossMods/DeadlyBossMods/releases/download/12.1.12/DBM-Core-12.1.12.zip 5c8bbcc7daabff029d8ecf4b4b95b400be1bfdd5e860123914d84ada032d40e6
+dbmdungeons https://github.com/DeadlyBossMods/DBM-Dungeons/releases/download/r264/DBM-Dungeons-r264.zip 63a30527dfef38975ef48d9f98c82608c286504cd7668d745e8998a1fd5c9479
+grid2 https://github.com/michaelnpsp/Grid2/releases/download/4.0.32/Grid2-4.0.32.zip d4c01d61b68dad397da48d7cfe2e9f4b6b5f503b48efc0ce7a76e5001ab0b916
+handynotes https://github.com/Nevcairiel/HandyNotes/releases/download/v1.6.31/HandyNotes-v1.6.31.zip ef2d24d2e9824dfdd81f60e0043efe53a55525c8c0f1390a3b83ce5a0119e10d
+hekili https://github.com/Hekili/hekili/releases/download/v11.2.5-1.0.0/Hekili-v11.2.5-1.0.0.zip ed8e186def65d0ca7eb8ee7f77ea1cd8d9250a94edd05a5a5fe164f6003ede1b
+littlewigs https://github.com/BigWigsMods/LittleWigs/releases/download/v12.1.19/LittleWigs-v12.1.19.zip 3c3d03e51c49e203c93445b77c868434a710a67ea24446da80cc2dee09b82288
+lsui https://github.com/ls-/ls_UI/releases/download/110207.02/ls_UI-110207.02.zip 775b56d514e349ccda8e80c25408fbac0ae9715e4d368d5575bbd2c77c68dfa3
+masque https://github.com/SFX-WoW/Masque/releases/download/12.1.0/Masque-12.1.0.zip 9e1da4827ae60bd25d7fc427cbeeb0dc297e59d53a71a29ae95223d3374bbfa0
+mdt https://github.com/Nnoggie/MythicDungeonTools/releases/download/6.3.5/MythicDungeonTools-6.3.5.zip b5ce17382e2ac94971205d6e8ba264fe1139d91297524a72ac689da7847325e4
+omnicc https://github.com/tullamods/OmniCC/releases/download/11.2.8/OmniCC-11.2.8.zip 1ced275d86be0072bd4888c79a42663ec0c18332a9e22fb3a7ee2ccbe4cc65e0
+ouf https://github.com/oUF-wow/oUF/releases/download/14.2.0/oUF-14.2.0.zip 629d3854e68003a5c71e5e4e79b3c37222a4803e629bcf963bcba1a9a9765f03
+plater https://github.com/Tercioo/Plater-Nameplates/releases/download/Plater-v658/Plater-v658.zip faeda3f14a2b109d2ceaa2a176be4a2e2d016b5e8c12d6c70e8222505bf461e0
+questie https://github.com/Questie/Questie/releases/download/bundle/v12.0.4%2Bv1.0.5/Questie-v12.0.4%2Bv1.0.5.zip 7fb156b8814fe734f4fb382fed9fcdcc6b7b9394e2b2d72a57fdc52522fe0b9c
+rarity https://github.com/WowRarity/Rarity/releases/download/r751-release/Rarity-r751-release.zip c61e462ae20848ac3402db2b33967e5285d21959ca0d2aeae3466040c6c68986
+realui https://github.com/RealUI/RealUI/releases/download/4.2.0/RealUI-4.2.0.zip 2e51cffcb6e2dc94294007ec74e69d0c0ae5b0864811a331d98c4465b76bc259
+simc https://github.com/simulationcraft/simc-addon/releases/download/12.1.0-04/Simulationcraft-12.1.0-04.zip f2992b7a1d68c739e5314acda074abba768726cfa2e1517b5113e60edd0c080f
+spartanui https://github.com/spartanui-wow/SpartanUI/releases/download/8.2.1/SpartanUI-8.2.1.zip 3153e7867a3bff8fd139f1fcc25af2ff3a69386cef5624a339b6793ffed86b73
+suf https://github.com/Nevcairiel/ShadowedUnitFrames/releases/download/v4.3.9-classic/ShadowedUnitFrames-v4.3.9-classic.zip 6d2e95fe098e8a304265e5984d96184c07fedd078fe8b290c6a0cf711a7edea6
+tellmewhen https://github.com/ascott18/TellMeWhen/releases/download/12.1.4/TellMeWhen-12.1.4.zip c910d47edde638dc0f4059669629af32c6d47835bbe708517f086054d0a549a1
+trp3 https://github.com/Total-RP/Total-RP-3/releases/download/3.4.3/totalRP3-3.4.3.zip 1c01323e945713f5d283be5b1d73d5ed16e895430a37b1270173e3fe47fcc32a
+weakauras https://github.com/WeakAuras/WeakAuras2/releases/download/5.22.1/WeakAuras-5.22.1.zip d0d4406b62e84d5e023f2af95e93d229907a41074d2749dd46643c8843536c33

@@ -6,4 +6,11 @@ publish = false
 
 [dependencies]
 anyhow.workspace = true
+mlua.workspace = true
+sha2.workspace = true
+wowlua-fmt.workspace = true
+wowlua-lower.workspace = true
+wowlua-luair.workspace = true
 wowlua-manifest.workspace = true
+wowlua-span.workspace = true
+wowlua-syntax.workspace = true
