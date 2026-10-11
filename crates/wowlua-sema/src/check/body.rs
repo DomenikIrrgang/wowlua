@@ -55,6 +55,10 @@ pub struct FileInfo<'a> {
     /// The file is a module (top-level `...` is not the addon arguments
     /// for imports; it still is in WoW).
     pub is_module: bool,
+    /// Shared flavor mode: the flavors and API availability.
+    pub shared: Option<&'a super::flavors::SharedFlavors>,
+    /// Names bound to `wowlua:meta`'s `flavor`.
+    pub meta_flavor: HashSet<String>,
 }
 
 pub struct Checker<'e> {
@@ -84,6 +88,11 @@ pub struct Checker<'e> {
     /// The file calls `setfenv`: global names resolve in environments the
     /// checker cannot see (no W1001/W1002).
     pub(crate) dynamic_env: bool,
+    pub(crate) shared: Option<super::flavors::SharedFlavors>,
+    pub(crate) guard: super::flavors::Guard,
+    pub(crate) meta_flavor: HashSet<String>,
+    /// Expressions that are existence tests (`if C_X then`): no E2030.
+    pub(crate) probes: HashSet<wowlua_span::Span>,
 }
 
 impl<'e> Checker<'e> {
@@ -111,6 +120,10 @@ impl<'e> Checker<'e> {
             pure_lua: info.pure_lua,
             top_vararg: None,
             dynamic_env: calls_setfenv(&parse.chunk.block),
+            shared: info.shared.cloned(),
+            guard: super::flavors::Guard::default(),
+            meta_flavor: info.meta_flavor.clone(),
+            probes: HashSet::new(),
         };
         for (name, &t) in &info.imports {
             c.declare(name, Some(t), t, true, None);
@@ -205,6 +218,20 @@ impl<'e> Checker<'e> {
 
     pub fn lookup_var(&self, name: &str) -> Option<VarId> {
         self.scopes.iter().rev().find_map(|s| s.get(name).copied())
+    }
+
+    /// An annotation's type; `typeof(expr)` parts are inferred first
+    /// (spec §2.2.7).
+    pub fn annotation(&mut self, t: &Type) -> TypeId {
+        let mut exprs: Vec<&Expr> = Vec::new();
+        typeof_exprs(t, &mut exprs);
+        for e in exprs {
+            let ty = self.infer(e);
+            let ty = self.env.types.widen(ty);
+            self.env.typeof_types.insert((e.span.start, e.span.end), ty);
+        }
+        let scope = self.scope.clone();
+        self.env.resolve(t, &scope)
     }
 
     /// The type of `...` in the current function.
@@ -326,10 +353,7 @@ impl<'e> Checker<'e> {
             StmtKind::Local { names, values } => {
                 let expected: Vec<Option<TypeId>> = names
                     .iter()
-                    .map(|n| {
-                        n.ty.as_ref()
-                            .map(|t| self.env.resolve(t, &self.scope.clone()))
-                    })
+                    .map(|n| n.ty.as_ref().map(|t| self.annotation(t)))
                     .collect();
                 let values = self.expr_list(values, &expected);
                 for (i, n) in names.iter().enumerate() {
@@ -369,10 +393,23 @@ impl<'e> Checker<'e> {
                 self.assign_target(target, result);
             }
             StmtKind::Call(e) => {
-                self.infer_multi(e);
+                let results = self.infer_multi(e);
+                // `error(...)` and other functions returning `never`.
+                if results.types.first() == Some(&Types::NEVER) {
+                    self.live = false;
+                }
+                // `assert(cond)` narrows like `if cond` (spec §2.5).
+                if let ExprKind::Call { callee, args } = &e.kind
+                    && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "assert" && self.lookup_var("assert").is_none())
+                    && let Some(cond) = args.exprs().first()
+                {
+                    let (t_flow, _) = self.narrow(cond, &self.flow.clone());
+                    self.flow = t_flow;
+                }
             }
             StmtKind::Do(b) => self.block(b),
             StmtKind::While { cond, body } => {
+                self.mark_probes(cond);
                 self.infer(cond);
                 let before = self.flow.clone();
                 self.forget_assigned(body);
@@ -389,6 +426,7 @@ impl<'e> Checker<'e> {
                 self.forget_assigned(body);
                 self.push_scope();
                 self.block_stmts(body);
+                self.mark_probes(cond);
                 self.infer(cond);
                 let (_, f) = self.narrow(cond, &self.flow.clone());
                 let _ = f;
@@ -403,32 +441,46 @@ impl<'e> Checker<'e> {
             } => {
                 let mut clauses: Vec<(&Expr, &Block)> = vec![(cond, then_block)];
                 clauses.extend(elseifs.iter().map(|(c, b)| (c, b)));
-                let mut ends: Vec<(Flow, bool)> = Vec::new();
+                let mut ends: Vec<(Flow, bool, super::flavors::Guard)> = Vec::new();
                 for (c, b) in clauses {
+                    self.mark_probes(c);
                     self.infer(c);
                     let (t_flow, f_flow) = self.narrow(c, &self.flow.clone());
+                    let (t_guard, f_guard) = self.narrow_guard(c, &self.guard.clone());
                     let entry_live = self.live;
                     self.flow = t_flow;
+                    self.guard = t_guard;
                     self.block(b);
-                    ends.push((self.flow.clone(), self.live));
+                    ends.push((self.flow.clone(), self.live, self.guard.clone()));
                     self.flow = f_flow;
+                    self.guard = f_guard;
                     self.live = entry_live;
                 }
                 match else_block {
                     Some(b) => {
                         self.block(b);
-                        ends.push((self.flow.clone(), self.live));
+                        ends.push((self.flow.clone(), self.live, self.guard.clone()));
                     }
-                    None => ends.push((self.flow.clone(), self.live)),
+                    None => ends.push((self.flow.clone(), self.live, self.guard.clone())),
                 }
                 let mut iter = ends.into_iter();
-                let (mut flow, mut live) = iter.next().expect("a branch");
-                for (f, l) in iter {
+                let (mut flow, mut live, first_guard) = iter.next().expect("a branch");
+                let mut guard = if live { Some(first_guard) } else { None };
+                for (f, l, g) in iter {
                     flow = self.join(&flow, &f, live, l);
                     live |= l;
+                    if l {
+                        guard = Some(match guard {
+                            Some(prev) => prev.join(&g),
+                            None => g,
+                        });
+                    }
                 }
                 self.flow = flow;
                 self.live = live;
+                if let Some(g) = guard {
+                    self.guard = g;
+                }
             }
             StmtKind::NumericFor {
                 var,
@@ -466,9 +518,7 @@ impl<'e> Checker<'e> {
                 self.forget_assigned(body);
                 self.push_scope();
                 for (i, v) in vars.iter().enumerate() {
-                    let declared =
-                        v.ty.as_ref()
-                            .map(|t| self.env.resolve(t, &self.scope.clone()));
+                    let declared = v.ty.as_ref().map(|t| self.annotation(t));
                     let t = loop_types.get(i).copied().unwrap_or(Types::ANY);
                     self.declare(&v.name.text, declared, t, false, Some(v.name.span));
                 }
@@ -506,9 +556,7 @@ impl<'e> Checker<'e> {
             StmtKind::LocalDestructure {
                 fields, value, ty, ..
             } => {
-                let declared = ty
-                    .as_ref()
-                    .map(|t| self.env.resolve(t, &self.scope.clone()));
+                let declared = ty.as_ref().map(|t| self.annotation(t));
                 let source = match value {
                     Some(v) => self.check(v, declared),
                     None => Types::ANY,
@@ -530,9 +578,7 @@ impl<'e> Checker<'e> {
                 }
             }
             StmtKind::Const { name, ty, value } => {
-                let declared = ty
-                    .as_ref()
-                    .map(|t| self.env.resolve(t, &self.scope.clone()));
+                let declared = ty.as_ref().map(|t| self.annotation(t));
                 let t = match value {
                     Some(v) => self.check(v, declared),
                     None => declared.unwrap_or(Types::ANY),
@@ -657,6 +703,18 @@ impl<'e> Checker<'e> {
         self_ty: Option<TypeId>,
     ) -> TypeId {
         let mut sig = self.env.func_sig(f, &self.scope.clone(), false);
+        // Strict mode: parameters of non-callback functions need
+        // annotations (E2050).
+        if self.mode == Mode::Strict && expected.is_none() {
+            for p in f
+                .params
+                .iter()
+                .filter(|p| p.ty.is_none() && p.default.is_none())
+            {
+                let msg = format!("parameter `{}` needs a type annotation", p.name.text);
+                self.report("E2050", p.name.span, msg);
+            }
+        }
         // Contextual parameter types for unannotated parameters.
         if let Some(exp) = &expected {
             for (i, p) in sig.params.iter_mut().enumerate() {
@@ -825,6 +883,9 @@ impl<'e> Checker<'e> {
             self.scope.params.push((name, p));
         }
         self.scope.self_ty = Some(instance);
+        if self.mode == Mode::Strict {
+            self.definite_assignment(c);
+        }
         for m in &c.members {
             let is_static = m.modifiers.contains(&Modifier::Static);
             self.classes.push((def, is_static));
@@ -910,6 +971,64 @@ impl<'e> Checker<'e> {
         let _ = class_obj;
     }
 
+    /// Strict mode: non-optional instance fields without an initializer
+    /// must be assigned by the constructor before it returns or calls a
+    /// method on `self` (E2052).
+    fn definite_assignment(&mut self, c: &ClassDecl) {
+        let required: Vec<&Name> = c
+            .members
+            .iter()
+            .filter(|m| !m.modifiers.contains(&Modifier::Static))
+            .filter_map(|m| match &m.kind {
+                ClassMemberKind::Field {
+                    name,
+                    optional: false,
+                    value: None,
+                    ty,
+                } if !matches!(ty.kind, TypeKind::Optional(_)) => Some(name),
+                _ => None,
+            })
+            .collect();
+        if required.is_empty() {
+            return;
+        }
+        let ctor = c.members.iter().find_map(|m| match &m.kind {
+            ClassMemberKind::Constructor {
+                func,
+                has_body: true,
+            } => Some(func),
+            _ => None,
+        });
+        let mut assigned: HashSet<Box<str>> = HashSet::new();
+        if let Some(f) = ctor {
+            for s in &f.body.stmts {
+                if let StmtKind::Assign { targets, .. } = &s.kind {
+                    for t in targets {
+                        if let ExprKind::Field { obj, name } = &t.kind
+                            && matches!(&obj.kind, ExprKind::Name(n) if n.text.as_ref() == "self")
+                        {
+                            assigned.insert(name.text.clone());
+                        }
+                    }
+                }
+                // A method call on `self` or a return ends the check.
+                let calls_self = matches!(&s.kind, StmtKind::Call(e) if matches!(&e.kind, ExprKind::Method { obj, .. } if matches!(&obj.kind, ExprKind::Name(n) if n.text.as_ref() == "self")));
+                if calls_self || matches!(s.kind, StmtKind::Return(_)) {
+                    break;
+                }
+            }
+        }
+        for name in required {
+            if !assigned.contains(&name.text) {
+                let msg = format!(
+                    "field `{}` is not assigned in the constructor (initialize it, assign it, or make it optional)",
+                    name.text
+                );
+                self.report("E2052", name.span, msg);
+            }
+        }
+    }
+
     /// Adds a field to an open table, or checks it against a sealed one.
     pub fn extend_open(&mut self, owner: TypeId, name: &str, value: TypeId) {
         let Ty::Record(mut r) = self.env.types.get(owner).clone() else {
@@ -962,6 +1081,38 @@ fn calls_setfenv(b: &Block) -> bool {
         }
     });
     found
+}
+
+/// The `typeof(expr)` parts of a type.
+fn typeof_exprs<'t>(t: &'t Type, out: &mut Vec<&'t Expr>) {
+    match &t.kind {
+        TypeKind::Typeof(e) => out.push(e),
+        TypeKind::Paren(i) | TypeKind::Optional(i) | TypeKind::Array(i) => typeof_exprs(i, out),
+        TypeKind::Union(ms) | TypeKind::Intersection(ms) => {
+            ms.iter().for_each(|m| typeof_exprs(m, out))
+        }
+        TypeKind::Table(fields) => {
+            for f in fields {
+                match f {
+                    TableTypeField::Named { ty, .. }
+                    | TableTypeField::NamedString { ty, .. }
+                    | TableTypeField::Array(ty) => typeof_exprs(ty, out),
+                    TableTypeField::Indexer { key, value } => {
+                        typeof_exprs(key, out);
+                        typeof_exprs(value, out);
+                    }
+                }
+            }
+        }
+        TypeKind::Ref { args, .. } => {
+            for a in args {
+                if let TypeArg::Type(t) = a {
+                    typeof_exprs(t, out);
+                }
+            }
+        }
+        _ => {}
+    }
 }
 
 /// `E2001` → `W2001` (spec §2.1).

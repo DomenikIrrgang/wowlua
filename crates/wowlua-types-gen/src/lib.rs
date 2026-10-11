@@ -27,6 +27,9 @@ pub struct FlavorDocs {
     pub ui_lua: Vec<(String, String)>,
     pub ui_xml: Vec<(String, String)>,
     pub strings: Vec<String>,
+    /// The global API functions the flavor's client has (`Name`,
+    /// `Namespace.Member`), when known.
+    pub api_names: Option<HashSet<String>>,
 }
 
 /// Generates the declarations. `skip`: global names the compiler declares
@@ -48,21 +51,28 @@ pub fn generate(
     // Older flavors' documentation is incomplete (vanilla's lacks
     // `GetTime`): a flavor gets the globals, namespaces and types its own
     // documentation lacks from the other flavors', in the given order.
+    // Functions come only where the flavor's client has them (when known).
     let fallback: Vec<Decls> = per_flavor.iter().map(|(_, _, d)| d.clone()).collect();
-    for (_, _, d) in per_flavor.iter_mut() {
+    for ((_, _, d), f) in per_flavor.iter_mut().zip(flavors) {
+        let has = |name: &str| f.api_names.as_ref().is_none_or(|a| a.contains(name));
         for other in &fallback {
             for (name, sigs) in &other.functions {
-                d.functions
-                    .entry(name.clone())
-                    .or_insert_with(|| sigs.clone());
+                if has(name) {
+                    d.functions
+                        .entry(name.clone())
+                        .or_insert_with(|| sigs.clone());
+                }
             }
             for (name, ns) in &other.namespaces {
-                let target = d.namespaces.entry(name.clone()).or_default();
-                for (f, sigs) in &ns.functions {
-                    target
-                        .functions
-                        .entry(f.clone())
-                        .or_insert_with(|| sigs.clone());
+                for (fname, sigs) in &ns.functions {
+                    if has(&format!("{name}.{fname}")) {
+                        d.namespaces
+                            .entry(name.clone())
+                            .or_default()
+                            .functions
+                            .entry(fname.clone())
+                            .or_insert_with(|| sigs.clone());
+                    }
                 }
             }
             for (name, fields) in &other.interfaces {
@@ -126,6 +136,80 @@ pub fn generate(
     for (_, _, d) in per_flavor.iter_mut() {
         d.classes.retain(|n, _| !shared.classes.contains_key(n));
         blizzard::mark_widgets(&mut d.classes);
+    }
+    // Annotated functions some flavor's client lacks move to the flavors
+    // that have them.
+    let all_have = |name: &str| {
+        flavors
+            .iter()
+            .all(|f| f.api_names.as_ref().is_none_or(|a| a.contains(name)))
+    };
+    let moved: Vec<String> = shared
+        .functions
+        .keys()
+        .filter(|n| {
+            !all_have(n)
+                && flavors
+                    .iter()
+                    .any(|f| f.api_names.as_ref().is_some_and(|a| a.contains(*n)))
+        })
+        .cloned()
+        .collect();
+    for name in moved {
+        let sigs = shared.functions.shift_remove(&name).expect("present");
+        for ((_, _, d), f) in per_flavor.iter_mut().zip(flavors) {
+            if f.api_names.as_ref().is_none_or(|a| a.contains(&name)) {
+                d.functions
+                    .entry(name.clone())
+                    .or_insert_with(|| sigs.clone());
+            }
+        }
+    }
+    // API functions no source documents: untyped.
+    for ((_, _, d), f) in per_flavor.iter_mut().zip(flavors) {
+        let Some(api) = &f.api_names else { continue };
+        let mut names: Vec<&String> = api.iter().collect();
+        names.sort();
+        for name in names {
+            match name.split_once('.') {
+                None => {
+                    if model::is_ident(name)
+                        && !skip.contains(name)
+                        && !d.functions.contains_key(name)
+                        && !shared.functions.contains_key(name)
+                        && !d.namespaces.contains_key(name)
+                        && !shared.namespaces.contains_key(name)
+                        && !shared.classes.contains_key(name)
+                    {
+                        d.globals
+                            .entry(name.clone())
+                            .or_insert_with(|| "(...any) -> ...any".into());
+                    }
+                }
+                Some((ns, member))
+                    if model::is_ident(ns) && model::is_ident(member) && !skip.contains(ns) =>
+                {
+                    let in_shared = shared
+                        .namespaces
+                        .get(ns)
+                        .is_some_and(|n| n.functions.contains_key(member));
+                    if !in_shared && !shared.classes.contains_key(ns) {
+                        let target = d.namespaces.entry(ns.to_string()).or_default();
+                        target
+                            .functions
+                            .entry(member.to_string())
+                            .or_insert_with(|| {
+                                vec![model::Sig {
+                                    vararg: Some("any".into()),
+                                    ret_vararg: Some("any".into()),
+                                    ..model::Sig::default()
+                                }]
+                            });
+                    }
+                }
+                _ => {}
+            }
+        }
     }
     // Globals of Blizzard's UI code and global strings, where nothing else
     // declares them; those of every flavor go into the shared file.

@@ -49,3 +49,60 @@ pub fn declarations(flavor: &str) -> Option<[File; 2]> {
     };
     Some([SHARED, own])
 }
+
+/// The APIs a declaration file declares: global functions and globals
+/// (`Name`), namespaces and their members (`Namespace.Member`).
+pub fn declared_names(text: &str) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    let mut namespace: Option<String> = None;
+    let ident = |s: &str| -> String {
+        s.chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect()
+    };
+    for line in text.lines() {
+        if let Some(rest) = line
+            .strip_prefix("declare function ")
+            .or_else(|| line.strip_prefix("@deprecated declare function "))
+        {
+            out.insert(ident(rest));
+        } else if let Some(rest) = line.strip_prefix("declare global ") {
+            out.insert(ident(rest));
+        } else if let Some(rest) = line.strip_prefix("declare namespace ") {
+            let ns = ident(rest);
+            out.insert(ns.clone());
+            namespace = Some(ns);
+        } else if line == "end" {
+            namespace = None;
+        } else if let Some(ns) = &namespace
+            && let Some(member) = line.strip_prefix("    ")
+            && !member.starts_with(' ')
+        {
+            let member = member.strip_prefix("@deprecated ").unwrap_or(member);
+            let member = member
+                .strip_prefix("function ")
+                .or_else(|| member.strip_prefix("namespace "))
+                .or_else(|| member.strip_prefix("const "))
+                .unwrap_or(member);
+            let name = ident(member);
+            if !name.is_empty() {
+                out.insert(format!("{ns}.{name}"));
+            }
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn names() {
+        let names = super::declared_names(
+            "declare function GetTime(): number\ndeclare namespace C_X\n    function Do()\n    value: number\nend\ndeclare global UIParent: Frame\n",
+        );
+        for n in ["GetTime", "C_X", "C_X.Do", "C_X.value", "UIParent"] {
+            assert!(names.contains(n), "{n}: {names:?}");
+        }
+        assert!(super::declarations("standard").is_some());
+    }
+}

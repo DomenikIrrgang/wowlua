@@ -107,11 +107,35 @@ impl Checker<'_> {
                 single(self.function_body(f, exp, None))
             }
             ExprKind::Table(fields) => single(self.table(fields, expected)),
+            // An existence test of an undeclared global: `nil`; inside the
+            // region the test guards: `any`.
+            ExprKind::Name(n)
+                if self.lookup_var(&n.text).is_none()
+                    && !self.env.globals.contains_key(n.text.as_ref())
+                    && !self.dynamic_env
+                    && n.text.as_ref() != "_G"
+                    && !self.extra_globals.contains(n.text.as_ref())
+                    && !self.assigned_globals.contains(n.text.as_ref())
+                    && (self.probes.contains(&e.span)
+                        || self.guard.present.contains(n.text.as_ref())) =>
+            {
+                single(if self.probes.contains(&e.span) {
+                    Types::NIL
+                } else {
+                    Types::ANY
+                })
+            }
+            ExprKind::Name(n) if self.probes.contains(&e.span) => {
+                let saved = self.shared.take();
+                let t = self.name_type(n);
+                self.shared = saved;
+                single(t)
+            }
             ExprKind::Name(n) => single(self.name_type(n)),
             ExprKind::Paren(inner) => single(self.check(inner, expected)),
             ExprKind::Cast { expr, ty } => {
                 let from = self.infer(expr);
-                let to = self.env.resolve(ty, &self.scope.clone());
+                let to = self.annotation(ty);
                 // Assertions between incomparable types (E2015).
                 if !self.env.assignable(from, to, self.mode)
                     && !self.env.assignable(to, from, self.mode)
@@ -130,15 +154,33 @@ impl Checker<'_> {
                 if self.is_super(obj) {
                     return single(self.super_member(&name.text, name.span));
                 }
+                let probed = self.probes.contains(&e.span);
+                let path = self.api_path_of(e);
+                if self.shared.is_some()
+                    && !probed
+                    && let Some(path) = &path
+                {
+                    self.check_available(path, name.span);
+                }
+                let guarded = path
+                    .as_ref()
+                    .is_some_and(|p| self.guard.present.contains(p));
                 let o = self.infer(obj);
                 let o = if matches!(e.kind, ExprKind::OptField { .. }) {
                     self.env.types.non_nil(o)
                 } else {
                     o
                 };
-                let t = self
-                    .member_type(o, &name.text, name.span, false)
-                    .unwrap_or(Types::ANY);
+                // A member the type lacks, in an existence test (`nil`) or
+                // in the region such a test guards (`any`).
+                let missing = (probed || guarded)
+                    && self.member_type(o, &name.text, name.span, true) == Some(Types::ERROR);
+                let t = if missing {
+                    if probed { Types::NIL } else { Types::ANY }
+                } else {
+                    self.member_type(o, &name.text, name.span, false)
+                        .unwrap_or(Types::ANY)
+                };
                 let t = if matches!(e.kind, ExprKind::OptField { .. }) {
                     self.env.types.optional(t)
                 } else {
@@ -165,7 +207,29 @@ impl Checker<'_> {
                 } else {
                     c
                 };
-                self.call(c, None, args, e.span, expected)
+                // A method called with `.` and no receiver (E2008).
+                if args.exprs().is_empty()
+                    && let ExprKind::Field { obj, name } = &callee.kind
+                    && self.is_method_member(obj, &name.text)
+                {
+                    self.report(
+                        "E2008",
+                        e.span,
+                        format!("`{}` is a method; call it with `:`", name.text),
+                    );
+                    return Pack::any();
+                }
+                self.check_yield_boundary(callee, args);
+                let results = self.call(c, None, args, e.span, expected);
+                // `setmetatable(t, mt)`: `t` with `mt.__index` as fallback.
+                if let ExprKind::Name(n) = &callee.kind
+                    && n.text.as_ref() == "setmetatable"
+                    && self.lookup_var("setmetatable").is_none()
+                    && let [t, mt] = args.exprs().as_slice()
+                {
+                    return Pack::single(self.with_metatable(t, mt));
+                }
+                results
             }
             ExprKind::Method { obj, name, args } | ExprKind::OptMethod { obj, name, args } => {
                 if self.is_super(obj) {
@@ -186,6 +250,9 @@ impl Checker<'_> {
                 single(self.binary(*op, lhs, rhs, e.span, expected))
             }
             ExprKind::Unary { op, operand } => {
+                if *op == UnOp::Not {
+                    self.mark_probes(operand);
+                }
                 let t = self.infer(operand);
                 single(match op {
                     UnOp::Not => Types::BOOLEAN,
@@ -264,6 +331,7 @@ impl Checker<'_> {
         if let Some(v) = self.lookup_var(&n.text) {
             return self.var_type(v);
         }
+        self.check_available(&n.text, n.span);
         if n.text.as_ref() == "super" && !self.classes.is_empty() {
             return self.super_member("", n.span);
         }
@@ -515,6 +583,20 @@ impl Checker<'_> {
                                 Some(Ty::Map(_, v)) => Some(*v),
                                 _ => None,
                             });
+                    // Strict mode: a literal's unknown field for a record
+                    // type is a typo (spec §2.2.4, E2003).
+                    if self.mode == super::query::Mode::Strict
+                        && let Some(Ty::Record(r)) = &exp_ty
+                        && r.indexer.is_none()
+                        && !r.fields.contains_key(name.text.as_ref())
+                    {
+                        let msg = format!(
+                            "`{}` is not a field of `{}`",
+                            name.text,
+                            self.env.display(exp.expect("expected"))
+                        );
+                        self.report("E2003", name.span, msg);
+                    }
                     let t = self.check(value, want);
                     if let Some(w) = want {
                         self.check_assignable(value.span, t, w);
@@ -968,21 +1050,29 @@ impl Checker<'_> {
     ) -> TypeId {
         match op {
             BinOp::And => {
+                self.mark_probes(lhs);
                 let l = self.check(lhs, expected);
                 let (t_flow, f_flow) = self.narrow(lhs, &self.flow.clone());
+                let (t_guard, _) = self.narrow_guard(lhs, &self.guard.clone());
                 let saved = std::mem::replace(&mut self.flow, t_flow);
+                let saved_guard = std::mem::replace(&mut self.guard, t_guard);
                 let r = self.check(rhs, expected);
                 self.flow = saved;
+                self.guard = saved_guard;
                 let _ = f_flow;
                 let lf = self.falsy(l);
                 self.env.types.union(&[lf, r])
             }
             BinOp::Or => {
+                self.mark_probes(lhs);
                 let l = self.check(lhs, expected);
                 let (_, f_flow) = self.narrow(lhs, &self.flow.clone());
+                let (_, f_guard) = self.narrow_guard(lhs, &self.guard.clone());
                 let saved = std::mem::replace(&mut self.flow, f_flow);
+                let saved_guard = std::mem::replace(&mut self.guard, f_guard);
                 let r = self.check(rhs, expected);
                 self.flow = saved;
+                self.guard = saved_guard;
                 let lt = self.truthy(l);
                 self.env.types.union(&[lt, r])
             }
@@ -1124,6 +1214,50 @@ impl Checker<'_> {
 
     /// A call of `callee` (with `receiver` for `:` calls on non-method
     /// members already handled). Returns the results.
+    /// `coroutine.yield` inside a function passed to `pcall`, `xpcall` or
+    /// a C callback cannot yield across that boundary (W2057).
+    fn check_yield_boundary(&mut self, callee: &Expr, args: &Args) {
+        let name = match &callee.kind {
+            ExprKind::Name(n) => n.text.to_string(),
+            ExprKind::Field { obj, name } => match &obj.kind {
+                ExprKind::Name(o) => format!("{}.{}", o.text, name.text),
+                _ => return,
+            },
+            _ => return,
+        };
+        if !matches!(
+            name.as_str(),
+            "pcall" | "xpcall" | "table.sort" | "sort" | "string.gsub" | "gsub"
+        ) {
+            return;
+        }
+        for a in args.exprs() {
+            let ExprKind::Function(f) = &a.kind else {
+                continue;
+            };
+            let mut found = None;
+            for s in &f.body.stmts {
+                wowlua_syntax::visit::walk_stmt(s, &mut |e| {
+                    if found.is_none()
+                        && let ExprKind::Call { callee, .. } = &e.kind
+                        && let ExprKind::Field { obj, name } = &callee.kind
+                        && name.text.as_ref() == "yield"
+                        && matches!(&obj.kind, ExprKind::Name(c) if c.text.as_ref() == "coroutine")
+                    {
+                        found = Some(e.span);
+                    }
+                });
+            }
+            if let Some(span) = found {
+                self.report(
+                    "W2057",
+                    span,
+                    format!("`coroutine.yield` cannot yield across `{name}` in Lua 5.1"),
+                );
+            }
+        }
+    }
+
     pub fn call(
         &mut self,
         callee: TypeId,
@@ -1603,6 +1737,55 @@ impl Checker<'_> {
             }
             _ => Types::ANY,
         }
+    }
+
+    /// The API path of a field expression on a global (`C_X.Fn`).
+    fn api_path_of(&self, e: &Expr) -> Option<String> {
+        match &e.kind {
+            ExprKind::Name(n) if self.lookup_var(&n.text).is_none() => Some(n.text.to_string()),
+            ExprKind::Field { obj, name } => {
+                self.api_path_of(obj).map(|p| format!("{p}.{}", name.text))
+            }
+            _ => None,
+        }
+    }
+
+    /// `obj.name` is a method of a class or declared class.
+    fn is_method_member(&mut self, obj: &Expr, name: &str) -> bool {
+        let o = self.peek_type(obj);
+        match self.env.types.get(o).clone() {
+            Ty::Named(d, args) => self
+                .env
+                .instance_member(d, &args, name)
+                .is_some_and(|(m, _)| m.kind == MemberKind::Method),
+            _ => false,
+        }
+    }
+
+    /// The type of `setmetatable(t, mt)` (spec §2.4.6): the fields of `t`,
+    /// then those of `mt.__index` (methods included). Later additions to an
+    /// open metatable are allowed through an indexer.
+    fn with_metatable(&mut self, t: &Expr, mt: &Expr) -> TypeId {
+        let tt = self.peek_type(t);
+        let mtt = self.peek_type(mt);
+        let index = self.field_type_quiet(mtt, "__index");
+        let Ty::Record(mut r) = self.env.types.get(tt).clone() else {
+            return tt;
+        };
+        if let Some(i) = index
+            && let Ty::Record(ir) = self.env.types.get(i).clone()
+        {
+            for (k, f) in ir.fields {
+                r.fields.entry(k).or_insert(f);
+            }
+            if ir.open || r.indexer.is_none() {
+                r.indexer = Some((Types::STRING, Types::ANY));
+            }
+        } else if index.is_some() {
+            r.indexer = Some((Types::STRING, Types::ANY));
+        }
+        r.open = false;
+        self.env.types.record(r)
     }
 
     pub fn is_super(&self, e: &Expr) -> bool {

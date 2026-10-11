@@ -1052,6 +1052,55 @@ fn standard_library_modules_and_intrinsics() {
         .stderr(predicate::str::contains("E3033"));
 }
 
+/// Shared flavor mode: APIs some flavor lacks need a flavor guard (spec
+/// §6.5, E2030).
+#[test]
+fn flavor_guards_in_shared_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    let manifest = "{ \"package\": { \"name\": \"guards\", \"version\": \"1.0.0\" }, \"flavors\": { \"standard\": {}, \"vanilla\": {} }, \"build\": { \"flavor-mode\": \"shared\" } }\n";
+    let guarded = r#"import flavor from "wowlua:meta"
+if C_Garrison then
+    C_Garrison.GetGarrisonInfo(1)
+end
+if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
+    C_Garrison.GetGarrisonInfo(1)
+end
+if flavor == "standard" then
+    C_Garrison.GetGarrisonInfo(1)
+end
+local function f()
+    if not C_Garrison then return end
+    C_Garrison.GetGarrisonInfo(1)
+end
+print(GetTime())
+"#;
+    write(
+        dir.path(),
+        &[("wowlua.json", manifest), ("src/main.wowlua", guarded)],
+    );
+    let assert = wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(
+        !stderr.contains("E2030") && !stderr.contains("W1001"),
+        "{stderr}"
+    );
+    fs::write(
+        dir.path().join("src/main.wowlua"),
+        "import flavor from \"wowlua:meta\"\nC_Garrison.GetGarrisonInfo(1)\n",
+    )
+    .unwrap();
+    wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .code(1)
+        .stderr(
+            predicate::str::contains("error[E2030]").and(predicate::str::contains("`vanilla`")),
+        );
+}
+
 /// A mock of the frame API for widget classes in the VM.
 const MOCK_FRAMES: &str = r##"UIParent = {}
 local methods = {}

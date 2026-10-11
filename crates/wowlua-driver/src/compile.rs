@@ -283,6 +283,7 @@ pub fn compile_flavor(
     layout: wowlua_sema::loadorder::Layout,
     api: &[ParsedDeclaration],
     check: &CheckConfig,
+    shared: Option<&wowlua_sema::check::flavors::SharedFlavors>,
 ) -> CompileOutput {
     let options = EmitOptions {
         line_mode: line_mode(profile),
@@ -363,6 +364,7 @@ pub fn compile_flavor(
             &analysis,
             &settings,
             &check.globals,
+            shared,
         ));
     }
     for info in analysis.modules.iter().flatten() {

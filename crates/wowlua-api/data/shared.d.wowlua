@@ -2980,8 +2980,6 @@ declare class TradeSkillCategoryInfo
     skillLineCurrentLevel: number
 end
 
-@deprecated declare function GetMerchantItemInfo(index: number): (string, number, number, number, number, boolean, boolean, boolean, number, number)
-@deprecated declare function IsActiveQuestLegendary(questIndex: number): boolean
 @deprecated declare function ConsolePrint(...: string)
 @deprecated declare function message(text: string, force: boolean)
 @deprecated declare function ActionButton_ShowOverlayGlow(button: table)
@@ -3105,14 +3103,10 @@ declare function GetCurrenciesString(currencies: number[] | table[]): string
 declare function ReplaceGenderTokens(string: string, gender: string): string
 declare function CreateAndInitFromMixin<T>(mixin: T, ...: any): T
 declare function ripairs(tbl: table): (function, table, number)
-declare function tDeleteItem(tbl: table, item: any)
-declare function tIndexOf(tbl: table, item: any): number?
-declare function tContains(tbl: table, item: any): boolean
 declare function tCompare(lhsTable: table, rhsTable: table, depth: number?): boolean
 declare function tInvert(tbl: table): table
 declare function tFilter(tbl: table, pred: function, isIndexTable: boolean): table
 declare function tAppendAll(tbl: table, addedArray: table)
-declare function tUnorderedRemove(tbl: table, index: number)
 declare function CopyTable(settings: table, shallow: boolean?): table
 declare function AccumulateIf(tbl: table, pred: function): number
 declare function ContainsIf(tbl: table, pred: function): boolean
@@ -3147,7 +3141,6 @@ declare function CreateVector2D(x: number, y: number): Vector2DMixin
 declare function AreVector2DEqual(left: Vector2DMixin, right: Vector2DMixin): boolean
 declare function CreateVector3D(x: number, y: number, z: number): Vector3DMixin
 declare function AreVector3DEqual(left: Vector3DMixin, right: Vector3DMixin): boolean
-declare function AbandonSkill(skillLineID: number)
 declare function AcceptBattlefieldPort(index: number, accept: boolean)
 declare function AcceptDuel()
 declare function AcceptGroup()
@@ -3155,18 +3148,12 @@ declare function AcceptProposal()
 declare function AcceptQuest()
 declare function AcceptSpellConfirmationPrompt(spellID: number)
 declare function AcceptTrade()
-declare function AcknowledgeAutoAcceptQuest()
 declare function AcknowledgeSurvey(caseIndex: any?)
 declare function AddAutoQuestPopUp(questID: number, type: string)
 declare function AddChatWindowChannel(windowId: number, channelName: string)
 declare function AddChatWindowMessages(index: number, messageGroup: string)
 declare function AntiAliasingSupported()
-declare function ArchaeologyGetIconInfo(index: number)
-declare function ArchaeologyMapUpdateAll(uiMapID: number): number
-declare function ArcheologyGetVisibleBlobID(index: number): number
-declare function AreTalentsLocked()
 declare function AscendStop()
-declare function AttachGlyphToSpell(spellID: any?)
 declare function AutoChooseCurrentGraphicsSetting()
 declare function AutoLootMailItem(index: any?)
 declare function AutoStoreGuildBankItem(tab: number, slot: number)
@@ -3181,7 +3168,6 @@ declare function BNGetBlockedInfo(index: any?)
 declare function BNGetDisplayName(bnetIdAccount: any?)
 declare function BNGetFOFInfo(mutual: boolean, nonMutual: boolean, index: number): (number, string, boolean)
 declare function BNGetFriendIndex(presenceID: number): number
-declare function BNGetFriendInviteInfo(inviteIndex: number): (number, number, boolean, string?, number)
 declare function BNGetInfo(): (number?, string, number, string, boolean, boolean, boolean)
 declare function BNGetNumBlocked()
 declare function BNGetNumFOF(ID: any?, mutual: any?, non: any?)
@@ -3198,18 +3184,12 @@ declare function BNRequestFOFInfo(bnetIDAccount: any?)
 declare function BNRequestInviteFriend(presenceID: any?, tank: any?, heal: any?, dps: any?)
 declare function BNSendFriendInvite(text: any?, noteText: any?)
 declare function BNSendFriendInviteByID(ID: any?, noteText: any?)
-declare function BNSendVerifiedBattleTagInvite()
-declare function BNSetBlocked(ID: any?, bool: any?)
 declare function BNSetFriendFavoriteFlag(id: number, isFavorite: boolean)
 declare function BNSetFriendNote(bnetIDAccount: number, noteText: string)
 declare function BNSetSelectedBlock(index: any?)
 declare function BNSetSelectedFriend(index: any?)
 declare function BNSummonFriendByIndex(id: any?)
 declare function BNTokenFindName(target: any?)
-declare function BattlefieldMgrEntryInviteResponse(queueId: any?, accept: any?)
-declare function BattlefieldMgrExitRequest(queueId: any?)
-declare function BattlefieldMgrQueueInviteResponse(queueId: any?, accept: any?)
-declare function BattlefieldMgrQueueRequest()
 declare function BuyGuildBankTab()
 declare function BuyGuildCharter(guildName: string)
 declare function BuyMerchantItem(index: number, quantity: number?)
@@ -3239,23 +3219,17 @@ declare function CanGuildPromote(): boolean
 declare function CanGuildRemove()
 declare function CanHearthAndResurrectFromArea()
 declare function CanInitiateWarGame()
-declare function CanItemBeSocketedToArtifact(itemID: number): boolean
 declare function CanJoinBattlefieldAsGroup(): boolean
 declare function CanMerchantRepair(): boolean
 declare function CanPartyLFGBackfill()
 declare function CanReplaceGuildMaster(): boolean
 declare function CanResetTutorials()
-declare function CanScanResearchSite(): boolean
 declare function CanShowAchievementUI(): boolean
 declare function CanSignPetition()
-declare function CanSolveArtifact(): boolean
 declare function CanSurrenderArena()
-declare function CanSwitchVehicleSeats(): boolean
 declare function CanViewGuildRecipes(skillID: number): boolean
 declare function CanWithdrawGuildBankMoney()
 declare function CancelDuel()
-declare function CancelItemTempEnchantment(weaponHand: number)
-declare function CancelMasterLootRoll(slot: any?)
 declare function CancelPetPossess()
 declare function CancelScene()
 declare function CancelShapeshiftForm()
@@ -3283,10 +3257,7 @@ declare function CheckInbox()
 declare function ClearAchievementComparisonUnit()
 declare function ClearAchievementSearchString()
 declare function ClearAllLFGDungeons(category: any?)
-declare function ClearAutoAcceptQuestSound()
 declare function ClearBattlemaster()
-declare function ClearFailedPVPTalentIDs()
-declare function ClearFailedTalentIDs()
 declare function ClearInspectPlayer()
 declare function ClearOverrideBindings(owner: Frame)
 declare function ClearPartyAssignment()
@@ -3295,9 +3266,7 @@ declare function ClearTutorials()
 declare function ClickSendMailItemButton(itemIndex: number?, clearItem: boolean?)
 declare function ClickTargetTradeButton(index: any?)
 declare function ClickTradeButton(index: any?)
-declare function ClickWorldMapActionButton()
 declare function CloseGuildBankFrame()
-declare function CloseGuildRegistrar()
 declare function CloseGuildRoster()
 declare function CloseItemText()
 declare function CloseLoot(showUnopenableError: boolean?)
@@ -3305,7 +3274,6 @@ declare function CloseMail()
 declare function CloseMerchant()
 declare function ClosePetition()
 declare function CloseQuest()
-declare function CloseResearch()
 declare function CloseTabardCreation()
 declare function CloseTaxiMap()
 declare function CloseTrade()
@@ -3364,7 +3332,6 @@ declare function DescendStop()
 declare function DetectWowMouse()
 declare function DismissCompanion(type: string)
 declare function DisplayChannelOwner(channelName: string)
-declare function DoMasterLootRoll(slot: any?)
 declare function DoReadyCheck()
 declare function DoesTemplateExist(template: any?)
 declare function DungeonAppearsInRandomLFD(dungeonID: any?)
@@ -3434,7 +3401,6 @@ declare function GetAchievementCategory(achievementID: number): number
 declare function GetAchievementComparisonInfo(achievementID: number): (boolean, number, number, number)
 declare function GetAchievementCriteriaInfo(achievementID: number, criteriaIndex: number, countHidden: boolean?): (string, number, boolean, number, number, string, number, number, string, number, boolean, number, number)
 declare function GetAchievementCriteriaInfoByID(achievementID: number, criteriaID: number): (string, number, boolean, number, number, string, number, number, string, number, boolean, number, number)
-declare function GetAchievementGuildRep(id: number): (boolean, boolean, number)
 declare function GetAchievementInfo(achievementID: number): (number, string, number, boolean, number, number, number, string, number, number, string, boolean, boolean, string, boolean)
 declare function GetAchievementInfo(categoryID: number, index: number)
 declare function GetAchievementLink(id: number): string
@@ -3445,18 +3411,11 @@ declare function GetAchievementSearchProgress()
 declare function GetAchievementSearchSize()
 declare function GetActionBarToggles(): (boolean, boolean, boolean, boolean, boolean, boolean, boolean)
 declare function GetActionInfo(slot: number): (string, number | string, string)
-declare function GetActiveArtifactByRace(branchIndex: number, artifactIndex: number): (string, string, string, string, string, number, string)
 declare function GetActiveLevel(index: any?)
 declare function GetActiveLootRollIDs()
-declare function GetActiveQuestID(index: any?)
 declare function GetActiveTitle(index: any?)
 declare function GetAlternativeDefaultLanguage()
-declare function GetArchaeologyInfo(): string
-declare function GetArchaeologyRaceInfo(raceIndex: number): (string, number, number, number, number, number)
-declare function GetArchaeologyRaceInfoByID(branchID: number): (string, number, number, number, number, number)
 declare function GetArenaOpponentSpec(id: number): (number, number)
-declare function GetArtifactInfoByRace(raceIndex: number, artifactIndex: number): (string, string, number, string, string, number, string, number, number)
-declare function GetArtifactProgress(): (number, number, number)
 declare function GetAutoQuestPopUp(index: number): (number, string)
 declare function GetAvailableLevel(index: any?)
 declare function GetAvailableQuestInfo(index: number): (boolean, number, boolean, boolean, number, boolean)
@@ -3507,7 +3466,6 @@ declare function GetCriteriaSpell()
 declare function GetCurrentArenaSeason(): number
 declare function GetCurrentBindingSet(): number
 declare function GetCurrentEnvironment()
-declare function GetCurrentGlyphNameForSpell(spellID: any?)
 declare function GetCurrentGraphicsAPI(): string
 declare function GetCurrentGraphicsSetting()
 declare function GetCurrentGuildBankTab()
@@ -3519,15 +3477,11 @@ declare function GetDefaultLanguage(): (string, number)
 declare function GetDemotionRank(index: any?)
 declare function GetDungeonForRandomSlot(randomID: any?, index: any?)
 declare function GetEditBoxMetatable(): table
-declare function GetEquipmentNameFromSpell()
-declare function GetFailedPVPTalentIDs()
-declare function GetFailedTalentIDs()
 declare function GetFilteredAchievementID(index: number): number
 declare function GetFlexRaidDungeonInfo(index: any?)
 declare function GetFlyoutID(index: any?)
 declare function GetFlyoutInfo(flyoutID: number): (string, string, number, boolean)
 declare function GetFlyoutSlotInfo(flyoutID: number, slot: number): (number, number, boolean, string, number)
-declare function GetFollowerTypeIDFromSpell()
 declare function GetFontStringMetatable(): table
 declare function GetFrameMetatable(): table
 declare function GetFramesRegisteredForEvent(event: FrameEvent): Frame
@@ -3538,9 +3492,6 @@ declare function GetGraphicsAPIs(): string
 declare function GetGraphicsCVarValueForQualityLevel()
 declare function GetGreetingText()
 declare function GetGroupMemberCounts()
-declare function GetGuildAchievementMemberInfo(achievementID: number, index: number): string?
-declare function GetGuildAchievementMembers(achievementID: number)
-declare function GetGuildAchievementNumMembers(achievementID: number): number
 declare function GetGuildBankBonusDepositMoney()
 declare function GetGuildBankItemInfo(tab: number, slot: number): (number, number, boolean, boolean, number)
 declare function GetGuildBankItemLink(tab: number, slot: number): string
@@ -3585,7 +3536,6 @@ declare function GetInboxNumItems(): (number, number)
 declare function GetInboxText(index: number): (string, string, string, boolean, boolean, boolean)
 declare function GetInspectArenaData(bracketId: number): (number, number, number, number, number)
 declare function GetInspectHonorData(): (number, number, number, number, number, number)
-declare function GetInspectSpecialization(unit: UnitToken): number
 declare function GetInspectTalent()
 declare function GetInventoryAlertStatus(index: string): number
 declare function GetInventoryItemBroken(unit: UnitToken, invSlotId: number): boolean
@@ -3598,10 +3548,7 @@ declare function GetInventoryItemLink(unit: UnitToken, invSlotId: number): strin
 declare function GetInventoryItemQuality(unit: UnitToken, invSlotId: number): number
 declare function GetInventoryItemTexture(unit: UnitToken, invSlotId: number): fileID
 declare function GetInventoryItemsForSlot(slot: number, returnTable: table, transmogrify: boolean?): table
-declare function GetInventorySlotInfo(invSlotName: InventorySlotName): (number, string, boolean)
 declare function GetInviteConfirmationInfo(guid: unknown): (number, string, string, boolean, boolean, number, number, number)
-declare function GetItemLevelColor(): (number, number, number)
-declare function GetJournalInfoForSpellConfirmation(spellID: any?)
 declare function GetLFDChoiceCollapseState(LFGCollapseList: any?)
 declare function GetLFDChoiceEnabledState(LFGEnabledList: any?)
 declare function GetLFDChoiceOrder(LFDDungeonList: any?)
@@ -3674,9 +3621,7 @@ declare function GetMaxBattlefieldID(): number
 declare function GetMaxNumCUFProfiles()
 declare function GetMaxRenderScale()
 declare function GetMaxRewardCurrencies()
-declare function GetMaxTalentTier(): number
 declare function GetMerchantCurrencies()
-declare function GetMerchantFilter()
 declare function GetMerchantItemCostInfo(index: number): number
 declare function GetMerchantItemCostItem(index: number, itemIndex: number): (string, number, string, string)
 declare function GetMerchantItemID(index: number): number
@@ -3694,16 +3639,12 @@ declare function GetNextAchievement(achievementID: number): (number?, boolean?)
 declare function GetNextCompleatedTutorial(tutorial: any?)
 declare function GetNextPendingInviteConfirmation()
 declare function GetNumActiveQuests(): number
-declare function GetNumArchaeologyRaces(): number
 declare function GetNumArenaOpponentSpecs()
 declare function GetNumArenaOpponents()
-declare function GetNumArtifactsByRace(raceIndex: number): number
 declare function GetNumAutoQuestPopUps(): number
 declare function GetNumAvailableQuests(): number
 declare function GetNumBattlefieldFlagPositions()
 declare function GetNumBattlefieldScores(): number
-declare function GetNumBattlefieldVehicles(index: any?)
-declare function GetNumBattlegroundTypes(): number
 declare function GetNumBindings(): number
 declare function GetNumBuybackItems(): number
 declare function GetNumChannelMembers()
@@ -3740,9 +3681,7 @@ declare function GetNumQuestItemDrops()
 declare function GetNumQuestItems(): number
 declare function GetNumQuestLeaderBoards(questID: number?): number
 declare function GetNumQuestLogChoices(questID: number, includeCurrencies: boolean?): number
-declare function GetNumQuestLogRewardFactions()
 declare function GetNumQuestLogRewards(questID: number?): number
-declare function GetNumQuestLogTasks()
 declare function GetNumQuestRewards(): number
 declare function GetNumRFDungeons(): number
 declare function GetNumRaidProfiles()
@@ -3757,8 +3696,6 @@ declare function GetNumSpecGroups(b: boolean): number
 declare function GetNumSpecializations(isInspect: boolean?, isPet: boolean?): number
 declare function GetNumSubgroupMembers(groupType: number?): number
 declare function GetNumTrainerServices(): number
-declare function GetNumTreasurePickerItems()
-declare function GetNumUnspentPvpTalents()
 declare function GetNumUnspentTalents(): number
 declare function GetNumWarGameTypes()
 declare function GetObjectiveText()
@@ -3767,7 +3704,6 @@ declare function GetPVPRoles(): (boolean, boolean, boolean)
 declare function GetPartyAssignment(assignment: string, raidmember: UnitToken?, exactMatch: boolean?): boolean
 declare function GetPartyLFGBackfillInfo()
 declare function GetPartyLFGID()
-declare function GetPendingGlyphName()
 declare function GetPendingInviteConfirmations()
 declare function GetPersonalRatedInfo(index: number): (number, number, number, number, number, number, number, number)
 declare function GetPetActionCooldown(index: number): (number, number, number)
@@ -3775,12 +3711,10 @@ declare function GetPetActionInfo(index: number): (string, string, boolean, bool
 declare function GetPetActionSlotUsable(index: number): boolean
 declare function GetPetActionsUsable()
 declare function GetPetExperience(): (number, number)
-declare function GetPetFoodTypes(): string
 declare function GetPetIcon()
 declare function GetPetTimeRemaining()
 declare function GetPetitionInfo(): (string, string, string, number, string, boolean, number)
 declare function GetPetitionNameInfo(index: any?)
-declare function GetPlayerTradeCurrency()
 declare function GetPlayerTradeMoney(): number
 declare function GetPossessInfo(index: number): (string, number, boolean)
 declare function GetPrevCompleatedTutorial(tutorial: any?)
@@ -3791,47 +3725,34 @@ declare function GetProfessionInfo(index: number): (string, fileID, number, numb
 declare function GetProfessions(): (number, number, number, number, number)
 declare function GetProgressText(): string
 declare function GetPromotionRank(index: any?)
-declare function GetPvpTalentInfoByID(talentID: number, specGroupIndex: number?, isInspect: boolean?, inspectedUnit: string?): (number, string, number, boolean, boolean, number, boolean, number, number, boolean, boolean)
-declare function GetPvpTalentInfoBySpecialization()
-declare function GetPvpTalentLink()
 declare function GetQuestBackgroundMaterial(): string?
 declare function GetQuestCurrencyID(type: any?, index: any?)
-declare function GetQuestExpansion(questID: any?)
 declare function GetQuestFactionGroup(questID: number): number
 declare function GetQuestID(): number
 declare function GetQuestItemInfo(type: string, index: number): (string, number, number, number, boolean, number)
-declare function GetQuestItemInfoLootType(type: any?, index: any?)
 declare function GetQuestItemLink(type: string, index: number): string
 declare function GetQuestLink(questID: number): string
 declare function GetQuestLogChoiceInfo(index: number, questID: number?): (string, fileID, number, number, boolean, number)
-declare function GetQuestLogChoiceInfoLootType(index: any?)
 declare function GetQuestLogCompletionText()
-declare function GetQuestLogCriteriaSpell()
 declare function GetQuestLogItemDrop(index: any?)
 declare function GetQuestLogItemLink(type: string, index: number, questID: number?): string
 declare function GetQuestLogLeaderBoard(objIndex: number, questIndex: number?): (string, string, boolean)
 declare function GetQuestLogPortraitTurnIn()
 declare function GetQuestLogQuestText(questLogIndex: number?): (string, string)
 declare function GetQuestLogQuestType()
-declare function GetQuestLogRewardArtifactXP()
-declare function GetQuestLogRewardFactionInfo(questIndex: any?)
 declare function GetQuestLogRewardHonor(questID: any?)
 declare function GetQuestLogRewardInfo(itemIndex: number, questID: number?): (string, string, number, number, boolean, number, number)
 declare function GetQuestLogRewardMoney(questID: number?): number
-declare function GetQuestLogRewardSkillPoints()
 declare function GetQuestLogRewardTitle()
 declare function GetQuestLogRewardXP(questID: any?)
 declare function GetQuestLogSpecialItemCooldown(questLogIndex: number): (number, number, number)
 declare function GetQuestLogSpecialItemInfo(questLogIndex: number): (string?, number, number, boolean)
 declare function GetQuestLogTimeLeft(): number
 declare function GetQuestMoneyToGet()
-declare function GetQuestObjectiveInfo(questID: number, objectiveIndex: number, displayComplete: boolean): (string, string, boolean, number, number)
-declare function GetQuestPOIBlobCount(questID: any?)
 declare function GetQuestPOILeaderBoard(index: any?)
 declare function GetQuestPOIs()
 declare function GetQuestPortraitGiver()
 declare function GetQuestPortraitTurnIn()
-declare function GetQuestProgressBarPercent(questID: number): number
 declare function GetQuestResetTime(): number
 declare function GetQuestReward(itemChoice: number)
 declare function GetQuestSortIndex(questLogIndex: number): number
@@ -3850,18 +3771,8 @@ declare function GetRatedBattleGroundInfo()
 declare function GetReadyCheckStatus(unit: any?)
 declare function GetReadyCheckTimeLeft()
 declare function GetRepairAllCost(): (number, boolean?)
-declare function GetRewardArtifactXP()
 declare function GetRewardHonor()
 declare function GetRewardMoney()
-declare function GetRewardNumSkillUps()
-declare function GetRewardPackArtifactPower(rewardPackID: any?)
-declare function GetRewardPackCurrencies(rewardPackID: any?)
-declare function GetRewardPackItems(rewardPackID: any?)
-declare function GetRewardPackMoney(rewardPackID: any?)
-declare function GetRewardPackTitle(rewardPackID: any?)
-declare function GetRewardPackTitleName(titleID: any?)
-declare function GetRewardSkillLineID()
-declare function GetRewardSkillPoints()
 declare function GetRewardText(): string
 declare function GetRewardTitle()
 declare function GetRewardXP(): number
@@ -3872,7 +3783,6 @@ declare function GetSavedInstanceEncounterInfo(instanceIndex: number, encounterI
 declare function GetSavedInstanceInfo(index: number): (string, number, number, number, boolean, boolean, number, boolean, number, string, number, number, boolean, number)
 declare function GetSavedWorldBossInfo(index: number): (string, number, number)
 declare function GetScenariosChoiceOrder(allScenarios: table?): table
-declare function GetSelectedArtifactInfo(): (string, string, number, number, string, number, number, number)
 declare function GetSelectedDisplayChannel()
 declare function GetSelectedWarGameType()
 declare function GetSendMailCOD(): number
@@ -3894,21 +3804,14 @@ declare function GetSpecializationSpells(specIndex: number, isInspect: boolean?,
 declare function GetSpecsForSpell()
 declare function GetSpellBaseCooldown(spellid: number): (number, number)
 declare function GetSpellConfirmationPromptsInfo()
-declare function GetSpellsForCharacterUpgradeTier(tierIndex: any?)
 declare function GetStatistic(category: number, index: number?): (string, boolean, string)
 declare function GetStatisticsCategoryList(): table
-declare function GetSuggestedGroupSize()
 declare function GetTabardCreationCost()
 declare function GetTabardInfo()
 declare function GetTalentInfoByID(talentID: any?, specGroupIndex: any?, isInspect: any?, inspectUnit: any?)
-declare function GetTalentInfoBySpecialization(specIndex: any?, tier: any?, column: any?)
 declare function GetTalentLink(talentID: any?, isInspect: any?, specGroup: any?, inspectID: any?, classID: any?)
 declare function GetTalentTierInfo(tier: number, specGroupIndex: number, isInspect: boolean?, inspectUnit: string?): (boolean, number, number)
-declare function GetTargetTradeCurrency()
 declare function GetTargetTradeMoney(): number
-declare function GetTaskInfo(questID: number): (boolean, boolean, number)
-declare function GetTaskPOIs()
-declare function GetTasksTable()
 declare function GetTaxiMapID(): number
 declare function GetText(token: string, gender: number, ordinal: unknown): string
 declare function GetTitleText(): string
@@ -3932,17 +3835,13 @@ declare function GetTrainerServiceSkillReq(index: number): (string?, number, boo
 declare function GetTrainerServiceStepIndex()
 declare function GetTrainerServiceTypeFilter(type: string): boolean
 declare function GetTrainerTradeskillRankValues()
-declare function GetTreasurePickerItemInfo(index: any?, questID: any?)
 declare function GetTutorialsEnabled()
 declare function GetVideoCaps()
 declare function GetWarGameQueueStatus()
 declare function GetWarGameTypeInfo(index: any?)
-declare function GetWeaponEnchantInfo(): (boolean, number, number, number, boolean, number, number, number, boolean, number, number, number)
 declare function GetWebTicket()
 declare function GetWorldElapsedTime(timerID: number): (string, number, number)
 declare function GetWorldElapsedTimers()
-declare function GetWorldMapActionButtonSpellInfo()
-declare function GetWorldPVPQueueStatus(index: number): (string, string?, number, number, number, number, boolean)
 declare function GiveMasterLoot(slot: number, index: number)
 declare function GroupHasOfflineMember()
 declare function GuildControlAddRank(name: any?)
@@ -3961,14 +3860,11 @@ declare function GuildMasterAbsent()
 declare function GuildNewsSetSticky(index: any?, bool: any?)
 declare function GuildNewsSort(byDate: any?)
 declare function HandleAtlasMemberCommand()
-declare function HasArtifactEquipped()
-declare function HasAttachedGlyph(spellID: any?)
 declare function HasCompletedAnyAchievement(achievementID: any?)
 declare function HasInboxItem()
 declare function HasLFGRestrictions(): boolean
 declare function HasLoadedCUFProfiles()
 declare function HasNewMail()
-declare function HasPendingGlyphCast()
 declare function HasPetUI(): (boolean, boolean)
 declare function HasSendMailItem(index: any?)
 declare function HasWandEquipped(): boolean
@@ -3984,12 +3880,9 @@ declare function IsActiveBattlefieldArena(): (boolean, boolean)
 declare function IsActiveQuestTrivial(index: any?)
 declare function IsAllowedToUserTeleport(): boolean
 declare function IsArenaSkirmish()
-declare function IsArtifactCompletionHistoryAvailable(): boolean
 declare function IsAvailableQuestTrivial(index: any?)
 declare function IsBNLogin()
 declare function IsBindingForGamePad(KEY: any?)
-declare function IsBreadcrumbQuest(questID: any?)
-declare function IsCastingGlyph()
 declare function IsChatAFK()
 declare function IsChatChannelRaid()
 declare function IsChatDND()
@@ -4025,31 +3918,21 @@ declare function IsMouselooking(): boolean
 declare function IsOutlineModeSupported()
 declare function IsPartyLFG()
 declare function IsPartyWorldPVP()
-declare function IsPendingGlyphRemoval()
 declare function IsPetActive()
 declare function IsPetAttackAction(index: any?)
 declare function IsPetAttackActive(): boolean
 declare function IsPlayerNeutral(): boolean
 declare function IsQuestCompletable(): boolean
-declare function IsQuestIDValidSpellTarget(questID: any?)
 declare function IsQuestItemHidden(index: any?)
 declare function IsQuestLogSpecialItemInRange(index: any?, target: any?)
-declare function IsQuestSequenced(questID: any?)
 declare function IsSelectedSpellBookItem(spellSlot: any?)
 declare function IsServerControlledBackfill()
-declare function IsSpecializationActivateSpell()
 declare function IsSpellClassOrSpec(spellName: string): (string?, string)
 declare function IsSpellClassOrSpec(spellIndex: number, bookType: string)
-declare function IsSpellValidForPendingGlyph(spellID: any?)
-declare function IsStoryQuest(questID: any?)
 declare function IsTradeskillTrainer(): boolean
 declare function IsTutorialFlagged(tutorial: any?)
 declare function IsUsingVehicleControls()
-declare function IsVehicleAimAngleAdjustable(): boolean
-declare function IsVehicleAimPowerAdjustable(): boolean
 declare function IsWargame(): boolean
-declare function ItemAddedToArtifact(index: number): boolean
-declare function ItemCanTargetGarrisonFollowerAbility()
 declare function ItemTextGetCreator(): string?
 declare function ItemTextGetItem(): string
 declare function ItemTextGetMaterial(): string
@@ -4064,14 +3947,11 @@ declare function JoinChannelByName(channelName: string, password: string?, frame
 declare function JoinLFG(category: any?)
 declare function JoinPermanentChannel(channelName: string, password: string?, frameID: number?, hasVoice: boolean?): (number, string)
 declare function JoinRatedBattlefield()
-declare function JoinRatedSoloShuffle()
 declare function JoinSingleLFG(category: any?, lfgID: any?)
 declare function JoinSkirmish(arenaID: number, joinAsGroup: boolean?)
 declare function JoinTemporaryChannel(channelName: string, password: string?, frameID: number?, hasVoice: boolean?): (number, string)
 declare function JumpOrAscendStart()
 declare function LFGTeleport(toSafety: boolean)
-declare function LearnPvpTalent(talentID: number, slotIndex: number)
-declare function LearnPvpTalents()
 declare function LearnTalent(talentID: number): boolean
 declare function LearnTalents()
 declare function LeaveBattlefield()
@@ -4119,7 +3999,6 @@ declare function PetAggressiveMode()
 declare function PetAttack()
 declare function PetCanBeAbandoned(): boolean
 declare function PetCanBeDismissed()
-declare function PetDefensiveAssistMode()
 declare function PetDefensiveMode()
 declare function PetDismiss()
 declare function PetFollow()
@@ -4140,21 +4019,18 @@ declare function PickupMacro(name: number | string)
 declare function PickupMerchantItem(index: number)
 declare function PickupPetAction(petActionSlot: number)
 declare function PickupPetSpell(spellID: number)
-declare function PickupPvpTalent()
 declare function PickupTalent(talentID: any?)
 declare function PitchDownStart()
 declare function PitchDownStop()
 declare function PitchUpStart()
 declare function PitchUpStop()
 declare function PlaceAction(slot: number)
-declare function PlayAutoAcceptQuestSound()
 declare function PlayMusic(sound: number | string): boolean
 declare function PlaySound(soundKitID: number, channel: string?, forceNoDuplicates: boolean?, runFinishCallback: boolean?): (boolean, number)
 declare function PlaySoundFile(sound: number | string, channel: string?): (boolean, number)
 declare function PlayerHasToy(itemId: number): boolean
 declare function PrevView()
 declare function ProcessExceptionClient(description: string)
-declare function ProcessQuestLogRewardFactions()
 declare function PromoteToAssistant(unit: any?)
 declare function PromoteToLeader(unit: UnitToken)
 declare function PromoteToLeader(name: string, exactmatch: boolean)
@@ -4168,15 +4044,8 @@ declare function QueryGuildNews()
 declare function QueryGuildRecipes()
 declare function QuestChooseRewardError()
 declare function QuestFlagsPVP()
-declare function QuestGetAutoAccept(): boolean
-declare function QuestGetAutoLaunched()
-declare function QuestHasPOIInfo(questID: any?)
 declare function QuestIsDaily(): boolean
-declare function QuestIsFromAdventureMap()
-declare function QuestIsFromAreaTrigger(): boolean
-declare function QuestIsWeekly(): boolean
 declare function QuestLogPushQuest()
-declare function QuestLogRewardHasTreasurePicker()
 declare function QuestLogShouldShowPortrait()
 declare function QuestMapUpdateAllQuests()
 declare function QuestPOIUpdateIcons()
@@ -4186,19 +4055,15 @@ declare function RedockChatWindows()
 declare function RefreshLFGList()
 declare function RegisterStaticConstants(table: any?)
 declare function RejectProposal()
-declare function ReleaseAction()
 declare function RemoveAutoQuestPopUp()
 declare function RemoveChatWindowChannel(windowId: number, channelName: string)
 declare function RemoveChatWindowMessages(index: number, messageGroup: string)
-declare function RemoveItemFromArtifact(): boolean
-declare function RemovePvpTalent()
 declare function RemoveTalent(talentID: any?)
 declare function RenamePetition(name: string)
 declare function RepairAllItems(guildBankRepair: boolean?)
 declare function ReplaceGuildMaster()
 declare function RequestBattlefieldScoreData()
 declare function RequestBattlegroundInstanceInfo(index: number)
-declare function RequestBottomLeftActionBar()
 declare function RequestGuildChallengeInfo()
 declare function RequestGuildPartyState()
 declare function RequestGuildRewards()
@@ -4212,7 +4077,6 @@ declare function RequestRatedInfo()
 declare function RequeueSkirmish()
 declare function ResetChatColors()
 declare function ResetChatWindows()
-declare function ResetSetMerchantFilter()
 declare function ResetTutorials()
 declare function ResetView(index: any?)
 declare function RespondMailLockSendItem(slot: any?, keepItem: any?)
@@ -4242,7 +4106,6 @@ declare function SendSystemMessage(msg: string)
 declare function SetAchievementComparisonUnit(unit: UnitToken): boolean
 declare function SetAchievementSearchString(searchText: string): boolean
 declare function SetActionBarToggles(bar1: boolean, bar2: boolean, bar3: boolean, bar4: boolean, bar5: boolean, bar6: boolean, bar7: boolean, alwaysShow: string)
-declare function SetBarSlotFromIntro(slot: any?)
 declare function SetBattlefieldScoreFaction(faction: number)
 declare function SetBinding(key: string, command: string?, mode: number?): boolean
 declare function SetBindingClick(key: string, buttonName: string, button: string): boolean
@@ -4265,7 +4128,6 @@ declare function SetChatWindowUninteractable(id: any?, isUninteractable: any?)
 declare function SetCurrentGraphicsSetting()
 declare function SetCurrentGuildBankTab(tab: any?)
 declare function SetEveryoneIsAssistant()
-declare function SetFocusedAchievement(id: number?)
 declare function SetGamePadCursorControl()
 declare function SetGamePadFreeLook()
 declare function SetGuildBankTabInfo(tab: number, name: string, icon: number)
@@ -4289,7 +4151,6 @@ declare function SetLootPortrait()
 declare function SetLootThreshold(threshold: number)
 declare function SetMacroItem(macro: any?, item: any?, target: any?)
 declare function SetMacroSpell(name: number | string, spell: string, target: UnitToken)
-declare function SetMerchantFilter()
 declare function SetModifiedClick(action: string, key: string)
 declare function SetMouselookOverrideBinding(key: any?, command: any?)
 declare function SetMoveEnabled()
@@ -4308,7 +4169,6 @@ declare function SetRaidProfileOption(profile: any?, optionName: any?, value: an
 declare function SetRaidProfileSavedPosition(profile: any?, isDynamic: any?, topPoint: any?, topOffset: any?, bottomPoint: any?, bottomOffset: any?, leftPoint: any?, leftOffset: any?)
 declare function SetRaidSubgroup(index: number, subgroup: number)
 declare function SetSavedInstanceExtend(index: any?, extend: any?)
-declare function SetSelectedArtifact(raceIndex: number, index: number?)
 declare function SetSelectedDisplayChannel(channelID: any?)
 declare function SetSelectedScreenResolutionIndex(integerIndex: any?)
 declare function SetSelectedWarGameType(index: any?)
@@ -4317,7 +4177,6 @@ declare function SetSendMailMoney(amount: any?)
 declare function SetSendMailShowing(shown: boolean)
 declare function SetSpellbookPetAction(slot: any?, target: any?)
 declare function SetTaxiMap(texture: string)
-declare function SetTradeCurrency(type: any?, amount: any?)
 declare function SetTrainerServiceTypeFilter(type: string, enable: boolean, exclusive: boolean)
 declare function SetTurnEnabled()
 declare function SetView(viewIndex: number)
@@ -4328,9 +4187,6 @@ declare function ShowQuestOffer(index: any?)
 declare function ShowRepairCursor()
 declare function SignPetition()
 declare function SocketInventoryItem(slot: any?)
-declare function SocketItemToArtifact(): boolean
-declare function SolveArtifact()
-declare function SortBGList(): boolean
 declare function SortBattlefieldScoreData(type: any?)
 declare function SortGuildRoster(sortType: string)
 declare function SortGuildTradeSkill(type: any?)
@@ -4345,12 +4201,8 @@ declare function Sound_GameSystem_GetNumInputDrivers()
 declare function Sound_GameSystem_GetNumOutputDrivers()
 declare function Sound_GameSystem_GetOutputDriverNameByIndex(OutputDriverIndex: any?)
 declare function Sound_GameSystem_RestartSoundSystem()
-declare function SpellCanTargetGarrisonFollower()
-declare function SpellCanTargetGarrisonFollowerAbility()
-declare function SpellCanTargetGarrisonMission()
 declare function SpellCanTargetItem()
 declare function SpellCanTargetItemID()
-declare function SpellCanTargetQuest()
 declare function SpellCanTargetUnit(unit: UnitToken): boolean
 declare function SpellCancelQueuedSpell()
 declare function SpellIsTargeting(): boolean
@@ -4362,8 +4214,6 @@ declare function SplitGuildBankItem(tab: any?, slot: any?, amount: any?)
 declare function StartAutoRun()
 declare function StartDuel(unit: string)
 declare function StartDuel(name: string, exactMatch: boolean?)
-declare function StartSoloShuffleWarGameByName()
-declare function StartSpectatorSoloShuffleWarGame()
 declare function StartSpectatorWarGame(target1: any?, target2: any?, size: any?, area: any?, isTournamentMode: any?)
 declare function StartWarGame(target: any?, name: any?, isTournament: any?)
 declare function StartWarGameByName(msg: any?)
@@ -4377,8 +4227,6 @@ declare function StrafeLeftStop()
 declare function StrafeRightStart()
 declare function StrafeRightStop()
 declare function SubmitRequiredGuildRename()
-declare function SummonRandomCritter()
-declare function SurrenderArena()
 declare function SwapRaidSubgroup(index1: number, index2: number)
 declare function SwapToGlobalEnvironment()
 declare function SwitchAchievementSearchTab(index: any?)
@@ -4422,7 +4270,6 @@ declare function UseInventoryItem(slot: number)
 declare function UseQuestLogSpecialItem(index: any?)
 declare function UseToy(itemId: number)
 declare function UseToyByName(name: string)
-declare function UseWorldMapActionButtonSpellOnQuest()
 declare function VehicleAimDecrement()
 declare function VehicleAimDownStart()
 declare function VehicleAimDownStop()
@@ -4442,8 +4289,6 @@ declare function addframetext(text: string)
 declare function issecurevalue(value: any): (boolean, string?)
 declare function pcallwithenv(func: string, env: table): boolean
 declare function setsecurehookforbidden()
-declare function GetSpellCooldown(spell: number | string): (number, number, number, number)
-declare function GetSpellCooldown(index: number, bookType: string)
 
 declare global GameTooltip: GameTooltip
 declare global Minimap: Minimap

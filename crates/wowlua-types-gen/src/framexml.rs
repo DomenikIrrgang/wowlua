@@ -185,6 +185,16 @@ fn xml_globals(text: &str, widget_classes: &HashSet<String>, out: &mut IndexMap<
     }
 }
 
+/// The names of a `GlobalAPI` dump (every quoted name).
+pub fn quoted_names(text: &str) -> HashSet<String> {
+    text.lines()
+        .filter_map(|l| {
+            let rest = l.trim().strip_prefix('"')?;
+            Some(rest[..rest.find('"')?].to_string())
+        })
+        .collect()
+}
+
 /// The names of a `GlobalStrings` file (`NAME = "…";` and
 /// `_G["NAME"] = "…";` lines).
 pub fn global_strings(text: &str) -> Vec<String> {

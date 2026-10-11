@@ -159,15 +159,22 @@ pub fn fetch(dir: &Path) -> Result<()> {
         )?;
         fs::write(&marker, &stamp)?;
     }
-    for (_, branch, commit) in STRINGS {
-        let path = dir.join("strings").join(format!("{commit}.lua"));
+    let dumps = [
+        ("strings", "GlobalStrings/enUS.lua"),
+        ("api", "GlobalAPI.lua"),
+    ];
+    for ((_, branch, commit), (kind, file)) in STRINGS
+        .iter()
+        .flat_map(|s| dumps.iter().map(move |d| (s, *d)))
+    {
+        let path = dir.join(kind).join(format!("{commit}.lua"));
         if path.exists() {
             continue;
         }
         fs::create_dir_all(path.parent().expect("a directory"))?;
-        println!("strings: fetching {branch} {commit}");
+        println!("{kind}: fetching {branch} {commit}");
         let url = format!(
-            "https://raw.githubusercontent.com/Ketho/BlizzardInterfaceResources/{commit}/Resources/GlobalStrings/enUS.lua"
+            "https://raw.githubusercontent.com/Ketho/BlizzardInterfaceResources/{commit}/Resources/{file}"
         );
         let status = Command::new("curl")
             .args(["-fsSL", "-o"])
@@ -308,11 +315,15 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
             .context("global strings missing: run `cargo xtask types fetch`")?;
         flavors.push(wowlua_types_gen::FlavorDocs {
             id: flavor,
-            source: format!("wow-ui-source {tag}; global string names from Ketho's BlizzardInterfaceResources {branch} {commit}"),
+            source: format!("wow-ui-source {tag}; global string and API names from Ketho's BlizzardInterfaceResources {branch} {commit}"),
             files,
             ui_lua,
             ui_xml,
             strings: wowlua_types_gen::framexml::global_strings(&strings_text),
+            api_names: Some(wowlua_types_gen::framexml::quoted_names(
+                &fs::read_to_string(dir.join("api").join(format!("{commit}.lua")))
+                    .context("global API names missing: run `cargo xtask types fetch`")?,
+            )),
         });
     }
     let mut annotations = Vec::new();
@@ -418,7 +429,7 @@ fn validate(files: &[(&str, &String)]) -> Vec<String> {
         .collect();
     let analysis = wowlua_sema::analyze(&inputs, None);
     let settings = vec![None; inputs.len()];
-    wowlua_sema::check::check_package(&inputs, &analysis, &settings, &Default::default())
+    wowlua_sema::check::check_package(&inputs, &analysis, &settings, &Default::default(), None)
         .into_iter()
         .map(|d| {
             let at = d.labels.first().map(|l| {

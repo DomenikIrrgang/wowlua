@@ -5,6 +5,7 @@
 pub mod body;
 pub mod env;
 pub mod expr;
+pub mod flavors;
 pub mod narrow;
 pub mod query;
 pub mod subst;
@@ -35,6 +36,7 @@ pub fn check_package(
     analysis: &Analysis,
     settings: &[Option<FileSettings>],
     extra_globals: &HashSet<String>,
+    shared: Option<&flavors::SharedFlavors>,
 ) -> Vec<Diagnostic> {
     // Declaration sources: declaration files first, then modules.
     let mut sources: Vec<env::Source> = Vec::new();
@@ -106,6 +108,36 @@ pub fn check_package(
     }
     let mut env = env::Env::build(&sources);
     let mut diagnostics = std::mem::take(&mut env.diagnostics);
+    // Shared mode: APIs only some flavors declare are known (as `any`), so
+    // that their uses report E2030.
+    if let Some(shared) = shared {
+        for path in shared.availability.keys() {
+            match path.rsplit_once('.') {
+                None => {
+                    env.globals
+                        .entry(path.as_str().into())
+                        .or_insert(Types::ANY);
+                }
+                Some((ns, member)) => {
+                    if let Some(&d) = env.global_types.get(ns)
+                        && env.def(d).kind == env::DefKind::Namespace
+                        && !env.def(d).members.contains_key(member)
+                    {
+                        env.def_mut(d).members.insert(
+                            member.into(),
+                            env::Member {
+                                ty: Types::ANY,
+                                kind: env::MemberKind::Field,
+                                optional: false,
+                                readonly: true,
+                                visibility: env::Visibility::Public,
+                            },
+                        );
+                    }
+                }
+            }
+        }
+    }
     // Globals created with `@global` are declared (spec §4.3); globals the
     // package assigns are known (their assignments are W1002).
     let mut extra_globals = extra_globals.clone();
@@ -147,6 +179,17 @@ pub fn check_package(
             assigned_globals,
             imports,
             is_module: analysis.modules[i].as_ref().is_some_and(|m| m.is_module),
+            shared,
+            meta_flavor: analysis.modules[i]
+                .as_ref()
+                .map(|m| {
+                    m.meta_bindings
+                        .iter()
+                        .filter(|(_, k)| **k == crate::meta::MetaKind::Flavor)
+                        .map(|(n, _)| n.clone())
+                        .collect()
+                })
+                .unwrap_or_default(),
         };
         let mut checker = Checker::new(&mut env, &info, parse);
         checker.check_file(parse);
@@ -316,9 +359,21 @@ mod tests {
 
     /// Checks one `.wowlua` source with the compiler's declarations.
     pub(crate) fn check_source(src: &str, mode: Mode) -> Vec<Diagnostic> {
+        check_with(src, mode, None, None)
+    }
+
+    /// Checks with an extra declaration file and shared flavor mode.
+    fn check_with(
+        src: &str,
+        mode: Mode,
+        extra: Option<&'static str>,
+        shared: Option<&flavors::SharedFlavors>,
+    ) -> Vec<Diagnostic> {
         let mut db = SourceDb::new();
         let mut parses = Vec::new();
-        for decl in wowlua_stdlib_files() {
+        let mut decls = wowlua_stdlib_files();
+        decls.extend(extra.map(|text| ("<test>/extra.d.wowlua", text)));
+        for decl in decls {
             let file = db.add(decl.0, decl.1.to_string());
             let p = wowlua_syntax::parse(decl.1.as_bytes(), file);
             assert!(!p.has_errors(), "{}: {:?}", decl.0, p.diagnostics);
@@ -354,6 +409,7 @@ mod tests {
             &analysis,
             &settings,
             &HashSet::new(),
+            shared,
         ));
         d
     }
@@ -388,6 +444,76 @@ mod tests {
     }
 
     #[test]
+    fn flavor_guards() {
+        let decl = "declare namespace C_X\n    function A(): number\n    function B(): number\nend\ndeclare global WOW_PROJECT_ID: number\n";
+        let shared = flavors::SharedFlavors {
+            flavors: ["standard".to_string(), "vanilla".into(), "mists".into()].into(),
+            project_ids: [
+                (1, "standard".to_string()),
+                (2, "vanilla".into()),
+                (19, "mists".into()),
+            ]
+            .into(),
+            project_constants: HashMap::new(),
+            availability: [
+                (
+                    "C_X".to_string(),
+                    ["standard".to_string(), "mists".into()].into(),
+                ),
+                (
+                    "C_X.A".to_string(),
+                    ["standard".to_string(), "mists".into()].into(),
+                ),
+                ("C_X.B".to_string(), ["standard".to_string()].into()),
+            ]
+            .into(),
+        };
+        let run = |src: &str| -> Vec<String> {
+            check_with(src, Mode::Basic, Some(decl), Some(&shared))
+                .iter()
+                .filter(|d| d.code == Some("E2030"))
+                .map(|d| d.message.clone())
+                .collect()
+        };
+        assert_eq!(
+            run(
+                "if C_X then print(C_X.A()) end\nif C_X ~= nil then print(C_X.A()) end\nlocal a = C_X and C_X.A()\nif not C_X or C_X.A() > 1 then end\nif WOW_PROJECT_ID == 1 then print(C_X.B()) end\n"
+            ),
+            Vec::<String>::new()
+        );
+        // The namespace exists in `mists`, which lacks `B`.
+        assert_eq!(run("if C_X then print(C_X.B()) end\n").len(), 1);
+        let unguarded = run("print(C_X.A())\n");
+        assert!(
+            unguarded
+                .iter()
+                .all(|m| m.contains("`vanilla`") && !m.contains("mists")),
+            "{unguarded:?}"
+        );
+        assert!(run("if WOW_PROJECT_ID ~= 2 then print(C_X.B()) end\n")[0].contains("`mists`"));
+        // Single-flavor builds: feature detection of what the flavor lacks.
+        let d = check_with(
+            "if C_X.Missing then C_X.Missing(1) end\nlocal f = C_X.Gone and C_X.Gone()\nif not OldApi then return end\nOldApi(1)\n",
+            Mode::Strict,
+            Some(decl),
+            None,
+        );
+        assert!(d.is_empty(), "{:#?}", codes(&d));
+        let d = check_with(
+            "C_X.Missing()\nprint(OldApi)\n",
+            Mode::Strict,
+            Some(decl),
+            None,
+        );
+        assert_eq!(
+            d.iter().filter(|d| d.is_error()).count(),
+            2,
+            "{:#?}",
+            codes(&d)
+        );
+    }
+
+    #[test]
     fn basics() {
         ok("local x: number = 1\nlocal s = tostring(x)\nprint(s:upper(), #s, math.floor(1.5))\n");
         err("local x: number = \"a\"\n", "E2001");
@@ -408,6 +534,65 @@ mod tests {
         ok("local t = {}\nt.x = 1\nprint(t.x + 1)\n");
         ok(
             "for k, v in pairs({ a = 1 }) do print(k:upper(), v + 1) end\nfor i, v in ipairs({ \"a\" }) do print(i + 1, v:upper()) end\n",
+        );
+    }
+
+    #[track_caller]
+    fn strict_err(src: &str, code: &str) {
+        let d = check_source(src, Mode::Strict);
+        assert!(
+            d.iter().any(|x| x.code == Some(code)),
+            "expected {code}: {src}\n{:#?}",
+            codes(&d)
+        );
+    }
+
+    #[track_caller]
+    fn strict_ok(src: &str) {
+        let d = check_source(src, Mode::Strict);
+        assert!(d.iter().all(|x| !x.is_error()), "{src}\n{:#?}", codes(&d));
+    }
+
+    #[test]
+    fn strict_mode() {
+        strict_err("local function f(a) return a end\n", "E2050");
+        strict_ok("local t: number[] = {}\ntable.sort(t, function(a, b) return a < b end)\n");
+        strict_err(
+            "local function f(x: string?) print(x:upper()) end\n",
+            "E2005",
+        );
+        strict_err("local x: number = nil\n", "E2001");
+        strict_err("local p: { x: number } = { x = 1, y = 2 }\n", "E2003");
+        strict_err("class A\n x: number\n constructor() end\nend\n", "E2052");
+        strict_ok("class A\n x: number\n constructor() self.x = 1 end\nend\n");
+        strict_err("print(undefinedGlobal)\n", "E1001");
+        let d = check_source("pcall(function() coroutine.yield(1) end)\n", Mode::Basic);
+        assert!(
+            d.iter().any(|x| x.code == Some("W2057")),
+            "{:#?}",
+            codes(&d)
+        );
+    }
+
+    #[test]
+    fn phase4() {
+        ok(
+            "local Account = {}\nAccount.__index = Account\nfunction Account.new(b: number) return setmetatable({ balance = b }, Account) end\nfunction Account:deposit(v: number) self.balance = self.balance + v end\nlocal a = Account.new(1)\na:deposit(2)\nprint(a.balance + 1)\n",
+        );
+        ok(
+            "local defaults = { scale = 1, locked = false }\nlocal s: typeof(defaults) = { scale = 2, locked = true }\n",
+        );
+        err(
+            "local defaults = { scale = 1 }\nlocal s: typeof(defaults) = { scale = \"x\" }\n",
+            "E2001",
+        );
+        ok("local function f(x: string?)\n assert(x)\n print(x:upper())\nend\n");
+        ok(
+            "local function f(x: string?): string\n if not x then error(\"no\") end\n return x\nend\n",
+        );
+        err(
+            "class A\n function m() end\nend\nlocal a = A.new()\na.m()\n",
+            "E2008",
         );
     }
 

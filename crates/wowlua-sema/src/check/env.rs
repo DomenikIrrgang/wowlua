@@ -149,6 +149,8 @@ pub struct Env {
     pub events: IndexMap<Box<str>, Pack>,
     pub messages: IndexMap<Box<str>, Pack>,
     pub diagnostics: Vec<Diagnostic>,
+    /// Types of `typeof(expr)` expressions, by span (set by the checker).
+    pub typeof_types: HashMap<(u32, u32), TypeId>,
 }
 
 pub const ADDON_NAMESPACE: &str = "AddonNamespace";
@@ -1026,7 +1028,11 @@ impl Env {
                 })
             }
             // Resolved by the checker (needs expression types).
-            TypeKind::Typeof(_) => Types::ANY,
+            TypeKind::Typeof(e) => self
+                .typeof_types
+                .get(&(e.span.start, e.span.end))
+                .copied()
+                .unwrap_or(Types::ANY),
             TypeKind::Error => Types::ERROR,
             TypeKind::Ref { path, args } => self.resolve_ref(path, args, t.span, scope),
         }

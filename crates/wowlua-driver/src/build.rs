@@ -312,6 +312,55 @@ pub fn build(
             .collect(),
     };
     let mut api_cache: HashMap<String, Vec<crate::compile::ParsedDeclaration>> = HashMap::new();
+    // Shared flavor mode: where each API exists, for flavor guards (E2030).
+    let shared_flavors = (build_cfg.flavor_mode == wowlua_manifest::model::FlavorMode::Shared
+        && flavors.len() > 1)
+        .then(|| {
+            let table = wowlua_flavors::table();
+            let mut per_flavor: Vec<(String, std::collections::HashSet<String>)> = Vec::new();
+            for f in &flavors {
+                if let Some([_, own]) = wowlua_api::declarations(f) {
+                    per_flavor.push((f.clone(), wowlua_api::declared_names(own.text)));
+                }
+            }
+            let mut availability: HashMap<String, BTreeSet<String>> = HashMap::new();
+            for (_, names) in &per_flavor {
+                for n in names {
+                    if availability.contains_key(n) {
+                        continue;
+                    }
+                    let have: BTreeSet<String> = per_flavor
+                        .iter()
+                        .filter(|(_, ns)| ns.contains(n))
+                        .map(|(f, _)| f.clone())
+                        .collect();
+                    if have.len() < per_flavor.len() {
+                        availability.insert(n.clone(), have);
+                    }
+                }
+            }
+            let project_ids = flavors
+                .iter()
+                .filter_map(|f| table.flavor(f).map(|fl| (fl.project_id, f.clone())))
+                .collect();
+            let project_constants = [
+                ("WOW_PROJECT_MAINLINE", 1),
+                ("WOW_PROJECT_CLASSIC", 2),
+                ("WOW_PROJECT_BURNING_CRUSADE_CLASSIC", 5),
+                ("WOW_PROJECT_WRATH_CLASSIC", 11),
+                ("WOW_PROJECT_CATACLYSM_CLASSIC", 14),
+                ("WOW_PROJECT_MISTS_CLASSIC", 19),
+            ]
+            .into_iter()
+            .map(|(n, v)| (n.to_string(), v))
+            .collect();
+            wowlua_sema::check::flavors::SharedFlavors {
+                flavors: flavors.iter().cloned().collect(),
+                project_ids,
+                project_constants,
+                availability,
+            }
+        });
     let mut parsed =
         crate::compile::parse_sources(&session.db, &mut diagnostics, &files, &declarations, &raw);
     crate::compile::add_stdlib(
@@ -389,6 +438,11 @@ pub fn build(
             },
             &api_cache[&api_flavor],
             &check_cfg,
+            if flavor.is_none() {
+                shared_flavors.as_ref()
+            } else {
+                None
+            },
         );
         builds.push(FlavorBuild {
             flavor: flavor.clone(),
