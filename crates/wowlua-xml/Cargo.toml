@@ -1,6 +1,15 @@
 [package]
 name = "wowlua-xml"
-version = "0.1.0"
-edition = "2024"
+description = "WoW UI XML: well-formedness and Script/Include references"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
 
 [dependencies]
+quick-xml.workspace = true
+
+[lints]
+workspace = true
