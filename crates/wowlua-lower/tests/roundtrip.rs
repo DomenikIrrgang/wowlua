@@ -134,18 +134,16 @@ fn type_annotations_are_erased() {
 #[test]
 fn unsupported_syntax_names_the_milestone() {
     let mut db = SourceDb::new();
-    let src = "class A\nend\n@trace\nlocal function f() end\n@trace\nlocal function g() end\n";
+    let src = "class A\nend\n@trace\nlocal function f() end\n@profile\nlocal function g() end\n";
     let file = db.add("t.wowlua", src.to_string());
     let parsed = wowlua_syntax::parse(src.as_bytes(), file);
     let errors = wowlua_lower::lower(&parsed, src.as_bytes()).unwrap_err();
-    assert_eq!(errors.len(), 2);
+    let messages: Vec<&str> = errors.iter().map(|e| e.message.as_str()).collect();
     assert_eq!(
-        errors[0].message,
-        "not available yet: classes (arrives with milestone M3)"
-    );
-    assert!(
-        errors[1].message.contains("used 2 times"),
-        "{}",
-        errors[1].message
+        messages,
+        [
+            "not available yet: `@trace` (arrives with milestone M5)",
+            "not available yet: `@profile` (arrives with milestone M5)"
+        ]
     );
 }

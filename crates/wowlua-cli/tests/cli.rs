@@ -481,8 +481,8 @@ fn init_handles_unusual_layouts() {
     );
 }
 
-/// Milestone M1: `.wowlua` files compile (types erased, lines preserved),
-/// with source maps; other wowlua syntax names its milestone.
+/// `.wowlua` files compile (types erased, lines preserved), with source
+/// maps; features of later milestones name their milestone.
 #[test]
 fn wowlua_sources_compile_with_types_erased() {
     let dir = tempfile::tempdir().unwrap();
@@ -512,13 +512,17 @@ fn wowlua_sources_compile_with_types_erased() {
         "maps stay outside the AddOn"
     );
 
-    fs::write(dir.path().join("src/main.wowlua"), "class A\nend\n").unwrap();
+    fs::write(
+        dir.path().join("src/main.wowlua"),
+        "@profile\nlocal function f() end\n",
+    )
+    .unwrap();
     wowlua(dir.path())
         .args(["build", "--message-format", "short"])
         .assert()
         .code(1)
         .stderr(predicate::str::contains(
-            "src/main.wowlua:1:1: error: not available yet: classes (arrives with milestone M3)",
+            "src/main.wowlua:1:1: error: not available yet: `@profile` (arrives with milestone M5)",
         ));
 }
 
@@ -918,6 +922,396 @@ fn incompatible_flavor_orders() {
         .assert()
         .code(1)
         .stderr(predicate::str::contains("error[E1036]"));
+}
+
+/// Classes, enums and decorators across modules, run in the VM (spec
+/// chapters 3 and 4).
+#[test]
+fn classes_across_modules_run() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"shapes\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import Square from \"./shapes/square\"\nenum Size { Small = 1, Large = 3 }\nexport enum Color { Red = \"r\" }\n@global(\"DemoSquare\")\nlocal s = Square.new(Size.Large)\nprint(s:describe(), Color.Red, DemoSquare == s)\n",
+            ),
+            (
+                "src/shapes/base.wowlua",
+                "export abstract class Shape\n    abstract function area(): number\n    function describe(): string return `{self:name()} {self:area()}` end\n    function name(): string return \"shape\" end\nend\n",
+            ),
+            (
+                "src/shapes/square.wowlua",
+                "import Shape from \"./base\"\nexport class Square extends Shape\n    side: number\n    constructor(side: number)\n        super()\n        self.side = side\n    end\n    override function area(): number return self.side ^ 2 end\n    override function name(): string return \"square\" end\nend\n",
+            ),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(!stderr.contains("warning"), "{stderr}");
+    let dist = dir.path().join("dist/dev/Shapes");
+    let toc = fs::read_to_string(dist.join("Shapes.toc")).unwrap();
+    let runtime = fs::read_to_string(dist.join("wowlua/runtime.lua")).unwrap();
+    assert!(
+        runtime.contains("function wl.class(") && !runtime.contains("wl.widgetClass"),
+        "slices are tree-shaken"
+    );
+    assert_eq!(run_addon(&dist, "Shapes"), "square 9 r true", "{toc}");
+}
+
+/// Standard-library infrastructure (spec §8.1, compiler §13.2): `wowlua:*`
+/// modules compile into the addon when imported, and `@intrinsic`
+/// declarations give framework decorators their behavior.
+#[test]
+fn standard_library_modules_and_intrinsics() {
+    let stdlib = tempfile::tempdir().unwrap();
+    write(
+        stdlib.path(),
+        &[
+            (
+                "fixture.wowlua",
+                "import helper from \"wowlua:helper\"\nexport function wrap(tag: string)\n    return function(fn, ctx) return function(...) return tag .. fn(...) end end\nend\nexport function register(name: string)\n    return function(fn, ctx) print(\"registered\", name, ctx.name, fn()) end\nend\nexport local version = helper()\n",
+            ),
+            (
+                "fixture.d.wowlua",
+                "@intrinsic(\"internal.wrap\")\ndeclare function wrap(tag: string): any\n@intrinsic(\"internal.register\")\ndeclare function register(name: string): any\n",
+            ),
+            ("helper.wowlua", "export function helper() return 7 end\n"),
+            ("unused.wowlua", "print(\"never loaded\")\n"),
+        ],
+    );
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"std\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import wrap, register, version from \"wowlua:fixture\"\n@register(\"r\")\n@wrap(\"<\")\nlocal function f() return \"x\" end\nprint(f(), version)\n",
+            ),
+        ],
+    );
+    wowlua(dir.path())
+        .env("WOWLUA_STDLIB_DIR", stdlib.path())
+        .arg("build")
+        .assert()
+        .success();
+    let dist = dir.path().join("dist/dev/Std");
+    let toc = fs::read_to_string(dist.join("Std.toc")).unwrap();
+    let files: Vec<&str> = toc
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
+    let pos = |name: &str| {
+        files
+            .iter()
+            .position(|f| f.replace('\\', "/") == name)
+            .unwrap_or_else(|| panic!("{name}: {toc}"))
+    };
+    assert!(
+        pos("wowlua/std/helper.lua") < pos("wowlua/std/fixture.lua"),
+        "{toc}"
+    );
+    assert!(pos("wowlua/std/fixture.lua") < pos("src/main.lua"), "{toc}");
+    assert!(
+        !toc.contains("unused") && !dist.join("wowlua/std/unused.lua").exists(),
+        "tree-shaken: {toc}"
+    );
+    assert_eq!(run_addon(&dist, "Std"), "registered r f <x\n<x 7");
+    // Unknown modules, and `@intrinsic` outside the standard library.
+    fs::write(
+        dir.path().join("src/main.wowlua"),
+        "import x from \"wowlua:nope\"\n",
+    )
+    .unwrap();
+    wowlua(dir.path())
+        .env("WOWLUA_STDLIB_DIR", stdlib.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains(
+            "unknown standard-library module `wowlua:nope`",
+        ));
+    fs::write(dir.path().join("src/main.wowlua"), "print(1)\n").unwrap();
+    fs::write(
+        dir.path().join("src/api.d.wowlua"),
+        "@intrinsic(\"x\")\ndeclare function f(): number\n",
+    )
+    .unwrap();
+    wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("E3033"));
+}
+
+/// A mock of the frame API for widget classes in the VM.
+const MOCK_FRAMES: &str = r##"UIParent = {}
+local methods = {}
+methods.__index = methods
+function methods:SetSize(w, h) self.w, self.h = w, h end
+function methods:SetScript(name, fn) self.scripts = self.scripts or {}; self.scripts[name] = fn end
+function methods:SetText(t) self.text = t end
+function methods:GetText() return self.text end
+function methods:Click() local f = self.scripts and self.scripts.OnClick; if f then f(self) end end
+function methods:GetObjectType() return self.objectType end
+function CreateFrame(kind, name, parent, template)
+  local f = setmetatable({ objectType = kind, template = template }, methods)
+  if name then _G[name] = f end
+  return f
+end
+function Mixin(obj, ...)
+  for i = 1, select("#", ...) do for k, v in pairs((select(i, ...))) do obj[k] = v end end
+  return obj
+end
+"##;
+
+/// Widget classes are mixins applied to frames (spec §3.2).
+#[test]
+fn widget_classes_run() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"widgets\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                r#"export class CounterButton extends Button
+    count: number = 0
+    constructor(parent: Frame)
+        super(nil, parent, "UIPanelButtonTemplate")
+        self:SetSize(120, 24)
+        self:SetScript("OnClick", function() self:increment() end)
+        self:refresh()
+    end
+    function increment()
+        self.count += 1
+        self:refresh()
+    end
+    function refresh()
+        self:SetText(`Clicked {self.count}x`)
+    end
+end
+class FancyButton extends CounterButton
+    stars: number = 3
+    override function refresh()
+        super:refresh()
+        self:SetText(self:GetText() .. " *" .. (self.stars or 0))
+    end
+end
+@global("DemoRowMixin")
+class Row extends Frame
+    label: string = "row"
+    function OnLoad()
+        print("onload", self.label)
+    end
+end
+class Plain extends Frame
+end
+local b = CounterButton.new(UIParent)
+b:Click()
+local f = FancyButton.new(UIParent)
+f:Click()
+f:Click()
+print(b:GetText(), f:GetText(), f.count, f.stars, f:GetObjectType(), f.template)
+local frame = CreateFrame("Frame")
+Mixin(frame, DemoRowMixin)
+frame:OnLoad()
+local p = Plain.new("Named")
+print(p:GetObjectType(), Named == p, p.__class == Plain)
+"#,
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let dist = dir.path().join("dist/dev/Widgets");
+    let toc = fs::read_to_string(dist.join("Widgets.toc")).unwrap();
+    fs::write(dist.join("mock.lua"), MOCK_FRAMES).unwrap();
+    fs::write(dist.join("Widgets.toc"), format!("mock.lua\n{toc}")).unwrap();
+    assert_eq!(
+        run_addon(&dist, "Widgets"),
+        "Clicked 1x Clicked 2x *3 2 3 Button UIPanelButtonTemplate\nonload row\nFrame true true"
+    );
+    // Widget classes cannot define metamethods or accessors.
+    for (src, code) in [
+        (
+            "class B extends Button\n function __tostring() return \"\" end\nend\n",
+            "E3007",
+        ),
+        (
+            "class B extends Frame\n get x(): number return 1 end\nend\n",
+            "E3043",
+        ),
+    ] {
+        fs::write(dir.path().join("src/main.wowlua"), src).unwrap();
+        wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains(code));
+    }
+}
+
+/// `extends` reads the imported class while the module loads, so a cycle
+/// through a run-time use elsewhere still loads the base first.
+#[test]
+fn class_inheritance_orders_modules() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"cycle\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/a.wowlua",
+                "import Base from \"./b\"\nexport class A<T> extends Base\n    item?: T\n    override function name(): string return \"a\" end\nend\nexport function make(): A<number> return A.new() end\n",
+            ),
+            (
+                "src/b.wowlua",
+                "import make from \"./a\"\nexport class Base\n    function name(): string return \"base\" end\n    static function demo(): string return make():name() end\nend\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import Base from \"./b\"\nimport _ from \"./a\"\nprint(Base.demo())\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let dist = dir.path().join("dist/dev/Cycle");
+    let toc = fs::read_to_string(dist.join("Cycle.toc")).unwrap();
+    assert!(
+        toc.find("src\\b.lua").unwrap() < toc.find("src\\a.lua").unwrap(),
+        "{toc}"
+    );
+    assert_eq!(run_addon(&dist, "Cycle"), "a");
+}
+
+/// Structural class, enum and decorator checks (spec chapters 3 and 4,
+/// decision T75).
+#[test]
+fn class_enum_and_decorator_errors() {
+    let cases: &[(&str, &str, &str)] = &[
+        ("class A\n function new() end\nend\n", "", "E3004"),
+        (
+            "class A\n function f() end\nend\nclass B extends A\n function f() end\nend\n",
+            "",
+            "E3005",
+        ),
+        ("class A\n override function f() end\nend\n", "", "E3005"),
+        (
+            "abstract class A\n abstract function f()\nend\nclass B extends A\nend\n",
+            "",
+            "E3003",
+        ),
+        ("class A\n abstract function f()\nend\n", "", "E3003"),
+        ("abstract class A\nend\nA.new()\n", "", "E3002"),
+        (
+            "import A from \"/b\"\nA()\n",
+            "export abstract class A\nend\n",
+            "E3002",
+        ),
+        (
+            "import A from \"/b\"\nclass B extends A\n function f() end\nend\n",
+            "export class A\n function f() end\nend\n",
+            "E3005",
+        ),
+        (
+            "class A\nend\nclass B extends A\n constructor()\n end\nend\n",
+            "",
+            "E3001",
+        ),
+        (
+            "class A\nend\nclass B extends A\n constructor()\n  self.x = 1\n  super()\n end\nend\n",
+            "",
+            "E3001",
+        ),
+        (
+            "class A\n constructor()\n  super()\n end\nend\n",
+            "",
+            "E3001",
+        ),
+        ("class A\n x: number = ...\nend\n", "", "E3041"),
+        ("class A\n x: number\n function x() end\nend\n", "", "E3042"),
+        (
+            "class A\n function f()\n  local super = 1\n end\nend\n",
+            "",
+            "E3040",
+        ),
+        ("enum E { A = 1, B = \"x\" }\n", "", "E3010"),
+        ("enum E { A = 1, B = 1 }\n", "", "E3011"),
+        ("enum E { A }\nprint(E.B)\n", "", "E2003"),
+        ("enum E { A }\nE.A = 2\n", "", "E2010"),
+        ("@nope\nlocal function f() end\n", "", "E3020"),
+        ("local function d() end\n@d\nlocal x = 1\n", "", "E3021"),
+        ("class A\n @global\n function f() end\nend\n", "", "E3021"),
+        ("@debugOnly\nlocal function f() return 1 end\n", "", "E3032"),
+        (
+            "@debugOnly\nlocal function f() end\nlocal g = f\n",
+            "",
+            "E3032",
+        ),
+        (
+            "@intrinsic(\"x\")\ndeclare function f(): number\n",
+            "",
+            "E3033",
+        ),
+        ("local x = A.new()\nclass A\nend\n", "", "E1037"),
+    ];
+    for (a, b, code) in cases {
+        let dir = tempfile::tempdir().unwrap();
+        let mut files = vec![
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"cls\", \"version\": \"1.0.0\" }, \"profiles\": { \"dev\": { \"debug\": false } } }\n",
+            ),
+            ("src/a.wowlua", *a),
+        ];
+        if !b.is_empty() {
+            files.push(("src/b.wowlua", *b));
+        }
+        write(dir.path(), &files);
+        wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .assert()
+            .code(1)
+            .stderr(
+                predicate::str::contains(format!("error[{code}]"))
+                    .or(predicate::str::contains(format!("error: {code}")))
+                    .or(predicate::str::contains(*code)),
+            );
+    }
+    // `@deprecated` warns at uses, also across modules (W3030).
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"dep\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/a.wowlua",
+                "import old from \"/b\"\n@deprecated(\"use g\")\nlocal function f() end\nf()\nold()\n",
+            ),
+            ("src/b.wowlua", "@deprecated\nexport function old() end\n"),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert_eq!(stderr.matches("W3030").count(), 2, "{stderr}");
+    assert!(stderr.contains("`f` is deprecated: use g"), "{stderr}");
 }
 
 /// XML files take part in the load order (spec §5.4.2).

@@ -354,6 +354,8 @@ impl<'a> Emitter<'a> {
                 // `a = b (f)()` would be a call; `;` ends the statement.
                 self.token(b";", Pos::NONE);
             }
+            // Statements sharing a line are separated by a space.
+            self.space();
             self.stmt(s);
             prev_end = self.last_src_line;
             if !self.preserve() {

@@ -2,6 +2,7 @@
 //! package (exports, imports, specifier resolution), constant evaluation
 //! across modules, and the dependency order of files.
 
+pub mod classes;
 pub mod constant;
 pub mod loadorder;
 pub mod meta;
@@ -11,7 +12,8 @@ pub mod usage;
 use constant::Const;
 use indexmap::IndexMap;
 use meta::{Meta, MetaKind};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
 use wowlua_syntax::Parse;
@@ -43,6 +45,45 @@ pub enum Export {
     /// `export const`; the value when it folds.
     Const(Option<Const>),
     Type,
+    Class(Arc<classes::ClassInfo>),
+    Enum(Arc<classes::EnumInfo>),
+}
+
+/// `@deprecated` and `@debugOnly` on an export (spec §4.3).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ExportAttrs {
+    /// `@deprecated(msg?)`: the message, if any.
+    pub deprecated: Option<Option<String>>,
+    pub debug_only: bool,
+}
+
+impl ExportAttrs {
+    /// The core decorators of a statement that importers see.
+    pub fn of(decorators: &[Decorator]) -> ExportAttrs {
+        let mut attrs = ExportAttrs::default();
+        for d in decorators {
+            if d.path.len() != 1 {
+                continue;
+            }
+            match d.path[0].text.as_ref() {
+                "deprecated" => {
+                    let message =
+                        d.args
+                            .as_ref()
+                            .and_then(|a| match a.exprs().first().map(|e| &e.kind) {
+                                Some(ExprKind::String(s)) => {
+                                    Some(String::from_utf8_lossy(&s.value).into_owned())
+                                }
+                                _ => None,
+                            });
+                    attrs.deprecated = Some(message);
+                }
+                "debugOnly" => attrs.debug_only = true,
+                _ => {}
+            }
+        }
+        attrs
+    }
 }
 
 /// What an import statement refers to.
@@ -77,6 +118,14 @@ pub struct ModuleInfo {
     pub imports: Vec<Import>,
     /// Names bound to `wowlua:meta` exports.
     pub meta_bindings: HashMap<String, MetaKind>,
+    /// Core decorators of exports that importers must know about.
+    pub export_attrs: HashMap<String, ExportAttrs>,
+    /// Exports bound to compiler behavior: export name → `@intrinsic` id
+    /// (from a standard-library module's declaration file).
+    pub intrinsics: HashMap<String, String>,
+    /// Top-level classes and enums of the file (exported or not).
+    pub classes: IndexMap<String, Arc<classes::ClassInfo>>,
+    pub enums: IndexMap<String, Arc<classes::EnumInfo>>,
 }
 
 #[derive(Debug, Default)]
@@ -88,8 +137,23 @@ pub struct Analysis {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-/// The module ID of a source path: `core/cache.wowlua` → `core/cache`.
+/// Standard-library sources live under this prefix (`@wowlua/events.wowlua`).
+pub const STDLIB_PREFIX: &str = "@wowlua/";
+
+/// A compiler-known file: a standard-library module or declaration.
+pub fn is_compiler_known(src_rel: &str) -> bool {
+    src_rel.starts_with(STDLIB_PREFIX) || src_rel.starts_with("<wowlua>/")
+}
+
+/// The module ID of a source path: `core/cache.wowlua` → `core/cache`;
+/// standard-library modules are `wowlua:<name>`.
 pub fn module_id(src_rel: &str) -> String {
+    if let Some(name) = src_rel
+        .strip_prefix(STDLIB_PREFIX)
+        .and_then(|n| n.strip_suffix(".wowlua"))
+    {
+        return format!("wowlua:{name}");
+    }
     for ext in [".d.wowlua", ".wowlua", ".lua", ".xml"] {
         if let Some(stem) = src_rel.strip_suffix(ext) {
             return stem.to_string();
@@ -168,6 +232,12 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
                 StmtKind::Export(inner) => {
                     info.is_module = true;
                     seen_other = true;
+                    let attrs = ExportAttrs::of(&s.decorators);
+                    if attrs != ExportAttrs::default() {
+                        for name in exported_names_of(inner) {
+                            info.export_attrs.insert(name, attrs.clone());
+                        }
+                    }
                     match &inner.kind {
                         StmtKind::Local { names, .. } => {
                             for n in names {
@@ -264,7 +334,271 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
             break;
         }
     }
+    classes_and_enums(files, &mut analysis);
+    intrinsics(files, &mut analysis);
     analysis
+}
+
+/// `@intrinsic("id")` declarations: in a standard-library module's
+/// declaration file they bind the module's exports to compiler behavior;
+/// anywhere else they are E3033.
+fn intrinsics(files: &[FileInput], analysis: &mut Analysis) {
+    let index: HashMap<&str, usize> = files
+        .iter()
+        .enumerate()
+        .map(|(i, f)| (f.src_rel.as_str(), i))
+        .collect();
+    for f in files.iter().filter(|f| f.kind == FileKind::Declaration) {
+        let Some(parse) = f.parse else { continue };
+        let module = f
+            .src_rel
+            .strip_suffix(".d.wowlua")
+            .filter(|_| f.src_rel.starts_with(STDLIB_PREFIX))
+            .and_then(|stem| index.get(format!("{stem}.wowlua").as_str()).copied());
+        for s in &parse.chunk.block.stmts {
+            for d in s.decorators.iter().filter(|d| d.is_named("intrinsic")) {
+                let Some(m) = module else {
+                    if !is_compiler_known(&f.src_rel) {
+                        analysis.diagnostics.push(
+                            Diagnostic::error(
+                                "E3033",
+                                "`@intrinsic` is only for compiler-known modules (the standard library)",
+                            )
+                            .with_label(d.span, "here"),
+                        );
+                    }
+                    continue;
+                };
+                let id = match d
+                    .args
+                    .as_ref()
+                    .and_then(|a| a.exprs().first().map(|e| &e.kind))
+                {
+                    Some(ExprKind::String(lit)) => String::from_utf8_lossy(&lit.value).into_owned(),
+                    _ => continue,
+                };
+                let name = match &s.kind {
+                    StmtKind::Declare(decl) => match decl.as_ref() {
+                        Declare::Function { name, .. } => name.path[0].text.to_string(),
+                        Declare::Global { name, .. } => name.text.to_string(),
+                        _ => continue,
+                    },
+                    _ => continue,
+                };
+                if let Some(info) = analysis.modules[m].as_mut() {
+                    info.intrinsics.insert(name, id);
+                }
+            }
+        }
+    }
+}
+
+/// Classes and enums of every module (spec chapter 3): enum values, what
+/// each class extends, widget classes, and the structural checks.
+fn classes_and_enums(files: &[FileInput], analysis: &mut Analysis) {
+    let declarations: Vec<&Parse> = files
+        .iter()
+        .filter(|f| f.kind == FileKind::Declaration)
+        .filter_map(|f| f.parse)
+        .collect();
+    let widgets = classes::widget_decls(&declarations);
+    // Enums first: their values fold with the module's constants.
+    for (i, file) in files.iter().enumerate() {
+        let (Some(parse), Some(info)) = (file.parse, &analysis.modules[i]) else {
+            continue;
+        };
+        let env = module_consts(info, &analysis.modules, parse);
+        let mut enums = IndexMap::new();
+        for (e, _) in classes::declarations(parse).1 {
+            let value = classes::enum_info(e, &|n| env.get(n).cloned(), &mut analysis.diagnostics);
+            enums.insert(e.name.text.to_string(), Arc::new(value));
+        }
+        analysis.modules[i].as_mut().expect("checked").enums = enums;
+    }
+    let class_names: HashSet<(usize, String)> = files
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| analysis.modules[*i].is_some())
+        .filter_map(|(i, f)| f.parse.map(|p| (i, p)))
+        .flat_map(|(i, p)| {
+            classes::declarations(p)
+                .0
+                .into_iter()
+                .map(move |c| (i, c.name.text.to_string()))
+        })
+        .collect();
+    let is_class = |m: usize, name: &str| class_names.contains(&(m, name.to_string()));
+    // Raw infos with resolved bases.
+    let mut raw: Vec<((usize, String), classes::ClassInfo)> = Vec::new();
+    for (i, file) in files.iter().enumerate() {
+        let (Some(parse), Some(info)) = (file.parse, &analysis.modules[i]) else {
+            continue;
+        };
+        let (decls, _) = classes::declarations(parse);
+        if decls.is_empty() {
+            continue;
+        }
+        let local_classes: HashSet<String> =
+            decls.iter().map(|c| c.name.text.to_string()).collect();
+        let locals = top_level_locals(parse);
+        let (named, namespaces) = import_bindings(info, parse);
+        for c in decls {
+            let base = match c.extends.as_ref().map(classes::type_path) {
+                None => classes::Base::None,
+                Some(None) => classes::Base::Unknown,
+                Some(Some(path)) => classes::resolve_base(
+                    &path,
+                    i,
+                    &local_classes,
+                    &locals,
+                    &named,
+                    &namespaces,
+                    &is_class,
+                    &widgets,
+                ),
+            };
+            raw.push((
+                (i, c.name.text.to_string()),
+                classes::ClassInfo {
+                    name: c.name.text.to_string(),
+                    is_abstract: c.is_abstract,
+                    base,
+                    widget: None,
+                    members: classes::members(c),
+                },
+            ));
+        }
+    }
+    // Widget classes: the chain reaches a native widget type.
+    let bases: HashMap<(usize, String), classes::Base> = raw
+        .iter()
+        .map(|(k, v)| (k.clone(), v.base.clone()))
+        .collect();
+    for (_, info) in raw.iter_mut() {
+        let mut base = info.base.clone();
+        for _ in 0..64 {
+            match base {
+                classes::Base::Widget { widget, .. } => {
+                    info.widget = Some(widget);
+                    break;
+                }
+                classes::Base::Class { file, name } => match bases.get(&(file, name)) {
+                    Some(b) => base = b.clone(),
+                    None => break,
+                },
+                _ => break,
+            }
+        }
+    }
+    let table: classes::ClassTable = raw.into_iter().map(|(k, v)| (k, Arc::new(v))).collect();
+    for (i, file) in files.iter().enumerate() {
+        let (Some(parse), Some(_)) = (file.parse, &analysis.modules[i]) else {
+            continue;
+        };
+        let mut module_classes = IndexMap::new();
+        for c in classes::declarations(parse).0 {
+            let info = table[&(i, c.name.text.to_string())].clone();
+            classes::check_class(c, &info, &table, &mut analysis.diagnostics);
+            module_classes.insert(c.name.text.to_string(), info);
+        }
+        let info = analysis.modules[i].as_mut().expect("checked");
+        info.classes = module_classes;
+        for (name, slot) in info.exports.iter_mut() {
+            if let Some(c) = info.classes.get(name) {
+                *slot = Export::Class(c.clone());
+            } else if let Some(e) = info.enums.get(name) {
+                *slot = Export::Enum(e.clone());
+            }
+        }
+    }
+}
+
+/// The folded top-level constants of a module, imported ones included.
+fn module_consts(
+    info: &ModuleInfo,
+    modules: &[Option<ModuleInfo>],
+    parse: &Parse,
+) -> HashMap<String, Const> {
+    let mut env = imported_consts(info, modules, parse);
+    for s in &parse.chunk.block.stmts {
+        let StmtKind::Const {
+            name,
+            value: Some(value),
+            ..
+        } = (match &s.kind {
+            StmtKind::Export(inner) => &inner.kind,
+            k => k,
+        })
+        else {
+            continue;
+        };
+        if let Some(c) = constant::eval(value, &|n| env.get(n).cloned()) {
+            env.insert(name.text.to_string(), c);
+        }
+    }
+    env
+}
+
+/// Names bound at the top level of a file other than classes.
+fn top_level_locals(parse: &Parse) -> HashSet<String> {
+    let mut out = HashSet::new();
+    for s in &parse.chunk.block.stmts {
+        let kind = match &s.kind {
+            StmtKind::Export(inner) => &inner.kind,
+            k => k,
+        };
+        match kind {
+            StmtKind::Local { names, .. } => {
+                out.extend(names.iter().map(|n| n.name.text.to_string()))
+            }
+            StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
+                out.insert(name.text.to_string());
+            }
+            StmtKind::LocalDestructure { fields, .. } => {
+                out.extend(fields.iter().map(|f| f.name.text.to_string()))
+            }
+            StmtKind::Enum(e) => {
+                out.insert(e.name.text.to_string());
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Imported bindings of a module: named (local → (module, export)) and
+/// namespaces (local → module).
+#[allow(clippy::type_complexity)]
+fn import_bindings(
+    info: &ModuleInfo,
+    parse: &Parse,
+) -> (HashMap<String, (usize, String)>, HashMap<String, usize>) {
+    let mut named = HashMap::new();
+    let mut namespaces = HashMap::new();
+    for s in &parse.chunk.block.stmts {
+        let StmtKind::Import(import) = &s.kind else {
+            continue;
+        };
+        let Some(resolved) = info.imports.iter().find(|i| i.start == s.span.start) else {
+            continue;
+        };
+        let Target::Module(m) = resolved.target else {
+            continue;
+        };
+        match &import.clause {
+            ImportClause::Names(specs) => {
+                for spec in specs {
+                    let local = spec.alias.as_ref().unwrap_or(&spec.name);
+                    named.insert(local.text.to_string(), (m, spec.name.text.to_string()));
+                }
+            }
+            ImportClause::Namespace(n) => {
+                namespaces.insert(n.text.to_string(), m);
+            }
+            ImportClause::SideEffect => {}
+        }
+    }
+    (named, namespaces)
 }
 
 /// The folded constants a module imports, by local name.
@@ -392,13 +726,15 @@ fn resolve(
     if text == "wowlua:meta" {
         return Ok(Target::Meta);
     }
-    if text.starts_with("wowlua:") {
-        return Err(Diagnostic::error(
-            "E1015",
-            format!(
-                "standard-library module `{text}` is not available yet (the standard library arrives with milestone M3)"
-            ),
-        ));
+    if let Some(name) = text.strip_prefix("wowlua:") {
+        let path = format!("{STDLIB_PREFIX}{name}.wowlua");
+        return match exact.get(path.as_str()) {
+            Some(&i) => Ok(Target::Module(i)),
+            None => Err(Diagnostic::error(
+                "E1015",
+                format!("unknown standard-library module `{text}`"),
+            )),
+        };
     }
     let base = if let Some(rest) = text.strip_prefix('/') {
         rest.to_string()
@@ -534,6 +870,18 @@ fn check_names(
                 Diagnostic::error("E1012", message).with_label(spec.name.span, "not exported"),
             );
         }
+    }
+}
+
+/// The names an `export` statement declares.
+fn exported_names_of(inner: &Stmt) -> Vec<String> {
+    match &inner.kind {
+        StmtKind::Local { names, .. } => names.iter().map(|n| n.name.text.to_string()).collect(),
+        StmtKind::Function { name, .. } => vec![name.path[0].text.to_string()],
+        StmtKind::Const { name, .. } => vec![name.text.to_string()],
+        StmtKind::Class(c) => vec![c.name.text.to_string()],
+        StmtKind::Enum(e) => vec![e.name.text.to_string()],
+        _ => Vec::new(),
     }
 }
 

@@ -223,6 +223,20 @@ pub fn build(
             ),
         }
     }
+    // The compiler's implicit declarations (native widget types).
+    for builtin in wowlua_stdlib::declarations() {
+        let file = session.db.add(builtin.path, builtin.text.to_string());
+        declarations.push(crate::compile::Declaration {
+            source: sources::Source {
+                rel: builtin.path.to_string(),
+                src_rel: builtin.path.to_string(),
+                abs: PathBuf::new(),
+                kind: SourceKind::Wowlua,
+            },
+            file,
+            bytes: builtin.text.as_bytes().to_vec(),
+        });
+    }
     // Version and build id (`wowlua:meta` needs them while compiling).
     let vcs = vcs::info(&root);
     let version = build_version(session, project, &profile, vcs.as_ref())?;
@@ -278,8 +292,16 @@ pub fn build(
     // Compile: once per flavor in split mode, once in shared mode (spec
     // §6.3). Sources are parsed once.
     let mut diagnostics = Vec::new();
-    let parsed =
+    let mut parsed =
         crate::compile::parse_sources(&session.db, &mut diagnostics, &files, &declarations, &raw);
+    crate::compile::add_stdlib(
+        &mut session.db,
+        &mut diagnostics,
+        &mut files,
+        &mut declarations,
+        &mut raw,
+        &mut parsed,
+    );
     let split = build_cfg.flavor_mode == wowlua_manifest::model::FlavorMode::Split;
     let compile_flavors: Vec<Option<String>> = if split {
         flavors.iter().cloned().map(Some).collect()
@@ -369,9 +391,9 @@ pub fn build(
                 .or_insert_with(|| reason.clone());
         }
     }
-    let needs_runtime = builds
-        .iter()
-        .any(|b| b.output.needs_runtime || !b.output.meta_used.is_empty());
+    let needs_runtime = builds.iter().any(|b| {
+        b.output.needs_runtime || !b.output.meta_used.is_empty() || !b.output.slices.is_empty()
+    });
     let runtimes: Vec<String> = builds
         .iter()
         .map(|b| {
@@ -385,6 +407,7 @@ pub fn build(
                     &flavors,
                     &project.interfaces,
                 ),
+                slices: b.output.slices.clone(),
             })
         })
         .collect();

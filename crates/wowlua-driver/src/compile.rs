@@ -39,6 +39,8 @@ pub struct CompileOutput {
     pub needs_runtime: bool,
     /// `wowlua:meta` paths used as runtime values.
     pub meta_used: BTreeSet<(MetaKind, Vec<String>)>,
+    /// Runtime slices the compiled files use.
+    pub slices: BTreeSet<wowlua_runtime::Slice>,
 }
 
 /// A declaration file with its contents.
@@ -120,6 +122,85 @@ pub fn parse_sources(
         parses,
         ok,
         declarations,
+    }
+}
+
+/// Adds the standard-library modules the sources import, transitively
+/// (tree-shaking at module granularity, spec §8.1): each is compiled into
+/// the addon as `wowlua/std/<name>.lua`.
+pub fn add_stdlib(
+    db: &mut SourceDb,
+    diagnostics: &mut Vec<Diagnostic>,
+    files: &mut Vec<(Source, FileId)>,
+    declarations: &mut Vec<Declaration>,
+    raw: &mut HashMap<String, Vec<u8>>,
+    parsed: &mut Parsed,
+) {
+    let mut loaded: BTreeSet<String> = BTreeSet::new();
+    let mut scanned = 0;
+    loop {
+        let mut wanted: BTreeSet<String> = BTreeSet::new();
+        for parse in parsed.parses[scanned..].iter().flatten() {
+            for s in &parse.chunk.block.stmts {
+                if let wowlua_syntax::ast::StmtKind::Import(import) = &s.kind {
+                    let spec = String::from_utf8_lossy(&import.from.value).into_owned();
+                    if let Some(name) = spec.strip_prefix("wowlua:")
+                        && name != "meta"
+                        && !loaded.contains(name)
+                    {
+                        wanted.insert(name.to_string());
+                    }
+                }
+            }
+        }
+        scanned = parsed.parses.len();
+        if wanted.is_empty() {
+            return;
+        }
+        for name in wanted {
+            loaded.insert(name.clone());
+            // Unknown modules are reported when the import is resolved.
+            let Some(module) = wowlua_stdlib::module(&name) else {
+                continue;
+            };
+            let src_rel = wowlua_stdlib::src_rel(&name);
+            let rel = format!("<wowlua>/{name}.wowlua");
+            let file = db.add(&rel, module.source.clone());
+            let source = Source {
+                rel: rel.clone(),
+                src_rel,
+                abs: std::path::PathBuf::new(),
+                kind: SourceKind::Wowlua,
+            };
+            let parse = wowlua_syntax::parse(module.source.as_bytes(), file);
+            let ok = !parse.has_errors();
+            if !ok {
+                diagnostics.extend(parse.diagnostics.clone());
+            }
+            raw.insert(rel, module.source.into_bytes());
+            files.push((source, file));
+            parsed.parses.push(Some(parse));
+            parsed.ok.push(ok);
+            if let Some(text) = module.declaration {
+                let rel = format!("<wowlua>/{name}.d.wowlua");
+                let file = db.add(&rel, text.clone());
+                let parse = wowlua_syntax::parse(text.as_bytes(), file);
+                if parse.has_errors() {
+                    diagnostics.extend(parse.diagnostics.clone());
+                }
+                declarations.push(Declaration {
+                    source: Source {
+                        rel,
+                        src_rel: format!("{}{name}.d.wowlua", wowlua_sema::STDLIB_PREFIX),
+                        abs: std::path::PathBuf::new(),
+                        kind: SourceKind::Wowlua,
+                    },
+                    file,
+                    bytes: text.into_bytes(),
+                });
+                parsed.declarations.push(parse);
+            }
+        }
     }
 }
 
@@ -213,7 +294,10 @@ pub fn compile_flavor(
         }
         let parse = parsed.parses[i].as_ref().expect("parsed");
         let bytes = &raw[&source.rel];
-        let ctx = context(&analysis, i, &inputs, meta.clone(), &order.lazy);
+        let mut ctx = context(&analysis, i, &inputs, meta.clone(), &order.lazy);
+        ctx.file = source.rel.clone();
+        ctx.debug = profile.debug;
+        ctx.compiler_known = wowlua_sema::is_compiler_known(&source.src_rel);
         let lowered = match wowlua_lower::lower_module(parse, bytes, &ctx) {
             Ok(lowered) => lowered,
             Err(errors) => {
@@ -223,6 +307,8 @@ pub fn compile_flavor(
         };
         out.needs_runtime |= lowered.uses_runtime;
         out.meta_used.extend(lowered.meta_used);
+        out.slices.extend(lowered.slices);
+        diagnostics.extend(lowered.warnings);
         let emitted = wowlua_luair::emit(&lowered.chunk, &options);
         // The output must parse (spec compiler §13.8, item 2).
         let reparsed = wowlua_syntax::parse(&emitted.text, *file);
@@ -264,19 +350,28 @@ fn context(
     lazy: &std::collections::HashSet<(usize, u32)>,
 ) -> Context {
     let mut ctx = Context {
-        module: None,
-        imports: HashMap::new(),
         meta: Some(meta),
+        ..Context::default()
     };
     let Some(info) = &analysis.modules[i] else {
         return ctx;
     };
     ctx.module = info.is_module.then(|| info.id.clone());
+    ctx.classes = info
+        .classes
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    ctx.enums = info
+        .enums
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
     for import in &info.imports {
         let target = match &import.target {
             Target::Module(m) => {
-                let exports = analysis.modules[*m]
-                    .as_ref()
+                let module = analysis.modules[*m].as_ref();
+                let exports = module
                     .map(|t| {
                         t.exports
                             .iter()
@@ -288,6 +383,8 @@ fn context(
                     id: wowlua_sema::module_id(&inputs[*m].src_rel),
                     lazy: lazy.contains(&(i, import.start)),
                     exports,
+                    attrs: module.map(|t| t.export_attrs.clone()).unwrap_or_default(),
+                    intrinsics: module.map(|t| t.intrinsics.clone()).unwrap_or_default(),
                 }
             }
             Target::Lua {
@@ -297,6 +394,8 @@ fn context(
                 id: wowlua_sema::module_id(&inputs[*file].src_rel),
                 lazy: lazy.contains(&(i, import.start)),
                 exports: HashMap::<String, Export>::new(),
+                attrs: HashMap::new(),
+                intrinsics: HashMap::new(),
             },
             Target::Lua {
                 declared: false, ..

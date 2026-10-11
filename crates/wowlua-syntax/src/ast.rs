@@ -201,6 +201,73 @@ pub struct Decorator {
     pub span: Span,
 }
 
+/// Core decorators (spec §4.3): always in scope, they win over lexical
+/// bindings of the same name.
+pub const CORE_DECORATORS: &[&str] = &[
+    "if",
+    "global",
+    "deprecated",
+    "inline",
+    "debugOnly",
+    "nocheck",
+    "widget",
+    "intrinsic",
+    "deferred",
+    "profile",
+    "noprofile",
+    "trace",
+    "reflect",
+    "checked",
+    "unchecked",
+];
+
+impl Decorator {
+    /// A core decorator (a single name from [`CORE_DECORATORS`]).
+    pub fn is_core(&self) -> bool {
+        self.path.len() == 1 && CORE_DECORATORS.contains(&self.path[0].text.as_ref())
+    }
+
+    /// A core decorator name (`@if`, `@global`, …) used without a path.
+    pub fn is_named(&self, name: &str) -> bool {
+        self.path.len() == 1 && self.path[0].text.as_ref() == name
+    }
+
+    /// The decorator as an expression: its path, called with its arguments
+    /// (`@a.b(x)` is `a.b(x)`, spec §4.5).
+    pub fn expr(&self) -> Expr {
+        let mk = |span: Span, kind: ExprKind| Expr {
+            id: NodeId(0),
+            span,
+            kind,
+        };
+        let mut e = mk(self.path[0].span, ExprKind::Name(self.path[0].clone()));
+        for n in &self.path[1..] {
+            let span = Span {
+                file: n.span.file,
+                start: self.path[0].span.start,
+                end: n.span.end,
+            };
+            e = mk(
+                span,
+                ExprKind::Field {
+                    obj: Box::new(e),
+                    name: n.clone(),
+                },
+            );
+        }
+        match &self.args {
+            Some(args) => mk(
+                self.span,
+                ExprKind::Call {
+                    callee: Box::new(e),
+                    args: args.clone(),
+                },
+            ),
+            None => e,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Expr {
     pub id: NodeId,

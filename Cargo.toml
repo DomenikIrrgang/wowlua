@@ -22,6 +22,7 @@ wowlua-luair = { path = "crates/wowlua-luair" }
 wowlua-lower = { path = "crates/wowlua-lower" }
 wowlua-fmt = { path = "crates/wowlua-fmt" }
 wowlua-runtime = { path = "crates/wowlua-runtime" }
+wowlua-stdlib = { path = "crates/wowlua-stdlib" }
 wowlua-sema = { path = "crates/wowlua-sema" }
 wowlua-driver = { path = "crates/wowlua-driver" }
 

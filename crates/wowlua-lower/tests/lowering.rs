@@ -54,7 +54,24 @@ fn run(code: &[u8]) -> String {
     )
     .exec()
     .unwrap();
-    if let Err(e) = lua.load(code).exec() {
+    // The addon table with the runtime, passed like WoW passes `...`.
+    let ns = lua.create_table().unwrap();
+    let runtime = wowlua_runtime::runtime(&wowlua_runtime::RuntimeOptions {
+        slices: [
+            wowlua_runtime::Slice::Widget,
+            wowlua_runtime::Slice::Enum,
+            wowlua_runtime::Slice::Decorate,
+        ]
+        .into_iter()
+        .collect(),
+        ..wowlua_runtime::RuntimeOptions::default()
+    });
+    lua.load(&runtime).call::<()>(("Test", ns.clone())).unwrap();
+    if let Err(e) = lua
+        .load(code)
+        .into_function()
+        .and_then(|f| f.call::<()>(("Test", ns)))
+    {
         panic!(
             "runtime error: {e}\n--- code ---\n{}",
             String::from_utf8_lossy(code)
@@ -234,4 +251,127 @@ fn static_conditions_need_a_constant() {
     assert!(compiled.contains("if true then"), "{compiled}");
     assert!(compiled.contains("1 == 1 and 2"), "{compiled}");
     assert_eq!(run(compiled.as_bytes()), "release\nx\n1\n2");
+}
+
+#[test]
+fn classes_inheritance_super_and_statics() {
+    same(
+        r#"class Animal
+    name: string
+    protected sound: string = "..."
+    static count: number = 0
+    constructor(name: string)
+        self.name = name
+        Animal.count += 1
+    end
+    function speak(): string
+        return `{self.name} says {self.sound}`
+    end
+    static function create(name: string): Animal
+        return Animal.new(name)
+    end
+    get label(): string
+        return `{self.name}#{Animal.count}`
+    end
+    function __tostring(): string
+        return `Animal({self.name})`
+    end
+end
+class Dog extends Animal
+    tricks: string[] = {}
+    constructor(name: string)
+        super(name)
+        self.sound = "woof"
+    end
+    override function speak(): string
+        return super:speak() .. "!"
+    end
+end
+local d = Dog.new("rex")
+local a = Animal.create("cat")
+print(d:speak(), a:speak(), Animal.count, Dog.count, d.label, tostring(d), #d.tricks)
+local d2 = Dog("max")
+print(d2:speak(), Animal.count)"#,
+        "print('rex says woof!', 'cat says ...', 2, 2, 'rex#2', 'Animal(rex)', 0) print('max says woof!', 3)",
+    );
+}
+
+#[test]
+fn abstract_classes_accessors_and_implicit_constructors() {
+    same(
+        r#"abstract class Shape
+    abstract function area(): number
+    function describe(): string return `area {self:area()}` end
+end
+class Square extends Shape
+    side: number = 2
+    override function area(): number return self.side * self.side end
+end
+class Temperature
+    private celsius: number = 0
+    get fahrenheit(): number return self.celsius * 9 / 5 + 32 end
+    set fahrenheit(value: number) self.celsius = (value - 32) * 5 / 9 end
+    static get unit(): string return "F" end
+end
+local t = Temperature.new()
+t.fahrenheit = 212
+print(Square.new():describe(), t.fahrenheit, t.celsius, Temperature.unit)
+print((pcall(function() Temperature.unit = 1 end)))"#,
+        "print('area 4', 212, 100, 'F') print(false)",
+    );
+}
+
+#[test]
+fn enums_are_inlined_unless_used_as_values() {
+    let src = "enum Direction { Up, Down, Left = 10, Right }\nenum Anchor { TopLeft = \"TOPLEFT\", Center = \"CENTER\" }\nprint(Direction.Up, Direction.Right, Anchor.Center, Anchor[\"TopLeft\"])\n";
+    let compiled = compile(src);
+    assert!(!compiled.contains("Direction ="), "{compiled}");
+    assert_eq!(run(compiled.as_bytes()), "1 11 CENTER TOPLEFT");
+    same(
+        "enum Quality { Poor = 0, Common, Rare }\nlocal n = 0\nfor _, v in pairs(Quality) do n += v end\nprint(n, Quality.Rare)",
+        "print(3, 2)",
+    );
+}
+
+#[test]
+fn user_decorators_apply_bottom_to_top() {
+    same(
+        r#"local log = {}
+local function tag(name: string)
+    return function(fn, ctx)
+        log[#log + 1] = name .. ":" .. ctx.kind .. ":" .. ctx.name
+        return function(...) return name .. "(" .. fn(...) .. ")" end
+    end
+end
+local function plain(fn, ctx) log[#log + 1] = "plain:" .. ctx.name end
+@tag("a")
+@tag("b")
+local function f(x: number): string
+    return tostring(x)
+end
+@plain
+function g() return "g" end
+print(f(1), g(), table.concat(log, ","))
+local seen = {}
+local function register(cls, ctx) seen[#seen + 1] = ctx.kind .. ":" .. ctx.name end
+local function field(_, ctx) seen[#seen + 1] = ctx.kind .. ":" .. ctx.name .. ":" .. tostring(ctx.static) end
+local function twice(fn, ctx) seen[#seen + 1] = ctx.kind .. ":" .. ctx.name; return function(self, ...) return fn(self, ...) * 2 end end
+@register
+class Counter
+    @field
+    static total: number = 1
+    @twice
+    function value(): number return 21 end
+end
+print(Counter.new():value(), table.concat(seen, ","))"#,
+        "print('a(b(1))', 'g', 'b:function:f,a:function:f,plain:g') print(42, 'field:total:true,method:value,class:Counter')",
+    );
+}
+
+#[test]
+fn core_decorators() {
+    same(
+        "@global(\"MyAddonApi\")\nlocal api = { v = 1 }\n@debugOnly\nlocal function dbg(m: string) print(m) end\ndbg(\"x\")\nprint(MyAddonApi.v, \"after\")",
+        "print(1, 'after')",
+    );
 }

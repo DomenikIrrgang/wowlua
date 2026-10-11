@@ -153,6 +153,18 @@ struct Walker<'a> {
 /// The usage summary of one file.
 pub fn file_usage(parse: &Parse, markers: &Markers) -> FileUsage {
     let mut w = Walker::new(markers);
+    // Top-level classes and enums are hoisted locals.
+    for s in &parse.chunk.block.stmts {
+        let kind = match &s.kind {
+            StmtKind::Export(inner) => &inner.kind,
+            k => k,
+        };
+        match kind {
+            StmtKind::Class(c) => w.declare(&c.name.text, Local::Plain),
+            StmtKind::Enum(e) => w.declare(&e.name.text, Local::Plain),
+            _ => {}
+        }
+    }
     w.block(&parse.chunk.block);
     w.out
 }
@@ -420,7 +432,131 @@ impl<'a> Walker<'a> {
     }
 
     fn stmt(&mut self, s: &Stmt) {
-        grow(|| self.stmt_inner(s))
+        let first = self.out.functions.len();
+        grow(|| self.stmt_inner(s));
+        self.decorators(&s.decorators, first);
+    }
+
+    /// User decorators are called at load time with the declared function
+    /// (the first function the declaration created, if any).
+    fn decorators(&mut self, decorators: &[Decorator], first: usize) {
+        for d in decorators.iter().filter(|d| !d.is_core()) {
+            let callee = self.expr(&d.expr());
+            let target: Vec<Info> = (first < self.out.functions.len())
+                .then_some(Info::Function(first))
+                .into_iter()
+                .collect();
+            self.record_call(Self::call_target(&callee), &target, 0, d.span, false);
+        }
+    }
+
+    /// A class: `extends` is read and static initializers run while the
+    /// file loads; methods, accessors, the constructor and instance field
+    /// initializers are functions.
+    fn class_decl(&mut self, c: &ClassDecl) {
+        if let Some(path) = c.extends.as_ref().and_then(crate::classes::type_path) {
+            let mk = |kind: ExprKind| Expr {
+                id: NodeId(0),
+                span: c.name.span,
+                kind,
+            };
+            let mut e = mk(ExprKind::Name(Name {
+                text: path[0].clone().into(),
+                span: c.name.span,
+            }));
+            for p in &path[1..] {
+                e = mk(ExprKind::Field {
+                    obj: Box::new(e),
+                    name: Name {
+                        text: p.clone().into(),
+                        span: c.name.span,
+                    },
+                });
+            }
+            self.expr(&e);
+        }
+        let class = c.name.text.to_string();
+        for m in &c.members {
+            let first = self.out.functions.len();
+            let is_static = m.modifiers.contains(&Modifier::Static);
+            match &m.kind {
+                ClassMemberKind::Field { value: Some(v), .. } if is_static => {
+                    self.expr(v);
+                }
+                ClassMemberKind::Field {
+                    name,
+                    value: Some(v),
+                    ..
+                } => {
+                    self.body_function(&format!("{class} field {}", name.text), true, &[], |w| {
+                        w.expr(v);
+                    });
+                }
+                ClassMemberKind::Method {
+                    name,
+                    func,
+                    has_body: true,
+                } => {
+                    self.function(func, &format!("{class}:{}", name.text), !is_static);
+                }
+                ClassMemberKind::Constructor {
+                    func,
+                    has_body: true,
+                } => {
+                    self.function(func, &format!("{class} constructor"), true);
+                }
+                ClassMemberKind::Getter { name, body, .. } => {
+                    self.body_function(
+                        &format!("{class}.{} getter", name.text),
+                        !is_static,
+                        &[],
+                        |w| w.block(body),
+                    );
+                }
+                ClassMemberKind::Setter { name, param, body } => {
+                    let p = param.name.text.to_string();
+                    self.body_function(
+                        &format!("{class}.{} setter", name.text),
+                        !is_static,
+                        &[p],
+                        |w| w.block(body),
+                    );
+                }
+                _ => {}
+            }
+            self.decorators(&m.decorators, first);
+        }
+    }
+
+    /// A function without a `FuncBody` (accessors, field initializers).
+    fn body_function(
+        &mut self,
+        name: &str,
+        method: bool,
+        params: &[String],
+        f: impl FnOnce(&mut Self),
+    ) -> usize {
+        let id = self.out.functions.len();
+        self.out.functions.push(Function {
+            name: name.to_string(),
+            calls: Vec::new(),
+            called_params: HashSet::new(),
+        });
+        let saved = self.current;
+        let saved_guards = std::mem::take(&mut self.guards);
+        self.current = id;
+        self.scopes.push(HashMap::new());
+        if method {
+            self.declare("self", Local::Param(0));
+        }
+        for (i, p) in params.iter().enumerate() {
+            self.declare(p, Local::Param(i + usize::from(method)));
+        }
+        f(self);
+        self.scopes.pop();
+        self.current = saved;
+        self.guards = saved_guards;
+        id
     }
 
     fn stmt_inner(&mut self, s: &Stmt) {
@@ -627,9 +763,9 @@ impl<'a> Walker<'a> {
                 }
                 self.stmt(inner);
             }
+            StmtKind::Class(c) => self.class_decl(c),
             StmtKind::Break
             | StmtKind::Continue
-            | StmtKind::Class(_)
             | StmtKind::Interface(_)
             | StmtKind::Enum(_)
             | StmtKind::TypeAlias(_)

@@ -1308,6 +1308,7 @@ dependencies = [
  "wowlua-runtime",
  "wowlua-sema",
  "wowlua-span",
+ "wowlua-stdlib",
  "wowlua-syntax",
  "wowlua-toc",
  "wowlua-xml",
@@ -1339,6 +1340,7 @@ dependencies = [
  "stacker",
  "wowlua-diagnostics",
  "wowlua-luair",
+ "wowlua-runtime",
  "wowlua-sema",
  "wowlua-span",
  "wowlua-syntax",
@@ -1392,6 +1394,10 @@ dependencies = [
 
 [[package]]
 name = "wowlua-span"
+version = "0.3.0"
+
+[[package]]
+name = "wowlua-stdlib"
 version = "0.3.0"
 
 [[package]]

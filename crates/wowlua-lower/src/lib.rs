@@ -2,25 +2,25 @@
 //! 14). Implements the syntax-sugar lowerings of spec chapter 1 with the
 //! "preceding statements" mechanism of codegen §14.4. Without type
 //! information (milestone M4), every file uses the basic-mode forms.
+//! Classes and enums are in [`class`], decorators in [`decorate`].
+
+mod class;
+mod decorate;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_luair::ir::{self, Pos};
+use wowlua_runtime::Slice;
+use wowlua_sema::classes::{ClassInfo, EnumInfo};
 use wowlua_sema::constant::{self, Const, quote};
 use wowlua_sema::meta::{Lookup, Meta, MetaKind};
 use wowlua_span::Span;
 use wowlua_syntax::Parse;
 use wowlua_syntax::ast::*;
-use wowlua_syntax::features::{Feature, features};
 use wowlua_syntax::token::TriviaKind;
 
 pub use wowlua_sema::constant::{format_g14, format_number};
-
-/// Features this compiler version cannot lower yet.
-fn unsupported(feature: Feature) -> bool {
-    matches!(feature, Feature::Decorator | Feature::Class | Feature::Enum)
-}
 
 /// What the lowering of one file needs to know about the package.
 #[derive(Clone, Debug, Default)]
@@ -31,6 +31,15 @@ pub struct Context {
     pub imports: HashMap<u32, ImportContext>,
     /// `wowlua:meta` values of the build configuration and flavor.
     pub meta: Option<Arc<Meta>>,
+    /// The source path (`src/core/cache.wowlua`), for decorator contexts.
+    pub file: String,
+    /// The file's top-level classes and enums (from the package analysis).
+    pub classes: HashMap<String, Arc<ClassInfo>>,
+    pub enums: HashMap<String, Arc<EnumInfo>>,
+    /// A debug build (enum guards, abstract stubs, `@debugOnly` kept).
+    pub debug: bool,
+    /// A compiler-known module (the standard library may use `@intrinsic`).
+    pub compiler_known: bool,
 }
 
 /// A lowered file.
@@ -41,6 +50,9 @@ pub struct Lowered {
     pub meta_used: BTreeSet<(MetaKind, Vec<String>)>,
     /// The file uses the runtime (`__wl`).
     pub uses_runtime: bool,
+    /// Runtime slices the file needs.
+    pub slices: BTreeSet<Slice>,
+    pub warnings: Vec<Diagnostic>,
 }
 
 #[derive(Clone, Debug)]
@@ -52,6 +64,10 @@ pub enum ImportContext {
         /// are read through the module table (spec §5.5).
         lazy: bool,
         exports: HashMap<String, wowlua_sema::Export>,
+        /// `@deprecated` / `@debugOnly` exports.
+        attrs: HashMap<String, wowlua_sema::ExportAttrs>,
+        /// Exports bound to compiler behavior: name → `@intrinsic` id.
+        intrinsics: HashMap<String, String>,
     },
     /// `wowlua:meta`.
     Meta,
@@ -72,33 +88,6 @@ pub fn lower_with(parse: &Parse, src: &[u8], ctx: &Context) -> Result<ir::Chunk,
 /// Lowers a parsed file without errors, with what the build needs to know
 /// about it.
 pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered, Vec<Diagnostic>> {
-    let mut found: BTreeMap<Feature, (Span, usize)> = BTreeMap::new();
-    for (feature, span) in features(&parse.chunk) {
-        if unsupported(feature) {
-            found.entry(feature).or_insert((span, 0)).1 += 1;
-        }
-    }
-    if !found.is_empty() {
-        let mut first: Vec<(Feature, Span, usize)> =
-            found.into_iter().map(|(f, (s, n))| (f, s, n)).collect();
-        first.sort_by_key(|(_, span, _)| span.start);
-        return Err(first
-            .into_iter()
-            .map(|(feature, span, count)| {
-                let more = if count > 1 {
-                    format!(" (used {count} times in this file)")
-                } else {
-                    String::new()
-                };
-                Diagnostic::plain_error(format!(
-                    "not available yet: {} (arrives with milestone {}){more}",
-                    feature.describe(),
-                    feature.milestone()
-                ))
-                .with_label(span, "needs a newer wowlua compiler")
-            })
-            .collect());
-    }
     let mut lowerer = Lowerer {
         parse,
         src,
@@ -110,25 +99,18 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         errors: Vec::new(),
         loops: Vec::new(),
         func_depth: 0,
-        pending_functions: HashSet::new(),
+        pending: HashSet::new(),
         uses_runtime: false,
+        slices: BTreeSet::new(),
+        warnings: Vec::new(),
+        classes: Vec::new(),
+        widget_ctor: None,
         has_exports: false,
         meta_used: BTreeSet::new(),
     };
-    // Exported functions are hoisted (spec §5.1, decision L24).
-    let mut hoisted = Vec::new();
-    if ctx.module.is_some() {
-        for s in &parse.chunk.block.stmts {
-            if let StmtKind::Export(inner) = &s.kind
-                && let StmtKind::Function { name, .. } = &inner.kind
-            {
-                let n = name.path[0].text.to_string();
-                lowerer.declare(&n, Binding::Export);
-                lowerer.pending_functions.insert(n.clone());
-                hoisted.push(n);
-            }
-        }
-    }
+    // Exported functions, classes and enums are hoisted (spec §5.1,
+    // decisions L24 and T76).
+    let hoisted = lowerer.hoist();
     let mut stmts = lowerer.stmts(&parse.chunk.block.stmts);
     if !lowerer.errors.is_empty() {
         return Err(lowerer.errors);
@@ -205,6 +187,8 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         chunk,
         meta_used: lowerer.meta_used,
         uses_runtime: lowerer.uses_runtime,
+        slices: lowerer.slices,
+        warnings: lowerer.warnings,
     })
 }
 
@@ -367,11 +351,32 @@ enum Binding {
     Const(Const),
     /// A `const` that is a normal local at run time.
     ConstLocal,
+    /// A top-level class of this file (hoisted; `exported` is immutable).
+    Class {
+        info: Arc<ClassInfo>,
+        exported: bool,
+    },
+    /// An imported class.
+    ImportedClass(Arc<ClassInfo>),
+    /// A top-level enum of this file; `table` when it exists at run time.
+    Enum {
+        info: Arc<EnumInfo>,
+        table: bool,
+    },
+    ImportedEnum(Arc<EnumInfo>),
+    /// A `@debugOnly` function removed from this build: call statements
+    /// are dropped (spec §4.3).
+    DebugOnlyRemoved,
+    /// An imported export with compiler behavior (`@intrinsic(id)`); a
+    /// normal import as a value.
+    Intrinsic(String),
 }
 
 #[derive(Default)]
 struct Scope {
     names: HashMap<Box<str>, Binding>,
+    /// `@deprecated` bindings of this scope: their messages.
+    deprecated: HashMap<Box<str>, Option<String>>,
 }
 
 /// How the body of the loop being lowered handles `continue` (spec §1.3.6).
@@ -389,9 +394,16 @@ struct Lowerer<'a> {
     ctx: &'a Context,
     /// Nesting of function bodies (0 = top level of the file).
     func_depth: u32,
-    /// Hoisted exported functions not defined yet (E1037).
-    pending_functions: HashSet<String>,
+    /// Hoisted declarations not defined yet (E1037).
+    pending: HashSet<String>,
     uses_runtime: bool,
+    slices: BTreeSet<Slice>,
+    warnings: Vec<Diagnostic>,
+    /// The classes whose bodies are being lowered (innermost last).
+    classes: Vec<class::ClassCtx>,
+    /// The function depth of a widget constructor body (`return` returns
+    /// the frame).
+    widget_ctor: Option<u32>,
     has_exports: bool,
     meta_used: BTreeSet<(MetaKind, Vec<String>)>,
     scopes: Vec<Scope>,
@@ -485,6 +497,19 @@ impl<'a> Lowerer<'a> {
 
     fn lookup(&self, name: &str) -> Option<&Binding> {
         self.scopes.iter().rev().find_map(|s| s.names.get(name))
+    }
+
+    /// The binding a name expression refers to; uses of `@deprecated`
+    /// bindings are reported (W3030).
+    fn name_binding(&mut self, n: &Name) -> Option<Binding> {
+        if let Some(message) = self.deprecated_of(&n.text) {
+            let detail = message.map(|m| format!(": {m}")).unwrap_or_default();
+            self.warnings.push(
+                Diagnostic::warning("W3030", format!("`{}` is deprecated{detail}", n.text))
+                    .with_label(n.span, "used here"),
+            );
+        }
+        self.lookup(&n.text).cloned()
     }
 
     fn is_local(&self, name: &str) -> bool {
@@ -606,6 +631,12 @@ impl<'a> Lowerer<'a> {
         if !s.decorators.is_empty() && !self.kept_by_if(s) {
             return Vec::new();
         }
+        if s.decorators
+            .iter()
+            .any(|d| wowlua_sema::meta::if_condition(d).is_none())
+        {
+            return grow(|| self.decorated_stmt(s));
+        }
         grow(|| self.stmt_inner(s))
     }
 
@@ -613,8 +644,19 @@ impl<'a> Lowerer<'a> {
     /// is false is removed; its names are remembered for E1020.
     fn kept_by_if(&mut self, s: &Stmt) -> bool {
         let import = matches!(s.kind, StmtKind::Import(_));
+        let keep = self.kept_by_if_decorators(&s.decorators, import);
+        if !keep {
+            for name in declared_names(s) {
+                self.declare(&name, Binding::Removed(s.span));
+            }
+        }
+        keep
+    }
+
+    /// Evaluates the `@if` decorators of a declaration or class member.
+    fn kept_by_if_decorators(&mut self, decorators: &[Decorator], import: bool) -> bool {
         let mut keep = true;
-        for d in &s.decorators {
+        for d in decorators {
             let Some(cond) = wowlua_sema::meta::if_condition(d) else {
                 continue;
             };
@@ -642,11 +684,6 @@ impl<'a> Lowerer<'a> {
                     cond.span,
                     "`@if` conditions must be static: `wowlua:meta` paths, constants and literals",
                 ),
-            }
-        }
-        if !keep {
-            for name in declared_names(s) {
-                self.declare(&name, Binding::Removed(s.span));
             }
         }
         keep
@@ -690,6 +727,7 @@ impl<'a> Lowerer<'a> {
             StmtKind::Compound { target, op, value } => {
                 self.wrapped(pos, |l| l.compound(target, *op, value, pos))
             }
+            StmtKind::Call(e) if self.is_removed_call(e) => Vec::new(),
             StmtKind::Call(e) => self.wrapped(pos, |l| {
                 if chain_has_optional(e) {
                     l.optional_chain(e, true);
@@ -849,6 +887,12 @@ impl<'a> Lowerer<'a> {
                     pos,
                 )]
             }
+            // A widget constructor returns its frame (spec §3.2).
+            StmtKind::Return(values)
+                if values.is_empty() && self.widget_ctor == Some(self.func_depth) =>
+            {
+                vec![stmt(K::Return(vec![name_expr(ident("self", pos))]), pos)]
+            }
             StmtKind::Return(values) => self.wrapped(pos, |l| {
                 let refs: Vec<&Expr> = values.iter().collect();
                 let mut lowered = l.seq(&refs);
@@ -899,8 +943,13 @@ impl<'a> Lowerer<'a> {
             StmtKind::TypeAlias(_) | StmtKind::Interface(_) | StmtKind::Declare(_) => Vec::new(),
             StmtKind::Import(import) => self.import(import, s.span, pos),
             StmtKind::Export(inner) => self.export(inner, pos),
-            // Rejected before lowering.
-            StmtKind::Class(_) | StmtKind::Enum(_) | StmtKind::Error => Vec::new(),
+            StmtKind::Class(c) => {
+                self.class_decl(c, &decorate::Decorations::default(), false, s.span)
+            }
+            StmtKind::Enum(e) => {
+                self.enum_decl(e, &decorate::Decorations::default(), false, s.span)
+            }
+            StmtKind::Error => Vec::new(),
         }
     }
 
@@ -925,12 +974,26 @@ impl<'a> Lowerer<'a> {
                 name.span,
                 format!("cannot assign to the constant `{}`", name.text),
             ),
-            Some(Binding::Import | Binding::LazyImport { .. } | Binding::Meta(_) | Binding::MetaNamespace) => self.error(
+            Some(Binding::Enum { .. }) => self.error(
+                "E2010",
+                name.span,
+                format!("cannot assign to the enum `{}`", name.text),
+            ),
+            Some(
+                Binding::Import
+                | Binding::LazyImport { .. }
+                | Binding::Meta(_)
+                | Binding::MetaNamespace
+                | Binding::ImportedClass(_)
+                | Binding::ImportedEnum(_)
+                | Binding::Intrinsic(_)
+                | Binding::DebugOnlyRemoved,
+            ) => self.error(
                 "E1010",
                 name.span,
                 format!("cannot assign to the imported binding `{}`", name.text),
             ),
-            Some(Binding::Export) => self.error(
+            Some(Binding::Export | Binding::Class { exported: true, .. }) => self.error(
                 "E1010",
                 name.span,
                 format!(
@@ -1126,7 +1189,27 @@ impl<'a> Lowerer<'a> {
             self.declare(&p.name.text, Binding::Local);
         }
         let pos = self.span_pos(f.params_span);
-        // Default parameter values (spec §1.3.5), on the parameter line.
+        let mut stmts = self.default_params(f);
+        stmts.extend(self.stmts(&f.body.stmts));
+        self.pop_scope();
+        self.loops = saved_loops;
+        self.prelude = saved_prelude;
+        self.func_depth -= 1;
+        ir::Func {
+            pos,
+            params: f.params.iter().map(|p| self.ident(&p.name)).collect(),
+            vararg: f.vararg.is_some(),
+            body: ir::Block {
+                stmts,
+                end: self.span_pos(f.end_span),
+            },
+        }
+    }
+
+    /// Default parameter values (spec §1.3.5), on the parameter line; the
+    /// parameters are declared by the caller.
+    fn default_params(&mut self, f: &FuncBody) -> Vec<ir::Stmt> {
+        let pos = self.span_pos(f.params_span);
         let mut stmts = Vec::new();
         for p in &f.params {
             if let Some(default) = &p.default {
@@ -1143,19 +1226,19 @@ impl<'a> Lowerer<'a> {
                 stmts.push(if_stmt(cond, body, pos));
             }
         }
-        stmts.extend(self.stmts(&f.body.stmts));
-        self.pop_scope();
-        self.loops = saved_loops;
-        self.prelude = saved_prelude;
-        self.func_depth -= 1;
-        ir::Func {
-            pos,
-            params: f.params.iter().map(|p| self.ident(&p.name)).collect(),
-            vararg: f.vararg.is_some(),
-            body: ir::Block {
-                stmts,
-                end: self.span_pos(f.end_span),
-            },
+        stmts
+    }
+
+    /// A call statement of a removed `@debugOnly` function (spec §4.3).
+    fn is_removed_call(&self, e: &Expr) -> bool {
+        matches!(&e.kind, ExprKind::Call { callee, .. } if matches!(&callee.kind, ExprKind::Name(n) if matches!(self.lookup(&n.text), Some(Binding::DebugOnlyRemoved))))
+    }
+
+    /// The arguments of a call as a list.
+    fn args_list(&mut self, args: &Args) -> Vec<ir::Expr> {
+        match args {
+            Args::Parens { args, .. } => self.exprs(args),
+            Args::Table(e) | Args::String(e) => vec![self.expr(e)],
         }
     }
 
@@ -1190,8 +1273,14 @@ impl<'a> Lowerer<'a> {
             );
             return Vec::new();
         };
-        let (id, lazy, exports) = match target {
-            ImportContext::Module { id, lazy, exports } => (id, lazy, exports),
+        let (id, lazy, exports, attrs, intrinsics) = match target {
+            ImportContext::Module {
+                id,
+                lazy,
+                exports,
+                attrs,
+                intrinsics,
+            } => (id, lazy, exports, attrs, intrinsics),
             ImportContext::Meta => {
                 match &import.clause {
                     ImportClause::Names(specs) => {
@@ -1220,13 +1309,44 @@ impl<'a> Lowerer<'a> {
             }
             ImportClause::Names(specs) => {
                 let mut values: Vec<&ImportSpec> = Vec::new();
+                let mut kinds: Vec<(String, Binding)> = Vec::new();
                 for spec in specs {
                     let local_name = spec.alias.as_ref().unwrap_or(&spec.name);
+                    let attr = attrs
+                        .get(spec.name.text.as_ref())
+                        .cloned()
+                        .unwrap_or_default();
+                    if let Some(message) = attr.deprecated {
+                        self.mark_deprecated(&local_name.text, message);
+                    }
+                    if attr.debug_only && !self.ctx.debug {
+                        self.declare(&local_name.text, Binding::DebugOnlyRemoved);
+                        continue;
+                    }
                     match exports.get(spec.name.text.as_ref()) {
                         Some(wowlua_sema::Export::Const(Some(c))) => {
                             self.declare(&local_name.text, Binding::Const(c.clone()))
                         }
                         Some(wowlua_sema::Export::Type) => {}
+                        Some(wowlua_sema::Export::Class(info)) => {
+                            kinds.push((
+                                local_name.text.to_string(),
+                                Binding::ImportedClass(info.clone()),
+                            ));
+                            values.push(spec);
+                        }
+                        Some(wowlua_sema::Export::Enum(info)) => {
+                            kinds.push((
+                                local_name.text.to_string(),
+                                Binding::ImportedEnum(info.clone()),
+                            ));
+                            values.push(spec);
+                        }
+                        _ if intrinsics.contains_key(spec.name.text.as_ref()) => {
+                            let id = intrinsics[spec.name.text.as_ref()].clone();
+                            kinds.push((local_name.text.to_string(), Binding::Intrinsic(id)));
+                            values.push(spec);
+                        }
                         _ => values.push(spec),
                     }
                 }
@@ -1269,6 +1389,9 @@ impl<'a> Lowerer<'a> {
                     let local_name = spec.alias.as_ref().unwrap_or(&spec.name);
                     self.declare(&local_name.text, Binding::Import);
                 }
+                for (name, binding) in kinds {
+                    self.declare(&name, binding);
+                }
                 out.push(stmt(
                     ir::StmtKind::Local {
                         names,
@@ -1305,7 +1428,7 @@ impl<'a> Lowerer<'a> {
                 let n = &name.path[0];
                 let fpos = self.span_pos(inner.span);
                 let f = self.func(func, false);
-                self.pending_functions.remove(n.text.as_ref());
+                self.pending.remove(n.text.as_ref());
                 let target = name_expr(self.ident(n));
                 let value = ir::Expr::new(ir::ExprKind::Function(Box::new(f)), fpos);
                 let export = self.export_assign(&n.text, name_expr(self.ident(n)), pos);
@@ -1326,6 +1449,12 @@ impl<'a> Lowerer<'a> {
                 }
                 out
             }
+            StmtKind::Class(c) => {
+                self.class_decl(c, &decorate::Decorations::default(), true, inner.span)
+            }
+            StmtKind::Enum(e) => {
+                self.enum_decl(e, &decorate::Decorations::default(), true, inner.span)
+            }
             // `export type`, `export interface`: types only.
             _ => Vec::new(),
         }
@@ -1343,9 +1472,30 @@ impl<'a> Lowerer<'a> {
         }
     }
 
+    /// Assignment to an enum member (E2010).
+    fn check_enum_target(&mut self, t: &Expr) {
+        let obj = match &t.kind {
+            ExprKind::Field { obj, .. } | ExprKind::Index { obj, .. } => obj,
+            _ => return,
+        };
+        if let ExprKind::Name(n) = &obj.kind
+            && matches!(
+                self.lookup(&n.text),
+                Some(Binding::Enum { .. } | Binding::ImportedEnum(_))
+            )
+        {
+            self.error(
+                "E2010",
+                t.span,
+                format!("cannot assign to a member of the enum `{}`", n.text),
+            );
+        }
+    }
+
     fn assignment(&mut self, targets: &[Expr], values: &[Expr], pos: Pos) -> Vec<ir::Stmt> {
         for t in targets {
             self.check_meta_target(t);
+            self.check_enum_target(t);
             if let ExprKind::Name(n) = &t.kind {
                 self.check_assignable(n);
             }
@@ -1397,6 +1547,7 @@ impl<'a> Lowerer<'a> {
     /// contains a call is evaluated once.
     fn compound(&mut self, target: &Expr, op: CompoundOp, value: &Expr, pos: Pos) -> Vec<ir::Stmt> {
         self.check_meta_target(target);
+        self.check_enum_target(target);
         let tpos = self.span_pos(target.span);
         let (write, read) = match &target.kind {
             ExprKind::Name(n) => {
@@ -1564,8 +1715,22 @@ impl<'a> Lowerer<'a> {
             ExprKind::Vararg => K::Vararg,
             ExprKind::Function(f) => K::Function(Box::new(self.func(f, false))),
             ExprKind::Table(fields) => self.table(fields, e.span),
-            ExprKind::Name(n) => match self.lookup(&n.text).cloned() {
+            ExprKind::Name(n) if n.text.as_ref() == "super" && self.is_super(e) => {
+                return self.super_value(n.span, pos);
+            }
+            ExprKind::Name(n) => match self.name_binding(n) {
                 Some(Binding::Const(c)) => return c.to_expr(pos),
+                Some(Binding::DebugOnlyRemoved) => {
+                    self.error(
+                        "E3032",
+                        n.span,
+                        format!(
+                            "`{}` is `@debugOnly`: it can only be called as a statement (the calls are removed from release builds)",
+                            n.text
+                        ),
+                    );
+                    K::Nil
+                }
                 Some(Binding::LazyImport { table, name }) => {
                     return field(name_expr(generated(&table, pos)), &name, pos);
                 }
@@ -1580,8 +1745,8 @@ impl<'a> Lowerer<'a> {
                     );
                     K::Name(self.ident(n))
                 }
-                Some(Binding::Export)
-                    if self.func_depth == 0 && self.pending_functions.contains(n.text.as_ref()) =>
+                Some(Binding::Export | Binding::Class { .. } | Binding::Enum { .. })
+                    if self.func_depth == 0 && self.pending.contains(n.text.as_ref()) =>
                 {
                     self.error(
                         "E1037",
@@ -1595,6 +1760,18 @@ impl<'a> Lowerer<'a> {
                 }
                 _ => K::Name(self.ident(n)),
             },
+            ExprKind::Index { obj, key }
+                if matches!(&key.kind, ExprKind::String(_))
+                    && let ExprKind::String(k) = &key.kind
+                    && let Some(v) = self.enum_member(
+                        obj,
+                        &String::from_utf8_lossy(&k.value),
+                        key.span,
+                        pos,
+                    ) =>
+            {
+                return v;
+            }
             ExprKind::Index { obj, key } => {
                 let mut parts = self.seq(&[obj, key]).into_iter();
                 K::Index {
@@ -1602,11 +1779,20 @@ impl<'a> Lowerer<'a> {
                     key: Box::new(parts.next().expect("key")),
                 }
             }
-            ExprKind::Field { obj, name } => K::Field {
-                obj: Box::new(self.expr(obj)),
-                name: self.ident(name),
-            },
+            ExprKind::Field { obj, name } => {
+                if let Some(v) = self.enum_member(obj, &name.text, name.span, pos) {
+                    return v;
+                }
+                K::Field {
+                    obj: Box::new(self.expr(obj)),
+                    name: self.ident(name),
+                }
+            }
+            ExprKind::Method { obj, name, args } if self.is_super(obj) => {
+                return self.super_method(obj, name, args, pos);
+            }
             ExprKind::Call { callee, args } => {
+                self.check_instantiation(callee);
                 let (callee, args) = self.call_parts(callee, args);
                 K::Call {
                     callee: Box::new(callee),

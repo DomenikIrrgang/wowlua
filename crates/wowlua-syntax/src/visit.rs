@@ -5,9 +5,23 @@ use crate::ast::*;
 /// Calls `f` on `e` and every expression inside it, including those in
 /// nested function bodies.
 pub fn walk_expr<'a>(e: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
+    walk(e, f, true)
+}
+
+/// Like [`walk_expr`], without entering nested function bodies.
+pub fn walk_expr_shallow<'a>(e: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
+    walk(e, f, false)
+}
+
+fn walk<'a>(e: &'a Expr, f: &mut impl FnMut(&'a Expr), deep: bool) {
+    let walk_expr = |x: &'a Expr, f: &mut _| walk(x, f, deep);
     f(e);
     match &e.kind {
-        ExprKind::Function(body) => walk_block(&body.body, f),
+        ExprKind::Function(body) => {
+            if deep {
+                walk_block(&body.body, f)
+            }
+        }
         ExprKind::Table(fields) => {
             for field in fields {
                 match field {
@@ -34,11 +48,11 @@ pub fn walk_expr<'a>(e: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
         ExprKind::Field { obj, .. } | ExprKind::OptField { obj, .. } => walk_expr(obj, f),
         ExprKind::Call { callee, args } | ExprKind::OptCall { callee, args } => {
             walk_expr(callee, f);
-            walk_args(args, f);
+            walk_args(args, f, deep);
         }
         ExprKind::Method { obj, args, .. } | ExprKind::OptMethod { obj, args, .. } => {
             walk_expr(obj, f);
-            walk_args(args, f);
+            walk_args(args, f, deep);
         }
         ExprKind::Paren(x) | ExprKind::Unary { operand: x, .. } => walk_expr(x, f),
         ExprKind::Cast { expr, .. } => walk_expr(expr, f),
@@ -57,10 +71,84 @@ pub fn walk_expr<'a>(e: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
     }
 }
 
-fn walk_args<'a>(args: &'a Args, f: &mut impl FnMut(&'a Expr)) {
+fn walk_args<'a>(args: &'a Args, f: &mut impl FnMut(&'a Expr), deep: bool) {
     match args {
-        Args::Parens { args, .. } => args.iter().for_each(|a| walk_expr(a, f)),
-        Args::Table(e) | Args::String(e) => walk_expr(e, f),
+        Args::Parens { args, .. } => args.iter().for_each(|a| walk(a, f, deep)),
+        Args::Table(e) | Args::String(e) => walk(e, f, deep),
+    }
+}
+
+/// Calls `f` on every statement in `block`, including those in nested
+/// blocks and function bodies.
+pub fn walk_stmts<'a>(block: &'a Block, f: &mut impl FnMut(&'a Stmt)) {
+    for s in &block.stmts {
+        walk_one_stmt(s, f);
+    }
+}
+
+fn walk_one_stmt<'a>(s: &'a Stmt, f: &mut impl FnMut(&'a Stmt)) {
+    f(s);
+    let mut blocks: Vec<&'a Block> = Vec::new();
+    let mut exprs: Vec<&'a Expr> = Vec::new();
+    match &s.kind {
+        StmtKind::Do(b) => blocks.push(b),
+        StmtKind::While { cond, body } | StmtKind::Repeat { body, cond } => {
+            exprs.push(cond);
+            blocks.push(body);
+        }
+        StmtKind::NumericFor {
+            start,
+            limit,
+            step,
+            body,
+            ..
+        } => {
+            exprs.extend([start, limit]);
+            exprs.extend(step.iter());
+            blocks.push(body);
+        }
+        StmtKind::GenericFor { exprs: e, body, .. } => {
+            exprs.extend(e.iter());
+            blocks.push(body);
+        }
+        StmtKind::If {
+            cond,
+            then_block,
+            elseifs,
+            else_block,
+        } => {
+            exprs.push(cond);
+            blocks.push(then_block);
+            for (c, b) in elseifs {
+                exprs.push(c);
+                blocks.push(b);
+            }
+            blocks.extend(else_block.iter());
+        }
+        StmtKind::Function { func, .. } | StmtKind::LocalFunction { func, .. } => {
+            blocks.push(&func.body)
+        }
+        StmtKind::Assign { targets, values } => exprs.extend(targets.iter().chain(values)),
+        StmtKind::Compound { target, value, .. } => exprs.extend([target, value]),
+        StmtKind::Call(e) => exprs.push(e),
+        StmtKind::Local { values, .. } | StmtKind::Return(values) => exprs.extend(values.iter()),
+        StmtKind::LocalDestructure { fields, value, .. } => {
+            exprs.extend(fields.iter().filter_map(|x| x.default.as_ref()));
+            exprs.extend(value.iter());
+        }
+        StmtKind::Const { value, .. } => exprs.extend(value.iter()),
+        StmtKind::Export(inner) => walk_one_stmt(inner, f),
+        _ => {}
+    }
+    for e in exprs {
+        walk_expr_shallow(e, &mut |x| {
+            if let ExprKind::Function(body) = &x.kind {
+                blocks.push(&body.body);
+            }
+        });
+    }
+    for b in blocks {
+        walk_stmts(b, f);
     }
 }
 

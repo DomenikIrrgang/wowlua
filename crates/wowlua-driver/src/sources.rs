@@ -45,6 +45,14 @@ impl Source {
     /// Output path inside the AddOn folder: `src/<path>`, with `.wowlua`
     /// compiled to `.lua` (spec §14.8).
     pub fn output_path(&self) -> String {
+        // Standard-library modules: `wowlua/std/<name>.lua`.
+        if let Some(name) = self
+            .src_rel
+            .strip_prefix(wowlua_sema::STDLIB_PREFIX)
+            .and_then(|n| n.strip_suffix(".wowlua"))
+        {
+            return format!("wowlua/std/{name}.lua");
+        }
         let path = match self.kind {
             SourceKind::Wowlua => {
                 format!(

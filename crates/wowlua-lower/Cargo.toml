@@ -15,6 +15,7 @@ wowlua-luair.workspace = true
 wowlua-span.workspace = true
 wowlua-syntax.workspace = true
 wowlua-sema.workspace = true
+wowlua-runtime.workspace = true
 
 [dev-dependencies]
 mlua.workspace = true
