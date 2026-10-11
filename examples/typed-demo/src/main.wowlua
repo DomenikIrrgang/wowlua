@@ -1,6 +1,7 @@
 -- Typed Demo: the gold earned and spent this session. Type /tdemo.
 import Ledger from "./ledger"
 import Source, format from "./money"
+import info, debug from "wowlua:log"
 
 const KEEP = 5
 
@@ -30,6 +31,14 @@ frame:SetScript("OnEvent", function(_, event: string)
         TypedDemoDB = db
         ledger = Ledger.new(GetMoney(), KEEP)
         print(`Typed Demo: session {db.sessions}, {format(GetMoney())}. Type /tdemo.`)
+        info(`session {db.sessions} started`)
+        -- Every 30 seconds: the session's result so far, in the log (the
+        -- dev window's Log tab; info messages stay out of the chat).
+        C_Timer.NewTicker(30, function()
+            if ledger then
+                info(`net this session: {format(ledger.net)}`)
+            end
+        end)
     elseif event == "MERCHANT_SHOW" then
         source = Source.Vendor
     elseif event == "LOOT_OPENED" then
@@ -37,7 +46,10 @@ frame:SetScript("OnEvent", function(_, event: string)
     elseif event == "MERCHANT_CLOSED" or event == "LOOT_CLOSED" then
         source = Source.Other
     elseif event == "PLAYER_MONEY" and ledger then
-        ledger:update(GetMoney(), GetTime(), source)
+        local change = ledger:update(GetMoney(), GetTime(), source)
+        if change then
+            debug(`money changed by {change.amount} ({change.kind})`)
+        end
     end
 end)
 

@@ -1886,6 +1886,7 @@ function __setMoney(m) money = m end
 local now = 0
 function GetTime() now = now + 1 return now end
 SlashCmdList = {{}}
+C_Timer = {{ NewTicker = function() end }}
 local frames = {{}}
 function CreateFrame()
   local f = {{ events = {{}} }}

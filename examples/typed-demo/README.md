@@ -14,6 +14,10 @@ and spent in a session.
   behind a flavor guard (`WOW_PROJECT_ID == WOW_PROJECT_MAINLINE`); without
   it the build fails with E2030.
 - `src/saved.d.wowlua`: the type of the saved variable `TypedDemoDB`.
+- `wowlua:log`: a session summary every 30 seconds (`C_Timer.NewTicker`) and
+  each money change, shown in the dev window's Log tab (`/wl`).
+- `/tdemo check` passes a value from the WoW API that can be `nil` to a
+  `@checked` function: the runtime check of dev builds catches it.
 
 Build it and copy it into your WoW clients:
 
