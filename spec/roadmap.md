@@ -112,6 +112,8 @@ Notes on the delivered state:
 
 ## M4: Type checker
 
+**Status: done (2026-10-12).**
+
 - Basic mode: inference, narrowing, assignability, arity, globals, classes,
   interfaces, generics, overloads.
 - Declaration files. `wow-api-<flavor>` packages generated per flavor from
@@ -123,6 +125,19 @@ Notes on the delivered state:
 
 **Exit:** the corpus checks in basic mode with zero errors. Sample addons
 check in strict mode with zero errors.
+
+Notes on the delivered state:
+
+- The corpus (108 addons, plain Lua checked with `check.lua`) checks with
+  zero errors; applying all lint fixes to it keeps every addon building.
+  `examples/widget-demo` and `examples/typed-demo` check in strict mode
+  without diagnostics, and CI runs both.
+- The `wow-api` declarations are embedded in the compiler (crate
+  `wowlua-api`) and regenerated with `cargo xtask types fetch` and
+  `cargo xtask types gen` (decisions T83–T85). The `wow-api-<flavor>` types
+  packages and `wowlua types sync` arrive with the package manager.
+- Leniency rules that keep valid Lua free of errors are decision T87;
+  feature detection (existence tests) works in every build mode (T89).
 
 ## M5: Debugging
 

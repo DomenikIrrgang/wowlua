@@ -59,7 +59,7 @@ wowlua publish           # package and upload to every configured addon site
 The specification lives in [`spec/`](spec/README.md). Implementation follows
 the [roadmap](spec/roadmap.md).
 
-**Milestones M0–M3 are done**: the toolchain builds and installs plain Lua
+**Milestones M0–M4 are done**: the toolchain builds and installs plain Lua
 addons and compiles `.wowlua` files with type annotations (erased), syntax
 sugar (`+=`, `continue`, `?.`, `??`, string interpolation, bitwise operators,
 `//`, `const`, default parameters, destructuring), modules
@@ -67,9 +67,12 @@ sugar (`+=`, `continue`, `?.`, `??`, string interpolation, bitwise operators,
 that extend native frame types, enums, core and user decorators,
 `wowlua:meta` with static conditions and `@if`, and per-flavor builds. The
 load order is computed from imports and usage analysis of Lua, `.wowlua` and
-XML files. The type checker and the standard-library modules arrive with M4
-and later; using a feature of a later milestone reports that milestone.
-[`examples/widget-demo`](examples/widget-demo) is a sample addon.
+XML files. The type checker (basic and strict mode, generics, narrowing,
+flavor guards for shared multi-flavor builds) checks against the WoW API of
+every flavor, generated from Blizzard's documentation. The standard-library
+modules arrive with later milestones; using a feature of a later milestone
+reports that milestone. [`examples/widget-demo`](examples/widget-demo) and
+[`examples/typed-demo`](examples/typed-demo) are sample addons.
 
 What works today:
 
@@ -81,7 +84,12 @@ What works today:
   syntax checks, XML reference checks and output validation. `.wowlua` files
   are compiled with their line numbers preserved (in-game errors point at the
   source line); source maps on request.
-- `wowlua check`: the same checks without writing a build.
+- `wowlua check`: type-check without writing a build (`.lua` files too with
+  `check.lua`; `--!strict` or `check.mode` for strict mode).
+- `wowlua lint [--fix]` and `wowlua fix`: unused bindings, shadowing and
+  unreachable code, with machine-applicable fixes.
+- `wowlua types convert <path>`: turn LuaLS `---@` annotations into
+  `.d.wowlua` declarations.
 - `wowlua fmt [--check]`: a StyLua-like, comment-preserving formatter
   (plain Lua syntax for now).
 - `wowlua dev [--link]` / `install` / `uninstall`: sync builds into every WoW
@@ -118,6 +126,10 @@ cargo xtask schema   # regenerate schema/wowlua-<version>.json
 cargo xtask check    # verify generated files (CI)
 cargo xtask corpus fetch && cargo run --release -p xtask -- corpus run
                      # conformance corpus: Lua 5.1 parity, bytecode round trip, formatter
+cargo xtask corpus addons
+                     # adopt, build and type-check the corpus addons (WOWLUA_CORPUS_FIX=1: also apply lint fixes)
+cargo xtask types fetch && cargo xtask types gen
+                     # regenerate the embedded wow-api declarations
 ```
 
 ## License
