@@ -189,7 +189,8 @@ Notes on the delivered state:
   with the BigWigs packager, at pinned commits, packaged by the packager the
   way their CI does (multi-version, `-S`, or game by game with `-g`/`-m`)
   and built by wowlua after `init --from-pkgmeta`, load identical code in
-  every flavor and client locale: Bartender4, BigWigs (12 AddOns),
+  every flavor and client locale and ship the same files (the same bytes
+  outside `src/`, with the packager's line endings and TOC versions): Bartender4, BigWigs (12 AddOns),
   LittleWigs (12), WeakAuras (5), DBM (8, with its voice pack as an external
   addon), Details (8), ElvUI (3), Inventorian (2), Plater, Masque, Mapster,
   Quartz, BugSack, SimulationCraft, AdvancedInterfaceOptions, GatherMate2
