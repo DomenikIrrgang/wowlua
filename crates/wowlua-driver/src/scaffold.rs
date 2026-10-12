@@ -453,6 +453,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     // one order that respects every flavor's order. Variable lines
     // (`Locales\[TextLocale].lua`) take part like files.
     let mut sequences: Vec<Vec<String>> = Vec::new();
+    let mut flavor_sequences: Vec<(String, Vec<String>)> = Vec::new();
     let mut canonical: HashMap<String, String> = HashMap::new();
     let mut file_flavors: IndexMap<String, BTreeSet<String>> = IndexMap::new();
     let mut variable_lines: IndexMap<String, (BTreeSet<String>, Option<Vec<String>>)> =
@@ -502,14 +503,10 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
                 sequence.push(key);
             }
         }
+        flavor_sequences.push((flavor.clone(), sequence.clone()));
         sequences.push(sequence);
     }
-    let (order, conflict) = merge_orders(&sequences);
-    if conflict {
-        report.warnings.push(Diagnostic::plain_warning(
-            "the flavors' TOCs load some files in contradicting orders; `build.load-order` follows the first flavor",
-        ));
-    }
+    let (order, _) = merge_orders(&sequences);
 
     // `.pkgmeta` externals: their files are not the addon's own. TOC lines
     // into them become the dependencies' entry files.
@@ -742,6 +739,27 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
                 }
             }
         }
+    }
+    // Flavors whose TOCs load files in another order than the merged one
+    // keep their own (decision T126).
+    let mut own_orders = Map::new();
+    for (flavor, sequence) in &flavor_sequences {
+        let merged: Vec<&String> = order.iter().filter(|p| sequence.contains(p)).collect();
+        if merged.iter().copied().ne(sequence.iter()) {
+            let entries: Vec<String> = sequence
+                .iter()
+                .filter_map(|p| order_entry(p, &external_paths, &to_move, src_dir))
+                .collect();
+            own_orders.insert(flavor.clone(), json!(entries));
+        }
+    }
+    if !own_orders.is_empty()
+        && let Some(build) = manifest
+            .as_object_mut()
+            .map(|m| m.entry("build").or_insert_with(|| json!({})))
+            .and_then(Value::as_object_mut)
+    {
+        build.insert("flavor-load-order".into(), Value::Object(own_orders));
     }
     if let Some(meta) = &pkgmeta {
         convert_pkgmeta(
@@ -1426,6 +1444,26 @@ fn member_folders(
             (!rel.is_empty() && has_toc).then(|| (rel, to.clone()))
         })
         .collect()
+}
+
+/// A TOC line as a `build.load-order` entry: its path after `init` moved
+/// it, or a library entry's output path.
+fn order_entry(
+    p: &str,
+    external_paths: &HashMap<String, String>,
+    moved: &[String],
+    src_dir: &str,
+) -> Option<String> {
+    if let Some(external) = external_paths.get(p) {
+        Some(external.clone())
+    } else if p.contains('[') {
+        Some(format!("{src_dir}/{p}"))
+    } else {
+        moved
+            .iter()
+            .find(|m| m.eq_ignore_ascii_case(p))
+            .map(|m| format!("{src_dir}/{m}"))
+    }
 }
 
 /// The TOC files of the addon in `dir`: `(path, addon name, suffix)`.
@@ -2365,18 +2403,7 @@ fn adopted_manifest(
     }
     let load_order: Vec<String> = order
         .iter()
-        .filter_map(|p| {
-            if let Some(external) = external_paths.get(p) {
-                Some(external.clone())
-            } else if p.contains('[') {
-                Some(format!("{src_dir}/{p}"))
-            } else {
-                moved
-                    .iter()
-                    .find(|m| m.eq_ignore_ascii_case(p))
-                    .map(|m| format!("{src_dir}/{m}"))
-            }
-        })
+        .filter_map(|p| order_entry(p, external_paths, moved, src_dir))
         .collect();
     if !load_order.is_empty() {
         build.insert("load-order".into(), json!(load_order));

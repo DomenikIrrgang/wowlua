@@ -805,6 +805,20 @@ fn globs(manifest: &Manifest, ctx: &mut Ctx) {
             }
         }
     }
+    for (flavor, list) in &manifest.build.flavor_load_order {
+        let path = build.clone().key("flavor-load-order").key(flavor);
+        check_flavor(flavor, &path, ctx);
+        for (i, pattern) in list.iter().enumerate() {
+            if let Err(error) = globset::Glob::new(pattern) {
+                ctx.error(
+                    "E4002",
+                    &path.clone().index(i),
+                    format!("invalid glob `{pattern}`: {error}"),
+                    "invalid glob",
+                );
+            }
+        }
+    }
     for pattern in manifest.build.flavor_files.keys() {
         if let Err(error) = globset::Glob::new(pattern) {
             ctx.error(

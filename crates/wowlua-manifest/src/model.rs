@@ -442,6 +442,10 @@ pub struct Build {
     pub exclude: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub load_order: Vec<String>,
+    /// Flavors with an order of their own (flavor → like `load-order`),
+    /// written by `wowlua init` when the flavors' TOCs disagree.
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub flavor_load_order: IndexMap<String, Vec<String>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keep: Vec<String>,
     #[serde(default = "Build::default_libs_dir")]
@@ -500,6 +504,7 @@ impl Default for Build {
             assets: Vec::new(),
             exclude: Vec::new(),
             load_order: Vec::new(),
+            flavor_load_order: IndexMap::new(),
             keep: Vec::new(),
             libs_dir: Self::default_libs_dir(),
             flavor_files: IndexMap::new(),

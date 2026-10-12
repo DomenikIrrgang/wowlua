@@ -329,6 +329,7 @@ TOCs.
 | `assets` | glob[] | `[]` | Files copied verbatim, at their path relative to the package root. Must not collide with reserved output names ([Code generation §14.8](codegen.md#148-output-layout)). |
 | `exclude` | glob[] | `[]` | Excluded from sources and assets |
 | `load-order` | (path\|glob)[] | `[]` | Explicit order, written by `wowlua init`: files without load-time dependencies between them keep this order, and it breaks ties in the computed order ([Modules §5.4](../language/05-modules.md#54-load-order)). An entry may also name an embedded library's entry file by its output path (`libs/LibStub/LibStub.lua`, exact match only) to place it ([Package manager §10.5.2](package-manager.md#1052-plain-lua-libraries)) |
+| `flavor-load-order` | {flavor: (path\|glob)[]} | `{}` | A flavor's own order, used instead of `load-order` for that flavor; flavors with different orders get per-flavor TOC files (decision T126) |
 | `keep` | string[] | `[]` | Module IDs never removed by tree-shaking (for plain-Lua consumers, [Optimization §15.1](optimization.md#151-always-on-optimizations)) |
 | `libs-dir` | path | `"libs"` | Output folder for dependencies. Migrated projects may use e.g. `"Libs"`. |
 | `variable-files` | `VariableFile[]` | `[]` | TOC file lines with `[Game]`, `[Family]` or `[TextLocale]` variables (§9.7.1) |

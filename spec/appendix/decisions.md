@@ -174,6 +174,7 @@ open for review.
 | T123 | `@project-version@` is the packager's value: the tag on `HEAD`, else `git describe --tags --abbrev=7` (alpha tags excluded); in library files, the tag of a `tag` external or the short hash of a branch (the packager clones those with `--depth 1`). `build.version` and the TOC `Version` stay wowlua's **(user, M6)** | Version strings inside converted addons (in-game version checks) match the packager's builds. |
 | T124 | With `compat.packager-keywords`, text files of the addon and of embedded libraries (`.lua`, `.xml`, `.toc`, `.md`, `.txt`) get LF line endings, like `packager -u`; files matching `compat.plain-copy` (from `.pkgmeta` `plain-copy`) stay unprocessed; `init` sets `packager-keywords` for every converted `.pkgmeta` project **(user, M6)** | Many addons and libraries are committed with CRLF; the packager always normalizes. |
 | T125 | A `build.variable-files` entry may be a plain path with `locales`: a file loaded only for some client locales; `init` keeps TOC lines with `[AllowLoadTextLocale …]` that way **(M6, Masque test)** | Masque and others load one locale file per client locale without `[TextLocale]`. |
+| T126 | `build.flavor-load-order` gives a flavor its own load order; `init` writes it for flavors whose TOC order contradicts the merged one, and those flavors get per-flavor TOCs in their own order **(user, M6, Details test)** | Addons with per-flavor TOCs keep each flavor's exact order. |
 
 ## Standard library
 

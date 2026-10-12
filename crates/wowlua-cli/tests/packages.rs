@@ -1294,3 +1294,48 @@ fn compat_pkgmeta_keeps_pkgmeta_as_the_source() {
         .failure()
         .stderr(predicate::str::contains("error[E4005]"));
 }
+
+#[test]
+fn flavors_keep_their_own_toc_order() {
+    let e = env();
+    write(
+        &e.project,
+        &[
+            (
+                "MyAddon.toc",
+                "## Interface: 120100\n## Title: My Addon\n## Version: 1.0.0\nA.lua\nB.lua\nC.lua\n",
+            ),
+            (
+                "MyAddon_Vanilla.toc",
+                "## Interface: 11509\n## Title: My Addon\n## Version: 1.0.0\nA.lua\nC.lua\nB.lua\n",
+            ),
+            ("A.lua", "A = 1\n"),
+            ("B.lua", "B = 1\n"),
+            ("C.lua", "C = 1\n"),
+        ],
+    );
+    wowlua(&e.project, &e.home).arg("init").assert().success();
+    let m: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(e.project.join("wowlua.json")).unwrap()).unwrap();
+    assert_eq!(
+        m["build"]["flavor-load-order"]["vanilla"],
+        serde_json::json!(["src/A.lua", "src/C.lua", "src/B.lua"]),
+        "{m}"
+    );
+    wowlua(&e.project, &e.home)
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("W4304").not());
+    let out = e.project.join("dist/release/MyAddon");
+    let mainline = fs::read_to_string(out.join("MyAddon_Mainline.toc")).unwrap();
+    let vanilla = fs::read_to_string(out.join("MyAddon_Classic.toc")).unwrap();
+    assert!(
+        mainline.ends_with("src\\A.lua\nsrc\\B.lua\nsrc\\C.lua\n"),
+        "{mainline}"
+    );
+    assert!(
+        vanilla.ends_with("src\\A.lua\nsrc\\C.lua\nsrc\\B.lua\n"),
+        "{vanilla}"
+    );
+}

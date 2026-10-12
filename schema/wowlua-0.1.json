@@ -827,6 +827,16 @@
             "type": "string"
           }
         },
+        "flavor-load-order": {
+          "description": "Flavors with an order of their own (flavor → like `load-order`),\nwritten by `wowlua init` when the flavors' TOCs disagree.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
         "keep": {
           "type": "array",
           "items": {

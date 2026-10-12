@@ -412,9 +412,21 @@ pub fn build(
         (!matching.is_empty()).then(|| matching.into_iter().cloned().collect())
     };
 
-    // Where each listed source loads by `build.load-order` (sources an XML
-    // file loads load in its place).
-    let listed = listed_positions(&files, &build_cfg.load_order, &xml);
+    // Flavors with an order of their own (`build.flavor-load-order`,
+    // decision T126).
+    let own_orders: BTreeMap<String, Vec<String>> = build_cfg
+        .flavor_load_order
+        .iter()
+        .filter_map(|(f, list)| {
+            let id = wowlua_flavors::table().resolve(f)?.id.clone();
+            flavors.contains(&id).then(|| (id, list.clone()))
+        })
+        .collect();
+    let order_of = |flavor: Option<&str>| -> &[String] {
+        flavor
+            .and_then(|f| own_orders.get(f))
+            .unwrap_or(&build_cfg.load_order)
+    };
     let loaded_by: Vec<Option<usize>> = {
         let index: HashMap<&str, usize> = files
             .iter()
@@ -670,7 +682,7 @@ pub fn build(
             &profile,
             std::sync::Arc::new(meta.clone()),
             wowlua_sema::loadorder::Layout {
-                listed: &listed,
+                listed: &listed_positions(&files, order_of(flavor.as_deref()), &xml),
                 active: &active,
                 loaded_by: &loaded_by,
             },
@@ -892,12 +904,13 @@ pub fn build(
             });
         }
     }
+    let unordered = (!own_orders.is_empty()).then(|| toc_items.clone());
     order_by_load_order(&mut toc_items, &build_cfg.load_order);
     let flavor_edges: Vec<FlavorEdges> = builds
         .iter()
         .map(|b| (b.flavor.clone(), b.output.edges.clone()))
         .collect();
-    let rel_orders = order_by_dependencies(
+    let mut rel_orders = order_by_dependencies(
         session,
         &mut toc_items,
         &edges,
@@ -906,6 +919,41 @@ pub fn build(
         &xml,
         &build_cfg.load_order,
     );
+    // Conflicting edges force per-flavor orders (W4304); explicit ones are
+    // wanted.
+    let conflicting = rel_orders.is_some();
+    if let Some(base) = unordered {
+        let mut orders = rel_orders.take().unwrap_or_default();
+        let default: Vec<String> = toc_items.iter().map(|i| i.rel.clone()).collect();
+        for f in &flavors {
+            let rels = match own_orders.get(f) {
+                Some(order) => {
+                    let mut items = base.clone();
+                    order_by_load_order(&mut items, order);
+                    let own_edges = flavor_edges
+                        .iter()
+                        .find(|(fl, _)| fl.as_deref() == Some(f.as_str()))
+                        .map(|(_, e)| e.clone())
+                        .unwrap_or_else(|| edges.clone());
+                    let _ = order_by_dependencies(
+                        session,
+                        &mut items,
+                        &own_edges,
+                        &edge_reasons,
+                        &[(Some(f.clone()), own_edges.clone())],
+                        &xml,
+                        order,
+                    );
+                    items.iter().map(|i| i.rel.clone()).collect()
+                }
+                None => orders.get(f).cloned().unwrap_or_else(|| default.clone()),
+            };
+            orders.insert(f.clone(), rels);
+        }
+        // Identical orders need no per-flavor TOCs.
+        let first = orders.values().next().cloned();
+        rel_orders = (!orders.values().all(|o| Some(o) == first.as_ref())).then_some(orders);
+    }
     // XML files that load per-flavor code are emitted per flavor too.
     let mut xml_per_flavor: BTreeSet<String> = BTreeSet::new();
     loop {
@@ -963,7 +1011,7 @@ pub fn build(
         .collect();
     // Flavors that need incompatible orders get per-flavor TOC files, each
     // in its own order (spec §5.4.6).
-    if rel_orders.is_some() && build_cfg.toc_layout == TocLayout::Auto {
+    if conflicting && build_cfg.toc_layout == TocLayout::Auto {
         session.push(
             Diagnostic::warning(
                 "W4304",

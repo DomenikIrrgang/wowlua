@@ -143,10 +143,11 @@ available.
    moved ([Manifest §9.7.1](manifest.md#971-file-variables)).
 4. Records the existing file order in `build.load-order`. Each flavor's order
    comes from the TOC its client reads (decision T53). The orders are merged
-   topologically, so files keep their relative order in every flavor. A
-   conflict (A before B in one flavor, B before A in another) is reported as a
-   warning, and the conflicting files keep the order in which they first
-   appear. The compiler keeps this order
+   topologically, so files keep their relative order in every flavor. When
+   the flavors conflict (A before B in one flavor, B before A in another), the
+   merged order follows the first flavor, and each flavor whose TOC order
+   differs keeps its own in `build.flavor-load-order` (decision T126). The
+   compiler keeps these orders
    wherever load-order analysis finds no reason to change it
    ([Modules §5.4](../language/05-modules.md#54-load-order)), so the build
    loads files as before.
