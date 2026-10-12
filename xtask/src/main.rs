@@ -58,8 +58,18 @@ fn main() -> Result<()> {
             // The single-game packager runs of a project's CI workflows:
             // `<game> <flavor> <project file or ->` per line.
             let dir = PathBuf::from(std::env::args().nth(2).unwrap_or_else(|| ".".into()));
+            // `split` alone when the runs make TOCs per game (`-S`).
+            let single = wowlua_driver::pkgmeta::single_game_runs(&dir);
+            if single.is_empty()
+                && wowlua_driver::pkgmeta::workflow_runs(&dir)
+                    .iter()
+                    .any(|r| r.split)
+            {
+                println!("split");
+                return Ok(());
+            }
             let mut seen = std::collections::BTreeSet::new();
-            for run in wowlua_driver::pkgmeta::single_game_runs(&dir) {
+            for run in single {
                 let Some(game) = run.game else { continue };
                 let Some(flavor) = wowlua_driver::keywords::interface_type_flavor(&game) else {
                     continue;

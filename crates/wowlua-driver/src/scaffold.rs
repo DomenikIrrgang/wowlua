@@ -353,7 +353,11 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     let mut all_flavors: Vec<String> = Vec::new();
     // `## Interface-<Type>:` lines make TOCs per game only in the
     // packager's split and single-game builds.
-    let per_game_tocs = pkgmeta.as_ref().is_some_and(|m| m.per_game || m.split);
+    let per_game_tocs = match &pkgmeta {
+        Some(m) if m.per_game => Some(true),
+        Some(m) if m.split => Some(false),
+        _ => None,
+    };
     let (tocs, texts): (Vec<_>, Vec<_>) = toc_views(&tocs, pkgmeta.is_some(), per_game_tocs)?
         .into_iter()
         .unzip();
@@ -1942,7 +1946,7 @@ fn find_tocs(
 fn toc_views(
     tocs: &[(PathBuf, String, Option<String>)],
     packaged: bool,
-    per_game: bool,
+    per_game: Option<bool>,
 ) -> Result<Vec<((PathBuf, String, Option<String>), String)>, Diagnostic> {
     let table = wowlua_flavors::table();
     let mut out = Vec::new();
@@ -1957,7 +1961,11 @@ fn toc_views(
             out.push((entry.clone(), text));
             continue;
         }
-        let typed: Vec<(&'static str, String)> = if suffix.is_none() && per_game {
+        // `Some(true)`: single-game builds; `Some(false)`: split builds,
+        // which make no TOC for `Interface-Titan`.
+        let typed: Vec<(&'static str, String)> = if suffix.is_none()
+            && let Some(single) = per_game
+        {
             wowlua_toc::parse(&text)
                 .directives
                 .iter()
@@ -1967,6 +1975,9 @@ fn toc_views(
                         .get(..10)
                         .filter(|k| k.eq_ignore_ascii_case("Interface-"))
                         .map(|_| &d.key[10..])?;
+                    if !single && kind.eq_ignore_ascii_case("titan") {
+                        return None;
+                    }
                     Some((
                         crate::keywords::interface_type_flavor(kind)?,
                         d.value.trim().to_string(),

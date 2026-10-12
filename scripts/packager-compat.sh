@@ -47,9 +47,12 @@ fi
 # <file>`) are compared game by game; the others in one multi-version run.
 # The packager: no upload (-d), no zip (-z), no localization (-l, which needs
 # the CurseForge API), Unix line endings (-u).
+# Projects released with `-S` get TOCs per game from `## Interface-<Game>:`.
 RUNS=$(cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-runs "$WORK/addon")
-if [ -z "$RUNS" ]; then
-  (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -z -l -u -r "$WORK/release")
+if [ -z "$RUNS" ] || [ "$RUNS" = split ]; then
+  split=()
+  [ "$RUNS" = split ] && split=(-S)
+  (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -z -l -u "${split[@]}" -r "$WORK/release")
   (cd "$WORK/wowlua" && "$WOWLUA" build --release)
   # Every AddOn folder the packager made (move-folders makes several).
   cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-diff \
