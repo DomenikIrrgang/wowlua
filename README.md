@@ -77,8 +77,10 @@ window (`/wl`) with watches and a table inspector; `wowlua:debug`,
 The package manager fetches git, SVN, path and archive dependencies into a
 global cache, locks them in `wowlua.lock`, embeds Lua libraries (only the
 files the game loads) and compiles wowlua libraries into the addon;
-workspaces group addon suites, and `.pkgmeta` projects migrate with
-`wowlua init --from-pkgmeta`.
+workspaces group addon suites, and BigWigs packager projects migrate with
+`wowlua init --from-pkgmeta`: their builds match the packager's (same
+loaded code, same shipped files, line endings and TOC versions), checked
+on 36 addons including BigWigs, DBM, WeakAuras, ElvUI and Details.
 The other standard-library modules arrive with later milestones; using a
 feature of a later milestone reports that milestone. [`examples/widget-demo`](examples/widget-demo) and
 [`examples/typed-demo`](examples/typed-demo) are sample addons.
@@ -88,8 +90,9 @@ What works today:
 - `wowlua new <path>`: create a package (`--kind`, `--flavors`, `--ci github`).
 - `wowlua init [--from-pkgmeta]`: adopt an existing addon. Its TOC(s) become
   `wowlua.json`, Lua/XML files move into `src/` and in-game paths to them are
-  updated; `.pkgmeta` externals become dependencies (an Ace3 addon such as
-  Bartender4 then builds the same code as the BigWigs packager).
+  updated; `.pkgmeta` externals become dependencies, and the build matches
+  the BigWigs packager's (`compat` settings, read from `.pkgmeta` and the
+  project's CI workflows).
 - `wowlua add` / `remove` / `update` / `fetch` / `tree` / `outdated` /
   `cache clean`: manage dependencies (`git`, `svn`, `path`, `archive`;
   the registry comes later). `-p <package>` selects a workspace member.
