@@ -95,7 +95,15 @@ MyAddon-1.4.2.zip
 ```
 
 - The zip's top-level folder is the AddOn folder name. With
-  `publish.bundle-addons` in a workspace, a zip contains several AddOn folders.
+  `publish.bundle-addons` in a workspace root, the root's targets get one zip
+  with several AddOn folders (decision T160): all addon members, or the listed
+  ones. The first listed member (with `true`: the first default member) is the
+  main one: the zip is `<Main>-<its build.version>…zip`, and it gives the
+  changelog and the release name; CurseForge relations are every bundled
+  member's. The root's targets are then not shared with the members, whose own
+  targets keep their own zips. `package` and `publish` at the root load the
+  bundled members even when they are not default members; with `-p` or inside
+  a member, there is no bundle.
 - Source maps, tests, dev files and `dist/.cache` are never included.
 - Zip entries use `/`, are sorted, and have timestamps normalized (to
   `SOURCE_DATE_EPOCH` or the commit time), so packages are reproducible.

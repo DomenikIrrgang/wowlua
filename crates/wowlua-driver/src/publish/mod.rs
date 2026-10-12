@@ -372,20 +372,25 @@ fn maps_dir(build: &crate::build::BuildOutput) -> Option<PathBuf> {
     dir.is_dir().then_some(dir)
 }
 
-/// The manifest targets of the project a zip was built from.
-fn target_of<'a>(projects: &'a [Project], zip: &Zip, name: &str) -> Option<&'a Target> {
-    let addon = zip.addons.first()?;
-    let project = projects
+/// The project a zip was built from (a bundle's main member).
+fn project_of<'a>(projects: &'a [Project], zip: &Zip) -> &'a Project {
+    projects
         .iter()
-        .find(|p| p.addon_name() == *addon)
-        .unwrap_or(&projects[0]);
-    project
-        .manifest
-        .manifest
-        .publish
-        .as_ref()?
-        .targets
-        .get(name)
+        .find(|p| zip.addons.first() == Some(&p.addon_name()))
+        .unwrap_or(&projects[0])
+}
+
+/// The publish settings a zip's targets come from: its project's, or the
+/// workspace root's for a bundle.
+fn publish_of(
+    projects: &[Project],
+    zip: &Zip,
+    repo: &Path,
+) -> Option<wowlua_manifest::model::Publish> {
+    if zip.bundle {
+        return crate::package::bundle_publish(repo).map(|(p, _)| p);
+    }
+    project_of(projects, zip).manifest.manifest.publish.clone()
 }
 
 /// A native changelog (§11.2.1) for a target.
@@ -524,7 +529,7 @@ fn publish_native(
     // Upload jobs: one per (target, zip); GitHub one per target.
     struct Job<'a> {
         name: String,
-        target: &'a Target,
+        target: Target,
         token: String,
         zips: Vec<&'a Zip>,
         changelog: Option<Changelog>,
@@ -533,24 +538,31 @@ fn publish_native(
     }
     let mut jobs: Vec<Job> = Vec::new();
     let mut missing_token = false;
-    let mut names: Vec<String> = Vec::new();
+    // Targets by their owner (a project, or the bundle) and name: members
+    // may name their targets alike.
+    let owner = |z: &Zip| (z.bundle, z.addons.first().cloned().unwrap_or_default());
+    let mut keys: Vec<((bool, String), String)> = Vec::new();
     for zip in &packaged.zips {
         for name in &zip.targets {
-            if !names.contains(name) {
-                names.push(name.clone());
+            let key = (owner(zip), name.clone());
+            if !keys.contains(&key) {
+                keys.push(key);
             }
         }
     }
-    for name in &names {
+    for (key, name) in &keys {
         let zips: Vec<&Zip> = packaged
             .zips
             .iter()
-            .filter(|z| z.targets.contains(name))
+            .filter(|z| owner(z) == *key && z.targets.contains(name))
             .collect();
-        let Some(target) = target_of(projects, zips[0], name) else {
+        let Some(publish) = publish_of(projects, zips[0], &packaged.repo) else {
             continue;
         };
-        let token = match tokens.of(target) {
+        let Some(target) = publish.targets.get(name).cloned() else {
+            continue;
+        };
+        let token = match tokens.of(&target) {
             Ok(t) => t,
             Err(var) => {
                 session.push(
@@ -567,18 +579,9 @@ fn publish_native(
                 String::new()
             }
         };
-        let project = projects
-            .iter()
-            .find(|p| zips[0].addons.first() == Some(&p.addon_name()))
-            .unwrap_or(&projects[0]);
-        let changelog = native_changelog(session, project, target, &zips[0].version);
-        let archive_maps = project
-            .manifest
-            .manifest
-            .publish
-            .as_ref()
-            .and_then(|p| p.archive_maps)
-            .unwrap_or(true);
+        let project = project_of(projects, zips[0]);
+        let changelog = native_changelog(session, project, &target, &zips[0].version);
+        let archive_maps = publish.archive_maps.unwrap_or(true);
         if target.target_type == TargetType::Github {
             jobs.push(Job {
                 name: name.clone(),
@@ -591,12 +594,24 @@ fn publish_native(
             });
         } else {
             for zip in zips {
+                // Every AddOn's relations (a bundle has several).
+                let mut relations: Vec<(String, String)> = Vec::new();
+                for p in projects
+                    .iter()
+                    .filter(|p| zip.addons.contains(&p.addon_name()))
+                {
+                    for r in native_relations(p, &target, zip.nolib) {
+                        if !relations.contains(&r) {
+                            relations.push(r);
+                        }
+                    }
+                }
                 jobs.push(Job {
                     name: name.clone(),
-                    target,
+                    target: target.clone(),
                     token: token.clone(),
                     zips: vec![zip],
-                    relations: native_relations(project, target, zip.nolib),
+                    relations,
                     changelog: changelog.clone(),
                     archive_maps,
                 });
@@ -608,13 +623,13 @@ fn publish_native(
     if missing_token && !request.dry_run {
         return;
     }
-    let title = &packaged.title;
+    let title = |z: &Zip| crate::packaging::plain_title(&project_of(projects, z).manifest.title());
     let release = packaged.release;
     let run = |job: &Job| -> Outcome {
         let upload = Upload {
             http,
             name: &job.name,
-            target: job.target,
+            target: &job.target,
             token: &job.token,
             zip: job.zips[0],
             release,
@@ -635,7 +650,7 @@ fn publish_native(
                 let c = job
                     .changelog
                     .as_ref()
-                    .map(|c| wowi_changelog(c, job.target));
+                    .map(|c| wowi_changelog(c, &job.target));
                 sites::wowinterface(&upload, tagged, c.as_deref())
             }
             TargetType::Github => {
@@ -665,7 +680,7 @@ fn publish_native(
                 let entries = job.target.release_json.unwrap_or(true).then(|| {
                     job.zips
                         .iter()
-                        .map(|z| sites::release_entry(title, &z.version, z))
+                        .map(|z| sites::release_entry(&title(z), &z.version, z))
                         .collect()
                 });
                 let gh = GithubRelease {

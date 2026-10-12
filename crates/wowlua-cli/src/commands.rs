@@ -27,6 +27,7 @@ fn load_options(out: &Output, global: &GlobalArgs) -> LoadOptions {
         update: None,
         precise: None,
         status: Some(out.status_sink()),
+        bundled: false,
     }
 }
 
@@ -187,8 +188,11 @@ pub fn package(
 ) -> bool {
     let started = Instant::now();
     let mut session = Session::new();
-    let Some(projects) = wowlua_driver::load_projects(&mut session, &load_options(out, global))
-    else {
+    let options = LoadOptions {
+        bundled: true,
+        ..load_options(out, global)
+    };
+    let Some(projects) = wowlua_driver::load_projects(&mut session, &options) else {
         out.flush(&mut session);
         return false;
     };
@@ -240,6 +244,7 @@ pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> b
     // A publish never changes the lockfile (§11.1.1).
     let mut options = load_options(out, global);
     options.locked = true;
+    options.bundled = true;
     let Some(projects) = wowlua_driver::load_projects(&mut session, &options) else {
         out.flush(&mut session);
         return false;

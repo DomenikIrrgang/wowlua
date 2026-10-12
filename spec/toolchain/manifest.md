@@ -503,7 +503,7 @@ Semantics in [Publishing](publishing.md).
 | `changelog-format` | `"markdown"` `"text"` `"html"` | `"markdown"` | Format of the changelog source |
 | `release-type` | `"auto"` `"release"` `"beta"` `"alpha"` | `"auto"` | |
 | `archive-maps` | bool | `true` | Archive source maps of published builds |
-| `bundle-addons` | bool \| string[] | `false` | Workspaces: one zip with all (or the listed) member addons |
+| `bundle-addons` | bool \| string[] | `false` | Workspace roots: the root's targets publish one zip with all (or the listed) member addons, named after the main one (the first listed, or the first default member) with its version and changelog ([Publishing §11.2](publishing.md#112-packaging), decision T160) |
 | `targets` | `{name: Target}` | `{}` | Publish targets, freely named |
 
 Target objects:
@@ -577,7 +577,7 @@ Only in a workspace root manifest, which may omit `package`:
 | `exclude` | Globs excluded from `members` |
 | `external-addons` | AddOns fetched and shipped as they are: AddOn folder name → source (`git`, `svn`, `path` or `archive`, with `subdir` / `strip-prefix`). Locked like dependencies; `build` and `install` of the whole workspace build them into `dist/<profile>/<Name>/` with all their files and their own TOC, with the packager's processing when the root sets `compat.packager-keywords` (decision T127) |
 | `build.out` | The single output root for all members (default `"dist"`). A member setting its own `build.out` is error E4316. |
-| `profiles`, `minify-levels`, `check`, `fmt`, `config`, `publish` | Shared defaults. A member's values are merged over them (objects deeply, arrays and scalars replace). Publish targets merge by target name; a member can turn a shared target off with `"enabled": false`. When the root is a package itself, its `publish` is its own and not shared (decision T121). |
+| `profiles`, `minify-levels`, `check`, `fmt`, `config`, `publish` | Shared defaults. A member's values are merged over them (objects deeply, arrays and scalars replace). Publish targets merge by target name; a member can turn a shared target off with `"enabled": false`. When the root is a package itself, its `publish` is its own and not shared (decision T121); with `bundle-addons`, its targets are the bundle's and not shared (decision T160). |
 
 Within a workspace, a dependency whose name matches a member library resolves
 to that member automatically, without a `path` entry.

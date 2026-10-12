@@ -56,7 +56,17 @@ pub fn with_defaults(member: &Value, root: &Value) -> Value {
             continue;
         }
         if let Some(v) = root.get(*key) {
-            merged.insert((*key).to_string(), v.clone());
+            let mut v = v.clone();
+            // A root bundling its members keeps its targets for the bundle.
+            if *key == "publish"
+                && let Some(p) = v.as_object_mut()
+                && p.get("bundle-addons")
+                    .is_some_and(|b| b != &Value::Bool(false))
+            {
+                p.shift_remove("targets");
+                p.shift_remove("bundle-addons");
+            }
+            merged.insert((*key).to_string(), v);
         }
     }
     let mut merged = Value::Object(merged);

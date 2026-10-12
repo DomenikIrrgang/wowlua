@@ -66,6 +66,9 @@ pub struct Zip {
     /// The package's version string (`build.version`, or the packager's
     /// `@project-version@`).
     pub version: String,
+    /// Bundled by the workspace root's `publish.bundle-addons` (its targets
+    /// upload it).
+    pub bundle: bool,
 }
 
 /// The result of packaging.
@@ -352,6 +355,13 @@ fn packager_templates(archive_name: Option<&str>) -> (String, String) {
     }
 }
 
+/// An enabled publish target selected by `--target`.
+fn selected(name: &String, t: &Target, request: &PackageRequest) -> bool {
+    t.enabled
+        && t.target_type != TargetType::Registry
+        && (request.targets.is_empty() || request.targets.contains(name))
+}
+
 /// The enabled publish targets of a manifest selected by `--target`.
 fn selected_targets(project: &Project, request: &PackageRequest) -> Vec<(String, Target)> {
     project
@@ -360,11 +370,7 @@ fn selected_targets(project: &Project, request: &PackageRequest) -> Vec<(String,
         .publish
         .iter()
         .flat_map(|p| p.targets.iter())
-        .filter(|(name, t)| {
-            t.enabled
-                && t.target_type != TargetType::Registry
-                && (request.targets.is_empty() || request.targets.contains(name))
-        })
+        .filter(|(name, t)| selected(name, t, request))
         .map(|(n, t)| (n.clone(), t.clone()))
         .collect()
 }
@@ -393,6 +399,122 @@ pub fn package(
     }
 }
 
+/// AddOns packaged together: one project, or the members bundled by the
+/// workspace root's `publish.bundle-addons` (the main one first).
+struct Unit<'a> {
+    members: Vec<&'a Project>,
+    targets: Vec<(String, Target)>,
+    bundle: bool,
+}
+
+/// The workspace root's `publish`, when it bundles members.
+pub(crate) fn bundle_publish(
+    repo: &Path,
+) -> Option<(wowlua_manifest::model::Publish, Vec<String>)> {
+    let text = std::fs::read_to_string(repo.join(wowlua_manifest::MANIFEST_FILE)).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+    value.get("workspace")?;
+    let publish: wowlua_manifest::model::Publish =
+        serde_json::from_value(value.get("publish")?.clone()).ok()?;
+    let default_members = value
+        .pointer("/workspace/default-members")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+    match publish.bundle_addons {
+        None | Some(wowlua_manifest::model::BundleAddons::All(false)) => None,
+        Some(_) => Some((publish, default_members)),
+    }
+}
+
+fn package_units<'a>(
+    session: &mut Session,
+    projects: &'a [Project],
+    request: &PackageRequest,
+    repo: &Path,
+) -> Option<Vec<Unit<'a>>> {
+    let addons: Vec<&Project> = projects
+        .iter()
+        .filter(|p| p.kind() == wowlua_manifest::model::PackageKind::Addon)
+        .collect();
+    let mut units = Vec::new();
+    let bundled: Vec<&Project> = addons.iter().copied().filter(|p| p.bundled).collect();
+    // The bundle, when the command runs at the workspace root.
+    if !bundled.is_empty()
+        && let Some((publish, default_members)) = bundle_publish(repo)
+    {
+        let same =
+            |a: &Path, b: &Path| std::fs::canonicalize(a).ok() == std::fs::canonicalize(b).ok();
+        let mut members: Vec<&Project> = Vec::new();
+        match &publish.bundle_addons {
+            Some(wowlua_manifest::model::BundleAddons::Listed(names)) => {
+                for name in names {
+                    match bundled.iter().find(|p| {
+                        p.addon_name() == *name
+                            || p.manifest.package().is_some_and(|k| k.name == *name)
+                    }) {
+                        Some(p) => members.push(*p),
+                        None => {
+                            session.push(
+                                Diagnostic::error(
+                                    "E4006",
+                                    format!(
+                                        "`publish.bundle-addons` names `{name}`, which is no addon of the workspace"
+                                    ),
+                                )
+                                .with_path(repo.join(wowlua_manifest::MANIFEST_FILE)),
+                            );
+                            return None;
+                        }
+                    }
+                }
+            }
+            _ => {
+                members = bundled.clone();
+                // The main AddOn: the first default member.
+                if let Some(i) = default_members.iter().find_map(|d| {
+                    members
+                        .iter()
+                        .position(|p| same(&p.manifest.root, &repo.join(d)))
+                }) {
+                    let main = members.remove(i);
+                    members.insert(0, main);
+                }
+            }
+        }
+        members.dedup_by(|a, b| std::ptr::eq(*a, *b));
+        let targets: Vec<(String, Target)> = publish
+            .targets
+            .iter()
+            .filter(|(name, t)| selected(name, t, request))
+            .map(|(n, t)| (n.clone(), t.clone()))
+            .collect();
+        if !targets.is_empty() {
+            units.push(Unit {
+                members,
+                targets,
+                bundle: true,
+            });
+        }
+    }
+    for project in addons {
+        // A root package's targets are the bundle's.
+        let root_package =
+            project.workspace_root.as_deref() == Some(project.manifest.root.as_path());
+        if !project.selected || (!bundled.is_empty() && root_package) {
+            continue;
+        }
+        let targets = selected_targets(project, request);
+        if !targets.is_empty() {
+            units.push(Unit {
+                members: vec![project],
+                targets,
+                bundle: false,
+            });
+        }
+    }
+    Some(units)
+}
+
 fn package_native(
     session: &mut Session,
     projects: &[Project],
@@ -404,17 +526,10 @@ fn package_native(
     let time = zip_time(repo);
     let mut zips = Vec::new();
     let mut release_setting = None;
-    for project in projects {
-        if project.kind() != wowlua_manifest::model::PackageKind::Addon {
-            continue;
-        }
-        let targets = selected_targets(project, request);
-        if targets.is_empty() {
-            continue;
-        }
+    for unit in package_units(session, projects, request, repo)? {
+        let main = unit.members[0];
         release_setting = release_setting.or_else(|| {
-            project
-                .manifest
+            main.manifest
                 .manifest
                 .publish
                 .as_ref()
@@ -422,7 +537,7 @@ fn package_native(
         });
         // Targets with equal settings share a build.
         let mut configs: Vec<(Config, Vec<String>)> = Vec::new();
-        for (name, target) in &targets {
+        for (name, target) in &unit.targets {
             let c = config_of(target);
             match configs.iter_mut().find(|(x, _)| *x == c) {
                 Some((_, names)) => names.push(name.clone()),
@@ -430,10 +545,10 @@ fn package_native(
             }
         }
         let several = configs.len() > 1;
-        let out_root = out_root(project);
+        let out_root = out_root(main);
         for (config, names) in &configs {
             let flavors = request.flavors.clone().or_else(|| config.flavors.clone());
-            let all = project.manifest.flavors.clone();
+            let all = main.manifest.flavors.clone();
             let groups: Vec<Option<Vec<String>>> = if config.split_flavors {
                 flavors
                     .clone()
@@ -449,19 +564,50 @@ fn package_native(
                     Some(g) if config.split_flavors => format!("{}-{}", names[0], g[0]),
                     _ => names[0].clone(),
                 };
-                let addon = project.addon_name();
-                let out_dir = out_root.join("targets").join(&dir_name).join(&addon);
-                let build_request = BuildRequest {
-                    profile: config.profile.clone(),
-                    flavors: group.clone(),
-                    out_dir: Some(out_dir.clone()),
-                    write: true,
-                    nolib: config.nolib,
-                    minify: config.minify.clone(),
-                    bundle: config.bundle,
-                };
-                let build = crate::build(session, project, &build_request)?;
-                let mut file_name = format!("{addon}-{}", build.version);
+                let mut builds = Vec::new();
+                let mut folders = Vec::new();
+                let mut license: Vec<(String, PathBuf)> = Vec::new();
+                for project in &unit.members {
+                    let addon = project.addon_name();
+                    let out_dir = out_root.join("targets").join(&dir_name).join(&addon);
+                    let build_request = BuildRequest {
+                        profile: config.profile.clone(),
+                        flavors: group.clone(),
+                        out_dir: Some(out_dir.clone()),
+                        write: true,
+                        nolib: config.nolib,
+                        minify: config.minify.clone(),
+                        bundle: config.bundle,
+                    };
+                    let build = crate::build(session, project, &build_request)?;
+                    // The package's own license files ship next to the AddOn.
+                    license.extend(
+                        std::fs::read_dir(&project.manifest.root)
+                            .into_iter()
+                            .flatten()
+                            .flatten()
+                            .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+                            .filter(|e| {
+                                let n = e.file_name().to_string_lossy().to_ascii_lowercase();
+                                n == "license" || n.starts_with("license.")
+                            })
+                            .filter(|e| {
+                                !build
+                                    .files
+                                    .contains_key(&e.file_name().to_string_lossy().into_owned())
+                            })
+                            .map(|e| {
+                                (
+                                    format!("{addon}/{}", e.file_name().to_string_lossy()),
+                                    e.path(),
+                                )
+                            }),
+                    );
+                    folders.push((addon, out_dir));
+                    builds.push(build);
+                }
+                let version = builds[0].version.clone();
+                let mut file_name = format!("{}-{version}", builds[0].addon_name);
                 if several {
                     file_name.push_str(&format!("-{}", names[0]));
                 }
@@ -475,57 +621,36 @@ fn package_native(
                 }
                 file_name.push_str(".zip");
                 let path = out_root.join("packages").join(&file_name);
-                // The package's own license files ship next to the AddOn.
-                let license: Vec<(String, PathBuf)> = std::fs::read_dir(&project.manifest.root)
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                    .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
-                    .filter(|e| {
-                        let n = e.file_name().to_string_lossy().to_ascii_lowercase();
-                        n == "license" || n.starts_with("license.")
-                    })
-                    .filter(|e| {
-                        !build
-                            .files
-                            .contains_key(&e.file_name().to_string_lossy().into_owned())
-                    })
-                    .map(|e| {
-                        (
-                            format!("{addon}/{}", e.file_name().to_string_lossy()),
-                            e.path(),
-                        )
-                    })
-                    .collect();
-                if let Err(e) =
-                    write_zip(&path, &[(addon.clone(), out_dir.clone())], &license, time)
-                {
+                if let Err(e) = write_zip(&path, &folders, &license, time) {
                     session.push(
                         Diagnostic::plain_error(format!("cannot write `{}`: {e}", path.display()))
                             .with_path(&path),
                     );
                     return None;
                 }
-                let interfaces = build
-                    .flavors
-                    .iter()
-                    .map(|f| {
-                        (
-                            f.clone(),
-                            project.interfaces.get(f).cloned().unwrap_or_default(),
-                        )
-                    })
-                    .collect();
+                // Every member's interface numbers per flavor.
+                let mut interfaces: BTreeMap<String, Vec<u32>> = BTreeMap::new();
+                for (project, build) in unit.members.iter().zip(&builds) {
+                    for f in &build.flavors {
+                        let list = interfaces.entry(f.clone()).or_default();
+                        for i in project.interfaces.get(f).into_iter().flatten() {
+                            if !list.contains(i) {
+                                list.push(*i);
+                            }
+                        }
+                    }
+                }
                 zips.push(Zip {
                     path,
                     file_name,
-                    label: build.version.clone(),
+                    label: version.clone(),
                     targets: names.clone(),
                     nolib: config.nolib,
                     interfaces,
-                    addons: vec![addon.clone()],
-                    version: build.version.clone(),
-                    builds: vec![build],
+                    addons: builds.iter().map(|b| b.addon_name.clone()).collect(),
+                    version,
+                    builds,
+                    bundle: unit.bundle,
                 });
             }
         }
@@ -724,6 +849,7 @@ fn package_like_the_packager(
                 addons: builds.iter().map(|b| b.addon_name.clone()).collect(),
                 version: info.version.clone(),
                 builds,
+                bundle: false,
             });
         }
     }

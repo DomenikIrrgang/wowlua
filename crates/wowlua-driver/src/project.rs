@@ -32,6 +32,9 @@ pub struct LoadOptions {
     pub precise: Option<(String, String)>,
     /// Progress lines (`Cloning …`, `Fetching …`).
     pub status: Option<Status>,
+    /// `package` / `publish` at a workspace root: also load the members the
+    /// root's `publish.bundle-addons` bundles.
+    pub bundled: bool,
 }
 
 /// A progress callback: status word and message.
@@ -64,6 +67,10 @@ pub struct Project {
     pub workspace_addons: Vec<WorkspaceAddon>,
     /// The workspace's external addons, fetched (`workspace.external-addons`).
     pub external_addons: Vec<ExternalAddon>,
+    /// Selected by the command (not only loaded for a bundle).
+    pub selected: bool,
+    /// Bundled into the workspace root's zip (`publish.bundle-addons`).
+    pub bundled: bool,
 }
 
 /// An AddOn fetched and shipped as it is (`workspace.external-addons`).
@@ -397,6 +404,8 @@ fn load_single(session: &mut Session, options: &LoadOptions, path: &Path) -> Opt
         workspace_root: None,
         workspace_addons: Vec::new(),
         external_addons: Vec::new(),
+        selected: true,
+        bundled: false,
     })
 }
 
@@ -655,9 +664,40 @@ fn load_workspace(
         (0..manifests.len()).collect()
     };
 
+    // At the root, `package` and `publish` also load the bundled members.
+    let bundled: Vec<usize> = if options.bundled && options.package.is_none() && inside.is_none() {
+        let addon = |m: &LoadedManifest| m.package().is_some_and(|p| p.kind == PackageKind::Addon);
+        match root_manifest
+            .manifest
+            .publish
+            .as_ref()
+            .and_then(|p| p.bundle_addons.as_ref())
+        {
+            Some(wowlua_manifest::model::BundleAddons::All(true)) => manifests
+                .iter()
+                .enumerate()
+                .filter(|(_, m)| addon(m))
+                .map(|(i, _)| i)
+                .collect(),
+            Some(wowlua_manifest::model::BundleAddons::Listed(names)) => manifests
+                .iter()
+                .enumerate()
+                .filter(|(_, m)| {
+                    addon(m)
+                        && names.iter().any(|n| {
+                            *n == m.addon_name() || m.package().is_some_and(|p| p.name == *n)
+                        })
+                })
+                .map(|(i, _)| i)
+                .collect(),
+            _ => Vec::new(),
+        }
+    } else {
+        Vec::new()
+    };
     let mut projects = Vec::new();
     for (i, manifest) in manifests.into_iter().enumerate() {
-        if !selected.contains(&i) {
+        if !selected.contains(&i) && !bundled.contains(&i) {
             continue;
         }
         let interfaces = interfaces_of(&manifest, &lock);
@@ -672,6 +712,8 @@ fn load_workspace(
             workspace_addons: addons.iter().filter(|a| a.name != own).cloned().collect(),
             external_addons: external_addons.clone(),
             manifest,
+            selected: selected.contains(&i),
+            bundled: bundled.contains(&i),
         });
     }
     Some(projects)

@@ -699,3 +699,99 @@ fn login_saves_tokens_for_publish() {
         .failure()
         .stderr(predicate::str::contains("no token given"));
 }
+
+#[test]
+fn workspaces_bundle_addons_and_keep_member_targets_apart() {
+    let e = env();
+    let mock = Mock::start(sites(false));
+    let member = |name: &str, extra: serde_json::Value| {
+        let mut m = serde_json::json!({
+            "package": { "name": name.to_lowercase(), "version": "1.0.0" },
+            "addon": { "name": name, "title": name },
+            "flavors": { "standard": { "interface": [120100] } },
+        });
+        if let serde_json::Value::Object(map) = extra {
+            for (k, v) in map {
+                m[k] = v;
+            }
+        }
+        serde_json::to_string_pretty(&m).unwrap()
+    };
+    let options = member(
+        "Options",
+        serde_json::json!({ "publish": { "targets": {
+            "cf": { "type": "curseforge", "project-id": 2, "api-url": mock.url }
+        } } }),
+    );
+    let root = serde_json::json!({
+        "workspace": { "members": ["addons/*"], "default-members": ["addons/core"] },
+        "publish": { "bundle-addons": true, "targets": {
+            "cf": { "type": "curseforge", "project-id": 1, "api-url": mock.url }
+        } }
+    });
+    write(
+        &e.project,
+        &[
+            ("wowlua.json", &serde_json::to_string_pretty(&root).unwrap()),
+            (
+                "addons/core/wowlua.json",
+                &member("Core", serde_json::json!({})),
+            ),
+            ("addons/core/src/main.lua", "CoreLoaded = true\n"),
+            ("addons/core/CHANGELOG.md", "## 1.0.0\n- core\n"),
+            ("addons/options/wowlua.json", &options),
+            ("addons/options/src/main.lua", "OptionsLoaded = true\n"),
+            ("addons/options/CHANGELOG.md", "## 1.0.0\n- options\n"),
+        ],
+    );
+    wowlua(&e.project, &e.home).arg("fetch").assert().success();
+    git(&e.project, &["init", "-q", "-b", "main"]);
+    commit_all(&e.project, Some("v1.0.0"));
+    let out = tokens(&mut wowlua(&e.project, &e.home))
+        .arg("publish")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let log = String::from_utf8_lossy(&out.stderr).into_owned();
+    let bundle = mock
+        .find("POST", "/api/projects/1/upload-file")
+        .pop()
+        .unwrap();
+    assert!(bundle.text().contains("filename=\"Core-1.0.0.zip\""));
+    assert_eq!(
+        bundle.json_field("metadata")["changelog"],
+        "## 1.0.0\n- core\n"
+    );
+    // A root publish works on the default members: Options' own target
+    // publishes with `-p`, and the bundle then stays put.
+    assert!(
+        mock.find("POST", "/api/projects/2/upload-file").is_empty(),
+        "{log}"
+    );
+    tokens(&mut wowlua(&e.project, &e.home))
+        .args(["publish", "-p", "options"])
+        .assert()
+        .success();
+    let own = mock
+        .find("POST", "/api/projects/2/upload-file")
+        .pop()
+        .unwrap();
+    assert!(own.text().contains("filename=\"Options-1.0.0.zip\""));
+    assert_eq!(mock.find("POST", "/api/projects/1/upload-file").len(), 3);
+    let file = fs::File::open(e.project.join("dist/packages/Core-1.0.0.zip")).unwrap();
+    let mut zip = zip::ZipArchive::new(file).unwrap();
+    let folders: std::collections::BTreeSet<String> = (0..zip.len())
+        .map(|i| {
+            zip.by_index(i)
+                .unwrap()
+                .name()
+                .unwrap()
+                .split('/')
+                .next()
+                .unwrap()
+                .to_string()
+        })
+        .collect();
+    assert_eq!(folders.into_iter().collect::<Vec<_>>(), ["Core", "Options"]);
+}
