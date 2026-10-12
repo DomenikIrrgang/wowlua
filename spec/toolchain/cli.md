@@ -183,7 +183,14 @@ available.
      `package-as` becomes `addon.name`, `manual-changelog` becomes
      `publish.changelog`.
    - `move-folders` entries that move whole addon folders become workspace
-     members. Other `move-folders` uses are reported with warning W4332.
+     members, adopted the same way; the externals and `ignore` entries inside
+     such a folder become the member's. Other `move-folders` uses are
+     reported with warning W4332.
+   - TOCs are read as the packager packages them: `#@do-not-package@`,
+     `#@debug@` and `#@alpha@` blocks are dropped and `#@non-debug@` /
+     `#@non-alpha@` blocks uncommented.
+   - Network operations (clones, fetches, SVN, downloads) are retried up to
+     three times, like the packager does.
    - `enable-nolib-creation: yes` adds a GitHub target with `"nolib": true`.
    - The relation lists (`required-dependencies`, `optional-dependencies`,
      `embedded-libraries`, `tools-used`) become CurseForge relations.

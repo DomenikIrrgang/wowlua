@@ -6,8 +6,8 @@
 //! - `cargo xtask check`: fail if generated files are out of date (used in CI).
 //! - `cargo xtask corpus fetch|run [dir]`: the conformance corpus.
 //! - `cargo xtask types fetch|gen [dir]`: the embedded wow-api declarations.
-//! - `cargo xtask packager-diff <packager dir> <wowlua dir> <wowlua.json>`:
-//!   the M6 exit check against the BigWigs packager.
+//! - `cargo xtask packager-diff <release dir> <wowlua project>`: the M6
+//!   exit check against the BigWigs packager (every AddOn folder).
 
 use anyhow::{Context, Result, bail};
 use std::fs;
@@ -58,8 +58,9 @@ fn main() -> Result<()> {
             let args: Vec<PathBuf> = std::env::args().skip(2).map(PathBuf::from).collect();
             match args.as_slice() {
                 [packager, wowlua, manifest] => packager_diff::run(packager, wowlua, manifest),
+                [release, project] => packager_diff::run_all(release, project),
                 _ => bail!(
-                    "usage: cargo xtask packager-diff <packager dir> <wowlua dir> <wowlua.json>"
+                    "usage: cargo xtask packager-diff <release dir> <wowlua project> | <packager dir> <wowlua dir> <wowlua.json>"
                 ),
             }
         }

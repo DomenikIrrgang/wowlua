@@ -185,10 +185,11 @@ Notes on the delivered state:
 - Sources: git (bare clones, exported per commit), SVN (system `svn`,
   pinned to a revision), path and archive (`https`, `file://`); the registry
   waits for its server (T104), and the wow-api types stay embedded.
-- The exit check (`packager-compat` workflow, T119): Bartender4 at a pinned
-  commit, packaged by the BigWigs packager and built by wowlua after
-  `init --from-pkgmeta`, loads the same 124 files in the same order for all
-  five flavors, all 127 loaded files byte-identical. The corpus still adopts
+- The exit check (`packager-compat` workflow, T119): Bartender4 and BigWigs
+  at pinned commits, packaged by the BigWigs packager and built by wowlua
+  after `init --from-pkgmeta`, load the same files in the same order for
+  every flavor, byte-identical (Bartender4: 124 files in five flavors;
+  BigWigs: twelve AddOns through `move-folders`). The corpus still adopts
   and builds all 108 addons.
 - wowlua `library` packages compile into the addon (tree-shaken modules,
   their own check settings and meta, T110–T112); workspaces share one lock

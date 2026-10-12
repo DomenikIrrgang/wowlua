@@ -12,7 +12,7 @@ pub mod fix;
 pub mod format;
 mod fsutil;
 pub mod install;
-mod keywords;
+pub mod keywords;
 pub mod lockfile;
 mod luacheck;
 mod meta;

@@ -451,6 +451,7 @@ pub fn init(out: &Output, from_toc: Option<PathBuf>, from_pkgmeta: bool) -> bool
         dir: cwd(),
         from_toc: from_toc.map(|t| cwd().join(t)),
         from_pkgmeta,
+        inherited: None,
     };
     match scaffold::init_package(&request) {
         Ok(report) => {

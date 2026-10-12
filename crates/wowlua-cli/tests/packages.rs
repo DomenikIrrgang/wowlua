@@ -1070,6 +1070,11 @@ fn init_from_pkgmeta_converts_externals() {
         &[("LibClassic.lua", "-- MIT License\n")],
         "v1",
     );
+    let opt = git_repo(
+        &e.root.join("LibOpt"),
+        &[("LibOpt.lua", "-- MIT License\n")],
+        "v1",
+    );
     let addon = &e.project;
     write(
         addon,
@@ -1077,12 +1082,12 @@ fn init_from_pkgmeta_converts_externals() {
             (
                 ".pkgmeta",
                 &format!(
-                    "package-as: MyAddon\nexternals:\n  Libs/LibStub:\n    url: {stub}\n    tag: 1.0\n  Libs/CallbackHandler-1.0:\n    url: {cbh}\n    path: CallbackHandler-1.0\n  Libs/LibClassic: {classic}\n  Libs/Hg: https://hg.wowace.com/wow/x/mainline\nignore:\n  - Docs\nmanual-changelog: CHANGELOG.md\nenable-nolib-creation: yes\nmove-folders:\n  MyAddon/Options: MyAddon_Options\n  MyAddon/Media: MyAddon_Media\n"
+                    "package-as: MyAddon\nexternals:\n  Libs/LibStub:\n    url: {stub}\n    tag: 1.0\n  Libs/CallbackHandler-1.0:\n    url: {cbh}\n    path: CallbackHandler-1.0\n  Libs/LibClassic: {classic}\n  Libs/Hg: https://hg.wowace.com/wow/x/mainline\n  Options/Libs/LibOpt: {opt}\nignore:\n  - Docs\nmanual-changelog: CHANGELOG.md\nenable-nolib-creation: yes\nmove-folders:\n  MyAddon/Options: MyAddon_Options\n  MyAddon/Media: MyAddon_Media\n"
                 ),
             ),
             (
                 "MyAddon.toc",
-                "## Interface: 120100, 11509\n## Title: My Addon\n## Version: @project-version@\n## X-Curse-Project-ID: 99\n\n#@no-lib-strip@\nLibs\\LibStub\\LibStub.lua\n#@end-no-lib-strip@\nembeds.xml\nLibs\\LibClassic\\LibClassic.lua [AllowLoadGameType vanilla]\nCore.lua\n",
+                "## Interface: 120100, 11509\n## Title: My Addon\n## Version: @project-version@\n## X-Curse-Project-ID: 99\n\n#@no-lib-strip@\nLibs\\LibStub\\LibStub.lua\n#@end-no-lib-strip@\n#@non-debug@\n# embeds.xml\n#@end-non-debug@\n#@do-not-package@\nOptions\\Options.lua\n#@end-do-not-package@\nLibs\\LibClassic\\LibClassic.lua [AllowLoadGameType vanilla]\nCore.lua\n",
             ),
             (
                 "embeds.xml",
@@ -1096,7 +1101,7 @@ fn init_from_pkgmeta_converts_externals() {
             ("Media/logo.tga", "TGA"),
             (
                 "Options/MyAddon_Options.toc",
-                "## Interface: 120100\n## Title: My Addon Options\n## LoadOnDemand: 1\n## Dependencies: MyAddon\nOptions.lua\n",
+                "## Interface: 120100\n## Title: My Addon Options\n## LoadOnDemand: 1\n## Dependencies: MyAddon\nLibs\\LibOpt\\LibOpt.lua\nOptions.lua\n",
             ),
             ("Options/Options.lua", "-- options\n"),
         ],
@@ -1106,7 +1111,7 @@ fn init_from_pkgmeta_converts_externals() {
         .assert()
         .success()
         .stderr(predicate::str::contains(
-            "Converted 3 externals from .pkgmeta",
+            "Converted 4 externals from .pkgmeta",
         ))
         .stderr(predicate::str::contains(
             "Adopted Options as a workspace member",
@@ -1142,7 +1147,18 @@ fn init_from_pkgmeta_converts_externals() {
     assert!(m["publish"]["targets"].get("github").is_none());
     assert_eq!(m["compat"]["packager-keywords"], true);
     assert_eq!(m["workspace"]["members"], serde_json::json!(["Options"]));
-    assert!(addon.join("Options/wowlua.json").exists());
+    // The external inside the moved folder belongs to the member.
+    let options: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(addon.join("Options/wowlua.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        options["dependencies"]["libopt"]["install-path"], "LibOpt",
+        "{options}"
+    );
+    assert!(m["dependencies"].get("libopt").is_none());
+    // The packaged TOC: `#@non-debug@` lines count, `#@do-not-package@` ones do not.
+    assert!(!addon.join("src/Options/Options.lua").exists());
+    assert!(addon.join("Options/src/Options.lua").exists());
     let lock = lock(addon);
     assert_eq!(
         lock["flavor-table"]["interfaces"]["standard"],
@@ -1198,10 +1214,11 @@ fn init_from_pkgmeta_converts_externals() {
         .args(["-p", "my-addon-options", "build"])
         .assert()
         .success();
+    let options_toc =
+        fs::read_to_string(addon.join("dist/dev/MyAddon_Options/MyAddon_Options.toc")).unwrap();
     assert!(
-        addon
-            .join("dist/dev/MyAddon_Options/MyAddon_Options.toc")
-            .exists()
+        options_toc.contains("Libs\\LibOpt\\LibOpt.lua\nsrc\\Options.lua"),
+        "{options_toc}"
     );
 }
 

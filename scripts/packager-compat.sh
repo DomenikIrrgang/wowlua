@@ -33,7 +33,6 @@ cp -R "$WORK/addon" "$WORK/wowlua"
 # wowlua.
 (cd "$WORK/wowlua" && "$WOWLUA" init --from-pkgmeta && "$WOWLUA" build --release)
 
-NAME=$(cd "$WORK/release" && find . -mindepth 1 -maxdepth 1 -type d ! -name '.*' | head -n 1)
-NAME=${NAME#./}
+# Every AddOn folder the packager made (move-folders makes several).
 cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-diff \
-  "$WORK/release/$NAME" "$WORK/wowlua/dist/release/$NAME" "$WORK/wowlua/wowlua.json"
+  "$WORK/release" "$WORK/wowlua"

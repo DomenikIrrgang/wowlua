@@ -101,6 +101,23 @@ fn run(mut command: Command, what: &str) -> Result<String, FetchError> {
     }
 }
 
+/// `run` for network operations: up to three attempts (like the
+/// packager's `retry`), because repository hosts fail transiently.
+fn run_net(url: &str, make: impl Fn() -> Command, what: &str) -> Result<String, FetchError> {
+    let local = url.starts_with("file:") || !url.contains("://");
+    let mut delay = std::time::Duration::from_secs(2);
+    for attempt in 1.. {
+        match run(make(), what) {
+            Err(e) if !local && attempt < 3 && !e.message.contains("is not installed") => {
+                std::thread::sleep(delay);
+                delay *= 2;
+            }
+            result => return result,
+        }
+    }
+    unreachable!("the loop returns")
+}
+
 fn git(dir: Option<&Path>) -> Command {
     let mut c = Command::new("git");
     // Exports keep the repository's bytes on every platform (checksums and
@@ -135,17 +152,23 @@ impl Fetcher {
             self.cache.touch(&dir);
             if update && !self.offline && self.fetched.borrow_mut().insert(url.to_string()) {
                 self.say("Updating", url);
-                let mut c = git(Some(&dir));
-                c.args([
-                    "fetch",
-                    "--quiet",
-                    "--force",
-                    "--prune",
-                    "--tags",
-                    "origin",
-                    "+refs/heads/*:refs/heads/*",
-                ]);
-                run(c, &format!("cannot update `{url}`"))?;
+                run_net(
+                    url,
+                    || {
+                        let mut c = git(Some(&dir));
+                        c.args([
+                            "fetch",
+                            "--quiet",
+                            "--force",
+                            "--prune",
+                            "--tags",
+                            "origin",
+                            "+refs/heads/*:refs/heads/*",
+                        ]);
+                        c
+                    },
+                    &format!("cannot update `{url}`"),
+                )?;
             }
             return Ok(dir);
         }
@@ -154,9 +177,13 @@ impl Fetcher {
         }
         self.say("Cloning", url);
         let staged = cache::staging(&dir).map_err(|e| FetchError::plain(e.to_string()))?;
-        let mut c = git(None);
-        c.args(["clone", "--bare", "--quiet", url]).arg(&staged);
-        if let Err(e) = run(c, &format!("cannot clone `{url}`")) {
+        let clone = || {
+            let _ = cache::remove(&staged);
+            let mut c = git(None);
+            c.args(["clone", "--bare", "--quiet", url]).arg(&staged);
+            c
+        };
+        if let Err(e) = run_net(url, clone, &format!("cannot clone `{url}`")) {
             let _ = cache::remove(&staged);
             return Err(FetchError {
                 code: Some("E4102"),
@@ -302,19 +329,36 @@ impl Fetcher {
             return Err(FetchError::offline(&format!("submodules of `{url}`")));
         }
         self.say("Cloning", &format!("{url} (with submodules)"));
-        let mut c = git(None);
-        c.args(["clone", "--quiet", "--no-checkout", url]).arg(dest);
-        run(c, &format!("cannot clone `{url}`"))?;
+        run_net(
+            url,
+            || {
+                let _ = cache::remove(dest);
+                let mut c = git(None);
+                c.args(["clone", "--quiet", "--no-checkout", url]).arg(dest);
+                c
+            },
+            &format!("cannot clone `{url}`"),
+        )?;
         let mut c = git(None);
         c.arg("-C")
             .arg(dest)
             .args(["checkout", "--quiet", "--detach", commit]);
         run(c, &format!("cannot check out {commit}"))?;
-        let mut c = Command::new("git");
-        c.arg("-C")
-            .arg(dest)
-            .args(["submodule", "update", "--quiet", "--init", "--recursive"]);
-        run(c, &format!("cannot fetch the submodules of `{url}`"))?;
+        run_net(
+            url,
+            || {
+                let mut c = git(None);
+                c.arg("-C").arg(dest).args([
+                    "submodule",
+                    "update",
+                    "--quiet",
+                    "--init",
+                    "--recursive",
+                ]);
+                c
+            },
+            &format!("cannot fetch the submodules of `{url}`"),
+        )?;
         // Version-control metadata is not part of the package.
         for entry in walkdir::WalkDir::new(dest).into_iter().flatten() {
             if entry.file_name() == ".git" {
@@ -354,15 +398,18 @@ impl Fetcher {
             )));
         }
         self.say("Updating", url);
-        let mut c = Command::new("svn");
-        c.args([
-            "info",
-            "--non-interactive",
-            "--show-item",
-            "last-changed-revision",
-            url,
-        ]);
-        let text = run(c, &format!("cannot read `{url}`")).map_err(|e| FetchError {
+        let info = || {
+            let mut c = Command::new("svn");
+            c.args([
+                "info",
+                "--non-interactive",
+                "--show-item",
+                "last-changed-revision",
+                url,
+            ]);
+            c
+        };
+        let text = run_net(url, info, &format!("cannot read `{url}`")).map_err(|e| FetchError {
             code: Some("E4102"),
             ..e
         })?;
@@ -395,13 +442,17 @@ impl Fetcher {
         }
         self.say("Fetching", &format!("{url}@{rev}"));
         let staged = cache::staging(&target).map_err(|e| FetchError::plain(e.to_string()))?;
-        let mut c = Command::new("svn");
-        c.args(["export", "--quiet", "--non-interactive"]);
-        if !externals {
-            c.arg("--ignore-externals");
-        }
-        c.arg(format!("{url}@{rev}")).arg(&staged);
-        if let Err(e) = run(c, &format!("cannot export `{url}`@{rev}")) {
+        let export = || {
+            let _ = cache::remove(&staged);
+            let mut c = Command::new("svn");
+            c.args(["export", "--quiet", "--non-interactive"]);
+            if !externals {
+                c.arg("--ignore-externals");
+            }
+            c.arg(format!("{url}@{rev}")).arg(&staged);
+            c
+        };
+        if let Err(e) = run_net(url, export, &format!("cannot export `{url}`@{rev}")) {
             let _ = cache::remove(&staged);
             return Err(FetchError {
                 code: Some("E4102"),
@@ -512,9 +563,24 @@ impl Fetcher {
             )));
         }
         self.say("Downloading", url);
-        let response = ureq::get(url)
-            .call()
-            .map_err(|e| FetchError::coded("E4102", format!("cannot download `{url}`: {e}")))?;
+        let mut delay = std::time::Duration::from_secs(2);
+        let mut attempt = 1;
+        let response = loop {
+            match ureq::get(url).call() {
+                Ok(r) => break r,
+                Err(_) if attempt < 3 => {
+                    std::thread::sleep(delay);
+                    delay *= 2;
+                    attempt += 1;
+                }
+                Err(e) => {
+                    return Err(FetchError::coded(
+                        "E4102",
+                        format!("cannot download `{url}`: {e}"),
+                    ));
+                }
+            }
+        };
         response
             .into_body()
             .with_config()

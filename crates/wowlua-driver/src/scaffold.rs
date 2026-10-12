@@ -236,6 +236,9 @@ pub struct InitRequest {
     /// `--from-pkgmeta`: require a `.pkgmeta` (it is converted whenever it
     /// exists).
     pub from_pkgmeta: bool,
+    /// For a folder `move-folders` makes a workspace member: the parts of
+    /// the parent's `.pkgmeta` inside it, relative to it.
+    pub inherited: Option<crate::pkgmeta::PkgMeta>,
 }
 
 /// What `wowlua init` did.
@@ -267,7 +270,15 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         )));
     }
     let tocs = find_tocs(dir, request.from_toc.as_deref())?;
-    let pkgmeta = crate::pkgmeta::read(dir)?;
+    let pkgmeta = match &request.inherited {
+        Some(m) => Some(m.clone()),
+        None => crate::pkgmeta::read(dir)?,
+    };
+    // Folders `move-folders` turns into addons of their own.
+    let members: Vec<(String, String)> = pkgmeta
+        .as_ref()
+        .map(|m| member_folders(dir, m, &tocs[0].1))
+        .unwrap_or_default();
     if request.from_pkgmeta && pkgmeta.is_none() {
         return Err(Diagnostic::plain_error(
             "`--from-pkgmeta` was given, but there is no `.pkgmeta` or `pkgmeta.yaml`",
@@ -293,6 +304,12 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         let text = std::fs::read_to_string(path).map_err(|e| {
             Diagnostic::plain_error(format!("cannot read `{}`: {e}", path.display()))
         })?;
+        // A packager project's TOC as the packager packages it.
+        let text = if pkgmeta.is_some() {
+            crate::keywords::packaged_toc(&text)
+        } else {
+            text
+        };
         let toc = wowlua_toc::parse(&text);
         let meaning = suffix.as_deref().and_then(|s| table.suffix_meaning(s));
         let mut candidates: Vec<String> = Vec::new();
@@ -469,7 +486,16 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     let externals: Vec<crate::pkgmeta::External> = pkgmeta
         .as_ref()
         .map(|m| m.externals.clone())
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| {
+            !members.iter().any(|(rel, _)| {
+                e.dir
+                    .to_ascii_lowercase()
+                    .starts_with(&format!("{}/", rel.to_ascii_lowercase()))
+            })
+        })
+        .collect();
     let external_of = |path: &str| -> Option<usize> {
         let lower = path.to_ascii_lowercase();
         externals
@@ -651,6 +677,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             &all_flavors,
             &to_move,
             src_dir,
+            &members,
             &mut report,
         );
     }
@@ -807,6 +834,7 @@ fn convert_pkgmeta(
     all_flavors: &[String],
     moved: &[String],
     src_dir: &str,
+    member_dirs: &[(String, String)],
     report: &mut InitReport,
 ) {
     let Some(object) = manifest.as_object_mut() else {
@@ -1029,42 +1057,48 @@ fn convert_pkgmeta(
     if publish.is_empty() {
         object.shift_remove("publish");
     }
-    // `move-folders`: whole addon folders become workspace members.
-    let prefix = format!(
-        "{}/",
-        meta.package_as
-            .clone()
-            .unwrap_or_else(|| report.addon_name.clone())
-    );
+    // `move-folders`: whole addon folders become workspace members, with
+    // the externals and `ignore` entries inside them.
     let mut members = Vec::new();
     for (from, to) in &meta.move_folders {
-        let rel = from
-            .strip_prefix(&prefix)
-            .unwrap_or(from)
-            .trim_matches('/')
-            .to_string();
-        let sub = dir.join(&rel);
-        let is_addon = std::fs::read_dir(&sub).ok().is_some_and(|entries| {
-            entries.flatten().any(|e| {
-                let n = e.file_name().to_string_lossy().to_ascii_lowercase();
-                n.ends_with(".toc") && n.starts_with(&to.to_ascii_lowercase())
-            })
-        });
-        if !is_addon || rel.is_empty() {
+        let Some((rel, _)) = member_dirs.iter().find(|(_, t)| t == to) else {
             report.warnings.push(Diagnostic::warning(
                 "W4332",
                 format!("`move-folders` entry `{from}: {to}` does not move a whole addon folder; not converted"),
             ));
             continue;
-        }
+        };
+        let prefix = format!("{}/", rel.to_ascii_lowercase());
+        let inside = |p: &str| p.to_ascii_lowercase().starts_with(&prefix);
+        let inherited = crate::pkgmeta::PkgMeta {
+            file: meta.file.clone(),
+            externals: meta
+                .externals
+                .iter()
+                .filter(|e| inside(&e.dir))
+                .map(|e| crate::pkgmeta::External {
+                    dir: e.dir[prefix.len()..].to_string(),
+                    ..e.clone()
+                })
+                .collect(),
+            ignore: meta
+                .ignore
+                .iter()
+                .filter(|p| inside(p))
+                .map(|p| p[prefix.len()..].to_string())
+                .collect(),
+            ..Default::default()
+        };
         match init_package(&InitRequest {
-            dir: sub.clone(),
+            dir: dir.join(rel),
             from_toc: None,
             from_pkgmeta: false,
+            inherited: Some(inherited),
         }) {
             Ok(member) => {
                 report.warnings.extend(member.warnings);
-                members.push(rel);
+                report.dependencies += member.dependencies;
+                members.push(rel.clone());
             }
             Err(d) => report.warnings.push(Diagnostic::warning(
                 "W4332",
@@ -1076,6 +1110,38 @@ fn convert_pkgmeta(
         object.insert("workspace".into(), json!({ "members": members }));
         report.members = members;
     }
+}
+
+/// The `move-folders` entries that move a whole addon folder: (folder
+/// relative to `dir`, addon name).
+fn member_folders(
+    dir: &Path,
+    meta: &crate::pkgmeta::PkgMeta,
+    addon: &str,
+) -> Vec<(String, String)> {
+    let prefix = format!(
+        "{}/",
+        meta.package_as.clone().unwrap_or_else(|| addon.to_string())
+    );
+    meta.move_folders
+        .iter()
+        .filter_map(|(from, to)| {
+            let rel = from
+                .strip_prefix(&prefix)
+                .unwrap_or(from)
+                .trim_matches('/')
+                .to_string();
+            let has_toc = std::fs::read_dir(dir.join(&rel))
+                .ok()
+                .is_some_and(|entries| {
+                    entries.flatten().any(|e| {
+                        let n = e.file_name().to_string_lossy().to_ascii_lowercase();
+                        n.ends_with(".toc") && n.starts_with(&to.to_ascii_lowercase())
+                    })
+                });
+            (!rel.is_empty() && has_toc).then(|| (rel, to.clone()))
+        })
+        .collect()
 }
 
 /// The TOC files of the addon in `dir`: `(path, addon name, suffix)`.

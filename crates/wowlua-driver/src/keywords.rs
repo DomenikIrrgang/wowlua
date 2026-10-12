@@ -288,6 +288,59 @@ pub fn apply_flavor(text: &str, flavor: &str, xml: bool) -> String {
     out
 }
 
+/// The TOC a packaged (release) build of the packager uses: `#@do-not-package@`
+/// blocks removed, `#@debug@` and `#@alpha@` blocks removed and their
+/// `#@non-…@` blocks uncommented (the packager's `toc_filter`).
+pub fn packaged_toc(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    // Which block a line is in: (keyword, negated).
+    let mut block: Option<(&str, bool)> = None;
+    for line in text.split_inclusive('\n') {
+        let trimmed = line.trim();
+        let marker = |kw: &str| -> Option<(bool, bool)> {
+            // (start, negated)
+            for (tag, start, neg) in [
+                (format!("#@{kw}@"), true, false),
+                (format!("#@end-{kw}@"), false, false),
+                (format!("#@non-{kw}@"), true, true),
+                (format!("#@end-non-{kw}@"), false, true),
+            ] {
+                if trimmed.starts_with(&tag) {
+                    return Some((start, neg));
+                }
+            }
+            None
+        };
+        let mut handled = false;
+        for kw in ["do-not-package", "debug", "alpha"] {
+            if let Some((start, neg)) = marker(kw) {
+                block = if start { Some((kw, neg)) } else { None };
+                handled = true;
+                break;
+            }
+        }
+        if handled {
+            continue;
+        }
+        match block {
+            // Inactive blocks are dropped.
+            Some((_, false)) => {}
+            // `non-` blocks are uncommented.
+            Some((_, true)) => {
+                let rest = line.trim_start();
+                match rest.strip_prefix('#') {
+                    Some(r) if r.starts_with([' ', '\t']) => {
+                        out.push_str(r.trim_start_matches([' ', '\t']))
+                    }
+                    _ => out.push_str(line),
+                }
+            }
+            None => out.push_str(line),
+        }
+    }
+    out
+}
+
 /// `@localization(…)@` is not supported (W4030).
 pub fn uses_localization(text: &str) -> bool {
     text.contains("@localization(")
@@ -340,6 +393,11 @@ mod tests {
         assert_eq!(
             apply_library(libxml, &info, true),
             "<Ui>\n<!--@no-lib-strip@\n<Script file=\"LibStub.lua\"/>\n@end-no-lib-strip@-->\n</Ui>\n"
+        );
+        let toc = "A.lua\n#@non-debug@\n# Libs\\X.lua\n#@end-non-debug@\n#@do-not-package@\nDev.lua\n#@end-do-not-package@\n#@debug@\nDbg.lua\n#@end-debug@\n#@no-lib-strip@\nL.lua\n#@end-no-lib-strip@\n";
+        assert_eq!(
+            packaged_toc(toc),
+            "A.lua\nLibs\\X.lua\n#@no-lib-strip@\nL.lua\n#@end-no-lib-strip@\n"
         );
         assert_eq!(dates(0).0, "1970-01-01T00:00:00Z");
         assert_eq!(dates(1_760_243_127).1, "20251012042527");

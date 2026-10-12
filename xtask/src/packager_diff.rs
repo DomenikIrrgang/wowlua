@@ -403,3 +403,61 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path) -> Result<()> {
     println!("OK: the builds load identical code");
     Ok(())
 }
+
+/// Compares every AddOn folder of a packager release folder with the
+/// matching build of the wowlua project (workspace members included).
+pub fn run_all(release: &Path, project: &Path) -> Result<()> {
+    // AddOn name → manifest of the project and its members.
+    let mut manifests: BTreeMap<String, std::path::PathBuf> = BTreeMap::new();
+    for e in walkdir::WalkDir::new(project)
+        .into_iter()
+        .filter_entry(|e| {
+            let n = e.file_name().to_string_lossy();
+            !(e.file_type().is_dir() && (n.starts_with('.') || n == "dist" || n == "src"))
+        })
+        .flatten()
+    {
+        if e.file_name() != "wowlua.json" {
+            continue;
+        }
+        let m: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(e.path())?)?;
+        let Some(package) = m["package"]["name"].as_str() else {
+            continue;
+        };
+        let name = m["addon"]["name"]
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| wowlua_manifest::pascal_case(package));
+        manifests.insert(name, e.path().to_path_buf());
+    }
+    let mut failed = Vec::new();
+    let mut folders: Vec<_> = std::fs::read_dir(release)?
+        .flatten()
+        .filter(|e| e.path().is_dir() && !e.file_name().to_string_lossy().starts_with('.'))
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    folders.sort();
+    for name in &folders {
+        println!("== {name}");
+        let Some(manifest) = manifests.get(name) else {
+            println!("FAIL no wowlua package builds `{name}`");
+            failed.push(name.clone());
+            continue;
+        };
+        let built = project.join("dist/release").join(name);
+        if let Err(e) = run(&release.join(name), &built, manifest) {
+            println!("FAIL {name}: {e}");
+            failed.push(name.clone());
+        }
+    }
+    if !failed.is_empty() {
+        bail!(
+            "{} of {} addons differ: {}",
+            failed.len(),
+            folders.len(),
+            failed.join(", ")
+        );
+    }
+    println!("OK: all {} addons load identical code", folders.len());
+    Ok(())
+}
