@@ -750,6 +750,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             }
         }
     }
+    per_flavor_toc_fields(&mut manifest, &views);
     // Flavors whose TOCs load files in another order than the merged one
     // keep their own (decision T126).
     let mut own_orders = Map::new();
@@ -1532,6 +1533,134 @@ fn member_folders(
             (!rel.is_empty() && has_toc).then(|| (rel, to.clone()))
         })
         .collect()
+}
+
+/// Fields the flavors' TOCs set differently stay per flavor: SavedVariables
+/// lists as flavor overrides (decision T128), publish IDs as publish targets
+/// restricted to their flavors (T129).
+fn per_flavor_toc_fields(manifest: &mut Value, views: &[(wowlua_toc::ParsedToc, Vec<String>)]) {
+    let used: Vec<&(wowlua_toc::ParsedToc, Vec<String>)> =
+        views.iter().filter(|(_, f)| !f.is_empty()).collect();
+    if used.len() < 2 {
+        return;
+    }
+    let all: Vec<String> = used.iter().flat_map(|(_, f)| f.clone()).collect();
+    let Some(object) = manifest.as_object_mut() else {
+        return;
+    };
+    for (directive, key) in [
+        ("SavedVariables", "saved-variables"),
+        (
+            "SavedVariablesPerCharacter",
+            "saved-variables-per-character",
+        ),
+    ] {
+        let lists: Vec<(Vec<String>, &Vec<String>)> = used
+            .iter()
+            .map(|(t, f)| (t.list(|k| k.eq_ignore_ascii_case(directive)), f))
+            .collect();
+        if lists.iter().all(|(l, _)| *l == lists[0].0) {
+            continue;
+        }
+        // The list most flavors use is the base.
+        let base = lists
+            .iter()
+            .max_by_key(|(l, _)| {
+                lists
+                    .iter()
+                    .filter(|(o, _)| o == l)
+                    .map(|(_, f)| f.len())
+                    .sum::<usize>()
+            })
+            .map(|(l, _)| l.clone())
+            .unwrap_or_default();
+        let addon = object
+            .entry("addon")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("an object");
+        if base.is_empty() {
+            addon.shift_remove(key);
+        } else {
+            addon.insert(key.into(), json!(base));
+        }
+        for (list, flavors) in &lists {
+            if *list == base {
+                continue;
+            }
+            let overrides = addon
+                .entry("flavor-overrides")
+                .or_insert_with(|| json!({}))
+                .as_object_mut()
+                .expect("an object");
+            for f in flavors.iter() {
+                overrides
+                    .entry(f.clone())
+                    .or_insert_with(|| json!({}))
+                    .as_object_mut()
+                    .expect("an object")
+                    .insert(key.into(), json!(list));
+            }
+        }
+    }
+    for (directive, name) in [
+        ("X-Curse-Project-ID", "curseforge"),
+        ("X-Wago-ID", "wago"),
+        ("X-WoWI-ID", "wowinterface"),
+    ] {
+        let values: Vec<(Option<String>, &Vec<String>)> = used
+            .iter()
+            .map(|(t, f)| (t.get(directive).map(|v| v.trim().to_string()), f))
+            .collect();
+        if values.iter().all(|(v, _)| *v == values[0].0) {
+            continue;
+        }
+        let mut groups: IndexMap<String, Vec<String>> = IndexMap::new();
+        for (value, flavors) in &values {
+            if let Some(v) = value {
+                groups
+                    .entry(v.clone())
+                    .or_default()
+                    .extend(flavors.iter().cloned());
+            }
+        }
+        let publish = object
+            .entry("publish")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("an object");
+        let targets = publish
+            .entry("targets")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("an object");
+        targets.shift_remove(name);
+        for (i, (value, flavors)) in groups.into_iter().enumerate() {
+            let id = value
+                .parse::<u64>()
+                .map(Value::from)
+                .unwrap_or_else(|_| Value::from(value.clone()));
+            let mut target = Map::new();
+            target.insert("type".into(), json!(name));
+            target.insert("project-id".into(), id);
+            if flavors.len() < all.len() {
+                let ordered: Vec<&String> = all.iter().filter(|f| flavors.contains(*f)).collect();
+                target.insert("flavors".into(), json!(ordered));
+            }
+            let key = if i == 0 {
+                name.to_string()
+            } else {
+                format!("{name}-{}", flavors.join("-"))
+            };
+            targets.insert(key, Value::Object(target));
+        }
+        if targets.is_empty() {
+            publish.shift_remove("targets");
+        }
+        if publish.is_empty() {
+            object.shift_remove("publish");
+        }
+    }
 }
 
 /// A TOC line as a `build.load-order` entry: its path after `init` moved

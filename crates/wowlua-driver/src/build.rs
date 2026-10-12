@@ -459,12 +459,14 @@ pub fn build(
             .check
             .globals
             .iter()
-            .chain(manifest.manifest.addon.iter().flat_map(|a| {
-                a.saved_variables
-                    .iter()
-                    .chain(&a.saved_variables_per_character)
-            }))
             .cloned()
+            .chain(
+                manifest
+                    .manifest
+                    .addon
+                    .iter()
+                    .flat_map(|a| a.all_saved_variables()),
+            )
             .collect(),
     };
     let mut api_cache: HashMap<String, Vec<crate::compile::ParsedDeclaration>> = HashMap::new();
@@ -2264,21 +2266,44 @@ fn directives(
         }
     }
 
-    let saved: Vec<String> = addon
-        .saved_variables
+    // SavedVariables, per flavor when overrides differ (decision T128).
+    let grouped = |out: &mut Vec<Directive>, key: &str, per_flavor: Vec<(String, String)>| {
+        let mut groups: indexmap::IndexMap<String, Vec<String>> = indexmap::IndexMap::new();
+        for (flavor, value) in per_flavor {
+            if !value.is_empty() {
+                groups.entry(value).or_default().push(flavor);
+            }
+        }
+        for (value, group) in groups {
+            out.push(Directive {
+                key: key.to_string(),
+                value,
+                flavors: (group.len() < flavors.len()).then_some(group),
+            });
+        }
+    };
+    let override_of = |f: &str| overrides.iter().find(|(id, _)| id == f).map(|(_, o)| o);
+    let saved: Vec<(String, String)> = flavors
         .iter()
-        .cloned()
-        .chain(dev_saved)
+        .map(|f| {
+            let list = override_of(f)
+                .and_then(|o| o.saved_variables.clone())
+                .unwrap_or_else(|| addon.saved_variables.clone());
+            let all: Vec<String> = list.into_iter().chain(dev_saved.clone()).collect();
+            (f.clone(), all.join(", "))
+        })
         .collect();
-    if !saved.is_empty() {
-        out.push(Directive::new("SavedVariables", saved.join(", ")));
-    }
-    if !addon.saved_variables_per_character.is_empty() {
-        out.push(Directive::new(
-            "SavedVariablesPerCharacter",
-            addon.saved_variables_per_character.join(", "),
-        ));
-    }
+    grouped(&mut out, "SavedVariables", saved);
+    let per_character: Vec<(String, String)> = flavors
+        .iter()
+        .map(|f| {
+            let list = override_of(f)
+                .and_then(|o| o.saved_variables_per_character.clone())
+                .unwrap_or_else(|| addon.saved_variables_per_character.clone());
+            (f.clone(), list.join(", "))
+        })
+        .collect();
+    grouped(&mut out, "SavedVariablesPerCharacter", per_character);
     if addon.load_saved_variables_first {
         out.push(Directive::new("LoadSavedVariablesFirst", "1"));
     }
@@ -2328,26 +2353,38 @@ fn directives(
         "X-Wowlua-Build",
         format!("{profile} {build_id}"),
     ));
+    // Publish IDs: per flavor, the first target of each site that serves
+    // it (targets restricted with `flavors` give per-flavor IDs, T129).
     if let Some(publish) = &manifest.manifest.publish {
         use wowlua_manifest::model::{ProjectId, TargetType};
-        let mut seen = BTreeSet::new();
-        for target in publish.targets.values() {
-            let key = match target.target_type {
-                TargetType::Curseforge => "X-Curse-Project-ID",
-                TargetType::Wago => "X-Wago-ID",
-                TargetType::Wowinterface => "X-WoWI-ID",
-                _ => continue,
-            };
-            let Some(id) = &target.project_id else {
-                continue;
-            };
-            if seen.insert(key) {
-                let value = match id {
-                    ProjectId::Number(n) => n.to_string(),
-                    ProjectId::String(s) => s.clone(),
-                };
-                out.push(Directive::new(key, value));
-            }
+        for (site, key) in [
+            (TargetType::Curseforge, "X-Curse-Project-ID"),
+            (TargetType::Wago, "X-Wago-ID"),
+            (TargetType::Wowinterface, "X-WoWI-ID"),
+        ] {
+            let per_flavor: Vec<(String, String)> = flavors
+                .iter()
+                .filter_map(|f| {
+                    let target = publish.targets.values().find(|t| {
+                        t.target_type == site
+                            && t.enabled
+                            && t.project_id.is_some()
+                            && t.flavors.as_ref().is_none_or(|list| {
+                                list.iter().any(|x| {
+                                    wowlua_flavors::table()
+                                        .resolve(x)
+                                        .is_some_and(|fl| fl.id == *f)
+                                })
+                            })
+                    })?;
+                    let value = match target.project_id.as_ref()? {
+                        ProjectId::Number(n) => n.to_string(),
+                        ProjectId::String(s) => s.clone(),
+                    };
+                    Some((f.clone(), value))
+                })
+                .collect();
+            grouped(&mut out, key, per_flavor);
         }
     }
     out

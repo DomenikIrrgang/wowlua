@@ -176,6 +176,8 @@ open for review.
 | T125 | A `build.variable-files` entry may be a plain path with `locales`: a file loaded only for some client locales; `init` keeps TOC lines with `[AllowLoadTextLocale …]` that way **(M6, Masque test)** | Masque and others load one locale file per client locale without `[TextLocale]`. |
 | T126 | `build.flavor-load-order` gives a flavor its own load order; `init` writes it for flavors whose TOC order contradicts the merged one, and those flavors get per-flavor TOCs in their own order **(user, M6, Details test)** | Addons with per-flavor TOCs keep each flavor's exact order. |
 | T127 | `workspace.external-addons`: AddOns fetched and shipped as they are (a `.pkgmeta` external that `move-folders` makes an AddOn, such as DBM's voice packs), locked like dependencies, built and installed with the whole workspace, all files and their own TOC, with the packager's external processing; `install` marks the folders it copies with `.wowlua-install` **(user, M6, DBM test)** | The packager ships them as separate AddOns from one package. |
+| T128 | `SavedVariables` and `SavedVariablesPerCharacter` may vary per flavor (`addon.flavor-overrides`); `init` keeps each flavor's TOC lists (supersedes T57's union for differing lists) **(user, M6, Details test)** | A drop-in replacement keeps every flavor's TOC exactly. |
+| T129 | Publish IDs in TOCs come per flavor from the publish targets that serve it (`flavors`); `init` turns differing per-flavor IDs into one target per ID (supersedes T57's majority for differing IDs) **(user, M6, Details test)** | Addons such as Details publish separate projects per flavor. |
 
 ## Standard library
 

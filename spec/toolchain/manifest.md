@@ -162,9 +162,12 @@ the field for that flavor.
 
 - Overridable fields: `title`, `title-localized`, `notes`, `notes-localized`,
   `author`, `category`, `category-localized`, `group`, `icon-texture`,
-  `icon-atlas` and `toc-extra`. Localized maps and `toc-extra` override per
-  key. Structural fields (saved variables, load behavior) cannot vary per
-  flavor, because the game data they describe must not depend on the client.
+  `icon-atlas`, `toc-extra`, `saved-variables` and
+  `saved-variables-per-character` (decision T128). Localized maps and
+  `toc-extra` override per key. Load behavior cannot vary per flavor.
+- Publish targets restricted with `flavors` give those flavors' TOCs their
+  site ID (`X-Curse-Project-ID`, `X-Wago-ID`, `X-WoWI-ID`); a flavor no
+  target serves gets none (decision T129).
 - Keys must be flavors listed in `flavors` (E4002 otherwise).
 - In the TOC, flavors that share a value share one directive. A value used by
   only some flavors gets an inline `[AllowLoadGameType …]` condition in the

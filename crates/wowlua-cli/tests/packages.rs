@@ -1376,3 +1376,39 @@ fn flavors_keep_their_own_toc_order() {
         "{vanilla}"
     );
 }
+
+#[test]
+fn flavors_keep_their_own_saved_variables_and_publish_ids() {
+    let e = env();
+    write(
+        &e.project,
+        &[
+            (
+                "MyAddon.toc",
+                "## Interface: 120100\n## Title: My Addon\n## Version: 1.0.0\n## SavedVariables: MyDB, MyDebugDB\n## X-Wago-ID: retailId\n## X-Curse-Project-ID: 42\nA.lua\n",
+            ),
+            (
+                "MyAddon_Vanilla.toc",
+                "## Interface: 11509\n## Title: My Addon\n## Version: 1.0.0\n## SavedVariables: MyDB\n## X-Curse-Project-ID: 42\nA.lua\n",
+            ),
+            ("A.lua", "MyDB = MyDB or {}\n"),
+        ],
+    );
+    wowlua(&e.project, &e.home).arg("init").assert().success();
+    wowlua(&e.project, &e.home)
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let out = e.project.join("dist/release/MyAddon");
+    let mainline = fs::read_to_string(out.join("MyAddon_Mainline.toc")).unwrap();
+    let classic = fs::read_to_string(out.join("MyAddon_Classic.toc")).unwrap();
+    assert!(
+        mainline.contains("## SavedVariables: MyDB, MyDebugDB\n"),
+        "{mainline}"
+    );
+    assert!(mainline.contains("## X-Wago-ID: retailId\n"), "{mainline}");
+    assert!(classic.contains("## SavedVariables: MyDB\n"), "{classic}");
+    assert!(!classic.contains("X-Wago-ID"), "{classic}");
+    assert!(mainline.contains("## X-Curse-Project-ID: 42\n"));
+    assert!(classic.contains("## X-Curse-Project-ID: 42\n"));
+}

@@ -155,13 +155,28 @@ pub fn build_meta(project: &Project, input: &MetaInput) -> Meta {
         "flavors".into(),
         MetaValue::strings(input.flavors.iter().cloned()),
     );
+    // A flavor's own lists in split mode (decision T128).
+    let own = input.flavor.and_then(|f| {
+        addon.flavor_overrides.iter().find_map(|(name, o)| {
+            wowlua_flavors::table()
+                .resolve(name)
+                .is_some_and(|fl| fl.id == f)
+                .then_some(o)
+        })
+    });
     addon_table.insert(
         "savedVariables".into(),
-        MetaValue::strings(addon.saved_variables.clone()),
+        MetaValue::strings(
+            own.and_then(|o| o.saved_variables.clone())
+                .unwrap_or_else(|| addon.saved_variables.clone()),
+        ),
     );
     addon_table.insert(
         "savedVariablesPerCharacter".into(),
-        MetaValue::strings(addon.saved_variables_per_character.clone()),
+        MetaValue::strings(
+            own.and_then(|o| o.saved_variables_per_character.clone())
+                .unwrap_or_else(|| addon.saved_variables_per_character.clone()),
+        ),
     );
     let names = |list: &[wowlua_manifest::model::AddonDependency]| {
         MetaValue::strings(

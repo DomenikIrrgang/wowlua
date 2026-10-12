@@ -152,12 +152,12 @@ available.
    ([Modules §5.4](../language/05-modules.md#54-load-order)), so the build
    loads files as before.
 5. Takes per-flavor metadata from the flavors' TOCs: the value most flavors use
-   becomes the base and the others become `addon.flavor-overrides`. Structural
-   fields cannot vary per flavor (§9.3.1). `Version`, the load flags and the
-   publish IDs take the value used by the most flavors among the TOCs that set
-   them. `SavedVariables` and
-   `SavedVariablesPerCharacter` take the union of all TOCs, so no flavor loses
-   saved data (decision T57). TOCs with more than 200 `X-` directives get
+   becomes the base and the others become `addon.flavor-overrides`. `Version`
+   and the load flags take the value used by the most flavors among the TOCs
+   that set them. `SavedVariables` and `SavedVariablesPerCharacter` lists that
+   differ between the flavors' TOCs stay per flavor (flavor overrides,
+   decision T128), and publish IDs that differ become publish targets
+   restricted to their flavors (T129), so every flavor's TOC keeps its lines. TOCs with more than 200 `X-` directives get
    `addon.toc-data` files ([Manifest §9.3.2](manifest.md#932-toc-data-files)).
    Addons that load no code at all (data or archive addons) are valid. Lua and
    XML files that no TOC loads are listed in a warning and left in place.

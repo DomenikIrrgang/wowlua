@@ -244,6 +244,33 @@ pub struct AddonOverride {
     pub icon_atlas: Option<Option<String>>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub toc_extra: IndexMap<String, Option<String>>,
+    /// This flavor's own SavedVariables (decision T128).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_variables: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_variables_per_character: Option<Vec<String>>,
+}
+
+impl Addon {
+    /// Every SavedVariables name of any flavor.
+    pub fn all_saved_variables(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        let lists = std::iter::once(&self.saved_variables)
+            .chain(std::iter::once(&self.saved_variables_per_character))
+            .chain(self.flavor_overrides.values().flat_map(|o| {
+                o.saved_variables
+                    .iter()
+                    .chain(o.saved_variables_per_character.iter())
+            }));
+        for list in lists {
+            for v in list {
+                if !out.contains(v) {
+                    out.push(v.clone());
+                }
+            }
+        }
+        out
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]

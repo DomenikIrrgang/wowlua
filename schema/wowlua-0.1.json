@@ -501,6 +501,25 @@
               "null"
             ]
           }
+        },
+        "saved-variables": {
+          "description": "This flavor's own SavedVariables (decision T128).",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "saved-variables-per-character": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

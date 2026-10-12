@@ -699,11 +699,7 @@ fn check_members(session: &mut Session, manifests: &[LoadedManifest]) {
         let Some(addon) = &m.manifest.addon else {
             continue;
         };
-        for var in addon
-            .saved_variables
-            .iter()
-            .chain(&addon.saved_variables_per_character)
-        {
+        for var in addon.all_saved_variables().iter() {
             if let Some(other) = saved.insert(var.clone(), m.addon_name()) {
                 session.push(
                     Diagnostic::error(
