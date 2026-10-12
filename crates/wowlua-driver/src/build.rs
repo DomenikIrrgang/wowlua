@@ -1295,6 +1295,9 @@ pub fn build(
     }
     let mut lib_licenses: Vec<(String, String)> = Vec::new();
     let mut unlicensed: Vec<String> = Vec::new();
+    // Output paths of embedded libraries' files: they win over the
+    // project's own files at the same path, like the packager's externals.
+    let mut lib_outputs: BTreeSet<String> = BTreeSet::new();
     for (i, lib) in libs.iter().enumerate() {
         let mut roots: Vec<String> = lib.entries.iter().map(|(e, _)| e.clone()).collect();
         roots.extend(xml.lib_refs.get(&i).into_iter().flatten().cloned());
@@ -1310,41 +1313,82 @@ pub fn build(
             Some((_, sub)) if !sub.is_empty() => format!("{sub}/{rel}"),
             _ => rel.to_string(),
         };
-        let shipped: Vec<String> = if keywords {
+        let ignored = |repo_rel: &str| {
+            own.as_ref()
+                .is_some_and(|(m, _)| crate::keywords::plain_copy(&m.ignore, &[repo_rel]))
+        };
+        let visible = |rel: &str| !rel.split('/').any(|part| part.starts_with('.'));
+        // (file, path in the library's output folder, path in its repository)
+        let mut shipped: Vec<(PathBuf, String, String)> = if keywords {
             lib.index
                 .values()
-                .filter(|rel| !rel.split('/').any(|part| part.starts_with('.')))
-                .filter(|rel| {
-                    !own.as_ref().is_some_and(|(m, _)| {
-                        crate::keywords::plain_copy(&m.ignore, &[&in_repo(rel)])
-                    })
-                })
-                .filter(|rel| !exclude.is_match(lib.output(rel)))
-                .cloned()
+                .filter(|rel| visible(rel) && !ignored(&in_repo(rel)))
+                .map(|rel| (lib.dir.join(rel), rel.clone(), in_repo(rel)))
                 .collect()
         } else {
-            reachable.into_iter().collect()
+            reachable
+                .into_iter()
+                .map(|rel| (lib.dir.join(&rel), rel.clone(), in_repo(&rel)))
+                .collect()
         };
+        // A folder `move-folders` moved up leaves its neighbours in place.
+        if keywords && let Some((outer, up)) = &lib.moved_from {
+            let outer_sub = own
+                .as_ref()
+                .map(|(_, sub)| {
+                    sub.trim_end_matches(up.as_str())
+                        .trim_end_matches('/')
+                        .to_string()
+                })
+                .unwrap_or_default();
+            let inner: BTreeSet<String> = shipped
+                .iter()
+                .map(|(_, r, _)| r.to_ascii_lowercase())
+                .collect();
+            for entry in walkdir::WalkDir::new(outer).into_iter().flatten() {
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                let Ok(rel) = entry.path().strip_prefix(outer) else {
+                    continue;
+                };
+                let rel = rel.to_string_lossy().replace('\\', "/");
+                let repo_rel = if outer_sub.is_empty() {
+                    rel.clone()
+                } else {
+                    format!("{outer_sub}/{rel}")
+                };
+                if rel.starts_with(&format!("{up}/"))
+                    || !visible(&rel)
+                    || ignored(&repo_rel)
+                    || inner.contains(&rel.to_ascii_lowercase())
+                {
+                    continue;
+                }
+                shipped.push((entry.path().to_path_buf(), rel, repo_rel));
+            }
+        }
+        shipped.retain(|(_, rel, _)| !exclude.is_match(lib.output(rel)));
         // Archives and `plain-copy` files are copied as they are.
         let archive = matches!(lib.source, wowlua_pkg::Source::Archive { .. });
         // SVN author and tag need the network; only asked for when used.
         let svn_detail = keywords
             && matches!(lib.source, wowlua_pkg::Source::Svn { .. })
-            && shipped.iter().any(|rel| {
+            && shipped.iter().any(|(abs, rel, _)| {
                 crate::keywords::processed_extension(rel)
-                    && std::fs::read_to_string(lib.dir.join(rel)).is_ok_and(|t| {
+                    && std::fs::read_to_string(abs).is_ok_and(|t| {
                         t.contains("@project-author@") || t.contains("@project-version@")
                     })
             });
         let mut lib_info: Option<crate::keywords::KeywordInfo> = None;
-        for rel in shipped {
-            let abs = lib.dir.join(&rel);
+        for (abs, rel, repo_rel) in shipped {
             let lower = rel.to_ascii_lowercase();
             let xml = lower.ends_with(".xml");
             let unchanged = archive
-                || own.as_ref().is_some_and(|(m, _)| {
-                    crate::keywords::plain_copy(&m.plain_copy, &[&in_repo(&rel)])
-                });
+                || own
+                    .as_ref()
+                    .is_some_and(|(m, _)| crate::keywords::plain_copy(&m.plain_copy, &[&repo_rel]));
+            lib_outputs.insert(lib.output(&rel));
             // Library files get the packager's processing (decisions T120,
             // T124): keywords and blocks, LF line endings.
             if keywords && !unchanged && crate::keywords::processed_extension(&rel) {
@@ -1384,6 +1428,63 @@ pub fn build(
         match crate::embed::license_text(lib) {
             Some(text) => lib_licenses.push((format!("{} ({})", lib.name, lib.install), text)),
             None => unlicensed.push(lib.name.clone()),
+        }
+    }
+    // Files the project keeps in a library's folder ship too where the
+    // library has none, as the packager copies the project first and the
+    // externals over it (decision T144).
+    if let Some(info) = &keyword_info {
+        let tracked = (!profile.debug).then(|| sources::tracked_files(&root));
+        for lib in &libs {
+            let folder = root.join(&lib.install);
+            for entry in walkdir::WalkDir::new(&folder)
+                .into_iter()
+                .filter_entry(|e| {
+                    e.depth() == 0 || !e.file_name().to_string_lossy().starts_with('.')
+                })
+                .flatten()
+            {
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                let Ok(rel) = entry.path().strip_prefix(&root) else {
+                    continue;
+                };
+                let rel = rel.to_string_lossy().replace('\\', "/");
+                let untracked = tracked
+                    .as_ref()
+                    .is_some_and(|t| !t.is_empty() && !t.contains(entry.path()));
+                if out.contains_key(&rel) || exclude.is_match(&rel) || untracked {
+                    continue;
+                }
+                let plain =
+                    crate::keywords::plain_copy(&manifest.manifest.compat.plain_copy, &[&rel]);
+                let lower = rel.to_ascii_lowercase();
+                let content = match std::fs::read(entry.path()) {
+                    Ok(bytes) if !plain && crate::keywords::processed_extension(&rel) => {
+                        let normalized = crate::keywords::lf(&bytes);
+                        match std::str::from_utf8(&normalized) {
+                            Ok(text) if lower.ends_with(".lua") || lower.ends_with(".xml") => {
+                                let path = Path::new(&rel);
+                                Content::Bytes(
+                                    crate::keywords::apply(
+                                        text,
+                                        info,
+                                        path,
+                                        path,
+                                        lower.ends_with(".xml"),
+                                    )
+                                    .into_bytes(),
+                                )
+                            }
+                            _ => Content::Bytes(packaged_text(&bytes, info, &rel)),
+                        }
+                    }
+                    _ => Content::Copy(entry.path().to_path_buf()),
+                };
+                lib_outputs.insert(rel.clone());
+                out.insert(rel, content);
+            }
         }
     }
     for lib in &wlibs {
@@ -1455,6 +1556,11 @@ pub fn build(
         }
     }
     for asset in &assets {
+        // A converted project's library folders hold what the libraries
+        // ship (their files win, like the packager's externals).
+        if keywords && lib_outputs.contains(&asset.rel) {
+            continue;
+        }
         // `build.flavor-files` restricts assets too.
         if restriction(&asset.rel).is_some_and(|list| !list.iter().any(|f| flavors.contains(f))) {
             continue;
@@ -1508,11 +1614,13 @@ pub fn build(
                     .map(str::to_string)
             })
         && !out.contains_key(&license)
-        && let Some(bytes) = license_bytes(ws, &license)
+        && let Some((bytes, downloaded)) = license_bytes(ws, &license)
     {
+        // A license of the repository is copied as the packager processed
+        // it; a downloaded one as it was saved.
         let bytes = match &keyword_info {
-            Some(info) => packaged_text(&bytes, info, &license),
-            None => bytes,
+            Some(info) if !downloaded => packaged_text(&bytes, info, &license),
+            _ => bytes,
         };
         out.insert(license.clone(), Content::Bytes(bytes));
     }
@@ -2746,12 +2854,12 @@ fn curseforge_id(manifest: &serde_json::Value) -> Option<String> {
 
 /// `license-output` of the package in `dir`: its file, else the license of
 /// its CurseForge project, like the packager downloads it.
-fn license_bytes(dir: &Path, license: &str) -> Option<Vec<u8>> {
+fn license_bytes(dir: &Path, license: &str) -> Option<(Vec<u8>, bool)> {
     if let Ok(bytes) = std::fs::read(dir.join(license)) {
-        return Some(bytes);
+        return Some((bytes, false));
     }
     let id = curseforge_id(&manifest_json(dir)?)?;
-    crate::packaging::downloaded_license(&id)
+    crate::packaging::downloaded_license(&id).map(|b| (b, true))
 }
 
 /// The files the packager adds to the AddOn its package directory becomes
@@ -2813,12 +2921,10 @@ fn package_files(
         .and_then(|v| v.as_str())
         && !out.contains_key(license)
         && !repo.join(license).is_file()
-        && let Some(bytes) = license_bytes(&repo, license)
+        && let Some((bytes, _)) = license_bytes(&repo, license)
     {
-        out.insert(
-            license.to_string(),
-            Content::Bytes(packaged_text(&bytes, info, license)),
-        );
+        // Saved after the packager's processing: as downloaded.
+        out.insert(license.to_string(), Content::Bytes(bytes));
     }
 }
 

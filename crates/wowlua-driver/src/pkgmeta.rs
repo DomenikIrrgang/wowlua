@@ -40,6 +40,8 @@ pub struct External {
     pub slug: Option<String>,
     /// `tag: latest`: the newest tag for git, trunk for SVN.
     pub latest: bool,
+    /// The folder of the external a `move-folders` entry moves up.
+    pub moved_up: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -569,6 +571,7 @@ fn external(spec: &ExternalSpec) -> Option<External> {
         source,
         slug,
         latest,
+        moved_up: None,
     })
 }
 
@@ -638,6 +641,9 @@ pub fn dependency_entry(
             }
             // The packager fetches submodules of git externals.
             m.insert("submodules".into(), json!(true));
+            if let Some(up) = &e.moved_up {
+                m.insert("moved-up".into(), json!(up));
+            }
         }
         ExternalSource::Svn { url } => {
             m.insert("svn".into(), json!(url));
@@ -653,6 +659,9 @@ pub fn dependency_entry(
             m.insert("sha256".into(), json!(sum));
             if let Some(s) = subdir {
                 m.insert("strip-prefix".into(), json!(s));
+            }
+            if let Some(up) = &e.moved_up {
+                m.insert("moved-up".into(), json!(up));
             }
         }
         ExternalSource::Hg { url } => {

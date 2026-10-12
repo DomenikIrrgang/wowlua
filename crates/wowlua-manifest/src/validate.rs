@@ -619,6 +619,22 @@ fn dependencies(manifest: &Manifest, ctx: &mut Ctx) {
                             "missing checksum",
                         );
                     }
+                    if let Some(up) = &detail.moved_up {
+                        let inner = detail.subdir.as_ref().or(detail.strip_prefix.as_ref());
+                        let tail = inner.is_some_and(|i| {
+                            let i = i.trim_matches('/');
+                            let up = up.trim_matches('/');
+                            i == up || i.ends_with(&format!("/{up}"))
+                        });
+                        if !tail {
+                            ctx.error(
+                                "E4002",
+                                &path.clone().key("moved-up"),
+                                format!("dependency `{name}`: `moved-up` must be the end of its `subdir` or `strip-prefix`"),
+                                "not the end of the package folder",
+                            );
+                        }
+                    }
                     if let Some(req) = &detail.version
                         && let Err(error) = semver::VersionReq::parse(req)
                     {

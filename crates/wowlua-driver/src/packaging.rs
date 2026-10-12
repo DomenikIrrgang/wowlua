@@ -210,7 +210,7 @@ pub fn downloaded_license(project_id: &str) -> Option<Vec<u8>> {
         return None;
     }
     let cache = wowlua_pkg::Cache::new()?;
-    let entry = cache.checkout_dir(&format!("license-{project_id}"));
+    let entry = cache.checkout_dir(&format!("wowace-license-{project_id}"));
     let file = entry.join("LICENSE");
     if let Ok(bytes) = std::fs::read(&file) {
         return Some(bytes);
@@ -222,19 +222,28 @@ pub fn downloaded_license(project_id: &str) -> Option<Vec<u8>> {
         .into_body()
         .read_to_string()
         .ok()?;
-    // `sed -e '1,4d' -e '5s/^\s*//' -e '$d' | sed '$d'`: the text without
-    // the page's wrapping lines.
-    let mut lines: Vec<String> = page.lines().skip(4).map(str::to_string).collect();
+    let text = license_from_page(&page);
+    std::fs::create_dir_all(&entry).ok()?;
+    std::fs::write(&file, &text).ok()?;
+    Some(text.into_bytes())
+}
+
+/// `echo "$(curl …)" | sed -e '1,4d' -e '5s/^\s*//' -e '$d' | sed '$d'`:
+/// the page without its wrapping lines, byte for byte (carriage returns
+/// stay, and so does the closing `</p>` line the packager keeps).
+fn license_from_page(page: &str) -> String {
+    let mut lines: Vec<String> = page
+        .trim_end_matches('\n')
+        .split('\n')
+        .skip(4)
+        .map(str::to_string)
+        .collect();
     if let Some(first) = lines.first_mut() {
         *first = first.trim_start().to_string();
     }
     lines.pop();
     lines.pop();
-    let mut text = lines.join("\n");
-    text.push('\n');
-    std::fs::create_dir_all(&entry).ok()?;
-    std::fs::write(&file, &text).ok()?;
-    Some(text.into_bytes())
+    lines.iter().map(|l| format!("{l}\n")).collect()
 }
 
 #[cfg(test)]
@@ -251,6 +260,15 @@ mod tests {
         assert_eq!(
             plain_title("|cff9966ffKui|r Nameplates |Tx:0|t"),
             "Kui Nameplates"
+        );
+    }
+
+    #[test]
+    fn cuts_the_license_out_of_the_page_like_the_packager() {
+        let page = "\r\n\r\n<div class=\"module\">\r\n\t<p>\r\n\t\tAll Rights Reserved.\r\n\t</p>\r\n</div>\r\n        ";
+        assert_eq!(
+            license_from_page(page),
+            "All Rights Reserved.\r\n\t</p>\r\n"
         );
     }
 }

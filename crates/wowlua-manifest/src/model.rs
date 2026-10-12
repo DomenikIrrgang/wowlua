@@ -353,6 +353,11 @@ pub struct DependencyDetail {
     pub sha256: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub strip_prefix: Option<String>,
+    /// The trailing folders of `subdir` / `strip-prefix` a `.pkgmeta`
+    /// `move-folders` moved up: the files of the folder above stay next to
+    /// them in the output, like the packager leaves them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub moved_up: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<PackageKind>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

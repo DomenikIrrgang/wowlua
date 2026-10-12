@@ -498,7 +498,22 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path, only: Option<&str>) 
             match wl.files.get(&lower) {
                 None => allowed.push(rel.clone()),
                 Some(w) if pk.bytes(rel) != wl.bytes(w) => {
-                    problems.push(format!("`{rel}` differs"))
+                    let (a, b) = (pk.bytes(rel), wl.bytes(w));
+                    let (ta, tb) = (String::from_utf8_lossy(&a), String::from_utf8_lossy(&b));
+                    let first = ta
+                        .split('\n')
+                        .zip(tb.split('\n'))
+                        .enumerate()
+                        .find(|(_, (x, y))| x != y)
+                        .map(|(i, (x, y))| format!("line {}: packager {x:?}, wowlua {y:?}", i + 1))
+                        .unwrap_or_else(|| {
+                            format!(
+                                "{} vs {} lines",
+                                ta.split('\n').count(),
+                                tb.split('\n').count()
+                            )
+                        });
+                    problems.push(format!("`{rel}` differs ({first})"))
                 }
                 Some(_) => {}
             }

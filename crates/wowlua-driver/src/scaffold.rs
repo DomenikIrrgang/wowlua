@@ -1675,6 +1675,7 @@ fn flatten_externals(
                         Some(s) => format!("{s}/{inner}"),
                         None => inner.clone(),
                     });
+                    e.moved_up = Some(inner.clone());
                 }
                 ExternalSource::Svn { url } => {
                     *url = format!("{url}/{inner}");

@@ -538,9 +538,19 @@ fn materialize(
             let extracted = fetcher
                 .archive(url, sha256)
                 .map_err(|e| vec![diag(e, name)])?;
+            // Without `strip-prefix`, a lone top folder (a GitHub archive's)
+            // is the root, like the packager uses it.
             let dir = match strip_prefix {
                 Some(p) => extracted.join(p),
-                None => extracted,
+                None => {
+                    let entries: Vec<PathBuf> = std::fs::read_dir(&extracted)
+                        .map(|d| d.flatten().map(|e| e.path()).collect())
+                        .unwrap_or_default();
+                    match entries.as_slice() {
+                        [only] if only.is_dir() => only.clone(),
+                        _ => extracted,
+                    }
+                }
             };
             if !dir.is_dir() {
                 return Err(vec![

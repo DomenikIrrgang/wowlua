@@ -9,6 +9,11 @@ on:
   schedule:
     - cron: "41 4 * * 1"
   workflow_dispatch:
+    inputs:
+      addons:
+        description: "Comma-separated addons to compare (empty: all)"
+        required: false
+        default: ""
 
 env:
   CARGO_TERM_COLOR: always
@@ -132,10 +137,18 @@ jobs:
     env:
       ADDON_REPO: ${{ matrix.repo }}
       ADDON_REV: ${{ matrix.rev }}
+      # A manual run may name the addons to compare.
+      SELECTED: ${{ !inputs.addons || contains(format(',{0},', inputs.addons), format(',{0},', matrix.addon)) }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq subversion
-      - run: cargo build --release -p wowlua-cli
-      - run: scripts/packager-compat.sh
+      - if: env.SELECTED == 'true'
+        uses: actions/checkout@v5
+      - if: env.SELECTED == 'true'
+        uses: dtolnay/rust-toolchain@stable
+      - if: env.SELECTED == 'true'
+        uses: Swatinem/rust-cache@v2
+      - if: env.SELECTED == 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq subversion
+      - if: env.SELECTED == 'true'
+        run: cargo build --release -p wowlua-cli
+      - if: env.SELECTED == 'true'
+        run: scripts/packager-compat.sh
