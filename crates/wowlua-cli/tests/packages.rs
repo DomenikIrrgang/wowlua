@@ -112,12 +112,21 @@ struct Env {
 
 fn env() -> Env {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().canonicalize().unwrap();
+    let root = plain(dir.path().canonicalize().unwrap());
     Env {
         home: root.join("home"),
         project: root.join("project"),
         root,
         _dir: dir,
+    }
+}
+
+/// Without the Windows verbatim prefix, which git cannot handle.
+fn plain(path: PathBuf) -> PathBuf {
+    let text = path.to_string_lossy().into_owned();
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) => PathBuf::from(rest),
+        None => path,
     }
 }
 

@@ -490,6 +490,14 @@ impl Fetcher {
     /// Downloads over HTTPS; `file://` URLs read local files.
     fn download(&self, url: &str) -> Result<Vec<u8>, FetchError> {
         if let Some(path) = url.strip_prefix("file://") {
+            // `file:///C:/x` names `C:/x` on Windows.
+            let b = path.as_bytes();
+            let path = if b.len() > 2 && b[0] == b'/' && b[1].is_ascii_alphabetic() && b[2] == b':'
+            {
+                &path[1..]
+            } else {
+                path
+            };
             return std::fs::read(path)
                 .map_err(|e| FetchError::coded("E4102", format!("cannot read `{url}`: {e}")));
         }

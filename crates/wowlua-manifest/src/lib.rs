@@ -2,6 +2,7 @@
 //! precise diagnostics, semantic validation, profile resolution and the JSON
 //! schema.
 
+pub mod edit;
 mod load;
 pub mod locate;
 pub mod model;

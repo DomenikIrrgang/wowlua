@@ -10,9 +10,19 @@ use std::time::{Duration, SystemTime};
 /// `$WOWLUA_HOME`, default `~/.wowlua`.
 pub fn wowlua_home() -> Option<PathBuf> {
     if let Some(home) = std::env::var_os("WOWLUA_HOME").filter(|h| !h.is_empty()) {
-        return Some(PathBuf::from(home));
+        return Some(plain(PathBuf::from(home)));
     }
-    dirs::home_dir().map(|h| h.join(".wowlua"))
+    dirs::home_dir().map(|h| plain(h.join(".wowlua")))
+}
+
+/// Without the Windows verbatim prefix (`\\?\C:\…`), which git and svn
+/// cannot write to.
+pub fn plain(path: PathBuf) -> PathBuf {
+    let text = path.to_string_lossy();
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) if !rest.starts_with("UNC") => PathBuf::from(rest.to_string()),
+        _ => path,
+    }
 }
 
 /// A short, stable file-name key for a URL or other text.
@@ -61,7 +71,9 @@ impl Cache {
     }
 
     pub fn at(root: impl Into<PathBuf>) -> Cache {
-        Cache { root: root.into() }
+        Cache {
+            root: plain(root.into()),
+        }
     }
 
     /// Bare git clones.
