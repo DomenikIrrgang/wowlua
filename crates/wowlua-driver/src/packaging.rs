@@ -66,10 +66,17 @@ fn github_url(dir: &Path) -> Option<String> {
         .then(|| url.trim_end_matches(".git").to_string())
 }
 
-/// The packager's `sed` pass over `git log --pretty=format:"###%B"`.
+/// The packager's `sed` pass over `git log --pretty=format:"###%B"`. Like
+/// `sed`, a last line without a newline keeps none.
 fn format_log(raw: &str) -> String {
-    let mut out = Vec::new();
-    for line in raw.split('\n') {
+    let terminated = raw.ends_with('\n');
+    let body = raw.strip_suffix('\n').unwrap_or(raw);
+    if body.is_empty() && !terminated {
+        return String::new();
+    }
+    let lines: Vec<&str> = body.split('\n').collect();
+    let mut out = String::new();
+    for (i, line) in lines.iter().enumerate() {
         let mut line = format!("    {line}");
         if line.trim_matches(' ').is_empty() {
             line.clear();
@@ -83,13 +90,12 @@ fn format_log(raw: &str) -> String {
         if line.contains("git-svn-id:") || is_revert_note(&line) || line.trim().is_empty() {
             continue;
         }
-        out.push(line);
+        out.push_str(&line);
+        if i + 1 < lines.len() || terminated {
+            out.push('\n');
+        }
     }
-    let mut text = out.join("\n");
-    if !text.is_empty() {
-        text.push('\n');
-    }
-    text
+    out
 }
 
 /// `_` outside backtick spans becomes `\###` (later `\_`), up to an
