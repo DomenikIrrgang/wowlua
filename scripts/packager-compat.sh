@@ -49,29 +49,53 @@ unix=()
 
 # Projects whose CI packages one game per packager run (`-g <game> -m
 # <file>`) are compared game by game; the others in one multi-version run.
-# The packager: no upload (-d), no zip (-z), no localization (-l, which needs
-# the CurseForge API).
+# The packager: no upload (-d), no localization (-l, which needs the
+# CurseForge API). Its zips are kept to compare with `wowlua package`.
 # Projects released with `-S` get TOCs per game from `## Interface-<Game>:`.
+mkdir -p "$WORK/zips"
+rm -f "$WORK/zips"/*
+status=0
 RUNS=$(cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-runs "$WORK/addon")
 if [ -z "$RUNS" ] || [ "$RUNS" = split ]; then
   split=()
   [ "$RUNS" = split ] && split=(-S)
-  (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -z -l "${unix[@]}" "${split[@]}" -r "$WORK/release")
+  (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -l "${unix[@]}" "${split[@]}" -r "$WORK/release")
+  cp "$WORK/release"/*.zip "$WORK/zips/"
   (cd "$WORK/wowlua" && "$WOWLUA" build --release)
   # Every AddOn folder the packager made (move-folders makes several).
   cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-diff \
-    "$WORK/release" "$WORK/wowlua"
+    "$WORK/release" "$WORK/wowlua" || status=1
 else
-  status=0
   while read -r game flavor file; do
     echo "### $game ($flavor) with ${file/#-/the default project file}"
     rm -rf "$WORK/release"
     meta=()
     [ "$file" != "-" ] && meta=(-m "$file")
-    (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -z -l "${unix[@]}" -g "$game" "${meta[@]}" -r "$WORK/release")
+    (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -l "${unix[@]}" -g "$game" "${meta[@]}" -r "$WORK/release")
+    cp "$WORK/release"/*.zip "$WORK/zips/"
     (cd "$WORK/wowlua" && "$WOWLUA" build --release --flavor "$flavor")
     cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-diff \
       --flavor "$flavor" "$WORK/release" "$WORK/wowlua" || status=1
   done <<< "$RUNS"
-  exit $status
 fi
+
+# Packages: the same zip names, each with the same AddOn folders.
+(cd "$WORK/wowlua" && "$WOWLUA" package)
+python3 - "$WORK/zips" "$WORK/wowlua/dist/packages" <<'PY' || status=1
+import os, sys, zipfile
+def zips(d):
+    out = {}
+    for name in sorted(os.listdir(d)):
+        if name.endswith(".zip"):
+            with zipfile.ZipFile(os.path.join(d, name)) as z:
+                out[name] = sorted({n.split("/")[0] for n in z.namelist()})
+    return out
+pk, wl = zips(sys.argv[1]), zips(sys.argv[2])
+print("packager zips:", pk)
+print("wowlua zips:  ", wl)
+if pk != wl:
+    print("FAIL packages differ")
+    sys.exit(1)
+print("OK: the same packages")
+PY
+exit $status

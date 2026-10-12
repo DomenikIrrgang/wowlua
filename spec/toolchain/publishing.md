@@ -98,6 +98,13 @@ MyAddon-1.4.2.zip
 - Display names on the sites use `build.version`
   ([Manifest §9.9.2](manifest.md#992-build-version)).
 
+A converted packager project (`compat.packager-keywords`) packages like the
+BigWigs packager instead (decision T157): one zip
+`{package-name}-{project-version}{nolib}{classic}.zip` (or `compat.archive-name`)
+holding every AddOn folder of the repository, one per released game for
+`compat.per-game` projects, and with `compat.nolib-package` a nolib zip that
+only the GitHub target receives.
+
 ### 11.2.1 Changelog
 
 | `changelog` | Content |

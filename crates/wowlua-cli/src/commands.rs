@@ -152,6 +152,9 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
         flavors: (!args.flavor.is_empty()).then(|| args.flavor.clone()),
         out_dir: args.out.as_ref().map(|o| cwd().join(o)),
         write: true,
+        nolib: false,
+        minify: None,
+        bundle: None,
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -175,6 +178,61 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
     }
 }
 
+/// `wowlua package`: builds every publish target and packs its zips.
+pub fn package(
+    out: &Output,
+    global: &GlobalArgs,
+    targets: Vec<String>,
+    flavors: Vec<String>,
+) -> bool {
+    let started = Instant::now();
+    let mut session = Session::new();
+    let Some(projects) = wowlua_driver::load_projects(&mut session, &load_options(out, global))
+    else {
+        out.flush(&mut session);
+        return false;
+    };
+    let request = wowlua_driver::package::PackageRequest {
+        targets,
+        flavors: (!flavors.is_empty()).then_some(flavors),
+        ..Default::default()
+    };
+    let packaged = wowlua_driver::package::package(&mut session, &projects, &request);
+    for project in &projects {
+        apply_lints(&mut session, project);
+    }
+    let ok = out.flush(&mut session);
+    match packaged {
+        Some(p) if ok => {
+            if p.zips.is_empty() {
+                out.status(
+                    "Note",
+                    "no publish targets: add one under `publish.targets` (see `wowlua explain` or the manual)",
+                );
+            }
+            for zip in &p.zips {
+                out.status(
+                    "Packaged",
+                    format!(
+                        "{} ({}{}; {}) → {}",
+                        zip.file_name,
+                        p.release.as_str(),
+                        if zip.nolib { ", nolib" } else { "" },
+                        zip.targets.join(", "),
+                        relative(&zip.path)
+                    ),
+                );
+            }
+            out.status(
+                "Finished",
+                format!("packaging in {:.2}s", started.elapsed().as_secs_f64()),
+            );
+            true
+        }
+        _ => false,
+    }
+}
+
 pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String>) -> bool {
     let mut session = Session::new();
     let request = BuildRequest {
@@ -182,6 +240,9 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
         flavors: (!flavors.is_empty()).then_some(flavors),
         out_dir: None,
         write: false,
+        nolib: false,
+        minify: None,
+        bundle: None,
     };
     let result = load_and_build(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -211,6 +272,9 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
         flavors: (!flavors.is_empty()).then_some(flavors),
         out_dir: None,
         write: false,
+        nolib: false,
+        minify: None,
+        bundle: None,
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -308,6 +372,9 @@ pub fn install(out: &Output, global: &GlobalArgs, profile: &str, target: &Instal
         flavors: (!target.flavor.is_empty()).then(|| target.flavor.clone()),
         out_dir: None,
         write: true,
+        nolib: false,
+        minify: None,
+        bundle: None,
     };
     let Some(built) = load_and_build_all(out, &mut session, global, &request) else {
         out.flush(&mut session);
@@ -578,6 +645,9 @@ pub fn dev(out: &Output, global: &GlobalArgs, target: &InstallTarget, link: bool
         flavors: (!target.flavor.is_empty()).then(|| target.flavor.clone()),
         out_dir: None,
         write: true,
+        nolib: false,
+        minify: None,
+        bundle: None,
     };
     let install = install_request(target, link);
 
@@ -671,6 +741,9 @@ fn apply_fixes(out: &Output, global: &GlobalArgs, lints_only: bool) -> Option<us
         flavors: None,
         out_dir: None,
         write: false,
+        nolib: false,
+        minify: None,
+        bundle: None,
     };
     let mut total = 0;
     let mut files: std::collections::BTreeSet<PathBuf> = Default::default();
@@ -724,6 +797,9 @@ pub fn lint(out: &Output, global: &GlobalArgs, fix: bool) -> bool {
         flavors: None,
         out_dir: None,
         write: false,
+        nolib: false,
+        minify: None,
+        bundle: None,
     };
     let Some(project) = wowlua_driver::load_project(&mut session, &load_options(out, global))
     else {
@@ -781,6 +857,9 @@ pub fn fix(out: &Output, global: &GlobalArgs, manifest: bool) -> bool {
         flavors: None,
         out_dir: None,
         write: false,
+        nolib: false,
+        minify: None,
+        bundle: None,
     };
     let _ = load_and_build(out, &mut session, global, &request);
     out.flush(&mut session)

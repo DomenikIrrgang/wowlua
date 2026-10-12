@@ -970,6 +970,34 @@ impl TocVersion {
     }
 }
 
+/// `compat.per-game`: `true`, or the flavors the project releases one per
+/// packager run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum PerGame {
+    All(bool),
+    Flavors(Vec<String>),
+}
+
+impl Compat {
+    /// Released game by game.
+    pub fn per_game(&self) -> bool {
+        match &self.per_game {
+            Some(PerGame::All(b)) => *b,
+            Some(PerGame::Flavors(list)) => !list.is_empty(),
+            None => false,
+        }
+    }
+
+    /// The flavors released game by game (`None`: all).
+    pub fn per_game_flavors(&self) -> Option<&[String]> {
+        match &self.per_game {
+            Some(PerGame::Flavors(list)) => Some(list),
+            _ => None,
+        }
+    }
+}
+
 /// Line endings of packager-processed files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
@@ -1006,10 +1034,18 @@ pub struct Compat {
     /// `changelog-title`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub changelog_title: Option<String>,
+    /// The packager's nolib zip (`.pkgmeta` `enable-nolib-creation`): made
+    /// next to the normal zip and attached to the GitHub release.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub nolib_package: bool,
+    /// The packager's zip name and upload label template (`-n
+    /// "{file}:{label}"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archive_name: Option<String>,
     /// The project is released one game per packager run (`-g`): packager
     /// flavor blocks apply per flavor.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub per_game: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub per_game: Option<PerGame>,
     /// The license file (`.pkgmeta` `license-output`) the workspace root
     /// copies into each member's output that has none.
     #[serde(default, skip_serializing_if = "Option::is_none")]

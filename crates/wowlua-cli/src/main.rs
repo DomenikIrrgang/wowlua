@@ -110,6 +110,15 @@ enum Command {
     },
     /// Build the AddOn into dist/<profile>/<Name>/
     Build(BuildArgs),
+    /// Build every publish target and package its zip(s) into dist/packages/
+    Package {
+        /// Only these publish targets
+        #[arg(long = "target", value_name = "NAME")]
+        targets: Vec<String>,
+        /// Restrict to these flavors
+        #[arg(long, value_delimiter = ',')]
+        flavor: Vec<String>,
+    },
     /// Check the sources without writing a build
     Check {
         #[command(flatten)]
@@ -373,6 +382,9 @@ fn main() -> ExitCode {
             from_pkgmeta,
         } => commands::init(&out, from_toc, from_pkgmeta),
         Command::Build(args) => commands::build(&out, &cli.global, &args),
+        Command::Package { targets, flavor } => {
+            commands::package(&out, &cli.global, targets, flavor)
+        }
         Command::Check { profile, flavor } => {
             commands::check(&out, &cli.global, &profile.name("dev"), flavor)
         }

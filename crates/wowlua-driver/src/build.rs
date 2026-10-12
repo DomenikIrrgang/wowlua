@@ -26,6 +26,12 @@ pub struct BuildRequest {
     pub out_dir: Option<PathBuf>,
     /// `false` assembles and validates without writing (e.g. `wowlua toc`).
     pub write: bool,
+    /// A nolib package: without embedded `lua-library` dependencies
+    /// (Publishing §11.2.2).
+    pub nolib: bool,
+    /// A publish target's `minify` / `bundle` over the profile's.
+    pub minify: Option<String>,
+    pub bundle: Option<bool>,
 }
 
 impl BuildRequest {
@@ -35,6 +41,9 @@ impl BuildRequest {
             flavors: None,
             out_dir: None,
             write: true,
+            nolib: false,
+            minify: None,
+            bundle: None,
         }
     }
 }
@@ -47,7 +56,7 @@ pub enum Content {
 }
 
 /// Result of a successful build.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BuildOutput {
     pub addon_name: String,
     /// The AddOn folder (written when the request asked for it).
@@ -164,7 +173,15 @@ pub fn build(
     }
 
     let profile = match manifest.profile(&request.profile) {
-        Ok(profile) => profile,
+        Ok(mut profile) => {
+            if let Some(m) = &request.minify {
+                profile.minify = m.clone();
+            }
+            if let Some(b) = request.bundle {
+                profile.bundle = b;
+            }
+            profile
+        }
         Err(_) => {
             session.push(
                 Diagnostic::error("E4006", format!("unknown profile `{}`", request.profile))
@@ -399,12 +416,15 @@ pub fn build(
                 Path::new(&source.src_rel),
                 source.kind == SourceKind::Xml,
             );
+            if request.nolib && source.kind == SourceKind::Xml {
+                processed = crate::keywords::nolib_xml(&processed);
+            }
             // Like the packager: a project released game by game, or one
             // with a single flavor, gets each game's blocks; a multi-version
             // build leaves `@retail@` blocks as written and rejects
             // `@version-…@` ones (decision T145).
             let multi_version =
-                !manifest.manifest.compat.per_game && project.manifest.flavors.len() > 1;
+                !manifest.manifest.compat.per_game() && project.manifest.flavors.len() > 1;
             if multi_version && crate::keywords::has_flavor_blocks(&processed) {
                 if crate::keywords::has_version_blocks(&processed) {
                     session.push(
@@ -970,6 +990,9 @@ pub fn build(
     }
     // Library entry files, unless the package's own XML loads them.
     for (i, lib) in libs.iter().enumerate() {
+        if request.nolib {
+            break;
+        }
         for (entry, entry_flavors) in &lib.entries {
             if xml.lib_refs.get(&i).is_some_and(|r| r.contains(entry)) {
                 continue;
@@ -1152,6 +1175,23 @@ pub fn build(
             &version,
             &build_id,
             toc_data,
+            // A nolib package names its libraries' standalone addons
+            // (not in a converted project: the packager adds none).
+            &if request.nolib && !keywords {
+                libs.iter()
+                    .map(|l| {
+                        l.addon_name.clone().unwrap_or_else(|| {
+                            l.install
+                                .rsplit('/')
+                                .next()
+                                .unwrap_or(&l.install)
+                                .to_string()
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            },
             // The dev window's state (spec §7.7.1).
             profile.dev_console.then(|| {
                 let safe: String = addon_name
@@ -1302,6 +1342,10 @@ pub fn build(
     // `plain-copy`, a downloaded license): no line-ending conversion.
     let mut raw_paths: BTreeSet<String> = BTreeSet::new();
     for (i, lib) in libs.iter().enumerate() {
+        // A nolib package leaves the libraries out (their licenses too).
+        if request.nolib {
+            break;
+        }
         let mut roots: Vec<String> = lib.entries.iter().map(|(e, _)| e.clone()).collect();
         roots.extend(xml.lib_refs.get(&i).into_iter().flatten().cloned());
         let reachable = crate::embed::reachable(session, lib, &roots);
@@ -1441,7 +1485,9 @@ pub fn build(
     // Files the project keeps in a library's folder ship too where the
     // library has none, as the packager copies the project first and the
     // externals over it (decision T144).
-    if let Some(info) = &keyword_info {
+    if let Some(info) = &keyword_info
+        && !request.nolib
+    {
         let tracked = (!profile.debug).then(|| sources::tracked_files(&root));
         for lib in &libs {
             let folder = root.join(&lib.install);
@@ -1667,7 +1713,11 @@ pub fn build(
             .flat_map(|w| w.members.iter())
             .map(|m| root.join(m))
             .collect();
-        let skip = [root.join(&build_cfg.src), root.join(&build_cfg.out)];
+        let mut skip = vec![root.join(&build_cfg.src), root.join(&build_cfg.out)];
+        // A nolib package leaves the libraries' folders out entirely.
+        if request.nolib {
+            skip.extend(libs.iter().map(|l| root.join(&l.install)));
+        }
         ship_project_files(
             &root,
             &members,
@@ -2620,6 +2670,7 @@ fn push_field(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn directives(
     project: &Project,
     flavors: &[String],
@@ -2627,6 +2678,7 @@ fn directives(
     version: &str,
     build_id: &str,
     toc_data: TocData,
+    nolib_optional: &[String],
     dev_saved: Option<String>,
 ) -> Vec<Directive> {
     let manifest = &project.manifest;
@@ -2764,6 +2816,24 @@ fn directives(
         out.push(Directive::new("OnlyBetaAndPTR", "1"));
     }
 
+    // A nolib package's libraries, as standalone addons (Publishing
+    // §11.2.2), join the optional dependencies.
+    let listed: Vec<String> = manifest
+        .manifest
+        .addon_dependencies
+        .iter()
+        .flat_map(|d| d.optional.iter())
+        .filter(|d| d.flavors().is_empty())
+        .map(|d| d.name().to_string())
+        .collect();
+    let nolib_extra: Vec<&str> = nolib_optional
+        .iter()
+        .filter(|n| !listed.contains(n))
+        .map(String::as_str)
+        .collect();
+    if !nolib_extra.is_empty() && manifest.manifest.addon_dependencies.is_none() {
+        out.push(Directive::new("OptionalDeps", nolib_extra.join(", ")));
+    }
     if let Some(deps) = &manifest.manifest.addon_dependencies {
         for (key, list) in [
             ("Dependencies", &deps.required),
@@ -2796,6 +2866,12 @@ fn directives(
                 match runs.last_mut() {
                     Some((last, names)) if *last == restriction => names.push(dep.name()),
                     _ => runs.push((restriction, vec![dep.name()])),
+                }
+            }
+            if key == "OptionalDeps" && !nolib_extra.is_empty() {
+                match runs.iter_mut().find(|(r, _)| r.is_none()) {
+                    Some((_, names)) => names.extend(nolib_extra.iter().copied()),
+                    None => runs.push((None, nolib_extra.clone())),
                 }
             }
             for (restriction, names) in runs {

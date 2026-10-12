@@ -35,6 +35,8 @@ pub struct LuaLib {
     pub pin: Option<String>,
     /// Its repository's packager project file and its path in there.
     pub project_file: Option<(PathBuf, String)>,
+    /// Its standalone addon's name (`addon-name`), for nolib packages.
+    pub addon_name: Option<String>,
     /// With `moved-up`: the folder it was moved out of, whose other files
     /// ship next to it, and the moved folders.
     pub moved_from: Option<(PathBuf, String)>,
@@ -303,6 +305,7 @@ pub fn lua_libraries(
             entries,
             index: idx,
             project_file: p.project_file.clone(),
+            addon_name: entry.addon_name.clone(),
             moved_from: entry.moved_up.as_ref().map(|up| {
                 let up = up.trim_matches('/').to_string();
                 let mut outer = p.dir.clone();

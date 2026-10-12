@@ -1642,6 +1642,7 @@ dependencies = [
  "wowlua-flavors",
  "wowlua-manifest",
  "wowlua-pkg",
+ "zip",
 ]
 
 [[package]]
@@ -1687,6 +1688,7 @@ dependencies = [
  "wowlua-toc",
  "wowlua-types-gen",
  "wowlua-xml",
+ "zip",
 ]
 
 [[package]]

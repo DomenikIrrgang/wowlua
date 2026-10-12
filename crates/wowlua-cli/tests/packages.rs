@@ -1594,3 +1594,86 @@ fn converted_projects_package_like_the_packager() {
         }
     }
 }
+
+#[test]
+fn package_builds_every_target() {
+    let e = env();
+    let stub = git_repo(
+        &e.root.join("LibStub"),
+        &[("LibStub.lua", "-- Public Domain\nLibStub = {}\n")],
+        "1.0",
+    );
+    addon(
+        &e.project,
+        serde_json::json!({
+            "libstub": { "git": stub, "tag": "1.0", "kind": "lua-library", "files": ["LibStub.lua"] }
+        }),
+        serde_json::json!({
+            "flavors": { "standard": {}, "vanilla": {} },
+            "publish": { "targets": {
+                "cf": { "type": "curseforge", "project-id": 1 },
+                "wago": { "type": "wago", "project-id": "abcdefgh" },
+                "gh": { "type": "github", "repository": "o/r", "nolib": true, "split-flavors": true }
+            } }
+        }),
+    );
+    write(&e.project, &[("LICENSE", "MIT")]);
+    wowlua(&e.project, &e.home).arg("fetch").assert().success();
+    git(&e.project, &["init", "-q", "-b", "main"]);
+    git(&e.project, &["add", "-A"]);
+    git(&e.project, &["commit", "-q", "-m", "c"]);
+    git(&e.project, &["tag", "v1.0.0"]);
+    wowlua(&e.project, &e.home)
+        .arg("package")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "Packaged MyAddon-1.0.0-cf.zip (release; cf, wago)",
+        ));
+    let packages = e.project.join("dist/packages");
+    let mut names: Vec<String> = fs::read_dir(&packages)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "MyAddon-1.0.0-cf.zip",
+            "MyAddon-1.0.0-gh-standard-nolib.zip",
+            "MyAddon-1.0.0-gh-vanilla-nolib.zip"
+        ]
+    );
+    let entries = |name: &str| -> Vec<String> {
+        let file = fs::File::open(packages.join(name)).unwrap();
+        let mut z = zip::ZipArchive::new(file).unwrap();
+        (0..z.len())
+            .map(|i| z.by_index(i).unwrap().name().unwrap().to_string())
+            .collect()
+    };
+    let full = entries("MyAddon-1.0.0-cf.zip");
+    assert!(
+        full.contains(&"MyAddon/libs/libstub/LibStub.lua".to_string()),
+        "{full:?}"
+    );
+    assert!(full.contains(&"MyAddon/LICENSE".to_string()), "{full:?}");
+    let nolib = entries("MyAddon-1.0.0-gh-standard-nolib.zip");
+    assert!(!nolib.iter().any(|n| n.contains("LibStub")), "{nolib:?}");
+    let toc = fs::read_to_string(
+        e.project
+            .join("dist/targets/gh-standard/MyAddon/MyAddon.toc"),
+    )
+    .unwrap();
+    assert!(toc.contains("## OptionalDeps: libstub"), "{toc}");
+    // Reproducible: packaging again gives the same bytes.
+    let before = fs::read(packages.join("MyAddon-1.0.0-cf.zip")).unwrap();
+    wowlua(&e.project, &e.home)
+        .arg("package")
+        .assert()
+        .success();
+    assert_eq!(
+        before,
+        fs::read(packages.join("MyAddon-1.0.0-cf.zip")).unwrap()
+    );
+}

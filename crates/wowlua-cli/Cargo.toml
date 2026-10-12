@@ -23,6 +23,7 @@ notify-debouncer-mini.workspace = true
 termcolor = "1.4"
 
 [dev-dependencies]
+zip.workspace = true
 mlua.workspace = true
 assert_cmd.workspace = true
 predicates.workspace = true

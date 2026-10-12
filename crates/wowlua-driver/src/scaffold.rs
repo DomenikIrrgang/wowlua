@@ -1279,7 +1279,13 @@ fn convert_pkgmeta(
         compat.insert("license-output".into(), json!(license));
     }
     if meta.per_game {
-        compat.insert("per-game".into(), json!(true));
+        compat.insert("per-game".into(), json!(meta.per_game_flavors));
+    }
+    if meta.enable_nolib {
+        compat.insert("nolib-package".into(), json!(true));
+    }
+    if let Some(name) = &meta.run_name {
+        compat.insert("archive-name".into(), json!(name));
     }
     if let Some(title) = &meta.changelog_title {
         compat.insert("changelog-title".into(), json!(title));
@@ -1326,29 +1332,43 @@ fn convert_pkgmeta(
             embed(slug);
         }
     }
-    if meta.enable_nolib || !relations.is_empty() {
+    {
         let targets = publish
             .entry("targets")
             .or_insert_with(|| json!({}))
             .as_object_mut()
             .expect("an object");
-        if meta.enable_nolib {
-            match crate::vcs::github_repository(dir) {
-                Some(repository) => {
-                    let name = if targets.contains_key("github") {
-                        "github-nolib"
-                    } else {
-                        "github"
-                    };
-                    targets.insert(
-                        name.into(),
-                        json!({ "type": "github", "repository": repository, "nolib": true }),
-                    );
-                }
-                None => report.warnings.push(Diagnostic::plain_warning(
-                    "`enable-nolib-creation` becomes a GitHub target with `nolib`, but the repository has no GitHub `origin`; not converted",
-                )),
+        // The packager uploads tagged builds to the GitHub repository of
+        // `origin` (decision T157).
+        if let Some(repository) = crate::vcs::github_repository(dir)
+            && !targets.values().any(|t| t["type"] == "github")
+        {
+            targets.insert(
+                "github".into(),
+                json!({ "type": "github", "repository": repository }),
+            );
+        }
+        // Project IDs every packager run passes (`-p` / `-w` / `-a`; 0 unsets).
+        for (site, id) in [
+            ("curseforge", &meta.run_curseforge),
+            ("wowinterface", &meta.run_wowinterface),
+            ("wago", &meta.run_wago),
+        ] {
+            let Some(id) = id else { continue };
+            if id == "0" {
+                targets.shift_remove(site);
+                continue;
             }
+            let value = match id.parse::<u64>() {
+                Ok(n) if site != "wago" => json!(n),
+                _ => json!(id),
+            };
+            targets
+                .entry(site)
+                .or_insert_with(|| json!({ "type": site }))
+                .as_object_mut()
+                .expect("an object")
+                .insert("project-id".into(), value);
         }
         if !relations.is_empty() {
             match targets.get_mut("curseforge").and_then(Value::as_object_mut) {
@@ -1365,9 +1385,31 @@ fn convert_pkgmeta(
             }
         }
     }
+    if publish
+        .get("targets")
+        .and_then(Value::as_object)
+        .is_some_and(Map::is_empty)
+    {
+        publish.shift_remove("targets");
+    }
     if publish.is_empty() {
         object.shift_remove("publish");
     }
+    // Release builds stay what the packager ships: no bundling,
+    // minification or optimization (decision T157).
+    object
+        .entry("profiles")
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .expect("an object")
+        .insert(
+            "release".into(),
+            json!({
+                "bundle": false,
+                "minify": "none",
+                "optimize": { "inline": false, "cache-globals": "off", "dead-code": false }
+            }),
+        );
     let root_addon = report.addon_name.clone();
     let members = init_members(dir, meta, member_dirs, Some((&root_addon, src_dir)), report);
     if !members.is_empty() || !report.external_addons.is_empty() {
@@ -1449,6 +1491,7 @@ fn init_members(
                 .map(|p| p[prefix.len()..].to_string())
                 .collect(),
             per_game: meta.per_game,
+            per_game_flavors: meta.per_game_flavors.clone(),
             split: meta.split,
             unix: meta.unix,
             games: meta

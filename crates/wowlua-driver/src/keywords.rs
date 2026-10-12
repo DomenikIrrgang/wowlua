@@ -171,7 +171,7 @@ fn packager_version(dir: &Path) -> Option<String> {
 
 /// The tag on `HEAD` the packager picks: the most recent one, or the one a
 /// GitHub Actions tag build names (`GITHUB_REF_NAME`).
-pub(crate) fn head_tag(dir: &Path) -> Option<String> {
+pub fn head_tag(dir: &Path) -> Option<String> {
     let tags = git(
         dir,
         &[
@@ -190,6 +190,11 @@ pub(crate) fn head_tag(dir: &Path) -> Option<String> {
         .and_then(|_| std::env::var("GITHUB_REF_NAME").ok())
         .filter(|n| tags.contains(&n.as_str()));
     named.or_else(|| tags.first().map(|t| t.to_string()))
+}
+
+/// `2026-10-12T04:45:27Z` and `20261012044527` of Unix seconds.
+pub fn date_pair(secs: i64) -> (String, String) {
+    dates(secs)
 }
 
 /// `2026-10-12T04:45:27Z` of Unix seconds.
@@ -284,6 +289,12 @@ pub const FLAVOR_KEYWORDS: &[(&str, &str)] = &[
     ("version-mists", "mists"),
     ("version-forever", "camelot"),
 ];
+
+/// An XML file of a nolib package: its `no-lib-strip` blocks commented out,
+/// like the packager's nolib pass.
+pub fn nolib_xml(text: &str) -> String {
+    xml_filter(text, "no-lib-strip", false)
+}
 
 /// Whether `text` uses `@version-…@` blocks, which the packager rejects in
 /// a multi-version build.

@@ -69,12 +69,20 @@ pub struct PkgMeta {
     /// The CI workflows package one game per packager run (`-g`), which
     /// applies the packager's flavor blocks.
     pub per_game: bool,
+    /// The flavors those runs release.
+    pub per_game_flavors: Vec<String>,
     /// The packager makes a TOC per game from `## Interface-<Type>:` lines
     /// (`enable-toc-creation: yes`, or `-S`).
     pub split: bool,
     /// The packager writes LF line endings (every run passes `-u`);
     /// otherwise its default, CR LF.
     pub unix: bool,
+    /// What every packager run passes as `-n` (name template) and `-p` /
+    /// `-w` / `-a` (project IDs).
+    pub run_name: Option<String>,
+    pub run_curseforge: Option<String>,
+    pub run_wowinterface: Option<String>,
+    pub run_wago: Option<String>,
 }
 
 /// The project file names the packager looks for.
@@ -142,8 +150,27 @@ pub fn read_project(dir: &Path, explicit: Option<&Path>) -> Result<Option<PkgMet
     };
     let mut meta = load(&main)?;
     meta.per_game = !runs.is_empty();
+    for run in &runs {
+        if let Some(f) = run.game.as_deref().and_then(crate::keywords::game_flavor)
+            && !meta.per_game_flavors.iter().any(|x| x == f)
+        {
+            meta.per_game_flavors.push(f.to_string());
+        }
+    }
     meta.split |= all_runs.iter().any(|r| r.split);
     meta.unix = !all_runs.is_empty() && all_runs.iter().all(|r| r.unix);
+    // A value every run passes alike.
+    let common = |get: fn(&WorkflowRun) -> &Option<String>| -> Option<String> {
+        let first = get(all_runs.first()?).clone()?;
+        all_runs
+            .iter()
+            .all(|r| get(r).as_deref() == Some(first.as_str()))
+            .then_some(first)
+    };
+    meta.run_name = common(|r| &r.name);
+    meta.run_curseforge = common(|r| &r.curseforge);
+    meta.run_wowinterface = common(|r| &r.wowinterface);
+    meta.run_wago = common(|r| &r.wago);
     for run in &runs {
         let Some(flavor) = run.game.as_deref().and_then(crate::keywords::game_flavor) else {
             continue;
@@ -174,6 +201,12 @@ pub struct WorkflowRun {
     pub split: bool,
     /// `-u`: Unix line endings.
     pub unix: bool,
+    /// `-n`: the zip name and upload label template.
+    pub name: Option<String>,
+    /// `-p`, `-w`, `-a`: CurseForge, WoWInterface and Wago project IDs.
+    pub curseforge: Option<String>,
+    pub wowinterface: Option<String>,
+    pub wago: Option<String>,
 }
 
 /// The packager's options that take a value, as its `getopts` reads them.
@@ -213,6 +246,10 @@ fn parse_run(args: &str) -> WorkflowRun {
             match flag {
                 'g' => run.game = value,
                 'm' => run.file = value.map(|v| v.trim_start_matches("./").to_string()),
+                'n' => run.name = value,
+                'p' => run.curseforge = value,
+                'w' => run.wowinterface = value,
+                'a' => run.wago = value,
                 _ => {}
             }
             break;
@@ -971,6 +1008,7 @@ mod tests {
                 file: Some(".pkgmeta-retail".into()),
                 split: true,
                 unix: true,
+                ..Default::default()
             }
         );
         let dir = tempfile::tempdir().unwrap();

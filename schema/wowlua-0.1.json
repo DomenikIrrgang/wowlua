@@ -1729,9 +1729,27 @@
             "null"
           ]
         },
+        "nolib-package": {
+          "description": "The packager's nolib zip (`.pkgmeta` `enable-nolib-creation`): made\nnext to the normal zip and attached to the GitHub release.",
+          "type": "boolean"
+        },
+        "archive-name": {
+          "description": "The packager's zip name and upload label template (`-n\n\"{file}:{label}\"`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "per-game": {
           "description": "The project is released one game per packager run (`-g`): packager\nflavor blocks apply per flavor.",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PerGame"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "license-output": {
           "description": "The license file (`.pkgmeta` `license-output`) the workspace root\ncopies into each member's output that has none.",
@@ -1763,6 +1781,20 @@
       "enum": [
         "lf",
         "crlf"
+      ]
+    },
+    "PerGame": {
+      "description": "`compat.per-game`: `true`, or the flavors the project releases one per\npackager run.",
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       ]
     },
     "Workspace": {
