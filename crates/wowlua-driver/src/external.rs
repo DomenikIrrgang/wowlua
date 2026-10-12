@@ -81,13 +81,9 @@ pub fn build_external(
                         &package.source,
                         package.pin.as_deref(),
                         profile.debug,
-                        [
-                            "@project-author@",
-                            "@project-version@",
-                            "@project-revision@",
-                        ]
-                        .iter()
-                        .any(|k| text.contains(k)),
+                        crate::keywords::SVN_DETAIL_KEYWORDS
+                            .iter()
+                            .any(|k| text.contains(k)),
                     )
                 });
                 let mut out = if lower.ends_with(".lua") || lower.ends_with(".xml") {

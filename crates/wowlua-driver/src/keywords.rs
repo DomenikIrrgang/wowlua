@@ -349,6 +349,16 @@ pub fn apply_library(text: &str, info: &KeywordInfo, xml: bool) -> String {
     out
 }
 
+/// Keywords whose values of an SVN library need `svn info` / `svn log`.
+pub const SVN_DETAIL_KEYWORDS: &[&str] = &[
+    "@project-author@",
+    "@project-version@",
+    "@project-revision@",
+    "@project-date-iso@",
+    "@project-date-integer@",
+    "@project-timestamp@",
+];
+
 /// The `@file-*@` keywords of one file.
 pub fn substitute_file(text: &str, f: &wowlua_pkg::fetch::FileVcs) -> String {
     let (iso, int) = dates(f.timestamp);

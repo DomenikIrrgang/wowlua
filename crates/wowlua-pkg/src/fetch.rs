@@ -786,6 +786,9 @@ pub fn package_vcs(cache: &Cache, source: &crate::Source, pin: &str, detail: boo
                     if let Some(a) = line.strip_prefix("Last Changed Author: ") {
                         v.author = a.to_string();
                     }
+                    if let Some(d) = line.strip_prefix("Last Changed Date: ") {
+                        v.timestamp = svn_date(d).unwrap_or(0);
+                    }
                     if let Some(r) = line.strip_prefix("Repository Root: ") {
                         root = Some(r.to_string());
                     }
