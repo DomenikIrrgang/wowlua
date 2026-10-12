@@ -66,7 +66,8 @@ indentation and line endings are preserved, and only the affected entries change
 |---------|-------------|
 | `wowlua package [--target <t>] [--flavor <f>…] [--registry]` | Build and package zips into `dist/packages/`. `--registry` creates the registry archive of a library package instead ([Package manager §10.10.3](package-manager.md#10103-package-archive)). |
 | `wowlua publish [--target <t>…] [--dry-run] [--tag <tag>] [--release-type <t>] [--allow-dirty] [--no-test]` | Package and upload ([Publishing §11.9](publishing.md#119-the-publish-command)) |
-| `wowlua login <type>` | Store an API token for a site type in the OS credential store ([Package manager §10.11](package-manager.md#1011-security)) |
+| `wowlua login <type> [--token <t>] [--no-verify]` | Store an API token for a site type (`curseforge`, `wago`, `wowinterface`, `github`, `registry`) in the OS credential store ([Package manager §10.11](package-manager.md#1011-security)). The token comes from `--token`, from stdin when piped, or from a hidden prompt. CurseForge and GitHub tokens are checked with a read-only request first, and a rejected token is not saved. |
+| `wowlua logout <type>` | Remove a saved API token |
 
 ## 12.5 WoW installation integration
 
@@ -298,6 +299,9 @@ Global configuration lives in `$WOWLUA_HOME/config.json` (default `~/.wowlua/con
 API tokens live in the OS credential store (`wowlua login`). Only when no
 credential store is available does `wowlua login` write a `tokens` object into
 this file ([Package manager §10.11](package-manager.md#1011-security)).
+
+`WOWLUA_NO_KEYRING=1` makes `login`, `logout` and `publish` skip the OS
+credential store and use `config.json` only (headless machines, tests).
 
 Environment variables override config values: `WOWLUA_HOME`,
 `WOWLUA_WOW_PATH`, the token variables in [Publishing §11.1.3](publishing.md#1113-tokens),

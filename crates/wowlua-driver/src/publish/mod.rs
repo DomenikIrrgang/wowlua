@@ -215,12 +215,11 @@ pub fn publish(
     Some(report)
 }
 
-/// API tokens (Publishing §11.1.3).
+/// API tokens (Publishing §11.1.3): environment (and the packager's `.env`),
+/// then what `wowlua login` saved.
 struct Tokens {
     /// The packager's `.env` file, in packager mode.
     dotenv: BTreeMap<String, String>,
-    /// `tokens` of `config.json`.
-    config: BTreeMap<String, String>,
     packager: bool,
 }
 
@@ -235,21 +234,7 @@ impl Tokens {
         } else {
             BTreeMap::new()
         };
-        let config = crate::install::wowlua_home()
-            .and_then(|h| std::fs::read_to_string(h.join("config.json")).ok())
-            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
-            .and_then(|v| v.get("tokens").and_then(|t| t.as_object()).cloned())
-            .map(|o| {
-                o.into_iter()
-                    .filter_map(|(k, v)| Some((k, v.as_str()?.to_string())))
-                    .collect()
-            })
-            .unwrap_or_default();
-        Tokens {
-            dotenv,
-            config,
-            packager,
-        }
+        Tokens { dotenv, packager }
     }
 
     /// A variable of the `.env` file or the environment. The packager's
@@ -298,7 +283,7 @@ impl Tokens {
         names
             .iter()
             .find_map(|n| self.var(n))
-            .or_else(|| self.config.get(type_name(target.target_type)).cloned())
+            .or_else(|| crate::credentials::get(type_name(target.target_type)))
             .ok_or_else(|| {
                 names
                     .iter()

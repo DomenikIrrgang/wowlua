@@ -78,6 +78,37 @@ pub struct PublishArgs {
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Site {
+    Curseforge,
+    Wago,
+    Wowinterface,
+    Github,
+    Registry,
+}
+
+impl Site {
+    pub fn id(self) -> &'static str {
+        match self {
+            Site::Curseforge => "curseforge",
+            Site::Wago => "wago",
+            Site::Wowinterface => "wowinterface",
+            Site::Github => "github",
+            Site::Registry => "registry",
+        }
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Site::Curseforge => "CurseForge",
+            Site::Wago => "Wago",
+            Site::Wowinterface => "WoWInterface",
+            Site::Github => "GitHub",
+            Site::Registry => "wowlua registry",
+        }
+    }
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReleaseTypeArg {
     Alpha,
     Beta,
@@ -153,6 +184,24 @@ enum Command {
     },
     /// Package and upload to the publish targets
     Publish(PublishArgs),
+    /// Save an API token for a publish site in the OS credential store
+    Login {
+        /// The site
+        #[arg(value_enum)]
+        site: Site,
+        /// The token (default: read from stdin, or a hidden prompt)
+        #[arg(long)]
+        token: Option<String>,
+        /// Save without checking the token against the site
+        #[arg(long)]
+        no_verify: bool,
+    },
+    /// Remove a saved API token
+    Logout {
+        /// The site
+        #[arg(value_enum)]
+        site: Site,
+    },
     /// Check the sources without writing a build
     Check {
         #[command(flatten)]
@@ -420,6 +469,12 @@ fn main() -> ExitCode {
             commands::package(&out, &cli.global, targets, flavor)
         }
         Command::Publish(args) => commands::publish(&out, &cli.global, args),
+        Command::Login {
+            site,
+            token,
+            no_verify,
+        } => commands::login(&out, site, token, no_verify),
+        Command::Logout { site } => commands::logout(&out, site),
         Command::Check { profile, flavor } => {
             commands::check(&out, &cli.global, &profile.name("dev"), flavor)
         }

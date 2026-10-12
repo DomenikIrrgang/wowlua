@@ -20,6 +20,7 @@ wowlua-pkg.workspace = true
 wowlua-manifest.workspace = true
 clap.workspace = true
 notify-debouncer-mini.workspace = true
+rpassword.workspace = true
 termcolor = "1.4"
 
 [dev-dependencies]

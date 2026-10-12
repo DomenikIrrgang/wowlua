@@ -16,6 +16,8 @@ fn wowlua(dir: &Path, home: &Path) -> Command {
         .env("NO_COLOR", "1")
         .env("WOWLUA_HOME", home)
         .env("WOWLUA_PUBLISH_BACKOFF_MS", "1")
+        // Never the developer's credential store.
+        .env("WOWLUA_NO_KEYRING", "1")
         // Like a CI runner: no git identity.
         .env("GIT_CONFIG_GLOBAL", home.join("no-gitconfig"))
         .env("GIT_CONFIG_NOSYSTEM", "1")
@@ -634,4 +636,66 @@ fn a_failed_curseforge_upload_stops_a_packager_publish() {
     // Tried ten times, like the packager's `retry`; nothing else uploaded.
     assert_eq!(mock.find("POST", "/api/projects/123/upload-file").len(), 10);
     assert!(mock.find("POST", "/addons/update").is_empty());
+}
+
+#[test]
+fn login_saves_tokens_for_publish() {
+    let e = env();
+    let mock = Mock::start(sites(false));
+    native_addon(&e, &mock);
+    // Without a credential store: `config.json`, readable only by the user.
+    wowlua(&e.project, &e.home)
+        .args(["login", "wago", "--token", "wago-saved"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("warning[W4326]"))
+        .stderr(predicate::str::contains(
+            "Saved the Wago token in config.json",
+        ));
+    wowlua(&e.project, &e.home)
+        .args(["login", "wowinterface"])
+        .write_stdin("wowi-saved\n")
+        .assert()
+        .success();
+    let config_path = e.home.join("config.json");
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+    assert_eq!(
+        config["tokens"],
+        serde_json::json!({ "wago": "wago-saved", "wowinterface": "wowi-saved" })
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = fs::metadata(&config_path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+    // The environment wins over saved tokens.
+    wowlua(&e.project, &e.home)
+        .env("CF_API_TOKEN", "cf-secret")
+        .env("GITHUB_TOKEN", "gh-secret")
+        .env("WAGO_API_TOKEN", "wago-env")
+        .arg("publish")
+        .assert()
+        .success();
+    let wago = mock.find("POST", "/api/projects/abcdefgh/version");
+    assert_eq!(wago[0].header("authorization"), Some("Bearer wago-env"));
+    let wowi = mock.find("POST", "/addons/update");
+    assert_eq!(wowi[0].header("x-api-token"), Some("wowi-saved"));
+    wowlua(&e.project, &e.home)
+        .args(["logout", "wago"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Removed the Wago token"));
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+    assert_eq!(
+        config["tokens"],
+        serde_json::json!({ "wowinterface": "wowi-saved" })
+    );
+    wowlua(&e.project, &e.home)
+        .args(["login", "wago", "--token", " "])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no token given"));
 }

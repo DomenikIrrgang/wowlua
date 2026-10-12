@@ -30,6 +30,7 @@ dirs.workspace = true
 globset.workspace = true
 ignore.workspace = true
 indexmap.workspace = true
+keyring.workspace = true
 mlua.workspace = true
 regex.workspace = true
 semver.workspace = true

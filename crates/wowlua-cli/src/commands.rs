@@ -318,6 +318,113 @@ pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> b
     ok
 }
 
+/// Prints one diagnostic.
+fn report(out: &Output, diagnostic: Diagnostic) {
+    let mut session = Session::new();
+    session.push(diagnostic);
+    out.flush(&mut session);
+}
+
+pub fn login(out: &Output, site: crate::Site, token: Option<String>, no_verify: bool) -> bool {
+    use std::io::IsTerminal;
+    use wowlua_driver::credentials::{self, Saved, Verified};
+    let token = match token {
+        Some(t) => t,
+        None if std::io::stdin().is_terminal() => {
+            match rpassword::prompt_password(format!("Paste the {} API token: ", site.title())) {
+                Ok(t) => t,
+                Err(e) => {
+                    report(
+                        out,
+                        Diagnostic::plain_error(format!("cannot read the token: {e}")),
+                    );
+                    return false;
+                }
+            }
+        }
+        None => {
+            let mut line = String::new();
+            if let Err(e) = std::io::stdin().read_line(&mut line) {
+                report(
+                    out,
+                    Diagnostic::plain_error(format!("cannot read the token: {e}")),
+                );
+                return false;
+            }
+            line
+        }
+    };
+    let token = token.trim();
+    if token.is_empty() {
+        report(out, Diagnostic::plain_error("no token given"));
+        return false;
+    }
+    if !no_verify {
+        match credentials::verify(site.id(), token) {
+            Verified::Accepted => out.status("Verified", format!("the {} token", site.title())),
+            Verified::Unchecked(why) => out.status("Note", format!("not checked: {why}")),
+            Verified::Rejected(why) => {
+                report(
+                    out,
+                    Diagnostic::plain_error(format!("{}: {why}; not saved", site.title()))
+                        .with_help("check the token, or save it anyway with `--no-verify`"),
+                );
+                return false;
+            }
+        }
+    }
+    match credentials::set(site.id(), token) {
+        Ok(Saved::CredentialStore) => {
+            out.status(
+                "Saved",
+                format!("the {} token in the OS credential store", site.title()),
+            );
+            true
+        }
+        Ok(Saved::Config) => {
+            report(
+                out,
+                Diagnostic::warning(
+                    "W4326",
+                    "no OS credential store; the token is saved in `config.json` (readable only by you)",
+                ),
+            );
+            out.status(
+                "Saved",
+                format!("the {} token in config.json", site.title()),
+            );
+            true
+        }
+        Err(e) => {
+            report(
+                out,
+                Diagnostic::plain_error(format!("cannot save the token: {e}")),
+            );
+            false
+        }
+    }
+}
+
+pub fn logout(out: &Output, site: crate::Site) -> bool {
+    match wowlua_driver::credentials::remove(site.id()) {
+        Ok(true) => {
+            out.status("Removed", format!("the {} token", site.title()));
+            true
+        }
+        Ok(false) => {
+            out.status("Note", format!("no saved {} token", site.title()));
+            true
+        }
+        Err(e) => {
+            report(
+                out,
+                Diagnostic::plain_error(format!("cannot remove the token: {e}")),
+            );
+            false
+        }
+    }
+}
+
 pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String>) -> bool {
     let mut session = Session::new();
     let request = BuildRequest {
