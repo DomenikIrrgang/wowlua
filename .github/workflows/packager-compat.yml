@@ -1,8 +1,8 @@
 name: packager-compat
 
-# The M6 exit check: Ace3-based addons adopted with `wowlua init
-# --from-pkgmeta` load the same code as the BigWigs packager's build of the
-# same commit: Bartender4, and BigWigs (twelve AddOns through move-folders). Needs the network (CurseForge SVN, GitHub), so it
+# The M6 exit check: addons built with the BigWigs packager, adopted with
+# `wowlua init --from-pkgmeta`, load the same code as the packager's build of
+# the same commit. Each addon is pinned to a tested commit. Needs the network (CurseForge SVN, GitHub), so it
 # runs weekly and on demand rather than on every push.
 
 on:
@@ -25,6 +25,48 @@ jobs:
           - addon: BigWigs
             repo: https://github.com/BigWigsMods/BigWigs
             rev: 1f60846d373b7049c3a2ad1eb7795079e7d747f9
+          - addon: WeakAuras
+            repo: https://github.com/WeakAuras/WeakAuras2
+            rev: 502a9c1537d0f7152b3f884808a84d4e68579678
+          - addon: DBM
+            repo: https://github.com/DeadlyBossMods/DeadlyBossMods
+            rev: 31e47d6a23f4ee96a9ad65ff25ad4eb2b7bdf498
+          - addon: LittleWigs
+            repo: https://github.com/BigWigsMods/LittleWigs
+            rev: dd6eafe383a9d2909f27296a4e6c4193d74c16c0
+          - addon: Plater
+            repo: https://github.com/Tercioo/Plater-Nameplates
+            rev: 01acdc773eec343abe6d171e7fbb844d5ce801c5
+          - addon: Masque
+            repo: https://github.com/SFX-WoW/Masque
+            rev: bedbaa23f541a45fc49566e362e045fa51cd25c7
+          - addon: Quartz
+            repo: https://github.com/Nevcairiel/Quartz
+            rev: ecf6091c6226bc0c95232267328ff8ee53aa76bc
+          - addon: Mapster
+            repo: https://github.com/Nevcairiel/Mapster
+            rev: 8284f439e43b4c868b7ce8f25c7f9d8dcf1da244
+          - addon: BugSack
+            repo: https://github.com/funkydude/BugSack
+            rev: e707fd126f4dc021dc126546a7911f3bfa736cd6
+          - addon: ElvUI
+            repo: https://github.com/tukui-org/ElvUI
+            rev: 41ce96ad7b37d45180dde6c24f4e8574dc8d3782
+          - addon: Details
+            repo: https://github.com/Tercioo/Details-Damage-Meter
+            rev: 5a11e5e20dd2a549784c8a28934f84c42190f454
+          - addon: Rarity
+            repo: https://github.com/WowRarity/Rarity
+            rev: af5be85bbee86992621b9372efff92fbf5d5c115
+          - addon: SimulationCraft
+            repo: https://github.com/simulationcraft/simc-addon
+            rev: 3fe70f34b03784d48bf2c0fb40e518b7f45fc758
+          - addon: AdvancedInterfaceOptions
+            repo: https://github.com/Stanzilla/AdvancedInterfaceOptions
+            rev: 7fa425bad3f08cbd500cd044abe31b3d269ec422
+          - addon: Inventorian
+            repo: https://github.com/Nevcairiel/Inventorian
+            rev: f673ca176fe6e98d8f18c1730f03981ca8ca0b02
     name: ${{ matrix.addon }}
     runs-on: ubuntu-latest
     env:

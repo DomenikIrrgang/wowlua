@@ -1022,9 +1022,35 @@ fn convert_pkgmeta(
     if !exclude.is_empty() {
         build.insert("exclude".into(), json!(exclude));
     }
+    // `plain-copy` patterns (shell wildcards, `*` crossing `/`): files the
+    // packager copies without keyword processing. Matching sources keep
+    // their bytes (no keyword processing for them); the rest are assets.
+    let plain_globs = {
+        let mut b = globset::GlobSetBuilder::new();
+        for p in &meta.plain_copy {
+            let p = p.trim_end_matches('/');
+            for pattern in [p.to_string(), format!("{p}/**")] {
+                if let Ok(g) = globset::GlobBuilder::new(&pattern)
+                    .case_insensitive(true)
+                    .build()
+                {
+                    b.add(g);
+                }
+            }
+        }
+        b.build().unwrap_or_else(|_| globset::GlobSet::empty())
+    };
+    let plain_source = |m: &str| plain_globs.is_match(m);
     let plain: Vec<String> = meta
         .plain_copy
         .iter()
+        .filter(|p| {
+            !moved.iter().any(|m| {
+                globset::Glob::new(p.trim_end_matches('/'))
+                    .map(|g| g.compile_matcher().is_match(m))
+                    .unwrap_or(false)
+            })
+        })
         .flat_map(|p| pattern_of(p))
         .filter(|p| !p.starts_with(&format!("{src_dir}/")))
         .collect();
@@ -1044,7 +1070,7 @@ fn convert_pkgmeta(
         object.shift_remove("build");
     }
     // Keyword substitution, when the sources use packager keywords.
-    let uses_keywords = moved.iter().any(|m| {
+    let uses_keywords = moved.iter().filter(|m| !plain_source(m)).any(|m| {
         let lower = m.to_ascii_lowercase();
         (lower.ends_with(".lua") || lower.ends_with(".xml"))
             && std::fs::read(dir.join(src_dir).join(m))
@@ -1292,6 +1318,22 @@ fn init_suite(dir: &Path, mut meta: crate::pkgmeta::PkgMeta) -> Result<InitRepor
         )));
     }
     flatten_externals(&mut meta, &members, false);
+    // Externals at the top of the package land in the folder named like
+    // the package, which `move-folders` merges the package's own addon into
+    // (`DBM-Core/DBM-Core: DBM-Core`).
+    if let Some((rel, _)) = members.iter().find(|(_, t)| *t == package) {
+        let rel = rel.clone();
+        for e in &mut meta.externals {
+            let inside = members.iter().any(|(r, _)| {
+                e.dir
+                    .to_ascii_lowercase()
+                    .starts_with(&format!("{}/", r.to_ascii_lowercase()))
+            });
+            if !inside {
+                e.dir = format!("{rel}/{}", e.dir);
+            }
+        }
+    }
     let mut report = InitReport {
         addon_name: package,
         ..Default::default()
