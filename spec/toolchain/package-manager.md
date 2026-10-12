@@ -45,9 +45,9 @@ can be used directly: the dependency declaration supplies `kind:
 | Source | Fields | Notes |
 |--------|--------|-------|
 | Registry | `"<semver req>"` or `{ "version": "…", "registry": "…" }` | Default registry: `https://registry.wowlua.dev` ([§10.10](#1010-registry)). Not available until the registry exists: error E4102 (decision T104). |
-| Git | `git`, plus one of `tag`, `branch`, `rev`; optional `subdir`, `submodules` (default `false`) | Locked to a commit hash. Uses the system `git`, so credentials and SSH work as usual. Submodules are only fetched with `"submodules": true`; their commits are fixed by the locked parent commit. |
+| Git | `git`, plus one of `tag`, `branch`, `rev`; optional `subdir`, `submodules` (default `false`) | Locked to a commit hash. Uses the system `git`, so credentials and SSH work as usual. Submodules are only fetched with `"submodules": true`; their commits are fixed by the locked parent commit. `"tag": "latest"` names the newest tag among the last 50 commits of the default branch, re-resolved by `wowlua update` (decision T149). |
 | Path | `path` | Relative to the manifest. Never locked by checksum. For workspaces and local development. |
-| Archive | `archive` (URL to `.zip` / `.tar.gz`; `https://`, or `file://` for a local archive, decision T108), `sha256` (required, of the archive file), optional `strip-prefix` | For release downloads |
+| Archive | `archive` (URL to `.zip` / `.tar.gz`; `https://`, or `file://` for a local archive, decision T108), `sha256` (required, of the archive file), optional `strip-prefix` | For release downloads. Without `strip-prefix`, an archive holding a single folder (a GitHub archive) has that folder as its root (decision T152). |
 | SVN | `svn` (repository URL, may include a path such as `…/trunk/AceAddon-3.0`), optional `rev`, optional `submodules` (default `false`: SVN externals are not fetched) | Locked to a revision number: the explicit `rev`, otherwise the last revision that changed the URL (decision T105). Uses the system `svn` client. Many WoW libraries (Ace3, LibStub, CallbackHandler, LibSharedMedia on `repos.curseforge.com`) are only published this way (decision T51). |
 
 Common fields:
@@ -59,6 +59,7 @@ Common fields:
 | `flavors` | Only included for these flavors |
 | `bundle` | `false` keeps the library as separate files even in bundled builds |
 | `files` | `lua-library` only: explicit ordered list of `.lua` / `.xml` / `.toc` entry files |
+| `moved-up` | The trailing folders of `subdir` / `strip-prefix` a `.pkgmeta` `move-folders` moved up: in a converted project the other files of the folder above ship next to them, as the packager leaves them (decision T152) |
 | `types` | A `types` package or a path to `.d.wowlua` files describing this library |
 | `install-path` | Folder under `build.libs-dir` (default: the dependency key) |
 | `features`, `default-features` | Features of the dependency to enable ([Manifest §9.5](manifest.md#95-dependencies)) |

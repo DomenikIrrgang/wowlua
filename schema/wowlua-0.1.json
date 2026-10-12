@@ -681,6 +681,13 @@
             "null"
           ]
         },
+        "moved-up": {
+          "description": "The trailing folders of `subdir` / `strip-prefix` a `.pkgmeta`\n`move-folders` moved up: the files of the folder above stay next to\nthem in the output, like the packager leaves them.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "kind": {
           "anyOf": [
             {
