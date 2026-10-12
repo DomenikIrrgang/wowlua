@@ -1744,7 +1744,7 @@ fn family_name(flavor: &str) -> &'static str {
 }
 
 /// Replaces TOC variables in `path` (case-insensitive).
-pub(crate) fn substitute(path: &str, flavor: &str, locale: &str) -> String {
+pub fn substitute(path: &str, flavor: &str, locale: &str) -> String {
     let mut out = path.to_string();
     for (var, value) in [
         ("[game]", game_name(flavor)),

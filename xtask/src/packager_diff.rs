@@ -78,15 +78,22 @@ impl Tree {
 
     /// Loaded files in order: TOC lines, each XML file followed by what it
     /// includes. Absolute in-game paths into this AddOn resolve too.
-    fn loaded(&self, toc: &str, flavor: &str, problems: &mut Vec<String>) -> Vec<String> {
+    fn loaded(
+        &self,
+        toc: &str,
+        flavor: &str,
+        locale: &str,
+        problems: &mut Vec<String>,
+    ) -> Vec<String> {
         let text = String::from_utf8_lossy(&self.bytes(toc)).into_owned();
         let parsed = wowlua_toc::parse(&text);
         let mut out = Vec::new();
         for f in &parsed.files {
-            if !applies(flavor, &f.conditions) {
+            if !applies(flavor, &f.conditions) || !locale_applies(locale, &f.conditions) {
                 continue;
             }
-            let path = f.path.replace('\\', "/");
+            // TOC variables (`[Game]`, `[Family]`, `[TextLocale]`).
+            let path = wowlua_driver::build::substitute(&f.path, flavor, locale).replace('\\', "/");
             match self.resolve(&path) {
                 Some(rel) => self.visit(&rel, flavor, &mut out, problems, 0),
                 None => problems.push(format!("{}: {toc} lists missing `{}`", self.name, f.path)),
@@ -196,6 +203,13 @@ fn normalize(path: &str) -> Option<String> {
     Some(parts.join("/"))
 }
 
+fn locale_applies(locale: &str, conditions: &[wowlua_toc::InlineDirective]) -> bool {
+    conditions
+        .iter()
+        .filter(|c| c.name.eq_ignore_ascii_case("AllowLoadTextLocale"))
+        .all(|c| c.values.iter().any(|v| v.eq_ignore_ascii_case(locale)))
+}
+
 fn applies(flavor: &str, conditions: &[wowlua_toc::InlineDirective]) -> bool {
     !wowlua_driver::scaffold::apply_conditions(&[flavor.to_string()], conditions).is_empty()
 }
@@ -241,30 +255,35 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path) -> Result<()> {
             ));
             continue;
         };
-        let a = pk.loaded(&pk_toc, flavor, &mut problems);
-        let b = wl.loaded(&wl_toc, flavor, &mut problems);
-        let b_mapped: Vec<String> = b.iter().map(|p| map(p)).collect();
-        let lower = |v: &[String]| v.iter().map(|p| p.to_ascii_lowercase()).collect::<Vec<_>>();
-        if lower(&a) != lower(&b_mapped) {
-            let first = lower(&a)
-                .iter()
-                .zip(lower(&b_mapped))
-                .position(|(x, y)| *x != y)
-                .unwrap_or(a.len().min(b_mapped.len()));
-            problems.push(format!(
-                "{flavor}: load order differs at #{first}: packager {:?}, wowlua {:?} (packager loads {}, wowlua {})",
+        for locale in wowlua_manifest::model::LOCALES {
+            let a = pk.loaded(&pk_toc, flavor, locale, &mut problems);
+            let b = wl.loaded(&wl_toc, flavor, locale, &mut problems);
+            let b_mapped: Vec<String> = b.iter().map(|p| map(p)).collect();
+            let lower = |v: &[String]| v.iter().map(|p| p.to_ascii_lowercase()).collect::<Vec<_>>();
+            if lower(&a) != lower(&b_mapped) {
+                let first = lower(&a)
+                    .iter()
+                    .zip(lower(&b_mapped))
+                    .position(|(x, y)| *x != y)
+                    .unwrap_or(a.len().min(b_mapped.len()));
+                problems.push(format!(
+                "{flavor} ({locale}): load order differs at #{first}: packager {:?}, wowlua {:?} (packager loads {}, wowlua {})",
                 a.get(first),
                 b_mapped.get(first),
                 a.len(),
                 b.len()
             ));
-        } else {
-            println!("{flavor}: {} files load in the same order", a.len());
+            } else if *locale == "enUS" {
+                println!(
+                    "{flavor}: {} files load in the same order (every client locale)",
+                    a.len()
+                );
+            }
+            for (pa, wb) in a.iter().zip(&b) {
+                loaded_pairs.insert(pa.clone(), wb.clone());
+            }
+            loaded_pk.extend(a.iter().cloned());
         }
-        for (pa, wb) in a.iter().zip(&b) {
-            loaded_pairs.insert(pa.clone(), wb.clone());
-        }
-        loaded_pk.extend(a.iter().cloned());
         // Directives.
         let (da, ia) = pk.directives(&pk_toc, flavor);
         let (db, ib) = wl.directives(&wl_toc, flavor);
@@ -394,6 +413,8 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path) -> Result<()> {
             println!("  {a}");
         }
     }
+    problems.sort();
+    problems.dedup();
     if !problems.is_empty() {
         for p in &problems {
             eprintln!("FAIL {p}");

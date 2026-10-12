@@ -48,7 +48,13 @@ pub fn merge(base: &mut Value, over: &Value) {
 /// A member's manifest with the root's shared defaults beneath it.
 pub fn with_defaults(member: &Value, root: &Value) -> Value {
     let mut merged = serde_json::Map::new();
+    // A root that is a package itself publishes itself: its targets are
+    // not the members' (decision T121).
+    let root_is_package = root.get("package").is_some();
     for key in SHARED_KEYS {
+        if root_is_package && *key == "publish" {
+            continue;
+        }
         if let Some(v) = root.get(*key) {
             merged.insert((*key).to_string(), v.clone());
         }

@@ -456,7 +456,11 @@ fn init_handles_unusual_layouts() {
         !manifest.contains("\"standard\""),
         "classic only: {manifest}"
     );
-    assert!(!manifest.contains("AllowLoadGameType"), "{manifest}");
+    // The addon-wide load condition stays in the TOC (decision T122).
+    assert!(
+        manifest.contains("\"AllowLoadGameType\": \"classic\""),
+        "{manifest}"
+    );
     assert!(addon.join("wowlua-src/src/Core.lua").exists());
     assert!(addon.join("wowlua-src/Data_Era.lua").exists());
     assert!(addon.join("src/Unused.lua").exists(), "unloaded files stay");

@@ -558,7 +558,7 @@ Only in a workspace root manifest, which may omit `package`:
 | `default-members` | Members used when no `-p` is given |
 | `exclude` | Globs excluded from `members` |
 | `build.out` | The single output root for all members (default `"dist"`). A member setting its own `build.out` is error E4316. |
-| `profiles`, `minify-levels`, `check`, `fmt`, `config`, `publish` | Shared defaults. A member's values are merged over them (objects deeply, arrays and scalars replace). Publish targets merge by target name; a member can turn a shared target off with `"enabled": false`. |
+| `profiles`, `minify-levels`, `check`, `fmt`, `config`, `publish` | Shared defaults. A member's values are merged over them (objects deeply, arrays and scalars replace). Publish targets merge by target name; a member can turn a shared target off with `"enabled": false`. When the root is a package itself, its `publish` is its own and not shared (decision T121). |
 
 Within a workspace, a dependency whose name matches a member library resolves
 to that member automatically, without a `path` entry.

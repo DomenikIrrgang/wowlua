@@ -666,6 +666,27 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     {
         addon.insert("toc-data".into(), json!(files));
     }
+    // Addon-wide load conditions stay in the TOC, as the client reads them
+    // there (the flavors already reflect them).
+    if let Some(addon) = manifest.get_mut("addon").and_then(Value::as_object_mut) {
+        for key in ["AllowLoadGameType", "ExcludeLoadGameType"] {
+            let values: BTreeSet<String> = views
+                .iter()
+                .filter(|(_, f)| !f.is_empty())
+                .map(|(t, _)| t.list(|k| k.eq_ignore_ascii_case(key)).join(", "))
+                .collect();
+            if values.len() == 1
+                && let Some(v) = values.into_iter().next().filter(|v| !v.is_empty())
+            {
+                let extra = addon
+                    .entry("toc-extra")
+                    .or_insert_with(|| json!({}))
+                    .as_object_mut()
+                    .expect("an object");
+                extra.insert(key.into(), json!(v));
+            }
+        }
+    }
     if let Some(meta) = &pkgmeta {
         convert_pkgmeta(
             dir,

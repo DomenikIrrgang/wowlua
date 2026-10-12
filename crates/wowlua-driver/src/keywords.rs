@@ -63,7 +63,10 @@ impl KeywordInfo {
             build_timestamp: now,
             ..Default::default()
         };
-        if let Some(line) = git(dir, &["log", "-1", "--format=%H%x09%h%x09%an%x09%ct"]) {
+        if let Some(line) = git(
+            dir,
+            &["log", "-1", "--abbrev=7", "--format=%H%x09%h%x09%an%x09%ct"],
+        ) {
             let parts: Vec<&str> = line.split('\t').collect();
             if parts.len() == 4 {
                 info.hash = parts[0].into();
@@ -250,7 +253,14 @@ pub fn apply(text: &str, info: &KeywordInfo, rel: &Path, xml: bool) -> String {
         let path = rel.to_string_lossy().into_owned();
         let line = git(
             repo,
-            &["log", "-1", "--format=%H%x09%h%x09%an%x09%ct", "--", &path],
+            &[
+                "log",
+                "-1",
+                "--abbrev=7",
+                "--format=%H%x09%h%x09%an%x09%ct",
+                "--",
+                &path,
+            ],
         )
         .unwrap_or_default();
         let parts: Vec<&str> = line.split('\t').collect();
