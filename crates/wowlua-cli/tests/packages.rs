@@ -558,3 +558,166 @@ fn registry_dependencies_are_not_available_yet() {
         .stderr(predicate::str::contains("error[E4102]"))
         .stderr(predicate::str::contains("registry"));
 }
+
+#[test]
+fn dependency_commands() {
+    let e = env();
+    let lib = e.root.join("LibFoo");
+    let url = git_repo(&lib, &[("LibFoo.lua", "-- 1")], "1.0");
+    commit(&lib, &[("LibFoo.lua", "-- 1.1")], Some("1.1"));
+    let branch_lib = e.root.join("LibBranch");
+    let branch_url = git_repo(&branch_lib, &[("LibBranch.lua", "-- a")], "a");
+    addon(&e.project, serde_json::json!({}), serde_json::json!({}));
+    let manifest = || fs::read_to_string(e.project.join("wowlua.json")).unwrap();
+
+    wowlua(&e.project, &e.home)
+        .args([
+            "add",
+            "libfoo",
+            "--git",
+            &url,
+            "--tag",
+            "1.0",
+            "--kind",
+            "lua-library",
+            "--files",
+            "LibFoo.lua",
+        ])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Adding libfoo to dependencies"))
+        .stderr(predicate::str::contains("Locking libfoo 0.0.0+"));
+    let m: serde_json::Value = serde_json::from_str(&manifest()).unwrap();
+    assert_eq!(
+        m["dependencies"]["libfoo"],
+        serde_json::json!({ "git": url, "tag": "1.0", "kind": "lua-library", "files": ["LibFoo.lua"] })
+    );
+    // The rest of the file keeps its formatting.
+    assert!(manifest().starts_with("{\n  \"package\": {\n    \"name\": \"my-addon\""));
+
+    wowlua(&e.project, &e.home)
+        .args([
+            "add",
+            "libbranch",
+            "--git",
+            &branch_url,
+            "--branch",
+            "main",
+            "--kind",
+            "lua-library",
+            "--files",
+            "LibBranch.lua",
+            "--dev",
+        ])
+        .assert()
+        .success();
+    wowlua(&e.project, &e.home)
+        .args(["add", "--addon", "Details", "--optional"])
+        .assert()
+        .success();
+    let m: serde_json::Value = serde_json::from_str(&manifest()).unwrap();
+    assert_eq!(
+        m["addon-dependencies"]["optional"],
+        serde_json::json!(["Details"])
+    );
+
+    wowlua(&e.project, &e.home)
+        .arg("tree")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "my-addon 1.0.0\n├── libfoo 0.0.0+",
+        ))
+        .stdout(predicate::str::contains("(tag 1.0))\n└── libbranch 0.0.0+"))
+        .stdout(predicate::str::contains("[dev]"));
+
+    // A new tag, and a new commit on the branch.
+    commit(&branch_lib, &[("LibBranch.lua", "-- b")], None);
+    wowlua(&e.project, &e.home)
+        .arg("outdated")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("libfoo"))
+        .stdout(predicate::str::contains("change `tag` to \"1.1\""))
+        .stdout(predicate::str::contains("libbranch"));
+
+    let before = lock(&e.project);
+    wowlua(&e.project, &e.home)
+        .args(["update", "libbranch"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Updating libbranch"));
+    let after = lock(&e.project);
+    let source = |l: &serde_json::Value, name: &str| {
+        l["packages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == name)
+            .unwrap()["source"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    assert_ne!(source(&before, "libbranch"), source(&after, "libbranch"));
+    assert_eq!(source(&before, "libfoo"), source(&after, "libfoo"));
+
+    // `--precise` moves a branch pin back; tags are pinned by the manifest.
+    let first = source(&before, "libbranch");
+    let first_commit = first.rsplit('#').next().unwrap().to_string();
+    wowlua(&e.project, &e.home)
+        .args(["update", "libbranch", "--precise", &first_commit])
+        .assert()
+        .success();
+    assert_eq!(source(&lock(&e.project), "libbranch"), first);
+    wowlua(&e.project, &e.home)
+        .args(["update", "libfoo", "--precise", "abc"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("pinned by its declaration"));
+
+    // A failed add leaves the manifest unchanged.
+    let unchanged = manifest();
+    wowlua(&e.project, &e.home)
+        .args([
+            "add",
+            "missing",
+            "--git",
+            &file_url(&e.root.join("nope")),
+            "--kind",
+            "lua-library",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("wowlua.json was left unchanged"));
+    assert_eq!(manifest(), unchanged);
+
+    wowlua(&e.project, &e.home)
+        .args(["remove", "libbranch", "--dev"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Removing libbranch"));
+    assert!(!manifest().contains("libbranch"));
+    wowlua(&e.project, &e.home)
+        .args(["remove", "libbranch"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "`libbranch` is not in `dependencies`",
+        ));
+
+    wowlua(&e.project, &e.home)
+        .args(["cache", "clean"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Removed 0 cache entries"));
+    wowlua(&e.project, &e.home)
+        .args(["cache", "clean", "--all"])
+        .assert()
+        .success();
+    wowlua(&e.project, &e.home)
+        .arg("fetch")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Fetched 1 package"));
+}

@@ -1628,7 +1628,9 @@ dependencies = [
  "termcolor",
  "wowlua-diagnostics",
  "wowlua-driver",
+ "wowlua-flavors",
  "wowlua-manifest",
+ "wowlua-pkg",
 ]
 
 [[package]]

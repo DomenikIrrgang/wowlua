@@ -1,7 +1,7 @@
 //! Command implementations. Each returns `true` on success.
 
 use crate::output::Output;
-use crate::{BuildArgs, GlobalArgs, InstallTarget, Kind};
+use crate::{AddArgs, BuildArgs, GlobalArgs, InstallTarget, Kind};
 use notify_debouncer_mini::{DebouncedEvent, new_debouncer, notify::RecursiveMode};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -24,6 +24,7 @@ fn load_options(out: &Output, global: &GlobalArgs) -> LoadOptions {
         offline: global.offline || global.frozen,
         skip_dependencies: false,
         update: None,
+        precise: None,
         status: Some(out.status_sink()),
     }
 }
@@ -741,4 +742,304 @@ pub fn trace(
     }
     out.print(wowlua_driver::trace::decode(&project, &input));
     out.flush(&mut session)
+}
+
+fn cli_kind_name(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Addon => "addon",
+        Kind::Library => "library",
+        Kind::LuaLibrary => "lua-library",
+        Kind::Types => "types",
+    }
+}
+
+/// Lockfile changes after a dependency command: added, changed and
+/// removed packages.
+fn report_lock_changes(out: &Output, before: &[wowlua_pkg::LockedPackage], project: &Project) {
+    let after = &project.lock.packages;
+    for p in after {
+        match before.iter().find(|b| b.name == p.name) {
+            None => out.status("Locking", format!("{} {}", p.name, p.version)),
+            Some(b) if b.source != p.source => out.status(
+                "Updating",
+                format!("{} {} -> {}", p.name, b.version, p.version),
+            ),
+            Some(_) => {}
+        }
+    }
+    for b in before {
+        if !after.iter().any(|p| p.name == b.name) {
+            out.status("Removing", format!("{} {}", b.name, b.version));
+        }
+    }
+}
+
+fn current_lock(global: &GlobalArgs) -> Vec<wowlua_pkg::LockedPackage> {
+    let cwd = cwd();
+    let manifest = global.manifest.as_ref().map(|m| cwd.join(m));
+    wowlua_manifest::find_manifest(&cwd, manifest.as_deref())
+        .and_then(|m| m.parent().map(Path::to_path_buf))
+        .and_then(|root| {
+            wowlua_driver::lockfile::Lockfile::read(&root)
+                .ok()
+                .flatten()
+        })
+        .map(|l| l.packages)
+        .unwrap_or_default()
+}
+
+/// `wowlua add`.
+pub fn add(out: &Output, global: &GlobalArgs, args: &AddArgs) -> bool {
+    let mut session = Session::new();
+    let before = current_lock(global);
+    let options = load_options(out, global);
+    let project = if args.addon {
+        wowlua_driver::deps::add_addon(&mut session, &options, &args.name, args.optional)
+    } else {
+        let (name, requirement) = match args.name.split_once('@') {
+            Some((n, r)) => (n.to_string(), Some(r.to_string())),
+            None => (args.name.clone(), None),
+        };
+        let request = wowlua_driver::deps::AddRequest {
+            name,
+            requirement,
+            git: args.git.clone(),
+            tag: args.tag.clone(),
+            branch: args.branch.clone(),
+            rev: args.rev.clone(),
+            svn: args.svn.clone(),
+            path: args.path.clone(),
+            archive: args.archive.clone(),
+            sha256: args.sha256.clone(),
+            strip_prefix: args.strip_prefix.clone(),
+            subdir: args.subdir.clone(),
+            kind: args.kind.map(|k| cli_kind_name(k).to_string()),
+            files: args.files.clone(),
+            install_path: args.install_path.clone(),
+            dev: args.dev,
+            optional: args.optional,
+            flavors: args.flavors.clone(),
+            features: args.features.clone(),
+        };
+        wowlua_driver::deps::add(&mut session, &options, &request)
+    };
+    let ok = out.flush(&mut session);
+    match project {
+        Some(p) if ok => {
+            out.status(
+                "Adding",
+                format!(
+                    "{} to {}",
+                    args.name,
+                    if args.addon {
+                        if args.optional {
+                            "addon-dependencies.optional"
+                        } else {
+                            "addon-dependencies.required"
+                        }
+                    } else if args.dev {
+                        "dev-dependencies"
+                    } else {
+                        "dependencies"
+                    }
+                ),
+            );
+            report_lock_changes(out, &before, &p);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// `wowlua remove`.
+pub fn remove(out: &Output, global: &GlobalArgs, name: &str, dev: bool) -> bool {
+    let mut session = Session::new();
+    let before = current_lock(global);
+    let project = wowlua_driver::deps::remove(&mut session, &load_options(out, global), name, dev);
+    let ok = out.flush(&mut session);
+    match project {
+        Some(p) if ok => {
+            report_lock_changes(out, &before, &p);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// `wowlua update [names] [--precise <pin>]`.
+pub fn update(
+    out: &Output,
+    global: &GlobalArgs,
+    names: Vec<String>,
+    precise: Option<String>,
+) -> bool {
+    let mut session = Session::new();
+    if precise.is_some() && names.len() != 1 {
+        session.push(Diagnostic::plain_error(
+            "`--precise` needs exactly one dependency name",
+        ));
+        out.flush(&mut session);
+        return false;
+    }
+    let before = current_lock(global);
+    let options = LoadOptions {
+        update: Some(if names.is_empty() {
+            wowlua_pkg::Update::All
+        } else {
+            wowlua_pkg::Update::Only(names.clone())
+        }),
+        precise: precise.map(|p| (names[0].clone(), p)),
+        ..load_options(out, global)
+    };
+    let project = wowlua_driver::load_project(&mut session, &options);
+    let ok = out.flush(&mut session);
+    match project {
+        Some(p) if ok => {
+            for name in &names {
+                if !p.lock.packages.iter().any(|l| &l.name == name) {
+                    out.status("Warning", format!("`{name}` is not a dependency"));
+                }
+            }
+            report_lock_changes(out, &before, &p);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// `wowlua fetch`.
+pub fn fetch(out: &Output, global: &GlobalArgs) -> bool {
+    let mut session = Session::new();
+    let project = wowlua_driver::load_project(&mut session, &load_options(out, global));
+    let ok = out.flush(&mut session);
+    match project {
+        Some(p) if ok => {
+            out.status(
+                "Fetched",
+                format!(
+                    "{} package{}",
+                    p.deps.packages.len(),
+                    if p.deps.packages.len() == 1 { "" } else { "s" }
+                ),
+            );
+            true
+        }
+        _ => false,
+    }
+}
+
+/// `wowlua tree`.
+pub fn tree(out: &Output, global: &GlobalArgs, flavor: Option<&str>, invert: Option<&str>) -> bool {
+    let mut session = Session::new();
+    let project = wowlua_driver::load_project(&mut session, &load_options(out, global));
+    let ok = out.flush(&mut session);
+    let Some(project) = project.filter(|_| ok) else {
+        return false;
+    };
+    let flavor_id = match flavor {
+        Some(f) => match wowlua_flavors::table().resolve(f) {
+            Some(fl) => Some(fl.id.clone()),
+            None => {
+                session.push(Diagnostic::error("E4004", format!("unknown flavor `{f}`")));
+                out.flush(&mut session);
+                return false;
+            }
+        },
+        None => None,
+    };
+    if let Some(name) = invert
+        && !project.deps.packages.iter().any(|p| p.name == name)
+    {
+        session.push(Diagnostic::plain_error(format!(
+            "`{name}` is not a dependency"
+        )));
+        out.flush(&mut session);
+        return false;
+    }
+    out.print(wowlua_driver::deps::tree(
+        &project,
+        flavor_id.as_deref(),
+        invert,
+    ));
+    true
+}
+
+/// `wowlua outdated`.
+pub fn outdated(out: &Output, global: &GlobalArgs) -> bool {
+    let mut session = Session::new();
+    let options = load_options(out, global);
+    let project = wowlua_driver::load_project(&mut session, &options);
+    let ok = out.flush(&mut session);
+    let Some(project) = project.filter(|_| ok) else {
+        return false;
+    };
+    let rows = wowlua_driver::deps::outdated(
+        &mut session,
+        &project,
+        options.offline,
+        options.status.clone(),
+    );
+    out.flush(&mut session);
+    if rows.is_empty() {
+        out.status("Fresh", "every dependency is up to date");
+        return true;
+    }
+    let width = |f: &dyn Fn(&wowlua_driver::deps::Outdated) -> &str, head: &str| {
+        rows.iter()
+            .map(|r| f(r).len())
+            .max()
+            .unwrap_or(0)
+            .max(head.len())
+    };
+    let (wn, wc, wl) = (
+        width(&|r| &r.name, "name"),
+        width(&|r| &r.current, "current"),
+        width(&|r| &r.latest, "latest"),
+    );
+    let mut text = format!(
+        "{:wn$}  {:wc$}  {:wl$}  to update\n",
+        "name", "current", "latest"
+    );
+    for r in &rows {
+        text.push_str(&format!(
+            "{:wn$}  {:wc$}  {:wl$}  {}\n",
+            r.name, r.current, r.latest, r.action
+        ));
+    }
+    out.print(text);
+    true
+}
+
+/// `wowlua cache clean [--all]`.
+pub fn cache_clean(out: &Output, all: bool) -> bool {
+    let mut session = Session::new();
+    let Some(cache) = wowlua_pkg::Cache::new() else {
+        session.push(
+            Diagnostic::plain_error("cannot find the package cache").with_help("set `WOWLUA_HOME`"),
+        );
+        out.flush(&mut session);
+        return false;
+    };
+    let limit = (!all).then(|| Duration::from_secs(30 * 24 * 60 * 60));
+    match cache.clean(limit) {
+        Ok((removed, freed)) => {
+            out.status(
+                "Removed",
+                format!(
+                    "{} cache entr{} ({:.1} MB)",
+                    removed.len(),
+                    if removed.len() == 1 { "y" } else { "ies" },
+                    freed as f64 / 1_048_576.0
+                ),
+            );
+            true
+        }
+        Err(e) => {
+            session.push(Diagnostic::plain_error(format!(
+                "cannot clean the cache: {e}"
+            )));
+            out.flush(&mut session);
+            false
+        }
+    }
 }

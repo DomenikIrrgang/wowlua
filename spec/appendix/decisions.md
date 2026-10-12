@@ -157,6 +157,7 @@ open for review.
 | T106 | Embedded `lua-library` entry files load before the package's own files, nested dependencies first, otherwise in declaration order. `build.load-order` may name a library entry by its output path (`libs/LibStub/LibStub.lua`) to place it among the package's files **(user, M6)** | Libraries are ready before code uses them; migrated addons keep their exact order. |
 | T107 | A reference in the package's XML into `<libs-dir>/<install-path>/` names a file of that embedded library and is rewritten to its absolute in-game path; that file is then not listed in the TOC again **(M6)** | Existing `embeds.xml` files keep working after `init` moves them into `src/`. |
 | T108 | Archive sources accept `file://` URLs for local archives; every download over the network uses HTTPS **(M6)** | Local release zips and tests need no server. |
+| T109 | `wowlua cache clean` removes cache entries unused for 30 days (every fetch and build stamps what it uses); `--all` empties the cache **(user, M6)** | The cache is shared by all projects; recently used entries of other projects survive. |
 
 ## Standard library
 

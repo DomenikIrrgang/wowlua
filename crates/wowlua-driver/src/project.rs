@@ -23,6 +23,8 @@ pub struct LoadOptions {
     pub skip_dependencies: bool,
     /// Which locked pins may move (`wowlua update`).
     pub update: Option<wowlua_pkg::Update>,
+    /// `wowlua update <name> --precise <pin>`.
+    pub precise: Option<(String, String)>,
     /// Progress lines (`Cloning …`, `Fetching …`).
     pub status: Option<Status>,
 }
@@ -248,6 +250,10 @@ fn resolve_dependencies(
             update: &update,
             compiler: &crate::compiler_version(),
             members: &Default::default(),
+            precise: options
+                .precise
+                .as_ref()
+                .map(|(n, p)| (n.as_str(), p.as_str())),
         },
     );
     match resolved {

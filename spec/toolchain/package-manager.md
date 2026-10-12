@@ -221,7 +221,9 @@ libraries.
 | `…/maps/<build id>/` | Archived source maps of published builds ([Code generation §14.6](codegen.md#146-source-maps)) |
 | `…/config.json` | Global configuration: WoW install paths, registries (see [CLI](cli.md#127-configuration)). Tokens are not stored here unless the OS keychain is unavailable (§10.11). |
 
-`wowlua cache clean` removes unused entries. All cache writes are atomic
+`wowlua cache clean` removes entries that no fetch or build has used for 30
+days; every use stamps the entry (`<entry>.used`). `--all` removes everything
+(decision T109). All cache writes are atomic
 (write to a temp location, then rename), so concurrent builds are safe.
 
 ## 10.8 Workspaces

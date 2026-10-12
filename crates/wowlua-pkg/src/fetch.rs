@@ -129,6 +129,7 @@ impl Fetcher {
     fn git_repo(&self, url: &str, update: bool) -> Result<PathBuf, FetchError> {
         let dir = self.cache.git_dir(url);
         if dir.join("HEAD").exists() {
+            self.cache.touch(&dir);
             if update && !self.offline && self.fetched.borrow_mut().insert(url.to_string()) {
                 self.say("Updating", url);
                 let mut c = git(Some(&dir));
@@ -160,6 +161,7 @@ impl Fetcher {
             });
         }
         cache::commit(&staged, &dir).map_err(|e| FetchError::plain(e.to_string()))?;
+        self.cache.touch(&dir);
         self.fetched.borrow_mut().insert(url.to_string());
         Ok(dir)
     }

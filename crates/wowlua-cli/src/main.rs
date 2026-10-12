@@ -179,6 +179,41 @@ enum Command {
         #[arg(long)]
         build: Option<String>,
     },
+    /// Add a dependency and update the lockfile
+    Add(Box<AddArgs>),
+    /// Remove a dependency
+    Remove {
+        name: String,
+        /// Remove it from dev-dependencies
+        #[arg(long)]
+        dev: bool,
+    },
+    /// Update locked dependency pins within their declarations
+    Update {
+        /// Only these dependencies (default: all)
+        names: Vec<String>,
+        /// Pin one dependency to this git commit or SVN revision
+        #[arg(long, value_name = "PIN")]
+        precise: Option<String>,
+    },
+    /// Download all dependencies into the cache
+    Fetch,
+    /// Show the dependency graph
+    Tree {
+        /// Only dependencies of this flavor
+        #[arg(long)]
+        flavor: Option<String>,
+        /// Show what depends on this package
+        #[arg(long, value_name = "NAME")]
+        invert: Option<String>,
+    },
+    /// List dependencies with newer tags, commits or revisions
+    Outdated,
+    /// Manage the global package cache
+    Cache {
+        #[command(subcommand)]
+        command: CacheCommand,
+    },
     /// Type declaration tools
     Types {
         #[command(subcommand)]
@@ -189,6 +224,68 @@ enum Command {
         /// For example E4002
         code: String,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum CacheCommand {
+    /// Remove cache entries not used for 30 days
+    Clean {
+        /// Remove everything
+        #[arg(long)]
+        all: bool,
+    },
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct AddArgs {
+    /// The dependency name (`name@<req>` for a registry requirement), or
+    /// the AddOn name with --addon
+    pub name: String,
+    /// Add an addon-dependencies entry instead
+    #[arg(long)]
+    pub addon: bool,
+    #[arg(long, value_name = "URL")]
+    pub git: Option<String>,
+    #[arg(long, requires = "git", conflicts_with_all = ["branch", "rev"])]
+    pub tag: Option<String>,
+    #[arg(long, requires = "git", conflicts_with = "rev")]
+    pub branch: Option<String>,
+    /// A git revision or an SVN revision number
+    #[arg(long)]
+    pub rev: Option<String>,
+    #[arg(long, value_name = "URL", conflicts_with = "git")]
+    pub svn: Option<String>,
+    #[arg(long, value_name = "PATH", conflicts_with_all = ["git", "svn"])]
+    pub path: Option<String>,
+    #[arg(long, value_name = "URL", conflicts_with_all = ["git", "svn", "path"], requires = "sha256")]
+    pub archive: Option<String>,
+    #[arg(long, requires = "archive")]
+    pub sha256: Option<String>,
+    #[arg(long, requires = "archive")]
+    pub strip_prefix: Option<String>,
+    #[arg(long, requires = "git")]
+    pub subdir: Option<String>,
+    /// The package kind (needed for sources without a wowlua.json)
+    #[arg(long, value_enum)]
+    pub kind: Option<Kind>,
+    /// lua-library entry files, in load order
+    #[arg(long, value_delimiter = ',')]
+    pub files: Vec<String>,
+    /// Folder under build.libs-dir
+    #[arg(long)]
+    pub install_path: Option<String>,
+    /// Add to dev-dependencies
+    #[arg(long)]
+    pub dev: bool,
+    /// Only included when a feature enables it (with --addon: OptionalDeps)
+    #[arg(long)]
+    pub optional: bool,
+    /// Only for these flavors
+    #[arg(long, value_delimiter = ',')]
+    pub flavors: Vec<String>,
+    /// Features of the dependency to enable
+    #[arg(long, value_delimiter = ',')]
+    pub features: Vec<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -298,6 +395,17 @@ fn main() -> ExitCode {
             build.as_deref(),
         ),
         Command::Fix { manifest } => commands::fix(&out, &cli.global, manifest),
+        Command::Add(args) => commands::add(&out, &cli.global, &args),
+        Command::Remove { name, dev } => commands::remove(&out, &cli.global, &name, dev),
+        Command::Update { names, precise } => commands::update(&out, &cli.global, names, precise),
+        Command::Fetch => commands::fetch(&out, &cli.global),
+        Command::Tree { flavor, invert } => {
+            commands::tree(&out, &cli.global, flavor.as_deref(), invert.as_deref())
+        }
+        Command::Outdated => commands::outdated(&out, &cli.global),
+        Command::Cache {
+            command: CacheCommand::Clean { all },
+        } => commands::cache_clean(&out, all),
         Command::Types {
             command: TypesCommand::Convert { path, out: dir },
         } => commands::types_convert(&out, &path, dir.as_deref()),

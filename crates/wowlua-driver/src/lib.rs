@@ -6,6 +6,7 @@
 
 pub mod build;
 mod compile;
+pub mod deps;
 mod embed;
 pub mod fix;
 pub mod format;

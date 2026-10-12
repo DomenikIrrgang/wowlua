@@ -46,14 +46,14 @@ wowlua <command> [options]
 
 | Command | Description |
 |---------|-------------|
-| `wowlua add <name>[@<req>] [--git <url> (--tag\|--branch\|--rev) <x>] [--path <p>] [--archive <url> --sha256 <h>] [--kind <k>] [--dev] [--optional] [--flavors <f,…>] [--features <a,b>]` | Add a dependency and update the lockfile |
+| `wowlua add <name>[@<req>] [--git <url> [--tag\|--branch\|--rev <x>] [--subdir <d>]] [--svn <url> [--rev <n>]] [--path <p>] [--archive <url> --sha256 <h> [--strip-prefix <p>]] [--kind <k>] [--files <a,b>] [--install-path <p>] [--dev] [--optional] [--flavors <f,…>] [--features <a,b>]` | Add (or replace) a dependency and update the lockfile. If the dependency cannot be resolved, `wowlua.json` is left unchanged |
 | `wowlua add --addon <Name> [--optional]` | Add an `addon-dependencies` entry |
 | `wowlua remove <name> [--dev]` | Remove a dependency |
-| `wowlua update [<name>…] [--precise <version>]` | Update locked versions within requirements |
+| `wowlua update [<name>…] [--precise <pin>]` | Move locked pins within their declarations: branches and default branches to their newest commit, SVN sources without `rev` to their newest revision. Tags and explicit revisions are pinned by the manifest. `--precise` pins one dependency to a given git commit or SVN revision |
 | `wowlua fetch` | Download all dependencies into the cache |
 | `wowlua tree [--flavor <f>] [--invert <name>]` | Show the dependency graph |
-| `wowlua outdated` | List dependencies with newer versions available |
-| `wowlua cache clean` | Prune the global cache |
+| `wowlua outdated` | List dependencies with newer tags (by SemVer), newer commits on their branch, or newer SVN revisions, and what to change |
+| `wowlua cache clean [--all]` | Remove cache entries not used by any fetch or build for 30 days; `--all` empties the cache (decision T109) |
 | `wowlua types sync [--flavor <f>…]` | Refresh the flavor table, the pinned interface numbers and the locked `wow-api-<flavor>` types packages after a game patch ([Package manager §10.9](package-manager.md#109-types-packages)) |
 | `wowlua types convert <path> [--out <dir>]` | Convert LuaLS `---@` annotations into `.d.wowlua` declarations |
 

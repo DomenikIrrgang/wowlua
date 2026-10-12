@@ -117,6 +117,8 @@ pub struct Options<'a> {
     /// Workspace members by package name: dependencies with these names
     /// resolve to them (spec §9.15).
     pub members: &'a HashMap<String, PathBuf>,
+    /// `wowlua update <name> --precise <commit|revision>`.
+    pub precise: Option<(&'a str, &'a str)>,
 }
 
 /// One materialized package version.
@@ -436,7 +438,30 @@ fn materialize(
         .iter()
         .find(|l| l.name == name && l.key() == key)
         .filter(|_| !options.update.allows(name));
-    let pin = locked.and_then(|l| l.pin());
+    let mut pin = locked.and_then(|l| l.pin()).map(str::to_string);
+    if let Some((_, precise)) = options.precise.filter(|(n, _)| *n == name) {
+        pin = Some(match source {
+            Source::Git {
+                reference: crate::source::GitRef::Tag(_) | crate::source::GitRef::Rev(_),
+                ..
+            }
+            | Source::Svn { rev: Some(_), .. } => {
+                return Err(vec![Diagnostic::plain_error(format!(
+                    "dependency `{name}` is pinned by its declaration (`tag` / `rev`); change the manifest instead of using `--precise`"
+                ))]);
+            }
+            Source::Git { url, .. } => fetcher
+                .git_commit(url, &crate::source::GitRef::Rev(precise.to_string()), None)
+                .map_err(|e| vec![diag(e, name)])?,
+            Source::Svn { .. } if precise.parse::<u64>().is_ok() => precise.to_string(),
+            _ => {
+                return Err(vec![Diagnostic::plain_error(format!(
+                    "`--precise {precise}` needs a git commit or an SVN revision number for dependency `{name}`"
+                ))]);
+            }
+        });
+    }
+    let pin = pin.as_deref();
     let (dir, pin) = match source {
         Source::Path { path, dir } => {
             if !dir.join("wowlua.json").exists() && !dir.is_dir() {
