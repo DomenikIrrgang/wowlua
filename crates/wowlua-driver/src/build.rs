@@ -78,7 +78,6 @@ struct FlavorBuild {
 fn flavor_xml(
     text: &str,
     rel: &str,
-    xml: &XmlInfo,
     files: &[(Source, FileId)],
     per_flavor: &BTreeSet<String>,
     xml_per_flavor: &BTreeSet<String>,
@@ -87,16 +86,33 @@ fn flavor_xml(
     let Ok(refs) = wowlua_xml::references(text) else {
         return (text.to_string(), Vec::new());
     };
-    let targets = xml.edges.get(rel).cloned().unwrap_or_default();
+    let Some((me, _)) = files.iter().find(|(s, _)| s.rel == rel) else {
+        return (text.to_string(), Vec::new());
+    };
+    let dir = me.src_rel.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
     let mut replacements = Vec::new();
     let mut shared = Vec::new();
-    for (reference, target) in refs.iter().zip(&targets) {
-        if per_flavor.contains(target) || xml_per_flavor.contains(target) {
-            continue;
-        }
-        let Some((source, _)) = files.iter().find(|(s, _)| &s.rel == target) else {
+    for reference in &refs {
+        // Resolved by path: a flavor's variant may load other files than
+        // the shared text (packager flavor blocks).
+        let joined = normalize(&if dir.is_empty() {
+            reference.normalized()
+        } else {
+            format!("{dir}/{}", reference.normalized())
+        })
+        .to_ascii_lowercase();
+        let Some((source, _)) = files.iter().find(|(s, _)| {
+            let src = s.src_rel.to_ascii_lowercase();
+            src == joined
+                || src
+                    .strip_suffix(".wowlua")
+                    .is_some_and(|stem| format!("{stem}.lua") == joined)
+        }) else {
             continue;
         };
+        if per_flavor.contains(&source.rel) || xml_per_flavor.contains(&source.rel) {
+            continue;
+        }
         let output = source.output_path();
         shared.push(output.clone());
         let conditions = reference.file[reference.path().len()..].to_string();
@@ -395,6 +411,7 @@ pub fn build(
         &libs,
         &addon_name,
         keywords && profile.debug,
+        (&flavor_blocks, &flavors),
     );
 
     // Flavor restrictions (`build.flavor-files`) and the TOC file list.
@@ -713,7 +730,7 @@ pub fn build(
     }
     // Packager flavor blocks: each flavor's variant of the file.
     for rel in &flavor_blocks {
-        let xml = rel.to_ascii_lowercase().ends_with(".xml");
+        let is_xml = rel.to_ascii_lowercase().ends_with(".xml");
         for b in &mut builds {
             let Some(f) = b.flavor.clone() else { continue };
             let base = b
@@ -721,8 +738,9 @@ pub fn build(
                 .compiled
                 .get(rel)
                 .map(|c| c.code.clone())
+                .or_else(|| xml.rewrites.get(rel).map(|t| t.clone().into_bytes()))
                 .unwrap_or_else(|| raw[rel].clone());
-            let code = crate::keywords::apply_flavor(&String::from_utf8_lossy(&base), &f, xml);
+            let code = crate::keywords::apply_flavor(&String::from_utf8_lossy(&base), &f, is_xml);
             b.output.compiled.insert(
                 rel.clone(),
                 crate::compile::Compiled {
@@ -1107,7 +1125,7 @@ pub fn build(
         },
         flavor_orders,
     };
-    let tocs = match wowlua_toc::generate(&toc_input) {
+    let mut tocs = match wowlua_toc::generate(&toc_input) {
         Ok(generated) => generated.files,
         Err(errors) => {
             for error in errors {
@@ -1116,6 +1134,15 @@ pub fn build(
             return None;
         }
     };
+    // The packager substitutes keywords in the whole TOC (`## Notes: …
+    // @project-version@`).
+    if let Some(info) = &keyword_info {
+        for toc in &mut tocs {
+            if toc.content.contains('@') {
+                toc.content = crate::keywords::substitute(&toc.content, info);
+            }
+        }
+    }
 
     // Assemble the output tree.
     let mut out: BTreeMap<String, Content> = BTreeMap::new();
@@ -1140,6 +1167,20 @@ pub fn build(
                 if let Some(map) = &c.map {
                     maps.insert(format!("{f}/{}.map", source.output_path()), map.clone());
                 }
+                // A flavor's XML loads shared files by their in-game path.
+                if source.kind == SourceKind::Xml {
+                    let (content, shared_targets) = flavor_xml(
+                        &String::from_utf8_lossy(&c.code),
+                        &source.rel,
+                        &files,
+                        &per_flavor,
+                        &xml_per_flavor,
+                        &addon_name,
+                    );
+                    flavor_roots.extend(shared_targets);
+                    out.insert(path, Content::Bytes(content.into_bytes()));
+                    continue;
+                }
                 out.insert(path, Content::Bytes(c.code.clone()));
             }
             continue;
@@ -1161,7 +1202,6 @@ pub fn build(
                 let (content, shared_targets) = flavor_xml(
                     &text,
                     &source.rel,
-                    &xml,
                     &files,
                     &per_flavor,
                     &xml_per_flavor,
@@ -1310,6 +1350,10 @@ pub fn build(
         }
     }
     for asset in &assets {
+        // `build.flavor-files` restricts assets too.
+        if restriction(&asset.rel).is_some_and(|list| !list.iter().any(|f| flavors.contains(f))) {
+            continue;
+        }
         let first = asset.rel.split('/').next().unwrap_or_default();
         let reserved = RESERVED_DIRS.contains(&first) && asset.rel.contains('/')
             || RESERVED_FILES.contains(&asset.rel.as_str())
@@ -1371,6 +1415,7 @@ pub fn build(
         &output_paths,
         &variable_outputs,
         &roots,
+        &addon_name,
     );
     if session.has_errors() {
         return None;
@@ -1458,6 +1503,7 @@ fn resolve_xml(
     libs: &[crate::embed::LuaLib],
     addon: &str,
     packager_debug: bool,
+    variants: (&BTreeSet<String>, &[String]),
 ) -> XmlInfo {
     let by_src_rel: HashMap<String, &Source> = files
         .iter()
@@ -1597,6 +1643,27 @@ fn resolve_xml(
                     )
                     .with_label(Span::new(*file, reference.span.clone()), "not found"),
                 ),
+            }
+        }
+        // Files only some flavors' variants load (packager flavor blocks).
+        if variants.0.contains(&source.rel) {
+            for flavor in variants.1 {
+                let variant = crate::keywords::apply_flavor(text, flavor, true);
+                for reference in wowlua_xml::references(&variant).unwrap_or_default() {
+                    let joined = normalize(&if dir.is_empty() {
+                        reference.normalized()
+                    } else {
+                        format!("{dir}/{}", reference.normalized())
+                    });
+                    let Some(target) = by_src_rel.get(&joined.to_ascii_lowercase()) else {
+                        continue;
+                    };
+                    let list = info.edges.entry(source.rel.clone()).or_default();
+                    if !list.contains(&target.rel) {
+                        list.push(target.rel.clone());
+                        info.loaded_by_xml.insert(target.rel.clone());
+                    }
+                }
             }
         }
         replacements.extend(dropped.iter().map(|r| (r, String::new())));
@@ -2621,6 +2688,7 @@ fn licenses_text(dev_fonts: bool, libs: &[(String, String)]) -> String {
 }
 
 /// Output validation (spec §13.8).
+#[allow(clippy::too_many_arguments)]
 fn validate_output(
     session: &mut Session,
     out: &BTreeMap<String, Content>,
@@ -2629,6 +2697,7 @@ fn validate_output(
     output_paths: &HashMap<String, String>,
     variable_outputs: &BTreeSet<String>,
     roots: &BTreeSet<String>,
+    addon: &str,
 ) {
     // Paths must not collide case-insensitively (E4308).
     let mut lower: HashMap<String, &str> = HashMap::new();
@@ -2685,6 +2754,54 @@ fn validate_output(
                 }
             }
         }
+    }
+    // The package's own XML loads only files of the output (W5004): a file
+    // `build.flavor-files` leaves out of a build may still be referenced.
+    let lower_paths: HashSet<String> = out.keys().map(|p| p.to_ascii_lowercase()).collect();
+    let prefix = format!("interface/addons/{}/", addon.to_ascii_lowercase());
+    let mut missing: BTreeSet<(String, String)> = BTreeSet::new();
+    for (path, content) in out {
+        let lower = path.to_ascii_lowercase();
+        if !lower.ends_with(".xml")
+            || !(lower.starts_with("src/") || lower.starts_with("wowlua/flavors/"))
+        {
+            continue;
+        }
+        let bytes = match content {
+            Content::Bytes(b) => b.clone(),
+            Content::Copy(p) => std::fs::read(p).unwrap_or_default(),
+        };
+        let Ok(refs) = wowlua_xml::references(&String::from_utf8_lossy(&bytes)) else {
+            continue;
+        };
+        let dir = path.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+        for r in refs {
+            let target = r.normalized().to_ascii_lowercase();
+            let target = if let Some(rest) = target.strip_prefix(&prefix) {
+                normalize(rest)
+            } else if target.starts_with("interface/") {
+                continue; // another AddOn's file
+            } else {
+                normalize(&format!("{dir}/{target}")).to_ascii_lowercase()
+            };
+            if !lower_paths.contains(&target) {
+                // Per-flavor copies report the shared path once.
+                let shown = path
+                    .strip_prefix("wowlua/flavors/")
+                    .and_then(|r| r.split_once('/'))
+                    .map_or(path.as_str(), |(_, r)| r);
+                missing.insert((shown.to_string(), r.path()));
+            }
+        }
+    }
+    for (path, reference) in missing {
+        session.push(
+            Diagnostic::warning(
+                "W5004",
+                format!("`{path}` loads `{reference}`, which is not part of this build's output"),
+            )
+            .with_help("check `build.exclude` and `build.flavor-files`"),
+        );
     }
     for path in out.keys() {
         let lower = path.to_ascii_lowercase();

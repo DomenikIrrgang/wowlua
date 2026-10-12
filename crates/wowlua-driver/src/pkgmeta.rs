@@ -5,7 +5,8 @@
 //! URLs, `.zip` archives, and git otherwise.
 
 use serde_json::{Map, Value, json};
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use wowlua_diagnostics::Diagnostic;
 
 /// Where an external comes from.
@@ -57,6 +58,13 @@ pub struct PkgMeta {
     pub relations: Vec<(String, String)>,
     /// `license-output`: the license file copied into `move-folders` targets.
     pub license_output: Option<String>,
+    /// The `ignore` lists of the flavors whose packager runs use their own
+    /// project file (`-g <game> -m <file>` in CI workflows), by flavor id;
+    /// flavors packaged with this file are listed with its `ignore`.
+    pub games: BTreeMap<String, Vec<String>>,
+    /// The CI workflows package one game per packager run (`-g`), which
+    /// applies the packager's flavor blocks.
+    pub per_game: bool,
 }
 
 /// The project file names the packager looks for.
@@ -81,6 +89,139 @@ pub fn read(dir: &Path) -> Result<Option<PkgMeta>, Diagnostic> {
 /// is the text before the first `:`; the value has its leading spaces
 /// trimmed, booleans normalized to `yes` / `no`, and one leading and one
 /// trailing quote removed.
+/// Reads the project file of a packager project: `explicit` (`init
+/// --from-pkgmeta <file>`), else one of [`FILES`], else the file its CI
+/// workflows pass to the packager with `-m`. Workflow runs that package a
+/// game (`-g`) with another file give that game's flavor its own `ignore`.
+pub fn read_project(dir: &Path, explicit: Option<&Path>) -> Result<Option<PkgMeta>, Diagnostic> {
+    let runs = workflow_runs(dir);
+    let default = FILES
+        .iter()
+        .find(|f| dir.join(f).is_file())
+        .map(|f| (*f).to_string());
+    let main = match explicit {
+        Some(path) => Some(
+            path.strip_prefix(dir)
+                .unwrap_or(path)
+                .to_string_lossy()
+                .replace('\\', "/"),
+        ),
+        None => default.clone().or_else(|| {
+            let retail = runs.iter().find(|r| {
+                r.game
+                    .as_deref()
+                    .and_then(crate::keywords::interface_type_flavor)
+                    == Some("standard")
+            });
+            retail.or(runs.first()).and_then(|r| r.file.clone())
+        }),
+    };
+    let Some(main) = main else {
+        return Ok(None);
+    };
+    let load = |name: &str| -> Result<PkgMeta, Diagnostic> {
+        let path = dir.join(name);
+        let text = std::fs::read_to_string(&path).map_err(|e| {
+            Diagnostic::plain_error(format!("cannot read `{name}`: {e}")).with_path(&path)
+        })?;
+        let mut meta = parse(&text).map_err(|e| {
+            Diagnostic::plain_error(format!("cannot read `{name}`: {e}")).with_path(&path)
+        })?;
+        meta.file = name.to_string();
+        Ok(meta)
+    };
+    let mut meta = load(&main)?;
+    meta.per_game = runs.iter().any(|r| r.game.is_some());
+    for run in &runs {
+        let Some(flavor) = run
+            .game
+            .as_deref()
+            .and_then(crate::keywords::interface_type_flavor)
+        else {
+            continue;
+        };
+        let file = run.file.clone().or_else(|| default.clone());
+        let ignore = match file {
+            Some(f) if f != main => match load(&f) {
+                Ok(other) => other.ignore,
+                Err(_) => continue,
+            },
+            _ => meta.ignore.clone(),
+        };
+        meta.games.entry(flavor.to_string()).or_insert(ignore);
+    }
+    // Only worth keeping when the flavors differ.
+    if meta.games.values().all(|i| *i == meta.ignore) {
+        meta.games.clear();
+    }
+    Ok(Some(meta))
+}
+
+/// A packager run in a CI workflow: its game (`-g`) and project file (`-m`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkflowRun {
+    pub game: Option<String>,
+    pub file: Option<String>,
+}
+
+/// The packager runs of the project's GitHub workflows: lines passing
+/// `-g` or `-m` to the packager action (`args:`) or to `release.sh`.
+pub fn workflow_runs(dir: &Path) -> Vec<WorkflowRun> {
+    let mut files: Vec<PathBuf> = std::fs::read_dir(dir.join(".github/workflows"))
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.extension().is_some_and(|e| {
+                        e.eq_ignore_ascii_case("yml") || e.eq_ignore_ascii_case("yaml")
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    files.sort();
+    let mut runs = Vec::new();
+    for file in files {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        let mut packager_step = false;
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.contains("BigWigsMods/packager") {
+                packager_step = true;
+            } else if trimmed.starts_with("- ") || trimmed.starts_with("- name:") {
+                packager_step = false;
+            }
+            let relevant =
+                trimmed.contains("release.sh") || (packager_step && trimmed.starts_with("args:"));
+            if !relevant {
+                continue;
+            }
+            let tokens: Vec<String> = trimmed
+                .split_whitespace()
+                .map(|t| t.trim_matches(|c| c == '"' || c == '\'').to_string())
+                .collect();
+            let mut run = WorkflowRun {
+                game: None,
+                file: None,
+            };
+            for pair in tokens.windows(2) {
+                match pair[0].as_str() {
+                    "-g" => run.game = Some(pair[1].clone()),
+                    "-m" => run.file = Some(pair[1].trim_start_matches("./").to_string()),
+                    _ => {}
+                }
+            }
+            if (run.game.is_some() || run.file.is_some()) && !runs.contains(&run) {
+                runs.push(run);
+            }
+        }
+    }
+    runs
+}
+
 fn key_value(line: &str) -> (&str, String) {
     let (key, rest) = line.split_once(':').unwrap_or((line, ""));
     let mut value = rest.trim_start_matches(' ').to_string();

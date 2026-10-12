@@ -26,7 +26,7 @@ wowlua <command> [options]
 | Command | Description |
 |---------|-------------|
 | `wowlua new <path> [--kind addon\|library\|lua-library\|types] [--name <Name>] [--flavors <f,…>] [--ci github]` | Create a new package from a template (§12.9) |
-| `wowlua init [--from-toc <file>] [--from-pkgmeta]` | Create `wowlua.json` in an existing directory (§12.6) |
+| `wowlua init [--from-toc <file>] [--from-pkgmeta [<file>]]` | Create `wowlua.json` in an existing directory (§12.6) |
 | `wowlua check [--flavor <f>…] [--watch]` | Parse and type-check without emitting |
 | `wowlua build [--profile <p> \| --release] [--flavor <f>…] [--watch] [--out <dir>] [--stats] [--reproducible]` | Build the AddOn into `dist/<profile>/<Name>/` |
 | `wowlua dev [--flavor <f>…] [--client <folder>…] [--link] [--wow <install>] [--force]` | Watch, build with the `dev` profile, and sync the AddOn into WoW (§12.5) |
@@ -161,7 +161,9 @@ available.
    `addon.toc-data` files ([Manifest §9.3.2](manifest.md#932-toc-data-files)).
    Addons that load no code at all (data or archive addons) are valid. Lua and
    XML files that no TOC loads are listed in a warning and left in place.
-6. With `--from-pkgmeta` (or automatically if `.pkgmeta` / `pkgmeta.yaml` exists):
+6. With `--from-pkgmeta` (or automatically if `.pkgmeta` / `pkgmeta.yaml` exists;
+   `--from-pkgmeta <file>` names another project file, and without one the
+   file the CI workflows pass to the packager with `-m` is used):
    - `externals` become `dependencies`: git, SVN and zip-archive externals are
      converted (decision T51); hg externals are listed with warning W4333 and
      must be replaced by a git mirror or archive. The common parent folder of the
@@ -202,6 +204,17 @@ available.
      AddOns (decision T133); the files the root addon shares that way move
      into its sources unless `.pkgmeta` ignores them.
    - `license-output` becomes `compat.license-output` (decision T136).
+   - Packager runs in `.github/workflows` that package one game with its own
+     project file (`-g classic -m .pkgmeta-classic.yml`) give that game's
+     flavor its own `ignore`: what every flavor ignores becomes
+     `build.exclude`, the rest `build.flavor-files` (decision T138). Such
+     single-game projects with packager flavor blocks (`@non-retail@`) get
+     `build.flavor-mode: "split"`.
+   - A plain TOC with `## Interface-<Game>:` lines stands for one TOC per
+     game, as the packager's split and single-game builds make them
+     (decision T139). `@toc-version-<game>@` placeholders (the
+     `NumyAddon/ToCVersions` action) take the flavor table's current
+     interface numbers (decision T140).
    - Network operations (clones, fetches, SVN, downloads) are retried up to
      three times, like the packager does.
    - `enable-nolib-creation: yes` adds a GitHub target with `"nolib": true`.

@@ -2,6 +2,7 @@
 //! `build.assets`. `.gitignore` rules and `build.exclude` apply to both.
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -108,28 +109,64 @@ pub fn glob_set_ci(patterns: &[String]) -> GlobSet {
 }
 
 /// Walks `dir` (respecting `.gitignore` and hidden files) and returns files as
-/// `(path relative to root, absolute path)`, skipping `skip_dirs`.
+/// `(path relative to root, absolute path)`, skipping `skip_dirs`. Like git,
+/// `.gitignore` does not apply to files git tracks.
 fn walk(root: &Path, dir: &Path, skip_dirs: &[PathBuf]) -> Vec<(String, PathBuf)> {
-    let skip = skip_dirs.to_vec();
-    let walker = ignore::WalkBuilder::new(dir)
-        .hidden(true)
-        .git_ignore(true)
-        .git_global(false)
-        .git_exclude(true)
-        .require_git(false)
-        .sort_by_file_path(|a, b| a.cmp(b))
-        .filter_entry(move |entry| !skip.iter().any(|s| entry.path() == s))
-        .build();
-    let mut files: Vec<(String, PathBuf)> = walker
-        .filter_map(Result::ok)
-        .filter(|entry| entry.file_type().is_some_and(|t| t.is_file()))
-        .filter_map(|entry| {
-            let rel = crate::fsutil::relative_slash(entry.path(), root)?;
-            Some((rel, entry.into_path()))
-        })
+    let walk_with = |git_ignore: bool| -> Vec<PathBuf> {
+        let skip = skip_dirs.to_vec();
+        ignore::WalkBuilder::new(dir)
+            .hidden(true)
+            .git_ignore(git_ignore)
+            .git_global(false)
+            .git_exclude(git_ignore)
+            .ignore(git_ignore)
+            .require_git(false)
+            .filter_entry(move |entry| !skip.iter().any(|s| entry.path() == s))
+            .build()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().is_some_and(|t| t.is_file()))
+            .map(|entry| entry.into_path())
+            .collect()
+    };
+    let mut paths = walk_with(true);
+    let tracked = tracked_files(dir);
+    if !tracked.is_empty() {
+        let found: HashSet<PathBuf> = paths.iter().cloned().collect();
+        paths.extend(
+            walk_with(false)
+                .into_iter()
+                .filter(|p| !found.contains(p) && tracked.contains(p)),
+        );
+    }
+    let mut files: Vec<(String, PathBuf)> = paths
+        .into_iter()
+        .filter_map(|path| Some((crate::fsutil::relative_slash(&path, root)?, path)))
         .collect();
     files.sort_by(|a, b| a.0.cmp(&b.0));
     files
+}
+
+/// The files under `dir` git tracks (absolute paths); empty outside a
+/// repository.
+fn tracked_files(dir: &Path) -> HashSet<PathBuf> {
+    let Ok(output) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["ls-files", "-z"])
+        .stderr(std::process::Stdio::null())
+        .output()
+    else {
+        return HashSet::new();
+    };
+    if !output.status.success() {
+        return HashSet::new();
+    }
+    output
+        .stdout
+        .split(|b| *b == 0)
+        .filter(|p| !p.is_empty())
+        .map(|p| dir.join(String::from_utf8_lossy(p).as_ref()))
+        .collect()
 }
 
 /// Directories never scanned: the output root and the lockfile's neighbours

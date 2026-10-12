@@ -359,6 +359,7 @@ pub fn addons(dir: &Path) -> Result<()> {
             dir: work.clone(),
             from_toc: None,
             from_pkgmeta: false,
+            pkgmeta_file: None,
             inherited: None,
             addon_name: None,
             neighbors: Vec::new(),

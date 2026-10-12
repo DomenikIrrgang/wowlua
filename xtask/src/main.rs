@@ -54,17 +54,46 @@ fn main() -> Result<()> {
                 _ => bail!("usage: cargo xtask types <fetch|gen> [dir]"),
             }
         }
+        "packager-runs" => {
+            // The single-game packager runs of a project's CI workflows:
+            // `<game> <flavor> <project file or ->` per line.
+            let dir = PathBuf::from(std::env::args().nth(2).unwrap_or_else(|| ".".into()));
+            let mut seen = std::collections::BTreeSet::new();
+            for run in wowlua_driver::pkgmeta::workflow_runs(&dir) {
+                let Some(game) = run.game else { continue };
+                let Some(flavor) = wowlua_driver::keywords::interface_type_flavor(&game) else {
+                    continue;
+                };
+                if seen.insert(flavor) {
+                    println!("{game} {flavor} {}", run.file.as_deref().unwrap_or("-"));
+                }
+            }
+            Ok(())
+        }
         "packager-diff" => {
-            let args: Vec<PathBuf> = std::env::args().skip(2).map(PathBuf::from).collect();
+            let mut raw: Vec<String> = std::env::args().skip(2).collect();
+            let only = match raw.iter().position(|a| a == "--flavor") {
+                Some(i) if i + 1 < raw.len() => {
+                    let flavor = raw.remove(i + 1);
+                    raw.remove(i);
+                    Some(flavor)
+                }
+                _ => None,
+            };
+            let args: Vec<PathBuf> = raw.into_iter().map(PathBuf::from).collect();
             match args.as_slice() {
-                [packager, wowlua, manifest] => packager_diff::run(packager, wowlua, manifest),
-                [release, project] => packager_diff::run_all(release, project),
+                [packager, wowlua, manifest] => {
+                    packager_diff::run(packager, wowlua, manifest, only.as_deref())
+                }
+                [release, project] => packager_diff::run_all(release, project, only.as_deref()),
                 _ => bail!(
-                    "usage: cargo xtask packager-diff <release dir> <wowlua project> | <packager dir> <wowlua dir> <wowlua.json>"
+                    "usage: cargo xtask packager-diff [--flavor <id>] <release dir> <wowlua project> | <packager dir> <wowlua dir> <wowlua.json>"
                 ),
             }
         }
-        _ => bail!("usage: cargo xtask <codes|schema|check|corpus|types|packager-diff>"),
+        _ => bail!(
+            "usage: cargo xtask <codes|schema|check|corpus|types|packager-diff|packager-runs>"
+        ),
     }
 }
 

@@ -236,6 +236,8 @@ pub struct InitRequest {
     /// `--from-pkgmeta`: require a `.pkgmeta` (it is converted whenever it
     /// exists).
     pub from_pkgmeta: bool,
+    /// `--from-pkgmeta <file>`: the packager project file to convert.
+    pub pkgmeta_file: Option<PathBuf>,
     /// For a folder `move-folders` makes a workspace member: the parts of
     /// the parent's `.pkgmeta` inside it, relative to it.
     pub inherited: Option<crate::pkgmeta::PkgMeta>,
@@ -300,7 +302,8 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             // A repository of several addons.
             if request.inherited.is_none()
                 && request.from_toc.is_none()
-                && let Some(meta) = crate::pkgmeta::read(dir)?
+                && let Some(meta) =
+                    crate::pkgmeta::read_project(dir, request.pkgmeta_file.as_deref())?
             {
                 return init_suite(dir, meta);
             }
@@ -309,7 +312,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     };
     let mut pkgmeta = match &request.inherited {
         Some(m) => Some(m.clone()),
-        None => crate::pkgmeta::read(dir)?,
+        None => crate::pkgmeta::read_project(dir, request.pkgmeta_file.as_deref())?,
     };
     let external_addons = match pkgmeta.as_mut() {
         Some(m) => {
@@ -348,17 +351,9 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     let table = wowlua_flavors::table();
     let mut infos: Vec<(wowlua_toc::ParsedToc, Option<String>, Vec<String>)> = Vec::new();
     let mut all_flavors: Vec<String> = Vec::new();
-    for (path, _, suffix) in &tocs {
-        let text = std::fs::read_to_string(path).map_err(|e| {
-            Diagnostic::plain_error(format!("cannot read `{}`: {e}", path.display()))
-        })?;
-        // A packager project's TOC as the packager packages it.
-        let text = if pkgmeta.is_some() {
-            crate::keywords::packaged_toc(&text)
-        } else {
-            text
-        };
-        let toc = wowlua_toc::parse(&text);
+    let (tocs, texts): (Vec<_>, Vec<_>) = toc_views(&tocs, pkgmeta.is_some())?.into_iter().unzip();
+    for ((_, _, suffix), text) in tocs.iter().zip(&texts) {
+        let toc = wowlua_toc::parse(text);
         let meaning = suffix.as_deref().and_then(|s| table.suffix_meaning(s));
         let mut candidates: Vec<String> = Vec::new();
         for interface in toc.interfaces() {
@@ -1078,14 +1073,16 @@ fn convert_pkgmeta(
             .replace('\\', "/");
         let lower = p.to_ascii_lowercase();
         let mut out = Vec::new();
+        let moved_inside = moved_lower
+            .iter()
+            .any(|m| m.starts_with(&format!("{lower}/")));
         if moved_lower.contains(&lower) {
             out.push(format!("{src_dir}/{p}"));
-        } else if dir.join(&p).is_dir() {
-            out.push(format!("{p}/**"));
-            if moved_lower
-                .iter()
-                .any(|m| m.starts_with(&format!("{lower}/")))
-            {
+        } else if dir.join(&p).is_dir() || moved_inside {
+            if dir.join(&p).is_dir() {
+                out.push(format!("{p}/**"));
+            }
+            if moved_inside {
                 out.push(format!("{src_dir}/{p}/**"));
             }
         } else {
@@ -1098,9 +1095,92 @@ fn convert_pkgmeta(
         .or_insert_with(|| json!({}))
         .as_object_mut()
         .expect("an object");
-    let exclude: Vec<String> = meta.ignore.iter().flat_map(|p| pattern_of(p)).collect();
+    // Each flavor's `ignore`: its own project file's (per-game packager
+    // runs), else that of the other flavors of its family when they agree,
+    // else the main file's. What every flavor ignores is excluded; the rest
+    // restricts files to the flavors that keep them (`build.flavor-files`).
+    let table = wowlua_flavors::table();
+    let ignore_of = |flavor: &String| -> Vec<String> {
+        if let Some(own) = meta.games.get(flavor) {
+            return own.clone();
+        }
+        let family = table.flavor(flavor).map(|f| f.family);
+        let kin: Vec<&Vec<String>> = meta
+            .games
+            .iter()
+            .filter(|(f, _)| table.flavor(f).map(|f| f.family) == family)
+            .map(|(_, ignore)| ignore)
+            .collect();
+        match kin.first() {
+            Some(first) if kin.iter().all(|i| i == first) => (*first).clone(),
+            _ => meta.ignore.clone(),
+        }
+    };
+    let per_flavor: Vec<(String, Vec<String>)> = all_flavors
+        .iter()
+        .map(|f| (f.clone(), ignore_of(f)))
+        .collect();
+    if !meta.games.is_empty() {
+        let main: Vec<&str> = per_flavor
+            .iter()
+            .filter(|(_, ignore)| *ignore == meta.ignore)
+            .map(|(f, _)| f.as_str())
+            .collect();
+        report.warnings.push(Diagnostic::note(format!(
+            "the CI workflows package games with different project files; `{}`'s `ignore` applies to {}, the others' to the rest (`build.flavor-files`)",
+            meta.file,
+            if main.is_empty() { "no flavor".to_string() } else { main.join(", ") }
+        )));
+    }
+    let mut patterns: Vec<String> = Vec::new();
+    for (_, ignore) in &per_flavor {
+        for p in ignore {
+            if !patterns.contains(p) {
+                patterns.push(p.clone());
+            }
+        }
+    }
+    let mut exclude: Vec<String> = Vec::new();
+    let mut flavor_files = Map::new();
+    for p in &patterns {
+        let keeping: Vec<&String> = per_flavor
+            .iter()
+            .filter(|(_, ignore)| !ignore.contains(p))
+            .map(|(f, _)| f)
+            .collect();
+        if keeping.is_empty() {
+            exclude.extend(pattern_of(p));
+        } else {
+            for glob in pattern_of(p) {
+                flavor_files.insert(glob, json!(keeping));
+            }
+        }
+    }
     if !exclude.is_empty() {
         build.insert("exclude".into(), json!(exclude));
+    }
+    if !flavor_files.is_empty() {
+        let existing = build
+            .entry("flavor-files")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("an object");
+        for (glob, keeping) in flavor_files {
+            existing.entry(glob).or_insert(keeping);
+        }
+    }
+    // Packager flavor blocks (`@retail@`, `@non-retail@`, `@version-…@`)
+    // need a compile per flavor.
+    let flavor_blocks = meta.per_game
+        && all_flavors.len() > 1
+        && moved.iter().any(|rel| {
+            let lower = rel.to_ascii_lowercase();
+            (lower.ends_with(".lua") || lower.ends_with(".xml"))
+                && std::fs::read_to_string(dir.join(src_dir).join(rel))
+                    .is_ok_and(|text| crate::keywords::has_flavor_blocks(&text))
+        });
+    if flavor_blocks {
+        build.insert("flavor-mode".into(), json!("split"));
     }
     // `plain-copy` patterns that match sources keep those files
     // unprocessed (`compat.plain-copy`); the rest become assets.
@@ -1295,6 +1375,19 @@ fn init_members(
                 .filter(|p| inside(p))
                 .map(|p| p[prefix.len()..].to_string())
                 .collect(),
+            per_game: meta.per_game,
+            games: meta
+                .games
+                .iter()
+                .map(|(flavor, ignore)| {
+                    let inner = ignore
+                        .iter()
+                        .filter(|p| inside(p))
+                        .map(|p| p[prefix.len()..].to_string())
+                        .collect();
+                    (flavor.clone(), inner)
+                })
+                .collect(),
             // Patterns without a folder apply everywhere.
             plain_copy: meta
                 .plain_copy
@@ -1309,10 +1402,16 @@ fn init_members(
                 .collect(),
             ..Default::default()
         };
+        // Per-game `ignore` lists matter only where they differ.
+        let mut inherited = inherited;
+        if inherited.games.values().all(|i| *i == inherited.ignore) {
+            inherited.games.clear();
+        }
         match init_package(&InitRequest {
             dir: dir.join(rel),
             from_toc: None,
             from_pkgmeta: false,
+            pkgmeta_file: None,
             inherited: Some(inherited),
             addon_name: Some(to.clone()),
             neighbors: package.iter().filter(|n| n.name != *to).cloned().collect(),
@@ -1825,6 +1924,102 @@ fn find_tocs(
     // The plain TOC first, so it provides the metadata.
     selected.sort_by_key(|(_, _, suffix)| suffix.is_some());
     Ok(selected)
+}
+
+/// The text of each TOC as `init` reads it. A packager project's TOC is
+/// read as the packager packages it; one with `## Interface-<Type>:` lines
+/// stands for a TOC per game type, like the packager's split and
+/// single-game builds make: each with that type's interface numbers and
+/// flavor blocks, under the type's suffix, besides the plain (retail) TOC
+/// when it has `## Interface:` numbers of its own.
+#[allow(clippy::type_complexity)]
+fn toc_views(
+    tocs: &[(PathBuf, String, Option<String>)],
+    packaged: bool,
+) -> Result<Vec<((PathBuf, String, Option<String>), String)>, Diagnostic> {
+    let table = wowlua_flavors::table();
+    let mut out = Vec::new();
+    for entry in tocs {
+        let (path, _, suffix) = entry;
+        let text = std::fs::read_to_string(path).map_err(|e| {
+            Diagnostic::plain_error(format!("cannot read `{}`: {e}", path.display()))
+        })?;
+        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+        let text = crate::keywords::toc_version_placeholders(text);
+        if !packaged {
+            out.push((entry.clone(), text));
+            continue;
+        }
+        let typed: Vec<(&'static str, String)> = if suffix.is_none() {
+            wowlua_toc::parse(&text)
+                .directives
+                .iter()
+                .filter_map(|d| {
+                    let kind = d
+                        .key
+                        .get(..10)
+                        .filter(|k| k.eq_ignore_ascii_case("Interface-"))
+                        .map(|_| &d.key[10..])?;
+                    Some((
+                        crate::keywords::interface_type_flavor(kind)?,
+                        d.value.trim().to_string(),
+                    ))
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        if typed.is_empty() {
+            out.push((entry.clone(), crate::keywords::packaged_toc(&text)));
+            continue;
+        }
+        let without_typed = |t: &str| -> String {
+            t.split_inclusive('\n')
+                .filter(|l| {
+                    !l.trim_start()
+                        .get(..13)
+                        .is_some_and(|p| p.eq_ignore_ascii_case("## Interface-"))
+                })
+                .collect()
+        };
+        // The plain TOC, for retail, when it has interface numbers.
+        if !wowlua_toc::parse(&text).interfaces().is_empty() {
+            let plain = crate::keywords::packaged_toc_for(&text, Some("standard"));
+            out.push((entry.clone(), without_typed(&plain)));
+        }
+        for (flavor, numbers) in typed {
+            let Some(game_suffix) = table
+                .flavor(flavor)
+                .and_then(|f| f.game_suffixes.first().cloned())
+            else {
+                continue;
+            };
+            let view = without_typed(&crate::keywords::packaged_toc_for(&text, Some(flavor)));
+            let mut replaced = false;
+            let mut lines: String = view
+                .split_inclusive('\n')
+                .map(|l| {
+                    let is_interface = l
+                        .trim_start()
+                        .get(..13)
+                        .is_some_and(|p| p.eq_ignore_ascii_case("## Interface:"));
+                    if is_interface && !replaced {
+                        replaced = true;
+                        format!("## Interface: {numbers}\n")
+                    } else if is_interface {
+                        String::new()
+                    } else {
+                        l.to_string()
+                    }
+                })
+                .collect();
+            if !replaced {
+                lines = format!("## Interface: {numbers}\n{lines}");
+            }
+            out.push(((path.clone(), entry.1.clone(), Some(game_suffix)), lines));
+        }
+    }
+    Ok(out)
 }
 
 /// The folder `init` moves sources into: `src`, or `wowlua-src` when the

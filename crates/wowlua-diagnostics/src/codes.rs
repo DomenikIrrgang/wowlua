@@ -160,6 +160,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E5001", summary: "Lua 5.1 limit exceeded (locals, upvalues, registers, constants, syntax levels, jump distance), including generated locals" },
     CodeInfo { code: "E5002", summary: "Output validation failed (missing or unreachable file, unresolvable XML reference, invalid TOC or XML)" },
     CodeInfo { code: "W5003", summary: "Unresolvable XML reference in a packager `@debug@` block, left out of a debug build" },
+    CodeInfo { code: "W5004", summary: "An XML file of the output loads a file that is not part of the output" },
     CodeInfo { code: "W6001", summary: "Code inspects its own file name (`debugstack`, `debuglocals`), which changes when bundled" },
     CodeInfo { code: "W6002", summary: "Side-effect-free, unused module removed by dead-code elimination" },
     CodeInfo { code: "E6003", summary: "Unknown minification pass name" },

@@ -186,6 +186,12 @@ open for review.
 | T135 | A byte order mark at the start of an XML file is ignored **(M6, AllTheThings/MythicDungeonTools test)** | The client accepts it; AllTheThings' database XML files start with one. |
 | T136 | `compat.license-output` (from `.pkgmeta` `license-output`): the root's license file ships with the root addon and is copied into each workspace member's output that has none **(user, M6, TellMeWhen test)** | The packager copies it into every `move-folders` addon. |
 | T137 | `build.load-order` contradictions (E1035) are checked per flavor, and a file loaded by several XML files counts at the first one that loads it for that flavor **(M6, Cell test)** | Cell loads its libraries through a different XML file per flavor. |
+| T138 | `init` reads the packager runs of a project's GitHub workflows (`-g <game> -m <file>`): flavors packaged with another project file keep its `ignore`, written as `build.flavor-files` (which now also restricts assets); a flavor without a run of its own takes its family's file when the family agrees, else the main file **(user, M6, KuiNameplates test)** | KuiNameplates packages classic with a file that keeps the classic-only libraries. |
+| T139 | A plain TOC with `## Interface-<Game>:` lines is read as one TOC per game type, each with that type's numbers and TOC flavor blocks, besides the plain TOC for retail **(user, M6, KuiNameplates test)** | The packager's split (`-S`) and single-game (`-g`) builds make those TOCs from it. |
+| T140 | `@toc-version-<game>@` in TOCs (the `NumyAddon/ToCVersions` action) stands for the current interface numbers of the game's flavor **(user, M6, BlizzMove test)** | Projects using the action declare their flavors only through the placeholders. |
+| T141 | `.gitignore` excludes only files git does not track, like git and the packager **(M6, AtlasLootClassic test)** | AtlasLootClassic ignores `data.lua` but tracks several. |
+| T142 | With `compat.packager-keywords`, repository keywords are substituted in generated TOCs too (`## Notes: … @project-version@`) **(M6, TotalRP3 test)** | The packager substitutes keywords in the whole TOC file. |
+| T143 | In split flavor mode, a flavor's variant of an XML file loads shared files by their in-game path, and the XML analysis covers what every flavor's variant loads; an XML file that loads a file missing from the output gets W5004 **(M6, KuiNameplates test)** | Flavor variants live under `wowlua/flavors/<id>/`; `@non-retail@` blocks load files only some flavors ship. |
 
 ## Standard library
 

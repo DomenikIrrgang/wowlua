@@ -1412,3 +1412,81 @@ fn flavors_keep_their_own_saved_variables_and_publish_ids() {
     assert!(mainline.contains("## X-Curse-Project-ID: 42\n"));
     assert!(classic.contains("## X-Curse-Project-ID: 42\n"));
 }
+
+#[test]
+fn init_reads_per_game_packager_runs() {
+    let e = env();
+    let dir = &e.project;
+    git_repo(
+        dir,
+        &[
+            (
+                ".github/workflows/release.yml",
+                "jobs:\n  release:\n    steps:\n      - name: Retail\n        uses: BigWigsMods/packager@v2\n        with:\n          args: -g retail -m .pkgmeta.yml\n      - name: Classic\n        uses: BigWigsMods/packager@v2\n        with:\n          args: -g classic -m .pkgmeta-classic.yml\n",
+            ),
+            (
+                ".pkgmeta.yml",
+                "package-as: MyAddon\nignore:\n    - lib/ClassicOnly\n",
+            ),
+            (".pkgmeta-classic.yml", "package-as: MyAddon\n"),
+            (
+                "MyAddon.toc",
+                "## Interface: 120100\n## Interface-Classic: 11509\n## Title: My Addon\n## Notes: Version @project-version@\nembeds.xml\ncore.lua\n",
+            ),
+            (
+                "embeds.xml",
+                "<Ui>\n<!--@non-retail@\n<Script file=\"lib\\ClassicOnly\\lib.lua\"/>\n@end-non-retail@-->\n</Ui>\n",
+            ),
+            ("lib/ClassicOnly/lib.lua", "ClassicOnly = true\n"),
+            (".gitignore", "core.lua\n"),
+        ],
+        "1.0",
+    );
+    // A tracked file `.gitignore` matches still builds, like with git.
+    write(dir, &[("core.lua", "local _, ns = ...\n")]);
+    git(dir, &["add", "-f", "core.lua"]);
+    git(dir, &["commit", "-q", "-m", "core"]);
+    wowlua(dir, &e.home)
+        .args(["init", "--from-pkgmeta"])
+        .assert()
+        .success();
+    let m: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("wowlua.json")).unwrap()).unwrap();
+    let flavors: Vec<&String> = m["flavors"].as_object().unwrap().keys().collect();
+    assert_eq!(flavors, ["standard", "vanilla"]);
+    assert_eq!(
+        m["build"]["flavor-files"]["src/lib/ClassicOnly/**"],
+        serde_json::json!(["vanilla"])
+    );
+    assert_eq!(m["build"]["flavor-mode"], "split");
+    assert!(m["build"].get("exclude").is_none());
+
+    wowlua(dir, &e.home)
+        .args(["build", "--release", "--flavor", "standard"])
+        .assert()
+        .success();
+    let out = dir.join("dist/release/MyAddon");
+    assert!(!out.join("src/lib/ClassicOnly/lib.lua").exists());
+    let toc = fs::read_to_string(
+        fs::read_dir(&out)
+            .unwrap()
+            .flatten()
+            .find(|e| e.file_name().to_string_lossy().ends_with(".toc"))
+            .unwrap()
+            .path(),
+    )
+    .unwrap();
+    assert!(toc.contains("src\\core.lua"), "{toc}");
+    assert!(!toc.contains("@project-version@"), "{toc}");
+
+    wowlua(dir, &e.home)
+        .args(["build", "--release", "--flavor", "vanilla"])
+        .assert()
+        .success();
+    assert!(out.join("src/lib/ClassicOnly/lib.lua").exists());
+    let embeds = fs::read_to_string(out.join("src/embeds.xml")).unwrap();
+    assert!(
+        embeds.contains("<!--@non-retail@-->"),
+        "the classic variant loads the library: {embeds}"
+    );
+}

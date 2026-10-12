@@ -246,7 +246,7 @@ pub const FLAVOR_KEYWORDS: &[(&str, &str)] = &[
 pub fn has_flavor_blocks(text: &str) -> bool {
     FLAVOR_KEYWORDS
         .iter()
-        .any(|(k, _)| text.contains(&format!("@{k}@")))
+        .any(|(k, _)| text.contains(&format!("@{k}@")) || text.contains(&format!("@non-{k}@")))
 }
 
 /// Deletes `@do-not-package@` blocks, lines included, like the packager.
@@ -397,9 +397,25 @@ pub fn apply_flavor(text: &str, flavor: &str, xml: bool) -> String {
 /// blocks removed, `#@debug@` and `#@alpha@` blocks removed and their
 /// `#@non-…@` blocks uncommented (the packager's `toc_filter`).
 pub fn packaged_toc(text: &str) -> String {
+    packaged_toc_for(text, None)
+}
+
+/// [`packaged_toc`] for one game (a flavor id): its flavor blocks
+/// (`#@retail@`, `#@version-…@`) are kept, the other flavors' blocks
+/// removed, and `#@non-…@` blocks of the others uncommented, like the
+/// packager's single-game and split builds.
+pub fn packaged_toc_for(text: &str, game: Option<&str>) -> String {
+    let mut keywords: Vec<(&str, bool)> = vec![
+        ("do-not-package", false),
+        ("debug", false),
+        ("alpha", false),
+    ];
+    if let Some(game) = game {
+        keywords.extend(FLAVOR_KEYWORDS.iter().map(|(k, f)| (*k, *f == game)));
+    }
     let mut out = String::with_capacity(text.len());
-    // Which block a line is in: (keyword, negated).
-    let mut block: Option<(&str, bool)> = None;
+    // Which block a line is in: (negated, active).
+    let mut block: Option<(bool, bool)> = None;
     for line in text.split_inclusive('\n') {
         let trimmed = line.trim();
         let marker = |kw: &str| -> Option<(bool, bool)> {
@@ -417,9 +433,9 @@ pub fn packaged_toc(text: &str) -> String {
             None
         };
         let mut handled = false;
-        for kw in ["do-not-package", "debug", "alpha"] {
+        for (kw, active) in &keywords {
             if let Some((start, neg)) = marker(kw) {
-                block = if start { Some((kw, neg)) } else { None };
+                block = if start { Some((neg, *active)) } else { None };
                 handled = true;
                 break;
             }
@@ -428,10 +444,11 @@ pub fn packaged_toc(text: &str) -> String {
             continue;
         }
         match block {
-            // Inactive blocks are dropped.
-            Some((_, false)) => {}
-            // `non-` blocks are uncommented.
-            Some((_, true)) => {
+            // Active blocks stay; inactive ones are dropped.
+            Some((false, true)) => out.push_str(line),
+            Some((false, false)) | Some((true, true)) => {}
+            // The `non-` blocks of inactive keywords are uncommented.
+            Some((true, false)) => {
                 let rest = line.trim_start();
                 match rest.strip_prefix('#') {
                     Some(r) if r.starts_with([' ', '\t']) => {
@@ -444,6 +461,48 @@ pub fn packaged_toc(text: &str) -> String {
         }
     }
     out
+}
+
+/// `@toc-version-<game>@` placeholders (the `NumyAddon/ToCVersions` action
+/// many packager projects run first) replaced by the current interface
+/// numbers of the flavor table.
+pub fn toc_version_placeholders(text: &str) -> String {
+    if !text.contains("@toc-version-") {
+        return text.to_string();
+    }
+    let table = wowlua_flavors::table();
+    let mut out = text.to_string();
+    for (game, flavor) in [
+        ("midnight", "standard"),
+        ("retail", "standard"),
+        ("camelot", "camelot"),
+        ("forever", "camelot"),
+        ("mists", "mists"),
+        ("cata", "cata"),
+        ("wrath", "wrath"),
+        ("bcc", "tbc"),
+        ("classic", "vanilla"),
+    ] {
+        if let Some(n) = table.flavor(flavor).and_then(|f| f.interface.first()) {
+            out = out.replace(&format!("@toc-version-{game}@"), &n.to_string());
+        }
+    }
+    out
+}
+
+/// The game types of the packager's `## Interface-<Type>:` lines and the
+/// flavors they name.
+pub fn interface_type_flavor(kind: &str) -> Option<&'static str> {
+    Some(match kind.to_ascii_lowercase().as_str() {
+        "retail" | "mainline" => "standard",
+        "classic" | "vanilla" => "vanilla",
+        "bcc" | "tbc" => "tbc",
+        "wrath" | "wotlkc" | "titan" => "wrath",
+        "cata" => "cata",
+        "mists" => "mists",
+        "forever" | "camelot" => "camelot",
+        _ => return None,
+    })
 }
 
 /// An XML file with every packager block's negated side active: `@debug@`,
@@ -566,5 +625,32 @@ mod tests {
         );
         assert_eq!(dates(0).0, "1970-01-01T00:00:00Z");
         assert_eq!(dates(1_760_243_127).1, "20251012042527");
+    }
+
+    #[test]
+    fn packaged_toc_for_a_game() {
+        let toc = "## Interface: 1\n#@retail@\nretail.lua\n#@end-retail@\n#@non-retail@\n# classic.lua\n#@end-non-retail@\n";
+        assert_eq!(
+            packaged_toc_for(toc, Some("standard")),
+            "## Interface: 1\nretail.lua\n"
+        );
+        assert_eq!(
+            packaged_toc_for(toc, Some("vanilla")),
+            "## Interface: 1\nclassic.lua\n"
+        );
+        // Without a game, flavor blocks stay as they are.
+        assert!(packaged_toc(toc).contains("#@retail@"));
+    }
+
+    #[test]
+    fn toc_version_placeholders_take_current_numbers() {
+        let text =
+            toc_version_placeholders("## Interface: @toc-version-retail@, @toc-version-classic@\n");
+        let table = wowlua_flavors::table();
+        let n = |id: &str| table.flavor(id).unwrap().interface[0];
+        assert_eq!(
+            text,
+            format!("## Interface: {}, {}\n", n("standard"), n("vanilla"))
+        );
     }
 }

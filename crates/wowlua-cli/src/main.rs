@@ -103,9 +103,10 @@ enum Command {
         /// The TOC file to adopt
         #[arg(long, value_name = "FILE")]
         from_toc: Option<PathBuf>,
-        /// Require and convert .pkgmeta (converted whenever it exists)
-        #[arg(long)]
-        from_pkgmeta: bool,
+        /// Require and convert .pkgmeta (converted whenever it exists), or
+        /// the given packager project file
+        #[arg(long, value_name = "FILE", num_args = 0..=1, default_missing_value = "")]
+        from_pkgmeta: Option<String>,
     },
     /// Build the AddOn into dist/<profile>/<Name>/
     Build(BuildArgs),

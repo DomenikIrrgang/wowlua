@@ -507,12 +507,17 @@ fn kind_name(kind: PackageKind) -> &'static str {
     }
 }
 
-pub fn init(out: &Output, from_toc: Option<PathBuf>, from_pkgmeta: bool) -> bool {
+pub fn init(out: &Output, from_toc: Option<PathBuf>, from_pkgmeta: Option<String>) -> bool {
     let mut session = Session::new();
+    let pkgmeta_file = from_pkgmeta
+        .as_ref()
+        .filter(|p| !p.is_empty())
+        .map(|p| cwd().join(p));
     let request = InitRequest {
         dir: cwd(),
         from_toc: from_toc.map(|t| cwd().join(t)),
-        from_pkgmeta,
+        from_pkgmeta: from_pkgmeta.is_some(),
+        pkgmeta_file,
         inherited: None,
         addon_name: None,
         neighbors: Vec::new(),
@@ -546,11 +551,15 @@ pub fn init(out: &Output, from_toc: Option<PathBuf>, from_pkgmeta: bool) -> bool
             for (name, _) in &report.external_addons {
                 out.status("Adopted", format!("{name} as an external addon"));
             }
+            let old = if report.old_tocs.is_empty() {
+                "TOC files of the members".to_string()
+            } else {
+                report.old_tocs.join(", ")
+            };
             out.status(
                 "Note",
                 format!(
-                    "TOC files are generated from wowlua.json now; the old {} can be deleted",
-                    report.old_tocs.join(", ")
+                    "TOC files are generated from wowlua.json now; the old {old} can be deleted"
                 ),
             );
             true

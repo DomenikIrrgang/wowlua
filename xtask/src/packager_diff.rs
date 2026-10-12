@@ -69,8 +69,12 @@ impl Tree {
             .map(|c| c.suffixes.clone())
             .unwrap_or_default();
         for s in suffixes.iter().map(String::as_str).chain([""]) {
-            if let Some(f) = self.resolve(&format!("{}{s}.toc", self.name)) {
-                return Some(f);
+            // The client takes `-` in place of `_` (`Tukui-Mists.toc`).
+            let hyphen = s.replacen('_', "-", 1);
+            for s in [s, hyphen.as_str()] {
+                if let Some(f) = self.resolve(&format!("{}{s}.toc", self.name)) {
+                    return Some(f);
+                }
             }
         }
         None
@@ -94,6 +98,17 @@ impl Tree {
             }
             // TOC variables (`[Game]`, `[Family]`, `[TextLocale]`).
             let path = wowlua_driver::build::substitute(&f.path, flavor, locale).replace('\\', "/");
+            // A file of another AddOn next to this one (`..\Other\file`),
+            // found like the client finds it, case-insensitively.
+            if let Some(rest) = path.strip_prefix("../") {
+                match self.root.parent().and_then(|parent| find_ci(parent, rest)) {
+                    Some(actual) => out.push(format!("../{actual}")),
+                    None => {
+                        problems.push(format!("{}: {toc} lists missing `{}`", self.name, f.path))
+                    }
+                }
+                continue;
+            }
             match self.resolve(&path) {
                 Some(rel) => self.visit(&rel, flavor, &mut out, problems, 0),
                 None => problems.push(format!("{}: {toc} lists missing `{}`", self.name, f.path)),
@@ -169,9 +184,26 @@ impl Tree {
                 k if k.starts_with("optionaldep") => "optionaldeps".to_string(),
                 k => k,
             };
+            // Boolean directives: `true` / `false` count as `1` / `0`.
+            let boolean = matches!(
+                key.as_str(),
+                "loadondemand"
+                    | "loadsavedvariablesfirst"
+                    | "allowaddontableaccess"
+                    | "onlybetaandptr"
+            );
+            let lower_value = d.value.trim().to_ascii_lowercase();
+            let value_text = match lower_value.as_str() {
+                "true" if boolean => "1".to_string(),
+                "false" if boolean => "0".to_string(),
+                _ => d.value.clone(),
+            };
             // Explicit default values.
             let default = matches!(
-                (key.as_str(), d.value.trim().to_ascii_lowercase().as_str()),
+                (
+                    key.as_str(),
+                    value_text.trim().to_ascii_lowercase().as_str()
+                ),
                 ("defaultstate", "enabled")
                     | (
                         "loadondemand"
@@ -195,8 +227,7 @@ impl Tree {
             if key == "version" || key.starts_with("x-wowlua") || key.starts_with("interface-") {
                 continue;
             }
-            let value = d
-                .value
+            let value = value_text
                 .split(',')
                 .map(str::trim)
                 .filter(|v| !v.is_empty())
@@ -238,6 +269,23 @@ fn applies(flavor: &str, conditions: &[wowlua_toc::InlineDirective]) -> bool {
     !wowlua_driver::scaffold::apply_conditions(&[flavor.to_string()], conditions).is_empty()
 }
 
+/// `rel` under `base` with each component matched case-insensitively:
+/// the on-disk spelling, if the file exists.
+fn find_ci(base: &Path, rel: &str) -> Option<String> {
+    let mut dir = base.to_path_buf();
+    let mut parts = Vec::new();
+    for part in rel.split('/').filter(|p| !p.is_empty()) {
+        let entry = std::fs::read_dir(&dir)
+            .ok()?
+            .filter_map(Result::ok)
+            .find(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case(part))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        dir = dir.join(&name);
+        parts.push(name);
+    }
+    dir.is_file().then(|| parts.join("/"))
+}
+
 /// XML text without its `file="…"` values (compared separately, as
 /// resolved targets).
 fn without_file_attributes(text: &str) -> String {
@@ -260,16 +308,25 @@ fn without_file_attributes(text: &str) -> String {
     out
 }
 
-pub fn run(packager: &Path, wowlua: &Path, manifest: &Path) -> Result<()> {
+pub fn run(packager: &Path, wowlua: &Path, manifest: &Path, only: Option<&str>) -> Result<()> {
     let pk = Tree::read(packager)?;
     let wl = Tree::read(wowlua)?;
     let m: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(manifest)?)?;
-    let src = m["build"]["src"].as_str().unwrap_or("src").to_string();
+    // Sources are always output under `src/`, whatever `build.src` is.
+    let src = "src".to_string();
     let flavors: Vec<String> = m["flavors"]
         .as_object()
         .map(|o| o.keys().cloned().collect())
-        .unwrap_or_else(|| vec!["standard".into()]);
+        .unwrap_or_else(|| vec!["standard".into()])
+        .into_iter()
+        .filter(|f| only.is_none_or(|o| o == f))
+        .collect();
     let map = |rel: &str| -> String {
+        // Another AddOn's file: `../Other/src/X` is the packager's `../Other/X`.
+        if let Some((addon, inner)) = rel.strip_prefix("../").and_then(|r| r.split_once('/')) {
+            let inner = inner.strip_prefix(&format!("{src}/")).unwrap_or(inner);
+            return format!("../{addon}/{inner}");
+        }
         rel.strip_prefix(&format!("{src}/"))
             .unwrap_or(rel)
             .to_string()
@@ -456,7 +513,9 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path) -> Result<()> {
 
 /// Compares every AddOn folder of a packager release folder with the
 /// matching build of the wowlua project (workspace members included).
-pub fn run_all(release: &Path, project: &Path) -> Result<()> {
+/// Compares every AddOn of a packager release folder; `only` restricts the
+/// comparison to one flavor (a single-game packager run, `-g`).
+pub fn run_all(release: &Path, project: &Path, only: Option<&str>) -> Result<()> {
     // AddOn name → manifest of the project and its members.
     let mut manifests: BTreeMap<String, std::path::PathBuf> = BTreeMap::new();
     for e in walkdir::WalkDir::new(project)
@@ -517,7 +576,7 @@ pub fn run_all(release: &Path, project: &Path) -> Result<()> {
             continue;
         };
         let built = project.join("dist/release").join(name);
-        if let Err(e) = run(&release.join(name), &built, manifest) {
+        if let Err(e) = run(&release.join(name), &built, manifest, only) {
             println!("FAIL {name}: {e}");
             failed.push(name.clone());
         }

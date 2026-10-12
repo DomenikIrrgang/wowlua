@@ -124,6 +124,9 @@ jobs:
           - addon: Tukui
             repo: https://github.com/tukui-org/Tukui
             rev: 22a852dcf2e206a4a30a48181d7ef8fd6ad63f46
+          - addon: KuiNameplates
+            repo: https://github.com/kesava-wow/kuinameplates2
+            rev: e1bbbc44f3ce398605ccb27dddf4e7308e1b494f
     name: ${{ matrix.addon }}
     runs-on: ubuntu-latest
     env:

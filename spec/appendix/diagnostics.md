@@ -148,6 +148,7 @@ any warning can be changed in the manifest (`check.lints`). `wowlua explain
 | E5001 | Lua 5.1 limit exceeded (locals, upvalues, registers, constants, syntax levels, jump distance), including generated locals |
 | E5002 | Output validation failed (missing or unreachable file, unresolvable XML reference, invalid TOC or XML) |
 | W5003 | Unresolvable XML reference in a packager `@debug@` block, left out of a debug build |
+| W5004 | An XML file of the output loads a file that is not part of the output |
 | E6003 | Unknown minification pass name |
 
 ## B.2 Warnings

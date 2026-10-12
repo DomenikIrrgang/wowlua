@@ -26,14 +26,45 @@ git clone -q https://github.com/BigWigsMods/packager "$WORK/packager"
 git -C "$WORK/packager" checkout -q "$PACKAGER_REV"
 cp -R "$WORK/addon" "$WORK/wowlua"
 
-# The packager: no upload (-d), no zip (-z), no localization (-l, which needs
-# the CurseForge API), Unix line endings (-u; wowlua passes files through
-# unchanged).
-(cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -z -l -u -r "$WORK/release")
+# Projects that run `NumyAddon/ToCVersions` before the packager get their
+# `@toc-version-<game>@` placeholders replaced first, with the interface
+# numbers of wowlua's flavor table (what `wowlua init` uses).
+if grep -rqs "NumyAddon/ToCVersions" "$WORK/addon/.github/workflows"; then
+  FLAVORS="$ROOT/crates/wowlua-flavors/data/flavors.json"
+  n() { jq -r --arg id "$1" '.flavors[] | select(.id == $id) | .interface[0]' "$FLAVORS"; }
+  find "$WORK/addon" -name '*.toc' -not -path '*/.git/*' -exec sed -i \
+    -e "s/@toc-version-midnight@/$(n standard)/g" -e "s/@toc-version-retail@/$(n standard)/g" \
+    -e "s/@toc-version-camelot@/$(n camelot)/g" -e "s/@toc-version-forever@/$(n camelot)/g" \
+    -e "s/@toc-version-mists@/$(n mists)/g" -e "s/@toc-version-cata@/$(n cata)/g" \
+    -e "s/@toc-version-wrath@/$(n wrath)/g" -e "s/@toc-version-bcc@/$(n tbc)/g" \
+    -e "s/@toc-version-classic@/$(n vanilla)/g" {} +
+fi
 
 # wowlua.
-(cd "$WORK/wowlua" && "$WOWLUA" init --from-pkgmeta && "$WOWLUA" build --release)
+(cd "$WORK/wowlua" && "$WOWLUA" init --from-pkgmeta)
 
-# Every AddOn folder the packager made (move-folders makes several).
-cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-diff \
-  "$WORK/release" "$WORK/wowlua"
+# Projects whose CI packages one game per packager run (`-g <game> -m
+# <file>`) are compared game by game; the others in one multi-version run.
+# The packager: no upload (-d), no zip (-z), no localization (-l, which needs
+# the CurseForge API), Unix line endings (-u).
+RUNS=$(cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-runs "$WORK/addon")
+if [ -z "$RUNS" ]; then
+  (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -z -l -u -r "$WORK/release")
+  (cd "$WORK/wowlua" && "$WOWLUA" build --release)
+  # Every AddOn folder the packager made (move-folders makes several).
+  cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-diff \
+    "$WORK/release" "$WORK/wowlua"
+else
+  status=0
+  while read -r game flavor file; do
+    echo "### $game ($flavor) with ${file/#-/the default project file}"
+    rm -rf "$WORK/release"
+    meta=()
+    [ "$file" != "-" ] && meta=(-m "$file")
+    (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -z -l -u -g "$game" "${meta[@]}" -r "$WORK/release")
+    (cd "$WORK/wowlua" && "$WOWLUA" build --release --flavor "$flavor")
+    cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-diff \
+      --flavor "$flavor" "$WORK/release" "$WORK/wowlua" || status=1
+  done <<< "$RUNS"
+  exit $status
+fi
