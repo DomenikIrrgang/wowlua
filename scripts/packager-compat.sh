@@ -15,7 +15,8 @@ PACKAGER_REV=${PACKAGER_REV:-0f24d2169de3ceb3b79a981311b2ebab4c6160c7}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WORK=${WORK:-$ROOT/target/packager-compat}
 WOWLUA=${WOWLUA:-$ROOT/target/release/wowlua}
-export WOWLUA_HOME=${WOWLUA_HOME:-$WORK/home}
+# Outside target/, which CI caches between runs.
+export WOWLUA_HOME=${WOWLUA_HOME:-$(mktemp -d)}
 
 rm -rf "$WORK/addon" "$WORK/wowlua" "$WORK/release" "$WORK/packager"
 mkdir -p "$WORK"

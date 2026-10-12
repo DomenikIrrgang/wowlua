@@ -238,6 +238,15 @@ fn git_dependency_on_the_default_branch() {
     );
     wowlua(&e.project, &e.home).arg("build").assert().success();
     assert!(e.project.join("dist/dev/MyAddon/libs/lib/Lib.lua").exists());
+    // A damaged cache entry is cloned again.
+    let git_cache = e.home.join("cache/git");
+    for entry in fs::read_dir(&git_cache).unwrap().flatten() {
+        if entry.path().is_dir() {
+            fs::remove_file(entry.path().join("HEAD")).unwrap();
+        }
+    }
+    fs::remove_file(e.project.join("wowlua.lock")).unwrap();
+    wowlua(&e.project, &e.home).arg("build").assert().success();
 }
 
 #[test]

@@ -175,6 +175,10 @@ impl Fetcher {
         if self.offline {
             return Err(FetchError::offline(&format!("git repository `{url}`")));
         }
+        // A damaged entry (no `HEAD`) is replaced.
+        if dir.exists() {
+            let _ = cache::remove(&dir);
+        }
         self.say("Cloning", url);
         let staged = cache::staging(&dir).map_err(|e| FetchError::plain(e.to_string()))?;
         let clone = || {

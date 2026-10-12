@@ -360,6 +360,7 @@ pub fn addons(dir: &Path) -> Result<()> {
             from_toc: None,
             from_pkgmeta: false,
             inherited: None,
+            addon_name: None,
         });
         if let Err(e) = report {
             failures.push(format!("{rel}: init failed: {}", e.message));

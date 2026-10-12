@@ -239,6 +239,9 @@ pub struct InitRequest {
     /// For a folder `move-folders` makes a workspace member: the parts of
     /// the parent's `.pkgmeta` inside it, relative to it.
     pub inherited: Option<crate::pkgmeta::PkgMeta>,
+    /// The AddOn name when it is known (a `move-folders` target), so that
+    /// `LittleWigs_Classic.toc` is not read as `LittleWigs` for Classic.
+    pub addon_name: Option<String>,
 }
 
 /// What `wowlua init` did.
@@ -269,7 +272,11 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             "`{MANIFEST_FILE}` already exists"
         )));
     }
-    let tocs = match find_tocs(dir, request.from_toc.as_deref()) {
+    let tocs = match find_tocs(
+        dir,
+        request.from_toc.as_deref(),
+        request.addon_name.as_deref(),
+    ) {
         Ok(t) => t,
         Err(e) => {
             // A repository of several addons.
@@ -1161,6 +1168,7 @@ fn init_members(
             from_toc: None,
             from_pkgmeta: false,
             inherited: Some(inherited),
+            addon_name: Some(to.clone()),
         }) {
             Ok(member) => {
                 report.warnings.extend(member.warnings);
@@ -1350,11 +1358,13 @@ fn member_folders(
 fn find_tocs(
     dir: &Path,
     explicit: Option<&Path>,
+    name: Option<&str>,
 ) -> Result<Vec<(PathBuf, String, Option<String>)>, Diagnostic> {
-    let folder = dir
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let folder = name.map(str::to_string).unwrap_or_else(|| {
+        dir.file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
     let mut found: Vec<(PathBuf, String, Option<String>)> = std::fs::read_dir(dir)
         .map_err(|e| Diagnostic::plain_error(format!("cannot read `{}`: {e}", dir.display())))?
         .filter_map(Result::ok)
