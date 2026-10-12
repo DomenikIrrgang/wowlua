@@ -332,6 +332,9 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path, only: Option<&str>) 
             .to_string()
     };
     let mut problems: Vec<String> = Vec::new();
+    // Missing files each output's TOC or XML names.
+    let mut pk_missing: Vec<String> = Vec::new();
+    let mut wl_missing: Vec<String> = Vec::new();
     let mut loaded_pairs: BTreeMap<String, String> = BTreeMap::new();
     let mut loaded_pk: BTreeSet<String> = BTreeSet::new();
     for flavor in &flavors {
@@ -342,8 +345,8 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path, only: Option<&str>) 
             continue;
         };
         for locale in wowlua_manifest::model::LOCALES {
-            let a = pk.loaded(&pk_toc, flavor, locale, &mut problems);
-            let b = wl.loaded(&wl_toc, flavor, locale, &mut problems);
+            let a = pk.loaded(&pk_toc, flavor, locale, &mut pk_missing);
+            let b = wl.loaded(&wl_toc, flavor, locale, &mut wl_missing);
             let b_mapped: Vec<String> = b.iter().map(|p| map(p)).collect();
             let lower = |v: &[String]| v.iter().map(|p| p.to_ascii_lowercase()).collect::<Vec<_>>();
             if lower(&a) != lower(&b_mapped) {
@@ -400,6 +403,17 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path, only: Option<&str>) 
             }
         }
     }
+    // A missing file both outputs name is the packager's own breakage (a
+    // reference into files a single-game `ignore` drops).
+    let pk_missing: BTreeSet<String> = pk_missing.into_iter().collect();
+    let wl_missing: BTreeSet<String> = wl_missing
+        .into_iter()
+        .map(|p| p.replace(&format!("`{src}/"), "`"))
+        .collect();
+    for p in pk_missing.intersection(&wl_missing) {
+        println!("both outputs: {p}");
+    }
+    problems.extend(pk_missing.symmetric_difference(&wl_missing).cloned());
     // Contents of loaded files.
     let in_game = format!(
         "Interface\\AddOns\\{}\\{}\\",

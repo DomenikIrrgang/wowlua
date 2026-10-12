@@ -351,7 +351,12 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     let table = wowlua_flavors::table();
     let mut infos: Vec<(wowlua_toc::ParsedToc, Option<String>, Vec<String>)> = Vec::new();
     let mut all_flavors: Vec<String> = Vec::new();
-    let (tocs, texts): (Vec<_>, Vec<_>) = toc_views(&tocs, pkgmeta.is_some())?.into_iter().unzip();
+    // `## Interface-<Type>:` lines make TOCs per game only in the
+    // packager's split and single-game builds.
+    let per_game_tocs = pkgmeta.as_ref().is_some_and(|m| m.per_game || m.split);
+    let (tocs, texts): (Vec<_>, Vec<_>) = toc_views(&tocs, pkgmeta.is_some(), per_game_tocs)?
+        .into_iter()
+        .unzip();
     for ((_, _, suffix), text) in tocs.iter().zip(&texts) {
         let toc = wowlua_toc::parse(text);
         let meaning = suffix.as_deref().and_then(|s| table.suffix_meaning(s));
@@ -1376,6 +1381,7 @@ fn init_members(
                 .map(|p| p[prefix.len()..].to_string())
                 .collect(),
             per_game: meta.per_game,
+            split: meta.split,
             games: meta
                 .games
                 .iter()
@@ -1936,6 +1942,7 @@ fn find_tocs(
 fn toc_views(
     tocs: &[(PathBuf, String, Option<String>)],
     packaged: bool,
+    per_game: bool,
 ) -> Result<Vec<((PathBuf, String, Option<String>), String)>, Diagnostic> {
     let table = wowlua_flavors::table();
     let mut out = Vec::new();
@@ -1950,7 +1957,7 @@ fn toc_views(
             out.push((entry.clone(), text));
             continue;
         }
-        let typed: Vec<(&'static str, String)> = if suffix.is_none() {
+        let typed: Vec<(&'static str, String)> = if suffix.is_none() && per_game {
             wowlua_toc::parse(&text)
                 .directives
                 .iter()
@@ -1994,6 +2001,18 @@ fn toc_views(
             else {
                 continue;
             };
+            // A TOC of the game's own in the source tree wins.
+            let own = tocs.iter().any(|(_, base, s)| {
+                *base == entry.1
+                    && s.as_deref()
+                        .and_then(|s| table.suffix_meaning(s))
+                        .is_some_and(|m| {
+                            matches!(m, wowlua_flavors::SuffixMeaning::Flavor(f) if f.id == flavor)
+                        })
+            });
+            if own {
+                continue;
+            }
             let view = without_typed(&crate::keywords::packaged_toc_for(&text, Some(flavor)));
             let mut replaced = false;
             let mut lines: String = view

@@ -59,7 +59,7 @@ fn main() -> Result<()> {
             // `<game> <flavor> <project file or ->` per line.
             let dir = PathBuf::from(std::env::args().nth(2).unwrap_or_else(|| ".".into()));
             let mut seen = std::collections::BTreeSet::new();
-            for run in wowlua_driver::pkgmeta::workflow_runs(&dir) {
+            for run in wowlua_driver::pkgmeta::single_game_runs(&dir) {
                 let Some(game) = run.game else { continue };
                 let Some(flavor) = wowlua_driver::keywords::interface_type_flavor(&game) else {
                     continue;

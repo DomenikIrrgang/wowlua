@@ -65,6 +65,9 @@ pub struct PkgMeta {
     /// The CI workflows package one game per packager run (`-g`), which
     /// applies the packager's flavor blocks.
     pub per_game: bool,
+    /// The packager makes a TOC per game from `## Interface-<Type>:` lines
+    /// (`enable-toc-creation: yes`, or `-S`).
+    pub split: bool,
 }
 
 /// The project file names the packager looks for.
@@ -94,7 +97,8 @@ pub fn read(dir: &Path) -> Result<Option<PkgMeta>, Diagnostic> {
 /// workflows pass to the packager with `-m`. Workflow runs that package a
 /// game (`-g`) with another file give that game's flavor its own `ignore`.
 pub fn read_project(dir: &Path, explicit: Option<&Path>) -> Result<Option<PkgMeta>, Diagnostic> {
-    let runs = workflow_runs(dir);
+    let all_runs = workflow_runs(dir);
+    let runs = single_game_runs(dir);
     let default = FILES
         .iter()
         .find(|f| dir.join(f).is_file())
@@ -113,7 +117,9 @@ pub fn read_project(dir: &Path, explicit: Option<&Path>) -> Result<Option<PkgMet
                     .and_then(crate::keywords::interface_type_flavor)
                     == Some("standard")
             });
-            retail.or(runs.first()).and_then(|r| r.file.clone())
+            retail
+                .or(all_runs.iter().find(|r| r.file.is_some()))
+                .and_then(|r| r.file.clone())
         }),
     };
     let Some(main) = main else {
@@ -131,7 +137,8 @@ pub fn read_project(dir: &Path, explicit: Option<&Path>) -> Result<Option<PkgMet
         Ok(meta)
     };
     let mut meta = load(&main)?;
-    meta.per_game = runs.iter().any(|r| r.game.is_some());
+    meta.per_game = !runs.is_empty();
+    meta.split |= all_runs.iter().any(|r| r.split);
     for run in &runs {
         let Some(flavor) = run
             .game
@@ -157,15 +164,60 @@ pub fn read_project(dir: &Path, explicit: Option<&Path>) -> Result<Option<PkgMet
     Ok(Some(meta))
 }
 
-/// A packager run in a CI workflow: its game (`-g`) and project file (`-m`).
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A packager run in a CI workflow: its game (`-g`), project file (`-m`)
+/// and whether it makes a TOC per game (`-S`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WorkflowRun {
     pub game: Option<String>,
     pub file: Option<String>,
+    pub split: bool,
 }
 
-/// The packager runs of the project's GitHub workflows: lines passing
-/// `-g` or `-m` to the packager action (`args:`) or to `release.sh`.
+/// The packager's options that take a value, as its `getopts` reads them.
+const VALUE_OPTIONS: &str = "pwartgmn";
+
+/// A packager command line (`-zg retail -m .pkgmeta.yml`).
+fn parse_run(args: &str) -> WorkflowRun {
+    let tokens: Vec<String> = args
+        .split_whitespace()
+        .map(|t| t.trim_matches(|c| c == '"' || c == '\'').to_string())
+        .collect();
+    let mut run = WorkflowRun::default();
+    let mut i = 0;
+    while i < tokens.len() {
+        let token = &tokens[i];
+        i += 1;
+        let Some(flags) = token.strip_prefix('-').filter(|f| !f.starts_with('-')) else {
+            continue;
+        };
+        for (at, flag) in flags.char_indices() {
+            if !VALUE_OPTIONS.contains(flag) {
+                if flag == 'S' {
+                    run.split = true;
+                }
+                continue;
+            }
+            // The value is the rest of the token, else the next token.
+            let rest = &flags[at + flag.len_utf8()..];
+            let value = if rest.is_empty() {
+                i += 1;
+                tokens.get(i - 1).cloned()
+            } else {
+                Some(rest.to_string())
+            };
+            match flag {
+                'g' => run.game = value,
+                'm' => run.file = value.map(|v| v.trim_start_matches("./").to_string()),
+                _ => {}
+            }
+            break;
+        }
+    }
+    run
+}
+
+/// The packager runs of the project's GitHub workflows: each step using
+/// the packager action (with its `args:`), and each `release.sh` command.
 pub fn workflow_runs(dir: &Path) -> Vec<WorkflowRun> {
     let mut files: Vec<PathBuf> = std::fs::read_dir(dir.join(".github/workflows"))
         .map(|entries| {
@@ -181,45 +233,51 @@ pub fn workflow_runs(dir: &Path) -> Vec<WorkflowRun> {
         })
         .unwrap_or_default();
     files.sort();
-    let mut runs = Vec::new();
+    let mut runs: Vec<WorkflowRun> = Vec::new();
+    let add = |run: WorkflowRun, runs: &mut Vec<WorkflowRun>| {
+        if !runs.contains(&run) {
+            runs.push(run);
+        }
+    };
     for file in files {
         let Ok(text) = std::fs::read_to_string(&file) else {
             continue;
         };
-        let mut packager_step = false;
+        // The packager action step being read.
+        let mut step: Option<WorkflowRun> = None;
         for line in text.lines() {
             let trimmed = line.trim();
+            if trimmed.starts_with("- ")
+                && let Some(run) = step.take()
+            {
+                add(run, &mut runs);
+            }
             if trimmed.contains("BigWigsMods/packager") {
-                packager_step = true;
-            } else if trimmed.starts_with("- ") || trimmed.starts_with("- name:") {
-                packager_step = false;
+                step = Some(WorkflowRun::default());
+            } else if let Some(run) = &mut step
+                && let Some(args) = trimmed.strip_prefix("args:")
+            {
+                *run = parse_run(args);
+            } else if let Some(i) = trimmed.find("release.sh") {
+                add(parse_run(&trimmed[i + "release.sh".len()..]), &mut runs);
             }
-            let relevant =
-                trimmed.contains("release.sh") || (packager_step && trimmed.starts_with("args:"));
-            if !relevant {
-                continue;
-            }
-            let tokens: Vec<String> = trimmed
-                .split_whitespace()
-                .map(|t| t.trim_matches(|c| c == '"' || c == '\'').to_string())
-                .collect();
-            let mut run = WorkflowRun {
-                game: None,
-                file: None,
-            };
-            for pair in tokens.windows(2) {
-                match pair[0].as_str() {
-                    "-g" => run.game = Some(pair[1].clone()),
-                    "-m" => run.file = Some(pair[1].trim_start_matches("./").to_string()),
-                    _ => {}
-                }
-            }
-            if (run.game.is_some() || run.file.is_some()) && !runs.contains(&run) {
-                runs.push(run);
-            }
+        }
+        if let Some(run) = step.take() {
+            add(run, &mut runs);
         }
     }
     runs
+}
+
+/// The workflow runs when every one packages a single game (`-g`): the
+/// project is released game by game. Empty otherwise.
+pub fn single_game_runs(dir: &Path) -> Vec<WorkflowRun> {
+    let runs = workflow_runs(dir);
+    if runs.iter().all(|r| r.game.is_some()) {
+        runs
+    } else {
+        Vec::new()
+    }
 }
 
 fn key_value(line: &str) -> (&str, String) {
@@ -307,6 +365,7 @@ pub fn parse(text: &str) -> Result<PkgMeta, String> {
                     meta.manual_changelog = Some((value.unwrap_or_default(), None));
                 }
                 "license-output" => meta.license_output = value,
+                "enable-toc-creation" => meta.split = value.as_deref() == Some("yes"),
                 _ => {}
             }
             continue;
@@ -882,5 +941,43 @@ mod tests {
                 if url == "https://github.com/b/b" && b == "main"
         ));
         assert!(parse("ignore:\n\t- x\n").is_err());
+    }
+
+    #[test]
+    fn reads_packager_runs_of_workflows() {
+        assert_eq!(
+            parse_run(" -zg retail -m './.pkgmeta-retail' -S"),
+            WorkflowRun {
+                game: Some("retail".into()),
+                file: Some(".pkgmeta-retail".into()),
+                split: true
+            }
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let workflows = dir.path().join(".github/workflows");
+        std::fs::create_dir_all(&workflows).unwrap();
+        let step = |args: &str| {
+            format!(
+                "      - name: Package\n        uses: BigWigsMods/packager@v2\n{args}      - name: Next\n        run: true\n"
+            )
+        };
+        std::fs::write(
+            workflows.join("beta.yml"),
+            step("        with:\n          args: -zg retail\n"),
+        )
+        .unwrap();
+        // A release without `-g` packages every game in one run.
+        std::fs::write(workflows.join("release.yml"), step("")).unwrap();
+        assert_eq!(workflow_runs(dir.path()).len(), 2);
+        assert!(single_game_runs(dir.path()).is_empty());
+        std::fs::remove_file(workflows.join("release.yml")).unwrap();
+        std::fs::write(
+            workflows.join("classic.yml"),
+            "    steps:\n      - run: curl -s https://x/release.sh | bash -s -- -g classic -m .pkgmeta-classic.yml\n",
+        )
+        .unwrap();
+        let runs = single_game_runs(dir.path());
+        let games: Vec<_> = runs.iter().filter_map(|r| r.game.as_deref()).collect();
+        assert_eq!(games, ["retail", "classic"]);
     }
 }

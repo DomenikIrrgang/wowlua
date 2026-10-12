@@ -204,14 +204,15 @@ available.
      AddOns (decision T133); the files the root addon shares that way move
      into its sources unless `.pkgmeta` ignores them.
    - `license-output` becomes `compat.license-output` (decision T136).
-   - Packager runs in `.github/workflows` that package one game with its own
-     project file (`-g classic -m .pkgmeta-classic.yml`) give that game's
-     flavor its own `ignore`: what every flavor ignores becomes
+   - When every packager run in `.github/workflows` packages one game,
+     runs with their own project file (`-g classic -m .pkgmeta-classic.yml`)
+     give that game's flavor its own `ignore`: what every flavor ignores becomes
      `build.exclude`, the rest `build.flavor-files` (decision T138). Such
      single-game projects with packager flavor blocks (`@non-retail@`) get
      `build.flavor-mode: "split"`.
-   - A plain TOC with `## Interface-<Game>:` lines stands for one TOC per
-     game, as the packager's split and single-game builds make them
+   - In such single-game projects, and with `enable-toc-creation` or `-S`, a
+     plain TOC with `## Interface-<Game>:` lines stands for one TOC per game,
+     as the packager makes them
      (decision T139). `@toc-version-<game>@` placeholders (the
      `NumyAddon/ToCVersions` action) take the flavor table's current
      interface numbers (decision T140).
