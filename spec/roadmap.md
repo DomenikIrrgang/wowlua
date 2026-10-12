@@ -167,6 +167,8 @@ Notes on the delivered state:
 
 ## M6: Package manager
 
+**Status: done (2026-10-12).**
+
 - Path, git and archive sources, lua-library embedding (reachable files and
   licenses only), lockfile, PubGrub resolution over the union, cache,
   workspaces with generated declaration files.
@@ -177,6 +179,21 @@ Notes on the delivered state:
 
 **Exit:** an Ace3-based addon migrates with `wowlua init --from-pkgmeta` and
 builds identically.
+
+Notes on the delivered state:
+
+- Sources: git (bare clones, exported per commit), SVN (system `svn`,
+  pinned to a revision), path and archive (`https`, `file://`); the registry
+  waits for its server (T104), and the wow-api types stay embedded.
+- The exit check (`packager-compat` workflow, T119): Bartender4 at a pinned
+  commit, packaged by the BigWigs packager and built by wowlua after
+  `init --from-pkgmeta`, loads the same 124 files in the same order for all
+  five flavors, all 127 loaded files byte-identical. The corpus still adopts
+  and builds all 108 addons.
+- wowlua `library` packages compile into the addon (tree-shaken modules,
+  their own check settings and meta, T110–T112); workspaces share one lock
+  and `dist/`, with generated declaration files of `@global` APIs (T113,
+  T114).
 
 ## M7: Optimization and publishing
 

@@ -59,7 +59,7 @@ wowlua publish           # package and upload to every configured addon site
 The specification lives in [`spec/`](spec/README.md). Implementation follows
 the [roadmap](spec/roadmap.md).
 
-**Milestones M0–M5 are done**: the toolchain builds and installs plain Lua
+**Milestones M0–M6 are done**: the toolchain builds and installs plain Lua
 addons and compiles `.wowlua` files with type annotations (erased), syntax
 sugar (`+=`, `continue`, `?.`, `??`, string interpolation, bitwise operators,
 `//`, `const`, default parameters, destructuring), modules
@@ -74,6 +74,11 @@ debugging tools built in: a profiler for every function, an event, script
 and timer monitor, error capture, runtime type checks and an in-game dev
 window (`/wl`) with watches and a table inspector; `wowlua:debug`,
 `wowlua:log` and `wowlua:reflect` are the first standard-library modules.
+The package manager fetches git, SVN, path and archive dependencies into a
+global cache, locks them in `wowlua.lock`, embeds Lua libraries (only the
+files the game loads) and compiles wowlua libraries into the addon;
+workspaces group addon suites, and `.pkgmeta` projects migrate with
+`wowlua init --from-pkgmeta`.
 The other standard-library modules arrive with later milestones; using a
 feature of a later milestone reports that milestone. [`examples/widget-demo`](examples/widget-demo) and
 [`examples/typed-demo`](examples/typed-demo) are sample addons.
@@ -81,8 +86,13 @@ feature of a later milestone reports that milestone. [`examples/widget-demo`](ex
 What works today:
 
 - `wowlua new <path>`: create a package (`--kind`, `--flavors`, `--ci github`).
-- `wowlua init`: adopt an existing addon. Its TOC(s) become `wowlua.json`,
-  Lua/XML files move into `src/` and in-game paths to them are updated.
+- `wowlua init [--from-pkgmeta]`: adopt an existing addon. Its TOC(s) become
+  `wowlua.json`, Lua/XML files move into `src/` and in-game paths to them are
+  updated; `.pkgmeta` externals become dependencies (an Ace3 addon such as
+  Bartender4 then builds the same code as the BigWigs packager).
+- `wowlua add` / `remove` / `update` / `fetch` / `tree` / `outdated` /
+  `cache clean`: manage dependencies (`git`, `svn`, `path`, `archive`;
+  the registry comes later). `-p <package>` selects a workspace member.
 - `wowlua build [--release] [--flavor …]`: a complete AddOn in
   `dist/<profile>/<Name>/` with generated TOC(s) for every flavor, Lua 5.1
   syntax checks, XML reference checks and output validation. `.wowlua` files
