@@ -72,6 +72,9 @@ pub struct PkgMeta {
     /// The packager makes a TOC per game from `## Interface-<Type>:` lines
     /// (`enable-toc-creation: yes`, or `-S`).
     pub split: bool,
+    /// The packager writes LF line endings (every run passes `-u`);
+    /// otherwise its default, CR LF.
+    pub unix: bool,
 }
 
 /// The project file names the packager looks for.
@@ -140,6 +143,7 @@ pub fn read_project(dir: &Path, explicit: Option<&Path>) -> Result<Option<PkgMet
     let mut meta = load(&main)?;
     meta.per_game = !runs.is_empty();
     meta.split |= all_runs.iter().any(|r| r.split);
+    meta.unix = !all_runs.is_empty() && all_runs.iter().all(|r| r.unix);
     for run in &runs {
         let Some(flavor) = run.game.as_deref().and_then(crate::keywords::game_flavor) else {
             continue;
@@ -168,6 +172,8 @@ pub struct WorkflowRun {
     pub game: Option<String>,
     pub file: Option<String>,
     pub split: bool,
+    /// `-u`: Unix line endings.
+    pub unix: bool,
 }
 
 /// The packager's options that take a value, as its `getopts` reads them.
@@ -189,8 +195,10 @@ fn parse_run(args: &str) -> WorkflowRun {
         };
         for (at, flag) in flags.char_indices() {
             if !VALUE_OPTIONS.contains(flag) {
-                if flag == 'S' {
-                    run.split = true;
+                match flag {
+                    'S' => run.split = true,
+                    'u' => run.unix = true,
+                    _ => {}
                 }
                 continue;
             }
@@ -957,11 +965,12 @@ mod tests {
     #[test]
     fn reads_packager_runs_of_workflows() {
         assert_eq!(
-            parse_run(" -zg retail -m './.pkgmeta-retail' -S"),
+            parse_run(" -zug retail -m './.pkgmeta-retail' -S"),
             WorkflowRun {
                 game: Some("retail".into()),
                 file: Some(".pkgmeta-retail".into()),
-                split: true
+                split: true,
+                unix: true,
             }
         );
         let dir = tempfile::tempdir().unwrap();

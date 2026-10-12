@@ -1298,6 +1298,9 @@ pub fn build(
     // Output paths of embedded libraries' files: they win over the
     // project's own files at the same path, like the packager's externals.
     let mut lib_outputs: BTreeSet<String> = BTreeSet::new();
+    // Output files the packager copies as they are (archives, a library's
+    // `plain-copy`, a downloaded license): no line-ending conversion.
+    let mut raw_paths: BTreeSet<String> = BTreeSet::new();
     for (i, lib) in libs.iter().enumerate() {
         let mut roots: Vec<String> = lib.entries.iter().map(|(e, _)| e.clone()).collect();
         roots.extend(xml.lib_refs.get(&i).into_iter().flatten().cloned());
@@ -1389,6 +1392,9 @@ pub fn build(
                     .as_ref()
                     .is_some_and(|(m, _)| crate::keywords::plain_copy(&m.plain_copy, &[&repo_rel]));
             lib_outputs.insert(lib.output(&rel));
+            if unchanged {
+                raw_paths.insert(lib.output(&rel));
+            }
             // Library files get the packager's processing (decisions T120,
             // T124): keywords and blocks, LF line endings.
             if keywords && !unchanged && crate::keywords::processed_extension(&rel) {
@@ -1483,6 +1489,9 @@ pub fn build(
                     _ => Content::Copy(entry.path().to_path_buf()),
                 };
                 lib_outputs.insert(rel.clone());
+                if plain {
+                    raw_paths.insert(rel.clone());
+                }
                 out.insert(rel, content);
             }
         }
@@ -1599,7 +1608,7 @@ pub fn build(
     }
     // What the packager adds to the package (decision T146).
     if let Some(info) = &keyword_info {
-        package_files(project, &root, info, &addon_name, &mut out);
+        package_files(project, &root, info, &addon_name, &mut out, &mut raw_paths);
     }
     // The workspace root's license in a member that has none (`.pkgmeta`
     // `license-output`, copied into `move-folders` addons by the packager).
@@ -1622,6 +1631,9 @@ pub fn build(
             Some(info) if !downloaded => packaged_text(&bytes, info, &license),
             _ => bytes,
         };
+        if downloaded {
+            raw_paths.insert(license.clone());
+        }
         out.insert(license.clone(), Content::Bytes(bytes));
     }
 
@@ -1640,6 +1652,90 @@ pub fn build(
         .map(|s| s.output_path())
         .collect();
     roots.extend(flavor_roots);
+    // Every other file of the project the packager would copy (decision
+    // T155): its tests, docs and unloaded files, processed like its own.
+    if let Some(info) = &keyword_info {
+        let tracked = (!profile.debug).then(|| sources::tracked_files(&root));
+        let members: Vec<PathBuf> = manifest
+            .manifest
+            .workspace
+            .iter()
+            .flat_map(|w| w.members.iter())
+            .map(|m| root.join(m))
+            .collect();
+        let skip = [root.join(&build_cfg.src), root.join(&build_cfg.out)];
+        ship_project_files(
+            &root,
+            &members,
+            &skip,
+            &exclude,
+            &manifest.manifest.compat.plain_copy,
+            tracked.as_ref(),
+            info,
+            &mut out,
+        );
+        // A workspace without a root addon: its own files go into the AddOn
+        // its package folder becomes (the AddOn's own files win, like the
+        // packager's `move-folders`).
+        if let Some((ws, ws_manifest)) = suite_package_root(project, &root, &addon_name) {
+            let ws_members: Vec<PathBuf> = ws_manifest
+                .pointer("/workspace/members")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|m| m.as_str())
+                .map(|m| ws.join(m))
+                .collect();
+            let strings = |pointer: &str| -> Vec<String> {
+                ws_manifest
+                    .pointer(pointer)
+                    .and_then(serde_json::Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            };
+            let ws_tracked = (!profile.debug).then(|| sources::tracked_files(&ws));
+            let skip = vec![ws.join(&build_cfg.out)];
+            ship_project_files(
+                &ws,
+                &ws_members,
+                &skip,
+                &sources::glob_set(&strings("/build/exclude")),
+                &strings("/compat/plain-copy"),
+                ws_tracked.as_ref(),
+                info,
+                &mut out,
+            );
+        }
+    }
+    // CR LF for what the packager processes, unless its runs pass `-u`
+    // (decision T154).
+    if keywords
+        && manifest.manifest.compat.line_endings == Some(wowlua_manifest::model::LineEndings::Crlf)
+    {
+        let plain = &manifest.manifest.compat.plain_copy;
+        for (path, content) in out.iter_mut() {
+            let generated = path == RUNTIME_PATH
+                || path == "LICENSES.txt"
+                || path.starts_with("wowlua/std/")
+                || path.starts_with("wowlua/fonts/")
+                || path.ends_with(&format!("/{RUNTIME_PATH}"));
+            let in_src = path.strip_prefix("src/").unwrap_or(path);
+            if generated
+                || raw_paths.contains(path)
+                || !crate::keywords::processed_extension(path)
+                || crate::keywords::plain_copy(plain, &[path, in_src])
+            {
+                continue;
+            }
+            let bytes = match content {
+                Content::Bytes(b) => std::mem::take(b),
+                Content::Copy(p) => std::fs::read(&*p).unwrap_or_default(),
+            };
+            *content = Content::Bytes(crate::keywords::crlf(&bytes));
+        }
+    }
     validate_output(
         session,
         &out,
@@ -2601,7 +2697,12 @@ fn directives(
         &scalar(|o| &o.author),
         flavors,
     );
-    out.push(Directive::new("Version", version));
+    // A converted project's TOC keeps its own version line (decision T153).
+    match &manifest.manifest.compat.toc_version {
+        Some(v) if v.is_empty() => {}
+        Some(v) => out.push(Directive::new("Version", v)),
+        None => out.push(Directive::new("Version", version)),
+    }
     push_field(
         &mut out,
         "IconTexture",
@@ -2872,6 +2973,7 @@ fn package_files(
     info: &crate::keywords::KeywordInfo,
     addon_name: &str,
     out: &mut BTreeMap<String, Content>,
+    raw_paths: &mut BTreeSet<String>,
 ) {
     let same = |a: &Path, b: &Path| std::fs::canonicalize(a).ok() == std::fs::canonicalize(b).ok();
     let (repo, repo_manifest) = match &project.workspace_root {
@@ -2924,7 +3026,89 @@ fn package_files(
         && let Some((bytes, _)) = license_bytes(&repo, license)
     {
         // Saved after the packager's processing: as downloaded.
+        raw_paths.insert(license.to_string());
         out.insert(license.to_string(), Content::Bytes(bytes));
+    }
+}
+
+/// The workspace root of a workspace without a root addon whose package
+/// folder becomes this AddOn (`compat.package-as`), and its manifest.
+fn suite_package_root(
+    project: &Project,
+    root: &Path,
+    addon_name: &str,
+) -> Option<(PathBuf, serde_json::Value)> {
+    let ws = project.workspace_root.as_ref()?;
+    if std::fs::canonicalize(ws).ok() == std::fs::canonicalize(root).ok() {
+        return None;
+    }
+    let m = manifest_json(ws)?;
+    (m.get("package").is_none()
+        && m.pointer("/compat/package-as").and_then(|v| v.as_str()) == Some(addon_name))
+    .then(|| (ws.clone(), m))
+}
+
+/// Ships the files of `dir` the packager copies and wowlua has not placed
+/// yet: all but dotfiles, `skip` folders, `members`, wowlua's own files and
+/// the TOCs it generates, excluded and (release) untracked files; text
+/// files get the packager's processing unless `plain-copy` says otherwise.
+#[allow(clippy::too_many_arguments)]
+fn ship_project_files(
+    dir: &Path,
+    members: &[PathBuf],
+    skip: &[PathBuf],
+    exclude: &globset::GlobSet,
+    plain: &[String],
+    tracked: Option<&std::collections::HashSet<PathBuf>>,
+    info: &crate::keywords::KeywordInfo,
+    out: &mut BTreeMap<String, Content>,
+) {
+    for entry in walkdir::WalkDir::new(dir)
+        .sort_by_file_name()
+        .into_iter()
+        .filter_entry(|e| {
+            e.depth() == 0
+                || !(e.file_name().to_string_lossy().starts_with('.')
+                    || skip.iter().any(|d| d == e.path())
+                    || members.iter().any(|m| m == e.path()))
+        })
+        .flatten()
+    {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let Ok(rel) = entry.path().strip_prefix(dir) else {
+            continue;
+        };
+        let rel = rel.to_string_lossy().replace('\\', "/");
+        let lower = rel.to_ascii_lowercase();
+        // wowlua's files, and the TOCs it generates in their place.
+        let own = !rel.contains('/')
+            && (lower == "wowlua.json" || lower == "wowlua.lock" || lower.ends_with(".toc"));
+        let untracked = tracked.is_some_and(|t| !t.is_empty() && !t.contains(entry.path()));
+        if own || untracked || out.contains_key(&rel) || exclude.is_match(&rel) {
+            continue;
+        }
+        let content = match std::fs::read(entry.path()) {
+            Ok(bytes)
+                if !crate::keywords::plain_copy(plain, &[&rel])
+                    && crate::keywords::processed_extension(&rel) =>
+            {
+                let normalized = crate::keywords::lf(&bytes);
+                match std::str::from_utf8(&normalized) {
+                    Ok(text) if lower.ends_with(".lua") || lower.ends_with(".xml") => {
+                        let path = Path::new(&rel);
+                        Content::Bytes(
+                            crate::keywords::apply(text, info, path, path, lower.ends_with(".xml"))
+                                .into_bytes(),
+                        )
+                    }
+                    _ => Content::Bytes(packaged_text(&bytes, info, &rel)),
+                }
+            }
+            _ => Content::Copy(entry.path().to_path_buf()),
+        };
+        out.insert(rel, content);
     }
 }
 

@@ -554,6 +554,8 @@ See [Tooling §16.3](tooling.md#163-formatter-wowlua-fmt).
 | `packager-keywords` | `false` | Apply BigWigs packager keyword substitution to passthrough files and embedded libraries, with LF line endings (decisions T120, T124) |
 | `plain-copy` | `[]` | Files the packager copies unprocessed (`.pkgmeta` `plain-copy`): shell patterns relative to the source folder or the package root, `*` matching `/` too |
 | `license-output` | none | The license file (`.pkgmeta` `license-output`) a workspace root copies into each member's output that has none (decision T136) |
+| `toc-version` | none | The TOC `## Version` value of a converted project, keywords substituted; `""` writes no `Version` line (decision T153) |
+| `line-endings` | `lf` | `crlf` or `lf`: line endings of the files the packager processes (decision T154) |
 | `per-game` | `false` | The project is released one game per packager run (`-g`): packager flavor blocks apply per flavor (decision T145) |
 | `package-as` | none | In a workspace without a root addon: the member the packager's package folder becomes, which gets the changelog and license files (decision T146) |
 | `changelog-title` | none | The title of the generated changelog (`.pkgmeta` `changelog-title`, decision T146) |

@@ -130,6 +130,12 @@ fn plain(path: PathBuf) -> PathBuf {
     }
 }
 
+/// An output file with LF line endings (converted projects default to the
+/// packager's CR LF, decision T154).
+fn read_lf(path: PathBuf) -> std::io::Result<String> {
+    fs::read_to_string(path).map(|t| t.replace("\r\n", "\n"))
+}
+
 fn lock(project: &Path) -> serde_json::Value {
     serde_json::from_str(&fs::read_to_string(project.join("wowlua.lock")).unwrap()).unwrap()
 }
@@ -160,7 +166,7 @@ fn git_dependency_is_locked_embedded_and_verified() {
         .success()
         .stderr(predicate::str::contains("Cloning"));
     let out = e.project.join("dist/release/MyAddon");
-    let toc = fs::read_to_string(out.join("MyAddon.toc")).unwrap();
+    let toc = read_lf(out.join("MyAddon.toc")).unwrap();
     assert!(
         toc.contains("libs\\libstub\\LibStub.lua\nsrc\\main.lua\n"),
         "{toc}"
@@ -169,7 +175,7 @@ fn git_dependency_is_locked_embedded_and_verified() {
     // Only what the game loads is copied.
     assert!(!out.join("libs/libstub/README.md").exists());
     assert!(!out.join("libs/libstub/tests").exists());
-    let licenses = fs::read_to_string(out.join("LICENSES.txt")).unwrap();
+    let licenses = read_lf(out.join("LICENSES.txt")).unwrap();
     assert!(
         licenses.contains("== libstub (libs/libstub) =="),
         "{licenses}"
@@ -311,7 +317,7 @@ fn library_toc_and_xml_reachability() {
         .assert()
         .success();
     let out = e.project.join("dist/release/MyAddon");
-    let toc = fs::read_to_string(out.join("MyAddon.toc")).unwrap();
+    let toc = read_lf(out.join("MyAddon.toc")).unwrap();
     assert!(
         toc.contains(
             "Libs\\LibMulti-1.0\\LibMulti.xml\nLibs\\LibMulti-1.0\\Classic.lua [AllowLoadGameType "
@@ -360,10 +366,10 @@ fn embeds_xml_of_the_package_loads_library_files() {
         .assert()
         .success();
     let out = e.project.join("dist/release/MyAddon");
-    let toc = fs::read_to_string(out.join("MyAddon.toc")).unwrap();
+    let toc = read_lf(out.join("MyAddon.toc")).unwrap();
     // Loaded through the package's XML, so not listed again.
     assert!(!toc.contains("Libs\\LibStub\\LibStub.lua"), "{toc}");
-    let xml = fs::read_to_string(out.join("src/embeds.xml")).unwrap();
+    let xml = read_lf(out.join("src/embeds.xml")).unwrap();
     assert!(
         xml.contains("file=\"Interface\\AddOns\\MyAddon\\Libs\\LibStub\\LibStub.lua\""),
         "{xml}"
@@ -798,13 +804,13 @@ fn wowlua_library_is_compiled_into_the_addon() {
         .success()
         .stderr(predicate::str::contains("W1003").not());
     let out = e.project.join("dist/release/MyAddon");
-    let toc = fs::read_to_string(out.join("MyAddon.toc")).unwrap();
+    let toc = read_lf(out.join("MyAddon.toc")).unwrap();
     assert!(
         toc.contains("libs\\wowlua-ui\\util.lua\nlibs\\wowlua-ui\\widgets\\button.lua\n"),
         "{toc}"
     );
     assert!(!out.join("libs/wowlua-ui/unused.lua").exists());
-    let button = fs::read_to_string(out.join("libs/wowlua-ui/widgets/button.lua")).unwrap();
+    let button = read_lf(out.join("libs/wowlua-ui/widgets/button.lua")).unwrap();
     assert!(
         button.contains("__wl.module(\"wowlua-ui/widgets/button\")"),
         "{button}"
@@ -815,12 +821,12 @@ fn wowlua_library_is_compiled_into_the_addon() {
         button.contains("self.shadows = true self.fancy = true"),
         "{button}"
     );
-    let main = fs::read_to_string(out.join("src/main.lua")).unwrap();
+    let main = read_lf(out.join("src/main.lua")).unwrap();
     assert!(
         main.contains("__wl.require(\"wowlua-ui/init\").Button"),
         "{main}"
     );
-    let licenses = fs::read_to_string(out.join("LICENSES.txt")).unwrap();
+    let licenses = read_lf(out.join("LICENSES.txt")).unwrap();
     assert!(
         licenses.contains("== wowlua-ui (libs/wowlua-ui) ==\n\nLicense: MIT"),
         "{licenses}"
@@ -1212,12 +1218,12 @@ fn init_from_pkgmeta_converts_externals() {
         .assert()
         .success();
     let out = addon.join("dist/release/MyAddon");
-    let toc = fs::read_to_string(out.join("MyAddon.toc")).unwrap();
+    let toc = read_lf(out.join("MyAddon.toc")).unwrap();
     assert!(
         toc.contains("Libs\\LibStub\\LibStub.lua\nsrc\\embeds.xml\nLibs\\LibClassic\\LibClassic.lua [AllowLoadGameType "),
         "{toc}"
     );
-    let embeds = fs::read_to_string(out.join("src/embeds.xml")).unwrap();
+    let embeds = read_lf(out.join("src/embeds.xml")).unwrap();
     assert!(!embeds.contains('\r'), "LF like `packager -u`: {embeds:?}");
     assert!(
         embeds.contains(
@@ -1233,9 +1239,9 @@ fn init_from_pkgmeta_converts_externals() {
     // external (decision T144).
     assert!(out.join("Libs/LibStub/README.md").exists());
     // Library files get the packager's processing too (decision T120).
-    let stub_out = fs::read_to_string(out.join("Libs/LibStub/LibStub.lua")).unwrap();
+    let stub_out = read_lf(out.join("Libs/LibStub/LibStub.lua")).unwrap();
     assert_eq!(stub_out, "-- LibStub, Public Domain\nLibStub = {}\n");
-    let core = fs::read_to_string(out.join("src/Core.lua")).unwrap();
+    let core = read_lf(out.join("src/Core.lua")).unwrap();
     assert!(
         core.contains("--[==[@debug@\nns.debug = true\n--@end-debug@]==]"),
         "{core}"
@@ -1246,21 +1252,19 @@ fn init_from_pkgmeta_converts_externals() {
         .args(["-p", "my-addon", "build"])
         .assert()
         .success();
-    let dev = fs::read_to_string(addon.join("dist/dev/MyAddon/src/Core.lua")).unwrap();
+    let dev = read_lf(addon.join("dist/dev/MyAddon/src/Core.lua")).unwrap();
     assert!(
         dev.contains("--@debug@\nns.debug = true\n--@end-debug@"),
         "{dev}"
     );
-    let stub_dev =
-        fs::read_to_string(addon.join("dist/dev/MyAddon/Libs/LibStub/LibStub.lua")).unwrap();
+    let stub_dev = read_lf(addon.join("dist/dev/MyAddon/Libs/LibStub/LibStub.lua")).unwrap();
     assert!(stub_dev.contains("LibStub.test = true"), "{stub_dev}");
     // The moved folder builds as its own addon.
     wowlua(addon, &e.home)
         .args(["-p", "my-addon-options", "build"])
         .assert()
         .success();
-    let options_toc =
-        fs::read_to_string(addon.join("dist/dev/MyAddon_Options/MyAddon_Options.toc")).unwrap();
+    let options_toc = read_lf(addon.join("dist/dev/MyAddon_Options/MyAddon_Options.toc")).unwrap();
     assert!(
         options_toc.contains("Libs\\LibOpt\\LibOpt.lua\nsrc\\Options.lua"),
         "{options_toc}"
@@ -1275,10 +1279,10 @@ fn init_from_pkgmeta_converts_externals() {
     let voice_out = addon.join("dist/release/MyAddon_Voice");
     assert_eq!(
         fs::read_to_string(voice_out.join("MyAddon_Voice.toc")).unwrap(),
-        "## Interface: 120100\n## Title: Voice\nVoice.lua\n"
+        "## Interface: 120100\r\n## Title: Voice\r\nVoice.lua\r\n"
     );
     assert_eq!(
-        fs::read_to_string(voice_out.join("Voice.lua")).unwrap(),
+        read_lf(voice_out.join("Voice.lua")).unwrap(),
         "Voice = \"v1\"\n"
     );
     assert!(voice_out.join("countdown.ogg").exists());
@@ -1367,8 +1371,8 @@ fn flavors_keep_their_own_toc_order() {
         .success()
         .stderr(predicate::str::contains("W4304").not());
     let out = e.project.join("dist/release/MyAddon");
-    let mainline = fs::read_to_string(out.join("MyAddon_Mainline.toc")).unwrap();
-    let vanilla = fs::read_to_string(out.join("MyAddon_Classic.toc")).unwrap();
+    let mainline = read_lf(out.join("MyAddon_Mainline.toc")).unwrap();
+    let vanilla = read_lf(out.join("MyAddon_Classic.toc")).unwrap();
     assert!(
         mainline.ends_with("src\\A.lua\nsrc\\B.lua\nsrc\\C.lua\n"),
         "{mainline}"
@@ -1402,8 +1406,8 @@ fn flavors_keep_their_own_saved_variables_and_publish_ids() {
         .assert()
         .success();
     let out = e.project.join("dist/release/MyAddon");
-    let mainline = fs::read_to_string(out.join("MyAddon_Mainline.toc")).unwrap();
-    let classic = fs::read_to_string(out.join("MyAddon_Classic.toc")).unwrap();
+    let mainline = read_lf(out.join("MyAddon_Mainline.toc")).unwrap();
+    let classic = read_lf(out.join("MyAddon_Classic.toc")).unwrap();
     assert!(
         mainline.contains("## SavedVariables: MyDB, MyDebugDB\n"),
         "{mainline}"
@@ -1486,7 +1490,7 @@ fn init_reads_per_game_packager_runs() {
         .assert()
         .success();
     assert!(out.join("src/lib/ClassicOnly/lib.lua").exists());
-    let embeds = fs::read_to_string(out.join("src/embeds.xml")).unwrap();
+    let embeds = read_lf(out.join("src/embeds.xml")).unwrap();
     assert!(
         embeds.contains("<!--@non-retail@-->"),
         "the classic variant loads the library: {embeds}"
@@ -1567,15 +1571,16 @@ fn converted_projects_package_like_the_packager() {
     assert!(out.join("Libs/LibIcon/media/icon.tga").exists());
     assert!(!out.join("Libs/LibIcon/tests/test.lua").exists());
     assert!(!out.join("Libs/LibIcon/docs/guide.md").exists());
+    // The packager's default line endings, CR LF (decision T154).
     assert_eq!(
         fs::read_to_string(out.join("Libs/LibIcon/README.md")).unwrap(),
-        "LibIcon v1\n"
+        "LibIcon v1\r\n"
     );
     // `@retail@` blocks stay as written in a multi-version build.
-    let core = fs::read_to_string(out.join("src/core.lua")).unwrap();
+    let core = read_lf(out.join("src/core.lua")).unwrap();
     assert!(core.contains("--@retail@\nns.retail = true"), "{core}");
     // The packager's changelog of the commits since the last tag.
-    let changelog = fs::read_to_string(out.join("CHANGELOG.md")).unwrap();
+    let changelog = read_lf(out.join("CHANGELOG.md")).unwrap();
     assert!(
         changelog.starts_with("# My Addon\n\n## 1.0-1-g"),
         "{changelog}"

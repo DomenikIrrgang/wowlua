@@ -832,6 +832,19 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             &members,
             &mut report,
         );
+        // The packager writes the TOC's own version line (decision T153).
+        let toc_version = views
+            .iter()
+            .find(|(_, flavors)| !flavors.is_empty())
+            .and_then(|(toc, _)| toc.get("Version"))
+            .unwrap_or_default()
+            .to_string();
+        if let Some(compat) = manifest
+            .pointer_mut("/compat")
+            .and_then(Value::as_object_mut)
+        {
+            compat.insert("toc-version".into(), json!(toc_version));
+        }
     }
     if !variable_lines.is_empty()
         && let Some(build) = manifest
@@ -1238,6 +1251,10 @@ fn convert_pkgmeta(
     // externals' files (keywords, blocks, line endings, decision T120).
     let mut compat = Map::new();
     compat.insert("packager-keywords".into(), json!(true));
+    compat.insert(
+        "line-endings".into(),
+        json!(if meta.unix { "lf" } else { "crlf" }),
+    );
     if !meta.plain_copy.is_empty() {
         compat.insert("plain-copy".into(), json!(meta.plain_copy));
     }
@@ -1416,6 +1433,7 @@ fn init_members(
                 .collect(),
             per_game: meta.per_game,
             split: meta.split,
+            unix: meta.unix,
             games: meta
                 .games
                 .iter()
@@ -1757,6 +1775,10 @@ fn init_suite(dir: &Path, mut meta: crate::pkgmeta::PkgMeta) -> Result<InitRepor
         .or_insert_with(|| json!({ "packager-keywords": true }))
         .as_object_mut()
         .expect("an object");
+    compat.insert(
+        "line-endings".into(),
+        json!(if meta.unix { "lf" } else { "crlf" }),
+    );
     if let Some(name) = &meta.package_as {
         compat.insert("package-as".into(), json!(name));
     }
@@ -1767,6 +1789,25 @@ fn init_suite(dir: &Path, mut meta: crate::pkgmeta::PkgMeta) -> Result<InitRepor
         compat.insert("changelog-title".into(), json!(title));
     }
     manifest.insert("workspace".into(), Value::Object(ws));
+    // The root's own files ship with the package-as AddOn, minus `ignore`.
+    let exclude: Vec<String> = meta
+        .ignore
+        .iter()
+        .flat_map(|p| {
+            let p = p
+                .trim_end_matches("/*")
+                .trim_end_matches('/')
+                .replace('\\', "/");
+            if dir.join(&p).is_dir() {
+                vec![format!("{p}/**")]
+            } else {
+                vec![p.clone(), format!("{p}/**")]
+            }
+        })
+        .collect();
+    if !exclude.is_empty() {
+        manifest.insert("build".into(), json!({ "exclude": exclude }));
+    }
     if let Some((file, _)) = &meta.manual_changelog {
         manifest.insert("publish".into(), json!({ "changelog": file }));
     }

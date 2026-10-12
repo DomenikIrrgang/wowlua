@@ -947,6 +947,14 @@ impl Default for Fmt {
     }
 }
 
+/// Line endings of packager-processed files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum LineEndings {
+    Lf,
+    Crlf,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Compat {
@@ -963,6 +971,14 @@ pub struct Compat {
     /// without a root addon (`.pkgmeta` `package-as`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub package_as: Option<String>,
+    /// The TOC `## Version` value as the packager writes it: the original
+    /// TOC's value, keywords substituted (`""`: no `Version` line).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toc_version: Option<String>,
+    /// Line endings of the files the packager processes: `crlf` (its
+    /// default) or `lf` (`-u`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_endings: Option<LineEndings>,
     /// The title of the changelog the packager generates (`.pkgmeta`
     /// `changelog-title`).
     #[serde(default, skip_serializing_if = "Option::is_none")]

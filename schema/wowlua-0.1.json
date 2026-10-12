@@ -1693,6 +1693,24 @@
             "null"
           ]
         },
+        "toc-version": {
+          "description": "The TOC `## Version` value as the packager writes it: the original\nTOC's value, keywords substituted (`\"\"`: no `Version` line).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "line-endings": {
+          "description": "Line endings of the files the packager processes: `crlf` (its\ndefault) or `lf` (`-u`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LineEndings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "changelog-title": {
           "description": "The title of the changelog the packager generates (`.pkgmeta`\n`changelog-title`).",
           "type": [
@@ -1713,6 +1731,14 @@
         }
       },
       "additionalProperties": false
+    },
+    "LineEndings": {
+      "description": "Line endings of packager-processed files.",
+      "type": "string",
+      "enum": [
+        "lf",
+        "crlf"
+      ]
     },
     "Workspace": {
       "type": "object",

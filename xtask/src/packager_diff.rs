@@ -224,7 +224,7 @@ impl Tree {
                 );
                 continue;
             }
-            if key == "version" || key.starts_with("x-wowlua") {
+            if key.starts_with("x-wowlua") {
                 continue;
             }
             let value = value_text
@@ -468,7 +468,8 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path, only: Option<&str>) 
     let mut allowed: Vec<String> = Vec::new();
     for rel in pk.files.values() {
         let lower = rel.to_ascii_lowercase();
-        if loaded_pk.contains(rel) || lower.ends_with(".toc") {
+        // The project's TOCs are compared as directives above.
+        if loaded_pk.contains(rel) || (lower.ends_with(".toc") && !rel.contains('/')) {
             continue;
         }
         let code = lower.ends_with(".lua") || lower.ends_with(".xml");
@@ -495,8 +496,15 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path, only: Option<&str>) 
         // files the game never loads may be missing, but must match when
         // both outputs have them (generated changelog, licenses).
         if (code || doc) && !in_lib {
-            match wl.files.get(&lower) {
-                None => allowed.push(rel.clone()),
+            // Unloaded sources stay outside `src/`; loaded ones moved in.
+            let found = wl
+                .files
+                .get(&lower)
+                .or_else(|| wl.files.get(&format!("{src}/{lower}")));
+            match found {
+                // The TOCs wowlua generates in place of the project's.
+                None if !rel.contains('/') && lower.ends_with(".toc") => allowed.push(rel.clone()),
+                None => problems.push(format!("`{rel}` is missing from the wowlua build")),
                 Some(w) if pk.bytes(rel) != wl.bytes(w) => {
                     let (a, b) = (pk.bytes(rel), wl.bytes(w));
                     let (ta, tb) = (String::from_utf8_lossy(&a), String::from_utf8_lossy(&b));

@@ -76,6 +76,8 @@ pub struct ExternalAddon {
     /// The packager's processing applies (the workspace root's
     /// `compat.packager-keywords`).
     pub packager: bool,
+    /// Processed text files get CR LF (`compat.line-endings: "crlf"`).
+    pub crlf: bool,
     /// The flavors the workspace targets (install folders).
     pub flavors: Vec<String>,
 }
@@ -591,6 +593,8 @@ fn load_workspace(
                 name: name.clone(),
                 package,
                 packager: root_manifest.manifest.compat.packager_keywords,
+                crlf: root_manifest.manifest.compat.line_endings
+                    == Some(wowlua_manifest::model::LineEndings::Crlf),
                 flavors: all_flavors.clone(),
             }
         })

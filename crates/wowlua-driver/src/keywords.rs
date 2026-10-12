@@ -24,6 +24,20 @@ pub fn lf(bytes: &[u8]) -> Vec<u8> {
     out
 }
 
+/// Line endings as the packager's default `line_ending_filter` writes
+/// them: CR LF after every line, a last line without newline kept so.
+pub fn crlf(bytes: &[u8]) -> Vec<u8> {
+    let normalized = lf(bytes);
+    let mut out = Vec::with_capacity(normalized.len() + normalized.len() / 32);
+    for b in normalized {
+        if b == b'\n' {
+            out.push(b'\r');
+        }
+        out.push(b);
+    }
+    out
+}
+
 /// Text files the packager processes (keywords, line endings).
 pub fn processed_extension(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();

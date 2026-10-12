@@ -115,6 +115,11 @@ pub fn build_external(
             }
             _ => normalized,
         };
+        let out = if ext.crlf {
+            crate::keywords::crlf(&out)
+        } else {
+            out
+        };
         if out == bytes {
             files.insert(rel, Content::Copy(abs));
         } else {

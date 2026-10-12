@@ -42,17 +42,21 @@ fi
 
 # wowlua.
 (cd "$WORK/wowlua" && "$WOWLUA" init --from-pkgmeta)
+# The packager's line endings: CR LF unless the project's runs pass `-u`
+# (what `init` read from its workflows).
+unix=()
+[ "$(jq -r '.compat."line-endings" // "lf"' "$WORK/wowlua/wowlua.json")" = lf ] && unix=(-u)
 
 # Projects whose CI packages one game per packager run (`-g <game> -m
 # <file>`) are compared game by game; the others in one multi-version run.
 # The packager: no upload (-d), no zip (-z), no localization (-l, which needs
-# the CurseForge API), Unix line endings (-u).
+# the CurseForge API).
 # Projects released with `-S` get TOCs per game from `## Interface-<Game>:`.
 RUNS=$(cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-runs "$WORK/addon")
 if [ -z "$RUNS" ] || [ "$RUNS" = split ]; then
   split=()
   [ "$RUNS" = split ] && split=(-S)
-  (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -z -l -u "${split[@]}" -r "$WORK/release")
+  (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -z -l "${unix[@]}" "${split[@]}" -r "$WORK/release")
   (cd "$WORK/wowlua" && "$WOWLUA" build --release)
   # Every AddOn folder the packager made (move-folders makes several).
   cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-diff \
@@ -64,7 +68,7 @@ else
     rm -rf "$WORK/release"
     meta=()
     [ "$file" != "-" ] && meta=(-m "$file")
-    (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -z -l -u -g "$game" "${meta[@]}" -r "$WORK/release")
+    (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -z -l "${unix[@]}" -g "$game" "${meta[@]}" -r "$WORK/release")
     (cd "$WORK/wowlua" && "$WOWLUA" build --release --flavor "$flavor")
     cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-diff \
       --flavor "$flavor" "$WORK/release" "$WORK/wowlua" || status=1
