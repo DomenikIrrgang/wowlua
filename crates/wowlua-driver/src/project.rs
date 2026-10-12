@@ -16,6 +16,28 @@ pub struct LoadOptions {
     pub cwd: PathBuf,
     /// `--locked` / `--frozen`: fail instead of changing `wowlua.lock`.
     pub locked: bool,
+    /// `--offline` / `--frozen`: only the cache, never the network.
+    pub offline: bool,
+    /// Commands that never look at dependencies (`fmt`, `trace`) skip
+    /// resolving and fetching them.
+    pub skip_dependencies: bool,
+    /// Which locked pins may move (`wowlua update`).
+    pub update: Option<wowlua_pkg::Update>,
+    /// Progress lines (`Cloning …`, `Fetching …`).
+    pub status: Option<Status>,
+}
+
+/// A progress callback: status word and message.
+pub type StatusFn = dyn Fn(&str, &str);
+
+/// A sink for progress lines.
+#[derive(Clone)]
+pub struct Status(pub std::rc::Rc<StatusFn>);
+
+impl std::fmt::Debug for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Status")
+    }
 }
 
 /// A loaded, validated project.
@@ -26,6 +48,9 @@ pub struct Project {
     /// Interface numbers per targeted flavor: explicit in the manifest, or
     /// pinned in the lockfile.
     pub interfaces: BTreeMap<String, Vec<u32>>,
+    /// The resolved dependencies, fetched into the cache (empty when the
+    /// command skips them).
+    pub deps: wowlua_pkg::Resolution,
 }
 
 impl Project {
@@ -122,7 +147,14 @@ pub fn load_project(session: &mut Session, options: &LoadOptions) -> Option<Proj
         .filter(|id| !explicit.contains_key(*id))
         .cloned()
         .collect();
-    let lock = lockfile::required(pinned.as_ref(), &pinned_flavors);
+    let mut lock = lockfile::required(pinned.as_ref(), &pinned_flavors);
+    let deps = if options.skip_dependencies {
+        wowlua_pkg::Resolution::default()
+    } else {
+        let deps = resolve_dependencies(session, &manifest, &lock, options)?;
+        lock.packages = deps.lock_entries(&manifest.root);
+        deps
+    };
     if pinned.as_ref() != Some(&lock) {
         if options.locked {
             session.push(
@@ -161,7 +193,70 @@ pub fn load_project(session: &mut Session, options: &LoadOptions) -> Option<Proj
         manifest,
         lock,
         interfaces,
+        deps,
     })
+}
+
+/// Resolves the package's dependencies (all features, flavors and
+/// dev-dependencies) and fetches them into the cache.
+fn resolve_dependencies(
+    session: &mut Session,
+    manifest: &LoadedManifest,
+    lock: &Lockfile,
+    options: &LoadOptions,
+) -> Option<wowlua_pkg::Resolution> {
+    let m = &manifest.manifest;
+    if m.dependencies.is_empty() && m.dev_dependencies.is_empty() {
+        return Some(wowlua_pkg::Resolution::default());
+    }
+    let Some(cache) = wowlua_pkg::Cache::new() else {
+        session.push(
+            Diagnostic::plain_error("cannot find a home directory for the package cache")
+                .with_help("set `WOWLUA_HOME`"),
+        );
+        return None;
+    };
+    let status = options.status.clone();
+    let fetcher = wowlua_pkg::Fetcher::new(cache, options.offline, move |word, message| {
+        if let Some(s) = &status {
+            (s.0)(word, message);
+        }
+    });
+    let package = manifest.package();
+    let root = wowlua_pkg::Root {
+        name: package.map(|p| p.name.clone()).unwrap_or_default(),
+        version: package
+            .and_then(|p| semver::Version::parse(&p.version).ok())
+            .unwrap_or(semver::Version::new(0, 0, 0)),
+        dir: manifest.root.clone(),
+        manifest_path: manifest.path.clone(),
+        deps: m
+            .dependencies
+            .iter()
+            .chain(&m.dev_dependencies)
+            .map(|(n, d)| (n.clone(), d.clone()))
+            .collect(),
+    };
+    let update = options.update.clone().unwrap_or(wowlua_pkg::Update::None);
+    let resolved = wowlua_pkg::resolve(
+        &mut session.db,
+        &[root],
+        &fetcher,
+        &wowlua_pkg::resolve::Options {
+            lock: &lock.packages,
+            lock_root: &manifest.root,
+            update: &update,
+            compiler: &crate::compiler_version(),
+            members: &Default::default(),
+        },
+    );
+    match resolved {
+        Ok(r) => Some(r),
+        Err(errors) => {
+            session.diagnostics.extend(errors);
+            None
+        }
+    }
 }
 
 /// A path relative to `cwd` when possible, for messages.

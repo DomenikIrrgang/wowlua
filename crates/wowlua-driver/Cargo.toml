@@ -24,6 +24,7 @@ wowlua-api.workspace = true
 wowlua-types-gen.workspace = true
 wowlua-luair.workspace = true
 wowlua-fmt.workspace = true
+wowlua-pkg.workspace = true
 blake3.workspace = true
 dirs.workspace = true
 globset.workspace = true

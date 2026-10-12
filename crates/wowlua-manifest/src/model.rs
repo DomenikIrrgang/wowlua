@@ -317,6 +317,8 @@ pub struct DependencyDetail {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub submodules: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub svn: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archive: Option<String>,

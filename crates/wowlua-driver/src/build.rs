@@ -160,6 +160,8 @@ pub fn build(
     }
 
     let flavors = select_flavors(session, project, request.flavors.as_deref())?;
+    // Embedded `lua-library` dependencies (spec §10.5.2).
+    let libs = crate::embed::lua_libraries(session, project, &flavors)?;
     for flavor in &flavors {
         if project.interfaces.get(flavor).is_none_or(Vec::is_empty) {
             session.push(
@@ -244,7 +246,7 @@ pub fn build(
     let asset_rels: Vec<String> = assets.iter().map(|a| a.rel.clone()).collect();
 
     // XML references.
-    let xml = resolve_xml(session, &files);
+    let xml = resolve_xml(session, &files, &libs, &addon_name);
 
     // Flavor restrictions (`build.flavor-files`) and the TOC file list.
     let flavor_globs: Vec<(globset::GlobMatcher, Vec<String>)> = build_cfg
@@ -635,6 +637,7 @@ pub fn build(
                 path: source.output_path(),
                 flavors: flavors_of,
                 locales: None,
+                dependency: false,
             });
         }
     }
@@ -658,7 +661,28 @@ pub fn build(
             path: entry.path.clone(),
             flavors: flavors_of,
             locales: None,
+            dependency: false,
         });
+    }
+    // Library entry files, unless the package's own XML loads them.
+    for (i, lib) in libs.iter().enumerate() {
+        for (entry, entry_flavors) in &lib.entries {
+            if xml.lib_refs.get(&i).is_some_and(|r| r.contains(entry)) {
+                continue;
+            }
+            let flavors_of = match (&lib.flavors, entry_flavors) {
+                (Some(a), Some(b)) => Some(a.iter().filter(|f| b.contains(f)).cloned().collect()),
+                (a, b) => a.clone().or_else(|| b.clone()),
+            };
+            let path = lib.output(entry);
+            toc_items.push(TocItem {
+                rel: path.clone(),
+                path,
+                flavors: flavors_of,
+                locales: None,
+                dependency: true,
+            });
+        }
     }
     order_by_load_order(&mut toc_items, &build_cfg.load_order);
     let flavor_edges: Vec<FlavorEdges> = builds
@@ -699,6 +723,7 @@ pub fn build(
                 path: RUNTIME_PATH.into(),
                 flavors: None,
                 locales: None,
+                dependency: false,
             },
         );
     }
@@ -723,6 +748,7 @@ pub fn build(
                     path: format!("wowlua/flavors/{f}/{}", item.path),
                     flavors: Some(vec![f]),
                     locales: item.locales.clone(),
+                    dependency: item.dependency,
                 })
                 .collect()
         })
@@ -905,9 +931,30 @@ pub fn build(
         };
         out.insert(source.output_path(), Content::Bytes(content));
     }
+    let mut lib_licenses: Vec<(String, String)> = Vec::new();
+    for (i, lib) in libs.iter().enumerate() {
+        let mut roots: Vec<String> = lib.entries.iter().map(|(e, _)| e.clone()).collect();
+        roots.extend(xml.lib_refs.get(&i).into_iter().flatten().cloned());
+        for rel in crate::embed::reachable(session, lib, &roots) {
+            out.insert(lib.output(&rel), Content::Copy(lib.dir.join(&rel)));
+        }
+        match crate::embed::license_text(lib) {
+            Some(text) => lib_licenses.push((format!("{} ({})", lib.name, lib.install), text)),
+            None => session.push(
+                Diagnostic::warning(
+                    "W4306",
+                    format!(
+                        "embedded library `{}` has no recognizable license file or header",
+                        lib.name
+                    ),
+                )
+                .with_help("check its license before publishing; `lua-library.license-files` can name the file"),
+            ),
+        }
+    }
     out.insert(
         "LICENSES.txt".into(),
-        Content::Bytes(licenses_text(profile.dev_console).into_bytes()),
+        Content::Bytes(licenses_text(profile.dev_console, &lib_licenses).into_bytes()),
     );
     // The dev window's fonts (spec §7.7.1).
     if profile.dev_console {
@@ -940,7 +987,9 @@ pub fn build(
     }
     for asset in &assets {
         let first = asset.rel.split('/').next().unwrap_or_default();
-        let reserved = RESERVED_DIRS.contains(&first) && asset.rel.contains('/')
+        let reserved = (RESERVED_DIRS.contains(&first)
+            || first.eq_ignore_ascii_case(&build_cfg.libs_dir))
+            && asset.rel.contains('/')
             || RESERVED_FILES.contains(&asset.rel.as_str())
             || (!asset.rel.contains('/') && asset.rel.to_ascii_lowercase().ends_with(".toc"));
         if reserved || out.contains_key(&asset.rel) {
@@ -1056,9 +1105,21 @@ pub(crate) struct XmlInfo {
     rewrites: HashMap<String, String>,
     /// Reference graph: XML source → referenced sources.
     edges: BTreeMap<String, Vec<String>>,
+    /// Files of embedded libraries the package's XML loads, by library
+    /// index (paths relative to the library).
+    lib_refs: BTreeMap<usize, BTreeSet<String>>,
 }
 
-fn resolve_xml(session: &mut Session, files: &[(Source, FileId)]) -> XmlInfo {
+/// Resolves the XML references of the sources. A reference into
+/// `<libs-dir>/<install-path>/` (an `embeds.xml` of a migrated addon) names
+/// a file of that embedded library; it is rewritten to the library's
+/// in-game path.
+fn resolve_xml(
+    session: &mut Session,
+    files: &[(Source, FileId)],
+    libs: &[crate::embed::LuaLib],
+    addon: &str,
+) -> XmlInfo {
     let by_src_rel: HashMap<String, &Source> = files
         .iter()
         .map(|(s, _)| (s.src_rel.to_ascii_lowercase(), s))
@@ -1099,6 +1160,28 @@ fn resolve_xml(session: &mut Session, files: &[(Source, FileId)]) -> XmlInfo {
                     .and_then(|stem| by_src_rel.get(&format!("{stem}.wowlua").to_ascii_lowercase()))
                     .copied()
             });
+            let library = if target.is_none() {
+                let lower = joined.to_ascii_lowercase();
+                libs.iter().enumerate().find_map(|(i, lib)| {
+                    let rest =
+                        lower.strip_prefix(&format!("{}/", lib.install.to_ascii_lowercase()))?;
+                    lib.index.get(rest).map(|rel| (i, rel.clone()))
+                })
+            } else {
+                None
+            };
+            if let Some((i, rel)) = library {
+                let conditions = reference.file[reference.path().len()..].to_string();
+                replacements.push((
+                    reference,
+                    format!(
+                        "Interface\\AddOns\\{addon}\\{}{conditions}",
+                        libs[i].output(&rel).replace('/', "\\")
+                    ),
+                ));
+                info.lib_refs.entry(i).or_default().insert(rel);
+                continue;
+            }
             match target {
                 Some(target) => {
                     let expected = if via_lua {
@@ -1182,6 +1265,9 @@ struct TocItem {
     path: String,
     flavors: Option<Vec<String>>,
     locales: Option<Vec<String>>,
+    /// An entry file of an embedded library: loads before the package's
+    /// own files unless `build.load-order` names it.
+    dependency: bool,
 }
 
 /// Orders TOC entries: `build.load-order` entries first, in their order (an
@@ -1364,8 +1450,18 @@ fn listed_positions(
 
 fn order_by_load_order(entries: &mut Vec<TocItem>, load_order: &[String]) {
     let mut ordered = Vec::with_capacity(entries.len());
-    let mut remaining: Vec<TocItem> = std::mem::take(entries);
+    // Library entries load first, unless the load order names them exactly.
+    let (mut deps, mut remaining): (Vec<TocItem>, Vec<TocItem>) = std::mem::take(entries)
+        .into_iter()
+        .partition(|i| i.dependency);
     for pattern in load_order {
+        if deps.iter().any(|i| i.rel == *pattern) {
+            let (matched, rest): (Vec<_>, Vec<_>) =
+                deps.into_iter().partition(|i| i.rel == *pattern);
+            ordered.extend(matched);
+            deps = rest;
+            continue;
+        }
         let (matched, rest): (Vec<_>, Vec<_>) = if remaining.iter().any(|i| i.rel == *pattern) {
             remaining.into_iter().partition(|i| i.rel == *pattern)
         } else {
@@ -1382,7 +1478,8 @@ fn order_by_load_order(entries: &mut Vec<TocItem>, load_order: &[String]) {
     }
     remaining.sort_by(|a, b| a.rel.cmp(&b.rel));
     ordered.extend(remaining);
-    *entries = ordered;
+    deps.extend(ordered);
+    *entries = deps;
 }
 
 /// `[Game]` values per flavor.
@@ -1497,6 +1594,7 @@ fn variable_items(
                 path: output(&entry.path),
                 flavors: restricted,
                 locales: line_locales,
+                dependency: false,
             });
         } else {
             // Expand per flavor (and per locale through [AllowLoadTextLocale]).
@@ -1509,6 +1607,7 @@ fn variable_items(
                             path: source.output_path(),
                             flavors: Some(vec![flavor.clone()]),
                             locales: has_locale.then(|| vec![locale.clone()]),
+                            dependency: false,
                         });
                     }
                 }
@@ -2023,16 +2122,23 @@ fn bindings_files(session: &mut Session, root: &Path) -> Vec<(String, Vec<u8>)> 
     files
 }
 
-fn licenses_text(dev_fonts: bool) -> String {
-    let embedded = if dev_fonts {
-        "The dev window's fonts in wowlua/fonts/ (dev builds only):\n\
-         - Marcellus SC, Copyright (c) 2012 Brian J. Bonislawsky DBA Astigmatic (AOETI),\n  \
-           SIL Open Font License 1.1 (wowlua/fonts/MarcellusSC-OFL.txt)\n\
-         - Figtree, Copyright 2022 The Figtree Project Authors,\n  \
-           SIL Open Font License 1.1 (wowlua/fonts/Figtree-OFL.txt)\n"
-    } else {
-        "This build embeds no third-party components.\n"
-    };
+fn licenses_text(dev_fonts: bool, libs: &[(String, String)]) -> String {
+    let mut embedded = String::new();
+    for (title, text) in libs {
+        embedded.push_str(&format!("== {title} ==\n\n{text}\n\n"));
+    }
+    if dev_fonts {
+        embedded.push_str(
+            "The dev window's fonts in wowlua/fonts/ (dev builds only):\n\
+             - Marcellus SC, Copyright (c) 2012 Brian J. Bonislawsky DBA Astigmatic (AOETI),\n  \
+               SIL Open Font License 1.1 (wowlua/fonts/MarcellusSC-OFL.txt)\n\
+             - Figtree, Copyright 2022 The Figtree Project Authors,\n  \
+               SIL Open Font License 1.1 (wowlua/fonts/Figtree-OFL.txt)\n",
+        );
+    }
+    if embedded.is_empty() {
+        embedded.push_str("This build embeds no third-party components.\n");
+    }
     format!(
         "Licenses of components embedded in this AddOn.\n\
          Generated by wowlua {}.\n\n{embedded}",

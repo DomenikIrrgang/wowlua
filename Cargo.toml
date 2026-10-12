@@ -27,6 +27,7 @@ wowlua-types-gen = { path = "crates/wowlua-types-gen" }
 wowlua-api = { path = "crates/wowlua-api" }
 wowlua-sema = { path = "crates/wowlua-sema" }
 wowlua-driver = { path = "crates/wowlua-driver" }
+wowlua-pkg = { path = "crates/wowlua-pkg" }
 
 anyhow = "1.0"
 assert_cmd = "2.2"
@@ -34,6 +35,7 @@ blake3 = "1.8"
 clap = { version = "4.6", features = ["derive", "env"] }
 codespan-reporting = "0.13"
 dirs = "7.0"
+flate2 = "1.1"
 globset = "0.4"
 ignore = "0.4"
 indexmap = { version = "2.14", features = ["serde"] }
@@ -42,6 +44,7 @@ junction = "2.1"
 mlua = { version = "0.12", features = ["lua51", "vendored"] }
 notify-debouncer-mini = "0.7"
 predicates = "3.1"
+pubgrub = "0.4"
 quick-xml = "0.42"
 regex = "1.13"
 schemars = { version = "1.2", features = ["indexmap2"] }
@@ -51,9 +54,12 @@ serde_json = { version = "1.0", features = ["preserve_order"] }
 serde_path_to_error = "0.1"
 sha2 = "0.10"
 stacker = "0.1"
+tar = "0.4"
 tempfile = "3.27"
 thiserror = "2.0"
+ureq = "3.4"
 walkdir = "2.5"
+zip = { version = "9.0", default-features = false, features = ["deflate"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

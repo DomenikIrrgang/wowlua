@@ -56,6 +56,25 @@ impl Output {
         let _ = writeln!(stream, " {}", message.as_ref());
     }
 
+    /// A status sink for the driver's progress lines.
+    pub fn status_sink(&self) -> wowlua_driver::Status {
+        let (color, quiet) = (self.color, self.quiet);
+        wowlua_driver::Status(std::rc::Rc::new(move |word: &str, message: &str| {
+            if quiet {
+                return;
+            }
+            let mut stream = StandardStream::stderr(color);
+            let _ = stream.set_color(
+                ColorSpec::new()
+                    .set_fg(Some(termcolor::Color::Green))
+                    .set_bold(true),
+            );
+            let _ = write!(stream, "{word:>12}");
+            let _ = stream.reset();
+            let _ = writeln!(stream, " {message}");
+        }))
+    }
+
     /// Prints a line to stdout (command results such as TOC text).
     pub fn print(&self, text: impl AsRef<str>) {
         print!("{}", text.as_ref());

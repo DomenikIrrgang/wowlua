@@ -152,6 +152,11 @@ open for review.
 | T101 | A dev window (tabs: overview, profiler, monitor, log, errors, watch, inspector) is part of the dev console; watches come from `debug.watch`, typed expressions (window or `/wl watch`), and right-clicking values; tables open in a live tree inspector **(user, M5)** | A normal debugging workflow inside the game. |
 | T102 | Dev builds ship the dev window's fonts (Marcellus SC, Figtree; SIL OFL) in `wowlua/fonts/`, with their licences in `LICENSES.txt`; release builds never do **(user, M5)** | The window matches the SuuUI design; the client has neither font. |
 | T103 | The dev window's state (position, size, tab, addon) is saved per addon in the SavedVariables `WowluaDevDB_<Addon>`, added to dev builds' TOC and written to every loaded dev build **(user, M5)** | The window comes back where it was after a reload, whichever runtime draws it. |
+| T104 | Until the wowlua registry exists, registry dependencies (`"name": "^1.0"`) are error E4102; dependencies come from `git`, `svn`, `path` and `archive` sources. The wow-api declarations stay embedded in the compiler (T83) **(user, M6)** | No registry server yet; builds stay offline-capable. |
+| T105 | SVN sources use the system `svn` client. A pin is the last revision that changed the URL, and SVN externals are fetched only with `"submodules": true`, like git submodules **(user, M6)** | Stable pins; one opt-in policy for nested repositories. |
+| T106 | Embedded `lua-library` entry files load before the package's own files, nested dependencies first, otherwise in declaration order. `build.load-order` may name a library entry by its output path (`libs/LibStub/LibStub.lua`) to place it among the package's files **(user, M6)** | Libraries are ready before code uses them; migrated addons keep their exact order. |
+| T107 | A reference in the package's XML into `<libs-dir>/<install-path>/` names a file of that embedded library and is rewritten to its absolute in-game path; that file is then not listed in the TOC again **(M6)** | Existing `embeds.xml` files keep working after `init` moves them into `src/`. |
+| T108 | Archive sources accept `file://` URLs for local archives; every download over the network uses HTTPS **(M6)** | Local release zips and tests need no server. |
 
 ## Standard library
 

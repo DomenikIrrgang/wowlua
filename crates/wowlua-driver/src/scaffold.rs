@@ -209,11 +209,7 @@ fn minor_requirement() -> String {
 
 fn main_template() -> String {
     "-- Entry point of the addon.\n\
-     --\n\
-     -- This compiler version (milestone M3) compiles modules, classes, widget\n\
-     -- classes, enums and decorators; type checking and the standard library\n\
-     -- arrive with later milestones.\n\
-     local addonName: string, ns = ...\n\
+     local addonName: string = ...\n\
      \n\
      local frame = CreateFrame(\"Frame\")\n\
      frame:RegisterEvent(\"PLAYER_LOGIN\")\n\

@@ -1,6 +1,7 @@
 //! `wowlua.lock` (spec §10.6): pins the flavor-table version and the
 //! interface numbers of every targeted flavor, so every machine generates
-//! identical TOCs. Dependency entries arrive with the package manager (M6).
+//! identical TOCs, and the resolved dependencies with their pins and
+//! checksums.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -15,7 +16,7 @@ pub struct Lockfile {
     pub version: u32,
     pub flavor_table: FlavorPins,
     #[serde(default)]
-    pub packages: Vec<serde_json::Value>,
+    pub packages: Vec<wowlua_pkg::LockedPackage>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

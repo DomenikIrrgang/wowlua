@@ -374,7 +374,7 @@ pub fn addons(dir: &Path) -> Result<()> {
         let options = wowlua_driver::LoadOptions {
             manifest: None,
             cwd: work.clone(),
-            locked: false,
+            ..Default::default()
         };
         let Some(project) = wowlua_driver::load_project(&mut session, &options) else {
             failures.push(format!("{rel}: the adopted manifest does not load"));

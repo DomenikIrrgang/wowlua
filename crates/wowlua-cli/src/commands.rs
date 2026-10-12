@@ -15,12 +15,16 @@ fn cwd() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
-fn load_options(global: &GlobalArgs) -> LoadOptions {
+fn load_options(out: &Output, global: &GlobalArgs) -> LoadOptions {
     let cwd = cwd();
     LoadOptions {
         manifest: global.manifest.as_ref().map(|m| cwd.join(m)),
         cwd,
         locked: global.locked || global.frozen,
+        offline: global.offline || global.frozen,
+        skip_dependencies: false,
+        update: None,
+        status: Some(out.status_sink()),
     }
 }
 
@@ -56,11 +60,12 @@ fn describe(build: &BuildOutput) -> String {
 
 /// Loads the project and builds it. Diagnostics stay in the session.
 fn load_and_build(
+    out: &Output,
     session: &mut Session,
     global: &GlobalArgs,
     request: &BuildRequest,
 ) -> Option<(Project, BuildOutput)> {
-    let project = wowlua_driver::load_project(session, &load_options(global))?;
+    let project = wowlua_driver::load_project(session, &load_options(out, global))?;
     let build = wowlua_driver::build(session, &project, request);
     apply_lints(session, &project);
     build.map(|b| (project, b))
@@ -75,7 +80,7 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
         out_dir: args.out.as_ref().map(|o| cwd().join(o)),
         write: true,
     };
-    let result = load_and_build(&mut session, global, &request);
+    let result = load_and_build(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
     match result {
         Some((_, build)) if ok => {
@@ -102,7 +107,7 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
         out_dir: None,
         write: false,
     };
-    let result = load_and_build(&mut session, global, &request);
+    let result = load_and_build(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
     let Some((_, build)) = result.filter(|_| ok) else {
         return false;
@@ -131,7 +136,7 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
         out_dir: None,
         write: false,
     };
-    let result = load_and_build(&mut session, global, &request);
+    let result = load_and_build(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
     match result {
         Some((_, build)) if ok => {
@@ -152,7 +157,13 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
 /// `wowlua fmt [--check] [paths…]`.
 pub fn fmt(out: &Output, global: &GlobalArgs, check: bool, paths: Vec<PathBuf>) -> bool {
     let mut session = Session::new();
-    let Some(project) = wowlua_driver::load_project(&mut session, &load_options(global)) else {
+    let Some(project) = wowlua_driver::load_project(
+        &mut session,
+        &LoadOptions {
+            skip_dependencies: true,
+            ..load_options(out, global)
+        },
+    ) else {
         out.flush(&mut session);
         return false;
     };
@@ -214,7 +225,7 @@ pub fn install(out: &Output, global: &GlobalArgs, profile: &str, target: &Instal
         out_dir: None,
         write: true,
     };
-    let Some((project, build)) = load_and_build(&mut session, global, &request) else {
+    let Some((project, build)) = load_and_build(out, &mut session, global, &request) else {
         out.flush(&mut session);
         return false;
     };
@@ -243,7 +254,13 @@ pub fn uninstall(
     wow: Option<PathBuf>,
 ) -> bool {
     let mut session = Session::new();
-    let Some(project) = wowlua_driver::load_project(&mut session, &load_options(global)) else {
+    let Some(project) = wowlua_driver::load_project(
+        &mut session,
+        &LoadOptions {
+            skip_dependencies: true,
+            ..load_options(out, global)
+        },
+    ) else {
         out.flush(&mut session);
         return false;
     };
@@ -265,7 +282,13 @@ pub fn uninstall(
 
 pub fn clean(out: &Output, global: &GlobalArgs) -> bool {
     let mut session = Session::new();
-    let Some(project) = wowlua_driver::load_project(&mut session, &load_options(global)) else {
+    let Some(project) = wowlua_driver::load_project(
+        &mut session,
+        &LoadOptions {
+            skip_dependencies: true,
+            ..load_options(out, global)
+        },
+    ) else {
         out.flush(&mut session);
         return false;
     };
@@ -424,7 +447,7 @@ pub fn dev(out: &Output, global: &GlobalArgs, target: &InstallTarget, link: bool
     let cycle = |first: bool| -> Option<PathBuf> {
         let started = Instant::now();
         let mut session = Session::new();
-        let result = load_and_build(&mut session, global, &request);
+        let result = load_and_build(out, &mut session, global, &request);
         let ok = out.flush(&mut session);
         let (project, build) = result.filter(|_| ok)?;
         out.status(
@@ -516,7 +539,8 @@ fn apply_fixes(out: &Output, global: &GlobalArgs, lints_only: bool) -> Option<us
     let mut files: std::collections::BTreeSet<PathBuf> = Default::default();
     for _ in 0..10 {
         let mut session = Session::new();
-        let Some(project) = wowlua_driver::load_project(&mut session, &load_options(global)) else {
+        let Some(project) = wowlua_driver::load_project(&mut session, &load_options(out, global))
+        else {
             out.flush(&mut session);
             return None;
         };
@@ -564,7 +588,8 @@ pub fn lint(out: &Output, global: &GlobalArgs, fix: bool) -> bool {
         out_dir: None,
         write: false,
     };
-    let Some(project) = wowlua_driver::load_project(&mut session, &load_options(global)) else {
+    let Some(project) = wowlua_driver::load_project(&mut session, &load_options(out, global))
+    else {
         out.flush(&mut session);
         return false;
     };
@@ -586,7 +611,13 @@ pub fn lint(out: &Output, global: &GlobalArgs, fix: bool) -> bool {
 pub fn fix(out: &Output, global: &GlobalArgs, manifest: bool) -> bool {
     if manifest {
         let mut session = Session::new();
-        let Some(project) = wowlua_driver::load_project(&mut session, &load_options(global)) else {
+        let Some(project) = wowlua_driver::load_project(
+            &mut session,
+            &LoadOptions {
+                skip_dependencies: true,
+                ..load_options(out, global)
+            },
+        ) else {
             out.flush(&mut session);
             return false;
         };
@@ -614,7 +645,7 @@ pub fn fix(out: &Output, global: &GlobalArgs, manifest: bool) -> bool {
         out_dir: None,
         write: false,
     };
-    let _ = load_and_build(&mut session, global, &request);
+    let _ = load_and_build(out, &mut session, global, &request);
     out.flush(&mut session)
 }
 
@@ -691,7 +722,13 @@ pub fn trace(
             return false;
         }
     };
-    let Some(project) = wowlua_driver::load_project(&mut session, &load_options(global)) else {
+    let Some(project) = wowlua_driver::load_project(
+        &mut session,
+        &LoadOptions {
+            skip_dependencies: true,
+            ..load_options(out, global)
+        },
+    ) else {
         out.flush(&mut session);
         return false;
     };

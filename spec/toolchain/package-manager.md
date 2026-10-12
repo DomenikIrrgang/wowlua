@@ -44,11 +44,11 @@ can be used directly: the dependency declaration supplies `kind:
 
 | Source | Fields | Notes |
 |--------|--------|-------|
-| Registry | `"<semver req>"` or `{ "version": "…", "registry": "…" }` | Default registry: `https://registry.wowlua.dev` ([§10.10](#1010-registry)) |
+| Registry | `"<semver req>"` or `{ "version": "…", "registry": "…" }` | Default registry: `https://registry.wowlua.dev` ([§10.10](#1010-registry)). Not available until the registry exists: error E4102 (decision T104). |
 | Git | `git`, plus one of `tag`, `branch`, `rev`; optional `subdir`, `submodules` (default `false`) | Locked to a commit hash. Uses the system `git`, so credentials and SSH work as usual. Submodules are only fetched with `"submodules": true`; their commits are fixed by the locked parent commit. |
 | Path | `path` | Relative to the manifest. Never locked by checksum. For workspaces and local development. |
-| Archive | `archive` (URL to `.zip` / `.tar.gz`), `sha256` (required), optional `strip-prefix` | For release downloads |
-| SVN | `svn` (repository URL, may include a path such as `…/trunk/AceAddon-3.0`), optional `rev` | Locked to a revision number. Uses the system `svn` client. Many WoW libraries (Ace3, LibStub, CallbackHandler, LibSharedMedia on `repos.curseforge.com`) are only published this way (decision T51). |
+| Archive | `archive` (URL to `.zip` / `.tar.gz`; `https://`, or `file://` for a local archive, decision T108), `sha256` (required, of the archive file), optional `strip-prefix` | For release downloads |
+| SVN | `svn` (repository URL, may include a path such as `…/trunk/AceAddon-3.0`), optional `rev`, optional `submodules` (default `false`: SVN externals are not fetched) | Locked to a revision number: the explicit `rev`, otherwise the last revision that changed the URL (decision T105). Uses the system `svn` client. Many WoW libraries (Ace3, LibStub, CallbackHandler, LibSharedMedia on `repos.curseforge.com`) are only published this way (decision T51). |
 
 Common fields:
 
@@ -128,7 +128,22 @@ load, in order, are determined by the first of these that applies:
 4. a single `lib.xml`, `embeds.xml` or `<name>.xml` in the library root.
 
 Otherwise the dependency is error E4110 and asks for `files`. Only the entry
-files appear in the TOC.
+files appear in the TOC. Entry paths are relative to the library root and
+resolve case-insensitively, like the client.
+
+**Load position** (decision T106). Entry files load before the package's own
+files: dependencies of a library before the library, otherwise in the
+manifest's declaration order. `build.load-order` may name an entry file by its
+output path (`libs/LibStub/LibStub.lua`) to place it among the package's files;
+`wowlua init --from-pkgmeta` writes such entries, so migrated addons keep
+their exact order.
+
+**The package's own XML** (decision T107). A reference in one of the package's
+XML files that resolves into `<libs-dir>/<install-path>/` (relative to the
+source folder, as an `embeds.xml` written for the packager does) names that
+library's file. It is rewritten to the absolute in-game path
+(`Interface\AddOns\<Name>\Libs\LibStub\LibStub.lua`), the file is copied with
+everything it reaches, and it is not listed in the TOC again.
 
 **Copied files.** Only what the addon can load is copied: the entry files,
 every file reachable from them through XML `<Script>` / `<Include>` chains
@@ -199,8 +214,9 @@ libraries.
 | Path | Content |
 |------|---------|
 | `$WOWLUA_HOME` (default `~/.wowlua`) | Root |
-| `…/cache/git/<hash>/` | Bare clones. Checkouts are exported per commit. |
-| `…/cache/archives/<sha256>` | Downloaded archives |
+| `…/cache/git/<name>-<hash>/` | Bare clones |
+| `…/cache/checkouts/<kind>-<name>-<hash>-<pin>/` | Exported trees: one per git commit, SVN revision; without version-control metadata |
+| `…/cache/archives/<sha256>`, `…/cache/archives/<sha256>.d/` | Downloaded archives and their extracted trees |
 | `…/cache/registry/<registry>/<name>/<version>/` | Unpacked registry packages and index cache |
 | `…/maps/<build id>/` | Archived source maps of published builds ([Code generation §14.6](codegen.md#146-source-maps)) |
 | `…/config.json` | Global configuration: WoW install paths, registries (see [CLI](cli.md#127-configuration)). Tokens are not stored here unless the OS keychain is unavailable (§10.11). |

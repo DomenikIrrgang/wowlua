@@ -632,6 +632,12 @@
         "submodules": {
           "type": "boolean"
         },
+        "svn": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "path": {
           "type": [
             "string",

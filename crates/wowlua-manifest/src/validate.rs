@@ -522,6 +522,7 @@ fn dependencies(manifest: &Manifest, ctx: &mut Ctx) {
                     let sources = [
                         detail.version.is_some() || detail.registry.is_some(),
                         detail.git.is_some(),
+                        detail.svn.is_some(),
                         detail.path.is_some(),
                         detail.archive.is_some(),
                     ];
@@ -530,7 +531,7 @@ fn dependencies(manifest: &Manifest, ctx: &mut Ctx) {
                         ctx.error(
                             "E4002",
                             &path,
-                            format!("dependency `{name}` must name exactly one source: `version`, `git`, `path` or `archive`"),
+                            format!("dependency `{name}` must name exactly one source: `version`, `git`, `svn`, `path` or `archive`"),
                             if count == 0 { "no source" } else { "several sources" },
                         );
                     }
@@ -548,12 +549,26 @@ fn dependencies(manifest: &Manifest, ctx: &mut Ctx) {
                             "conflicting git refs",
                         );
                     }
-                    if detail.git.is_none() && refs > 0 {
+                    if detail.git.is_none()
+                        && (detail.tag.is_some()
+                            || detail.branch.is_some()
+                            || (detail.rev.is_some() && detail.svn.is_none()))
+                    {
                         ctx.error(
                             "E4002",
                             &path,
-                            format!("dependency `{name}`: `tag`, `branch` and `rev` require `git`"),
-                            "git ref without git",
+                            format!("dependency `{name}`: `tag` and `branch` require `git`, `rev` requires `git` or `svn`"),
+                            "ref without git",
+                        );
+                    }
+                    if let (Some(_), Some(rev)) = (&detail.svn, &detail.rev)
+                        && rev.parse::<u64>().is_err()
+                    {
+                        ctx.error(
+                            "E4002",
+                            &path.clone().key("rev"),
+                            format!("dependency `{name}`: an SVN `rev` is a revision number"),
+                            "not a revision number",
                         );
                     }
                     if detail.archive.is_some() && detail.sha256.is_none() {
