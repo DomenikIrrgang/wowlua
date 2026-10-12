@@ -220,11 +220,17 @@ impl FlavorTable {
         }) {
             return Some(SuffixMeaning::Flavor(flavor));
         }
-        self.legacy_toc_suffixes
+        if let Some(meaning) = self
+            .legacy_toc_suffixes
             .iter()
             .find(|(k, _)| k.eq_ignore_ascii_case(suffix))
             .and_then(|(_, id)| self.flavor(id))
-            .map(SuffixMeaning::Flavor)
+        {
+            return Some(SuffixMeaning::Flavor(meaning));
+        }
+        // The client (and the packager) take `-` in place of `_`.
+        let rest = suffix.strip_prefix('-')?;
+        self.suffix_meaning(&format!("_{rest}"))
     }
 }
 
@@ -285,6 +291,9 @@ mod tests {
         );
         assert!(
             matches!(t.suffix_meaning("-BCC"), Some(SuffixMeaning::Flavor(f)) if f.id == "tbc")
+        );
+        assert!(
+            matches!(t.suffix_meaning("-Mists"), Some(SuffixMeaning::Flavor(f)) if f.id == "mists")
         );
         assert_eq!(interface_to_version(120100), "12.1.0");
         assert_eq!(interface_to_version(11509), "1.15.9");

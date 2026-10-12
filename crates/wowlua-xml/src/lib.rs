@@ -53,6 +53,7 @@ pub struct XmlError {
 /// Checks that `text` is well-formed XML and returns its file references in
 /// document order.
 pub fn references(text: &str) -> Result<Vec<XmlRef>, XmlError> {
+    let text = &*without_bom(text);
     let mut reader = Reader::from_str(text);
     reader.config_mut().check_end_names = true;
     let mut refs = Vec::new();
@@ -108,6 +109,15 @@ pub fn references(text: &str) -> Result<Vec<XmlRef>, XmlError> {
     }
 }
 
+/// The document with a leading byte order mark (which the client accepts)
+/// replaced by spaces, so that byte offsets stay those of the file.
+pub(crate) fn without_bom(text: &str) -> std::borrow::Cow<'_, str> {
+    match text.strip_prefix('\u{feff}') {
+        Some(rest) => format!("   {rest}").into(),
+        None => text.into(),
+    }
+}
+
 /// Byte range of an attribute's value inside the text of one tag.
 fn attribute_value_span(tag: &str, name: &str) -> Option<Range<usize>> {
     let bytes = tag.as_bytes();
@@ -133,6 +143,36 @@ fn attribute_value_span(tag: &str, name: &str) -> Option<Range<usize>> {
         i = start + name.len();
     }
     None
+}
+
+/// Byte ranges of the packager's `<!--@debug@-->` … `<!--@end-debug@-->`
+/// blocks in a document.
+pub fn debug_blocks(text: &str) -> Vec<Range<usize>> {
+    const START: &str = "<!--@debug@-->";
+    const END: &str = "<!--@end-debug@-->";
+    let mut blocks = Vec::new();
+    let mut from = 0;
+    while let Some(i) = text[from..].find(START) {
+        let start = from + i;
+        let Some(j) = text[start..].find(END) else {
+            break;
+        };
+        let end = start + j + END.len();
+        blocks.push(start..end);
+        from = end;
+    }
+    blocks
+}
+
+/// The byte range of the element holding a reference (`<Script … />`).
+pub fn element_range(text: &str, reference: &XmlRef) -> Range<usize> {
+    let start = text[..reference.span.start]
+        .rfind('<')
+        .unwrap_or(reference.span.start);
+    let end = text[reference.span.end..]
+        .find('>')
+        .map_or(reference.span.end, |i| reference.span.end + i + 1);
+    start..end
 }
 
 /// Replaces reference values. `replacements` pairs each reference with its
@@ -203,5 +243,13 @@ mod tests {
             error.message
         );
         assert!(references("<Ui>").is_err());
+    }
+
+    #[test]
+    fn skips_a_byte_order_mark() {
+        let text = "\u{feff}<?xml version=\"1.0\"?><Ui>\n\t<Include file='A\\B.xml'/>\n</Ui>";
+        let refs = references(text).unwrap();
+        assert_eq!(refs.len(), 1);
+        assert_eq!(&text[refs[0].span.clone()], "A\\B.xml");
     }
 }

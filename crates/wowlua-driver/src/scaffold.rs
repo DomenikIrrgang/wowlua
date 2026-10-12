@@ -242,6 +242,19 @@ pub struct InitRequest {
     /// The AddOn name when it is known (a `move-folders` target), so that
     /// `LittleWigs_Classic.toc` is not read as `LittleWigs` for Classic.
     pub addon_name: Option<String>,
+    /// The AddOns next to this one once packaged, when they are not its
+    /// folder's siblings: a `move-folders` member and the addon it is moved
+    /// out of. `..\<name>\` TOC lines resolve to them.
+    pub neighbors: Vec<Neighbor>,
+}
+
+/// An AddOn next to the one being adopted once packaged.
+#[derive(Clone, Debug)]
+pub struct Neighbor {
+    pub name: String,
+    pub dir: PathBuf,
+    /// Its source directory when its files are already moved.
+    pub src: Option<String>,
 }
 
 /// What `wowlua init` did.
@@ -579,7 +592,14 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     }
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut into_externals: Vec<String> = Vec::new();
-    let skip = |p: &str| external_of(p).is_some();
+    // Files of externals and of `move-folders` members are not this addon's.
+    let skip = |p: &str| {
+        let lower = p.to_ascii_lowercase();
+        external_of(p).is_some()
+            || members
+                .iter()
+                .any(|(rel, _)| lower.starts_with(&format!("{}/", rel.to_ascii_lowercase())))
+    };
     let mut to_move = closure(
         dir,
         queue,
@@ -587,7 +607,45 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         &mut report.warnings,
         &skip,
         &mut into_externals,
+        pkgmeta.is_some(),
     );
+    // Files other AddOns next to this one load (`..\<this>\file.lua`) move
+    // too and are shipped as `build.shared-files` (unless loaded here anyway).
+    let neighbors = if request.neighbors.is_empty() {
+        // The members `move-folders` places next to this addon.
+        members
+            .iter()
+            .map(|(rel, name)| Neighbor {
+                name: name.clone(),
+                dir: dir.join(rel),
+                src: None,
+            })
+            .collect()
+    } else {
+        request.neighbors.clone()
+    };
+    let referenced = sibling_references(dir, &addon_name, &neighbors);
+    let ignored = |rel: &str| {
+        pkgmeta
+            .as_ref()
+            .is_some_and(|m| crate::keywords::plain_copy(&m.ignore, &[rel]))
+    };
+    let shared: Vec<String> = referenced
+        .iter()
+        .filter_map(|rel| existing_case(dir, rel))
+        .filter(|actual| !seen.contains(actual))
+        // The packager does not ship files `.pkgmeta` ignores.
+        .filter(|actual| !ignored(actual))
+        .collect();
+    to_move.extend(closure(
+        dir,
+        shared.clone(),
+        &mut seen,
+        &mut report.warnings,
+        &skip,
+        &mut into_externals,
+        pkgmeta.is_some(),
+    ));
     // Files the addon's own XML loads from externals are entry files too
     // (they are not listed in the TOC again, decision T107).
     for path in &into_externals {
@@ -601,22 +659,6 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             }
         }
     }
-    // Files other AddOns next to this one load (`..\<this>\file.lua`) move
-    // too and are shipped as `build.shared-files` (unless loaded here anyway).
-    let referenced = sibling_references(dir);
-    let shared: Vec<String> = referenced
-        .iter()
-        .filter_map(|rel| existing_case(dir, rel))
-        .filter(|actual| !seen.contains(actual))
-        .collect();
-    to_move.extend(closure(
-        dir,
-        shared.clone(),
-        &mut seen,
-        &mut report.warnings,
-        &skip,
-        &mut into_externals,
-    ));
     to_move.sort();
 
     // Move into src/ (git mv inside a repository).
@@ -670,7 +712,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     // Paths of external lines in the other AddOn's output.
     let mut external_paths: HashMap<String, String> = HashMap::new();
     for line in external_lines.keys() {
-        let (path, warning) = resolve_external(dir, line);
+        let (path, warning) = resolve_external(dir, line, &neighbors);
         if let Some(warning) = warning {
             warnings.push(warning);
         }
@@ -1074,7 +1116,17 @@ fn convert_pkgmeta(
         })
         .flat_map(|p| pattern_of(p))
         .filter(|p| !p.starts_with(&format!("{src_dir}/")))
+        // Keybinding files are copied anyway (processed unless plain-copy).
+        .filter(|p| !crate::build::is_bindings_file(p))
         .collect();
+    // The license `license-output` names ships with the addon too.
+    let mut plain = plain;
+    if let Some(license) = &meta.license_output
+        && dir.join(license).is_file()
+        && !plain.contains(license)
+    {
+        plain.push(license.clone());
+    }
     if !plain.is_empty() {
         let assets = build
             .entry("assets")
@@ -1096,6 +1148,9 @@ fn convert_pkgmeta(
     compat.insert("packager-keywords".into(), json!(true));
     if !meta.plain_copy.is_empty() {
         compat.insert("plain-copy".into(), json!(meta.plain_copy));
+    }
+    if let Some(license) = &meta.license_output {
+        compat.insert("license-output".into(), json!(license));
     }
     object.insert("compat".into(), Value::Object(compat));
     // Publishing.
@@ -1159,7 +1214,8 @@ fn convert_pkgmeta(
     if publish.is_empty() {
         object.shift_remove("publish");
     }
-    let members = init_members(dir, meta, member_dirs, report);
+    let root_addon = report.addon_name.clone();
+    let members = init_members(dir, meta, member_dirs, Some((&root_addon, src_dir)), report);
     if !members.is_empty() || !report.external_addons.is_empty() {
         let mut ws = Map::new();
         ws.insert("members".into(), json!(members));
@@ -1180,12 +1236,39 @@ fn init_members(
     dir: &Path,
     meta: &crate::pkgmeta::PkgMeta,
     member_dirs: &[(String, String)],
+    root: Option<(&str, &str)>,
     report: &mut InitReport,
 ) -> Vec<String> {
     let mut members = Vec::new();
+    // The AddOns of the package, side by side once packaged; the root
+    // addon (name, source directory) is already adopted.
+    let package: Vec<Neighbor> = root
+        .map(|(name, src)| Neighbor {
+            name: name.to_string(),
+            dir: dir.to_path_buf(),
+            src: Some(src.to_string()),
+        })
+        .into_iter()
+        .chain(member_dirs.iter().map(|(rel, name)| Neighbor {
+            name: name.clone(),
+            dir: dir.join(rel),
+            src: None,
+        }))
+        .collect();
     for (from, to) in &meta.move_folders {
         let Some((rel, _)) = member_dirs.iter().find(|(_, t)| t == to) else {
-            if !is_flattening(from, to) {
+            // The packager skips entries whose folder does not exist.
+            let package = meta
+                .package_as
+                .clone()
+                .or_else(|| root.map(|(name, _)| name.to_string()))
+                .unwrap_or_default();
+            let source = from
+                .strip_prefix(&format!("{package}/"))
+                .unwrap_or(from)
+                .trim_matches('/');
+            let exists = source.is_empty() || dir.join(source).exists();
+            if exists && !is_flattening(from, to) {
                 report.warnings.push(Diagnostic::warning(
                     "W4332",
                     format!("`move-folders` entry `{from}: {to}` does not move a whole addon folder; not converted"),
@@ -1232,6 +1315,7 @@ fn init_members(
             from_pkgmeta: false,
             inherited: Some(inherited),
             addon_name: Some(to.clone()),
+            neighbors: package.iter().filter(|n| n.name != *to).cloned().collect(),
         }) {
             Ok(member) => {
                 report.warnings.extend(member.warnings);
@@ -1481,7 +1565,7 @@ fn init_suite(dir: &Path, mut meta: crate::pkgmeta::PkgMeta) -> Result<InitRepor
             )));
         }
     }
-    let converted = init_members(dir, &meta, &members, &mut report);
+    let converted = init_members(dir, &meta, &members, None, &mut report);
     let mut manifest = Map::new();
     manifest.insert("$schema".into(), schema_url().into());
     let mut ws = Map::new();
@@ -1491,6 +1575,14 @@ fn init_suite(dir: &Path, mut meta: crate::pkgmeta::PkgMeta) -> Result<InitRepor
         ws.insert("external-addons".into(), Value::Object(ext));
         // Shipped like the packager ships externals.
         manifest.insert("compat".into(), json!({ "packager-keywords": true }));
+    }
+    if let Some(license) = &meta.license_output {
+        let compat = manifest
+            .entry("compat")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("an object");
+        compat.insert("license-output".into(), json!(license));
     }
     manifest.insert("workspace".into(), Value::Object(ws));
     if let Some((file, _)) = &meta.manual_changelog {
@@ -1755,6 +1847,7 @@ fn closure(
     warnings: &mut Vec<Diagnostic>,
     skip: &dyn Fn(&str) -> bool,
     skipped: &mut Vec<String>,
+    packaged: bool,
 ) -> Vec<String> {
     let mut found = Vec::new();
     while let Some(rel) = queue.pop() {
@@ -1776,8 +1869,23 @@ fn closure(
         }
         if actual.to_ascii_lowercase().ends_with(".xml")
             && let Ok(text) = std::fs::read_to_string(dir.join(&actual))
-            && let Ok(refs) = wowlua_xml::references(&text)
+            && let Ok(mut refs) = wowlua_xml::references(&text)
         {
+            // A packager project's file belongs to the addon when any of
+            // its builds loads it: the source tree's (`@debug@` blocks
+            // active), a release's (`@non-debug@`) or a flavor's.
+            if packaged {
+                for view in [
+                    crate::keywords::packaged_xml(&text),
+                    crate::keywords::negated_xml(&text),
+                ] {
+                    for r in wowlua_xml::references(&view).unwrap_or_default() {
+                        if !refs.iter().any(|x| x.file == r.file) {
+                            refs.push(r);
+                        }
+                    }
+                }
+            }
             let base = actual
                 .rsplit_once('/')
                 .map(|(d, _)| d.to_string())
@@ -1800,11 +1908,16 @@ fn closure(
 /// `..\<addon>\<path>` lines: from their TOCs, and from the
 /// `build.external-files` of those already adopted. Paths are relative to
 /// `dir`, before moving.
-fn sibling_references(dir: &Path) -> Vec<String> {
+fn sibling_references(dir: &Path, name: &str, neighbors: &[Neighbor]) -> Vec<String> {
     let (Some(parent), Some(folder)) = (dir.parent(), dir.file_name()) else {
         return Vec::new();
     };
-    let prefix = format!("../{}/", folder.to_string_lossy().to_ascii_lowercase());
+    let folder = if neighbors.is_empty() {
+        folder.to_string_lossy().into_owned()
+    } else {
+        name.to_string()
+    };
+    let prefix = format!("../{}/", folder.to_ascii_lowercase());
     let strip = |path: &str| -> Option<String> {
         let lower = path.to_ascii_lowercase();
         lower
@@ -1812,14 +1925,18 @@ fn sibling_references(dir: &Path) -> Vec<String> {
             .then(|| path[prefix.len()..].to_string())
     };
     let mut found: Vec<String> = Vec::new();
-    let Ok(siblings) = std::fs::read_dir(parent) else {
-        return found;
+    let mut siblings: Vec<PathBuf> = if neighbors.is_empty() {
+        let Ok(siblings) = std::fs::read_dir(parent) else {
+            return found;
+        };
+        siblings
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.is_dir() && p.as_path() != dir)
+            .collect()
+    } else {
+        neighbors.iter().map(|n| n.dir.clone()).collect()
     };
-    let mut siblings: Vec<PathBuf> = siblings
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.is_dir() && p.as_path() != dir)
-        .collect();
     siblings.sort();
     for sibling in siblings {
         let Ok(entries) = std::fs::read_dir(&sibling) else {
@@ -1864,17 +1981,27 @@ fn sibling_references(dir: &Path) -> Vec<String> {
 /// The path of an external line (`../Other/file.lua`) in the other AddOn's
 /// output: `../Other/src/file.lua` once that AddOn is (or will be) adopted,
 /// since its `init` moves the files its siblings load into its sources.
-fn resolve_external(dir: &Path, line: &str) -> (String, Option<Diagnostic>) {
+fn resolve_external(
+    dir: &Path,
+    line: &str,
+    neighbors: &[Neighbor],
+) -> (String, Option<Diagnostic>) {
     let Some((owner, file)) = line.strip_prefix("../").and_then(|r| r.split_once('/')) else {
         return (line.to_string(), None);
     };
-    let owner_dir = dir.parent().and_then(|parent| {
-        std::fs::read_dir(parent)
-            .ok()?
-            .filter_map(Result::ok)
-            .find(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case(owner))
-            .map(|e| e.path())
-    });
+    let neighbor = neighbors
+        .iter()
+        .find(|n| n.name.eq_ignore_ascii_case(owner));
+    let owner_dir = match neighbor {
+        Some(n) => Some(n.dir.clone()),
+        None => dir.parent().and_then(|parent| {
+            std::fs::read_dir(parent)
+                .ok()?
+                .filter_map(Result::ok)
+                .find(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case(owner))
+                .map(|e| e.path())
+        }),
+    };
     let Some(owner_dir) = owner_dir else {
         return (
             line.to_string(),
@@ -1883,27 +2010,33 @@ fn resolve_external(dir: &Path, line: &str) -> (String, Option<Diagnostic>) {
             ))),
         );
     };
-    let owner_name = owner_dir
-        .file_name()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .into_owned();
+    let owner_name = match neighbor {
+        Some(n) => n.name.clone(),
+        None => owner_dir
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned(),
+    };
     let adopted = std::fs::read_to_string(owner_dir.join(MANIFEST_FILE))
         .ok()
         .and_then(|text| serde_json::from_str::<Value>(&text).ok());
-    let owner_src = match &adopted {
-        Some(manifest) => manifest
+    let owner_src = match (neighbor.and_then(|n| n.src.clone()), &adopted) {
+        (Some(src), _) => src,
+        (None, Some(manifest)) => manifest
             .pointer("/build/src")
             .and_then(Value::as_str)
             .unwrap_or("src")
             .to_string(),
-        None => source_dir_for(&owner_dir).to_string(),
+        (None, None) => source_dir_for(&owner_dir).to_string(),
     };
     if let Some(actual) = existing_case(&owner_dir.join(&owner_src), file) {
         return (format!("../{owner_name}/src/{actual}"), None);
     }
     match existing_case(&owner_dir, file) {
-        Some(actual) if adopted.is_none() => (format!("../{owner_name}/src/{actual}"), None),
+        Some(actual) if adopted.is_none() && neighbor.is_none_or(|n| n.src.is_none()) => {
+            (format!("../{owner_name}/src/{actual}"), None)
+        }
         Some(actual) => (
             format!("../{owner_name}/{actual}"),
             Some(Diagnostic::plain_warning(format!(

@@ -954,6 +954,10 @@ pub struct Compat {
     /// `*` also matching `/`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub plain_copy: Vec<String>,
+    /// The license file (`.pkgmeta` `license-output`) the workspace root
+    /// copies into each member's output that has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license_output: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]

@@ -361,6 +361,7 @@ pub fn addons(dir: &Path) -> Result<()> {
             from_pkgmeta: false,
             inherited: None,
             addon_name: None,
+            neighbors: Vec::new(),
         });
         if let Err(e) = report {
             failures.push(format!("{rel}: init failed: {}", e.message));

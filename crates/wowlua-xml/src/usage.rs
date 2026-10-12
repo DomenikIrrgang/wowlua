@@ -58,6 +58,7 @@ struct Open {
 /// Analyzes a document; malformed XML gives an empty result (its errors
 /// are reported by [`crate::references`]).
 pub fn usage(text: &str) -> Usage {
+    let text = &*crate::without_bom(text);
     let mut reader = Reader::from_str(text);
     let mut out = Usage::default();
     let mut stack: Vec<Open> = Vec::new();

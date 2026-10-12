@@ -7,7 +7,6 @@
 use serde_json::{Map, Value, json};
 use std::path::Path;
 use wowlua_diagnostics::Diagnostic;
-use yaml_rust2::{Yaml, YamlLoader};
 
 /// Where an external comes from.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -56,6 +55,8 @@ pub struct PkgMeta {
     pub enable_nolib: bool,
     /// `required-dependencies`, … as (slug, CurseForge relation type).
     pub relations: Vec<(String, String)>,
+    /// `license-output`: the license file copied into `move-folders` targets.
+    pub license_output: Option<String>,
 }
 
 /// The project file names the packager looks for.
@@ -76,117 +77,197 @@ pub fn read(dir: &Path) -> Result<Option<PkgMeta>, Diagnostic> {
     Ok(None)
 }
 
-fn scalar(y: &Yaml) -> Option<String> {
-    match y {
-        Yaml::String(s) | Yaml::Real(s) => Some(s.trim().to_string()),
-        Yaml::Integer(i) => Some(i.to_string()),
-        Yaml::Boolean(b) => Some(b.to_string()),
-        _ => None,
+/// A `key: value` line split like the packager's `yaml_keyvalue`: the key
+/// is the text before the first `:`; the value has its leading spaces
+/// trimmed, booleans normalized to `yes` / `no`, and one leading and one
+/// trailing quote removed.
+fn key_value(line: &str) -> (&str, String) {
+    let (key, rest) = line.split_once(':').unwrap_or((line, ""));
+    let mut value = rest.trim_start_matches(' ').to_string();
+    match value.to_ascii_lowercase().as_str() {
+        "yes" | "true" | "on" => value = "yes".into(),
+        "no" | "false" | "off" => value = "no".into(),
+        _ => {}
     }
+    (key, unquote(&value).to_string())
 }
 
-fn list(y: &Yaml) -> Vec<String> {
-    match y {
-        Yaml::Array(items) => items.iter().filter_map(scalar).collect(),
-        other => scalar(other).into_iter().collect(),
-    }
+/// One leading and one trailing quote removed (`yaml_listitem`, the end of
+/// `yaml_keyvalue`).
+fn unquote(s: &str) -> &str {
+    let s = s.strip_prefix(['\'', '"']).unwrap_or(s);
+    s.strip_suffix(['\'', '"']).unwrap_or(s)
 }
 
-fn truthy(y: &Yaml) -> bool {
-    scalar(y)
-        .is_some_and(|s| matches!(s.to_ascii_lowercase().as_str(), "yes" | "true" | "on" | "1"))
+/// A list item like the packager's `yaml_listitem`: after the `-`, leading
+/// spaces and one pair of quotes are trimmed; an inline comment stays part
+/// of the item.
+fn list_item(line: &str) -> String {
+    let item = line
+        .strip_prefix('-')
+        .unwrap_or(line)
+        .trim_start_matches(' ');
+    unquote(item).to_string()
 }
 
+/// An external's fields as the packager collects them.
+#[derive(Default)]
+struct ExternalSpec {
+    dir: String,
+    url: Option<String>,
+    tag: Option<String>,
+    branch: Option<String>,
+    commit: Option<String>,
+    kind: Option<String>,
+    slug: Option<String>,
+    path: Option<String>,
+}
+
+/// Reads a `.pkgmeta` line by line, like the packager's own reader rather
+/// than a YAML parser: comment lines are skipped; a line starting without a
+/// space and holding a `:` starts a section; indented lines are list items
+/// (`- item`) or `key: value` entries of that section. Unindented list
+/// items are not part of any section, as for the packager.
 pub fn parse(text: &str) -> Result<PkgMeta, String> {
-    let docs = YamlLoader::load_from_str(text).map_err(|e| e.to_string())?;
-    let Some(root) = docs.into_iter().next() else {
-        return Ok(PkgMeta::default());
-    };
     let mut meta = PkgMeta::default();
-    let Yaml::Hash(map) = &root else {
-        return Ok(meta);
+    let mut phase = String::new();
+    let mut pending: Option<ExternalSpec> = None;
+    let flush = |pending: &mut Option<ExternalSpec>, meta: &mut PkgMeta| {
+        if let Some(spec) = pending.take()
+            && let Some(e) = external(&spec)
+        {
+            meta.externals.push(e);
+        }
     };
-    for (key, value) in map {
-        let Some(key) = scalar(key) else { continue };
-        match key.as_str() {
-            "package-as" => meta.package_as = scalar(value),
-            "ignore" => meta.ignore = list(value),
-            "plain-copy" => meta.plain_copy = list(value),
-            "enable-nolib-creation" => meta.enable_nolib = truthy(value),
-            "manual-changelog" => {
-                meta.manual_changelog = match value {
-                    Yaml::Hash(h) => h
-                        .get(&Yaml::String("filename".into()))
-                        .and_then(scalar)
-                        .map(|f| {
-                            (
-                                f,
-                                h.get(&Yaml::String("markup-type".into())).and_then(scalar),
-                            )
-                        }),
-                    other => scalar(other).map(|f| (f, None)),
-                }
+    for (n, raw) in text.split('\n').enumerate() {
+        if raw.trim_start().starts_with('#') {
+            continue;
+        }
+        let line = raw.strip_suffix('\r').unwrap_or(raw);
+        let indent = line.len() - line.trim_start_matches([' ', '\t']).len();
+        if line[..indent].contains('\t') && !line.trim().is_empty() {
+            return Err(format!(
+                "line {} is indented with a tab; only spaces are allowed",
+                n + 1
+            ));
+        }
+        if !line.starts_with(' ') && !line.is_empty() {
+            if !line.contains(':') {
+                continue;
             }
-            "move-folders" => {
-                if let Yaml::Hash(h) = value {
-                    for (from, to) in h {
-                        if let (Some(f), Some(t)) = (scalar(from), scalar(to)) {
-                            meta.move_folders.push((f, t));
-                        }
-                    }
+            flush(&mut pending, &mut meta);
+            let (key, value) = key_value(line);
+            phase = key.to_string();
+            let value = (!value.is_empty()).then_some(value);
+            match key {
+                "package-as" => meta.package_as = value,
+                "enable-nolib-creation" => meta.enable_nolib = value.as_deref() == Some("yes"),
+                "manual-changelog" => {
+                    meta.manual_changelog = Some((value.unwrap_or_default(), None));
                 }
+                "license-output" => meta.license_output = value,
+                _ => {}
             }
-            "required-dependencies"
-            | "optional-dependencies"
-            | "embedded-libraries"
-            | "tools-used" => {
-                let kind = match key.as_str() {
-                    "required-dependencies" => "requiredDependency",
-                    "optional-dependencies" => "optionalDependency",
-                    "embedded-libraries" => "embeddedLibrary",
-                    _ => "tool",
+            continue;
+        }
+        if !line.starts_with(' ') {
+            continue;
+        }
+        let item = line.trim_start_matches(' ');
+        // `ignore` and `plain-copy` take any indented line holding `- `.
+        if matches!(phase.as_str(), "ignore" | "plain-copy") {
+            if line.contains("- ") {
+                let target = if phase == "ignore" {
+                    &mut meta.ignore
+                } else {
+                    &mut meta.plain_copy
                 };
-                for slug in list(value) {
-                    meta.relations.push((slug, kind.to_string()));
+                target.push(list_item(item));
+            }
+            continue;
+        }
+        if item.starts_with("- ") {
+            let kind = match phase.as_str() {
+                "required-dependencies" => "requiredDependency",
+                "optional-dependencies" => "optionalDependency",
+                "embedded-libraries" => "embeddedLibrary",
+                "tools-used" => "tool",
+                _ => continue,
+            };
+            let slug = list_item(item).to_ascii_lowercase();
+            meta.relations.retain(|(s, _)| *s != slug);
+            meta.relations.push((slug, kind.to_string()));
+            continue;
+        }
+        if !item.contains(':') {
+            continue;
+        }
+        let (key, value) = key_value(item);
+        match phase.as_str() {
+            "manual-changelog" => {
+                let entry = meta.manual_changelog.get_or_insert_with(Default::default);
+                match key {
+                    "filename" => entry.0 = value,
+                    "markup-type" => entry.1 = Some(value),
+                    _ => {}
                 }
             }
+            "move-folders" => meta.move_folders.push((key.to_string(), value)),
             "externals" => {
-                if let Yaml::Hash(h) = value {
-                    for (dir, spec) in h {
-                        let Some(dir) = scalar(dir) else { continue };
-                        if let Some(e) = external(&dir, spec) {
-                            meta.externals.push(e);
-                        }
-                    }
+                let mut spare = ExternalSpec::default();
+                let spec = pending.as_mut().unwrap_or(&mut spare);
+                let slot = match key {
+                    "url" => Some(&mut spec.url),
+                    "tag" => Some(&mut spec.tag),
+                    "branch" => Some(&mut spec.branch),
+                    "commit" => Some(&mut spec.commit),
+                    "type" => Some(&mut spec.kind),
+                    "curse-slug" => Some(&mut spec.slug),
+                    "path" => Some(&mut spec.path),
+                    _ => None,
+                };
+                if let Some(slot) = slot {
+                    *slot = Some(value);
+                    continue;
                 }
+                // A new external; a value on the same line is its URL.
+                flush(&mut pending, &mut meta);
+                pending = Some(ExternalSpec {
+                    dir: key.to_string(),
+                    url: (!value.is_empty()).then_some(value),
+                    ..Default::default()
+                });
             }
             _ => {}
         }
+    }
+    flush(&mut pending, &mut meta);
+    // A `manual-changelog:` without a file name names no changelog.
+    if meta
+        .manual_changelog
+        .as_ref()
+        .is_some_and(|(f, _)| f.is_empty())
+    {
+        meta.manual_changelog = None;
     }
     Ok(meta)
 }
 
 /// One external, interpreted like the packager's `process_external`.
-fn external(dir: &str, spec: &Yaml) -> Option<External> {
-    let get = |k: &str| match spec {
-        Yaml::Hash(h) => h.get(&Yaml::String(k.into())).and_then(scalar),
-        _ => None,
-    };
-    let mut uri = match spec {
-        Yaml::Hash(_) => get("url")?,
-        other => scalar(other)?,
-    };
+fn external(spec: &ExternalSpec) -> Option<External> {
+    let dir = spec.dir.as_str();
+    let mut uri = spec.url.clone()?;
     // Trailing comments, spaces and slashes.
     if let Some(i) = uri.find('#') {
         uri.truncate(i);
     }
     let mut uri = uri.trim().trim_end_matches('/').to_string();
-    let mut tag = get("tag");
-    let branch = get("branch");
-    let commit = get("commit");
-    let mut kind = get("type");
-    let mut slug = get("curse-slug");
-    let mut path = get("path");
+    let mut tag = spec.tag.clone();
+    let branch = spec.branch.clone();
+    let commit = spec.commit.clone();
+    let mut kind = spec.kind.clone();
+    let mut slug = spec.slug.clone();
+    let mut path = spec.path.clone();
 
     // Old CurseForge repository URLs.
     let lower = uri.to_ascii_lowercase();
@@ -637,5 +718,28 @@ mod tests {
         assert_eq!(libs_dir(&m.externals).as_deref(), Some("libs"));
         assert_eq!(dependency_name("libs/AceAddon-3.0"), "aceaddon-3-0");
         assert_eq!(dependency_name("libs/LibStub"), "libstub");
+    }
+
+    #[test]
+    fn reads_lines_like_the_packager() {
+        let text = "package-as: \"ATT\" \r\nignore: # comment\r\n  # - skipped\r\n  - *.md\r\n  - '*.meta.lua' # kept\r\n- unindented\r\nexternals:\n  libs/A: https://github.com/a/a\n  url: https://ignored\n  libs/B:\n    url: \"https://github.com/b/b\"\n    branch: main\nlicense-output: LICENSE.txt\nenable-nolib-creation: On\nmanual-changelog: CHANGES.txt\nrequired-dependencies:\n  - Masque\n";
+        let m = parse(text).unwrap();
+        assert_eq!(m.package_as.as_deref(), Some("ATT\" "));
+        assert_eq!(m.ignore, vec!["*.md", "*.meta.lua' # kept"]);
+        assert_eq!(m.license_output.as_deref(), Some("LICENSE.txt"));
+        assert!(m.enable_nolib);
+        assert_eq!(m.manual_changelog, Some(("CHANGES.txt".into(), None)));
+        assert_eq!(
+            m.relations,
+            vec![("masque".into(), "requiredDependency".into())]
+        );
+        let dirs: Vec<_> = m.externals.iter().map(|e| e.dir.as_str()).collect();
+        assert_eq!(dirs, vec!["libs/A", "libs/B"]);
+        assert!(matches!(
+            &m.externals[1].source,
+            ExternalSource::Git { url, branch: Some(b), .. }
+                if url == "https://github.com/b/b" && b == "main"
+        ));
+        assert!(parse("ignore:\n\t- x\n").is_err());
     }
 }

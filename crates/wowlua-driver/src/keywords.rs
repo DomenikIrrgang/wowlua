@@ -446,6 +446,29 @@ pub fn packaged_toc(text: &str) -> String {
     out
 }
 
+/// An XML file with every packager block's negated side active: `@debug@`,
+/// `@alpha@`, flavor and `no-lib-strip` blocks commented out, their
+/// `@non-…@` blocks uncommented (what some packaged build loads).
+pub fn negated_xml(text: &str) -> String {
+    let mut out = text.to_string();
+    for keyword in ["debug", "alpha", "no-lib-strip"]
+        .into_iter()
+        .chain(FLAVOR_KEYWORDS.iter().map(|(k, _)| *k))
+    {
+        out = xml_filter(&out, keyword, false);
+    }
+    out
+}
+
+/// An XML file as a packaged (release) build of the packager loads it:
+/// `@do-not-package@` blocks removed, `@debug@` and `@alpha@` blocks
+/// commented out and their `@non-…@` blocks uncommented.
+pub fn packaged_xml(text: &str) -> String {
+    let out = remove_do_not_package(text, true);
+    let out = xml_filter(&out, "debug", false);
+    xml_filter(&out, "alpha", false)
+}
+
 /// Keyword values of a fetched package (library or external addon), as
 /// the packager computes them for an external. `detail` asks for values
 /// that need the network (SVN author).

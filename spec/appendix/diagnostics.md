@@ -147,6 +147,7 @@ any warning can be changed in the manifest (`check.lints`). `wowlua explain
 | E4331 | `dev`/`install` refuses to overwrite an AddOn folder not installed by wowlua (no `X-Wowlua-Build`); use `--force` |
 | E5001 | Lua 5.1 limit exceeded (locals, upvalues, registers, constants, syntax levels, jump distance), including generated locals |
 | E5002 | Output validation failed (missing or unreachable file, unresolvable XML reference, invalid TOC or XML) |
+| W5003 | Unresolvable XML reference in a packager `@debug@` block, left out of a debug build |
 | E6003 | Unknown minification pass name |
 
 ## B.2 Warnings

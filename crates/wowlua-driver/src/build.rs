@@ -314,11 +314,12 @@ pub fn build(
     // are applied per flavor after compiling.
     let keywords = manifest.manifest.compat.packager_keywords;
     let mut flavor_blocks: BTreeSet<String> = BTreeSet::new();
-    if keywords {
+    let keyword_info = keywords.then(|| {
         let alpha = semver::Version::parse(&version).is_ok_and(|v| !v.pre.is_empty());
         let now = crate::keywords::build_time();
-        let info =
-            crate::keywords::KeywordInfo::from_git(&root, &version, profile.debug, alpha, now);
+        crate::keywords::KeywordInfo::from_git(&root, &version, profile.debug, alpha, now)
+    });
+    if let Some(info) = &keyword_info {
         let plain = &manifest.manifest.compat.plain_copy;
         for (source, _) in &files {
             if !matches!(source.kind, SourceKind::Lua | SourceKind::Xml)
@@ -346,7 +347,7 @@ pub fn build(
             }
             let mut processed = crate::keywords::apply(
                 text,
-                &info,
+                info,
                 Path::new(&source.rel),
                 Path::new(&source.src_rel),
                 source.kind == SourceKind::Xml,
@@ -388,7 +389,13 @@ pub fn build(
     }
 
     // XML references.
-    let xml = resolve_xml(session, &files, &libs, &addon_name);
+    let xml = resolve_xml(
+        session,
+        &files,
+        &libs,
+        &addon_name,
+        keywords && profile.debug,
+    );
 
     // Flavor restrictions (`build.flavor-files`) and the TOC file list.
     let flavor_globs: Vec<(globset::GlobMatcher, Vec<String>)> = build_cfg
@@ -1272,7 +1279,17 @@ pub fn build(
             );
         }
     }
-    for (name, bytes) in bindings_files(session, &root) {
+    for (name, mut bytes) in bindings_files(session, &root) {
+        // The packager processes them like the TOC's XML files.
+        if let Some(info) = &keyword_info
+            && !crate::keywords::plain_copy(&manifest.manifest.compat.plain_copy, &[&name])
+        {
+            bytes = crate::keywords::lf(&bytes);
+            if let Ok(text) = std::str::from_utf8(&bytes) {
+                let path = Path::new(&name);
+                bytes = crate::keywords::apply(text, info, path, path, true).into_bytes();
+            }
+        }
         out.insert(name, Content::Bytes(bytes));
     }
     if needs_runtime {
@@ -1312,6 +1329,23 @@ pub fn build(
             continue;
         }
         out.insert(asset.rel.clone(), Content::Copy(asset.abs.clone()));
+    }
+    // The workspace root's license in a member that has none (`.pkgmeta`
+    // `license-output`, copied into `move-folders` addons by the packager).
+    if let Some(ws) = &project.workspace_root
+        && std::fs::canonicalize(ws).ok() != std::fs::canonicalize(&root).ok()
+        && let Some(license) = std::fs::read_to_string(ws.join(wowlua_manifest::MANIFEST_FILE))
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+            .and_then(|m| {
+                m.pointer("/compat/license-output")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string)
+            })
+        && ws.join(&license).is_file()
+        && !out.contains_key(&license)
+    {
+        out.insert(license.clone(), Content::Copy(ws.join(&license)));
     }
 
     let output_paths: HashMap<String, String> = emitted
@@ -1423,6 +1457,7 @@ fn resolve_xml(
     files: &[(Source, FileId)],
     libs: &[crate::embed::LuaLib],
     addon: &str,
+    packager_debug: bool,
 ) -> XmlInfo {
     let by_src_rel: HashMap<String, &Source> = files
         .iter()
@@ -1448,6 +1483,14 @@ fn resolve_xml(
             .rsplit_once('/')
             .map(|(d, _)| d)
             .unwrap_or("");
+        // References a dev build cannot resolve inside the packager's
+        // `@debug@` blocks are left out (a member's files, say).
+        let debug_blocks = if packager_debug {
+            wowlua_xml::debug_blocks(text)
+        } else {
+            Vec::new()
+        };
+        let mut dropped: Vec<wowlua_xml::XmlRef> = Vec::new();
         let mut replacements = Vec::new();
         for reference in &refs {
             let joined = normalize(&if dir.is_empty() {
@@ -1524,6 +1567,26 @@ fn resolve_xml(
                         .or_default()
                         .push(target.rel.clone());
                 }
+                None if debug_blocks
+                    .iter()
+                    .any(|b| b.contains(&reference.span.start)) =>
+                {
+                    diagnostics.push(
+                        Diagnostic::warning(
+                            "W5003",
+                            format!(
+                                "XML reference `{}` in a `@debug@` block does not resolve to a source file; left out of this build",
+                                reference.path()
+                            ),
+                        )
+                        .with_label(Span::new(*file, reference.span.clone()), "not found")
+                        .with_note("release builds comment the block out, like the packager"),
+                    );
+                    dropped.push(wowlua_xml::XmlRef {
+                        span: wowlua_xml::element_range(text, reference),
+                        ..reference.clone()
+                    });
+                }
                 None => diagnostics.push(
                     Diagnostic::error(
                         "E5002",
@@ -1536,6 +1599,7 @@ fn resolve_xml(
                 ),
             }
         }
+        replacements.extend(dropped.iter().map(|r| (r, String::new())));
         if !replacements.is_empty() {
             info.rewrites
                 .insert(source.rel.clone(), wowlua_xml::rewrite(text, &replacements));
@@ -1601,52 +1665,118 @@ fn order_by_dependencies(
         .enumerate()
         .map(|(i, e)| (e.rel.as_str(), i))
         .collect();
-    let mut parent: HashMap<&str, &str> = HashMap::new();
+    // A file may be loaded by several XML files (one per flavor, say).
+    let mut parents: HashMap<&str, Vec<&str>> = HashMap::new();
     for (xml_file, targets) in &xml.edges {
         for t in targets {
-            parent.entry(t.as_str()).or_insert(xml_file.as_str());
+            let list = parents.entry(t.as_str()).or_default();
+            if !list.contains(&xml_file.as_str()) {
+                list.push(xml_file.as_str());
+            }
         }
     }
-    let item_of = |rel: &str| -> Option<usize> {
-        let mut current = rel;
-        for _ in 0..64 {
-            if let Some(&i) = index.get(current) {
-                return Some(i);
+    // The TOC entries that load `rel`, directly or through XML.
+    let find_items = |rel: &str| -> Vec<usize> {
+        let mut found = Vec::new();
+        let mut queue = vec![rel];
+        let mut seen: HashSet<&str> = HashSet::new();
+        while let Some(current) = queue.pop() {
+            if !seen.insert(current) || seen.len() > 256 {
+                continue;
             }
-            current = parent.get(current)?;
+            if let Some(&i) = index.get(current) {
+                if !found.contains(&i) {
+                    found.push(i);
+                }
+                continue;
+            }
+            if let Some(ps) = parents.get(current) {
+                queue.extend(ps.iter().copied());
+            }
         }
-        None
+        found.sort_unstable();
+        found
     };
+    let mut items: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (a, b) in edges
+        .iter()
+        .chain(flavor_edges.iter().flat_map(|f| f.1.iter()))
+    {
+        for rel in [a.as_str(), b.as_str()] {
+            if !items.contains_key(rel) {
+                items.insert(rel, find_items(rel));
+            }
+        }
+    }
+    let items_of = |rel: &str| -> &[usize] { items.get(rel).map_or(&[], Vec::as_slice) };
+    // An edge (a loads before b) between entries: from the first entry
+    // loading `a` to each entry loading `b`.
     let item_edges = |edges: &[(String, String)]| -> Vec<(usize, usize)> {
-        edges
-            .iter()
-            .filter_map(|(a, b)| Some((item_of(a)?, item_of(b)?)))
-            .filter(|(x, y)| x != y)
-            .collect()
+        let mut out = Vec::new();
+        let mut known = HashSet::new();
+        for (a, b) in edges {
+            let Some(&x) = items_of(a).first() else {
+                continue;
+            };
+            for &y in items_of(b) {
+                if x != y && known.insert((x, y)) {
+                    out.push((x, y));
+                }
+            }
+        }
+        out
     };
     let union = item_edges(edges);
     let pos = |rel: &str| load_order.iter().position(|l| l == rel);
+    // Whether an entry loads for `flavor` (`None`: any).
+    let active = |i: usize, flavor: Option<&str>| match (flavor, &entries[i].flavors) {
+        (Some(f), Some(fs)) => fs.iter().any(|x| x == f),
+        _ => true,
+    };
+    let mut flavors: Vec<Option<&str>> = entries
+        .iter()
+        .filter_map(|e| e.flavors.as_ref())
+        .flatten()
+        .map(|f| Some(f.as_str()))
+        .collect();
+    flavors.sort();
+    flavors.dedup();
+    if flavors.is_empty() {
+        flavors.push(None);
+    }
     let mut reported = HashSet::new();
     for (a, b) in edges {
-        let (Some(x), Some(y)) = (item_of(a), item_of(b)) else {
+        let (xs, ys) = (items_of(a), items_of(b));
+        if xs.is_empty() || ys.is_empty() {
             continue;
-        };
-        // A `build.load-order` that lists b before a contradicts it.
-        if let (Some(pa), Some(pb)) = (pos(&entries[x].rel), pos(&entries[y].rel))
-            && pb < pa
-            && reported.insert((x, y))
-        {
-            let mut d = Diagnostic::error(
-                "E1035",
-                format!(
-                    "`build.load-order` lists `{}` before `{}`, but it depends on it",
-                    entries[y].rel, entries[x].rel
-                ),
-            );
-            if let Some((span, text)) = reasons.get(&(a.clone(), b.clone())) {
-                d = d.with_label(*span, text.clone());
+        }
+        // A `build.load-order` that lists b's first entry before a's (for
+        // a flavor loading both) contradicts it.
+        for flavor in &flavors {
+            let first = |items: &[usize]| {
+                items
+                    .iter()
+                    .copied()
+                    .filter(|&i| active(i, *flavor))
+                    .filter_map(|i| Some((pos(&entries[i].rel)?, i)))
+                    .min()
+            };
+            let (Some((pa, x)), Some((pb, y))) = (first(xs), first(ys)) else {
+                continue;
+            };
+            if pb < pa && x != y && reported.insert((x, y)) {
+                let mut d = Diagnostic::error(
+                    "E1035",
+                    format!(
+                        "`build.load-order` lists `{}` before `{}`, but it depends on it",
+                        entries[y].rel, entries[x].rel
+                    ),
+                );
+                if let Some((span, text)) = reasons.get(&(a.clone(), b.clone())) {
+                    d = d.with_label(*span, text.clone());
+                }
+                session.push(d);
             }
-            session.push(d);
         }
     }
     let rank: Vec<usize> = (0..entries.len()).collect();

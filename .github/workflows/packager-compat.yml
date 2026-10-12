@@ -64,6 +64,66 @@ jobs:
           - addon: Inventorian
             repo: https://github.com/Nevcairiel/Inventorian
             rev: f673ca176fe6e98d8f18c1730f03981ca8ca0b02
+          - addon: GatherMate2
+            repo: https://github.com/Nevcairiel/GatherMate2
+            rev: afb09160c706d9c039bfca0c638245ccb6359ac0
+          - addon: ShadowedUnitFrames
+            repo: https://github.com/Nevcairiel/ShadowedUnitFrames
+            rev: dcd7fc4eb50fcb1d929484de278b43f40cf0e7a5
+          - addon: AtlasLootClassic
+            repo: https://github.com/Hoizame/AtlasLootClassic
+            rev: 8e99341e4e779328460bf7684c0d5b22ce50ddf1
+          - addon: RCLootCouncil2
+            repo: https://github.com/evil-morfar/RCLootCouncil2
+            rev: 4c7fcfed51e05a77b803626b9414f986d822040f
+          - addon: omnibar
+            repo: https://github.com/jordonwow/omnibar
+            rev: d83628924a92ecf0467783380c2dfd495fc79dc1
+          - addon: Capping
+            repo: https://github.com/BigWigsMods/Capping
+            rev: b21c80489473203b8b5d641dfede1d5564abc05e
+          - addon: BigWigs_Voice
+            repo: https://github.com/BigWigsMods/BigWigs_Voice
+            rev: a141718fb90a2d1c16e82488e70ba0f578d02450
+          - addon: BigWigs_Classic
+            repo: https://github.com/BigWigsMods/BigWigs_Classic
+            rev: 2cc8e655144c096c6c0a070ecb0a1dd9157f81ef
+          - addon: SexyMap
+            repo: https://github.com/funkydude/SexyMap
+            rev: 92b27dc605601eceec1b7c27e7c6540e542a4b70
+          - addon: MythicDungeonTools
+            repo: https://github.com/Nnoggie/MythicDungeonTools
+            rev: a99b7f01d7627f22314cdb5ad17f0236fecb6923
+          - addon: TellMeWhen
+            repo: https://github.com/ascott18/TellMeWhen
+            rev: 704a2946d18a13cf2a19e2e4ac631eff6ceb2266
+          - addon: AllTheThings
+            repo: https://github.com/ATTWoWAddon/AllTheThings
+            rev: 552603fa49a4d541873fd396978743e7d2780299
+          - addon: Dominos
+            repo: https://github.com/tullamods/Dominos
+            rev: 4604aee0daabc694f53b20206ab5cc9adb79f40d
+          - addon: OmniCC
+            repo: https://github.com/tullamods/OmniCC
+            rev: 81e0891abd044516f0a300fc6043f9870e99f96a
+          - addon: Cell
+            repo: https://github.com/enderneko/Cell
+            rev: 2fbdca82e79d22d6ae4c8fb4e9ea2148aeaf0df7
+          - addon: TotalRP3
+            repo: https://github.com/Total-RP/Total-RP-3
+            rev: bca652f43b04d74555ec225667b4aa19d72f0b57
+          - addon: BlizzMove
+            repo: https://github.com/Kiatra/BlizzMove
+            rev: 8246d892ba48be000ca048a9f3955b1f00b8361d
+          - addon: QuickQuest
+            repo: https://github.com/p3lim-wow/QuickQuest
+            rev: 4a54a41979aca05a6c831a7855dd5b6f1ceaf5e7
+          - addon: BigWigs_WrathOfTheLichKing
+            repo: https://github.com/BigWigsMods/BigWigs_WrathOfTheLichKing
+            rev: ed03412159debb490f9c9e573e4e63df9429f7c7
+          - addon: Tukui
+            repo: https://github.com/tukui-org/Tukui
+            rev: 22a852dcf2e206a4a30a48181d7ef8fd6ad63f46
     name: ${{ matrix.addon }}
     runs-on: ubuntu-latest
     env:

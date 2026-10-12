@@ -515,6 +515,7 @@ pub fn init(out: &Output, from_toc: Option<PathBuf>, from_pkgmeta: bool) -> bool
         from_pkgmeta,
         inherited: None,
         addon_name: None,
+        neighbors: Vec::new(),
     };
     match scaffold::init_package(&request) {
         Ok(report) => {

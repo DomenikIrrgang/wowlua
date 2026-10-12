@@ -553,6 +553,7 @@ See [Tooling §16.3](tooling.md#163-formatter-wowlua-fmt).
 | `pkgmeta` | `false` | Read dependencies and publishing settings from `.pkgmeta` ([CLI §12.6](cli.md#126-adopting-an-existing-addon)) |
 | `packager-keywords` | `false` | Apply BigWigs packager keyword substitution to passthrough files and embedded libraries, with LF line endings (decisions T120, T124) |
 | `plain-copy` | `[]` | Files the packager copies unprocessed (`.pkgmeta` `plain-copy`): shell patterns relative to the source folder or the package root, `*` matching `/` too |
+| `license-output` | none | The license file (`.pkgmeta` `license-output`) a workspace root copies into each member's output that has none (decision T136) |
 
 ## 9.15 `workspace`
 

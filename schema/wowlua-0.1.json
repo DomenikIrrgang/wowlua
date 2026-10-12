@@ -1678,6 +1678,13 @@
           "items": {
             "type": "string"
           }
+        },
+        "license-output": {
+          "description": "The license file (`.pkgmeta` `license-output`) the workspace root\ncopies into each member's output that has none.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false

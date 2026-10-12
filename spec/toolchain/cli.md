@@ -191,9 +191,17 @@ available.
      its own become `workspace.external-addons` (decision T127); entries that
      move a library's inner folder up become the external's `subdir`. Other `move-folders` uses are
      reported with warning W4332.
+   - `.pkgmeta` is read line by line like the packager reads it (decision
+     T130), so unquoted patterns such as `- *.md` work.
    - TOCs are read as the packager packages them: `#@do-not-package@`,
      `#@debug@` and `#@alpha@` blocks are dropped and `#@non-debug@` /
-     `#@non-alpha@` blocks uncommented.
+     `#@non-alpha@` blocks uncommented. An XML file's references count when
+     any build loads them: the source tree's, a release's or a flavor's
+     (decision T131).
+   - A member's `..\<Name>\` TOC lines resolve to the package's other
+     AddOns (decision T133); the files the root addon shares that way move
+     into its sources unless `.pkgmeta` ignores them.
+   - `license-output` becomes `compat.license-output` (decision T136).
    - Network operations (clones, fetches, SVN, downloads) are retried up to
      three times, like the packager does.
    - `enable-nolib-creation: yes` adds a GitHub target with `"nolib": true`.

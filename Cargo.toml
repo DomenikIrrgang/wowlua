@@ -59,7 +59,6 @@ tempfile = "3.27"
 thiserror = "2.0"
 ureq = "3.4"
 walkdir = "2.5"
-yaml-rust2 = { version = "0.13", default-features = false }
 zip = { version = "9.0", default-features = false, features = ["deflate"] }
 
 [workspace.lints.rust]
