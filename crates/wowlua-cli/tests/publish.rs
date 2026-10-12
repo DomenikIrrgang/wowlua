@@ -16,6 +16,9 @@ fn wowlua(dir: &Path, home: &Path) -> Command {
         .env("NO_COLOR", "1")
         .env("WOWLUA_HOME", home)
         .env("WOWLUA_PUBLISH_BACKOFF_MS", "1")
+        // Like a CI runner: no git identity.
+        .env("GIT_CONFIG_GLOBAL", home.join("no-gitconfig"))
+        .env("GIT_CONFIG_NOSYSTEM", "1")
         .env_remove("WOWLUA_WOW_PATH");
     for var in [
         "CF_API_TOKEN",

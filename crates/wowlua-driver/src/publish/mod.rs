@@ -152,7 +152,19 @@ pub fn publish(
                 package_request.tag = Some(tag.clone());
             }
             None => {
-                if git(&repo, &["tag", "-a", tag, "-m", tag]).is_none() {
+                // An annotated tag needs a tagger; CI runners often have none.
+                let identity = git(&repo, &["config", "user.email"]).is_some();
+                let mut args = vec![];
+                if !identity {
+                    args.extend([
+                        "-c",
+                        "user.name=wowlua",
+                        "-c",
+                        "user.email=wowlua@localhost",
+                    ]);
+                }
+                args.extend(["tag", "-a", tag, "-m", tag]);
+                if git(&repo, &args).is_none() {
                     session.push(
                         Diagnostic::plain_error(format!("cannot create the tag `{tag}`"))
                             .with_path(&repo),
@@ -240,11 +252,15 @@ impl Tokens {
         }
     }
 
+    /// A variable of the `.env` file or the environment. The packager's
+    /// own lowercase variables (`cf_token`, …) come from `.env` only (the
+    /// environment's names are case-insensitive on Windows).
     fn var(&self, name: &str) -> Option<String> {
+        let environment = name.bytes().all(|b| !b.is_ascii_lowercase());
         self.dotenv
             .get(name)
             .cloned()
-            .or_else(|| std::env::var(name).ok())
+            .or_else(|| environment.then(|| std::env::var(name).ok()).flatten())
             .filter(|v| !v.is_empty())
     }
 
