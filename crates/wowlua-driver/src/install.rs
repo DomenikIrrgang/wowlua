@@ -115,6 +115,7 @@ fn folder_matches(folder: &str, wanted: &str) -> bool {
 fn targets(
     session: &mut Session,
     project: &Project,
+    addon: &str,
     wow: &Path,
     flavors: &[String],
     clients: Option<&[String]>,
@@ -137,7 +138,7 @@ fn targets(
                 .join(&folder)
                 .join("Interface")
                 .join("AddOns")
-                .join(project.addon_name());
+                .join(addon);
             if !out.iter().any(|(_, p)| *p == path) {
                 out.push((folder, path));
             }
@@ -149,6 +150,10 @@ fn targets(
 /// Whether an existing AddOn folder was installed by wowlua: a link, or a
 /// folder whose TOC carries `X-Wowlua-Build`.
 pub fn is_wowlua_install(path: &Path) -> bool {
+    // External addons keep their own TOC; the install leaves a marker.
+    if path.join(INSTALL_MARKER).is_file() {
+        return true;
+    }
     if fsutil::is_link(path) {
         return fsutil::link_target(path).is_some_and(|target| {
             has_wowlua_toc(&target) || target.components().any(|c| c.as_os_str() == "dist")
@@ -188,6 +193,7 @@ pub fn install(
     for (folder, path) in targets(
         session,
         project,
+        &build.addon_name,
         &wow,
         &build.flavors,
         request.clients.as_deref(),
@@ -232,9 +238,13 @@ pub fn install(
     installed
 }
 
+/// Left in AddOn folders `install` copies (the client ignores it).
+pub const INSTALL_MARKER: &str = ".wowlua-install";
+
 fn copy(build_dir: &Path, target: &Path) -> std::io::Result<bool> {
     let staged = fsutil::temp_sibling(target)?;
     fsutil::copy_dir(build_dir, &staged)?;
+    std::fs::write(staged.join(INSTALL_MARKER), b"installed by wowlua\n")?;
     fsutil::replace_dir(&staged, target)?;
     Ok(false)
 }
@@ -258,6 +268,7 @@ fn link(build_dir: &Path, target: &Path) -> std::io::Result<bool> {
 pub fn uninstall(
     session: &mut Session,
     project: &Project,
+    addon: &str,
     request: &InstallRequest,
 ) -> Vec<PathBuf> {
     let wow = match find_wow(request.wow.as_deref()) {
@@ -272,7 +283,14 @@ pub fn uninstall(
         .clone()
         .unwrap_or_else(|| project.manifest.flavors.clone());
     let mut removed = Vec::new();
-    for (_, path) in targets(session, project, &wow, &flavors, request.clients.as_deref()) {
+    for (_, path) in targets(
+        session,
+        project,
+        addon,
+        &wow,
+        &flavors,
+        request.clients.as_deref(),
+    ) {
         if !(path.exists() || fsutil::is_link(&path)) {
             continue;
         }

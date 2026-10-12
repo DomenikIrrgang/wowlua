@@ -175,6 +175,7 @@ open for review.
 | T124 | With `compat.packager-keywords`, text files of the addon and of embedded libraries (`.lua`, `.xml`, `.toc`, `.md`, `.txt`) get LF line endings, like `packager -u`; files matching `compat.plain-copy` (from `.pkgmeta` `plain-copy`) stay unprocessed; `init` sets `packager-keywords` for every converted `.pkgmeta` project **(user, M6)** | Many addons and libraries are committed with CRLF; the packager always normalizes. |
 | T125 | A `build.variable-files` entry may be a plain path with `locales`: a file loaded only for some client locales; `init` keeps TOC lines with `[AllowLoadTextLocale …]` that way **(M6, Masque test)** | Masque and others load one locale file per client locale without `[TextLocale]`. |
 | T126 | `build.flavor-load-order` gives a flavor its own load order; `init` writes it for flavors whose TOC order contradicts the merged one, and those flavors get per-flavor TOCs in their own order **(user, M6, Details test)** | Addons with per-flavor TOCs keep each flavor's exact order. |
+| T127 | `workspace.external-addons`: AddOns fetched and shipped as they are (a `.pkgmeta` external that `move-folders` makes an AddOn, such as DBM's voice packs), locked like dependencies, built and installed with the whole workspace, all files and their own TOC, with the packager's external processing; `install` marks the folders it copies with `.wowlua-install` **(user, M6, DBM test)** | The packager ships them as separate AddOns from one package. |
 
 ## Standard library
 

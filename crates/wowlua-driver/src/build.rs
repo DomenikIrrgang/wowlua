@@ -1208,27 +1208,13 @@ pub fn build(
                     && std::str::from_utf8(&normalized).is_ok()
                 {
                     let info = lib_info.get_or_insert_with(|| {
-                        let detail = text.contains("@project-author@")
-                            || text.contains("@project-date")
-                            || text.contains("@project-timestamp@");
-                        let vcs = match (wowlua_pkg::Cache::new(), &lib.pin) {
-                            (Some(cache), Some(pin)) => {
-                                wowlua_pkg::fetch::package_vcs(&cache, &lib.source, pin, detail)
-                            }
-                            _ => Default::default(),
-                        };
-                        crate::keywords::KeywordInfo {
-                            version: vcs.version,
-                            hash: vcs.hash,
-                            short_hash: vcs.short_hash,
-                            revision: vcs.revision,
-                            author: vcs.author,
-                            timestamp: vcs.timestamp,
-                            build_timestamp: crate::keywords::build_time(),
-                            debug: profile.debug,
-                            alpha: false,
-                            repo: None,
-                        }
+                        let detail = text.contains("@project-author@");
+                        crate::keywords::package_info(
+                            &lib.source,
+                            lib.pin.as_deref(),
+                            profile.debug,
+                            detail,
+                        )
                     });
                     crate::keywords::apply_library(&text, info, xml).into_bytes()
                 } else {
@@ -2568,7 +2554,7 @@ fn write_maps(dir: &Path, addon: &str, maps: &BTreeMap<String, String>) -> std::
     Ok(())
 }
 
-fn write_tree(dir: &Path, out: &BTreeMap<String, Content>) -> std::io::Result<()> {
+pub(crate) fn write_tree(dir: &Path, out: &BTreeMap<String, Content>) -> std::io::Result<()> {
     let staged = fsutil::temp_sibling(dir)?;
     for (path, content) in out {
         let dest = staged.join(path);

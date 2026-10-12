@@ -260,6 +260,8 @@ pub struct InitReport {
     /// Their interface pins (member folder, flavor → numbers), settled into
     /// the workspace lockfile by [`write_pins`].
     pub member_pins: Vec<(String, BTreeMap<String, Vec<u32>>)>,
+    /// External addons from `move-folders` (AddOn name → source).
+    pub external_addons: Vec<(String, Value)>,
 }
 
 const ASSET_EXTENSIONS: &[&str] = &[
@@ -296,6 +298,13 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         Some(m) => Some(m.clone()),
         None => crate::pkgmeta::read(dir)?,
     };
+    let external_addons = match pkgmeta.as_mut() {
+        Some(m) => {
+            let package = m.package_as.clone().unwrap_or_else(|| tocs[0].1.clone());
+            extract_external_addons(m, &package)
+        }
+        None => Vec::new(),
+    };
     // Folders `move-folders` turns into addons of their own.
     let members: Vec<(String, String)> = pkgmeta
         .as_ref()
@@ -313,6 +322,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     let src_dir = source_dir_for(dir);
     let mut report = InitReport {
         addon_name: addon_name.clone(),
+        external_addons,
         old_tocs: tocs
             .iter()
             .map(|(p, _, _)| p.file_name().unwrap().to_string_lossy().into_owned())
@@ -1149,8 +1159,14 @@ fn convert_pkgmeta(
         object.shift_remove("publish");
     }
     let members = init_members(dir, meta, member_dirs, report);
-    if !members.is_empty() {
-        object.insert("workspace".into(), json!({ "members": members }));
+    if !members.is_empty() || !report.external_addons.is_empty() {
+        let mut ws = Map::new();
+        ws.insert("members".into(), json!(members));
+        if !report.external_addons.is_empty() {
+            let ext: Map<String, Value> = report.external_addons.iter().cloned().collect();
+            ws.insert("external-addons".into(), Value::Object(ext));
+        }
+        object.insert("workspace".into(), Value::Object(ws));
         report.members = members;
     }
 }
@@ -1297,6 +1313,68 @@ fn write_pins(
     })
 }
 
+/// `move-folders` entries that make (part of) an external an AddOn of its
+/// own (DBM's voice packs) become external addons (decision T127); the
+/// external and the entry are consumed.
+fn extract_external_addons(
+    meta: &mut crate::pkgmeta::PkgMeta,
+    package: &str,
+) -> Vec<(String, Value)> {
+    let prefix = format!("{package}/");
+    let mut out = Vec::new();
+    let mut consumed_moves = Vec::new();
+    let mut consumed_externals = Vec::new();
+    for (i, (from, to)) in meta.move_folders.iter().enumerate() {
+        if to.contains('/') {
+            continue;
+        }
+        let rel = from.strip_prefix(&prefix).unwrap_or(from).trim_matches('/');
+        let Some((j, e)) = meta.externals.iter().enumerate().find(|(_, e)| {
+            let d = e.dir.to_ascii_lowercase();
+            let r = rel.to_ascii_lowercase();
+            r == d || r.starts_with(&format!("{d}/"))
+        }) else {
+            continue;
+        };
+        let inner = rel[e.dir.len()..].trim_matches('/').to_string();
+        let mut external = e.clone();
+        if !inner.is_empty() {
+            use crate::pkgmeta::ExternalSource;
+            match &mut external.source {
+                ExternalSource::Git { subdir, .. } | ExternalSource::Zip { subdir, .. } => {
+                    *subdir = Some(match subdir.take() {
+                        Some(s) => format!("{s}/{inner}"),
+                        None => inner.clone(),
+                    });
+                }
+                ExternalSource::Svn { url } => *url = format!("{url}/{inner}"),
+                ExternalSource::Hg { .. } => {}
+            }
+        }
+        let Ok(mut entry) =
+            crate::pkgmeta::dependency_entry(&external, wowlua_pkg::fetch::sha256_of_url)
+        else {
+            continue;
+        };
+        entry.remove("kind");
+        entry.remove("curseforge-slug");
+        out.push((to.clone(), Value::Object(entry)));
+        consumed_moves.push(i);
+        consumed_externals.push(j);
+    }
+    let mut i = 0;
+    meta.move_folders.retain(|_| {
+        i += 1;
+        !consumed_moves.contains(&(i - 1))
+    });
+    let mut j = 0;
+    meta.externals.retain(|_| {
+        j += 1;
+        !consumed_externals.contains(&(j - 1))
+    });
+    out
+}
+
 /// `move-folders` entries that move a folder up into its parent
 /// (`X/Libs/Lib/Lib: X/Libs/Lib`), which flattens a library checkout.
 fn is_flattening(from: &str, to: &str) -> bool {
@@ -1358,6 +1436,7 @@ fn init_suite(dir: &Path, mut meta: crate::pkgmeta::PkgMeta) -> Result<InitRepor
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default()
     });
+    let external_addons = extract_external_addons(&mut meta, &package);
     let members = member_folders(dir, &meta, &package);
     if members.is_empty() {
         return Err(Diagnostic::plain_error(format!(
@@ -1385,6 +1464,7 @@ fn init_suite(dir: &Path, mut meta: crate::pkgmeta::PkgMeta) -> Result<InitRepor
     }
     let mut report = InitReport {
         addon_name: package,
+        external_addons,
         ..Default::default()
     };
     for e in &meta.externals {
@@ -1403,7 +1483,15 @@ fn init_suite(dir: &Path, mut meta: crate::pkgmeta::PkgMeta) -> Result<InitRepor
     let converted = init_members(dir, &meta, &members, &mut report);
     let mut manifest = Map::new();
     manifest.insert("$schema".into(), schema_url().into());
-    manifest.insert("workspace".into(), json!({ "members": converted }));
+    let mut ws = Map::new();
+    ws.insert("members".into(), json!(converted));
+    if !report.external_addons.is_empty() {
+        let ext: Map<String, Value> = report.external_addons.iter().cloned().collect();
+        ws.insert("external-addons".into(), Value::Object(ext));
+        // Shipped like the packager ships externals.
+        manifest.insert("compat".into(), json!({ "packager-keywords": true }));
+    }
+    manifest.insert("workspace".into(), Value::Object(ws));
     if let Some((file, _)) = &meta.manual_changelog {
         manifest.insert("publish".into(), json!({ "changelog": file }));
     }

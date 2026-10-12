@@ -560,6 +560,7 @@ Only in a workspace root manifest, which may omit `package`:
 | `members` | Globs of member package directories |
 | `default-members` | Members used when no `-p` is given |
 | `exclude` | Globs excluded from `members` |
+| `external-addons` | AddOns fetched and shipped as they are: AddOn folder name → source (`git`, `svn`, `path` or `archive`, with `subdir` / `strip-prefix`). Locked like dependencies; `build` and `install` of the whole workspace build them into `dist/<profile>/<Name>/` with all their files and their own TOC, with the packager's processing when the root sets `compat.packager-keywords` (decision T127) |
 | `build.out` | The single output root for all members (default `"dist"`). A member setting its own `build.out` is error E4316. |
 | `profiles`, `minify-levels`, `check`, `fmt`, `config`, `publish` | Shared defaults. A member's values are merged over them (objects deeply, arrays and scalars replace). Publish targets merge by target name; a member can turn a shared target off with `"enabled": false`. When the root is a package itself, its `publish` is its own and not shared (decision T121). |
 

@@ -185,7 +185,11 @@ available.
      `publish.changelog`.
    - `move-folders` entries that move whole addon folders become workspace
      members, adopted the same way; the externals and `ignore` entries inside
-     such a folder become the member's. Other `move-folders` uses are
+     such a folder become the member's. A repository whose addons all come from
+     `move-folders` (WeakAuras, DBM, ElvUI) becomes a workspace root without a
+     package. Entries that make an external (or a folder of one) an AddOn of
+     its own become `workspace.external-addons` (decision T127); entries that
+     move a library's inner folder up become the external's `subdir`. Other `move-folders` uses are
      reported with warning W4332.
    - TOCs are read as the packager packages them: `#@do-not-package@`,
      `#@debug@` and `#@alpha@` blocks are dropped and `#@non-debug@` /

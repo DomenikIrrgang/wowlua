@@ -297,7 +297,7 @@ pub fn apply_library(text: &str, info: &KeywordInfo, xml: bool) -> String {
     out
 }
 
-fn substitute(text: &str, info: &KeywordInfo) -> String {
+pub fn substitute(text: &str, info: &KeywordInfo) -> String {
     let (date_iso, date_int) = dates(info.timestamp);
     let (build_iso, build_int) = dates(info.build_timestamp);
     text.replace("@project-revision@", &info.revision)
@@ -444,6 +444,33 @@ pub fn packaged_toc(text: &str) -> String {
         }
     }
     out
+}
+
+/// Keyword values of a fetched package (library or external addon), as
+/// the packager computes them for an external. `detail` asks for values
+/// that need the network (SVN author).
+pub fn package_info(
+    source: &wowlua_pkg::Source,
+    pin: Option<&str>,
+    debug: bool,
+    detail: bool,
+) -> KeywordInfo {
+    let vcs = match (wowlua_pkg::Cache::new(), pin) {
+        (Some(cache), Some(pin)) => wowlua_pkg::fetch::package_vcs(&cache, source, pin, detail),
+        _ => Default::default(),
+    };
+    KeywordInfo {
+        version: vcs.version,
+        hash: vcs.hash,
+        short_hash: vcs.short_hash,
+        revision: vcs.revision,
+        author: vcs.author,
+        timestamp: vcs.timestamp,
+        build_timestamp: build_time(),
+        debug,
+        alpha: false,
+        repo: None,
+    }
 }
 
 /// `@localization(…)@` is not supported (W4030).

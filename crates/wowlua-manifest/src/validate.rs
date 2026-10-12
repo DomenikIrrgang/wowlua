@@ -98,6 +98,7 @@ pub(crate) fn validate(
     let flavors = flavors(manifest, &mut ctx);
     flavor_references(manifest, &mut ctx);
     dependencies(manifest, &mut ctx);
+    external_addons(manifest, &mut ctx);
     features(manifest, &mut ctx);
     profiles(manifest, &mut ctx);
     minify_levels(manifest, &mut ctx);
@@ -109,6 +110,48 @@ pub(crate) fn validate(
 
 fn root() -> JsonPath {
     JsonPath::root()
+}
+
+fn external_addons(manifest: &Manifest, ctx: &mut Ctx) {
+    let Some(ws) = &manifest.workspace else {
+        return;
+    };
+    for (name, d) in &ws.external_addons {
+        let path = root().key("workspace").key("external-addons").key(name);
+        let sources = [
+            d.git.is_some(),
+            d.svn.is_some(),
+            d.path.is_some(),
+            d.archive.is_some(),
+        ]
+        .iter()
+        .filter(|s| **s)
+        .count();
+        if sources != 1 {
+            ctx.error(
+                "E4002",
+                &path,
+                format!("external addon `{name}` must name exactly one source: `git`, `svn`, `path` or `archive`"),
+                "one source",
+            );
+        }
+        if d.archive.is_some() && d.sha256.is_none() {
+            ctx.error(
+                "E4002",
+                &path,
+                format!("archive external addon `{name}` needs a `sha256` checksum"),
+                "missing checksum",
+            );
+        }
+        if name.is_empty() || name.contains(['/', '\\']) {
+            ctx.error(
+                "E4002",
+                &path,
+                format!("`{name}` is not an AddOn folder name"),
+                "invalid name",
+            );
+        }
+    }
 }
 
 fn package(manifest: &Manifest, ctx: &mut Ctx) {

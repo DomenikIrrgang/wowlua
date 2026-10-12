@@ -8,6 +8,7 @@ pub mod build;
 mod compile;
 pub mod deps;
 mod embed;
+pub mod external;
 pub mod fix;
 pub mod format;
 mod fsutil;
@@ -29,7 +30,7 @@ use wowlua_diagnostics::{Diagnostic, Diagnostics};
 use wowlua_span::SourceDb;
 
 pub use build::{BuildOutput, BuildRequest, build};
-pub use project::{LoadOptions, Project, Status, load_project, load_projects};
+pub use project::{ExternalAddon, LoadOptions, Project, Status, load_project, load_projects};
 
 /// Version of this compiler.
 pub const COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");

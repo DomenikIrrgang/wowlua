@@ -1684,6 +1684,13 @@
           "items": {
             "type": "string"
           }
+        },
+        "external-addons": {
+          "description": "AddOns that are fetched and shipped as they are (a `.pkgmeta`\nexternal that `move-folders` makes an AddOn): AddOn folder name →\nsource (`git`, `svn`, `archive` or `path`, with `subdir` /\n`strip-prefix`).",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/DependencyDetail"
+          }
         }
       },
       "additionalProperties": false

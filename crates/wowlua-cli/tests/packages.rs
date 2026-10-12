@@ -1092,6 +1092,16 @@ fn init_from_pkgmeta_converts_externals() {
         &[("LibClassic.lua", "-- MIT License\n")],
         "v1",
     );
+    let voice = git_repo(
+        &e.root.join("Voice"),
+        &[
+            ("MyAddon_Voice/MyAddon_Voice.toc", "## Interface: 120100\r\n## Title: Voice\r\nVoice.lua\r\n"),
+            ("MyAddon_Voice/Voice.lua", "Voice = \"@project-version@\"\n"),
+            ("MyAddon_Voice/countdown.ogg", "OGG"),
+            ("README.md", "voice pack"),
+        ],
+        "v1",
+    );
     let opt = git_repo(
         &e.root.join("LibOpt"),
         &[("LibOpt.lua", "-- MIT License\n")],
@@ -1104,7 +1114,7 @@ fn init_from_pkgmeta_converts_externals() {
             (
                 ".pkgmeta",
                 &format!(
-                    "package-as: MyAddon\nexternals:\n  Libs/LibStub:\n    url: {stub}\n    tag: 1.0\n  Libs/CallbackHandler-1.0:\n    url: {cbh}\n    path: CallbackHandler-1.0\n  Libs/LibClassic: {classic}\n  Libs/Hg: https://hg.wowace.com/wow/x/mainline\n  Options/Libs/LibOpt: {opt}\nignore:\n  - Docs\nmanual-changelog: CHANGELOG.md\nenable-nolib-creation: yes\nmove-folders:\n  MyAddon/Options: MyAddon_Options\n  MyAddon/Media: MyAddon_Media\n"
+                    "package-as: MyAddon\nexternals:\n  Libs/LibStub:\n    url: {stub}\n    tag: 1.0\n  Libs/CallbackHandler-1.0:\n    url: {cbh}\n    path: CallbackHandler-1.0\n  Libs/LibClassic: {classic}\n  Libs/Hg: https://hg.wowace.com/wow/x/mainline\n  Options/Libs/LibOpt: {opt}\n  Voice: {voice}\nignore:\n  - Docs\nmanual-changelog: CHANGELOG.md\nenable-nolib-creation: yes\nmove-folders:\n  MyAddon/Options: MyAddon_Options\n  MyAddon/Media: MyAddon_Media\n  MyAddon/Voice/MyAddon_Voice: MyAddon_Voice\n"
                 ),
             ),
             (
@@ -1179,6 +1189,12 @@ fn init_from_pkgmeta_converts_externals() {
         "{options}"
     );
     assert!(m["dependencies"].get("libopt").is_none());
+    // An external that `move-folders` makes an AddOn of its own.
+    assert_eq!(
+        m["workspace"]["external-addons"]["MyAddon_Voice"],
+        serde_json::json!({ "git": voice, "subdir": "MyAddon_Voice", "submodules": true }),
+        "{m}"
+    );
     // The packaged TOC: `#@non-debug@` lines count, `#@do-not-package@` ones do not.
     assert!(!addon.join("src/Options/Options.lua").exists());
     assert!(addon.join("Options/src/Options.lua").exists());
@@ -1244,6 +1260,21 @@ fn init_from_pkgmeta_converts_externals() {
         options_toc.contains("Libs\\LibOpt\\LibOpt.lua\nsrc\\Options.lua"),
         "{options_toc}"
     );
+    // The whole workspace builds the external addon too: every file, its
+    // own TOC (with LF line endings), keywords from its tag.
+    wowlua(addon, &e.home)
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Finished MyAddon_Voice"));
+    let voice_out = addon.join("dist/release/MyAddon_Voice");
+    assert_eq!(
+        fs::read_to_string(voice_out.join("MyAddon_Voice.toc")).unwrap(),
+        "## Interface: 120100\n## Title: Voice\nVoice.lua\n"
+    );
+    assert_eq!(fs::read_to_string(voice_out.join("Voice.lua")).unwrap(), "Voice = \"v1\"\n");
+    assert!(voice_out.join("countdown.ogg").exists());
+    assert!(!voice_out.join("README.md").exists());
 }
 
 #[test]

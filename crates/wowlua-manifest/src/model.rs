@@ -938,6 +938,12 @@ pub struct Workspace {
     pub default_members: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude: Vec<String>,
+    /// AddOns that are fetched and shipped as they are (a `.pkgmeta`
+    /// external that `move-folders` makes an AddOn): AddOn folder name →
+    /// source (`git`, `svn`, `archive` or `path`, with `subdir` /
+    /// `strip-prefix`).
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub external_addons: IndexMap<String, DependencyDetail>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]

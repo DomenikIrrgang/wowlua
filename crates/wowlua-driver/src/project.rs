@@ -62,6 +62,35 @@ pub struct Project {
     pub workspace_root: Option<PathBuf>,
     /// The workspace's other addons (generated declaration files).
     pub workspace_addons: Vec<WorkspaceAddon>,
+    /// The workspace's external addons, fetched (`workspace.external-addons`).
+    pub external_addons: Vec<ExternalAddon>,
+}
+
+/// An AddOn fetched and shipped as it is (`workspace.external-addons`).
+#[derive(Debug, Clone)]
+pub struct ExternalAddon {
+    /// The AddOn folder name.
+    pub name: String,
+    /// The fetched package (`None` when the command skipped dependencies).
+    pub package: Option<wowlua_pkg::ResolvedPackage>,
+    /// The packager's processing applies (the workspace root's
+    /// `compat.packager-keywords`).
+    pub packager: bool,
+    /// The flavors the workspace targets (install folders).
+    pub flavors: Vec<String>,
+}
+
+/// The dependency name an external addon is resolved under.
+pub fn external_dependency_name(addon: &str) -> String {
+    let mut out = String::from("addon-");
+    for c in addon.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c.to_ascii_lowercase());
+        } else if !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    out.trim_end_matches('-').chars().take(64).collect()
 }
 
 impl Project {
@@ -348,6 +377,7 @@ fn load_single(session: &mut Session, options: &LoadOptions, path: &Path) -> Opt
             session,
             options,
             &[&manifest],
+            None,
             &manifest.root,
             &lock,
             &HashMap::new(),
@@ -364,6 +394,7 @@ fn load_single(session: &mut Session, options: &LoadOptions, path: &Path) -> Opt
         deps,
         workspace_root: None,
         workspace_addons: Vec::new(),
+        external_addons: Vec::new(),
     })
 }
 
@@ -504,14 +535,66 @@ fn load_workspace(
             (p.kind != PackageKind::Addon).then(|| (p.name.clone(), m.root.clone()))
         })
         .collect();
+    // External addons resolve like dependencies of the workspace itself.
+    let externals: Vec<(String, String, wowlua_manifest::model::DependencyDetail)> = ws
+        .external_addons
+        .iter()
+        .map(|(name, d)| {
+            let mut d = d.clone();
+            d.kind = Some(PackageKind::LuaLibrary);
+            (name.clone(), external_dependency_name(name), d)
+        })
+        .collect();
     let deps = if options.skip_dependencies {
         wowlua_pkg::Resolution::default()
     } else {
         let refs: Vec<&LoadedManifest> = manifests.iter().collect();
-        let deps = resolve(session, options, &refs, root, &lock, &members)?;
+        let extra = (!externals.is_empty()).then(|| wowlua_pkg::Root {
+            name: "workspace".into(),
+            version: semver::Version::new(0, 0, 0),
+            dir: root.to_path_buf(),
+            manifest_path: root_path.clone(),
+            deps: externals
+                .iter()
+                .map(|(_, key, d)| {
+                    (
+                        key.clone(),
+                        wowlua_manifest::model::Dependency::Detailed(Box::new(d.clone())),
+                    )
+                })
+                .collect(),
+        });
+        let deps = resolve(session, options, &refs, extra, root, &lock, &members)?;
         lock.packages = deps.lock_entries(root);
         deps
     };
+    let all_flavors: Vec<String> = {
+        let mut f: Vec<String> = Vec::new();
+        for m in &manifests {
+            for id in &m.flavors {
+                if !f.contains(id) {
+                    f.push(id.clone());
+                }
+            }
+        }
+        f
+    };
+    let external_addons: Vec<ExternalAddon> = externals
+        .iter()
+        .map(|(name, key, _)| {
+            let package = deps
+                .packages
+                .iter()
+                .find(|p| &p.name == key && p.used_by.iter().any(|u| u == "workspace"))
+                .cloned();
+            ExternalAddon {
+                name: name.clone(),
+                package,
+                packager: root_manifest.manifest.compat.packager_keywords,
+                flavors: all_flavors.clone(),
+            }
+        })
+        .collect();
     store_lock(session, options, root, pinned.as_ref(), &lock)?;
 
     let addons: Vec<WorkspaceAddon> = manifests
@@ -583,6 +666,7 @@ fn load_workspace(
             },
             workspace_root: Some(root.to_path_buf()),
             workspace_addons: addons.iter().filter(|a| a.name != own).cloned().collect(),
+            external_addons: external_addons.clone(),
             manifest,
         });
     }
@@ -707,11 +791,12 @@ fn resolve(
     session: &mut Session,
     options: &LoadOptions,
     manifests: &[&LoadedManifest],
+    extra: Option<wowlua_pkg::Root>,
     lock_root: &Path,
     lock: &Lockfile,
     members: &HashMap<String, PathBuf>,
 ) -> Option<wowlua_pkg::Resolution> {
-    let roots: Vec<wowlua_pkg::Root> = manifests
+    let mut roots: Vec<wowlua_pkg::Root> = manifests
         .iter()
         .filter(|m| !m.manifest.dependencies.is_empty() || !m.manifest.dev_dependencies.is_empty())
         .map(|manifest| {
@@ -733,6 +818,7 @@ fn resolve(
             }
         })
         .collect();
+    roots.extend(extra);
     if roots.is_empty() {
         return Some(wowlua_pkg::Resolution::default());
     }

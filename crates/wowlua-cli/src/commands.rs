@@ -68,9 +68,10 @@ fn load_and_build_all(
     session: &mut Session,
     global: &GlobalArgs,
     request: &BuildRequest,
-) -> Option<Vec<(Project, BuildOutput)>> {
+) -> Option<Built> {
     let projects = wowlua_driver::load_projects(session, &load_options(out, global))?;
     let single = projects.len() == 1;
+    let whole = whole_workspace(global, &projects);
     let mut builds = Vec::new();
     for project in projects {
         let buildable = match project.kind() {
@@ -87,7 +88,47 @@ fn load_and_build_all(
             builds.push((project, b));
         }
     }
-    (!session.has_errors()).then_some(builds)
+    // The workspace's external addons, built with the whole workspace.
+    let mut externals = Vec::new();
+    if whole
+        && request.write
+        && let Some((first, _)) = builds.first()
+        && let Ok(profile) = first.manifest.profile(&request.profile)
+    {
+        let out_root = first.manifest.out_dir();
+        for ext in &first.external_addons {
+            if let Some(b) =
+                wowlua_driver::external::build_external(session, ext, &profile, &out_root, true)
+            {
+                externals.push(b);
+            }
+        }
+    }
+    (!session.has_errors()).then_some(Built { builds, externals })
+}
+
+/// What `load_and_build_all` built.
+struct Built {
+    builds: Vec<(Project, BuildOutput)>,
+    /// The workspace's external addons (installed with the first member's
+    /// client folders).
+    externals: Vec<BuildOutput>,
+}
+
+/// Whether the command works on the whole workspace: no `-p`, run at the
+/// workspace root.
+fn whole_workspace(global: &GlobalArgs, projects: &[Project]) -> bool {
+    if global.package.is_some() {
+        return false;
+    }
+    let cwd = cwd();
+    let manifest = global.manifest.as_ref().map(|m| cwd.join(m));
+    let found = wowlua_manifest::find_manifest(&cwd, manifest.as_deref())
+        .and_then(|m| m.parent().map(Path::to_path_buf));
+    projects
+        .first()
+        .and_then(|p| p.workspace_root.clone())
+        .is_some_and(|root| found.is_some_and(|f| f == root))
 }
 
 /// Loads the project and builds it. Diagnostics stay in the session.
@@ -115,8 +156,9 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
     match result {
-        Some(builds) if ok => {
-            for (_, build) in &builds {
+        Some(built) if ok => {
+            let all = built.builds.iter().map(|(_, b)| b).chain(&built.externals);
+            for build in all {
                 out.status(
                     "Finished",
                     format!(
@@ -173,8 +215,8 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
     match result {
-        Some(builds) if ok => {
-            for (_, build) in &builds {
+        Some(built) if ok => {
+            for (_, build) in &built.builds {
                 out.status(
                     "Checked",
                     format!(
@@ -267,7 +309,7 @@ pub fn install(out: &Output, global: &GlobalArgs, profile: &str, target: &Instal
         out_dir: None,
         write: true,
     };
-    let Some(builds) = load_and_build_all(out, &mut session, global, &request) else {
+    let Some(built) = load_and_build_all(out, &mut session, global, &request) else {
         out.flush(&mut session);
         return false;
     };
@@ -275,7 +317,15 @@ pub fn install(out: &Output, global: &GlobalArgs, profile: &str, target: &Instal
         return false;
     }
     let mut ok = true;
-    for (project, build) in &builds {
+    let pairs = built.builds.iter().map(|(p, b)| (p, b)).chain(
+        built
+            .builds
+            .first()
+            .map(|(p, _)| p)
+            .into_iter()
+            .flat_map(|p| built.externals.iter().map(move |b| (p, b))),
+    );
+    for (project, build) in pairs {
         out.status("Built", describe(build));
         let installed = install::install(
             &mut session,
@@ -315,17 +365,29 @@ pub fn uninstall(
         ..InstallRequest::default()
     };
     let mut ok = true;
-    for project in projects.iter().filter(|p| p.kind() == PackageKind::Addon) {
-        let removed = install::uninstall(&mut session, project, &request);
+    let whole = whole_workspace(global, &projects);
+    let mut names: Vec<(&Project, String, Option<Vec<String>>)> = projects
+        .iter()
+        .filter(|p| p.kind() == PackageKind::Addon)
+        .map(|p| (p, p.addon_name(), None))
+        .collect();
+    if whole && let Some(first) = projects.first() {
+        for ext in &first.external_addons {
+            names.push((first, ext.name.clone(), Some(ext.flavors.clone())));
+        }
+    }
+    for (project, name, flavors) in names {
+        let request = InstallRequest {
+            flavors: flavors.or_else(|| request.flavors.clone()),
+            ..request.clone()
+        };
+        let removed = install::uninstall(&mut session, project, &name, &request);
         ok &= out.flush(&mut session);
         for path in &removed {
             out.status("Removed", path.display().to_string());
         }
         if removed.is_empty() && ok {
-            out.status(
-                "Nothing",
-                format!("no installed build of {} found", project.addon_name()),
-            );
+            out.status("Nothing", format!("no installed build of {name} found"));
         }
     }
     ok
@@ -479,6 +541,9 @@ pub fn init(out: &Output, from_toc: Option<PathBuf>, from_pkgmeta: bool) -> bool
             }
             for member in &report.members {
                 out.status("Adopted", format!("{member} as a workspace member"));
+            }
+            for (name, _) in &report.external_addons {
+                out.status("Adopted", format!("{name} as an external addon"));
             }
             out.status(
                 "Note",

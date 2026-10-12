@@ -1,0 +1,169 @@
+//! External addons (`workspace.external-addons`, decision T127): AddOns that
+//! are fetched and shipped as they are, like a `.pkgmeta` external that
+//! `move-folders` turns into an AddOn of its own (DBM's voice packs). Every
+//! file is copied (minus dotfiles and the external's own `.pkgmeta`
+//! `ignore`), its own TOC included; with the packager's processing, text
+//! files get keywords and LF line endings like the packager's externals.
+
+use crate::Session;
+use crate::build::{BuildOutput, Content};
+use crate::project::ExternalAddon;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use wowlua_diagnostics::Diagnostic;
+
+/// The checkout root of a fetched package (the package directory above
+/// its `subdir`), where its own `.pkgmeta` lives, and the package's path
+/// inside it.
+fn checkout_root(package: &wowlua_pkg::ResolvedPackage) -> (PathBuf, String) {
+    let sub = match &package.source {
+        wowlua_pkg::Source::Git { subdir, .. } => subdir.clone(),
+        wowlua_pkg::Source::Archive { strip_prefix, .. } => strip_prefix.clone(),
+        _ => None,
+    }
+    .unwrap_or_default();
+    let mut root = package.dir.clone();
+    for _ in sub.split('/').filter(|p| !p.is_empty()) {
+        root.pop();
+    }
+    (root, sub)
+}
+
+/// Builds an external addon into `<out>/<profile>/<name>/`.
+pub fn build_external(
+    session: &mut Session,
+    ext: &ExternalAddon,
+    profile: &wowlua_manifest::Profile,
+    out_root: &Path,
+    write: bool,
+) -> Option<BuildOutput> {
+    let Some(package) = &ext.package else {
+        session.push(Diagnostic::plain_error(format!(
+            "external addon `{}` was not fetched",
+            ext.name
+        )));
+        return None;
+    };
+    let dir = &package.dir;
+    let (root, sub) = checkout_root(package);
+    // The external's own `.pkgmeta`: `ignore` and `plain-copy` (patterns
+    // relative to its checkout root).
+    let own = crate::pkgmeta::read(&root)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let mut files: BTreeMap<String, Content> = BTreeMap::new();
+    let mut info: Option<crate::keywords::KeywordInfo> = None;
+    for entry in walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_entry(|e| e.depth() == 0 || !e.file_name().to_string_lossy().starts_with('.'))
+        .flatten()
+    {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let Ok(rel) = entry.path().strip_prefix(dir) else {
+            continue;
+        };
+        let rel = rel.to_string_lossy().replace('\\', "/");
+        let in_root = if sub.is_empty() {
+            rel.clone()
+        } else {
+            format!("{sub}/{rel}")
+        };
+        if crate::keywords::plain_copy(&own.ignore, &[&in_root]) {
+            continue;
+        }
+        let abs = entry.path().to_path_buf();
+        let processed = ext.packager
+            && crate::keywords::processed_extension(&rel)
+            && !crate::keywords::plain_copy(&own.plain_copy, &[&in_root]);
+        if !processed {
+            files.insert(rel, Content::Copy(abs));
+            continue;
+        }
+        let bytes = std::fs::read(&abs).unwrap_or_default();
+        let normalized = crate::keywords::lf(&bytes);
+        let lower = rel.to_ascii_lowercase();
+        let out = match std::str::from_utf8(&normalized) {
+            Ok(text) if text.contains('@') => {
+                let info = info.get_or_insert_with(|| {
+                    crate::keywords::package_info(
+                        &package.source,
+                        package.pin.as_deref(),
+                        profile.debug,
+                        text.contains("@project-author@"),
+                    )
+                });
+                if lower.ends_with(".lua") || lower.ends_with(".xml") {
+                    crate::keywords::apply_library(text, info, lower.ends_with(".xml"))
+                } else {
+                    crate::keywords::substitute(text, info)
+                }
+                .into_bytes()
+            }
+            _ => normalized,
+        };
+        if out == bytes {
+            files.insert(rel, Content::Copy(abs));
+        } else {
+            files.insert(rel, Content::Bytes(out));
+        }
+    }
+    // Its own TOC files, shipped unchanged.
+    let tocs: Vec<wowlua_toc::TocFile> = files
+        .keys()
+        .filter(|f| !f.contains('/') && f.to_ascii_lowercase().ends_with(".toc"))
+        .map(|f| {
+            let content = match &files[f] {
+                Content::Bytes(b) => String::from_utf8_lossy(b).into_owned(),
+                Content::Copy(p) => std::fs::read(p)
+                    .map(|b| String::from_utf8_lossy(&b).into_owned())
+                    .unwrap_or_default(),
+            };
+            wowlua_toc::TocFile {
+                name: f.clone(),
+                flavors: Vec::new(),
+                content,
+            }
+        })
+        .collect();
+    if tocs.is_empty() {
+        session.push(
+            Diagnostic::plain_error(format!(
+                "external addon `{}` has no .toc file in `{}`",
+                ext.name,
+                dir.display()
+            ))
+            .with_help("check its `subdir` / `strip-prefix`"),
+        );
+        return None;
+    }
+    let version = tocs
+        .iter()
+        .find_map(|t| {
+            wowlua_toc::parse(&t.content)
+                .get("Version")
+                .map(str::to_string)
+        })
+        .or_else(|| package.pin.clone())
+        .unwrap_or_default();
+    let out_dir = wowlua_pkg::source::normalize(&out_root.join(&profile.name).join(&ext.name));
+    if write && let Err(error) = crate::build::write_tree(&out_dir, &files) {
+        session.push(
+            Diagnostic::plain_error(format!("cannot write the build output: {error}"))
+                .with_path(&out_dir),
+        );
+        return None;
+    }
+    Some(BuildOutput {
+        addon_name: ext.name.clone(),
+        dir: out_dir,
+        profile: profile.name.clone(),
+        flavors: ext.flavors.clone(),
+        version,
+        build_id: "external".into(),
+        tocs,
+        files,
+    })
+}

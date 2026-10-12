@@ -480,6 +480,14 @@ pub fn run_all(release: &Path, project: &Path) -> Result<()> {
             .unwrap_or_else(|| wowlua_manifest::pascal_case(package));
         manifests.insert(name, e.path().to_path_buf());
     }
+    let root: serde_json::Value = std::fs::read_to_string(project.join("wowlua.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    let externals: Vec<String> = root["workspace"]["external-addons"]
+        .as_object()
+        .map(|o| o.keys().cloned().collect())
+        .unwrap_or_default();
     let mut failed = Vec::new();
     let mut folders: Vec<_> = std::fs::read_dir(release)?
         .flatten()
@@ -490,6 +498,20 @@ pub fn run_all(release: &Path, project: &Path) -> Result<()> {
     for name in &folders {
         println!("== {name}");
         let Some(manifest) = manifests.get(name) else {
+            // An external addon: shipped as it is, so every file matches.
+            if externals.contains(name) {
+                match compare_trees(
+                    &release.join(name),
+                    &project.join("dist/release").join(name),
+                ) {
+                    Ok(n) => println!("{n} files identical (external addon)"),
+                    Err(e) => {
+                        println!("FAIL {name}: {e}");
+                        failed.push(name.clone());
+                    }
+                }
+                continue;
+            }
             println!("FAIL no wowlua package builds `{name}`");
             failed.push(name.clone());
             continue;
@@ -510,4 +532,28 @@ pub fn run_all(release: &Path, project: &Path) -> Result<()> {
     }
     println!("OK: all {} addons load identical code", folders.len());
     Ok(())
+}
+
+/// Every file of `a` is in `b` with the same bytes, and `b` has no others.
+fn compare_trees(a: &Path, b: &Path) -> Result<usize> {
+    let ta = Tree::read(a)?;
+    let tb = Tree::read(b)?;
+    let mut problems = Vec::new();
+    for (lower, rel) in &ta.files {
+        match tb.files.get(lower) {
+            Some(r) if ta.bytes(rel) == tb.bytes(r) => {}
+            Some(_) => problems.push(format!("`{rel}` differs")),
+            None => problems.push(format!("`{rel}` is missing")),
+        }
+    }
+    for (lower, rel) in &tb.files {
+        if !ta.files.contains_key(lower) {
+            problems.push(format!("`{rel}` is extra"));
+        }
+    }
+    if problems.is_empty() {
+        Ok(ta.files.len())
+    } else {
+        bail!("{}", problems.join("; "))
+    }
 }
