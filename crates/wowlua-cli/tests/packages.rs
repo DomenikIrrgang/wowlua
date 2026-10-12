@@ -1113,7 +1113,8 @@ fn init_from_pkgmeta_converts_externals() {
             ),
             (
                 "embeds.xml",
-                "<Ui>\n  <Include file=\"Libs\\CallbackHandler-1.0\\CallbackHandler-1.0.xml\"/>\n</Ui>\n",
+                // CRLF, as many addons are committed.
+                "<Ui>\r\n  <Include file=\"Libs\\CallbackHandler-1.0\\CallbackHandler-1.0.xml\"/>\r\n</Ui>\r\n",
             ),
             (
                 "Core.lua",
@@ -1198,6 +1199,7 @@ fn init_from_pkgmeta_converts_externals() {
         "{toc}"
     );
     let embeds = fs::read_to_string(out.join("src/embeds.xml")).unwrap();
+    assert!(!embeds.contains('\r'), "LF like `packager -u`: {embeds:?}");
     assert!(
         embeds.contains(
             "Interface\\AddOns\\MyAddon\\Libs\\CallbackHandler-1.0\\CallbackHandler-1.0.xml"

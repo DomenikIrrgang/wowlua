@@ -374,6 +374,17 @@ pub fn build(
                 raw.insert(source.rel.clone(), processed.into_bytes());
             }
         }
+        // Later steps (XML references, diagnostics) read the processed text.
+        for (source, file) in &mut files {
+            let current = session.db.get(*file).text().as_bytes();
+            if let Some(bytes) = raw.get(&source.rel)
+                && bytes.as_slice() != current
+            {
+                *file = session
+                    .db
+                    .add(&source.rel, String::from_utf8_lossy(bytes).into_owned());
+            }
+        }
     }
 
     // XML references.
