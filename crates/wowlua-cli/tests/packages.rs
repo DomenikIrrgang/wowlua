@@ -1095,7 +1095,10 @@ fn init_from_pkgmeta_converts_externals() {
     let voice = git_repo(
         &e.root.join("Voice"),
         &[
-            ("MyAddon_Voice/MyAddon_Voice.toc", "## Interface: 120100\r\n## Title: Voice\r\nVoice.lua\r\n"),
+            (
+                "MyAddon_Voice/MyAddon_Voice.toc",
+                "## Interface: 120100\r\n## Title: Voice\r\nVoice.lua\r\n",
+            ),
             ("MyAddon_Voice/Voice.lua", "Voice = \"@project-version@\"\n"),
             ("MyAddon_Voice/countdown.ogg", "OGG"),
             ("README.md", "voice pack"),
@@ -1272,7 +1275,10 @@ fn init_from_pkgmeta_converts_externals() {
         fs::read_to_string(voice_out.join("MyAddon_Voice.toc")).unwrap(),
         "## Interface: 120100\n## Title: Voice\nVoice.lua\n"
     );
-    assert_eq!(fs::read_to_string(voice_out.join("Voice.lua")).unwrap(), "Voice = \"v1\"\n");
+    assert_eq!(
+        fs::read_to_string(voice_out.join("Voice.lua")).unwrap(),
+        "Voice = \"v1\"\n"
+    );
     assert!(voice_out.join("countdown.ogg").exists());
     assert!(!voice_out.join("README.md").exists());
 }
