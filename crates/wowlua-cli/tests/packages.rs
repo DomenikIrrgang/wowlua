@@ -721,3 +721,153 @@ fn dependency_commands() {
         .success()
         .stderr(predicate::str::contains("Fetched 1 package"));
 }
+
+#[test]
+fn wowlua_library_is_compiled_into_the_addon() {
+    let e = env();
+    let ui = e.root.join("ui");
+    write(
+        &ui,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "wowlua-ui", "version": "0.4.2", "kind": "library", "license": "MIT" },
+  "features": { "default": ["shadows"], "shadows": [], "fancy": [] },
+  "config": { "size": 10 },
+  "check": { "mode": "strict" } }"#,
+            ),
+            (
+                "src/init.wowlua",
+                "import ButtonClass from \"./widgets/button\"\nexport const Button = ButtonClass\nexport const VERSION = \"0.4.2\"\n",
+            ),
+            (
+                "src/widgets/button.wowlua",
+                "import config, features from \"wowlua:meta\"\nimport clamp from \"/util\"\nexport class ButtonClass\n    size: number = clamp(config.size, 1, 100)\n    shadows: boolean = features.shadows\n    fancy: boolean = features.fancy\n    constructor()\n    end\nend\n",
+            ),
+            (
+                "src/util.wowlua",
+                "export function clamp(v: number, lo: number, hi: number): number\n    if v < lo then return lo end\n    if v > hi then return hi end\n    return v\nend\n",
+            ),
+            ("src/unused.wowlua", "export const unused = 1\n"),
+            // A warning in library code is not the addon's problem.
+            (
+                "src/noisy.wowlua",
+                "local unusedLocal = 1\nexport const noisy = 2\n",
+            ),
+        ],
+    );
+    write(
+        &e.project,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "my-addon", "version": "1.0.0" },
+  "dependencies": { "wowlua-ui": { "path": "../ui", "features": ["fancy"], "config": { "size": 500 } } } }"#,
+            ),
+            (
+                "src/main.wowlua",
+                "import Button, VERSION from \"wowlua-ui\"\nimport clamp from \"wowlua-ui/util\"\nimport noisy from \"wowlua-ui/noisy\"\nlocal b = Button.new()\nprint(VERSION, b.size, b.shadows, b.fancy, clamp(5, 1, 3), noisy)\n",
+            ),
+        ],
+    );
+    wowlua(&e.project, &e.home)
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("W1003").not());
+    let out = e.project.join("dist/release/MyAddon");
+    let toc = fs::read_to_string(out.join("MyAddon.toc")).unwrap();
+    assert!(
+        toc.contains("libs\\wowlua-ui\\util.lua\nlibs\\wowlua-ui\\widgets\\button.lua\n"),
+        "{toc}"
+    );
+    assert!(!out.join("libs/wowlua-ui/unused.lua").exists());
+    let button = fs::read_to_string(out.join("libs/wowlua-ui/widgets/button.lua")).unwrap();
+    assert!(
+        button.contains("__wl.module(\"wowlua-ui/widgets/button\")"),
+        "{button}"
+    );
+    // The library's config, overridden by the entry; its own features.
+    assert!(button.contains("clamp(500, 1, 100)"), "{button}");
+    assert!(
+        button.contains("self.shadows = true self.fancy = true"),
+        "{button}"
+    );
+    let main = fs::read_to_string(out.join("src/main.lua")).unwrap();
+    assert!(
+        main.contains("__wl.require(\"wowlua-ui/init\").Button"),
+        "{main}"
+    );
+    let licenses = fs::read_to_string(out.join("LICENSES.txt")).unwrap();
+    assert!(
+        licenses.contains("== wowlua-ui (libs/wowlua-ui) ==\n\nLicense: MIT"),
+        "{licenses}"
+    );
+
+    // The library checks on its own, but is not built on its own.
+    wowlua(&ui, &e.home).arg("check").assert().success();
+    wowlua(&ui, &e.home)
+        .arg("build")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "run `wowlua check` to check the library",
+        ));
+
+    // Unknown packages and escaping paths.
+    write(
+        &e.project,
+        &[("src/main.wowlua", "import x from \"nope/x\"\nprint(x)\n")],
+    );
+    wowlua(&e.project, &e.home)
+        .arg("check")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("package `nope` not found"));
+}
+
+#[test]
+fn types_packages_type_the_checker() {
+    let e = env();
+    write(
+        &e.root.join("libfoo-types"),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "libfoo-types", "version": "1.0.0", "kind": "types" } }"#,
+            ),
+            (
+                "LibFoo.d.wowlua",
+                "declare function LibFoo_Greet(name: string): string\n",
+            ),
+        ],
+    );
+    write(
+        &e.project,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "my-addon", "version": "1.0.0" },
+  "check": { "mode": "strict" },
+  "dev-dependencies": { "libfoo-types": { "path": "../libfoo-types" } } }"#,
+            ),
+            (
+                "src/main.wowlua",
+                "local s: string = LibFoo_Greet(\"x\")\nprint(s)\n",
+            ),
+        ],
+    );
+    wowlua(&e.project, &e.home).arg("check").assert().success();
+    write(
+        &e.project,
+        &[(
+            "src/main.wowlua",
+            "local n: number = 42\nprint(LibFoo_Greet(n))\n",
+        )],
+    );
+    wowlua(&e.project, &e.home)
+        .arg("check")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E2"));
+}

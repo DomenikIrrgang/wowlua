@@ -8,7 +8,7 @@ use crate::project::Project;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use wowlua_diagnostics::Diagnostic;
-use wowlua_manifest::model::{Dependency, PackageKind};
+use wowlua_manifest::model::{Dependency, DependencyDetail, Manifest, PackageKind};
 use wowlua_pkg::ResolvedPackage;
 
 /// One embedded `lua-library`.
@@ -103,14 +103,12 @@ fn resolve_flavors(list: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// The embedded `lua-library` dependencies of the project for `flavors`,
-/// in load order: dependencies of a library before it, otherwise in the
-/// manifest's declaration order.
-pub fn lua_libraries(
-    session: &mut Session,
-    project: &Project,
-    flavors: &[String],
-) -> Option<Vec<LuaLib>> {
+/// The packages embedded into the project's build, in load order
+/// (dependencies of a package before it, otherwise in the manifest's
+/// declaration order), each with its flavor restriction (`None`: all).
+/// Walks from the manifest's `dependencies` (never `dev-dependencies`),
+/// with optional ones only when a default feature enables them.
+pub fn embedded(project: &Project) -> Vec<(&ResolvedPackage, Option<BTreeSet<String>>)> {
     let manifest = &project.manifest.manifest;
     let root_name = project
         .manifest
@@ -119,12 +117,12 @@ pub fn lua_libraries(
         .unwrap_or_default();
     let packages: HashMap<&str, &ResolvedPackage> = project
         .deps
-        .of_root(&root_name)
+        .packages
+        .iter()
+        .filter(|p| p.used_by.contains(&root_name))
         .map(|p| (p.name.as_str(), p))
         .collect();
     let optional_on = enabled_optional(project);
-    // Embedded packages and their flavor restrictions, walking from the
-    // manifest's `dependencies` (never `dev-dependencies`).
     let mut order: Vec<String> = Vec::new();
     let mut restriction: HashMap<String, Option<BTreeSet<String>>> = HashMap::new();
     fn visit(
@@ -201,30 +199,51 @@ pub fn lua_libraries(
             &mut stack,
         );
     }
+    order
+        .into_iter()
+        .map(|n| {
+            let r = restriction.get(&n).cloned().flatten();
+            (packages[n.as_str()], r)
+        })
+        .collect()
+}
 
+/// The entry of a dependency as the root declares it, else as the package
+/// that brought it in declares it.
+fn entry_of(project: &Project, p: &ResolvedPackage) -> DependencyDetail {
+    match project.manifest.manifest.dependencies.get(&p.name) {
+        Some(Dependency::Detailed(d)) => (**d).clone(),
+        _ => p.entry.clone(),
+    }
+}
+
+/// The embedded `lua-library` dependencies of the project for `flavors`,
+/// in load order.
+pub fn lua_libraries(
+    session: &mut Session,
+    project: &Project,
+    flavors: &[String],
+) -> Option<Vec<LuaLib>> {
+    let manifest = &project.manifest.manifest;
     let libs_dir = manifest.build.libs_dir.trim_matches('/').to_string();
     let mut libs = Vec::new();
-    for name in order {
-        let p = packages[name.as_str()];
+    for (p, restriction) in embedded(project) {
         if p.kind != PackageKind::LuaLibrary {
             continue;
         }
-        let flavors_of: Option<Vec<String>> =
-            restriction.get(&name).cloned().flatten().map(|set| {
-                flavors
-                    .iter()
-                    .filter(|f| set.contains(*f))
-                    .cloned()
-                    .collect()
-            });
+        let name = p.name.clone();
+        let flavors_of: Option<Vec<String>> = restriction.map(|set| {
+            flavors
+                .iter()
+                .filter(|f| set.contains(*f))
+                .cloned()
+                .collect()
+        });
         if flavors_of.as_ref().is_some_and(Vec::is_empty) {
             continue;
         }
         // The root's own entry wins for `files` and `install-path`.
-        let entry = match manifest.dependencies.get(&name) {
-            Some(Dependency::Detailed(d)) => (**d).clone(),
-            _ => p.entry.clone(),
-        };
+        let entry = entry_of(project, p);
         let install_path = entry
             .install_path
             .clone()
@@ -269,6 +288,224 @@ pub fn lua_libraries(
         });
     }
     Some(libs)
+}
+
+/// One embedded wowlua `library` (spec §10.5.1): its modules are compiled
+/// into the addon as `@pkg/<name>/<path>`, emitted under `out`.
+#[derive(Clone, Debug)]
+pub struct WowluaLib {
+    pub name: String,
+    /// The package root.
+    pub dir: PathBuf,
+    pub manifest: Manifest,
+    /// `<libs-dir>/<install-path>` (output folder).
+    pub out: String,
+    /// The main module, relative to `src` (`init.wowlua`).
+    pub main: Option<String>,
+    /// Its source files by path relative to `src`.
+    pub files: BTreeMap<String, PathBuf>,
+    /// The declaration that embeds it (features, config).
+    pub entry: DependencyDetail,
+}
+
+impl WowluaLib {
+    /// `@pkg/<name>/<rel>`.
+    pub fn src_rel(&self, rel: &str) -> String {
+        format!("{}{}/{rel}", wowlua_sema::PACKAGE_PREFIX, self.name)
+    }
+
+    /// The output path of a source (`.wowlua` compiles to `.lua`).
+    pub fn output(&self, rel: &str) -> String {
+        let rel = match rel.strip_suffix(".wowlua") {
+            Some(stem) => format!("{stem}.lua"),
+            None => rel.to_string(),
+        };
+        format!("{}/{rel}", self.out)
+    }
+}
+
+/// The embedded wowlua libraries, and types packages for checking.
+/// Libraries that do not support a targeted flavor are E4327.
+pub fn wowlua_libraries(
+    session: &mut Session,
+    project: &Project,
+    flavors: &[String],
+) -> Vec<WowluaLib> {
+    let libs_dir = project
+        .manifest
+        .manifest
+        .build
+        .libs_dir
+        .trim_matches('/')
+        .to_string();
+    let mut out = Vec::new();
+    for (p, restriction) in embedded(project) {
+        if p.kind != PackageKind::Library {
+            continue;
+        }
+        let Some(manifest) = p.manifest.clone() else {
+            continue;
+        };
+        let targeted: Vec<&String> = flavors
+            .iter()
+            .filter(|f| restriction.as_ref().is_none_or(|r| r.contains(*f)))
+            .collect();
+        if let Some(listed) = manifest.flavors.as_ref().filter(|f| !f.is_empty()) {
+            let supported = resolve_flavors(&listed.keys().cloned().collect::<Vec<_>>());
+            let missing: Vec<&str> = targeted
+                .iter()
+                .filter(|f| !supported.contains(f))
+                .map(|f| f.as_str())
+                .collect();
+            if !missing.is_empty() {
+                session.push(
+                    Diagnostic::error(
+                        "E4327",
+                        format!(
+                            "library `{}` does not support the flavor{} {}",
+                            p.name,
+                            if missing.len() == 1 { "" } else { "s" },
+                            missing.join(", ")
+                        ),
+                    )
+                    .with_path(&project.manifest.path)
+                    .with_help(format!(
+                        "restrict the dependency with `\"flavors\": [{}]`",
+                        supported
+                            .iter()
+                            .map(|f| format!("\"{f}\""))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )),
+                );
+                continue;
+            }
+        }
+        let entry = entry_of(project, p);
+        let src = p.dir.join(&manifest.build.src);
+        let mut files = BTreeMap::new();
+        for entry in walkdir::WalkDir::new(&src).into_iter().flatten() {
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let Ok(rel) = entry.path().strip_prefix(&src) else {
+                continue;
+            };
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            let lower = rel.to_ascii_lowercase();
+            if lower.ends_with(".test.wowlua") {
+                continue;
+            }
+            if [".wowlua", ".lua", ".xml"]
+                .iter()
+                .any(|e| lower.ends_with(e))
+            {
+                files.insert(rel, entry.path().to_path_buf());
+            }
+        }
+        let main_path = manifest
+            .package
+            .as_ref()
+            .and_then(|pk| pk.main.clone())
+            .unwrap_or_else(|| format!("{}/init.wowlua", manifest.build.src));
+        let main = p
+            .dir
+            .join(&main_path)
+            .strip_prefix(&src)
+            .ok()
+            .map(|r| r.to_string_lossy().replace('\\', "/"))
+            .filter(|r| files.contains_key(r));
+        let install = entry
+            .install_path
+            .clone()
+            .unwrap_or_else(|| p.name.clone())
+            .trim_matches('/')
+            .to_string();
+        out.push(WowluaLib {
+            name: p.name.clone(),
+            dir: p.dir.clone(),
+            manifest,
+            out: format!("{libs_dir}/{install}"),
+            main,
+            files,
+            entry,
+        });
+    }
+    out
+}
+
+/// Declaration files the checker reads from `types` packages (dependencies
+/// and dev-dependencies) and from `types` paths of dependency entries.
+pub fn type_declarations(project: &Project) -> Vec<(String, PathBuf)> {
+    let mut out = Vec::new();
+    let root = project
+        .manifest
+        .package()
+        .map(|p| p.name.clone())
+        .unwrap_or_default();
+    for p in project.deps.of_root(&root) {
+        if p.kind != PackageKind::Types {
+            continue;
+        }
+        let globs = p
+            .manifest
+            .as_ref()
+            .and_then(|m| m.types.as_ref())
+            .map(|t| t.declarations.clone())
+            .filter(|d| !d.is_empty())
+            .unwrap_or_else(|| vec!["**/*.d.wowlua".into()]);
+        let set = crate::sources::glob_set(&globs);
+        for entry in walkdir::WalkDir::new(&p.dir).into_iter().flatten() {
+            let Ok(rel) = entry.path().strip_prefix(&p.dir) else {
+                continue;
+            };
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            if entry.file_type().is_file() && rel.ends_with(".d.wowlua") && set.is_match(&rel) {
+                out.push((
+                    format!("{}{}/{rel}", wowlua_sema::PACKAGE_PREFIX, p.name),
+                    entry.path().to_path_buf(),
+                ));
+            }
+        }
+    }
+    let manifest = &project.manifest.manifest;
+    for (name, dep) in manifest
+        .dependencies
+        .iter()
+        .chain(&manifest.dev_dependencies)
+    {
+        let Dependency::Detailed(d) = dep else {
+            continue;
+        };
+        let Some(types) = &d.types else { continue };
+        if project.deps.packages.iter().any(|p| &p.name == types) {
+            continue;
+        }
+        let path = project.root().join(types);
+        let files: Vec<PathBuf> = if path.is_dir() {
+            walkdir::WalkDir::new(&path)
+                .into_iter()
+                .flatten()
+                .filter(|e| {
+                    e.file_type().is_file() && e.path().to_string_lossy().ends_with(".d.wowlua")
+                })
+                .map(|e| e.path().to_path_buf())
+                .collect()
+        } else {
+            vec![path.clone()]
+        };
+        for f in files {
+            let rel = f
+                .strip_prefix(project.root())
+                .map(|r| r.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_else(|_| f.display().to_string());
+            out.push((
+                format!("{}{name}.types/{rel}", wowlua_sema::PACKAGE_PREFIX),
+                f,
+            ));
+        }
+    }
+    out
 }
 
 /// The entry files (spec §10.5.2): the declaration's `files`, the library
@@ -490,6 +727,43 @@ pub fn reachable(session: &mut Session, lib: &LuaLib, roots: &[String]) -> BTree
     }
     seen.extend(lib.licenses.iter().cloned());
     seen
+}
+
+/// The license text of a wowlua library: its license files, else its
+/// manifest's `license`.
+pub fn wowlua_license_text(lib: &WowluaLib) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&lib.dir) {
+        let mut names: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                let n = p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_ascii_lowercase())
+                    .unwrap_or_default();
+                p.is_file()
+                    && (n.starts_with("license")
+                        || n.starts_with("licence")
+                        || n.starts_with("copying"))
+            })
+            .collect();
+        names.sort();
+        for p in names {
+            if let Ok(bytes) = std::fs::read(&p) {
+                parts.push(String::from_utf8_lossy(&bytes).trim_end().to_string());
+            }
+        }
+    }
+    if parts.is_empty() {
+        return lib
+            .manifest
+            .package
+            .as_ref()
+            .and_then(|p| p.license.clone())
+            .map(|id| format!("License: {id}"));
+    }
+    Some(parts.join("\n\n"))
 }
 
 /// The license text of a library for `LICENSES.txt`: its license files, or

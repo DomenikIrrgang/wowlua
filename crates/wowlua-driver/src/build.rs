@@ -128,12 +128,22 @@ pub fn build(
     let root = manifest.root.clone();
     let addon_name = project.addon_name();
     let kind = manifest.package().map(|p| p.kind).unwrap_or_default();
-    if kind != wowlua_manifest::model::PackageKind::Addon {
-        session.push(
-            Diagnostic::plain_error("only packages of kind `addon` can be built")
-                .with_path(&manifest.path)
-                .with_note("building libraries arrives with the package manager (milestone M6)"),
-        );
+    // A wowlua library is checked on its own and built into its addons.
+    let checkable = kind == wowlua_manifest::model::PackageKind::Library && !request.write;
+    if kind != wowlua_manifest::model::PackageKind::Addon && !checkable {
+        let mut d = Diagnostic::plain_error(format!(
+            "a package of kind `{}` is not built on its own",
+            serde_json::to_value(kind)
+                .ok()
+                .and_then(|v| v.as_str().map(str::to_string))
+                .unwrap_or_default()
+        ))
+        .with_path(&manifest.path)
+        .with_note("libraries are embedded into the addons that depend on them");
+        if kind == wowlua_manifest::model::PackageKind::Library {
+            d = d.with_help("run `wowlua check` to check the library");
+        }
+        session.push(d);
         return None;
     }
 
@@ -162,6 +172,8 @@ pub fn build(
     let flavors = select_flavors(session, project, request.flavors.as_deref())?;
     // Embedded `lua-library` dependencies (spec §10.5.2).
     let libs = crate::embed::lua_libraries(session, project, &flavors)?;
+    // wowlua `library` dependencies, compiled with the package (§10.5.1).
+    let wlibs = crate::embed::wowlua_libraries(session, project, &flavors);
     for flavor in &flavors {
         if project.interfaces.get(flavor).is_none_or(Vec::is_empty) {
             session.push(
@@ -225,6 +237,31 @@ pub fn build(
             ),
         }
     }
+    // Declarations of `types` packages and `types` paths.
+    for (src_rel, abs) in crate::embed::type_declarations(project) {
+        match std::fs::read(&abs) {
+            Ok(bytes) => {
+                let file = session
+                    .db
+                    .add(&src_rel, String::from_utf8_lossy(&bytes).into_owned());
+                declarations.push(crate::compile::Declaration {
+                    source: sources::Source {
+                        rel: src_rel.clone(),
+                        src_rel,
+                        abs,
+                        kind: SourceKind::Wowlua,
+                        output: None,
+                    },
+                    file,
+                    bytes,
+                });
+            }
+            Err(error) => session.push(Diagnostic::plain_error(format!(
+                "cannot read declaration file `{}`: {error}",
+                abs.display()
+            ))),
+        }
+    }
     // The compiler's implicit declarations (Lua 5.1 and WoW's Lua).
     for builtin in wowlua_stdlib::declarations() {
         let file = session.db.add(builtin.path, builtin.text.to_string());
@@ -234,6 +271,7 @@ pub fn build(
                 src_rel: builtin.path.to_string(),
                 abs: PathBuf::new(),
                 kind: SourceKind::Wowlua,
+                output: None,
             },
             file,
             bytes: builtin.text.as_bytes().to_vec(),
@@ -365,6 +403,15 @@ pub fn build(
         });
     let mut parsed =
         crate::compile::parse_sources(&session.db, &mut diagnostics, &files, &declarations, &raw);
+    crate::compile::add_libraries(
+        &mut session.db,
+        &mut diagnostics,
+        &mut files,
+        &mut declarations,
+        &mut raw,
+        &mut parsed,
+        &wlibs,
+    );
     crate::compile::add_stdlib(
         &mut session.db,
         &mut diagnostics,
@@ -373,6 +420,18 @@ pub fn build(
         &mut raw,
         &mut parsed,
     );
+    // Files of dependencies: their warnings and lints are not the package's.
+    let dependency_files: HashSet<wowlua_span::FileId> = files
+        .iter()
+        .filter(|(s, _)| wowlua_sema::package_of(&s.src_rel).is_some())
+        .map(|(_, f)| *f)
+        .chain(
+            declarations
+                .iter()
+                .filter(|d| wowlua_sema::package_of(&d.source.src_rel).is_some())
+                .map(|d| d.file),
+        )
+        .collect();
     // Lints (spec appendix B), once per file: `.wowlua` files, and `.lua`
     // files with `check.lua`. `--!nolint` turns them off for a file.
     let mut nolint: HashSet<wowlua_span::FileId> = HashSet::new();
@@ -380,7 +439,10 @@ pub fn build(
         let Some(parse) = parsed.parses.get(i).and_then(Option::as_ref) else {
             continue;
         };
-        if !parsed.ok[i] || wowlua_sema::is_compiler_known(&source.src_rel) {
+        if !parsed.ok[i]
+            || wowlua_sema::is_compiler_known(&source.src_rel)
+            || dependency_files.contains(file)
+        {
             continue;
         }
         if parse
@@ -403,26 +465,28 @@ pub fn build(
     }
     // Plain Lua files compiled for instrumentation (decision T97): not
     // embedded libraries, nor files another AddOn loads.
-    let lower_lua: HashSet<String> = if profile.instrument
-        == wowlua_manifest::model::Instrument::All
-        || profile.monitor
-    {
-        files
-            .iter()
-            .map(|(s, _)| s)
-            .filter(|s| s.kind == SourceKind::Lua && !wowlua_sema::is_compiler_known(&s.src_rel))
-            .filter(|s| {
-                !s.src_rel
-                    .split('/')
-                    .next()
-                    .is_some_and(|first| first.eq_ignore_ascii_case(&build_cfg.libs_dir))
-            })
-            .filter(|s| !build_cfg.shared_files.contains(&s.rel))
-            .map(|s| s.rel.clone())
-            .collect()
-    } else {
-        HashSet::new()
-    };
+    let lower_lua: HashSet<String> =
+        if profile.instrument == wowlua_manifest::model::Instrument::All || profile.monitor {
+            files
+                .iter()
+                .map(|(s, _)| s)
+                .filter(|s| {
+                    s.kind == SourceKind::Lua
+                        && !wowlua_sema::is_compiler_known(&s.src_rel)
+                        && wowlua_sema::package_of(&s.src_rel).is_none()
+                })
+                .filter(|s| {
+                    !s.src_rel
+                        .split('/')
+                        .next()
+                        .is_some_and(|first| first.eq_ignore_ascii_case(&build_cfg.libs_dir))
+                })
+                .filter(|s| !build_cfg.shared_files.contains(&s.rel))
+                .map(|s| s.rel.clone())
+                .collect()
+        } else {
+            HashSet::new()
+        };
     let split = build_cfg.flavor_mode == wowlua_manifest::model::FlavorMode::Split;
     let compile_flavors: Vec<Option<String>> = if split {
         flavors.iter().cloned().map(Some).collect()
@@ -468,12 +532,30 @@ pub fn build(
                         src_rel: f.path.to_string(),
                         abs: PathBuf::new(),
                         kind: SourceKind::Wowlua,
+                        output: None,
                     },
                     parse: wowlua_syntax::parse(f.text.as_bytes(), file),
                 });
             }
             api_cache.insert(api_flavor.clone(), list);
         }
+        let units: HashMap<String, crate::compile::LibraryUnit> = wlibs
+            .iter()
+            .map(|l| {
+                let m = &l.manifest;
+                let unit = crate::compile::LibraryUnit {
+                    check: crate::compile::CheckConfig {
+                        mode: m.check.mode,
+                        strict: sources::glob_set(&m.check.strict),
+                        lua: m.check.lua,
+                        globals: m.check.globals.iter().cloned().collect(),
+                    },
+                    main: l.main.as_ref().map(|r| l.src_rel(r)),
+                    meta: std::sync::Arc::new(crate::meta::library_meta(&meta, m, &l.entry)),
+                };
+                (l.name.clone(), unit)
+            })
+            .collect();
         let output = crate::compile::compile_flavor(
             &session.db,
             &mut diagnostics,
@@ -496,6 +578,7 @@ pub fn build(
                 None
             },
             &lower_lua,
+            &units,
         );
         builds.push(FlavorBuild {
             flavor: flavor.clone(),
@@ -506,11 +589,11 @@ pub fn build(
     // One message per problem, not one per flavor.
     let mut seen = BTreeSet::new();
     for d in diagnostics {
-        if d.is_lint()
-            && d.labels
-                .first()
-                .is_some_and(|l| nolint.contains(&l.span.file))
-        {
+        let file = d.labels.first().map(|l| l.span.file);
+        if d.is_lint() && file.is_some_and(|f| nolint.contains(&f)) {
+            continue;
+        }
+        if !d.is_error() && file.is_some_and(|f| dependency_files.contains(&f)) {
             continue;
         }
         let key = format!(
@@ -950,6 +1033,24 @@ pub fn build(
                 )
                 .with_help("check its license before publishing; `lua-library.license-files` can name the file"),
             ),
+        }
+    }
+    for lib in &wlibs {
+        let used = files
+            .iter()
+            .any(|(s, _)| wowlua_sema::package_of(&s.src_rel) == Some(lib.name.as_str()));
+        if !used {
+            continue;
+        }
+        match crate::embed::wowlua_license_text(lib) {
+            Some(text) => lib_licenses.push((format!("{} ({})", lib.name, lib.out), text)),
+            None => session.push(Diagnostic::warning(
+                "W4306",
+                format!(
+                    "embedded library `{}` has no recognizable license file or `license`",
+                    lib.name
+                ),
+            )),
         }
     }
     out.insert(

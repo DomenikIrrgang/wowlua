@@ -38,6 +38,11 @@ pub struct FileInput<'a> {
     pub parse: Option<&'a Parse>,
     /// The text of an XML file, for the load order.
     pub xml: Option<(&'a str, wowlua_span::FileId)>,
+    /// `wowlua:meta` of this file when it differs from the package's (a
+    /// wowlua library's own features and config, spec §10.5.1).
+    pub meta: Option<&'a Meta>,
+    /// The dependency whose main module this file is (`import x from "pkg"`).
+    pub main_of: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -142,9 +147,21 @@ pub struct Analysis {
 /// Standard-library sources live under this prefix (`@wowlua/events.wowlua`).
 pub const STDLIB_PREFIX: &str = "@wowlua/";
 
+/// Sources of wowlua library dependencies live under this prefix
+/// (`@pkg/wowlua-ui/widgets/button.wowlua`, module `wowlua-ui/widgets/button`).
+pub const PACKAGE_PREFIX: &str = "@pkg/";
+
 /// A compiler-known file: a standard-library module or declaration.
 pub fn is_compiler_known(src_rel: &str) -> bool {
     src_rel.starts_with(STDLIB_PREFIX) || src_rel.starts_with("<wowlua>/")
+}
+
+/// The dependency a source belongs to (`None`: the package's own file).
+pub fn package_of(src_rel: &str) -> Option<&str> {
+    src_rel
+        .strip_prefix(PACKAGE_PREFIX)
+        .and_then(|rest| rest.split_once('/'))
+        .map(|(name, _)| name)
 }
 
 /// The module ID of a source path: `core/cache.wowlua` → `core/cache`;
@@ -156,6 +173,7 @@ pub fn module_id(src_rel: &str) -> String {
     {
         return format!("wowlua:{name}");
     }
+    let src_rel = src_rel.strip_prefix(PACKAGE_PREFIX).unwrap_or(src_rel);
     for ext in [".d.wowlua", ".wowlua", ".lua", ".xml"] {
         if let Some(stem) = src_rel.strip_suffix(ext) {
             return stem.to_string();
@@ -205,7 +223,7 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
                             .with_label(s.span, "this import follows other code"),
                         );
                     }
-                    if import_removed(s, &info, meta, &mut analysis.diagnostics) {
+                    if import_removed(s, &info, f.meta.or(meta), &mut analysis.diagnostics) {
                         continue;
                     }
                     let resolved = resolve(&import.from, &f.src_rel, &exact, &folded, files);
@@ -308,7 +326,7 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
                 };
                 let Some(value) = value else { continue };
                 let kinds = &info.meta_bindings;
-                let folded = match meta {
+                let folded = match files[i].meta.or(meta) {
                     Some(meta) => {
                         meta::static_value(value, meta, &|n| kinds.get(n).copied(), &|n| {
                             env.get(n).cloned()
@@ -738,18 +756,45 @@ fn resolve(
             )),
         };
     }
+    // A library's own source root is `@pkg/<name>/`.
+    let importer_package = package_of(importer);
+    let root = importer_package
+        .map(|p| format!("{PACKAGE_PREFIX}{p}/"))
+        .unwrap_or_default();
     let base = if let Some(rest) = text.strip_prefix('/') {
-        rest.to_string()
+        format!("{root}{rest}")
     } else if text.starts_with("./") || text.starts_with("../") {
         let dir = importer.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
         format!("{dir}/{text}")
     } else {
-        return Err(Diagnostic::error(
-            "E1015",
-            format!(
-                "package `{text}` not found (dependencies arrive with the package manager, milestone M6)"
-            ),
-        ));
+        // A dependency: `pkg` (its main module) or `pkg/x/y`.
+        let (package, rest) = text.split_once('/').unwrap_or((text.as_str(), ""));
+        let prefix = format!("{PACKAGE_PREFIX}{package}/");
+        if !files.iter().any(|f| f.src_rel.starts_with(&prefix)) {
+            return Err(Diagnostic::error(
+                "E1015",
+                format!("package `{package}` not found"),
+            )
+            .with_help(format!(
+                "add `{package}` to `dependencies` (a `library` package), or use `./` or `/` for a file of this package"
+            )));
+        }
+        if rest.is_empty() {
+            return match files
+                .iter()
+                .position(|f| f.main_of.as_deref() == Some(package))
+            {
+                Some(i) => Ok(Target::Module(i)),
+                None => Err(Diagnostic::error(
+                    "E1015",
+                    format!("package `{package}` has no main module"),
+                )
+                .with_help(
+                    "import one of its modules (`pkg/x`), or set `package.main` in the library",
+                )),
+            };
+        }
+        format!("{prefix}{rest}")
     };
     let Some(path) = normalize(&base) else {
         return Err(Diagnostic::error(
@@ -757,6 +802,23 @@ fn resolve(
             format!("`{text}` leaves the source root"),
         ));
     };
+    // Relative paths stay inside their package.
+    let relative = text.starts_with('.') || text.starts_with('/');
+    if relative && !root.is_empty() && !path.starts_with(&root) {
+        return Err(Diagnostic::error(
+            "E1015",
+            format!(
+                "`{text}` leaves the source root of package `{}`",
+                importer_package.unwrap_or("")
+            ),
+        ));
+    }
+    if relative && root.is_empty() && path.starts_with('@') {
+        return Err(Diagnostic::error(
+            "E1015",
+            format!("module `{text}` not found"),
+        ));
+    }
     let has_ext = [".xml", ".lua", ".wowlua"]
         .iter()
         .any(|e| path.ends_with(e));

@@ -95,8 +95,8 @@ is why side-effect imports use `import _ from "x"`, following Go's convention.
 |-----------|-------------|
 | `"./x"`, `"../x"` | Relative to the importing file |
 | `"/x/y"` | Relative to the package's source root (`build.src`, default `src/`) |
-| `"pkg"` | The main module of dependency `pkg` |
-| `"pkg/x/y"` | Module `x/y` inside dependency `pkg` |
+| `"pkg"` | The main module of dependency `pkg` (`package.main`, default `src/init.wowlua`) |
+| `"pkg/x/y"` | Module `x/y` inside dependency `pkg`, relative to its `build.src` |
 | `"wowlua:name"` | Standard-library module, e.g. `wowlua:events` |
 
 Extension resolution, in order:
@@ -116,6 +116,9 @@ would not.
 **Module IDs** are canonical paths without extension relative to the source
 root (`core/cache`), prefixed by the package name for dependencies
 (`libfoo/core/cache`).
+
+Inside a wowlua library, `"/x"` is relative to the library's own source root,
+and relative specifiers may not leave it (E1015).
 
 ## 5.4 Load order
 

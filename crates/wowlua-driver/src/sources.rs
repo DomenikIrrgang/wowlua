@@ -39,12 +39,18 @@ pub struct Source {
     pub src_rel: String,
     pub abs: PathBuf,
     pub kind: SourceKind,
+    /// The output path when it is not derived from `src_rel` (files of
+    /// wowlua library dependencies: `libs/<name>/…`).
+    pub output: Option<String>,
 }
 
 impl Source {
     /// Output path inside the AddOn folder: `src/<path>`, with `.wowlua`
     /// compiled to `.lua` (spec §14.8).
     pub fn output_path(&self) -> String {
+        if let Some(output) = &self.output {
+            return output.clone();
+        }
         // Standard-library modules: `wowlua/std/<name>.lua`.
         if let Some(name) = self
             .src_rel
@@ -131,6 +137,7 @@ pub fn discover_sources(root: &Path, src: &str, out: &str, exclude: &GlobSet) ->
                 src_rel,
                 abs,
                 kind,
+                output: None,
             })
         })
         .collect()
@@ -152,6 +159,7 @@ pub fn discover_declarations(root: &Path, src: &str, out: &str, exclude: &GlobSe
                 src_rel,
                 abs,
                 kind: SourceKind::Wowlua,
+                output: None,
             })
         })
         .collect()

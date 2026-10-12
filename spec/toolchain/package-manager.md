@@ -111,6 +111,24 @@ Library modules are compiled together with the addon:
 - **Flavors.** A library supports all flavors unless its manifest lists
   `flavors`. Depending on a library for a flavor it does not support is error
   E4327, unless the dependency entry restricts itself with `flavors`.
+- **Output.** Modules are emitted to `<libs-dir>/<install-path>/` (default
+  `libs/<name>/`), mirroring the library's `build.src`, and load in the order
+  the load-order analysis computes for them, like the package's own modules.
+- **Dependency code** (decision T111). Warnings and lints in library code are
+  not reported to the consumer (errors are), and library code is never
+  instrumented, monitored or runtime-checked by the consumer's profile.
+- **Runtime meta** (decision T110). At run time, `wowlua:meta`'s `config` and
+  `features` tables are the consuming addon's. A library may therefore only
+  use values that fold to constants (scalars); reading a table-valued path at
+  run time is an error.
+- **Checking a library** (decision T112). `wowlua check` in a library package
+  checks it on its own, for all its flavors. `wowlua build` refuses: a
+  library is only built into the addons that depend on it.
+
+**`types` packages** contribute their declarations (`types.declarations`,
+default every `.d.wowlua`) to the checker, from `dependencies` and
+`dev-dependencies`. A dependency entry's `types` may also name a path (a
+`.d.wowlua` file or a folder of them) relative to the manifest.
 
 ### 10.5.2 Plain Lua libraries
 

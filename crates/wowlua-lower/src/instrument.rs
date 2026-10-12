@@ -34,7 +34,10 @@ impl Lowerer<'_> {
     pub(crate) fn instrument(&mut self, stmts: &mut Vec<ir::Stmt>) {
         let tools = &self.ctx.tools;
         // The standard library is never instrumented.
-        if self.ctx.compiler_known || (tools.instrument == 0 && tools.log_level > 0) {
+        if self.ctx.compiler_known
+            || self.ctx.dependency
+            || (tools.instrument == 0 && tools.log_level > 0)
+        {
             return;
         }
         self.instrument_block(stmts);
@@ -265,7 +268,7 @@ impl Lowerer<'_> {
     /// `frame:HookScript(…)` and the global `C_Timer` functions become calls
     /// of `__wl.mon` helpers with the call's location.
     pub(crate) fn monitor_call(&mut self, e: &Expr) -> Option<ir::Expr> {
-        if !self.ctx.tools.monitor || self.ctx.compiler_known {
+        if !self.ctx.tools.monitor || self.ctx.compiler_known || self.ctx.dependency {
             return None;
         }
         let (helper, items, arity): (&str, Vec<&Expr>, usize) = match &e.kind {

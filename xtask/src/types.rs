@@ -425,6 +425,8 @@ fn validate(files: &[(&str, &String)]) -> Vec<String> {
             kind: wowlua_sema::FileKind::Declaration,
             parse: Some(p),
             xml: None,
+            meta: None,
+            main_of: None,
         })
         .collect();
     let analysis = wowlua_sema::analyze(&inputs, None);

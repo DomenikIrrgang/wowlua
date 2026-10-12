@@ -432,6 +432,8 @@ mod tests {
                 kind: FileKind::Declaration,
                 parse: Some(p),
                 xml: None,
+                meta: None,
+                main_of: None,
             })
             .collect();
         inputs.push(FileInput {
@@ -439,6 +441,8 @@ mod tests {
             kind: FileKind::Wowlua,
             parse: Some(&main),
             xml: None,
+            meta: None,
+            main_of: None,
         });
         let analysis = crate::analyze(&inputs, None);
         let mut settings: Vec<Option<FileSettings>> = vec![None; inputs.len()];

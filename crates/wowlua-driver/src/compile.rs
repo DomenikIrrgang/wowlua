@@ -205,7 +205,16 @@ pub fn add_stdlib(
     raw: &mut HashMap<String, Vec<u8>>,
     parsed: &mut Parsed,
 ) {
-    let mut loaded: BTreeSet<String> = BTreeSet::new();
+    // Modules added by an earlier call stay.
+    let mut loaded: BTreeSet<String> = files
+        .iter()
+        .filter_map(|(s, _)| {
+            s.src_rel
+                .strip_prefix(wowlua_sema::STDLIB_PREFIX)
+                .and_then(|n| n.strip_suffix(".wowlua"))
+                .map(str::to_string)
+        })
+        .collect();
     let mut scanned = 0;
     loop {
         let mut wanted: BTreeSet<String> = BTreeSet::new();
@@ -240,6 +249,7 @@ pub fn add_stdlib(
                 src_rel,
                 abs: std::path::PathBuf::new(),
                 kind: SourceKind::Wowlua,
+                output: None,
             };
             let parse = wowlua_syntax::parse(module.source.as_bytes(), file);
             let ok = !parse.has_errors();
@@ -263,6 +273,7 @@ pub fn add_stdlib(
                         src_rel: format!("{}{name}.d.wowlua", wowlua_sema::STDLIB_PREFIX),
                         abs: std::path::PathBuf::new(),
                         kind: SourceKind::Wowlua,
+                        output: None,
                     },
                     file,
                     bytes: text.into_bytes(),
@@ -271,6 +282,233 @@ pub fn add_stdlib(
             }
         }
     }
+}
+
+/// Adds the modules of wowlua library dependencies the sources import,
+/// transitively (tree-shaking at module granularity, spec §10.5.1). Each is
+/// a source `@pkg/<name>/<path>`, emitted under the library's output folder.
+/// Files an added XML file references come along.
+pub fn add_libraries(
+    db: &mut SourceDb,
+    diagnostics: &mut Vec<Diagnostic>,
+    files: &mut Vec<(Source, FileId)>,
+    declarations: &mut Vec<Declaration>,
+    raw: &mut HashMap<String, Vec<u8>>,
+    parsed: &mut Parsed,
+    libs: &[crate::embed::WowluaLib],
+) {
+    if libs.is_empty() {
+        return;
+    }
+    let mut present: std::collections::HashSet<String> = files
+        .iter()
+        .map(|(s, _)| s.src_rel.clone())
+        .chain(declarations.iter().map(|d| d.source.src_rel.clone()))
+        .collect();
+    let mut scanned = 0;
+    loop {
+        // (library index, path relative to its src) still to add.
+        let mut wanted: Vec<(usize, String)> = Vec::new();
+        let lookup = |lib: usize, path: &str, wanted: &mut Vec<(usize, String)>| {
+            let files = &libs[lib].files;
+            let has_ext = [".xml", ".lua", ".wowlua"]
+                .iter()
+                .any(|e| path.ends_with(e));
+            let candidates: Vec<String> = if has_ext {
+                vec![path.to_string()]
+            } else {
+                vec![
+                    format!("{path}.wowlua"),
+                    format!("{path}.d.wowlua"),
+                    format!("{path}.lua"),
+                    format!("{path}/init.wowlua"),
+                ]
+            };
+            for c in candidates {
+                // Exact first; a case mismatch is added so that the import
+                // reports E1013.
+                let found = files
+                    .keys()
+                    .find(|k| **k == c)
+                    .or_else(|| files.keys().find(|k| k.eq_ignore_ascii_case(&c)));
+                if let Some(k) = found {
+                    wanted.push((lib, k.clone()));
+                    if let Some(stem) = k.strip_suffix(".d.wowlua") {
+                        let lua = format!("{stem}.lua");
+                        if files.contains_key(&lua) {
+                            wanted.push((lib, lua));
+                        }
+                    }
+                    return;
+                }
+            }
+        };
+        for (i, (source, _)) in files.iter().enumerate().skip(scanned) {
+            let importer = wowlua_sema::package_of(&source.src_rel)
+                .and_then(|n| libs.iter().position(|l| l.name == n));
+            let dir_of = |src_rel: &str| -> String {
+                src_rel
+                    .rsplit_once('/')
+                    .map(|(d, _)| d.to_string())
+                    .unwrap_or_default()
+            };
+            if source.kind == SourceKind::Xml {
+                // A library's XML loads files next to it.
+                let Some(lib) = importer else { continue };
+                let Ok(refs) = wowlua_xml::references(&String::from_utf8_lossy(&raw[&source.rel]))
+                else {
+                    continue;
+                };
+                let prefix = libs[lib].src_rel("");
+                let dir = dir_of(&source.src_rel);
+                for r in refs {
+                    let joined = format!("{dir}/{}", r.normalized());
+                    if let Some(rel) = normalize_rel(&joined)
+                        .and_then(|p| p.strip_prefix(&prefix).map(str::to_string))
+                    {
+                        lookup(lib, &rel, &mut wanted);
+                    }
+                }
+                continue;
+            }
+            let Some(parse) = parsed.parses.get(i).and_then(Option::as_ref) else {
+                continue;
+            };
+            for s in &parse.chunk.block.stmts {
+                let wowlua_syntax::ast::StmtKind::Import(import) = &s.kind else {
+                    continue;
+                };
+                let spec = String::from_utf8_lossy(&import.from.value).into_owned();
+                if spec.contains(':') {
+                    continue;
+                }
+                if spec.starts_with("./") || spec.starts_with("../") || spec.starts_with('/') {
+                    let Some(lib) = importer else { continue };
+                    let prefix = libs[lib].src_rel("");
+                    let joined = match spec.strip_prefix('/') {
+                        Some(rest) => format!("{prefix}{rest}"),
+                        None => format!("{}/{spec}", dir_of(&source.src_rel)),
+                    };
+                    if let Some(rel) = normalize_rel(&joined)
+                        .and_then(|p| p.strip_prefix(&prefix).map(str::to_string))
+                    {
+                        lookup(lib, &rel, &mut wanted);
+                    }
+                    continue;
+                }
+                let (name, rest) = spec.split_once('/').unwrap_or((spec.as_str(), ""));
+                let Some(lib) = libs.iter().position(|l| l.name == name) else {
+                    continue;
+                };
+                if rest.is_empty() {
+                    if let Some(main) = &libs[lib].main {
+                        wanted.push((lib, main.clone()));
+                    }
+                } else {
+                    lookup(lib, rest, &mut wanted);
+                }
+            }
+        }
+        scanned = files.len();
+        let mut added = false;
+        for (lib, rel) in wanted {
+            let l = &libs[lib];
+            let src_rel = l.src_rel(&rel);
+            if !present.insert(src_rel.clone()) {
+                continue;
+            }
+            added = true;
+            let abs = l.files[&rel].clone();
+            let bytes = match std::fs::read(&abs) {
+                Ok(b) => b,
+                Err(e) => {
+                    diagnostics.push(Diagnostic::plain_error(format!(
+                        "cannot read `{}`: {e}",
+                        abs.display()
+                    )));
+                    continue;
+                }
+            };
+            let text = String::from_utf8_lossy(&bytes).into_owned();
+            let file = db.add(&src_rel, text);
+            let lower = rel.to_ascii_lowercase();
+            if lower.ends_with(".d.wowlua") {
+                let parse = wowlua_syntax::parse(&bytes, file);
+                if parse.has_errors() {
+                    diagnostics.extend(parse.diagnostics.clone());
+                }
+                declarations.push(Declaration {
+                    source: Source {
+                        rel: src_rel.clone(),
+                        src_rel,
+                        abs,
+                        kind: SourceKind::Wowlua,
+                        output: None,
+                    },
+                    file,
+                    bytes,
+                });
+                parsed.declarations.push(parse);
+                continue;
+            }
+            let kind = if lower.ends_with(".wowlua") {
+                SourceKind::Wowlua
+            } else if lower.ends_with(".lua") {
+                SourceKind::Lua
+            } else {
+                SourceKind::Xml
+            };
+            let source = Source {
+                rel: src_rel.clone(),
+                src_rel: src_rel.clone(),
+                abs,
+                kind,
+                output: Some(l.output(&rel)),
+            };
+            if kind == SourceKind::Xml {
+                parsed.parses.push(None);
+                parsed.ok.push(true);
+            } else {
+                let parse = wowlua_syntax::parse(&bytes, file);
+                let ok = !parse.has_errors();
+                if !ok {
+                    diagnostics.extend(parse.diagnostics.clone());
+                }
+                parsed.parses.push(Some(parse));
+                parsed.ok.push(ok);
+            }
+            raw.insert(src_rel, bytes);
+            files.push((source, file));
+        }
+        if !added {
+            return;
+        }
+    }
+}
+
+/// `.` and `..` resolved; `None` if the path leaves the root.
+fn normalize_rel(path: &str) -> Option<String> {
+    let mut parts: Vec<&str> = Vec::new();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            p => parts.push(p),
+        }
+    }
+    Some(parts.join("/"))
+}
+
+/// What compiling a wowlua library's files needs (per flavor).
+pub struct LibraryUnit {
+    pub check: CheckConfig,
+    /// `src_rel` of its main module.
+    pub main: Option<String>,
+    /// Its `wowlua:meta`: the consumer's addon, build and flavor; its own
+    /// features and config.
+    pub meta: Arc<Meta>,
 }
 
 /// Compiles the package for one build configuration and flavor.
@@ -289,6 +527,7 @@ pub fn compile_flavor(
     check: &CheckConfig,
     shared: Option<&wowlua_sema::check::flavors::SharedFlavors>,
     lower_lua: &std::collections::HashSet<String>,
+    libraries: &HashMap<String, LibraryUnit>,
 ) -> CompileOutput {
     let options = EmitOptions {
         line_mode: line_mode(profile),
@@ -298,6 +537,7 @@ pub fn compile_flavor(
     };
     let mut out = CompileOutput::default();
 
+    let unit_of = |src_rel: &str| wowlua_sema::package_of(src_rel).and_then(|n| libraries.get(n));
     let mut inputs: Vec<FileInput> = files
         .iter()
         .zip(&parsed.parses)
@@ -316,6 +556,10 @@ pub fn compile_flavor(
                         .map(|t| (t, *file))
                 })
                 .flatten(),
+            meta: unit_of(&source.src_rel).map(|u| u.meta.as_ref()),
+            main_of: unit_of(&source.src_rel)
+                .filter(|u| u.main.as_deref() == Some(source.src_rel.as_str()))
+                .and(wowlua_sema::package_of(&source.src_rel).map(str::to_string)),
         })
         .collect();
     for (d, parse) in declarations.iter().zip(&parsed.declarations) {
@@ -324,6 +568,8 @@ pub fn compile_flavor(
             kind: FileKind::Declaration,
             parse: Some(parse),
             xml: None,
+            meta: None,
+            main_of: None,
         });
     }
     for d in api {
@@ -332,6 +578,8 @@ pub fn compile_flavor(
             kind: FileKind::Declaration,
             parse: Some(&d.parse),
             xml: None,
+            meta: None,
+            main_of: None,
         });
     }
     let analysis = wowlua_sema::analyze(&inputs, Some(&meta));
@@ -357,7 +605,9 @@ pub fn compile_flavor(
                 (Some((source, _)), Some(parse))
                     if parsed.ok[i] && !wowlua_sema::is_compiler_known(&source.src_rel) =>
                 {
-                    check_settings(source, parse, check)
+                    // A library is checked with its own settings.
+                    let cfg = unit_of(&source.src_rel).map_or(check, |u| &u.check);
+                    check_settings(source, parse, cfg)
                 }
                 _ => None,
             },
@@ -408,7 +658,9 @@ pub fn compile_flavor(
         }
         let parse = parsed.parses[i].as_ref().expect("parsed");
         let bytes = &raw[&source.rel];
-        let mut ctx = context(&analysis, i, &inputs, meta.clone(), &order.lazy);
+        let unit = unit_of(&source.src_rel);
+        let file_meta = unit.map_or_else(|| meta.clone(), |u| u.meta.clone());
+        let mut ctx = context(&analysis, i, &inputs, file_meta, &order.lazy);
         ctx.file = source.rel.clone();
         ctx.debug = profile.debug;
         ctx.tools = wowlua_lower::Tools {
@@ -435,6 +687,7 @@ pub fn compile_flavor(
             .map(|(span, name)| ((span.start, span.end), name.clone()))
             .collect();
         ctx.compiler_known = wowlua_sema::is_compiler_known(&source.src_rel);
+        ctx.dependency = unit.is_some();
         let lowered = match wowlua_lower::lower_module(parse, bytes, &ctx) {
             Ok(lowered) => lowered,
             Err(errors) => {
@@ -442,6 +695,23 @@ pub fn compile_flavor(
                 continue;
             }
         };
+        // The runtime's `config` and `features` tables are the addon's: a
+        // library may only use their constant (scalar) values.
+        if unit.is_some()
+            && let Some((kind, path)) = lowered
+                .meta_used
+                .iter()
+                .find(|(k, _)| matches!(k, MetaKind::Config | MetaKind::Features))
+        {
+            diagnostics.push(
+                Diagnostic::plain_error(format!(
+                    "library code reads `{}{}` at run time; a library may only use constant `config` and `features` values",
+                    if *kind == MetaKind::Config { "config" } else { "features" },
+                    path.iter().map(|p| format!(".{p}")).collect::<String>()
+                ))
+                .with_path(&source.rel),
+            );
+        }
         out.needs_runtime |= lowered.uses_runtime;
         out.meta_used.extend(lowered.meta_used);
         out.slices.extend(lowered.slices);

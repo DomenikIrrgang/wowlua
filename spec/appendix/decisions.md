@@ -158,6 +158,9 @@ open for review.
 | T107 | A reference in the package's XML into `<libs-dir>/<install-path>/` names a file of that embedded library and is rewritten to its absolute in-game path; that file is then not listed in the TOC again **(M6)** | Existing `embeds.xml` files keep working after `init` moves them into `src/`. |
 | T108 | Archive sources accept `file://` URLs for local archives; every download over the network uses HTTPS **(M6)** | Local release zips and tests need no server. |
 | T109 | `wowlua cache clean` removes cache entries unused for 30 days (every fetch and build stamps what it uses); `--all` empties the cache **(user, M6)** | The cache is shared by all projects; recently used entries of other projects survive. |
+| T110 | A wowlua library may only use constant (scalar) `config` and `features` values from `wowlua:meta`; table-valued run-time reads are an error, because the runtime's tables belong to the consuming addon **(M6)** | Libraries get their own feature and config values without a second runtime table. |
+| T111 | Warnings and lints in dependency code are not reported to the consumer, and dependency code is never instrumented, monitored or runtime-checked **(M6)** | Consumers cannot act on them; the dev tools show the addon's own code (as T97). |
+| T112 | `wowlua check` checks a library package on its own; `wowlua build` refuses non-addon packages **(M6)** | Library authors check their code; only addons are installable. |
 
 ## Standard library
 

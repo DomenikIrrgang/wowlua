@@ -8,7 +8,7 @@ use wowlua_sema::check::runtime::{RuntimeCheck, ValueCheck};
 impl Lowerer<'_> {
     /// Whether a function with these marks gets entry checks.
     pub(crate) fn checks_function(&self, marks: &FnMarks) -> bool {
-        if marks.unchecked || self.ctx.compiler_known {
+        if marks.unchecked || self.ctx.compiler_known || self.ctx.dependency {
             return false;
         }
         match self.ctx.tools.runtime_checks {
@@ -113,7 +113,11 @@ impl Lowerer<'_> {
             .value_checks
             .get(&(e.span.start, e.span.end))
             .cloned()
-            .filter(|_| self.ctx.tools.runtime_checks == 2 && !self.ctx.compiler_known)
+            .filter(|_| {
+                self.ctx.tools.runtime_checks == 2
+                    && !self.ctx.compiler_known
+                    && !self.ctx.dependency
+            })
         else {
             return value;
         };

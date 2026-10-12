@@ -46,6 +46,9 @@ pub struct Context {
     pub debug: bool,
     /// A compiler-known module (the standard library may use `@intrinsic`).
     pub compiler_known: bool,
+    /// A file of a wowlua library dependency: compiled like the package's
+    /// own files, but never instrumented or monitored (decision T97).
+    pub dependency: bool,
     /// The profile's debugging settings (spec chapter 7).
     pub tools: Tools,
     /// The static types of `typeName(expr)` arguments, by span.

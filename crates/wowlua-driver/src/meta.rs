@@ -246,6 +246,53 @@ pub fn build_meta(project: &Project, input: &MetaInput) -> Meta {
     }
 }
 
+/// The `wowlua:meta` of a wowlua library (spec §10.5.1): `addon`, `build`
+/// and `flavor` describe the consuming addon's build; `features` and
+/// `config` are the library's own, enabled and overridden by the consumer's
+/// dependency entry.
+pub fn library_meta(
+    base: &Meta,
+    library: &wowlua_manifest::Manifest,
+    entry: &wowlua_manifest::model::DependencyDetail,
+) -> Meta {
+    let mut enabled = BTreeSet::new();
+    let mut stack: Vec<String> = entry.features.clone();
+    if entry.default_features {
+        stack.extend(library.features.get("default").cloned().unwrap_or_default());
+    }
+    while let Some(f) = stack.pop() {
+        if f.starts_with("dep:") || !enabled.insert(f.clone()) {
+            continue;
+        }
+        if let Some(more) = library.features.get(&f) {
+            stack.extend(more.iter().cloned());
+        }
+    }
+    let features: IndexMap<String, MetaValue> = library
+        .features
+        .keys()
+        .filter(|k| k.as_str() != "default")
+        .map(|k| (camel(k), MetaValue::Bool(enabled.contains(k))))
+        .collect();
+    fn merge(base: &mut Value, over: &Value) {
+        match (base, over) {
+            (Value::Object(b), Value::Object(o)) => {
+                for (k, v) in o {
+                    merge(b.entry(k.clone()).or_insert(Value::Null), v);
+                }
+            }
+            (b, o) => *b = o.clone(),
+        }
+    }
+    let mut config = Value::Object(library.config.clone());
+    merge(&mut config, &Value::Object(entry.config.clone()));
+    Meta {
+        features: MetaValue::Table(features),
+        config: json(&config),
+        ..base.clone()
+    }
+}
+
 /// Keeps the parts of `value` reached by `paths` (each a path below it; an
 /// empty path keeps everything).
 fn shake(value: &MetaValue, paths: &[&[String]]) -> MetaValue {
