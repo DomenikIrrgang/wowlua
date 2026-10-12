@@ -228,6 +228,19 @@ fn super_lock_source(project: &Path) -> String {
 }
 
 #[test]
+fn git_dependency_on_the_default_branch() {
+    let e = env();
+    let url = git_repo(&e.root.join("Lib"), &[("Lib.lua", "Lib = {}\n")], "v1");
+    addon(
+        &e.project,
+        serde_json::json!({ "lib": { "git": url, "kind": "lua-library", "submodules": true, "files": ["Lib.lua"] } }),
+        serde_json::json!({}),
+    );
+    wowlua(&e.project, &e.home).arg("build").assert().success();
+    assert!(e.project.join("dist/dev/MyAddon/libs/lib/Lib.lua").exists());
+}
+
+#[test]
 fn offline_and_locked_modes() {
     let e = env();
     let url = git_repo(&e.root.join("Lib"), &[("Lib.lua", "Lib = {}\n")], "v1");

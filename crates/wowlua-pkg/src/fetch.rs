@@ -254,7 +254,14 @@ impl Fetcher {
                 GitRef::Rev(r) => format!("revision `{r}`"),
                 GitRef::Head => "a default branch".into(),
             };
-            FetchError::coded("E4102", format!("`{url}` has no {what}"))
+            // What git says, for diagnosis.
+            let mut c = git(Some(&dir));
+            c.args(["symbolic-ref", "HEAD"]);
+            let head = run(c, "HEAD").unwrap_or_else(|e| e.message);
+            FetchError::coded("E4102", format!("`{url}` has no {what}")).help(format!(
+                "the cached clone at {} has HEAD {head}",
+                dir.display()
+            ))
         })
     }
 
