@@ -57,7 +57,7 @@ pub const MINIFY_PASSES: &[&str] = &[
 ];
 
 /// A successfully parsed and validated manifest.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LoadedManifest {
     /// Path of `wowlua.json`.
     pub path: PathBuf,

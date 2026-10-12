@@ -871,3 +871,168 @@ fn types_packages_type_the_checker() {
         .failure()
         .stderr(predicate::str::contains("error[E2"));
 }
+
+fn workspace(root: &Path) {
+    write(
+        root,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "workspace": { "members": ["addons/*", "libs/*"], "default-members": ["addons/core"] },
+  "check": { "mode": "strict" } }"#,
+            ),
+            (
+                "addons/core/wowlua.json",
+                r#"{ "package": { "name": "suite-core", "version": "1.0.0" },
+  "addon": { "name": "SuiteCore", "saved-variables": ["SuiteDB"] },
+  "dependencies": { "shared": "*" } }"#,
+            ),
+            (
+                "addons/core/src/main.wowlua",
+                "import greet from \"shared/greet\"\n@global\nexport function SuiteCore_Score(unit: string): number\n    return #greet(unit)\nend\n",
+            ),
+            (
+                "addons/options/wowlua.json",
+                r#"{ "package": { "name": "suite-options", "version": "1.0.0" },
+  "addon": { "name": "SuiteOptions", "load-on-demand": true },
+  "addon-dependencies": { "required": ["SuiteCore"] } }"#,
+            ),
+            (
+                "addons/options/src/main.wowlua",
+                "local s: number = SuiteCore_Score(\"player\")\nprint(s)\n",
+            ),
+            (
+                "libs/shared/wowlua.json",
+                r#"{ "package": { "name": "shared", "version": "0.1.0", "kind": "library", "license": "MIT" } }"#,
+            ),
+            (
+                "libs/shared/src/greet.wowlua",
+                "export function greet(name: string): string\n    return \"hi \" .. name\nend\n",
+            ),
+        ],
+    );
+}
+
+#[test]
+fn workspaces() {
+    let e = env();
+    let root = &e.project;
+    workspace(root);
+    // At the root: the default members.
+    wowlua(root, &e.home)
+        .arg("build")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Finished SuiteCore"))
+        .stderr(predicate::str::contains("SuiteOptions").not());
+    assert!(
+        root.join("dist/dev/SuiteCore/libs/shared/greet.lua")
+            .exists()
+    );
+    assert!(root.join("wowlua.lock").exists());
+    assert!(!root.join("addons/core/wowlua.lock").exists());
+    // `-p`, and the member around the current directory; one `dist/`.
+    wowlua(root, &e.home)
+        .args(["-p", "suite-options", "build"])
+        .assert()
+        .success();
+    wowlua(&root.join("addons/options"), &e.home)
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("dist/release/SuiteOptions"));
+    assert!(
+        root.join("dist/release/SuiteOptions/SuiteOptions.toc")
+            .exists()
+    );
+    // The library member checks on its own.
+    wowlua(root, &e.home)
+        .args(["check", "-p", "shared"])
+        .assert()
+        .success();
+    // The generated declarations of SuiteCore type-check SuiteOptions.
+    write(
+        root,
+        &[(
+            "addons/options/src/main.wowlua",
+            "local s: string = SuiteCore_Score(\"player\")\nprint(s)\n",
+        )],
+    );
+    wowlua(root, &e.home)
+        .args(["check", "-p", "suite-options"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E2"));
+    write(
+        root,
+        &[(
+            "addons/options/src/main.wowlua",
+            "local s: number = SuiteCore_Score(\"player\")\nprint(s)\n",
+        )],
+    );
+    // Commands on one package need a selection.
+    wowlua(root, &e.home)
+        .args(["add", "--addon", "Details"])
+        .assert()
+        .success();
+    let all =
+        r#"{ "workspace": { "members": ["addons/*", "libs/*"] }, "check": { "mode": "strict" } }"#;
+    write(root, &[("wowlua.json", all)]);
+    wowlua(root, &e.home)
+        .args(["add", "--addon", "Details"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("choose one with `-p <package>`"));
+    wowlua(root, &e.home)
+        .arg("check")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Checked SuiteCore"))
+        .stderr(predicate::str::contains("Checked SuiteOptions"))
+        .stderr(predicate::str::contains("Checked Shared"));
+
+    // Workspace rules.
+    write(
+        root,
+        &[(
+            "addons/core/wowlua.json",
+            r#"{ "package": { "name": "suite-core", "version": "1.0.0" },
+  "addon": { "name": "SuiteCore", "saved-variables": ["SuiteDB"] },
+  "addon-dependencies": { "required": ["SuiteOptions"] },
+  "dependencies": { "shared": "*" } }"#,
+        )],
+    );
+    wowlua(root, &e.home)
+        .arg("check")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E4324]"));
+    write(
+        root,
+        &[(
+            "addons/options/wowlua.json",
+            r#"{ "package": { "name": "suite-options", "version": "1.0.0" },
+  "addon": { "name": "SuiteCore", "saved-variables": ["SuiteDB"] },
+  "build": { "out": "x" } }"#,
+        )],
+    );
+    wowlua(root, &e.home)
+        .arg("check")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E4316]"));
+    write(
+        root,
+        &[(
+            "addons/options/wowlua.json",
+            r#"{ "package": { "name": "suite-options", "version": "1.0.0" },
+  "addon": { "name": "SuiteCore", "saved-variables": ["SuiteDB"] } }"#,
+        )],
+    );
+    wowlua(root, &e.home)
+        .arg("check")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E4325]"))
+        .stderr(predicate::str::contains("error[E4120]"));
+}

@@ -26,6 +26,9 @@ pub struct GlobalArgs {
     /// Use a specific wowlua.json
     #[arg(long, global = true, value_name = "PATH")]
     pub manifest: Option<PathBuf>,
+    /// Select a workspace member
+    #[arg(short = 'p', long, global = true, value_name = "NAME")]
+    pub package: Option<String>,
     /// Fail if wowlua.lock would change
     #[arg(long, global = true)]
     pub locked: bool,

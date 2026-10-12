@@ -1,12 +1,15 @@
-//! Loading a project: finding and validating `wowlua.json`, and bringing
-//! `wowlua.lock` up to date.
+//! Loading a project: finding and validating `wowlua.json` (and the
+//! workspace around it), resolving dependencies, and bringing `wowlua.lock`
+//! up to date.
 
 use crate::Session;
 use crate::lockfile::{self, LockError, Lockfile};
-use std::collections::BTreeMap;
-use std::path::PathBuf;
+use crate::workspace::{self, WorkspaceAddon};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::{Path, PathBuf};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_manifest::LoadedManifest;
+use wowlua_manifest::model::PackageKind;
 
 #[derive(Clone, Debug, Default)]
 pub struct LoadOptions {
@@ -14,6 +17,8 @@ pub struct LoadOptions {
     pub manifest: Option<PathBuf>,
     /// Directory to search from (normally the current directory).
     pub cwd: PathBuf,
+    /// `-p, --package`: the workspace member to use.
+    pub package: Option<String>,
     /// `--locked` / `--frozen`: fail instead of changing `wowlua.lock`.
     pub locked: bool,
     /// `--offline` / `--frozen`: only the cache, never the network.
@@ -51,8 +56,12 @@ pub struct Project {
     /// pinned in the lockfile.
     pub interfaces: BTreeMap<String, Vec<u32>>,
     /// The resolved dependencies, fetched into the cache (empty when the
-    /// command skips them).
+    /// command skips them). In a workspace: those of every member.
     pub deps: wowlua_pkg::Resolution,
+    /// The workspace root, when the package is a workspace member.
+    pub workspace_root: Option<PathBuf>,
+    /// The workspace's other addons (generated declaration files).
+    pub workspace_addons: Vec<WorkspaceAddon>,
 }
 
 impl Project {
@@ -63,53 +72,124 @@ impl Project {
     pub fn addon_name(&self) -> String {
         self.manifest.addon_name()
     }
+
+    /// Where `wowlua.lock` lives.
+    pub fn lock_root(&self) -> &Path {
+        self.workspace_root
+            .as_deref()
+            .unwrap_or(&self.manifest.root)
+    }
+
+    pub fn kind(&self) -> PackageKind {
+        self.manifest.package().map(|p| p.kind).unwrap_or_default()
+    }
 }
 
-/// Loads the project for a command. Problems are reported to the session;
-/// `None` means the project cannot be used.
+/// Loads the one project a command works on. In a workspace root without
+/// `-p`, this needs a single selected member.
 pub fn load_project(session: &mut Session, options: &LoadOptions) -> Option<Project> {
-    let Some(path) = wowlua_manifest::find_manifest(&options.cwd, options.manifest.as_deref())
-    else {
-        session.push(
-            Diagnostic::plain_error(format!(
-                "no {} found in `{}` or any parent directory",
-                wowlua_manifest::MANIFEST_FILE,
-                options.cwd.display()
-            ))
-            .with_help("run `wowlua new <path>` to create a package or `wowlua init` to adopt an existing addon"),
-        );
-        return None;
-    };
-    let text = match std::fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(error) => {
-            session.push(
-                Diagnostic::plain_error(format!("cannot read the manifest: {error}"))
-                    .with_path(&path),
-            );
-            return None;
+    let mut projects = load_projects(session, options)?;
+    if projects.len() == 1 {
+        return projects.pop();
+    }
+    let names: Vec<String> = projects
+        .iter()
+        .filter_map(|p| p.manifest.package().map(|pk| pk.name.clone()))
+        .collect();
+    session.push(
+        Diagnostic::plain_error(
+            "this command works on one package, but the workspace selects several",
+        )
+        .with_note(format!("members: {}", names.join(", ")))
+        .with_help("choose one with `-p <package>`, or run the command inside the member's folder"),
+    );
+    None
+}
+
+fn no_manifest(options: &LoadOptions) -> Diagnostic {
+    Diagnostic::plain_error(format!(
+        "no {} found in `{}` or any parent directory",
+        wowlua_manifest::MANIFEST_FILE,
+        options.cwd.display()
+    ))
+    .with_help(
+        "run `wowlua new <path>` to create a package or `wowlua init` to adopt an existing addon",
+    )
+}
+
+fn read_json(path: &Path) -> Option<serde_json::Value> {
+    serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
+}
+
+fn member_globs(patterns: &[String]) -> globset::GlobSet {
+    let mut b = globset::GlobSetBuilder::new();
+    for p in patterns {
+        if let Ok(g) = globset::GlobBuilder::new(p.trim_end_matches('/'))
+            .literal_separator(true)
+            .build()
+        {
+            b.add(g);
         }
+    }
+    b.build().unwrap_or_else(|_| globset::GlobSet::empty())
+}
+
+fn is_member(root_value: &serde_json::Value, rel: &str) -> bool {
+    let list = |key: &str| -> Vec<String> {
+        root_value["workspace"][key]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
     };
+    member_globs(&list("members")).is_match(rel) && !member_globs(&list("exclude")).is_match(rel)
+}
+
+/// The workspace root above `dir` that lists it as a member.
+fn workspace_root_above(dir: &Path) -> Option<PathBuf> {
+    for ancestor in dir.ancestors().skip(1) {
+        let candidate = ancestor.join(wowlua_manifest::MANIFEST_FILE);
+        if !candidate.is_file() {
+            continue;
+        }
+        let value = read_json(&candidate)?;
+        if value.get("workspace").is_none() {
+            continue;
+        }
+        let rel = dir
+            .strip_prefix(ancestor)
+            .ok()?
+            .to_string_lossy()
+            .replace('\\', "/");
+        return is_member(&value, &rel).then(|| ancestor.to_path_buf());
+    }
+    None
+}
+
+/// Parses a manifest text into a loaded manifest at `path`.
+fn parse_manifest(
+    session: &mut Session,
+    options: &LoadOptions,
+    path: &Path,
+    text: String,
+) -> Option<LoadedManifest> {
     // Diagnostics show the manifest relative to the current directory.
-    let display = display_path(&path, &options.cwd);
+    let display = display_path(path, &options.cwd);
     let mut output =
         wowlua_manifest::parse(&mut session.db, &display, text, &crate::compiler_version());
     session.diagnostics.extend(output.diagnostics);
     let mut manifest = output.manifest.take()?;
-    manifest.path = path.clone();
+    manifest.path = path.to_path_buf();
     manifest.root = path.parent().map(PathBuf::from).unwrap_or_default();
+    Some(manifest)
+}
 
-    if manifest.is_workspace_root() {
-        session.push(
-            Diagnostic::plain_error("workspaces are not supported yet")
-                .with_path(&path)
-                .with_note("workspace support arrives with the package manager (milestone M6)"),
-        );
-        return None;
-    }
-
-    let pinned = match Lockfile::read(&manifest.root) {
-        Ok(lock) => lock,
+fn read_lock(session: &mut Session, root: &Path) -> Option<Option<Lockfile>> {
+    match Lockfile::read(root) {
+        Ok(lock) => Some(lock),
         Err(LockError::TooNew(version)) => {
             session.push(
                 Diagnostic::error(
@@ -118,22 +198,25 @@ pub fn load_project(session: &mut Session, options: &LoadOptions) -> Option<Proj
                         "wowlua.lock has version {version}, which this compiler does not understand"
                     ),
                 )
-                .with_path(manifest.root.join(lockfile::LOCKFILE))
+                .with_path(root.join(lockfile::LOCKFILE))
                 .with_help("update wowlua"),
             );
-            return None;
+            None
         }
         Err(LockError::Invalid(message)) => {
             session.push(
                 Diagnostic::plain_error(format!("invalid wowlua.lock: {message}"))
-                    .with_path(manifest.root.join(lockfile::LOCKFILE))
+                    .with_path(root.join(lockfile::LOCKFILE))
                     .with_help("delete it to regenerate it"),
             );
-            return None;
+            None
         }
-    };
+    }
+}
 
-    let explicit: BTreeMap<String, Vec<u32>> = manifest
+/// Interface numbers set explicitly in the manifest.
+fn explicit_interfaces(manifest: &LoadedManifest) -> BTreeMap<String, Vec<u32>> {
+    manifest
         .manifest
         .flavors
         .iter()
@@ -142,43 +225,12 @@ pub fn load_project(session: &mut Session, options: &LoadOptions) -> Option<Proj
             let id = wowlua_flavors::table().resolve(name)?.id.clone();
             settings.interface.clone().map(|i| (id, i))
         })
-        .collect();
-    let pinned_flavors: Vec<String> = manifest
-        .flavors
-        .iter()
-        .filter(|id| !explicit.contains_key(*id))
-        .cloned()
-        .collect();
-    let mut lock = lockfile::required(pinned.as_ref(), &pinned_flavors);
-    let deps = if options.skip_dependencies {
-        wowlua_pkg::Resolution::default()
-    } else {
-        let deps = resolve_dependencies(session, &manifest, &lock, options)?;
-        lock.packages = deps.lock_entries(&manifest.root);
-        deps
-    };
-    if pinned.as_ref() != Some(&lock) {
-        if options.locked {
-            session.push(
-                Diagnostic::error(
-                    "E4104",
-                    "wowlua.lock needs to be updated, but `--locked` was given",
-                )
-                .with_path(manifest.root.join(lockfile::LOCKFILE))
-                .with_help("run the command without `--locked` and commit the updated lockfile"),
-            );
-            return None;
-        }
-        if let Err(error) = lock.write(&manifest.root) {
-            session.push(
-                Diagnostic::plain_error(format!("cannot write wowlua.lock: {error}"))
-                    .with_path(manifest.root.join(lockfile::LOCKFILE)),
-            );
-            return None;
-        }
-    }
+        .collect()
+}
 
-    let interfaces = manifest
+fn interfaces_of(manifest: &LoadedManifest, lock: &Lockfile) -> BTreeMap<String, Vec<u32>> {
+    let explicit = explicit_interfaces(manifest);
+    manifest
         .flavors
         .iter()
         .map(|id| {
@@ -189,26 +241,489 @@ pub fn load_project(session: &mut Session, options: &LoadOptions) -> Option<Proj
                 .unwrap_or_default();
             (id.clone(), numbers)
         })
-        .collect();
+        .collect()
+}
 
+/// Writes the lockfile when it changed (E4104 with `--locked`).
+fn store_lock(
+    session: &mut Session,
+    options: &LoadOptions,
+    root: &Path,
+    pinned: Option<&Lockfile>,
+    lock: &Lockfile,
+) -> Option<()> {
+    if pinned == Some(lock) {
+        return Some(());
+    }
+    if options.locked {
+        session.push(
+            Diagnostic::error(
+                "E4104",
+                "wowlua.lock needs to be updated, but `--locked` was given",
+            )
+            .with_path(root.join(lockfile::LOCKFILE))
+            .with_help("run the command without `--locked` and commit the updated lockfile"),
+        );
+        return None;
+    }
+    if let Err(error) = lock.write(root) {
+        session.push(
+            Diagnostic::plain_error(format!("cannot write wowlua.lock: {error}"))
+                .with_path(root.join(lockfile::LOCKFILE)),
+        );
+        return None;
+    }
+    Some(())
+}
+
+/// Loads the projects a command works on: the package, or the selected
+/// members of a workspace (`-p`, the member around the current directory,
+/// `default-members`, or all members).
+pub fn load_projects(session: &mut Session, options: &LoadOptions) -> Option<Vec<Project>> {
+    let Some(path) = wowlua_manifest::find_manifest(&options.cwd, options.manifest.as_deref())
+    else {
+        session.push(no_manifest(options));
+        return None;
+    };
+    let dir = path.parent().map(PathBuf::from).unwrap_or_default();
+    let is_root = read_json(&path).is_some_and(|v| v.get("workspace").is_some());
+    let root = if is_root {
+        Some(dir.clone())
+    } else {
+        workspace_root_above(&dir)
+    };
+    match root {
+        None => {
+            if let Some(name) = &options.package {
+                session.push(
+                    Diagnostic::plain_error(format!(
+                        "`-p {name}` selects a workspace member, but this package is not in a workspace"
+                    ))
+                    .with_path(&path),
+                );
+                return None;
+            }
+            load_single(session, options, &path).map(|p| vec![p])
+        }
+        Some(root) => load_workspace(session, options, &root, (!is_root).then_some(dir.as_path())),
+    }
+}
+
+/// A package outside any workspace.
+fn load_single(session: &mut Session, options: &LoadOptions, path: &Path) -> Option<Project> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) => {
+            session.push(
+                Diagnostic::plain_error(format!("cannot read the manifest: {error}"))
+                    .with_path(path),
+            );
+            return None;
+        }
+    };
+    let manifest = parse_manifest(session, options, path, text)?;
+    let pinned = read_lock(session, &manifest.root)?;
+    let explicit = explicit_interfaces(&manifest);
+    let pinned_flavors: Vec<String> = manifest
+        .flavors
+        .iter()
+        .filter(|id| !explicit.contains_key(*id))
+        .cloned()
+        .collect();
+    let mut lock = lockfile::required(pinned.as_ref(), &pinned_flavors);
+    let deps = if options.skip_dependencies {
+        wowlua_pkg::Resolution::default()
+    } else {
+        let deps = resolve(
+            session,
+            options,
+            &[&manifest],
+            &manifest.root,
+            &lock,
+            &HashMap::new(),
+        )?;
+        lock.packages = deps.lock_entries(&manifest.root);
+        deps
+    };
+    store_lock(session, options, &manifest.root, pinned.as_ref(), &lock)?;
+    let interfaces = interfaces_of(&manifest, &lock);
     Some(Project {
         manifest,
         lock,
         interfaces,
         deps,
+        workspace_root: None,
+        workspace_addons: Vec::new(),
     })
 }
 
-/// Resolves the package's dependencies (all features, flavors and
-/// dev-dependencies) and fetches them into the cache.
-fn resolve_dependencies(
+/// A workspace: every member is loaded and resolved together; the selected
+/// ones are returned.
+fn load_workspace(
     session: &mut Session,
-    manifest: &LoadedManifest,
-    lock: &Lockfile,
     options: &LoadOptions,
+    root: &Path,
+    inside: Option<&Path>,
+) -> Option<Vec<Project>> {
+    let root_path = root.join(wowlua_manifest::MANIFEST_FILE);
+    let root_text = match std::fs::read_to_string(&root_path) {
+        Ok(t) => t,
+        Err(error) => {
+            session.push(
+                Diagnostic::plain_error(format!("cannot read the workspace manifest: {error}"))
+                    .with_path(&root_path),
+            );
+            return None;
+        }
+    };
+    let root_manifest = parse_manifest(session, options, &root_path, root_text.clone())?;
+    let root_value: serde_json::Value = serde_json::from_str(&root_text).ok()?;
+    let ws = root_manifest.manifest.workspace.clone().unwrap_or_default();
+    let out_root = root.join(&root_manifest.manifest.build.out);
+
+    // Member directories: the root itself when it is a package, and every
+    // folder with a manifest that `members` matches.
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    if root_manifest.package().is_some() {
+        dirs.push(root.to_path_buf());
+    }
+    for entry in walkdir::WalkDir::new(root)
+        .min_depth(1)
+        .into_iter()
+        .filter_entry(|e| {
+            let n = e.file_name().to_string_lossy();
+            e.file_type().is_dir()
+                && !n.starts_with('.')
+                && e.path() != out_root
+                && n != "node_modules"
+        })
+        .flatten()
+    {
+        if !entry.path().join(wowlua_manifest::MANIFEST_FILE).is_file() {
+            continue;
+        }
+        let rel = entry
+            .path()
+            .strip_prefix(root)
+            .unwrap_or(entry.path())
+            .to_string_lossy()
+            .replace('\\', "/");
+        if is_member(&root_value, &rel) {
+            dirs.push(entry.path().to_path_buf());
+        }
+    }
+    dirs.sort();
+    if dirs.is_empty() {
+        session.push(
+            Diagnostic::plain_error("the workspace has no members")
+                .with_path(&root_path)
+                .with_help("list member folders in `workspace.members`, e.g. `[\"addons/*\"]`"),
+        );
+        return None;
+    }
+
+    let mut manifests: Vec<LoadedManifest> = Vec::new();
+    for dir in &dirs {
+        let path = dir.join(wowlua_manifest::MANIFEST_FILE);
+        if dir == root {
+            let mut m = root_manifest.clone();
+            m.manifest.workspace = None;
+            manifests.push(m);
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+            // Reported with positions by the parser.
+            parse_manifest(session, options, &path, text);
+            continue;
+        };
+        if value["build"].get("out").is_some() {
+            session.push(
+                Diagnostic::error("E4316", "a workspace member may not set `build.out`")
+                    .with_path(&path)
+                    .with_help("the workspace root's `build.out` holds every member's build"),
+            );
+            continue;
+        }
+        let merged = workspace::with_defaults(&value, &root_value);
+        let text = if merged == value {
+            text
+        } else {
+            let mut t = serde_json::to_string_pretty(&merged).unwrap_or(text);
+            t.push('\n');
+            t
+        };
+        let Some(mut m) = parse_manifest(session, options, &path, text) else {
+            continue;
+        };
+        // Every member builds into the root's `build.out`.
+        m.manifest.build.out = wowlua_pkg::source::relative(&out_root, &m.root)
+            .unwrap_or_else(|| out_root.display().to_string());
+        manifests.push(m);
+    }
+    if session.has_errors() {
+        return None;
+    }
+
+    check_members(session, &manifests);
+    if session.has_errors() {
+        return None;
+    }
+
+    let pinned = read_lock(session, root)?;
+    let mut pinned_flavors: BTreeSet<String> = BTreeSet::new();
+    for m in &manifests {
+        let explicit = explicit_interfaces(m);
+        pinned_flavors.extend(
+            m.flavors
+                .iter()
+                .filter(|f| !explicit.contains_key(*f))
+                .cloned(),
+        );
+    }
+    let mut lock = lockfile::required(
+        pinned.as_ref(),
+        &pinned_flavors.into_iter().collect::<Vec<_>>(),
+    );
+    let members: HashMap<String, PathBuf> = manifests
+        .iter()
+        .filter_map(|m| {
+            let p = m.package()?;
+            (p.kind != PackageKind::Addon).then(|| (p.name.clone(), m.root.clone()))
+        })
+        .collect();
+    let deps = if options.skip_dependencies {
+        wowlua_pkg::Resolution::default()
+    } else {
+        let refs: Vec<&LoadedManifest> = manifests.iter().collect();
+        let deps = resolve(session, options, &refs, root, &lock, &members)?;
+        lock.packages = deps.lock_entries(root);
+        deps
+    };
+    store_lock(session, options, root, pinned.as_ref(), &lock)?;
+
+    let addons: Vec<WorkspaceAddon> = manifests
+        .iter()
+        .filter(|m| m.package().is_some_and(|p| p.kind == PackageKind::Addon))
+        .map(|m| WorkspaceAddon {
+            name: m.addon_name(),
+            src: m.root.join(&m.manifest.build.src),
+        })
+        .collect();
+
+    // Selection.
+    let selected: Vec<usize> = if let Some(name) = &options.package {
+        match manifests
+            .iter()
+            .position(|m| m.package().is_some_and(|p| &p.name == name))
+        {
+            Some(i) => vec![i],
+            None => {
+                let names: Vec<String> = manifests
+                    .iter()
+                    .filter_map(|m| m.package().map(|p| p.name.clone()))
+                    .collect();
+                session.push(
+                    Diagnostic::plain_error(format!("the workspace has no member `{name}`"))
+                        .with_path(&root_path)
+                        .with_note(format!("members: {}", names.join(", "))),
+                );
+                return None;
+            }
+        }
+    } else if let Some(dir) = inside {
+        manifests
+            .iter()
+            .position(|m| m.root == dir)
+            .into_iter()
+            .collect()
+    } else if !ws.default_members.is_empty() {
+        let set = member_globs(&ws.default_members);
+        manifests
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| {
+                let rel = m
+                    .root
+                    .strip_prefix(root)
+                    .map(|r| r.to_string_lossy().replace('\\', "/"))
+                    .unwrap_or_default();
+                set.is_match(if rel.is_empty() { "." } else { &rel })
+            })
+            .map(|(i, _)| i)
+            .collect()
+    } else {
+        (0..manifests.len()).collect()
+    };
+
+    let mut projects = Vec::new();
+    for (i, manifest) in manifests.into_iter().enumerate() {
+        if !selected.contains(&i) {
+            continue;
+        }
+        let interfaces = interfaces_of(&manifest, &lock);
+        let own = manifest.addon_name();
+        projects.push(Project {
+            interfaces,
+            lock: lock.clone(),
+            deps: wowlua_pkg::Resolution {
+                packages: deps.packages.clone(),
+            },
+            workspace_root: Some(root.to_path_buf()),
+            workspace_addons: addons.iter().filter(|a| a.name != own).cloned().collect(),
+            manifest,
+        });
+    }
+    Some(projects)
+}
+
+/// Workspace-wide rules: unique addon names (E4325) and SavedVariables
+/// (E4120), and no cycle of required addon dependencies (E4324).
+fn check_members(session: &mut Session, manifests: &[LoadedManifest]) {
+    let addons: Vec<&LoadedManifest> = manifests
+        .iter()
+        .filter(|m| m.package().is_some_and(|p| p.kind == PackageKind::Addon))
+        .collect();
+    let mut names: HashMap<String, &Path> = HashMap::new();
+    for m in &addons {
+        let name = m.addon_name();
+        if let Some(other) = names.insert(name.to_ascii_lowercase(), &m.path) {
+            session.push(
+                Diagnostic::error(
+                    "E4325",
+                    format!("two workspace members are both the addon `{name}`"),
+                )
+                .with_path(&m.path)
+                .with_note(format!("also {}", other.display())),
+            );
+        }
+    }
+    let mut saved: HashMap<String, String> = HashMap::new();
+    for m in &addons {
+        let Some(addon) = &m.manifest.addon else {
+            continue;
+        };
+        for var in addon
+            .saved_variables
+            .iter()
+            .chain(&addon.saved_variables_per_character)
+        {
+            if let Some(other) = saved.insert(var.clone(), m.addon_name()) {
+                session.push(
+                    Diagnostic::error(
+                        "E4120",
+                        format!(
+                            "SavedVariables `{var}` is used by both `{other}` and `{}`",
+                            m.addon_name()
+                        ),
+                    )
+                    .with_path(&m.path),
+                );
+            }
+        }
+    }
+    // Required addon dependencies between members.
+    let index: HashMap<String, usize> = addons
+        .iter()
+        .enumerate()
+        .map(|(i, m)| (m.addon_name().to_ascii_lowercase(), i))
+        .collect();
+    let edges: Vec<Vec<usize>> = addons
+        .iter()
+        .map(|m| {
+            m.manifest
+                .addon_dependencies
+                .as_ref()
+                .map(|d| {
+                    d.required
+                        .iter()
+                        .filter_map(|r| index.get(&r.name().to_ascii_lowercase()).copied())
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+        .collect();
+    let mut state = vec![0u8; addons.len()];
+    fn dfs(
+        i: usize,
+        edges: &[Vec<usize>],
+        state: &mut [u8],
+        stack: &mut Vec<usize>,
+    ) -> Option<Vec<usize>> {
+        state[i] = 1;
+        stack.push(i);
+        for &j in &edges[i] {
+            if state[j] == 1 {
+                let start = stack.iter().position(|&s| s == j).unwrap_or(0);
+                return Some(stack[start..].to_vec());
+            }
+            if state[j] == 0
+                && let Some(c) = dfs(j, edges, state, stack)
+            {
+                return Some(c);
+            }
+        }
+        stack.pop();
+        state[i] = 2;
+        None
+    }
+    for i in 0..addons.len() {
+        if state[i] == 0
+            && let Some(cycle) = dfs(i, &edges, &mut state, &mut Vec::new())
+        {
+            let mut names: Vec<String> = cycle.iter().map(|&c| addons[c].addon_name()).collect();
+            names.push(names[0].clone());
+            session.push(
+                Diagnostic::error(
+                    "E4324",
+                    format!(
+                        "the workspace's required addon dependencies form a cycle: {}",
+                        names.join(" → ")
+                    ),
+                )
+                .with_path(&addons[cycle[0]].path)
+                .with_help("make one of them an optional dependency"),
+            );
+            break;
+        }
+    }
+}
+
+/// Resolves the dependencies of `manifests` together (all features, flavors
+/// and dev-dependencies) and fetches them into the cache.
+fn resolve(
+    session: &mut Session,
+    options: &LoadOptions,
+    manifests: &[&LoadedManifest],
+    lock_root: &Path,
+    lock: &Lockfile,
+    members: &HashMap<String, PathBuf>,
 ) -> Option<wowlua_pkg::Resolution> {
-    let m = &manifest.manifest;
-    if m.dependencies.is_empty() && m.dev_dependencies.is_empty() {
+    let roots: Vec<wowlua_pkg::Root> = manifests
+        .iter()
+        .filter(|m| !m.manifest.dependencies.is_empty() || !m.manifest.dev_dependencies.is_empty())
+        .map(|manifest| {
+            let package = manifest.package();
+            let m = &manifest.manifest;
+            wowlua_pkg::Root {
+                name: package.map(|p| p.name.clone()).unwrap_or_default(),
+                version: package
+                    .and_then(|p| semver::Version::parse(&p.version).ok())
+                    .unwrap_or(semver::Version::new(0, 0, 0)),
+                dir: manifest.root.clone(),
+                manifest_path: manifest.path.clone(),
+                deps: m
+                    .dependencies
+                    .iter()
+                    .chain(&m.dev_dependencies)
+                    .map(|(n, d)| (n.clone(), d.clone()))
+                    .collect(),
+            }
+        })
+        .collect();
+    if roots.is_empty() {
         return Some(wowlua_pkg::Resolution::default());
     }
     let Some(cache) = wowlua_pkg::Cache::new() else {
@@ -224,32 +739,17 @@ fn resolve_dependencies(
             (s.0)(word, message);
         }
     });
-    let package = manifest.package();
-    let root = wowlua_pkg::Root {
-        name: package.map(|p| p.name.clone()).unwrap_or_default(),
-        version: package
-            .and_then(|p| semver::Version::parse(&p.version).ok())
-            .unwrap_or(semver::Version::new(0, 0, 0)),
-        dir: manifest.root.clone(),
-        manifest_path: manifest.path.clone(),
-        deps: m
-            .dependencies
-            .iter()
-            .chain(&m.dev_dependencies)
-            .map(|(n, d)| (n.clone(), d.clone()))
-            .collect(),
-    };
     let update = options.update.clone().unwrap_or(wowlua_pkg::Update::None);
     let resolved = wowlua_pkg::resolve(
         &mut session.db,
-        &[root],
+        &roots,
         &fetcher,
         &wowlua_pkg::resolve::Options {
             lock: &lock.packages,
-            lock_root: &manifest.root,
+            lock_root,
             update: &update,
             compiler: &crate::compiler_version(),
-            members: &Default::default(),
+            members,
             precise: options
                 .precise
                 .as_ref()

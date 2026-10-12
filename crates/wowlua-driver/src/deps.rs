@@ -79,16 +79,17 @@ impl AddRequest {
     }
 }
 
+/// The manifest the command edits: the package, or the selected workspace
+/// member.
 fn manifest_path(session: &mut Session, options: &LoadOptions) -> Option<PathBuf> {
-    let found = wowlua_manifest::find_manifest(&options.cwd, options.manifest.as_deref());
-    if found.is_none() {
-        session.push(Diagnostic::plain_error(format!(
-            "no {} found in `{}` or any parent directory",
-            wowlua_manifest::MANIFEST_FILE,
-            options.cwd.display()
-        )));
-    }
-    found
+    let project = load_project(
+        session,
+        &LoadOptions {
+            skip_dependencies: true,
+            ..options.clone()
+        },
+    )?;
+    Some(project.manifest.path.clone())
 }
 
 /// Applies `edit` to the manifest text, then loads the project (resolving

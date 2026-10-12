@@ -259,10 +259,22 @@ addon plus load-on-demand modules, together with shared libraries.
 ```
 
 - One `wowlua.lock` and one `dist/` at the workspace root.
-- Commands run for all members, or for one with `-p <package>`.
+- **Members** are the folders with a `wowlua.json` that `members` matches
+  (and `exclude` does not), plus the root itself when its manifest has a
+  `package` section.
+- **Selection** (decision T113). `-p <package>` selects one member. Otherwise
+  a command run inside a member's folder works on that member, and one run at
+  the root works on `default-members` (all members if it is empty). `build`,
+  `check`, `install`, `uninstall`, `clean`, `fmt`, `fetch`, `update`, `tree`
+  and `outdated` work on every selected member; `build` and `install` skip
+  library members, which `check` checks. Commands on one package (`add`,
+  `remove`, `toc`, `lint`, `fix`, `dev`, `trace`) need exactly one selected
+  member.
 - An addon may list another workspace addon in `addon-dependencies`. The
   compiler then type-checks against that addon's **generated declaration file**,
-  which describes its `@global` API. The file is generated from the other
+  which describes its `@global` API: `@global` functions with their
+  signatures, values with their annotated or literal type, and classes and
+  enums as `any` (decision T114). The file is generated from the other
   addon's collected declarations, not from a full build
   ([Compiler §13.3.1](compiler.md#1331-stages), stage 12), so two addons that
   list each other as optional dependencies still build.

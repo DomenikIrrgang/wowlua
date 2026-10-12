@@ -20,6 +20,7 @@ fn load_options(out: &Output, global: &GlobalArgs) -> LoadOptions {
     LoadOptions {
         manifest: global.manifest.as_ref().map(|m| cwd.join(m)),
         cwd,
+        package: global.package.clone(),
         locked: global.locked || global.frozen,
         offline: global.offline || global.frozen,
         skip_dependencies: false,
@@ -59,6 +60,36 @@ fn describe(build: &BuildOutput) -> String {
     )
 }
 
+/// Loads the selected projects (every member of a workspace) and builds
+/// the addons among them; with `write: false`, libraries are checked too.
+/// Diagnostics stay in the session.
+fn load_and_build_all(
+    out: &Output,
+    session: &mut Session,
+    global: &GlobalArgs,
+    request: &BuildRequest,
+) -> Option<Vec<(Project, BuildOutput)>> {
+    let projects = wowlua_driver::load_projects(session, &load_options(out, global))?;
+    let single = projects.len() == 1;
+    let mut builds = Vec::new();
+    for project in projects {
+        let buildable = match project.kind() {
+            PackageKind::Addon => true,
+            PackageKind::Library => !request.write,
+            _ => false,
+        };
+        if !buildable && !single {
+            continue;
+        }
+        let build = wowlua_driver::build(session, &project, request);
+        apply_lints(session, &project);
+        if let Some(b) = build {
+            builds.push((project, b));
+        }
+    }
+    (!session.has_errors()).then_some(builds)
+}
+
 /// Loads the project and builds it. Diagnostics stay in the session.
 fn load_and_build(
     out: &Output,
@@ -81,19 +112,21 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
         out_dir: args.out.as_ref().map(|o| cwd().join(o)),
         write: true,
     };
-    let result = load_and_build(out, &mut session, global, &request);
+    let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
     match result {
-        Some((_, build)) if ok => {
-            out.status(
-                "Finished",
-                format!(
-                    "{} in {:.2}s → {}",
-                    describe(&build),
-                    started.elapsed().as_secs_f64(),
-                    relative(&build.dir)
-                ),
-            );
+        Some(builds) if ok => {
+            for (_, build) in &builds {
+                out.status(
+                    "Finished",
+                    format!(
+                        "{} in {:.2}s → {}",
+                        describe(build),
+                        started.elapsed().as_secs_f64(),
+                        relative(&build.dir)
+                    ),
+                );
+            }
             true
         }
         _ => false,
@@ -137,18 +170,20 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
         out_dir: None,
         write: false,
     };
-    let result = load_and_build(out, &mut session, global, &request);
+    let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
     match result {
-        Some((_, build)) if ok => {
-            out.status(
-                "Checked",
-                format!(
-                    "{} in {:.2}s",
-                    describe(&build),
-                    started.elapsed().as_secs_f64()
-                ),
-            );
+        Some(builds) if ok => {
+            for (_, build) in &builds {
+                out.status(
+                    "Checked",
+                    format!(
+                        "{} in {:.2}s",
+                        describe(build),
+                        started.elapsed().as_secs_f64()
+                    ),
+                );
+            }
             true
         }
         _ => false,
@@ -158,7 +193,7 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
 /// `wowlua fmt [--check] [paths…]`.
 pub fn fmt(out: &Output, global: &GlobalArgs, check: bool, paths: Vec<PathBuf>) -> bool {
     let mut session = Session::new();
-    let Some(project) = wowlua_driver::load_project(
+    let Some(projects) = wowlua_driver::load_projects(
         &mut session,
         &LoadOptions {
             skip_dependencies: true,
@@ -173,7 +208,13 @@ pub fn fmt(out: &Output, global: &GlobalArgs, check: bool, paths: Vec<PathBuf>) 
         paths: paths.iter().map(|p| cwd.join(p)).collect(),
         check,
     };
-    let report = wowlua_driver::format::format(&mut session, &project, &request);
+    let mut report = wowlua_driver::format::FormatReport::default();
+    for project in &projects {
+        let r = wowlua_driver::format::format(&mut session, project, &request);
+        report.changed.extend(r.changed);
+        report.unchanged += r.unchanged;
+        report.skipped += r.skipped;
+    }
     let ok = out.flush(&mut session);
     for file in &report.changed {
         if check {
@@ -226,24 +267,27 @@ pub fn install(out: &Output, global: &GlobalArgs, profile: &str, target: &Instal
         out_dir: None,
         write: true,
     };
-    let Some((project, build)) = load_and_build(out, &mut session, global, &request) else {
+    let Some(builds) = load_and_build_all(out, &mut session, global, &request) else {
         out.flush(&mut session);
         return false;
     };
     if !out.flush(&mut session) {
         return false;
     }
-    out.status("Built", describe(&build));
-    let installed = install::install(
-        &mut session,
-        &project,
-        &build,
-        &install_request(target, false),
-    );
-    let ok = out.flush(&mut session);
-    report_installed(out, &installed);
-    if installed.is_empty() && ok {
-        out.status("Skipped", "no client folder to install into");
+    let mut ok = true;
+    for (project, build) in &builds {
+        out.status("Built", describe(build));
+        let installed = install::install(
+            &mut session,
+            project,
+            build,
+            &install_request(target, false),
+        );
+        ok &= out.flush(&mut session);
+        report_installed(out, &installed);
+        if installed.is_empty() && ok {
+            out.status("Skipped", "no client folder to install into");
+        }
     }
     ok
 }
@@ -255,7 +299,7 @@ pub fn uninstall(
     wow: Option<PathBuf>,
 ) -> bool {
     let mut session = Session::new();
-    let Some(project) = wowlua_driver::load_project(
+    let Some(projects) = wowlua_driver::load_projects(
         &mut session,
         &LoadOptions {
             skip_dependencies: true,
@@ -270,20 +314,26 @@ pub fn uninstall(
         clients: (!client.is_empty()).then_some(client),
         ..InstallRequest::default()
     };
-    let removed = install::uninstall(&mut session, &project, &request);
-    let ok = out.flush(&mut session);
-    for path in &removed {
-        out.status("Removed", path.display().to_string());
-    }
-    if removed.is_empty() && ok {
-        out.status("Nothing", "no installed build of this addon found");
+    let mut ok = true;
+    for project in projects.iter().filter(|p| p.kind() == PackageKind::Addon) {
+        let removed = install::uninstall(&mut session, project, &request);
+        ok &= out.flush(&mut session);
+        for path in &removed {
+            out.status("Removed", path.display().to_string());
+        }
+        if removed.is_empty() && ok {
+            out.status(
+                "Nothing",
+                format!("no installed build of {} found", project.addon_name()),
+            );
+        }
     }
     ok
 }
 
 pub fn clean(out: &Output, global: &GlobalArgs) -> bool {
     let mut session = Session::new();
-    let Some(project) = wowlua_driver::load_project(
+    let Some(projects) = wowlua_driver::load_projects(
         &mut session,
         &LoadOptions {
             skip_dependencies: true,
@@ -294,24 +344,28 @@ pub fn clean(out: &Output, global: &GlobalArgs) -> bool {
         return false;
     };
     out.flush(&mut session);
-    let dir = project.manifest.out_dir();
-    if !dir.exists() {
-        return true;
-    }
-    match std::fs::remove_dir_all(&dir) {
-        Ok(()) => {
-            out.status("Removed", relative(&dir));
-            true
+    // Workspace members share one output folder.
+    let mut dirs: Vec<PathBuf> = projects
+        .iter()
+        .map(|p| wowlua_pkg::source::normalize(&p.manifest.out_dir()))
+        .collect();
+    dirs.sort();
+    dirs.dedup();
+    let mut ok = true;
+    for dir in dirs.iter().filter(|d| d.exists()) {
+        match std::fs::remove_dir_all(dir) {
+            Ok(()) => out.status("Removed", relative(dir)),
+            Err(error) => {
+                session.push(Diagnostic::plain_error(format!(
+                    "cannot remove `{}`: {error}",
+                    dir.display()
+                )));
+                out.flush(&mut session);
+                ok = false;
+            }
         }
-        Err(error) => {
-            session.push(Diagnostic::plain_error(format!(
-                "cannot remove `{}`: {error}",
-                dir.display()
-            )));
-            out.flush(&mut session);
-            false
-        }
     }
+    ok
 }
 
 pub fn explain(out: &Output, code: &str) -> bool {
@@ -777,8 +831,14 @@ fn report_lock_changes(out: &Output, before: &[wowlua_pkg::LockedPackage], proje
 fn current_lock(global: &GlobalArgs) -> Vec<wowlua_pkg::LockedPackage> {
     let cwd = cwd();
     let manifest = global.manifest.as_ref().map(|m| cwd.join(m));
+    // A workspace member's lockfile is at the workspace root.
     wowlua_manifest::find_manifest(&cwd, manifest.as_deref())
-        .and_then(|m| m.parent().map(Path::to_path_buf))
+        .and_then(|m| {
+            m.ancestors()
+                .skip(1)
+                .find(|d| d.join(wowlua_driver::lockfile::LOCKFILE).is_file())
+                .map(Path::to_path_buf)
+        })
         .and_then(|root| {
             wowlua_driver::lockfile::Lockfile::read(&root)
                 .ok()

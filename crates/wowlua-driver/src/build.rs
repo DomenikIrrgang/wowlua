@@ -262,6 +262,33 @@ pub fn build(
             ))),
         }
     }
+    // Generated declaration files of the workspace addons this addon lists
+    // in `addon-dependencies` (spec §10.8).
+    if let Some(deps) = &manifest.manifest.addon_dependencies {
+        for dep in deps.required.iter().chain(&deps.optional) {
+            let Some(other) = project
+                .workspace_addons
+                .iter()
+                .find(|a| a.name.eq_ignore_ascii_case(dep.name()))
+            else {
+                continue;
+            };
+            let text = crate::workspace::global_declarations(&other.src);
+            let rel = format!("@workspace/{}.d.wowlua", other.name);
+            let file = session.db.add(&rel, text.clone());
+            declarations.push(crate::compile::Declaration {
+                source: sources::Source {
+                    rel: rel.clone(),
+                    src_rel: rel,
+                    abs: PathBuf::new(),
+                    kind: SourceKind::Wowlua,
+                    output: None,
+                },
+                file,
+                bytes: text.into_bytes(),
+            });
+        }
+    }
     // The compiler's implicit declarations (Lua 5.1 and WoW's Lua).
     for builtin in wowlua_stdlib::declarations() {
         let file = session.db.add(builtin.path, builtin.text.to_string());
@@ -1138,10 +1165,9 @@ pub fn build(
         return None;
     }
 
-    let dir = request
-        .out_dir
-        .clone()
-        .unwrap_or_else(|| manifest.out_dir().join(&profile.name).join(&addon_name));
+    let dir = request.out_dir.clone().unwrap_or_else(|| {
+        wowlua_pkg::source::normalize(&manifest.out_dir().join(&profile.name).join(&addon_name))
+    });
     if request.write
         && let Err(error) =
             write_tree(&dir, &out).and_then(|()| write_maps(&dir, &addon_name, &maps))

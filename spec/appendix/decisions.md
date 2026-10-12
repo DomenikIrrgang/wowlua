@@ -161,6 +161,8 @@ open for review.
 | T110 | A wowlua library may only use constant (scalar) `config` and `features` values from `wowlua:meta`; table-valued run-time reads are an error, because the runtime's tables belong to the consuming addon **(M6)** | Libraries get their own feature and config values without a second runtime table. |
 | T111 | Warnings and lints in dependency code are not reported to the consumer, and dependency code is never instrumented, monitored or runtime-checked **(M6)** | Consumers cannot act on them; the dev tools show the addon's own code (as T97). |
 | T112 | `wowlua check` checks a library package on its own; `wowlua build` refuses non-addon packages **(M6)** | Library authors check their code; only addons are installable. |
+| T113 | Workspace selection follows Cargo: `-p`, else the member around the current directory, else `default-members`, else all members. Multi-package commands run per member; commands on one package need one selected member **(M6)** | Familiar behavior; no command silently picks an arbitrary member. |
+| T114 | A workspace addon's generated declaration file declares its `@global` functions with their signatures, values with their annotated or literal type, and classes and enums as `any` **(M6)** | Generated from source without type inference, so mutually dependent addons need no build of each other; typed class declarations can follow. |
 
 ## Standard library
 
