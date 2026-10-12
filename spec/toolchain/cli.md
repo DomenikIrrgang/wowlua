@@ -222,9 +222,14 @@ available.
      interface numbers (decision T140).
    - Network operations (clones, fetches, SVN, downloads) are retried up to
      three times, like the packager does.
-   - `enable-nolib-creation: yes` adds a GitHub target with `"nolib": true`.
+   - `enable-nolib-creation: yes` becomes `compat.nolib-package` (the
+     packager's nolib zip, for GitHub only; decision T157).
    - The relation lists (`required-dependencies`, `optional-dependencies`,
      `embedded-libraries`, `tools-used`) become CurseForge relations.
+   - `wowi-convert-changelog: no`, `wowi-create-changelog: no` and
+     `wowi-archive-previous: no` become the WoWInterface target's
+     `changelog-output: "markdown"`, `changelog: null` and
+     `archive-previous: false` (decision T158).
    - Passthrough files that use packager keywords turn on
      `compat.packager-keywords`. A TOC `Version` of `@project-version@` takes
      the version of the latest git tag.
@@ -236,6 +241,11 @@ available.
 9. Leaves the contents of all `.lua` files untouched except for the path
    rewrites of step 2. They build as-is, and can be renamed to `.wowlua` one at a
    time.
+10. Leaves CI workflows untouched: workflows running the BigWigs packager keep
+   working. For each, `init` prints how to switch it: its packager steps
+   become `setup-wowlua` and one `wowlua publish` with the same `env`
+   (plus a `pandoc` install where the step asked for `pandoc`), and runs with
+   `-d` become `wowlua package` (decision T159).
 
 As an alternative to converting, a project may keep its `.pkgmeta` as the source
 of truth for dependencies and publishing with `"compat": { "pkgmeta": true }`.
@@ -343,6 +353,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write                     # GitHub releases
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }          # tags and history for build.version and changelogs

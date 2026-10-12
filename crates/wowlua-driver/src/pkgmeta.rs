@@ -265,6 +265,28 @@ fn parse_run(args: &str) -> WorkflowRun {
     run
 }
 
+/// The CI workflows that run the BigWigs packager action, by file name, and
+/// whether they ask it for `pandoc`.
+pub fn packager_workflows(dir: &Path) -> Vec<(String, bool)> {
+    let mut out: Vec<(String, bool)> = std::fs::read_dir(dir.join(".github/workflows"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let text = std::fs::read_to_string(e.path()).ok()?;
+            text.contains("BigWigsMods/packager").then(|| {
+                let pandoc = text.lines().any(|l| {
+                    let l = l.trim().replace(' ', "");
+                    l == "pandoc:true" || l == "pandoc:\"true\""
+                });
+                (e.file_name().to_string_lossy().into_owned(), pandoc)
+            })
+        })
+        .collect();
+    out.sort();
+    out
+}
+
 /// The packager runs of the project's GitHub workflows: each step using
 /// the packager action (with its `args:`), and each `release.sh` command.
 pub fn workflow_runs(dir: &Path) -> Vec<WorkflowRun> {

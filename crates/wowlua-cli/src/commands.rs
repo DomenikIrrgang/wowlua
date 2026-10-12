@@ -821,6 +821,24 @@ pub fn init(out: &Output, from_toc: Option<PathBuf>, from_pkgmeta: Option<String
                     "TOC files are generated from wowlua.json now; the old {old} can be deleted"
                 ),
             );
+            // Packager workflows keep working; how to switch them (T159).
+            for (file, pandoc) in wowlua_driver::pkgmeta::packager_workflows(&cwd()) {
+                let mut steps = String::from(
+                    "      - uses: DomenikIrrgang/wowlua/.github/actions/setup-wowlua@main\n",
+                );
+                if pandoc {
+                    steps.push_str("      - run: sudo apt-get install -y pandoc\n");
+                }
+                steps.push_str("      - run: wowlua publish\n        env: # the packager step's env (CF_API_TOKEN, WOWI_API_TOKEN, WAGO_API_TOKEN, GITHUB_OAUTH)");
+                out.status(
+                    "Note",
+                    format!(
+                        ".github/workflows/{file} publishes with the BigWigs packager, which keeps working; \
+                         to publish with wowlua, replace its packager steps with one\n{steps}\n\
+                         (runs with `-d`, which upload nothing, become `wowlua package`)"
+                    ),
+                );
+            }
             true
         }
         Err(diagnostic) => {

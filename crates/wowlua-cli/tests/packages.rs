@@ -1455,7 +1455,11 @@ fn init_reads_per_game_packager_runs() {
     wowlua(dir, &e.home)
         .args(["init", "--from-pkgmeta"])
         .assert()
-        .success();
+        .success()
+        .stderr(predicate::str::contains(
+            ".github/workflows/release.yml publishes with the BigWigs packager",
+        ))
+        .stderr(predicate::str::contains("- run: wowlua publish"));
     let m: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(dir.join("wowlua.json")).unwrap()).unwrap();
     let flavors: Vec<&String> = m["flavors"].as_object().unwrap().keys().collect();

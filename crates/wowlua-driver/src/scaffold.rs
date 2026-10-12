@@ -71,6 +71,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # GitHub releases
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
@@ -80,6 +82,13 @@ jobs:
           path: ~/.wowlua/cache
           key: wowlua-${{ hashFiles('wowlua.lock') }}
       - run: wowlua build --release --locked --message-format github
+      - if: startsWith(github.ref, 'refs/tags/')
+        run: wowlua publish
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+          WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 "#;
 
 /// Creates a new package from a template. Returns the files written.
@@ -3285,6 +3294,8 @@ local other = "Interface/AddOns/OtherAddon/core.lua""#;
         assert_eq!(manifest.addon_name(), "KillTracker");
         assert_eq!(manifest.flavors, vec!["standard", "vanilla"]);
         assert!(path.join("src/main.wowlua").exists());
-        assert!(path.join(".github/workflows/ci.yml").exists());
+        let ci = std::fs::read_to_string(path.join(".github/workflows/ci.yml")).unwrap();
+        assert!(ci.contains("run: wowlua publish"), "{ci}");
+        assert!(ci.contains("contents: write"), "{ci}");
     }
 }
