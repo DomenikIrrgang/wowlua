@@ -269,8 +269,20 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             "`{MANIFEST_FILE}` already exists"
         )));
     }
-    let tocs = find_tocs(dir, request.from_toc.as_deref())?;
-    let pkgmeta = match &request.inherited {
+    let tocs = match find_tocs(dir, request.from_toc.as_deref()) {
+        Ok(t) => t,
+        Err(e) => {
+            // A repository of several addons.
+            if request.inherited.is_none()
+                && request.from_toc.is_none()
+                && let Some(meta) = crate::pkgmeta::read(dir)?
+            {
+                return init_suite(dir, meta);
+            }
+            return Err(e);
+        }
+    };
+    let mut pkgmeta = match &request.inherited {
         Some(m) => Some(m.clone()),
         None => crate::pkgmeta::read(dir)?,
     };
@@ -279,6 +291,9 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         .as_ref()
         .map(|m| member_folders(dir, m, &tocs[0].1))
         .unwrap_or_default();
+    if let Some(m) = pkgmeta.as_mut() {
+        flatten_externals(m, &members, true);
+    }
     if request.from_pkgmeta && pkgmeta.is_none() {
         return Err(Diagnostic::plain_error(
             "`--from-pkgmeta` was given, but there is no `.pkgmeta` or `pkgmeta.yaml`",
@@ -815,10 +830,24 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             }
         }
     }
-    if !pins.is_empty() && !dir.join(crate::lockfile::LOCKFILE).exists() {
-        let mut lock = crate::lockfile::required(None, &all_flavors);
+    if !pins.is_empty() {
+        // Members' pins may already be there (`move-folders`).
+        let (mut lock, merge) = match crate::lockfile::Lockfile::read(dir) {
+            Ok(Some(l)) => (l, true),
+            _ => (crate::lockfile::required(None, &all_flavors), false),
+        };
         for (flavor, list) in pins {
-            lock.flavor_table.interfaces.insert(flavor, list);
+            if !merge {
+                lock.flavor_table
+                    .interfaces
+                    .insert(flavor.clone(), Vec::new());
+            }
+            let entry = lock.flavor_table.interfaces.entry(flavor).or_default();
+            for i in list {
+                if !entry.contains(&i) {
+                    entry.push(i);
+                }
+            }
         }
         lock.write(dir).map_err(|e| {
             Diagnostic::plain_error(format!("cannot write `{}`: {e}", crate::lockfile::LOCKFILE))
@@ -1078,15 +1107,32 @@ fn convert_pkgmeta(
     if publish.is_empty() {
         object.shift_remove("publish");
     }
-    // `move-folders`: whole addon folders become workspace members, with
-    // the externals and `ignore` entries inside them.
+    let members = init_members(dir, meta, member_dirs, report);
+    if !members.is_empty() {
+        object.insert("workspace".into(), json!({ "members": members }));
+        report.members = members;
+    }
+}
+
+/// Adopts the folders `move-folders` turns into addons as workspace
+/// members, each with the externals and `ignore` entries inside it. Other
+/// entries (except flattened library folders, see [`flatten_externals`])
+/// are W4332.
+fn init_members(
+    dir: &Path,
+    meta: &crate::pkgmeta::PkgMeta,
+    member_dirs: &[(String, String)],
+    report: &mut InitReport,
+) -> Vec<String> {
     let mut members = Vec::new();
     for (from, to) in &meta.move_folders {
         let Some((rel, _)) = member_dirs.iter().find(|(_, t)| t == to) else {
-            report.warnings.push(Diagnostic::warning(
-                "W4332",
-                format!("`move-folders` entry `{from}: {to}` does not move a whole addon folder; not converted"),
-            ));
+            if !is_flattening(from, to) {
+                report.warnings.push(Diagnostic::warning(
+                    "W4332",
+                    format!("`move-folders` entry `{from}: {to}` does not move a whole addon folder; not converted"),
+                ));
+            }
             continue;
         };
         let prefix = format!("{}/", rel.to_ascii_lowercase());
@@ -1127,10 +1173,145 @@ fn convert_pkgmeta(
             )),
         }
     }
-    if !members.is_empty() {
-        object.insert("workspace".into(), json!({ "members": members }));
-        report.members = members;
+    // One lockfile for the workspace: the members' interface pins move to
+    // the root's.
+    let mut pins: BTreeMap<String, Vec<u32>> = BTreeMap::new();
+    for rel in &members {
+        let member = dir.join(rel);
+        if let Ok(Some(lock)) = crate::lockfile::Lockfile::read(&member) {
+            for (flavor, list) in lock.flavor_table.interfaces {
+                let entry = pins.entry(flavor).or_default();
+                for i in list {
+                    if !entry.contains(&i) {
+                        entry.push(i);
+                    }
+                }
+            }
+            let _ = std::fs::remove_file(member.join(crate::lockfile::LOCKFILE));
+        }
     }
+    if !pins.is_empty() {
+        let flavors: Vec<String> = pins.keys().cloned().collect();
+        let mut lock = match crate::lockfile::Lockfile::read(dir) {
+            Ok(Some(l)) => l,
+            _ => crate::lockfile::required(None, &flavors),
+        };
+        for (flavor, list) in pins {
+            let entry = lock.flavor_table.interfaces.entry(flavor).or_default();
+            for i in list {
+                if !entry.contains(&i) {
+                    entry.push(i);
+                }
+            }
+        }
+        if let Err(e) = lock.write(dir) {
+            report.warnings.push(Diagnostic::plain_warning(format!(
+                "cannot write `{}`: {e}",
+                crate::lockfile::LOCKFILE
+            )));
+        }
+    }
+    members
+}
+
+/// `move-folders` entries that move a folder up into its parent
+/// (`X/Libs/Lib/Lib: X/Libs/Lib`), which flattens a library checkout.
+fn is_flattening(from: &str, to: &str) -> bool {
+    to.contains('/') && from.starts_with(&format!("{to}/"))
+}
+
+/// Flattening `move-folders` entries become the `subdir` (`path`) of the
+/// external at the destination. `members` maps addon names to their folders;
+/// the root addon's files are at the repository root when `root_addon`.
+fn flatten_externals(
+    meta: &mut crate::pkgmeta::PkgMeta,
+    members: &[(String, String)],
+    root_addon: bool,
+) {
+    let package = meta.package_as.clone().unwrap_or_default();
+    let entries: Vec<(String, String)> = meta
+        .move_folders
+        .iter()
+        .filter(|(f, t)| is_flattening(f, t))
+        .cloned()
+        .collect();
+    for (from, to) in entries {
+        let inner = from[to.len() + 1..].to_string();
+        let (addon, path) = to.split_once('/').unwrap_or((to.as_str(), ""));
+        let base = match members.iter().find(|(_, t)| t == addon) {
+            Some((rel, _)) if !(root_addon && addon == package) => format!("{rel}/"),
+            _ if addon == package => String::new(),
+            _ => continue,
+        };
+        let target = format!("{base}{path}").to_ascii_lowercase();
+        if let Some(e) = meta
+            .externals
+            .iter_mut()
+            .find(|e| e.dir.to_ascii_lowercase() == target)
+        {
+            use crate::pkgmeta::ExternalSource;
+            match &mut e.source {
+                ExternalSource::Git { subdir, .. } | ExternalSource::Zip { subdir, .. } => {
+                    *subdir = Some(match subdir.take() {
+                        Some(s) => format!("{s}/{inner}"),
+                        None => inner.clone(),
+                    });
+                }
+                ExternalSource::Svn { url } => {
+                    *url = format!("{url}/{inner}");
+                }
+                ExternalSource::Hg { .. } => {}
+            }
+        }
+    }
+}
+
+/// A repository of several addons and no TOC of its own (WeakAuras, DBM,
+/// ElvUI): `move-folders` makes every folder an addon, and the repository
+/// root becomes a workspace root (spec CLI §12.6).
+fn init_suite(dir: &Path, mut meta: crate::pkgmeta::PkgMeta) -> Result<InitReport, Diagnostic> {
+    let package = meta.package_as.clone().unwrap_or_else(|| {
+        dir.file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
+    let members = member_folders(dir, &meta, &package);
+    if members.is_empty() {
+        return Err(Diagnostic::plain_error(format!(
+            "no .toc file found in `{}`, and no `move-folders` entry of `{}` moves an addon folder",
+            dir.display(),
+            meta.file
+        )));
+    }
+    flatten_externals(&mut meta, &members, false);
+    let mut report = InitReport {
+        addon_name: package,
+        ..Default::default()
+    };
+    for e in &meta.externals {
+        let inside = members.iter().any(|(rel, _)| {
+            e.dir
+                .to_ascii_lowercase()
+                .starts_with(&format!("{}/", rel.to_ascii_lowercase()))
+        });
+        if !inside {
+            report.warnings.push(Diagnostic::plain_warning(format!(
+                "external `{}` is outside every addon folder; not converted",
+                e.dir
+            )));
+        }
+    }
+    let converted = init_members(dir, &meta, &members, &mut report);
+    let mut manifest = Map::new();
+    manifest.insert("$schema".into(), schema_url().into());
+    manifest.insert("workspace".into(), json!({ "members": converted }));
+    if let Some((file, _)) = &meta.manual_changelog {
+        manifest.insert("publish".into(), json!({ "changelog": file }));
+    }
+    report.members = converted;
+    std::fs::write(dir.join(MANIFEST_FILE), pretty(&Value::Object(manifest)))
+        .map_err(|e| Diagnostic::plain_error(format!("cannot write `{MANIFEST_FILE}`: {e}")))?;
+    Ok(report)
 }
 
 /// The `move-folders` entries that move a whole addon folder: (folder
