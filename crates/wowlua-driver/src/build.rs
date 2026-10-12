@@ -1380,7 +1380,13 @@ pub fn build(
             && shipped.iter().any(|(abs, rel, _)| {
                 crate::keywords::processed_extension(rel)
                     && std::fs::read_to_string(abs).is_ok_and(|t| {
-                        t.contains("@project-author@") || t.contains("@project-version@")
+                        [
+                            "@project-author@",
+                            "@project-version@",
+                            "@project-revision@",
+                        ]
+                        .iter()
+                        .any(|k| t.contains(k))
                     })
             });
         let mut lib_info: Option<crate::keywords::KeywordInfo> = None;

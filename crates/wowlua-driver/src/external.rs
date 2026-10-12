@@ -81,7 +81,13 @@ pub fn build_external(
                         &package.source,
                         package.pin.as_deref(),
                         profile.debug,
-                        text.contains("@project-author@"),
+                        [
+                            "@project-author@",
+                            "@project-version@",
+                            "@project-revision@",
+                        ]
+                        .iter()
+                        .any(|k| text.contains(k)),
                     )
                 });
                 let mut out = if lower.ends_with(".lua") || lower.ends_with(".xml") {

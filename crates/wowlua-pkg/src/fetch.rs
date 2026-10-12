@@ -807,6 +807,21 @@ pub fn package_vcs(cache: &Cache, source: &crate::Source, pin: &str, detail: boo
                             && let Some(tag) = path.rsplit('/').next().filter(|t| !t.is_empty())
                         {
                             v.version = tag.to_string();
+                            // The revision becomes the tag's (its copy).
+                            let mut c = Command::new("svn");
+                            c.args([
+                                "info",
+                                "--non-interactive",
+                                "--show-item",
+                                "last-changed-revision",
+                            ])
+                            .arg(format!("{root}/tags/{tag}"));
+                            if let Ok(rev) = run(c, "") {
+                                let rev = rev.trim();
+                                if !rev.is_empty() {
+                                    v.revision = rev.to_string();
+                                }
+                            }
                         }
                     }
                 }
