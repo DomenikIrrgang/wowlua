@@ -2588,6 +2588,14 @@ fn build_version(
     if vcs.tags.is_empty() || vcs.dirty {
         return Some(format!("{version}-alpha{hash}"));
     }
+    // A converted packager project is versioned by its tags, like the
+    // packager's `@project-version@` (decision T157).
+    if project.manifest.manifest.compat.packager_keywords {
+        return Some(
+            crate::keywords::head_tag(&project.manifest.root)
+                .unwrap_or_else(|| vcs.tags[0].clone()),
+        );
+    }
     let matching = vcs
         .tags
         .iter()

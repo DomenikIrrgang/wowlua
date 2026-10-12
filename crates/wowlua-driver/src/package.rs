@@ -25,6 +25,8 @@ pub struct PackageRequest {
     pub release_type: Option<ReleaseType>,
     /// `--allow-dirty`: a dirty working tree is allowed (an alpha build).
     pub allow_dirty: bool,
+    /// `publish --tag` in a dry run: the tag the build is treated as on.
+    pub tag: Option<String>,
 }
 
 /// The release type of a build (`alpha`, `beta`, `release`).
@@ -77,6 +79,11 @@ pub struct Packaged {
     pub packager: bool,
     /// The repository root.
     pub repo: PathBuf,
+    /// The project title (`release.json` names, changelogs): the packager's
+    /// `changelog-title` or plain TOC title in packager mode.
+    pub title: String,
+    /// The AddOn whose folder holds the package files (changelog).
+    pub main: String,
 }
 
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
@@ -94,9 +101,42 @@ fn git(dir: &Path, args: &[&str]) -> Option<String> {
 
 /// Whether the working tree has uncommitted changes (the build output
 /// folder `out` aside).
-pub fn dirty(dir: &Path, out: &str) -> bool {
-    let exclude = format!(":(exclude){out}");
-    git(dir, &["status", "--porcelain", "--", ".", &exclude]).is_some_and(|s| !s.is_empty())
+pub fn dirty(dir: &Path, out: &Path) -> bool {
+    let mut args = vec![
+        "status".to_string(),
+        "--porcelain".into(),
+        "--".into(),
+        ".".into(),
+    ];
+    if let Ok(rel) = normalized(out).strip_prefix(normalized(dir)) {
+        args.push(format!(
+            ":(exclude){}",
+            rel.to_string_lossy().replace('\\', "/")
+        ));
+    }
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    git(dir, &args).is_some_and(|s| !s.is_empty())
+}
+
+/// A path with `.` and `..` components resolved lexically.
+fn normalized(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for c in path.components() {
+        match c {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// The output root of a project (`build.out`; a workspace member's is the
+/// workspace's).
+pub fn out_root(project: &Project) -> PathBuf {
+    normalized(&project.manifest.out_dir())
 }
 
 /// The release type (Publishing §11.1.2): explicit, else from the tag on
@@ -154,7 +194,7 @@ fn config_of(target: &Target) -> Config {
 }
 
 /// Zip timestamps: `SOURCE_DATE_EPOCH`, else the time of `HEAD`.
-fn zip_time(repo: &Path) -> zip::DateTime {
+pub(crate) fn zip_time(repo: &Path) -> zip::DateTime {
     let secs = std::env::var("SOURCE_DATE_EPOCH")
         .ok()
         .and_then(|s| s.parse::<i64>().ok())
@@ -340,8 +380,11 @@ pub fn package(
         .workspace_root
         .clone()
         .unwrap_or_else(|| first.manifest.root.clone());
-    let tag = crate::keywords::head_tag(&repo);
-    let dirty = dirty(&repo, &first.manifest.manifest.build.out);
+    let tag = request
+        .tag
+        .clone()
+        .or_else(|| crate::keywords::head_tag(&repo));
+    let dirty = dirty(&repo, &out_root(first));
     let packager = first.manifest.manifest.compat.packager_keywords;
     if packager {
         package_like_the_packager(session, projects, request, &repo, tag)
@@ -387,7 +430,7 @@ fn package_native(
             }
         }
         let several = configs.len() > 1;
-        let out_root = project.manifest.out_dir();
+        let out_root = out_root(project);
         for (config, names) in &configs {
             let flavors = request.flavors.clone().or_else(|| config.flavors.clone());
             let all = project.manifest.flavors.clone();
@@ -491,13 +534,15 @@ fn package_native(
         release: release_type(
             request.release_type.or(release_setting),
             tag.as_deref(),
-            dirty && !request.allow_dirty,
+            dirty,
             false,
         ),
         zips,
         tag,
         packager: false,
         repo: repo.to_path_buf(),
+        title: crate::packaging::plain_title(&projects[0].manifest.title()),
+        main: projects[0].addon_name(),
     })
 }
 
@@ -541,11 +586,7 @@ fn package_like_the_packager(
     let info = crate::keywords::KeywordInfo::from_git(repo, "", false, false, 0);
     let (file_template, label_template) = packager_templates(compat.archive_name.as_deref());
     let time = zip_time(repo);
-    let out_root = main
-        .workspace_root
-        .as_ref()
-        .map(|w| w.join(&main.manifest.manifest.build.out))
-        .unwrap_or_else(|| main.manifest.out_dir());
+    let out_root = out_root(main);
     let all_targets: Vec<String> = targets.iter().map(|(n, _)| n.clone()).collect();
     let github: Vec<String> = targets
         .iter()
@@ -692,6 +733,17 @@ fn package_like_the_packager(
         tag,
         packager: true,
         repo: repo.to_path_buf(),
+        // Like the package files the build adds: the repository manifest's.
+        title: std::fs::read_to_string(repo.join(wowlua_manifest::MANIFEST_FILE))
+            .ok()
+            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+            .and_then(|m| {
+                m.pointer("/compat/changelog-title")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+            })
+            .unwrap_or_else(|| crate::packaging::plain_title(&main.manifest.title())),
+        main: package_name,
     })
 }
 

@@ -44,8 +44,11 @@ fi
 (cd "$WORK/wowlua" && "$WOWLUA" init --from-pkgmeta)
 # The packager's line endings: CR LF unless the project's runs pass `-u`
 # (what `init` read from its workflows).
-unix=()
-[ "$(jq -r '.compat."line-endings" // "lf"' "$WORK/wowlua/wowlua.json")" = lf ] && unix=(-u)
+opts=()
+[ "$(jq -r '.compat."line-endings" // "lf"' "$WORK/wowlua/wowlua.json")" = lf ] && opts=(-u)
+# The zip name templates its runs pass (`-n`, what `init` read).
+name=$(jq -r '.compat."archive-name" // empty' "$WORK/wowlua/wowlua.json")
+[ -n "$name" ] && opts+=(-n "$name")
 
 # Projects whose CI packages one game per packager run (`-g <game> -m
 # <file>`) are compared game by game; the others in one multi-version run.
@@ -59,7 +62,7 @@ RUNS=$(cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager
 if [ -z "$RUNS" ] || [ "$RUNS" = split ]; then
   split=()
   [ "$RUNS" = split ] && split=(-S)
-  (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -l "${unix[@]}" "${split[@]}" -r "$WORK/release")
+  (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -l "${opts[@]}" "${split[@]}" -r "$WORK/release")
   cp "$WORK/release"/*.zip "$WORK/zips/"
   (cd "$WORK/wowlua" && "$WOWLUA" build --release)
   # Every AddOn folder the packager made (move-folders makes several).
@@ -71,7 +74,7 @@ else
     rm -rf "$WORK/release"
     meta=()
     [ "$file" != "-" ] && meta=(-m "$file")
-    (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -l "${unix[@]}" -g "$game" "${meta[@]}" -r "$WORK/release")
+    (cd "$WORK/addon" && bash "$WORK/packager/release.sh" -d -l "${opts[@]}" -g "$game" "${meta[@]}" -r "$WORK/release")
     cp "$WORK/release"/*.zip "$WORK/zips/"
     (cd "$WORK/wowlua" && "$WOWLUA" build --release --flavor "$flavor")
     cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -p xtask -- packager-diff \

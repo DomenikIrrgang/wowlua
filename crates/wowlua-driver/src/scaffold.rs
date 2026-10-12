@@ -1370,6 +1370,22 @@ fn convert_pkgmeta(
                 .expect("an object")
                 .insert("project-id".into(), value);
         }
+        // The `.pkgmeta` WoWInterface settings.
+        if let Some(wowi) = targets
+            .get_mut("wowinterface")
+            .and_then(Value::as_object_mut)
+        {
+            if meta.wowi_markdown {
+                wowi.insert("changelog-output".into(), json!("markdown"));
+            }
+            // Without a manual changelog: no generated one.
+            if meta.wowi_no_changelog && meta.manual_changelog.is_none() {
+                wowi.insert("changelog".into(), Value::Null);
+            }
+            if meta.wowi_keep_previous {
+                wowi.insert("archive-previous".into(), json!(false));
+            }
+        }
         if !relations.is_empty() {
             match targets.get_mut("curseforge").and_then(Value::as_object_mut) {
                 Some(cf) => {

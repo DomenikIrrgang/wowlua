@@ -52,6 +52,38 @@ pub struct GlobalArgs {
     pub deny_warnings: bool,
 }
 
+#[derive(Args, Debug, Clone)]
+pub struct PublishArgs {
+    /// Only these publish targets
+    #[arg(long = "target", value_name = "NAME")]
+    pub targets: Vec<String>,
+    /// Package and print what each target would receive, without uploading
+    #[arg(long)]
+    pub dry_run: bool,
+    /// Tag HEAD (locally) and publish it as that tag
+    #[arg(long, value_name = "TAG")]
+    pub tag: Option<String>,
+    /// Release type instead of the manifest's
+    #[arg(long, value_enum)]
+    pub release_type: Option<ReleaseTypeArg>,
+    /// Publish with uncommitted changes (an alpha build)
+    #[arg(long)]
+    pub allow_dirty: bool,
+    /// Skip the tests
+    #[arg(long)]
+    pub no_test: bool,
+    /// Restrict to these flavors
+    #[arg(long, value_delimiter = ',')]
+    pub flavor: Vec<String>,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseTypeArg {
+    Alpha,
+    Beta,
+    Release,
+}
+
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     Human,
@@ -119,6 +151,8 @@ enum Command {
         #[arg(long, value_delimiter = ',')]
         flavor: Vec<String>,
     },
+    /// Package and upload to the publish targets
+    Publish(PublishArgs),
     /// Check the sources without writing a build
     Check {
         #[command(flatten)]
@@ -385,6 +419,7 @@ fn main() -> ExitCode {
         Command::Package { targets, flavor } => {
             commands::package(&out, &cli.global, targets, flavor)
         }
+        Command::Publish(args) => commands::publish(&out, &cli.global, args),
         Command::Check { profile, flavor } => {
             commands::check(&out, &cli.global, &profile.name("dev"), flavor)
         }

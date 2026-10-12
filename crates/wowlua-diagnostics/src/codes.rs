@@ -159,6 +159,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "W4333", summary: "`.pkgmeta` hg external cannot be converted" },
     CodeInfo { code: "E4334", summary: "Both a hand-written `Bindings.xml` and `wowlua:bindings` declarations" },
     CodeInfo { code: "E4335", summary: "Packager `@version-…@` blocks in a multi-version build" },
+    CodeInfo { code: "E4336", summary: "`wowlua publish` with uncommitted changes in the working tree (without `--allow-dirty`)" },
     CodeInfo { code: "E5001", summary: "Lua 5.1 limit exceeded (locals, upvalues, registers, constants, syntax levels, jump distance), including generated locals" },
     CodeInfo { code: "E5002", summary: "Output validation failed (missing or unreachable file, unresolvable XML reference, invalid TOC or XML)" },
     CodeInfo { code: "W5003", summary: "Unresolvable XML reference in a packager `@debug@` block, left out of a debug build" },

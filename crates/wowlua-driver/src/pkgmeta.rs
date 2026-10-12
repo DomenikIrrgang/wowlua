@@ -62,6 +62,13 @@ pub struct PkgMeta {
     pub license_output: Option<String>,
     /// `changelog-title`: the title of the generated changelog.
     pub changelog_title: Option<String>,
+    /// `wowi-create-changelog: no`: no generated WoWInterface changelog.
+    pub wowi_no_changelog: bool,
+    /// `wowi-convert-changelog: no`: Markdown changelogs go to WoWInterface
+    /// unconverted.
+    pub wowi_markdown: bool,
+    /// `wowi-archive-previous: no`: the previous file stays.
+    pub wowi_keep_previous: bool,
     /// The `ignore` lists of the flavors whose packager runs use their own
     /// project file (`-g <game> -m <file>` in CI workflows), by flavor id;
     /// flavors packaged with this file are listed with its `ignore`.
@@ -414,6 +421,11 @@ pub fn parse(text: &str) -> Result<PkgMeta, String> {
                 "license-output" => meta.license_output = value,
                 "enable-toc-creation" => meta.split = value.as_deref() == Some("yes"),
                 "changelog-title" => meta.changelog_title = value,
+                "wowi-create-changelog" => meta.wowi_no_changelog = value.as_deref() == Some("no"),
+                "wowi-convert-changelog" => meta.wowi_markdown = value.as_deref() == Some("no"),
+                "wowi-archive-previous" => {
+                    meta.wowi_keep_previous = value.as_deref() == Some("no");
+                }
                 _ => {}
             }
             continue;

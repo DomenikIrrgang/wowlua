@@ -47,7 +47,7 @@ pub fn plain_title(title: &str) -> String {
 }
 
 /// The repository's GitHub URL, as the packager reads it from `origin`.
-fn github_url(dir: &Path) -> Option<String> {
+pub(crate) fn github_url(dir: &Path) -> Option<String> {
     let remote = git(dir, &["remote", "get-url", "origin"])
         .filter(|u| !u.trim().is_empty())
         .or_else(|| {
@@ -128,22 +128,19 @@ fn escape_underscores(line: &str) -> String {
     out
 }
 
-fn is_revert_note(line: &str) -> bool {
+pub(crate) fn is_revert_note(line: &str) -> bool {
     let t = line.trim();
     t.strip_prefix("This reverts commit ")
         .and_then(|r| r.strip_suffix('.'))
         .is_some_and(|h| h.len() == 40 && h.bytes().all(|b| b.is_ascii_hexdigit()))
 }
 
-/// The changelog the packager generates (`CHANGELOG.md`): the commits since
-/// the previous release tag, with GitHub links when the repository is on
-/// GitHub. `None` outside a git repository.
-pub fn generated_changelog(dir: &Path, title: &str, info: &KeywordInfo) -> Option<String> {
-    git(dir, &["rev-parse", "HEAD"])?;
+/// The packager's previous version: the latest earlier tag, alpha tags
+/// aside (and beta tags for a release tag).
+pub(crate) fn previous_tag(dir: &Path, tag: Option<&str>) -> Option<String> {
     let exclude_alpha = "--exclude=*[Aa][Ll][Pp][Hh][Aa]*";
-    let tag = crate::keywords::head_tag(dir);
     let line = |s: Option<String>| s.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
-    let previous = match &tag {
+    match tag {
         Some(t) => {
             let lower = t.to_ascii_lowercase();
             let mut args = vec!["describe", "--tags", "--abbrev=0", exclude_alpha];
@@ -163,7 +160,16 @@ pub fn generated_changelog(dir: &Path, title: &str, info: &KeywordInfo) -> Optio
                 &["describe", "--tags", "--abbrev=0", exclude_alpha],
             ))
         }),
-    };
+    }
+}
+
+/// The changelog the packager generates (`CHANGELOG.md`): the commits since
+/// the previous release tag, with GitHub links when the repository is on
+/// GitHub. `None` outside a git repository.
+pub fn generated_changelog(dir: &Path, title: &str, info: &KeywordInfo) -> Option<String> {
+    git(dir, &["rev-parse", "HEAD"])?;
+    let tag = crate::keywords::head_tag(dir);
+    let previous = previous_tag(dir, tag.as_deref());
     let url = github_url(dir);
     let hash = &info.hash;
     let version = &info.version;

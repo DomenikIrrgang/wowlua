@@ -483,6 +483,10 @@ with an incompatible type, is error E4012.
 
 Without version control, `<short hash>` is omitted (`X.Y.Z-dev`).
 
+A converted packager project (`compat.packager-keywords`) is versioned by its
+tags like the BigWigs packager: on a tag, `build.version` is the tag as it is
+(the packager's `@project-version@`) and E4319 does not apply (decision T158).
+
 ## 9.10 `minify-levels`
 
 User-defined minification levels: `{ name: { extends?: level, passes: pass[] } }`.

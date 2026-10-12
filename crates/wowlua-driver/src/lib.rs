@@ -21,6 +21,7 @@ pub mod package;
 pub mod packaging;
 pub mod pkgmeta;
 pub mod project;
+pub mod publish;
 pub mod scaffold;
 mod sources;
 pub mod trace;

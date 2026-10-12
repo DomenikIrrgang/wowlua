@@ -233,6 +233,91 @@ pub fn package(
     }
 }
 
+pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> bool {
+    use wowlua_manifest::model::ReleaseType;
+    let started = Instant::now();
+    let mut session = Session::new();
+    // A publish never changes the lockfile (§11.1.1).
+    let mut options = load_options(out, global);
+    options.locked = true;
+    let Some(projects) = wowlua_driver::load_projects(&mut session, &options) else {
+        out.flush(&mut session);
+        return false;
+    };
+    let request = wowlua_driver::publish::PublishRequest {
+        package: wowlua_driver::package::PackageRequest {
+            targets: args.targets,
+            flavors: (!args.flavor.is_empty()).then_some(args.flavor),
+            release_type: args.release_type.map(|r| match r {
+                crate::ReleaseTypeArg::Alpha => ReleaseType::Alpha,
+                crate::ReleaseTypeArg::Beta => ReleaseType::Beta,
+                crate::ReleaseTypeArg::Release => ReleaseType::Release,
+            }),
+            allow_dirty: args.allow_dirty,
+            tag: None,
+        },
+        dry_run: args.dry_run,
+        tag: args.tag,
+    };
+    let report = wowlua_driver::publish::publish(&mut session, &projects, &request);
+    for project in &projects {
+        apply_lints(&mut session, project);
+    }
+    let Some(report) = report else {
+        out.flush(&mut session);
+        return false;
+    };
+    if let Some(p) = &report.packaged {
+        for zip in &p.zips {
+            out.status(
+                "Packaged",
+                format!(
+                    "{} ({}{}) → {}",
+                    zip.file_name,
+                    p.release.as_str(),
+                    if zip.nolib { ", nolib" } else { "" },
+                    relative(&zip.path)
+                ),
+            );
+        }
+        if p.zips.is_empty() {
+            out.status(
+                "Note",
+                "no publish targets: add one under `publish.targets` (see `wowlua explain` or the manual)",
+            );
+        }
+    }
+    for o in &report.outcomes {
+        let (label, text) = match (o.ok, o.skipped, args.dry_run) {
+            (true, true, _) => (
+                "Skipped",
+                format!("{} ({}): {}", o.target, o.file, o.message),
+            ),
+            (true, false, true) => (
+                "Dry run",
+                format!("{} ({}): {}", o.target, o.file, o.message),
+            ),
+            (true, false, false) => (
+                "Uploaded",
+                format!("{} → {}: {}", o.file, o.target, o.message),
+            ),
+            (false, _, _) => ("Failed", format!("{} ({})", o.target, o.file)),
+        };
+        out.status(label, text);
+    }
+    for note in &report.notes {
+        out.status("Note", note);
+    }
+    let ok = out.flush(&mut session) && report.ok();
+    if ok {
+        out.status(
+            "Finished",
+            format!("publishing in {:.2}s", started.elapsed().as_secs_f64()),
+        );
+    }
+    ok
+}
+
 pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String>) -> bool {
     let mut session = Session::new();
     let request = BuildRequest {

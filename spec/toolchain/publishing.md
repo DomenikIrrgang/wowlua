@@ -61,15 +61,19 @@ by `wowlua login <type>`), or, where no credential store exists, from
 `config.json` ([Package manager §10.11](package-manager.md#1011-security)).
 A missing token is error E4201. Default variables:
 
-| Target | Default env var |
+| Target | Default env vars, in order |
 |--------|-----------------|
-| CurseForge | `CF_API_TOKEN` |
+| CurseForge | `CF_API_TOKEN`, `CF_API_KEY` |
 | Wago | `WAGO_API_TOKEN` |
 | WoWInterface | `WOWI_API_TOKEN` |
-| GitHub | `GITHUB_TOKEN`, falling back to `GH_API_TOKEN` |
+| GitHub | `GITHUB_TOKEN`, `GH_API_TOKEN`, `GITHUB_API_TOKEN`, `GITHUB_OAUTH` |
 | wowlua registry | `WOWLUA_REGISTRY_TOKEN` |
 
-The default names match the BigWigs packager, so existing CI secrets keep working.
+Besides `GITHUB_TOKEN`, the names are the BigWigs packager's, so existing CI
+secrets keep working. A converted packager project reads exactly the
+packager's variables (not `GITHUB_TOKEN`), and also its `.env` file in the
+repository root, whose values win over the environment like the packager's
+(decision T158).
 
 ## 11.2 Packaging
 
@@ -272,9 +276,12 @@ It is read by addon managers such as WowUp:
   `mists`, …), taken from the flavor table.
 - When a release is re-run, existing `release.json` entries are merged by
   `filename`.
-- With `archive-maps: true`, the build's source maps are uploaded as
-  `<Name>-<version>-maps.zip`, so `wowlua trace` can decode reports from that
-  version later.
+- With `archive-maps: true`, each zip's source maps are uploaded as
+  `<zip name>-maps.zip` (for example `MyAddon-1.4.2-maps.zip`), so
+  `wowlua trace` can decode reports from that version later. Converted
+  packager projects upload them only with an explicit `archive-maps: true`.
+- The release is named after the tag, and the token is sent as
+  `Authorization: Bearer` (`token` for converted packager projects).
 - GitHub requires a tag. Publishing an untagged build to GitHub creates no
   release unless `--tag` is given (warning W4329 otherwise).
 
@@ -290,8 +297,9 @@ cannot be published to the registry (E4230).
 wowlua publish [--target <name>…] [--dry-run] [--tag <tag>] [--release-type <t>] [--allow-dirty] [--no-test] [--deny-warnings] [-p <package>]
 ```
 
-1. Verify a clean working tree, unless `--allow-dirty` (which makes the release
-   type `alpha` under `"auto"`). Resolution runs with `--locked`.
+1. Verify a clean working tree (E4336), unless `--allow-dirty` (which makes
+   the release type `alpha` under `"auto"`). Resolution runs with `--locked`.
+   Every target's token must be present (E4201) before anything is uploaded.
 2. Build every distinct target configuration and validate the output.
 3. Run `wowlua test`, unless `--no-test`.
 4. Package the zips.
@@ -312,4 +320,26 @@ publish stops (E4330).
 
 `--dry-run` performs steps 1–4, prints the exact metadata each target would
 receive (tokens redacted), and validates tokens with a read-only request where
-the site offers one.
+the site offers one. It does not create a `--tag` tag.
+
+**Converted packager projects** publish like the BigWigs packager (decision
+T158) instead of steps 1, 5 and 7's parallel uploads:
+
+- no clean-tree check (the packager does not look at the working tree);
+- per package (one per game for `compat.per-game`), the targets upload in the
+  packager's order: CurseForge, WoWInterface, Wago, GitHub. The CurseForge
+  upload is tried up to ten times; if it still fails, the remaining uploads
+  are aborted;
+- a target without a token is skipped with a note;
+- the changelog is the packager's: the `manual-changelog` file (markup type
+  from `publish.changelog-format`, default `text`) or the `CHANGELOG.md` it
+  generates, read from the built package. WoWInterface gets the manual
+  Markdown changelog converted with `pandoc` when it is installed (the
+  packager's HTML-to-BBCode rules), else as it is, or its generated BBCode
+  changelog. `.pkgmeta` `wowi-convert-changelog: no` becomes the target's
+  `changelog-output: "markdown"`, `wowi-create-changelog: no` its
+  `changelog: null`, `wowi-archive-previous: no` its `archive-previous: false`;
+- the GitHub release gets the package, its nolib package, and `release.json`
+  entries named after the project title with the tag as version;
+- on GitHub Actions, a branch push whose commit is tagged publishes nothing
+  (the tag's run does), like the packager.

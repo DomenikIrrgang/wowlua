@@ -145,6 +145,7 @@ any warning can be changed in the manifest (`check.lints`). `wowlua explain
 | E4327 | Library does not support a targeted flavor (and the dependency is not restricted with `flavors`) |
 | E4330 | `--tag` names an existing tag that points at another commit |
 | E4331 | `dev`/`install` refuses to overwrite an AddOn folder not installed by wowlua (no `X-Wowlua-Build`); use `--force` |
+| E4336 | `wowlua publish` with uncommitted changes in the working tree (without `--allow-dirty`) |
 | E5001 | Lua 5.1 limit exceeded (locals, upvalues, registers, constants, syntax levels, jump distance), including generated locals |
 | E5002 | Output validation failed (missing or unreachable file, unresolvable XML reference, invalid TOC or XML) |
 | W5003 | Unresolvable XML reference in a packager `@debug@` block, left out of a debug build |
