@@ -167,7 +167,10 @@ everything it reaches, and it is not listed in the TOC again.
 every file reachable from them through XML `<Script>` / `<Include>` chains
 (which must resolve), and the library's license files (`LICENSE*`, `COPYING*`,
 or `lua-library.license-files`). Tests, docs and other files of the library
-repository are not copied.
+repository are not copied. A converted packager project
+(`compat.packager-keywords`) ships every file of the library instead, like the
+packager ships externals: all but dotfiles, its repository's `.pkgmeta`
+`ignore` and the project's `build.exclude` (decision T144).
 
 These libraries keep their own runtime versioning (LibStub). wowlua does not
 rename or rewrite them, except when the minification level applies to bundled

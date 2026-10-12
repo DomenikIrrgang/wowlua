@@ -100,8 +100,18 @@ fn git(dir: &Path, args: &[&str]) -> Option<String> {
 impl KeywordInfo {
     /// Repository values from `git` (empty outside a repository).
     pub fn from_git(dir: &Path, version: &str, debug: bool, alpha: bool, now: i64) -> Self {
+        // The packager's file type: untagged builds and tags naming
+        // "alpha" are alpha builds (`-beta` tags are not).
+        let tag = head_tag(dir);
+        let alpha = match &tag {
+            Some(t) => t.to_ascii_lowercase().contains("alpha"),
+            None if git(dir, &["rev-parse", "HEAD"]).is_some() => true,
+            None => alpha,
+        };
         let mut info = KeywordInfo {
-            version: packager_version(dir).unwrap_or_else(|| version.to_string()),
+            version: tag
+                .or_else(|| packager_version(dir))
+                .unwrap_or_else(|| version.to_string()),
             debug,
             alpha,
             build_timestamp: now,
@@ -129,19 +139,8 @@ impl KeywordInfo {
 /// tag on `HEAD`, otherwise `git describe` with 7-digit hashes, ignoring
 /// alpha tags, otherwise the short hash.
 fn packager_version(dir: &Path) -> Option<String> {
-    let tags = git(
-        dir,
-        &[
-            "tag",
-            "--points-at",
-            "HEAD",
-            "--sort=-committerdate",
-            "--sort=-v:refname",
-            "--sort=-taggerdate",
-        ],
-    )?;
-    if let Some(tag) = tags.lines().next().filter(|t| !t.is_empty()) {
-        return Some(tag.to_string());
+    if let Some(tag) = head_tag(dir) {
+        return Some(tag);
     }
     git(
         dir,
@@ -154,6 +153,34 @@ fn packager_version(dir: &Path) -> Option<String> {
     )
     .filter(|d| !d.is_empty())
     .or_else(|| git(dir, &["describe", "--tags", "--always", "--abbrev=7"]))
+}
+
+/// The tag on `HEAD` the packager picks: the most recent one, or the one a
+/// GitHub Actions tag build names (`GITHUB_REF_NAME`).
+pub(crate) fn head_tag(dir: &Path) -> Option<String> {
+    let tags = git(
+        dir,
+        &[
+            "tag",
+            "--points-at",
+            "HEAD",
+            "--sort=-committerdate",
+            "--sort=-v:refname",
+            "--sort=-taggerdate",
+        ],
+    )?;
+    let tags: Vec<&str> = tags.lines().filter(|t| !t.is_empty()).collect();
+    let named = std::env::var("GITHUB_REF")
+        .ok()
+        .filter(|r| r.starts_with("refs/tags/"))
+        .and_then(|_| std::env::var("GITHUB_REF_NAME").ok())
+        .filter(|n| tags.contains(&n.as_str()));
+    named.or_else(|| tags.first().map(|t| t.to_string()))
+}
+
+/// `2026-10-12T04:45:27Z` of Unix seconds.
+pub(crate) fn iso_date(secs: i64) -> String {
+    dates(secs).0
 }
 
 /// `2026-10-12T04:45:27Z` and `20261012044527` of Unix seconds.
@@ -236,11 +263,22 @@ pub const FLAVOR_KEYWORDS: &[(&str, &str)] = &[
     ("version-vanilla", "vanilla"),
     ("version-bcc", "tbc"),
     ("version-wrath", "wrath"),
-    ("version-titan", "wrath"),
+    // Titan Reforged is not a flavor of its own: wrath builds are
+    // `-g wrath` builds, where its blocks are inactive.
+    ("version-titan", "titan"),
     ("version-cata", "cata"),
     ("version-mists", "mists"),
     ("version-forever", "camelot"),
 ];
+
+/// Whether `text` uses `@version-…@` blocks, which the packager rejects in
+/// a multi-version build.
+pub fn has_version_blocks(text: &str) -> bool {
+    FLAVOR_KEYWORDS
+        .iter()
+        .filter(|(k, _)| k.starts_with("version-"))
+        .any(|(k, _)| text.contains(&format!("@{k}@")) || text.contains(&format!("@non-{k}@")))
+}
 
 /// Whether `text` uses flavor blocks.
 pub fn has_flavor_blocks(text: &str) -> bool {
@@ -297,6 +335,18 @@ pub fn apply_library(text: &str, info: &KeywordInfo, xml: bool) -> String {
     out
 }
 
+/// The `@file-*@` keywords of one file.
+pub fn substitute_file(text: &str, f: &wowlua_pkg::fetch::FileVcs) -> String {
+    let (iso, int) = dates(f.timestamp);
+    text.replace("@file-revision@", &f.revision)
+        .replace("@file-hash@", &f.hash)
+        .replace("@file-abbreviated-hash@", &f.short_hash)
+        .replace("@file-author@", &f.author)
+        .replace("@file-date-iso@", &iso)
+        .replace("@file-date-integer@", &int)
+        .replace("@file-timestamp@", &f.timestamp.to_string())
+}
+
 pub fn substitute(text: &str, info: &KeywordInfo) -> String {
     let (date_iso, date_int) = dates(info.timestamp);
     let (build_iso, build_int) = dates(info.build_timestamp);
@@ -317,7 +367,9 @@ pub fn substitute(text: &str, info: &KeywordInfo) -> String {
 /// Applies repository keywords and the debug/alpha blocks; release builds
 /// drop `@do-not-package@` blocks. `rel` is the file's path in the
 /// repository, for `@file-*@`.
-pub fn apply(text: &str, info: &KeywordInfo, rel: &Path, original: &Path, xml: bool) -> String {
+/// Repository keywords of a text file of the project (`.md`, `.txt` and
+/// the like get nothing else from the packager).
+pub fn apply_text(text: &str, info: &KeywordInfo, rel: &Path, original: &Path) -> String {
     if !text.contains('@') {
         return text.to_string();
     }
@@ -361,19 +413,29 @@ pub fn apply(text: &str, info: &KeywordInfo, rel: &Path, original: &Path, xml: b
         let parts: Vec<&str> = line.split('\t').collect();
         if parts.len() == 4 {
             let ts: i64 = parts[3].parse().unwrap_or(0);
-            let (iso, int) = dates(ts);
-            let count =
-                git(repo, &["rev-list", "--count", "HEAD", "--", &path]).unwrap_or_default();
-            out = out
-                .replace("@file-revision@", &count)
-                .replace("@file-hash@", parts[0])
-                .replace("@file-abbreviated-hash@", parts[1])
-                .replace("@file-author@", parts[2])
-                .replace("@file-date-iso@", &iso)
-                .replace("@file-date-integer@", &int)
-                .replace("@file-timestamp@", &ts.to_string());
+            // The commit count of the file's last commit, like the
+            // packager's `rev-list --count <file hash>`.
+            let count = git(repo, &["rev-list", "--count", parts[0]]).unwrap_or_default();
+            out = substitute_file(
+                &out,
+                &wowlua_pkg::fetch::FileVcs {
+                    revision: count,
+                    hash: parts[0].into(),
+                    short_hash: parts[1].into(),
+                    author: parts[2].into(),
+                    timestamp: ts,
+                },
+            );
         }
     }
+    out
+}
+
+pub fn apply(text: &str, info: &KeywordInfo, rel: &Path, original: &Path, xml: bool) -> String {
+    if !text.contains('@') {
+        return text.to_string();
+    }
+    let mut out = apply_text(text, info, rel, original);
     if !info.debug {
         out = remove_do_not_package(&out, xml);
     }
@@ -490,6 +552,38 @@ pub fn toc_version_placeholders(text: &str) -> String {
     out
 }
 
+/// The flavor of a packager `-g` value: a game type, or game versions
+/// (`1.15.9`, `5.5.4,1.15.9`) of one game type; `None` for several types,
+/// which the packager builds as a multi-version package.
+pub fn game_flavor(game: &str) -> Option<&'static str> {
+    if let Some(f) = interface_type_flavor(game) {
+        return Some(f);
+    }
+    let mut flavor = None;
+    for version in game.split(',') {
+        let parts: Vec<&str> = version.trim().split('.').collect();
+        let [major, minor, _] = parts.as_slice() else {
+            return None;
+        };
+        let f = match (*major, *minor) {
+            ("1", m) if m.len() == 2 && m.starts_with('6') => "camelot",
+            ("1", _) => "vanilla",
+            ("2", _) => "tbc",
+            ("3", "80") => "titan",
+            ("3", _) => "wrath",
+            ("4", _) => "cata",
+            ("5", _) => "mists",
+            _ => "standard",
+        };
+        if flavor.is_some_and(|x| x != f) {
+            return None;
+        }
+        flavor = Some(f);
+    }
+    // Titan Reforged builds have no flavor of their own.
+    flavor.filter(|f| *f != "titan")
+}
+
 /// The game types of the packager's `## Interface-<Type>:` lines and the
 /// flavors they name.
 pub fn interface_type_flavor(kind: &str) -> Option<&'static str> {
@@ -553,6 +647,29 @@ pub fn package_info(
         alpha: false,
         repo: None,
     }
+}
+
+/// The `@file-*@` keywords of a file of an embedded library.
+pub fn library_file_keywords(
+    text: &str,
+    lib: &crate::embed::LuaLib,
+    info: &KeywordInfo,
+    rel: &str,
+    bytes: &[u8],
+) -> String {
+    let (Some(cache), Some(pin)) = (wowlua_pkg::Cache::new(), lib.pin.as_deref()) else {
+        return text.to_string();
+    };
+    let project = wowlua_pkg::fetch::PackageVcs {
+        version: info.version.clone(),
+        hash: info.hash.clone(),
+        short_hash: info.short_hash.clone(),
+        revision: info.revision.clone(),
+        author: info.author.clone(),
+        timestamp: info.timestamp,
+    };
+    let file = wowlua_pkg::fetch::package_file_vcs(&cache, &lib.source, pin, rel, bytes, &project);
+    substitute_file(text, &file)
 }
 
 /// `@localization(…)@` is not supported (W4030).

@@ -9,25 +9,8 @@ use crate::Session;
 use crate::build::{BuildOutput, Content};
 use crate::project::ExternalAddon;
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use wowlua_diagnostics::Diagnostic;
-
-/// The checkout root of a fetched package (the package directory above
-/// its `subdir`), where its own `.pkgmeta` lives, and the package's path
-/// inside it.
-fn checkout_root(package: &wowlua_pkg::ResolvedPackage) -> (PathBuf, String) {
-    let sub = match &package.source {
-        wowlua_pkg::Source::Git { subdir, .. } => subdir.clone(),
-        wowlua_pkg::Source::Archive { strip_prefix, .. } => strip_prefix.clone(),
-        _ => None,
-    }
-    .unwrap_or_default();
-    let mut root = package.dir.clone();
-    for _ in sub.split('/').filter(|p| !p.is_empty()) {
-        root.pop();
-    }
-    (root, sub)
-}
 
 /// Builds an external addon into `<out>/<profile>/<name>/`.
 pub fn build_external(
@@ -45,13 +28,18 @@ pub fn build_external(
         return None;
     };
     let dir = &package.dir;
-    let (root, sub) = checkout_root(package);
     // The external's own `.pkgmeta`: `ignore` and `plain-copy` (patterns
-    // relative to its checkout root).
-    let own = crate::pkgmeta::read(&root)
-        .ok()
-        .flatten()
+    // relative to its repository root, where the package sits at `sub`).
+    let (own, sub) = package
+        .project_file
+        .as_ref()
+        .and_then(|(file, sub)| {
+            let text = std::fs::read_to_string(file).ok()?;
+            Some((crate::pkgmeta::parse(&text).ok()?, sub.clone()))
+        })
         .unwrap_or_default();
+    // An archive is copied as it is, like the packager does.
+    let archive = matches!(package.source, wowlua_pkg::Source::Archive { .. });
     let mut files: BTreeMap<String, Content> = BTreeMap::new();
     let mut info: Option<crate::keywords::KeywordInfo> = None;
     for entry in walkdir::WalkDir::new(dir)
@@ -76,6 +64,7 @@ pub fn build_external(
         }
         let abs = entry.path().to_path_buf();
         let processed = ext.packager
+            && !archive
             && crate::keywords::processed_extension(&rel)
             && !crate::keywords::plain_copy(&own.plain_copy, &[&in_root]);
         if !processed {
@@ -95,12 +84,34 @@ pub fn build_external(
                         text.contains("@project-author@"),
                     )
                 });
-                if lower.ends_with(".lua") || lower.ends_with(".xml") {
+                let mut out = if lower.ends_with(".lua") || lower.ends_with(".xml") {
                     crate::keywords::apply_library(text, info, lower.ends_with(".xml"))
                 } else {
                     crate::keywords::substitute(text, info)
+                };
+                if out.contains("@file-")
+                    && let (Some(cache), Some(pin)) =
+                        (wowlua_pkg::Cache::new(), package.pin.as_deref())
+                {
+                    let project = wowlua_pkg::fetch::PackageVcs {
+                        version: info.version.clone(),
+                        hash: info.hash.clone(),
+                        short_hash: info.short_hash.clone(),
+                        revision: info.revision.clone(),
+                        author: info.author.clone(),
+                        timestamp: info.timestamp,
+                    };
+                    let file = wowlua_pkg::fetch::package_file_vcs(
+                        &cache,
+                        &package.source,
+                        pin,
+                        &rel,
+                        &bytes,
+                        &project,
+                    );
+                    out = crate::keywords::substitute_file(&out, &file);
                 }
-                .into_bytes()
+                out.into_bytes()
             }
             _ => normalized,
         };

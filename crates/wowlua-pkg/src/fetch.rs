@@ -260,6 +260,11 @@ impl Fetcher {
         }
         let dir = self.git_repo(url, true)?;
         let found = match reference {
+            // The packager's `tag: latest`: the newest tag in a 50-commit
+            // clone of the default branch, else that branch.
+            GitRef::Tag(t) if t == LATEST_TAG => latest_tag(&dir)
+                .and_then(|(tag, _)| Self::rev_parse(&dir, &format!("refs/tags/{tag}")))
+                .or_else(|| Self::rev_parse(&dir, "HEAD")),
             GitRef::Tag(t) => Self::rev_parse(&dir, &format!("refs/tags/{t}")),
             GitRef::Branch(b) => Self::rev_parse(&dir, &format!("refs/heads/{b}")),
             GitRef::Rev(r) => Self::rev_parse(&dir, r),
@@ -509,6 +514,43 @@ impl Fetcher {
         Ok(target)
     }
 
+    /// The packager project file (`.pkgmeta`) of the SVN project a
+    /// `…/trunk/<sub>` or `…/tags/<tag>/<sub>` URL points into, with
+    /// `<sub>`: the packager reads it for an external's `ignore` and
+    /// `plain-copy`. Cached per revision; `None` when there is none.
+    pub fn svn_root_pkgmeta(&self, url: &str, rev: u64) -> Option<(PathBuf, String)> {
+        let (root, sub) = svn_project_root(url)?;
+        let entry = self.cache.checkout_dir(&format!(
+            "svn-{}-{}-r{rev}-pkgmeta",
+            cache::label(root),
+            cache::key(root)
+        ));
+        if !entry.exists() {
+            if self.offline {
+                return None;
+            }
+            let output = Command::new("svn")
+                .args(["cat", "--non-interactive"])
+                .arg(format!("{root}/.pkgmeta@{rev}"))
+                .stdin(Stdio::null())
+                .output()
+                .ok()?;
+            let missing = String::from_utf8_lossy(&output.stderr).contains("160013");
+            if !output.status.success() && !missing {
+                return None;
+            }
+            let staged = cache::staging(&entry).ok()?;
+            std::fs::create_dir_all(&staged).ok()?;
+            if output.status.success() {
+                std::fs::write(staged.join(".pkgmeta"), &output.stdout).ok()?;
+            }
+            cache::commit(&staged, &entry).ok()?;
+        }
+        self.cache.touch(&entry);
+        let file = entry.join(".pkgmeta");
+        file.is_file().then(|| (file, sub.to_string()))
+    }
+
     /// The newest revision of `url` (for `outdated`).
     pub fn svn_latest(&self, url: &str) -> Result<u64, FetchError> {
         self.svn_revision(url, None, None)
@@ -676,6 +718,22 @@ pub fn package_vcs(cache: &Cache, source: &crate::Source, pin: &str, detail: boo
             // history, so the revision is 1 and the version the tag or the
             // short hash; only `commit` externals are full clones.
             match reference {
+                crate::GitRef::Tag(t) if t == LATEST_TAG => {
+                    // Checked out in a 50-commit clone: the version is the
+                    // tag, the revision what that clone holds of its history.
+                    match latest_tag(&dir).filter(|(_, commit)| commit == pin) {
+                        Some((tag, _)) => {
+                            v.version = tag;
+                            let recent = q(&["rev-list", "--max-count=50", "HEAD"]);
+                            let depth = recent.lines().position(|c| c == pin).unwrap_or(0);
+                            v.revision = (50 - depth).to_string();
+                        }
+                        None => {
+                            v.version = v.short_hash.clone();
+                            v.revision = q(&["rev-list", "--count", "--max-count=50", pin]);
+                        }
+                    }
+                }
                 crate::GitRef::Tag(t) => {
                     v.revision = "1".into();
                     v.version = t.clone();
@@ -723,9 +781,33 @@ pub fn package_vcs(cache: &Cache, source: &crate::Source, pin: &str, detail: boo
                 let mut c = Command::new("svn");
                 c.args(["info", "--non-interactive"])
                     .arg(format!("{url}@{pin}"));
+                let mut root = None;
                 for line in run(c, "").unwrap_or_default().lines() {
                     if let Some(a) = line.strip_prefix("Last Changed Author: ") {
                         v.author = a.to_string();
+                    }
+                    if let Some(r) = line.strip_prefix("Repository Root: ") {
+                        root = Some(r.to_string());
+                    }
+                }
+                // A trunk checkout whose revision the newest tag was copied
+                // from is that tag (the packager's `set_info_svn`).
+                if let Some(root) = root.filter(|_| !url.contains("/tags/")) {
+                    let mut c = Command::new("svn");
+                    c.args(["log", "--non-interactive", "--verbose", "--limit", "1"])
+                        .arg(format!("{root}/tags"));
+                    let log = run(c, "").unwrap_or_default();
+                    if let Some(line) = log.lines().find(|l| l.starts_with("   A ")) {
+                        let path = line[5..].split_whitespace().next().unwrap_or("");
+                        let from = line
+                            .rsplit_once(':')
+                            .map(|(_, r)| r.trim_end_matches(')'))
+                            .unwrap_or("");
+                        if from == pin
+                            && let Some(tag) = path.rsplit('/').next().filter(|t| !t.is_empty())
+                        {
+                            v.version = tag.to_string();
+                        }
                     }
                 }
             }
@@ -733,4 +815,186 @@ pub fn package_vcs(cache: &Cache, source: &crate::Source, pin: &str, detail: boo
         _ => {}
     }
     v
+}
+
+/// A git `tag` of `latest`: the newest tag, like the packager's.
+pub const LATEST_TAG: &str = "latest";
+
+/// The newest tag (by creation date) among the last 50 commits of the
+/// default branch of a cached clone, and its commit.
+fn latest_tag(dir: &Path) -> Option<(String, String)> {
+    let q = |args: &[&str]| -> String {
+        let mut c = git(Some(dir));
+        c.args(args);
+        run(c, "").unwrap_or_default()
+    };
+    let recent: HashSet<String> = q(&["rev-list", "--max-count=50", "HEAD"])
+        .lines()
+        .map(str::to_string)
+        .collect();
+    q(&[
+        "for-each-ref",
+        "refs/tags",
+        "--sort=-creatordate",
+        "--format=%(refname:short)",
+    ])
+    .lines()
+    .find_map(|tag| {
+        let commit = q(&[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/tags/{tag}^{{commit}}"),
+        ]);
+        recent.contains(&commit).then(|| (tag.to_string(), commit))
+    })
+}
+
+/// The `@file-*@` values of one file of a package.
+#[derive(Clone, Debug, Default)]
+pub struct FileVcs {
+    pub revision: String,
+    pub hash: String,
+    pub short_hash: String,
+    pub author: String,
+    pub timestamp: i64,
+}
+
+/// The `@file-*@` values of `rel` (a path inside the package) as the
+/// packager's `set_info_file` computes them for an external: in a shallow
+/// clone (tag and branch externals) every file has the checked-out commit
+/// and revision 1; `commit` externals have their full history; SVN files
+/// their last change and checksum.
+pub fn package_file_vcs(
+    cache: &Cache,
+    source: &crate::Source,
+    pin: &str,
+    rel: &str,
+    bytes: &[u8],
+    project: &PackageVcs,
+) -> FileVcs {
+    let mut f = FileVcs::default();
+    match source {
+        crate::Source::Git {
+            url,
+            reference,
+            subdir,
+            ..
+        } => {
+            if !matches!(reference, crate::GitRef::Rev(_)) {
+                return FileVcs {
+                    revision: "1".into(),
+                    hash: project.hash.clone(),
+                    short_hash: project.short_hash.clone(),
+                    author: project.author.clone(),
+                    timestamp: project.timestamp,
+                };
+            }
+            let dir = cache.git_dir(url);
+            let q = |args: &[&str]| -> String {
+                let mut c = git(Some(&dir));
+                c.args(args);
+                run(c, "").unwrap_or_default()
+            };
+            let path = match subdir {
+                Some(s) => format!("{s}/{rel}"),
+                None => rel.to_string(),
+            };
+            let line = q(&[
+                "log",
+                "-1",
+                "--abbrev=7",
+                "--format=%H%x09%h%x09%an%x09%at",
+                pin,
+                "--",
+                &path,
+            ]);
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() == 4 {
+                f.hash = parts[0].into();
+                f.short_hash = parts[1].into();
+                f.author = parts[2].into();
+                f.timestamp = parts[3].parse().unwrap_or(0);
+                f.revision = q(&["rev-list", "--count", parts[0]]);
+            }
+        }
+        crate::Source::Svn { url, .. } => {
+            let mut c = Command::new("svn");
+            c.args(["info", "--non-interactive"])
+                .arg(format!("{url}/{rel}@{pin}"));
+            for line in run(c, "").unwrap_or_default().lines() {
+                if let Some(a) = line.strip_prefix("Last Changed Author: ") {
+                    f.author = a.to_string();
+                } else if let Some(r) = line.strip_prefix("Last Changed Rev: ") {
+                    f.revision = r.to_string();
+                } else if let Some(d) = line.strip_prefix("Last Changed Date: ") {
+                    f.timestamp = svn_date(d).unwrap_or(0);
+                }
+            }
+            use sha1::Digest;
+            f.hash = sha1::Sha1::digest(bytes)
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect();
+            f.short_hash = f.hash.chars().take(7).collect();
+        }
+        _ => {}
+    }
+    f
+}
+
+/// Unix seconds of an `svn info` date: `2020-01-02 03:04:05 +0100 (…)`.
+fn svn_date(text: &str) -> Option<i64> {
+    let mut parts = text.split_whitespace();
+    let date = parts.next()?;
+    let time = parts.next()?;
+    let zone = parts.next()?;
+    let d: Vec<i64> = date
+        .split('-')
+        .map(|x| x.parse().ok())
+        .collect::<Option<_>>()?;
+    let t: Vec<i64> = time
+        .split(':')
+        .map(|x| x.parse().ok())
+        .collect::<Option<_>>()?;
+    if d.len() != 3 || t.len() != 3 || zone.len() != 5 {
+        return None;
+    }
+    let (y, m, day) = (d[0] - i64::from(d[1] <= 2), d[1], d[2]);
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (m + if m > 2 { -3 } else { 9 }) + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    let sign = if zone.starts_with('-') { -1 } else { 1 };
+    let offset =
+        sign * (zone[1..3].parse::<i64>().ok()? * 3600 + zone[3..5].parse::<i64>().ok()? * 60);
+    Some(days * 86_400 + t[0] * 3600 + t[1] * 60 + t[2] - offset)
+}
+
+/// The project root of an SVN URL inside `trunk` or a tag, and the path
+/// below it: `…/wow/ace3/trunk/AceGUI-3.0` → (`…/wow/ace3/trunk`,
+/// `AceGUI-3.0`).
+pub fn svn_project_root(url: &str) -> Option<(&str, &str)> {
+    if let Some(i) = url.find("/trunk/") {
+        return Some((&url[..i + "/trunk".len()], &url[i + "/trunk/".len()..]));
+    }
+    let i = url.find("/tags/")? + "/tags/".len();
+    let j = url[i..].find('/')? + i;
+    Some((&url[..j], &url[j + 1..]))
+}
+
+#[cfg(test)]
+mod svn_date_tests {
+    #[test]
+    fn parses_svn_dates() {
+        assert_eq!(
+            super::svn_date("2008-05-01 12:34:56 +0000 (Thu, 01 May 2008)"),
+            Some(1_209_645_296)
+        );
+        assert_eq!(
+            super::svn_date("2008-05-01 14:34:56 +0200"),
+            Some(1_209_645_296)
+        );
+    }
 }

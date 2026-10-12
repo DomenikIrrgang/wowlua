@@ -35,6 +35,7 @@ regex.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+ureq.workspace = true
 walkdir.workspace = true
 
 [target.'cfg(windows)'.dependencies]

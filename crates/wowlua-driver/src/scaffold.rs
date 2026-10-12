@@ -1013,9 +1013,9 @@ fn convert_pkgmeta(
                 continue;
             }
         };
-        if e.latest {
+        if e.latest && matches!(e.source, crate::pkgmeta::ExternalSource::Svn { .. }) {
             report.warnings.push(Diagnostic::plain_warning(format!(
-                "external `{}` uses `tag: latest`; the dependency follows the default branch instead (pin a `tag`)",
+                "external `{}` uses `tag: latest` on SVN; the dependency follows trunk instead (pin a `tag`)",
                 e.dir
             )));
         }
@@ -1095,6 +1095,9 @@ fn convert_pkgmeta(
                 out.push(format!("{src_dir}/{p}/**"));
             }
         } else {
+            // Nothing there yet (an external's folder): a file or a folder,
+            // like the packager's pattern pair.
+            out.push(format!("{p}/**"));
             out.push(p);
         }
         out
@@ -1241,6 +1244,12 @@ fn convert_pkgmeta(
     if let Some(license) = &meta.license_output {
         compat.insert("license-output".into(), json!(license));
     }
+    if meta.per_game {
+        compat.insert("per-game".into(), json!(true));
+    }
+    if let Some(title) = &meta.changelog_title {
+        compat.insert("changelog-title".into(), json!(title));
+    }
     object.insert("compat".into(), Value::Object(compat));
     // Publishing.
     let publish = object
@@ -1260,7 +1269,30 @@ fn convert_pkgmeta(
             publish.insert("changelog-format".into(), json!(f));
         }
     }
-    if meta.enable_nolib || !meta.relations.is_empty() {
+    // CurseForge relations as the packager sends them: the `.pkgmeta`
+    // lists, overridden by `@curseforge-project-slug: x@` markers in the
+    // project's Lua files and by every external's slug (embedded).
+    let mut relations: Vec<(String, String)> = meta.relations.clone();
+    let mut embed = |slug: &str| {
+        let slug = slug.to_ascii_lowercase();
+        relations.retain(|(s, _)| *s != slug);
+        relations.push((slug, "embeddedLibrary".into()));
+    };
+    let package = meta
+        .package_as
+        .clone()
+        .unwrap_or_else(|| report.addon_name.clone());
+    for slug in embedded_slug_markers(dir) {
+        if !slug.eq_ignore_ascii_case(&package) {
+            embed(&slug);
+        }
+    }
+    for e in &meta.externals {
+        if let Some(slug) = &e.slug {
+            embed(slug);
+        }
+    }
+    if meta.enable_nolib || !relations.is_empty() {
         let targets = publish
             .entry("targets")
             .or_insert_with(|| json!({}))
@@ -1284,11 +1316,10 @@ fn convert_pkgmeta(
                 )),
             }
         }
-        if !meta.relations.is_empty() {
+        if !relations.is_empty() {
             match targets.get_mut("curseforge").and_then(Value::as_object_mut) {
                 Some(cf) => {
-                    let list: Vec<Value> = meta
-                        .relations
+                    let list: Vec<Value> = relations
                         .iter()
                         .map(|(slug, kind)| json!({ "slug": slug, "type": kind }))
                         .collect();
@@ -1352,11 +1383,10 @@ fn init_members(
                 .clone()
                 .or_else(|| root.map(|(name, _)| name.to_string()))
                 .unwrap_or_default();
-            let source = from
+            let exists = from
                 .strip_prefix(&format!("{package}/"))
-                .unwrap_or(from)
-                .trim_matches('/');
-            let exists = source.is_empty() || dir.join(source).exists();
+                .map(|s| s.trim_matches('/'))
+                .is_some_and(|s| s.is_empty() || dir.join(s).exists());
             if exists && !is_flattening(from, to) {
                 report.warnings.push(Diagnostic::warning(
                     "W4332",
@@ -1450,6 +1480,40 @@ fn init_members(
         }
     }
     members
+}
+
+/// The slugs of `@curseforge-project-slug: x@` markers in the Lua files of
+/// a repository (libraries copied into it, which the packager reports as
+/// embedded).
+fn embedded_slug_markers(dir: &Path) -> Vec<String> {
+    let mut slugs = Vec::new();
+    for entry in walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_entry(|e| e.depth() == 0 || !e.file_name().to_string_lossy().starts_with('.'))
+        .flatten()
+    {
+        if !entry.file_type().is_file() || !entry.file_name().to_string_lossy().ends_with(".lua") {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(entry.path()) else {
+            continue;
+        };
+        let lower = text.to_ascii_lowercase();
+        let Some(i) = lower.find("@curseforge-project-slug") else {
+            continue;
+        };
+        let rest = &text[i + "@curseforge-project-slug".len()..];
+        let rest = rest.trim_start_matches([' ', '\t']);
+        let Some(rest) = rest.strip_prefix(':') else {
+            continue;
+        };
+        let Some(end) = rest.find('@') else { continue };
+        let slug: String = rest[..end].chars().filter(|c| !c.is_whitespace()).collect();
+        if !slug.is_empty() && !slugs.contains(&slug) {
+            slugs.push(slug);
+        }
+    }
+    slugs
 }
 
 /// Writes `wowlua.lock` with the root's interface pins and those of the
@@ -1685,13 +1749,21 @@ fn init_suite(dir: &Path, mut meta: crate::pkgmeta::PkgMeta) -> Result<InitRepor
         // Shipped like the packager ships externals.
         manifest.insert("compat".into(), json!({ "packager-keywords": true }));
     }
+    // The package folder becomes the member of that name; it gets the
+    // packager's changelog and license files.
+    let compat = manifest
+        .entry("compat")
+        .or_insert_with(|| json!({ "packager-keywords": true }))
+        .as_object_mut()
+        .expect("an object");
+    if let Some(name) = &meta.package_as {
+        compat.insert("package-as".into(), json!(name));
+    }
     if let Some(license) = &meta.license_output {
-        let compat = manifest
-            .entry("compat")
-            .or_insert_with(|| json!({}))
-            .as_object_mut()
-            .expect("an object");
         compat.insert("license-output".into(), json!(license));
+    }
+    if let Some(title) = &meta.changelog_title {
+        compat.insert("changelog-title".into(), json!(title));
     }
     manifest.insert("workspace".into(), Value::Object(ws));
     if let Some((file, _)) = &meta.manual_changelog {
@@ -1718,11 +1790,9 @@ fn member_folders(
     meta.move_folders
         .iter()
         .filter_map(|(from, to)| {
-            let rel = from
-                .strip_prefix(&prefix)
-                .unwrap_or(from)
-                .trim_matches('/')
-                .to_string();
+            // Paths outside the package folder move nothing (the packager
+            // finds no such folder).
+            let rel = from.strip_prefix(&prefix)?.trim_matches('/').to_string();
             let has_toc = std::fs::read_dir(dir.join(&rel))
                 .ok()
                 .is_some_and(|entries| {
@@ -1957,7 +2027,18 @@ fn toc_views(
         })?;
         let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
         let text = crate::keywords::toc_version_placeholders(text);
-        if !packaged {
+        // The packager processes only the project's TOCs: the plain one and
+        // those with its suffixes; others keep their blocks as written.
+        let project_toc = suffix.as_deref().is_none_or(|s| {
+            let name = s.trim_start_matches(['_', '-']).to_ascii_lowercase();
+            (s.starts_with('_') || s.starts_with('-'))
+                && [
+                    "mainline", "classic", "vanilla", "bcc", "tbc", "wrath", "wotlkc", "cata",
+                    "mists", "camelot",
+                ]
+                .contains(&name.as_str())
+        });
+        if !packaged || !project_toc {
             out.push((entry.clone(), text));
             continue;
         }
@@ -2650,7 +2731,10 @@ fn is_metadata(key: &str) -> bool {
         "allowloadgametype",
         "excludeloadgametype",
     ];
+    // `## Interface-<Type>:` lines are packager input it strips from the
+    // packaged TOC.
     !(structural.contains(&lower.as_str())
+        || lower.starts_with("interface-")
         || lower.starts_with("dep")
         || lower.starts_with("optionaldep"))
 }

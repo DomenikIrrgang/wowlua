@@ -71,7 +71,7 @@ fn main() -> Result<()> {
             let mut seen = std::collections::BTreeSet::new();
             for run in single {
                 let Some(game) = run.game else { continue };
-                let Some(flavor) = wowlua_driver::keywords::interface_type_flavor(&game) else {
+                let Some(flavor) = wowlua_driver::keywords::game_flavor(&game) else {
                     continue;
                 };
                 if seen.insert(flavor) {

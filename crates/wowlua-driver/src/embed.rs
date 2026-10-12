@@ -33,6 +33,8 @@ pub struct LuaLib {
     /// keywords in its files).
     pub source: wowlua_pkg::Source,
     pub pin: Option<String>,
+    /// Its repository's packager project file and its path in there.
+    pub project_file: Option<(PathBuf, String)>,
 }
 
 impl LuaLib {
@@ -292,6 +294,7 @@ pub fn lua_libraries(
             flavors: flavors_of,
             entries,
             index: idx,
+            project_file: p.project_file.clone(),
             licenses,
             license_id: p
                 .manifest

@@ -206,12 +206,43 @@ pub fn build(
     let build_cfg = &manifest.manifest.build;
     let exclude = sources::glob_set(&build_cfg.exclude);
     let sources = sources::discover_sources(&root, &build_cfg.src, &build_cfg.out, &exclude);
-    let assets = sources::discover_assets(
+    let mut assets = sources::discover_assets(
         &root,
         &build_cfg.out,
         &sources::glob_set_ci(&build_cfg.assets),
         &exclude,
     );
+    let mut sources = sources;
+    // Release builds of a packager project ship only what git tracks, like
+    // the packager, which leaves out every untracked file (decision T147).
+    if manifest.manifest.compat.packager_keywords && !profile.debug {
+        let tracked = sources::tracked_files(&root);
+        if !tracked.is_empty() {
+            // Both sides are paths under `root`.
+            let is_tracked = |abs: &Path| tracked.contains(abs);
+            let mut left_out: Vec<String> = Vec::new();
+            sources.retain(|s| {
+                let keep = is_tracked(&s.abs);
+                if !keep {
+                    left_out.push(s.rel.clone());
+                }
+                keep
+            });
+            assets.retain(|a| {
+                let keep = is_tracked(&a.abs);
+                if !keep {
+                    left_out.push(a.rel.clone());
+                }
+                keep
+            });
+            if !left_out.is_empty() {
+                session.push(Diagnostic::note(format!(
+                    "left out of the release build, as git does not track them: {}",
+                    left_out.join(", ")
+                )));
+            }
+        }
+    }
     // An addon without code is valid (voice packs, saved-variable stores).
 
     // Load and check every source.
@@ -368,7 +399,33 @@ pub fn build(
                 Path::new(&source.src_rel),
                 source.kind == SourceKind::Xml,
             );
-            if crate::keywords::has_flavor_blocks(&processed) {
+            // Like the packager: a project released game by game, or one
+            // with a single flavor, gets each game's blocks; a multi-version
+            // build leaves `@retail@` blocks as written and rejects
+            // `@version-…@` ones (decision T145).
+            let multi_version =
+                !manifest.manifest.compat.per_game && project.manifest.flavors.len() > 1;
+            if multi_version && crate::keywords::has_flavor_blocks(&processed) {
+                if crate::keywords::has_version_blocks(&processed) {
+                    session.push(
+                        Diagnostic::error(
+                            "E4335",
+                            "build type version keywords (`@version-…@`) are not allowed in a multi-version build",
+                        )
+                        .with_path(&source.rel)
+                        .with_help("use Lua conditions on `WOW_PROJECT_ID` or TOC load conditions, like the packager asks"),
+                    );
+                } else {
+                    session.push(
+                        Diagnostic::warning(
+                            "W4031",
+                            "`@retail@` blocks are left as written in a multi-version build, like the packager does",
+                        )
+                        .with_path(&source.rel)
+                        .with_help("the code runs on every client; use Lua conditions on `WOW_PROJECT_ID` to limit it"),
+                    );
+                }
+            } else if crate::keywords::has_flavor_blocks(&processed) {
                 if flavors.len() == 1 {
                     processed = crate::keywords::apply_flavor(
                         &processed,
@@ -1241,33 +1298,81 @@ pub fn build(
     for (i, lib) in libs.iter().enumerate() {
         let mut roots: Vec<String> = lib.entries.iter().map(|(e, _)| e.clone()).collect();
         roots.extend(xml.lib_refs.get(&i).into_iter().flatten().cloned());
+        let reachable = crate::embed::reachable(session, lib, &roots);
+        // A converted packager project ships every file of an external but
+        // dotfiles and what its `.pkgmeta` or the project ignores, like the
+        // packager (decision T144); otherwise what the addon can load.
+        let own = lib.project_file.as_ref().and_then(|(file, sub)| {
+            let text = std::fs::read_to_string(file).ok()?;
+            Some((crate::pkgmeta::parse(&text).ok()?, sub.clone()))
+        });
+        let in_repo = |rel: &str| match &own {
+            Some((_, sub)) if !sub.is_empty() => format!("{sub}/{rel}"),
+            _ => rel.to_string(),
+        };
+        let shipped: Vec<String> = if keywords {
+            lib.index
+                .values()
+                .filter(|rel| !rel.split('/').any(|part| part.starts_with('.')))
+                .filter(|rel| {
+                    !own.as_ref().is_some_and(|(m, _)| {
+                        crate::keywords::plain_copy(&m.ignore, &[&in_repo(rel)])
+                    })
+                })
+                .filter(|rel| !exclude.is_match(lib.output(rel)))
+                .cloned()
+                .collect()
+        } else {
+            reachable.into_iter().collect()
+        };
+        // Archives and `plain-copy` files are copied as they are.
+        let archive = matches!(lib.source, wowlua_pkg::Source::Archive { .. });
+        // SVN author and tag need the network; only asked for when used.
+        let svn_detail = keywords
+            && matches!(lib.source, wowlua_pkg::Source::Svn { .. })
+            && shipped.iter().any(|rel| {
+                crate::keywords::processed_extension(rel)
+                    && std::fs::read_to_string(lib.dir.join(rel)).is_ok_and(|t| {
+                        t.contains("@project-author@") || t.contains("@project-version@")
+                    })
+            });
         let mut lib_info: Option<crate::keywords::KeywordInfo> = None;
-        for rel in crate::embed::reachable(session, lib, &roots) {
+        for rel in shipped {
             let abs = lib.dir.join(&rel);
             let lower = rel.to_ascii_lowercase();
             let xml = lower.ends_with(".xml");
+            let unchanged = archive
+                || own.as_ref().is_some_and(|(m, _)| {
+                    crate::keywords::plain_copy(&m.plain_copy, &[&in_repo(&rel)])
+                });
             // Library files get the packager's processing (decisions T120,
             // T124): keywords and blocks, LF line endings.
-            if keywords && crate::keywords::processed_extension(&rel) {
+            if keywords && !unchanged && crate::keywords::processed_extension(&rel) {
                 let bytes = std::fs::read(&abs).unwrap_or_default();
                 let normalized = crate::keywords::lf(&bytes);
-                let text = String::from_utf8_lossy(&normalized).into_owned();
-                let processed = if (xml || lower.ends_with(".lua"))
-                    && text.contains('@')
-                    && std::str::from_utf8(&normalized).is_ok()
-                {
-                    let info = lib_info.get_or_insert_with(|| {
-                        let detail = text.contains("@project-author@");
-                        crate::keywords::package_info(
-                            &lib.source,
-                            lib.pin.as_deref(),
-                            profile.debug,
-                            detail,
-                        )
-                    });
-                    crate::keywords::apply_library(&text, info, xml).into_bytes()
-                } else {
-                    normalized
+                let processed = match std::str::from_utf8(&normalized) {
+                    Ok(text) if text.contains('@') => {
+                        let info = lib_info.get_or_insert_with(|| {
+                            crate::keywords::package_info(
+                                &lib.source,
+                                lib.pin.as_deref(),
+                                profile.debug,
+                                svn_detail,
+                            )
+                        });
+                        let mut out = if xml || lower.ends_with(".lua") {
+                            crate::keywords::apply_library(text, info, xml)
+                        } else {
+                            crate::keywords::substitute(text, info)
+                        };
+                        if out.contains("@file-") {
+                            out = crate::keywords::library_file_keywords(
+                                &out, lib, info, &rel, &bytes,
+                            );
+                        }
+                        out.into_bytes()
+                    }
+                    _ => normalized,
                 };
                 if processed != bytes {
                     out.insert(lib.output(&rel), Content::Bytes(processed));
@@ -1372,7 +1477,23 @@ pub fn build(
             );
             continue;
         }
+        // Shipped text files get the packager's keywords and line endings.
+        if let Some(info) = &keyword_info
+            && crate::keywords::processed_extension(&asset.rel)
+            && !crate::keywords::plain_copy(&manifest.manifest.compat.plain_copy, &[&asset.rel])
+            && let Ok(bytes) = std::fs::read(&asset.abs)
+        {
+            out.insert(
+                asset.rel.clone(),
+                Content::Bytes(packaged_text(&bytes, info, &asset.rel)),
+            );
+            continue;
+        }
         out.insert(asset.rel.clone(), Content::Copy(asset.abs.clone()));
+    }
+    // What the packager adds to the package (decision T146).
+    if let Some(info) = &keyword_info {
+        package_files(project, &root, info, &addon_name, &mut out);
     }
     // The workspace root's license in a member that has none (`.pkgmeta`
     // `license-output`, copied into `move-folders` addons by the packager).
@@ -1386,10 +1507,14 @@ pub fn build(
                     .and_then(serde_json::Value::as_str)
                     .map(str::to_string)
             })
-        && ws.join(&license).is_file()
         && !out.contains_key(&license)
+        && let Some(bytes) = license_bytes(ws, &license)
     {
-        out.insert(license.clone(), Content::Copy(ws.join(&license)));
+        let bytes = match &keyword_info {
+            Some(info) => packaged_text(&bytes, info, &license),
+            None => bytes,
+        };
+        out.insert(license.clone(), Content::Bytes(bytes));
     }
 
     let output_paths: HashMap<String, String> = emitted
@@ -2585,6 +2710,116 @@ fn directives(
         }
     }
     out
+}
+
+/// A text file as the packager ships it: LF line endings and repository
+/// keywords.
+fn packaged_text(bytes: &[u8], info: &crate::keywords::KeywordInfo, rel: &str) -> Vec<u8> {
+    let normalized = crate::keywords::lf(bytes);
+    match std::str::from_utf8(&normalized) {
+        Ok(text) => {
+            crate::keywords::apply_text(text, info, Path::new(rel), Path::new(rel)).into_bytes()
+        }
+        Err(_) => normalized,
+    }
+}
+
+/// The manifest JSON of a package folder.
+fn manifest_json(dir: &Path) -> Option<serde_json::Value> {
+    let text = std::fs::read_to_string(dir.join(wowlua_manifest::MANIFEST_FILE)).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// The CurseForge project ID of a manifest's publish targets.
+fn curseforge_id(manifest: &serde_json::Value) -> Option<String> {
+    manifest
+        .pointer("/publish/targets")?
+        .as_object()?
+        .values()
+        .find(|t| t["type"] == "curseforge")
+        .and_then(|t| match &t["project-id"] {
+            serde_json::Value::Number(n) => Some(n.to_string()),
+            serde_json::Value::String(s) => Some(s.clone()),
+            _ => None,
+        })
+}
+
+/// `license-output` of the package in `dir`: its file, else the license of
+/// its CurseForge project, like the packager downloads it.
+fn license_bytes(dir: &Path, license: &str) -> Option<Vec<u8>> {
+    if let Ok(bytes) = std::fs::read(dir.join(license)) {
+        return Some(bytes);
+    }
+    let id = curseforge_id(&manifest_json(dir)?)?;
+    crate::packaging::downloaded_license(&id)
+}
+
+/// The files the packager adds to the AddOn its package directory becomes
+/// (the root addon, or the member named `compat.package-as` of a workspace
+/// without one): the manual changelog or the one it generates, and the
+/// `license-output` license when the repository has none.
+fn package_files(
+    project: &Project,
+    root: &Path,
+    info: &crate::keywords::KeywordInfo,
+    addon_name: &str,
+    out: &mut BTreeMap<String, Content>,
+) {
+    let same = |a: &Path, b: &Path| std::fs::canonicalize(a).ok() == std::fs::canonicalize(b).ok();
+    let (repo, repo_manifest) = match &project.workspace_root {
+        Some(ws) if !same(ws, root) => {
+            let Some(m) = manifest_json(ws) else { return };
+            let package_root = m.get("package").is_none()
+                && m.pointer("/compat/package-as").and_then(|v| v.as_str()) == Some(addon_name);
+            if !package_root {
+                return;
+            }
+            (ws.clone(), m)
+        }
+        _ => match manifest_json(root) {
+            Some(m) => (root.to_path_buf(), m),
+            None => return,
+        },
+    };
+    match repo_manifest
+        .pointer("/publish/changelog")
+        .and_then(|v| v.as_str())
+    {
+        Some(file) => {
+            if !out.contains_key(file)
+                && let Ok(bytes) = std::fs::read(repo.join(file))
+            {
+                out.insert(
+                    file.to_string(),
+                    Content::Bytes(packaged_text(&bytes, info, file)),
+                );
+            }
+        }
+        None => {
+            let title = repo_manifest
+                .pointer("/compat/changelog-title")
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+                .unwrap_or_else(|| crate::packaging::plain_title(&project.manifest.title()));
+            // It replaces a `CHANGELOG.md` of the repository, like the
+            // packager's.
+            if let Some(text) = crate::packaging::generated_changelog(&repo, &title, info) {
+                out.insert("CHANGELOG.md".into(), Content::Bytes(text.into_bytes()));
+            }
+        }
+    }
+    if let Some(license) = repo_manifest
+        .pointer("/compat/license-output")
+        .and_then(|v| v.as_str())
+        && !out.contains_key(license)
+        && !repo.join(license).is_file()
+        && let Some(bytes) = license_bytes(&repo, license)
+    {
+        out.insert(
+            license.to_string(),
+            Content::Bytes(packaged_text(&bytes, info, license)),
+        );
+    }
 }
 
 fn toc_error(error: TocError, manifest: &Path) -> Diagnostic {

@@ -224,7 +224,7 @@ impl Tree {
                 );
                 continue;
             }
-            if key == "version" || key.starts_with("x-wowlua") || key.starts_with("interface-") {
+            if key == "version" || key.starts_with("x-wowlua") {
                 continue;
             }
             let value = value_text
@@ -491,9 +491,16 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path, only: Option<&str>) 
                 })
             })
             .unwrap_or(false);
-        if code || doc || in_lib {
-            if !wl.files.contains_key(&lower) {
-                allowed.push(rel.clone());
+        // Library folders ship whole, like the packager's externals; other
+        // files the game never loads may be missing, but must match when
+        // both outputs have them (generated changelog, licenses).
+        if (code || doc) && !in_lib {
+            match wl.files.get(&lower) {
+                None => allowed.push(rel.clone()),
+                Some(w) if pk.bytes(rel) != wl.bytes(w) => {
+                    problems.push(format!("`{rel}` differs"))
+                }
+                Some(_) => {}
             }
             continue;
         }

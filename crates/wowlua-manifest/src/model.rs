@@ -954,6 +954,18 @@ pub struct Compat {
     /// `*` also matching `/`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub plain_copy: Vec<String>,
+    /// The AddOn the packager's package folder becomes in a workspace
+    /// without a root addon (`.pkgmeta` `package-as`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_as: Option<String>,
+    /// The title of the changelog the packager generates (`.pkgmeta`
+    /// `changelog-title`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changelog_title: Option<String>,
+    /// The project is released one game per packager run (`-g`): packager
+    /// flavor blocks apply per flavor.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub per_game: bool,
     /// The license file (`.pkgmeta` `license-output`) the workspace root
     /// copies into each member's output that has none.
     #[serde(default, skip_serializing_if = "Option::is_none")]

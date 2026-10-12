@@ -61,6 +61,10 @@ pub struct ResolvedPackage {
     pub checksum: Option<String>,
     /// Its `wowlua.json`, if it has one.
     pub manifest: Option<Manifest>,
+    /// The packager project file (`.pkgmeta`) of the repository it comes
+    /// from, and the package's path inside that repository: the packager
+    /// applies its `ignore` and `plain-copy` to an external.
+    pub project_file: Option<(PathBuf, String)>,
     pub kind: PackageKind,
     /// The declaration that brought it in (a root's entry when there is one).
     pub entry: DependencyDetail,
@@ -129,6 +133,7 @@ struct Materialized {
     dir: PathBuf,
     checksum: Option<String>,
     manifest: Option<Manifest>,
+    project_file: Option<(PathBuf, String)>,
 }
 
 /// A dependency request, while walking the graph.
@@ -415,6 +420,7 @@ pub fn resolve(
             dir: m.dir.clone(),
             checksum: m.checksum.clone(),
             manifest: m.manifest.clone(),
+            project_file: m.project_file.clone(),
             kind,
             entry,
             dependencies,
@@ -462,6 +468,11 @@ fn materialize(
         });
     }
     let pin = pin.as_deref();
+    let own_pkgmeta = |root: &Path, sub: &str| {
+        let file = root.join(".pkgmeta");
+        file.is_file().then(|| (file, sub.to_string()))
+    };
+    let mut project_file = None;
     let (dir, pin) = match source {
         Source::Path { path, dir } => {
             if !dir.join("wowlua.json").exists() && !dir.is_dir() {
@@ -470,6 +481,7 @@ fn materialize(
                     format!("dependency `{name}`: path `{path}` does not exist"),
                 )]);
             }
+            project_file = own_pkgmeta(dir, "");
             (dir.clone(), None)
         }
         Source::Git {
@@ -484,6 +496,7 @@ fn materialize(
             let checkout = fetcher
                 .git_checkout(url, &commit, *submodules)
                 .map_err(|e| vec![diag(e, name)])?;
+            project_file = own_pkgmeta(&checkout, subdir.as_deref().unwrap_or(""));
             let dir = match subdir {
                 Some(s) => checkout.join(s),
                 None => checkout,
@@ -511,6 +524,10 @@ fn materialize(
             let dir = fetcher
                 .svn_checkout(url, revision, *externals)
                 .map_err(|e| vec![diag(e, name)])?;
+            // A checkout of a folder of the project leaves its root's
+            // `.pkgmeta` behind; the packager fetches that one.
+            project_file =
+                own_pkgmeta(&dir, "").or_else(|| fetcher.svn_root_pkgmeta(url, revision));
             (dir, Some(revision.to_string()))
         }
         Source::Archive {
@@ -611,6 +628,7 @@ fn materialize(
         dir,
         checksum,
         manifest,
+        project_file,
     })
 }
 

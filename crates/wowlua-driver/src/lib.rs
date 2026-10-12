@@ -17,6 +17,7 @@ pub mod keywords;
 pub mod lockfile;
 mod luacheck;
 mod meta;
+pub mod packaging;
 pub mod pkgmeta;
 pub mod project;
 pub mod scaffold;

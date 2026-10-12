@@ -180,8 +180,8 @@ available.
      `files`, and gets a `flavors` restriction when only some flavors load
      it. The TOC lines keep their place in `build.load-order` under their
      output path (decision T106). An external that nothing loads is not
-     converted (warning); `tag: latest` follows the default branch instead
-     (warning).
+     converted (warning); `tag: latest` resolves to the newest tag for git
+     (decision T149) and follows trunk for SVN (warning).
    - `ignore` becomes `build.exclude`, `plain-copy` becomes `build.assets`,
      `package-as` becomes `addon.name`, `manual-changelog` becomes
      `publish.changelog`.
@@ -203,7 +203,10 @@ available.
    - A member's `..\<Name>\` TOC lines resolve to the package's other
      AddOns (decision T133); the files the root addon shares that way move
      into its sources unless `.pkgmeta` ignores them.
-   - `license-output` becomes `compat.license-output` (decision T136).
+   - `license-output` becomes `compat.license-output` (decision T136),
+     `changelog-title` `compat.changelog-title`; a workspace without a root
+     addon records `compat.package-as` (decision T146).
+   - The CurseForge target gets the packager's relations (decision T150).
    - When every packager run in `.github/workflows` packages one game,
      runs with their own project file (`-g classic -m .pkgmeta-classic.yml`)
      give that game's flavor its own `ignore`: what every flavor ignores becomes

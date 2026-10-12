@@ -148,7 +148,7 @@ fn walk(root: &Path, dir: &Path, skip_dirs: &[PathBuf]) -> Vec<(String, PathBuf)
 
 /// The files under `dir` git tracks (absolute paths); empty outside a
 /// repository.
-fn tracked_files(dir: &Path) -> HashSet<PathBuf> {
+pub(crate) fn tracked_files(dir: &Path) -> HashSet<PathBuf> {
     let Ok(output) = std::process::Command::new("git")
         .arg("-C")
         .arg(dir)

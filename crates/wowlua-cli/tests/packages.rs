@@ -1229,7 +1229,9 @@ fn init_from_pkgmeta_converts_externals() {
         out.join("Libs/CallbackHandler-1.0/CallbackHandler-1.0.lua")
             .exists()
     );
-    assert!(!out.join("Libs/LibStub/README.md").exists());
+    // Like the packager, a converted project ships every file of an
+    // external (decision T144).
+    assert!(out.join("Libs/LibStub/README.md").exists());
     // Library files get the packager's processing too (decision T120).
     let stub_out = fs::read_to_string(out.join("Libs/LibStub/LibStub.lua")).unwrap();
     assert_eq!(stub_out, "-- LibStub, Public Domain\nLibStub = {}\n");
@@ -1489,4 +1491,101 @@ fn init_reads_per_game_packager_runs() {
         embeds.contains("<!--@non-retail@-->"),
         "the classic variant loads the library: {embeds}"
     );
+}
+
+#[test]
+fn converted_projects_package_like_the_packager() {
+    let e = env();
+    let lib = git_repo(
+        &e.root.join("LibIcon"),
+        &[
+            ("lib.xml", "<Ui><Script file=\"LibIcon.lua\"/></Ui>\n"),
+            ("LibIcon.lua", "-- MIT License\nLibIcon = {}\n"),
+            ("media/icon.tga", "TGA"),
+            ("docs/guide.md", "guide"),
+            ("tests/test.lua", "-- test\n"),
+            ("README.md", "LibIcon @project-version@\r\n"),
+            (".pkgmeta", "ignore:\n  - tests\n"),
+        ],
+        "v1",
+    );
+    let dir = &e.project;
+    git_repo(
+        dir,
+        &[
+            (
+                ".pkgmeta",
+                &format!(
+                    "package-as: MyAddon\nexternals:\n  Libs/LibIcon: {lib}\nignore:\n  - Libs/LibIcon/docs\n"
+                ),
+            ),
+            (
+                "MyAddon.toc",
+                "## Interface: 120100, 50504\n## Interface-Mists: 50504\n## Title: |cff00ff00My|r Addon\n## X-Curse-Project-ID: 123\nembeds.xml\ncore.lua\n",
+            ),
+            (
+                "embeds.xml",
+                "<Ui><Include file=\"Libs\\LibIcon\\lib.xml\"/></Ui>\n",
+            ),
+            (
+                "core.lua",
+                "local _, ns = ...\n-- @curseforge-project-slug: libfoo@\n--@retail@\nns.retail = true\n--@end-retail@\n",
+            ),
+        ],
+        "1.0",
+    );
+    commit(
+        dir,
+        &[(
+            "core.lua",
+            "local _, ns = ...\n-- @curseforge-project-slug: libfoo@\n--@retail@\nns.retail = true\n--@end-retail@\nns.fixed = true\n",
+        )],
+        None,
+    );
+    wowlua(dir, &e.home)
+        .args(["init", "--from-pkgmeta"])
+        .assert()
+        .success();
+    let m: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("wowlua.json")).unwrap()).unwrap();
+    assert!(
+        m["addon"]["toc-extra"].get("Interface-Mists").is_none(),
+        "{m}"
+    );
+    assert_eq!(
+        m["publish"]["targets"]["curseforge"]["relations"],
+        serde_json::json!([{ "slug": "libfoo", "type": "embeddedLibrary" }])
+    );
+
+    wowlua(dir, &e.home)
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("warning[W4031]"));
+    let out = dir.join("dist/release/MyAddon");
+    // Every file of the library but what the library or the project ignore.
+    assert!(out.join("Libs/LibIcon/media/icon.tga").exists());
+    assert!(!out.join("Libs/LibIcon/tests/test.lua").exists());
+    assert!(!out.join("Libs/LibIcon/docs/guide.md").exists());
+    assert_eq!(
+        fs::read_to_string(out.join("Libs/LibIcon/README.md")).unwrap(),
+        "LibIcon v1\n"
+    );
+    // `@retail@` blocks stay as written in a multi-version build.
+    let core = fs::read_to_string(out.join("src/core.lua")).unwrap();
+    assert!(core.contains("--@retail@\nns.retail = true"), "{core}");
+    // The packager's changelog of the commits since the last tag.
+    let changelog = fs::read_to_string(out.join("CHANGELOG.md")).unwrap();
+    assert!(
+        changelog.starts_with("# My Addon\n\n## 1.0-1-g"),
+        "{changelog}"
+    );
+    assert!(changelog.ends_with("- c  \n"), "{changelog}");
+    for toc in fs::read_dir(&out).unwrap().flatten() {
+        let name = toc.file_name().to_string_lossy().into_owned();
+        if name.ends_with(".toc") {
+            let text = fs::read_to_string(toc.path()).unwrap();
+            assert!(!text.contains("Interface-"), "{text}");
+        }
+    }
 }

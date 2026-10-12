@@ -1679,6 +1679,24 @@
             "type": "string"
           }
         },
+        "package-as": {
+          "description": "The AddOn the packager's package folder becomes in a workspace\nwithout a root addon (`.pkgmeta` `package-as`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "changelog-title": {
+          "description": "The title of the changelog the packager generates (`.pkgmeta`\n`changelog-title`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "per-game": {
+          "description": "The project is released one game per packager run (`-g`): packager\nflavor blocks apply per flavor.",
+          "type": "boolean"
+        },
         "license-output": {
           "description": "The license file (`.pkgmeta` `license-output`) the workspace root\ncopies into each member's output that has none.",
           "type": [

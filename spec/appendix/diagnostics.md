@@ -176,6 +176,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W3031 | `@inline` ignored |
 | W4001 | Unknown TOC directive in `addon.toc-extra` |
 | W4030 | Unsupported packager keyword |
+| W4031 | Packager `@retail@` blocks left as written in a multi-version build |
 | W4220 | Flavor unknown to a publish site and omitted from that upload |
 | W4304 | Flavors' load orders conflict; falling back to per-flavor TOC layout |
 | W4306 | Embedded library without a recognizable license file or header |
@@ -188,6 +189,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W4329 | GitHub target skipped: build is not on a tag and no `--tag` given |
 | W4332 | `.pkgmeta` `move-folders` use that cannot be converted |
 | E4334 | Both a hand-written `Bindings.xml` and `wowlua:bindings` declarations |
+| E4335 | Packager `@version-â€¦@` blocks in a multi-version build |
 | W4333 | `.pkgmeta` hg external cannot be converted |
 | W6001 | Code inspects its own file name (`debugstack`, `debuglocals`), which changes when bundled |
 | W6002 | Side-effect-free, unused module removed by dead-code elimination |

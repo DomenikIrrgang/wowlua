@@ -38,7 +38,7 @@ pub struct External {
     pub source: ExternalSource,
     /// The CurseForge project slug (`curse-slug`, or from the URL).
     pub slug: Option<String>,
-    /// `tag: latest`, which wowlua cannot pin.
+    /// `tag: latest`: the newest tag for git, trunk for SVN.
     pub latest: bool,
 }
 
@@ -58,6 +58,8 @@ pub struct PkgMeta {
     pub relations: Vec<(String, String)>,
     /// `license-output`: the license file copied into `move-folders` targets.
     pub license_output: Option<String>,
+    /// `changelog-title`: the title of the generated changelog.
+    pub changelog_title: Option<String>,
     /// The `ignore` lists of the flavors whose packager runs use their own
     /// project file (`-g <game> -m <file>` in CI workflows), by flavor id;
     /// flavors packaged with this file are listed with its `ignore`.
@@ -112,10 +114,7 @@ pub fn read_project(dir: &Path, explicit: Option<&Path>) -> Result<Option<PkgMet
         ),
         None => default.clone().or_else(|| {
             let retail = runs.iter().find(|r| {
-                r.game
-                    .as_deref()
-                    .and_then(crate::keywords::interface_type_flavor)
-                    == Some("standard")
+                r.game.as_deref().and_then(crate::keywords::game_flavor) == Some("standard")
             });
             retail
                 .or(all_runs.iter().find(|r| r.file.is_some()))
@@ -140,11 +139,7 @@ pub fn read_project(dir: &Path, explicit: Option<&Path>) -> Result<Option<PkgMet
     meta.per_game = !runs.is_empty();
     meta.split |= all_runs.iter().any(|r| r.split);
     for run in &runs {
-        let Some(flavor) = run
-            .game
-            .as_deref()
-            .and_then(crate::keywords::interface_type_flavor)
-        else {
+        let Some(flavor) = run.game.as_deref().and_then(crate::keywords::game_flavor) else {
             continue;
         };
         let file = run.file.clone().or_else(|| default.clone());
@@ -273,7 +268,12 @@ pub fn workflow_runs(dir: &Path) -> Vec<WorkflowRun> {
 /// project is released game by game. Empty otherwise.
 pub fn single_game_runs(dir: &Path) -> Vec<WorkflowRun> {
     let runs = workflow_runs(dir);
-    if runs.iter().all(|r| r.game.is_some()) {
+    if runs.iter().all(|r| {
+        r.game
+            .as_deref()
+            .and_then(crate::keywords::game_flavor)
+            .is_some()
+    }) {
         runs
     } else {
         Vec::new()
@@ -366,6 +366,7 @@ pub fn parse(text: &str) -> Result<PkgMeta, String> {
                 }
                 "license-output" => meta.license_output = value,
                 "enable-toc-creation" => meta.split = value.as_deref() == Some("yes"),
+                "changelog-title" => meta.changelog_title = value,
                 _ => {}
             }
             continue;
@@ -514,11 +515,12 @@ fn external(spec: &ExternalSpec) -> Option<External> {
         }
     }
     let latest = tag.as_deref() == Some("latest");
-    if latest {
-        tag = None;
-    }
     let source = match kind.as_str() {
         "svn" => {
+            // wowlua follows trunk for an SVN `tag: latest`.
+            if latest {
+                tag = None;
+            }
             // `tag: X` on a trunk URL names `…/tags/X/<sub>`.
             if let Some(t) = &tag {
                 let (trunk, sub) = match uri.split_once("/trunk/") {
