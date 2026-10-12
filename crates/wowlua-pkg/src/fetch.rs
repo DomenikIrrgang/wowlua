@@ -103,6 +103,9 @@ fn run(mut command: Command, what: &str) -> Result<String, FetchError> {
 
 fn git(dir: Option<&Path>) -> Command {
     let mut c = Command::new("git");
+    // Exports keep the repository's bytes on every platform (checksums and
+    // builds must not depend on a user's line-ending settings).
+    c.args(["-c", "core.autocrlf=false", "-c", "core.eol=lf"]);
     if let Some(d) = dir {
         c.arg("--git-dir").arg(d);
     }
@@ -302,7 +305,7 @@ impl Fetcher {
         let mut c = git(None);
         c.args(["clone", "--quiet", "--no-checkout", url]).arg(dest);
         run(c, &format!("cannot clone `{url}`"))?;
-        let mut c = Command::new("git");
+        let mut c = git(None);
         c.arg("-C")
             .arg(dest)
             .args(["checkout", "--quiet", "--detach", commit]);
