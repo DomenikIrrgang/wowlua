@@ -539,3 +539,70 @@ fn unsafe_error(source: &str, u: safety::Unsafe) -> FetchError {
     )
     .help("wowlua refuses to extract packages that could write outside their folder")
 }
+
+/// Repository values of a fetched package, for packager keywords in its
+/// files (like the packager's `set_info_git` / `set_info_svn`).
+#[derive(Clone, Debug, Default)]
+pub struct PackageVcs {
+    pub version: String,
+    pub hash: String,
+    pub short_hash: String,
+    pub revision: String,
+    pub author: String,
+    pub timestamp: i64,
+}
+
+/// The repository values of `source` at `pin`. Git values come from the
+/// cached bare clone; SVN author and date need `svn info` (`detail`).
+pub fn package_vcs(cache: &Cache, source: &crate::Source, pin: &str, detail: bool) -> PackageVcs {
+    let mut v = PackageVcs::default();
+    match source {
+        crate::Source::Git { url, .. } => {
+            let dir = cache.git_dir(url);
+            let q = |args: &[&str]| -> String {
+                let mut c = git(Some(&dir));
+                c.args(args);
+                run(c, "").unwrap_or_default()
+            };
+            v.hash = pin.to_string();
+            v.short_hash = pin.chars().take(7).collect();
+            let line = q(&["log", "-1", "--format=%an%x09%at", pin]);
+            if let Some((a, t)) = line.split_once('\t') {
+                v.author = a.to_string();
+                v.timestamp = t.parse().unwrap_or(0);
+            }
+            v.revision = q(&["rev-list", "--count", pin]);
+            let tags = q(&["tag", "--points-at", pin, "--sort=-v:refname"]);
+            v.version = match tags.lines().next() {
+                Some(t) if !t.is_empty() => t.to_string(),
+                _ => {
+                    let d = q(&["describe", "--tags", "--abbrev=7", pin]);
+                    if d.is_empty() {
+                        v.short_hash.clone()
+                    } else {
+                        d
+                    }
+                }
+            };
+        }
+        crate::Source::Svn { url, .. } => {
+            v.revision = pin.to_string();
+            v.version = match url.split_once("/tags/") {
+                Some((_, rest)) => rest.split('/').next().unwrap_or(rest).to_string(),
+                None => format!("r{pin}"),
+            };
+            if detail {
+                let mut c = Command::new("svn");
+                c.args(["info", "--non-interactive"])
+                    .arg(format!("{url}@{pin}"));
+                for line in run(c, "").unwrap_or_default().lines() {
+                    if let Some(a) = line.strip_prefix("Last Changed Author: ") {
+                        v.author = a.to_string();
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    v
+}

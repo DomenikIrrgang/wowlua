@@ -268,6 +268,18 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path) -> Result<()> {
         // Directives.
         let (da, ia) = pk.directives(&pk_toc, flavor);
         let (db, ib) = wl.directives(&wl_toc, flavor);
+        // A client reads only the numbers of its own flavor.
+        let own = |set: &BTreeSet<u32>| -> BTreeSet<u32> {
+            set.iter()
+                .copied()
+                .filter(|n| {
+                    wowlua_flavors::table()
+                        .by_interface(*n)
+                        .is_some_and(|f| f.id == *flavor)
+                })
+                .collect()
+        };
+        let (ia, ib) = (own(&ia), own(&ib));
         if ia != ib {
             problems.push(format!(
                 "{flavor}: Interface differs: packager {ia:?}, wowlua {ib:?}"
@@ -320,9 +332,13 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path) -> Result<()> {
             .zip(tb.lines())
             .position(|(x, y)| x != y)
             .map(|i| i + 1)
-            .unwrap_or(0);
+            .unwrap_or_else(|| ta.lines().count().min(tb.lines().count()) + 1);
         problems.push(format!(
-            "`{pa}` differs from wowlua's `{wb}` (first at line {line})"
+            "`{pa}` differs from wowlua's `{wb}` (first at line {line}; {} vs {} lines, {} vs {} bytes)",
+            ta.lines().count(),
+            tb.lines().count(),
+            a.len(),
+            b.len()
         ));
     }
     println!(

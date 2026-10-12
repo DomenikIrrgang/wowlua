@@ -227,7 +227,7 @@ generated, so TOC keywords do not apply.
 |-------|-------------|
 | `@debug@ … @end-debug@` | The profile's `debug` is true |
 | `@alpha@ … @end-alpha@` | `build.version` is an alpha or dev version (untagged build) |
-| `@do-not-package@ … @end-do-not-package@` | Removed in builds made by `package` and `publish`, kept otherwise |
+| `@do-not-package@ … @end-do-not-package@` | Removed (lines deleted, like the packager) when the profile's `debug` is false, kept otherwise (decision T120) |
 | `@retail@`, `@version-retail@` | Flavor `standard` |
 | `@version-classic@`, `@version-vanilla@` | Flavor `vanilla` |
 | `@version-bcc@` | Flavor `tbc` |
@@ -237,8 +237,11 @@ generated, so TOC keywords do not apply.
 | `@version-forever@` | Flavor `camelot` |
 
 The `non-` prefixed forms invert a block. Inactive blocks are commented out in
-the packager's style, and removed lines are replaced by blank lines, so line
-numbers stay correct. Keywords are applied before the files are checked. Flavor blocks
+the packager's style, so line numbers stay correct; `@do-not-package@` blocks
+are deleted like the packager deletes them. Embedded `lua-library` files get the processing the packager gives its
+externals: repository keywords from the library's locked commit or revision,
+`@debug@` and `@do-not-package@` blocks as above, and XML
+`<!--@no-lib-strip@-->` blocks commented out (decision T120). Keywords are applied before the files are checked. Flavor blocks
 need `build.flavor-mode: "split"` when several flavors are built, and then
 produce per-flavor variants of the file (decision T118). `@localization(...)@` is not supported (W4030). Use
 `wowlua:locale` instead.

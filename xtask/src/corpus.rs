@@ -377,7 +377,10 @@ pub fn addons(dir: &Path) -> Result<()> {
             cwd: work.clone(),
             ..Default::default()
         };
-        let Some(project) = wowlua_driver::load_project(&mut session, &options) else {
+        // A converted `move-folders` makes a workspace: check its root.
+        let Some(project) = wowlua_driver::load_projects(&mut session, &options)
+            .and_then(|ps| ps.into_iter().find(|p| p.manifest.root == work))
+        else {
             failures.push(format!("{rel}: the adopted manifest does not load"));
             continue;
         };

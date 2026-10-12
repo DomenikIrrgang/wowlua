@@ -316,15 +316,7 @@ pub fn build(
     let mut flavor_blocks: BTreeSet<String> = BTreeSet::new();
     if keywords {
         let alpha = semver::Version::parse(&version).is_ok_and(|v| !v.pre.is_empty());
-        let now = std::env::var("SOURCE_DATE_EPOCH")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_else(|| {
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs() as i64)
-                    .unwrap_or(0)
-            });
+        let now = crate::keywords::build_time();
         let info =
             crate::keywords::KeywordInfo::from_git(&root, &version, profile.debug, alpha, now);
         for (source, _) in &files {
@@ -1132,8 +1124,47 @@ pub fn build(
     for (i, lib) in libs.iter().enumerate() {
         let mut roots: Vec<String> = lib.entries.iter().map(|(e, _)| e.clone()).collect();
         roots.extend(xml.lib_refs.get(&i).into_iter().flatten().cloned());
+        let mut lib_info: Option<crate::keywords::KeywordInfo> = None;
         for rel in crate::embed::reachable(session, lib, &roots) {
-            out.insert(lib.output(&rel), Content::Copy(lib.dir.join(&rel)));
+            let abs = lib.dir.join(&rel);
+            let lower = rel.to_ascii_lowercase();
+            let xml = lower.ends_with(".xml");
+            // Library files get the packager's processing (decision T120).
+            if keywords
+                && (xml || lower.ends_with(".lua"))
+                && let Ok(text) = std::fs::read_to_string(&abs)
+                && text.contains('@')
+            {
+                let info = lib_info.get_or_insert_with(|| {
+                    let detail = text.contains("@project-author@")
+                        || text.contains("@project-date")
+                        || text.contains("@project-timestamp@");
+                    let vcs = match (wowlua_pkg::Cache::new(), &lib.pin) {
+                        (Some(cache), Some(pin)) => {
+                            wowlua_pkg::fetch::package_vcs(&cache, &lib.source, pin, detail)
+                        }
+                        _ => Default::default(),
+                    };
+                    crate::keywords::KeywordInfo {
+                        version: vcs.version,
+                        hash: vcs.hash,
+                        short_hash: vcs.short_hash,
+                        revision: vcs.revision,
+                        author: vcs.author,
+                        timestamp: vcs.timestamp,
+                        build_timestamp: crate::keywords::build_time(),
+                        debug: profile.debug,
+                        alpha: false,
+                        repo: None,
+                    }
+                });
+                let processed = crate::keywords::apply_library(&text, info, xml);
+                if processed != text {
+                    out.insert(lib.output(&rel), Content::Bytes(processed.into_bytes()));
+                    continue;
+                }
+            }
+            out.insert(lib.output(&rel), Content::Copy(abs));
         }
         match crate::embed::license_text(lib) {
             Some(text) => lib_licenses.push((format!("{} ({})", lib.name, lib.install), text)),
@@ -1200,9 +1231,7 @@ pub fn build(
     }
     for asset in &assets {
         let first = asset.rel.split('/').next().unwrap_or_default();
-        let reserved = (RESERVED_DIRS.contains(&first)
-            || first.eq_ignore_ascii_case(&build_cfg.libs_dir))
-            && asset.rel.contains('/')
+        let reserved = RESERVED_DIRS.contains(&first) && asset.rel.contains('/')
             || RESERVED_FILES.contains(&asset.rel.as_str())
             || (!asset.rel.contains('/') && asset.rel.to_ascii_lowercase().ends_with(".toc"));
         if reserved || out.contains_key(&asset.rel) {

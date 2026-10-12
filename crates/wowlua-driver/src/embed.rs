@@ -29,6 +29,10 @@ pub struct LuaLib {
     pub licenses: Vec<String>,
     /// The `license` of its manifest.
     pub license_id: Option<String>,
+    /// Where it comes from, and the locked commit or revision (packager
+    /// keywords in its files).
+    pub source: wowlua_pkg::Source,
+    pub pin: Option<String>,
 }
 
 impl LuaLib {
@@ -285,6 +289,8 @@ pub fn lua_libraries(
                 .as_ref()
                 .and_then(|m| m.package.as_ref())
                 .and_then(|pk| pk.license.clone()),
+            source: p.source.clone(),
+            pin: p.pin.clone(),
         });
     }
     Some(libs)

@@ -27,6 +27,19 @@ pub struct KeywordInfo {
     pub repo: Option<std::path::PathBuf>,
 }
 
+/// The build time: `SOURCE_DATE_EPOCH` when set (reproducible builds).
+pub fn build_time() -> i64 {
+    std::env::var("SOURCE_DATE_EPOCH")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0)
+        })
+}
+
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
     let out = Command::new("git")
         .args(args)
@@ -158,16 +171,58 @@ pub fn has_flavor_blocks(text: &str) -> bool {
         .any(|(k, _)| text.contains(&format!("@{k}@")))
 }
 
-/// Applies repository keywords and the debug/alpha blocks. `rel` is the
-/// file's path in the repository, for `@file-*@`.
-pub fn apply(text: &str, info: &KeywordInfo, rel: &Path, xml: bool) -> String {
+/// Deletes `@do-not-package@` blocks, lines included, like the packager.
+fn remove_do_not_package(text: &str, xml: bool) -> String {
+    let (start, end) = if xml {
+        ("<!--@do-not-package@-->", "<!--@end-do-not-package@-->")
+    } else {
+        ("--@do-not-package@", "--@end-do-not-package@")
+    };
+    if !text.contains(start) {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut removing = false;
+    for line in text.split_inclusive('\n') {
+        if removing {
+            if line.contains(end) {
+                removing = false;
+            }
+            continue;
+        }
+        if line.contains(start) {
+            removing = true;
+            continue;
+        }
+        out.push_str(line);
+    }
+    out
+}
+
+/// Repository keywords of the package and its blocks, the way the packager
+/// processes the files of an external: debug blocks follow the profile,
+/// `@do-not-package@` blocks go in release builds, and XML `no-lib-strip`
+/// blocks are always commented out (the addon embeds its libraries itself).
+pub fn apply_library(text: &str, info: &KeywordInfo, xml: bool) -> String {
     if !text.contains('@') {
         return text.to_string();
     }
+    let mut out = substitute(text, info);
+    if !info.debug {
+        out = remove_do_not_package(&out, xml);
+    }
+    let filter = if xml { xml_filter } else { lua_filter };
+    out = filter(&out, "debug", info.debug);
+    if xml {
+        out = xml_filter(&out, "no-lib-strip", false);
+    }
+    out
+}
+
+fn substitute(text: &str, info: &KeywordInfo) -> String {
     let (date_iso, date_int) = dates(info.timestamp);
     let (build_iso, build_int) = dates(info.build_timestamp);
-    let mut out = text
-        .replace("@project-revision@", &info.revision)
+    text.replace("@project-revision@", &info.revision)
         .replace("@project-hash@", &info.hash)
         .replace("@project-abbreviated-hash@", &info.short_hash)
         .replace("@project-author@", &info.author)
@@ -178,7 +233,17 @@ pub fn apply(text: &str, info: &KeywordInfo, rel: &Path, xml: bool) -> String {
         .replace("@build-date@", &build_iso[..10])
         .replace("@build-date-iso@", &build_iso)
         .replace("@build-date-integer@", &build_int)
-        .replace("@build-timestamp@", &info.build_timestamp.to_string());
+        .replace("@build-timestamp@", &info.build_timestamp.to_string())
+}
+
+/// Applies repository keywords and the debug/alpha blocks; release builds
+/// drop `@do-not-package@` blocks. `rel` is the file's path in the
+/// repository, for `@file-*@`.
+pub fn apply(text: &str, info: &KeywordInfo, rel: &Path, xml: bool) -> String {
+    if !text.contains('@') {
+        return text.to_string();
+    }
+    let mut out = substitute(text, info);
     if out.contains("@file-")
         && let Some(repo) = &info.repo
     {
@@ -203,6 +268,9 @@ pub fn apply(text: &str, info: &KeywordInfo, rel: &Path, xml: bool) -> String {
                 .replace("@file-date-integer@", &int)
                 .replace("@file-timestamp@", &ts.to_string());
         }
+    }
+    if !info.debug {
+        out = remove_do_not_package(&out, xml);
     }
     let filter = if xml { xml_filter } else { lua_filter };
     out = filter(&out, "debug", info.debug);
@@ -264,6 +332,14 @@ mod tests {
         assert_eq!(
             apply_flavor(flavored, "standard", false),
             "--[====[@version-classic@\nx()\n--@end-version-classic@]====]\n"
+        );
+        let dnp = "a\n--@do-not-package@\ntest()\n--@end-do-not-package@\nb\n";
+        assert_eq!(apply(dnp, &info, Path::new("a.lua"), false), "a\nb\n");
+        assert_eq!(apply(dnp, &on, Path::new("a.lua"), false), dnp);
+        let libxml = "<Ui>\n<!--@no-lib-strip@-->\n<Script file=\"LibStub.lua\"/>\n<!--@end-no-lib-strip@-->\n</Ui>\n";
+        assert_eq!(
+            apply_library(libxml, &info, true),
+            "<Ui>\n<!--@no-lib-strip@\n<Script file=\"LibStub.lua\"/>\n@end-no-lib-strip@-->\n</Ui>\n"
         );
         assert_eq!(dates(0).0, "1970-01-01T00:00:00Z");
         assert_eq!(dates(1_760_243_127).1, "20251012042527");

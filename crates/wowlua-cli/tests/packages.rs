@@ -1043,7 +1043,10 @@ fn init_from_pkgmeta_converts_externals() {
     let stub = git_repo(
         &e.root.join("LibStub"),
         &[
-            ("LibStub.lua", "-- LibStub, Public Domain\nLibStub = {}\n"),
+            (
+                "LibStub.lua",
+                "-- LibStub, Public Domain\nLibStub = {}\n--@do-not-package@\nLibStub.test = true\n--@end-do-not-package@\n",
+            ),
             ("README.md", "x"),
         ],
         "1.0",
@@ -1168,6 +1171,9 @@ fn init_from_pkgmeta_converts_externals() {
             .exists()
     );
     assert!(!out.join("Libs/LibStub/README.md").exists());
+    // Library files get the packager's processing too (decision T120).
+    let stub_out = fs::read_to_string(out.join("Libs/LibStub/LibStub.lua")).unwrap();
+    assert_eq!(stub_out, "-- LibStub, Public Domain\nLibStub = {}\n");
     let core = fs::read_to_string(out.join("src/Core.lua")).unwrap();
     assert!(
         core.contains("--[==[@debug@\nns.debug = true\n--@end-debug@]==]"),
@@ -1184,6 +1190,9 @@ fn init_from_pkgmeta_converts_externals() {
         dev.contains("--@debug@\nns.debug = true\n--@end-debug@"),
         "{dev}"
     );
+    let stub_dev =
+        fs::read_to_string(addon.join("dist/dev/MyAddon/Libs/LibStub/LibStub.lua")).unwrap();
+    assert!(stub_dev.contains("LibStub.test = true"), "{stub_dev}");
     // The moved folder builds as its own addon.
     wowlua(addon, &e.home)
         .args(["-p", "my-addon-options", "build"])
