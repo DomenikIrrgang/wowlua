@@ -447,17 +447,10 @@ fn kind_name(kind: PackageKind) -> &'static str {
 
 pub fn init(out: &Output, from_toc: Option<PathBuf>, from_pkgmeta: bool) -> bool {
     let mut session = Session::new();
-    if from_pkgmeta {
-        session.push(
-            Diagnostic::plain_error("`--from-pkgmeta` is not available yet")
-                .with_note("converting .pkgmeta arrives with the package manager (milestone M6)"),
-        );
-        out.flush(&mut session);
-        return false;
-    }
     let request = InitRequest {
         dir: cwd(),
         from_toc: from_toc.map(|t| cwd().join(t)),
+        from_pkgmeta,
     };
     match scaffold::init_package(&request) {
         Ok(report) => {
@@ -473,6 +466,18 @@ pub fn init(out: &Output, from_toc: Option<PathBuf>, from_pkgmeta: bool) -> bool
                     plural(report.rewritten_paths, "in-game path", "in-game paths")
                 ),
             );
+            if report.dependencies > 0 {
+                out.status(
+                    "Converted",
+                    format!(
+                        "{} from .pkgmeta",
+                        plural(report.dependencies, "external", "externals")
+                    ),
+                );
+            }
+            for member in &report.members {
+                out.status("Adopted", format!("{member} as a workspace member"));
+            }
             out.status(
                 "Note",
                 format!(

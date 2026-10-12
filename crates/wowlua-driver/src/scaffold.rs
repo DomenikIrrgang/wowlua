@@ -6,7 +6,7 @@ use crate::vcs;
 use indexmap::IndexMap;
 use regex::Regex;
 use serde_json::{Map, Value, json};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_manifest::model::PackageKind;
@@ -233,6 +233,9 @@ pub struct InitRequest {
     pub dir: PathBuf,
     /// `--from-toc`: the TOC to adopt (default: all TOCs of the addon).
     pub from_toc: Option<PathBuf>,
+    /// `--from-pkgmeta`: require a `.pkgmeta` (it is converted whenever it
+    /// exists).
+    pub from_pkgmeta: bool,
 }
 
 /// What `wowlua init` did.
@@ -244,6 +247,10 @@ pub struct InitReport {
     pub rewritten_paths: usize,
     pub warnings: Vec<Diagnostic>,
     pub old_tocs: Vec<String>,
+    /// Dependencies converted from `.pkgmeta` externals.
+    pub dependencies: usize,
+    /// Workspace members created from `move-folders`.
+    pub members: Vec<String>,
 }
 
 const ASSET_EXTENSIONS: &[&str] = &[
@@ -260,6 +267,12 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         )));
     }
     let tocs = find_tocs(dir, request.from_toc.as_deref())?;
+    let pkgmeta = crate::pkgmeta::read(dir)?;
+    if request.from_pkgmeta && pkgmeta.is_none() {
+        return Err(Diagnostic::plain_error(
+            "`--from-pkgmeta` was given, but there is no `.pkgmeta` or `pkgmeta.yaml`",
+        ));
+    }
     let addon_name = tocs[0].1.clone();
     let src_dir = source_dir_for(dir);
     let mut report = InitReport {
@@ -451,11 +464,37 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         ));
     }
 
+    // `.pkgmeta` externals: their files are not the addon's own. TOC lines
+    // into them become the dependencies' entry files.
+    let externals: Vec<crate::pkgmeta::External> = pkgmeta
+        .as_ref()
+        .map(|m| m.externals.clone())
+        .unwrap_or_default();
+    let external_of = |path: &str| -> Option<usize> {
+        let lower = path.to_ascii_lowercase();
+        externals
+            .iter()
+            .position(|e| lower.starts_with(&format!("{}/", e.dir.to_ascii_lowercase())))
+    };
+    let mut external_files: Vec<Vec<String>> = vec![Vec::new(); externals.len()];
+    let mut external_flavors: Vec<BTreeSet<String>> = vec![BTreeSet::new(); externals.len()];
+    for path in &order {
+        if let Some(i) = external_of(path) {
+            let rel = path[externals[i].dir.len() + 1..].to_string();
+            if !external_files[i].contains(&rel) {
+                external_files[i].push(rel);
+            }
+            if let Some(set) = file_flavors.get(path) {
+                external_flavors[i].extend(set.iter().cloned());
+            }
+        }
+    }
+
     // Files to move: TOC files, expansions of variable lines, and everything
     // they include through XML.
     let mut queue: Vec<String> = order
         .iter()
-        .filter(|p| !p.contains('[') && !p.starts_with("../"))
+        .filter(|p| !p.contains('[') && !p.starts_with("../") && external_of(p).is_none())
         .cloned()
         .collect();
     for (path, (flavors, locales)) in &variable_lines {
@@ -476,7 +515,29 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         }
     }
     let mut seen: BTreeSet<String> = BTreeSet::new();
-    let mut to_move = closure(dir, queue, &mut seen, &mut report.warnings);
+    let mut into_externals: Vec<String> = Vec::new();
+    let skip = |p: &str| external_of(p).is_some();
+    let mut to_move = closure(
+        dir,
+        queue,
+        &mut seen,
+        &mut report.warnings,
+        &skip,
+        &mut into_externals,
+    );
+    // Files the addon's own XML loads from externals are entry files too
+    // (they are not listed in the TOC again, decision T107).
+    for path in &into_externals {
+        if let Some(i) = external_of(path) {
+            let rel = path[externals[i].dir.len() + 1..].to_string();
+            if !external_files[i]
+                .iter()
+                .any(|f| f.eq_ignore_ascii_case(&rel))
+            {
+                external_files[i].push(rel);
+            }
+        }
+    }
     // Files other AddOns next to this one load (`..\<this>\file.lua`) move
     // too and are shipped as `build.shared-files` (unless loaded here anyway).
     let referenced = sibling_references(dir);
@@ -490,6 +551,8 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         shared.clone(),
         &mut seen,
         &mut report.warnings,
+        &skip,
+        &mut into_externals,
     ));
     to_move.sort();
 
@@ -550,6 +613,13 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         }
         external_paths.insert(line.clone(), path);
     }
+    // Entry files of embedded libraries keep their place in the load order
+    // under their output path (`libs/LibStub/LibStub.lua`, decision T106).
+    for path in &order {
+        if external_of(path).is_some() {
+            external_paths.insert(path.clone(), path.clone());
+        }
+    }
     let mut manifest = adopted_manifest(
         &structural,
         &views,
@@ -563,11 +633,26 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         &mut warnings,
         src_dir,
         &external_paths,
+        crate::vcs::latest_tag(dir),
     );
     if let Some(addon) = manifest.get_mut("addon").and_then(Value::as_object_mut)
         && let Some(files) = &toc_data
     {
         addon.insert("toc-data".into(), json!(files));
+    }
+    if let Some(meta) = &pkgmeta {
+        convert_pkgmeta(
+            dir,
+            meta,
+            &mut manifest,
+            &externals,
+            &external_files,
+            &external_flavors,
+            &all_flavors,
+            &to_move,
+            src_dir,
+            &mut report,
+        );
     }
     if !variable_lines.is_empty()
         && let Some(build) = manifest
@@ -638,6 +723,13 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         .filter_map(|e| fsutil::relative_slash(e.path(), dir))
         .filter(|rel| !rel.starts_with(&format!("{src_dir}/")) && !rel.starts_with("dist/"))
         .filter(|rel| !crate::build::is_bindings_file(rel))
+        .filter(|rel| external_of(rel).is_none())
+        .filter(|rel| {
+            !report
+                .members
+                .iter()
+                .any(|m| rel.starts_with(&format!("{m}/")))
+        })
         .filter(|rel| {
             let lower = rel.to_ascii_lowercase();
             lower.ends_with(".lua") || lower.ends_with(".xml")
@@ -659,7 +751,331 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
 
     std::fs::write(dir.join(MANIFEST_FILE), pretty(&manifest))
         .map_err(|e| Diagnostic::plain_error(format!("cannot write `{MANIFEST_FILE}`: {e}")))?;
+
+    // The lockfile pins the interface numbers the TOCs list, so the
+    // generated TOCs keep them (`wowlua types sync` moves them on).
+    let mut pins: BTreeMap<String, Vec<u32>> = BTreeMap::new();
+    for (toc, flavors) in &views {
+        for interface in toc.interfaces() {
+            if let Some(f) = table.by_interface(interface)
+                && flavors.contains(&f.id)
+            {
+                let list = pins.entry(f.id.clone()).or_default();
+                if !list.contains(&interface) {
+                    list.push(interface);
+                }
+            }
+        }
+    }
+    if !pins.is_empty() && !dir.join(crate::lockfile::LOCKFILE).exists() {
+        let mut lock = crate::lockfile::required(None, &all_flavors);
+        for (flavor, list) in pins {
+            lock.flavor_table.interfaces.insert(flavor, list);
+        }
+        lock.write(dir).map_err(|e| {
+            Diagnostic::plain_error(format!("cannot write `{}`: {e}", crate::lockfile::LOCKFILE))
+        })?;
+    }
     Ok(report)
+}
+
+/// Packager keywords and blocks in a passthrough file (spec CLI §12.6).
+fn has_packager_keywords(text: &str) -> bool {
+    static PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    PATTERN
+        .get_or_init(|| {
+            regex::Regex::new(
+                r"@(project|file|build)-[a-z-]+@|@(end-)?(non-)?(debug|alpha|do-not-package|retail|version-[a-z]+)@",
+            )
+            .expect("a valid pattern")
+        })
+        .is_match(text)
+}
+
+/// Step 6 of `wowlua init` (spec CLI §12.6): `.pkgmeta` externals become
+/// dependencies; `ignore`, `plain-copy`, `package-as`, `manual-changelog`,
+/// `enable-nolib-creation` and the relation lists become manifest settings;
+/// `move-folders` that move whole addon folders become workspace members.
+#[allow(clippy::too_many_arguments)]
+fn convert_pkgmeta(
+    dir: &Path,
+    meta: &crate::pkgmeta::PkgMeta,
+    manifest: &mut Value,
+    externals: &[crate::pkgmeta::External],
+    external_files: &[Vec<String>],
+    external_flavors: &[BTreeSet<String>],
+    all_flavors: &[String],
+    moved: &[String],
+    src_dir: &str,
+    report: &mut InitReport,
+) {
+    let Some(object) = manifest.as_object_mut() else {
+        return;
+    };
+    // Dependencies, in the order of the externals.
+    let libs_dir = crate::pkgmeta::libs_dir(externals);
+    let mut deps = Map::new();
+    for (i, e) in externals.iter().enumerate() {
+        if let crate::pkgmeta::ExternalSource::Hg { url } = &e.source {
+            report.warnings.push(
+                Diagnostic::warning(
+                    "W4333",
+                    format!(
+                        "external `{}` is a Mercurial repository (`{url}`), which wowlua cannot fetch; not converted",
+                        e.dir
+                    ),
+                )
+                .with_help("replace it with a git mirror or a release archive"),
+            );
+            continue;
+        }
+        if external_files[i].is_empty() {
+            report.warnings.push(Diagnostic::plain_warning(format!(
+                "external `{}` is not loaded by the TOC or the addon's XML; not converted",
+                e.dir
+            )));
+            continue;
+        }
+        let mut entry = match crate::pkgmeta::dependency_entry(e, wowlua_pkg::fetch::sha256_of_url)
+        {
+            Ok(entry) => entry,
+            Err(warning) => {
+                report.warnings.push(warning);
+                continue;
+            }
+        };
+        if e.latest {
+            report.warnings.push(Diagnostic::plain_warning(format!(
+                "external `{}` uses `tag: latest`; the dependency follows the default branch instead (pin a `tag`)",
+                e.dir
+            )));
+        }
+        let install = match &libs_dir {
+            Some(d) => e.dir[d.len() + 1..].to_string(),
+            None => e.dir.clone(),
+        };
+        entry.insert("install-path".into(), json!(install));
+        entry.insert("files".into(), json!(external_files[i]));
+        let flavors = &external_flavors[i];
+        if !flavors.is_empty() && flavors.len() < all_flavors.len() {
+            let ordered: Vec<&String> = all_flavors
+                .iter()
+                .filter(|f| flavors.contains(*f))
+                .collect();
+            entry.insert("flavors".into(), json!(ordered));
+        }
+        let mut name = crate::pkgmeta::dependency_name(&e.dir);
+        let base = name.clone();
+        let mut n = 2;
+        while deps.contains_key(&name) {
+            name = format!("{base}-{n}");
+            n += 1;
+        }
+        deps.insert(name, Value::Object(entry));
+        report.dependencies += 1;
+    }
+    if !deps.is_empty() {
+        object.insert("dependencies".into(), Value::Object(deps));
+        let build = object
+            .entry("build")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("an object");
+        match &libs_dir {
+            Some(d) if d != "libs" => {
+                build.insert("libs-dir".into(), json!(d));
+            }
+            None => {
+                build.insert("libs-dir".into(), json!("."));
+            }
+            _ => {}
+        }
+    }
+    // `package-as` names the AddOn folder.
+    if let Some(name) = &meta.package_as {
+        let addon = object
+            .entry("addon")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("an object");
+        if &report.addon_name != name {
+            addon.insert("name".into(), json!(name));
+            report.addon_name = name.clone();
+        }
+    }
+    // `ignore` and `plain-copy`, relative to the package root; moved files
+    // live under the source folder now.
+    let moved_lower: BTreeSet<String> = moved.iter().map(|m| m.to_ascii_lowercase()).collect();
+    let pattern_of = |p: &str| -> Vec<String> {
+        let p = p
+            .trim_end_matches("/*")
+            .trim_end_matches('/')
+            .replace('\\', "/");
+        let lower = p.to_ascii_lowercase();
+        let mut out = Vec::new();
+        if moved_lower.contains(&lower) {
+            out.push(format!("{src_dir}/{p}"));
+        } else if dir.join(&p).is_dir() {
+            out.push(format!("{p}/**"));
+            if moved_lower
+                .iter()
+                .any(|m| m.starts_with(&format!("{lower}/")))
+            {
+                out.push(format!("{src_dir}/{p}/**"));
+            }
+        } else {
+            out.push(p);
+        }
+        out
+    };
+    let build = object
+        .entry("build")
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .expect("an object");
+    let exclude: Vec<String> = meta.ignore.iter().flat_map(|p| pattern_of(p)).collect();
+    if !exclude.is_empty() {
+        build.insert("exclude".into(), json!(exclude));
+    }
+    let plain: Vec<String> = meta
+        .plain_copy
+        .iter()
+        .flat_map(|p| pattern_of(p))
+        .filter(|p| !p.starts_with(&format!("{src_dir}/")))
+        .collect();
+    if !plain.is_empty() {
+        let assets = build
+            .entry("assets")
+            .or_insert_with(|| json!([]))
+            .as_array_mut()
+            .expect("an array");
+        for p in plain {
+            if !assets.iter().any(|a| a.as_str() == Some(&p)) {
+                assets.push(json!(p));
+            }
+        }
+    }
+    if build.is_empty() {
+        object.shift_remove("build");
+    }
+    // Keyword substitution, when the sources use packager keywords.
+    let uses_keywords = moved.iter().any(|m| {
+        let lower = m.to_ascii_lowercase();
+        (lower.ends_with(".lua") || lower.ends_with(".xml"))
+            && std::fs::read(dir.join(src_dir).join(m))
+                .is_ok_and(|b| has_packager_keywords(&String::from_utf8_lossy(&b)))
+    });
+    if uses_keywords {
+        object.insert("compat".into(), json!({ "packager-keywords": true }));
+    }
+    // Publishing.
+    let publish = object
+        .entry("publish")
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .expect("an object");
+    if let Some((file, markup)) = &meta.manual_changelog {
+        publish.insert("changelog".into(), json!(file));
+        let format = match markup.as_deref() {
+            Some("markdown") => Some("markdown"),
+            Some("html") => Some("html"),
+            Some("text" | "plain") => Some("text"),
+            _ => None,
+        };
+        if let Some(f) = format {
+            publish.insert("changelog-format".into(), json!(f));
+        }
+    }
+    if meta.enable_nolib || !meta.relations.is_empty() {
+        let targets = publish
+            .entry("targets")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("an object");
+        if meta.enable_nolib {
+            match crate::vcs::github_repository(dir) {
+                Some(repository) => {
+                    let name = if targets.contains_key("github") {
+                        "github-nolib"
+                    } else {
+                        "github"
+                    };
+                    targets.insert(
+                        name.into(),
+                        json!({ "type": "github", "repository": repository, "nolib": true }),
+                    );
+                }
+                None => report.warnings.push(Diagnostic::plain_warning(
+                    "`enable-nolib-creation` becomes a GitHub target with `nolib`, but the repository has no GitHub `origin`; not converted",
+                )),
+            }
+        }
+        if !meta.relations.is_empty() {
+            match targets.get_mut("curseforge").and_then(Value::as_object_mut) {
+                Some(cf) => {
+                    let list: Vec<Value> = meta
+                        .relations
+                        .iter()
+                        .map(|(slug, kind)| json!({ "slug": slug, "type": kind }))
+                        .collect();
+                    cf.insert("relations".into(), Value::Array(list));
+                }
+                None => report.warnings.push(Diagnostic::plain_warning(
+                    "the `.pkgmeta` relation lists need a CurseForge target (`## X-Curse-Project-ID`); not converted",
+                )),
+            }
+        }
+    }
+    if publish.is_empty() {
+        object.shift_remove("publish");
+    }
+    // `move-folders`: whole addon folders become workspace members.
+    let prefix = format!(
+        "{}/",
+        meta.package_as
+            .clone()
+            .unwrap_or_else(|| report.addon_name.clone())
+    );
+    let mut members = Vec::new();
+    for (from, to) in &meta.move_folders {
+        let rel = from
+            .strip_prefix(&prefix)
+            .unwrap_or(from)
+            .trim_matches('/')
+            .to_string();
+        let sub = dir.join(&rel);
+        let is_addon = std::fs::read_dir(&sub).ok().is_some_and(|entries| {
+            entries.flatten().any(|e| {
+                let n = e.file_name().to_string_lossy().to_ascii_lowercase();
+                n.ends_with(".toc") && n.starts_with(&to.to_ascii_lowercase())
+            })
+        });
+        if !is_addon || rel.is_empty() {
+            report.warnings.push(Diagnostic::warning(
+                "W4332",
+                format!("`move-folders` entry `{from}: {to}` does not move a whole addon folder; not converted"),
+            ));
+            continue;
+        }
+        match init_package(&InitRequest {
+            dir: sub.clone(),
+            from_toc: None,
+            from_pkgmeta: false,
+        }) {
+            Ok(member) => {
+                report.warnings.extend(member.warnings);
+                members.push(rel);
+            }
+            Err(d) => report.warnings.push(Diagnostic::warning(
+                "W4332",
+                format!("`move-folders` entry `{from}`: {}", d.message),
+            )),
+        }
+    }
+    if !members.is_empty() {
+        object.insert("workspace".into(), json!({ "members": members }));
+        report.members = members;
+    }
 }
 
 /// The TOC files of the addon in `dir`: `(path, addon name, suffix)`.
@@ -730,9 +1146,18 @@ fn closure(
     mut queue: Vec<String>,
     seen: &mut BTreeSet<String>,
     warnings: &mut Vec<Diagnostic>,
+    skip: &dyn Fn(&str) -> bool,
+    skipped: &mut Vec<String>,
 ) -> Vec<String> {
     let mut found = Vec::new();
     while let Some(rel) = queue.pop() {
+        // Files of `.pkgmeta` externals are not part of the checkout.
+        if skip(&rel) {
+            if !skipped.contains(&rel) {
+                skipped.push(rel);
+            }
+            continue;
+        }
         let Some(actual) = existing_case(dir, &rel) else {
             warnings.push(Diagnostic::plain_warning(format!(
                 "the TOC lists `{rel}`, which does not exist"
@@ -909,7 +1334,7 @@ fn split_toc_name(file_name: &str, folder: &str) -> Option<(String, Option<Strin
 
 /// Flavors that load a file: the TOC's flavors filtered by the line's inline
 /// `[AllowLoadGameType]` / `[ExcludeLoadGameType]` directives.
-fn apply_conditions(
+pub fn apply_conditions(
     toc_flavors: &[String],
     conditions: &[wowlua_toc::InlineDirective],
 ) -> Vec<String> {
@@ -1405,16 +1830,29 @@ fn adopted_manifest(
     warnings: &mut Vec<Diagnostic>,
     src_dir: &str,
     external_paths: &HashMap<String, String>,
+    tag_version: Option<String>,
 ) -> Value {
     let package_name = kebab_case(addon_name);
+    // `@project-version@` (packager keyword): the version of the latest tag.
+    let keyword_version = toc
+        .get("Version")
+        .is_some_and(|v| v.contains("@project-version@"));
     let version = toc
         .get("Version")
+        .filter(|_| !keyword_version)
         .and_then(normalize_version)
+        .or_else(|| {
+            keyword_version
+                .then(|| tag_version.clone())
+                .flatten()
+                .and_then(|t| normalize_version(&t))
+                .or_else(|| keyword_version.then(|| "0.1.0".to_string()))
+        })
         .unwrap_or_else(|| {
-            warnings.push(Diagnostic::plain_warning(format!(
-                "the TOC version `{}` is not a SemVer version; using 0.1.0",
-                toc.get("Version").unwrap_or("")
-            )));
+            warnings.push(Diagnostic::plain_warning(match toc.get("Version") {
+                Some(v) => format!("the TOC version `{v}` is not a SemVer version; using 0.1.0"),
+                None => "the TOC has no `## Version`; using 0.1.0".to_string(),
+            }));
             "0.1.0".into()
         });
 

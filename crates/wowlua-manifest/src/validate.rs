@@ -527,7 +527,11 @@ fn dependencies(manifest: &Manifest, ctx: &mut Ctx) {
                         detail.archive.is_some(),
                     ];
                     let count = sources.iter().filter(|s| **s).count();
-                    if count != 1 {
+                    // With `compat.pkgmeta`, `.pkgmeta` supplies the source
+                    // of its externals.
+                    if count != 1
+                        && !(count == 0 && manifest.compat.pkgmeta && section == "dependencies")
+                    {
                         ctx.error(
                             "E4002",
                             &path,

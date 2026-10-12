@@ -1,0 +1,25 @@
+name: packager-compat
+
+# The M6 exit check: an Ace3-based addon (Bartender4) adopted with
+# `wowlua init --from-pkgmeta` loads the same code as the BigWigs packager's
+# build of the same commit. Needs the network (CurseForge SVN, GitHub), so it
+# runs weekly and on demand rather than on every push.
+
+on:
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bartender4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq subversion
+      - run: cargo build --release -p wowlua-cli
+      - run: scripts/packager-compat.sh

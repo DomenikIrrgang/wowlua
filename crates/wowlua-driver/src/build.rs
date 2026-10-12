@@ -310,6 +310,71 @@ pub fn build(
     let build_id = build_id(session, project, &profile.name, &flavors, &files, &assets);
     let asset_rels: Vec<String> = assets.iter().map(|a| a.rel.clone()).collect();
 
+    // Packager keywords in passthrough files (spec CLI §12.6). Flavor blocks
+    // are applied per flavor after compiling.
+    let keywords = manifest.manifest.compat.packager_keywords;
+    let mut flavor_blocks: BTreeSet<String> = BTreeSet::new();
+    if keywords {
+        let alpha = semver::Version::parse(&version).is_ok_and(|v| !v.pre.is_empty());
+        let now = std::env::var("SOURCE_DATE_EPOCH")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0)
+            });
+        let info =
+            crate::keywords::KeywordInfo::from_git(&root, &version, profile.debug, alpha, now);
+        for (source, _) in &files {
+            if !matches!(source.kind, SourceKind::Lua | SourceKind::Xml) {
+                continue;
+            }
+            let Ok(text) = std::str::from_utf8(&raw[&source.rel]) else {
+                continue;
+            };
+            if crate::keywords::uses_localization(text) {
+                session.push(
+                    Diagnostic::warning(
+                        "W4030",
+                        "`@localization(…)@` is not supported; the line is left unchanged",
+                    )
+                    .with_path(&source.rel)
+                    .with_help("use `wowlua:locale` instead"),
+                );
+            }
+            let mut processed = crate::keywords::apply(
+                text,
+                &info,
+                Path::new(&source.rel),
+                source.kind == SourceKind::Xml,
+            );
+            if crate::keywords::has_flavor_blocks(&processed) {
+                if flavors.len() == 1 {
+                    processed = crate::keywords::apply_flavor(
+                        &processed,
+                        &flavors[0],
+                        source.kind == SourceKind::Xml,
+                    );
+                } else if build_cfg.flavor_mode == wowlua_manifest::model::FlavorMode::Split {
+                    flavor_blocks.insert(source.rel.clone());
+                } else {
+                    session.push(
+                        Diagnostic::plain_error(
+                            "packager flavor blocks (`@version-…@`, `@retail@`) need `build.flavor-mode: \"split\"` when several flavors are built",
+                        )
+                        .with_path(&source.rel)
+                        .with_help("use `wowlua:meta`'s `flavor` or TOC load conditions instead"),
+                    );
+                }
+            }
+            if processed != text {
+                raw.insert(source.rel.clone(), processed.into_bytes());
+            }
+        }
+    }
+
     // XML references.
     let xml = resolve_xml(session, &files, &libs, &addon_name);
 
@@ -612,6 +677,27 @@ pub fn build(
             meta,
             output,
         });
+    }
+    // Packager flavor blocks: each flavor's variant of the file.
+    for rel in &flavor_blocks {
+        let xml = rel.to_ascii_lowercase().ends_with(".xml");
+        for b in &mut builds {
+            let Some(f) = b.flavor.clone() else { continue };
+            let base = b
+                .output
+                .compiled
+                .get(rel)
+                .map(|c| c.code.clone())
+                .unwrap_or_else(|| raw[rel].clone());
+            let code = crate::keywords::apply_flavor(&String::from_utf8_lossy(&base), &f, xml);
+            b.output.compiled.insert(
+                rel.clone(),
+                crate::compile::Compiled {
+                    code: code.into_bytes(),
+                    map: None,
+                },
+            );
+        }
     }
     // One message per problem, not one per flavor.
     let mut seen = BTreeSet::new();
@@ -1042,6 +1128,7 @@ pub fn build(
         out.insert(source.output_path(), Content::Bytes(content));
     }
     let mut lib_licenses: Vec<(String, String)> = Vec::new();
+    let mut unlicensed: Vec<String> = Vec::new();
     for (i, lib) in libs.iter().enumerate() {
         let mut roots: Vec<String> = lib.entries.iter().map(|(e, _)| e.clone()).collect();
         roots.extend(xml.lib_refs.get(&i).into_iter().flatten().cloned());
@@ -1050,16 +1137,7 @@ pub fn build(
         }
         match crate::embed::license_text(lib) {
             Some(text) => lib_licenses.push((format!("{} ({})", lib.name, lib.install), text)),
-            None => session.push(
-                Diagnostic::warning(
-                    "W4306",
-                    format!(
-                        "embedded library `{}` has no recognizable license file or header",
-                        lib.name
-                    ),
-                )
-                .with_help("check its license before publishing; `lua-library.license-files` can name the file"),
-            ),
+            None => unlicensed.push(lib.name.clone()),
         }
     }
     for lib in &wlibs {
@@ -1071,14 +1149,21 @@ pub fn build(
         }
         match crate::embed::wowlua_license_text(lib) {
             Some(text) => lib_licenses.push((format!("{} ({})", lib.name, lib.out), text)),
-            None => session.push(Diagnostic::warning(
+            None => unlicensed.push(lib.name.clone()),
+        }
+    }
+    if !unlicensed.is_empty() {
+        session.push(
+            Diagnostic::warning(
                 "W4306",
                 format!(
-                    "embedded library `{}` has no recognizable license file or `license`",
-                    lib.name
+                    "embedded {} without a recognizable license file or header: {}",
+                    if unlicensed.len() == 1 { "library" } else { "libraries" },
+                    unlicensed.join(", ")
                 ),
-            )),
-        }
+            )
+            .with_help("check their licenses before publishing; `lua-library.license-files` can name the file"),
+        );
     }
     out.insert(
         "LICENSES.txt".into(),

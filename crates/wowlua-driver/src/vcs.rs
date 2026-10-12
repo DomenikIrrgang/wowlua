@@ -74,3 +74,21 @@ pub fn git_init(dir: &Path) -> bool {
 pub fn user_name(dir: &Path) -> Option<String> {
     git(dir, &["config", "user.name"]).filter(|n| !n.is_empty())
 }
+
+/// The most recent tag reachable from `HEAD`.
+pub fn latest_tag(dir: &Path) -> Option<String> {
+    git(dir, &["describe", "--tags", "--abbrev=0"]).filter(|t| !t.is_empty())
+}
+
+/// `owner/repo` of the `origin` remote when it is on GitHub.
+pub fn github_repository(dir: &Path) -> Option<String> {
+    let url = git(dir, &["remote", "get-url", "origin"])?;
+    let rest = url
+        .strip_prefix("https://github.com/")
+        .or_else(|| url.strip_prefix("git@github.com:"))
+        .or_else(|| url.strip_prefix("ssh://git@github.com/"))?;
+    let rest = rest.trim_end_matches('/').trim_end_matches(".git");
+    let mut parts = rest.split('/');
+    let (owner, repo) = (parts.next()?, parts.next()?);
+    (!owner.is_empty() && !repo.is_empty()).then(|| format!("{owner}/{repo}"))
+}

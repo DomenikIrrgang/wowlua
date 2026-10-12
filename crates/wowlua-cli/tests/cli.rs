@@ -113,7 +113,9 @@ fn init_adopts_an_existing_addon() {
     let dist = addon.join("dist/dev/MyAddon");
     let mainline = fs::read_to_string(dist.join("MyAddon_Mainline.toc")).unwrap();
     let classic = fs::read_to_string(dist.join("MyAddon_Classic.toc")).unwrap();
-    assert!(mainline.starts_with("## Interface: 120100\n"), "{mainline}");
+    // init pins the interface numbers the TOCs list (`types sync` moves
+    // them on).
+    assert!(mainline.starts_with("## Interface: 110200\n"), "{mainline}");
     assert!(mainline.contains("## Version: 1.2.3-dev\n"));
     assert!(mainline.contains("## OptionalDeps: Details\n"));
     assert!(mainline.contains("## X-Curse-Project-ID: 12345\n"));
@@ -121,7 +123,7 @@ fn init_adopts_an_existing_addon() {
         mainline.ends_with("src\\embeds.xml\nsrc\\Core.lua\nsrc\\UI\\Frames.xml\n"),
         "{mainline}"
     );
-    assert!(classic.starts_with("## Interface: 11509\n"), "{classic}");
+    assert!(classic.starts_with("## Interface: 11507\n"), "{classic}");
     assert!(
         classic.contains("## Title: My Addon Classic\n"),
         "{classic}"

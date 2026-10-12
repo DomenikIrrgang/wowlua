@@ -103,7 +103,7 @@ enum Command {
         /// The TOC file to adopt
         #[arg(long, value_name = "FILE")]
         from_toc: Option<PathBuf>,
-        /// Convert .pkgmeta (arrives with the package manager)
+        /// Require and convert .pkgmeta (converted whenever it exists)
         #[arg(long)]
         from_pkgmeta: bool,
     },

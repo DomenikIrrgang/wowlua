@@ -358,6 +358,7 @@ pub fn addons(dir: &Path) -> Result<()> {
         let report = wowlua_driver::scaffold::init_package(&wowlua_driver::scaffold::InitRequest {
             dir: work.clone(),
             from_toc: None,
+            from_pkgmeta: false,
         });
         if let Err(e) = report {
             failures.push(format!("{rel}: init failed: {}", e.message));

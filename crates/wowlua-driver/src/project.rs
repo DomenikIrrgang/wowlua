@@ -184,6 +184,16 @@ fn parse_manifest(
     let mut manifest = output.manifest.take()?;
     manifest.path = path.to_path_buf();
     manifest.root = path.parent().map(PathBuf::from).unwrap_or_default();
+    // `.pkgmeta` as the source of dependencies (spec CLI §12.6).
+    if manifest.manifest.compat.pkgmeta {
+        let mut problems = Vec::new();
+        crate::pkgmeta::apply_compat(&mut manifest, &mut problems);
+        let failed = problems.iter().any(|d| d.is_error());
+        session.diagnostics.extend(problems);
+        if failed {
+            return None;
+        }
+    }
     Some(manifest)
 }
 

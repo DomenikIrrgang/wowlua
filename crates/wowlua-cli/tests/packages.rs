@@ -1036,3 +1036,211 @@ fn workspaces() {
         .stderr(predicate::str::contains("error[E4325]"))
         .stderr(predicate::str::contains("error[E4120]"));
 }
+
+#[test]
+fn init_from_pkgmeta_converts_externals() {
+    let e = env();
+    let stub = git_repo(
+        &e.root.join("LibStub"),
+        &[
+            ("LibStub.lua", "-- LibStub, Public Domain\nLibStub = {}\n"),
+            ("README.md", "x"),
+        ],
+        "1.0",
+    );
+    let cbh = git_repo(
+        &e.root.join("CallbackHandler"),
+        &[
+            (
+                "CallbackHandler-1.0/CallbackHandler-1.0.xml",
+                "<Ui><Script file=\"CallbackHandler-1.0.lua\"/></Ui>",
+            ),
+            (
+                "CallbackHandler-1.0/CallbackHandler-1.0.lua",
+                "-- License: BSD\nCBH = {}\n",
+            ),
+        ],
+        "r1",
+    );
+    let classic = git_repo(
+        &e.root.join("LibClassic"),
+        &[("LibClassic.lua", "-- MIT License\n")],
+        "v1",
+    );
+    let addon = &e.project;
+    write(
+        addon,
+        &[
+            (
+                ".pkgmeta",
+                &format!(
+                    "package-as: MyAddon\nexternals:\n  Libs/LibStub:\n    url: {stub}\n    tag: 1.0\n  Libs/CallbackHandler-1.0:\n    url: {cbh}\n    path: CallbackHandler-1.0\n  Libs/LibClassic: {classic}\n  Libs/Hg: https://hg.wowace.com/wow/x/mainline\nignore:\n  - Docs\nmanual-changelog: CHANGELOG.md\nenable-nolib-creation: yes\nmove-folders:\n  MyAddon/Options: MyAddon_Options\n  MyAddon/Media: MyAddon_Media\n"
+                ),
+            ),
+            (
+                "MyAddon.toc",
+                "## Interface: 120100, 11509\n## Title: My Addon\n## Version: @project-version@\n## X-Curse-Project-ID: 99\n\n#@no-lib-strip@\nLibs\\LibStub\\LibStub.lua\n#@end-no-lib-strip@\nembeds.xml\nLibs\\LibClassic\\LibClassic.lua [AllowLoadGameType vanilla]\nCore.lua\n",
+            ),
+            (
+                "embeds.xml",
+                "<Ui>\n  <Include file=\"Libs\\CallbackHandler-1.0\\CallbackHandler-1.0.xml\"/>\n</Ui>\n",
+            ),
+            (
+                "Core.lua",
+                "local _, ns = ...\n--@debug@\nns.debug = true\n--@end-debug@\nns.version = \"@project-version@\"\n",
+            ),
+            ("Docs/notes.txt", "docs"),
+            ("Media/logo.tga", "TGA"),
+            (
+                "Options/MyAddon_Options.toc",
+                "## Interface: 120100\n## Title: My Addon Options\n## LoadOnDemand: 1\n## Dependencies: MyAddon\nOptions.lua\n",
+            ),
+            ("Options/Options.lua", "-- options\n"),
+        ],
+    );
+    wowlua(addon, &e.home)
+        .args(["init", "--from-pkgmeta"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "Converted 3 externals from .pkgmeta",
+        ))
+        .stderr(predicate::str::contains(
+            "Adopted Options as a workspace member",
+        ))
+        .stderr(predicate::str::contains("warning[W4333]"))
+        .stderr(predicate::str::contains("warning[W4332]"));
+    let m: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(addon.join("wowlua.json")).unwrap()).unwrap();
+    assert_eq!(m["build"]["libs-dir"], "Libs");
+    assert_eq!(
+        m["dependencies"]["libstub"],
+        serde_json::json!({ "git": stub, "tag": "1.0", "submodules": true, "kind": "lua-library", "install-path": "LibStub", "files": ["LibStub.lua"] })
+    );
+    assert_eq!(
+        m["dependencies"]["callbackhandler-1-0"]["subdir"],
+        "CallbackHandler-1.0"
+    );
+    assert_eq!(
+        m["dependencies"]["callbackhandler-1-0"]["files"],
+        serde_json::json!(["CallbackHandler-1.0.xml"])
+    );
+    assert_eq!(
+        m["dependencies"]["libclassic"]["flavors"],
+        serde_json::json!(["vanilla"])
+    );
+    assert_eq!(
+        m["build"]["load-order"][0], "Libs/LibStub/LibStub.lua",
+        "{m}"
+    );
+    assert_eq!(m["build"]["exclude"], serde_json::json!(["Docs/**"]));
+    assert_eq!(m["publish"]["changelog"], "CHANGELOG.md");
+    // No GitHub `origin`: the nolib target is left out.
+    assert!(m["publish"]["targets"].get("github").is_none());
+    assert_eq!(m["compat"]["packager-keywords"], true);
+    assert_eq!(m["workspace"]["members"], serde_json::json!(["Options"]));
+    assert!(addon.join("Options/wowlua.json").exists());
+    let lock = lock(addon);
+    assert_eq!(
+        lock["flavor-table"]["interfaces"]["standard"],
+        serde_json::json!([120100])
+    );
+
+    wowlua(addon, &e.home)
+        .args(["-p", "my-addon", "build", "--release"])
+        .assert()
+        .success();
+    let out = addon.join("dist/release/MyAddon");
+    let toc = fs::read_to_string(out.join("MyAddon.toc")).unwrap();
+    assert!(
+        toc.contains("Libs\\LibStub\\LibStub.lua\nsrc\\embeds.xml\nLibs\\LibClassic\\LibClassic.lua [AllowLoadGameType "),
+        "{toc}"
+    );
+    let embeds = fs::read_to_string(out.join("src/embeds.xml")).unwrap();
+    assert!(
+        embeds.contains(
+            "Interface\\AddOns\\MyAddon\\Libs\\CallbackHandler-1.0\\CallbackHandler-1.0.xml"
+        ),
+        "{embeds}"
+    );
+    assert!(
+        out.join("Libs/CallbackHandler-1.0/CallbackHandler-1.0.lua")
+            .exists()
+    );
+    assert!(!out.join("Libs/LibStub/README.md").exists());
+    let core = fs::read_to_string(out.join("src/Core.lua")).unwrap();
+    assert!(
+        core.contains("--[==[@debug@\nns.debug = true\n--@end-debug@]==]"),
+        "{core}"
+    );
+    assert!(!core.contains("@project-version@"), "{core}");
+    // The dev profile keeps debug blocks active.
+    wowlua(addon, &e.home)
+        .args(["-p", "my-addon", "build"])
+        .assert()
+        .success();
+    let dev = fs::read_to_string(addon.join("dist/dev/MyAddon/src/Core.lua")).unwrap();
+    assert!(
+        dev.contains("--@debug@\nns.debug = true\n--@end-debug@"),
+        "{dev}"
+    );
+    // The moved folder builds as its own addon.
+    wowlua(addon, &e.home)
+        .args(["-p", "my-addon-options", "build"])
+        .assert()
+        .success();
+    assert!(
+        addon
+            .join("dist/dev/MyAddon_Options/MyAddon_Options.toc")
+            .exists()
+    );
+}
+
+#[test]
+fn compat_pkgmeta_keeps_pkgmeta_as_the_source() {
+    let e = env();
+    let stub = git_repo(
+        &e.root.join("LibStub"),
+        &[("LibStub.lua", "LibStub = {}\n")],
+        "1.0",
+    );
+    write(
+        &e.project,
+        &[
+            (
+                ".pkgmeta",
+                &format!("externals:\n  libs/LibStub:\n    url: {stub}\n    tag: 1.0\n"),
+            ),
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "my-addon", "version": "1.0.0" },
+  "compat": { "pkgmeta": true },
+  "dependencies": { "libstub": { "files": ["LibStub.lua"] } } }"#,
+            ),
+            ("src/main.lua", "print(1)\n"),
+        ],
+    );
+    wowlua(&e.project, &e.home)
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let toc = fs::read_to_string(e.project.join("dist/release/MyAddon/MyAddon.toc")).unwrap();
+    assert!(
+        toc.contains("libs\\LibStub\\LibStub.lua\nsrc\\main.lua"),
+        "{toc}"
+    );
+    write(
+        &e.project,
+        &[(
+            "wowlua.json",
+            r#"{ "package": { "name": "my-addon", "version": "1.0.0" },
+  "compat": { "pkgmeta": true },
+  "dependencies": { "libstub": { "git": "https://example.com/x", "files": ["LibStub.lua"] } } }"#,
+        )],
+    );
+    wowlua(&e.project, &e.home)
+        .arg("build")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E4005]"));
+}

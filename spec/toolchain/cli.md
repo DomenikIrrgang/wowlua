@@ -166,7 +166,19 @@ available.
      must be replaced by a git mirror or archive. The common parent folder of the
      externals' paths (e.g. `Libs`) becomes `build.libs-dir`, and each
      remaining path becomes the dependency's `install-path`, so the addon's
-     existing XML (`embeds.xml`) keeps working.
+     existing XML (`embeds.xml`) keeps working. URLs are interpreted like the
+     packager does (decision T116): old CurseForge URLs, SVN `trunk` and
+     `tags/<tag>` paths (and `tag:` on a trunk URL), sub-paths of CurseForge
+     and GitHub git URLs (`subdir`), `.zip` archives (their `sha256` is
+     computed by downloading them once), and git otherwise, with
+     `"submodules": true` like the packager. Each dependency is named after
+     its folder (`Libs/AceAddon-3.0` → `aceaddon-3-0`), takes the TOC lines
+     into its folder (and the files the addon's own XML loads from it) as its
+     `files`, and gets a `flavors` restriction when only some flavors load
+     it. The TOC lines keep their place in `build.load-order` under their
+     output path (decision T106). An external that nothing loads is not
+     converted (warning); `tag: latest` follows the default branch instead
+     (warning).
    - `ignore` becomes `build.exclude`, `plain-copy` becomes `build.assets`,
      `package-as` becomes `addon.name`, `manual-changelog` becomes
      `publish.changelog`.
@@ -175,16 +187,27 @@ available.
    - `enable-nolib-creation: yes` adds a GitHub target with `"nolib": true`.
    - The relation lists (`required-dependencies`, `optional-dependencies`,
      `embedded-libraries`, `tools-used`) become CurseForge relations.
+   - Passthrough files that use packager keywords turn on
+     `compat.packager-keywords`. A TOC `Version` of `@project-version@` takes
+     the version of the latest git tag.
 7. Reads `## X-Curse-Project-ID`, `## X-Wago-ID` and `## X-WoWI-ID` into publish
    targets.
-8. Leaves the contents of all `.lua` files untouched except for the path
+8. Writes `wowlua.lock` pinning the interface numbers the TOCs list, so the
+   first build generates the same `## Interface` lines; `wowlua types sync`
+   moves them on (decision T115).
+9. Leaves the contents of all `.lua` files untouched except for the path
    rewrites of step 2. They build as-is, and can be renamed to `.wowlua` one at a
    time.
 
 As an alternative to converting, a project may keep its `.pkgmeta` as the source
 of truth for dependencies and publishing with `"compat": { "pkgmeta": true }`.
 The manifest then only adds wowlua-specific settings, and conflicting keys are
-error E4005.
+error E4005. Externals become dependencies as above (named after their folders);
+a manifest entry of the same name may add `files`, `flavors`, `optional`,
+`sha256` (zip externals) and the other non-source keys, while source keys
+(`git`, `svn`, `tag`, `install-path`, …), `build.libs-dir`, `build.exclude`,
+`addon.name` and `publish.changelog` that `.pkgmeta` also sets are E4005
+(decision T117).
 
 **Packager keywords.** With `"compat": { "packager-keywords": true }`, BigWigs
 packager keyword substitution is applied to passthrough `.lua` and `.xml`
@@ -215,7 +238,9 @@ generated, so TOC keywords do not apply.
 
 The `non-` prefixed forms invert a block. Inactive blocks are commented out in
 the packager's style, and removed lines are replaced by blank lines, so line
-numbers stay correct. `@localization(...)@` is not supported (W4030). Use
+numbers stay correct. Keywords are applied before the files are checked. Flavor blocks
+need `build.flavor-mode: "split"` when several flavors are built, and then
+produce per-flavor variants of the file (decision T118). `@localization(...)@` is not supported (W4030). Use
 `wowlua:locale` instead.
 
 ## 12.7 Configuration

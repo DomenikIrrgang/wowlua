@@ -521,6 +521,14 @@ impl Fetcher {
     }
 }
 
+/// Downloads `url` and returns its SHA-256 (for converting `.pkgmeta` zip
+/// externals, which carry no checksum).
+pub fn sha256_of_url(url: &str) -> Result<String, String> {
+    let fetcher = Fetcher::new(Cache::at(std::env::temp_dir()), false, |_, _| {});
+    let bytes = fetcher.download(url).map_err(|e| e.message)?;
+    Ok(crate::checksum::sha256_hex(&bytes))
+}
+
 fn unsafe_error(source: &str, u: safety::Unsafe) -> FetchError {
     FetchError::coded(
         "E4323",
