@@ -3036,6 +3036,12 @@ fn package_files(
             // It replaces a `CHANGELOG.md` of the repository, like the
             // packager's.
             if let Some(text) = crate::packaging::generated_changelog(&repo, &title, info) {
+                // A `changelog.md` of the repository: one file on the game's
+                // case-insensitive file systems, where the packager's
+                // generated one replaces it.
+                out.retain(|path, _| {
+                    path == "CHANGELOG.md" || !path.eq_ignore_ascii_case("CHANGELOG.md")
+                });
                 out.insert("CHANGELOG.md".into(), Content::Bytes(text.into_bytes()));
             }
         }
@@ -3086,6 +3092,10 @@ fn ship_project_files(
     out: &mut BTreeMap<String, Content>,
     shipped: &mut BTreeSet<String>,
 ) {
+    // Output paths compare case-insensitively, like the game's file system:
+    // what is already there wins.
+    let mut taken: std::collections::HashSet<String> =
+        out.keys().map(|k| k.to_ascii_lowercase()).collect();
     for entry in walkdir::WalkDir::new(dir)
         .sort_by_file_name()
         .into_iter()
@@ -3109,9 +3119,10 @@ fn ship_project_files(
         let own = !rel.contains('/')
             && (lower == "wowlua.json" || lower == "wowlua.lock" || lower.ends_with(".toc"));
         let untracked = tracked.is_some_and(|t| !t.is_empty() && !t.contains(entry.path()));
-        if own || untracked || out.contains_key(&rel) || exclude.is_match(&rel) {
+        if own || untracked || taken.contains(&lower) || exclude.is_match(&rel) {
             continue;
         }
+        taken.insert(lower.clone());
         let content = match std::fs::read(entry.path()) {
             Ok(bytes)
                 if !crate::keywords::plain_copy(plain, &[&rel])

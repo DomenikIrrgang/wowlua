@@ -22,6 +22,9 @@ struct Tree {
     name: String,
     /// Lowercase relative path → on-disk relative path.
     files: BTreeMap<String, String>,
+    /// Lowercase paths held in several spellings (one file on the game's
+    /// case-insensitive file systems; which one wins is not defined).
+    ambiguous: BTreeSet<String>,
     root: std::path::PathBuf,
 }
 
@@ -33,6 +36,7 @@ impl Tree {
             .to_string_lossy()
             .into_owned();
         let mut files = BTreeMap::new();
+        let mut ambiguous = BTreeSet::new();
         for e in walkdir::WalkDir::new(root).into_iter().flatten() {
             if e.file_type().is_file() {
                 let rel = e
@@ -40,12 +44,18 @@ impl Tree {
                     .strip_prefix(root)?
                     .to_string_lossy()
                     .replace('\\', "/");
-                files.insert(rel.to_ascii_lowercase(), rel);
+                if files
+                    .insert(rel.to_ascii_lowercase(), rel.clone())
+                    .is_some()
+                {
+                    ambiguous.insert(rel.to_ascii_lowercase());
+                }
             }
         }
         Ok(Tree {
             name,
             files,
+            ambiguous,
             root: root.to_path_buf(),
         })
     }
@@ -487,8 +497,12 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path, only: Option<&str>) 
     let mut allowed: Vec<String> = Vec::new();
     for rel in pk.files.values() {
         let lower = rel.to_ascii_lowercase();
-        // The project's TOCs are compared as directives above.
-        if loaded_pk.contains(rel) || (lower.ends_with(".toc") && !rel.contains('/')) {
+        // The project's TOCs are compared as directives above; a path the
+        // packager wrote in two spellings is one undefined file in game.
+        if loaded_pk.contains(rel)
+            || (lower.ends_with(".toc") && !rel.contains('/'))
+            || pk.ambiguous.contains(&lower)
+        {
             continue;
         }
         let code = lower.ends_with(".lua") || lower.ends_with(".xml");
