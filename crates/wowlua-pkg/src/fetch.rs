@@ -190,6 +190,20 @@ impl Fetcher {
                 ..e
             });
         }
+        if !staged.join("HEAD").exists() {
+            let listing: Vec<String> = std::fs::read_dir(&staged)
+                .map(|d| {
+                    d.flatten()
+                        .map(|e| e.file_name().to_string_lossy().into_owned())
+                        .collect()
+                })
+                .unwrap_or_default();
+            let _ = cache::remove(&staged);
+            return Err(FetchError::coded(
+                "E4102",
+                format!("cloning `{url}` produced no repository (the folder holds {listing:?})"),
+            ));
+        }
         cache::commit(&staged, &dir).map_err(|e| FetchError::plain(e.to_string()))?;
         self.cache.touch(&dir);
         self.fetched.borrow_mut().insert(url.to_string());
@@ -258,8 +272,15 @@ impl Fetcher {
             let mut c = git(Some(&dir));
             c.args(["symbolic-ref", "HEAD"]);
             let head = run(c, "HEAD").unwrap_or_else(|e| e.message);
+            let listing: Vec<String> = std::fs::read_dir(dir.parent().unwrap_or(&dir))
+                .map(|d| {
+                    d.flatten()
+                        .map(|e| e.file_name().to_string_lossy().into_owned())
+                        .collect()
+                })
+                .unwrap_or_default();
             FetchError::coded("E4102", format!("`{url}` has no {what}")).help(format!(
-                "the cached clone at {} has HEAD {head}",
+                "the cached clone at {} has HEAD {head}; its folder holds {listing:?}",
                 dir.display()
             ))
         })
