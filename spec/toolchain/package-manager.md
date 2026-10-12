@@ -59,6 +59,7 @@ Common fields:
 | `flavors` | Only included for these flavors |
 | `bundle` | `false` keeps the library as separate files even in bundled builds |
 | `files` | `lua-library` only: explicit ordered list of `.lua` / `.xml` / `.toc` entry files |
+| `load` | `false`: a `lua-library` shipped without entry files, not loaded (a converted project's external nothing loads, decision T156) |
 | `moved-up` | The trailing folders of `subdir` / `strip-prefix` a `.pkgmeta` `move-folders` moved up: in a converted project the other files of the folder above ship next to them, as the packager leaves them (decision T152) |
 | `types` | A `types` package or a path to `.d.wowlua` files describing this library |
 | `install-path` | Folder under `build.libs-dir` (default: the dependency key) |

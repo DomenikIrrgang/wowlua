@@ -286,6 +286,25 @@ fn find_ci(base: &Path, rel: &str) -> Option<String> {
     dir.is_file().then(|| parts.join("/"))
 }
 
+/// XML files equal but for their `file="…"` values (wowlua's in-game
+/// paths into a library folder).
+fn same_xml(rel: &str, a: &[u8], b: &[u8]) -> bool {
+    rel.to_ascii_lowercase().ends_with(".xml")
+        && without_file_attributes(&String::from_utf8_lossy(a))
+            == without_file_attributes(&String::from_utf8_lossy(b))
+}
+
+/// The first line two files differ at.
+fn first_difference(a: &[u8], b: &[u8]) -> String {
+    let (ta, tb) = (String::from_utf8_lossy(a), String::from_utf8_lossy(b));
+    ta.split('\n')
+        .zip(tb.split('\n'))
+        .enumerate()
+        .find(|(_, (x, y))| x != y)
+        .map(|(i, (x, y))| format!("line {}: packager {x:?}, wowlua {y:?}", i + 1))
+        .unwrap_or_else(|| format!("{} vs {} bytes", a.len(), b.len()))
+}
+
 /// XML text without its `file="…"` values (compared separately, as
 /// resolved targets).
 fn without_file_attributes(text: &str) -> String {
@@ -502,25 +521,20 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path, only: Option<&str>) 
                 .get(&lower)
                 .or_else(|| wl.files.get(&format!("{src}/{lower}")));
             match found {
-                // The TOCs wowlua generates in place of the project's.
-                None if !rel.contains('/') && lower.ends_with(".toc") => allowed.push(rel.clone()),
+                // The TOCs wowlua generates in place of the project's, and
+                // the extensionless Titan TOC of the packager's split builds
+                // (its `-S` names `Interface-Titan` TOCs `<name>`).
+                None if !rel.contains('/')
+                    && (lower.ends_with(".toc") || lower == pk.name.to_ascii_lowercase()) =>
+                {
+                    allowed.push(rel.clone())
+                }
                 None => problems.push(format!("`{rel}` is missing from the wowlua build")),
-                Some(w) if pk.bytes(rel) != wl.bytes(w) => {
-                    let (a, b) = (pk.bytes(rel), wl.bytes(w));
-                    let (ta, tb) = (String::from_utf8_lossy(&a), String::from_utf8_lossy(&b));
-                    let first = ta
-                        .split('\n')
-                        .zip(tb.split('\n'))
-                        .enumerate()
-                        .find(|(_, (x, y))| x != y)
-                        .map(|(i, (x, y))| format!("line {}: packager {x:?}, wowlua {y:?}", i + 1))
-                        .unwrap_or_else(|| {
-                            format!(
-                                "{} vs {} lines",
-                                ta.split('\n').count(),
-                                tb.split('\n').count()
-                            )
-                        });
+                Some(w)
+                    if pk.bytes(rel) != wl.bytes(w)
+                        && !same_xml(rel, &pk.bytes(rel), &wl.bytes(w)) =>
+                {
+                    let first = first_difference(&pk.bytes(rel), &wl.bytes(w));
                     problems.push(format!("`{rel}` differs ({first})"))
                 }
                 Some(_) => {}
@@ -530,7 +544,10 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path, only: Option<&str>) 
         // An asset: present and identical.
         match wl.files.get(&lower) {
             Some(w) if pk.bytes(rel) == wl.bytes(w) => {}
-            Some(_) => problems.push(format!("asset `{rel}` differs")),
+            Some(w) => problems.push(format!(
+                "asset `{rel}` differs ({})",
+                first_difference(&pk.bytes(rel), &wl.bytes(w))
+            )),
             None => problems.push(format!("asset `{rel}` is missing from the wowlua build")),
         }
     }

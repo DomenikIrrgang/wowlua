@@ -270,9 +270,14 @@ pub fn lua_libraries(
             .to_string();
         let idx = index(&p.dir);
         let active: Vec<String> = flavors_of.clone().unwrap_or_else(|| flavors.to_vec());
-        let entries = match entry_files(session, &name, p, &entry.files, &idx, &active) {
-            Some(e) => e,
-            None => continue,
+        // `"load": false`: shipped, nothing loaded.
+        let entries = if entry.load == Some(false) {
+            Vec::new()
+        } else {
+            match entry_files(session, &name, p, &entry.files, &idx, &active) {
+                Some(e) => e,
+                None => continue,
+            }
         };
         let lib_section = p.manifest.as_ref().and_then(|m| m.lua_library.as_ref());
         let licenses: Vec<String> = match lib_section.and_then(|l| l.license_files.as_ref()) {

@@ -40,10 +40,10 @@ pub fn crlf(bytes: &[u8]) -> Vec<u8> {
 
 /// Text files the packager processes (keywords, line endings).
 pub fn processed_extension(path: &str) -> bool {
-    let lower = path.to_ascii_lowercase();
+    // The packager's `match_pattern`, case-sensitive like its shell globs.
     [".lua", ".xml", ".toc", ".md", ".txt"]
         .iter()
-        .any(|e| lower.ends_with(e))
+        .any(|e| path.ends_with(e))
 }
 
 /// Whether `path` matches a packager `plain-copy` pattern (shell

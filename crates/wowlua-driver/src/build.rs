@@ -1654,6 +1654,8 @@ pub fn build(
     roots.extend(flavor_roots);
     // Every other file of the project the packager would copy (decision
     // T155): its tests, docs and unloaded files, processed like its own.
+    // The game loads none of them, so they need not be reachable.
+    let mut shipped_as_is: BTreeSet<String> = BTreeSet::new();
     if let Some(info) = &keyword_info {
         let tracked = (!profile.debug).then(|| sources::tracked_files(&root));
         let members: Vec<PathBuf> = manifest
@@ -1673,6 +1675,7 @@ pub fn build(
             tracked.as_ref(),
             info,
             &mut out,
+            &mut shipped_as_is,
         );
         // A workspace without a root addon: its own files go into the AddOn
         // its package folder becomes (the AddOn's own files win, like the
@@ -1706,6 +1709,7 @@ pub fn build(
                 ws_tracked.as_ref(),
                 info,
                 &mut out,
+                &mut shipped_as_is,
             );
         }
     }
@@ -1736,6 +1740,7 @@ pub fn build(
             *content = Content::Bytes(crate::keywords::crlf(&bytes));
         }
     }
+    roots.extend(shipped_as_is);
     validate_output(
         session,
         &out,
@@ -2699,8 +2704,21 @@ fn directives(
     );
     // A converted project's TOC keeps its own version line (decision T153).
     match &manifest.manifest.compat.toc_version {
-        Some(v) if v.is_empty() => {}
-        Some(v) => out.push(Directive::new("Version", v)),
+        Some(v) => {
+            let mut groups: indexmap::IndexMap<String, Vec<String>> = indexmap::IndexMap::new();
+            for f in flavors {
+                if let Some(value) = v.of(f).filter(|value| !value.is_empty()) {
+                    groups.entry(value.to_string()).or_default().push(f.clone());
+                }
+            }
+            for (value, group) in groups {
+                out.push(Directive {
+                    key: "Version".into(),
+                    value,
+                    flavors: (group.len() < flavors.len()).then_some(group),
+                });
+            }
+        }
         None => out.push(Directive::new("Version", version)),
     }
     push_field(
@@ -2994,6 +3012,8 @@ fn package_files(
     match repo_manifest
         .pointer("/publish/changelog")
         .and_then(|v| v.as_str())
+        // A manual changelog the repository lacks: the packager generates one.
+        .filter(|file| repo.join(file).is_file())
     {
         Some(file) => {
             if !out.contains_key(file)
@@ -3062,6 +3082,7 @@ fn ship_project_files(
     tracked: Option<&std::collections::HashSet<PathBuf>>,
     info: &crate::keywords::KeywordInfo,
     out: &mut BTreeMap<String, Content>,
+    shipped: &mut BTreeSet<String>,
 ) {
     for entry in walkdir::WalkDir::new(dir)
         .sort_by_file_name()
@@ -3108,6 +3129,7 @@ fn ship_project_files(
             }
             _ => Content::Copy(entry.path().to_path_buf()),
         };
+        shipped.insert(rel.clone());
         out.insert(rel, content);
     }
 }

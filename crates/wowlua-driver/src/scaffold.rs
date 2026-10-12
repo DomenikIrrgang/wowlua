@@ -833,17 +833,24 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             &mut report,
         );
         // The packager writes the TOC's own version line (decision T153).
-        let toc_version = views
-            .iter()
-            .find(|(_, flavors)| !flavors.is_empty())
-            .and_then(|(toc, _)| toc.get("Version"))
-            .unwrap_or_default()
-            .to_string();
+        // Per flavor when the TOCs (or their flavor blocks) differ.
+        let mut per_flavor = Map::new();
+        for (toc, flavors) in &views {
+            for f in flavors {
+                per_flavor.insert(f.clone(), json!(toc.get("Version").unwrap_or_default()));
+            }
+        }
+        let values: BTreeSet<String> = per_flavor.values().map(|v| v.to_string()).collect();
+        let toc_version = match values.len() {
+            0 => json!(""),
+            1 => per_flavor.values().next().cloned().unwrap_or_default(),
+            _ => Value::Object(per_flavor.clone()),
+        };
         if let Some(compat) = manifest
             .pointer_mut("/compat")
             .and_then(Value::as_object_mut)
         {
-            compat.insert("toc-version".into(), json!(toc_version));
+            compat.insert("toc-version".into(), toc_version);
         }
     }
     if !variable_lines.is_empty()
@@ -1011,10 +1018,16 @@ fn convert_pkgmeta(
             );
             continue;
         }
-        if external_files[i].is_empty() {
+        // The packager ships externals nothing loads too (decision T156).
+        let unloaded = external_files[i].is_empty();
+        let inside_libs = libs_dir
+            .as_ref()
+            .is_none_or(|d| e.dir.starts_with(&format!("{d}/")));
+        if unloaded && !inside_libs {
             report.warnings.push(Diagnostic::plain_warning(format!(
-                "external `{}` is not loaded by the TOC or the addon's XML; not converted",
-                e.dir
+                "external `{}` is not loaded by the TOC or the addon's XML and lies outside `{}`; not converted",
+                e.dir,
+                libs_dir.as_deref().unwrap_or_default()
             )));
             continue;
         }
@@ -1037,7 +1050,11 @@ fn convert_pkgmeta(
             None => e.dir.clone(),
         };
         entry.insert("install-path".into(), json!(install));
-        entry.insert("files".into(), json!(external_files[i]));
+        if unloaded {
+            entry.insert("load".into(), json!(false));
+        } else {
+            entry.insert("files".into(), json!(external_files[i]));
+        }
         let flavors = &external_flavors[i];
         if !flavors.is_empty() && flavors.len() < all_flavors.len() {
             let ordered: Vec<&String> = all_flavors

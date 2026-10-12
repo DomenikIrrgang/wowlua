@@ -719,6 +719,13 @@
             "type": "string"
           }
         },
+        "load": {
+          "description": "`false`: a `lua-library` that is shipped but not loaded (no entry\nfiles), like the packager ships every external.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "types": {
           "type": [
             "string",
@@ -1695,9 +1702,13 @@
         },
         "toc-version": {
           "description": "The TOC `## Version` value as the packager writes it: the original\nTOC's value, keywords substituted (`\"\"`: no `Version` line).",
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TocVersion"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "line-endings": {
@@ -1731,6 +1742,20 @@
         }
       },
       "additionalProperties": false
+    },
+    "TocVersion": {
+      "description": "A converted project's TOC `Version`: one value, or one per flavor (TOC\nflavor blocks of a split build).",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      ]
     },
     "LineEndings": {
       "description": "Line endings of packager-processed files.",

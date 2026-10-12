@@ -368,6 +368,10 @@ pub struct DependencyDetail {
     pub bundle: Option<bool>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub files: Vec<String>,
+    /// `false`: a `lua-library` that is shipped but not loaded (no entry
+    /// files), like the packager ships every external.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub load: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub types: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -947,6 +951,25 @@ impl Default for Fmt {
     }
 }
 
+/// A converted project's TOC `Version`: one value, or one per flavor (TOC
+/// flavor blocks of a split build).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum TocVersion {
+    One(String),
+    PerFlavor(IndexMap<String, String>),
+}
+
+impl TocVersion {
+    /// The value for `flavor` (`""`: no `Version` line).
+    pub fn of(&self, flavor: &str) -> Option<&str> {
+        match self {
+            TocVersion::One(v) => Some(v),
+            TocVersion::PerFlavor(map) => map.get(flavor).map(String::as_str),
+        }
+    }
+}
+
 /// Line endings of packager-processed files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
@@ -974,7 +997,7 @@ pub struct Compat {
     /// The TOC `## Version` value as the packager writes it: the original
     /// TOC's value, keywords substituted (`""`: no `Version` line).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub toc_version: Option<String>,
+    pub toc_version: Option<TocVersion>,
     /// Line endings of the files the packager processes: `crlf` (its
     /// default) or `lf` (`-u`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
