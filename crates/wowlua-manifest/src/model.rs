@@ -917,6 +917,11 @@ pub struct Compat {
     pub pkgmeta: bool,
     #[serde(default)]
     pub packager_keywords: bool,
+    /// Files the packager copies unprocessed (`.pkgmeta` `plain-copy`):
+    /// shell patterns relative to the source folder or the package root,
+    /// `*` also matching `/`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plain_copy: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]

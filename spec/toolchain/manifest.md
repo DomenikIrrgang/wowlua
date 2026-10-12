@@ -546,7 +546,8 @@ See [Tooling §16.3](tooling.md#163-formatter-wowlua-fmt).
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `pkgmeta` | `false` | Read dependencies and publishing settings from `.pkgmeta` ([CLI §12.6](cli.md#126-adopting-an-existing-addon)) |
-| `packager-keywords` | `false` | Apply BigWigs packager keyword substitution to passthrough files |
+| `packager-keywords` | `false` | Apply BigWigs packager keyword substitution to passthrough files and embedded libraries, with LF line endings (decisions T120, T124) |
+| `plain-copy` | `[]` | Files the packager copies unprocessed (`.pkgmeta` `plain-copy`): shell patterns relative to the source folder or the package root, `*` matching `/` too |
 
 ## 9.15 `workspace`
 

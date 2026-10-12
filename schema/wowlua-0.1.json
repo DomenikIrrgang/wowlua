@@ -1642,6 +1642,13 @@
         "packager-keywords": {
           "type": "boolean",
           "default": false
+        },
+        "plain-copy": {
+          "description": "Files the packager copies unprocessed (`.pkgmeta` `plain-copy`):\nshell patterns relative to the source folder or the package root,\n`*` also matching `/`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

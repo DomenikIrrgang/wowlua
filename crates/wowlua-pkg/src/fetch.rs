@@ -658,7 +658,7 @@ pub struct PackageVcs {
 pub fn package_vcs(cache: &Cache, source: &crate::Source, pin: &str, detail: bool) -> PackageVcs {
     let mut v = PackageVcs::default();
     match source {
-        crate::Source::Git { url, .. } => {
+        crate::Source::Git { url, reference, .. } => {
             let dir = cache.git_dir(url);
             let q = |args: &[&str]| -> String {
                 let mut c = git(Some(&dir));
@@ -672,19 +672,34 @@ pub fn package_vcs(cache: &Cache, source: &crate::Source, pin: &str, detail: boo
                 v.author = a.to_string();
                 v.timestamp = t.parse().unwrap_or(0);
             }
-            v.revision = q(&["rev-list", "--count", pin]);
-            let tags = q(&["tag", "--points-at", pin, "--sort=-v:refname"]);
-            v.version = match tags.lines().next() {
-                Some(t) if !t.is_empty() => t.to_string(),
-                _ => {
-                    let d = q(&["describe", "--tags", "--abbrev=7", pin]);
-                    if d.is_empty() {
-                        v.short_hash.clone()
-                    } else {
-                        d
-                    }
+            // The packager clones branches and tags with `--depth 1`: no
+            // history, so the revision is 1 and the version the tag or the
+            // short hash; only `commit` externals are full clones.
+            match reference {
+                crate::GitRef::Tag(t) => {
+                    v.revision = "1".into();
+                    v.version = t.clone();
                 }
-            };
+                crate::GitRef::Branch(_) | crate::GitRef::Head => {
+                    v.revision = "1".into();
+                    v.version = v.short_hash.clone();
+                }
+                crate::GitRef::Rev(_) => {
+                    v.revision = q(&["rev-list", "--count", pin]);
+                    let tags = q(&["tag", "--points-at", pin, "--sort=-v:refname"]);
+                    v.version = match tags.lines().next() {
+                        Some(t) if !t.is_empty() => t.to_string(),
+                        _ => {
+                            let d = q(&["describe", "--tags", "--abbrev=7", pin]);
+                            if d.is_empty() {
+                                v.short_hash.clone()
+                            } else {
+                                d
+                            }
+                        }
+                    };
+                }
+            }
         }
         crate::Source::Svn { url, .. } => {
             v.revision = pin.to_string();

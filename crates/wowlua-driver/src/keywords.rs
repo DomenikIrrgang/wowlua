@@ -6,6 +6,50 @@
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+/// LF line endings, like `packager -u`: a CR before each LF and at the
+/// end of the file is removed.
+pub fn lf(bytes: &[u8]) -> Vec<u8> {
+    if !bytes.contains(&b'\r') {
+        return bytes.to_vec();
+    }
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut lines = bytes.split(|b| *b == b'\n').peekable();
+    while let Some(line) = lines.next() {
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        out.extend_from_slice(line);
+        if lines.peek().is_some() {
+            out.push(b'\n');
+        }
+    }
+    out
+}
+
+/// Text files the packager processes (keywords, line endings).
+pub fn processed_extension(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    [".lua", ".xml", ".toc", ".md", ".txt"]
+        .iter()
+        .any(|e| lower.ends_with(e))
+}
+
+/// Whether `path` matches a packager `plain-copy` pattern (shell
+/// wildcards, `*` matching `/` too, case-insensitive).
+pub fn plain_copy(patterns: &[String], paths: &[&str]) -> bool {
+    patterns.iter().any(|p| {
+        let p = p.trim_end_matches('/');
+        [p.to_string(), format!("{p}/*")].iter().any(|pattern| {
+            globset::GlobBuilder::new(pattern)
+                .case_insensitive(true)
+                .build()
+                .map(|g| {
+                    let m = g.compile_matcher();
+                    paths.iter().any(|path| m.is_match(path))
+                })
+                .unwrap_or(false)
+        })
+    })
+}
+
 /// Values for repository and build keywords.
 #[derive(Clone, Debug, Default)]
 pub struct KeywordInfo {
@@ -57,7 +101,7 @@ impl KeywordInfo {
     /// Repository values from `git` (empty outside a repository).
     pub fn from_git(dir: &Path, version: &str, debug: bool, alpha: bool, now: i64) -> Self {
         let mut info = KeywordInfo {
-            version: version.to_string(),
+            version: packager_version(dir).unwrap_or_else(|| version.to_string()),
             debug,
             alpha,
             build_timestamp: now,
@@ -65,7 +109,7 @@ impl KeywordInfo {
         };
         if let Some(line) = git(
             dir,
-            &["log", "-1", "--abbrev=7", "--format=%H%x09%h%x09%an%x09%ct"],
+            &["log", "-1", "--abbrev=7", "--format=%H%x09%h%x09%an%x09%at"],
         ) {
             let parts: Vec<&str> = line.split('\t').collect();
             if parts.len() == 4 {
@@ -79,6 +123,37 @@ impl KeywordInfo {
         }
         info
     }
+}
+
+/// `@project-version@` as the packager computes it (decision T123): the
+/// tag on `HEAD`, otherwise `git describe` with 7-digit hashes, ignoring
+/// alpha tags, otherwise the short hash.
+fn packager_version(dir: &Path) -> Option<String> {
+    let tags = git(
+        dir,
+        &[
+            "tag",
+            "--points-at",
+            "HEAD",
+            "--sort=-committerdate",
+            "--sort=-v:refname",
+            "--sort=-taggerdate",
+        ],
+    )?;
+    if let Some(tag) = tags.lines().next().filter(|t| !t.is_empty()) {
+        return Some(tag.to_string());
+    }
+    git(
+        dir,
+        &[
+            "describe",
+            "--tags",
+            "--abbrev=7",
+            "--exclude=*[Aa][Ll][Pp][Hh][Aa]*",
+        ],
+    )
+    .filter(|d| !d.is_empty())
+    .or_else(|| git(dir, &["describe", "--tags", "--always", "--abbrev=7"]))
 }
 
 /// `2026-10-12T04:45:27Z` and `20261012044527` of Unix seconds.
@@ -257,7 +332,7 @@ pub fn apply(text: &str, info: &KeywordInfo, rel: &Path, xml: bool) -> String {
                 "log",
                 "-1",
                 "--abbrev=7",
-                "--format=%H%x09%h%x09%an%x09%ct",
+                "--format=%H%x09%h%x09%an%x09%at",
                 "--",
                 &path,
             ],

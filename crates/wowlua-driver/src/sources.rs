@@ -92,6 +92,21 @@ pub fn glob_set(patterns: &[String]) -> GlobSet {
     builder.build().unwrap_or_else(|_| GlobSet::empty())
 }
 
+/// Like [`glob_set`], but case-insensitive (asset paths: the client reads
+/// `.TTF` as well as `.ttf`).
+pub fn glob_set_ci(patterns: &[String]) -> GlobSet {
+    let mut builder = GlobSetBuilder::new();
+    for pattern in patterns {
+        if let Ok(glob) = globset::GlobBuilder::new(pattern)
+            .case_insensitive(true)
+            .build()
+        {
+            builder.add(glob);
+        }
+    }
+    builder.build().unwrap_or_else(|_| GlobSet::empty())
+}
+
 /// Walks `dir` (respecting `.gitignore` and hidden files) and returns files as
 /// `(path relative to root, absolute path)`, skipping `skip_dirs`.
 fn walk(root: &Path, dir: &Path, skip_dirs: &[PathBuf]) -> Vec<(String, PathBuf)> {

@@ -193,7 +193,7 @@ pub fn build(
     let assets = sources::discover_assets(
         &root,
         &build_cfg.out,
-        &sources::glob_set(&build_cfg.assets),
+        &sources::glob_set_ci(&build_cfg.assets),
         &exclude,
     );
     // An addon without code is valid (voice packs, saved-variable stores).
@@ -319,9 +319,17 @@ pub fn build(
         let now = crate::keywords::build_time();
         let info =
             crate::keywords::KeywordInfo::from_git(&root, &version, profile.debug, alpha, now);
+        let plain = &manifest.manifest.compat.plain_copy;
         for (source, _) in &files {
-            if !matches!(source.kind, SourceKind::Lua | SourceKind::Xml) {
+            if !matches!(source.kind, SourceKind::Lua | SourceKind::Xml)
+                || crate::keywords::plain_copy(plain, &[&source.src_rel, &source.rel])
+            {
                 continue;
+            }
+            // Line endings as `packager -u` writes them (decision T124).
+            let normalized = crate::keywords::lf(&raw[&source.rel]);
+            if normalized != raw[&source.rel] {
+                raw.insert(source.rel.clone(), normalized);
             }
             let Ok(text) = std::str::from_utf8(&raw[&source.rel]) else {
                 continue;
@@ -1129,38 +1137,45 @@ pub fn build(
             let abs = lib.dir.join(&rel);
             let lower = rel.to_ascii_lowercase();
             let xml = lower.ends_with(".xml");
-            // Library files get the packager's processing (decision T120).
-            if keywords
-                && (xml || lower.ends_with(".lua"))
-                && let Ok(text) = std::fs::read_to_string(&abs)
-                && text.contains('@')
-            {
-                let info = lib_info.get_or_insert_with(|| {
-                    let detail = text.contains("@project-author@")
-                        || text.contains("@project-date")
-                        || text.contains("@project-timestamp@");
-                    let vcs = match (wowlua_pkg::Cache::new(), &lib.pin) {
-                        (Some(cache), Some(pin)) => {
-                            wowlua_pkg::fetch::package_vcs(&cache, &lib.source, pin, detail)
+            // Library files get the packager's processing (decisions T120,
+            // T124): keywords and blocks, LF line endings.
+            if keywords && crate::keywords::processed_extension(&rel) {
+                let bytes = std::fs::read(&abs).unwrap_or_default();
+                let normalized = crate::keywords::lf(&bytes);
+                let text = String::from_utf8_lossy(&normalized).into_owned();
+                let processed = if (xml || lower.ends_with(".lua"))
+                    && text.contains('@')
+                    && std::str::from_utf8(&normalized).is_ok()
+                {
+                    let info = lib_info.get_or_insert_with(|| {
+                        let detail = text.contains("@project-author@")
+                            || text.contains("@project-date")
+                            || text.contains("@project-timestamp@");
+                        let vcs = match (wowlua_pkg::Cache::new(), &lib.pin) {
+                            (Some(cache), Some(pin)) => {
+                                wowlua_pkg::fetch::package_vcs(&cache, &lib.source, pin, detail)
+                            }
+                            _ => Default::default(),
+                        };
+                        crate::keywords::KeywordInfo {
+                            version: vcs.version,
+                            hash: vcs.hash,
+                            short_hash: vcs.short_hash,
+                            revision: vcs.revision,
+                            author: vcs.author,
+                            timestamp: vcs.timestamp,
+                            build_timestamp: crate::keywords::build_time(),
+                            debug: profile.debug,
+                            alpha: false,
+                            repo: None,
                         }
-                        _ => Default::default(),
-                    };
-                    crate::keywords::KeywordInfo {
-                        version: vcs.version,
-                        hash: vcs.hash,
-                        short_hash: vcs.short_hash,
-                        revision: vcs.revision,
-                        author: vcs.author,
-                        timestamp: vcs.timestamp,
-                        build_timestamp: crate::keywords::build_time(),
-                        debug: profile.debug,
-                        alpha: false,
-                        repo: None,
-                    }
-                });
-                let processed = crate::keywords::apply_library(&text, info, xml);
-                if processed != text {
-                    out.insert(lib.output(&rel), Content::Bytes(processed.into_bytes()));
+                    });
+                    crate::keywords::apply_library(&text, info, xml).into_bytes()
+                } else {
+                    normalized
+                };
+                if processed != bytes {
+                    out.insert(lib.output(&rel), Content::Bytes(processed));
                     continue;
                 }
             }
@@ -1696,9 +1711,10 @@ fn order_by_load_order(entries: &mut Vec<TocItem>, load_order: &[String]) {
         .into_iter()
         .partition(|i| i.dependency);
     for pattern in load_order {
-        if deps.iter().any(|i| i.rel == *pattern) {
-            let (matched, rest): (Vec<_>, Vec<_>) =
-                deps.into_iter().partition(|i| i.rel == *pattern);
+        if deps.iter().any(|i| i.rel.eq_ignore_ascii_case(pattern)) {
+            let (matched, rest): (Vec<_>, Vec<_>) = deps
+                .into_iter()
+                .partition(|i| i.rel.eq_ignore_ascii_case(pattern));
             ordered.extend(matched);
             deps = rest;
             continue;
@@ -1847,7 +1863,11 @@ fn variable_items(
                             rel: entry.path.clone(),
                             path: source.output_path(),
                             flavors: Some(vec![flavor.clone()]),
-                            locales: has_locale.then(|| vec![locale.clone()]),
+                            locales: if has_locale {
+                                Some(vec![locale.clone()])
+                            } else {
+                                line_locales.clone()
+                            },
                             dependency: false,
                         });
                     }

@@ -159,7 +159,31 @@ impl Tree {
             if !applies(flavor, &d.conditions) {
                 continue;
             }
-            let key = d.key.to_ascii_lowercase();
+            // Aliases the client treats alike.
+            let key = match d.key.to_ascii_lowercase() {
+                k if k == "requireddeps"
+                    || (k.starts_with("dep") && !k.starts_with("dependson")) =>
+                {
+                    "dependencies".to_string()
+                }
+                k if k.starts_with("optionaldep") => "optionaldeps".to_string(),
+                k => k,
+            };
+            // Explicit default values.
+            let default = matches!(
+                (key.as_str(), d.value.trim().to_ascii_lowercase().as_str()),
+                ("defaultstate", "enabled")
+                    | (
+                        "loadondemand"
+                            | "loadsavedvariablesfirst"
+                            | "allowaddontableaccess"
+                            | "onlybetaandptr",
+                        "0"
+                    )
+            );
+            if default {
+                continue;
+            }
             if key == "interface" {
                 interfaces.extend(
                     d.value
@@ -372,15 +396,15 @@ pub fn run(packager: &Path, wowlua: &Path, manifest: &Path) -> Result<()> {
             continue;
         }
         let code = lower.ends_with(".lua") || lower.ends_with(".xml");
-        let doc = [
-            ".md", ".txt", ".textile", ".html", ".pdf", ".yml", ".yaml", ".json",
+        // Media the game can use; anything else (docs, tooling config) is
+        // never loaded.
+        let media = [
+            ".tga", ".blp", ".png", ".jpg", ".jpeg", ".ogg", ".mp3", ".wav", ".ttf", ".otf", ".m2",
+            ".flac",
         ]
         .iter()
-        .any(|e| lower.ends_with(e))
-            || lower
-                .rsplit('/')
-                .next()
-                .is_some_and(|n| n.starts_with("license") || n.starts_with("readme"));
+        .any(|e| lower.ends_with(e));
+        let doc = !media;
         let in_lib = m["dependencies"]
             .as_object()
             .map(|deps| {

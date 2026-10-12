@@ -257,6 +257,9 @@ pub struct InitReport {
     pub dependencies: usize,
     /// Workspace members created from `move-folders`.
     pub members: Vec<String>,
+    /// Their interface pins (member folder, flavor → numbers), settled into
+    /// the workspace lockfile by [`write_pins`].
+    pub member_pins: Vec<(String, BTreeMap<String, Vec<u32>>)>,
 }
 
 const ASSET_EXTENSIONS: &[&str] = &[
@@ -474,7 +477,12 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
                     .entry(key.clone())
                     .or_default()
                     .insert(flavor.clone());
-            } else if key.contains('[') {
+            } else if key.contains('[')
+                || file
+                    .conditions
+                    .iter()
+                    .any(|c| c.name.eq_ignore_ascii_case("AllowLoadTextLocale"))
+            {
                 let locales = file
                     .conditions
                     .iter()
@@ -697,15 +705,41 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
                 .filter(|(_, f)| !f.is_empty())
                 .map(|(t, _)| t.list(|k| k.eq_ignore_ascii_case(key)).join(", "))
                 .collect();
-            if values.len() == 1
-                && let Some(v) = values.into_iter().next().filter(|v| !v.is_empty())
-            {
-                let extra = addon
-                    .entry("toc-extra")
-                    .or_insert_with(|| json!({}))
-                    .as_object_mut()
-                    .expect("an object");
-                extra.insert(key.into(), json!(v));
+            if values.len() == 1 {
+                if let Some(v) = values.into_iter().next().filter(|v| !v.is_empty()) {
+                    let extra = addon
+                        .entry("toc-extra")
+                        .or_insert_with(|| json!({}))
+                        .as_object_mut()
+                        .expect("an object");
+                    extra.insert(key.into(), json!(v));
+                }
+            } else {
+                // Per flavor, as each flavor's TOC says.
+                for (toc, flavors) in views.iter().filter(|(_, f)| !f.is_empty()) {
+                    let v = toc.list(|k| k.eq_ignore_ascii_case(key)).join(", ");
+                    if v.is_empty() {
+                        continue;
+                    }
+                    for flavor in flavors {
+                        let overrides = addon
+                            .entry("flavor-overrides")
+                            .or_insert_with(|| json!({}))
+                            .as_object_mut()
+                            .expect("an object");
+                        let o = overrides
+                            .entry(flavor.clone())
+                            .or_insert_with(|| json!({}))
+                            .as_object_mut()
+                            .expect("an object");
+                        let extra = o
+                            .entry("toc-extra")
+                            .or_insert_with(|| json!({}))
+                            .as_object_mut()
+                            .expect("an object");
+                        extra.insert(key.into(), json!(v));
+                    }
+                }
             }
         }
     }
@@ -837,43 +871,8 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             }
         }
     }
-    if !pins.is_empty() {
-        // Members' pins may already be there (`move-folders`).
-        let (mut lock, merge) = match crate::lockfile::Lockfile::read(dir) {
-            Ok(Some(l)) => (l, true),
-            _ => (crate::lockfile::required(None, &all_flavors), false),
-        };
-        for (flavor, list) in pins {
-            if !merge {
-                lock.flavor_table
-                    .interfaces
-                    .insert(flavor.clone(), Vec::new());
-            }
-            let entry = lock.flavor_table.interfaces.entry(flavor).or_default();
-            for i in list {
-                if !entry.contains(&i) {
-                    entry.push(i);
-                }
-            }
-        }
-        lock.write(dir).map_err(|e| {
-            Diagnostic::plain_error(format!("cannot write `{}`: {e}", crate::lockfile::LOCKFILE))
-        })?;
-    }
+    write_pins(dir, pins, &mut report)?;
     Ok(report)
-}
-
-/// Packager keywords and blocks in a passthrough file (spec CLI §12.6).
-fn has_packager_keywords(text: &str) -> bool {
-    static PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    PATTERN
-        .get_or_init(|| {
-            regex::Regex::new(
-                r"@(project|file|build)-[a-z-]+@|@(end-)?(non-)?(debug|alpha|do-not-package|retail|version-[a-z]+)@",
-            )
-            .expect("a valid pattern")
-        })
-        .is_match(text)
 }
 
 /// Step 6 of `wowlua init` (spec CLI §12.6): `.pkgmeta` externals become
@@ -1022,25 +1021,8 @@ fn convert_pkgmeta(
     if !exclude.is_empty() {
         build.insert("exclude".into(), json!(exclude));
     }
-    // `plain-copy` patterns (shell wildcards, `*` crossing `/`): files the
-    // packager copies without keyword processing. Matching sources keep
-    // their bytes (no keyword processing for them); the rest are assets.
-    let plain_globs = {
-        let mut b = globset::GlobSetBuilder::new();
-        for p in &meta.plain_copy {
-            let p = p.trim_end_matches('/');
-            for pattern in [p.to_string(), format!("{p}/**")] {
-                if let Ok(g) = globset::GlobBuilder::new(&pattern)
-                    .case_insensitive(true)
-                    .build()
-                {
-                    b.add(g);
-                }
-            }
-        }
-        b.build().unwrap_or_else(|_| globset::GlobSet::empty())
-    };
-    let plain_source = |m: &str| plain_globs.is_match(m);
+    // `plain-copy` patterns that match sources keep those files
+    // unprocessed (`compat.plain-copy`); the rest become assets.
     let plain: Vec<String> = meta
         .plain_copy
         .iter()
@@ -1069,16 +1051,14 @@ fn convert_pkgmeta(
     if build.is_empty() {
         object.shift_remove("build");
     }
-    // Keyword substitution, when the sources use packager keywords.
-    let uses_keywords = moved.iter().filter(|m| !plain_source(m)).any(|m| {
-        let lower = m.to_ascii_lowercase();
-        (lower.ends_with(".lua") || lower.ends_with(".xml"))
-            && std::fs::read(dir.join(src_dir).join(m))
-                .is_ok_and(|b| has_packager_keywords(&String::from_utf8_lossy(&b)))
-    });
-    if uses_keywords {
-        object.insert("compat".into(), json!({ "packager-keywords": true }));
+    // The packager processes every converted project's files and its
+    // externals' files (keywords, blocks, line endings, decision T120).
+    let mut compat = Map::new();
+    compat.insert("packager-keywords".into(), json!(true));
+    if !meta.plain_copy.is_empty() {
+        compat.insert("plain-copy".into(), json!(meta.plain_copy));
     }
+    object.insert("compat".into(), Value::Object(compat));
     // Publishing.
     let publish = object
         .entry("publish")
@@ -1187,6 +1167,18 @@ fn init_members(
                 .filter(|p| inside(p))
                 .map(|p| p[prefix.len()..].to_string())
                 .collect(),
+            // Patterns without a folder apply everywhere.
+            plain_copy: meta
+                .plain_copy
+                .iter()
+                .filter_map(|p| {
+                    if inside(p) {
+                        Some(p[prefix.len()..].to_string())
+                    } else {
+                        (!p.contains('/')).then(|| p.clone())
+                    }
+                })
+                .collect(),
             ..Default::default()
         };
         match init_package(&InitRequest {
@@ -1207,45 +1199,74 @@ fn init_members(
             )),
         }
     }
-    // One lockfile for the workspace: the members' interface pins move to
-    // the root's.
-    let mut pins: BTreeMap<String, Vec<u32>> = BTreeMap::new();
+    // One lockfile for the workspace: the members' pins are collected and
+    // settled by `write_pins`.
     for rel in &members {
         let member = dir.join(rel);
         if let Ok(Some(lock)) = crate::lockfile::Lockfile::read(&member) {
-            for (flavor, list) in lock.flavor_table.interfaces {
-                let entry = pins.entry(flavor).or_default();
-                for i in list {
-                    if !entry.contains(&i) {
-                        entry.push(i);
-                    }
-                }
-            }
+            report.member_pins.push((
+                rel.clone(),
+                lock.flavor_table.interfaces.into_iter().collect(),
+            ));
             let _ = std::fs::remove_file(member.join(crate::lockfile::LOCKFILE));
         }
     }
-    if !pins.is_empty() {
-        let flavors: Vec<String> = pins.keys().cloned().collect();
-        let mut lock = match crate::lockfile::Lockfile::read(dir) {
-            Ok(Some(l)) => l,
-            _ => crate::lockfile::required(None, &flavors),
-        };
-        for (flavor, list) in pins {
-            let entry = lock.flavor_table.interfaces.entry(flavor).or_default();
-            for i in list {
-                if !entry.contains(&i) {
-                    entry.push(i);
+    members
+}
+
+/// Writes `wowlua.lock` with the root's interface pins and those of the
+/// workspace members. A member whose numbers for a flavor differ from the
+/// lockfile's gets them as explicit `flavors.<id>.interface` instead.
+fn write_pins(
+    dir: &Path,
+    mut pins: BTreeMap<String, Vec<u32>>,
+    report: &mut InitReport,
+) -> Result<(), Diagnostic> {
+    for (rel, member) in std::mem::take(&mut report.member_pins) {
+        let mut explicit: BTreeMap<String, Vec<u32>> = BTreeMap::new();
+        for (flavor, list) in member {
+            match pins.get(&flavor) {
+                None => {
+                    pins.insert(flavor, list);
+                }
+                Some(l) if *l == list => {}
+                Some(_) => {
+                    explicit.insert(flavor, list);
                 }
             }
         }
-        if let Err(e) = lock.write(dir) {
-            report.warnings.push(Diagnostic::plain_warning(format!(
-                "cannot write `{}`: {e}",
-                crate::lockfile::LOCKFILE
-            )));
+        if explicit.is_empty() {
+            continue;
         }
+        let path = dir.join(&rel).join(MANIFEST_FILE);
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(mut m) = serde_json::from_str::<Value>(&text) else {
+            continue;
+        };
+        if let Some(flavors) = m.get_mut("flavors").and_then(Value::as_object_mut) {
+            for (flavor, list) in explicit {
+                if let Some(entry) = flavors.get_mut(&flavor).and_then(Value::as_object_mut) {
+                    entry.insert("interface".into(), json!(list));
+                }
+            }
+        }
+        std::fs::write(&path, pretty(&m)).map_err(|e| {
+            Diagnostic::plain_error(format!("cannot write `{}`: {e}", path.display()))
+        })?;
     }
-    members
+    if pins.is_empty() {
+        return Ok(());
+    }
+    let flavors: Vec<String> = pins.keys().cloned().collect();
+    let mut lock = crate::lockfile::required(None, &flavors);
+    for (flavor, list) in pins {
+        lock.flavor_table.interfaces.insert(flavor, list);
+    }
+    lock.write(dir).map_err(|e| {
+        Diagnostic::plain_error(format!("cannot write `{}`: {e}", crate::lockfile::LOCKFILE))
+    })
 }
 
 /// `move-folders` entries that move a folder up into its parent
@@ -1361,6 +1382,7 @@ fn init_suite(dir: &Path, mut meta: crate::pkgmeta::PkgMeta) -> Result<InitRepor
     report.members = converted;
     std::fs::write(dir.join(MANIFEST_FILE), pretty(&Value::Object(manifest)))
         .map_err(|e| Diagnostic::plain_error(format!("cannot write `{MANIFEST_FILE}`: {e}")))?;
+    write_pins(dir, BTreeMap::new(), &mut report)?;
     Ok(report)
 }
 

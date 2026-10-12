@@ -55,9 +55,6 @@ jobs:
           - addon: Details
             repo: https://github.com/Tercioo/Details-Damage-Meter
             rev: 5a11e5e20dd2a549784c8a28934f84c42190f454
-          - addon: Rarity
-            repo: https://github.com/WowRarity/Rarity
-            rev: af5be85bbee86992621b9372efff92fbf5d5c115
           - addon: SimulationCraft
             repo: https://github.com/simulationcraft/simc-addon
             rev: 3fe70f34b03784d48bf2c0fb40e518b7f45fc758
