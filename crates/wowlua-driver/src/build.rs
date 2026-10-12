@@ -348,6 +348,7 @@ pub fn build(
                 text,
                 &info,
                 Path::new(&source.rel),
+                Path::new(&source.src_rel),
                 source.kind == SourceKind::Xml,
             );
             if crate::keywords::has_flavor_blocks(&processed) {

@@ -243,10 +243,15 @@ fn applies(flavor: &str, conditions: &[wowlua_toc::InlineDirective]) -> bool {
 fn without_file_attributes(text: &str) -> String {
     let mut out = String::new();
     let mut rest = text;
-    while let Some(i) = rest.find("file=\"") {
+    loop {
+        let next = ["file=\"", "file='"]
+            .iter()
+            .filter_map(|m| rest.find(m).map(|i| (i, m.as_bytes()[5] as char)))
+            .min();
+        let Some((i, quote)) = next else { break };
         out.push_str(&rest[..i + 6]);
         rest = &rest[i + 6..];
-        match rest.find('"') {
+        match rest.find(quote) {
             Some(j) => rest = &rest[j..],
             None => break,
         }

@@ -682,7 +682,19 @@ pub fn package_vcs(cache: &Cache, source: &crate::Source, pin: &str, detail: boo
                 }
                 crate::GitRef::Branch(_) | crate::GitRef::Head => {
                     v.revision = "1".into();
-                    v.version = v.short_hash.clone();
+                    // A shallow clone still has the tags on its commit.
+                    let tags = q(&[
+                        "tag",
+                        "--points-at",
+                        pin,
+                        "--sort=-committerdate",
+                        "--sort=-v:refname",
+                        "--sort=-taggerdate",
+                    ]);
+                    v.version = match tags.lines().next() {
+                        Some(t) if !t.is_empty() => t.to_string(),
+                        _ => v.short_hash.clone(),
+                    };
                 }
                 crate::GitRef::Rev(_) => {
                     v.revision = q(&["rev-list", "--count", pin]);

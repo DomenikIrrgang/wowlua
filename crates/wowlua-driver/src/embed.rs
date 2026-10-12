@@ -41,6 +41,15 @@ impl LuaLib {
     }
 }
 
+/// `<libs-dir>/<install-path>`; a `libs-dir` of `.` puts libraries at the
+/// top of the AddOn folder.
+fn join_libs(libs_dir: &str, install: &str) -> String {
+    match libs_dir {
+        "" | "." => install.to_string(),
+        d => format!("{d}/{install}"),
+    }
+}
+
 /// Every file of a package directory (version-control folders excluded).
 fn index(dir: &Path) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
@@ -278,7 +287,7 @@ pub fn lua_libraries(
         };
         libs.push(LuaLib {
             name: name.clone(),
-            install: format!("{libs_dir}/{install_path}"),
+            install: join_libs(&libs_dir, &install_path),
             dir: p.dir.clone(),
             flavors: flavors_of,
             entries,
@@ -431,7 +440,7 @@ pub fn wowlua_libraries(
             name: p.name.clone(),
             dir: p.dir.clone(),
             manifest,
-            out: format!("{libs_dir}/{install}"),
+            out: join_libs(&libs_dir, &install),
             main,
             files,
             entry,

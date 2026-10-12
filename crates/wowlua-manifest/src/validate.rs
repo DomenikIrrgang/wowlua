@@ -414,27 +414,20 @@ fn flavor_references(manifest: &Manifest, ctx: &mut Ctx) {
                     .contains(&v.to_ascii_lowercase())
             })
             .collect();
-        if variables.is_empty() {
+        // A line without variables but with `locales` loads one file for
+        // some client locales (`deDE.lua [AllowLoadTextLocale deDE]`).
+        if variables.is_empty() && entry.locales.is_none() {
             ctx.error(
                 "E4002",
                 &epath.clone().key("path"),
                 format!(
-                    "`{}` contains no TOC variable ([Game], [Family] or [TextLocale])",
+                    "`{}` contains no TOC variable ([Game], [Family] or [TextLocale]) and no `locales`",
                     entry.path
                 ),
                 "no variable",
             );
         }
         if let Some(locales) = &entry.locales {
-            let has_locale_var = entry.path.to_ascii_lowercase().contains("[textlocale]");
-            if !has_locale_var {
-                ctx.error(
-                    "E4002",
-                    &epath.clone().key("locales"),
-                    "`locales` requires `[TextLocale]` in the path".into(),
-                    "unused locales",
-                );
-            }
             for (j, locale) in locales.iter().enumerate() {
                 if !crate::model::LOCALES.contains(&locale.as_str()) {
                     ctx.error(

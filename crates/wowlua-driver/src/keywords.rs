@@ -317,7 +317,7 @@ fn substitute(text: &str, info: &KeywordInfo) -> String {
 /// Applies repository keywords and the debug/alpha blocks; release builds
 /// drop `@do-not-package@` blocks. `rel` is the file's path in the
 /// repository, for `@file-*@`.
-pub fn apply(text: &str, info: &KeywordInfo, rel: &Path, xml: bool) -> String {
+pub fn apply(text: &str, info: &KeywordInfo, rel: &Path, original: &Path, xml: bool) -> String {
     if !text.contains('@') {
         return text.to_string();
     }
@@ -325,7 +325,27 @@ pub fn apply(text: &str, info: &KeywordInfo, rel: &Path, xml: bool) -> String {
     if out.contains("@file-")
         && let Some(repo) = &info.repo
     {
-        let path = rel.to_string_lossy().into_owned();
+        // History follows renames; files `init` moved but nobody committed
+        // yet have it under their original path.
+        let log = |path: &str| {
+            git(
+                repo,
+                &[
+                    "log",
+                    "-1",
+                    "--follow",
+                    "--abbrev=7",
+                    "--format=%H%x09%h%x09%an%x09%at",
+                    "--",
+                    path,
+                ],
+            )
+            .filter(|l| !l.is_empty())
+        };
+        let mut path = rel.to_string_lossy().into_owned();
+        if log(&path).is_none() {
+            path = original.to_string_lossy().into_owned();
+        }
         let line = git(
             repo,
             &[
@@ -443,18 +463,22 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            apply(lua, &info, Path::new("a.lua"), false),
+            apply(lua, &info, Path::new("a.lua"), Path::new("a.lua"), false),
             "--[==[@debug@\nprint(1)\n--@end-debug@]==]\n--@non-debug@\nprint(2)\n--@end-non-debug@\n"
         );
         let on = KeywordInfo {
             debug: true,
             ..info.clone()
         };
-        assert_eq!(apply(lua, &on, Path::new("a.lua"), false), lua);
+        assert_eq!(
+            apply(lua, &on, Path::new("a.lua"), Path::new("a.lua"), false),
+            lua
+        );
         assert_eq!(
             apply(
                 "v = \"@project-version@\"",
                 &info,
+                Path::new("a.lua"),
                 Path::new("a.lua"),
                 false
             ),
@@ -462,7 +486,7 @@ mod tests {
         );
         let xml = "<!--@debug@-->\n<Script file=\"x.lua\"/>\n<!--@end-debug@-->\n";
         assert_eq!(
-            apply(xml, &info, Path::new("a.xml"), true),
+            apply(xml, &info, Path::new("a.xml"), Path::new("a.xml"), true),
             "<!--@debug@\n<Script file=\"x.lua\"/>\n@end-debug@-->\n"
         );
         let flavored = "--@version-classic@\nx()\n--@end-version-classic@\n";
@@ -472,8 +496,14 @@ mod tests {
             "--[====[@version-classic@\nx()\n--@end-version-classic@]====]\n"
         );
         let dnp = "a\n--@do-not-package@\ntest()\n--@end-do-not-package@\nb\n";
-        assert_eq!(apply(dnp, &info, Path::new("a.lua"), false), "a\nb\n");
-        assert_eq!(apply(dnp, &on, Path::new("a.lua"), false), dnp);
+        assert_eq!(
+            apply(dnp, &info, Path::new("a.lua"), Path::new("a.lua"), false),
+            "a\nb\n"
+        );
+        assert_eq!(
+            apply(dnp, &on, Path::new("a.lua"), Path::new("a.lua"), false),
+            dnp
+        );
         let libxml = "<Ui>\n<!--@no-lib-strip@-->\n<Script file=\"LibStub.lua\"/>\n<!--@end-no-lib-strip@-->\n</Ui>\n";
         assert_eq!(
             apply_library(libxml, &info, true),

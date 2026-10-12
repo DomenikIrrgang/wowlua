@@ -173,6 +173,7 @@ open for review.
 | T122 | `init` keeps addon-wide `## AllowLoadGameType` / `## ExcludeLoadGameType` lines in `addon.toc-extra` besides deriving the flavors from them **(M6, BigWigs test)** | The client also applies them to out-of-date loading; the packaged TOC keeps them. |
 | T123 | `@project-version@` is the packager's value: the tag on `HEAD`, else `git describe --tags --abbrev=7` (alpha tags excluded); in library files, the tag of a `tag` external or the short hash of a branch (the packager clones those with `--depth 1`). `build.version` and the TOC `Version` stay wowlua's **(user, M6)** | Version strings inside converted addons (in-game version checks) match the packager's builds. |
 | T124 | With `compat.packager-keywords`, text files of the addon and of embedded libraries (`.lua`, `.xml`, `.toc`, `.md`, `.txt`) get LF line endings, like `packager -u`; files matching `compat.plain-copy` (from `.pkgmeta` `plain-copy`) stay unprocessed; `init` sets `packager-keywords` for every converted `.pkgmeta` project **(user, M6)** | Many addons and libraries are committed with CRLF; the packager always normalizes. |
+| T125 | A `build.variable-files` entry may be a plain path with `locales`: a file loaded only for some client locales; `init` keeps TOC lines with `[AllowLoadTextLocale …]` that way **(M6, Masque test)** | Masque and others load one locale file per client locale without `[TextLocale]`. |
 
 ## Standard library
 

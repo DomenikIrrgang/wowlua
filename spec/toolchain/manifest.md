@@ -361,8 +361,8 @@ lines (decision T55):
 
 | Field | Type | Default | Meaning |
 |-------|------|---------|---------|
-| `path` | path | required | Path relative to the package root. Must contain at least one variable (E4002). |
-| `locales` | locale code[] | all | `[TextLocale]` only (E4002 otherwise): the locales the line loads for, emitted as `[AllowLoadTextLocale …]` |
+| `path` | path | required | Path relative to the package root. Must contain at least one variable or have `locales` (E4002). |
+| `locales` | locale code[] | all | The locales the line loads for, emitted as `[AllowLoadTextLocale …]`. On a path without variables, a file that only some client locales load (decision T125). |
 | `flavors` | flavor[] | all targeted | Restricts the line to these flavors |
 
 - Every expansion for a targeted flavor and listed locale must exist after the
@@ -371,7 +371,8 @@ lines (decision T55):
   verbatim, in its `build.load-order` position. Otherwise it is expanded into
   one line per flavor and locale, each with the matching inline directive or
   in the matching per-flavor TOC.
-- `wowlua init` writes this list from TOC lines that contain variables.
+- `wowlua init` writes this list from TOC lines that contain variables or an
+  `[AllowLoadTextLocale …]` condition.
 
 ### 9.7.2 Files shared between addons
 

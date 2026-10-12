@@ -897,7 +897,17 @@ fn convert_pkgmeta(
         return;
     };
     // Dependencies, in the order of the externals.
-    let libs_dir = crate::pkgmeta::libs_dir(externals);
+    // The folder of the externals that become dependencies (loaded ones,
+    // not hg).
+    let converted: Vec<crate::pkgmeta::External> = externals
+        .iter()
+        .zip(external_files)
+        .filter(|(e, files)| {
+            !files.is_empty() && !matches!(e.source, crate::pkgmeta::ExternalSource::Hg { .. })
+        })
+        .map(|(e, _)| e.clone())
+        .collect();
+    let libs_dir = crate::pkgmeta::libs_dir(&converted);
     let mut deps = Map::new();
     for (i, e) in externals.iter().enumerate() {
         if let crate::pkgmeta::ExternalSource::Hg { url } = &e.source {
