@@ -96,7 +96,7 @@ export function onAddonLoaded(name: string, fn: () -> ())
     sub = on("ADDON_LOADED", function(loadedName: string)
         if loadedName == name then
             sub:cancel()
-            fn()
+            callIn({ component = "lifecycle: onAddonLoaded " .. name }, fn)
         end
     end)
 end

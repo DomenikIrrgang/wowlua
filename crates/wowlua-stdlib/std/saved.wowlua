@@ -64,21 +64,37 @@ local function attach(data: any, defaults: any): any
     })
 end
 
--- Removes values equal to their defaults (and secret values), recursively.
-local function strip(data: any, defaults: any)
+-- Removes values equal to their defaults, recursively, and secret values
+-- (they cannot be saved) anywhere; returns whether a secret was dropped.
+-- Empty tables go only where their default is a table.
+local function strip(data: any, defaults: any, seen: { [any]: boolean }?): boolean
+    seen = seen or {}
+    if seen[data] then
+        return false
+    end
+    seen[data] = true
+    local secrets = false
     for k, v in pairs(data) do
-        local d = type(defaults) == "table" and defaults[k] or nil
+        local d: any = nil
+        if type(defaults) == "table" then
+            d = defaults[k]
+        end
         if issecretvalue and issecretvalue(v) then
             data[k] = nil
-        elseif type(v) == "table" and type(d) == "table" then
-            strip(v, d)
-            if next(v) == nil then
+            secrets = true
+        elseif type(v) == "table" then
+            local nested = type(d) == "table" and d or nil
+            if strip(v, nested, seen) then
+                secrets = true
+            end
+            if nested and next(v) == nil then
                 data[k] = nil
             end
         elseif d ~= nil and v == d then
             data[k] = nil
         end
     end
+    return secrets
 end
 
 local function locked(b: Binding): any
@@ -171,14 +187,20 @@ local function stripAll(b: Binding)
     if not b.loaded or not b.strip or b.opts.stripDefaults == false then
         return
     end
+    local secrets = false
     if b.opts.profiles then
         for _, data in pairs(b.root.profiles) do
-            strip(data, b.opts.defaults)
+            if strip(data, b.opts.defaults) then
+                secrets = true
+            end
         end
     else
         local version = rawget(b.db, "__version")
-        strip(b.db, b.opts.defaults)
+        secrets = strip(b.db, b.opts.defaults)
         rawset(b.db, "__version", version)
+    end
+    if secrets and wl.debug then
+        report(b.name .. ": secret values were not saved")
     end
 end
 
@@ -199,11 +221,14 @@ tasks.afterLogout[#tasks.afterLogout + 1] = function()
 end
 
 local function makeHandle(b: Binding): any
+    local function need(what: string)
+        if not b.loaded then
+            error(what .. ": " .. b.name .. " is not loaded", 3)
+        end
+    end
     local h: any = {
         reset = function()
-            if not b.loaded then
-                error(b.name .. " is not loaded", 2)
-            end
+            need("reset")
             local data = b.data
             local version = rawget(data, "__version")
             for k in pairs(data) do
@@ -218,6 +243,7 @@ local function makeHandle(b: Binding): any
     if b.opts.profiles then
         h.profiles = {
             use = function(_, name: string)
+                need("profiles:use")
                 useProfile(b, name)
                 for _, fn in ipairs(b.listeners) do
                     callIn({ component = "saved: profile change" }, fn, name)
@@ -225,6 +251,7 @@ local function makeHandle(b: Binding): any
             end,
             current = function(): string return b.profile or DEFAULT_PROFILE end,
             list = function(): string[]
+                need("profiles:list")
                 local names = {}
                 for name in pairs(b.root.profiles) do
                     names[#names + 1] = name
@@ -233,20 +260,24 @@ local function makeHandle(b: Binding): any
                 return names
             end,
             copy = function(_, from: string)
+                need("profiles:copy")
                 local source = b.root.profiles[from]
                 if type(source) ~= "table" then
-                    error("no profile `" .. from .. "`", 2)
+                    error("no profile `" .. tostring(from) .. "`", 2)
                 end
+                -- Copied first: `from` may be the active profile itself.
+                local values = copy(source)
                 local data = b.data
                 for k in pairs(data) do
                     rawset(data, k, nil)
                 end
-                for k, v in pairs(copy(source)) do
+                for k, v in pairs(values) do
                     rawset(data, k, v)
                 end
                 attach(data, b.opts.defaults)
             end,
             delete = function(_, name: string)
+                need("profiles:delete")
                 if name == b.profile then
                     error("cannot delete the active profile `" .. name .. "`", 2)
                 end
@@ -298,8 +329,9 @@ export function bind(name: string, opts: any): any
     b.handle = makeHandle(b)
     handles[db] = b.handle
     bindings[#bindings + 1] = b
-    -- Bound after the addon loaded.
-    if isLoaded() then
+    -- Bound after the addon loaded, or the SavedVariables load first
+    -- (`addon.load-saved-variables-first`).
+    if isLoaded() or wl.savedFirst then
         load(b)
     end
     return db

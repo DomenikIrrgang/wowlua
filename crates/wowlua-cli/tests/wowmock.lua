@@ -39,7 +39,15 @@ function debugstack() return "" end
 function GetTime() return Mock.now end
 function InCombatLockdown() return Mock.combat end
 function IsLoggedIn() return Mock.loggedIn end
-function issecretvalue() return false end
+-- Values marked secret (the modern client hides them from addons).
+Mock.secrets = setmetatable({}, { __mode = "k" })
+function issecretvalue(v) return type(v) == "table" and Mock.secrets[v] == true end
+function Mock.secret() local v = {}; Mock.secrets[v] = true; return v end
+
+-- An assertion inside a test script.
+function Mock.check(cond, label)
+    if not cond then print("FAIL: " .. tostring(label)) end
+end
 
 DEFAULT_CHAT_FRAME = { AddMessage = function(_, msg) print(msg) end }
 

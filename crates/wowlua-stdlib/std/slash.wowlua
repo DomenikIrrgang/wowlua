@@ -40,9 +40,9 @@ end
 -- Router ---------------------------------------------------------------------
 
 -- Splits on whitespace; "two words" and 'two words' are one token, \"
--- escapes. Also returns where each token ends in `msg`.
+-- escapes. Also returns where each token starts in `msg`.
 local function tokenize(msg: string): (string[], number[])
-    local tokens, ends = {}, {}
+    local tokens, starts = {}, {}
     local i, n = 1, #msg
     while i <= n do
         local c = msg:sub(i, i)
@@ -50,6 +50,7 @@ local function tokenize(msg: string): (string[], number[])
             i += 1
         elseif c == "\"" or c == "'" then
             local buf = {}
+            starts[#starts + 1] = i
             i += 1
             while i <= n and msg:sub(i, i) ~= c do
                 if msg:sub(i, i) == "\\" and i < n then
@@ -59,7 +60,6 @@ local function tokenize(msg: string): (string[], number[])
                 i += 1
             end
             tokens[#tokens + 1] = table.concat(buf)
-            ends[#ends + 1] = i
             i += 1
         else
             local j = i
@@ -67,11 +67,11 @@ local function tokenize(msg: string): (string[], number[])
                 j += 1
             end
             tokens[#tokens + 1] = msg:sub(i, j - 1)
-            ends[#ends + 1] = j - 1
+            starts[#starts + 1] = i
             i = j
         end
     end
-    return tokens, ends
+    return tokens, starts
 end
 
 const BOOLEANS = { ["true"] = true, on = true, yes = true, ["1"] = true,
@@ -162,7 +162,7 @@ export function router(defs: { [string]: any }): any
     end
 
     function r.dispatch(_, msg: string): boolean
-        local tokens, ends = tokenize(msg)
+        local tokens, starts = tokenize(msg)
         if #tokens == 0 or tokens[1]:lower() == "help" then
             printHelp()
             return true
@@ -173,6 +173,16 @@ export function router(defs: { [string]: any }): any
             return false
         end
         local command = defs[name]
+        local args = command.args or {}
+        -- A `rest` argument takes the text as typed from the first token
+        -- after the arguments before it (flags must come before it).
+        local restAt: number? = nil
+        for i, spec in ipairs(args) do
+            if spec == "rest" then
+                restAt = i
+                break
+            end
+        end
         -- Flags anywhere after the command; the rest are positional.
         local flags: { [string]: boolean } = {}
         local known: { [string]: boolean } = {}
@@ -181,8 +191,12 @@ export function router(defs: { [string]: any }): any
             flags[f] = false
         end
         local positional = {}
-        local restFrom: number? = nil
+        local rest = ""
         for i = 2, #tokens do
+            if restAt and #positional == restAt - 1 then
+                rest = msg:sub(starts[i]):match("^(.-)%s*$")
+                break
+            end
             local flag = tokens[i]:match("^%-%-(.+)$")
             if flag then
                 if not known[flag] then
@@ -194,15 +208,10 @@ export function router(defs: { [string]: any }): any
                 positional[#positional + 1] = tokens[i]
             end
         end
-        local args = command.args or {}
         local values = {}
         for i, spec in ipairs(args) do
-            if spec == "rest" then
-                -- The remaining text as typed, after the command and the
-                -- arguments before it.
-                local after = ends[i] or #msg
-                values[i] = msg:sub(after + 1):match("^%s*(.-)%s*$")
-                restFrom = i
+            if i == restAt then
+                values[i] = rest
                 break
             end
             local ok, v = convert(spec, positional[i])
@@ -212,7 +221,7 @@ export function router(defs: { [string]: any }): any
             end
             values[i] = v
         end
-        if not restFrom and #positional > #args then
+        if not restAt and #positional > #args then
             say("Usage: " .. usage(name, command))
             return true
         end

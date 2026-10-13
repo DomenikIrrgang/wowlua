@@ -1,12 +1,17 @@
 //! The standard library (spec chapter 8) at run time: addons that import
 //! `wowlua:*` modules are built and run against a model of the WoW client
-//! (`wowmock.lua`), driven by a test script.
+//! (`wowmock.lua`), driven by a test script. Every runtime test runs the
+//! addon in three builds (dev, release, and release fully minified with the
+//! libraries minified too), which must behave alike.
 
 use assert_cmd::Command;
 use std::fs;
 use std::path::Path;
 
 const MOCK: &str = include_str!("wowmock.lua");
+
+/// The builds every runtime test runs in.
+const MODES: &[&str] = &["dev", "release", "max"];
 
 fn wowlua(dir: &Path) -> Command {
     let mut cmd = Command::cargo_bin("wowlua").unwrap();
@@ -22,9 +27,17 @@ fn wowlua(dir: &Path) -> Command {
 fn project(files: &[(&str, &str)]) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let manifest = r#"{ "package": { "name": "std", "version": "1.0.0" },
-  "addon": { "saved-variables": ["StdDB", "StdOtherDB"], "saved-variables-per-character": ["StdDBPerChar"] } }
+  "addon": { "saved-variables": ["StdDB", "StdOtherDB"], "saved-variables-per-character": ["StdDBPerChar", "StdCharDB"] },
+  "profiles": { "max": { "inherits": "release", "minify": "max", "minify-libraries": true } } }
 "#;
     fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
+    // The mock client's controls, for checks inside the addon.
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(
+        dir.path().join("src/mock.d.wowlua"),
+        "declare global Mock: any\n",
+    )
+    .unwrap();
     for (path, text) in files {
         let path = dir.path().join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -42,13 +55,15 @@ fn build(dir: &Path, profile: &str) -> String {
     String::from_utf8_lossy(&assert.get_output().stderr).into_owned()
 }
 
-/// Loads the built addon into the mock client and runs `script`; returns
+/// Runs `setup` (before the addon's files, as WoW loads SavedVariables),
+/// loads the built addon into the mock client and runs `script`; returns
 /// what was printed, one line each.
-fn run(dir: &Path, profile: &str, script: &str) -> Vec<String> {
+fn run(dir: &Path, profile: &str, setup: &str, script: &str) -> Vec<String> {
     let out = dir.join("dist").join(profile).join("Std");
     let toc = fs::read_to_string(out.join("Std.toc")).unwrap();
     let lua = mlua::Lua::new();
     lua.load(MOCK).set_name("@wowmock.lua").exec().unwrap();
+    lua.load(setup).set_name("@setup").exec().unwrap();
     let ns = lua.create_table().unwrap();
     for line in toc
         .lines()
@@ -62,12 +77,12 @@ fn run(dir: &Path, profile: &str, script: &str) -> Vec<String> {
         lua.load(code)
             .set_name(format!("@{path}"))
             .call::<()>(("Std", ns.clone()))
-            .unwrap_or_else(|e| panic!("{path}: {e}"));
+            .unwrap_or_else(|e| panic!("{profile}: {path}: {e}"));
     }
     lua.load(script)
         .set_name("@test")
         .exec()
-        .unwrap_or_else(|e| panic!("{e}"));
+        .unwrap_or_else(|e| panic!("{profile}: {e}"));
     let printed: mlua::Table = lua.load("return Mock.out").eval().unwrap();
     printed
         .sequence_values::<String>()
@@ -75,40 +90,150 @@ fn run(dir: &Path, profile: &str, script: &str) -> Vec<String> {
         .collect()
 }
 
-/// Builds in dev and release and checks both behave the same.
-fn both(files: &[(&str, &str)], script: &str) -> Vec<String> {
-    let dir = project(files);
-    build(dir.path(), "dev");
-    build(dir.path(), "release");
-    let dev = run(dir.path(), "dev", script);
-    let release = run(dir.path(), "release", script);
-    // Error messages differ: dev builds capture them and name the handler.
-    let plain = |lines: &[String]| -> Vec<String> {
-        lines
-            .iter()
-            .filter(|l| !l.contains("ERROR:") && !l.contains("error captured"))
-            .cloned()
-            .collect()
-    };
-    assert_eq!(
-        plain(&dev),
-        plain(&release),
-        "dev and release builds differ"
-    );
-    assert_eq!(
-        dev.iter().filter(|l| l.contains("ERROR:")).count(),
-        release.iter().filter(|l| l.contains("ERROR:")).count(),
-        "dev and release report different errors"
-    );
-    dev
+fn is_error(line: &str) -> bool {
+    line.contains("ERROR:") || line.contains("error captured")
 }
 
+/// The printed lines without error reports (dev builds also capture errors
+/// in the dev console and name the failing handler).
+fn plain(lines: &[String]) -> Vec<String> {
+    lines.iter().filter(|l| !is_error(l)).cloned().collect()
+}
+
+/// Builds the addon in every mode and runs it; every mode must print the
+/// same and report the same number of errors, and no `Mock.check` may
+/// fail. Returns the dev build's output.
+fn modes(files: &[(&str, &str)], setup: &str, script: &str) -> Vec<String> {
+    modes_in(&project(files), setup, script)
+}
+
+/// [`modes`] for a prepared project.
+fn modes_in(dir: &tempfile::TempDir, setup: &str, script: &str) -> Vec<String> {
+    let mut outputs: Vec<(&str, Vec<String>)> = Vec::new();
+    for mode in MODES {
+        build(dir.path(), mode);
+        outputs.push((mode, run(dir.path(), mode, setup, script)));
+    }
+    let (_, dev) = &outputs[0];
+    for (mode, out) in &outputs {
+        let failed: Vec<&String> = out.iter().filter(|l| l.starts_with("FAIL")).collect();
+        assert!(failed.is_empty(), "{mode}: {failed:?}\n{out:?}");
+        assert_eq!(plain(dev), plain(out), "dev and {mode} differ");
+        let count = |o: &[String]| o.iter().filter(|l| l.contains("ERROR:")).count();
+        assert_eq!(
+            count(dev),
+            count(out),
+            "dev and {mode} report different errors:\n{dev:?}\n{out:?}"
+        );
+    }
+    dev.clone()
+}
+
+/// The error reports (as the error handler received them) of an output.
+fn errors(lines: &[String]) -> Vec<String> {
+    lines
+        .iter()
+        .filter_map(|l| l.strip_prefix("ERROR: ").map(str::to_string))
+        .collect()
+}
+
+// ----------------------------------------------------------------- errors --
+
 #[test]
-fn events_dispatch_isolated_in_order() {
-    let out = both(
+fn errors_prefix_rate_limit_and_listeners() {
+    let out = modes(
         &[(
             "src/main.wowlua",
-            r#"import event, unitEvent, on, once, off, offAll, send, onUnit from "wowlua:events"
+            r#"import * as errors from "wowlua:errors"
+local C = Mock.check
+
+-- Prefixed once, never twice.
+errors.report("plain message")
+errors.report("Std: already prefixed")
+-- Non-string errors are converted.
+errors.report({})
+errors.report(Mock.secret())
+
+-- The same message within the rate limit (10 s) is counted, not repeated.
+errors.report("repeated")
+errors.report("repeated")
+errors.report("repeated")
+_G.StdAgain = function() errors.report("repeated") end
+
+-- Listeners see every report; their own errors go to the handler directly
+-- and are not reported again.
+local seen = 0
+local sub = errors.onError(function(msg: string) seen += 1 end)
+errors.onError(function(msg: string) error("listener broke") end)
+errors.report("for listeners")
+C(seen == 1, "listener called once")
+sub:cancel()
+errors.report("after cancel")
+C(seen == 1, "cancelled listener not called")
+
+-- call returns the results, or false; wrap drops results.
+local ok, a, b = errors.call(function(x: number, y: number?) return x, y end, 1, nil)
+C(ok == true and a == 1 and b == nil, "call returns results")
+local failed = errors.call(function() error("in call") end)
+C(failed == false, "call returns false on error")
+local wrapped = errors.wrap(function(x: number) return x * 2 end)
+C(wrapped(2) == nil, "wrap drops results")
+
+errors.configure({ rateLimit = 0 })
+errors.report("unlimited")
+errors.report("unlimited")
+_G.StdCount = errors.count
+"#,
+        )],
+        "",
+        r#"Mock.advance(11)
+StdAgain()
+-- Repeats held back by the rate limit are not counted.
+print("count", StdCount())
+"#,
+    );
+    let reported = errors(&out);
+    let has = |m: &str| reported.iter().filter(|r| r.starts_with(m)).count();
+    assert_eq!(has("Std: plain message"), 1, "{reported:?}");
+    assert_eq!(has("Std: already prefixed"), 1, "{reported:?}");
+    assert!(
+        !reported.iter().any(|r| r.contains("Std: Std:")),
+        "{reported:?}"
+    );
+    assert_eq!(has("Std: table: "), 1, "{reported:?}");
+    assert_eq!(has("Std: <secret>"), 1, "{reported:?}");
+    // Reported once, then after the window with the count of repeats.
+    assert_eq!(has("Std: repeated"), 2, "{reported:?}");
+    assert!(
+        reported.contains(&"Std: repeated (2 more)".to_string()),
+        "{reported:?}"
+    );
+    // The broken listener's error reaches the handler for each of the six
+    // reports after it subscribed, unprefixed and never reported again.
+    assert_eq!(
+        reported
+            .iter()
+            .filter(|r| r.contains("listener broke"))
+            .count(),
+        6,
+        "{reported:?}"
+    );
+    assert!(
+        reported.iter().any(|r| r.contains("in call")),
+        "{reported:?}"
+    );
+    assert_eq!(has("Std: unlimited"), 2, "{reported:?}");
+    assert!(out.contains(&"count 11".to_string()), "{out:?}");
+}
+
+// ----------------------------------------------------------------- events --
+
+#[test]
+fn events_dispatch_in_order_and_isolated() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import event, unitEvent, on, once, off, offAll, send from "wowlua:events"
 
 @event("PLAYER_ENTERING_WORLD")
 local function first(isInitialLogin: boolean, isReloadingUi: boolean)
@@ -139,22 +264,14 @@ local owner = {}
 on("UNIT_HEALTH", function(unit: string) print("any health", unit) end, owner)
 once("PLAYER_LOGIN", function() print("login once") end)
 
--- a message, dispatched in Lua only
 declare message STD_PING(n: number)
-local count = 0
-local sub = on("STD_PING", function(n: number) count += n; print("ping", n) end)
-local function sendPing(n: number) send("STD_PING", n) end
-_G.StdPing = sendPing
+local sub = on("STD_PING", function(n: number) print("ping", n) end)
+_G.StdPing = function(n: number) send("STD_PING", n) end
 _G.StdUnsub = function() off(sub) end
 _G.StdOffAll = function() offAll(owner) end
-
--- registering during a dispatch applies to the next one
-on("PLAYER_STARTED_MOVING", function()
-    print("moving")
-    on("PLAYER_STARTED_MOVING", function() print("added later") end)
-end)
 "#,
         )],
+        "",
         r#"Mock.fire("PLAYER_ENTERING_WORLD", true, false)
 Mock.fire("BAG_UPDATE", 3)
 Mock.fire("BAG_UPDATE_DELAYED")
@@ -167,52 +284,198 @@ StdUnsub()
 StdPing(5)
 StdOffAll()
 Mock.fire("UNIT_HEALTH", "target")
-Mock.fire("PLAYER_STARTED_MOVING")
-Mock.fire("PLAYER_STARTED_MOVING")
 "#,
     );
-    let out = out.join("\n");
-    let expected = [
-        "first true false",
-        "ERROR: Std: ",
-        "third",
-        "bags BAG_UPDATE 3",
-        "bags BAG_UPDATE_DELAYED",
-        "any health target",
-        "login once",
-        "ping 2",
-        "moving",
-        "moving\nadded later",
-    ];
-    let mut at = 0;
-    for e in expected {
-        let found = out[at..]
-            .find(e)
-            .unwrap_or_else(|| panic!("`{e}` not found in order:\n{out}"));
-        at += found + e.len();
-    }
-    assert!(out.contains("boom"), "{out}");
-    assert_eq!(out.matches("login once").count(), 1, "{out}");
-    assert_eq!(out.matches("ping").count(), 1, "{out}");
-    assert_eq!(out.matches("any health target").count(), 1, "{out}");
-    // The unit filter: only the player's health reaches the unit handler.
-    assert_eq!(out.matches("health player").count(), 2, "{out}");
-    assert!(!out.contains("\nhealth target"), "{out}");
-    assert!(
-        out.contains("boom [events: PLAYER_ENTERING_WORLD handler]"),
-        "{out}"
+    assert_eq!(
+        plain(&out),
+        [
+            "first true false",
+            "third",
+            "bags BAG_UPDATE 3",
+            "bags BAG_UPDATE_DELAYED",
+            "any health target",
+            // The unit handler and the plain one live on different frames.
+            "any health player",
+            "health player",
+            "login once",
+            "ping 2",
+        ],
+        "{out:?}"
+    );
+    assert!(errors(&out)[0].contains("boom"), "{out:?}");
+}
+
+#[test]
+fn events_registration_follows_the_handlers() {
+    modes(
+        &[(
+            "src/main.wowlua",
+            r#"import on, onUnit, send from "wowlua:events"
+local C = Mock.check
+
+-- The shared frame registers plain events (without a unit filter).
+local function registered(name: string): boolean
+    for _, f in ipairs(Mock.frames) do
+        if f.events[name] and not f.units[name] then return true end
+    end
+    return false
+end
+
+C(not registered("BAG_UPDATE"), "nothing registered before a handler")
+local a = on("BAG_UPDATE", function() end)
+local b = on("BAG_UPDATE", function() end)
+C(registered("BAG_UPDATE"), "registered with a handler")
+a:cancel()
+C(registered("BAG_UPDATE"), "still registered with one handler left")
+C(a.active == false and b.active == true, "subscription states")
+b:cancel()
+C(not registered("BAG_UPDATE"), "unregistered without handlers")
+b:cancel()
+C(not registered("BAG_UPDATE"), "cancelling twice is harmless")
+
+-- Messages are never registered with the game.
+declare message STD_LOCAL()
+on("STD_LOCAL", function() end)
+C(not registered("STD_LOCAL"), "a message is not registered")
+
+-- Unit events: one frame per event and unit set, shared by equal sets.
+local frames = #Mock.frames
+local u1 = onUnit("UNIT_HEALTH", { "player" }, function() end)
+local u2 = onUnit("UNIT_HEALTH", { "player" }, function() end)
+C(#Mock.frames == frames + 1, "equal unit sets share a frame")
+local u3 = onUnit("UNIT_HEALTH", { "target", "focus" }, function() end)
+C(#Mock.frames == frames + 2, "another unit set gets its own frame")
+local frame = Mock.frames[frames + 1]
+C(frame.units.UNIT_HEALTH.player == true, "unit filter set")
+u1:cancel()
+C(frame.events.UNIT_HEALTH == true, "still registered for the second handler")
+u2:cancel()
+C(frame.events.UNIT_HEALTH == nil, "unregistered without handlers")
+u3:cancel()
+
+-- WoW's limit of two units, at run time too.
+local units = { "a", "b", "c" }
+C(not pcall(onUnit, "UNIT_HEALTH", units, function() end), "three units are refused")
+local none: string[] = {}
+C(not pcall(onUnit, "UNIT_HEALTH", none, function() end), "no units is refused")
+
+-- Sending a WoW event is an error (a name the compiler cannot see).
+local name = "BAG_" .. "UPDATE"
+C(not pcall(send, name), "send refuses WoW events")
+print("done")
+"#,
+        )],
+        "",
+        "",
     );
 }
 
 #[test]
+fn events_changes_during_a_dispatch_apply_to_the_next() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r##"import on, once, off, send from "wowlua:events"
+
+local later: any = nil
+on("PLAYER_STARTED_MOVING", function()
+    print("first")
+    -- Added during the dispatch: runs from the next one.
+    later = later or on("PLAYER_STARTED_MOVING", function() print("added") end)
+end)
+local second = on("PLAYER_STARTED_MOVING", function()
+    print("second")
+end)
+on("PLAYER_STARTED_MOVING", function()
+    -- Removed during the dispatch: still ran this time.
+    off(second)
+end)
+once("PLAYER_STARTED_MOVING", function()
+    print("once")
+end)
+
+-- nil values in a payload arrive as sent.
+declare message STD_HOLES(a: any, b: any, c: any)
+on("STD_HOLES", function(...: any) print("holes", select("#", ...), ...) end)
+_G.StdHoles = function() send("STD_HOLES", nil, 2, nil) end
+"##,
+        )],
+        "",
+        r#"Mock.fire("PLAYER_STARTED_MOVING")
+Mock.fire("PLAYER_STARTED_MOVING")
+StdHoles()
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "first",
+            "second",
+            "once",
+            "first",
+            "added",
+            "holes 3 nil 2 nil"
+        ],
+        "{out:?}"
+    );
+}
+
+#[test]
+fn events_on_static_methods_and_with_owners() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import event, on, offAll from "wowlua:events"
+
+class Tracker
+    count: number = 0
+
+    @event("PLAYER_LOGIN")
+    static function onLogin()
+        print("static login")
+    end
+
+    constructor()
+        on("BAG_UPDATE", function(bag: number) self:bag(bag) end, self)
+    end
+
+    function bag(n: number)
+        self.count += 1
+        print("bag", n, self.count)
+    end
+end
+
+local a, b = Tracker.new(), Tracker.new()
+_G.StdDrop = function() offAll(a) end
+"#,
+        )],
+        "",
+        r#"Mock.fire("PLAYER_LOGIN")
+Mock.fire("BAG_UPDATE", 1)
+StdDrop()
+Mock.fire("BAG_UPDATE", 2)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        ["static login", "bag 1 1", "bag 1 1", "bag 2 2"],
+        "{out:?}"
+    );
+}
+
+// -------------------------------------------------------------- lifecycle --
+
+#[test]
 fn lifecycle_runs_its_phases_in_order() {
-    let out = both(
+    let out = modes(
         &[(
             "src/main.wowlua",
             r#"import onLoad, onLogin, onEnterWorld, onLogout, onAddonLoaded, isLoaded, isLoggedIn from "wowlua:lifecycle"
 
+print("top", isLoaded(), isLoggedIn())
+
 @onLoad
-local function load1() print("load 1", isLoaded()) end
+local function load1() print("load 1", isLoaded(), isLoggedIn()) end
 
 @onLoad
 local function loadFails() error("load failed") end
@@ -233,11 +496,17 @@ local function world(initial: boolean, reload: boolean) print("world", initial, 
 local function logout() print("logout") end
 
 onAddonLoaded("Blizzard_Later", function() print("later loaded") end)
+onAddonLoaded("Blizzard_Later", function() error("later failed") end)
+onAddonLoaded("Blizzard_Later", function() print("later loaded too") end)
 "#,
         )],
+        "",
         r#"Mock.loadAddon("Other")
 print("before")
 Mock.loadAddon("Std")
+-- Once only, whatever the client sends again.
+Mock.loadAddon("Std")
+Mock.fire("PLAYER_LOGIN")
 Mock.fire("PLAYER_LOGIN")
 Mock.fire("PLAYER_ENTERING_WORLD", true, false)
 Mock.loadAddon("Blizzard_Later")
@@ -246,31 +515,79 @@ Mock.fire("PLAYER_ENTERING_WORLD", false, true)
 Mock.fire("PLAYER_LOGOUT")
 "#,
     );
-    let plain: Vec<&String> = out
-        .iter()
-        .filter(|l| !l.contains("ERROR") && !l.contains("error captured"))
-        .collect();
     assert_eq!(
-        plain,
+        plain(&out),
         [
+            "top false false",
             "before",
-            "load 1 true",
+            "load 1 true false",
             "load 2",
             "login true",
             "already loaded",
             "world true false",
             "later loaded",
+            "later loaded too",
             "world false true",
             "logout",
         ],
         "{out:?}"
     );
-    assert!(out.iter().any(|l| l.contains("load failed")), "{out:?}");
+    let reported = errors(&out);
+    assert_eq!(reported.len(), 2, "{out:?}");
+    assert!(reported[0].contains("load failed"), "{out:?}");
+    assert!(reported[1].contains("later failed"), "{out:?}");
 }
 
 #[test]
+fn lifecycle_of_a_load_on_demand_addon() {
+    // Loaded after login: @onLogin follows @onLoad at once, and the later
+    // PLAYER_LOGIN of a reload does not repeat it.
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import onLoad, onLogin, isLoggedIn from "wowlua:lifecycle"
+
+@onLoad
+local function load() print("load", isLoggedIn()) end
+
+@onLogin
+local function login() print("login", isLoggedIn()) end
+"#,
+        )],
+        "Mock.loggedIn = true",
+        r#"Mock.loadAddon("Std")
+Mock.fire("PLAYER_LOGIN")
+"#,
+    );
+    assert_eq!(plain(&out), ["load false", "login true"], "{out:?}");
+    // Logged in by the event before the addon loaded.
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import onLoad, onLogin from "wowlua:lifecycle"
+
+@onLogin
+local function login() print("login") end
+
+@onLoad
+local function load() print("load") end
+"#,
+        )],
+        "",
+        r#"Mock.fire("PLAYER_LOGIN")
+Mock.loggedIn = false
+print("loading")
+Mock.loadAddon("Std")
+"#,
+    );
+    assert_eq!(plain(&out), ["loading", "load", "login"], "{out:?}");
+}
+
+// ------------------------------------------------------------------ timer --
+
+#[test]
 fn timers_throttle_debounce_and_next_frame() {
-    let out = both(
+    let out = modes(
         &[(
             "src/main.wowlua",
             r#"import after, every, throttle, debounce, nextFrame from "wowlua:timer"
@@ -278,6 +595,7 @@ fn timers_throttle_debounce_and_next_frame() {
 local t = after(2, function() print("after 2") end)
 local cancelled = after(1, function() print("never") end)
 cancelled:Cancel()
+Mock.check(cancelled:IsCancelled(), "cancelled")
 every(1, function(ticker: any) print("tick", GetTime()) end, 3)
 
 @throttle(1)
@@ -299,6 +617,7 @@ _G.StdT = { resize = resize, search = search, a = a, b = b }
 nextFrame(function() print("next frame") end)
 "#,
         )],
+        "",
         r#"StdT.resize(1); StdT.resize(2); StdT.resize(3)
 StdT.search("x"); Mock.advance(0.2); StdT.search("xy")
 StdT.a:refresh(1); StdT.a:refresh(2); StdT.b:refresh(9)
@@ -326,8 +645,108 @@ Mock.advance(5)
 }
 
 #[test]
+fn timers_edge_cases() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import after, every, throttle, debounce, nextFrame from "wowlua:timer"
+
+-- A ticker gets itself, and can stop itself.
+local n = 0
+every(1, function(ticker: any)
+    n += 1
+    print("ticker", n)
+    if n == 2 then ticker:Cancel() end
+end)
+
+-- Errors in timer callbacks are reported; the timers carry on.
+after(0.5, function() error("timer failed") end)
+after(0.5, function() print("after the failure") end)
+local failing = 0
+every(3, function()
+    failing += 1
+    error("ticker failed " .. failing)
+end, 2)
+
+-- Plain nextFrame calls are not coalesced.
+nextFrame(function() print("frame a") end)
+nextFrame(function() print("frame a") end)
+
+-- @nextFrame on a function coalesces, and runs again after it ran.
+@nextFrame
+local function redraw(why: string) print("redraw", why) end
+
+class Unit
+    name: string
+    constructor(name: string) self.name = name end
+
+    -- Throttled per instance.
+    @throttle(2)
+    function update(v: number) print("update", self.name, v, GetTime()) end
+end
+local u1, u2 = Unit.new("u1"), Unit.new("u2")
+
+-- Debounce restarts with every call.
+@debounce(1)
+local function save(v: number) print("save", v, GetTime()) end
+
+-- A throttled trailing call that fails is reported.
+@throttle(1)
+local function risky(v: number)
+    if v > 1 then error("risky " .. v) end
+    print("risky", v)
+end
+
+_G.StdT = { redraw = redraw, u1 = u1, u2 = u2, save = save, risky = risky }
+"#,
+        )],
+        "",
+        r#"StdT.redraw("a"); StdT.redraw("b")
+Mock.advance(0)
+StdT.redraw("c")
+Mock.advance(0)
+StdT.u1:update(1); StdT.u2:update(1); StdT.u1:update(2)
+StdT.save(1); Mock.advance(0.6); StdT.save(2); Mock.advance(0.6); StdT.save(3)
+StdT.risky(1); StdT.risky(2)
+Mock.advance(10)
+-- After the window, a call runs at once again.
+StdT.u1:update(3)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "frame a",
+            "frame a",
+            "redraw b",
+            "redraw c",
+            "update u1 1 0",
+            "update u2 1 0",
+            // At 0.5 and 1, while the clock advances for `save`.
+            "after the failure",
+            "ticker 1",
+            "risky 1",
+            // Both due at 2: the ticker was scheduled first.
+            "ticker 2",
+            "update u1 2 2",
+            "save 3 2.2",
+            "update u1 3 11.2",
+        ],
+        "{out:?}"
+    );
+    let reported = errors(&out);
+    assert_eq!(reported.len(), 4, "{out:?}");
+    assert!(reported[0].contains("timer failed"), "{out:?}");
+    assert!(reported[1].contains("risky 2"), "{out:?}");
+    assert!(reported[2].contains("ticker failed 1"), "{out:?}");
+    assert!(reported[3].contains("ticker failed 2"), "{out:?}");
+}
+
+// ----------------------------------------------------------------- combat --
+
+#[test]
 fn combat_queues_until_combat_ends() {
-    let out = both(
+    let out = modes(
         &[(
             "src/main.wowlua",
             r#"import outOfCombat, defer, inCombat, onCombatChange from "wowlua:combat"
@@ -345,6 +764,7 @@ onCombatChange(function(entering: boolean) print("combat", entering) end)
 _G.StdC = { one = one, two = two, defer = defer }
 "#,
         )],
+        "",
         r#"StdC.one:layout(1)
 Mock.fire("PLAYER_REGEN_DISABLED")
 StdC.one:layout(2)
@@ -359,6 +779,7 @@ Mock.fire("PLAYER_REGEN_ENABLED")
         [
             "layout one 1 false",
             "combat true",
+            // Coalesced: one's first place, its latest arguments.
             "layout one 3 false",
             "layout two 5 false",
             "deferred",
@@ -369,8 +790,79 @@ Mock.fire("PLAYER_REGEN_ENABLED")
 }
 
 #[test]
+fn combat_edge_cases() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import outOfCombat, defer, onCombatChange from "wowlua:combat"
+
+@outOfCombat
+local function apply(v: number) print("apply", v) end
+
+@outOfCombat
+local function fails() error("queued failure") end
+
+local function step(name: string): () -> ()
+    return function() print("step", name) end
+end
+local restart = function()
+    print("restart")
+    Mock.combat = true
+end
+
+local sub = onCombatChange(function(entering: boolean) print("combat", entering) end)
+_G.StdC = { apply = apply, fails = fails, defer = defer, step = step, restart = restart, sub = sub }
+"#,
+        )],
+        "",
+        r#"-- Out of combat everything runs at once.
+StdC.defer(StdC.step("now"))
+StdC.apply(0)
+Mock.fire("PLAYER_REGEN_DISABLED")
+StdC.apply(1)
+StdC.fails()
+-- defer is not coalesced, even for one function.
+local s = StdC.step("twice")
+StdC.defer(s)
+StdC.defer(s)
+StdC.apply(2)
+-- Combat starts again in the middle of the flush: the rest waits.
+StdC.defer(StdC.restart)
+StdC.defer(StdC.step("after restart"))
+StdC.sub:cancel()
+Mock.fire("PLAYER_REGEN_ENABLED")
+print("in combat again", Mock.combat)
+-- Queued again after a flush (the coalescing entry is gone).
+StdC.apply(3)
+Mock.fire("PLAYER_REGEN_ENABLED")
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "step now",
+            "apply 0",
+            "combat true",
+            "apply 2",
+            "step twice",
+            "step twice",
+            "restart",
+            "in combat again true",
+            "step after restart",
+            "apply 3",
+        ],
+        "{out:?}"
+    );
+    let reported = errors(&out);
+    assert_eq!(reported.len(), 1, "{out:?}");
+    assert!(reported[0].contains("queued failure"), "{out:?}");
+}
+
+// ------------------------------------------------------------------ hooks --
+
+#[test]
 fn hooks_post_hook_globals_methods_and_scripts() {
-    let out = both(
+    let out = modes(
         &[(
             "src/main.wowlua",
             r#"import hook, hookScript from "wowlua:hooks"
@@ -388,6 +880,7 @@ local function shown(frame: any) print("shown", frame:GetName()) end
 local function lateShown(frame: any) print("late shown") end
 "#,
         )],
+        "",
         r#"Mock.loadAddon("Std")
 ToggleGameMenu()
 GameTooltip:SetUnit("target")
@@ -411,244 +904,610 @@ LateFrame:Show()
     );
 }
 
-/// Runs `script` with saved data set up by `setup` (before the addon's
-/// files run, as WoW loads SavedVariables).
-fn run_with(dir: &Path, profile: &str, setup: &str, script: &str) -> Vec<String> {
-    run(dir, profile, &format!("{setup}\n{script}"))
+#[test]
+fn hooks_edge_cases() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import hook, hookScript from "wowlua:hooks"
+
+-- Plain forms; the hooked function keeps its results, and a failing hook
+-- is reported without breaking the caller.
+hook("StdAdd", function(a: number, b: number) print("added", a, b) end)
+hook("StdAdd", function() error("hook failed") end)
+hook(StdObject, "Get", function(self: any, k: string) print("got", k) end)
+hookScript(PlayerFrame, "OnHide", function(frame: any) print("hidden") end)
+
+-- A missing target is an error where the hook is installed.
+Mock.check(not pcall(hook, "NoSuchFrame", "Show", function() end), "missing target refused")
+Mock.check(not pcall(hookScript, "NoSuchFrame", "OnShow", function() end), "missing frame refused")
+
+-- An addon that has loaded already: installed at once.
+hook("OtherFrame", "Show", function() print("other shown") end, { addon = "Other" })
+-- Missing when its addon loads: reported then.
+hook("NeverFrame", "Show", function() end, { addon = "Blizzard_Never" })
+"#,
+        )],
+        r#"function StdAdd(a, b) return a + b, "sum" end
+StdObject = { Get = function(self, k) return k .. "!" end }
+CreateFrame("Frame", "OtherFrame")
+Mock.loaded.Other = true
+"#,
+        r#"local sum, label = StdAdd(1, 2)
+print("result", sum, label)
+print("get", StdObject:Get("k"))
+PlayerFrame:Hide()
+OtherFrame:Show()
+Mock.loadAddon("Blizzard_Never")
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "added 1 2",
+            "result 3 sum",
+            "got k",
+            "get k!",
+            "hidden",
+            "other shown",
+        ],
+        "{out:?}"
+    );
+    let reported = errors(&out);
+    assert_eq!(reported.len(), 2, "{out:?}");
+    assert!(reported[0].contains("hook failed"), "{out:?}");
+    assert!(
+        reported[1].contains("hook: `NeverFrame` does not exist"),
+        "{out:?}"
+    );
 }
 
-#[test]
-fn saved_variables_load_migrate_default_and_strip() {
-    let dir = project(&[(
-        "src/main.wowlua",
-        r#"import * as saved from "wowlua:saved"
+// ------------------------------------------------------------------ saved --
+
+const SAVED_MAIN: &str = r#"import * as saved from "wowlua:saved"
 import onLoad, onLogout from "wowlua:lifecycle"
 
 interface Settings
     scale: number
+    enabled: boolean
     hidden: { [string]: boolean }
     window: { x: number, y: number }
 end
 
+local defaults = { scale = 1, enabled = false, hidden = {}, window = { x = 0, y = 0 } } :: Settings
 local db = saved.bind("StdDB", {
     version = 3,
-    defaults = { scale = 1, hidden = {}, window = { x = 0, y = 0 } } :: Settings,
+    defaults = defaults,
     migrate = {
         [2] = function(old: any) old.scale = old.uiScale; old.uiScale = nil end,
         [3] = function(old: any) old.hidden = old.hidden or {} end,
     },
 })
 
+-- Locked until loaded, for reads and writes.
 local ok, err = pcall(function() return db.scale end)
-print("early", ok, tostring(err):match("accessed before it was loaded") ~= nil)
+Mock.check(not ok and tostring(err):match("Std: StdDB accessed before it was loaded; use @onLoad") ~= nil, "early read")
+ok, err = pcall(function() db.scale = 2 end)
+Mock.check(not ok and tostring(err):match("accessed before it was loaded") ~= nil, "early write")
+Mock.check(not saved.handle(db).isLoaded(), "not loaded yet")
+Mock.check(saved.handle(db).profiles == nil, "no profiles")
 
 @onLoad
 local function init()
-    print("scale", db.scale, "x", db.window.x)
+    print("scale", db.scale, "x", db.window.x, "enabled", db.enabled)
     db.window.y = 7
     db.hidden.minimap = true
-    print("handle loaded", saved.handle(db).isLoaded())
+    db.enabled = false
+    db.custom = {}
+    Mock.check(saved.handle(db).isLoaded(), "loaded")
+    Mock.check(_G.StdDB == db, "the global is the returned table")
+    -- Writes never reach the defaults.
+    Mock.check(defaults.window.y == 0 and defaults.hidden.minimap == nil, "defaults untouched")
 end
 
 @onLogout
 local function bye() print("logout", db.scale) end
-_G.StdDb = db
-"#,
-    )]);
-    build(dir.path(), "dev");
-    let script = r#"
+"#;
+
+const SAVED_SCRIPT: &str = r#"
 Mock.loadAddon("Std")
 Mock.fire("PLAYER_LOGOUT")
 local d = StdDB
-print("saved", d.__version, rawget(d, "scale"), d.uiScale, d.window and rawget(d.window, "y"), d.window and rawget(d.window, "x"), d.hidden and d.hidden.minimap)
-print("same table", StdDb == StdDB)
+print("saved", d.__version, rawget(d, "scale"), d.uiScale, rawget(d, "enabled"))
+print("window", d.window and rawget(d.window, "y"), d.window and rawget(d.window, "x"))
+print("hidden", d.hidden and d.hidden.minimap, type(rawget(d, "custom")))
 "#;
-    // Stored at version 1: migrations 2 and 3 run; defaults equal values go.
-    let out = run_with(
-        dir.path(),
-        "dev",
-        "StdDB = { __version = 1, uiScale = 2 }",
-        script,
-    );
+
+#[test]
+fn saved_variables_load_migrate_default_and_strip() {
+    let dir = project(&[("src/main.wowlua", SAVED_MAIN)]);
+    // Stored at version 1: migrations 2 and 3 run; values equal to their
+    // defaults go (also `false`); tables without defaults stay.
+    let out = modes_in(&dir, "StdDB = { __version = 1, uiScale = 2 }", SAVED_SCRIPT);
     assert_eq!(
         out,
         [
-            "early false true",
-            "scale 2 x 0",
-            "handle loaded true",
+            "scale 2 x 0 enabled false",
             "logout 2",
-            "saved 3 2 nil 7 nil true",
-            "same table true",
+            "saved 3 2 nil nil",
+            "window 7 nil",
+            "hidden true table",
         ],
         "{out:?}"
     );
     // A fresh install runs no migrations; a value back at its default goes.
-    let out = run_with(dir.path(), "dev", "", script);
-    assert_eq!(out[1], "scale 1 x 0", "{out:?}");
-    assert_eq!(out[4], "saved 3 nil nil 7 nil true", "{out:?}");
-    // Saved by a newer version: kept unchanged, nothing stripped.
-    let out = run_with(
-        dir.path(),
-        "dev",
-        "StdDB = { __version = 9, scale = 1 }",
-        script,
-    );
-    assert!(
-        out.iter().any(|l| l.contains("saved by a newer version")),
+    let out = modes_in(&dir, "", SAVED_SCRIPT);
+    assert_eq!(
+        out,
+        [
+            "scale 1 x 0 enabled false",
+            "logout 1",
+            "saved 3 nil nil nil",
+            "window 7 nil",
+            "hidden true table",
+        ],
         "{out:?}"
     );
-    assert!(out.iter().any(|l| l.starts_with("saved 9 1 ")), "{out:?}");
+    // Saved by a newer version: kept unchanged, nothing stripped.
+    let out = modes_in(&dir, "StdDB = { __version = 9, scale = 1 }", SAVED_SCRIPT);
+    assert!(
+        errors(&out)
+            .iter()
+            .any(|l| l.contains("StdDB was saved by a newer version (9 > 3)")),
+        "{out:?}"
+    );
+    assert!(out.contains(&"saved 9 1 nil false".to_string()), "{out:?}");
+    // Not stripped, but defaults never read were not created either.
+    assert!(out.contains(&"window 7 nil".to_string()), "{out:?}");
 }
 
 #[test]
-fn saved_migration_failure_preserves_the_data() {
+fn saved_migrations() {
+    let dir = project(&[(
+        "src/main.wowlua",
+        r#"import * as saved from "wowlua:saved"
+import onLoad from "wowlua:lifecycle"
+
+local runs: number[] = {}
+local db = saved.bind("StdDB", {
+    version = 4,
+    defaults = { a = 0 },
+    -- Steps may be missing; each runs once, on the whole table.
+    migrate = {
+        [2] = function(old: any)
+            runs[#runs + 1] = 2
+            for _, p in pairs(old.profiles) do p.a *= 10 end
+        end,
+        [4] = function(old: any)
+            runs[#runs + 1] = 4
+            old.profiles.Tank.b = old.__version
+        end,
+    },
+    profiles = true,
+})
+
+@onLoad
+local function init()
+    print("runs", table.concat(runs, ","))
+    print("a", db.a, "tank", StdDB.profiles.Tank.a, StdDB.profiles.Tank.b)
+    print("version", StdDB.__version)
+end
+"#,
+    )]);
+    let out = modes_in(
+        &dir,
+        "StdDB = { __version = 1, profiles = { Default = { a = 1 }, Tank = { a = 2 } } }",
+        "Mock.loadAddon(\"Std\")",
+    );
+    // The stored version stays 1 for the steps (it is set at the end).
+    assert_eq!(out, ["runs 2,4", "a 10 tank 20 1", "version 4"], "{out:?}");
+
+    // A failing step: nothing changes, the data stays locked with the reason.
     let dir = project(&[(
         "src/main.wowlua",
         r#"import * as saved from "wowlua:saved"
 import onLoad from "wowlua:lifecycle"
 
 local db = saved.bind("StdDB", {
-    version = 2,
+    version = 3,
     defaults = { scale = 1 },
-    migrate = { [2] = function(old: any) old.scale = 5; error("bad migration") end },
+    migrate = {
+        [2] = function(old: any) old.scale = 5 end,
+        [3] = function(old: any) old.scale = 6; error("bad migration") end,
+    },
 })
 
 @onLoad
 local function init()
     local ok, err = pcall(function() return db.scale end)
-    print("access", ok, tostring(err):match("failed to migrate to version 2; data preserved") ~= nil)
+    print("access", ok, tostring(err):match("Std: StdDB failed to migrate to version 3; data preserved") ~= nil)
+    print("handle", saved.handle(db).isLoaded())
 end
 "#,
     )]);
-    build(dir.path(), "dev");
-    let out = run_with(
-        dir.path(),
-        "dev",
+    let out = modes_in(
+        &dir,
         "StdDB = { __version = 1, scale = 3 }",
         "Mock.loadAddon(\"Std\")\nMock.fire(\"PLAYER_LOGOUT\")\nprint(\"stored\", StdDB.__version, StdDB.scale)",
     );
-    assert!(out.iter().any(|l| l.contains("bad migration")), "{out:?}");
-    assert!(out.contains(&"access false true".to_string()), "{out:?}");
-    assert!(out.contains(&"stored 1 3".to_string()), "{out:?}");
+    assert_eq!(
+        plain(&out),
+        ["access false true", "handle false", "stored 1 3"],
+        "{out:?}"
+    );
+    assert!(errors(&out)[0].contains("bad migration"), "{out:?}");
 }
 
 #[test]
-fn saved_profiles_switch_per_character() {
+fn saved_reset_strip_options_and_late_binds() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as saved from "wowlua:saved"
+import onLoad from "wowlua:lifecycle"
+
+local db = saved.bind("StdDB", { version = 2, defaults = { scale = 1, list = { 1, 2 } } })
+local keep = saved.bind("StdOtherDB", { version = 1, defaults = { scale = 1, nested = { a = 1 } }, stripDefaults = false })
+
+@onLoad
+local function init()
+    db.scale = 3
+    db.extra = "x"
+    saved.handle(db).reset()
+    print("reset", db.scale, rawget(db, "extra"), rawget(db, "__version"))
+    keep.scale = 1
+    print("nested", keep.nested.a)
+end
+
+-- Bound after loading: usable at once.
+_G.StdLate = function()
+    local late = saved.bind("StdCharDB", { version = 1, defaults = { n = 5 } })
+    print("late", late.n, saved.handle(late).isLoaded())
+    late.n = 6
+end
+
+-- handle() takes only bound tables.
+Mock.check(not pcall(saved.handle, {}), "handle of another table")
+"#,
+        )],
+        "StdCharDB = { n = 1 }",
+        r#"Mock.loadAddon("Std")
+StdLate()
+Mock.fire("PLAYER_LOGOUT")
+print("db", rawget(StdDB, "scale"), StdDB.__version)
+print("keep", rawget(StdOtherDB, "scale"), StdOtherDB.nested and StdOtherDB.nested.a)
+print("char", StdCharDB.n, StdCharDB.__version)
+"#,
+    );
+    assert_eq!(
+        out,
+        [
+            "reset 1 nil 2",
+            "nested 1",
+            "late 1 true",
+            "db nil 2",
+            "keep 1 1",
+            "char 6 1",
+        ],
+        "{out:?}"
+    );
+}
+
+#[test]
+fn saved_secrets_are_dropped() {
     let dir = project(&[(
         "src/main.wowlua",
         r#"import * as saved from "wowlua:saved"
 import onLoad from "wowlua:lifecycle"
 
-local db = saved.bind("StdDB", { version = 1, defaults = { scale = 1 }, profiles = true })
+local db = saved.bind("StdDB", { version = 1, defaults = { opts = { a = 1 } } })
 
 @onLoad
 local function init()
-    local profiles = saved.handle(db).profiles
-    profiles:onChange(function(name: string) print("changed to", name) end)
-    print("current", profiles:current(), db.scale)
-    db.scale = 2
-    profiles:use("Healer")
-    print("healer", db.scale)
-    profiles:copy("Default")
-    print("copied", db.scale)
-    print("list", table.concat(profiles:list(), ","))
+    db.secret = Mock.secret()
+    db.opts.secret = Mock.secret()
+    db.free = { secret = Mock.secret(), keep = 1 }
 end
 "#,
     )]);
-    build(dir.path(), "dev");
-    let out = run_with(
-        dir.path(),
-        "dev",
+    let script = r#"Mock.loadAddon("Std")
+Mock.fire("PLAYER_LOGOUT")
+print("saved", rawget(StdDB, "secret"), rawget(StdDB, "opts"), StdDB.free.secret, StdDB.free.keep)
+"#;
+    for mode in MODES {
+        build(dir.path(), mode);
+        let out = run(dir.path(), mode, "", script);
+        assert_eq!(plain(&out), ["saved nil nil nil 1"], "{mode}: {out:?}");
+        // Reported in debug builds only.
+        let reported = errors(&out);
+        if *mode == "dev" {
+            assert_eq!(
+                reported,
+                ["Std: StdDB: secret values were not saved"],
+                "{out:?}"
+            );
+        } else {
+            assert!(reported.is_empty(), "{mode}: {out:?}");
+        }
+    }
+}
+
+#[test]
+fn saved_variables_loaded_first() {
+    let dir = project(&[(
+        "src/main.wowlua",
+        r#"import * as saved from "wowlua:saved"
+
+-- `addon.load-saved-variables-first`: usable at top level.
+local db = saved.bind("StdDB", { version = 1, defaults = { scale = 1 } })
+print("top", db.scale, db.count)
+db.count = (db.count ?? 0) + 1
+"#,
+    )]);
+    let manifest = fs::read_to_string(dir.path().join("wowlua.json")).unwrap();
+    let manifest = manifest.replace(
+        "\"addon\": {",
+        "\"addon\": { \"load-saved-variables-first\": true,",
+    );
+    fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
+    let out = modes_in(
+        &dir,
+        "StdDB = { __version = 1, count = 4 }",
+        "Mock.loadAddon(\"Std\")\nprint(\"count\", StdDB.count)",
+    );
+    assert_eq!(out, ["top 1 4", "count 5"], "{out:?}");
+    let toc = fs::read_to_string(dir.path().join("dist/dev/Std/Std.toc")).unwrap();
+    assert!(toc.contains("## LoadSavedVariablesFirst: 1"), "{toc}");
+}
+
+#[test]
+fn saved_profiles_switch_per_character() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as saved from "wowlua:saved"
+import onLoad from "wowlua:lifecycle"
+
+local db = saved.bind("StdDB", { version = 1, defaults = { scale = 1, bars = { n = 1 } }, profiles = true })
+local profiles = saved.handle(db).profiles
+
+-- Profile operations need the data.
+Mock.check(not pcall(profiles.use, profiles, "X"), "use before load")
+Mock.check(not pcall(profiles.list, profiles), "list before load")
+
+@onLoad
+local function init()
+    local changes = profiles:onChange(function(name: string) print("changed to", name) end)
+    print("current", profiles:current(), db.scale)
+    db.scale = 2
+    db.bars.n = 4
+    profiles:use("Healer")
+    print("healer", db.scale, db.bars.n)
+    profiles:copy("Default")
+    print("copied", db.scale, db.bars.n)
+    -- A copy is not shared with its source.
+    db.bars.n = 5
+    print("source", StdDB.profiles.Default.bars.n)
+    -- Copying the active profile keeps it.
+    profiles:copy("Healer")
+    print("self copy", db.scale, db.bars.n)
+    print("list", table.concat(profiles:list(), ","))
+    Mock.check(not pcall(profiles.copy, profiles, "Missing"), "copy of a missing profile")
+    Mock.check(not pcall(profiles.delete, profiles, "Healer"), "delete of the active profile")
+    changes:cancel()
+    profiles:use("Default")
+    profiles:delete("Healer")
+    print("after delete", table.concat(profiles:list(), ","), profiles:current(), db.scale)
+    saved.handle(db).reset()
+    print("reset", db.scale, StdDB.__version)
+    profiles:use("Tank")
+end
+"#,
+        )],
         "",
-        "Mock.loadAddon(\"Std\")\nMock.fire(\"PLAYER_LOGOUT\")\nprint(\"char\", StdDBPerChar.profile, StdDB.profiles.Default.scale)",
+        "Mock.loadAddon(\"Std\")\nMock.fire(\"PLAYER_LOGOUT\")\nprint(\"char\", StdDBPerChar.profile, StdDB.profiles.Tank and next(StdDB.profiles.Tank), rawget(StdDB.profiles.Default, \"scale\"))",
     );
     assert_eq!(
         out,
         [
             "current Default 1",
             "changed to Healer",
-            "healer 1",
-            "copied 2",
+            "healer 1 1",
+            "copied 2 4",
+            "source 4",
+            "self copy 2 5",
             "list Default,Healer",
-            "char Healer 2",
+            "after delete Default Default 2",
+            "reset 1 1",
+            "char Tank nil nil",
         ],
         "{out:?}"
     );
 }
 
 #[test]
-fn slash_commands_and_the_router() {
-    let out = both(
+fn saved_profiles_are_restored_per_character() {
+    let out = modes(
         &[(
             "src/main.wowlua",
-            r#"import slash, router from "wowlua:slash"
+            r#"import * as saved from "wowlua:saved"
+import onLoad from "wowlua:lifecycle"
+
+local db = saved.bind("StdDB", { version = 1, defaults = { scale = 1 }, profiles = true })
+
+@onLoad
+local function init()
+    print("profile", saved.handle(db).profiles:current(), db.scale)
+end
+"#,
+        )],
+        r#"StdDB = { __version = 1, profiles = { Default = { scale = 2 }, Tank = { scale = 3 } } }
+StdDBPerChar = { profile = "Tank" }"#,
+        "Mock.loadAddon(\"Std\")",
+    );
+    assert_eq!(out, ["profile Tank 3"], "{out:?}");
+}
+
+// ------------------------------------------------------------------ slash --
+
+const ROUTER: &str = r#"import slash, router from "wowlua:slash"
 
 local commands = router({
     show = { run = function() print("show") end, help = "Show the window", aliases = { "open" } },
     scale = { args = { "number" }, run = function(v: number) print("scale", v) end, help = "Set the scale" },
     mode = { args = { { "tank", "heal" }, "boolean?" }, run = function(m: string, on: boolean?) print("mode", m, on) end },
-    say = { args = { "string", "rest" }, run = function(who: string, text: string) print("say", who, "[" .. text .. "]") end },
+    say = { args = { "string", "rest" }, flags = { "loud" }, run = function(who: string, text: string, flags: { loud: boolean }) print("say", who, "[" .. text .. "]", flags.loud) end },
     reset = { flags = { "all" }, run = function(flags: { all: boolean }) print("reset", flags.all) end },
+    move = { args = { "number", "number?" }, flags = { "smooth" }, run = function(x: number, y: number?, flags: { smooth: boolean }) print("move", x, y, flags.smooth) end },
+    note = { args = { "rest" }, run = function(text: string) print("note", "[" .. text .. "]") end },
+    boom = { run = function() error("command failed") end },
 })
 
 @slash("/std", "/stdlib")
-local function onCommand(msg: string) commands:dispatch(msg) end
+local function onCommand(msg: string) print("->", commands:dispatch(msg)) end
 
 @slash("/stdping")
-local function ping(msg: string) print("ping", msg) end
-"#,
-        )],
+local function ping(msg: string, editBox: any) print("ping", "[" .. msg .. "]", type(editBox)) end
+"#;
+
+#[test]
+fn slash_commands_and_the_router() {
+    let out = modes(
+        &[("src/main.wowlua", ROUTER)],
+        "",
         r#"Mock.slash("/std show")
 Mock.slash("/STDLIB OPEN")
 Mock.slash("/std scale 1.5")
+Mock.slash("/std scale -2")
 Mock.slash("/std scale big")
+Mock.slash("/std scale 1 2")
 Mock.slash("/std mode HEAL yes")
+Mock.slash("/std mode tank OFF")
+Mock.slash("/std mode tank 0")
 Mock.slash("/std mode tank")
-Mock.slash([[/std say "two words" hello there  friend]])
+Mock.slash("/std mode dps")
+Mock.slash("/std mode tank maybe")
+Mock.slash([[/std say "two words" hello there  friend  ]])
+Mock.slash([[/std say 'it\'s' "a \"quoted\" word"]])
+Mock.slash([[/std say --loud bob hello --loud]])
+Mock.slash("/std say bob")
+Mock.slash("/std say")
 Mock.slash("/std reset --all")
 Mock.slash("/std reset")
 Mock.slash("/std reset --nope")
+Mock.slash("/std reset extra")
+Mock.slash("/std move --smooth 1")
+Mock.slash("/std move 1 2 --smooth")
+Mock.slash("/std note   ")
+Mock.slash("/std boom")
+Mock.slash("/std nothing")
 Mock.slash("/stdping 42")
-Mock.slash("/std")
+Mock.slash("/stdping")
 print("keys", SLASH_WOWLUA_STD_11, SLASH_WOWLUA_STD_12, SLASH_WOWLUA_STD_21)
 "#,
     );
-    let out: Vec<String> = out
+    let out: Vec<String> = plain(&out)
         .iter()
         .map(|l| l.replace("|cff33ff99Std|r: ", ""))
         .collect();
-    assert_eq!(
-        out,
-        [
-            "show",
-            "show",
-            "scale 1.5",
-            "Usage: scale <number>",
-            "mode heal true",
-            "mode tank nil",
-            "say two words [hello there  friend]",
-            "reset true",
-            "reset false",
-            "Usage: reset [--all]",
-            "ping 42",
-            "mode <tank|heal> [boolean]",
-            "reset [--all]",
-            "say <string> <text...>",
-            "scale <number> - Set the scale",
-            "show - Show the window",
-            "keys /std /stdlib /stdping",
-        ],
-        "{out:?}"
-    );
+    let help = [
+        "boom",
+        "mode <tank|heal> [boolean]",
+        "move <number> [number] [--smooth]",
+        "note <text...>",
+        "reset [--all]",
+        "say <string> <text...> [--loud]",
+        "scale <number> - Set the scale",
+        "show - Show the window",
+    ];
+    let mut expected: Vec<&str> = vec![
+        "show",
+        "-> true",
+        "show",
+        "-> true",
+        "scale 1.5",
+        "-> true",
+        "scale -2",
+        "-> true",
+        "Usage: scale <number>",
+        "-> true",
+        "Usage: scale <number>",
+        "-> true",
+        // Choices match in any case and give the declared spelling.
+        "mode heal true",
+        "-> true",
+        "mode tank false",
+        "-> true",
+        "mode tank false",
+        "-> true",
+        "mode tank nil",
+        "-> true",
+        "Usage: mode <tank|heal> [boolean]",
+        "-> true",
+        "Usage: mode <tank|heal> [boolean]",
+        "-> true",
+        // The rest as typed, trimmed at the end.
+        "say two words [hello there  friend] false",
+        "-> true",
+        "say it's [\"a \\\"quoted\\\" word\"] false",
+        "-> true",
+        // Flags before the rest; in it, they are text.
+        "say bob [hello --loud] true",
+        "-> true",
+        "say bob [] false",
+        "-> true",
+        "Usage: say <string> <text...> [--loud]",
+        "-> true",
+        "reset true",
+        "-> true",
+        "reset false",
+        "-> true",
+        "Usage: reset [--all]",
+        "-> true",
+        "Usage: reset [--all]",
+        "-> true",
+        "move 1 nil true",
+        "-> true",
+        "move 1 2 true",
+        "-> true",
+        "note []",
+        "-> true",
+        // A failing command is reported; it was dispatched.
+        "-> true",
+    ];
+    // An unknown command lists the commands and is not dispatched.
+    expected.extend(help);
+    expected.extend([
+        "-> false",
+        "ping [42] table",
+        "ping [] table",
+        "keys /std /stdlib /stdping",
+    ]);
+    assert_eq!(out, expected, "{out:?}");
 }
 
 #[test]
-fn callback_registries_and_errors_api() {
-    let out = both(
+fn slash_router_help() {
+    let out = modes(
+        &[("src/main.wowlua", ROUTER)],
+        "",
+        "Mock.slash(\"/std\")\nMock.slash(\"/std HELP\")",
+    );
+    // Both list every command, sorted, and count as handled.
+    assert_eq!(out.len(), 18, "{out:?}");
+    assert_eq!(out[0], "|cff33ff99Std|r: boom", "{out:?}");
+    assert_eq!(out[8], "-> true", "{out:?}");
+    assert_eq!(out[0..9], out[9..18], "{out:?}");
+}
+
+// -------------------------------------------------------------- callbacks --
+
+#[test]
+fn callback_registries() {
+    let out = modes(
         &[(
             "src/main.wowlua",
             r#"import * as callbacks from "wowlua:callbacks"
-import * as errors from "wowlua:errors"
 
 local events = callbacks.registry({ compat = "CallbackHandler" })
 local owner = {}
@@ -660,43 +1519,96 @@ events:fire("Kill", 1)
 events:fire("Kill", 2)
 events:offAll(owner)
 events:fire("Kill", 3)
+events:fire("Nobody", 1)
 
--- a plain Lua consumer, CallbackHandler style
-local consumer = { OnKill = function(self: any, name: string, n: number) print("consumer", name, n) end }
+-- Changes during a fire apply to the next one.
+local late: any = nil
+local second: any = nil
+events:on("Tick", function()
+    print("tick 1")
+    late = late or events:on("Tick", function() print("tick late") end)
+    if second then events:off(second) end
+end)
+second = events:on("Tick", function() print("tick 2") end)
+events:fire("Tick")
+events:fire("Tick")
+
+-- Unsubscribing everything removes the name.
+local sub = events:on("Solo", function() end)
+sub:cancel()
+print("solo", events:has("Solo"), sub.active)
+
+-- A plain Lua consumer, CallbackHandler style.
+local consumer: any = {}
+function consumer.OnKill(self: any, name: string, n: number) print("method", self == consumer, name, n) end
+function consumer.OnKillArg(self: any, arg: any, name: string, n: number) print("method arg", arg, name, n) end
+function consumer.Kill(self: any, name: string, n: number) print("default method", name, n) end
 events.RegisterCallback(consumer, "Kill", "OnKill")
 events:fire("Kill", 4)
-events.UnregisterAllCallbacks(consumer)
+-- Registering the same owner and name again replaces the handler.
+events.RegisterCallback(consumer, "Kill", "OnKillArg", "x")
 events:fire("Kill", 5)
+events.RegisterCallback(consumer, "Kill")
+events:fire("Kill", 6)
+events.RegisterCallback(consumer, "Kill", function(name: string, n: number) print("function", name, n) end)
+events:fire("Kill", 7)
+events.RegisterCallback(consumer, "Kill", function(arg: any, name: string, n: number) print("function arg", arg, name, n) end, nil)
+events:fire("Kill", 8)
+events.RegisterCallback("SomeAddon", "Kill", function(name: string, n: number) print("string owner", n) end)
+events:fire("Kill", 9)
+events.UnregisterCallback(consumer, "Kill")
+events.UnregisterAllCallbacks("SomeAddon")
+events:fire("Kill", 10)
+print("kill", events:has("Kill"))
 
-errors.onError(function(msg: string) print("noticed", msg:match("wrapped failure") ~= nil) end)
-local safe = errors.wrap(function() error("wrapped failure") end)
-safe()
-local ok, a, b = errors.call(function(x: number) return x, x * 2 end, 21)
-print("call", ok, a, b)
-print("count", errors.count())
+-- Without compat, no CallbackHandler face.
+local plainRegistry = callbacks.registry()
+print("compat", plainRegistry.RegisterCallback == nil)
 "#,
         )],
         "",
+        "",
     );
-    let plain: Vec<&String> = out
-        .iter()
-        .filter(|l| !l.contains("ERROR") && !l.contains("error captured"))
-        .collect();
     assert_eq!(
-        plain,
+        plain(&out),
         [
             "has true false",
             "kill 1",
             "first kill 1",
             "kill 2",
-            "consumer Kill 4",
-            "noticed true",
-            "call true 21 42",
-            // The repeated handler failure is rate limited: reported once.
-            "count 2",
+            "tick 1",
+            "tick 2",
+            "tick 1",
+            "tick late",
+            "solo false false",
+            "method true Kill 4",
+            "method arg x Kill 5",
+            "default method Kill 6",
+            "function Kill 7",
+            "function arg nil Kill 8",
+            "function arg nil Kill 9",
+            "string owner 9",
+            // The failing handler without an owner is still there.
+            "kill true",
+            "compat true",
         ],
         "{out:?}"
     );
+    // The failing handler: the second failure is within the rate limit.
+    let reported = errors(&out);
+    assert_eq!(reported.len(), 1, "{out:?}");
+    assert!(reported[0].contains("handler failed"), "{out:?}");
+}
+
+// ---------------------------------------------------------- compile checks --
+
+/// Builds `source` as the addon's only module; returns the build's stderr.
+fn check(source: &str) -> String {
+    let dir = project(&[("src/main.wowlua", source)]);
+    let assert = wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert();
+    String::from_utf8_lossy(&assert.get_output().stderr).into_owned()
 }
 
 /// The core modules' compile-time checks (spec stdlib, "core").
@@ -707,9 +1619,30 @@ fn core_modules_are_checked_at_compile_time() {
             "import event from \"wowlua:events\"\n@event(\"PLAYER_LOGN\")\nlocal function f() end\n",
             "E8003",
         ),
+        // Through a namespace import and an alias, too.
+        (
+            "import * as events from \"wowlua:events\"\n@events.event(\"PLAYER_LOGN\")\nlocal function f() end\n",
+            "E8003",
+        ),
+        (
+            "import event as ev from \"wowlua:events\"\n@ev(\"PLAYER_LOGN\")\nlocal function f() end\n",
+            "E8003",
+        ),
+        (
+            "import * as events from \"wowlua:events\"\nevents.on(\"BAG_UPDAET\", function() end)\n",
+            "E8003",
+        ),
         (
             "import on from \"wowlua:events\"\non(\"BAG_UPDAET\", function() end)\n",
             "E8003",
+        ),
+        (
+            "import once from \"wowlua:events\"\nonce(\"BAG_UPDAET\", function() end)\n",
+            "E8003",
+        ),
+        (
+            "import onUnit from \"wowlua:events\"\nonUnit(\"UNIT_HEALTH\", { \"player\", \"target\", \"focus\" }, function() end)\n",
+            "E8100",
         ),
         (
             "import send from \"wowlua:events\"\nsend(\"PLAYER_LOGIN\")\n",
@@ -772,17 +1705,20 @@ fn core_modules_are_checked_at_compile_time() {
             "E8030",
         ),
         (
+            "import throttle from \"wowlua:timer\"\n@throttle(1)\nlocal function f(): string return \"\" end\n",
+            "E8030",
+        ),
+        (
+            "import nextFrame from \"wowlua:timer\"\n@nextFrame\nlocal function f(): boolean return true end\n",
+            "E8030",
+        ),
+        (
             "import outOfCombat from \"wowlua:combat\"\nclass A\n    @outOfCombat\n    function m(): boolean return true end\nend\n",
             "E8030",
         ),
     ];
     for (source, code) in cases {
-        let dir = project(&[("src/main.wowlua", source)]);
-        let assert = wowlua(dir.path())
-            .args(["build", "--message-format", "short"])
-            .assert();
-        let output = assert.get_output().clone();
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = check(source);
         let kind = if code.starts_with('W') {
             "warning"
         } else {
@@ -793,11 +1729,61 @@ fn core_modules_are_checked_at_compile_time() {
             "{code} expected for:\n{source}\n{stderr}"
         );
     }
-    // Correct uses pass.
-    let dir = project(&[(
-        "src/main.wowlua",
-        "import event, send, on from \"wowlua:events\"\nimport slash, router from \"wowlua:slash\"\ndeclare message STD_PING(n: number)\n@event(\"PLAYER_LOGIN\", \"STD_PING\")\nlocal function f(name: string, ...: any) end\nsend(\"STD_PING\", 1)\non(\"BAG_UPDATE\", function() end)\nlocal r = router({ go = { args = { \"number\", \"rest\" }, flags = { \"all\" }, run = function(a: number, b: string, flags: any) end } })\n@slash(\"/stdgo\")\nlocal function g(msg: string) r:dispatch(msg) end\n",
-    )]);
+}
+
+/// Correct uses of the core modules pass their checks.
+#[test]
+fn core_modules_accept_correct_uses() {
+    let dir = project(&[
+        (
+            "src/main.wowlua",
+            r#"import event, unitEvent, send, on, onUnit from "wowlua:events"
+import * as events from "wowlua:events"
+import slash, router from "wowlua:slash"
+import * as saved from "wowlua:saved"
+import throttle from "wowlua:timer"
+import outOfCombat from "wowlua:combat"
+import onLoad from "wowlua:lifecycle"
+
+@event("PLAYER_LOGIN", "STD_PING")
+local function f(name: string, ...: any) end
+
+@events.event("PLAYER_LOGOUT")
+local function g() end
+
+@unitEvent("UNIT_HEALTH", "player", "target")
+local function h(unit: string) end
+
+-- A message declared in another module.
+send("STD_PING", 1)
+on("BAG_UPDATE", function() end)
+onUnit("UNIT_POWER_UPDATE", { "player" }, function() end)
+
+class Bars
+    @event("PLAYER_LOGIN")
+    static function login() end
+
+    @outOfCombat
+    function layout() end
+
+    @throttle(1)
+    function refresh() end
+end
+
+-- Per-character data without profiles, and data with them.
+local char = saved.bind("StdCharDB", { version = 1, defaults = { n = 1 } })
+local db = saved.bind("StdDB", { version = 1, defaults = { n = 1 }, profiles = true })
+
+local r = router({ go = { args = { "number", "rest" }, flags = { "all" }, run = function(a: number, b: string, flags: any) end } })
+@slash("/stdgo")
+local function cmd(msg: string) r:dispatch(msg) end
+"#,
+        ),
+        (
+            "src/messages.wowlua",
+            "declare message STD_PING(n: number)\n",
+        ),
+    ]);
     let stderr = build(dir.path(), "dev");
     assert!(
         !stderr.contains("[E8") && !stderr.contains("[W8"),

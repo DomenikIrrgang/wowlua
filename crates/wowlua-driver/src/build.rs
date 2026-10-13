@@ -973,6 +973,11 @@ pub fn build(
                     .unwrap_or_default(),
                 log_history: manifest.manifest.stdlib.log.history_size,
                 profile_errors: profile.profile_errors,
+                saved_first: manifest
+                    .manifest
+                    .addon
+                    .as_ref()
+                    .is_some_and(|a| a.load_saved_variables_first),
                 dev_info: if profile.dev_console {
                     vec![
                         ("version".into(), version.to_string()),

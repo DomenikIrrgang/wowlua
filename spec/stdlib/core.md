@@ -219,7 +219,7 @@ end
 | Tokenizing | Whitespace-separated. `"two words"` and `'two words'` are single tokens. `\"` escapes a quote inside a quoted token. |
 | Command matching | The first token, **case-insensitive**, against command names and `aliases`. Argument values keep their case. |
 | Positional arguments | Converted per `ArgSpec`: `"number"` via `tonumber`; `"boolean"` accepts `true/false/on/off/yes/no/1/0` (case-insensitive); a choice list must match one entry case-insensitively and yields that entry's spelling; `"rest"` (last only) yields the remaining text unparsed. `?` marks an optional trailing argument. |
-| Flags | `--name` tokens anywhere after the command set `flags.name = true`. Unknown flags are a usage error. |
+| Flags | `--name` tokens anywhere after the command set `flags.name = true`, except inside a `"rest"` argument's text (which starts at the first token after the arguments before it, as typed). Unknown flags are a usage error. |
 | Calling `run` | Positional values in order, then the flags table **last** if `flags` is declared. The compiler checks `run`'s parameter types against `args` and `flags` (intrinsic check, E8112 for a mismatch or an invalid `ArgSpec`). |
 | Errors | A conversion or arity error prints `Usage: /<cmd> <command> <args>` for that command and returns `true`. |
 | Help | `help` and an empty message print one line per command, sorted by name: `/<cmd> <command> <args> - <help>`. Output goes through `print` from `wowlua:log`. An unknown command prints the help and `dispatch` returns `false`. |

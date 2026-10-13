@@ -106,6 +106,9 @@ pub struct RuntimeOptions {
     pub log_history: u32,
     /// `profile-errors`: profiled functions count their errors.
     pub profile_errors: bool,
+    /// `addon.load-saved-variables-first`: the SavedVariables exist before
+    /// the addon's files run (`wowlua:saved` binds them at once).
+    pub saved_first: bool,
     /// Dev builds: what the dev console shows about this build, as
     /// `(key, value)` strings, and the runtime version number.
     pub dev_info: Vec<(String, String)>,
@@ -143,6 +146,9 @@ pub fn runtime(options: &RuntimeOptions) -> String {
     placeholders.push_str(&format!("wl.debug = {}\n", options.debug));
     if options.profile_errors {
         placeholders.push_str("wl.profErrors = true\n");
+    }
+    if options.saved_first {
+        placeholders.push_str("wl.savedFirst = true\n");
     }
     if !options.dev_info.is_empty() {
         let fields: Vec<String> = options

@@ -94,16 +94,26 @@ export function registry(opts: { compat: string? }?): any
     end
 
     if opts and opts.compat == "CallbackHandler" then
-        -- `Registry.RegisterCallback(owner, name, method, arg?)`: a method
-        -- name is called on the owner with the event name first.
+        -- `Registry.RegisterCallback(owner, name, method?, arg?)`, as in
+        -- CallbackHandler: a method name is called on the owner, a function
+        -- directly; either gets `arg` first when one is passed (even nil),
+        -- then the event name and the payload.
         local byOwner = setmetatable({}, { __mode = "k" })
-        function r.RegisterCallback(owner: any, name: string, method: any, arg: any?)
+        function r.RegisterCallback(owner: any, name: string, method: any, ...: any)
             method = method or name
+            local hasArg = select("#", ...) > 0
+            -- Not named `arg`: Lua 5.1 gives every vararg function an
+            -- implicit local of that name, which would shadow it below.
+            local extra = (...)
             local fn: (...any) -> ()
             if type(method) == "string" then
-                fn = function(...) owner[method](owner, name, ...) end
-            elseif arg ~= nil then
-                fn = function(...) method(arg, name, ...) end
+                if hasArg then
+                    fn = function(...) owner[method](owner, extra, name, ...) end
+                else
+                    fn = function(...) owner[method](owner, name, ...) end
+                end
+            elseif hasArg then
+                fn = function(...) method(extra, name, ...) end
             else
                 fn = function(...) method(name, ...) end
             end
