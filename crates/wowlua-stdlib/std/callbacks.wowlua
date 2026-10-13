@@ -1,0 +1,139 @@
+-- wowlua:callbacks (spec stdlib "callbacks"): publish/subscribe on objects,
+-- like CallbackHandler. Handlers run through the error policy, `fire`
+-- iterates a snapshot, and owners are held weakly. With
+-- `compat = "CallbackHandler"` a registry also offers RegisterCallback,
+-- UnregisterCallback and UnregisterAllCallbacks for plain Lua consumers.
+import callIn from "wowlua:errors"
+import Subscription from "wowlua:events"
+
+type Record = { fn: (...any) -> (), sub: any }
+
+--- A callback registry.
+export function registry(opts: { compat: string? }?): any
+    local handlers: { [string]: Record[] } = {}
+    -- Owners by record, weakly: a registry never keeps an owner alive.
+    local owners = setmetatable({}, { __mode = "v" })
+    local r: any = {}
+
+    local function remove(name: string, record: Record)
+        local list = handlers[name]
+        if not list then
+            return
+        end
+        for i, rec in ipairs(list) do
+            if rec == record then
+                table.remove(list, i)
+                break
+            end
+        end
+        if #list == 0 then
+            handlers[name] = nil
+        end
+    end
+
+    local function subscribe(name: string, fn: (...any) -> (), owner: any): Subscription
+        local list = handlers[name]
+        if not list then
+            list = {}
+            handlers[name] = list
+        end
+        local sub: any = { active = true }
+        local record: Record = { fn = fn, sub = sub }
+        sub.cancel = function()
+            sub.active = false
+            remove(name, record)
+        end
+        owners[record] = owner
+        list[#list + 1] = record
+        return sub
+    end
+
+    function r.on(_, name: string, fn: (...any) -> (), owner: any?): Subscription
+        return subscribe(name, fn, owner)
+    end
+
+    function r.once(_, name: string, fn: (...any) -> (), owner: any?): Subscription
+        local sub: Subscription
+        sub = subscribe(name, function(...)
+            sub:cancel()
+            fn(...)
+        end, owner)
+        return sub
+    end
+
+    function r.off(_, sub: Subscription)
+        sub:cancel()
+    end
+
+    function r.offAll(_, owner: any)
+        local subs = {}
+        for _, list in pairs(handlers) do
+            for _, rec in ipairs(list) do
+                if owners[rec] == owner then
+                    subs[#subs + 1] = rec.sub
+                end
+            end
+        end
+        for _, sub in ipairs(subs) do
+            sub:cancel()
+        end
+    end
+
+    function r.fire(_, name: string, ...: any)
+        local list = handlers[name]
+        if not list then
+            return
+        end
+        for _, rec in ipairs({ unpack(list) }) do
+            callIn({ component = "callbacks: " .. name }, rec.fn, ...)
+        end
+    end
+
+    function r.has(_, name: string): boolean
+        return handlers[name] ~= nil
+    end
+
+    if opts and opts.compat == "CallbackHandler" then
+        -- `Registry.RegisterCallback(owner, name, method, arg?)`: a method
+        -- name is called on the owner with the event name first.
+        local byOwner = setmetatable({}, { __mode = "k" })
+        function r.RegisterCallback(owner: any, name: string, method: any, arg: any?)
+            method = method or name
+            local fn: (...any) -> ()
+            if type(method) == "string" then
+                fn = function(...) owner[method](owner, name, ...) end
+            elseif arg ~= nil then
+                fn = function(...) method(arg, name, ...) end
+            else
+                fn = function(...) method(name, ...) end
+            end
+            local subs = byOwner[owner]
+            if not subs then
+                subs = {}
+                byOwner[owner] = subs
+            end
+            if subs[name] then
+                subs[name]:cancel()
+            end
+            subs[name] = subscribe(name, fn, owner)
+        end
+        function r.UnregisterCallback(owner: any, name: string)
+            local subs = byOwner[owner]
+            if subs and subs[name] then
+                subs[name]:cancel()
+                subs[name] = nil
+            end
+        end
+        function r.UnregisterAllCallbacks(owner: any)
+            local subs = byOwner[owner]
+            if subs then
+                for _, sub in pairs(subs) do
+                    sub:cancel()
+                end
+                byOwner[owner] = nil
+            end
+        end
+    end
+
+    return r
+end

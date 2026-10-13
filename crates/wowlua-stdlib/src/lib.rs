@@ -42,10 +42,32 @@ pub struct Module {
 /// The modules shipped with this compiler version: name, source and
 /// `@intrinsic` declarations.
 const MODULES: &[(&str, &str, Option<&str>)] = &[
+    ("callbacks", include_str!("../std/callbacks.wowlua"), None),
+    (
+        "combat",
+        include_str!("../std/combat.wowlua"),
+        Some(include_str!("../std/combat.d.wowlua")),
+    ),
     (
         "debug",
         include_str!("../std/debug.wowlua"),
         Some(include_str!("../std/debug.d.wowlua")),
+    ),
+    ("errors", include_str!("../std/errors.wowlua"), None),
+    (
+        "events",
+        include_str!("../std/events.wowlua"),
+        Some(include_str!("../std/events.d.wowlua")),
+    ),
+    (
+        "hooks",
+        include_str!("../std/hooks.wowlua"),
+        Some(include_str!("../std/hooks.d.wowlua")),
+    ),
+    (
+        "lifecycle",
+        include_str!("../std/lifecycle.wowlua"),
+        Some(include_str!("../std/lifecycle.d.wowlua")),
     ),
     (
         "log",
@@ -56,6 +78,17 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         "reflect",
         include_str!("../std/reflect.wowlua"),
         Some(include_str!("../std/reflect.d.wowlua")),
+    ),
+    ("saved", include_str!("../std/saved.wowlua"), None),
+    (
+        "slash",
+        include_str!("../std/slash.wowlua"),
+        Some(include_str!("../std/slash.d.wowlua")),
+    ),
+    (
+        "timer",
+        include_str!("../std/timer.wowlua"),
+        Some(include_str!("../std/timer.d.wowlua")),
     ),
 ];
 

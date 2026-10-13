@@ -1,0 +1,121 @@
+-- wowlua:timer (spec stdlib "timer"): C_Timer's timers, plus the wrapping
+-- decorators `@throttle`, `@debounce` and `@nextFrame`. Decorated methods
+-- keep their state per instance (weak keys on `self`).
+import callIn from "wowlua:errors"
+
+--- A one-shot timer; the handle has `Cancel()` and `IsCancelled()`.
+export function after(sec: number, fn: () -> ()): any
+    return C_Timer.NewTimer(sec, function()
+        callIn({ component = "timer: after" }, fn)
+    end)
+end
+
+--- A repeating timer; `fn` receives the ticker.
+export function every(sec: number, fn: (ticker: any) -> (), iterations: number?): any
+    return C_Timer.NewTicker(sec, function(ticker: any)
+        callIn({ component = "timer: every" }, fn, ticker)
+    end, iterations)
+end
+
+-- Per-instance state of a decorated method, or one state for a function.
+local function states(ctx: any): (any) -> any
+    if ctx and ctx.kind == "method" and not ctx.static then
+        local byInstance = setmetatable({}, { __mode = "k" })
+        return function(self: any): any
+            local s = byInstance[self]
+            if not s then
+                s = {}
+                byInstance[self] = s
+            end
+            return s
+        end
+    end
+    local single = {}
+    return function(): any return single end
+end
+
+local function now(): number
+    return GetTime and GetTime() or 0
+end
+
+local function pack(...: any): any
+    return { n = select("#", ...), ... }
+end
+
+--- Runs `fn` on the next frame.
+local function defer(fn: () -> ())
+    C_Timer.After(0, function()
+        callIn({ component = "timer: nextFrame" }, fn)
+    end)
+end
+
+--- `nextFrame(fn)` runs `fn` on the next frame; as `@nextFrame`, calls in
+--- one frame coalesce into one, with the last call's arguments.
+export function nextFrame(fn: any, ctx: any?): any
+    if ctx == nil then
+        defer(fn)
+        return nil
+    end
+    local state = states(ctx)
+    return function(...)
+        local s = state((...))
+        s.args = pack(...)
+        if s.pending then
+            return
+        end
+        s.pending = true
+        defer(function()
+            s.pending = false
+            local args = s.args
+            fn(unpack(args, 1, args.n))
+        end)
+    end
+end
+
+--- `@throttle(sec)`: the first call runs at once; later calls within `sec`
+--- become one trailing call with the latest arguments.
+export function throttle(sec: number)
+    return function(fn: any, ctx: any): any
+        local state = states(ctx)
+        return function(...)
+            local s = state((...))
+            local t = now()
+            if not s.scheduled and (s.last == nil or t - s.last >= sec) then
+                s.last = t
+                fn(...)
+                return
+            end
+            s.args = pack(...)
+            if s.scheduled then
+                return
+            end
+            s.scheduled = true
+            C_Timer.After(math.max(0, s.last + sec - t), function()
+                s.scheduled = false
+                s.last = now()
+                local args = s.args
+                callIn({ component = "timer: @throttle" }, fn, unpack(args, 1, args.n))
+            end)
+        end
+    end
+end
+
+--- `@debounce(sec)`: runs `sec` seconds after the last call, with its
+--- arguments.
+export function debounce(sec: number)
+    return function(fn: any, ctx: any): any
+        local state = states(ctx)
+        return function(...)
+            local s = state((...))
+            s.args = pack(...)
+            if s.timer then
+                s.timer:Cancel()
+            end
+            s.timer = C_Timer.NewTimer(sec, function()
+                s.timer = nil
+                local args = s.args
+                callIn({ component = "timer: @debounce" }, fn, unpack(args, 1, args.n))
+            end)
+        end
+    end
+end

@@ -38,6 +38,19 @@ pub(crate) fn intrinsic(id: &str) -> Option<Intrinsic> {
         // Infrastructure checks of the standard library itself.
         "internal.wrap" => Some(Intrinsic::Wrapping),
         "internal.register" => Some(Intrinsic::Registering),
+        // wowlua:events
+        "events.event" | "events.unitEvent" => Some(Intrinsic::Registering),
+        // wowlua:timer, wowlua:combat
+        "timer.throttle" | "timer.debounce" | "timer.nextFrame" | "combat.outOfCombat" => {
+            Some(Intrinsic::Wrapping)
+        }
+        // wowlua:hooks, wowlua:slash
+        "hooks.hook" | "hooks.hookScript" | "slash.slash" => Some(Intrinsic::Registering),
+        // wowlua:lifecycle
+        "lifecycle.onLoad"
+        | "lifecycle.onLogin"
+        | "lifecycle.onEnterWorld"
+        | "lifecycle.onLogout" => Some(Intrinsic::Registering),
         _ => None,
     }
 }

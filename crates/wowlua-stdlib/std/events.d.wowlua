@@ -1,0 +1,6 @@
+-- Compiler behavior of `wowlua:events` (spec stdlib "events"): `@event` and
+-- `@unitEvent` register the final function value.
+@intrinsic("events.event")
+declare function event(...: string): any
+@intrinsic("events.unitEvent")
+declare function unitEvent(name: string, ...: string): any

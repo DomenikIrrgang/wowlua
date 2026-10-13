@@ -1,0 +1,4 @@
+-- Compiler behavior of `wowlua:slash` (spec stdlib "slash"): `@slash`
+-- registers the final function value.
+@intrinsic("slash.slash")
+declare function slash(...: string): any

@@ -1,0 +1,86 @@
+-- wowlua:hooks (spec stdlib "hooks"): post-hooks through hooksecurefunc and
+-- HookScript, never pre-hooks or replacements (those taint secure code).
+-- Targets may be strings naming globals; `opts.addon` installs the hook once
+-- that load-on-demand addon has loaded.
+import onAddonLoaded from "wowlua:lifecycle"
+import callIn from "wowlua:errors"
+
+type Options = { addon: string? }
+
+local function resolve(target: any): any
+    if type(target) == "string" then
+        return _G[target]
+    end
+    return target
+end
+
+local function install(addon: string?, fn: () -> ())
+    if addon then
+        onAddonLoaded(addon, fn)
+    else
+        fn()
+    end
+end
+
+local function isolated(fn: any, what: string): any
+    return function(...)
+        callIn({ component = "hooks: " .. what }, fn, ...)
+    end
+end
+
+local function hookNow(target: any, name: any, fn: any, opts: Options?)
+    if name == nil then
+        -- A global function: `hook(name, fn)`.
+        install(nil, function() hooksecurefunc(target, isolated(fn, target)) end)
+        return
+    end
+    install(opts and opts.addon, function()
+        local t = resolve(target)
+        if t == nil then
+            error("hook: `" .. tostring(target) .. "` does not exist", 0)
+        end
+        hooksecurefunc(t, name, isolated(fn, tostring(name)))
+    end)
+end
+
+local function hookScriptNow(frame: any, script: string, fn: any, opts: Options?)
+    install(opts and opts.addon, function()
+        local f = resolve(frame)
+        if f == nil then
+            error("hookScript: `" .. tostring(frame) .. "` does not exist", 0)
+        end
+        f:HookScript(script, isolated(fn, script))
+    end)
+end
+
+--- A post-hook: `hook(name, fn)` or `hook(target, name, fn, opts?)`. As a
+--- decorator: `@hook(name)` or `@hook(target, name, opts?)`.
+export function hook(a: any, b: any?, c: any?, d: any?): any
+    if type(b) == "function" then
+        hookNow(a, nil, b, nil)
+        return nil
+    end
+    if type(c) == "function" then
+        hookNow(a, b, c, d)
+        return nil
+    end
+    return function(fn: any, ctx: any)
+        if b == nil then
+            hookNow(a, nil, fn, nil)
+        else
+            hookNow(a, b, fn, c)
+        end
+    end
+end
+
+--- `frame:HookScript(script, fn)`: `hookScript(frame, script, fn, opts?)`,
+--- or as a decorator `@hookScript(frame, script, opts?)`.
+export function hookScript(frame: any, script: string, c: any?, d: any?): any
+    if type(c) == "function" then
+        hookScriptNow(frame, script, c, d)
+        return nil
+    end
+    return function(fn: any, ctx: any)
+        hookScriptNow(frame, script, fn, c)
+    end
+end

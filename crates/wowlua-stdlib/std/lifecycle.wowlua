@@ -1,0 +1,110 @@
+-- wowlua:lifecycle (spec stdlib "lifecycle"): the addon's startup and
+-- shutdown hooks, in a fixed phase order around the standard library's own
+-- work (saved variables before `@onLoad`, default stripping after
+-- `@onLogout`).
+import on from "wowlua:events"
+import callIn from "wowlua:errors"
+
+local addonName, ns = ...
+local wl = ns.__wowlua
+
+-- The standard library's own work per phase (`wowlua:saved` and others add
+-- to these): before and after the addon's hooks.
+local tasks = wl.lifecycleTasks or { beforeLoad = {}, afterLoad = {}, afterLogin = {}, afterLogout = {} }
+wl.lifecycleTasks = tasks
+
+local loadHooks: { () -> () } = {}
+local loginHooks: { () -> () } = {}
+local worldHooks: { (boolean, boolean) -> () } = {}
+local logoutHooks: { () -> () } = {}
+local loaded = false
+local loggedIn = false
+local loginDone = false
+
+local function runAll(list: { any }, component: string, ...: any)
+    for _, fn in ipairs(list) do
+        callIn({ component = component }, fn, ...)
+    end
+end
+
+local function login()
+    if loginDone then
+        return
+    end
+    loginDone = true
+    runAll(loginHooks, "lifecycle: @onLogin")
+    runAll(tasks.afterLogin, "lifecycle: login")
+end
+
+on("ADDON_LOADED", function(name: string)
+    if name ~= addonName or loaded then
+        return
+    end
+    loaded = true
+    runAll(tasks.beforeLoad, "lifecycle: load")
+    runAll(loadHooks, "lifecycle: @onLoad")
+    runAll(tasks.afterLoad, "lifecycle: load")
+    -- A load-on-demand addon loads after login: its login phase follows.
+    if loggedIn or (IsLoggedIn and IsLoggedIn()) then
+        loggedIn = true
+        login()
+    end
+end)
+
+on("PLAYER_LOGIN", function()
+    loggedIn = true
+    if loaded then
+        login()
+    end
+end)
+
+on("PLAYER_ENTERING_WORLD", function(isInitialLogin: boolean, isReloadingUi: boolean)
+    runAll(worldHooks, "lifecycle: @onEnterWorld", isInitialLogin, isReloadingUi)
+end)
+
+on("PLAYER_LOGOUT", function()
+    runAll(logoutHooks, "lifecycle: @onLogout")
+    runAll(tasks.afterLogout, "lifecycle: logout")
+end)
+
+local function hookOf(list: { any }, what: string)
+    return function(fn: any, ctx: any)
+        if ctx and ctx.kind == "method" and not ctx.static then
+            error("@" .. what .. " on the instance method `" .. tostring(ctx.name) .. "`", 2)
+        end
+        list[#list + 1] = fn
+    end
+end
+
+--- `@onLoad`: this addon's SavedVariables are loaded.
+export local onLoad = hookOf(loadHooks, "onLoad")
+--- `@onLogin`: the player is in the world (right after `@onLoad` for a
+--- load-on-demand addon loaded later).
+export local onLogin = hookOf(loginHooks, "onLogin")
+--- `@onEnterWorld`: every `PLAYER_ENTERING_WORLD`.
+export local onEnterWorld = hookOf(worldHooks, "onEnterWorld")
+--- `@onLogout`: before `wowlua:saved` strips its defaults.
+export local onLogout = hookOf(logoutHooks, "onLogout")
+
+--- Runs `fn` once AddOn `name` has loaded, or right away if it has.
+export function onAddonLoaded(name: string, fn: () -> ())
+    if C_AddOns.IsAddOnLoaded(name) then
+        callIn({ component = "lifecycle: onAddonLoaded " .. name }, fn)
+        return
+    end
+    local sub: any
+    sub = on("ADDON_LOADED", function(loadedName: string)
+        if loadedName == name then
+            sub:cancel()
+            fn()
+        end
+    end)
+end
+
+export function isLoaded(): boolean
+    return loaded
+end
+
+export function isLoggedIn(): boolean
+    return loggedIn
+end

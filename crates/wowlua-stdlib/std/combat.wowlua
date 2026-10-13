@@ -1,0 +1,90 @@
+-- wowlua:combat (spec stdlib "combat"): work that must wait for the end of
+-- combat lockdown. Queued calls run in FIFO order on PLAYER_REGEN_ENABLED;
+-- repeated calls to one `@outOfCombat` function (per receiver for methods)
+-- keep their first place in the queue and take the latest arguments.
+import on, Subscription from "wowlua:events"
+import callIn from "wowlua:errors"
+
+type Entry = { fn: any, args: any, key: any, done: boolean }
+
+local queue: Entry[] = {}
+-- Queued `@outOfCombat` calls: function → receiver (or the function) → entry.
+local pending: { [any]: any } = {}
+
+local function pack(...: any): any
+    return { n = select("#", ...), ... }
+end
+
+local function enqueue(fn: any, key: any, args: any)
+    if key ~= nil then
+        local byKey = pending[fn]
+        if not byKey then
+            byKey = setmetatable({}, { __mode = "k" })
+            pending[fn] = byKey
+        end
+        local entry = byKey[key]
+        if entry and not entry.done then
+            entry.args = args
+            return
+        end
+        entry = { fn = fn, args = args, key = key, done = false }
+        byKey[key] = entry
+        queue[#queue + 1] = entry
+        return
+    end
+    queue[#queue + 1] = { fn = fn, args = args, key = nil, done = false }
+end
+
+local function flush()
+    while #queue > 0 do
+        -- Combat started again: the rest waits for the next flush.
+        if InCombatLockdown() then
+            return
+        end
+        local entry = table.remove(queue, 1)
+        entry.done = true
+        if entry.key ~= nil and pending[entry.fn] then
+            pending[entry.fn][entry.key] = nil
+        end
+        callIn({ component = "combat: queued call" }, entry.fn, unpack(entry.args, 1, entry.args.n))
+    end
+end
+
+on("PLAYER_REGEN_ENABLED", flush)
+
+export function inCombat(): boolean
+    return InCombatLockdown() and true or false
+end
+
+--- Runs `fn` now out of combat, else once combat ends.
+export function defer(fn: () -> ())
+    if not InCombatLockdown() then
+        fn()
+        return
+    end
+    enqueue(fn, nil, pack())
+end
+
+--- `@outOfCombat`: the call runs now out of combat, else queued (coalesced).
+export function outOfCombat(fn: any, ctx: any): any
+    local method = ctx and ctx.kind == "method" and not ctx.static
+    return function(...)
+        if not InCombatLockdown() then
+            return fn(...)
+        end
+        enqueue(fn, method and (...) or fn, pack(...))
+    end
+end
+
+--- Calls `fn(true)` when combat starts and `fn(false)` when it ends.
+export function onCombatChange(fn: (entering: boolean) -> ()): Subscription
+    local enter = on("PLAYER_REGEN_DISABLED", function() fn(true) end)
+    local leave = on("PLAYER_REGEN_ENABLED", function() fn(false) end)
+    local sub: any = { active = true }
+    sub.cancel = function()
+        sub.active = false
+        enter:cancel()
+        leave:cancel()
+    end
+    return sub
+end

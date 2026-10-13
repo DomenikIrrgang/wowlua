@@ -1,0 +1,119 @@
+-- wowlua:errors (spec stdlib "errors"): the standard library's error policy.
+-- Every function the standard library calls for user code runs isolated: an
+-- error goes to `geterrorhandler()` (so BugSack and the error frame see it,
+-- with the stack of the error), prefixed with the addon's name, at most once
+-- per `rateLimit` seconds per message, and the caller carries on.
+local addonName, ns = ...
+local wl = ns.__wowlua
+
+local rateLimit = 10
+local reported = 0
+local recent: { [string]: { time: number, more: number } } = {}
+local listeners: { { fn: (string) -> (), active: boolean } } = {}
+local notifying = false
+
+local function now(): number
+    return GetTime and GetTime() or 0
+end
+
+local function deliver(message: string)
+    local handler = geterrorhandler and geterrorhandler()
+    if handler then
+        handler(message)
+    else
+        print(message)
+    end
+end
+
+local function text(err: any): string
+    if issecretvalue and issecretvalue(err) then
+        return "<secret>"
+    end
+    return tostring(err)
+end
+
+--- Reports an error through the policy.
+export function report(err: any, context: { [string]: any }?)
+    local message = text(err)
+    if message:sub(1, #addonName + 2) ~= addonName .. ": " then
+        message = addonName .. ": " .. message
+    end
+    if wl.debug and context and context.component then
+        message = message .. " [" .. tostring(context.component) .. "]"
+    end
+    local seen = recent[message]
+    local t = now()
+    if seen and t - seen.time < rateLimit then
+        seen.more += 1
+        return
+    end
+    local more = seen and seen.more or 0
+    recent[message] = { time = t, more = 0 }
+    reported += 1
+    deliver(more > 0 and message .. " (" .. more .. " more)" or message)
+    -- Listeners' own errors go straight to the handler, never back here.
+    if notifying then
+        return
+    end
+    notifying = true
+    for _, l in ipairs(listeners) do
+        if l.active then
+            local ok, e = pcall(l.fn, message)
+            if not ok then
+                deliver(text(e))
+            end
+        end
+    end
+    notifying = false
+end
+
+--- Calls `fn` isolated: on error, reports it and returns `false`.
+export function call(fn: (...any) -> ...any, ...: any): (boolean, ...any)
+    local n = select("#", ...)
+    local args = { ... }
+    return xpcall(function() return fn(unpack(args, 1, n)) end, function(e)
+        report(e)
+        return e
+    end)
+end
+
+--- Calls `fn` isolated, reporting with `context` (the stdlib's handlers).
+export function callIn(context: { [string]: any }, fn: (...any) -> ...any, ...: any): (boolean, ...any)
+    local n = select("#", ...)
+    local args = { ... }
+    return xpcall(function() return fn(unpack(args, 1, n)) end, function(e)
+        report(e, context)
+        return e
+    end)
+end
+
+--- An isolated version of `fn` (its results are dropped).
+export function wrap(fn: (...any) -> ...any): (...any) -> ()
+    return function(...)
+        call(fn, ...)
+    end
+end
+
+--- Calls `fn` with every error this addon reports.
+export function onError(fn: (msg: string) -> ()): { active: boolean, cancel: (any) -> () }
+    local entry = { fn = fn, active = true }
+    listeners[#listeners + 1] = entry
+    return {
+        active = true,
+        cancel = function(self)
+            self.active = false
+            entry.active = false
+        end,
+    }
+end
+
+export function configure(opts: { rateLimit: number? })
+    if opts.rateLimit then
+        rateLimit = opts.rateLimit
+    end
+end
+
+--- Errors reported by this addon since it loaded.
+export function count(): number
+    return reported
+end

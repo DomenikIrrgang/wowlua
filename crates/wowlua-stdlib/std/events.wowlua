@@ -1,0 +1,206 @@
+-- wowlua:events (spec stdlib "events"): WoW events and addon-internal
+-- messages. WoW events are registered on a shared hidden frame while
+-- handlers exist; unit events get frames of their own, so their unit filters
+-- never clear each other. Messages are dispatched in Lua only.
+import callIn from "wowlua:errors"
+
+export interface Subscription
+    active: boolean
+    function cancel()
+end
+
+type Handler = {
+    fn: (...any) -> (),
+    owner: any,
+    sub: Subscription,
+}
+
+-- Handlers by event or message name, in registration order.
+local handlers: { [string]: Handler[] } = {}
+-- Unit-event registrations: one frame per event and unit set.
+local unitFrames: { [string]: { frame: any, handlers: Handler[] } } = {}
+local driver = CreateFrame("Frame")
+local gameEvents: { [string]: boolean } = {}
+
+-- Whether `name` is an event of this client (not a message).
+local function isGameEvent(name: string): boolean
+    local known = gameEvents[name]
+    if known ~= nil then
+        return known
+    end
+    local valid: boolean
+    if C_EventUtils and C_EventUtils.IsEventValid then
+        valid = C_EventUtils.IsEventValid(name) and true or false
+    else
+        valid = pcall(driver.RegisterEvent, driver, name)
+        if valid and not handlers[name] then
+            driver:UnregisterEvent(name)
+        end
+    end
+    gameEvents[name] = valid
+    return valid
+end
+
+local function run(list: Handler[], context: string, ...: any)
+    -- A snapshot: changes during the dispatch apply to the next one.
+    local snapshot = { unpack(list) }
+    for _, h in ipairs(snapshot) do
+        callIn({ component = context }, h.fn, ...)
+    end
+end
+
+local function dispatch(name: string, ...: any)
+    local list = handlers[name]
+    if list then
+        run(list, "events: " .. name .. " handler", ...)
+    end
+end
+
+driver:SetScript("OnEvent", function(_, name: string, ...: any)
+    dispatch(name, ...)
+end)
+
+local function remove(list: Handler[], sub: Subscription): boolean
+    for i, h in ipairs(list) do
+        if h.sub == sub then
+            table.remove(list, i)
+            return true
+        end
+    end
+    return false
+end
+
+local function cancel(name: string, sub: Subscription)
+    sub.active = false
+    local list = handlers[name]
+    if list and remove(list, sub) and #list == 0 then
+        handlers[name] = nil
+        if isGameEvent(name) then
+            driver:UnregisterEvent(name)
+        end
+    end
+end
+
+local function subscribe(name: string, fn: (...any) -> (), owner: any): Subscription
+    local sub: any = { active = true }
+    sub.cancel = function() cancel(name, sub) end
+    local list = handlers[name]
+    if not list then
+        list = {}
+        handlers[name] = list
+        if isGameEvent(name) then
+            driver:RegisterEvent(name)
+        end
+    end
+    list[#list + 1] = { fn = fn, owner = owner, sub = sub }
+    return sub
+end
+
+--- Calls `handler` with every `event` (or message) from now on.
+export function on(event: string, handler: (...any) -> (), owner: any?): Subscription
+    return subscribe(event, handler, owner)
+end
+
+--- Calls `handler` with the next `event` only.
+export function once(event: string, handler: (...any) -> (), owner: any?): Subscription
+    local sub: Subscription
+    sub = subscribe(event, function(...)
+        sub:cancel()
+        handler(...)
+    end, owner)
+    return sub
+end
+
+--- `RegisterUnitEvent` for one or two units, on a frame of its own.
+export function onUnit(event: string, units: string[], handler: (...any) -> (), owner: any?): Subscription
+    if #units < 1 or #units > 2 then
+        error("onUnit: one or two units (WoW's limit), not " .. #units, 2)
+    end
+    local key = event .. "\0" .. table.concat(units, "\0")
+    local entry = unitFrames[key]
+    if not entry then
+        local frame = CreateFrame("Frame")
+        entry = { frame = frame, handlers = {} }
+        unitFrames[key] = entry
+        frame:SetScript("OnEvent", function(_, name: string, ...: any)
+            run(entry.handlers, "events: " .. name .. " handler", ...)
+        end)
+    end
+    if #entry.handlers == 0 then
+        entry.frame:RegisterUnitEvent(event, units[1], units[2])
+    end
+    local sub: any = { active = true }
+    sub.cancel = function()
+        sub.active = false
+        if remove(entry.handlers, sub) and #entry.handlers == 0 then
+            entry.frame:UnregisterEvent(event)
+        end
+    end
+    entry.handlers[#entry.handlers + 1] = { fn = handler, owner = owner, sub = sub }
+    return sub
+end
+
+export function off(sub: Subscription)
+    sub:cancel()
+end
+
+--- Cancels every subscription registered with `owner`.
+export function offAll(owner: any)
+    local subs: Subscription[] = {}
+    for _, list in pairs(handlers) do
+        for _, h in ipairs(list) do
+            if h.owner == owner then
+                subs[#subs + 1] = h.sub
+            end
+        end
+    end
+    for _, entry in pairs(unitFrames) do
+        for _, h in ipairs(entry.handlers) do
+            if h.owner == owner then
+                subs[#subs + 1] = h.sub
+            end
+        end
+    end
+    for _, sub in ipairs(subs) do
+        sub:cancel()
+    end
+end
+
+--- Dispatches a message to this addon's handlers, synchronously.
+export function send(name: string, ...: any)
+    if isGameEvent(name) then
+        error("send: `" .. name .. "` is a WoW event, not a message", 2)
+    end
+    dispatch(name, ...)
+end
+
+local function decorated(ctx: any, what: string)
+    if ctx and ctx.kind == "method" and not ctx.static then
+        error("@" .. what .. " on the instance method `" .. tostring(ctx.name) .. "`: use on() in the constructor", 3)
+    end
+end
+
+--- `@event(name, ...)`: one name, the handler gets the payload; several,
+--- the handler gets the name first.
+export function event(...: string)
+    local names = { ... }
+    return function(fn: (...any) -> (), ctx: any)
+        decorated(ctx, "event")
+        if #names == 1 then
+            subscribe(names[1], fn, nil)
+        else
+            for _, name in ipairs(names) do
+                subscribe(name, function(...) fn(name, ...) end, nil)
+            end
+        end
+    end
+end
+
+--- `@unitEvent(name, unit, unit?)`.
+export function unitEvent(name: string, ...: string)
+    local units = { ... }
+    return function(fn: (...any) -> (), ctx: any)
+        decorated(ctx, "unitEvent")
+        onUnit(name, units, fn, nil)
+    end
+end

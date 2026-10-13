@@ -767,7 +767,7 @@ fn module_errors() {
             "import m from \"/main\"\nexport local a = m\n",
             "E1014",
         ),
-        ("import _ from \"wowlua:events\"\n", "", "E1015"),
+        ("import _ from \"wowlua:settings\"\n", "", "E1015"),
         (
             "print(f())\nexport function f() return 1 end\n",
             "",

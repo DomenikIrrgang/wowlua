@@ -1,0 +1,315 @@
+-- wowlua:saved (spec stdlib "saved"): typed SavedVariables with lazy deep
+-- defaults, migrations, default stripping at logout and profiles. `bind`
+-- returns the data table itself (locked until the addon's SavedVariables
+-- load); housekeeping lives on `handle(db)`.
+import isLoaded from "wowlua:lifecycle"
+import Subscription from "wowlua:events"
+import report, callIn from "wowlua:errors"
+
+local addonName, ns = ...
+local wl = ns.__wowlua
+
+const DEFAULT_PROFILE = "Default"
+
+type Binding = {
+    name: string,
+    opts: any,
+    db: any,
+    root: any,
+    data: any,
+    loaded: boolean,
+    failed: string?,
+    strip: boolean,
+    profile: string?,
+    listeners: any[],
+    handle: any,
+}
+
+local bindings: Binding[] = {}
+local handles = setmetatable({}, { __mode = "k" })
+
+local function copy(value: any): any
+    if type(value) ~= "table" then
+        return value
+    end
+    local out = {}
+    for k, v in pairs(value) do
+        out[k] = copy(v)
+    end
+    return out
+end
+
+-- Lazy deep defaults: a missing key reads its default; a table default is
+-- created in the data on first read, so writes never reach the defaults.
+local function attach(data: any, defaults: any): any
+    if type(defaults) ~= "table" then
+        return data
+    end
+    for k, d in pairs(defaults) do
+        local v = rawget(data, k)
+        if type(d) == "table" and type(v) == "table" then
+            attach(v, d)
+        end
+    end
+    return setmetatable(data, {
+        __index = function(t: any, k: any): any
+            local d = defaults[k]
+            if type(d) == "table" then
+                local child = attach({}, d)
+                rawset(t, k, child)
+                return child
+            end
+            return d
+        end,
+    })
+end
+
+-- Removes values equal to their defaults (and secret values), recursively.
+local function strip(data: any, defaults: any)
+    for k, v in pairs(data) do
+        local d = type(defaults) == "table" and defaults[k] or nil
+        if issecretvalue and issecretvalue(v) then
+            data[k] = nil
+        elseif type(v) == "table" and type(d) == "table" then
+            strip(v, d)
+            if next(v) == nil then
+                data[k] = nil
+            end
+        elseif d ~= nil and v == d then
+            data[k] = nil
+        end
+    end
+end
+
+local function locked(b: Binding): any
+    local message = function(): string
+        return b.failed or (addonName .. ": " .. b.name .. " accessed before it was loaded; use @onLoad")
+    end
+    return {
+        __index = function() error(message(), 2) end,
+        __newindex = function() error(message(), 2) end,
+    }
+end
+
+local function perChar(b: Binding): any
+    local key = b.name .. "PerChar"
+    local store = _G[key]
+    if type(store) ~= "table" then
+        store = {}
+        _G[key] = store
+    end
+    return store
+end
+
+-- Points the returned table at the active profile's data.
+local function useProfile(b: Binding, name: string)
+    local profiles = b.root.profiles
+    if type(profiles[name]) ~= "table" then
+        profiles[name] = {}
+    end
+    b.profile = name
+    perChar(b).profile = name
+    b.data = attach(profiles[name], b.opts.defaults)
+end
+
+local function load(b: Binding)
+    local opts = b.opts
+    local stored = _G[b.name]
+    local version = opts.version
+    if type(stored) ~= "table" then
+        stored = { __version = version }
+    else
+        local from = stored.__version or 0
+        if from > version then
+            -- A newer version wrote this: keep it as it is (decision S14).
+            b.strip = false
+            report(b.name .. " was saved by a newer version (" .. from .. " > " .. version .. "); not migrating, defaults are kept")
+        elseif from < version and opts.migrate then
+            -- Migrations run on a copy, so a failure leaves the data as loaded.
+            local work = copy(stored)
+            for v = from + 1, version do
+                local step = opts.migrate[v]
+                if step then
+                    local ok = callIn({ component = "saved: " .. b.name .. " migration " .. v }, step, work)
+                    if not ok then
+                        b.failed = addonName .. ": " .. b.name .. " failed to migrate to version " .. v .. "; data preserved"
+                        b.strip = false
+                        return
+                    end
+                end
+            end
+            work.__version = version
+            stored = work
+        else
+            stored.__version = math.max(from, version)
+        end
+    end
+    if opts.profiles then
+        stored.profiles = type(stored.profiles) == "table" and stored.profiles or {}
+        b.root = stored
+        _G[b.name] = stored
+        useProfile(b, perChar(b).profile or DEFAULT_PROFILE)
+        setmetatable(b.db, {
+            __index = function(_, k: any): any return b.data[k] end,
+            __newindex = function(_, k: any, v: any) b.data[k] = v end,
+        })
+    else
+        -- The returned table becomes the data (its identity never changes).
+        setmetatable(b.db, nil)
+        for k, v in pairs(stored) do
+            rawset(b.db, k, v)
+        end
+        b.root = b.db
+        b.data = b.db
+        _G[b.name] = b.db
+        attach(b.db, opts.defaults)
+    end
+    b.loaded = true
+end
+
+local function stripAll(b: Binding)
+    if not b.loaded or not b.strip or b.opts.stripDefaults == false then
+        return
+    end
+    if b.opts.profiles then
+        for _, data in pairs(b.root.profiles) do
+            strip(data, b.opts.defaults)
+        end
+    else
+        local version = rawget(b.db, "__version")
+        strip(b.db, b.opts.defaults)
+        rawset(b.db, "__version", version)
+    end
+end
+
+-- Loading before the addon's `@onLoad` hooks, stripping after `@onLogout`
+-- (the phase order of wowlua:lifecycle).
+local tasks = wl.lifecycleTasks
+tasks.beforeLoad[#tasks.beforeLoad + 1] = function()
+    for _, b in ipairs(bindings) do
+        if not b.loaded and not b.failed then
+            load(b)
+        end
+    end
+end
+tasks.afterLogout[#tasks.afterLogout + 1] = function()
+    for _, b in ipairs(bindings) do
+        stripAll(b)
+    end
+end
+
+local function makeHandle(b: Binding): any
+    local h: any = {
+        reset = function()
+            if not b.loaded then
+                error(b.name .. " is not loaded", 2)
+            end
+            local data = b.data
+            local version = rawget(data, "__version")
+            for k in pairs(data) do
+                rawset(data, k, nil)
+            end
+            if not b.opts.profiles then
+                rawset(data, "__version", version)
+            end
+        end,
+        isLoaded = function(): boolean return b.loaded end,
+    }
+    if b.opts.profiles then
+        h.profiles = {
+            use = function(_, name: string)
+                useProfile(b, name)
+                for _, fn in ipairs(b.listeners) do
+                    callIn({ component = "saved: profile change" }, fn, name)
+                end
+            end,
+            current = function(): string return b.profile or DEFAULT_PROFILE end,
+            list = function(): string[]
+                local names = {}
+                for name in pairs(b.root.profiles) do
+                    names[#names + 1] = name
+                end
+                table.sort(names)
+                return names
+            end,
+            copy = function(_, from: string)
+                local source = b.root.profiles[from]
+                if type(source) ~= "table" then
+                    error("no profile `" .. from .. "`", 2)
+                end
+                local data = b.data
+                for k in pairs(data) do
+                    rawset(data, k, nil)
+                end
+                for k, v in pairs(copy(source)) do
+                    rawset(data, k, v)
+                end
+                attach(data, b.opts.defaults)
+            end,
+            delete = function(_, name: string)
+                if name == b.profile then
+                    error("cannot delete the active profile `" .. name .. "`", 2)
+                end
+                b.root.profiles[name] = nil
+            end,
+            onChange = function(_, fn: (name: string) -> ()): Subscription
+                local list = b.listeners
+                list[#list + 1] = fn
+                local sub: any = { active = true }
+                sub.cancel = function()
+                    sub.active = false
+                    for i, f in ipairs(list) do
+                        if f == fn then
+                            table.remove(list, i)
+                            break
+                        end
+                    end
+                end
+                return sub
+            end,
+        }
+    end
+    return h
+end
+
+--- Binds the SavedVariable `name`; returns its data table (locked until
+--- the addon's SavedVariables load).
+export function bind(name: string, opts: any): any
+    for _, b in ipairs(bindings) do
+        if b.name == name then
+            error("bind: " .. name .. " is bound already", 2)
+        end
+    end
+    local db = {}
+    local b: Binding = {
+        name = name,
+        opts = opts,
+        db = db,
+        root = nil,
+        data = nil,
+        loaded = false,
+        failed = nil,
+        strip = true,
+        profile = nil,
+        listeners = {},
+        handle = nil,
+    }
+    setmetatable(db, locked(b))
+    b.handle = makeHandle(b)
+    handles[db] = b.handle
+    bindings[#bindings + 1] = b
+    -- Bound after the addon loaded.
+    if isLoaded() then
+        load(b)
+    end
+    return db
+end
+
+--- The housekeeping handle of a bound table.
+export function handle(db: any): any
+    local h = handles[db]
+    if not h then
+        error("handle: not a table from saved.bind", 2)
+    end
+    return h
+end

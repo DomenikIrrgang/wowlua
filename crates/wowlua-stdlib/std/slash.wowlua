@@ -1,0 +1,229 @@
+-- wowlua:slash (spec stdlib "slash"): slash commands, and a router for
+-- subcommands with typed arguments and flags. Each `@slash` gets the key
+-- WOWLUA_<ADDON>_<N> in WoW's SlashCmdList, unique across addons.
+import callIn from "wowlua:errors"
+import print as say from "wowlua:log"
+
+local addonName, ns = ...
+
+local prefix = "WOWLUA_" .. addonName:upper():gsub("[^A-Z0-9]", "_") .. "_"
+local registered = 0
+local commands: { [string]: boolean } = {}
+
+local function register(names: string[], fn: any)
+    registered += 1
+    local key = prefix .. registered
+    for i, name in ipairs(names) do
+        if type(name) ~= "string" or not name:match("^/%S+$") then
+            error("@slash: `" .. tostring(name) .. "` is no slash command (\"/name\")", 3)
+        end
+        local lower = name:lower()
+        if commands[lower] then
+            error("@slash: " .. name .. " is registered twice", 3)
+        end
+        commands[lower] = true
+        _G["SLASH_" .. key .. i] = name
+    end
+    SlashCmdList[key] = function(msg: string, editBox: any)
+        callIn({ component = "slash: " .. names[1] }, fn, msg, editBox)
+    end
+end
+
+--- `@slash("/cmd", ...)`: the handler gets the message and the edit box.
+export function slash(...: string)
+    local names = { ... }
+    return function(fn: any, ctx: any)
+        register(names, fn)
+    end
+end
+
+-- Router ---------------------------------------------------------------------
+
+-- Splits on whitespace; "two words" and 'two words' are one token, \"
+-- escapes. Also returns where each token ends in `msg`.
+local function tokenize(msg: string): (string[], number[])
+    local tokens, ends = {}, {}
+    local i, n = 1, #msg
+    while i <= n do
+        local c = msg:sub(i, i)
+        if c:match("%s") then
+            i += 1
+        elseif c == "\"" or c == "'" then
+            local buf = {}
+            i += 1
+            while i <= n and msg:sub(i, i) ~= c do
+                if msg:sub(i, i) == "\\" and i < n then
+                    i += 1
+                end
+                buf[#buf + 1] = msg:sub(i, i)
+                i += 1
+            end
+            tokens[#tokens + 1] = table.concat(buf)
+            ends[#ends + 1] = i
+            i += 1
+        else
+            local j = i
+            while j <= n and not msg:sub(j, j):match("%s") do
+                j += 1
+            end
+            tokens[#tokens + 1] = msg:sub(i, j - 1)
+            ends[#ends + 1] = j - 1
+            i = j
+        end
+    end
+    return tokens, ends
+end
+
+const BOOLEANS = { ["true"] = true, on = true, yes = true, ["1"] = true,
+                   ["false"] = false, off = false, no = false, ["0"] = false }
+
+-- Converts one argument by its spec; returns ok and the value.
+local function convert(spec: any, token: string?): (boolean, any)
+    if type(spec) == "table" then
+        if token == nil then
+            return false, nil
+        end
+        for _, choice in ipairs(spec) do
+            if choice:lower() == token:lower() then
+                return true, choice
+            end
+        end
+        return false, nil
+    end
+    local optional = spec:sub(-1) == "?"
+    local kind = optional and spec:sub(1, -2) or spec
+    if token == nil then
+        return optional, nil
+    end
+    if kind == "string" then
+        return true, token
+    elseif kind == "number" then
+        local v = tonumber(token)
+        return v ~= nil, v
+    elseif kind == "boolean" then
+        local v = BOOLEANS[token:lower()]
+        return v ~= nil, v
+    end
+    return false, nil
+end
+
+local function describe(spec: any): string
+    if type(spec) == "table" then
+        return "<" .. table.concat(spec, "|") .. ">"
+    end
+    if spec == "rest" then
+        return "<text...>"
+    end
+    local optional = spec:sub(-1) == "?"
+    local kind = optional and spec:sub(1, -2) or spec
+    return optional and "[" .. kind .. "]" or "<" .. kind .. ">"
+end
+
+local function usage(name: string, command: any): string
+    local parts = { name }
+    for _, spec in ipairs(command.args or {}) do
+        parts[#parts + 1] = describe(spec)
+    end
+    for _, flag in ipairs(command.flags or {}) do
+        parts[#parts + 1] = "[--" .. flag .. "]"
+    end
+    return table.concat(parts, " ")
+end
+
+--- A router: `router:dispatch(msg)` runs the matching command.
+export function router(defs: { [string]: any }): any
+    local byName: { [string]: string } = {}
+    for name, command in pairs(defs) do
+        byName[name:lower()] = name
+        for _, alias in ipairs(command.aliases or {}) do
+            byName[alias:lower()] = name
+        end
+    end
+    local r: any = {}
+
+    function r.help(): string
+        local names = {}
+        for name in pairs(defs) do
+            names[#names + 1] = name
+        end
+        table.sort(names)
+        local lines = {}
+        for _, name in ipairs(names) do
+            local command = defs[name]
+            lines[#lines + 1] = usage(name, command) .. (command.help and " - " .. command.help or "")
+        end
+        return table.concat(lines, "\n")
+    end
+
+    local function printHelp()
+        for line in r.help():gmatch("[^\n]+") do
+            say(line)
+        end
+    end
+
+    function r.dispatch(_, msg: string): boolean
+        local tokens, ends = tokenize(msg)
+        if #tokens == 0 or tokens[1]:lower() == "help" then
+            printHelp()
+            return true
+        end
+        local name = byName[tokens[1]:lower()]
+        if not name then
+            printHelp()
+            return false
+        end
+        local command = defs[name]
+        -- Flags anywhere after the command; the rest are positional.
+        local flags: { [string]: boolean } = {}
+        local known: { [string]: boolean } = {}
+        for _, f in ipairs(command.flags or {}) do
+            known[f] = true
+            flags[f] = false
+        end
+        local positional = {}
+        local restFrom: number? = nil
+        for i = 2, #tokens do
+            local flag = tokens[i]:match("^%-%-(.+)$")
+            if flag then
+                if not known[flag] then
+                    say("Usage: " .. usage(name, command))
+                    return true
+                end
+                flags[flag] = true
+            else
+                positional[#positional + 1] = tokens[i]
+            end
+        end
+        local args = command.args or {}
+        local values = {}
+        for i, spec in ipairs(args) do
+            if spec == "rest" then
+                -- The remaining text as typed, after the command and the
+                -- arguments before it.
+                local after = ends[i] or #msg
+                values[i] = msg:sub(after + 1):match("^%s*(.-)%s*$")
+                restFrom = i
+                break
+            end
+            local ok, v = convert(spec, positional[i])
+            if not ok then
+                say("Usage: " .. usage(name, command))
+                return true
+            end
+            values[i] = v
+        end
+        if not restFrom and #positional > #args then
+            say("Usage: " .. usage(name, command))
+            return true
+        end
+        local n = #args
+        if command.flags then
+            n += 1
+            values[n] = flags
+        end
+        callIn({ component = "slash: " .. name }, command.run, unpack(values, 1, n))
+        return true
+    end
+
+    return r
+end

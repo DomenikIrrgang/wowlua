@@ -1,0 +1,4 @@
+-- Compiler behavior of `wowlua:combat` (spec stdlib "combat"):
+-- `@outOfCombat` wraps the function.
+@intrinsic("combat.outOfCombat")
+declare function outOfCombat(fn: any, ctx: any): any
