@@ -11,6 +11,24 @@ local wl = ns.__wowlua
 
 const DEFAULT_PROFILE = "Default"
 
+--- The profiles of a binding with `profiles = true`.
+export interface Profiles
+    function use(name: string)
+    function current(): string
+    function list(): string[]
+    function copy(from: string)
+    function delete(name: string)
+    function onChange(fn: (name: string) -> ()): Subscription
+end
+
+--- The housekeeping of a bound table: `saved.handle(db)`.
+export interface SavedHandle
+    profiles: Profiles?
+    --- The current profile (or the whole data) back to its defaults.
+    function reset()
+    function isLoaded(): boolean
+end
+
 type Binding = {
     name: string,
     opts: any,
@@ -227,7 +245,7 @@ local function makeHandle(b: Binding): any
         end
     end
     local h: any = {
-        reset = function()
+        reset = function(_)
             need("reset")
             local data = b.data
             local version = rawget(data, "__version")
@@ -238,19 +256,22 @@ local function makeHandle(b: Binding): any
                 rawset(data, "__version", version)
             end
         end,
-        isLoaded = function(): boolean return b.loaded end,
+        isLoaded = function(_): boolean return b.loaded end,
     }
     if b.opts.profiles then
         h.profiles = {
             use = function(_, name: string)
                 need("profiles:use")
+                if type(name) ~= "string" then
+                    error("profiles:use: the profile name must be a string, not " .. type(name), 2)
+                end
                 useProfile(b, name)
                 for _, fn in ipairs(b.listeners) do
                     callIn({ component = "saved: profile change" }, fn, name)
                 end
             end,
-            current = function(): string return b.profile or DEFAULT_PROFILE end,
-            list = function(): string[]
+            current = function(_): string return b.profile or DEFAULT_PROFILE end,
+            list = function(_): string[]
                 need("profiles:list")
                 local names = {}
                 for name in pairs(b.root.profiles) do
@@ -338,7 +359,7 @@ export function bind(name: string, opts: any): any
 end
 
 --- The housekeeping handle of a bound table.
-export function handle(db: any): any
+export function handle(db: any): SavedHandle
     local h = handles[db]
     if not h then
         error("handle: not a table from saved.bind", 2)

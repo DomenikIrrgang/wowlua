@@ -409,7 +409,10 @@ impl<'e> Checker<'e> {
                     if declared.is_some() && no_values {
                         self.flow.insert(id, Types::NIL);
                     } else if let Some(d) = declared {
-                        let narrowed = if self.env.assignable(value, d, self.mode)
+                        // A declared `any` opts out: it is not narrowed to
+                        // its initializer's type.
+                        let narrowed = if d != Types::ANY
+                            && self.env.assignable(value, d, self.mode)
                             && value != Types::ANY
                             && value != Types::NIL
                         {

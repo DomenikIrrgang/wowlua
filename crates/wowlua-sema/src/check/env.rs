@@ -135,6 +135,10 @@ pub struct Source<'a> {
     pub namespaces: Vec<(Box<str>, usize)>,
     /// Folded enum values of the module.
     pub enums: HashMap<String, Vec<(String, Const)>>,
+    /// A standard-library module's declaration file: the module it
+    /// declares. Its functions and globals type that module's exports
+    /// (as callers see them) instead of becoming globals.
+    pub declares: Option<usize>,
 }
 
 #[derive(Default)]
@@ -151,6 +155,8 @@ pub struct Env {
     pub module_namespaces: HashMap<usize, HashMap<Box<str>, usize>>,
     /// Declared globals (values).
     pub globals: HashMap<Box<str>, TypeId>,
+    /// Export types from standard-library declaration files, by module.
+    pub declared_exports: HashMap<usize, HashMap<Box<str>, TypeId>>,
     pub events: IndexMap<Box<str>, Pack>,
     pub messages: IndexMap<Box<str>, Pack>,
     pub diagnostics: Vec<Diagnostic>,
@@ -841,6 +847,23 @@ impl Env {
             module: (!src.declaration).then_some(src.index).or(scope.module),
             ..Scope::default()
         };
+        if let Some(module) = src.declares {
+            let (name, t) = match d.as_ref() {
+                Declare::Function { name, sig }
+                    if name.path.len() == 1 && name.method.is_none() =>
+                {
+                    let f = self.func_sig(sig, &scope, true);
+                    (name.path[0].text.clone(), self.types.func(f))
+                }
+                Declare::Global { name, ty } => (name.text.clone(), self.resolve(ty, &scope)),
+                _ => return,
+            };
+            self.declared_exports
+                .entry(module)
+                .or_default()
+                .insert(name, t);
+            return;
+        }
         match d.as_ref() {
             Declare::Function { name, sig } => {
                 let f = self.func_sig(sig, &scope, true);

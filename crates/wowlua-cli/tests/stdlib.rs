@@ -989,7 +989,7 @@ local ok, err = pcall(function() return db.scale end)
 Mock.check(not ok and tostring(err):match("Std: StdDB accessed before it was loaded; use @onLoad") ~= nil, "early read")
 ok, err = pcall(function() db.scale = 2 end)
 Mock.check(not ok and tostring(err):match("accessed before it was loaded") ~= nil, "early write")
-Mock.check(not saved.handle(db).isLoaded(), "not loaded yet")
+Mock.check(not saved.handle(db):isLoaded(), "not loaded yet")
 Mock.check(saved.handle(db).profiles == nil, "no profiles")
 
 @onLoad
@@ -999,7 +999,7 @@ local function init()
     db.hidden.minimap = true
     db.enabled = false
     db.custom = {}
-    Mock.check(saved.handle(db).isLoaded(), "loaded")
+    Mock.check(saved.handle(db):isLoaded(), "loaded")
     Mock.check(_G.StdDB == db, "the global is the returned table")
     -- Writes never reach the defaults.
     Mock.check(defaults.window.y == 0 and defaults.hidden.minimap == nil, "defaults untouched")
@@ -1121,7 +1121,7 @@ local db = saved.bind("StdDB", {
 local function init()
     local ok, err = pcall(function() return db.scale end)
     print("access", ok, tostring(err):match("Std: StdDB failed to migrate to version 3; data preserved") ~= nil)
-    print("handle", saved.handle(db).isLoaded())
+    print("handle", saved.handle(db):isLoaded())
 end
 "#,
     )]);
@@ -1153,7 +1153,7 @@ local keep = saved.bind("StdOtherDB", { version = 1, defaults = { scale = 1, nes
 local function init()
     db.scale = 3
     db.extra = "x"
-    saved.handle(db).reset()
+    saved.handle(db):reset()
     print("reset", db.scale, rawget(db, "extra"), rawget(db, "__version"))
     keep.scale = 1
     print("nested", keep.nested.a)
@@ -1162,7 +1162,7 @@ end
 -- Bound after loading: usable at once.
 _G.StdLate = function()
     local late = saved.bind("StdCharDB", { version = 1, defaults = { n = 5 } })
-    print("late", late.n, saved.handle(late).isLoaded())
+    print("late", late.n, saved.handle(late):isLoaded())
     late.n = 6
 end
 
@@ -1274,6 +1274,7 @@ local profiles = saved.handle(db).profiles
 -- Profile operations need the data.
 Mock.check(not pcall(profiles.use, profiles, "X"), "use before load")
 Mock.check(not pcall(profiles.list, profiles), "list before load")
+_G.StdUseDot = function() (profiles :: any).use("Tank") end
 
 @onLoad
 local function init()
@@ -1298,14 +1299,14 @@ local function init()
     profiles:use("Default")
     profiles:delete("Healer")
     print("after delete", table.concat(profiles:list(), ","), profiles:current(), db.scale)
-    saved.handle(db).reset()
+    saved.handle(db):reset()
     print("reset", db.scale, StdDB.__version)
     profiles:use("Tank")
 end
 "#,
         )],
         "",
-        "Mock.loadAddon(\"Std\")\nMock.fire(\"PLAYER_LOGOUT\")\nprint(\"char\", StdDBPerChar.profile, StdDB.profiles.Tank and next(StdDB.profiles.Tank), rawget(StdDB.profiles.Default, \"scale\"))",
+        "Mock.loadAddon(\"Std\")\nlocal ok, err = pcall(StdUseDot)\nMock.check(not ok and err:match(\"profiles:use: the profile name must be a string, not nil\"), \"dot call\")\nMock.fire(\"PLAYER_LOGOUT\")\nprint(\"char\", StdDBPerChar.profile, StdDB.profiles.Tank and next(StdDB.profiles.Tank), rawget(StdDB.profiles.Default, \"scale\"))",
     );
     assert_eq!(
         out,
@@ -1700,6 +1701,19 @@ fn core_modules_are_checked_at_compile_time() {
             "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"StdDBPerChar\", { version = 1, defaults = {}, profiles = true })\n",
             "E8117",
         ),
+        // The handle's methods are typed (spec stdlib "saved").
+        (
+            "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"StdDB\", { version = 1, defaults = {}, profiles = true })\nsaved.handle(db).reset()\n",
+            "E2008",
+        ),
+        (
+            "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"StdDB\", { version = 1, defaults = {}, profiles = true })\nsaved.handle(db).profiles?.use(\"Tank\")\n",
+            "E2007",
+        ),
+        (
+            "import after from \"wowlua:timer\"\nafter(\"soon\", function() end)\n",
+            "E2001",
+        ),
         (
             "import debounce from \"wowlua:timer\"\n@debounce(1)\nlocal function f(): number return 1 end\n",
             "E8030",
@@ -1789,4 +1803,51 @@ local function cmd(msg: string) r:dispatch(msg) end
         !stderr.contains("[E8") && !stderr.contains("[W8"),
         "{stderr}"
     );
+}
+
+/// The standard library's modules type-check clean, also in a strict
+/// project, and their exports are typed for the code importing them.
+#[test]
+fn standard_library_is_typed_and_checks_clean() {
+    let dir = project(&[(
+        "src/main.wowlua",
+        r#"--!strict
+import * as errors from "wowlua:errors"
+import * as events from "wowlua:events"
+import * as lifecycle from "wowlua:lifecycle"
+import * as timer from "wowlua:timer"
+import * as combat from "wowlua:combat"
+import * as hooks from "wowlua:hooks"
+import * as slash from "wowlua:slash"
+import * as saved from "wowlua:saved"
+import * as callbacks from "wowlua:callbacks"
+import * as log from "wowlua:log"
+import * as debug from "wowlua:debug"
+import * as reflect from "wowlua:reflect"
+print(errors, events, lifecycle, timer, combat, hooks, slash, saved, callbacks, log, debug, reflect)
+local n: number = errors.count()
+local loaded: boolean = lifecycle.isLoaded()
+print(n, loaded)
+"#,
+    )]);
+    let manifest = fs::read_to_string(dir.path().join("wowlua.json")).unwrap();
+    let manifest = manifest.replacen('{', "{ \"check\": { \"mode\": \"strict\" },", 1);
+    fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
+    let stderr = build(dir.path(), "dev");
+    assert!(
+        !stderr.contains("error") && !stderr.contains("warning"),
+        "{stderr}"
+    );
+    // A wrong use of a typed export is an error.
+    fs::write(
+        dir.path().join("src/main.wowlua"),
+        "import count from \"wowlua:errors\"\nlocal s: string = count()\nprint(s)\n",
+    )
+    .unwrap();
+    let assert = wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .failure();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(stderr.contains("error[E2001]"), "{stderr}");
 }

@@ -30,7 +30,7 @@ end
 @onLogin
 local function greet()
     if db.greet then
-        print(`login #{db.logins}, profile {saved.handle(db).profiles?.current()}. Type /coredemo for commands.`)
+        print(`login #{db.logins}, profile {saved.handle(db).profiles?:current()}. Type /coredemo for commands.`)
     end
     after(3, function() print("three seconds after login (wowlua:timer)") end)
 end
@@ -80,7 +80,7 @@ local commands = router({
         help = "Show the saved data",
         run = function()
             local profiles = saved.handle(db).profiles
-            print(`logins {db.logins}, scale {db.scale}, greet {db.greet}, profile {profiles?.current()}, in combat {inCombat()}`)
+            print(`logins {db.logins}, scale {db.scale}, greet {db.greet}, profile {profiles?:current()}, in combat {inCombat()}`)
         end,
     },
     scale = {
@@ -103,7 +103,7 @@ local commands = router({
         args = { "string" },
         help = "Switch to (or create) a profile",
         run = function(name: string)
-            saved.handle(db).profiles?.use(name)
+            saved.handle(db).profiles?:use(name)
             print("profile", name, "scale", db.scale)
         end,
     },
@@ -111,7 +111,7 @@ local commands = router({
     reset = {
         help = "Reset this profile",
         run = function()
-            saved.handle(db).reset()
+            saved.handle(db):reset()
             print("profile reset")
         end,
     },

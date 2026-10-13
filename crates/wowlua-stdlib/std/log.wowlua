@@ -90,7 +90,7 @@ export function sink(fn: (level: string, message: string) -> ())
 end
 
 -- The newest `n` entries (all by default), oldest first.
-export function history(n: number?): { [number]: any }
+export function history(n: number?): { time: number, level: string, message: string, location: string? }[]
     local take = math.min(n ?? count, count)
     local out = {}
     for i = count - take, count - 1 do

@@ -44,7 +44,7 @@ export function isSubclass(cls: any, base: any): boolean
 end
 
 -- Member names in declaration order (registered), else sorted by value.
-local function order(e: any): { [number]: string }
+local function order(e: any): string[]
     local reg = registry()
     local known = reg and reg.enums[e]
     if known then
@@ -73,7 +73,7 @@ export function enumName(e: any, value: any): string?
     return nil
 end
 
-export function enumEntries(e: any): { [number]: { name: string, value: any } }
+export function enumEntries(e: any): { name: string, value: any }[]
     local out = {}
     for _, name in ipairs(order(e)) do
         out[#out + 1] = { name = name, value = rawget(e, name) }
@@ -140,7 +140,7 @@ export function getClass(name: string): any
     return reg and reg.byName[name] or nil
 end
 
-export function classes(): { [number]: any }
+export function classes(): any[]
     local out = {}
     local reg = registry()
     if reg then

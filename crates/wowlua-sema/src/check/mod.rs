@@ -72,10 +72,20 @@ pub fn check_package_full(
     let mut global_classes: HashSet<DefId> = HashSet::new();
     // Declaration sources: declaration files first, then modules.
     let mut sources: Vec<env::Source> = Vec::new();
+    let index: HashMap<&str, usize> = files
+        .iter()
+        .enumerate()
+        .map(|(i, f)| (f.src_rel.as_str(), i))
+        .collect();
     for (i, f) in files.iter().enumerate() {
         if f.kind == FileKind::Declaration
             && let Some(parse) = f.parse
         {
+            let declares = f
+                .src_rel
+                .strip_suffix(".d.wowlua")
+                .filter(|_| f.src_rel.starts_with(crate::STDLIB_PREFIX))
+                .and_then(|stem| index.get(format!("{stem}.wowlua").as_str()).copied());
             sources.push(env::Source {
                 index: i,
                 parse,
@@ -83,6 +93,7 @@ pub fn check_package_full(
                 imports: Vec::new(),
                 namespaces: Vec::new(),
                 enums: HashMap::new(),
+                declares,
             });
         }
     }
@@ -136,6 +147,7 @@ pub fn check_package_full(
             imports,
             namespaces,
             enums,
+            declares: None,
         });
     }
     let mut env = env::Env::build(&sources);
@@ -298,9 +310,14 @@ pub fn check_package_full(
             }
         }
         global_classes.extend(std::mem::take(&mut checker.global_classes));
-        let file_exports = std::mem::take(&mut checker.exports);
+        let mut file_exports = std::mem::take(&mut checker.exports);
         diagnostics.append(&mut checker.diagnostics);
         diagnostics.append(&mut env.diagnostics);
+        // A standard-library module's declarations give its exports as
+        // callers see them (the compiler fills in some arguments).
+        if let Some(declared) = env.declared_exports.get(&i) {
+            file_exports.extend(declared.iter().map(|(k, &t)| (k.clone(), t)));
+        }
         exports.insert(i, file_exports);
     }
     private_methods.extend(env.renamable_defs.iter().copied());
@@ -866,6 +883,10 @@ mod tests {
         );
         ok("local x = 1\nx = \"s\"\nprint(x:upper())\n");
         err("local x = \"s\"\nx = 1\nprint(x:upper())\n", "E2003");
+        // A declared `any` is not narrowed to its initializer.
+        ok(
+            "interface S\n active: boolean\n function cancel()\nend\nlocal function f(): S\n local s: any = { active = true }\n s.cancel = function() end\n return s\nend\n",
+        );
     }
 
     #[test]
