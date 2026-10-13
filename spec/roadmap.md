@@ -220,7 +220,9 @@ Notes on the delivered state:
 - Optimization was checked in game on the WoW: Forever client (2026-10-13):
   Bartender4 adopted with `wowlua init` and built bundled (`strip`, release
   optimizations) loads from 2 bundles and its template XML, with no Lua
-  errors. The corpus checks every minification pass on 7179 files and builds
+  errors; so does the build at `max` with `minify-libraries` (Ace3 and the
+  other libraries renamed, compacted and optimized too: 774 KiB of Lua
+  instead of 1.29 MB, compiled in a third of the time). The corpus checks every minification pass on 7179 files and builds
   its 108 addons bundled at every level.
 
 ## M8: Standard library
