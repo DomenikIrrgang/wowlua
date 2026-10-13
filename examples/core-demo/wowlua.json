@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DomenikIrrgang/wowlua/main/schema/wowlua-0.1.json",
+  "package": {
+    "name": "core-demo",
+    "version": "0.1.0",
+    "description": "wowlua sample addon: the core standard library (events, lifecycle, slash, saved, timer, combat, hooks)",
+    "authors": ["wowlua contributors"],
+    "license": "MIT",
+    "wowlua": "^0.8"
+  },
+  "addon": {
+    "title": "Core Demo",
+    "notes": "wowlua sample addon for the core standard library. Type /coredemo.",
+    "saved-variables": ["CoreDemoDB"],
+    "saved-variables-per-character": ["CoreDemoDBPerChar"]
+  },
+  "flavors": {
+    "standard": {},
+    "camelot": {},
+    "vanilla": {}
+  }
+}

@@ -1,0 +1,123 @@
+-- Core Demo: the core standard library in one addon. Type /coredemo.
+import onLoad, onLogin, onLogout from "wowlua:lifecycle"
+import event from "wowlua:events"
+import slash, router from "wowlua:slash"
+import * as saved from "wowlua:saved"
+import after, throttle from "wowlua:timer"
+import outOfCombat, onCombatChange, inCombat from "wowlua:combat"
+import hook from "wowlua:hooks"
+import print from "wowlua:log"
+
+interface Settings
+    logins: number
+    greet: boolean
+    scale: number
+end
+
+local db = saved.bind("CoreDemoDB", {
+    version = 1,
+    defaults = { logins = 0, greet = true, scale = 1 } :: Settings,
+    profiles = true,
+})
+
+local box: Frame? = nil
+
+@onLoad
+local function countLogin()
+    db.logins += 1
+end
+
+@onLogin
+local function greet()
+    if db.greet then
+        print(`login #{db.logins}, profile {saved.handle(db).profiles?.current()}. Type /coredemo for commands.`)
+    end
+    after(3, function() print("three seconds after login (wowlua:timer)") end)
+end
+
+@onLogout
+local function goodbye()
+    db.lastLogout = date("%Y-%m-%d %H:%M")
+end
+
+-- Fires often; @throttle keeps it to one line per second.
+@event("PLAYER_TARGET_CHANGED")
+@throttle(1)
+local function targetChanged()
+    print("target:", UnitName("target") or "none")
+end
+
+onCombatChange(function(entering: boolean)
+    print(entering and "combat started" or "combat ended")
+end)
+
+-- Creating and showing frames waits for the end of combat.
+@outOfCombat
+local function showBox()
+    if not box then
+        local f = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+        f:SetSize(160, 40)
+        f:SetPoint("CENTER", 0, 200)
+        f:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+        f:SetBackdropColor(0.1, 0.1, 0.12, 0.85)
+        local label = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetPoint("CENTER")
+        label:SetText("Core Demo")
+        box = f
+    end
+    box:SetScale(db.scale)
+    box:SetShown(not box:IsShown())
+    print("box toggled (out of combat)")
+end
+
+@hook("ToggleGameMenu")
+local function afterGameMenu()
+    print("game menu toggled (wowlua:hooks)")
+end
+
+local commands = router({
+    status = {
+        help = "Show the saved data",
+        run = function()
+            local profiles = saved.handle(db).profiles
+            print(`logins {db.logins}, scale {db.scale}, greet {db.greet}, profile {profiles?.current()}, in combat {inCombat()}`)
+        end,
+    },
+    scale = {
+        args = { "number" },
+        help = "Set the box's scale",
+        run = function(value: number)
+            db.scale = value
+            print("scale", value)
+        end,
+    },
+    greet = {
+        args = { "boolean" },
+        help = "Greet at login (on/off)",
+        run = function(enabled: boolean)
+            db.greet = enabled
+            print("greet", enabled)
+        end,
+    },
+    profile = {
+        args = { "string" },
+        help = "Switch to (or create) a profile",
+        run = function(name: string)
+            saved.handle(db).profiles?.use(name)
+            print("profile", name, "scale", db.scale)
+        end,
+    },
+    box = { help = "Toggle the box (waits for the end of combat)", run = function() showBox() end },
+    reset = {
+        help = "Reset this profile",
+        run = function()
+            saved.handle(db).reset()
+            print("profile reset")
+        end,
+    },
+})
+
+@slash("/coredemo", "/cdemo")
+local function command(msg: string)
+    commands:dispatch(msg)
+end
