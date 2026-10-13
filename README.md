@@ -1,24 +1,45 @@
-# wowlua
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/wowlua-banner-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset=".github/assets/wowlua-banner-light.svg">
+    <img src=".github/assets/wowlua-banner-dark.svg" alt="wowlua: Typed Lua for World of Warcraft AddOns" width="100%">
+  </picture>
+</p>
 
-**wowlua** is a language, compiler, framework and package manager for building
-World of Warcraft AddOns.
+<p align="center">
+  <a href="https://github.com/DomenikIrrgang/wowlua/actions/workflows/ci.yml"><img alt="ci" src="https://img.shields.io/github/actions/workflow/status/DomenikIrrgang/wowlua/ci.yml?branch=main&style=flat-square&label=ci&labelColor=14120e"></a>
+  <a href="https://github.com/DomenikIrrgang/wowlua/releases/latest"><img alt="latest release" src="https://img.shields.io/github/v/release/DomenikIrrgang/wowlua?style=flat-square&label=release&labelColor=14120e&color=ffb547"></a>
+  <img alt="Lua 5.1" src="https://img.shields.io/badge/lua-5.1-ffb547?style=flat-square&labelColor=14120e">
+  <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-ffb547?style=flat-square&labelColor=14120e"></a>
+</p>
 
-- **Language.** `.wowlua` is a strict superset of Lua 5.1, the dialect WoW runs.
-  Every Lua file is a valid wowlua file. It adds gradual types, classes,
-  interfaces, enums, decorators, import/export modules, reflection,
-  compile-time build information, and syntax sugar (`+=`, `continue`, `?.`,
-  `??`, string interpolation, …). Everything compiles to plain Lua 5.1.
-- **Compiler.** Written in Rust, shipped as a single binary. It type-checks your
-  code and always emits a complete, installable AddOn: TOC files for every game
-  flavor, embedded libraries, assets and only the runtime pieces you use.
-  Release builds are bundled and minified to the level you choose, to keep
-  in-game load times low.
-- **Framework.** A typed standard library for the things almost every addon
-  needs: events, saved variables, slash commands, timers, localization,
-  settings, minimap button, addon comms, serialization, logging, and more.
-- **Package manager.** A `wowlua.json` manifest describes the addon. Dependencies
-  are resolved, locked and embedded. Finished addons are packaged and uploaded
-  to CurseForge, Wago, WoWInterface and GitHub Releases with one command.
+<p align="center">
+  <a href="#install">install</a> ·
+  <a href="#quick-start">quick start</a> ·
+  <a href="#bring-your-addon">bring your addon</a> ·
+  <a href="spec/README.md">specification</a> ·
+  <a href="spec/roadmap.md">roadmap</a> ·
+  <a href="https://github.com/DomenikIrrgang/wowlua/releases">releases</a>
+</p>
+
+---
+
+**wowlua** is a language, compiler, framework and package manager for World of
+Warcraft AddOns, shipped as one binary. It type-checks your code against the
+WoW API of every game flavor, builds a complete AddOn, and publishes it to
+CurseForge, Wago, WoWInterface and GitHub with one command. Every Lua file you
+have today is already valid wowlua.
+
+## Four tools, one binary
+
+| | |
+|---|---|
+| **Language** | `.wowlua` is a strict superset of Lua 5.1, the dialect WoW runs. It adds gradual types, classes, interfaces, enums, decorators, `import`/`export` modules, reflection, compile-time build information and syntax sugar (`+=`, `continue`, `?.`, `??`, string interpolation, …). Everything compiles to plain Lua 5.1. |
+| **Compiler** | Written in Rust. It type-checks your code and always emits a complete, installable AddOn: TOC files for every flavor, embedded libraries, assets and only the runtime pieces you use. Release builds are bundled and minified to the level you choose, to keep in-game load times low. |
+| **Framework** | A typed standard library for what almost every addon needs: events, saved variables, slash commands, timers, localization, settings, a minimap button, addon comms, serialization and logging. |
+| **Package manager** | A `wowlua.json` manifest describes the addon. Dependencies are resolved, locked and embedded. Finished addons are packaged and uploaded to every configured addon site. |
+
+## A taste
 
 ```lua
 -- src/main.wowlua
@@ -47,45 +68,120 @@ local function onLogin()
 end
 ```
 
+Mistakes show up before `/reload`, in the format your terminal already knows:
+
+```text
+error[E2003]: `Ledger` has no field or method `balanse`
+   ┌─ src/main.wowlua:88:10
+   │
+88 │ print(l2.balanse)
+   │          ^^^^^^^ here
+```
+
+## Install
+
+macOS and Linux:
+
+```sh
+curl -fsSL https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.ps1 | iex
+```
+
+From source (Rust 1.96 or newer):
+
+```sh
+cargo install --path crates/wowlua-cli
+```
+
+## Quick start
+
 ```sh
 wowlua new MyAddon && cd MyAddon
-wowlua dev               # watch, build and sync into your WoW AddOns folder
+wowlua dev               # watch, build and sync into your WoW AddOns folders
 wowlua build --release   # bundled, optimized build
 wowlua publish           # package and upload to every configured addon site
 ```
 
+`wowlua dev` syncs into every WoW client folder it finds (`_retail_`,
+`_classic_era_`, …) and never overwrites a folder it did not install. In game,
+type `/wl` to open the dev window.
+
+## Bring your addon
+
+```sh
+cd MyExistingAddon
+wowlua init --from-pkgmeta
+```
+
+`init` turns your TOC files into `wowlua.json`, moves Lua and XML files into
+`src/` and updates the in-game paths to them. `.pkgmeta` externals become
+dependencies, and the build matches the BigWigs packager's: the same loaded
+code, the same shipped files, line endings and TOC versions. This is checked on
+36 addons, including BigWigs, DBM, WeakAuras, ElvUI and Details. Your
+packager workflows stay untouched; `init` prints how to switch them to
+`wowlua publish`.
+
+In plain Lua files the checker only warns, never errors. Rename files to
+`.wowlua` one at a time when you want types, and convert LuaLS annotations with
+`wowlua types convert <path>`.
+
+## Debugging in game
+
+Dev builds carry debugging tools without any change to your code, and release
+builds contain none of it.
+
+- **Profiler** for every function: calls, total, self, max and average time.
+- **Monitor** for events, scripts and timers, plus memory over time.
+- **Error capture** that keeps BugSack and the default error frame working.
+- **Watches and a table inspector**, live while the window is open.
+- **`wowlua trace`** maps errors and stacks from the game back to your source lines, also through the source maps of bundled builds.
+
+`/wl` opens the dev window; `/wl prof|mon|errors|log|watch <addon>` print to chat.
+
 ## Status
 
-The specification lives in [`spec/`](spec/README.md). Implementation follows
-the [roadmap](spec/roadmap.md).
+The specification lives in [`spec/`](spec/README.md); implementation follows the
+[roadmap](spec/roadmap.md).
 
-**Milestones M0–M6 are done**: the toolchain builds and installs plain Lua
-addons and compiles `.wowlua` files with type annotations (erased), syntax
-sugar (`+=`, `continue`, `?.`, `??`, string interpolation, bitwise operators,
-`//`, `const`, default parameters, destructuring), modules
-(`import`/`export`), classes (abstract, generic, accessors), widget classes
-that extend native frame types, enums, core and user decorators,
-`wowlua:meta` with static conditions and `@if`, and per-flavor builds. The
-load order is computed from imports and usage analysis of Lua, `.wowlua` and
-XML files. The type checker (basic and strict mode, generics, narrowing,
-flavor guards for shared multi-flavor builds) checks against the WoW API of
-every flavor, generated from Blizzard's documentation. Dev builds have
-debugging tools built in: a profiler for every function, an event, script
-and timer monitor, error capture, runtime type checks and an in-game dev
-window (`/wl`) with watches and a table inspector; `wowlua:debug`,
-`wowlua:log` and `wowlua:reflect` are the first standard-library modules.
-The package manager fetches git, SVN, path and archive dependencies into a
-global cache, locks them in `wowlua.lock`, embeds Lua libraries (only the
-files the game loads) and compiles wowlua libraries into the addon;
-workspaces group addon suites, and BigWigs packager projects migrate with
-`wowlua init --from-pkgmeta`: their builds match the packager's (same
-loaded code, same shipped files, line endings and TOC versions), checked
-on 36 addons including BigWigs, DBM, WeakAuras, ElvUI and Details.
-The other standard-library modules arrive with later milestones; using a
-feature of a later milestone reports that milestone. [`examples/widget-demo`](examples/widget-demo) and
-[`examples/typed-demo`](examples/typed-demo) are sample addons.
+| Milestone | | Status |
+|---|---|---|
+| M0 | Foundation | done · 2026-10-11 |
+| M1 | Parser and emitter | done · 2026-10-11 |
+| M2 | Lowering of syntax sugar and modules | done · 2026-10-11 |
+| M3 | Classes, enums, decorators and stdlib infrastructure | done · 2026-10-11 |
+| M4 | Type checker | done · 2026-10-12 |
+| M5 | Debugging | done · 2026-10-12 |
+| M6 | Package manager | done · 2026-10-12 |
+| **M7** | **Optimization and publishing** | **in progress** |
+| M8 | Standard library | planned |
+| M9 | Test runner, language server, formatter | planned |
+| M10 | Registry | planned |
 
 What works today:
+
+| Area | |
+|---|---|
+| **Language** | Type annotations (erased), `+=`, `continue`, `?.`, `??`, string interpolation, bitwise operators, `//`, `const`, default parameters, destructuring, `import`/`export`, classes (abstract, generic, accessors), widget classes that extend native frame types, enums, core and user decorators, `wowlua:meta` with static conditions and `@if`. |
+| **Type checker** | Basic and strict mode, generics, narrowing and flavor guards for shared multi-flavor builds, against the WoW API of every flavor, generated from Blizzard's documentation. |
+| **Builds** | Per-flavor builds with generated TOC files; load order from imports and usage analysis of Lua, `.wowlua` and XML files; line numbers preserved in dev builds; bundling, minification levels, inlining, global caching and dead-code removal for release builds, within Lua's limits. |
+| **Debugging** | The profiler, monitor, error capture, runtime type checks and the `/wl` dev window; `wowlua:debug`, `wowlua:log` and `wowlua:reflect` are the first standard-library modules. |
+| **Packages** | git, SVN, path and archive dependencies in a global cache, locked in `wowlua.lock`; Lua libraries embedded (only the files the game loads), wowlua libraries compiled in; workspaces for addon suites. |
+| **Publishing** | `package` and `publish` to CurseForge, Wago, WoWInterface and GitHub Releases, with API tokens kept in the OS credential store. |
+
+The other standard-library modules arrive with later milestones; using a
+feature of a later milestone reports that milestone.
+[`examples/typed-demo`](examples/typed-demo) and
+[`examples/widget-demo`](examples/widget-demo) are sample addons.
+
+<details>
+<summary><b>Every command</b></summary>
+
+<br>
 
 - `wowlua new <path>`: create a package (`--kind`, `--flavors`, `--ci github`).
 - `wowlua init [--from-pkgmeta]`: adopt an existing addon. Its TOC(s) become
@@ -96,7 +192,7 @@ What works today:
 - `wowlua add` / `remove` / `update` / `fetch` / `tree` / `outdated` /
   `cache clean`: manage dependencies (`git`, `svn`, `path`, `archive`;
   the registry comes later). `-p <package>` selects a workspace member.
-- `wowlua build [--release] [--flavor …]`: a complete AddOn in
+- `wowlua build [--release] [--flavor …] [--stats]`: a complete AddOn in
   `dist/<profile>/<Name>/` with generated TOC(s) for every flavor, Lua 5.1
   syntax checks, XML reference checks and output validation. `.wowlua` files
   are compiled with their line numbers preserved (in-game errors point at the
@@ -109,6 +205,10 @@ What works today:
   `.d.wowlua` declarations.
 - `wowlua trace [file] [--clipboard]`: map error messages and stacks from
   the game (error frame, BugSack) back to source lines and functions.
+- `wowlua package` / `publish [--dry-run]`: build and package zips, and upload
+  them to every configured publish target.
+- `wowlua login <site>` / `logout <site>`: store or remove an API token in the
+  OS credential store.
 - In game, dev builds: `/wl` opens the dev window (profiler, monitor, log,
   errors, watches, inspector); `/wl prof|mon|errors|log|watch <addon>` print
   to chat.
@@ -119,27 +219,9 @@ What works today:
   that wowlua did not install.
 - `wowlua toc`, `wowlua clean`, `wowlua explain <code>`.
 
-### Installing
+</details>
 
-From a release (macOS, Linux):
-
-```sh
-curl -fsSL https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.sh | sh
-```
-
-Windows (PowerShell):
-
-```powershell
-irm https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.ps1 | iex
-```
-
-From source (Rust 1.96+):
-
-```sh
-cargo install --path crates/wowlua-cli
-```
-
-### Developing
+## Developing
 
 ```sh
 cargo test --workspace
@@ -154,6 +236,17 @@ cargo xtask types fetch && cargo xtask types gen
                      # regenerate the embedded wow-api declarations
 ```
 
-## License
+## Licence
 
-[MIT](LICENSE)
+[MIT](LICENSE). The logo and banner in [`.github/assets`](.github/assets) are
+set in Martian Mono and IBM Plex Mono (SIL Open Font License 1.1) and
+converted to outlines.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/wowlua-mark-dark.svg">
+    <img src=".github/assets/wowlua-mark-light.svg" alt="" width="40">
+  </picture>
+</p>
+
+<p align="center"><sub>Not affiliated with Blizzard Entertainment. World of Warcraft is a trademark of Blizzard Entertainment, Inc.</sub></p>
