@@ -161,6 +161,7 @@ The specification lives in [`spec/`](spec/README.md); implementation follows the
 | M8 | Standard library | planned |
 | M9 | Test runner, language server, formatter | planned |
 | M10 | Registry | planned |
+| M11 | Performance optimization | planned |
 
 What works today:
 
@@ -229,9 +230,10 @@ cargo xtask codes    # regenerate diagnostic codes from spec/appendix/diagnostic
 cargo xtask schema   # regenerate schema/wowlua-<version>.json
 cargo xtask check    # verify generated files (CI)
 cargo xtask corpus fetch && cargo run --release -p xtask -- corpus run
-                     # conformance corpus: Lua 5.1 parity, bytecode round trip, formatter
+                     # conformance corpus: Lua 5.1 parity, bytecode round trip, every minification pass, formatter
 cargo xtask corpus addons
-                     # adopt, build and type-check the corpus addons (WOWLUA_CORPUS_FIX=1: also apply lint fixes)
+                     # adopt, build and type-check the corpus addons, then build them bundled at every
+                     # minification level (WOWLUA_CORPUS_FIX=1: also apply lint fixes)
 cargo xtask types fetch && cargo xtask types gen
                      # regenerate the embedded wow-api declarations
 ```
