@@ -95,6 +95,12 @@ creates a Lua 5.1 limit error that the unoptimized code did not have:
 | `dedupe-strings` | Same limits, applied to its shared string locals |
 | `inline` | Does not inline into a function if that would exceed 180 locals or 50 upvalues in it |
 
+Locals also take registers, which a function's temporaries share (250 in
+all; large nested table constructors need many). The budgets cannot see
+those, so the build compiles each optimized file: if it exceeds a Lua 5.1
+limit, the file is built again without `dedupe-strings`, `cache-globals` and
+`inline`, and a note says so.
+
 Bundling adds no locals to modules, because each module keeps its own
 function (§15.3.1).
 

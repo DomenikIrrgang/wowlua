@@ -36,6 +36,7 @@ use wowlua_diagnostics::{Diagnostic, Diagnostics};
 use wowlua_span::SourceDb;
 
 pub use build::{BuildOutput, BuildRequest, build};
+pub use compile::{Optimizations, Optimized, optimize_and_emit};
 pub use project::{ExternalAddon, LoadOptions, Project, Status, load_project, load_projects};
 
 /// Version of this compiler.

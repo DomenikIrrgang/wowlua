@@ -136,6 +136,76 @@ pub struct Minify {
     pub keep: Vec<String>,
 }
 
+/// The profile's optimizations (spec optimization §15.2).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Optimizations {
+    pub dead_code: bool,
+    pub inline: bool,
+    pub cache_globals: bool,
+}
+
+/// A chunk optimized, minified and emitted.
+pub struct Optimized {
+    pub emitted: wowlua_luair::Emitted,
+    /// Original names of renamed locals by source position.
+    pub original: HashMap<wowlua_luair::ir::Pos, String>,
+    /// Local functions not inlined, and why.
+    pub not_inlined: Vec<(wowlua_luair::ir::Pos, wowlua_luair::optimize::NotInlined)>,
+    /// The passes that add locals, upvalues or expression size were left
+    /// out, as they broke a Lua 5.1 limit.
+    pub reduced: bool,
+}
+
+/// Optimizes, minifies and emits `chunk`. When that breaks a Lua 5.1 limit
+/// (registers, locals, upvalues, constants) that the code without
+/// `dedupe-strings`, `cache-globals` and `inline` keeps, those are left out:
+/// optimization never creates a limit error (spec optimization §15.2.2).
+pub fn optimize_and_emit(
+    chunk: wowlua_luair::ir::Chunk,
+    optimizations: &Optimizations,
+    passes: &wowlua_luair::Passes,
+    options: &wowlua_luair::EmitOptions,
+) -> Optimized {
+    let run = |mut chunk: wowlua_luair::ir::Chunk, reduced: bool| {
+        if optimizations.dead_code {
+            wowlua_luair::optimize::remove_dead_locals(&mut chunk);
+        }
+        let mut not_inlined = Vec::new();
+        if optimizations.inline && !reduced {
+            not_inlined = wowlua_luair::optimize::inline(&mut chunk);
+        }
+        if optimizations.cache_globals && !reduced {
+            wowlua_luair::optimize::cache_globals(&mut chunk);
+        }
+        let mut passes = *passes;
+        if reduced {
+            passes.dedupe_strings = false;
+        }
+        let original = wowlua_luair::minify::apply(&mut chunk, &passes, options.line_mode);
+        Optimized {
+            emitted: wowlua_luair::emit(&chunk, options),
+            original,
+            not_inlined,
+            reduced,
+        }
+    };
+    let grows = optimizations.inline || optimizations.cache_globals || passes.dedupe_strings;
+    if !grows {
+        return run(chunk, false);
+    }
+    let full = run(chunk.clone(), false);
+    let compiles = |code: &[u8]| mlua::Lua::new().load(code).into_function().is_ok();
+    if compiles(&full.emitted.text) {
+        return full;
+    }
+    let reduced = run(chunk, true);
+    if compiles(&reduced.emitted.text) {
+        reduced
+    } else {
+        full
+    }
+}
+
 /// Minifies Lua the compiler did not compile (the runtime, library files);
 /// `None` when there is nothing to do or it does not parse as Lua 5.1, and
 /// it then ships as it is.
@@ -756,38 +826,46 @@ pub fn compile_flavor(
     }
     // Emits a lowered chunk: optimized, minified, checked to parse and to
     // stay within Lua's limits.
-    let finish = |mut chunk: wowlua_luair::ir::Chunk,
+    let finish = |chunk: wowlua_luair::ir::Chunk,
                   source: &Source,
                   file: FileId,
                   diagnostics: &mut Vec<Diagnostic>|
      -> Option<Compiled> {
-        // The optimizations before minification (spec compiler §13.4).
-        if profile.optimize.dead_code {
-            wowlua_luair::optimize::remove_dead_locals(&mut chunk);
+        let optimized = optimize_and_emit(
+            chunk,
+            &Optimizations {
+                dead_code: profile.optimize.dead_code,
+                inline: profile.optimize.inline,
+                cache_globals: profile.optimize.cache_globals
+                    == wowlua_manifest::model::CacheGlobals::Safe,
+            },
+            &minify.passes,
+            &options,
+        );
+        for (pos, span) in inline_hints.get(&file).into_iter().flatten() {
+            use wowlua_luair::optimize::NotInlined;
+            let Some((_, why)) = optimized.not_inlined.iter().find(|(p, _)| p == pos) else {
+                continue;
+            };
+            let why = match why {
+                NotInlined::NotAnExpression => "its body is not a single `return` expression",
+                NotInlined::Recursive => "it is recursive",
+                NotInlined::Escapes => "it is used other than by calling it",
+            };
+            diagnostics.push(
+                Diagnostic::warning("W3031", format!("`@inline` is ignored: {why}"))
+                    .with_label(*span, "not inlined"),
+            );
         }
-        if profile.optimize.inline {
-            let skipped = wowlua_luair::optimize::inline(&mut chunk);
-            for (pos, span) in inline_hints.get(&file).into_iter().flatten() {
-                use wowlua_luair::optimize::NotInlined;
-                let Some((_, why)) = skipped.iter().find(|(p, _)| p == pos) else {
-                    continue;
-                };
-                let why = match why {
-                    NotInlined::NotAnExpression => "its body is not a single `return` expression",
-                    NotInlined::Recursive => "it is recursive",
-                    NotInlined::Escapes => "it is used other than by calling it",
-                };
-                diagnostics.push(
-                    Diagnostic::warning("W3031", format!("`@inline` is ignored: {why}"))
-                        .with_label(*span, "not inlined"),
-                );
-            }
+        if optimized.reduced {
+            diagnostics.push(
+                Diagnostic::note(
+                    "`dedupe-strings`, `cache-globals` and `inline` are left out for this file: with them it would exceed a Lua 5.1 limit",
+                )
+                .with_path(&source.rel),
+            );
         }
-        if profile.optimize.cache_globals == wowlua_manifest::model::CacheGlobals::Safe {
-            wowlua_luair::optimize::cache_globals(&mut chunk);
-        }
-        let original = wowlua_luair::minify::apply(&mut chunk, &minify.passes, options.line_mode);
-        let emitted = wowlua_luair::emit(&chunk, &options);
+        let (emitted, original) = (optimized.emitted, optimized.original);
         // The output must parse (spec compiler §13.8, item 2).
         let reparsed = wowlua_syntax::parse(&emitted.text, file);
         if reparsed.has_errors() {
@@ -1149,4 +1227,53 @@ fn context(
         ctx.imports.insert(import.start, target);
     }
     ctx
+}
+
+#[cfg(test)]
+mod limit_tests {
+    use super::*;
+
+    /// A table so large and nested that hoisting its strings into locals
+    /// would run out of registers: the passes that add locals are left out.
+    #[test]
+    fn optimizations_never_break_lua_limits() {
+        // 170 long strings used twice each (170 hoisted locals), and lists
+        // of 49 items three levels deep (pending items take registers).
+        let mut src = String::from("Strings = {\n");
+        for i in 0..170 {
+            src.push_str(&format!(
+                "\"a long string number {i}\", \"a long string number {i}\",\n"
+            ));
+        }
+        src.push_str("}\nData = {\n");
+        for _ in 0..3 {
+            for _ in 0..49 {
+                src.push_str("{ 1 },\n");
+            }
+            src.push_str("{\n");
+        }
+        src.push('1');
+        for _ in 0..3 {
+            src.push_str("},\n");
+        }
+        src.push_str("}\n");
+        let mut db = SourceDb::new();
+        let file = db.add("t.lua", src.clone());
+        let parse = wowlua_syntax::parse(src.as_bytes(), file);
+        let chunk = wowlua_lower::lower(&parse, src.as_bytes()).unwrap();
+        let passes = wowlua_luair::Passes::from_names(["dedupe-strings", "rename-locals"]);
+        let out = optimize_and_emit(
+            chunk,
+            &Optimizations::default(),
+            &passes,
+            &passes.emit_options(LineMode::Statement),
+        );
+        assert!(out.reduced);
+        assert!(
+            mlua::Lua::new()
+                .load(&out.emitted.text[..])
+                .into_function()
+                .is_ok()
+        );
+    }
 }

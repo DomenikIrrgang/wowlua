@@ -238,16 +238,24 @@ pub fn run(dir: &Path) -> Result<()> {
         for mode in [LineMode::Preserve, LineMode::Statement] {
             for names in [BYTECODE_PASSES, ALL_PASSES] {
                 let passes = wowlua_luair::Passes::from_names(names.iter().copied());
-                let mut minified = chunk.clone();
                 // The release optimizations (spec optimization §15.2) with
-                // every pass.
-                if names == ALL_PASSES {
-                    wowlua_luair::optimize::remove_dead_locals(&mut minified);
-                    wowlua_luair::optimize::inline(&mut minified);
-                    wowlua_luair::optimize::cache_globals(&mut minified);
-                }
-                wowlua_luair::minify::apply(&mut minified, &passes, mode);
-                let out = emit(&minified, &passes.emit_options(mode));
+                // every pass, as the compiler runs them.
+                let optimizations = if names == ALL_PASSES {
+                    wowlua_driver::Optimizations {
+                        dead_code: true,
+                        inline: true,
+                        cache_globals: true,
+                    }
+                } else {
+                    wowlua_driver::Optimizations::default()
+                };
+                let out = wowlua_driver::optimize_and_emit(
+                    chunk.clone(),
+                    &optimizations,
+                    &passes,
+                    &passes.emit_options(mode),
+                )
+                .emitted;
                 let label = if names == BYTECODE_PASSES {
                     "all passes but dedupe-strings"
                 } else {
