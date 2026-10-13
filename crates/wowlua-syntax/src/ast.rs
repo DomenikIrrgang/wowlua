@@ -214,6 +214,7 @@ pub const CORE_DECORATORS: &[&str] = &[
     "widget",
     "intrinsic",
     "deferred",
+    "onDemand",
     "profile",
     "noprofile",
     "trace",

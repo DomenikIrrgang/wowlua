@@ -59,6 +59,8 @@ pub struct FileInfo<'a> {
     pub shared: Option<&'a super::flavors::SharedFlavors>,
     /// Names bound to `wowlua:meta`'s `flavor`.
     pub meta_flavor: HashSet<String>,
+    /// Imports bound to the standard library's `@intrinsic` ids.
+    pub intrinsics: crate::stdlib::Intrinsics,
 }
 
 pub struct Checker<'e> {
@@ -107,6 +109,13 @@ pub struct Checker<'e> {
     pub(crate) callback_next: bool,
     /// Runtime checks of annotated parameters, `...: T` and `::`, by span.
     pub(crate) value_checks: HashMap<wowlua_span::Span, super::runtime::ValueCheck>,
+    /// Imports bound to the standard library's `@intrinsic` ids, and the
+    /// variables of those imports (a shadowing local is not the import).
+    intrinsics: crate::stdlib::Intrinsics,
+    import_vars: HashMap<Box<str>, VarId>,
+    /// The handler type the decorators of the statement being checked give
+    /// its function (`@event("X")`): (type, what it handles).
+    next_handler: Option<(Func, String)>,
 }
 
 impl<'e> Checker<'e> {
@@ -145,9 +154,13 @@ impl<'e> Checker<'e> {
             callbacks: HashSet::new(),
             callback_next: false,
             value_checks: HashMap::new(),
+            intrinsics: info.intrinsics.clone(),
+            import_vars: HashMap::new(),
+            next_handler: None,
         };
         for (name, &t) in &info.imports {
-            c.declare(name, Some(t), t, true, None);
+            let id = c.declare(name, Some(t), t, true, None);
+            c.import_vars.insert(name.clone(), id);
         }
         c
     }
@@ -382,7 +395,104 @@ impl<'e> Checker<'e> {
     }
 
     fn stmt(&mut self, s: &Stmt) {
-        stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.stmt_inner(s))
+        self.next_handler = self.decorated_handler(&s.decorators);
+        stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.stmt_inner(s));
+        self.next_handler = None;
+    }
+
+    /// The standard-library `@intrinsic` id a callee (`on`, `events.on`)
+    /// names through an import that no local shadows.
+    pub(crate) fn intrinsic_of(&self, callee: &Expr) -> Option<String> {
+        let (local, member) = match &callee.kind {
+            ExprKind::Name(n) => (n, None),
+            ExprKind::Field { obj, name } => match &obj.kind {
+                ExprKind::Name(m) => (m, Some(name.text.as_ref())),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        self.intrinsic_path(&local.text, member)
+    }
+
+    fn intrinsic_path(&self, local: &str, member: Option<&str>) -> Option<String> {
+        let id = self.intrinsics.get(local, member)?;
+        match (self.lookup_var(local), self.import_vars.get(local)) {
+            (Some(v), Some(&import)) if v != import => None,
+            (Some(_), None) => None,
+            _ => Some(id.to_string()),
+        }
+    }
+
+    /// The handler type an `@event` or `@unitEvent` decorator gives the
+    /// function it decorates: the event's (or message's) parameters, or with
+    /// several names the name first, then anything.
+    fn decorated_handler(&mut self, decorators: &[Decorator]) -> Option<(Func, String)> {
+        for d in decorators {
+            let id = match d.path.as_slice() {
+                [n] => self.intrinsic_path(&n.text, None),
+                [m, n] => self.intrinsic_path(&m.text, Some(&n.text)),
+                _ => None,
+            };
+            let Some(id) = id else { continue };
+            let args = d.args.as_ref().map(|a| a.exprs()).unwrap_or_default();
+            let names: Vec<String> = args.iter().map_while(|e| literal_string(e)).collect();
+            let event_names = match id.as_str() {
+                "events.event" => args.len(),
+                "events.unitEvent" => 1,
+                _ => 0,
+            };
+            for e in args.iter().take(event_names) {
+                if let Some(n) = literal_string(e) {
+                    self.check_event_available(&n, e.span);
+                }
+            }
+            if id.starts_with("hooks.") {
+                self.check_hook_target(&id, &args, true);
+            }
+            match id.as_str() {
+                "events.event" if names.len() == 1 => {
+                    let f = self.env.handlers.get(names[0].as_str())?.clone();
+                    return Some((f, format!("`{}`", names[0])));
+                }
+                "events.event" if names.len() > 1 && names.len() == args.len() => {
+                    let types: Vec<TypeId> = names.iter().map(|n| self.env.types.str(n)).collect();
+                    let ty = self.env.types.union(&types);
+                    let f = Func {
+                        type_params: Vec::new(),
+                        params: vec![super::types::Param {
+                            name: Some("event".into()),
+                            ty,
+                            optional: false,
+                        }],
+                        rest: Some(Rest::Variadic(Types::ANY)),
+                        ret: Pack::any(),
+                        predicate: None,
+                        unannotated: false,
+                    };
+                    return Some((f, format!("`{}`", names.join("`, `"))));
+                }
+                "events.unitEvent" if !names.is_empty() => {
+                    let f = self.env.handlers.get(names[0].as_str())?.clone();
+                    return Some((f, format!("`{}`", names[0])));
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// Checks a decorated handler's type against the decorator's.
+    fn check_handler(&mut self, actual: TypeId, handler: &(Func, String), span: Span) {
+        let expected = self.env.types.func(handler.0.clone());
+        if !self.env.assignable(actual, expected, self.mode) {
+            let msg = format!(
+                "`{}` cannot handle {}: it is called with `{}`",
+                self.env.display(actual),
+                handler.1,
+                self.env.display(expected)
+            );
+            self.report("E2001", span, msg);
+        }
     }
 
     fn stmt_inner(&mut self, s: &Stmt) {
@@ -584,7 +694,11 @@ impl<'e> Checker<'e> {
                 let sig = self.env.func_sig(func, &self.scope.clone(), false);
                 let t = self.env.types.func(sig);
                 let id = self.declare(&name.text, None, t, false, Some(name.span));
-                let actual = self.function_body(func, None, None);
+                let handler = self.next_handler.take();
+                let actual = self.function_body(func, handler.as_ref().map(|h| h.0.clone()), None);
+                if let Some(h) = &handler {
+                    self.check_handler(actual, h, name.span);
+                }
                 self.flow.insert(id, actual);
                 self.vars[id.0 as usize].base = actual;
             }
@@ -745,7 +859,19 @@ impl<'e> Checker<'e> {
             _ => None,
         };
         let self_ty = if method { owner } else { None };
-        let t = self.function_body(func, expected.and_then(|e| self.as_func(e)), self_ty);
+        let handler = self.next_handler.take();
+        let expected = expected
+            .and_then(|e| self.as_func(e))
+            .or_else(|| handler.as_ref().map(|h| h.0.clone()));
+        let t = self.function_body(func, expected, self_ty);
+        if let Some(h) = &handler {
+            let span = name
+                .method
+                .as_ref()
+                .unwrap_or(&name.path[name.path.len() - 1])
+                .span;
+            self.check_handler(t, h, span);
+        }
         if name.path.len() == 1 && !method {
             let n = &name.path[0];
             match self.lookup_var(&n.text) {
@@ -1441,4 +1567,11 @@ fn reassigned_in_closures(b: &Block) -> HashSet<u32> {
     let mut out = w.out;
     out.extend(w.captured.intersection(&w.assigned).copied());
     out
+}
+
+fn literal_string(e: &Expr) -> Option<String> {
+    match &e.kind {
+        ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value).into_owned()),
+        _ => None,
+    }
 }

@@ -35,7 +35,7 @@ Decorators may be applied to:
 | Classes | all |
 | Class methods, constructors, accessors and fields | all applicable (fields: no wrapping decorators) |
 | Enums | core only: `@deprecated`, `@if`, `@global`, `@reflect` |
-| Interfaces, type aliases, `declare` statements | core only: `@deprecated`, `@if` (plus `@widget`, `@intrinsic` and, on parameters, `@deferred` where documented) |
+| Interfaces, type aliases, `declare` statements | core only: `@deprecated`, `@if` (plus `@widget`, `@intrinsic`, `@onDemand` and, on parameters, `@deferred` where documented) |
 | `const` / `local` declarations | `@if`, `@global`, `@deprecated` |
 | `import` statements | `@if` |
 
@@ -85,6 +85,7 @@ Always available without import.
 | `@nocheck` | functions, methods, classes | Skip static type checking of the body. |
 | `@widget(type)` | `declare class` only | Marks a native widget type for widget classes ([Classes](03-classes.md#32-widget-classes)). Used by type packages. |
 | `@intrinsic(id)` | declarations in compiler-known modules only | Binds a declaration to compiler behavior. Not for user code (E3033). |
+| `@onDemand(addon)` | `declare global` and `declare function` only | The global exists only once Blizzard's load-on-demand addon `addon` has loaded. Hooks of it without `opts.addon` are W8102. Generated into the `wow-api` declarations. |
 | `@deferred` | callback parameters in `declare` signatures only | Marks a callback that the API invokes later, not during the call (e.g. `C_Timer.After`). Used by load-order analysis ([Modules §5.4.3](05-modules.md#543-load-time-and-run-time-edges)). |
 
 ## 4.4 Framework decorators

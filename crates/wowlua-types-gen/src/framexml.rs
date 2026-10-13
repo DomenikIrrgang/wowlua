@@ -24,6 +24,48 @@ pub fn globals(
     out
 }
 
+/// Globals that only files of load-on-demand addons define (`lod_files`:
+/// path, lowercase with `/`, → addon): name → the addon (the first by name
+/// when several do).
+pub fn lod_origins(
+    lua: &[(String, String)],
+    xml: &[(String, String)],
+    lod_files: &std::collections::HashMap<String, String>,
+    widget_classes: &HashSet<String>,
+) -> std::collections::HashMap<String, String> {
+    let mut by_name: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+        std::collections::BTreeMap::new();
+    let mut not_lod: HashSet<String> = HashSet::new();
+    let files = lua
+        .iter()
+        .map(|f| (f, true))
+        .chain(xml.iter().map(|f| (f, false)));
+    for ((path, text), is_lua) in files {
+        let mut g = IndexMap::new();
+        if is_lua {
+            lua_globals(text, &mut g);
+        } else {
+            xml_globals(text, widget_classes, &mut g);
+        }
+        match lod_files.get(&path.replace('\\', "/").to_lowercase()) {
+            Some(addon) => {
+                for name in g.keys() {
+                    by_name
+                        .entry(name.clone())
+                        .or_default()
+                        .insert(addon.clone());
+                }
+            }
+            None => not_lod.extend(g.into_keys()),
+        }
+    }
+    by_name
+        .into_iter()
+        .filter(|(name, _)| !not_lod.contains(name))
+        .filter_map(|(name, addons)| addons.into_iter().next().map(|a| (name, a)))
+        .collect()
+}
+
 fn add(out: &mut IndexMap<String, String>, name: &str, ty: &str) {
     if !crate::model::is_ident(name) {
         return;

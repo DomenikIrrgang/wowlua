@@ -568,6 +568,52 @@ fn bindings(analysis: &Analysis, i: usize, parse: &wowlua_syntax::Parse) -> Hash
     out
 }
 
+/// The standard library's `@intrinsic` ids a file's imports bind, for the
+/// type checker (which types handlers by their event, for example).
+#[derive(Clone, Debug, Default)]
+pub struct Intrinsics {
+    /// `import on from "wowlua:events"`: local name → id.
+    names: HashMap<String, String>,
+    /// `import * as events from "wowlua:events"`: local name → export → id.
+    namespaces: HashMap<String, HashMap<String, String>>,
+}
+
+impl Intrinsics {
+    pub fn of(analysis: &Analysis, file: usize, parse: &wowlua_syntax::Parse) -> Intrinsics {
+        let mut out = Intrinsics::default();
+        for (local, bound) in bindings(analysis, file, parse) {
+            match bound {
+                Bound::Intrinsic(id) => {
+                    out.names.insert(local, id);
+                }
+                Bound::Namespace(m) => {
+                    if let Some(info) = analysis.modules[m].as_ref() {
+                        out.namespaces.insert(local, info.intrinsics.clone());
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// The id `name` (or `namespace.member`) is bound to.
+    pub fn get(&self, name: &str, member: Option<&str>) -> Option<&str> {
+        match member {
+            None => self.names.get(name),
+            Some(m) => self.namespaces.get(name)?.get(m),
+        }
+        .map(String::as_str)
+    }
+
+    /// The local names bound (to shadowing checks).
+    pub fn locals(&self) -> impl Iterator<Item = &str> {
+        self.names
+            .keys()
+            .chain(self.namespaces.keys())
+            .map(String::as_str)
+    }
+}
+
 /// Runs the checks over every file of the package.
 pub fn check(files: &[FileInput], analysis: &Analysis, config: &StdlibConfig) -> Vec<Diagnostic> {
     let mut ctx = Ctx {

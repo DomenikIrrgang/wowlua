@@ -56,6 +56,8 @@ pub struct Decls {
     pub constants: IndexMap<String, Vec<(String, String)>>,
     pub events: IndexMap<String, Vec<ParamDecl>>,
     pub globals: IndexMap<String, String>,
+    /// Globals only a load-on-demand Blizzard addon defines: name → addon.
+    pub global_addons: IndexMap<String, String>,
 }
 
 const LUA_KEYWORDS: &[&str] = &[
@@ -170,6 +172,9 @@ impl Decls {
             out.push('\n');
         }
         for (name, ty) in &self.globals {
+            if let Some(addon) = self.global_addons.get(name) {
+                let _ = writeln!(out, "@onDemand(\"{addon}\")");
+            }
             let _ = writeln!(out, "declare global {name}: {ty}");
         }
         if !self.globals.is_empty() {

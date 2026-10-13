@@ -4941,164 +4941,320 @@ declare global currentIndex: any
 declare global count: any
 declare global Vector2DMixin: Vector2DMixin
 declare global Vector3DMixin: Vector3DMixin
+@onDemand("Blizzard_AccountSaveUI")
 declare global ACCOUNT_SAVE_KICK_ERROR_CODE: number
+@onDemand("Blizzard_AccountSaveUI")
 declare global AccountSaveFrameMixin: table
 declare global AchievementFrame_LoadUI: (...any) -> ...any
 declare global InspectAchievements: (...any) -> ...any
 declare global ToggleAchievementFrame: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTUI_CRITERIACHECKWIDTH: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTUI_SUMMARYCATEGORIES: table
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTUI_DEFAULTGUILDSUMMARYACHIEVEMENTS: table
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTUI_GUILDSUMMARYCATEGORIES: table
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_ToggleAchievementFrame: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_DisplayComparison: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_SetTabs: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_UpdateTabs: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_ToggleView: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameBaseTab_OnClick: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameComparisonTab_OnClick: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_ShowSubFrame: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameCategories_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameCategories_GetCategoryList: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameCategories_DisplayButton: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameCategories_SelectButton: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameAchievements_OnShow: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementCategoryButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameAchievements_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameAchievements_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameAchievementsBackdrop_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameAchievements_Update: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameAchievements_ClearSelection: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameAchievements_ToggleView: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementIcon_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementShield_Desaturate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementShield_Saturate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global GUILDACHIEVEMENTBUTTON_MINHEIGHT: number
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_UpdatePlusMinusTexture: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_Collapse: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_Expand: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_Saturate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_Desaturate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_ToggleTracking: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_DisplayAchievement: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameAchievements_SelectButton: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_DisplayObjectives: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementsObjectivesMixin: table
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_ResetCriteria: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_GetMeta: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_ToggleMetaView: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementObjectives_DisplayProgressiveAchievement: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementObjectives_DisplayCriteria: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementStatButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummary_OnShow: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummary_Update: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummary_ToggleView: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummary_UpdateAchievements: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummaryCategoriesStatusBar_Update: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummaryAchievement_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummaryAchievement_SetGuildTextures: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummaryCategory_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_SelectAchievement: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_SelectSummaryStatistic: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameComparison_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameComparison_OnShow: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameComparison_OnHide: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameComparison_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameComparison_SetUnit: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameComparison_DisplayAchievement: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameComparisonStat_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementComparisonPlayerButton_Saturate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementComparisonPlayerButton_Desaturate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementComparisonPlayerButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementComparisonFriendButton_Saturate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementComparisonFriendButton_Desaturate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementComparisonFriendButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_IsFeatOfStrength: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global GUILD_ACHIEVEMENT_FUNCTIONS: table
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_TEXTURES_TO_LOAD: table
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementMeta_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementMeta_OnLeave: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementShield_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementShield_OnLeave: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameAchievements_CheckGuildMembersTooltip: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_GOLD_BORDER_COLOR: any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_RED_BORDER_COLOR: any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_BLUE_BORDER_COLOR: any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTCOMPARISON_PLAYERSHIELDFONT1: any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTCOMPARISON_PLAYERSHIELDFONT2: any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTCOMPARISON_FRIENDSHIELDFONT1: any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTCOMPARISON_FRIENDSHIELDFONT2: any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTUI_CATEGORIESWIDTH: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTUI_PROGRESSIVEHEIGHT: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTUI_PROGRESSIVEWIDTH: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTUI_MAX_SUMMARY_ACHIEVEMENTS: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTUI_MAXCONTENTWIDTH: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTUI_DEFAULTSUMMARYACHIEVEMENTS: table
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_CATEGORY_NORMAL_R: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_CATEGORY_NORMAL_G: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_CATEGORY_NORMAL_B: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_CATEGORY_NORMAL_A: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_CATEGORY_HIGHLIGHT_R: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_CATEGORY_HIGHLIGHT_G: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_CATEGORY_HIGHLIGHT_B: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_CATEGORY_HIGHLIGHT_A: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTBUTTON_LABELWIDTH: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_COMPARISON_SUMMARY_ID: any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID: any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_FILTER_ALL: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_FILTER_COMPLETE: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_FILTER_INCOMPLETE: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENT_FUNCTIONS: table
+@onDemand("Blizzard_AchievementUI")
 declare global STAT_FUNCTIONS: table
+@onDemand("Blizzard_AchievementUI")
 declare global COMPARISON_ACHIEVEMENT_FUNCTIONS: table
+@onDemand("Blizzard_AchievementUI")
 declare global COMPARISON_STAT_FUNCTIONS: table
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_OnHide: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_ForceUpdate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameTab_OnClick: any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameCategories_OnShow: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameCategory_StatusBarTooltip: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameCategory_FeatOfStrengthTooltip: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameCategories_UpdateTooltip: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameComparison_UpdateStatusBars: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameAchievements_ForceUpdate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementIcon_Desaturate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementIcon_Saturate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementShield_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTBUTTON_DESCRIPTIONHEIGHT: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTBUTTON_COLLAPSEDHEIGHT: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTBUTTON_CRITERIAROWHEIGHT: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTBUTTON_METAROWHEIGHT: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTBUTTON_MAXHEIGHT: number
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTBUTTON_TEXTUREHEIGHT: number
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementShield_SetPoints: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_ResetTable: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_GetProgressivePoints: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_GetCategoryNumAchievements_All: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_GetCategoryNumAchievements_Complete: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_GetCategoryNumAchievements_Incomplete: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global ACHIEVEMENTUI_SELECTEDFILTER: any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameFilters: table
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_SetFilter: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameStats_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameStats_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummaryAchievement_OnClick: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummaryAchievement_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummaryCategoryButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_GetCategoryTotalNumAchievements: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummaryCategory_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummaryCategory_OnShow: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummaryCategory_OnHide: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameComparison_ForceUpdate: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_IsComparison: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameSummary_LocalizeButton: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_LocalizeMiniAchievement: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_LocalizeProgressBar: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementButton_LocalizeMetaAchievement: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_LocalizeCriteria: (...any) -> ...any
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementCategoryButton_Localize: (...any) -> ...any
 declare global ActionButtonUtil: table
 declare global ATTACK_BUTTON_FLASH_TIME: number
@@ -5210,206 +5366,406 @@ declare global AddonList_SetSecurityIcon: (...any) -> ...any
 declare global AddonList_DisableOutOfDate: (...any) -> ...any
 declare global AddonTooltip_BuildDeps: (...any) -> ...any
 declare global AddonTooltip_Update: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ARCHAEOLOGY_BUTTON_HEIGHT: number
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ARCHAEOLOGY_MID_TITLE_YOFFSET: any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ARCHAEOLOGY_MAX_RACES: number
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ARCHAEOLOGY_MAX_STONES: number
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ARCHAEOLOGY_MAX_COMPLETED_SHOWN: number
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ARCHAEOLOGY_HELP_TAB: number
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ARCHAEOLOGY_SUMMARY_TAB: number
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ARCHAEOLOGY_COMPLETED_TAB: number
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ARCHAEOLOGY_SUMMARY_PAGE: number
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ARCHAEOLOGY_COMPLETED_PAGE: number
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ARCHAEOLOGY_CURRENT_PAGE: number
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_Show: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_Hide: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_ShowFailed: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_OnHide: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_OnMouseWheel: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_UpdateSummary: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_CurrentArtifactUpdate: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_UpdateComplete: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_ShowArtifact: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_OnTabClick: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_KeyStoneClick: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame_PageClick: (...any) -> ...any
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrameSummary_PageClick: (...any) -> ...any
 declare global ArchaeologyFrame_LoadUI: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global PRICE_DISPLAY_WIDTH: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global PRICE_DISPLAY_WITH_CHECKMARK_WIDTH: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionCategoryMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFilterButton_SetUp: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBackgroundMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseItemDisplayMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AUCTION_HOUSE_FILTER_STRINGS: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AUCTION_HOUSE_DEFAULT_FILTERS: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global GetAHFilterCategoryName: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseUtil: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global NUM_BROWSE_TO_DISPLAY: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global NUM_AUCTION_ITEMS_PER_PAGE: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global NUM_FILTERS_TO_DISPLAY: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global BROWSE_FILTER_HEIGHT: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global NUM_BIDS_TO_DISPLAY: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global NUM_AUCTIONS_TO_DISPLAY: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AUCTIONS_BUTTON_HEIGHT: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global CLASS_FILTERS: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AUCTION_TIMER_UPDATE_DELAY: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global MAXIMUM_BID_PRICE: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AUCTION_CANCEL_COST: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global NUM_TOKEN_LOGS_TO_DISPLAY: number
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionCategories: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrame_GetDetailColumnString: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrame_GetDetailColumnStringUnsafe: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrame_DoesCategoryHaveFlag: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrame_CreateCategory: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseCategory_FindDeepest: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseAuctionsFrameTabMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseAuctionsSummaryListMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseAuctionsSummaryLineMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global CancelAuctionButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseAuctionsFrameMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBrowseResultsFrameMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBuyDialogNotificationFrameMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBuyDialogNotificationButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBuyDialogButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBuyDialogBuyNowButtonMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBuyDialogCancelButtonMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBuyDialogOkayButtonMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBuyDialogMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrameFilters_Update: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrameFilters_UpdateCategories: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrameFilters_AddSubCategories: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrameFilters_AddSubSubCategories: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrameFilter_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrameFilter_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrameFilter_OnLeave: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrameFilter_OnMouseDown: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionFrameFilter_OnMouseUp: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseCategoriesListMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseCommoditiesBackButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseCommoditiesBuyButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseCommoditiesBuyDisplayMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseCommoditiesBuyFrameMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseCommoditiesListMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseCommoditiesBuyListMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseCommoditiesSellListMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseCommoditiesSellFrameMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global g_auctionHouseSortsBySearchContext: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global g_outbidAuctionIDs: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global g_activeBidAuctionIDs: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AUCTION_HOUSE_STATIC_POPUPS: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseSortOrderState: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFrameMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFrameDisplayMode: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFrameDialogs: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFramePopups: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseItemBuyFrameMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseItemBuyItemDisplayMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseItemListLineMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFavoritableLineMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseItemListMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBuyoutModeCheckButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseItemSellFrameMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global MultisellProgressFrameMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseSearchButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFavoritesSearchButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFilterButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseSearchBoxMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseSearchBarMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseSellFrameAlignedControlMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseAlignedQuantityInputBoxMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseQuantityInputMaxButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseAlignedQuantityInputFrameMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseAlignedPriceInputFrameMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHousePriceErrorFrameMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseAlignedDurationMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseAlignedPriceDisplayMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseSellFramePostButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseSellFrameOverlayMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseSellFrameItemDisplayMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseSellFrameMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFavoriteContextMenu: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseItemDisplayItemButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseInteractableItemDisplayItemButtonMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseInteractableItemDisplayMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseQuantityInputBoxMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHousePriceDisplayFrameMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseRefreshFrameMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseRefreshButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBidFrameMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBuyoutFrameMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBidButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBuyoutButtonMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFavoriteButtonBaseMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFrameTabMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFrameTopTabMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFrameDisplayModeTabMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellItemKeyMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellTooltipMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellTextTooltipMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellVirtualTextMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTablePriceDisplayMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAuctionsMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAuctionsTextMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAuctionsPriceMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellUnitPriceMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellCommoditiesQuantityMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellFavoriteMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellFavoriteButtonMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellBidMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellBuyoutMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellOwnedCheckmarkMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableExtraInfoMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellOwnersMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellTimeLeftMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellTimeLeftBandMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAuctionsBidMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAllAuctionsPriceMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAllAuctionsBidMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAuctionsBuyoutMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAllAuctionsBuyoutMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAuctionsOwnersMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAuctionsItemLevelMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAuctionsCommoditiesQuantityMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAuctionsUnitPriceMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellItemDisplayMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellAuctionsItemDisplayMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellMinPriceMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellQuantityMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellLevelMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellItemSellBuyoutMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableCellItemQuantityMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableHeaderStringMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableBuilderMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseTableBuilder: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global GetAHFilterName: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseSearchContext: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBidStatus: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseSystemMixin: table
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseSortOrderSystemMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseBuySystemMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global BrowseWowTokenResults_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global BrowseWowTokenResults_OnShow: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global BrowseWowTokenResults_OnHide: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global BrowseWowTokenResults_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global BrowseWowTokenResults_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global BrowseWowTokenResults_Update: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global BrowseWowTokenResultsBuyout_OnClick: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global BrowseWowTokenResultsBuyout_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global WoWTokenSellFrameMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global WoWTokenDisplayMixin: any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionWowToken_UpdateMarketPriceCallback: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionWowToken_ShouldUpdatePrice: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionWowToken_UpdateMarketPrice: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionWowToken_CancelUpdateTicker: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global WoWTokenGameTimeTutorial_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global WoWTokenGameTimeTutorial_OnShow: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global WowTokenGameTimeTutorialStoreButton_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global WowTokenGameTimeTutorialStoreButton_UpdateState: (...any) -> ...any
+@onDemand("Blizzard_AuctionHouseUI")
 declare global WowTokenGameTimeTutorialStoreButton_OnLoad: (...any) -> ...any
 declare global AuthChallengeUI_OnLoad: (...any) -> ...any
 declare global AuthChallengeUI_Submit: (...any) -> ...any
@@ -5454,21 +5810,33 @@ declare global BNToastMixin: table
 declare global BNetTimeAlertMixin: table
 declare global BarberShopFrame_LoadUI: (...any) -> ...any
 declare global BattlefieldMap_LoadUI: (...any) -> ...any
+@onDemand("Blizzard_BattlefieldMap")
 declare global BATTLEFIELD_TAB_SHOW_DELAY: number
+@onDemand("Blizzard_BattlefieldMap")
 declare global BATTLEFIELD_TAB_FADE_TIME: number
+@onDemand("Blizzard_BattlefieldMap")
 declare global BATTLEFIELD_TAB_DEFAULT_ALPHA: number
+@onDemand("Blizzard_BattlefieldMap")
 declare global BATTLEFIELD_MAP_PARTY_MEMBER_SIZE: number
+@onDemand("Blizzard_BattlefieldMap")
 declare global BATTLEFIELD_MAP_RAID_MEMBER_SIZE: number
+@onDemand("Blizzard_BattlefieldMap")
 declare global BATTLEFIELD_MAP_PLAYER_SIZE: number
+@onDemand("Blizzard_BattlefieldMap")
 declare global BATTLEFIELD_MAP_POI_SCALE: number
-declare global BATTLEFIELD_MAP_WIDTH: number
+@onDemand("Blizzard_BattlefieldMap")
 declare global BattlefieldMapOptions: any
+@onDemand("Blizzard_BattlefieldMap")
 declare global BattlefieldMapTabMixin: table
+@onDemand("Blizzard_BattlefieldMap")
 declare global BattlefieldMapMixin: table
 declare global GetBattlefieldMapInstanceType: (...any) -> ...any
 declare global ToggleBattlefieldMap: (...any) -> ...any
+@onDemand("Blizzard_BehavioralMessaging")
 declare global BehavioralMessagingNotificationMixin: table
+@onDemand("Blizzard_BehavioralMessaging")
 declare global BehavioralMessagingTrayMixin: table
+@onDemand("Blizzard_BehavioralMessaging")
 declare global BehavioralMessagingDetailsMixin: table
 declare global BUFF_WARNING_TIME: number
 declare global BUFF_MAX_DISPLAY: number
@@ -5477,198 +5845,391 @@ declare global SetButtonPulse: (...any) -> ...any
 declare global ButtonPulse_StopPulse: (...any) -> ...any
 declare global Calendar_LoadUI: (...any) -> ...any
 declare global ToggleCalendar: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CALENDAR_FRAME_EXTRA_WIDTH: number
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventTypeNames: table
+@onDemand("Blizzard_Calendar")
 declare global CalendarOnEditBoxTab: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global Calendar_Toggle: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global Calendar_Hide: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global Calendar_Show: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_ShowEventFrame: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_HideEventFrame: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_GetEventFrame: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_UpdateTimeFormat: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_OnHide: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_OnMouseWheel: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_InitWeekday: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_InitDay: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_UpdateTitle: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_UpdateDay: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_UpdateDayEvents: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_UpdateDayTextures: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_SetSelectedDay: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_SetToday: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTodayFrame_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_SetLastDay: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_SetSelectedEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_OpenEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_CloseEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_OffsetMonth: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_UpdateMonthOffsetButtons: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_OpenToGuildEventIndex: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarPrevMonthButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarNextMonthButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_UpdateFilter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_PushModal: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_PopModal: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame_GetModal: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarModalDummy_Show: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarModalDummy_Hide: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventFrameBlocker_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventFrameBlocker_OnHide: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventFrameBlocker_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_ClearEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_CreateEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_CreateGuildAnnouncement: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_CreateGuildEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_CreateCommunityEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_PasteEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_DeleteEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_ReportSpam: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_AcceptInvite: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_TentativeInvite: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_DeclineInvite: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_RemoveInvite: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayContextMenu_SignUp: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayButton_OnLeave: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global GenerateDayContextMenu: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayButton_Click: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayButtonMoreEventsButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayButtonMoreEventsButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayButtonMoreEventsButton_OnLeave: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayButtonMoreEventsButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayEventButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayEventButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayEventButton_OnLeave: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayEventButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarDayEventButton_Click: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTitleFrame_SetText: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewHolidayFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewHolidayFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewHolidayFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewRaidFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewRaidFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewRaidFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventCloseButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventInviteList_InitButtonShared: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEvent_InitManagedScrollBarVisibility: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteList_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteList_InitButton: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventInviteList_InitButton: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventInviteList_AnchorSortButtons: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventInviteList_UpdateSortButtons: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventInviteSortButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventInviteSortButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventInviteListButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventDescriptionContainer_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventAcceptButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventAcceptButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventTentativeButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventTentativeButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventDeclineButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventDeclineButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventRemoveButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventRemoveButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventFrameHeaderFrame_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventRSVP_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEvent_SetEventButtons: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventInviteList_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventInviteListScrollFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventInviteList_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventFrame_SetSelectedInvite: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventInviteListButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventInviteListButton_Click: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventFrame_OnHide: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventTitleEdit_OnTextChanged: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventTitleEdit_OnEditFocusLost: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventDescriptionContainer_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventCreatorName_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventTexture_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEvent_UpdateEventType: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEvent_SetSelectedIndex: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEvent_SetEventTime: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEvent_UpdateEventTime: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEvent_UpdateTimeFormat: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventAutoApproveCheck_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventAutoApproveCheck_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEvent_SetAutoApprove: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventLockEventCheck_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventLockEventCheck_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEvent_SetLockEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteList_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteListScrollFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventFrame_SetSelectedInvite: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteListButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteEdit_OnEnterPressed: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteEdit_OnEditFocusLost: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteButton_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteButton_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventMassInviteButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventMassInviteButton_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventMassInviteButton_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventRaidInviteButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventRaidInviteButton_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventRaidInviteButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventRaidInviteButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventRaidInviteButton_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventCreateButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventCreateButton_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventCreateButton_SetText: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventCreateButton_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInviteFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInvite_GenerateDropdowns: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInviteFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInviteFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInvite_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInviteAcceptButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerFrame_Show: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerFrame_Hide: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerFrame_Toggle: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerFrame_SetSelectedEvent: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerFrame_InitButton: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerCloseButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerButton_Click: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerButton_OnDoubleClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerFrame_Show: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerFrame_Hide: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerFrame_Toggle: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerFrame_UpdateScrollBox: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerTitleFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePicker_InitButton: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerAcceptButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerButton_OnDoubleClick: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarClassButtonContainer_Show: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarClassButtonContainer_Hide: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarClassButtonContainer_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarClassButtonContainer_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarClassButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarClassButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarClassTotalsButton_Update: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarClassTotalsButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventRetrievingFrame_OnUpdate: (...any) -> ...any
 declare global ChannelButtonBaseMixin: table
 declare global ChannelButtonMixin: any
@@ -6336,118 +6897,231 @@ declare global COLLECTIONS_JOURNAL_TAB_INDEX_APPEARANCES: any
 declare global ToggleCollectionsJournal: (...any) -> ...any
 declare global SetCollectionsJournalShown: (...any) -> ...any
 declare global ToggleToyCollection: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global CollectionsSpellButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global CollectionsButton_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global CollectionsSpellButton_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global CollectionsSpellButton_OnHide: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global CollectionsSpellButton_UpdateCooldown: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global CollectionsPagingMixin: table
+@onDemand("Blizzard_Collections")
 declare global CollectionItemListButton_SetRedOverlayShown: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global COLLECTIONS_FANFARE_ICON: string
+@onDemand("Blizzard_Collections")
 declare global CollectionsJournal_SetTab: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global CollectionsJournal_GetTab: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global CollectionsJournal_ValidateTab: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global CollectionsJournal_UpdateSelectedTab: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global CollectionsJournal_HideTabHelpTips: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global CollectionsJournal_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global CollectionsJournal_OnHide: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global HeirloomsMixin: table
+@onDemand("Blizzard_Collections")
 declare global HeirloomsJournal_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global HeirloomsJournal_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global HeirloomsJournal_OnMouseWheel: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global HeirloomsJournal_UpdateButton: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global HeirloomsJournalSpellButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global HeirloomsJournalSpellButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global HeirloomsJournalSearchBox_OnTextChanged: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_InitFilterButton: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_ResetMountButton: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_InitMountButton: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_FullUpdate: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_OnHide: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_UpdateMountList: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournalMountButton_UpdateTooltip: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournalMountButton_ChooseFallbackMountToDisplay: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_UpdateMountDisplay: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_Select: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_SelectByMountID: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_GetMountButtonHeight: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_GetMountButtonByMountID: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_SetSelected: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournalMountButton_UseMount: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournalMountButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournalMountButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountListDragButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountListItem_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_OnSearchTextChanged: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_ClearSearch: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_SetCollectedFilter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_GetCollectedFilter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_SetNotCollectedFilter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_GetNotCollectedFilter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_SetUnusableFilter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_GetUnusableFilter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global MountJournal_SetAllSourceFilters: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PlayerPreviewToggle: table
+@onDemand("Blizzard_Collections")
 declare global ToyBox_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToyBox_InitFilterDropdown: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToyBox_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToyBox_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToyBox_FindPageForToyID: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToyBox_OnMouseWheel: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToySpellButton_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToySpellButton_OnHide: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToySpellButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToySpellButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToySpellButton_CreateContextMenu: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToySpellButton_FadeInIcon: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToySpellButton_OnModifiedClick: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToySpellButton_OnDrag: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToySpellButton_UpdateButton: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToyBox_UpdateButtons: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToyBox_UpdatePages: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToyBox_UpdateProgressBar: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global ToyBox_OnSearchTextChanged: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global WardrobeCollectionFrameMixin: table
+@onDemand("Blizzard_Collections")
 declare global WardrobeItemsCollectionSlotButtonMixin: table
+@onDemand("Blizzard_Collections")
 declare global WardrobeItemsCollectionMixin: table
+@onDemand("Blizzard_Collections")
 declare global WardrobeCollectionFrameSearchBoxProgressMixin: table
+@onDemand("Blizzard_Collections")
 declare global WardrobeCollectionFrameSearchBoxMixin: table
+@onDemand("Blizzard_Collections")
 declare global PET_ACHIEVEMENT_CATEGORY: number
+@onDemand("Blizzard_Collections")
 declare global PetJournalUtil_GetDisplayName: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_InitFilterDropdown: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_OnShow: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_OnHide: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_SelectSpecies: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_SelectPet: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_UpdateSummonButtonState: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_UpdateAll: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_InitPetButton: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_UpdatePetList: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_OnSearchTextChanged: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_ShowPetDropdown: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_ShowPetCardByID: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_ShowPetCardBySpeciesID: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_ShowPetCard: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_FindPetCardIndex: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournalPetCard_OnClick: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_UpdatePetCard: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_UnwrapPet: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_SetPendingCage: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_ClearPendingCage: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournal_IsPendingCage: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global GetPetTypeTexture: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournalFilterDropdown_SetCollectedFilter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournalFilterDropdown_GetCollectedFilter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournalFilterDropdown_SetNotCollectedFilter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournalFilterDropdown_GetNotCollectedFilter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournalFilterDropdown_SetAllPetTypes: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournalFilterDropdown_SetAllPetSources: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournalPetCount_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_Collections")
 declare global PetJournalSummonButton_OnEnter: (...any) -> ...any
 declare global ColorPickerFrameMixin: table
 declare global ITEM_QUALITY_COLORS: table
@@ -6461,78 +7135,132 @@ declare global MATERIAL_TEXT_COLOR_TABLE: table
 declare global MATERIAL_TITLETEXT_COLOR_TABLE: table
 declare global GetMaterialTextColors: (...any) -> ...any
 declare global CombatLog_LoadUI: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global COMBATLOG_FILTER_VERSION: number
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_Filter_Version: number
+@onDemand("Blizzard_CombatLog")
 declare global COMBATLOG: any
+@onDemand("Blizzard_CombatLog")
 declare global COMBATLOG_LIMIT_PER_FRAME: number
+@onDemand("Blizzard_CombatLog")
 declare global COMBATLOG_DEFAULT_SETTINGS: table
+@onDemand("Blizzard_CombatLog")
 declare global COMBATLOG_EVENT_LIST: table
+@onDemand("Blizzard_CombatLog")
 declare global COMBATLOG_FLAG_LIST: table
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_InitializeFilters: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_GenerateFullEventList: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_GenerateFullFlagList: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global DEFAULT_COMBATLOG_FILTER_TEMPLATE: table
+@onDemand("Blizzard_CombatLog")
 declare global CombatLogQuickButtonFrame: any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_Filter_Defaults: table
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_Filters: any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_HasEvent: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_EnableEvent: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_DisableEvent: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_CreateActionMenu: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_CreateSpellMenu: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_MessageTypesMenu: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_FormattingMenu: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_MenuHelper: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_CreateUnitMenu: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_CreateFilterMenu: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_UnitMenuClick: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_QuickButtonRightClick: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_SpellMenuClick: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_CurrentSettings: any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_QuickButtonFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_QuickButtonFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global CreateCombatLogContextMenu: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_Update_QuickButtons: any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_QuickButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global ShowQuickButton: (...any) -> ...any
+@onDemand("Blizzard_CombatLog")
 declare global Blizzard_CombatLog_RefreshGlobalLinks: (...any) -> ...any
-declare global COMBATLOG_DEFAULT_COLORS: table
-declare global COMBATLOG_FILTER_ME: any
-declare global COMBATLOG_FILTER_MINE: any
-declare global COMBATLOG_FILTER_MY_PET: any
-declare global COMBATLOG_FILTER_FRIENDLY_UNITS: any
-declare global COMBATLOG_FILTER_HOSTILE_PLAYERS: any
-declare global COMBATLOG_FILTER_HOSTILE_UNITS: any
-declare global COMBATLOG_FILTER_NEUTRAL_UNITS: any
-declare global COMBATLOG_FILTER_UNKNOWN_UNITS: any
+@onDemand("Blizzard_Commentator")
 declare global COMMENTATOR_MAX_OFFENSIVE_SPELLS: any
+@onDemand("Blizzard_Commentator")
 declare global COMMENTATOR_MAX_DEFENSIVE_SPELLS: any
+@onDemand("Blizzard_Commentator")
 declare global COMMENTATOR_MAX_DEBUFF_SPELLS: any
+@onDemand("Blizzard_Commentator")
 declare global COMMENTATOR_INVERSE_SCALE: any
+@onDemand("Blizzard_Commentator")
 declare global CommentatorNamePlateMixin: table
+@onDemand("Blizzard_Commentator")
 declare global COMMENTATOR_SCORE_LIMIT: any
+@onDemand("Blizzard_Commentator")
 declare global CommentatorScoreboardMixin: table
+@onDemand("Blizzard_Commentator")
 declare global CommentatorSpellCache: table
+@onDemand("Blizzard_Commentator")
 declare global CommentatorSpellTrayMixin: table
+@onDemand("Blizzard_Commentator")
 declare global FunctionThrottleMixin: table
+@onDemand("Blizzard_Commentator")
 declare global CommentatorUtil: table
 declare global Commentator_LoadUI: (...any) -> ...any
+@onDemand("Blizzard_Commentator")
 declare global CommentatorSave: table
+@onDemand("Blizzard_Commentator")
 declare global TOURNAMENT_OBSERVE_PLAYER_PRIMARY: number
+@onDemand("Blizzard_Commentator")
 declare global TOURNAMENT_OBSERVE_PLAYER_SECONDARY: number
+@onDemand("Blizzard_Commentator")
 declare global TOURNAMENT_OBSERVE_PLAYER_PRIMARY_SNAP: number
+@onDemand("Blizzard_Commentator")
 declare global SetFollowCameraTransitionPreset: (...any) -> ...any
+@onDemand("Blizzard_Commentator")
 declare global CycleFollowCameraTransitionPreset: (...any) -> ...any
+@onDemand("Blizzard_Commentator")
 declare global SetSpectatorModeForOtherFrames: (...any) -> ...any
+@onDemand("Blizzard_Commentator")
 declare global CommentatorMixin: table
+@onDemand("Blizzard_Commentator")
 declare global CommentatorModelSceneMixin: table
+@onDemand("Blizzard_Commentator")
 declare global CommentatorSpellBaseMixin: table
+@onDemand("Blizzard_Commentator")
 declare global CommentatorSpellMixin: any
+@onDemand("Blizzard_Commentator")
 declare global CommentatorDebuffMixin: any
+@onDemand("Blizzard_Commentator")
 declare global CommentatorCooldownMixin: table
+@onDemand("Blizzard_Commentator")
 declare global CooldownCircleTrackerMixin: table
+@onDemand("Blizzard_Commentator")
 declare global CommentatorUnitFrameMixin: table
+@onDemand("Blizzard_Commentator")
 declare global CommentatorVictoryFanfareFrameMixin: table
+@onDemand("Blizzard_Commentator")
 declare global FadeToBlackMixin: table
 declare global ClubFinderDropdownMixin: table
 declare global ClubFinderGetRecruitmentSettingByValue: (...any) -> ...any
@@ -6779,181 +7507,321 @@ declare global DeveloperConsole_RepeatLastCommand: (...any) -> ...any
 declare global DeveloperConsoleAutoCompleteMixin: table
 declare global DeathRecap_LoadUI: (...any) -> ...any
 declare global OpenDeathRecapUI: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global DebugTooltip_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_OnDisplaySizeChanged: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_IsFramestackEnabled: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_IsShowHiddenEnabled: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_IsHighlightEnabled: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_IsShowRegionsEnabled: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_IsShowAnchorsEnabled: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_OnFramestackVisibilityUpdated: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_ChangeHighlight: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_InspectTable: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_ToggleTextureInformation: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_HandleFrameCommand: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_OnTooltipSetFrameStack: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_Show: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_Hide: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_ToggleDefaults: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_Toggle: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global AnchorHighlightMixin: table
+@onDemand("Blizzard_DebugTools")
 declare global FRAMESTACK_UPDATE_TIME: number
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_OnShow: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_OnHide: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_OnTooltipCleared: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip_OnEnter: any
+@onDemand("Blizzard_DebugTools")
 declare global DebugIdentifierFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global CompareFunctionReturns: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableInspectorMixin: any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeDisplayDuplicateButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeDisplayParentButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeDisplayNavigateBackwardButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeDisplayNavigateForwardButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeDisplayVisibilityButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeDisplayDynamicUpdateButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeDisplayHighlightButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableInspectorFilterBox_OnEnterPressed: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableInspectorFilterBox_OnTextChanged: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global DisplayTableInspectorWindow: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableInspectorAnchorDataProviderMixin: any
+@onDemand("Blizzard_DebugTools")
 declare global TableInspectAnchorLineMixin: table
+@onDemand("Blizzard_DebugTools")
 declare global TableInspectorAttributeDataProviderMixin: any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeLineMixin: table
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeLineEditableMixin: any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeLineReferenceMixin: any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeLineFixedValueMixin: any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeLineTitleMixin: table
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeDisplayEditBox_OnEditFocusGained: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeDisplayEditBox_OnEnterPressed: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeDisplayValueButton_OnMouseDown: (...any) -> ...any
+@onDemand("Blizzard_DebugTools")
 declare global TableInspectorDataProviderMixin: table
+@onDemand("Blizzard_DebugTools")
 declare global TexelSnappingVisualizerMixin: table
 declare global GMError: (...any) -> ...any
 declare global OnExcessiveErrors: (...any) -> ...any
 declare global COMBATLOG_OBJECT_RAIDTARGET_MASK: any
-declare global AURA_TYPE_BUFF: string
-declare global AURA_TYPE_DEBUFF: string
-declare global COMBATLOG_HIGHLIGHT_MULTIPLIER: number
-declare global CombatLog_Color_ColorArrayByEventType: any
-declare global CombatLog_Color_ColorArrayBySchool: any
-declare global CombatLog_Color_ColorArrayByUnitType: any
-declare global CombatLog_Color_HighlightColorArray: any
-declare global CombatLog_String_DamageResultString: any
-declare global CombatLog_String_GetIcon: any
-declare global CombatLog_String_PowerType: any
-declare global CombatLog_String_SchoolString: any
 declare global RaidNotice_AddMessage: (...any) -> ...any
 declare global RaidNotice_Clear: (...any) -> ...any
 declare global RaidNotice_UpdateSlot: (...any) -> ...any
 declare global RaidNotice_FadeInit: (...any) -> ...any
-declare global MAX_ARENA_ENEMIES: number
+@onDemand("Blizzard_Dispatcher")
 declare global DISPATCHER_VERSION: number
+@onDemand("Blizzard_Dispatcher")
 declare global Dispatcher: table
 declare global INVENTORY_ALERT_STATUS_SLOTS: table
 declare global INVENTORY_ALERT_COLORS: table
 declare global EncounterJournal_LoadUI: (...any) -> ...any
 declare global CanShowEncounterJournal: (...any) -> ...any
 declare global ToggleEncounterJournal: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global GetEJTierData: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global ExpansionEnumToEJTierDataTableId: table
+@onDemand("Blizzard_EncounterJournal")
 declare global GetEJTierDataTableID: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalItemMixin: table
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalItemHeaderMixin: table
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterBossButtonMixin: table
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SetupLootFilterDropdown: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SetupLootSlotFilterDropdown: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SetupDifficultyDropdown: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SetupExpansionDropdown: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterItemTemplate_DividerFrameTipOnEnter: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_EnableExpansionDropdown: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_DisableExpansionDropdown: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_HasChangedContext: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ResetDisplay: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_OnShow: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_OnHide: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_IsDungeonTabSelected: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_IsRaidTabSelected: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_UpdateDifficulty: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_GetCreatureButton: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_FindCreatureButtonForDisplayInfo: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_UpdatePortraits: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ListInstances: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalInstanceButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_DisplayInstance: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_DisplayEncounter: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_DisplayCreature: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ShowCreatures: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_HideCreatures: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_UpdateButtonState: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_OnClick: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_OnHyperlinkEnter: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_CleanBullets: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SetBullets: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SetDescriptionWithBullets: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SetUpOverview: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ToggleHeaders: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ShiftHeaders: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ResetHeaders: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_FocusSection: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_FocusSectionCallback: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_MoveSectionUpdate: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ClearChildHeaders: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ClearDetails: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_TabClicked: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SetTab: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SetTabEnabled: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ValidateSelectedTab: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_LootCallback: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_LootUpdate: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_Loot_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_Loot_OnClick: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SetFlagIcon: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_Refresh: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_GetSearchDisplay: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SelectSearch: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterSearchResultLGMixin: table
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SearchUpdate: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ShowFullSearch: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_RestartSearchTracking: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ShowSearch: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalSearchBox_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalSearchBoxSearchProgressBar_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalSearchBox_OnTextChanged: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalSearchBox_OnEditFocusGained: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalSearchBox_OnHide: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_UpdateSearchPreview: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ClearSearch: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalSearchBoxShowAllResults_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_OpenJournal: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SelectDifficulty: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EJSuggestTab_GetPlayerTierIndex: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EJ_ContentTab_OnClick: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EJ_ContentTab_Select: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EJ_ContentTab_SelectAppropriateInstanceTab: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EJ_ContentTab_SetEnabled: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_ExpansionDropdown_Select: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_OnFilterChanged: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_SetSlotFilterInternal: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EJNAV_RefreshInstance: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EJNAV_SelectInstance: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EJNAV_GetInstanceList: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EJNAV_RefreshEncounter: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EJNAV_SelectEncounter: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EJNAV_GetEncounterList: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global AdventureJournal_LeftTitleFonts: table
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal_AJ_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global AdventureJournal_Reward_OnLeave: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global AdventureJournal_Reward_OnMouseDown: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalBossButton_OnShow: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalBossButton_OnHide: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalBossButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalScrollBarOldMixin: table
+@onDemand("Blizzard_EncounterJournal")
 declare global ModifiedInstanceIconMixin: table
+@onDemand("Blizzard_EncounterJournal")
 declare global EJInstanceSelect_UpdateTitle: (...any) -> ...any
 declare global C_StoreSecure: any
 declare global CreateForbiddenFrame: any
@@ -7230,12 +8098,19 @@ declare global BLIZZARD_STORE_DISCLAIMER_GUILD_NAME_CHANGE: any
 declare global BLIZZARD_STORE_DISCLAIMER_GUILD_FACTION_CHANGE: any
 declare global BLIZZARD_STORE_DISCLAIMER_GUILD_TRANSFER: any
 declare global CreateSecureMixinCopy: any
+@onDemand("Blizzard_EventTrace")
 declare global EventTraceSavedVars: table
+@onDemand("Blizzard_EventTrace")
 declare global EventTraceButtonBehaviorMixin: table
+@onDemand("Blizzard_EventTrace")
 declare global EventTraceScrollBoxButtonMixin: table
+@onDemand("Blizzard_EventTrace")
 declare global EventTracePanelMixin: any
+@onDemand("Blizzard_EventTrace")
 declare global EventTraceLogEventButtonMixin: table
+@onDemand("Blizzard_EventTrace")
 declare global EventTraceLogMessageButtonMixin: table
+@onDemand("Blizzard_EventTrace")
 declare global EventTraceFilterButtonMixin: table
 declare global EffectFactoryMixin: table
 declare global GlowEmitterMixin: table
@@ -7848,15 +8723,6 @@ declare global IconDataProvider_GetAllIconTypes: (...any) -> ...any
 declare global IconDataProviderMixin: table
 declare global IconDataProviderIconType: any
 declare global IconDataProviderExtraType: table
-declare global NUM_GLYPH_SLOTS: number
-declare global GLYPH_TYPE_MAJOR: number
-declare global GLYPH_TYPE_MINOR: number
-declare global GLYPH_ID_MINOR_1: number
-declare global GLYPH_ID_MINOR_2: number
-declare global GLYPH_ID_MINOR_3: number
-declare global GLYPH_ID_MAJOR_1: number
-declare global GLYPH_ID_MAJOR_2: number
-declare global GLYPH_ID_MAJOR_3: number
 declare global PlayerMovementFrameFader: table
 declare global MAX_RAID_MEMBERS: number
 declare global NUM_RAID_GROUPS: number
@@ -8006,13 +8872,21 @@ declare global FriendsFrame_GetInviteRestriction: (...any) -> ...any
 declare global FriendsFrame_GetInviteRestrictionText: (...any) -> ...any
 declare global TravelPassButton_OnEnter: (...any) -> ...any
 declare global FriendsFriendsFrame_Show: (...any) -> ...any
+@onDemand("Blizzard_GMChatUI")
 declare global GMChatFrame_IsGM: (...any) -> ...any
+@onDemand("Blizzard_GMChatUI")
 declare global GMChatFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_GMChatUI")
 declare global GMChatFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_GMChatUI")
 declare global GMChatFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_GMChatUI")
 declare global GMChatFrame_OnHide: (...any) -> ...any
+@onDemand("Blizzard_GMChatUI")
 declare global GMChatFrame_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_GMChatUI")
 declare global GMChatFrame_Show: (...any) -> ...any
+@onDemand("Blizzard_GMChatUI")
 declare global GMChatFrame_Close: (...any) -> ...any
 declare global GMChatFrame_LoadUI: (...any) -> ...any
 declare global ToggleGuildFrame: (...any) -> ...any
@@ -8770,41 +9644,77 @@ declare global RaidFinderQueueFrameCooldownFrame_OnUpdate: (...any) -> ...any
 declare global RaidFinderQueueFrameCooldownFrame_Update: (...any) -> ...any
 declare global RaidFinderQueueFrameCooldownAdditionalPlayers_OnEnter: (...any) -> ...any
 declare global GuildBankFrame_LoadUI: (...any) -> ...any
+@onDemand("Blizzard_GuildBankUI")
 declare global GUILDBANK_ICON_ROW_HEIGHT: number
+@onDemand("Blizzard_GuildBankUI")
 declare global GUILDBANK_TRANSACTION_HEIGHT: number
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrameMixin: table
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankTabButtonMixin: table
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrameTabMixin: table
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankTabMixin: table
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrameDepositButtonMixin: table
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrameWithdrawButtonMixin: table
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankItemButtonMixin: table
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrame_UpdateLog: (...any) -> ...any
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrame_UpdateMoneyLog: (...any) -> ...any
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankPopupFrameMixin: table
+@onDemand("Blizzard_GuildControlUI")
 declare global BANK_TAB_OFFSET: number
+@onDemand("Blizzard_GuildControlUI")
 declare global BANK_TAB_HEIGHT: any
+@onDemand("Blizzard_GuildControlUI")
 declare global NUM_RANK_FLAGS: number
+@onDemand("Blizzard_GuildControlUI")
 declare global MAX_GUILDRANKS: number
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_SubmitChanges: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_SetBankTabChange: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_SetBankTabWithdrawChange: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_BankTabPermissions_Update: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_RankPermissions_Update: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GUILD_OFFICER_PERMISSION_STRINGS: table
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlRankSettings_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlRankBank_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_RankOrder_Update: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_BankFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_CheckClicked: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_RemoveRankButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_AddRankButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_ShiftRankDownButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_ShiftRankUpButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI_DisableRankButtons: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUIRankDropdown_OnClick: (...any) -> ...any
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUIRankPermissions_HideGuildBankOptions: (...any) -> ...any
 declare global GetDeathStaticPopup: (...any) -> ...any
 declare global CheckHardcoreGuildLeadStatus: (...any) -> ...any
@@ -8827,24 +9737,23 @@ declare global TicketStatusFrameButton_OnLoad: (...any) -> ...any
 declare global TicketStatusFrameButton_OnClick: (...any) -> ...any
 declare global InspectFrame_LoadUI: (...any) -> ...any
 declare global InspectUnit: (...any) -> ...any
-declare global INSPECTFRAME_SUBFRAMES: table
-declare global InspectFrame_Show: (...any) -> ...any
-declare global InspectFrame_OnLoad: (...any) -> ...any
-declare global InspectFrame_OnEvent: (...any) -> ...any
-declare global InspectFrame_UnitChanged: (...any) -> ...any
-declare global InspectFrame_OnShow: (...any) -> ...any
-declare global InspectFrame_OnHide: (...any) -> ...any
-declare global InspectSwitchTabs: (...any) -> ...any
-declare global InspectFrameTab_OnClick: (...any) -> ...any
-declare global InspectFrame_UpdateTabs: (...any) -> ...any
+@onDemand("Blizzard_InspectUI")
 declare global InspectPVPFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_InspectUI")
 declare global InspectPVPFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_InspectUI")
 declare global InspectPVPFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_InspectUI")
 declare global InspectPVPFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_InspectUI")
 declare global InspectPaperDollItemSlotButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_InspectUI")
 declare global InspectPaperDollItemSlotButton_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_InspectUI")
 declare global InspectPaperDollItemSlotButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_InspectUI")
 declare global InspectPaperDollItemSlotButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_InspectUI")
 declare global InspectPaperDollItemSlotButton_Update: (...any) -> ...any
 declare global SetItemButtonCount: (...any) -> ...any
 declare global SetItemButtonStock: (...any) -> ...any
@@ -8857,12 +9766,18 @@ declare global SetItemButtonSlotVertexColor: (...any) -> ...any
 declare global SetItemButtonQuality: (...any) -> ...any
 declare global HandleModifiedItemClick: (...any) -> ...any
 declare global ItemButtonMixin: table
+@onDemand("Blizzard_ItemSocketingUI")
 declare global ITEM_SOCKETING_DESCRIPTION_MIN_WIDTH: number
+@onDemand("Blizzard_ItemSocketingUI")
 declare global ItemSocketingFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_ItemSocketingUI")
 declare global ItemSocketingFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_ItemSocketingUI")
 declare global ItemSocketingFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_ItemSocketingUI")
 declare global ItemSocketingSocketButton_OnScrollRangeChanged: (...any) -> ...any
 declare global ItemSocketingFrame_LoadUI: (...any) -> ...any
+@onDemand("Blizzard_Kiosk")
 declare global KioskFrameMixin: table
 declare global LFD_IsEmpowered: (...any) -> ...any
 declare global IsInLFDBattlefield: (...any) -> ...any
@@ -8883,15 +9798,23 @@ declare global LoginWarningDialogBaseMixin: table
 declare global ChinaAgeAppropriatenessWarningMixin: any
 declare global KoreanRatingsMixin: any
 declare global TaiwanFraudWarningMixin: any
+@onDemand("Blizzard_MacroUI")
 declare global MACRO_TAB2_WIDTH: number
+@onDemand("Blizzard_MacroUI")
 declare global MacroPopupFrameMixin: table
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrame_Show: (...any) -> ...any
-declare global MacroFrame_SaveMacro: (...any) -> ...any
+@onDemand("Blizzard_MacroUI")
 declare global MacroButtonMixin: table
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameMixin: table
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameSaveButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameCancelButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_MacroUI")
 declare global MacroNewButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_MacroUI")
 declare global MacroEditButton_OnClick: (...any) -> ...any
 declare global MacroFrame_LoadUI: (...any) -> ...any
 declare global ShowMacroFrame: (...any) -> ...any
@@ -8926,21 +9849,37 @@ declare global SendMailAttachmentButton_OnDropAny: (...any) -> ...any
 declare global SendMailAttachment_OnEnter: (...any) -> ...any
 declare global OpenAllMailMixin: table
 declare global BackpackButton_OnModifiedClick: (...any) -> ...any
+@onDemand("Blizzard_MapCanvas")
 declare global MapCanvasMixin: any
+@onDemand("Blizzard_MapCanvas")
 declare global SquaredDistanceBetweenPoints: (...any) -> ...any
+@onDemand("Blizzard_MapCanvas")
 declare global MapCanvasDetailLayerMixin: table
+@onDemand("Blizzard_MapCanvas")
 declare global MapCanvasDataProviderMixin: table
+@onDemand("Blizzard_MapCanvas")
 declare global CVarMapCanvasDataProviderMixin: any
+@onDemand("Blizzard_MapCanvas")
 declare global AM_PIN_SCALE_STYLE_VISIBLE_WHEN_ZOOMED_IN: number
+@onDemand("Blizzard_MapCanvas")
 declare global AM_PIN_SCALE_STYLE_VISIBLE_WHEN_ZOOMED_OUT: number
+@onDemand("Blizzard_MapCanvas")
 declare global AM_PIN_SCALE_STYLE_WITH_TERRAIN: number
+@onDemand("Blizzard_MapCanvas")
 declare global AM_PIN_ALPHA_STYLE_VISIBLE_WHEN_ZOOMED_IN: number
+@onDemand("Blizzard_MapCanvas")
 declare global AM_PIN_ALPHA_STYLE_VISIBLE_WHEN_ZOOMED_OUT: number
+@onDemand("Blizzard_MapCanvas")
 declare global AM_PIN_ALPHA_STYLE_ALWAYS_VISIBLE: number
+@onDemand("Blizzard_MapCanvas")
 declare global MapCanvasPinFrameLevelsManagerMixin: table
+@onDemand("Blizzard_MapCanvas")
 declare global MapCanvasScrollControllerMixin: table
+@onDemand("Blizzard_MapCanvas")
 declare global MAP_CANVAS_MOUSE_WHEEL_ZOOM_BEHAVIOR_SMOOTH: number
+@onDemand("Blizzard_MapCanvas")
 declare global MAP_CANVAS_MOUSE_WHEEL_ZOOM_BEHAVIOR_FULL: number
+@onDemand("Blizzard_MapCanvas")
 declare global MAP_CANVAS_MOUSE_WHEEL_ZOOM_BEHAVIOR_NONE: number
 declare global QueueTypeSelectionButtonMixin: table
 declare global QueueTypeSettingsFrameMixin: table
@@ -9054,27 +9993,12 @@ declare global SetTooltipMoney: (...any) -> ...any
 declare global GameTooltip_ClearMoney: (...any) -> ...any
 declare global MoneyInputFrame_SetCopperShown: (...any) -> ...any
 declare global LargeMoneyInputFrameMixin: table
+@onDemand("Blizzard_MovePad")
 declare global MovePadMixin: table
 declare global NamePlateDriverMixin: table
 declare global NamePlateBorderTemplateMixin: table
 declare global OverrideActionBar_StatusBars_ShowTooltip: (...any) -> ...any
 declare global PTR_IssueReporter: any
-declare global MAX_ARENA_TEAM_MEMBERS: number
-declare global HonorFrame_OnLoad: (...any) -> ...any
-declare global HonorFrame_OnShow: (...any) -> ...any
-declare global HonorFrame_OnEvent: (...any) -> ...any
-declare global HonorFrame_InitSpecificButton: (...any) -> ...any
-declare global HonorFrameSpecificList_Update: (...any) -> ...any
-declare global HonorFrameSpecificList_FindAndSelectBattleground: (...any) -> ...any
-declare global WARGAME_HEADER_HEIGHT: number
-declare global WarGameButtonHeader_OnClick: (...any) -> ...any
-declare global WarGameButton_OnEnter: (...any) -> ...any
-declare global WarGameButton_OnLeave: (...any) -> ...any
-declare global WarGameButton_OnClick: (...any) -> ...any
-declare global WarGameStartButton_Update: (...any) -> ...any
-declare global WarGameStartButton_OnEnter: (...any) -> ...any
-declare global WarGameStartButton_GetErrorTooltip: (...any) -> ...any
-declare global WarGameStartButton_OnClick: (...any) -> ...any
 declare global PagedCondensedVerticalGridContentFrameMixin: any
 declare global PagedContentFrameBaseMixin: any
 declare global BasePagedGridContentFrameMixin: any
@@ -9098,8 +10022,6 @@ declare global TrainingLobbyQueueMixin: table
 declare global StartQueueButtonMixin: table
 declare global setprinthandler: (...any) -> ...any
 declare global getprinthandler: (...any) -> ...any
-declare global PROFESSION_RANKS: table
-declare global FormatProfession: (...any) -> ...any
 declare global QuestTimerMixin: table
 declare global QuestTimerButtonMixin: table
 declare global QueueStatusFrameMixin: table
@@ -9126,53 +10048,101 @@ declare global RaidParentFrame_SetView: (...any) -> ...any
 declare global RaidFrameAllAssistCheckButton_UpdateAvailable: (...any) -> ...any
 declare global ClaimRaidFrame: (...any) -> ...any
 declare global RaidFrame_LoadUI: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RAID_RANGE_ALPHA: number
+@onDemand("Blizzard_RaidUI")
 declare global MOVING_RAID_MEMBER: any
+@onDemand("Blizzard_RaidUI")
 declare global TARGET_RAID_SLOT: any
+@onDemand("Blizzard_RaidUI")
 declare global RAID_SUBGROUP_LISTS: table
+@onDemand("Blizzard_RaidUI")
 declare global NUM_RAID_PULLOUT_FRAMES: number
+@onDemand("Blizzard_RaidUI")
 declare global RAID_PULLOUT_BUTTON_HEIGHT: number
+@onDemand("Blizzard_RaidUI")
 declare global MOVING_RAID_PULLOUT: any
+@onDemand("Blizzard_RaidUI")
 declare global RAID_PULLOUT_POSITIONS: table
+@onDemand("Blizzard_RaidUI")
 declare global RAID_SINGLE_POSITIONS: table
+@onDemand("Blizzard_RaidUI")
 declare global MAX_RAID_AURAS: number
+@onDemand("Blizzard_RaidUI")
 declare global RAID_CLASS_BUTTONS: table
+@onDemand("Blizzard_RaidUI")
 declare global MAX_RAID_CLASS_BUTTONS: any
+@onDemand("Blizzard_RaidUI")
 declare global RAID_PULLOUT_SAVED_SETTINGS: table
+@onDemand("Blizzard_RaidUI")
 declare global RaidClassButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidClassButton_Update: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidClassButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupFrame_OnHide: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroup_ResetSlotButtons: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupFrame_UpdateLevel: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupFrame_UpdateHealth: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupFrame_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupFrame_ReadyCheckFinished: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupButton_OpenMenu: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupButton_OnDragStart: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupButton_OnDragStop: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidGroupButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPullout_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPullout_ReadyCheckFinished: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPullout_ReadyCheckFinishFunc: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPullout_GeneratePulloutFrame: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPullout_UpdateTarget: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPullout_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPullout_Update: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPulloutButton_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPulloutButton_UpdateSwapFrames: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPulloutButton_UpdateDead: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPulloutButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPulloutButton_OnDragStart: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPulloutStopMoving: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPullout_SaveFrames: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPullout_RenewFrames: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPullout_MatchName: (...any) -> ...any
+@onDemand("Blizzard_RaidUI")
 declare global RaidPullout_GetFrame: (...any) -> ...any
 declare global ReportFrameMixin: any
 declare global SharedReportFrameMixin: table
@@ -9327,65 +10297,115 @@ declare global NewSettings: table
 declare global IsNewSettingInCurrentVersion: (...any) -> ...any
 declare global ShakeFrameRandom: (...any) -> ...any
 declare global ShakeFrame: (...any) -> ...any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global AreaLabelDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global MAP_AREA_LABEL_TYPE: table
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global AreaLabelFrameMixin: table
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global AreaPOIDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global AreaPOIPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global BannerDataProvider: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global BattlefieldFlagDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global BattlefieldFlagMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global BonusObjectiveDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global BonusObjectivePinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global ClickToZoomDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global ContributionCollectorDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global ContributionCollectorPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global DeathMapDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global CorpsePinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global DeathReleasePinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global DigSiteDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global DigSitePinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global DungeonEntranceDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global DungeonEntrancePinMixin: any
-declare global EncounterJournalDataProviderMixin: any
-declare global EncounterJournalPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global FlightPointDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global FlightPointPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global FogOfWarDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global FogOfWarPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global GarrisonPlotDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global GarrisonPlotPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global GossipDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global GossipPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global GroupMembersDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global GroupMembersPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global InvasionDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global InvasionPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global MapExplorationDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global MapExplorationPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global MapHighlightDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global MapHighlightPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global MapLinkDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global MapLinkPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global PetTamerDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global PetTamerPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global QuestBlobDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global QuestBlobPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global QuestDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global QuestPinMixin: any
-declare global ScenarioDataProviderMixin: any
-declare global ScenarioBlobPinMixin: any
-declare global ScenarioPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global SelectableGraveyardDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global SelectableGraveyardPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global BaseMapPoiPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global VehicleDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global VehiclePinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global VignetteDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global VignettePinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global WorldQuestDataProviderMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global WorldQuestPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global WorldQuestSpellEffectPinMixin: any
+@onDemand("Blizzard_SharedMapDataProviders")
 declare global ZoneLabelDataProviderMixin: any
 declare global TalentButtonSearchIconMixin: table
 declare global TalentEdgeBaseMixin: table
@@ -10253,18 +11273,31 @@ declare global SocialToastCloseButtonMixin: table
 declare global SocialToastMixin: table
 declare global SpellPickupIndicatorMixin: table
 declare global SpellPickupDisplayMixin: table
+@onDemand("Blizzard_SpellSearch")
 declare global SpellSearchActionBarFilterMixin: any
+@onDemand("Blizzard_SpellSearch")
 declare global SpellSearchControllerMixin: table
+@onDemand("Blizzard_SpellSearch")
 declare global BaseSpellSearchFilterMixin: table
+@onDemand("Blizzard_SpellSearch")
 declare global SpellSearchNameFilterMixin: any
+@onDemand("Blizzard_SpellSearch")
 declare global SpellSearchSourceMixin: table
+@onDemand("Blizzard_SpellSearch")
 declare global TraitSearchSourceMixin: any
+@onDemand("Blizzard_SpellSearch")
 declare global PvPTalentsSearchSourceMixin: any
+@onDemand("Blizzard_SpellSearch")
 declare global SpellBookItemSearchSourceMixin: any
+@onDemand("Blizzard_SpellSearch")
 declare global SpellSearchPreviewResultMixin: table
+@onDemand("Blizzard_SpellSearch")
 declare global SpellSearchPreviewContainerMixin: table
+@onDemand("Blizzard_SpellSearch")
 declare global SpellSearchBoxMixin: table
+@onDemand("Blizzard_SpellSearch")
 declare global SpellSearchTextFilterMixin: any
+@onDemand("Blizzard_SpellSearch")
 declare global SpellSearchUtil: table
 declare global StaticPopup_SetFullScreenFrame: (...any) -> ...any
 declare global StaticPopup_ClearFullScreenFrame: (...any) -> ...any
@@ -10448,83 +11481,149 @@ declare global StoreFrame_CheckMarketPriceUpdates: (...any) -> ...any
 declare global StoreFrameBuyButton_OnClick: (...any) -> ...any
 declare global StoreTooltipBackdropMixin: table
 declare global TimeManager_LoadUI: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global BlizzardStopwatchOptions: any
+@onDemand("Blizzard_TimeManager")
 declare global MAX_TIMER_SEC: any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_Toggle: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerFrame_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerFrame_SetupHourDropdown: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerFrame_SetupMinuteDropdown: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerFrame_SetupAMPMDropdown: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerFrame_OnHide: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerCloseButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerStopwatchCheck_OnClick: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_Update: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_UpdateAlarmTime: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_UpdateTimeTicker: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmMessageEditBox_OnEnterPressed: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmMessageEditBox_OnEscapePressed: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmMessageEditBox_OnEditFocusLost: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmEnabledButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerMilitaryTimeCheck_OnClick: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_ToggleTimeFormat: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerLocalTimeCheck_OnClick: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_ToggleLocalTime: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerClockButton_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerClockButton_Update: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerClockButton_OnEnter: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerClockButton_OnLeave: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerClockButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerClockButton_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerClockButton_OnUpdateWithTooltip: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_ShouldCheckAlarm: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_StartCheckingAlarm: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_CheckAlarm: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_FireAlarmWarning: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_FireAlarm: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_TurnOffAlarm: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManager_IsAlarmFiring: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerClockButton_UpdateTooltip: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global Stopwatch_Toggle: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global Stopwatch_StartCountdown: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global Stopwatch_Play: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global Stopwatch_Pause: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global Stopwatch_IsPlaying: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global Stopwatch_Clear: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global Stopwatch_FinishCountdown: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchCloseButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchFrame_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchFrame_OnHide: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchFrame_OnMouseDown: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchFrame_OnMouseUp: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchFrame_OnDragStart: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchFrame_OnDragStop: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchTicker_OnUpdate: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchTicker_Update: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchResetButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchPlayPauseButton_OnClick: (...any) -> ...any
 declare global TimerunningUtil: table
 declare global GetNumWatchedTokens: (...any) -> ...any
 declare global ClassTrainerFrame_LoadUI: (...any) -> ...any
+@onDemand("Blizzard_TrainerUI")
 declare global CLASS_TRAINER_SKILLS_DISPLAYED: number
+@onDemand("Blizzard_TrainerUI")
 declare global CLASS_TRAINER_SKILL_HEIGHT: number
+@onDemand("Blizzard_TrainerUI")
 declare global MAX_LEARNABLE_PROFESSIONS: number
+@onDemand("Blizzard_TrainerUI")
 declare global ClassTrainerFrame_OnShow: (...any) -> ...any
+@onDemand("Blizzard_TrainerUI")
 declare global ClassTrainerFrame_OnHide: (...any) -> ...any
+@onDemand("Blizzard_TrainerUI")
 declare global ClassTrainerFrame_OnLoad: (...any) -> ...any
+@onDemand("Blizzard_TrainerUI")
 declare global ClassTrainerFrame_OnEvent: (...any) -> ...any
+@onDemand("Blizzard_TrainerUI")
 declare global ClassTrainerFrame_Update: (...any) -> ...any
+@onDemand("Blizzard_TrainerUI")
 declare global ClassTrainer_SetSelection: (...any) -> ...any
+@onDemand("Blizzard_TrainerUI")
 declare global ClassTrainerSkillButton_OnClick: (...any) -> ...any
+@onDemand("Blizzard_TrainerUI")
 declare global ClassTrainerTrainButton_OnClick: (...any) -> ...any
-declare global TransmogFrameMixin: table
-declare global TransmogSlotOrder: table
-declare global TRANSMOG_SLOTS: table
-declare global TransmogUtil: table
 declare global UIErrorsMixin: table
 declare global ITEM_SEARCHBAR_LIST: table
 declare global BagSearch_OnHide: (...any) -> ...any
@@ -11462,9 +12561,13 @@ declare global class: (...any) -> ...any
 declare global instanceOf: (...any) -> ...any
 declare global subclassOf: (...any) -> ...any
 declare global includes: (...any) -> ...any
+@onDemand("Blizzard_AccountSaveUI")
 declare global AccountSaveFrame: Frame
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameAchievementsObjectives: Frame
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame: Frame
+@onDemand("Blizzard_AchievementUI")
 declare global AchievementFrameFilterDropdown: DropdownButton
 declare global ActionBarButtonEventsFrame: Frame
 declare global ActionBarActionEventsFrame: Frame
@@ -11488,8 +12591,11 @@ declare global AddonDialogText: FontString
 declare global AddonDialogButton1: Button
 declare global AddonDialogButton2: Button
 declare global AddonList: Frame
+@onDemand("Blizzard_ArchaeologyUI")
 declare global ArchaeologyFrame: Frame
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseMultisellProgressFrame: Frame
+@onDemand("Blizzard_AuctionHouseUI")
 declare global AuctionHouseFrame: Frame
 declare global AuthChallengeFrame: Frame
 declare global AutoCompleteBox: Frame
@@ -11501,96 +12607,186 @@ declare global AutoCompleteButton4: Button
 declare global AutoCompleteButton5: Button
 declare global BNToastFrame: Frame
 declare global TimeAlertFrame: Frame
+@onDemand("Blizzard_BarbershopUI")
 declare global BarberShopFrame: Frame
+@onDemand("Blizzard_BattlefieldMap")
 declare global BattlefieldMapTab: Button
+@onDemand("Blizzard_BattlefieldMap")
 declare global BattlefieldMapFrame: Frame
+@onDemand("Blizzard_BehavioralMessaging")
 declare global BehavioralMessagingTray: Frame
+@onDemand("Blizzard_BehavioralMessaging")
 declare global BehavioralMessagingDetails: Frame
 declare global BuffFrame: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrame: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday1Background: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday2Background: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday3Background: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday4Background: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday5Background: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday6Background: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday7Background: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday1Name: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday2Name: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday3Name: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday4Name: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday5Name: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday6Name: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekday7Name: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarMonthBackground: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarMonthName: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarYearBackground: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarYearName: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarLastDayDarkTexture: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarWeekdaySelectedTexture: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarTodayFrame: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarTodayTextureGlow: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarTodayTexture: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarPrevMonthButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarNextMonthButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarCloseButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarModalDummy: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarFrameBlocker: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventFrameBlocker: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewHolidayFrame: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewHolidayCloseButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewRaidFrame: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewRaidCloseButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventFrame: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventIcon: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventTitle: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventCommunityName: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventTypeName: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventCreatorName: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventDateLabel: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventTimeLabel: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventDescriptionContainer: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventInviteListSection: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventDivider: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventAcceptButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventTentativeButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventDeclineButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventRemoveButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventInviteList: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarViewEventCloseButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventFrame: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventIcon: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventCommunityName: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventTextureName: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventCreatorName: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventDateLabel: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventTitleEdit: EditBox
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteListSection: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventDivider: Texture
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventAutoApproveCheck: CheckButton
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventLockEventCheck: CheckButton
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteList: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteEdit: EditBox
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventInviteButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventDescriptionContainer: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventMassInviteButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventRaidInviteButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventCreateButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarCreateEventCloseButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInviteFrame: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInviteLevelText: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInviteRankText: FontString
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInviteMinLevelEdit: EditBox
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInviteMaxLevelEdit: EditBox
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInviteAcceptButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarMassInviteCloseButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerFrame: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarEventPickerCloseButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerFrame: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerCancelButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarTexturePickerAcceptButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarClassButtonContainer: Frame
+@onDemand("Blizzard_Calendar")
 declare global CalendarClassTotalsButton: Button
+@onDemand("Blizzard_Calendar")
 declare global CalendarClassTotalsText: FontString
 declare global ChannelFrame: Frame
 declare global CreateChannelPopup: Frame
@@ -11646,11 +12842,17 @@ declare global ChatFrame9: Frame
 declare global ChatFrame10Tab: Button
 declare global ChatFrame10: Frame
 declare global FloatingChatFrameManager: Frame
+@onDemand("Blizzard_Collections")
 declare global CollectionsJournal: Frame
+@onDemand("Blizzard_Collections")
 declare global HeirloomsJournal: Frame
+@onDemand("Blizzard_Collections")
 declare global MountJournal: Frame
+@onDemand("Blizzard_Collections")
 declare global ToyBox: Frame
+@onDemand("Blizzard_Collections")
 declare global WardrobeCollectionFrame: Frame
+@onDemand("Blizzard_Collections")
 declare global PetJournal: Frame
 declare global ColorSwatch: Texture
 declare global ColorPickerFrameHeader: Texture
@@ -11661,7 +12863,9 @@ declare global ColorPickerWheel: Frame
 declare global OpacityFrame: Frame
 declare global OpacityFrameSlider: Slider
 declare global OpacityFrameCloseButton: Button
+@onDemand("Blizzard_CombatLog")
 declare global CombatLogQuickButtonFrame_Custom: Frame
+@onDemand("Blizzard_CombatText")
 declare global CombatText: Frame
 declare global COMMENTATORRESET: Frame
 declare global COMMENTATORMOVESPEEDINCREASE: Frame
@@ -11720,9 +12924,13 @@ declare global COMMENTATORLOOKAT9: Frame
 declare global COMMENTATORLOOKAT10: Frame
 declare global COMMENTATORLOOKAT11: Frame
 declare global COMMENTATORLOOKAT12: Frame
+@onDemand("Blizzard_Commentator")
 declare global Commentator: Frame
+@onDemand("Blizzard_Commentator")
 declare global CommentatorEventAlertsFrame: Frame
+@onDemand("Blizzard_Commentator")
 declare global CommentatorVictoryFanfareFrame: Frame
+@onDemand("Blizzard_Commentator")
 declare global CommentatorFadeToBlackFrame: Frame
 declare global CommunitiesAvatarPickerDialog: Frame
 declare global CommunitiesFrame: Frame
@@ -11739,8 +12947,11 @@ declare global CompactRaidFrameContainer: Frame
 declare global CompactRaidFrameManager: Frame
 declare global DeveloperConsole: Frame
 declare global Background: Frame
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackTooltip: GameTooltip
+@onDemand("Blizzard_DebugTools")
 declare global FrameStackHighlight: Frame
+@onDemand("Blizzard_DebugTools")
 declare global TableAttributeDisplay: Frame
 declare global DurabilityFrame: Frame
 declare global DurabilityHead: Texture
@@ -11755,9 +12966,13 @@ declare global DurabilityWeapon: Texture
 declare global DurabilityShield: Texture
 declare global DurabilityOffWeapon: Texture
 declare global DurabilityRanged: Texture
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournal: Frame
+@onDemand("Blizzard_EncounterJournal")
 declare global EncounterJournalTooltip: Frame
+@onDemand("Blizzard_EventTrace")
 declare global EventTrace: Frame
+@onDemand("Blizzard_EventTrace")
 declare global EventTraceTooltip: GameTooltip
 declare global SystemFont16_Shadow_ThickOutline: Font
 declare global GlueFontNormalHuge: Font
@@ -12208,8 +13423,11 @@ declare global FriendsFrameTab4: Button
 declare global FriendsTooltip: Frame
 declare global FriendsFriendsFrame: Frame
 declare global FriendsFriendsFrameDropdown: DropdownButton
+@onDemand("Blizzard_GMChatUI")
 declare global GMChatFrame: Frame
+@onDemand("Blizzard_GMChatUI")
 declare global GMChatTab: Frame
+@onDemand("Blizzard_GMChatUI")
 declare global GMChatStatusFrame: Button
 declare global GameMenuFrame: Frame
 declare global ShoppingTooltip1: GameTooltip
@@ -12304,44 +13522,83 @@ declare global PVPFramePopup: Frame
 declare global PVPReadyDialog: Frame
 declare global RaidFinderFrame: Frame
 declare global RaidFinderQueueFrame: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrame: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemBackgroundUL: Texture
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemBackgroundUR: Texture
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemBackgroundBL: Texture
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemBackgroundBR: Texture
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemBorderUL: Texture
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemBorderUR: Texture
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemBorderBL: Texture
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemBorderBR: Texture
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemUL: Texture
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemUR: Texture
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemBL: Texture
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemBR: Texture
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankMoneyLimitLabel: FontString
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankMoneyUnlimitedLabel: FontString
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankMoneyFrame: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankWithdrawMoneyFrame: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrameTab1: Button
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrameTab2: Button
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrameTab3: Button
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrameTab4: Button
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankTab1: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankTab2: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankTab3: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankTab4: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankTab5: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankTab6: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankTab7: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankTab8: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrameTabCost: FontString
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrameTabCostMoneyFrame: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankMessageFrame: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankInfo: Frame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankInfoSaveButton: Button
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankInfoScrollFrame: ScrollFrame
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankTabInfoEditBox: EditBox
+@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankPopupFrame: Frame
+@onDemand("Blizzard_GuildControlUI")
 declare global GuildControlUI: Frame
+@onDemand("Blizzard_GuildControlUI")
 declare global parentLabel: FontString
 declare global HelpFrame: Frame
 declare global HelpBrowser: Frame
@@ -12355,48 +13612,73 @@ declare global TicketStatusFrameButton: Button
 declare global ReportCheatingDialog: Frame
 declare global HelpPlateTooltip: Frame
 declare global IMECandidatesFrame: Frame
-declare global InspectFrame: Frame
-declare global InspectFrameTab1: Button
-declare global InspectFrameTab2: Button
-declare global InspectFrameTab3: Button
-declare global InspectPVPFrame: Frame
+@onDemand("Blizzard_InspectUI")
 declare global InspectPaperDollFrame: Frame
+@onDemand("Blizzard_InspectUI")
 declare global InspectLevelText: FontString
+@onDemand("Blizzard_InspectUI")
 declare global InspectModelFrame: PlayerModel
+@onDemand("Blizzard_InspectUI")
 declare global InspectPaperDollItemsFrame: Frame
+@onDemand("Blizzard_InspectUI")
 declare global InspectTitleText: FontString
+@onDemand("Blizzard_InspectUI")
 declare global InspectGuildText: FontString
+@onDemand("Blizzard_InspectUI")
 declare global InspectFaction: Texture
 declare global ItemButton: Button
+@onDemand("Blizzard_ItemSocketingUI")
 declare global ItemSocketingFrame: Frame
+@onDemand("Blizzard_ItemSocketingUI")
 declare global ItemSocketingScrollChild: Frame
+@onDemand("Blizzard_ItemSocketingUI")
 declare global ItemSocketingDescription: GameTooltip
-declare global KioskModeSplash: Frame
-declare global KioskFrame: Frame
+@onDemand("Blizzard_Kiosk")
 declare global KioskDialogHeaderFont: Font
 declare global ChinaAgeAppropriatenessWarning: Frame
 declare global KoreanRatings: Button
 declare global TaiwanFraudWarning: Frame
+@onDemand("Blizzard_MacroUI")
 declare global MacroPopupFrame: Frame
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrame: Frame
+@onDemand("Blizzard_MacroUI")
 declare global MacroFramePortrait: Texture
+@onDemand("Blizzard_MacroUI")
 declare global MacroHorizontalBarLeft: Texture
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameSelectedMacroBackground: Texture
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameSelectedMacroName: FontString
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameEnterMacroText: FontString
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameCharLimitText: FontString
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameSelectedMacroButton: CheckButton
+@onDemand("Blizzard_MacroUI")
 declare global MacroEditButton: Button
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameScrollFrame: ScrollFrame
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameText: EditBox
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameTextButton: Button
+@onDemand("Blizzard_MacroUI")
 declare global MacroCancelButton: Button
+@onDemand("Blizzard_MacroUI")
 declare global MacroSaveButton: Button
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameTextBackground: Frame
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameTab1: Button
+@onDemand("Blizzard_MacroUI")
 declare global MacroFrameTab2: Button
+@onDemand("Blizzard_MacroUI")
 declare global MacroDeleteButton: Button
+@onDemand("Blizzard_MacroUI")
 declare global MacroNewButton: Button
+@onDemand("Blizzard_MacroUI")
 declare global MacroExitButton: Button
 declare global MailFrame: Frame
 declare global InboxFrame: Frame
@@ -12497,23 +13779,24 @@ declare global MinimapZoneText: FontString
 declare global MiniMapMailIcon: Texture
 declare global MinimapBackdrop: Frame
 declare global MinimapCompassTexture: Texture
+@onDemand("Blizzard_MovePad")
 declare global MovePadFrame: Frame
+@onDemand("Blizzard_MovePad")
 declare global MovePadForward: CheckButton
+@onDemand("Blizzard_MovePad")
 declare global MovePadJump: Button
+@onDemand("Blizzard_MovePad")
 declare global MovePadBackward: CheckButton
+@onDemand("Blizzard_MovePad")
 declare global MovePadRotateLeft: CheckButton
+@onDemand("Blizzard_MovePad")
 declare global MovePadRotateRight: CheckButton
+@onDemand("Blizzard_MovePad")
 declare global MovePadStrafeLeft: CheckButton
+@onDemand("Blizzard_MovePad")
 declare global MovePadStrafeRight: CheckButton
 declare global OverrideActionBar: Frame
-declare global HonorFrame: Frame
-declare global WarGameStartButton: Button
 declare global PrematchHeaderFrame: Frame
-declare global PrimaryProfession1: Frame
-declare global PrimaryProfession2: Frame
-declare global SecondaryProfession1: Frame
-declare global SecondaryProfession2: Frame
-declare global SecondaryProfession3: Frame
 declare global QuestTimerFrame: Frame
 declare global QuestTimerHeader: Texture
 declare global QueueStatusFrame: Frame
@@ -12528,69 +13811,6 @@ declare global RaidInfoDetailHeader: Texture
 declare global RaidInfoDetailFooter: Texture
 declare global RaidInfoCloseButton: Button
 declare global RaidInfoCancelButton: Button
-declare global RaidClassButton15: Button
-declare global RaidClassButton14: Button
-declare global RaidClassButton13: Button
-declare global RaidClassButton12: Button
-declare global RaidClassButton11: Button
-declare global RaidClassButton10: Button
-declare global RaidClassButton9: Button
-declare global RaidClassButton8: Button
-declare global RaidClassButton7: Button
-declare global RaidClassButton6: Button
-declare global RaidClassButton5: Button
-declare global RaidClassButton4: Button
-declare global RaidClassButton3: Button
-declare global RaidClassButton2: Button
-declare global RaidClassButton1: Button
-declare global RaidGroup1: Frame
-declare global RaidGroup2: Frame
-declare global RaidGroup3: Frame
-declare global RaidGroup4: Frame
-declare global RaidGroup5: Frame
-declare global RaidGroup6: Frame
-declare global RaidGroup7: Frame
-declare global RaidGroup8: Frame
-declare global RaidGroupButton1: Button
-declare global RaidGroupButton2: Button
-declare global RaidGroupButton3: Button
-declare global RaidGroupButton4: Button
-declare global RaidGroupButton5: Button
-declare global RaidGroupButton6: Button
-declare global RaidGroupButton7: Button
-declare global RaidGroupButton8: Button
-declare global RaidGroupButton9: Button
-declare global RaidGroupButton10: Button
-declare global RaidGroupButton11: Button
-declare global RaidGroupButton12: Button
-declare global RaidGroupButton13: Button
-declare global RaidGroupButton14: Button
-declare global RaidGroupButton15: Button
-declare global RaidGroupButton16: Button
-declare global RaidGroupButton17: Button
-declare global RaidGroupButton18: Button
-declare global RaidGroupButton19: Button
-declare global RaidGroupButton20: Button
-declare global RaidGroupButton21: Button
-declare global RaidGroupButton22: Button
-declare global RaidGroupButton23: Button
-declare global RaidGroupButton24: Button
-declare global RaidGroupButton25: Button
-declare global RaidGroupButton26: Button
-declare global RaidGroupButton27: Button
-declare global RaidGroupButton28: Button
-declare global RaidGroupButton29: Button
-declare global RaidGroupButton30: Button
-declare global RaidGroupButton31: Button
-declare global RaidGroupButton32: Button
-declare global RaidGroupButton33: Button
-declare global RaidGroupButton34: Button
-declare global RaidGroupButton35: Button
-declare global RaidGroupButton36: Button
-declare global RaidGroupButton37: Button
-declare global RaidGroupButton38: Button
-declare global RaidGroupButton39: Button
-declare global RaidGroupButton40: Button
 declare global RaidWarningFrame: Frame
 declare global ReportFrame: Frame
 declare global ScriptErrorsFrame: Frame
@@ -12626,36 +13846,65 @@ declare global StoreFrame: Frame
 declare global StoreConfirmationFrame: Frame
 declare global StoreVASValidationFrame: Frame
 declare global StoreTooltip: Frame
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerFrame: Frame
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerGlobe: Texture
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerFrameTicker: FontString
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerStopwatchFrame: Frame
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerStopwatchFrameText: FontString
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerStopwatchCheck: CheckButton
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmTimeFrame: Frame
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmTimeLabel: FontString
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmMessageFrame: Frame
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmMessageLabel: FontString
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmMessageEditBox: EditBox
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmEnabledButton: CheckButton
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerMilitaryTimeCheck: CheckButton
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerLocalTimeCheck: CheckButton
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerClockButton: Button
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerClockTicker: FontString
+@onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmFiredTexture: Texture
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchFrame: Frame
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchTicker: Frame
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchTickerSecond: FontString
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchTickerMinute: FontString
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchTickerHour: FontString
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchTabFrame: Frame
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchTitle: FontString
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchCloseButton: Button
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchResetButton: Button
+@onDemand("Blizzard_TimeManager")
 declare global StopwatchPlayPauseButton: Button
 declare global TokenFrame: Frame
 declare global TokenFramePopup: Frame
+@onDemand("Blizzard_TrainerUI")
 declare global ClassTrainerFrame: Frame
+@onDemand("Blizzard_TrainerUI")
 declare global ClassTrainerTrainButton: Button
 declare global UIErrorsFrame: MessageFrame
 declare global BankFrame: Frame

@@ -6,7 +6,7 @@
 //! (pinned); `gen` writes `crates/wowlua-api/data/`.
 
 use anyhow::{Context, Result, bail};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -162,6 +162,7 @@ pub fn fetch(dir: &Path) -> Result<()> {
     let dumps = [
         ("strings", "GlobalStrings/enUS.lua"),
         ("api", "GlobalAPI.lua"),
+        ("events", "Events.lua"),
     ];
     for ((_, branch, commit), (kind, file)) in STRINGS
         .iter()
@@ -247,6 +248,163 @@ fn ui_files(
     Ok(())
 }
 
+/// The files only Blizzard's load-on-demand addons load (from their TOCs
+/// and the XML files those include; `[Bootstrap]` files load at startup):
+/// path (lowercase, `/`) → addon.
+fn lod_files(dir: &Path) -> Result<HashMap<String, String>> {
+    let mut lod: HashMap<String, String> = HashMap::new();
+    let mut always: HashSet<String> = HashSet::new();
+    let mut addons: Vec<PathBuf> = fs::read_dir(dir)?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.is_dir())
+        .collect();
+    addons.sort();
+    for folder in addons {
+        let Some(addon) = folder
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(str::to_string)
+        else {
+            continue;
+        };
+        let mut tocs: Vec<PathBuf> = fs::read_dir(&folder)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|e| e == "toc"))
+            .collect();
+        tocs.sort();
+        for toc in tocs {
+            let text = String::from_utf8_lossy(&fs::read(&toc)?).into_owned();
+            let is_lod = text
+                .lines()
+                .any(|l| l.replace(' ', "").eq_ignore_ascii_case("##LoadOnDemand:1"));
+            for line in text.lines().map(str::trim) {
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                // `path [Attribute …]`: variables like `[Family]` follow no space.
+                let (path, attrs) = match line.find(" [") {
+                    Some(i) => (&line[..i], &line[i..]),
+                    None => (line, ""),
+                };
+                let bootstrap = attrs.contains("[Bootstrap]");
+                let mut files = Vec::new();
+                for f in resolve(&folder, path) {
+                    loaded(&f, &mut files, 0);
+                }
+                for f in files {
+                    let key = key_of(&f);
+                    if is_lod && !bootstrap {
+                        lod.entry(key).or_insert_with(|| addon.clone());
+                    } else {
+                        always.insert(key);
+                    }
+                }
+            }
+        }
+    }
+    lod.retain(|k, _| !always.contains(k));
+    Ok(lod)
+}
+
+/// A path as `lod_files` keys it.
+fn key_of(p: &Path) -> String {
+    p.to_string_lossy().replace('\\', "/").to_lowercase()
+}
+
+/// The existing files a TOC or XML path names (`\\` separated, `..`
+/// allowed, `[Variable]` segments matching any name).
+fn resolve(base: &Path, rel: &str) -> Vec<PathBuf> {
+    let mut current = vec![base.to_path_buf()];
+    for seg in rel
+        .split(['\\', '/'])
+        .filter(|s| !s.is_empty() && *s != ".")
+    {
+        let mut next = Vec::new();
+        for dir in &current {
+            if seg == ".." {
+                if let Some(p) = dir.parent() {
+                    next.push(p.to_path_buf());
+                }
+            } else if seg.contains('[') {
+                let pattern = seg.to_lowercase();
+                for e in fs::read_dir(dir).into_iter().flatten().flatten() {
+                    let name = e.file_name().to_string_lossy().to_lowercase();
+                    if matches_variables(&pattern, &name) {
+                        next.push(e.path());
+                    }
+                }
+            } else {
+                // Case-insensitive, as the client.
+                let lower = seg.to_lowercase();
+                let found = fs::read_dir(dir)
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .find(|e| e.file_name().to_string_lossy().to_lowercase() == lower);
+                if let Some(e) = found {
+                    next.push(e.path());
+                }
+            }
+        }
+        current = next;
+    }
+    current.into_iter().filter(|p| p.is_file()).collect()
+}
+
+/// `name` matches `pattern`, where `[X]` parts match anything.
+fn matches_variables(pattern: &str, name: &str) -> bool {
+    let mut parts: Vec<&str> = Vec::new();
+    let mut rest = pattern;
+    while let Some(open) = rest.find('[') {
+        parts.push(&rest[..open]);
+        match rest[open..].find(']') {
+            Some(close) => rest = &rest[open + close + 1..],
+            None => return false,
+        }
+    }
+    parts.push(rest);
+    let mut pos = 0;
+    for (i, part) in parts.iter().enumerate() {
+        match name[pos..].find(part) {
+            Some(at) if i > 0 || at == 0 => pos += at + part.len(),
+            _ => return false,
+        }
+    }
+    parts.last().is_some_and(|p| p.is_empty()) || pos == name.len()
+}
+
+/// A loaded file and, for XML, the files it includes.
+fn loaded(file: &Path, out: &mut Vec<PathBuf>, depth: u32) {
+    out.push(file.to_path_buf());
+    if depth > 16
+        || !file
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("xml"))
+    {
+        return;
+    }
+    let Ok(text) = fs::read(file) else { return };
+    let text = String::from_utf8_lossy(&text);
+    let lower = text.to_lowercase();
+    let base = file.parent().unwrap_or(Path::new("."));
+    for tag in ["<script", "<include"] {
+        let mut from = 0;
+        while let Some(at) = lower[from..].find(tag) {
+            let start = from + at;
+            let end = lower[start..].find('>').map_or(lower.len(), |e| start + e);
+            if let Some(f) = lower[start..end].find("file=\"") {
+                let value_start = start + f + "file=\"".len();
+                if let Some(len) = text[value_start..end].find('"') {
+                    for inc in resolve(base, &text[value_start..value_start + len]) {
+                        loaded(&inc, out, depth + 1);
+                    }
+                }
+            }
+            from = end;
+        }
+    }
+}
+
 fn lua_files(dir: &Path, out: &mut Vec<(String, String)>) -> Result<()> {
     let mut entries: Vec<PathBuf> = fs::read_dir(dir)?
         .filter_map(|e| e.ok().map(|e| e.path()))
@@ -313,6 +471,7 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
             .with_context(|| format!("no global strings for {flavor}"))?;
         let strings_text = fs::read_to_string(dir.join("strings").join(format!("{commit}.lua")))
             .context("global strings missing: run `cargo xtask types fetch`")?;
+        let lod_files = lod_files(&dir.join(&flavor).join("Interface/AddOns"))?;
         flavors.push(wowlua_types_gen::FlavorDocs {
             id: flavor,
             source: format!("wow-ui-source {tag}; global string and API names from Ketho's BlizzardInterfaceResources {branch} {commit}"),
@@ -324,6 +483,11 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
                 &fs::read_to_string(dir.join("api").join(format!("{commit}.lua")))
                     .context("global API names missing: run `cargo xtask types fetch`")?,
             )),
+            event_names: Some(wowlua_types_gen::framexml::quoted_names(
+                &fs::read_to_string(dir.join("events").join(format!("{commit}.lua")))
+                    .context("event names missing: run `cargo xtask types fetch`")?,
+            )),
+            lod_files,
         });
     }
     let mut annotations = Vec::new();

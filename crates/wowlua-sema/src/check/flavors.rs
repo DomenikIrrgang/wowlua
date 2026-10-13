@@ -208,6 +208,34 @@ impl Checker<'_> {
         }
     }
 
+    /// An event a standard-library handler is registered for: W8101 when
+    /// some flavor the code can run in lacks it (the registration checks at
+    /// run time, so the handler is never called there).
+    pub fn check_event_available(&mut self, name: &str, span: wowlua_span::Span) {
+        let Some(shared) = &self.shared else { return };
+        let Some(have) = shared.availability.get(&format!("event:{name}")) else {
+            return;
+        };
+        let active = self
+            .guard
+            .flavors
+            .clone()
+            .unwrap_or_else(|| shared.flavors.clone());
+        let missing: Vec<String> = active
+            .iter()
+            .filter(|f| !have.contains(*f))
+            .map(|f| format!("`{f}`"))
+            .collect();
+        if missing.is_empty() {
+            return;
+        }
+        let msg = format!(
+            "`{name}` is not available in {}; there the handler is never called",
+            missing.join(", ")
+        );
+        self.report("W8101", span, msg);
+    }
+
     /// A use of an API: E2030 when some flavor the code can run in lacks
     /// it and no guard covers it.
     pub fn check_available(&mut self, path: &str, span: wowlua_span::Span) {

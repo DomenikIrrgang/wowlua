@@ -256,15 +256,19 @@ menus and lists, then the widget themes.
   `hooks`, `slash`, `saved` and `callbacks` (with `log`, `debug` and `reflect`
   from M5), written in wowlua and type-checked, so their exports are typed
   for importers. Their compile-time checks are E8001–E8003, E8010, E8020,
-  E8021, E8030, E8100–E8103, E8112, E8117 and W8011. Tests run every addon in
-  dev, release and fully minified builds against a mock client; the in-game
+  E8021, E8030, E8100–E8104, E8112, E8117, W8011, W8040, W8101 and W8102.
+  Tests run every addon in dev, release and fully minified builds against a
+  mock client; the in-game
   suite (`tests/ingame`, `/stdtest`) passed on the WoW: Forever client,
   including combat lockdown and a `/reload` with real SavedVariables, and
   runs against the mock in CI. `examples/core-demo` uses every core module.
-- Open from S1: typed handler payloads (`EventArgs<E>` for `on`, `once`,
-  `onUnit`, `send` and `@event`); W8040 and W8102 (hook targets); W8101 at
-  compile time (the runtime validity check exists); E8104 (`Secret<…>` in
-  `saved.bind` defaults).
+- Completed 2026-10-14: handlers are typed by their event or message
+  (`on`, `once`, `onUnit`, `send`, `@event`, `@unitEvent`), hook targets are
+  checked (W8040, and W8102 for globals of Blizzard's load-on-demand addons,
+  marked `@onDemand` in the `wow-api` declarations), events missing from a
+  shared-mode flavor warn (W8101; the declarations now list each flavor's
+  own events, from client dumps), and `Secret<…>` in `saved.bind` defaults
+  is E8104.
 
 ## M9: Test runner, language server, formatter
 

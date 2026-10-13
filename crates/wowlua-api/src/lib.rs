@@ -68,6 +68,9 @@ pub fn declared_names(text: &str) -> std::collections::HashSet<String> {
             out.insert(ident(rest));
         } else if let Some(rest) = line.strip_prefix("declare global ") {
             out.insert(ident(rest));
+        } else if let Some(rest) = line.strip_prefix("declare event ") {
+            // Events by `event:NAME`, apart from globals of the same name.
+            out.insert(format!("event:{}", ident(rest)));
         } else if let Some(rest) = line.strip_prefix("declare namespace ") {
             let ns = ident(rest);
             out.insert(ns.clone());

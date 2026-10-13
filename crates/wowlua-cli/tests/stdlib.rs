@@ -1725,6 +1725,56 @@ fn core_modules_are_checked_at_compile_time() {
             "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"StdDBPerChar\", { version = 1, defaults = {}, profiles = true })\n",
             "E8117",
         ),
+        // Handlers are typed by their event or message.
+        (
+            "import on from \"wowlua:events\"\non(\"UNIT_HEALTH\", function(unit: number) end)\n",
+            "E2001",
+        ),
+        (
+            "import * as events from \"wowlua:events\"\nevents.once(\"UNIT_HEALTH\", function(unit) local n: number = unit end)\n",
+            "E2001",
+        ),
+        (
+            "import event from \"wowlua:events\"\n@event(\"UNIT_HEALTH\")\nlocal function f(unit: number) end\n",
+            "E2001",
+        ),
+        (
+            "import unitEvent from \"wowlua:events\"\n@unitEvent(\"UNIT_HEALTH\", \"player\")\nlocal function f(unit: boolean) end\n",
+            "E2001",
+        ),
+        (
+            "import send from \"wowlua:events\"\ndeclare message STD_PING(n: number)\nsend(\"STD_PING\", \"one\")\n",
+            "E2001",
+        ),
+        (
+            "import send from \"wowlua:events\"\ndeclare message STD_PING(n: number)\nsend(\"STD_PING\")\n",
+            "E2007",
+        ),
+        // Hook targets.
+        (
+            "import hook from \"wowlua:hooks\"\nhook(\"NoSuchGlobalFunction\", function() end)\n",
+            "W8040",
+        ),
+        (
+            "import hook from \"wowlua:hooks\"\n@hook(GameTooltip, \"NoSuchMethod\")\nlocal function f() end\n",
+            "W8040",
+        ),
+        (
+            "import hookScript from \"wowlua:hooks\"\nhookScript(\"NoSuchFrame\", \"OnShow\", function() end)\n",
+            "W8040",
+        ),
+        (
+            "import hook from \"wowlua:hooks\"\nhook(\"PlayerSpellsFrame\", \"Show\", function() end)\n",
+            "W8102",
+        ),
+        (
+            "import hook from \"wowlua:hooks\"\nhook(PlayerSpellsFrame, \"Show\", function() end, { addon = \"Blizzard_PlayerSpells\" })\n",
+            "W8102",
+        ),
+        (
+            "import * as saved from \"wowlua:saved\"\ninterface S\n    name: Secret<string>\nend\nlocal db = saved.bind(\"StdDB\", { version = 1, defaults = { inner = {} } :: { inner: S } })\n",
+            "E8104",
+        ),
         // The handle's methods are typed (spec stdlib "saved").
         (
             "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"StdDB\", { version = 1, defaults = {}, profiles = true })\nsaved.handle(db).reset()\n",
@@ -1782,6 +1832,7 @@ import * as saved from "wowlua:saved"
 import throttle from "wowlua:timer"
 import outOfCombat from "wowlua:combat"
 import onLoad from "wowlua:lifecycle"
+import hook, hookScript from "wowlua:hooks"
 
 @event("PLAYER_LOGIN", "STD_PING")
 local function f(name: string, ...: any) end
@@ -1815,6 +1866,23 @@ local db = saved.bind("StdDB", { version = 1, defaults = { n = 1 }, profiles = t
 local r = router({ go = { args = { "number", "rest" }, flags = { "all" }, run = function(a: number, b: string, flags: any) end } })
 @slash("/stdgo")
 local function cmd(msg: string) r:dispatch(msg) end
+
+-- Handlers get their event's types; extra parameters are fine.
+on("UNIT_HEALTH", function(unit) local s: string = unit end)
+on("UNIT_HEALTH", function(unit: string, extra: any) end)
+send("STD_PING", 2)
+@event("UNIT_HEALTH")
+local function health(unit) local s: string = unit end
+
+-- Hooks of declared targets, of load-on-demand addons with `addon`, and of
+-- named frames the addon creates.
+hook("ToggleGameMenu", function() end)
+hook(GameTooltip, "SetUnit", function() end)
+hook("PlayerSpellsFrame", "Show", function() end, { addon = "Blizzard_PlayerSpells" })
+@hookScript("PlayerSpellsFrame", "OnShow", { addon = "Blizzard_PlayerSpells" })
+local function shown() end
+local frame = CreateFrame("Frame", "StdOwnFrame")
+hookScript("StdOwnFrame", "OnShow", function() end)
 "#,
         ),
         (
@@ -2102,4 +2170,33 @@ Mock.awaitText(" passed, ")
             "{suite}:\n{before}\n----\n{text}"
         );
     }
+}
+
+/// W8101 (spec stdlib "events"): in shared flavor mode, an event some
+/// selected flavor lacks; a flavor guard covers it.
+#[test]
+fn events_missing_from_a_flavor_warn_in_shared_mode() {
+    let dir = project(&[(
+        "src/main.wowlua",
+        r#"import on, event from "wowlua:events"
+on("PLAYER_LOGIN", function() end)
+on("ACTIVE_COMBAT_CONFIG_CHANGED", function() end)
+@event("ACTIVE_COMBAT_CONFIG_CHANGED")
+local function f() end
+if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
+    on("ACTIVE_COMBAT_CONFIG_CHANGED", function() end)
+end
+"#,
+    )]);
+    let manifest = fs::read_to_string(dir.path().join("wowlua.json")).unwrap();
+    let manifest = manifest.replacen(
+        '{',
+        "{ \"flavors\": { \"standard\": {}, \"vanilla\": {} }, \"build\": { \"flavor-mode\": \"shared\" },",
+        1,
+    );
+    fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
+    let stderr = build(dir.path(), "dev");
+    let lines: Vec<&str> = stderr.lines().filter(|l| l.contains("W8101")).collect();
+    assert_eq!(lines.len(), 2, "{stderr}");
+    assert!(stderr.contains("is not available in `vanilla`"), "{stderr}");
 }

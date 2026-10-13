@@ -227,7 +227,9 @@ impl Checker<'_> {
                     return Pack::any();
                 }
                 self.check_yield_boundary(callee, args);
+                let c = self.stdlib_call_type(callee, args, c);
                 let results = self.call(c, None, args, e.span, expected);
+                self.stdlib_after_call(callee, args);
                 // `setmetatable(t, mt)`: `t` with `mt.__index` as fallback.
                 if let ExprKind::Name(n) = &callee.kind
                     && n.text.as_ref() == "setmetatable"
@@ -1549,6 +1551,252 @@ impl Checker<'_> {
             }
         }
         subst::apply_func(&mut self.env.types, f, &s)
+    }
+
+    /// Checks of standard-library calls that need their arguments' types:
+    /// `Secret<…>` in `saved.bind` defaults (E8104), hook targets (W8040).
+    fn stdlib_after_call(&mut self, callee: &Expr, args: &Args) {
+        let Some(id) = self.intrinsic_of(callee) else {
+            return;
+        };
+        if id.starts_with("hooks.") {
+            self.check_hook_target(&id, &args.exprs(), false);
+        }
+        if id == "saved.bind"
+            && let Some(opts) = args.exprs().get(1)
+            && let ExprKind::Table(fields) = &opts.kind
+        {
+            for f in fields {
+                if let TableField::Named { name, value, .. } = f
+                    && name.text.as_ref() == "defaults"
+                    && let Some(&t) = self.expr_types.get(&(value.span.start, value.span.end))
+                    && let Some(path) =
+                        self.secret_path(t, String::new(), &mut std::collections::HashSet::new())
+                {
+                    let at = if path.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" (at `{path}`)")
+                    };
+                    let msg = format!(
+                        "the defaults of `saved.bind` contain a `Secret<…>` type{at}: secret values cannot be compared or saved"
+                    );
+                    self.report("E8104", value.span, msg);
+                }
+            }
+        }
+    }
+
+    /// W8102: the target belongs to a load-on-demand addon, but the hook
+    /// does not wait for it (`opts.addon`), or names it by an expression
+    /// (evaluated before the addon loads).
+    fn check_hook_on_demand(&mut self, id: &str, args: &[&Expr], decorator: bool) {
+        let Some(&first) = args.first() else { return };
+        let (root, by_name) = match &first.kind {
+            ExprKind::String(lit) => (String::from_utf8_lossy(&lit.value).into_owned(), true),
+            ExprKind::Name(n) if self.lookup_var(&n.text).is_none() => (n.text.to_string(), false),
+            _ => return,
+        };
+        let Some(addon) = self.env.on_demand.get(root.as_str()).cloned() else {
+            return;
+        };
+        let has_method = matches!(args.get(1).map(|e| &e.kind), Some(ExprKind::String(_)));
+        let global_only = id == "hooks.hook" && !has_method;
+        let opts_at = if decorator { 2 } else { 3 };
+        let waits = !global_only && match args.get(opts_at).map(|e| &e.kind) {
+            Some(ExprKind::Table(fields)) => fields.iter().any(
+                |f| matches!(f, TableField::Named { name, .. } if name.text.as_ref() == "addon"),
+            ),
+            // Options from elsewhere: cannot tell.
+            Some(_) => true,
+            None => false,
+        };
+        let msg = if global_only {
+            format!(
+                "`{root}` exists only once the load-on-demand addon `{addon}` has loaded; hook it with `hook(_G, \"{root}\", fn, {{ addon = \"{addon}\" }})`"
+            )
+        } else if !waits {
+            format!(
+                "`{root}` exists only once the load-on-demand addon `{addon}` has loaded; pass `{{ addon = \"{addon}\" }}` so the hook waits for it"
+            )
+        } else if !by_name {
+            format!(
+                "`{root}` is read before `{addon}` loads; name it as a string (\"{root}\") so the hook finds it once the addon has loaded"
+            )
+        } else {
+            return;
+        };
+        self.report("W8102", first.span, msg);
+    }
+
+    /// A hook's target exists (W8040): `hook(name, fn)` and `@hook(name)`
+    /// name a global function, `hook(target, method, …)` a method of the
+    /// target, `hookScript(frame, …)` a frame. A target of a load-on-demand
+    /// addon needs `opts.addon` and a name (W8102).
+    pub(crate) fn check_hook_target(&mut self, id: &str, args: &[&Expr], decorator: bool) {
+        let literal = |e: &Expr| match &e.kind {
+            ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value).into_owned()),
+            _ => None,
+        };
+        self.check_hook_on_demand(id, args, decorator);
+        let known = |c: &Self, name: &str| {
+            c.env.globals.contains_key(name)
+                || c.extra_globals.contains(name)
+                || c.assigned_globals.contains(name)
+                || c.dynamic_env
+        };
+        let Some(&first) = args.first() else { return };
+        let method = args.get(1).and_then(|e| literal(e));
+        let global_only = id == "hooks.hook" && method.is_none();
+        if global_only || id == "hooks.hookScript" {
+            if let Some(name) = literal(first)
+                && !known(self, &name)
+            {
+                let what = if global_only { "function" } else { "frame" };
+                let msg = format!(
+                    "`{name}` is not a declared global {what}; the hook fails where it is installed"
+                );
+                self.report("W8040", first.span, msg);
+            }
+            return;
+        }
+        let (Some(method), Some(&method_expr)) = (method, args.get(1)) else {
+            return;
+        };
+        let target = match literal(first) {
+            Some(name) => match self.env.globals.get(name.as_str()) {
+                Some(&t) => t,
+                None => {
+                    if !known(self, &name) {
+                        let msg = format!(
+                            "`{name}` is not a declared global; the hook fails where it is installed"
+                        );
+                        self.report("W8040", first.span, msg);
+                    }
+                    return;
+                }
+            },
+            None => match self.expr_types.get(&(first.span.start, first.span.end)) {
+                Some(&t) => t,
+                None => self.infer(first),
+            },
+        };
+        if matches!(
+            self.env.types.get(target),
+            Ty::Any | Ty::Unknown | Ty::Error | Ty::Table
+        ) {
+            return;
+        }
+        // Declared members (native widget types are open to any field, so
+        // a member lookup would always succeed).
+        let missing = match self.env.types.get(target).clone() {
+            Ty::Named(d, targs) => {
+                self.env.def(d).kind != DefKind::Enum
+                    && self.env.instance_member(d, &targs, &method).is_none()
+                    && self.env.def(d).indexer.is_none()
+            }
+            _ => matches!(
+                self.member_type(target, &method, method_expr.span, true),
+                None | Some(Types::ERROR)
+            ),
+        };
+        if missing {
+            let msg = format!(
+                "`{}` has no `{method}` to hook; the hook fails where it is installed",
+                self.env.display(target)
+            );
+            self.report("W8040", method_expr.span, msg);
+        }
+    }
+
+    /// Where `t` contains a `Secret<…>` type: its field path, if any.
+    fn secret_path(
+        &self,
+        t: TypeId,
+        path: String,
+        seen: &mut std::collections::HashSet<TypeId>,
+    ) -> Option<String> {
+        if !seen.insert(t) {
+            return None;
+        }
+        let join = |name: &str| {
+            if path.is_empty() {
+                name.to_string()
+            } else {
+                format!("{path}.{name}")
+            }
+        };
+        match self.env.types.get(t).clone() {
+            Ty::Secret(_) => Some(path),
+            Ty::Union(ms) | Ty::Intersection(ms) => ms
+                .iter()
+                .find_map(|&m| self.secret_path(m, path.clone(), seen)),
+            Ty::Array(e) => self.secret_path(e, join("[]"), seen),
+            Ty::Map(k, v) => self
+                .secret_path(k, join("[key]"), seen)
+                .or_else(|| self.secret_path(v, join("[]"), seen)),
+            Ty::Record(r) => r
+                .fields
+                .iter()
+                .find_map(|(n, f)| self.secret_path(f.ty, join(n), seen))
+                .or_else(|| {
+                    r.indexer
+                        .and_then(|(_, v)| self.secret_path(v, join("[]"), seen))
+                }),
+            Ty::Named(d, _) => {
+                let def = self.env.def(d);
+                let members: Vec<(Box<str>, TypeId)> =
+                    def.members.iter().map(|(n, m)| (n.clone(), m.ty)).collect();
+                let indexer = def.indexer;
+                members
+                    .iter()
+                    .find_map(|(n, ty)| self.secret_path(*ty, join(n), seen))
+                    .or_else(|| indexer.and_then(|(_, v)| self.secret_path(v, join("[]"), seen)))
+            }
+            _ => None,
+        }
+    }
+
+    /// A standard-library call typed by its event or message: the handler
+    /// of `on`, `once` and `onUnit` gets the event's parameters, and `send`
+    /// takes the message's.
+    fn stdlib_call_type(&mut self, callee: &Expr, args: &Args, c: TypeId) -> TypeId {
+        let Some(id) = self.intrinsic_of(callee) else {
+            return c;
+        };
+        let Ty::Func(mut f) = self.env.types.get(c).clone() else {
+            return c;
+        };
+        let exprs = args.exprs();
+        let (name, name_span) = match exprs.first().map(|e| (&e.kind, e.span)) {
+            Some((ExprKind::String(lit), span)) => {
+                (String::from_utf8_lossy(&lit.value).into_owned(), span)
+            }
+            _ => return c,
+        };
+        if matches!(id.as_str(), "events.on" | "events.once" | "events.onUnit") {
+            self.check_event_available(&name, name_span);
+        }
+        let Some(handler) = self.env.handlers.get(name.as_str()).cloned() else {
+            return c;
+        };
+        match id.as_str() {
+            "events.on" | "events.once" | "events.onUnit" => {
+                let at = if id == "events.onUnit" { 2 } else { 1 };
+                let h = self.env.types.func(handler);
+                match f.params.get_mut(at) {
+                    Some(p) => p.ty = h,
+                    None => return c,
+                }
+            }
+            "events.send" => {
+                f.params.truncate(1);
+                f.params.extend(handler.params);
+                f.rest = handler.rest;
+            }
+            _ => return c,
+        }
+        self.env.types.func(f)
     }
 
     /// Checks a call of `f`: arity (E2006, W2055, E2007), argument types

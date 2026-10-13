@@ -156,6 +156,9 @@ pub fn check_package_full(
     // that their uses report E2030.
     if let Some(shared) = shared {
         for path in shared.availability.keys() {
+            if path.starts_with("event:") {
+                continue;
+            }
             match path.rsplit_once('.') {
                 None => {
                     env.globals
@@ -199,6 +202,15 @@ pub fn check_package_full(
                     assigned_globals.insert(name);
                 }
             }
+            // `CreateFrame(type, "Name", …)` creates the global `Name`.
+            wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
+                if let ExprKind::Call { callee, args } = &e.kind
+                    && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "CreateFrame")
+                    && let Some(ExprKind::String(lit)) = args.exprs().get(1).map(|a| &a.kind)
+                {
+                    assigned_globals.insert(String::from_utf8_lossy(&lit.value).into_owned());
+                }
+            });
         }
     }
     let extra_globals = &extra_globals;
@@ -217,6 +229,7 @@ pub fn check_package_full(
         }
         let imports = import_types(&mut env, files, analysis, i, &exports);
         let info = FileInfo {
+            intrinsics: crate::stdlib::Intrinsics::of(analysis, i, parse),
             index: i,
             mode: settings.mode,
             pure_lua: settings.pure_lua,

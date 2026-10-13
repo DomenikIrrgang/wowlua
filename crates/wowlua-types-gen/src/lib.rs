@@ -30,6 +30,11 @@ pub struct FlavorDocs {
     /// The global API functions the flavor's client has (`Name`,
     /// `Namespace.Member`), when known.
     pub api_names: Option<HashSet<String>>,
+    /// The events the flavor's client has, when known.
+    pub event_names: Option<HashSet<String>>,
+    /// The UI files only load-on-demand addons load (their globals exist
+    /// only once the addon is loaded): path (lowercase, `/`) → addon.
+    pub lod_files: std::collections::HashMap<String, String>,
 }
 
 /// Generates the declarations. `skip`: global names the compiler declares
@@ -88,10 +93,13 @@ pub fn generate(
                     .entry(name.clone())
                     .or_insert_with(|| members.clone());
             }
+            // Events only where the flavor's client has them (when known).
             for (name, params) in &other.events {
-                d.events
-                    .entry(name.clone())
-                    .or_insert_with(|| params.clone());
+                if f.event_names.as_ref().is_none_or(|e| e.contains(name)) {
+                    d.events
+                        .entry(name.clone())
+                        .or_insert_with(|| params.clone());
+                }
             }
         }
     }
@@ -214,11 +222,21 @@ pub fn generate(
     // Globals of Blizzard's UI code and global strings, where nothing else
     // declares them; those of every flavor go into the shared file.
     let widget_classes: HashSet<String> = shared.classes.keys().cloned().collect();
-    let mut ui_globals: Vec<indexmap::IndexMap<String, String>> = Vec::new();
+    // Each with the load-on-demand addon that alone defines it, if any.
+    let mut ui_globals: Vec<indexmap::IndexMap<String, (String, Option<String>)>> = Vec::new();
     for (f, (_, _, d)) in flavors.iter().zip(&per_flavor) {
-        let mut g = framexml::globals(&f.ui_lua, &f.ui_xml, &widget_classes);
+        let lod = framexml::lod_origins(&f.ui_lua, &f.ui_xml, &f.lod_files, &widget_classes);
+        let mut g: indexmap::IndexMap<String, (String, Option<String>)> =
+            framexml::globals(&f.ui_lua, &f.ui_xml, &widget_classes)
+                .into_iter()
+                .map(|(n, ty)| {
+                    let addon = lod.get(&n).cloned();
+                    (n, (ty, addon))
+                })
+                .collect();
         for s in &f.strings {
-            g.entry(s.clone()).or_insert_with(|| "string".into());
+            g.entry(s.clone())
+                .or_insert_with(|| ("string".into(), None));
         }
         g.retain(|n, _| {
             !skip.contains(n)
@@ -233,9 +251,15 @@ pub fn generate(
         ui_globals.push(g);
     }
     if let Some(first) = ui_globals.first().cloned() {
-        for (name, ty) in first {
-            if ui_globals.iter().all(|g| g.get(&name) == Some(&ty)) {
+        for (name, (ty, addon)) in first {
+            if ui_globals
+                .iter()
+                .all(|g| g.get(&name) == Some(&(ty.clone(), addon.clone())))
+            {
                 shared.globals.insert(name.clone(), ty);
+                if let Some(a) = addon {
+                    shared.global_addons.insert(name.clone(), a);
+                }
                 for g in ui_globals.iter_mut() {
                     g.shift_remove(&name);
                 }
@@ -243,7 +267,12 @@ pub fn generate(
         }
     }
     for ((_, _, d), g) in per_flavor.iter_mut().zip(ui_globals) {
-        for (name, ty) in g {
+        for (name, (ty, addon)) in g {
+            if !d.globals.contains_key(&name)
+                && let Some(a) = addon
+            {
+                d.global_addons.insert(name.clone(), a);
+            }
             d.globals.entry(name).or_insert(ty);
         }
     }

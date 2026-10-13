@@ -159,6 +159,12 @@ pub struct Env {
     pub declared_exports: HashMap<usize, HashMap<Box<str>, TypeId>>,
     pub events: IndexMap<Box<str>, Pack>,
     pub messages: IndexMap<Box<str>, Pack>,
+    /// The handler signature of each event and message (its declared
+    /// parameters, any results).
+    pub handlers: HashMap<Box<str>, Func>,
+    /// Globals only a load-on-demand Blizzard addon defines (`@onDemand`):
+    /// name → addon.
+    pub on_demand: HashMap<Box<str>, String>,
     pub diagnostics: Vec<Diagnostic>,
     /// Types of `typeof(expr)` expressions, by span (set by the checker).
     pub typeof_types: HashMap<(u32, u32), TypeId>,
@@ -842,6 +848,30 @@ impl Env {
         let StmtKind::Declare(d) = &s.kind else {
             return;
         };
+        if let Some(addon) = s
+            .decorators
+            .iter()
+            .find(|d| d.is_named("onDemand"))
+            .and_then(
+                |d| match d.args.as_ref()?.exprs().first().map(|e| &e.kind) {
+                    Some(ExprKind::String(lit)) => {
+                        Some(String::from_utf8_lossy(&lit.value).into_owned())
+                    }
+                    _ => None,
+                },
+            )
+        {
+            let name = match d.as_ref() {
+                Declare::Global { name, .. } => Some(name.text.clone()),
+                Declare::Function { name, .. } if name.path.len() == 1 => {
+                    Some(name.path[0].text.clone())
+                }
+                _ => None,
+            };
+            if let Some(name) = name {
+                self.on_demand.insert(name, addon);
+            }
+        }
         let scope = self.scope_of(src.index, &[]);
         let scope = Scope {
             module: (!src.declaration).then_some(src.index).or(scope.module),
@@ -891,8 +921,15 @@ impl Env {
                 let f = self.func_sig(params, &scope, true);
                 let pack = Pack {
                     types: f.params.iter().map(|p| p.ty).collect(),
-                    rest: f.rest,
+                    rest: f.rest.clone(),
                 };
+                self.handlers.insert(
+                    name.text.clone(),
+                    Func {
+                        ret: Pack::any(),
+                        ..f
+                    },
+                );
                 if matches!(d.as_ref(), Declare::Event { .. }) {
                     self.events.insert(name.text.clone(), pack);
                 } else {

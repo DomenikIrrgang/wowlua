@@ -160,7 +160,7 @@ impl<'a> Lowerer<'a> {
                     target,
                     T::Function | T::Method | T::Constructor | T::Accessor | T::Class
                 ),
-                "widget" | "intrinsic" | "deferred" => target == T::Declare,
+                "widget" | "intrinsic" | "deferred" | "onDemand" => target == T::Declare,
                 "profile" | "noprofile" => {
                     matches!(target, T::Function | T::Method | T::Constructor | T::Class)
                 }
