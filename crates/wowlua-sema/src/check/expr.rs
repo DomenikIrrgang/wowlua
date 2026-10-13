@@ -1581,12 +1581,16 @@ impl Checker<'_> {
             if let (Some(exp), Some(&r)) = (expected, f.ret.types.first()) {
                 self.unify(r, exp, &mut s);
             }
-            // The variadic tail binds a pack parameter.
+            // The variadic tail binds a pack parameter. A function literal
+            // (typed in the second pass) takes the type the pack was bound
+            // to at its position by an earlier parameter, or `any`.
             if let Some(Rest::Pack(p)) = &f.rest {
                 let fixed = f.params.len();
+                let bound = s.packs.get(p).cloned();
                 let mut pack = Pack::default();
-                for t in arg_types.iter().skip(fixed).flatten() {
-                    pack.types.push(*t);
+                for (k, t) in arg_types.iter().skip(fixed).enumerate() {
+                    let from_bound = || bound.as_ref().and_then(|b| b.types.get(k).copied());
+                    pack.types.push(t.or_else(from_bound).unwrap_or(Types::ANY));
                 }
                 s.packs.insert(*p, pack);
             }

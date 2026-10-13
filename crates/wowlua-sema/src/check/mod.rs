@@ -883,6 +883,10 @@ mod tests {
         ok(
             "local ok, v = pcall(function(a: number) return a * 2 end, 1)\nif ok then print(v + 1) end\n",
         );
+        // A function literal among the arguments a pack passes on.
+        ok(
+            "local function h(a: string, fn: () -> (), c: any?) end\nprint(pcall(h, \"x\", function() end))\n",
+        );
         ok(
             "local t: number[] = {}\ntable.insert(t, 1)\nlocal n = select(\"#\", 1, 2)\nprint(n + 1)\n",
         );
