@@ -143,6 +143,10 @@ The generator runs every time the menu opens, so it always reflects current
 state. On fallback clients, menu buttons are pooled (`wowlua:pool`) and the
 menu closes on Escape, on an outside click, or when the owner hides.
 
+The fallback frame looks like the client's own menus by default and can be
+restyled with `menu.setTheme(theme)` ([Widget themes](#widget-themes)).
+Menus drawn by `MenuUtil` are Blizzard's own and are not themed.
+
 ## list
 
 `wowlua:list` is a virtualized scrolling list on top of `wowlua:pool`. It
@@ -220,6 +224,58 @@ dialog.import({
   ([Code generation §14.1.1](../toolchain/codegen.md#1411-global-writes)).
 - Very large imports: the edit box accepts unlimited text (`SetMaxLetters(0)`),
   and import parsing of large strings runs as a `wowlua:jobs` job.
+- **Look:** like the client's own dialogs by default; `dialog.setTheme(theme)`
+  restyles them ([Widget themes](#widget-themes)).
+
+## Widget themes
+
+`wowlua:dialog`, the fallback frame of `wowlua:menu` and the built-in minimap
+button of `wowlua:launcher` ([UI](ui.md#launcher)) draw frames that ship inside
+the addon, in front of players who may never have heard of wowlua. By default
+they look like the client's own UI and carry no wowlua branding (decision
+S17): they are built from the client's templates and font objects
+(`BackdropTemplate`, `UIPanelButtonTemplate`, `InputBoxTemplate`,
+`UIPanelScrollFrameTemplate`; `GameFontNormal`, `GameFontHighlight`,
+`GameFontNormalSmall`, `GameFontHighlightSmall`, `ChatFontNormal`), so they
+blend into any addon and follow the player's UI scale and font replacements.
+Where a template does not exist on a flavor, the flavor table names the
+equivalent.
+
+An addon restyles them with one `WidgetTheme`, a type exported by
+`wowlua:frames` (decision S18):
+
+```wowlua
+import type WidgetTheme from "wowlua:frames"
+import * as dialog from "wowlua:dialog"
+import * as menu from "wowlua:menu"
+
+const THEME: WidgetTheme = {
+    font = { title = "Interface\\AddOns\\MyAddon\\media\\Title.ttf", size = 12 },
+    colors = { background = { 0.08, 0.07, 0.06, 0.94 }, border = { 0.43, 0.40, 0.33 }, accent = { 1, 0.71, 0.28 } },
+    borderSize = 1,
+    button = "flat",
+}
+
+dialog.setTheme(THEME)
+menu.setTheme(THEME)
+```
+
+| Slot | Type | Default |
+|------|------|---------|
+| `font.title`, `font.body` | `string?`: a font file path or a font object name | The client's font objects |
+| `font.size` | `number?` | The font object's size |
+| `colors.background`, `border`, `title`, `text`, `muted`, `accent`, `onAccent`, `error` | `{ number, number, number, number? }?` (0–1) | The client's template art and font colors |
+| `borderSize` | `number?` | The template's border |
+| `padding` | `number?` | The template's insets |
+| `button` | `("template" \| "flat")?` | `"template"`: the client's button template; `"flat"` draws a fill, a border and a label |
+
+- Every slot is optional; a theme with only `colors.accent` changes only the
+  accent, and `setTheme(nil)` returns to the default look.
+- A theme is per addon and applies to frames created afterwards; pooled frames
+  take it the next time they are shown.
+- Not themed: menus drawn by `MenuUtil`, minimap buttons drawn by LibDBIcon,
+  the Addon Compartment and LDB displays. They belong to the client or to the
+  player's other addons.
 
 ## color
 

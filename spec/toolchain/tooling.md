@@ -222,3 +222,28 @@ MyAddon/MyAddon.lua:4821: attempt to index local 'a' (a nil value)
   `.wowlua` source file, and names the enclosing function found in the source
   (`in Window:refresh`).
 - Locations of other addons are left as they are.
+
+## 16.5 Profiling reports (`wowlua prof report`)
+
+`wowlua prof report` turns recordings exported from the dev window
+([Debugging §7.7.9](../language/07-debugging.md#779-export)) into a single,
+self-contained HTML page and opens it in the browser (`--no-open` only writes
+it). The default output is `dist/reports/<Name>-<date>.html`; `--out` sets
+another path.
+
+- **Finding the data.** The command reads `WowluaDevDB_<Addon>.lua` of the
+  current package from the SavedVariables folders of the WoW installation,
+  found as for `wowlua dev` ([CLI §12.5](cli.md#125-wow-installation-integration)):
+  `--wow`, `WOWLUA_WOW_PATH`, the global config, then auto-detection. Every
+  client folder and every account under `WTF/Account/` is searched. When more
+  than one has exported recordings, the command lists them and asks, or takes
+  `--client` and `--account` (decision T179).
+- **What it shows.** Every exported recording (`--recording` selects some),
+  with the functions table, the call tree and flame graph when call paths
+  were on, the frame timeline with the frame budget, the slow calls with
+  their stacks, the garbage view and the hints found in that recording, in
+  the style of the wowlua website. Locations are mapped back to source lines
+  as `wowlua trace` does (§16.4), using the build id stored with each
+  recording.
+- **Nothing is uploaded.** The report is a local file; the command does not
+  use the network.

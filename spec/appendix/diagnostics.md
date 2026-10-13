@@ -1,7 +1,9 @@
 # Appendix B. Diagnostics
 
 Every diagnostic has a stable code. `E` codes are errors, which fail the build.
-`W` codes are warnings, which fail it only with `--deny-warnings`. The level of
+`W` codes are warnings, which fail it only with `--deny-warnings`. `P` codes
+are performance hints found at run time by the dev window (§B.3); they never
+affect a build. The level of
 any warning can be changed in the manifest (`check.lints`). `wowlua explain
 <code>` prints an explanation with examples.
 
@@ -249,3 +251,23 @@ is reported as the warning with the same number (`E2001` → `W2001`, `E2030` �
 | E8390 | Invalid color hex literal |
 | E8400 | Unknown media kind |
 | E8420 | Unknown callback event name for the registry's event type |
+
+## B.3 Performance hints
+
+Performance hints are found in game by the dev window's rules
+([Debugging §7.7.7](../language/07-debugging.md#777-hints)), not by the
+compiler. They use the `x7xxx` debugging range with the `P` prefix, and
+`wowlua explain` explains them like any other code (decision T176).
+
+| Range | Area |
+|-------|------|
+| `P71xx` | Events and scripts |
+| `P72xx` | Garbage and memory |
+| `P73xx` | Frame time |
+
+| Code | Message (summary) |
+|------|-------------------|
+| P7101 | A handler runs very often in a recording (bursts of the same event); collapse bursts with `@throttle` from `wowlua:timer` |
+| P7102 | An `OnUpdate` script runs every frame, also while its frame is hidden; use `every` from `wowlua:timer`, or clear the script on hide |
+| P7201 | A function creates a large share of the addon's garbage; reuse tables or cache results |
+| P7301 | A single call took longer than the frame budget; spread the work across frames with `wowlua:jobs` |

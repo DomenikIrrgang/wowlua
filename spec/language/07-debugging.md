@@ -16,6 +16,10 @@ controlled by the active **profile**
 | `monitor` | bool | `true` | `false` | `false` |
 | `capture-errors` | bool | `true` | `false` | `false` |
 | `source-maps` | bool | `true` | `true` | `true` |
+| `profile-call-paths` | bool | `false` | `false` | `false` |
+| `profile-garbage` | bool | `false` | `false` | `false` |
+| `frame-budget` | number (ms) | `1` | `1` | `1` |
+| `slow-call` | number (ms) | `2` | `2` | `2` |
 
 A dev build therefore has every tool of this chapter built in without any
 change to the code (decision T96): every function is profiled, events,
@@ -25,6 +29,14 @@ compile time; in profiles that use them, plain `.lua` files are compiled too
 (line numbers preserved) instead of copied byte for byte, except embedded
 libraries under `build.libs-dir` (decision T97). Release builds contain none
 of it.
+
+Two measurements cost something on every call and are therefore off by
+default: call paths (`profile-call-paths`, §7.3.2) and garbage per function
+(`profile-garbage`, §7.3.3). The profile settings are the starting values; the
+dev window switches both at run time (§7.7.5). `frame-budget` and `slow-call`
+are the starting thresholds of the frame timeline and the slow-call log
+(§7.3.1); the window changes them too and saves the changes per addon
+(decision T174).
 
 ## 7.1 `wowlua:debug`
 
@@ -153,6 +165,44 @@ standard library's own modules are never instrumented.
   error tracking, wrapped functions may yield normally, but the time spent
   suspended is counted as call time.
 
+### 7.3.1 Frame time and slow calls
+
+In profiles with `instrument` other than `"none"` or with `monitor = true`,
+the runtime also measures time **per rendered frame**: the time of every
+top-level instrumented call and monitored handler (one that no other measured
+call is running under) is added to the current frame, and the frame is closed
+by the runtime's `OnUpdate` mark. The last frames of the live recording are
+kept in a ring buffer (at least 60 seconds at 60 fps). The frame timeline
+(§7.7.4) and the HUD (§7.7.8) read it.
+
+A single call that takes longer than the slow-call threshold (`slow-call`,
+default 2 ms) is a **slow call**. It is recorded with its time, function and
+location, the root that started the work (§7.3.2) and a stack from
+`debugstack()`. Only calls over the threshold pay for the stack. The last 200
+slow calls per addon are kept (decision T178). A frame whose total exceeds
+`frame-budget` (default 1 ms) is **over budget**.
+
+### 7.3.2 Call paths
+
+With call paths switched on (`profile-call-paths`, or the window's switch),
+the profiler also keys its statistics by **path**: the chain of instrumented
+functions from a **root** to the function. A root is the monitored handler
+that started the work (an event, a script, a timer or a slash command, §7.9);
+work that started elsewhere has the root `other`. Paths feed the call tree,
+the flame graph and the by-event view (§7.7.4). Each path costs one statistics
+entry, and every call pays a path lookup, which is why it is opt-in.
+
+### 7.3.3 Garbage
+
+The runtime samples `collectgarbage("count")` once per frame and reports the
+addon-wide **garbage rate** (KB created per second, collections removed). With
+garbage per function switched on (`profile-garbage`, or the window's switch),
+every instrumented call records its allocation, as `@profile({ memory = true })`
+does for one function (§7.3). `collectgarbage("count")` measures the whole
+Lua state, so the figures are exact only for work that runs synchronously
+inside the call; a collection step during a call lowers the count and is
+recorded as zero.
+
 **Reading the data.** In game, through the dev console (`/wl prof MyAddon`), or
 in code through `debug.stats()`:
 
@@ -258,6 +308,10 @@ window; older addons still answer through the registry's versioned interface
 | `/wl log <addon> [level]` | Show or set the runtime log level. Also opens the log ring buffer. |
 | `/wl meta <addon>` | Print `wowlua:meta` information |
 | `/wl inspect <addon> <module>` | Print a module's exports |
+| `/wl record <addon> [name]` / `/wl record <addon> stop` | Start or stop a manual recording (§7.7.4) |
+| `/wl bench <addon> <expression> [n]` | Benchmark an expression (§7.7.6) |
+| `/wl hints <addon>` | Print the current performance hints (§7.7.7) |
+| `/wl hud` | Toggle the compact HUD (§7.7.8) |
 | `/wl reload` | `ReloadUI()` |
 
 Chat output of `/wl prof` and `/wl mon` is an aligned table (name, calls,
@@ -265,25 +319,34 @@ total, self, max, avg).
 
 ### 7.7.1 Dev window
 
-`/wl` opens a movable, resizable window with an addon selector and these tabs:
+`/wl` opens a movable, resizable window (880 × 640 by default) with an addon
+selector and these tabs (decision T170):
 
 | Tab | Contents |
 |-----|----------|
-| Overview | Version, profile, build id, `wowlua:meta` values, memory use over time |
-| Profiler | The profiler statistics (§7.3), sortable by any column, with reset |
-| Monitor | Events, scripts and timers (§7.9) |
-| Log | The `wowlua:log` ring buffer, filterable by level |
-| Errors | Captured errors with count, location and stack (§7.10) |
-| Watch | Watched values (§7.7.2) |
-| Inspector | A table tree view (§7.7.3) |
+| overview | Version, profile, build id, `wowlua:meta` values, memory use over time |
+| performance | Recordings and eight views of the profiler data (§7.7.4) |
+| monitor | Events, scripts and timers since load (§7.9) |
+| log | The `wowlua:log` ring buffer, filterable by level |
+| errors | Captured errors with count, location and stack (§7.10) |
+| watch | Watched values (§7.7.2) |
+| inspector | A table tree view (§7.7.3) |
+| hints | Performance hints with a count on the tab (§7.7.7) |
+
+The footer shows the addon's memory, its garbage rate and the last frame's
+time, the HUD switch (§7.7.8) and, while recordings are marked for export,
+the reminder that `/reload` saves them.
 
 The window refreshes only while it is visible (default every 0.25 s for
 watches and the inspector, every second for the other tabs). It follows the
-SuuUI design system; dev builds ship its fonts (Marcellus SC and Figtree,
-SIL Open Font License, listed in `LICENSES.txt`) in `wowlua/fonts/`
-(decision T102). Its position, size, tab and addon are saved in the
-SavedVariables `WowluaDevDB_<Addon>`, which dev builds add to the TOC
-(decision T103). Escape closes it.
+wowlua design system (dark, flat textures, 1px lines); dev builds ship its
+fonts (Martian Mono for titles, IBM Plex Mono for everything else, SIL Open
+Font License, listed in `LICENSES.txt`) in `wowlua/fonts/` (decision T171,
+which replaces T102). The window uses only glyphs the font files
+contain; the client draws a missing glyph as an empty box. Its position, size,
+tab, addon, thresholds and switches are saved in the SavedVariables
+`WowluaDevDB_<Addon>`, which dev builds add to the TOC (decision T103).
+Escape closes it.
 
 ### 7.7.2 Watches
 
@@ -307,6 +370,97 @@ expression that raises shows its error as the value. Secret values show as
 The Inspector tab shows a table as an expandable tree (keys sorted, cycles
 marked, metatables shown as a `<metatable>` node), refreshed live. A watch
 value, `/wl inspect <addon> <module>` or *Inspect* on a value opens it.
+
+### 7.7.4 Performance
+
+The performance tab lists **recordings** on the left and shows the selected
+one in one of eight **views** on the right.
+
+A recording is a time slice of the profiler (§7.3), monitor (§7.9), frame
+time and garbage data (decision T172):
+
+| Recording | Covers |
+|-----------|--------|
+| `live` | Everything since the last reload. Always first, never dropped. |
+| `combat` | One combat, from `PLAYER_REGEN_DISABLED` to `PLAYER_REGEN_ENABLED`. Made automatically. |
+| `pull N` | One boss pull, from `ENCOUNTER_START` to `ENCOUNTER_END`, numbered per encounter in the session. Made automatically. |
+| manual | From `record` to `stop` (or `/wl record`), named when stopped. |
+
+The last 20 automatic recordings per addon are kept; an older one is dropped
+when a new one ends. Manual recordings and recordings marked for export are
+never dropped automatically. Recordings live in memory and end with the
+session, except those marked for export (§7.7.9).
+
+| View | Shows |
+|------|-------|
+| functions | The profiler table: calls, total, self, max, the garbage column when garbage per function is on, and a 60-second trend per function; filter and reset |
+| tree | The call tree, rooted at the event, script, timer or slash command that started the work (needs call paths) |
+| flame | The same paths as a flame graph by total time, zoomable (needs call paths) |
+| by event | Time per root, with the function that took most of it |
+| timeline | Time per rendered frame against the frame budget, the garbage rate, and the recording's combats and pulls; selecting a frame lists what ran in it |
+| slow | The slow calls (§7.3.1), newest first, with root, recording and stack |
+| garbage | The garbage rate and memory over time, then garbage per function (needs garbage per function) |
+| bench | Benchmarks (§7.7.6) |
+
+**Comparing.** A second recording can be selected for comparison. Every view
+then shows the difference of the selected recording against the compared
+one. Totals are compared **per minute of recording**, so recordings of
+different lengths compare fairly (decision T173). A difference within ±1% is
+shown as unchanged.
+
+### 7.7.5 Switches and thresholds
+
+The window switches call paths and garbage per function on and off at run
+time, for the addon shown, starting from the profile's `profile-call-paths`
+and `profile-garbage`. A view that needs a switch that is off says so and
+offers it. The frame budget and the slow-call threshold start from the
+profile's `frame-budget` and `slow-call`. Changes made in the window are saved
+per addon in `WowluaDevDB_<Addon>` and win over the profile until reset
+(decision T174).
+
+### 7.7.6 Bench
+
+The bench view (or `/wl bench <addon> <expression> [n]`) runs an expression
+n times (default 10000) and reports min, median, max and total. Expressions
+follow the rules of watch expressions (§7.7.2): they are compiled once with
+`loadstring`, run with `ns`, `modules` and globals in scope, and time each call
+with `debugprofilestop()`. A run longer than 50 ms is split into chunks of at
+most 50 ms per frame, so the game never freezes; the statistics cover all
+chunks. Bench does not run in combat. The last 20 runs per addon are kept for
+the session (decision T178).
+
+### 7.7.7 Hints
+
+While the window is open, the runtime checks the live recording every few
+seconds against a set of rules and lists its findings in the hints tab, with
+the count of new hints on the tab. Each hint has a `P` code (`hint[P7301]`),
+names its subject, states the evidence with numbers and the recording it came
+from, and suggests a fix that uses the standard library or plain Lua.
+`wowlua explain P7301` explains it (decision T176). The codes are listed in
+[Diagnostics §B.3](../appendix/diagnostics.md#b3-performance-hints). Hints
+can be dismissed; a dismissed hint comes back when its finding gets worse.
+The rules run only while the window is shown.
+
+### 7.7.8 HUD
+
+The HUD is a small movable overlay with one row per loaded wowlua dev build:
+the addon, the time it used in the last frame, its average, its garbage rate
+and its error count. A row is highlighted for a second when a frame goes over
+the frame budget; clicking a row opens the window on that addon. `/wl hud`
+or the window's switch shows and hides it; the choice and its position are
+saved. It hides itself while the window is open and during cinematics
+(decision T177). It reads the frame-time ring buffers through the
+`WOWLUA_DEV` registry and samples nothing itself.
+
+### 7.7.9 Export
+
+Recordings can be marked for export in the window. Marked recordings are
+written to the addon's `WowluaDevDB_<Addon>` SavedVariables, which WoW saves
+on `/reload` and on logout, so the window reminds of a pending `/reload`.
+On the desktop, `wowlua prof report` reads them and writes a report
+([Developer tooling §16.5](../toolchain/tooling.md#165-profiling-reports-wowlua-prof-report),
+decision T179). An exported recording keeps its statistics, call paths,
+frame times (bucketed) and slow calls; stacks are kept as text.
 
 ## 7.8 Reflection
 
@@ -401,4 +555,14 @@ when its stack passes through the addon's folder. When BugGrabber is loaded
 `BugGrabber_BugGrabbed` callback instead. Paths are shown relative to the
 AddOn folder. The last 50 distinct errors are kept. Recorded errors are shown
 in the Errors tab and by `/wl errors`.
+
+**Error toast.** In dev builds with `dev-console = true`, a newly captured
+error also shows a small notice at the top of the screen while the dev window
+is closed: the addon, the count of new errors, the first line of the message
+with its location, and an action that opens the errors tab with that error
+expanded. Errors within two seconds collapse into one notice. It hides after
+eight seconds (the timer pauses while the cursor is over it), when clicked,
+or when the window opens. In combat it waits until combat ends. It makes no
+sound. BugSack and the default error frame still receive every error
+(decision T180).
 

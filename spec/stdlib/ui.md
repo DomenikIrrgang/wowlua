@@ -269,3 +269,8 @@ launcher.register({
   a runtime error.
 - `launcher.setIcon`, `setLabel`, `showMinimap(bool)` and `refresh()` update
   the surfaces at runtime.
+- **Look.** The built-in minimap button looks like the client's own minimap
+  buttons by default. `theme` in `register`, or `launcher.setTheme(theme)`,
+  restyles it with a `WidgetTheme`
+  ([Interface: widget themes](interface.md#widget-themes)). A button drawn by
+  LibDBIcon, the Addon Compartment entry and LDB displays are not themed.

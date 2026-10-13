@@ -235,6 +235,8 @@ Notes on the delivered state:
   hooks, movable frames.
 - Then unit/aura/spell helpers, colors, SharedMedia interop, item/spell data
   cache, callback registry, background jobs, dialogs, menus and lists.
+- Widget themes for dialogs, the fallback menu and the built-in minimap button
+  (decisions S17, S18).
 
 **Exit:** a sample addon uses no third-party libraries for its events, saved
 variables, settings, minimap button, keybindings and comms.
@@ -278,6 +280,24 @@ as they are, and secure-code paths keep their call structure (taint).
   out of M7).
 - Constant propagation of locals assigned once with a constant.
 
+In-game performance tools, to measure what the optimizations change
+([Debugging §7.7](language/07-debugging.md#77-dev-console), decision T181):
+
+- The dev window in the wowlua design system with its fonts (T170, T171).
+- Recordings: live, per combat, per boss pull and manual; comparison per
+  minute (T172, T173).
+- Frame time, slow calls, call paths, event attribution and garbage per
+  function, with the profile settings `profile-call-paths`,
+  `profile-garbage`, `frame-budget` and `slow-call` (T174).
+- The performance views (functions, tree, flame, by event, timeline, slow,
+  garbage, bench) and `/wl record`, `/wl bench`, `/wl hints`, `/wl hud`.
+- Performance hints with `P` codes and their `wowlua explain` texts; the
+  code generator learns the `P` prefix (T176).
+- The compact HUD (T177) and the error toast (T180).
+- Export through SavedVariables and `wowlua prof report` (T175, T179).
+
 **Exit:** the benchmark suite shows a measured speed-up of the optimized
 release build over the unoptimized one, the corpus and differential tests show
-unchanged behavior, and an optimized addon is checked in game.
+unchanged behavior, and an optimized addon is checked in game; a recording of
+a boss pull, taken in game with the dev window, is exported and opened with
+`wowlua prof report`.

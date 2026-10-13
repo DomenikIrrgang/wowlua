@@ -450,6 +450,8 @@ on with `inherits` (E4315 if missing).
 | `profile-errors` | bool, default `false` | Count errors in profiled functions ([Debugging §7.3](../language/07-debugging.md#73-profiling)) |
 | `reflection` | `"none"` `"decorated"` `"all"` | [Debugging](../language/07-debugging.md) |
 | `dev-console`, `monitor`, `capture-errors`, `source-maps` | bool | [Debugging](../language/07-debugging.md) |
+| `profile-call-paths`, `profile-garbage` | bool, default `false` | Start the dev window with call paths or garbage per function switched on ([Debugging §7.3.2](../language/07-debugging.md#732-call-paths), [§7.3.3](../language/07-debugging.md#733-garbage)) |
+| `frame-budget`, `slow-call` | number (ms), defaults `1` and `2` | Starting frame budget and slow-call threshold of the dev window ([Debugging §7.3.1](../language/07-debugging.md#731-frame-time-and-slow-calls)) |
 | `bundle` | bool | `false` (dev, test), `true` (release). [Optimization](optimization.md) |
 | `minify` | level name | `"none"` (dev, test), `"strip"` (release) |
 | `minify-libraries` | bool | `false`. Apply the minification level to lua-library dependencies too. |
