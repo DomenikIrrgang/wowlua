@@ -195,12 +195,17 @@ pub fn build(
             "bundling is not available yet (milestone M7); building unbundled",
         ));
     }
-    if profile.minify != "none" {
-        session.push(Diagnostic::note(format!(
-            "minification level `{}` is not available yet (milestone M7); output is not minified",
-            profile.minify
-        )));
-    }
+    let Some(level) = wowlua_manifest::minify_passes(&manifest.manifest, &profile.minify) else {
+        session.push(
+            Diagnostic::error(
+                "E4006",
+                format!("unknown minification level `{}`", profile.minify),
+            )
+            .with_path(&manifest.path),
+        );
+        return None;
+    };
+    let passes = wowlua_luair::Passes::from_names(level.iter().map(String::as_str));
 
     let flavors = select_flavors(session, project, request.flavors.as_deref())?;
     // Embedded `lua-library` dependencies (spec §10.5.2).
@@ -706,6 +711,55 @@ pub fn build(
         } else {
             HashSet::new()
         };
+    // Plain Lua that is minified with the compiled code: not libraries
+    // (unless `minify-libraries`), packager flavor blocks or `plain-copy`.
+    // `rename-private` keeps the names the XML and libraries use.
+    let foreign: Vec<Vec<u8>> = if passes.rename_private {
+        files
+            .iter()
+            .filter(|(s, _)| s.kind == SourceKind::Xml)
+            .filter_map(|(s, _)| raw.get(&s.rel).cloned())
+            .chain(libs.iter().flat_map(|lib| {
+                lib.index
+                    .values()
+                    .filter(|rel| {
+                        let lower = rel.to_ascii_lowercase();
+                        lower.ends_with(".lua") || lower.ends_with(".xml")
+                    })
+                    .filter_map(|rel| std::fs::read(lib.dir.join(rel)).ok())
+                    .collect::<Vec<_>>()
+            }))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let minify =
+        crate::compile::Minify {
+            passes,
+            foreign,
+            lua: if passes.is_empty() {
+                HashSet::new()
+            } else {
+                files
+                    .iter()
+                    .map(|(s, _)| s)
+                    .filter(|s| s.kind == SourceKind::Lua && !flavor_blocks.contains(&s.rel))
+                    .filter(|s| {
+                        profile.minify_libraries
+                            || !s.src_rel.split('/').next().is_some_and(|first| {
+                                first.eq_ignore_ascii_case(&build_cfg.libs_dir)
+                            })
+                    })
+                    .filter(|s| {
+                        !crate::keywords::plain_copy(
+                            &manifest.manifest.compat.plain_copy,
+                            &[&s.src_rel, &s.rel],
+                        )
+                    })
+                    .map(|s| s.rel.clone())
+                    .collect()
+            },
+        };
     let split = build_cfg.flavor_mode == wowlua_manifest::model::FlavorMode::Split;
     let compile_flavors: Vec<Option<String>> = if split {
         flavors.iter().cloned().map(Some).collect()
@@ -753,6 +807,7 @@ pub fn build(
                         kind: SourceKind::Wowlua,
                         output: None,
                     },
+                    file,
                     parse: wowlua_syntax::parse(f.text.as_bytes(), file),
                 });
             }
@@ -798,6 +853,7 @@ pub fn build(
             },
             &lower_lua,
             &units,
+            &minify,
         );
         builds.push(FlavorBuild {
             flavor: flavor.clone(),
@@ -913,6 +969,22 @@ pub fn build(
                 ),
                 slices: tool_slices(&profile, &b.output.slices),
             })
+        })
+        .collect();
+    // The runtime is minified like the code that uses it.
+    let runtime_mode = crate::compile::line_mode(&profile);
+    let runtimes: Vec<String> = runtimes
+        .into_iter()
+        .map(|text| {
+            crate::compile::minify_lua(
+                &mut session.db,
+                RUNTIME_PATH,
+                text.as_bytes(),
+                &minify.passes,
+                runtime_mode,
+            )
+            .and_then(|code| String::from_utf8(code).ok())
+            .unwrap_or(text)
         })
         .collect();
     let runtime_per_flavor = runtimes.windows(2).any(|w| w[0] != w[1]);
@@ -1480,6 +1552,27 @@ pub fn build(
         match crate::embed::license_text(lib) {
             Some(text) => lib_licenses.push((format!("{} ({})", lib.name, lib.install), text)),
             None => unlicensed.push(lib.name.clone()),
+        }
+    }
+    // `minify-libraries`: the libraries' Lua files are minified too.
+    if profile.minify_libraries && !minify.passes.is_empty() {
+        let mode = crate::compile::line_mode(&profile);
+        for path in &lib_outputs {
+            if raw_paths.contains(path) || !path.to_ascii_lowercase().ends_with(".lua") {
+                continue;
+            }
+            let Some(content) = out.get(path) else {
+                continue;
+            };
+            let bytes = match content {
+                Content::Bytes(b) => b.clone(),
+                Content::Copy(p) => std::fs::read(p).unwrap_or_default(),
+            };
+            if let Some(code) =
+                crate::compile::minify_lua(&mut session.db, path, &bytes, &minify.passes, mode)
+            {
+                out.insert(path.clone(), Content::Bytes(code));
+            }
         }
     }
     // Files the project keeps in a library's folder ship too where the

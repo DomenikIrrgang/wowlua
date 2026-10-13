@@ -24,6 +24,7 @@ fn compile(src: &str, mode: LineMode, comments: CommentMode) -> Vec<u8> {
         line_mode: mode,
         comments,
         indent: "\t".into(),
+        compact: false,
     };
     emit(&chunk, &options).text
 }

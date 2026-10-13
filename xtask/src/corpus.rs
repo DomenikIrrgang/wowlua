@@ -106,6 +106,27 @@ fn dump(lua: &mlua::Lua, src: &[u8]) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Minification passes that leave the bytecode unchanged.
+const BYTECODE_PASSES: &[&str] = &[
+    "strip-comments",
+    "strip-whitespace",
+    "compact",
+    "shorten-literals",
+    "simplify",
+    "rename-locals",
+];
+
+const ALL_PASSES: &[&str] = &[
+    "strip-comments",
+    "strip-whitespace",
+    "compact",
+    "shorten-literals",
+    "simplify",
+    "rename-locals",
+    "dedupe-strings",
+    "rename-private",
+];
+
 #[derive(Default)]
 struct Stats {
     files: usize,
@@ -211,6 +232,51 @@ pub fn run(dir: &Path) -> Result<()> {
                 .failures
                 .push(format!("{rel}: formatting failed: {e:?}")),
         }
+        // Minification (spec optimization §15.4): every pass but
+        // `dedupe-strings` keeps the bytecode, and preserve mode keeps the
+        // lines of the plain output; with `dedupe-strings` it still compiles.
+        for mode in [LineMode::Preserve, LineMode::Statement] {
+            for names in [BYTECODE_PASSES, ALL_PASSES] {
+                let passes = wowlua_luair::Passes::from_names(names.iter().copied());
+                let mut minified = chunk.clone();
+                wowlua_luair::minify::apply(&mut minified, &passes, mode);
+                let out = emit(&minified, &passes.emit_options(mode));
+                let label = if names == BYTECODE_PASSES {
+                    "all passes but dedupe-strings"
+                } else {
+                    "all passes"
+                };
+                let new = match dump(&lua, &out.text) {
+                    Ok(new) => new,
+                    Err(e) => {
+                        stats.failures.push(format!(
+                            "{rel}: minified with {label} in {mode:?} mode, it does not compile: {e}"
+                        ));
+                        continue;
+                    }
+                };
+                if names != BYTECODE_PASSES {
+                    continue;
+                }
+                if strip(&original, stripped) != strip(&new, stripped) {
+                    stats.failures.push(format!(
+                        "{rel}: minified with {label} in {mode:?} mode, it compiles to different bytecode"
+                    ));
+                } else if mode == LineMode::Preserve {
+                    let plain = emit(&chunk, &EmitOptions::default());
+                    let lines = |code: &[u8]| {
+                        dump(&lua, code)
+                            .ok()
+                            .and_then(|d| wowlua_luair::bytecode::line_info(&d))
+                    };
+                    if lines(&plain.text) != lines(&out.text) {
+                        stats.failures.push(format!(
+                            "{rel}: minified in preserve mode, instructions move to other lines"
+                        ));
+                    }
+                }
+            }
+        }
         for mode in [LineMode::Preserve, LineMode::Statement, LineMode::Pretty] {
             let comments = if mode == LineMode::Preserve {
                 CommentMode::All
@@ -223,6 +289,7 @@ pub fn run(dir: &Path) -> Result<()> {
                     line_mode: mode,
                     comments,
                     indent: "\t".into(),
+                    compact: false,
                 },
             );
             match dump(&lua, &out.text) {

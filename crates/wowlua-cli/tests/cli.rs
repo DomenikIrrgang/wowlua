@@ -695,6 +695,57 @@ fn modules_build_and_run_in_load_order() {
 }
 
 #[test]
+fn minified_builds_run_the_same() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "mini", "version": "1.0.0" },
+  "minify-levels": { "small": { "extends": "compact", "passes": ["rename-locals"] } },
+  "profiles": { "release": { "minify": "small" } } }
+"#,
+            ),
+            (
+                "src/core/math.wowlua",
+                "-- Clamps a value.\nexport function clamp(value: number, lowest: number, highest: number): number\n\treturn math.max(lowest, math.min(highest, value))\nend\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import clamp from \"/core/math\"\nimport build from \"wowlua:meta\"\nlocal result = clamp(5, 0, 1000000)\nprint(result, (\"%d\"):format(1), build.minify)\n",
+            ),
+            (
+                "src/plain.lua",
+                "-- A plain Lua file.\nlocal message = \"plain\"\nprint(message)\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let dev = dir.path().join("dist/dev/Mini");
+    let release = dir.path().join("dist/release/Mini");
+    assert_eq!(run_addon(&dev, "Mini"), "5 1 none\nplain");
+    assert_eq!(run_addon(&release, "Mini"), "5 1 small\nplain");
+    let math = fs::read_to_string(release.join("src/core/math.lua")).unwrap();
+    assert!(
+        !math.contains("Clamps") && !math.contains("lowest"),
+        "{math}"
+    );
+    let plain = fs::read_to_string(release.join("src/plain.lua")).unwrap();
+    assert_eq!(plain, "\nlocal a=\"plain\"\nprint(a)\n");
+    let main = fs::read_to_string(release.join("src/main.lua")).unwrap();
+    assert!(main.contains("1e6"), "{main}");
+    // Unbundled output keeps every line.
+    assert_eq!(main.lines().count(), 4, "{main}");
+    let size = |d: &Path| fs::metadata(d.join("wowlua/runtime.lua")).unwrap().len();
+    assert!(size(&release) < size(&dev), "the runtime is minified too");
+}
+
+#[test]
 fn module_errors() {
     let cases: &[(&str, &str, &str)] = &[
         ("import nope from \"/b\"\n", "export local a = 1\n", "E1012"),
@@ -963,6 +1014,55 @@ fn classes_across_modules_run() {
         "slices are tree-shaken"
     );
     assert_eq!(run_addon(&dist, "Shapes"), "square 9 r true", "{toc}");
+}
+
+/// `rename-private` (spec optimization §15.4.1): private and protected
+/// methods get short names unless their names occur anywhere else.
+#[test]
+fn rename_private_renames_only_provably_private_methods() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "priv", "version": "1.0.0" },
+  "profiles": { "release": { "minify": "max" } } }
+"#,
+            ),
+            (
+                "src/base.wowlua",
+                "export class Counter\n    total: number = 0\n    protected function incrementTotal(by: number) self.total = self.total + by end\n    private function describeTotal(): string return `total {self.total}` end\n    private function lookedUpByName(): string return \"dynamic\" end\n    function run(other: Counter): string\n        self:incrementTotal(2)\n        other:incrementTotal(1)\n        return self:describeTotal() .. \" \" .. self[\"lookedUpByName\"](self)\n    end\nend\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import Counter from \"./base\"\nclass Double extends Counter\n    protected override function incrementTotal(by: number) self.total = self.total + by * 2 end\nend\nlocal d = Double.new()\nprint(d:run(Counter.new()))\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let release = dir.path().join("dist/release/Priv");
+    assert_eq!(
+        run_addon(&dir.path().join("dist/dev/Priv"), "Priv"),
+        "total 4 dynamic"
+    );
+    assert_eq!(run_addon(&release, "Priv"), "total 4 dynamic");
+    let base = fs::read_to_string(release.join("src/base.lua")).unwrap();
+    let main = fs::read_to_string(release.join("src/main.lua")).unwrap();
+    assert!(
+        !base.contains("incrementTotal") && !base.contains("describeTotal"),
+        "{base}"
+    );
+    assert!(
+        !main.contains("incrementTotal"),
+        "the override is renamed alike:\n{main}"
+    );
+    // Its name is in a string: it stays.
+    assert!(base.contains("lookedUpByName"), "{base}");
 }
 
 /// Standard-library infrastructure (spec §8.1, compiler §13.2): `wowlua:*`

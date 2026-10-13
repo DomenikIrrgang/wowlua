@@ -158,8 +158,48 @@ own.
 | `shorten-literals` | Shortest equivalent numeric literals (`1000000` → `1e6`) and shortest string quoting | Low |
 | `simplify` | Safe syntactic simplifications (below) | Low |
 | `rename-locals` | Rename local variables, parameters and upvalues to the shortest available names, most frequent first | High. Original names are recoverable only through source maps. |
-| `rename-private` | Also rename private and protected class members and module-private table fields that provably do not escape | High |
+| `rename-private` | Also rename private and protected class methods and the fields of module-private tables that provably do not escape (below) | High |
 | `dedupe-strings` | Hoist repeated long string literals into shared locals, within the budgets of §15.2.2 | Medium |
+
+**What is minified.** The level applies to compiled code, to the project's
+plain `.lua` files (not those in `build.libs-dir`, files with packager flavor
+blocks, or `compat.plain-copy` files) and to the runtime. Lua-library
+dependencies (and `build.libs-dir`) are minified only with
+`minify-libraries`. A library file that is not plain Lua 5.1 ships as it is.
+
+**Preserve mode keeps every line.** Unbundled output (`line-mode =
+"preserve"`) keeps the line of every instruction, so in-game errors point at
+the source line without a source map. Lua gives an instruction the line of
+the last token it read, so there `simplify` rewrites only statements that sit
+on one line, and `shorten-literals` leaves literals that span lines alone.
+
+**`rename-locals`** never renames globals, table fields or the implicit
+`self` of methods, and leaves locals named `arg` alone: a Lua 5.1 built with
+`LUA_COMPAT_VARARG` (unlike WoW's, §15.3.1) declares `arg` in every vararg
+function, so keeping the name keeps the meaning on any build. No local is
+renamed to `arg`.
+
+**`dedupe-strings`** hoists a string only when that saves bytes: it occurs at
+least twice and its occurrences are longer than the local's declaration plus
+one name per use.
+
+**`rename-private`** renames:
+
+- the fields of a `local t = { … }` (named and positional fields only) that is
+  never assigned and only used as `t.field`, `t.field = v` or
+  `function t.field()`: never passed, returned, indexed with `[…]`, iterated,
+  given a metatable or called with `:`;
+- private and protected **methods** that are not abstract, not decorated, not
+  metamethods (`__…`) and not members of widget classes. A method name is
+  renamed only if every occurrence of it in the package (as a name or as a
+  string's content), in its declaration files, the WoW API declarations, its
+  XML files and its embedded libraries is a definition of such a method or an
+  access the type checker resolved to one. The new name occurs in none of
+  them, and is the same in every class, so overrides stay overrides.
+
+Instance **fields** are never renamed: their names are the keys of saved
+variables and serialized data, which must stay readable across versions
+(decision T161).
 
 **Every level keeps at least one line break per statement.** WoW error
 messages contain a line number but no column, so output joined onto a single
@@ -236,4 +276,15 @@ to and viewable by the general public."* CurseForge and Wago require uploads to
 comply with Blizzard's terms. wowlua leaves the choice of level per target to
 the project. When a publish target uses a level containing `rename-locals` or
 `rename-private`, `wowlua publish` prints warning W6010 citing the policy, and
-`--deny-warnings` turns that warning into a failure.
+`--deny-warnings` turns that warning into a failure before anything is
+uploaded.
+
+### 15.4.5 Verification
+
+Besides the compiler's tests, the conformance corpus
+([Compiler §13.5.3](compiler.md#1353-superset-conformance)) checks every file at
+every pass: with every pass but `dedupe-strings` and `rename-private`, the
+output compiles to the same bytecode once debug information is stripped, and
+in preserve mode every instruction keeps its line; with all passes, it still
+compiles. The semantic passes are checked by running test programs before and
+after.

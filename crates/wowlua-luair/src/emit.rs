@@ -30,6 +30,8 @@ pub struct EmitOptions {
     pub line_mode: LineMode,
     pub comments: CommentMode,
     pub indent: String,
+    /// Only the spaces Lua's lexer needs (the `compact` pass).
+    pub compact: bool,
 }
 
 impl Default for EmitOptions {
@@ -38,6 +40,7 @@ impl Default for EmitOptions {
             line_mode: LineMode::Preserve,
             comments: CommentMode::All,
             indent: "\t".into(),
+            compact: false,
         }
     }
 }
@@ -213,7 +216,9 @@ impl<'a> Emitter<'a> {
         match self.last {
             Last::None => false,
             Last::Word => is_word_byte(first),
-            Last::Keyword => is_word_byte(first) || b"({\"'[-#".contains(&first),
+            Last::Keyword => {
+                is_word_byte(first) || (!self.opts.compact && b"({\"'[-#".contains(&first))
+            }
             Last::Number => is_word_byte(first) || first == b'.',
             Last::Symbol(c) => match c {
                 b'-' => first == b'-',
@@ -226,7 +231,9 @@ impl<'a> Emitter<'a> {
     }
 
     fn space(&mut self) {
-        self.pending_space = true;
+        if !self.opts.compact {
+            self.pending_space = true;
+        }
     }
 
     /// Writes one token, placing it on its source line in preserve mode.

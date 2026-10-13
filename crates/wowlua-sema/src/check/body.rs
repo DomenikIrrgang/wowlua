@@ -81,6 +81,8 @@ pub struct Checker<'e> {
     pub(crate) classes: Vec<(DefId, bool)>,
     /// Exported values of this module.
     pub exports: HashMap<Box<str>, TypeId>,
+    /// Name spans of accesses to renamable methods (`rename-private`).
+    pub private_methods: HashSet<wowlua_span::Span>,
     reassigned: HashSet<u32>,
     pure_lua: bool,
     /// `...` at the top level: (addon name, addon table).
@@ -125,6 +127,7 @@ impl<'e> Checker<'e> {
             expr_types: HashMap::new(),
             classes: Vec::new(),
             exports: HashMap::new(),
+            private_methods: HashSet::new(),
             reassigned: reassigned_in_closures(&parse.chunk.block),
             pure_lua: info.pure_lua,
             top_vararg: None,

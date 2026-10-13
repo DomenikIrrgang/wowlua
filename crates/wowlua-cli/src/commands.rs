@@ -263,6 +263,7 @@ pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> b
         },
         dry_run: args.dry_run,
         tag: args.tag,
+        deny_warnings: global.deny_warnings,
     };
     let report = wowlua_driver::publish::publish(&mut session, &projects, &request);
     for project in &projects {

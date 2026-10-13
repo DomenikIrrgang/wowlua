@@ -56,6 +56,48 @@ pub const MINIFY_PASSES: &[&str] = &[
     "dedupe-strings",
 ];
 
+/// The passes of minification level `name` (spec §15.4.2–15.4.3): the
+/// project's own definition of the name, else the preset. Presets build on
+/// each other by name, so a redefined `strip` also changes `compact`.
+/// `None` for an unknown level.
+pub fn minify_passes(
+    manifest: &Manifest,
+    name: &str,
+) -> Option<std::collections::BTreeSet<String>> {
+    fn preset(name: &str) -> Option<(Option<&'static str>, &'static [&'static str])> {
+        Some(match name {
+            "none" => (None, &[]),
+            "strip" => (None, &["strip-comments", "strip-whitespace", "simplify"]),
+            "compact" => (Some("strip"), &["compact", "shorten-literals"]),
+            "rename" => (Some("compact"), &["rename-locals", "dedupe-strings"]),
+            "max" => (Some("rename"), &["rename-private"]),
+            _ => return None,
+        })
+    }
+    let mut passes = std::collections::BTreeSet::new();
+    let mut seen: Vec<String> = Vec::new();
+    let mut current = Some(name.to_string());
+    while let Some(level) = current {
+        // Cycles are reported by validation (E4007).
+        if seen.contains(&level) {
+            break;
+        }
+        seen.push(level.clone());
+        current = match manifest.minify_levels.get(&level) {
+            Some(own) => {
+                passes.extend(own.passes.iter().cloned());
+                own.extends.clone()
+            }
+            None => {
+                let (extends, own) = preset(&level)?;
+                passes.extend(own.iter().map(|p| p.to_string()));
+                extends.map(str::to_string)
+            }
+        };
+    }
+    Some(passes)
+}
+
 /// A successfully parsed and validated manifest.
 #[derive(Debug, Clone)]
 pub struct LoadedManifest {
@@ -184,6 +226,42 @@ mod tests {
         assert_eq!(pascal_case("kill_tracker-x"), "KillTrackerX");
         assert_eq!(strip_email("Jane Doe <jane@example.com>"), "Jane Doe");
         assert_eq!(strip_email("Solo"), "Solo");
+    }
+
+    #[test]
+    fn resolves_minify_levels() {
+        let manifest: Manifest = serde_json::from_str(
+            r#"{ "minify-levels": {
+                "strip": { "passes": ["strip-comments"] },
+                "small": { "extends": "compact", "passes": ["dedupe-strings"] }
+            } }"#,
+        )
+        .unwrap();
+        let passes =
+            |name: &str| minify_passes(&manifest, name).map(|p| p.into_iter().collect::<Vec<_>>());
+        assert_eq!(passes("none"), Some(vec![]));
+        // The redefined `strip` flows into the presets built on it.
+        assert_eq!(
+            passes("small").unwrap(),
+            [
+                "compact",
+                "dedupe-strings",
+                "shorten-literals",
+                "strip-comments"
+            ]
+        );
+        assert_eq!(
+            passes("max").unwrap(),
+            [
+                "compact",
+                "dedupe-strings",
+                "rename-locals",
+                "rename-private",
+                "shorten-literals",
+                "strip-comments"
+            ]
+        );
+        assert_eq!(passes("nope"), None);
     }
 
     #[test]

@@ -32,6 +32,8 @@ pub struct PublishRequest {
     pub dry_run: bool,
     /// `--tag`: tag `HEAD` (locally) and publish it as a tagged build.
     pub tag: Option<String>,
+    /// `--deny-warnings`: W6010 stops the publish before any upload.
+    pub deny_warnings: bool,
 }
 
 /// What happened.
@@ -180,6 +182,9 @@ pub fn publish(
     }
     let packaged = crate::package::package(session, projects, &package_request)?;
     if session.has_errors() {
+        return None;
+    }
+    if renaming_targets(session, projects, &packaged, &repo) && request.deny_warnings {
         return None;
     }
     let http = http::Http::default();
@@ -370,6 +375,55 @@ fn archive_maps(packaged: &Packaged) {
 fn maps_dir(build: &crate::build::BuildOutput) -> Option<PathBuf> {
     let dir = build.dir.parent()?.join(".maps").join(&build.addon_name);
     dir.is_dir().then_some(dir)
+}
+
+/// Warns (W6010) about targets whose minification level renames
+/// identifiers; true if any does.
+fn renaming_targets(
+    session: &mut Session,
+    projects: &[Project],
+    packaged: &crate::package::Packaged,
+    repo: &Path,
+) -> bool {
+    let mut seen = std::collections::BTreeSet::new();
+    for zip in &packaged.zips {
+        let project = project_of(projects, zip);
+        let Some(publish) = publish_of(projects, zip, repo) else {
+            continue;
+        };
+        for name in &zip.targets {
+            let Some(target) = publish.targets.get(name) else {
+                continue;
+            };
+            let level = match &target.minify {
+                Some(level) => level.clone(),
+                None => match project
+                    .manifest
+                    .profile(target.profile.as_deref().unwrap_or("release"))
+                {
+                    Ok(profile) => profile.minify,
+                    Err(_) => continue,
+                },
+            };
+            let passes = wowlua_manifest::minify_passes(&project.manifest.manifest, &level)
+                .unwrap_or_default();
+            let renames = passes.contains("rename-locals") || passes.contains("rename-private");
+            if renames && seen.insert(name.clone()) {
+                session.push(
+                    Diagnostic::warning(
+                        "W6010",
+                        format!(
+                            "target `{name}` uses the minification level `{level}`, which renames identifiers"
+                        ),
+                    )
+                    .with_path(&project.manifest.path)
+                    .with_note("Blizzard's UI Add-On Development Policy: \"the programming code of an add-on must in no way be hidden or obfuscated, and must be freely accessible to and viewable by the general public\"")
+                    .with_help("give the target a level without `rename-locals` and `rename-private`"),
+                );
+            }
+        }
+    }
+    !seen.is_empty()
 }
 
 /// The project a zip was built from (a bundle's main member).

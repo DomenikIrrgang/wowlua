@@ -465,6 +465,27 @@ fn publish_checks_before_uploading() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("error[E4319]"));
+    // A renaming level is against Blizzard's policy (W6010); with
+    // `--deny-warnings` nothing is uploaded.
+    let path = e.project.join("wowlua.json");
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    manifest["publish"]["targets"]["gh"]["minify"] = "rename".into();
+    std::fs::write(&path, serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
+    commit_all(&e.project, None);
+    tokens(&mut wowlua(&e.project, &e.home))
+        .args(["publish", "--dry-run"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "warning[W6010]: target `gh` uses the minification level `rename`",
+        ));
+    tokens(&mut wowlua(&e.project, &e.home))
+        .args(["--deny-warnings", "publish"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("warning[W6010]"));
+    assert!(mock.requests().iter().all(|r| r.method == "GET"));
 }
 
 #[test]

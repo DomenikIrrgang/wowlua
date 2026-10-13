@@ -821,6 +821,9 @@ impl Checker<'_> {
                     } else {
                         match self.env.instance_member(d, &args, name) {
                             Some((mem, owner)) => {
+                                if mem.renamable {
+                                    self.private_methods.insert(span);
+                                }
                                 if !quiet {
                                     self.check_visibility(mem.visibility, owner, name, span);
                                 }
@@ -936,13 +939,21 @@ impl Checker<'_> {
                 }
             },
             _ => match self.env.static_member(d, name) {
-                Some(m) => Some(m.ty),
+                Some(m) => {
+                    if m.renamable {
+                        self.private_methods.insert(span);
+                    }
+                    Some(m.ty)
+                }
                 None => {
                     // Instance methods through the class (`C.method(self, …)`).
                     let args: Vec<TypeId> =
                         self.env.def(d).params.iter().map(|_| Types::ANY).collect();
                     match self.env.instance_member(d, &args, name) {
                         Some((m, _)) if m.kind == MemberKind::Method => {
+                            if m.renamable {
+                                self.private_methods.insert(span);
+                            }
                             let inst = self.env.instance(d);
                             Some(self.env.with_self(m.ty, inst))
                         }
@@ -981,6 +992,9 @@ impl Checker<'_> {
                 Ty::Named(d, args) if self.env.def(d).kind != DefKind::Enum => {
                     match self.env.instance_member(d, &args, name) {
                         Some((mem, owner)) => {
+                            if mem.renamable {
+                                self.private_methods.insert(span);
+                            }
                             self.check_visibility(mem.visibility, owner, name, span);
                             match mem.kind {
                                 MemberKind::Method => mem.ty,

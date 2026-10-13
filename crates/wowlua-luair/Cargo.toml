@@ -1,6 +1,6 @@
 [package]
 name = "wowlua-luair"
-description = "Lua 5.1 IR, emitter with line modes and source maps, hygiene"
+description = "Lua 5.1 IR, emitter with line modes and source maps, hygiene, minifier"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

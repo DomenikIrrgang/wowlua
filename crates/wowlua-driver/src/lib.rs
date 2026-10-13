@@ -21,6 +21,7 @@ mod meta;
 pub mod package;
 pub mod packaging;
 pub mod pkgmeta;
+mod private_names;
 pub mod project;
 pub mod publish;
 pub mod scaffold;

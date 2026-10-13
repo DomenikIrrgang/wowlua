@@ -43,6 +43,10 @@ pub struct Member {
     pub optional: bool,
     pub readonly: bool,
     pub visibility: Visibility,
+    /// A private or protected method the `rename-private` minification
+    /// pass may rename (spec optimization §15.4.1): not abstract, not
+    /// decorated, not a metamethod, of a class that is no widget class.
+    pub renamable: bool,
 }
 
 impl Member {
@@ -53,6 +57,7 @@ impl Member {
             optional: false,
             readonly: false,
             visibility: Visibility::Public,
+            renamable: false,
         }
     }
 }
@@ -151,6 +156,8 @@ pub struct Env {
     pub diagnostics: Vec<Diagnostic>,
     /// Types of `typeof(expr)` expressions, by span (set by the checker).
     pub typeof_types: HashMap<(u32, u32), TypeId>,
+    /// Name spans of the definitions of renamable methods.
+    pub renamable_defs: Vec<wowlua_span::Span>,
 }
 
 pub const ADDON_NAMESPACE: &str = "AddonNamespace";
@@ -454,6 +461,7 @@ impl Env {
                                     optional: *optional,
                                     readonly: *readonly,
                                     visibility: Visibility::Public,
+                                    renamable: false,
                                 },
                             )
                         }
@@ -468,6 +476,7 @@ impl Env {
                                     optional: false,
                                     readonly: true,
                                     visibility: Visibility::Public,
+                                    renamable: false,
                                 },
                             )
                         }
@@ -500,6 +509,7 @@ impl Env {
                                 optional: false,
                                 readonly: true,
                                 visibility: Visibility::Public,
+                                renamable: false,
                             };
                             self.add_member(def, &name.text, m, member.is_static);
                         }
@@ -519,6 +529,7 @@ impl Env {
                                 optional: *optional,
                                 readonly: *readonly,
                                 visibility: Visibility::Public,
+                                renamable: false,
                             };
                             self.add_member(def, &name.text, m, member.is_static);
                         }
@@ -628,6 +639,10 @@ impl Env {
     }
 
     fn resolve_class(&mut self, def: DefId, c: &ClassDecl, module: usize, sources: &[Source]) {
+        let declaration = sources
+            .iter()
+            .find(|s| s.index == module)
+            .is_none_or(|s| s.declaration);
         let mut scope = self.scope_of(module, sources);
         self.def_type_params(def, &c.type_params, &mut scope);
         let instance = self.instance(def);
@@ -677,12 +692,22 @@ impl Env {
                         optional: *optional,
                         readonly,
                         visibility,
+                        renamable: false,
                     };
                     self.add_member(def, &name.text, member, is_static);
                 }
                 ClassMemberKind::Method { name, func, .. } => {
                     let f = self.func_sig(func, &scope, false);
                     let t = self.types.func(f);
+                    let renamable = visibility != Visibility::Public
+                        && !declaration
+                        && self.def(def).widget.is_none()
+                        && m.decorators.is_empty()
+                        && !m.modifiers.contains(&Modifier::Abstract)
+                        && !name.text.starts_with("__");
+                    if renamable {
+                        self.renamable_defs.push(name.span);
+                    }
                     let member = Member {
                         ty: t,
                         kind: if is_static {
@@ -693,6 +718,7 @@ impl Env {
                         optional: false,
                         readonly: true,
                         visibility,
+                        renamable,
                     };
                     self.add_member(def, &name.text, member, is_static);
                 }
@@ -707,6 +733,7 @@ impl Env {
                         optional: false,
                         readonly: true,
                         visibility,
+                        renamable: false,
                     };
                     let target = if is_static {
                         &mut self.def_mut(def).statics
@@ -749,6 +776,7 @@ impl Env {
                                     optional: false,
                                     readonly: false,
                                     visibility,
+                                    renamable: false,
                                 },
                             );
                         }

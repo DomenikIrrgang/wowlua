@@ -52,6 +52,9 @@ pub struct CheckOutput {
     /// Runtime checks (spec §7.5) of annotated parameters (by the name's
     /// span), `...: T` (by the `...` span) and `::` (by the expression's).
     pub value_checks: HashMap<wowlua_span::Span, runtime::ValueCheck>,
+    /// Name spans of the definitions of renamable methods (see
+    /// `env::Member::renamable`) and of the accesses that resolve to them.
+    pub private_methods: HashSet<wowlua_span::Span>,
 }
 
 /// Like [`check_package`], with the type information lowering uses.
@@ -64,6 +67,7 @@ pub fn check_package_full(
 ) -> CheckOutput {
     let mut type_names = HashMap::new();
     let mut value_checks = HashMap::new();
+    let mut private_methods: HashSet<wowlua_span::Span> = HashSet::new();
     // Declaration sources: declaration files first, then modules.
     let mut sources: Vec<env::Source> = Vec::new();
     for (i, f) in files.iter().enumerate() {
@@ -157,6 +161,7 @@ pub fn check_package_full(
                                 optional: false,
                                 readonly: true,
                                 visibility: env::Visibility::Public,
+                                renamable: false,
                             },
                         );
                     }
@@ -232,15 +237,18 @@ pub fn check_package_full(
             }
         });
         value_checks.extend(std::mem::take(&mut checker.value_checks));
+        private_methods.extend(std::mem::take(&mut checker.private_methods));
         let file_exports = std::mem::take(&mut checker.exports);
         diagnostics.append(&mut checker.diagnostics);
         diagnostics.append(&mut env.diagnostics);
         exports.insert(i, file_exports);
     }
+    private_methods.extend(env.renamable_defs.iter().copied());
     CheckOutput {
         diagnostics,
         type_names,
         value_checks,
+        private_methods,
     }
 }
 

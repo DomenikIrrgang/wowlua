@@ -11,7 +11,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_lower::{Context, ImportContext};
-use wowlua_luair::{CommentMode, EmitOptions, LineMode};
+use wowlua_luair::LineMode;
 use wowlua_manifest::Profile;
 use wowlua_manifest::model::LineMode as ManifestLineMode;
 use wowlua_sema::meta::{Meta, MetaKind};
@@ -66,6 +66,7 @@ pub struct CheckConfig {
 /// A declaration file of one flavor (the wow-api types), parsed.
 pub struct ParsedDeclaration {
     pub source: Source,
+    pub file: FileId,
     pub parse: Parse,
 }
 
@@ -119,6 +120,43 @@ fn check_settings(
     }
 }
 
+/// What minification applies to (spec optimization §15.4).
+#[derive(Default)]
+pub struct Minify {
+    pub passes: wowlua_luair::Passes,
+    /// Plain Lua sources minified too (by `Source::rel`).
+    pub lua: std::collections::HashSet<String>,
+    /// `rename-private`: text renamed methods must not occur in (the XML
+    /// and embedded libraries).
+    pub foreign: Vec<Vec<u8>>,
+}
+
+/// Minifies Lua the compiler did not compile (the runtime, library files);
+/// `None` when there is nothing to do or it does not parse as Lua 5.1, and
+/// it then ships as it is.
+pub fn minify_lua(
+    db: &mut SourceDb,
+    path: &str,
+    code: &[u8],
+    passes: &wowlua_luair::Passes,
+    line_mode: LineMode,
+) -> Option<Vec<u8>> {
+    if passes.is_empty() {
+        return None;
+    }
+    let file = db.add(path, String::from_utf8_lossy(code).into_owned());
+    let parse = wowlua_syntax::parse(code, file);
+    if parse.has_errors() || !wowlua_syntax::features::features(&parse.chunk).is_empty() {
+        return None;
+    }
+    let mut chunk = wowlua_lower::lower(&parse, code).ok()?;
+    wowlua_luair::minify::apply(&mut chunk, passes, line_mode);
+    let emitted = wowlua_luair::emit(&chunk, &passes.emit_options(line_mode));
+    let ok = !wowlua_syntax::parse(&emitted.text, file).has_errors()
+        && luacheck::check(db, file, &emitted.text).is_none();
+    ok.then_some(emitted.text)
+}
+
 /// The parsed sources of a package (shared by all flavors).
 pub struct Parsed {
     pub(crate) parses: Vec<Option<Parse>>,
@@ -128,7 +166,7 @@ pub struct Parsed {
 
 /// The line mode for unbundled output: `preserve` unless the profile sets
 /// one (spec codegen §14.5; bundling is not available yet).
-fn line_mode(profile: &Profile) -> LineMode {
+pub(crate) fn line_mode(profile: &Profile) -> LineMode {
     match profile.line_mode {
         Some(ManifestLineMode::Statement) => LineMode::Statement,
         Some(ManifestLineMode::Pretty) => LineMode::Pretty,
@@ -528,13 +566,9 @@ pub fn compile_flavor(
     shared: Option<&wowlua_sema::check::flavors::SharedFlavors>,
     lower_lua: &std::collections::HashSet<String>,
     libraries: &HashMap<String, LibraryUnit>,
+    minify: &Minify,
 ) -> CompileOutput {
-    let options = EmitOptions {
-        line_mode: line_mode(profile),
-        // Minification (which strips comments) is not available yet.
-        comments: CommentMode::All,
-        indent: "\t".into(),
-    };
+    let options = minify.passes.emit_options(line_mode(profile));
     let mut out = CompileOutput::default();
 
     let unit_of = |src_rel: &str| wowlua_sema::package_of(src_rel).and_then(|n| libraries.get(n));
@@ -613,6 +647,7 @@ pub fn compile_flavor(
             },
         )
         .collect();
+    let mut private_methods = std::collections::HashSet::new();
     if settings.iter().any(Option::is_some) {
         let checked = wowlua_sema::check::check_package_full(
             &inputs,
@@ -624,6 +659,7 @@ pub fn compile_flavor(
         diagnostics.extend(checked.diagnostics);
         out.type_names = checked.type_names;
         out.value_checks = checked.value_checks;
+        private_methods = checked.private_methods;
     }
     for info in analysis.modules.iter().flatten() {
         if info.is_module {
@@ -651,13 +687,57 @@ pub fn compile_flavor(
                 if analysis.modules[t].as_ref().is_some_and(|x| x.id == "wowlua:reflect"))
         })
     });
+    // Emits a lowered chunk: minified, checked to parse and to stay within
+    // Lua's limits.
+    let finish = |mut chunk: wowlua_luair::ir::Chunk,
+                  source: &Source,
+                  file: FileId,
+                  diagnostics: &mut Vec<Diagnostic>|
+     -> Option<Compiled> {
+        wowlua_luair::minify::apply(&mut chunk, &minify.passes, options.line_mode);
+        let emitted = wowlua_luair::emit(&chunk, &options);
+        // The output must parse (spec compiler §13.8, item 2).
+        let reparsed = wowlua_syntax::parse(&emitted.text, file);
+        if reparsed.has_errors() {
+            diagnostics.push(
+                Diagnostic::plain_error(format!(
+                    "internal compiler error: the code emitted for this file does not parse: {}",
+                    reparsed.diagnostics[0].message
+                ))
+                .with_path(&source.rel),
+            );
+            return None;
+        }
+        if let Some(d) = luacheck::check(db, file, &emitted.text) {
+            diagnostics.push(d);
+        }
+        let output = source.output_path();
+        let map = profile.source_maps.then(|| {
+            let name = output.rsplit('/').next().unwrap_or(&output);
+            wowlua_luair::sourcemap::source_map(&emitted.mappings, name, &source.rel)
+        });
+        Some(Compiled {
+            code: emitted.text,
+            map,
+        })
+    };
+    let mut lowered_files: Vec<(usize, wowlua_luair::ir::Chunk)> = Vec::new();
     for (i, (source, file)) in files.iter().enumerate() {
         let plain_lua = source.kind == SourceKind::Lua && lower_lua.contains(&source.rel);
-        if (source.kind != SourceKind::Wowlua && !plain_lua) || !parsed.ok[i] {
+        let minified_lua = source.kind == SourceKind::Lua && minify.lua.contains(&source.rel);
+        if (source.kind != SourceKind::Wowlua && !plain_lua && !minified_lua) || !parsed.ok[i] {
             continue;
         }
         let parse = parsed.parses[i].as_ref().expect("parsed");
         let bytes = &raw[&source.rel];
+        // Plain Lua is only minified: it compiles to itself (spec §14.2).
+        if minified_lua && !plain_lua {
+            match wowlua_lower::lower(parse, bytes) {
+                Ok(chunk) => lowered_files.push((i, chunk)),
+                Err(errors) => diagnostics.extend(errors),
+            }
+            continue;
+        }
         let unit = unit_of(&source.src_rel);
         let file_meta = unit.map_or_else(|| meta.clone(), |u| u.meta.clone());
         let mut ctx = context(&analysis, i, &inputs, file_meta, &order.lazy);
@@ -716,36 +796,78 @@ pub fn compile_flavor(
         out.meta_used.extend(lowered.meta_used);
         out.slices.extend(lowered.slices);
         diagnostics.extend(lowered.warnings);
-        let emitted = wowlua_luair::emit(&lowered.chunk, &options);
-        // The output must parse (spec compiler §13.8, item 2).
-        let reparsed = wowlua_syntax::parse(&emitted.text, *file);
-        if reparsed.has_errors() {
-            diagnostics.push(
-                Diagnostic::plain_error(format!(
-                    "internal compiler error: the code emitted for this file does not parse: {}",
-                    reparsed.diagnostics[0].message
-                ))
-                .with_path(&source.rel),
-            );
-            continue;
+        lowered_files.push((i, lowered.chunk));
+    }
+    if minify.passes.rename_private {
+        let mut parsed_files: Vec<crate::private_names::Parsed> = Vec::new();
+        for (i, (source, file)) in files.iter().enumerate() {
+            if let (Some(parse), Some(bytes)) = (parsed.parses[i].as_ref(), raw.get(&source.rel)) {
+                parsed_files.push(crate::private_names::Parsed {
+                    file: *file,
+                    parse,
+                    bytes,
+                });
+            }
         }
-        if let Some(d) = luacheck::check(db, *file, &emitted.text) {
-            diagnostics.push(d);
+        for (d, parse) in declarations.iter().zip(&parsed.declarations) {
+            parsed_files.push(crate::private_names::Parsed {
+                file: d.file,
+                parse,
+                bytes: &d.bytes,
+            });
         }
-        let output = source.output_path();
-        let map = profile.source_maps.then(|| {
-            let name = output.rsplit('/').next().unwrap_or(&output);
-            wowlua_luair::sourcemap::source_map(&emitted.mappings, name, &source.rel)
-        });
-        out.compiled.insert(
-            source.rel.clone(),
-            Compiled {
-                code: emitted.text,
-                map,
-            },
+        for d in api {
+            parsed_files.push(crate::private_names::Parsed {
+                file: d.file,
+                parse: &d.parse,
+                bytes: db.get(d.file).text().as_bytes(),
+            });
+        }
+        rename_private_methods(
+            &mut lowered_files,
+            files,
+            &parsed_files,
+            &private_methods,
+            minify,
         );
     }
+    for (i, chunk) in lowered_files {
+        let (source, file) = &files[i];
+        if let Some(compiled) = finish(chunk, source, *file, diagnostics) {
+            out.compiled.insert(source.rel.clone(), compiled);
+        }
+    }
     out
+}
+
+/// The class half of `rename-private` over every file of the package.
+fn rename_private_methods(
+    lowered: &mut [(usize, wowlua_luair::ir::Chunk)],
+    files: &[(Source, FileId)],
+    parsed: &[crate::private_names::Parsed],
+    recorded: &std::collections::HashSet<wowlua_span::Span>,
+    minify: &Minify,
+) {
+    if recorded.is_empty() {
+        return;
+    }
+    let mut plan = crate::private_names::plan(recorded, parsed, &minify.foreign);
+    if plan.at.is_empty() {
+        return;
+    }
+    let mut found: HashMap<FileId, Vec<wowlua_luair::ir::Pos>> = HashMap::new();
+    for (i, chunk) in lowered.iter_mut() {
+        let file = files[*i].1;
+        if let Some(at) = plan.at.get(&file) {
+            found.insert(file, wowlua_luair::minify::rename_members(chunk, at, false));
+        }
+    }
+    crate::private_names::verify(&mut plan, &found);
+    for (i, chunk) in lowered.iter_mut() {
+        if let Some(at) = plan.at.get(&files[*i].1) {
+            wowlua_luair::minify::rename_members(chunk, at, true);
+        }
+    }
 }
 
 /// The lowering context of input `i` from the package analysis.
