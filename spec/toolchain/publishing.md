@@ -19,11 +19,11 @@ overridden per target (`api-url`) if a site changes them.
     "release-type": "auto",
     "archive-maps": true,
     "targets": {
-      "curseforge": { "type": "curseforge", "project-id": 123456, "minify": "strip" },
+      "curseforge": { "type": "curseforge", "project-id": 123456 },
       "cf-nolib":   { "type": "curseforge", "project-id": 123457, "nolib": true },
       "wago":       { "type": "wago", "project-id": "a1b2c3d4" },
       "wowi":       { "type": "wowinterface", "project-id": 5678 },
-      "github":     { "type": "github", "repository": "owner/my-addon", "minify": "compact" }
+      "github":     { "type": "github", "repository": "owner/my-addon", "minify": "max" }
     }
   }
 }
@@ -37,8 +37,10 @@ All target fields, with types and defaults, are listed in
 ### 11.1.1 Target builds
 
 - Each target builds with its profile plus its own overrides (`minify`,
-  `bundle`, `flavors`, `nolib`). Targets with identical effective settings share
-  one build and one zip.
+  `bundle`, `flavors`, `nolib`). Addon sites (CurseForge, Wago, WoWInterface)
+  build unminified unless the target sets `minify`, which W6010 warns about
+  ([Optimization §15.4.4](optimization.md#1544-platform-policies)). Targets
+  with identical effective settings share one build and one zip.
 - Publish builds are written to `dist/targets/<target>/<Addon>/` (a shared
   build lives under the first target's name, in manifest order), so targets
   with different settings never overwrite each other or the profile builds in

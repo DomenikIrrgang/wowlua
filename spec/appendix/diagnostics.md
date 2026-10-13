@@ -196,7 +196,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W4333 | `.pkgmeta` hg external cannot be converted |
 | W6001 | Code inspects its own file name (`debugstack`, `debuglocals`), which changes when bundled |
 | W6002 | Side-effect-free, unused module removed by dead-code elimination |
-| W6010 | Publish target uses a renaming minification level (Blizzard AddOn policy: code must not be hidden or obfuscated) |
+| W6010 | An addon-site target (CurseForge, Wago, WoWInterface) publishes minified code (Blizzard AddOn policy: code must not be hidden or obfuscated) |
 | W7001 | `todo()` in a release build |
 | W7010 | Reflection metadata requested but `reflection = "none"` |
 | W8011 | Slash command collides with a Blizzard command |

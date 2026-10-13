@@ -334,12 +334,14 @@ untouched.
 
 Blizzard's UI Add-On Development Policy states that *"the programming code of
 an add-on must in no way be hidden or obfuscated, and must be freely accessible
-to and viewable by the general public."* CurseForge and Wago require uploads to
-comply with Blizzard's terms. wowlua leaves the choice of level per target to
-the project. When a publish target uses a level containing `rename-locals` or
-`rename-private`, `wowlua publish` prints warning W6010 citing the policy, and
-`--deny-warnings` turns that warning into a failure before anything is
-uploaded.
+to and viewable by the general public."* CurseForge, Wago and WoWInterface take
+readable code only. Their targets therefore build **unminified** (level
+`none`) unless the target sets `minify` itself; bundling and the profile's
+optimizations still apply. When an addon-site target sets a level with any
+minification pass, `wowlua publish` prints warning W6010 citing the policy,
+and `--deny-warnings` turns that warning into a failure before anything is
+uploaded. GitHub targets build at the profile's level, which may minify fully
+(a project's own builds, decision T170).
 
 ### 15.4.5 Verification
 

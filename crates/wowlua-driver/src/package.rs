@@ -185,10 +185,23 @@ struct Config {
     split_flavors: bool,
 }
 
+/// CurseForge, Wago and WoWInterface: addon sites, which take readable code
+/// only (decision T170).
+pub(crate) fn addon_site(target: &Target) -> bool {
+    matches!(
+        target.target_type,
+        TargetType::Curseforge | TargetType::Wago | TargetType::Wowinterface
+    )
+}
+
 fn config_of(target: &Target) -> Config {
     Config {
         profile: target.profile.clone().unwrap_or_else(|| "release".into()),
-        minify: target.minify.clone(),
+        // Addon sites build unminified unless the target says otherwise.
+        minify: target
+            .minify
+            .clone()
+            .or_else(|| addon_site(target).then(|| "none".into())),
         bundle: target.bundle,
         flavors: target.flavors.clone(),
         nolib: target.nolib,

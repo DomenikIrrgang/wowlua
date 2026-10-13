@@ -335,7 +335,7 @@ fn publish_uploads_to_every_site() {
         assert!(!text.contains(secret), "{text}");
     }
     assert!(
-        text.contains("Uploaded MyAddon-1.0.0.zip → cf: file 555"),
+        text.contains("Uploaded MyAddon-1.0.0-cf.zip → cf: file 555"),
         "{text}"
     );
 
@@ -353,7 +353,7 @@ fn publish_uploads_to_every_site() {
         meta["relations"]["projects"],
         serde_json::json!([{ "slug": "details", "type": "optionalDependency" }])
     );
-    assert!(cf[2].text().contains("filename=\"MyAddon-1.0.0.zip\""));
+    assert!(cf[2].text().contains("filename=\"MyAddon-1.0.0-cf.zip\""));
 
     let wago = mock.find("POST", "/api/projects/abcdefgh/version");
     assert_eq!(wago.len(), 1);
@@ -398,11 +398,11 @@ fn publish_uploads_to_every_site() {
         .map(|r| r.path.split("name=").nth(1).unwrap().to_string())
         .collect();
     assert!(
-        assets.contains(&"MyAddon-1.0.0.zip".to_string()),
+        assets.contains(&"MyAddon-1.0.0-gh.zip".to_string()),
         "{assets:?}"
     );
     assert!(
-        assets.contains(&"MyAddon-1.0.0-maps.zip".to_string()),
+        assets.contains(&"MyAddon-1.0.0-gh-maps.zip".to_string()),
         "{assets:?}"
     );
     let json = mock
@@ -413,7 +413,7 @@ fn publish_uploads_to_every_site() {
     assert_eq!(
         json["releases"][0],
         serde_json::json!({
-            "name": "My Addon", "version": "1.0.0", "filename": "MyAddon-1.0.0.zip", "nolib": false,
+            "name": "My Addon", "version": "1.0.0", "filename": "MyAddon-1.0.0-gh.zip", "nolib": false,
             "metadata": [
                 { "flavor": "classic", "interface": 11508 },
                 { "flavor": "mainline", "interface": 120100 }
@@ -435,8 +435,10 @@ fn publish_checks_before_uploading() {
         .assert()
         .success()
         .stderr(predicate::str::contains(
-            "Dry run cf (MyAddon-1.0.0.zip): would upload with",
+            "Dry run cf (MyAddon-1.0.0-cf.zip): would upload with",
         ))
+        // Addon sites get unminified code; GitHub's minified build is fine.
+        .stderr(predicate::str::contains("W6010").not())
         .stderr(predicate::str::contains("cf-secret").not());
     assert!(mock.requests().iter().all(|r| r.method == "GET"));
     // A missing token stops the publish before any upload.
@@ -465,12 +467,13 @@ fn publish_checks_before_uploading() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("error[E4319]"));
-    // A renaming level is against Blizzard's policy (W6010); with
+    // Minified code for an addon site is against the sites' rules and
+    // Blizzard's policy (W6010); with
     // `--deny-warnings` nothing is uploaded.
     let path = e.project.join("wowlua.json");
     let mut manifest: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    manifest["publish"]["targets"]["gh"]["minify"] = "rename".into();
+    manifest["publish"]["targets"]["cf"]["minify"] = "strip".into();
     std::fs::write(&path, serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
     commit_all(&e.project, None);
     tokens(&mut wowlua(&e.project, &e.home))
@@ -478,7 +481,7 @@ fn publish_checks_before_uploading() {
         .assert()
         .success()
         .stderr(predicate::str::contains(
-            "warning[W6010]: target `gh` uses the minification level `rename`",
+            "warning[W6010]: target `cf` publishes minified code (level `strip`) to an addon site",
         ));
     tokens(&mut wowlua(&e.project, &e.home))
         .args(["--deny-warnings", "publish"])

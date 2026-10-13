@@ -515,7 +515,7 @@ Target objects:
 | `type` | all | `"curseforge"` `"wago"` `"wowinterface"` `"github"` `"registry"` | required |
 | `enabled` | all | bool | `true` |
 | `profile` | all | profile name | `"release"` |
-| `minify`, `bundle` | all | level name / bool | from the profile |
+| `minify`, `bundle` | all | level name / bool | from the profile; `minify` is `none` for `curseforge`, `wago` and `wowinterface` (decision T170) |
 | `flavors` | all | flavor[] | all manifest flavors |
 | `split-flavors` | all | bool | `false` |
 | `nolib` | all | bool | `false`. Package without embedded `lua-library` dependencies ([Publishing §11.2.2](publishing.md#1122-nolib-packages)). |

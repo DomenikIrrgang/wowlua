@@ -32,7 +32,8 @@ pub struct PublishRequest {
     pub dry_run: bool,
     /// `--tag`: tag `HEAD` (locally) and publish it as a tagged build.
     pub tag: Option<String>,
-    /// `--deny-warnings`: W6010 stops the publish before any upload.
+    /// `--deny-warnings`: W6010 (minified code for an addon site) stops the
+    /// publish before any upload.
     pub deny_warnings: bool,
 }
 
@@ -184,7 +185,7 @@ pub fn publish(
     if session.has_errors() {
         return None;
     }
-    if renaming_targets(session, projects, &packaged, &repo) && request.deny_warnings {
+    if minified_site_targets(session, projects, &packaged, &repo) && request.deny_warnings {
         return None;
     }
     let http = http::Http::default();
@@ -377,9 +378,9 @@ fn maps_dir(build: &crate::build::BuildOutput) -> Option<PathBuf> {
     dir.is_dir().then_some(dir)
 }
 
-/// Warns (W6010) about targets whose minification level renames
-/// identifiers; true if any does.
-fn renaming_targets(
+/// Warns (W6010) about addon-site targets that publish minified code; true
+/// if any does (decision T170).
+fn minified_site_targets(
     session: &mut Session,
     projects: &[Project],
     packaged: &crate::package::Packaged,
@@ -395,30 +396,27 @@ fn renaming_targets(
             let Some(target) = publish.targets.get(name) else {
                 continue;
             };
-            let level = match &target.minify {
-                Some(level) => level.clone(),
-                None => match project
-                    .manifest
-                    .profile(target.profile.as_deref().unwrap_or("release"))
-                {
-                    Ok(profile) => profile.minify,
-                    Err(_) => continue,
-                },
+            // Addon sites build unminified unless the target sets a level.
+            let Some(level) = target
+                .minify
+                .as_ref()
+                .filter(|_| crate::package::addon_site(target))
+            else {
+                continue;
             };
-            let passes = wowlua_manifest::minify_passes(&project.manifest.manifest, &level)
+            let passes = wowlua_manifest::minify_passes(&project.manifest.manifest, level)
                 .unwrap_or_default();
-            let renames = passes.contains("rename-locals") || passes.contains("rename-private");
-            if renames && seen.insert(name.clone()) {
+            if !passes.is_empty() && seen.insert(name.clone()) {
                 session.push(
                     Diagnostic::warning(
                         "W6010",
                         format!(
-                            "target `{name}` uses the minification level `{level}`, which renames identifiers"
+                            "target `{name}` publishes minified code (level `{level}`) to an addon site"
                         ),
                     )
                     .with_path(&project.manifest.path)
-                    .with_note("Blizzard's UI Add-On Development Policy: \"the programming code of an add-on must in no way be hidden or obfuscated, and must be freely accessible to and viewable by the general public\"")
-                    .with_help("give the target a level without `rename-locals` and `rename-private`"),
+                    .with_note("Blizzard's UI Add-On Development Policy: \"the programming code of an add-on must in no way be hidden or obfuscated, and must be freely accessible to and viewable by the general public\"; CurseForge, Wago and WoWInterface take readable code only")
+                    .with_help("remove the target's `minify` (addon sites build unminified), or publish minified builds to GitHub"),
                 );
             }
         }
