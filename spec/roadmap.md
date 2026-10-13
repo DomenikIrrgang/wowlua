@@ -254,3 +254,30 @@ variables, settings, minimap button, keybindings and comms.
   `package --registry`, registry sources in the resolver, owners and yanking.
 
 **Exit:** libraries can be published and consumed by version requirement.
+
+## M11: Performance optimization
+
+WoW loads Lua source only, and its Lua 5.1 compiler barely optimizes, so the
+compiler shapes the source the client compiles. Each optimization applies
+only where the type checker proves its preconditions (plain tables without
+metatables, numbers, no writes in between), so plain Lua and `any` values stay
+as they are, and secure-code paths keep their call structure (taint).
+
+- `wowlua bench`: benchmarks run on the embedded Lua 5.1 (WoW runs plain Lua
+  5.1, not LuaJIT), comparing the optimized and the unoptimized build; every
+  optimization is measured before it is kept.
+- Loop-invariant field reads hoisted out of loops (`self.frame.texture` read
+  once).
+- Repeated field reads in one stretch of code read once into a local.
+- `ipairs` loops over plain arrays become numeric loops.
+- `table.insert(t, v)` on plain tables becomes `t[#t + 1] = v`.
+- Upvalues read often in hot functions copied into locals when not written
+  meanwhile.
+- Closures that capture nothing from a loop created once, outside it.
+- Inlining of statement bodies and private methods (decision T166 left them
+  out of M7).
+- Constant propagation of locals assigned once with a constant.
+
+**Exit:** the benchmark suite shows a measured speed-up of the optimized
+release build over the unoptimized one, the corpus and differential tests show
+unchanged behavior, and an optimized addon is checked in game.
