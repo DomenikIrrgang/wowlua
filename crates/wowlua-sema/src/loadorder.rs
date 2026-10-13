@@ -93,12 +93,36 @@ pub fn analyze(
         })
         .collect();
 
+    // Global and `ns` keys holding the same table (`ns.API = SuuUI`) share
+    // their fields; each group is named by its smallest key.
+    let mut same_table: HashMap<Key, Key> = HashMap::new();
+    for (a, b) in usages.iter().flatten().flat_map(|u| &u.table_aliases) {
+        let (a, b) = (table_root(&same_table, a), table_root(&same_table, b));
+        if a != b {
+            let (low, high) = if a < b { (a, b) } else { (b, a) };
+            same_table.insert(high, low);
+        }
+    }
+    let canon = |key: &Key| match key {
+        Key::Field(root, fields) => {
+            Key::Field(Box::new(table_root(&same_table, root)), fields.clone())
+        }
+        key => key.clone(),
+    };
+    let canon_path = |path: &Path| -> Path {
+        if path.1.is_empty() {
+            path.clone()
+        } else {
+            (table_root(&same_table, &path.0), path.1.clone())
+        }
+    };
+
     // Functions stored under global or `ns` paths, package-wide.
     let mut function_index: HashMap<Path, Vec<(usize, usize)>> = HashMap::new();
     for (file, u) in usages.iter().enumerate() {
         for (path, f) in u.iter().flat_map(|u| &u.function_defs) {
             function_index
-                .entry(path.clone())
+                .entry(canon_path(path))
                 .or_default()
                 .push((file, *f));
         }
@@ -143,7 +167,10 @@ pub fn analyze(
     let resolve = |file: usize, target: &CallTarget| -> Vec<(usize, usize)> {
         match target {
             CallTarget::Local(f) => vec![(file, *f)],
-            CallTarget::Path(p) => function_index.get(p).cloned().unwrap_or_default(),
+            CallTarget::Path(p) => function_index
+                .get(&canon_path(p))
+                .cloned()
+                .unwrap_or_default(),
             CallTarget::Import { binding, fields } => {
                 let Some((target_file, export)) = bindings.get(&(file, binding.clone())) else {
                     return Vec::new();
@@ -247,7 +274,7 @@ pub fn analyze(
     // runs while it loads (also inside functions of other files it calls).
     let mut definers: BTreeMap<Key, Vec<(usize, bool, Span)>> = BTreeMap::new();
     let mut add_def = |key: &Key, file: usize, lt: bool, span: Span| {
-        let list = definers.entry(key.clone()).or_default();
+        let list = definers.entry(canon(key)).or_default();
         match list.iter_mut().find(|(f, _, _)| *f == file) {
             Some(entry) => entry.1 |= lt,
             None => list.push((file, lt, span)),
@@ -301,6 +328,31 @@ pub fn analyze(
         parts.join(", ")
     };
 
+    // Tables defined in the package: only their fields order files
+    // (`C_Timer.After` is the game's).
+    let defined_tables: HashSet<Key> = definers
+        .keys()
+        .filter(|k| !matches!(k, Key::Field(..)))
+        .map(|k| table_root(&same_table, k))
+        .collect();
+    // Fields written at load time through tables the analysis cannot trace,
+    // by name: (the file loading, span).
+    let mut untracked: HashMap<&str, Vec<(usize, Span)>> = HashMap::new();
+    for (root, parents) in exec.iter().enumerate() {
+        for &(file, f) in parents.keys() {
+            for (name, _, span) in usages[file]
+                .iter()
+                .flat_map(|u| &u.untracked_field_writes)
+                .filter(|w| w.1 == f)
+            {
+                untracked
+                    .entry(name.as_str())
+                    .or_default()
+                    .push((root, *span));
+            }
+        }
+    }
+
     // Uses at load time order their definer before the file being loaded.
     for (root, parents) in exec.iter().enumerate() {
         let mut seen: HashSet<Key> = HashSet::new();
@@ -312,10 +364,43 @@ pub fn analyze(
                 .flat_map(|u| &u.uses)
                 .filter(|a| a.function == f && !a.guarded)
             {
-                if !seen.insert(access.key.clone()) {
+                let key = canon(&access.key);
+                if !seen.insert(key.clone()) {
                     continue;
                 }
-                let Some(defs) = definers.get(&access.key) else {
+                let Some(defs) = definers.get(&key) else {
+                    // A field of a package table nobody defines traceably:
+                    // warn when a file writes it through a table the
+                    // analysis cannot follow.
+                    if let Key::Field(table, fields) = &key
+                        && defined_tables.contains(table.as_ref())
+                        && let Some(writes) = fields.last().and_then(|f| untracked.get(f.as_str()))
+                    {
+                        let writes: Vec<&(usize, Span)> =
+                            writes.iter().filter(|w| w.0 != root).collect();
+                        let unordered = !ordered(root) || writes.iter().any(|w| !ordered(w.0));
+                        if !writes.is_empty()
+                            && unordered
+                            && warned.insert(format!("untraced {}", key.display()))
+                        {
+                            let mut d = Diagnostic::warning(
+                                "W1033",
+                                format!(
+                                    "the definition of `{}` cannot be traced, so the files reading it at load time may load before it is set",
+                                    access.key.display()
+                                ),
+                            )
+                            .with_label(access.span, "read at load time")
+                            .with_help("define the field through its global or `ns` table (`function ns.API.f()`, `ns.API.f = …`), or list the files in `build.load-order`");
+                            let mut spans: Vec<Span> = writes.iter().map(|w| w.1).collect();
+                            spans.sort_by_key(|s| (s.file, s.start));
+                            spans.dedup();
+                            for span in spans {
+                                d = d.with_label(span, "written here through an untraced table");
+                            }
+                            out.diagnostics.push(d);
+                        }
+                    }
                     continue;
                 };
                 let lt_defs: Vec<&(usize, bool, Span)> = defs.iter().filter(|d| d.1).collect();
@@ -602,6 +687,15 @@ pub fn analyze(
     out.constraints.sort();
     out.constraints.dedup();
     out
+}
+
+/// The key naming the group of keys that hold the same table as `key`.
+fn table_root(same_table: &HashMap<Key, Key>, key: &Key) -> Key {
+    let mut key = key;
+    while let Some(next) = same_table.get(key) {
+        key = next;
+    }
+    key.clone()
 }
 
 /// The strongly connected components of the file graph.
