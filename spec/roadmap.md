@@ -217,6 +217,12 @@ Notes on the delivered state:
 
 **Exit:** a release is published to all four sites from CI with one command.
 
+- Optimization was checked in game on the WoW: Forever client (2026-10-13):
+  Bartender4 adopted with `wowlua init` and built bundled (`strip`, release
+  optimizations) loads from 2 bundles and its template XML, with no Lua
+  errors. The corpus checks every minification pass on 7179 files and builds
+  its 108 addons bundled at every level.
+
 ## M8: Standard library
 
 - Core set first: `events`, `lifecycle`, `slash`, `saved`, `timer`, `combat`,
