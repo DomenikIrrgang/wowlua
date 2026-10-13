@@ -40,6 +40,8 @@ pub struct LuaLib {
     /// With `moved-up`: the folder it was moved out of, whose other files
     /// ship next to it, and the moved folders.
     pub moved_from: Option<(PathBuf, String)>,
+    /// `"bundle": false` on the dependency keeps its files separate.
+    pub bundle: bool,
 }
 
 impl LuaLib {
@@ -306,6 +308,7 @@ pub fn lua_libraries(
             index: idx,
             project_file: p.project_file.clone(),
             addon_name: entry.addon_name.clone(),
+            bundle: entry.bundle != Some(false),
             moved_from: entry.moved_up.as_ref().map(|up| {
                 let up = up.trim_matches('/').to_string();
                 let mut outer = p.dir.clone();

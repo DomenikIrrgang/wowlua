@@ -155,7 +155,7 @@ no columns).
 
 | Build | Location |
 |-------|----------|
-| Profile builds | `dist/<profile>/.maps/<Addon>/<flavor>/<output path>.map` for per-flavor files, `dist/<profile>/.maps/<Addon>/<output path>.map` for files shared by all flavors (decision T68) |
+| Profile builds | `dist/<profile>/.maps/<Addon>/<flavor>/<output path>.map` for per-flavor files, `dist/<profile>/.maps/<Addon>/<output path>.map` for files shared by all flavors (decision T68) and bundles (`<Name>.lua.map`) |
 | Publish builds | `dist/targets/<target>/.maps/<Addon>/<flavor>/<output path>.map` |
 | Published builds (archive) | `$WOWLUA_HOME/maps/<build id>/`, plus the `archive-maps` upload ([Publishing §11.7](publishing.md#117-github-releases)) |
 
@@ -165,8 +165,8 @@ the archive, then in downloaded `-maps.zip` release assets.
 
 ## 14.7 The runtime (`__wl`)
 
-The runtime is a small Lua library emitted as `wowlua/runtime.lua`, or inlined
-at the top of a bundle. It is **sliced by feature**: only the parts the
+The runtime is a small Lua library emitted as `wowlua/runtime.lua`, or the
+first file of a bundle. It is **sliced by feature**: only the parts the
 compiled code uses are included. It stores itself in the addon table as
 `ns.__wowlua` and never in globals. If locale files already created that table
 (§14.9.2), the runtime extends it instead of replacing it.
@@ -174,7 +174,6 @@ compiled code uses are included. It stores itself in the addon table as
 | Slice | Contents | Needed by |
 |-------|----------|-----------|
 | `core` | `module`, `require`, `define`, `error` helper, `meta` tables, lazy-binding support | modules, `wowlua:meta` values |
-| `load` | `__wl.load`: protected module execution for bundles | bundled builds |
 | `class` | `class`, `finalize`, `isInstance`, `classOf`, abstract stubs, property dispatch | classes |
 | `widget` | `widgetClass`, mixin flattening, `__ctor` threading | widget classes |
 | `enum` | frozen enum tables (debug) | enums used as values in debug builds |

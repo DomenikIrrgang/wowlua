@@ -1164,14 +1164,7 @@ pub fn trace(
         out.flush(&mut session);
         return false;
     };
-    if build.is_some() {
-        // Every build keeps its source lines until bundling (milestone M7):
-        // locations decode without the build's source maps.
-        session.push(Diagnostic::note(
-            "builds are line-preserved: `--build` is not needed yet",
-        ));
-    }
-    out.print(wowlua_driver::trace::decode(&project, &input));
+    out.print(wowlua_driver::trace::decode(&project, &input, build));
     out.flush(&mut session)
 }
 

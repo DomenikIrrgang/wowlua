@@ -80,7 +80,13 @@ impl Passes {
 }
 
 /// Runs the IR passes of `passes` on `chunk`, in the compiler's order.
-pub fn apply(chunk: &mut Chunk, passes: &Passes, line_mode: LineMode) {
+/// Returns the original names of renamed locals by source position (for
+/// source maps).
+pub fn apply(
+    chunk: &mut Chunk,
+    passes: &Passes,
+    line_mode: LineMode,
+) -> std::collections::HashMap<Pos, String> {
     if passes.simplify {
         simplify::apply(chunk, line_mode == LineMode::Preserve);
     }
@@ -94,8 +100,9 @@ pub fn apply(chunk: &mut Chunk, passes: &Passes, line_mode: LineMode) {
         fields::apply(chunk);
     }
     if passes.rename_locals {
-        rename::apply(chunk);
+        return rename::apply(chunk);
     }
+    std::collections::HashMap::new()
 }
 
 /// `preserve_lines`: a literal spanning lines keeps them, as Lua gives the

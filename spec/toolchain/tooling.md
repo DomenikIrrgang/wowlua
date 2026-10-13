@@ -208,16 +208,17 @@ MyAddon/MyAddon.lua:4821: attempt to index local 'a' (a nil value)
   always identifies one source statement.
 - Input: pasted text, a file, or `--clipboard`. It recognizes WoW error-frame
   and BugSack formats.
-- Build matching: the build id (`X-Wowlua-Build` TOC field, also included in
-  runtime error messages) selects the right source maps. Maps of published builds
+- Build matching: the build id (`--build`, the `X-Wowlua-Build` TOC field,
+  also included in the load errors of bundles) selects the right source maps:
+  a build in `dist/` with that id, else the archive. Without one, the newest
+  build in `dist/` is used. Maps of published builds
   are archived as described in [Code generation §14.6](codegen.md#146-source-maps),
   and can be uploaded as release assets (`publish.archive-maps`). That way,
   reports from users of old versions can still be decoded.
 - Renamed locals are reported with their original names, looked up by line and
   minified name.
-- Line-preserved dev builds need no decoding. `wowlua trace` passes their
-  locations through, rewriting the output path (including any flavor directory)
-  to the `.wowlua` source file, and names the enclosing function found in the
-  source (`in Window:refresh`). Until bundling exists (milestone M7) every
-  build is line-preserved, and `--build` is accepted but not needed.
+- Line-preserved builds need no map. `wowlua trace` passes their locations
+  through, rewriting the output path (including any flavor directory) to the
+  `.wowlua` source file, and names the enclosing function found in the source
+  (`in Window:refresh`).
 - Locations of other addons are left as they are.

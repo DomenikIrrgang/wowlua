@@ -4,7 +4,7 @@
 //! 5.1 built with `LUA_COMPAT_VARARG` (not WoW's) declares it in every vararg
 //! function, so keeping it keeps the code's meaning on any build.
 
-use crate::ir::Chunk;
+use crate::ir::{Chunk, Pos};
 use crate::scope::{rename, resolve};
 use std::collections::{HashMap, HashSet};
 
@@ -33,7 +33,8 @@ pub fn short_name(mut i: usize) -> String {
     String::from_utf8(out).expect("ASCII")
 }
 
-pub fn apply(chunk: &mut Chunk) {
+/// Returns the original names of the renamed identifiers by position.
+pub fn apply(chunk: &mut Chunk) -> HashMap<Pos, String> {
     let res = resolve(chunk);
     let mut order: Vec<usize> = (0..res.bindings.len()).collect();
     order.sort_by_key(|&b| std::cmp::Reverse(res.bindings[b].uses));
@@ -63,7 +64,7 @@ pub fn apply(chunk: &mut Chunk) {
             .expect("names are unbounded");
         names.insert(b, name);
     }
-    rename(chunk, &res, &names);
+    rename(chunk, &res, &names)
 }
 
 #[cfg(test)]

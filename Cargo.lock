@@ -2597,6 +2597,7 @@ name = "wowlua-luair"
 version = "0.7.0"
 dependencies = [
  "mlua",
+ "serde_json",
  "stacker",
 ]
 

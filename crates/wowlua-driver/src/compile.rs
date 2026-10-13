@@ -164,13 +164,13 @@ pub struct Parsed {
     declarations: Vec<Parse>,
 }
 
-/// The line mode for unbundled output: `preserve` unless the profile sets
-/// one (spec codegen §14.5; bundling is not available yet).
+/// The line mode (spec codegen §14.5): the profile's, else `preserve` for
+/// unbundled and `statement` for bundled output.
 pub(crate) fn line_mode(profile: &Profile) -> LineMode {
-    match profile.line_mode {
-        Some(ManifestLineMode::Statement) => LineMode::Statement,
-        Some(ManifestLineMode::Pretty) => LineMode::Pretty,
-        _ => LineMode::Preserve,
+    match profile.effective_line_mode() {
+        ManifestLineMode::Statement => LineMode::Statement,
+        ManifestLineMode::Pretty => LineMode::Pretty,
+        ManifestLineMode::Preserve => LineMode::Preserve,
     }
 }
 
@@ -694,7 +694,7 @@ pub fn compile_flavor(
                   file: FileId,
                   diagnostics: &mut Vec<Diagnostic>|
      -> Option<Compiled> {
-        wowlua_luair::minify::apply(&mut chunk, &minify.passes, options.line_mode);
+        let original = wowlua_luair::minify::apply(&mut chunk, &minify.passes, options.line_mode);
         let emitted = wowlua_luair::emit(&chunk, &options);
         // The output must parse (spec compiler §13.8, item 2).
         let reparsed = wowlua_syntax::parse(&emitted.text, file);
@@ -714,7 +714,12 @@ pub fn compile_flavor(
         let output = source.output_path();
         let map = profile.source_maps.then(|| {
             let name = output.rsplit('/').next().unwrap_or(&output);
-            wowlua_luair::sourcemap::source_map(&emitted.mappings, name, &source.rel)
+            wowlua_luair::sourcemap::source_map_named(
+                &emitted.mappings,
+                name,
+                &source.rel,
+                &original,
+            )
         });
         Some(Compiled {
             code: emitted.text,

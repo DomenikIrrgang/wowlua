@@ -109,6 +109,46 @@ pub fn references(text: &str) -> Result<Vec<XmlRef>, XmlError> {
     }
 }
 
+/// The references of a document that contains nothing but its root element
+/// and `<Script file="…"/>` / `<Include file="…"/>` elements (comments and
+/// whitespace aside), without inline load directives: such a file can be
+/// flattened into the files it loads (spec optimization §15.3.1). `None`
+/// for any other document.
+pub fn script_only(text: &str) -> Option<Vec<XmlRef>> {
+    let text = &*without_bom(text);
+    let refs = references(text).ok()?;
+    let mut reader = Reader::from_str(text);
+    let mut depth = 0usize;
+    loop {
+        match reader.read_event().ok()? {
+            Event::Start(e) => {
+                // Only the root may have content.
+                if depth > 0 {
+                    return None;
+                }
+                let _ = e;
+                depth += 1;
+            }
+            Event::Empty(e) => {
+                if depth != 1 || !matches!(e.local_name().as_ref(), "Script" | "Include") {
+                    return None;
+                }
+            }
+            Event::End(_) => depth = depth.saturating_sub(1),
+            Event::Text(t) => {
+                if !t.as_ref().trim().is_empty() {
+                    return None;
+                }
+            }
+            Event::CData(_) => return None,
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    let plain = refs.iter().all(|r| r.conditions().is_empty());
+    plain.then_some(refs)
+}
+
 /// The document with a leading byte order mark (which the client accepts)
 /// replaced by spaces, so that byte offsets stay those of the file.
 pub(crate) fn without_bom(text: &str) -> std::borrow::Cow<'_, str> {
@@ -190,6 +230,16 @@ pub fn rewrite(text: &str, replacements: &[(&XmlRef, String)]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recognizes_script_only_documents() {
+        let flat = "<Ui xmlns=\"x\">\n<!-- libs -->\n<Script file=\"a.lua\"/>\n<Include file=\"b\\b.xml\"/>\n</Ui>";
+        let refs = script_only(flat).unwrap();
+        assert_eq!(refs.len(), 2);
+        assert!(script_only("<Ui><Frame name=\"X\"/></Ui>").is_none());
+        assert!(script_only("<Ui><Script>print(1)</Script></Ui>").is_none());
+        assert!(script_only("<Ui><Script file=\"a.lua [AllowLoadGameType tbc]\"/></Ui>").is_none());
+    }
 
     const DOC: &str = r#"<Ui xmlns="http://www.blizzard.com/wow/ui/">
   <Script file="core.lua"/>

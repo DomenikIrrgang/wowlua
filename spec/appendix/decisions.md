@@ -213,6 +213,7 @@ open for review.
 | T162 | `cache-globals: "safe"` hoists Lua 5.1's base and library functions (`pairs`, `type`, `string.format`, `math.floor`, …), WoW's Lua aliases (`strsplit`, `tinsert`, `wipe`, `format`, …) and `C_*` namespace tables, never their functions and never other WoW API functions **(user, M7)** | A hook installed on an API function or a namespace field after load keeps working. |
 | T163 | A lua-library that calls `debugstack` or `debuglocals` (often to find its own folder) is not bundled; the build notes why. Project code gets lint W6001 **(user, M7)** | Bundling must not break libraries the author cannot change. |
 | T164 | Optimization is verified by the conformance corpus at every minification pass (bytecode and lines unchanged by every pass but `dedupe-strings` and `rename-private`), differential test programs, and an in-game check of a bundled release build **(user, M7)** | Thousands of real addon files catch what hand-written tests miss. |
+| T165 | Every bundle segment defines its own protected loader (`__wl_load`) instead of a runtime `load` slice; the runtime is the first file of the bundle, wrapped like the others; load errors name the addon, the file and the build id **(proposal, M7)** | Bundles of plain Lua addons need no runtime, and every segment stands alone. |
 
 ## Standard library
 

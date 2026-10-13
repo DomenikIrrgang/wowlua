@@ -81,37 +81,56 @@ load order.
 
 ```lua
 local __wl_name, __wl_ns = ...
--- runtime slices (inlined)
-local __wl = __wl_ns.__wowlua or {}; __wl_ns.__wowlua = __wl   -- keeps the table locale files created
--- each module or file as a function, in load order, identified by module ID
-__wl.load("libstub/LibStub", function(...) <LibStub.lua body> end)
-__wl.load("core/cache", function(...) <module body> end)
-__wl.load("main", function(...) <module body> end)
+local function __wl_load(id, f)
+xpcall(function() f(__wl_name, __wl_ns) end, function(e)
+local message = __wl_name .. " (" .. id .. ", build 9f3a1c2e): " .. tostring(e)
+local handler = geterrorhandler and geterrorhandler()
+if handler then handler(message) else print(message) end
+end)
+end
+-- each file as a function, in load order, named by its path
+__wl_load("wowlua/runtime", function(...) <runtime> end)
+__wl_load("libs/libstub/LibStub", function(...) <LibStub.lua> end)
+__wl_load("src/core/cache", function(...) <module> end)
+__wl_load("src/main", function(...) <module> end)
 ```
 
-- Each module or plain Lua file becomes a function, called with
-  `(addonName, ns)` so that `...` behaves exactly as in a separate file. Locals
-  stay private to their module, and Lua's per-function limits (200 locals, 60
-  upvalues, registers, constants) apply per module, as they did before
-  bundling. Each wrapper adds one nested syntax level and two call levels.
+- Each module or plain Lua file (the runtime too) becomes a function, called
+  with `(addonName, ns)` so that `...` behaves exactly as in a separate file.
+  Locals stay private to their file, and Lua's per-function limits (200
+  locals, 60 upvalues, registers, constants) apply per file, as they did
+  before bundling. Each wrapper adds one nested syntax level and two call
+  levels.
 - **Error isolation.** In WoW, a load-time error in one file stops only that
-  file. Bundles keep that behavior: `__wl.load` runs each wrapper protected,
-  through a closure (Lua 5.1's `xpcall` takes no extra arguments):
-  ```lua
-  function __wl.load(id, f)
-      local ok, err = xpcall(function() return f(__wl_name, __wl_ns) end, __wl.onLoadError)
-  end
-  ```
-  The handler forwards the error, prefixed with the addon name and module ID,
-  to `geterrorhandler()`, so BugSack and the default error frame show it as
-  usual, and loading continues with the next module. Modules that imported
-  something from the failed module see `nil` exports, exactly as with separate
-  files.
+  file. Bundles keep that behavior: the bundle's own `__wl_load` runs each
+  wrapper protected, through a closure (Lua 5.1's `xpcall` takes no extra
+  arguments). The handler forwards the error, prefixed with the addon name,
+  the file and the build id, to `geterrorhandler()`, so BugSack and the
+  default error frame show it as usual, and loading continues with the next
+  file. Modules that imported something from the failed module see `nil`
+  exports, exactly as with separate files. Every segment defines its own
+  loader, so bundles need no runtime (decision T165).
+- **What is bundled.** The TOC's Lua files: the runtime, the standard-library
+  modules, wowlua libraries, lua-library entries and the project's files.
+  Files that must stay separate split the bundle into segments at their place
+  in the load order: XML files, locale files, files of other AddOns
+  (`build.external-files`), TOC lines with variables, library files kept
+  apart (below), and files that do not compile on their own. When the
+  flavors load different files or orders, each flavor gets bundles of its
+  own (`<Name>.<flavor>.lua`).
+- **Libraries kept apart.** `"bundle": false` on the dependency, and every
+  lua-library that calls `debugstack` or `debuglocals` (often to find its own
+  folder for media paths), stay separate files; the build notes why (decision
+  T163).
+- **Source maps.** A bundle's map (`<Name>.lua.map`) composes the maps of its
+  files (identity for files that were not compiled), with the original names
+  of renamed locals, so `wowlua trace` decodes bundle locations.
 - A top-level `return` in a plain Lua file returns from its wrapper function,
   which matches file semantics.
 - **Remaining differences from separate files** (documented, and checked by
-  lint W6001 where detectable): `debugstack()` and error messages show the
-  bundle file name and line, and the stack is two levels deeper. `wowlua trace`
+  warning W6001 for the project's bundled files that call `debugstack` or
+  `debuglocals`): `debugstack()` and error messages show the bundle file name
+  and line, and the stack is two levels deeper. `wowlua trace`
   maps locations back through source maps. Code that inspects its own file name
   through `debugstack`, or that uses numeric stack levels with `getfenv`,
   `setfenv` or `error`, sees the bundle frames.

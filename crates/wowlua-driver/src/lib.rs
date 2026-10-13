@@ -5,6 +5,7 @@
 //! the CLI renders them.
 
 pub mod build;
+mod bundle;
 mod compile;
 pub mod credentials;
 pub mod deps;

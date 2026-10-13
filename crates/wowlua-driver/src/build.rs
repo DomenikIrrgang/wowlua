@@ -190,11 +190,6 @@ pub fn build(
             return None;
         }
     };
-    if profile.bundle {
-        session.push(Diagnostic::note(
-            "bundling is not available yet (milestone M7); building unbundled",
-        ));
-    }
     let Some(level) = wowlua_manifest::minify_passes(&manifest.manifest, &profile.minify) else {
         session.push(
             Diagnostic::error(
@@ -1230,97 +1225,8 @@ pub fn build(
         return None;
     }
 
-    // TOC files.
-    let toc_input = TocInput {
-        addon_name: addon_name.clone(),
-        flavors: flavors
-            .iter()
-            .map(|id| FlavorTarget {
-                id: id.clone(),
-                interfaces: project.interfaces.get(id).cloned().unwrap_or_default(),
-            })
-            .collect(),
-        directives: directives(
-            project,
-            &flavors,
-            &profile.name,
-            &version,
-            &build_id,
-            toc_data,
-            // A nolib package names its libraries' standalone addons
-            // (not in a converted project: the packager adds none).
-            &if request.nolib && !keywords {
-                libs.iter()
-                    .map(|l| {
-                        l.addon_name.clone().unwrap_or_else(|| {
-                            l.install
-                                .rsplit('/')
-                                .next()
-                                .unwrap_or(&l.install)
-                                .to_string()
-                        })
-                    })
-                    .collect::<Vec<_>>()
-            } else {
-                Vec::new()
-            },
-            // The dev window's state (spec §7.7.1).
-            profile.dev_console.then(|| {
-                let safe: String = addon_name
-                    .chars()
-                    .map(|c| {
-                        if c.is_ascii_alphanumeric() || c == '_' {
-                            c
-                        } else {
-                            '_'
-                        }
-                    })
-                    .collect();
-                format!("WowluaDevDB_{safe}")
-            }),
-        ),
-        files: toc_items
-            .iter()
-            .map(|item| FileEntry {
-                path: item.path.clone(),
-                flavors: item.flavors.clone(),
-                locales: item.locales.clone(),
-            })
-            .collect(),
-        layout: match build_cfg.toc_layout {
-            TocLayout::Auto => Layout::Auto,
-            TocLayout::Single => Layout::Single,
-            TocLayout::PerFlavor => Layout::PerFlavor,
-        },
-        flavor_orders,
-    };
-    let mut tocs = match wowlua_toc::generate(&toc_input) {
-        Ok(generated) => generated.files,
-        Err(errors) => {
-            for error in errors {
-                session.push(toc_error(error, &manifest.path));
-            }
-            return None;
-        }
-    };
-    // The packager substitutes keywords in the whole TOC (`## Notes: …
-    // @project-version@`).
-    if let Some(info) = &keyword_info {
-        for toc in &mut tocs {
-            if toc.content.contains('@') {
-                toc.content = crate::keywords::substitute(&toc.content, info);
-            }
-        }
-    }
-
     // Assemble the output tree.
     let mut out: BTreeMap<String, Content> = BTreeMap::new();
-    for toc in &tocs {
-        out.insert(
-            toc.name.clone(),
-            Content::Bytes(toc.content.clone().into_bytes()),
-        );
-    }
     let mut flavor_roots: BTreeSet<String> = BTreeSet::new();
     let mut maps: BTreeMap<String, String> = BTreeMap::new();
     for source in &emitted {
@@ -1886,6 +1792,116 @@ pub fn build(
         }
     }
     roots.extend(shipped_as_is);
+    // Bundling (spec optimization §15.3) rewrites the TOC's file list.
+    let (toc_items, flavor_orders) = if profile.bundle {
+        bundle_output(
+            session,
+            &BundleInput {
+                addon: &addon_name,
+                build_id: &build_id,
+                flavors: &flavors,
+                libs: &libs,
+                files: &files,
+                raw: &raw,
+                source_maps: profile.source_maps,
+            },
+            toc_items,
+            flavor_orders,
+            &mut out,
+            &mut maps,
+        )?
+    } else {
+        (toc_items, flavor_orders)
+    };
+    // TOC files.
+    let toc_input = TocInput {
+        addon_name: addon_name.clone(),
+        flavors: flavors
+            .iter()
+            .map(|id| FlavorTarget {
+                id: id.clone(),
+                interfaces: project.interfaces.get(id).cloned().unwrap_or_default(),
+            })
+            .collect(),
+        directives: directives(
+            project,
+            &flavors,
+            &profile.name,
+            &version,
+            &build_id,
+            toc_data,
+            // A nolib package names its libraries' standalone addons
+            // (not in a converted project: the packager adds none).
+            &if request.nolib && !keywords {
+                libs.iter()
+                    .map(|l| {
+                        l.addon_name.clone().unwrap_or_else(|| {
+                            l.install
+                                .rsplit('/')
+                                .next()
+                                .unwrap_or(&l.install)
+                                .to_string()
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            },
+            // The dev window's state (spec §7.7.1).
+            profile.dev_console.then(|| {
+                let safe: String = addon_name
+                    .chars()
+                    .map(|c| {
+                        if c.is_ascii_alphanumeric() || c == '_' {
+                            c
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect();
+                format!("WowluaDevDB_{safe}")
+            }),
+        ),
+        files: toc_items
+            .iter()
+            .map(|item| FileEntry {
+                path: item.path.clone(),
+                flavors: item.flavors.clone(),
+                locales: item.locales.clone(),
+            })
+            .collect(),
+        layout: match build_cfg.toc_layout {
+            TocLayout::Auto => Layout::Auto,
+            TocLayout::Single => Layout::Single,
+            TocLayout::PerFlavor => Layout::PerFlavor,
+        },
+        flavor_orders,
+    };
+    let mut tocs = match wowlua_toc::generate(&toc_input) {
+        Ok(generated) => generated.files,
+        Err(errors) => {
+            for error in errors {
+                session.push(toc_error(error, &manifest.path));
+            }
+            return None;
+        }
+    };
+    // The packager substitutes keywords in the whole TOC (`## Notes: …
+    // @project-version@`).
+    if let Some(info) = &keyword_info {
+        for toc in &mut tocs {
+            if toc.content.contains('@') {
+                toc.content = crate::keywords::substitute(&toc.content, info);
+            }
+        }
+    }
+
+    for toc in &tocs {
+        out.insert(
+            toc.name.clone(),
+            Content::Bytes(toc.content.clone().into_bytes()),
+        );
+    }
     validate_output(
         session,
         &out,
@@ -3551,6 +3567,274 @@ fn validate_output(
             ));
         }
     }
+}
+
+/// What bundling needs to know about the build.
+struct BundleInput<'a> {
+    addon: &'a str,
+    build_id: &'a str,
+    flavors: &'a [String],
+    libs: &'a [crate::embed::LuaLib],
+    files: &'a [(Source, wowlua_span::FileId)],
+    raw: &'a HashMap<String, Vec<u8>>,
+    source_maps: bool,
+}
+
+fn content_bytes(content: &Content) -> Vec<u8> {
+    match content {
+        Content::Bytes(b) => b.clone(),
+        Content::Copy(p) => std::fs::read(p).unwrap_or_default(),
+    }
+}
+
+/// The key of an output file's source map in `maps`.
+fn map_key(path: &str) -> String {
+    match path
+        .strip_prefix("wowlua/flavors/")
+        .and_then(|rest| rest.split_once('/'))
+    {
+        Some((flavor, rest)) => format!("{flavor}/{rest}.map"),
+        None => format!("{path}.map"),
+    }
+}
+
+/// Calls of `debugstack` or `debuglocals` in Lua text: code that may look at
+/// its own file name (spec optimization §15.3.1).
+fn inspects_own_file(text: &[u8]) -> bool {
+    let file = wowlua_span::SourceDb::new().add("lexed", String::new());
+    let lexed = wowlua_syntax::lexer::lex(text, file);
+    lexed.tokens.iter().any(|t| {
+        t.kind == wowlua_syntax::token::TokenKind::Name
+            && matches!(
+                text.get(t.start as usize..t.end as usize),
+                Some(b"debugstack" | b"debuglocals")
+            )
+    })
+}
+
+/// Bundles the TOC's Lua files (spec optimization §15.3): returns the new
+/// TOC entries and per-flavor orders; the bundles replace their files in
+/// `out` and `maps`.
+#[allow(clippy::type_complexity)]
+fn bundle_output(
+    session: &mut Session,
+    input: &BundleInput,
+    items: Vec<TocItem>,
+    orders: Option<HashMap<String, Vec<usize>>>,
+    out: &mut BTreeMap<String, Content>,
+    maps: &mut BTreeMap<String, String>,
+) -> Option<(Vec<TocItem>, Option<HashMap<String, Vec<usize>>>)> {
+    let lib_of = |path: &str| {
+        input
+            .libs
+            .iter()
+            .find(|l| path.starts_with(&format!("{}/", l.install)))
+    };
+    // Libraries that stay separate: `"bundle": false`, or code that looks at
+    // its own file name (decision T163).
+    let mut separate: BTreeSet<String> = BTreeSet::new();
+    for lib in input.libs {
+        if !lib.bundle {
+            separate.insert(lib.name.clone());
+            continue;
+        }
+        let inspects = lib.index.values().any(|rel| {
+            rel.to_ascii_lowercase().ends_with(".lua")
+                && std::fs::read(lib.dir.join(rel)).is_ok_and(|t| inspects_own_file(&t))
+        });
+        if inspects {
+            separate.insert(lib.name.clone());
+            session.push(Diagnostic::note(format!(
+                "the library `{}` is not bundled: it calls `debugstack` or `debuglocals`, which see the file name",
+                lib.name
+            )));
+        }
+    }
+    let bundled_lib = |path: &str| lib_of(path).is_none_or(|l| !separate.contains(&l.name));
+    // A library's entry XML that only loads Lua files is flattened into them.
+    let mut expanded: Vec<TocItem> = Vec::new();
+    let mut origin: Vec<Vec<usize>> = Vec::new();
+    let mut flattened_xml: Vec<String> = Vec::new();
+    for item in items {
+        let mut xmls = Vec::new();
+        let flat = (item.dependency
+            && item.path.to_ascii_lowercase().ends_with(".xml")
+            && bundled_lib(&item.path))
+        .then(|| flatten_xml(out, &item.path, &mut xmls, 0))
+        .flatten();
+        let start = expanded.len();
+        match flat {
+            Some(paths) => {
+                flattened_xml.extend(xmls);
+                for path in paths {
+                    expanded.push(TocItem {
+                        rel: path.clone(),
+                        path,
+                        ..item.clone()
+                    });
+                }
+            }
+            None => expanded.push(item),
+        }
+        origin.push((start..expanded.len()).collect());
+    }
+    let orders = orders.map(|o| {
+        o.into_iter()
+            .map(|(f, idx)| (f, idx.iter().flat_map(|&i| origin[i].clone()).collect()))
+            .collect::<HashMap<_, _>>()
+    });
+    let lua = mlua::Lua::new();
+    let compiles = |bytes: &[u8]| {
+        let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
+        lua.load(bytes).into_function().is_ok()
+    };
+    let entries: Vec<(bool, Option<Vec<String>>)> = expanded
+        .iter()
+        .map(|item| {
+            let ok = item.path.to_ascii_lowercase().ends_with(".lua")
+                && !item.path.starts_with("../")
+                && !item.path.contains('[')
+                && item.locales.is_none()
+                && bundled_lib(&item.path)
+                && out
+                    .get(&item.path)
+                    .is_some_and(|c| compiles(&content_bytes(c)));
+            (ok, item.flavors.clone())
+        })
+        .collect();
+    let (planned, orders) =
+        crate::bundle::plan(input.addon, &entries, input.flavors, orders.as_ref());
+    // Bundled project code that looks at its own file name (W6001).
+    let sources: HashMap<&str, &Source> = input
+        .files
+        .iter()
+        .map(|(s, _)| (s.rel.as_str(), s))
+        .collect();
+    let mut warned: BTreeSet<String> = BTreeSet::new();
+    let mut result: Vec<TocItem> = Vec::new();
+    for p in planned {
+        match p {
+            crate::bundle::Planned::Keep(i) => result.push(expanded[i].clone()),
+            crate::bundle::Planned::Bundle {
+                path,
+                flavors,
+                members,
+            } => {
+                if out.contains_key(&path) {
+                    session.push(
+                        Diagnostic::error(
+                            "E4311",
+                            format!("`{path}` is the bundle's path and also a file of the output"),
+                        )
+                        .with_help("rename the file, or turn bundling off with `bundle: false`"),
+                    );
+                    return None;
+                }
+                let mut parts = Vec::new();
+                for i in members {
+                    let item = &expanded[i];
+                    let text = out
+                        .remove(&item.path)
+                        .map(|c| content_bytes(&c))
+                        .unwrap_or_default();
+                    let own_map = maps
+                        .remove(&map_key(&item.path))
+                        .and_then(|m| wowlua_luair::sourcemap::SourceMap::parse(&m));
+                    if let Some(source) = sources.get(item.rel.as_str())
+                        && lib_of(&item.path).is_none()
+                        && !wowlua_sema::is_compiler_known(&source.src_rel)
+                        && input
+                            .raw
+                            .get(&source.rel)
+                            .is_some_and(|t| inspects_own_file(t))
+                        && warned.insert(source.rel.clone())
+                    {
+                        session.push(
+                            Diagnostic::warning(
+                                "W6001",
+                                "this file calls `debugstack` or `debuglocals`, which see the bundle's file name, not this file's",
+                            )
+                            .with_path(&source.rel)
+                            .with_help("`wowlua trace` maps bundle locations back; or turn bundling off with `bundle: false`"),
+                        );
+                    }
+                    let unprefixed = item
+                        .path
+                        .strip_prefix("wowlua/flavors/")
+                        .and_then(|r| r.split_once('/'))
+                        .map_or(item.path.as_str(), |(_, r)| r);
+                    parts.push(crate::bundle::Member {
+                        id: unprefixed
+                            .strip_suffix(".lua")
+                            .unwrap_or(unprefixed)
+                            .to_string(),
+                        text,
+                        map: own_map,
+                        source: item.rel.clone(),
+                    });
+                }
+                let (text, map) = crate::bundle::assemble(&path, input.build_id, parts);
+                if let Err(error) = lua.load(&text[..]).into_function() {
+                    session.push(Diagnostic::plain_error(format!(
+                        "internal compiler error: the bundle `{path}` does not compile: {error}"
+                    )));
+                    return None;
+                }
+                if input.source_maps {
+                    maps.insert(format!("{path}.map"), map.to_json());
+                }
+                out.insert(path.clone(), Content::Bytes(text));
+                result.push(TocItem {
+                    rel: path.clone(),
+                    path,
+                    flavors,
+                    locales: None,
+                    dependency: false,
+                });
+            }
+        }
+    }
+    for xml in flattened_xml {
+        out.remove(&xml);
+    }
+    Some((result, orders))
+}
+
+/// The Lua files an XML file of the output loads, when it (and every file it
+/// includes) loads nothing else; `xmls` collects the XML files involved.
+fn flatten_xml(
+    out: &BTreeMap<String, Content>,
+    path: &str,
+    xmls: &mut Vec<String>,
+    depth: u32,
+) -> Option<Vec<String>> {
+    if depth > 16 {
+        return None;
+    }
+    let text = String::from_utf8(content_bytes(out.get(path)?)).ok()?;
+    let refs = wowlua_xml::script_only(&text)?;
+    xmls.push(path.to_string());
+    let dir = path.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+    let lower: HashMap<String, &String> = out.keys().map(|k| (k.to_ascii_lowercase(), k)).collect();
+    let mut files = Vec::new();
+    for r in refs {
+        let joined = if dir.is_empty() {
+            r.normalized()
+        } else {
+            format!("{dir}/{}", r.normalized())
+        };
+        let target = (*lower.get(&normalize(&joined).to_ascii_lowercase())?).clone();
+        match r.kind {
+            wowlua_xml::RefKind::Script if target.to_ascii_lowercase().ends_with(".lua") => {
+                files.push(target)
+            }
+            wowlua_xml::RefKind::Include => {
+                files.extend(flatten_xml(out, &target, xmls, depth + 1)?)
+            }
+            _ => return None,
+        }
+    }
+    Some(files)
 }
 
 /// Writes the output tree to a temporary directory and swaps it into place.

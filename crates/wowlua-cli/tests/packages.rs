@@ -79,12 +79,14 @@ fn has(program: &str) -> bool {
         .is_ok_and(|s| s.success())
 }
 
-/// A minimal addon with `deps` as its `dependencies` object.
+/// A minimal addon with `deps` as its `dependencies` object. Its release
+/// builds are not bundled, so the tests see the libraries' layout.
 fn addon(root: &Path, deps: serde_json::Value, extra: serde_json::Value) {
     let mut manifest = serde_json::json!({
         "package": { "name": "my-addon", "version": "1.0.0" },
         "addon": { "title": "My Addon" },
         "dependencies": deps,
+        "profiles": { "release": { "bundle": false } },
     });
     if let serde_json::Value::Object(map) = extra {
         for (k, v) in map {
@@ -790,6 +792,7 @@ fn wowlua_library_is_compiled_into_the_addon() {
             (
                 "wowlua.json",
                 r#"{ "package": { "name": "my-addon", "version": "1.0.0" },
+  "profiles": { "release": { "bundle": false } },
   "dependencies": { "wowlua-ui": { "path": "../ui", "features": ["fancy"], "config": { "size": 500 } } } }"#,
             ),
             (
@@ -1308,6 +1311,7 @@ fn compat_pkgmeta_keeps_pkgmeta_as_the_source() {
                 "wowlua.json",
                 r#"{ "package": { "name": "my-addon", "version": "1.0.0" },
   "compat": { "pkgmeta": true },
+  "profiles": { "release": { "bundle": false } },
   "dependencies": { "libstub": { "files": ["LibStub.lua"] } } }"#,
             ),
             ("src/main.lua", "print(1)\n"),
@@ -1373,14 +1377,19 @@ fn flavors_keep_their_own_toc_order() {
     let out = e.project.join("dist/release/MyAddon");
     let mainline = read_lf(out.join("MyAddon_Mainline.toc")).unwrap();
     let vanilla = read_lf(out.join("MyAddon_Classic.toc")).unwrap();
-    assert!(
-        mainline.ends_with("src\\A.lua\nsrc\\B.lua\nsrc\\C.lua\n"),
-        "{mainline}"
-    );
-    assert!(
-        vanilla.ends_with("src\\A.lua\nsrc\\C.lua\nsrc\\B.lua\n"),
-        "{vanilla}"
-    );
+    // Bundled per flavor, each in its own order.
+    assert!(mainline.ends_with("\nMyAddon.standard.lua\n"), "{mainline}");
+    assert!(vanilla.ends_with("\nMyAddon.vanilla.lua\n"), "{vanilla}");
+    let order = |bundle: &str| -> Vec<String> {
+        read_lf(out.join(bundle))
+            .unwrap()
+            .lines()
+            .filter_map(|l| l.strip_prefix("__wl_load(\""))
+            .map(|l| l.split('"').next().unwrap().to_string())
+            .collect()
+    };
+    assert_eq!(order("MyAddon.standard.lua"), ["src/A", "src/B", "src/C"]);
+    assert_eq!(order("MyAddon.vanilla.lua"), ["src/A", "src/C", "src/B"]);
 }
 
 #[test]
@@ -1680,4 +1689,85 @@ fn package_builds_every_target() {
         before,
         fs::read(packages.join("MyAddon-1.0.0-cf.zip")).unwrap()
     );
+}
+
+/// Bundling and libraries (spec optimization §15.3.1): an entry XML that
+/// only loads Lua files is flattened into the bundle; a library that calls
+/// `debugstack` (decision T163) or says `"bundle": false` stays separate.
+#[test]
+fn bundles_flatten_library_xml_and_keep_some_libraries_apart() {
+    let e = env();
+    let xml = git_repo(
+        &e.root.join("LibXml"),
+        &[
+            (
+                "LibXml.xml",
+                "<Ui>\n<Script file=\"Core.lua\"/>\n<Include file=\"sub\\more.xml\"/>\n</Ui>\n",
+            ),
+            ("Core.lua", "LibXmlLoaded = { \"core\" }\n"),
+            ("sub/more.xml", "<Ui><Script file=\"More.lua\"/></Ui>\n"),
+            ("sub/More.lua", "LibXmlLoaded[2] = \"more\"\n"),
+        ],
+        "1",
+    );
+    let stack = git_repo(
+        &e.root.join("LibStack"),
+        &[(
+            "LibStack.lua",
+            "local path = debugstack and debugstack() or \"\"\nLibStackLoaded = true\n",
+        )],
+        "1",
+    );
+    let keep = git_repo(
+        &e.root.join("LibKeep"),
+        &[("LibKeep.lua", "LibKeepLoaded = true\n")],
+        "1",
+    );
+    addon(
+        &e.project,
+        serde_json::json!({
+            "libxml": { "git": xml, "tag": "1", "kind": "lua-library", "files": ["LibXml.xml"] },
+            "libstack": { "git": stack, "tag": "1", "kind": "lua-library", "files": ["LibStack.lua"] },
+            "libkeep": { "git": keep, "tag": "1", "kind": "lua-library", "files": ["LibKeep.lua"], "bundle": false }
+        }),
+        serde_json::json!({ "profiles": {} }),
+    );
+    wowlua(&e.project, &e.home)
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "the library `libstack` is not bundled: it calls `debugstack`",
+        ));
+    let out = e.project.join("dist/release/MyAddon");
+    let toc = read_lf(out.join("MyAddon.toc")).unwrap();
+    let files: Vec<&str> = toc
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
+    assert_eq!(
+        files,
+        [
+            "MyAddon.lua",
+            "libs\\libstack\\LibStack.lua",
+            "libs\\libkeep\\LibKeep.lua",
+            "MyAddon.2.lua"
+        ],
+        "{toc}"
+    );
+    // The libraries kept apart split the bundle into segments, in load order.
+    let bundle =
+        read_lf(out.join("MyAddon.lua")).unwrap() + &read_lf(out.join("MyAddon.2.lua")).unwrap();
+    let ids: Vec<&str> = bundle
+        .lines()
+        .filter_map(|l| l.strip_prefix("__wl_load(\""))
+        .map(|l| l.split('"').next().unwrap())
+        .collect();
+    assert_eq!(
+        ids,
+        ["libs/libxml/Core", "libs/libxml/sub/More", "src/main"],
+        "{bundle}"
+    );
+    assert!(!out.join("libs/libxml").exists());
+    assert!(out.join("libs/libkeep/LibKeep.lua").exists());
 }

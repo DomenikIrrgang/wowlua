@@ -704,7 +704,7 @@ fn minified_builds_run_the_same() {
                 "wowlua.json",
                 r#"{ "package": { "name": "mini", "version": "1.0.0" },
   "minify-levels": { "small": { "extends": "compact", "passes": ["rename-locals"] } },
-  "profiles": { "release": { "minify": "small" } } }
+  "profiles": { "release": { "minify": "small", "bundle": false } } }
 "#,
             ),
             (
@@ -1016,6 +1016,69 @@ fn classes_across_modules_run() {
     assert_eq!(run_addon(&dist, "Shapes"), "square 9 r true", "{toc}");
 }
 
+/// Bundling (spec optimization §15.3): the TOC's Lua files become segments
+/// around XML files; each file runs protected, so an error stops only it.
+#[test]
+fn bundled_builds_run_the_same() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "bun", "version": "1.0.0" },
+  "build": { "load-order": ["src/first.lua", "src/broken.lua", "src/frames.xml", "src/main.wowlua"] } }
+"#,
+            ),
+            (
+                "src/first.lua",
+                "local _, ns = ...\nns.order = { \"first\" }\nns.where = debugstack and debugstack(1)\n",
+            ),
+            (
+                "src/broken.lua",
+                "local _, ns = ...\nns.order[#ns.order + 1] = \"broken\"\nerror(\"boom\")\n",
+            ),
+            (
+                "src/frames.xml",
+                "<Ui><Script file=\"framecode.lua\"/></Ui>\n",
+            ),
+            (
+                "src/framecode.lua",
+                "local _, ns = ...\nns.order[#ns.order + 1] = \"xml\"\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import build from \"wowlua:meta\"\nlocal _, ns = ...\nns.order[#ns.order + 1] = \"main\"\nprint(table.concat(ns.order, \" \"), build.bundled)\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(
+            predicate::str::contains("warning[W6001]")
+                .and(predicate::str::contains("= in src/first.lua")),
+        );
+    let release = dir.path().join("dist/release/Bun");
+    let toc = fs::read_to_string(release.join("Bun.toc")).unwrap();
+    let files: Vec<&str> = toc
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
+    assert_eq!(files, ["Bun.lua", "src\\frames.xml", "Bun.2.lua"], "{toc}");
+    assert!(!release.join("src/first.lua").exists());
+    assert!(release.join("src/framecode.lua").exists(), "XML loads it");
+    let out = run_addon(&release, "Bun");
+    assert!(out.contains("Bun (src/broken, build "), "{out}");
+    // The test runner does not run XML scripts.
+    assert!(out.ends_with("first broken main true"), "{out}");
+    // The source map leads back to the files.
+    let map = fs::read_to_string(dir.path().join("dist/release/.maps/Bun/Bun.lua.map")).unwrap();
+    assert!(map.contains("src/broken.lua"), "{map}");
+}
+
 /// `rename-private` (spec optimization §15.4.1): private and protected
 /// methods get short names unless their names occur anywhere else.
 #[test]
@@ -1027,7 +1090,7 @@ fn rename_private_renames_only_provably_private_methods() {
             (
                 "wowlua.json",
                 r#"{ "package": { "name": "priv", "version": "1.0.0" },
-  "profiles": { "release": { "minify": "max" } } }
+  "profiles": { "release": { "minify": "max", "bundle": false } } }
 "#,
             ),
             (
@@ -1824,6 +1887,58 @@ Interface/AddOns/Other/x.lua:1: not ours\n";
     assert!(
         stdout.contains("not ours\n") && !stdout.contains("x.lua:1\n  →"),
         "{stdout}"
+    );
+}
+
+/// `wowlua trace` through a bundle's source map, with renamed locals.
+#[test]
+fn trace_decodes_bundled_builds() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "tr", "version": "1.0.0" },
+  "profiles": { "release": { "minify": "rename" } } }
+"#,
+            ),
+            ("src/first.wowlua", "print(\"first\")\n"),
+            (
+                "src/calc.wowlua",
+                "local function addOne(values: any)\n    local runningTotal = values.missing\n    return runningTotal + 1\nend\naddOne({})\n",
+            ),
+        ],
+    );
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let bundle = fs::read_to_string(dir.path().join("dist/release/Tr/Tr.lua")).unwrap();
+    let (index, line) = bundle
+        .lines()
+        .enumerate()
+        .find(|(_, l)| l.starts_with("return") && l.ends_with("+1"))
+        .unwrap();
+    let short = line
+        .trim_start_matches("return")
+        .trim_end_matches("+1")
+        .trim();
+    let input = format!(
+        "Tr (src/calc, build 0): Interface/AddOns/Tr/Tr.lua:{}: attempt to perform arithmetic on local '{short}' (a nil value)\n",
+        index + 1
+    );
+    let assert = wowlua(dir.path())
+        .arg("trace")
+        .write_stdin(input)
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+    assert!(
+        stdout.contains(&format!(
+            "  → src/calc.wowlua:3 in addOne   ('{short}' is 'runningTotal')"
+        )),
+        "{stdout}\n{bundle}"
     );
 }
 

@@ -230,8 +230,7 @@ pub fn build_meta(project: &Project, input: &MetaInput) -> Meta {
     build.insert("timestamp".into(), MetaValue::Number(now as f64));
     build.insert("compiler".into(), MetaValue::str(crate::COMPILER_VERSION));
     build.insert("id".into(), MetaValue::str(input.build_id));
-    // Bundling is not available yet.
-    build.insert("bundled".into(), MetaValue::Bool(false));
+    build.insert("bundled".into(), MetaValue::Bool(input.profile.bundle));
     build.insert(
         "minify".into(),
         MetaValue::str(input.profile.minify.clone()),

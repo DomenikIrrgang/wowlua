@@ -383,28 +383,38 @@ pub fn resolve(chunk: &mut Chunk) -> Resolution {
 }
 
 /// Renames the locals of `chunk` (by binding) and leaves globals alone.
-pub fn rename(chunk: &mut Chunk, res: &Resolution, names: &HashMap<usize, String>) {
+/// Returns the original names of the renamed identifiers by position.
+pub fn rename(
+    chunk: &mut Chunk,
+    res: &Resolution,
+    names: &HashMap<usize, String>,
+) -> HashMap<Pos, String> {
     struct Renamer<'a> {
         res: &'a Resolution,
         names: &'a HashMap<usize, String>,
         next: usize,
+        original: HashMap<Pos, String>,
     }
     impl Visitor for Renamer<'_> {
         fn ident(&mut self, id: &mut Ident, _use: Use) {
             if let Some(Ref::Local(b)) = self.res.occurrences.get(self.next)
                 && let Some(name) = self.names.get(b)
+                && *name != id.name
             {
+                if id.pos.is_some() && !id.generated {
+                    self.original.insert(id.pos, std::mem::take(&mut id.name));
+                }
                 id.name = name.clone();
             }
             self.next += 1;
         }
     }
-    walk(
-        chunk,
-        &mut Renamer {
-            res,
-            names,
-            next: 0,
-        },
-    );
+    let mut r = Renamer {
+        res,
+        names,
+        next: 0,
+        original: HashMap::new(),
+    };
+    walk(chunk, &mut r);
+    r.original
 }
