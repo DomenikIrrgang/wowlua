@@ -231,6 +231,7 @@ open for review.
 | T179 | Exported recordings travel through `WowluaDevDB_<Addon>`; `wowlua prof report` finds them like `wowlua dev` finds the WoW installation and asks (or takes `--account`, `--client`) when several accounts or clients have data **(user, M11)** | SavedVariables are the only way data leaves the game. |
 | T180 | Dev builds show an error toast for newly captured errors while the dev window is closed. Bursts within 2 s collapse, it hides after 8 s, waits for combat to end and makes no sound **(user, M11; timings: proposal)** | Errors are seen when they happen, without opening `/wl`. |
 | T181 | The in-game performance tools are part of milestone M11 **(user)** | They measure what M11's optimizations change. |
+| T182 | Load-order usage analysis tracks fields below global and `ns` keys (`Lib.Register`, `ns.Tools.Run`) as names of their own, follows local aliases and table identity (`ns.API = SuuUI`, `local Roles = {}` with `ns.Roles = Roles`), and gives fields the same W1033/W1034 as globals. A read whose field is only written through an untraceable table is W1033 only when such a write exists at load time **(user, issue #1)** | Addons define their API as table fields; ordering by the root name alone loaded callers before the functions they call. Warning on every untraceable table would flood real addons. |
 
 ## Standard library
 

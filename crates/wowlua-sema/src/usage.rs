@@ -20,13 +20,23 @@ use wowlua_span::{FileId, Span};
 use wowlua_syntax::Parse;
 use wowlua_syntax::ast::*;
 
-/// A name whose definition orders files: a global or an addon-table field.
+/// A name whose definition orders files: a global, an addon-table field,
+/// or a field of a table reached from one of them (`Lib.Register`,
+/// `ns.UI.Icon`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Key {
     Global(String),
     Ns(String),
     /// An XML template (`virtual="true"`).
     Template(String),
+    /// A field path below a global or `ns` key (never empty, never below
+    /// another field key).
+    Field(Box<Key>, Vec<String>),
+    /// A table constructor held by a local (`local Roles = {}`), named by
+    /// its file, its declaration offset and the local's name. Its fields
+    /// order files once a global or `ns` key holds the same table
+    /// (`ns.Roles = Roles`).
+    LocalTable(FileId, u32, String),
 }
 
 impl Key {
@@ -35,6 +45,17 @@ impl Key {
             Key::Global(n) => n.clone(),
             Key::Ns(n) => format!("ns.{n}"),
             Key::Template(n) => format!("template {n}"),
+            Key::Field(root, fields) => format!("{}.{}", root.display(), fields.join(".")),
+            Key::LocalTable(_, _, n) => n.clone(),
+        }
+    }
+
+    /// The key of a path: the root itself, or a field key below it.
+    pub fn of_path(root: Key, fields: Vec<String>) -> Key {
+        if fields.is_empty() {
+            root
+        } else {
+            Key::Field(Box::new(root), fields)
         }
     }
 }
@@ -97,6 +118,12 @@ pub struct FileUsage {
     pub import_uses: Vec<(String, usize, Span)>,
     /// A write through a dynamic name (`_G[name] = …`, `setfenv`).
     pub dynamic_write: Option<Span>,
+    /// Two global or `ns` keys holding the same table (`ns.API = SuuUI`):
+    /// the fields of one are the fields of the other.
+    pub table_aliases: Vec<(Key, Key)>,
+    /// Field writes into tables the analysis cannot trace (locals,
+    /// parameters, call results): (field, function, span).
+    pub untracked_field_writes: Vec<(String, usize, Span)>,
 }
 
 /// APIs that run passed functions later (spec §5.4.3).
@@ -299,7 +326,19 @@ impl<'a> Walker<'a> {
     }
 
     fn use_key(&mut self, key: Key, span: Span) {
-        let guarded = self.guards.contains(&key);
+        // A field use is also guarded when its root or a shorter path is
+        // tested (`Later and Later.y`).
+        let guarded = self.guards.contains(&key)
+            || match &key {
+                Key::Field(root, fields) => {
+                    self.guards.contains(root)
+                        || (1..fields.len()).any(|n| {
+                            self.guards
+                                .contains(&Key::Field(root.clone(), fields[..n].to_vec()))
+                        })
+                }
+                _ => false,
+            };
         self.out.uses.push(Access {
             key,
             span,
@@ -400,17 +439,17 @@ impl<'a> Walker<'a> {
                 | ExprKind::OptField { .. }
         );
         if let Info::Path((key, fields)) = &info
-            && fields.is_empty()
             && plain
         {
+            let key = Key::of_path(key.clone(), fields.clone());
             if let Some(access) = self.out.uses[start..]
                 .iter_mut()
                 .rev()
-                .find(|a| a.key == *key)
+                .find(|a| a.key == key)
             {
                 access.guarded = true;
             }
-            return vec![key.clone()];
+            return vec![key];
         }
         Vec::new()
     }
@@ -575,7 +614,26 @@ impl<'a> Walker<'a> {
                         {
                             Local::Ns
                         }
-                        _ => Local::Plain,
+                        _ => match values.get(i) {
+                            Some(
+                                value @ Expr {
+                                    kind: ExprKind::Table(_),
+                                    ..
+                                },
+                            ) => {
+                                let path = (
+                                    Key::LocalTable(
+                                        n.name.span.file,
+                                        n.name.span.start,
+                                        n.name.text.to_string(),
+                                    ),
+                                    Vec::new(),
+                                );
+                                self.constructor_fields(&path, value);
+                                Local::Alias(path)
+                            }
+                            _ => Local::Plain,
+                        },
                     };
                     self.declare(&n.name.text, local);
                 }
@@ -583,13 +641,17 @@ impl<'a> Walker<'a> {
             StmtKind::Assign { targets, values } => {
                 let infos: Vec<Info> = values.iter().map(|v| self.expr(v)).collect();
                 for (i, t) in targets.iter().enumerate() {
-                    self.assign_target(t, infos.get(i), t.span);
+                    if let Some(path) = self.assign_target(t, infos.get(i), t.span, false)
+                        && let Some(value) = values.get(i)
+                    {
+                        self.constructor_fields(&path, value);
+                    }
                 }
             }
             StmtKind::Compound { target, value, .. } => {
                 self.expr(target);
                 self.expr(value);
-                self.assign_target(target, None, target.span);
+                self.assign_target(target, None, target.span, true);
             }
             StmtKind::Call(e) => {
                 self.expr(e);
@@ -671,6 +733,7 @@ impl<'a> Walker<'a> {
                                 self.def_key(key.clone(), root.span);
                             } else {
                                 self.use_key(key.clone(), root.span);
+                                self.def_key(Key::of_path(key.clone(), rest.to_vec()), s.span);
                             }
                             self.out.function_defs.push(((key, rest.to_vec()), f));
                         }
@@ -679,15 +742,26 @@ impl<'a> Walker<'a> {
                         self.use_key(key.clone(), root.span);
                         let mut path = prefix.clone();
                         path.extend(fields);
+                        if !path.is_empty() {
+                            self.def_key(Key::of_path(key.clone(), path.clone()), s.span);
+                        }
                         self.out.function_defs.push(((key, path), f));
                     }
-                    Some(_) => {}
+                    Some(_) => {
+                        if let Some(last) = fields.last() {
+                            let current = self.current;
+                            self.out
+                                .untracked_field_writes
+                                .push((last.clone(), current, s.span));
+                        }
+                    }
                     None => {
                         let key = Key::Global(root.text.to_string());
                         if fields.is_empty() {
                             self.def_key(key.clone(), root.span);
                         } else {
                             self.use_key(key.clone(), root.span);
+                            self.def_key(Key::of_path(key.clone(), fields.clone()), s.span);
                         }
                         self.out.function_defs.push(((key, fields), f));
                     }
@@ -784,25 +858,40 @@ impl<'a> Walker<'a> {
         }
     }
 
-    fn assign_target(&mut self, t: &Expr, value: Option<&Info>, span: Span) {
+    /// The global or `ns` key whose table `value` is (`SuuUI`, `ns.API`).
+    fn table_of(value: Option<&Info>) -> Option<Key> {
+        match value {
+            Some(Info::Path((
+                key @ (Key::Global(_) | Key::Ns(_) | Key::LocalTable(..)),
+                fields,
+            ))) if fields.is_empty() => Some(key.clone()),
+            _ => None,
+        }
+    }
+
+    /// `compound` is true for `X.f += 1`, which reads `X.f` rather than
+    /// defining it. Returns the global or `ns` path the target defines.
+    fn assign_target(
+        &mut self,
+        t: &Expr,
+        value: Option<&Info>,
+        span: Span,
+        compound: bool,
+    ) -> Option<Path> {
         let function = match value {
             Some(Info::Function(f)) => Some(*f),
             _ => None,
         };
-        match &t.kind {
+        let table = Self::table_of(value);
+        let (key, fields) = match &t.kind {
             ExprKind::Name(n) => match self.lookup(&n.text) {
                 Some(_) => {
                     if let Some(f) = function {
                         self.declare_existing(&n.text, Local::Function(f));
                     }
+                    return None;
                 }
-                None => {
-                    let key = Key::Global(n.text.to_string());
-                    self.def_key(key.clone(), span);
-                    if let Some(f) = function {
-                        self.out.function_defs.push(((key, Vec::new()), f));
-                    }
-                }
+                None => (Key::Global(n.text.to_string()), Vec::new()),
             },
             ExprKind::Field { obj, .. } | ExprKind::Index { obj, .. } => {
                 let obj_info = self.expr(obj);
@@ -820,36 +909,61 @@ impl<'a> Walker<'a> {
                     _ => None,
                 };
                 match (obj_info, field) {
-                    (Info::Ns, Some(f)) => {
-                        self.def_key(Key::Ns(f.clone()), span);
-                        if let Some(func) = function {
-                            self.out
-                                .function_defs
-                                .push(((Key::Ns(f), Vec::new()), func));
-                        }
-                    }
-                    (Info::GlobalTable, Some(f)) => {
-                        self.def_key(Key::Global(f.clone()), span);
-                        if let Some(func) = function {
-                            self.out
-                                .function_defs
-                                .push(((Key::Global(f), Vec::new()), func));
-                        }
-                    }
+                    (Info::Ns, Some(f)) => (Key::Ns(f), Vec::new()),
+                    (Info::GlobalTable, Some(f)) => (Key::Global(f), Vec::new()),
                     (Info::Ns | Info::GlobalTable, None) => {
                         self.out.dynamic_write.get_or_insert(span);
+                        return None;
                     }
                     (Info::Path((key, mut fields)), Some(f)) => {
-                        if let Some(func) = function {
-                            fields.push(f);
-                            self.out.function_defs.push(((key, fields), func));
-                        }
+                        fields.push(f);
+                        (key, fields)
                     }
-                    _ => {}
+                    (Info::Other | Info::Param(_), Some(f)) if !compound => {
+                        let current = self.current;
+                        self.out.untracked_field_writes.push((f, current, span));
+                        return None;
+                    }
+                    _ => return None,
                 }
             }
             _ => {
                 self.expr(t);
+                return None;
+            }
+        };
+        if fields.is_empty()
+            && let Some(other) = table
+        {
+            self.out.table_aliases.push((key.clone(), other));
+        }
+        // `X.f += 1` reads `X.f`; a compound write to a global or `ns`
+        // field still (re)defines it.
+        let defines = !compound || fields.is_empty();
+        if defines {
+            self.def_key(Key::of_path(key.clone(), fields.clone()), span);
+        }
+        if let Some(func) = function {
+            self.out
+                .function_defs
+                .push(((key.clone(), fields.clone()), func));
+        }
+        defines.then_some((key, fields))
+    }
+
+    /// Defines the fields of a table constructor assigned to `path`
+    /// (`Lib = { Register = function() end }`).
+    fn constructor_fields(&mut self, path: &Path, value: &Expr) {
+        let ExprKind::Table(fields) = &value.kind else {
+            return;
+        };
+        for field in fields {
+            if let TableField::Named { name, value, span } = field {
+                let mut inner = path.1.clone();
+                inner.push(name.text.to_string());
+                let inner = (path.0.clone(), inner);
+                self.def_key(Key::of_path(inner.0.clone(), inner.1.clone()), *span);
+                self.constructor_fields(&inner, value);
             }
         }
     }
@@ -898,11 +1012,7 @@ impl<'a> Walker<'a> {
     }
 
     fn path_text(path: &Path) -> String {
-        let mut parts = vec![match &path.0 {
-            Key::Global(n) => n.clone(),
-            Key::Ns(n) => format!("ns.{n}"),
-            Key::Template(n) => format!("template {n}"),
-        }];
+        let mut parts = vec![path.0.display()];
         parts.extend(path.1.iter().cloned());
         parts.join(".")
     }
@@ -1016,7 +1126,10 @@ impl<'a> Walker<'a> {
                     Info::Path(p) => {
                         let last = p.1.last().or(match &p.0 {
                             Key::Ns(m) => Some(m),
-                            Key::Global(_) | Key::Template(_) => None,
+                            Key::Global(_)
+                            | Key::Template(_)
+                            | Key::Field(..)
+                            | Key::LocalTable(..) => None,
                         });
                         self.markers
                             .deferred_functions
@@ -1030,6 +1143,15 @@ impl<'a> Walker<'a> {
             }
             ExprKind::Method { obj, name, args } | ExprKind::OptMethod { obj, name, args } => {
                 let o = self.expr(obj);
+                match &o {
+                    Info::Path((k, fields)) => {
+                        let mut fields = fields.clone();
+                        fields.push(name.text.to_string());
+                        self.use_key(Key::of_path(k.clone(), fields), name.span);
+                    }
+                    Info::Ns => self.use_key(Key::Ns(name.text.to_string()), name.span),
+                    _ => {}
+                }
                 let arg_infos = self.args(args);
                 let target = match &o {
                     Info::Path((k, fields)) => {
@@ -1150,6 +1272,7 @@ impl<'a> Walker<'a> {
             }
             Info::Path((k, mut fields)) => {
                 fields.push(field);
+                self.use_key(Key::of_path(k.clone(), fields.clone()), span);
                 Info::Path((k, fields))
             }
             Info::Import(b, mut fields) => {
