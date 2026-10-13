@@ -85,6 +85,11 @@ pub fn plan(
         name.push_str(".lua");
         name
     };
+    // One TOC list: files every flavor loads form shared bundles; the
+    // stretches of flavor-specific files between them, per-flavor bundles.
+    if orders.is_none() {
+        return (plan_shared(&name, entries, flavors), None);
+    }
     if shared {
         let runs = per_flavor
             .first()
@@ -112,9 +117,32 @@ pub fn plan(
         });
         return (planned, orders);
     }
-    // Per-flavor bundles; entries kept apart are shared.
+    // Per-flavor bundles, but a segment every flavor has alike is shared,
+    // as are the entries kept apart.
+    let mut alike: HashMap<Vec<usize>, usize> = HashMap::new();
+    for (_, runs) in &per_flavor {
+        for run in runs {
+            if let Run::Bundle(members) = run {
+                *alike.entry(members.clone()).or_default() += 1;
+            }
+        }
+    }
+    let shared_runs: std::collections::HashSet<Vec<usize>> = alike
+        .into_iter()
+        .filter(|(_, n)| *n == per_flavor.len())
+        .map(|(m, _)| m)
+        .collect();
     let mut planned: Vec<(usize, usize, Planned)> = Vec::new();
     let mut kept: HashMap<usize, usize> = HashMap::new();
+    let mut shared_slots: HashMap<Vec<usize>, usize> = HashMap::new();
+    // Shared bundles are numbered in load order.
+    let mut shared_order: Vec<Vec<usize>> = shared_runs.iter().cloned().collect();
+    shared_order.sort_by_key(|m| m[0]);
+    let shared_names: HashMap<Vec<usize>, String> = shared_order
+        .iter()
+        .enumerate()
+        .map(|(i, m)| (m.clone(), name(None, i + 1)))
+        .collect();
     let mut flavor_runs: Vec<(String, Vec<usize>)> = Vec::new();
     for (fi, (flavor, runs)) in per_flavor.into_iter().enumerate() {
         let mut n = 0;
@@ -124,6 +152,21 @@ pub fn plan(
                 Run::Keep(i) => {
                     let slot = *kept.entry(i).or_insert_with(|| {
                         planned.push((i, 0, Planned::Keep(i)));
+                        planned.len() - 1
+                    });
+                    seq.push(slot);
+                }
+                Run::Bundle(members) if shared_runs.contains(&members) => {
+                    let slot = *shared_slots.entry(members.clone()).or_insert_with(|| {
+                        planned.push((
+                            members[0],
+                            0,
+                            Planned::Bundle {
+                                path: shared_names[&members].clone(),
+                                flavors: None,
+                                members: members.clone(),
+                            },
+                        ));
                         planned.len() - 1
                     });
                     seq.push(slot);
@@ -165,6 +208,80 @@ pub fn plan(
         .map(|&k| slots[k].take().expect("once"))
         .collect();
     (planned, orders)
+}
+
+/// The plan for one TOC list (see [`plan`]).
+fn plan_shared(
+    name: &dyn Fn(Option<&str>, usize) -> String,
+    entries: &[(bool, Option<Vec<String>>)],
+    flavors: &[String],
+) -> Vec<Planned> {
+    let everywhere = |i: usize| {
+        entries[i]
+            .1
+            .as_ref()
+            .is_none_or(|l| flavors.iter().all(|f| l.contains(f)))
+    };
+    let mut planned: Vec<(usize, Planned)> = Vec::new();
+    let mut shared_count = 0;
+    let mut flavor_count: HashMap<String, usize> = HashMap::new();
+    let mut shared: Vec<usize> = Vec::new();
+    let mut specific: Vec<(String, Vec<usize>)> =
+        flavors.iter().map(|f| (f.clone(), Vec::new())).collect();
+    let mut flush_shared = |planned: &mut Vec<(usize, Planned)>, shared: &mut Vec<usize>| {
+        if !shared.is_empty() {
+            shared_count += 1;
+            planned.push((
+                shared[0],
+                Planned::Bundle {
+                    path: name(None, shared_count),
+                    flavors: None,
+                    members: std::mem::take(shared),
+                },
+            ));
+        }
+    };
+    let flush_specific = |planned: &mut Vec<(usize, Planned)>,
+                          specific: &mut Vec<(String, Vec<usize>)>,
+                          counts: &mut HashMap<String, usize>| {
+        for (f, members) in specific.iter_mut() {
+            if members.is_empty() {
+                continue;
+            }
+            let n = counts.entry(f.clone()).or_default();
+            *n += 1;
+            planned.push((
+                members[0],
+                Planned::Bundle {
+                    path: name(Some(f), *n),
+                    flavors: Some(vec![f.clone()]),
+                    members: std::mem::take(members),
+                },
+            ));
+        }
+    };
+    for (i, (bundlable, restriction)) in entries.iter().enumerate() {
+        if !bundlable {
+            flush_shared(&mut planned, &mut shared);
+            flush_specific(&mut planned, &mut specific, &mut flavor_count);
+            planned.push((i, Planned::Keep(i)));
+        } else if everywhere(i) {
+            flush_specific(&mut planned, &mut specific, &mut flavor_count);
+            shared.push(i);
+        } else {
+            flush_shared(&mut planned, &mut shared);
+            for (f, members) in specific.iter_mut() {
+                if restriction.as_ref().is_some_and(|l| l.contains(f)) {
+                    members.push(i);
+                }
+            }
+        }
+    }
+    flush_shared(&mut planned, &mut shared);
+    flush_specific(&mut planned, &mut specific, &mut flavor_count);
+    // Stable: by the position of each entry's first file.
+    planned.sort_by_key(|(first, _)| *first);
+    planned.into_iter().map(|(_, p)| p).collect()
 }
 
 /// One file of a bundle.
@@ -364,12 +481,42 @@ mod tests {
     }
 
     #[test]
+    fn split_flavor_files_are_bundled_per_flavor() {
+        // Every file has a variant per flavor (split mode).
+        let entries = vec![
+            (true, Some(flavors(&["standard"]))),
+            (true, Some(flavors(&["mists"]))),
+            (true, Some(flavors(&["standard"]))),
+            (true, Some(flavors(&["mists"]))),
+            (true, None),
+        ];
+        let (planned, _) = plan("A", &entries, &flavors(&["standard", "mists"]), None);
+        let members: Vec<(String, Vec<usize>)> = planned
+            .iter()
+            .filter_map(|p| match p {
+                Planned::Bundle { path, members, .. } => Some((path.clone(), members.clone())),
+                Planned::Keep(_) => None,
+            })
+            .collect();
+        assert_eq!(
+            members,
+            [
+                ("A.standard.lua".to_string(), vec![0, 2]),
+                ("A.mists.lua".to_string(), vec![1, 3]),
+                ("A.lua".to_string(), vec![4]),
+            ]
+        );
+    }
+
+    #[test]
     fn flavors_with_different_files_get_bundles_of_their_own() {
         let entries = vec![
             (true, None),
             (true, Some(flavors(&["mists"]))),
             (false, None),
             (true, None),
+            (false, None),
+            (true, Some(flavors(&["standard"]))),
         ];
         let (planned, _) = plan("A", &entries, &flavors(&["standard", "mists"]), None);
         let paths: Vec<String> = planned
@@ -382,11 +529,14 @@ mod tests {
         assert_eq!(
             paths,
             [
-                "A.standard.lua [0]",
-                "A.mists.lua [0, 1]",
+                // Files every flavor loads are shared; the others go into
+                // bundles of their flavor.
+                "A.lua [0]",
+                "A.mists.lua [1]",
                 "keep 2",
-                "A.standard.2.lua [3]",
-                "A.mists.2.lua [3]"
+                "A.2.lua [3]",
+                "keep 4",
+                "A.standard.lua [5]"
             ]
         );
     }

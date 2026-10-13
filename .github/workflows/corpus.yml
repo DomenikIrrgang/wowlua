@@ -2,7 +2,8 @@ name: corpus
 
 # The full conformance corpus (spec compiler §13.5.3): parse parity with
 # Lua 5.1, bytecode round trip, minification (spec optimization §15.4.5) and
-# formatter checks on the pinned addon releases and the Lua 5.1 test suite.
+# formatter checks on the pinned addon releases and the Lua 5.1 test suite;
+# then every addon adopted and built, bundled at every minification level.
 # Regular CI runs the same checks on tests/corpus-sample/.
 
 on:
@@ -26,3 +27,5 @@ jobs:
           key: corpus-${{ hashFiles('xtask/corpus.txt') }}
       - run: cargo run --release -p xtask -- corpus fetch
       - run: cargo run --release -p xtask -- corpus run
+      # Adopt and build every addon, bundled at every minification level.
+      - run: cargo run --release -p xtask -- corpus addons

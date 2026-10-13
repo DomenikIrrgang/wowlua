@@ -172,6 +172,23 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
                         relative(&build.dir)
                     ),
                 );
+                if args.stats {
+                    let s = wowlua_driver::build::stats(build);
+                    let count = |n: usize, what: &str| {
+                        format!("{n} {what}{}", if n == 1 { "" } else { "s" })
+                    };
+                    out.status(
+                        "Stats",
+                        format!(
+                            "{} ({} KiB), {} ({} KiB), compiled by Lua 5.1 in {:.1} ms",
+                            count(s.files, "file"),
+                            s.bytes.div_ceil(1024),
+                            count(s.lua_files, "Lua file"),
+                            s.lua_bytes.div_ceil(1024),
+                            s.compile.as_secs_f64() * 1000.0
+                        ),
+                    );
+                }
             }
             true
         }

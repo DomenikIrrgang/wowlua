@@ -3593,6 +3593,38 @@ fn validate_output(
     }
 }
 
+/// What `wowlua build --stats` reports (spec optimization §15.3.2).
+#[derive(Clone, Debug, Default)]
+pub struct Stats {
+    pub files: usize,
+    pub bytes: u64,
+    pub lua_files: usize,
+    pub lua_bytes: u64,
+    /// How long the embedded Lua 5.1 takes to compile the Lua files: the
+    /// parse cost the client pays at load, without its per-file overhead.
+    pub compile: std::time::Duration,
+}
+
+/// The statistics of a build's output.
+pub fn stats(build: &BuildOutput) -> Stats {
+    let lua = mlua::Lua::new();
+    let mut stats = Stats::default();
+    for (path, content) in &build.files {
+        let bytes = content_bytes(content);
+        stats.files += 1;
+        stats.bytes += bytes.len() as u64;
+        if path.to_ascii_lowercase().ends_with(".lua") {
+            stats.lua_files += 1;
+            stats.lua_bytes += bytes.len() as u64;
+            let code = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
+            let started = std::time::Instant::now();
+            let _ = lua.load(code).into_function();
+            stats.compile += started.elapsed();
+        }
+    }
+    stats
+}
+
 /// What bundling needs to know about the build.
 struct BundleInput<'a> {
     addon: &'a str,
@@ -3675,17 +3707,25 @@ fn bundle_output(
         }
     }
     let bundled_lib = |path: &str| lib_of(path).is_none_or(|l| !separate.contains(&l.name));
-    // A library's entry XML that only loads Lua files is flattened into them.
+    // An XML file of the TOC that only loads Lua files is flattened into them
+    // (decision T167), unless another XML file loads any of them.
+    let referrers = xml_referrers(out, input.addon);
     let mut expanded: Vec<TocItem> = Vec::new();
     let mut origin: Vec<Vec<usize>> = Vec::new();
     let mut flattened_xml: Vec<String> = Vec::new();
     for item in items {
         let mut xmls = Vec::new();
-        let flat = (item.dependency
-            && item.path.to_ascii_lowercase().ends_with(".xml")
-            && bundled_lib(&item.path))
-        .then(|| flatten_xml(out, &item.path, &mut xmls, 0))
-        .flatten();
+        let flat = (item.path.to_ascii_lowercase().ends_with(".xml") && bundled_lib(&item.path))
+            .then(|| flatten_xml(out, &item.path, &mut xmls, 0))
+            .flatten()
+            .filter(|paths| {
+                let inside: BTreeSet<&String> = xmls.iter().collect();
+                paths.iter().chain(&xmls).all(|p| {
+                    referrers
+                        .get(&p.to_ascii_lowercase())
+                        .is_none_or(|from| from.iter().all(|x| inside.contains(x)))
+                }) && paths.iter().all(|p| bundled_lib(p))
+            });
         let start = expanded.len();
         match flat {
             Some(paths) => {
@@ -3822,6 +3862,36 @@ fn bundle_output(
         out.remove(&xml);
     }
     Some((result, orders))
+}
+
+/// The XML files of the output that load each file (by lowercase path).
+fn xml_referrers(out: &BTreeMap<String, Content>, addon: &str) -> HashMap<String, Vec<String>> {
+    let prefix = format!("interface/addons/{}/", addon.to_ascii_lowercase());
+    let mut referrers: HashMap<String, Vec<String>> = HashMap::new();
+    for (path, content) in out {
+        if !path.to_ascii_lowercase().ends_with(".xml") {
+            continue;
+        }
+        let Ok(refs) = wowlua_xml::references(&String::from_utf8_lossy(&content_bytes(content)))
+        else {
+            continue;
+        };
+        let dir = path.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+        for r in refs {
+            let target = r.normalized().to_ascii_lowercase();
+            let target = match target.strip_prefix(&prefix) {
+                Some(rest) => normalize(rest),
+                None if target.starts_with("interface/") => continue,
+                None if dir.is_empty() => normalize(&target),
+                None => normalize(&format!("{dir}/{target}")),
+            };
+            referrers
+                .entry(target.to_ascii_lowercase())
+                .or_default()
+                .push(path.clone());
+        }
+    }
+    referrers
 }
 
 /// The Lua files an XML file of the output loads, when it (and every file it

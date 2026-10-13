@@ -168,12 +168,14 @@ __wl_load("src/main", function(...) <module> end)
   `arg`). Wrapping a file in `function(...) … end` therefore cannot shadow
   anything. Wrappers still mention `...` in their body, at no cost, so the
   output stays correct on any Lua 5.1 build, including the test VM.
-- **XML.** Modules referenced by XML `<Script>` elements stay separate files
-  ([Code generation §14.8.4](codegen.md#1484-xml)). A lua-library whose entry
-  is an XML file is bundled only if that XML file (and every XML file it
-  includes) contains nothing but `<Script>` and `<Include>` elements: the chain
-  is flattened in document order. Otherwise the library stays separate, and
-  its XML file splits the bundle into segments at its position.
+- **XML.** A TOC-listed XML file (the project's own, like `embeds.xml`, or a
+  library's entry) that, with every XML file it includes, contains nothing but
+  `<Script file>` and `<Include file>` elements is flattened into the files it
+  loads, in document order, unless another XML file loads any of them
+  (decision T167). Any other XML file stays, splits the bundle into segments
+  at its position, and the files it loads stay separate
+  ([Code generation §14.8.4](codegen.md#1484-xml)). Segments that every flavor
+  has alike are one shared bundle.
 - Libraries that must stay separate files can also be excluded with
   `"bundle": false` on the dependency, e.g. libraries other addons reference by
   path.
@@ -184,8 +186,10 @@ WoW reads and compiles every file listed in a TOC separately, so per-file
 overhead adds up for addons with hundreds of small files (typical with embedded
 libraries). One file also enables whole-addon minification (shared renaming,
 dead-module removal). The spec does not promise a specific speed-up. `wowlua
-build --stats` reports file count, byte size and an estimated parse cost, so
-the effect is measurable for each project.
+build --stats` reports the output's file count and size, its Lua files and
+their size, and how long the embedded Lua 5.1 takes to compile them (the parse
+cost the client pays at load, without its per-file overhead), so the effect is
+measurable for each project.
 
 ## 15.4 Minification levels
 
@@ -334,4 +338,6 @@ every pass: with every pass but `dedupe-strings` and `rename-private`, the
 output compiles to the same bytecode once debug information is stripped, and
 in preserve mode every instruction keeps its line; with all passes, it still
 compiles. The semantic passes are checked by running test programs before and
-after.
+after. The corpus addons are also adopted and built bundled, with the release
+optimizations, at every preset level; every Lua file of each build must
+compile (`cargo xtask corpus addons`).

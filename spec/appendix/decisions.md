@@ -215,6 +215,7 @@ open for review.
 | T164 | Optimization is verified by the conformance corpus at every minification pass (bytecode and lines unchanged by every pass but `dedupe-strings` and `rename-private`), differential test programs, and an in-game check of a bundled release build **(user, M7)** | Thousands of real addon files catch what hand-written tests miss. |
 | T165 | Every bundle segment defines its own protected loader (`__wl_load`) instead of a runtime `load` slice; the runtime is the first file of the bundle, wrapped like the others; load errors name the addon, the file and the build id **(proposal, M7)** | Bundles of plain Lua addons need no runtime, and every segment stands alone. |
 | T166 | `optimize.inline` inlines expression helpers only: local functions whose body is a single `return <expression>`, at calls whose arguments are literals or locals; multi-statement bodies and methods are not inlined, and `@inline` on them is W3031 **(user, M7)** | The common helpers gain the most; statement inlining and methods need more machinery than they are worth now. |
+| T167 | Bundling flattens every TOC-listed XML file that only loads Lua files (`<Script file>` / `<Include file>`, the project's own `embeds.xml` and library XML alike) into those files, unless another XML file loads any of them; identical segments of different flavors are one shared bundle **(user, M7)** | Adopted addons load their libraries through XML; without flattening, every XML file splits the bundle. |
 
 ## Standard library
 

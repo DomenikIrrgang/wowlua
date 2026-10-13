@@ -1027,7 +1027,7 @@ fn bundled_builds_run_the_same() {
             (
                 "wowlua.json",
                 r#"{ "package": { "name": "bun", "version": "1.0.0" },
-  "build": { "load-order": ["src/first.lua", "src/broken.lua", "src/frames.xml", "src/main.wowlua"] } }
+  "build": { "load-order": ["src/first.lua", "src/embeds.xml", "src/broken.lua", "src/frames.xml", "src/main.wowlua"] } }
 "#,
             ),
             (
@@ -1040,7 +1040,16 @@ fn bundled_builds_run_the_same() {
             ),
             (
                 "src/frames.xml",
-                "<Ui><Script file=\"framecode.lua\"/></Ui>\n",
+                "<Ui><Frame name=\"BunFrame\"/><Script file=\"framecode.lua\"/></Ui>\n",
+            ),
+            // Only loads Lua: flattened into the bundle (decision T167).
+            (
+                "src/embeds.xml",
+                "<Ui>\n<Script file=\"embedded.lua\"/>\n</Ui>\n",
+            ),
+            (
+                "src/embedded.lua",
+                "local _, ns = ...\nns.order[#ns.order + 1] = \"embedded\"\n",
             ),
             (
                 "src/framecode.lua",
@@ -1054,13 +1063,14 @@ fn bundled_builds_run_the_same() {
     );
     wowlua(dir.path()).arg("build").assert().success();
     wowlua(dir.path())
-        .args(["build", "--release"])
+        .args(["build", "--release", "--stats"])
         .assert()
         .success()
         .stderr(
             predicate::str::contains("warning[W6001]")
                 .and(predicate::str::contains("= in src/first.lua")),
-        );
+        )
+        .stderr(predicate::str::contains("Stats").and(predicate::str::contains("3 Lua files")));
     let release = dir.path().join("dist/release/Bun");
     let toc = fs::read_to_string(release.join("Bun.toc")).unwrap();
     let files: Vec<&str> = toc
@@ -1073,7 +1083,8 @@ fn bundled_builds_run_the_same() {
     let out = run_addon(&release, "Bun");
     assert!(out.contains("Bun (src/broken, build "), "{out}");
     // The test runner does not run XML scripts.
-    assert!(out.ends_with("first broken main true"), "{out}");
+    assert!(out.ends_with("first embedded broken main true"), "{out}");
+    assert!(!release.join("src/embeds.xml").exists() && !release.join("src/embedded.lua").exists());
     // The source map leads back to the files.
     let map = fs::read_to_string(dir.path().join("dist/release/.maps/Bun/Bun.lua.map")).unwrap();
     assert!(map.contains("src/broken.lua"), "{map}");

@@ -527,6 +527,41 @@ pub fn addons(dir: &Path) -> Result<()> {
                 break;
             }
         }
+        // Optimized builds (spec optimization §15.4.5): bundled, with the
+        // release optimizations, at every minification level; every Lua
+        // file of the output must compile.
+        let lua = mlua::Lua::new();
+        for level in ["none", "strip", "compact", "rename", "max"] {
+            let mut session = wowlua_driver::Session::new();
+            let mut release = wowlua_driver::BuildRequest::new("release");
+            release.write = false;
+            release.minify = Some(level.into());
+            release.bundle = Some(true);
+            let Some(built) = wowlua_driver::build(&mut session, &project, &release) else {
+                let first = session.diagnostics.iter().find(|d| d.is_error());
+                failures.push(format!(
+                    "{rel}: the bundled `{level}` build fails: {} {}",
+                    first.and_then(|d| d.code).unwrap_or(""),
+                    first.map(|d| d.message.as_str()).unwrap_or("")
+                ));
+                continue;
+            };
+            for (path, content) in &built.files {
+                if !path.to_ascii_lowercase().ends_with(".lua") {
+                    continue;
+                }
+                let bytes = match content {
+                    wowlua_driver::build::Content::Bytes(b) => b.clone(),
+                    wowlua_driver::build::Content::Copy(p) => std::fs::read(p)?,
+                };
+                let code = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
+                if let Err(e) = lua.load(code).into_function() {
+                    failures.push(format!(
+                        "{rel}: `{level}` output {path} does not compile: {e}"
+                    ));
+                }
+            }
+        }
         // `WOWLUA_CORPUS_FIX=1`: apply the lint fixes, then the addon must
         // still build without errors.
         if std::env::var_os("WOWLUA_CORPUS_FIX").is_some() {

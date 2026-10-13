@@ -426,6 +426,9 @@ pub struct BuildArgs {
     /// Write the AddOn folder here
     #[arg(long, value_name = "DIR")]
     pub out: Option<PathBuf>,
+    /// Report the output's files, sizes and Lua compile time
+    #[arg(long)]
+    pub stats: bool,
 }
 
 #[derive(Args, Debug, Clone)]
