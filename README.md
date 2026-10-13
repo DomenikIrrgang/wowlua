@@ -157,7 +157,7 @@ The specification lives in [`spec/`](spec/README.md); implementation follows the
 | M4 | Type checker | done · 2026-10-12 |
 | M5 | Debugging | done · 2026-10-12 |
 | M6 | Package manager | done · 2026-10-12 |
-| **M7** | **Optimization and publishing** | **in progress** |
+| M7 | Optimization and publishing | done · 2026-10-13 |
 | M8 | Standard library | planned |
 | M9 | Test runner, language server, formatter | planned |
 | M10 | Registry | planned |

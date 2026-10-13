@@ -217,6 +217,13 @@ Notes on the delivered state:
 
 **Exit:** a release is published to all four sites from CI with one command.
 
+- Done 2026-10-13 with SuuUI, a WoW Forever addon adopted with `wowlua init`:
+  one tag push (`v0.2.0-beta.2`) made CI publish to CurseForge and Wago (the
+  readable build, as betas) and to GitHub Releases (the fully optimized
+  build, with source maps and `release.json`). WoWInterface takes no WoW
+  Forever addons yet; its upload is covered by the publish tests against a
+  mock site.
+
 - Optimization was checked in game on the WoW: Forever client (2026-10-13):
   Bartender4 adopted with `wowlua init` and built bundled (`strip`, release
   optimizations) loads from 2 bundles and its template XML, with no Lua
