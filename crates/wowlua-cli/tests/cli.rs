@@ -2970,6 +2970,122 @@ fn load_order_from_usage_analysis() {
     assert_eq!(run_addon(&dist, "Usage"), "3 true hi\nab ab");
 }
 
+/// Fields of global and `ns` tables order files like globals do (issue #1).
+#[test]
+fn load_order_from_table_fields() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"fields\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/a_init.lua",
+                "local _, ns = ...\nLib = {}\nSuuUI = {}\nns.API = SuuUI\nns.Tools = {}\nns.UI = {}\n",
+            ),
+            // `function X.f` and `X.f = value`.
+            ("src/b_user.lua", "print(Lib.Register(1))\n"),
+            ("src/c_api.lua", "function Lib.Register(x) return x end\n"),
+            ("src/d_value_user.lua", "print(Lib.value)\n"),
+            ("src/e_value_api.lua", "Lib.value = 42\n"),
+            // Below an `ns` key.
+            (
+                "src/f_ns_user.lua",
+                "local _, ns = ...\nprint(ns.Tools.Run())\n",
+            ),
+            (
+                "src/g_ns_api.lua",
+                "local _, ns = ...\nfunction ns.Tools.Run() return \"run\" end\n",
+            ),
+            // Through a local alias of a global, and of an `ns` table.
+            ("src/h_alias_user.lua", "print(Lib.Alias(), Lib:Method())\n"),
+            (
+                "src/i_alias_api.lua",
+                "local API = Lib\nfunction API.Alias() return \"alias\" end\nfunction API:Method() return \"method\" end\n",
+            ),
+            (
+                "src/j_ui_user.lua",
+                "local _, ns = ...\nprint(ns.UI.Icon())\n",
+            ),
+            (
+                "src/k_ui_api.lua",
+                "local _, ns = ...\nlocal UI = ns.UI\nfunction UI.Icon() return \"icon\" end\n",
+            ),
+            // `ns.API = SuuUI`: both names hold one table.
+            (
+                "src/l_module.lua",
+                "print(SuuUI.RegisterModule({ name = \"module\" }))\n",
+            ),
+            (
+                "src/m_api.lua",
+                "local _, ns = ...\nlocal API = ns.API\nlocal Modules = {}\nfunction Modules.Register(m) return m.name end\nAPI.RegisterModule = Modules.Register\n",
+            ),
+            // A local table that an `ns` key holds (`ns.Roles = Roles`).
+            (
+                "src/p_roles_user.lua",
+                "local _, ns = ...\nprint(ns.Roles.Current())\n",
+            ),
+            (
+                "src/q_roles_api.lua",
+                "local _, ns = ...\nlocal Roles = { label = \"roles\" }\nns.Roles = Roles\nfunction Roles.Current() return Roles.label end\n",
+            ),
+            // Guarded field uses do not order files.
+            (
+                "src/n_guarded.lua",
+                "if Lib.Maybe then Lib.Maybe() end\nlocal y = Lib.Other and Lib.Other.y\n",
+            ),
+            (
+                "src/o_maybe.lua",
+                "Lib.Maybe = function() end\nLib.Other = { y = 1 }\n",
+            ),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(
+        !stderr.contains("W1033") && !stderr.contains("W1034"),
+        "{stderr}"
+    );
+    let dist = dir.path().join("dist/dev/Fields");
+    let toc = fs::read_to_string(dist.join("Fields.toc")).unwrap();
+    let files: Vec<&str> = toc
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
+    let pos = |name: &str| {
+        files
+            .iter()
+            .position(|f| f.ends_with(name))
+            .unwrap_or_else(|| panic!("{name}: {toc}"))
+    };
+    for (definer, user) in [
+        ("c_api.lua", "b_user.lua"),
+        ("e_value_api.lua", "d_value_user.lua"),
+        ("g_ns_api.lua", "f_ns_user.lua"),
+        ("i_alias_api.lua", "h_alias_user.lua"),
+        ("k_ui_api.lua", "j_ui_user.lua"),
+        ("m_api.lua", "l_module.lua"),
+        ("q_roles_api.lua", "p_roles_user.lua"),
+    ] {
+        assert!(pos(definer) < pos(user), "{definer} before {user}: {toc}");
+    }
+    assert!(
+        pos("n_guarded.lua") < pos("o_maybe.lua"),
+        "guarded field uses do not order: {toc}"
+    );
+    let mut lines: Vec<String> = run_addon(&dist, "Fields")
+        .lines()
+        .map(str::to_string)
+        .collect();
+    lines.sort();
+    assert_eq!(
+        lines,
+        ["1", "42", "alias method", "icon", "module", "roles", "run"]
+    );
+}
+
 #[test]
 fn load_order_guards_callbacks_and_listed_order() {
     let dir = tempfile::tempdir().unwrap();
@@ -3060,6 +3176,38 @@ fn load_order_diagnostics() {
             ],
             "W1033",
             "cannot be determined",
+        ),
+        // Fields: several load-time definers, a late definition, and a
+        // write through a table the analysis cannot trace.
+        (
+            &[
+                ("src/a.lua", "Lib = {}\n"),
+                ("src/b.lua", "function Lib.f() end\n"),
+                ("src/c.lua", "Lib.f = 1\n"),
+                ("src/d.lua", "print(Lib.f)\n"),
+            ],
+            "W1033",
+            "files defining `Lib.f` cannot be determined",
+        ),
+        (
+            &[
+                ("src/a.lua", "Lib = {}\nprint(Lib.late)\n"),
+                ("src/b.lua", "function init_lib() Lib.late = 1 end\n"),
+            ],
+            "W1034",
+            "`Lib.late` is read while the file loads",
+        ),
+        (
+            &[
+                ("src/a.lua", "Lib = {}\n"),
+                ("src/b.lua", "print(Lib.f)\n"),
+                (
+                    "src/c.lua",
+                    "local function get() return Lib end\nget().f = 1\n",
+                ),
+            ],
+            "W1033",
+            "the definition of `Lib.f` cannot be traced",
         ),
         (
             &[

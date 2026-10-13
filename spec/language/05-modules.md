@@ -147,7 +147,7 @@ An edge `A → B` means "A must be loaded before B". Edges come from:
 |--------|------|
 | Value import in `B` of module `A` | `A → B` |
 | `import _ from "A"` in `B` | `A → B` (always load-time) |
-| **Usage analysis**: `B` reads a global `G` or an addon-namespace field `ns.F` that `A` defines | `A → B` |
+| **Usage analysis**: `B` reads a global `G`, an addon-namespace field `ns.F`, or a field below one of them (`G.f`, `ns.F.f`) that `A` defines | `A → B` |
 | XML: `B.xml` references a global defined by `A` (`mixin="X"`, script handler attributes, inline `<OnLoad>` code) or a template defined in `A.xml` (`inherits="T"`) | `A → B` (load-time: frames are created while the XML loads) |
 | `build.load-order` | consecutive listed files, in the listed order |
 
@@ -155,8 +155,37 @@ An edge `A → B` means "A must be loaded before B". Edges come from:
 *definition* is an assignment to a global (`G = …`, `function G()`,
 `_G.G = …`, `_G["G"] = …` with a constant key, `@global`) or to a field of the
 addon namespace (`ns.F = …`, where `ns` is bound from the file's `...`, through
-any local alias) with a constant key. A *use* is a read of the same name. For
-nested paths (`ns.Util.round`), the first segment after `ns` decides.
+any local alias) with a constant key. A *use* is a read of the same name.
+
+**Fields of tables** (decision T182). A path below a global or `ns` key
+(`Lib.Register`, `ns.Tools.Run`, `ns.UI.Icon`) is a name of its own:
+
+- It is *defined* by `function Lib.Register()`, `function Lib:Register()`,
+  `Lib.Register = …` (also `Lib["Register"] = …`), a named field of a table
+  constructor assigned to the parent (`Lib = { Register = … }`), and the same
+  forms through a local alias (`local API = Lib`, `local UI = ns.UI`).
+  `Lib.n += 1` reads `Lib.n` and does not define it.
+- It is *used* by every read of the path, including calls and method calls
+  (`Lib.Register(…)`, `Lib:Register(…)`). Reading `Lib.Register` also reads
+  `Lib`. Guards work per path: `if Lib.Maybe then Lib.Maybe() end` does not
+  order files.
+- **Table identity:** a global or `ns` key assigned another one
+  (`ns.API = SuuUI`, `Alias = Lib`) holds the same table, so their fields are
+  the same names: `API.RegisterModule = …` (with `local API = ns.API`) defines
+  `SuuUI.RegisterModule`. A local initialized with a table constructor
+  (`local Roles = {}`) is a table too: after `ns.Roles = Roles`,
+  `function Roles.Current()` defines `ns.Roles.Current`, wherever in the file
+  it stands.
+- Only fields of tables that the package defines take part; reads of the
+  game's tables (`C_Timer.After`) order nothing.
+- Fields get the same diagnostics as globals: several load-time definers are
+  W1033, a field read at load time but only defined at run time is W1034.
+- **Untraceable writes:** a write into a table the analysis cannot follow
+  (a parameter, a call result, a local not initialized with a table
+  constructor: `get().f = …`) defines nothing.
+  If a field of a package table is read at load time, no file defines it
+  traceably, and another file writes a field of that name through such a table
+  at load time, that is W1033. Otherwise the read stays silent.
 
 ### 5.4.3 Load-time and run-time edges
 
