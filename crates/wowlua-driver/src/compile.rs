@@ -45,6 +45,9 @@ pub struct CompileOutput {
     pub type_names: HashMap<wowlua_span::Span, String>,
     /// Runtime checks (from the checker, spec §7.5).
     pub value_checks: HashMap<wowlua_span::Span, wowlua_sema::check::runtime::ValueCheck>,
+    /// Modules `dead-code` removed (by `Source::rel`, spec optimization
+    /// §15.2.1).
+    pub removed: BTreeSet<String>,
 }
 
 /// A declaration file with its contents.
@@ -124,11 +127,13 @@ fn check_settings(
 #[derive(Default)]
 pub struct Minify {
     pub passes: wowlua_luair::Passes,
-    /// Plain Lua sources minified too (by `Source::rel`).
+    /// Plain Lua sources minified and optimized too (by `Source::rel`).
     pub lua: std::collections::HashSet<String>,
     /// `rename-private`: text renamed methods must not occur in (the XML
     /// and embedded libraries).
     pub foreign: Vec<Vec<u8>>,
+    /// `build.keep`: modules `dead-code` never removes.
+    pub keep: Vec<String>,
 }
 
 /// Minifies Lua the compiler did not compile (the runtime, library files);
@@ -618,6 +623,22 @@ pub fn compile_flavor(
     }
     let analysis = wowlua_sema::analyze(&inputs, Some(&meta));
     diagnostics.extend(analysis.diagnostics.iter().cloned());
+    // Dead modules (spec optimization §15.2.1); the build leaves out those
+    // dead in every flavor.
+    let dead: std::collections::HashSet<usize> = if profile.optimize.dead_code {
+        dead_modules(
+            files,
+            parsed,
+            &analysis,
+            raw,
+            layout.loaded_by,
+            &minify.keep,
+        )
+    } else {
+        std::collections::HashSet::new()
+    };
+    out.removed = dead.iter().map(|&i| files[i].0.rel.clone()).collect();
+
     // Load order (spec §5.4): files listed in `build.load-order` keep their
     // listed order; files outside this flavor do not take part.
     let markers = wowlua_sema::usage::Markers::from_table();
@@ -687,13 +708,84 @@ pub fn compile_flavor(
                 if analysis.modules[t].as_ref().is_some_and(|x| x.id == "wowlua:reflect"))
         })
     });
-    // Emits a lowered chunk: minified, checked to parse and to stay within
-    // Lua's limits.
+    // `@inline` hints (spec §4.3): local functions by position, and methods,
+    // which are not inlined.
+    let mut inline_hints: HashMap<FileId, Vec<(wowlua_luair::ir::Pos, wowlua_span::Span)>> =
+        HashMap::new();
+    if profile.optimize.inline {
+        use wowlua_syntax::ast;
+        let is_inline = |d: &[ast::Decorator]| {
+            d.iter()
+                .any(|d| d.path.len() == 1 && d.path[0].text.as_ref() == "inline")
+        };
+        for (i, (source, file)) in files.iter().enumerate() {
+            let Some(parse) = parsed.parses[i].as_ref() else {
+                continue;
+            };
+            if source.kind != SourceKind::Wowlua {
+                continue;
+            }
+            let lexed = &parse.lexed;
+            wowlua_syntax::visit::walk_stmts(&parse.chunk.block, &mut |st| match &st.kind {
+                ast::StmtKind::LocalFunction { name, .. } if is_inline(&st.decorators) => {
+                    let pos = wowlua_luair::ir::Pos::new(
+                        lexed.line_of(name.span.start),
+                        lexed.column_of(name.span.start),
+                    );
+                    inline_hints
+                        .entry(*file)
+                        .or_default()
+                        .push((pos, name.span));
+                }
+                ast::StmtKind::Class(c) => {
+                    for m in &c.members {
+                        if is_inline(&m.decorators) {
+                            diagnostics.push(
+                                Diagnostic::warning(
+                                    "W3031",
+                                    "`@inline` is ignored: only local functions with a single `return` expression are inlined",
+                                )
+                                .with_label(m.span, "a method"),
+                            );
+                        }
+                    }
+                }
+                _ => {}
+            });
+        }
+    }
+    // Emits a lowered chunk: optimized, minified, checked to parse and to
+    // stay within Lua's limits.
     let finish = |mut chunk: wowlua_luair::ir::Chunk,
                   source: &Source,
                   file: FileId,
                   diagnostics: &mut Vec<Diagnostic>|
      -> Option<Compiled> {
+        // The optimizations before minification (spec compiler §13.4).
+        if profile.optimize.dead_code {
+            wowlua_luair::optimize::remove_dead_locals(&mut chunk);
+        }
+        if profile.optimize.inline {
+            let skipped = wowlua_luair::optimize::inline(&mut chunk);
+            for (pos, span) in inline_hints.get(&file).into_iter().flatten() {
+                use wowlua_luair::optimize::NotInlined;
+                let Some((_, why)) = skipped.iter().find(|(p, _)| p == pos) else {
+                    continue;
+                };
+                let why = match why {
+                    NotInlined::NotAnExpression => "its body is not a single `return` expression",
+                    NotInlined::Recursive => "it is recursive",
+                    NotInlined::Escapes => "it is used other than by calling it",
+                };
+                diagnostics.push(
+                    Diagnostic::warning("W3031", format!("`@inline` is ignored: {why}"))
+                        .with_label(*span, "not inlined"),
+                );
+            }
+        }
+        if profile.optimize.cache_globals == wowlua_manifest::model::CacheGlobals::Safe {
+            wowlua_luair::optimize::cache_globals(&mut chunk);
+        }
         let original = wowlua_luair::minify::apply(&mut chunk, &minify.passes, options.line_mode);
         let emitted = wowlua_luair::emit(&chunk, &options);
         // The output must parse (spec compiler §13.8, item 2).
@@ -730,6 +822,8 @@ pub fn compile_flavor(
     for (i, (source, file)) in files.iter().enumerate() {
         let plain_lua = source.kind == SourceKind::Lua && lower_lua.contains(&source.rel);
         let minified_lua = source.kind == SourceKind::Lua && minify.lua.contains(&source.rel);
+        // Dead modules are compiled still: the build removes a module only
+        // if it is dead in every flavor.
         if (source.kind != SourceKind::Wowlua && !plain_lua && !minified_lua) || !parsed.ok[i] {
             continue;
         }
@@ -873,6 +967,121 @@ fn rename_private_methods(
             wowlua_luair::minify::rename_members(chunk, at, true);
         }
     }
+}
+
+/// The modules `dead-code` removes (spec optimization §15.2.1): modules
+/// whose top level only declares things, that no kept file imports, that
+/// no XML file loads, not in `build.keep` and not required by name from
+/// plain Lua (`__wowlua.require("id")`). Plain Lua files are never removed.
+fn dead_modules(
+    files: &[(Source, FileId)],
+    parsed: &Parsed,
+    analysis: &wowlua_sema::Analysis,
+    raw: &HashMap<String, Vec<u8>>,
+    loaded_by: &[Option<usize>],
+    keep: &[String],
+) -> std::collections::HashSet<usize> {
+    use wowlua_syntax::ast;
+    fn pure(e: &ast::Expr) -> bool {
+        match &e.kind {
+            ast::ExprKind::Nil
+            | ast::ExprKind::True
+            | ast::ExprKind::False
+            | ast::ExprKind::Number(_)
+            | ast::ExprKind::String(_)
+            | ast::ExprKind::Function(_) => true,
+            ast::ExprKind::Table(fields) => fields.iter().all(|f| match f {
+                ast::TableField::Keyed { key, value, .. } => {
+                    matches!(
+                        key.kind,
+                        ast::ExprKind::String(_) | ast::ExprKind::Number(_)
+                    ) && pure(value)
+                }
+                ast::TableField::Named { value, .. } | ast::TableField::Positional(value) => {
+                    pure(value)
+                }
+            }),
+            _ => false,
+        }
+    }
+    fn declaration(s: &ast::Stmt) -> bool {
+        s.decorators.is_empty()
+            && match &s.kind {
+                ast::StmtKind::Local { values, .. } => values.iter().all(pure),
+                ast::StmtKind::LocalFunction { .. }
+                | ast::StmtKind::Interface(_)
+                | ast::StmtKind::Enum(_)
+                | ast::StmtKind::TypeAlias(_)
+                | ast::StmtKind::Declare(_)
+                | ast::StmtKind::Import(_) => true,
+                ast::StmtKind::Const { value, .. } => value.as_ref().is_none_or(pure),
+                ast::StmtKind::Class(c) => c.members.iter().all(|m| {
+                    m.decorators.is_empty()
+                        && match &m.kind {
+                            ast::ClassMemberKind::Field { value, .. } => {
+                                !m.modifiers.contains(&ast::Modifier::Static)
+                                    || value.as_ref().is_none_or(pure)
+                            }
+                            _ => true,
+                        }
+                }),
+                ast::StmtKind::Export(inner) => {
+                    // `export function f()` defines an export, not a global.
+                    matches!(&inner.kind, ast::StmtKind::Function { name, .. } if name.path.len() == 1 && name.method.is_none())
+                        || declaration(inner)
+                }
+                _ => false,
+            }
+    }
+    // Module IDs plain Lua requires by name.
+    let required =
+        regex::Regex::new(r#"require\s*\(?\s*["']([^"']+)["']"#).expect("a valid pattern");
+    let mut by_name: std::collections::HashSet<String> = keep.iter().cloned().collect();
+    for (source, _) in files {
+        if source.kind == SourceKind::Lua
+            && let Some(text) = raw.get(&source.rel)
+        {
+            let text = String::from_utf8_lossy(text);
+            by_name.extend(required.captures_iter(&text).map(|c| c[1].to_string()));
+        }
+    }
+    let candidate = |i: usize| -> bool {
+        let Some(info) = analysis.modules.get(i).and_then(Option::as_ref) else {
+            return false;
+        };
+        files[i].0.kind == SourceKind::Wowlua
+            && info.is_module
+            && loaded_by.get(i).copied().flatten().is_none()
+            && !by_name.contains(&info.id)
+            && parsed.parses[i]
+                .as_ref()
+                .is_some_and(|p| p.chunk.block.stmts.iter().all(declaration))
+    };
+    // Everything else is kept, and so is what kept files import.
+    let mut kept: Vec<bool> = (0..files.len()).map(|i| !candidate(i)).collect();
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for i in 0..files.len() {
+            if !kept[i] {
+                continue;
+            }
+            let Some(info) = analysis.modules.get(i).and_then(Option::as_ref) else {
+                continue;
+            };
+            for import in &info.imports {
+                if let wowlua_sema::Target::Module(m) | wowlua_sema::Target::Lua { file: m, .. } =
+                    import.target
+                    && m < kept.len()
+                    && !kept[m]
+                {
+                    kept[m] = true;
+                    changed = true;
+                }
+            }
+        }
+    }
+    (0..files.len()).filter(|&i| !kept[i]).collect()
 }
 
 /// The lowering context of input `i` from the package analysis.

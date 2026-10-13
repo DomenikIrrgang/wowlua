@@ -706,8 +706,9 @@ pub fn build(
         } else {
             HashSet::new()
         };
-    // Plain Lua that is minified with the compiled code: not libraries
-    // (unless `minify-libraries`), packager flavor blocks or `plain-copy`.
+    // Plain Lua that is minified and optimized with the compiled code: not
+    // libraries (unless `minify-libraries`), packager flavor blocks or
+    // `plain-copy`.
     // `rename-private` keeps the names the XML and libraries use.
     let foreign: Vec<Vec<u8>> = if passes.rename_private {
         files
@@ -732,7 +733,11 @@ pub fn build(
         crate::compile::Minify {
             passes,
             foreign,
-            lua: if passes.is_empty() {
+            keep: build_cfg.keep.clone(),
+            lua: if passes.is_empty()
+                && !profile.optimize.dead_code
+                && profile.optimize.cache_globals == wowlua_manifest::model::CacheGlobals::Off
+            {
                 HashSet::new()
             } else {
                 files
@@ -1008,9 +1013,28 @@ pub fn build(
         }
     }
 
+    // Modules `dead-code` removed in every flavor (W6002).
+    let removed: BTreeSet<String> = builds
+        .iter()
+        .map(|b| b.output.removed.clone())
+        .reduce(|a, b| a.intersection(&b).cloned().collect())
+        .unwrap_or_default();
+    for rel in &removed {
+        session.push(
+            Diagnostic::warning(
+                "W6002",
+                "this module is removed: it only declares things and nothing uses it",
+            )
+            .with_path(rel)
+            .with_help("import it where it is needed, or list it in `build.keep`"),
+        );
+    }
     let mut toc_items: Vec<TocItem> = Vec::new();
     let mut emitted: Vec<&Source> = Vec::new();
     for (source, _) in &files {
+        if removed.contains(&source.rel) {
+            continue;
+        }
         let flavors_of = restriction(&source.rel);
         let included = flavors_of
             .as_ref()

@@ -22,7 +22,7 @@ harder to read:
 
 | Setting | Values | Effect |
 |---------|--------|--------|
-| `optimize.inline` | bool | Inline `@inline` functions and trivial private helpers (single return expression, no upvalue writes, not recursive) |
+| `optimize.inline` | bool | Inline local functions whose body is a single `return <expression>` (§15.2) |
 | `optimize.cache-globals` | `"off"` `"safe"` | Hoist frequently used read-only globals and Lua standard-library functions into file-level locals (`local pairs, type = pairs, type`). Faster access in hot code. `"safe"` only hoists names the module never assigns and that are on the compiler's stable-global list (Lua stdlib and immutable WoW API namespaces). Never hoists names that addons commonly hook. |
 | `optimize.dead-code` | bool | Remove unused local functions, unused module-private declarations, and **side-effect-free** modules nothing uses (§15.2.1) |
 | `bundle` | bool | Bundle all Lua into as few files as possible (§15.3) |
@@ -41,6 +41,32 @@ Defaults:
 In the manifest, `optimize` is a nested object:
 `"optimize": { "inline": true, "cache-globals": "safe", "dead-code": true }`.
 
+The optimizations apply to compiled code and to the project's plain Lua
+files (like minification, §15.4.1), before minification.
+
+**`cache-globals: "safe"`** hoists, the most used first, names read at least
+twice and never assigned in the file: Lua 5.1's base functions (`pairs`,
+`type`, `tostring`, `select`, …, but not `print`), the library tables and
+their functions (`string.format` becomes a local of its own), WoW's Lua
+aliases (`strsplit`, `tinsert`, `wipe`, `format`, …) and `C_*` namespace
+tables, never their functions and never other WoW API functions (decision
+T162). A file that uses `setfenv`, `getfenv`, `loadstring` or `_G` is left
+alone. A function that takes the hoisted locals as upvalues stays within the
+budgets of §15.2.2.
+
+**`inline`** replaces calls of a local function whose body is a single
+`return <expression>` (no function expressions, no `...`) with that
+expression when the function is not recursive, never assigned and only ever
+called, the call's arguments are literals or locals, and the body's other
+names mean the same at the call. Calls used as statements stay calls. A
+function whose calls were all inlined goes. `@inline` is a hint for such
+functions; on anything else (a longer body, a recursive or escaping function,
+a method) it is ignored with W3031 (decision T166).
+
+**`dead-code`** removes `local` declarations and local functions nothing uses
+whose values have no side effects (literals, tables of them, functions,
+locals), repeatedly, and dead modules (§15.2.1).
+
 ### 15.2.1 Dead modules
 
 A module is removed only if **both** hold:
@@ -51,7 +77,9 @@ A module is removed only if **both** hold:
   expressions), with no calls, no global or addon-table writes, and no
   decorators that register anything (`@event`, `@slash`, `@hook`, `@global`,
   user decorators); and
-- no kept module uses any of its exports, and no XML file references it.
+- no kept module imports it, no XML file loads it, it is not listed in
+  `build.keep`, and no plain Lua file requires it by name
+  (`__wowlua.require("id")`).
 
 Plain `.lua` files and scripts are never removed. They are entry points. Each
 removed module is reported with warning W6002.

@@ -1079,6 +1079,100 @@ fn bundled_builds_run_the_same() {
     assert!(map.contains("src/broken.lua"), "{map}");
 }
 
+/// `dead-code` (spec optimization §15.2.1): side-effect-free modules nothing
+/// uses go (W6002); modules with effects, imported ones and `build.keep`
+/// stay.
+#[test]
+fn dead_code_removes_unused_modules() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "dead", "version": "1.0.0" },
+  "build": { "keep": ["kept"] },
+  "profiles": { "release": { "bundle": false } } }
+"#,
+            ),
+            (
+                "src/unused.wowlua",
+                "export function helper(): number return 1 end\nlocal function inner() end\n",
+            ),
+            ("src/kept.wowlua", "export const VALUE = 2\n"),
+            (
+                "src/effects.wowlua",
+                "export local x = 1\nprint(\"effects\")\n",
+            ),
+            (
+                "src/used.wowlua",
+                "export function twice(n: number): number return n * 2 end\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import twice from \"./used\"\nlocal function neverCalled() return 3 end\nprint(twice(2))\n",
+            ),
+        ],
+    );
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(
+            predicate::str::contains("warning[W6002]")
+                .and(predicate::str::contains("= in src/unused.wowlua")),
+        )
+        .stderr(predicate::str::contains("src/kept.wowlua").not())
+        .stderr(predicate::str::contains("src/effects.wowlua").not());
+    let release = dir.path().join("dist/release/Dead");
+    assert!(!release.join("src/unused.lua").exists());
+    assert!(release.join("src/kept.lua").exists());
+    assert!(release.join("src/effects.lua").exists());
+    let toc = fs::read_to_string(release.join("Dead.toc")).unwrap();
+    assert!(!toc.contains("unused"), "{toc}");
+    let main = fs::read_to_string(release.join("src/main.lua")).unwrap();
+    assert!(
+        !main.contains("neverCalled"),
+        "unused local functions go too:\n{main}"
+    );
+    let out = run_addon(&release, "Dead");
+    assert!(out.ends_with('4'), "{out}");
+}
+
+/// `optimize.inline` (spec optimization §15.2): expression helpers are
+/// inlined; `@inline` on anything else is W3031.
+#[test]
+fn release_builds_inline_expression_helpers() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "inl", "version": "1.0.0" },
+  "profiles": { "release": { "bundle": false } } }
+"#,
+            ),
+            (
+                "src/main.wowlua",
+                "local function half(n: number): number return n / 2 end\n@inline\nlocal function countdown(n: number): number\n    if n <= 0 then return 0 end\n    return countdown(n - 1)\nend\nlocal size = 10\nprint(half(size), countdown(3))\n",
+            ),
+        ],
+    );
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "warning[W3031]: `@inline` is ignored: its body is not a single `return` expression",
+        ));
+    let release = dir.path().join("dist/release/Inl");
+    let main = fs::read_to_string(release.join("src/main.lua")).unwrap();
+    assert!(main.contains("print(size / 2,"), "{main}");
+    assert!(!main.contains("half"), "{main}");
+    assert_eq!(run_addon(&release, "Inl"), "5 0");
+}
+
 /// `rename-private` (spec optimization §15.4.1): private and protected
 /// methods get short names unless their names occur anywhere else.
 #[test]

@@ -62,6 +62,19 @@ pub fn ident_count(e: &mut Expr) -> usize {
     c.0
 }
 
+/// The identifier occurrences [`walk`] visits in statement `s`.
+pub fn stmt_ident_count(s: &mut Stmt) -> usize {
+    struct Count(usize);
+    impl Visitor for Count {
+        fn ident(&mut self, _id: &mut Ident, _use: Use) {
+            self.0 += 1;
+        }
+    }
+    let mut c = Count(0);
+    stmt(s, &mut c);
+    c.0
+}
+
 fn block(b: &mut Block, v: &mut impl Visitor) {
     v.enter_block();
     stmts(b, v);

@@ -7,6 +7,7 @@ pub mod emit;
 pub mod hygiene;
 pub mod ir;
 pub mod minify;
+pub mod optimize;
 pub mod scope;
 pub mod sourcemap;
 

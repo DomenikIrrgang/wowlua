@@ -239,6 +239,13 @@ pub fn run(dir: &Path) -> Result<()> {
             for names in [BYTECODE_PASSES, ALL_PASSES] {
                 let passes = wowlua_luair::Passes::from_names(names.iter().copied());
                 let mut minified = chunk.clone();
+                // The release optimizations (spec optimization §15.2) with
+                // every pass.
+                if names == ALL_PASSES {
+                    wowlua_luair::optimize::remove_dead_locals(&mut minified);
+                    wowlua_luair::optimize::inline(&mut minified);
+                    wowlua_luair::optimize::cache_globals(&mut minified);
+                }
                 wowlua_luair::minify::apply(&mut minified, &passes, mode);
                 let out = emit(&minified, &passes.emit_options(mode));
                 let label = if names == BYTECODE_PASSES {
