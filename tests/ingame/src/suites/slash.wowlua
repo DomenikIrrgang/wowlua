@@ -27,10 +27,12 @@ local commands = router({
     boom = { run = function() error("command failed") end },
 })
 
--- The SlashCmdList key of a command name.
+-- The SlashCmdList key of a command name (looked up by index: the client
+-- may not list addon commands to pairs()).
 local function keyOf(command: string): string?
-    for key in pairs(SlashCmdList) do
-        if type(key) == "string" and _G["SLASH_" .. key .. "1"] == command then
+    for n = 1, 50 do
+        local key = "WOWLUA_STDTEST_" .. n
+        if SlashCmdList[key] and _G["SLASH_" .. key .. "1"] == command then
             return key
         end
     end

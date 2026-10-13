@@ -60,10 +60,14 @@ s:test("every repeats, gets its ticker, stops", function(t: any)
 end)
 
 s:test("timer callbacks are isolated", function(t: any)
-    local after2 = false
-    after(0.05, function() error("timer failed") end)
+    -- Timers due at the same time run in no fixed order.
+    local failed, after2 = false, false
+    after(0.05, function()
+        failed = true
+        error("timer failed")
+    end)
     after(0.05, function() after2 = true end)
-    t:waitFor(function() return after2 end, 2, "the next timer")
+    t:waitFor(function() return failed and after2 end, 2, "both timers")
     t:ok(t:reported("timer failed"), "the error is reported")
     t:ok(t:reported("[timer: after]"), "naming the timer")
 end)

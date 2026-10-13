@@ -95,30 +95,22 @@ s:test("a failing handler is reported, the others run", function(t: any)
 end)
 
 s:test("WoW events: registered while handled", function(t: any)
-    if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
-        t:skip("no addon messages in this client")
-        return
-    end
-    C_ChatInfo.RegisterAddonMessagePrefix("StdTest")
     local function frames(): number
         if not GetFramesRegisteredForEvent then
             return -1
         end
-        return select("#", GetFramesRegisteredForEvent("CHAT_MSG_ADDON"))
+        return select("#", GetFramesRegisteredForEvent("TIME_PLAYED_MSG"))
     end
     local before = frames()
-    local got: string? = nil
-    local sub = on("CHAT_MSG_ADDON", function(prefix: string, text: string)
-        if prefix == "StdTest" then
-            got = text
-        end
-    end)
+    local total: number? = nil
+    local sub = on("TIME_PLAYED_MSG", function(totalTimePlayed: number) total = totalTimePlayed end)
     if before >= 0 then
         t:eq(frames(), before + 1, "registered with a handler")
     end
-    C_ChatInfo.SendAddonMessage("StdTest", "ping", "WHISPER", UnitName("player") :: any)
-    if t:waitFor(function() return got ~= nil end, 5, "CHAT_MSG_ADDON arrives") then
-        t:eq(got, "ping", "with its payload")
+    -- A round trip to the server (it prints your /played line).
+    RequestTimePlayed()
+    if t:waitFor(function() return total ~= nil end, 10, "TIME_PLAYED_MSG arrives") then
+        t:ok(type(total) == "number" and total > 0, "with its payload")
     end
     sub:cancel()
     if before >= 0 then

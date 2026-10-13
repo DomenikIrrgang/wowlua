@@ -11,7 +11,7 @@ Mock.events = {}
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_LOGOUT", "PLAYER_ENTERING_WORLD",
     "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PLAYER_STARTED_MOVING", "BAG_UPDATE",
     "BAG_UPDATE_DELAYED", "UNIT_HEALTH", "UNIT_POWER_UPDATE", "PLAYER_TARGET_CHANGED", "UNIT_TARGET",
-    "CHAT_MSG_ADDON", "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN" }) do
+    "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN", "TIME_PLAYED_MSG" }) do
     Mock.events[e] = true
 end
 
@@ -153,13 +153,10 @@ function GetFramesRegisteredForEvent(event)
     end
     return unpack(out)
 end
--- Addon messages arrive a moment later, like from the server.
-C_ChatInfo = {
-    RegisterAddonMessagePrefix = function() return true end,
-    SendAddonMessage = function(prefix, text, kind, target)
-        C_Timer.After(0.1, function() Mock.fire("CHAT_MSG_ADDON", prefix, text, kind, target) end)
-    end,
-}
+-- Server answers arrive a moment later.
+function RequestTimePlayed()
+    C_Timer.After(0.2, function() Mock.fire("TIME_PLAYED_MSG", 3600, 60) end)
+end
 C_EventUtils = { IsEventValid = function(event) return Mock.events[event] == true end }
 
 -- Hooks ---------------------------------------------------------------------
