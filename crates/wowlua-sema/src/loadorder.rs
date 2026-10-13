@@ -373,8 +373,10 @@ pub fn analyze(
         }
     }
     for (file, u) in usages.iter().enumerate() {
+        // The standard library's files are ordered by their imports.
         if let Some(span) = u.as_ref().and_then(|u| u.dynamic_write)
             && !ordered(file)
+            && !crate::is_compiler_known(&files[file].src_rel)
         {
             out.diagnostics.push(
                 Diagnostic::warning(

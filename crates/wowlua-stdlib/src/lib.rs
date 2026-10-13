@@ -79,7 +79,11 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         include_str!("../std/reflect.wowlua"),
         Some(include_str!("../std/reflect.d.wowlua")),
     ),
-    ("saved", include_str!("../std/saved.wowlua"), None),
+    (
+        "saved",
+        include_str!("../std/saved.wowlua"),
+        Some(include_str!("../std/saved.d.wowlua")),
+    ),
     (
         "slash",
         include_str!("../std/slash.wowlua"),

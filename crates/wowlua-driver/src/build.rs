@@ -569,6 +569,32 @@ pub fn build(
                     .flat_map(|a| a.all_saved_variables()),
             )
             .collect(),
+        stdlib: wowlua_sema::stdlib::StdlibConfig {
+            saved: manifest
+                .manifest
+                .addon
+                .iter()
+                .flat_map(|a| {
+                    a.saved_variables.iter().cloned().chain(
+                        a.flavor_overrides
+                            .values()
+                            .flat_map(|o| o.saved_variables.iter().flatten().cloned()),
+                    )
+                })
+                .collect(),
+            saved_per_char: manifest
+                .manifest
+                .addon
+                .iter()
+                .flat_map(|a| {
+                    a.saved_variables_per_character.iter().cloned().chain(
+                        a.flavor_overrides.values().flat_map(|o| {
+                            o.saved_variables_per_character.iter().flatten().cloned()
+                        }),
+                    )
+                })
+                .collect(),
+        },
     };
     let mut api_cache: HashMap<String, Vec<crate::compile::ParsedDeclaration>> = HashMap::new();
     // Shared flavor mode: where each API exists, for flavor guards (E2030).
@@ -823,6 +849,7 @@ pub fn build(
                         strict: sources::glob_set(&m.check.strict),
                         lua: m.check.lua,
                         globals: m.check.globals.iter().cloned().collect(),
+                        stdlib: wowlua_sema::stdlib::StdlibConfig::default(),
                     },
                     main: l.main.as_ref().map(|r| l.src_rel(r)),
                     meta: std::sync::Arc::new(crate::meta::library_meta(&meta, m, &l.entry)),

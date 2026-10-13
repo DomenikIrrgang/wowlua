@@ -1,0 +1,663 @@
+//! Compile-time checks of the core standard library (spec stdlib, "core"):
+//! names given to `wowlua:events`, `wowlua:slash` and `wowlua:saved`, and
+//! the deferring decorators of `wowlua:timer` and `wowlua:combat`. Calls and
+//! decorators are recognized through the imports' `@intrinsic` ids.
+
+use crate::{Analysis, FileInput, FileKind, Target, is_compiler_known};
+use std::collections::{HashMap, HashSet};
+use wowlua_diagnostics::Diagnostic;
+use wowlua_span::Span;
+use wowlua_syntax::ast::*;
+
+/// What the checks need from the manifest.
+#[derive(Clone, Debug, Default)]
+pub struct StdlibConfig {
+    /// `addon.saved-variables`.
+    pub saved: HashSet<String>,
+    /// `addon.saved-variables-per-character`.
+    pub saved_per_char: HashSet<String>,
+}
+
+/// Slash commands of the game; registering one again is W8011.
+const BLIZZARD_COMMANDS: &[&str] = &[
+    "/reload",
+    "/console",
+    "/run",
+    "/script",
+    "/dump",
+    "/help",
+    "/h",
+    "/who",
+    "/join",
+    "/leave",
+    "/invite",
+    "/inv",
+    "/kick",
+    "/logout",
+    "/exit",
+    "/quit",
+    "/camp",
+    "/afk",
+    "/dnd",
+    "/say",
+    "/s",
+    "/yell",
+    "/y",
+    "/party",
+    "/p",
+    "/guild",
+    "/g",
+    "/raid",
+    "/ra",
+    "/whisper",
+    "/w",
+    "/tell",
+    "/t",
+    "/r",
+    "/reply",
+    "/emote",
+    "/e",
+    "/me",
+    "/macro",
+    "/framestack",
+    "/fstack",
+    "/eventtrace",
+    "/etrace",
+    "/target",
+    "/tar",
+    "/assist",
+    "/a",
+    "/focus",
+    "/cast",
+    "/use",
+    "/stopmacro",
+    "/click",
+    "/follow",
+    "/f",
+    "/roll",
+    "/random",
+    "/rnd",
+    "/played",
+    "/time",
+    "/friend",
+    "/ignore",
+    "/chat",
+    "/combatlog",
+    "/stopattack",
+    "/startattack",
+    "/dance",
+    "/sit",
+    "/stand",
+    "/wave",
+    "/bow",
+    "/cheer",
+    "/readycheck",
+    "/rw",
+    "/i",
+    "/instance",
+];
+
+/// A local name bound to the standard library.
+#[derive(Clone)]
+enum Bound {
+    Intrinsic(String),
+    /// `import * as m`: the module's intrinsics by export name.
+    Namespace(usize),
+}
+
+struct Ctx<'a> {
+    analysis: &'a Analysis,
+    events: HashSet<String>,
+    messages: HashSet<String>,
+    config: &'a StdlibConfig,
+    diagnostics: Vec<Diagnostic>,
+    slash_seen: HashMap<String, Span>,
+    bound_saved: HashMap<String, Span>,
+}
+
+fn string(e: &Expr) -> Option<String> {
+    match &e.kind {
+        ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value).into_owned()),
+        _ => None,
+    }
+}
+
+impl Ctx<'_> {
+    fn error(&mut self, code: &'static str, span: Span, message: String, label: &str) {
+        self.diagnostics
+            .push(Diagnostic::error(code, message).with_label(span, label));
+    }
+
+    fn warn(&mut self, code: &'static str, span: Span, message: String, label: &str) {
+        self.diagnostics
+            .push(Diagnostic::warning(code, message).with_label(span, label));
+    }
+
+    /// An event or message name: known, and of the expected kind.
+    fn event_name(&mut self, e: &Expr, game_only: bool) {
+        let Some(name) = string(e) else { return };
+        let is_event = self.events.contains(&name);
+        let is_message = self.messages.contains(&name);
+        if !is_event && !is_message {
+            self.error(
+                "E8003",
+                e.span,
+                format!("unknown event or message `{name}`"),
+                "not declared",
+            );
+        } else if game_only && !is_event {
+            self.error(
+                "E8003",
+                e.span,
+                format!("`{name}` is a message; unit events must be WoW events"),
+                "a message",
+            );
+        }
+    }
+
+    fn intrinsic(&self, bindings: &HashMap<String, Bound>, callee: &Expr) -> Option<String> {
+        match &callee.kind {
+            ExprKind::Name(n) => match bindings.get(n.text.as_ref())? {
+                Bound::Intrinsic(id) => Some(id.clone()),
+                Bound::Namespace(_) => None,
+            },
+            ExprKind::Field { obj, name } => match &obj.kind {
+                ExprKind::Name(m) => match bindings.get(m.text.as_ref())? {
+                    Bound::Namespace(module) => self.analysis.modules[*module]
+                        .as_ref()?
+                        .intrinsics
+                        .get(name.text.as_ref())
+                        .cloned(),
+                    Bound::Intrinsic(_) => None,
+                },
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn decorator(&self, bindings: &HashMap<String, Bound>, d: &Decorator) -> Option<String> {
+        match d.path.as_slice() {
+            [n] => match bindings.get(n.text.as_ref())? {
+                Bound::Intrinsic(id) => Some(id.clone()),
+                Bound::Namespace(_) => None,
+            },
+            [m, n] => match bindings.get(m.text.as_ref())? {
+                Bound::Namespace(module) => self.analysis.modules[*module]
+                    .as_ref()?
+                    .intrinsics
+                    .get(n.text.as_ref())
+                    .cloned(),
+                Bound::Intrinsic(_) => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// The decorators of a declaration; `instance_method`: an instance
+    /// method of a class; `func`: the decorated function.
+    fn decorators(
+        &mut self,
+        bindings: &HashMap<String, Bound>,
+        decorators: &[Decorator],
+        instance_method: bool,
+        func: Option<&FuncBody>,
+    ) {
+        for d in decorators {
+            let Some(id) = self.decorator(bindings, d) else {
+                continue;
+            };
+            let args: Vec<&Expr> = d.args.as_ref().map(|a| a.exprs()).unwrap_or_default();
+            match id.as_str() {
+                "events.event" => {
+                    if instance_method {
+                        self.error(
+                            "E8002",
+                            d.span,
+                            "`@event` on an instance method: register with `on(…, self)` in the constructor".into(),
+                            "an instance method",
+                        );
+                    }
+                    for a in &args {
+                        self.event_name(a, false);
+                    }
+                }
+                "events.unitEvent" => {
+                    if instance_method {
+                        self.error(
+                            "E8002",
+                            d.span,
+                            "`@unitEvent` on an instance method: register with `onUnit(…, self)` in the constructor".into(),
+                            "an instance method",
+                        );
+                    }
+                    if let Some(first) = args.first() {
+                        self.event_name(first, true);
+                    }
+                    let units = args.len().saturating_sub(1);
+                    if !(1..=2).contains(&units) {
+                        self.error(
+                            "E8100",
+                            d.span,
+                            format!(
+                                "`@unitEvent` takes one or two units (WoW's limit), not {units}"
+                            ),
+                            "here",
+                        );
+                    }
+                }
+                "slash.slash" => {
+                    for a in &args {
+                        self.slash_command(a);
+                    }
+                }
+                "timer.throttle" | "timer.debounce" | "timer.nextFrame" | "combat.outOfCombat" => {
+                    if let Some(f) = func
+                        && returns_values(&f.body)
+                    {
+                        let name = id.split('.').nth(1).unwrap_or(&id);
+                        self.error(
+                            "E8030",
+                            d.span,
+                            format!(
+                                "`@{name}` may run the function later, so it must not return values"
+                            ),
+                            "defers the call",
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn slash_command(&mut self, e: &Expr) {
+        let Some(name) = string(e) else { return };
+        if !name.starts_with('/') || name.len() < 2 || name.chars().any(char::is_whitespace) {
+            self.error(
+                "E8101",
+                e.span,
+                format!("`{name}` is no slash command: it starts with `/` and has no spaces"),
+                "invalid",
+            );
+            return;
+        }
+        let lower = name.to_lowercase();
+        if self.slash_seen.contains_key(&lower) {
+            self.error(
+                "E8010",
+                e.span,
+                format!("the slash command `{name}` is registered twice"),
+                "again",
+            );
+        } else {
+            self.slash_seen.insert(lower.clone(), e.span);
+        }
+        if BLIZZARD_COMMANDS.contains(&lower.as_str()) {
+            self.warn(
+                "W8011",
+                e.span,
+                format!("`{name}` is one of the game's slash commands"),
+                "taken by the game",
+            );
+        }
+    }
+
+    fn call(&mut self, bindings: &HashMap<String, Bound>, e: &Expr) {
+        let ExprKind::Call { callee, args } = &e.kind else {
+            return;
+        };
+        let Some(id) = self.intrinsic(bindings, callee) else {
+            return;
+        };
+        let args = args.exprs();
+        match id.as_str() {
+            "events.on" | "events.once" => {
+                if let Some(first) = args.first() {
+                    self.event_name(first, false);
+                }
+            }
+            "events.onUnit" => {
+                if let Some(first) = args.first() {
+                    self.event_name(first, true);
+                }
+                if let Some(ExprKind::Table(fields)) = args.get(1).map(|a| &a.kind)
+                    && !(1..=2).contains(&fields.len())
+                {
+                    self.error(
+                        "E8100",
+                        args[1].span,
+                        format!(
+                            "`onUnit` takes one or two units (WoW's limit), not {}",
+                            fields.len()
+                        ),
+                        "here",
+                    );
+                }
+            }
+            "events.send" => {
+                if let Some(first) = args.first()
+                    && let Some(name) = string(first)
+                {
+                    if self.events.contains(&name) && !self.messages.contains(&name) {
+                        self.error(
+                            "E8001",
+                            first.span,
+                            format!("`{name}` is a WoW event; only messages can be sent"),
+                            "a WoW event",
+                        );
+                    } else if !self.messages.contains(&name) {
+                        self.error(
+                            "E8003",
+                            first.span,
+                            format!("unknown message `{name}`: declare it with `declare message {name}(…)`"),
+                            "not declared",
+                        );
+                    }
+                }
+            }
+            "saved.bind" => self.bind(e, &args),
+            "slash.router" => {
+                if let Some(ExprKind::Table(fields)) = args.first().map(|a| &a.kind) {
+                    for field in fields {
+                        if let TableField::Named { value, .. } = field {
+                            self.router_command(value);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn bind(&mut self, call: &Expr, args: &[&Expr]) {
+        let Some(first) = args.first() else { return };
+        let Some(name) = string(first) else {
+            self.error(
+                "E8102",
+                first.span,
+                "`saved.bind` needs the SavedVariable's name as a string literal".into(),
+                "not a literal",
+            );
+            return;
+        };
+        let per_char = self.config.saved_per_char.contains(&name);
+        if !self.config.saved.contains(&name) && !per_char {
+            self.error(
+                "E8020",
+                first.span,
+                format!("`{name}` is not declared in `addon.saved-variables` or `addon.saved-variables-per-character`"),
+                "not in the manifest",
+            );
+        }
+        if let Some(previous) = self.bound_saved.get(&name).copied() {
+            self.diagnostics.push(
+                Diagnostic::error("E8103", format!("`{name}` is bound twice"))
+                    .with_label(call.span, "again")
+                    .with_label(previous, "first bound here"),
+            );
+        } else {
+            self.bound_saved.insert(name.clone(), call.span);
+        }
+        let profiles = args.get(1).is_some_and(|opts| match &opts.kind {
+            ExprKind::Table(fields) => fields.iter().any(|f| {
+                matches!(f, TableField::Named { name, value, .. }
+                    if name.text.as_ref() == "profiles" && matches!(value.kind, ExprKind::True))
+            }),
+            _ => false,
+        });
+        if profiles {
+            if per_char {
+                self.error(
+                    "E8117",
+                    first.span,
+                    format!(
+                        "`{name}` is per character: profiles need an account-wide SavedVariable"
+                    ),
+                    "per character",
+                );
+            } else if !self
+                .config
+                .saved_per_char
+                .contains(&format!("{name}PerChar"))
+            {
+                self.error(
+                    "E8021",
+                    first.span,
+                    format!("profiles keep the active profile in `{name}PerChar`: add it to `addon.saved-variables-per-character`"),
+                    "needs `PerChar`",
+                );
+            }
+        }
+    }
+
+    /// One router command: valid `args` specs, `rest` last, and `run` taking
+    /// one parameter per argument (plus the flags table).
+    fn router_command(&mut self, command: &Expr) {
+        let ExprKind::Table(fields) = &command.kind else {
+            return;
+        };
+        let field = |key: &str| {
+            fields.iter().find_map(|f| match f {
+                TableField::Named { name, value, .. } if name.text.as_ref() == key => Some(value),
+                _ => None,
+            })
+        };
+        let mut count = 0;
+        if let Some(Expr {
+            kind: ExprKind::Table(specs),
+            ..
+        }) = field("args")
+        {
+            count = specs.len();
+            for (i, spec) in specs.iter().enumerate() {
+                let TableField::Positional(value) = spec else {
+                    continue;
+                };
+                let ok = match &value.kind {
+                    ExprKind::String(lit) => {
+                        let s = String::from_utf8_lossy(&lit.value);
+                        matches!(
+                            s.as_ref(),
+                            "string" | "number" | "boolean" | "string?" | "number?" | "boolean?"
+                        ) || (s == "rest" && i + 1 == specs.len())
+                    }
+                    ExprKind::Table(choices) => choices.iter().all(|c| {
+                        matches!(c, TableField::Positional(v) if matches!(v.kind, ExprKind::String(_)))
+                    }),
+                    _ => true,
+                };
+                if !ok {
+                    self.error(
+                        "E8112",
+                        value.span,
+                        "an argument is \"string\", \"number\", \"boolean\" (with `?` when optional), a list of choices, or \"rest\" last".into(),
+                        "invalid",
+                    );
+                }
+            }
+        }
+        if field("flags").is_some() {
+            count += 1;
+        }
+        if let Some(Expr {
+            kind: ExprKind::Function(f),
+            span,
+            ..
+        }) = field("run")
+            && f.vararg.is_none()
+            && f.params.len() != count
+        {
+            self.error(
+                "E8112",
+                *span,
+                format!(
+                    "`run` takes {} parameter(s) for its arguments and flags, not {}",
+                    count,
+                    f.params.len()
+                ),
+                "here",
+            );
+        }
+    }
+}
+
+/// `return` with values in the function's own body (not nested functions).
+fn returns_values(block: &Block) -> bool {
+    fn walk(stmts: &[Stmt]) -> bool {
+        stmts.iter().any(|s| match &s.kind {
+            StmtKind::Return(values) => !values.is_empty(),
+            StmtKind::Do(b)
+            | StmtKind::While { body: b, .. }
+            | StmtKind::Repeat { body: b, .. } => walk(&b.stmts),
+            StmtKind::NumericFor { body, .. } | StmtKind::GenericFor { body, .. } => {
+                walk(&body.stmts)
+            }
+            StmtKind::If {
+                then_block,
+                elseifs,
+                else_block,
+                ..
+            } => {
+                walk(&then_block.stmts)
+                    || elseifs.iter().any(|(_, b)| walk(&b.stmts))
+                    || else_block.as_ref().is_some_and(|b| walk(&b.stmts))
+            }
+            _ => false,
+        })
+    }
+    walk(&block.stmts)
+}
+
+/// The names a file's imports bind to the standard library.
+fn bindings(analysis: &Analysis, i: usize, parse: &wowlua_syntax::Parse) -> HashMap<String, Bound> {
+    let mut out = HashMap::new();
+    let Some(info) = analysis.modules.get(i).and_then(Option::as_ref) else {
+        return out;
+    };
+    for s in &parse.chunk.block.stmts {
+        let StmtKind::Import(import) = &s.kind else {
+            continue;
+        };
+        let Some(resolved) = info.imports.iter().find(|r| r.start == s.span.start) else {
+            continue;
+        };
+        let Target::Module(m) = resolved.target else {
+            continue;
+        };
+        let Some(target) = analysis.modules[m].as_ref() else {
+            continue;
+        };
+        match &import.clause {
+            ImportClause::Names(specs) => {
+                for spec in specs {
+                    if let Some(id) = target.intrinsics.get(spec.name.text.as_ref()) {
+                        let local = spec.alias.as_ref().unwrap_or(&spec.name);
+                        out.insert(local.text.to_string(), Bound::Intrinsic(id.clone()));
+                    }
+                }
+            }
+            ImportClause::Namespace(n) => {
+                if !target.intrinsics.is_empty() {
+                    out.insert(n.text.to_string(), Bound::Namespace(m));
+                }
+            }
+            ImportClause::SideEffect => {}
+        }
+    }
+    out
+}
+
+/// Runs the checks over every file of the package.
+pub fn check(files: &[FileInput], analysis: &Analysis, config: &StdlibConfig) -> Vec<Diagnostic> {
+    let mut ctx = Ctx {
+        analysis,
+        events: HashSet::new(),
+        messages: HashSet::new(),
+        config,
+        diagnostics: Vec::new(),
+        slash_seen: HashMap::new(),
+        bound_saved: HashMap::new(),
+    };
+    for f in files {
+        let Some(parse) = f.parse else { continue };
+        for s in &parse.chunk.block.stmts {
+            let decl = match &s.kind {
+                StmtKind::Declare(d) => d.as_ref(),
+                StmtKind::Export(inner) => match &inner.kind {
+                    StmtKind::Declare(d) => d.as_ref(),
+                    _ => continue,
+                },
+                _ => continue,
+            };
+            match decl {
+                Declare::Event { name, .. } => {
+                    ctx.events.insert(name.text.to_string());
+                }
+                Declare::Message { name, .. } => {
+                    ctx.messages.insert(name.text.to_string());
+                }
+                _ => {}
+            }
+        }
+    }
+    for (i, f) in files.iter().enumerate() {
+        if f.kind != FileKind::Wowlua || is_compiler_known(&f.src_rel) {
+            continue;
+        }
+        let Some(parse) = f.parse else { continue };
+        let bound = bindings(analysis, i, parse);
+        if bound.is_empty() {
+            continue;
+        }
+        let mut stmts: Vec<&Stmt> = Vec::new();
+        wowlua_syntax::visit::walk_stmts(&parse.chunk.block, &mut |s| stmts.push(s));
+        let mut i = 0;
+        while i < stmts.len() {
+            let s = stmts[i];
+            i += 1;
+            let inner = match &s.kind {
+                StmtKind::Export(inner) => inner.as_ref(),
+                _ => s,
+            };
+            match &inner.kind {
+                StmtKind::LocalFunction { func, .. } | StmtKind::Function { func, .. } => {
+                    ctx.decorators(&bound, &s.decorators, false, Some(func));
+                }
+                StmtKind::Class(c) => {
+                    for m in &c.members {
+                        let static_ = m.modifiers.contains(&Modifier::Static);
+                        if let ClassMemberKind::Method { func, .. } = &m.kind {
+                            ctx.decorators(&bound, &m.decorators, !static_, Some(func));
+                            wowlua_syntax::visit::walk_stmts(&func.body, &mut |s| stmts.push(s));
+                        }
+                    }
+                }
+                _ => ctx.decorators(&bound, &s.decorators, false, None),
+            }
+        }
+        let mut calls: Vec<&Expr> = Vec::new();
+        wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
+            if matches!(e.kind, ExprKind::Call { .. }) {
+                calls.push(e);
+            }
+        });
+        for s in &stmts {
+            if let StmtKind::Class(c) = &s.kind {
+                for m in &c.members {
+                    if let ClassMemberKind::Method { func, .. } = &m.kind {
+                        wowlua_syntax::visit::walk_block(&func.body, &mut |e| {
+                            if matches!(e.kind, ExprKind::Call { .. }) {
+                                calls.push(e);
+                            }
+                        });
+                    }
+                }
+            }
+        }
+        for e in calls {
+            ctx.call(&bound, e);
+        }
+    }
+    ctx.diagnostics
+}

@@ -64,6 +64,8 @@ pub struct CheckConfig {
     pub lua: bool,
     /// `check.globals` and the SavedVariables.
     pub globals: std::collections::HashSet<String>,
+    /// The SavedVariables, for `wowlua:saved`'s checks.
+    pub stdlib: wowlua_sema::stdlib::StdlibConfig,
 }
 
 /// A declaration file of one flavor (the wow-api types), parsed.
@@ -693,6 +695,12 @@ pub fn compile_flavor(
     }
     let analysis = wowlua_sema::analyze(&inputs, Some(&meta));
     diagnostics.extend(analysis.diagnostics.iter().cloned());
+    // The standard library's compile-time checks (spec stdlib, "core").
+    diagnostics.extend(wowlua_sema::stdlib::check(
+        &inputs,
+        &analysis,
+        &check.stdlib,
+    ));
     // Dead modules (spec optimization §15.2.1); the build leaves out those
     // dead in every flavor.
     let dead: std::collections::HashSet<usize> = if profile.optimize.dead_code {

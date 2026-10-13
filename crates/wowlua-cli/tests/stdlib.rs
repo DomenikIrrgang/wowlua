@@ -22,7 +22,7 @@ fn wowlua(dir: &Path) -> Command {
 fn project(files: &[(&str, &str)]) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let manifest = r#"{ "package": { "name": "std", "version": "1.0.0" },
-  "addon": { "saved-variables": ["StdDB"] } }
+  "addon": { "saved-variables": ["StdDB", "StdOtherDB"], "saved-variables-per-character": ["StdDBPerChar"] } }
 "#;
     fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
     for (path, text) in files {
@@ -140,6 +140,7 @@ on("UNIT_HEALTH", function(unit: string) print("any health", unit) end, owner)
 once("PLAYER_LOGIN", function() print("login once") end)
 
 -- a message, dispatched in Lua only
+declare message STD_PING(n: number)
 local count = 0
 local sub = on("STD_PING", function(n: number) count += n; print("ping", n) end)
 local function sendPing(n: number) send("STD_PING", n) end
@@ -695,5 +696,111 @@ print("count", errors.count())
             "count 2",
         ],
         "{out:?}"
+    );
+}
+
+/// The core modules' compile-time checks (spec stdlib, "core").
+#[test]
+fn core_modules_are_checked_at_compile_time() {
+    let cases: &[(&str, &str)] = &[
+        (
+            "import event from \"wowlua:events\"\n@event(\"PLAYER_LOGN\")\nlocal function f() end\n",
+            "E8003",
+        ),
+        (
+            "import on from \"wowlua:events\"\non(\"BAG_UPDAET\", function() end)\n",
+            "E8003",
+        ),
+        (
+            "import send from \"wowlua:events\"\nsend(\"PLAYER_LOGIN\")\n",
+            "E8001",
+        ),
+        (
+            "import send from \"wowlua:events\"\nsend(\"STD_UNDECLARED\")\n",
+            "E8003",
+        ),
+        (
+            "import event from \"wowlua:events\"\nclass A\n    @event(\"PLAYER_LOGIN\")\n    function m() end\nend\n",
+            "E8002",
+        ),
+        (
+            "import unitEvent from \"wowlua:events\"\n@unitEvent(\"UNIT_HEALTH\", \"player\", \"target\", \"focus\")\nlocal function f() end\n",
+            "E8100",
+        ),
+        (
+            "import slash from \"wowlua:slash\"\n@slash(\"std\")\nlocal function f() end\n",
+            "E8101",
+        ),
+        (
+            "import slash from \"wowlua:slash\"\n@slash(\"/std\")\nlocal function f() end\n@slash(\"/STD\")\nlocal function g() end\n",
+            "E8010",
+        ),
+        (
+            "import slash from \"wowlua:slash\"\n@slash(\"/reload\")\nlocal function f() end\n",
+            "W8011",
+        ),
+        (
+            "import router from \"wowlua:slash\"\nlocal r = router({ go = { args = { \"number\", \"text\" }, run = function(a, b) end } })\n",
+            "E8112",
+        ),
+        (
+            "import router from \"wowlua:slash\"\nlocal r = router({ go = { args = { \"number\" }, flags = { \"all\" }, run = function(a) end } })\n",
+            "E8112",
+        ),
+        (
+            "import * as saved from \"wowlua:saved\"\nlocal n = \"StdDB\"\nlocal db = saved.bind(n, { version = 1, defaults = {} })\n",
+            "E8102",
+        ),
+        (
+            "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"OtherDB\", { version = 1, defaults = {} })\n",
+            "E8020",
+        ),
+        (
+            "import bind from \"wowlua:saved\"\nlocal a = bind(\"StdDB\", { version = 1, defaults = {} })\nlocal b = bind(\"StdDB\", { version = 1, defaults = {} })\n",
+            "E8103",
+        ),
+        (
+            "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"StdOtherDB\", { version = 1, defaults = {}, profiles = true })\n",
+            "E8021",
+        ),
+        (
+            "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"StdDBPerChar\", { version = 1, defaults = {}, profiles = true })\n",
+            "E8117",
+        ),
+        (
+            "import debounce from \"wowlua:timer\"\n@debounce(1)\nlocal function f(): number return 1 end\n",
+            "E8030",
+        ),
+        (
+            "import outOfCombat from \"wowlua:combat\"\nclass A\n    @outOfCombat\n    function m(): boolean return true end\nend\n",
+            "E8030",
+        ),
+    ];
+    for (source, code) in cases {
+        let dir = project(&[("src/main.wowlua", source)]);
+        let assert = wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .assert();
+        let output = assert.get_output().clone();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let kind = if code.starts_with('W') {
+            "warning"
+        } else {
+            "error"
+        };
+        assert!(
+            stderr.contains(&format!("{kind}[{code}]")),
+            "{code} expected for:\n{source}\n{stderr}"
+        );
+    }
+    // Correct uses pass.
+    let dir = project(&[(
+        "src/main.wowlua",
+        "import event, send, on from \"wowlua:events\"\nimport slash, router from \"wowlua:slash\"\ndeclare message STD_PING(n: number)\n@event(\"PLAYER_LOGIN\", \"STD_PING\")\nlocal function f(name: string, ...: any) end\nsend(\"STD_PING\", 1)\non(\"BAG_UPDATE\", function() end)\nlocal r = router({ go = { args = { \"number\", \"rest\" }, flags = { \"all\" }, run = function(a: number, b: string, flags: any) end } })\n@slash(\"/stdgo\")\nlocal function g(msg: string) r:dispatch(msg) end\n",
+    )]);
+    let stderr = build(dir.path(), "dev");
+    assert!(
+        !stderr.contains("[E8") && !stderr.contains("[W8"),
+        "{stderr}"
     );
 }

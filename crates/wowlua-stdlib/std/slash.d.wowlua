@@ -2,3 +2,5 @@
 -- registers the final function value.
 @intrinsic("slash.slash")
 declare function slash(...: string): any
+@intrinsic("slash.router")
+declare function router(commands: { [string]: any }): any

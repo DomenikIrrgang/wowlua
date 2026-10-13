@@ -9,6 +9,7 @@ pub mod lint;
 pub mod loadorder;
 pub mod meta;
 pub mod order;
+pub mod stdlib;
 pub mod usage;
 
 use constant::Const;
