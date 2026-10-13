@@ -1,0 +1,105 @@
+-- wowlua StdTest: in-game tests of the standard library.
+--   /stdtest          every test: automatic, then guided (target, combat,
+--                     /reload), finishing by itself after the reload
+--   /stdtest auto     the automatic tests only
+--   /stdtest skip     skip the guided step waiting for you
+--   /stdtest results  the last summary again
+import slash, router from "wowlua:slash"
+import onLogin from "wowlua:lifecycle"
+import after from "wowlua:timer"
+import run, report, skip, isRunning, say from "/harness"
+import state from "/state"
+import _ from "/suites/errors"
+import _ from "/suites/events"
+import _ from "/suites/lifecycle"
+import _ from "/suites/timer"
+import _ from "/suites/combat"
+import _ from "/suites/hooks"
+import _ from "/suites/slash"
+import _ from "/suites/saved"
+import _ from "/suites/callbacks"
+import _ from "/suites/devtools"
+
+local function concat(a: any[], b: any[]): any[]
+    local out = {}
+    for _, r in ipairs(a) do out[#out + 1] = r end
+    for _, r in ipairs(b) do out[#out + 1] = r end
+    return out
+end
+
+local function finish(results: any[])
+    local st = state()
+    st.results = results
+    st.time = date("%Y-%m-%d %H:%M:%S")
+    report(results)
+end
+
+local function automatic()
+    say("running the automatic tests...")
+    run(function(s: any): boolean return s.kind == "auto" end, finish)
+end
+
+local function everything()
+    say("running the automatic tests, then the guided ones...")
+    run(function(s: any): boolean return s.kind == "auto" end, function(auto: any[])
+        report(auto)
+        say("now the guided tests: follow the yellow instructions")
+        run(function(s: any): boolean return s.kind == "guided" end, function(guided: any[])
+            local all = concat(auto, guided)
+            local st = state()
+            if st.reload and st.reload.pending then
+                -- The rest runs after the reload.
+                st.results = all
+                say("|cffffd200>>> Type /reload to finish (the saved-variables test continues after it)|r")
+            else
+                finish(all)
+            end
+        end)
+    end)
+end
+
+-- After the /reload a guided test asked for: the last suites, then the
+-- whole summary.
+@onLogin
+local function continueAfterReload()
+    local st = state()
+    if not (st.reload and st.reload.pending) then
+        return
+    end
+    after(3, function()
+        say("continuing after the reload...")
+        run(function(s: any): boolean return s.kind == "reload" end, function(results: any[])
+            finish(concat(st.results or {}, results))
+        end)
+    end)
+end
+
+local commands = router({
+    auto = { help = "Run the automatic tests only", run = function() automatic() end },
+    skip = { help = "Skip the guided step waiting for you", run = function() skip() end },
+    results = {
+        help = "Show the last summary again",
+        run = function()
+            local st = state()
+            if st.results then
+                say(`results of {st.time ?? "the last run"}:`)
+                report(st.results)
+            else
+                say("no results yet: type /stdtest")
+            end
+        end,
+    },
+})
+
+@slash("/stdtest")
+local function onCommand(msg: string)
+    if msg:match("^%s*$") then
+        if isRunning() then
+            say("a run is in progress (/stdtest skip skips a guided step)")
+        else
+            everything()
+        end
+        return
+    end
+    commands:dispatch(msg)
+end

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DomenikIrrgang/wowlua/main/schema/wowlua-0.1.json",
+  "package": {
+    "name": "std-test",
+    "version": "0.1.0",
+    "description": "In-game tests of the wowlua standard library against the real client. Type /stdtest.",
+    "authors": ["wowlua contributors"],
+    "license": "MIT"
+  },
+  "addon": {
+    "title": "wowlua StdTest",
+    "notes": "In-game tests of the wowlua standard library. Type /stdtest.",
+    "saved-variables": ["StdTestState", "StdTestDB", "StdTestMigrateDB"],
+    "saved-variables-per-character": ["StdTestDBPerChar", "StdTestCharDB"]
+  },
+  "flavors": {
+    "standard": {},
+    "camelot": {},
+    "vanilla": {}
+  }
+}

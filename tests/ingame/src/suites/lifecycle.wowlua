@@ -1,0 +1,86 @@
+-- wowlua:lifecycle in the client's real startup sequence, and an addon
+-- loaded on demand (with a hook waiting for it, from wowlua:hooks).
+import onLoad, onLogin, onEnterWorld, onAddonLoaded, isLoaded, isLoggedIn from "wowlua:lifecycle"
+import on from "wowlua:events"
+import hook from "wowlua:hooks"
+import suite from "/harness"
+
+const phases: string[] = {}
+local world: { initial: any, reload: any } = { initial = nil, reload = nil }
+local loadedAtTop = isLoaded()
+
+@onLoad
+local function load()
+    phases[#phases + 1] = "load"
+end
+
+@onLogin
+local function login()
+    phases[#phases + 1] = "login"
+end
+
+@onEnterWorld
+local function enterWorld(isInitialLogin: boolean, isReloadingUi: boolean)
+    if #phases == 2 then
+        phases[#phases + 1] = "world"
+    end
+    world.initial = isInitialLogin
+    world.reload = isReloadingUi
+end
+
+local s = suite("lifecycle")
+
+s:test("phases ran once, in order", function(t: any)
+    t:eq(loadedAtTop, false, "not loaded while the files run")
+    t:eq(table.concat(phases, " "), "load login world", "load, login, enter world")
+    t:ok(isLoaded() and isLoggedIn(), "isLoaded and isLoggedIn")
+    t:ok(type(world.initial) == "boolean" and type(world.reload) == "boolean", "@onEnterWorld gets its flags")
+end)
+
+s:test("onAddonLoaded runs at once for a loaded addon", function(t: any)
+    local ran = false
+    onAddonLoaded("StdTest", function() ran = true end)
+    t:ok(ran, "ran synchronously")
+    onAddonLoaded("StdTest", function() error("onAddonLoaded failed") end)
+    t:ok(t:reported("onAddonLoaded failed"), "its errors are reported")
+end)
+
+-- Load-on-demand Blizzard addons and a global function each defines.
+const CANDIDATES = {
+    { addon = "Blizzard_DebugTools", fn = "DevTools_Dump" },
+    { addon = "Blizzard_TimeManager", fn = "TimeManager_Toggle" },
+    { addon = "Blizzard_MacroUI", fn = "MacroFrame_Show" },
+}
+
+s:test("a load-on-demand addon: callbacks and deferred hooks", function(t: any)
+    local pick: any = nil
+    for _, c in ipairs(CANDIDATES) do
+        if C_AddOns.IsAddOnLoadOnDemand(c.addon) and not C_AddOns.IsAddOnLoaded(c.addon) then
+            pick = c
+            break
+        end
+    end
+    if not pick then
+        t:skip("every candidate addon is loaded already (this test needs a fresh session)")
+        return
+    end
+    local order: string[] = {}
+    local original: any = nil
+    -- Registered first, so it sees the function before the hook wraps it.
+    local sub = on("ADDON_LOADED", function(name: string)
+        if name == pick.addon then
+            original = _G[pick.fn]
+        end
+    end)
+    onAddonLoaded(pick.addon, function() order[#order + 1] = "first" end)
+    onAddonLoaded(pick.addon, function() error("callback failed") end)
+    onAddonLoaded(pick.addon, function() order[#order + 1] = "third" end)
+    hook(_G, pick.fn, function() end, { addon = pick.addon })
+    t:eq(#order, 0, "nothing ran before the addon loads")
+    local loaded = C_AddOns.LoadAddOn(pick.addon)
+    sub:cancel()
+    t:ok(loaded, "loaded " .. pick.addon)
+    t:eq(table.concat(order, " "), "first third", "callbacks ran, isolated")
+    t:ok(t:reported("callback failed"), "the failing callback is reported")
+    t:ok(original ~= nil and _G[pick.fn] ~= original, "the hook was installed on " .. pick.fn)
+end)

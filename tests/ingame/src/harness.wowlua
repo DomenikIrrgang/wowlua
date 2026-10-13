@@ -1,0 +1,274 @@
+-- The test runner: suites of tests, each run as a coroutine so it can wait
+-- for real timers, events and the player (`t:wait`, `t:waitFor`, `t:ask`).
+-- Errors the standard library reports are captured while tests run (and
+-- kept away from the error frame where the client allows it).
+import * as errors from "wowlua:errors"
+
+const NAME = "|cff33ff99StdTest|r"
+const PASS = "|cff3fdf6fPASS|r"
+const FAIL = "|cffff5f5fFAIL|r"
+const SKIP = "|cffa39b8bSKIP|r"
+
+type Test = { name: string, fn: (t: any) -> () }
+
+-- `kind`: "auto" (runs alone), "guided" (asks the player to do things) or
+-- "reload" (runs after the /reload a guided test asked for).
+export type Suite = { name: string, kind: string, tests: Test[] }
+
+local suites: Suite[] = {}
+
+-- `Suite.test(name, fn)` adds a test to a suite.
+export function suite(name: string, kind: string?): any
+    local s: Suite = { name = name, kind = kind ?? "auto", tests = {} }
+    suites[#suites + 1] = s
+    return {
+        test = function(_, testName: string, fn: (t: any) -> ())
+            s.tests[#s.tests + 1] = { name = testName, fn = fn }
+        end,
+    }
+end
+
+export function say(...: any)
+    local parts = {}
+    for i = 1, select("#", ...) do
+        parts[i] = tostring((select(i, ...)))
+    end
+    print(NAME .. " " .. table.concat(parts, " "))
+end
+
+-- The state of a run.
+local running: any = nil
+local captured: string[] = {}
+local skipRequested = false
+
+-- An error in a test, with the test's stack.
+local function failure(co: any, err: any): string
+    local stack = debugstack and debugstack(co, 1, 6, 0) or ""
+    return tostring(err) .. "\n" .. stack
+end
+
+-- What tests see.
+local function context(record: any): any
+    local t: any = {}
+    local co = coroutine.running()
+
+    function t.ok(_, cond: any, label: string)
+        record.checks += 1
+        if not cond then
+            record.failures[#record.failures + 1] = label
+        end
+        return cond and true or false
+    end
+
+    function t.eq(self: any, actual: any, expected: any, label: string)
+        return self:ok(actual == expected, `{label}: expected {tostring(expected)}, got {tostring(actual)}`)
+    end
+
+    -- Waits `sec` seconds of game time.
+    function t.wait(_, sec: number)
+        C_Timer.After(sec, function()
+            local ok, err = coroutine.resume(co)
+            if not ok then
+                record.error = failure(co, err)
+            end
+        end)
+        coroutine.yield()
+    end
+
+    -- Waits until `pred()` is true (checked every 0.05 s); false after
+    -- `timeout` seconds, or when the player skips a guided step.
+    function t.waitFor(self: any, pred: () -> any, timeout: number, label: string): boolean
+        local deadline = GetTime() + timeout
+        while not pred() do
+            if skipRequested then
+                skipRequested = false
+                record.skipped = "skipped by the player"
+                return false
+            end
+            if GetTime() >= deadline then
+                self:ok(false, `{label} (timed out after {timeout} s)`)
+                return false
+            end
+            self:wait(0.05)
+        end
+        return true
+    end
+
+    -- A guided step: what the player should do now.
+    function t.ask(_, text: string)
+        say("|cffffd200>>> " .. text .. "|r  (/stdtest skip to skip)")
+    end
+
+    function t.skip(_, reason: string)
+        record.skipped = reason
+    end
+
+    -- Errors reported (through the error policy) since this test started.
+    function t.errors(): string[]
+        local out = {}
+        for i = record.errorsFrom, #captured do
+            out[#out + 1] = captured[i]
+        end
+        return out
+    end
+
+    -- Whether one of the errors since the test started contains `text`.
+    function t.reported(self: any, text: string): boolean
+        for _, e in ipairs(self:errors()) do
+            if e:find(text, 1, true) then
+                return true
+            end
+        end
+        return false
+    end
+
+    return t
+end
+
+local function finishTest(record: any)
+    local passed = record.error == nil and #record.failures == 0
+    record.ok = passed
+    running.current = nil
+    C_Timer.After(0, running.next)
+end
+
+-- Runs one test in its own coroutine; calls `finishTest` when it is done.
+local function runTest(test: Test, record: any)
+    record.errorsFrom = #captured + 1
+    local co = coroutine.create(function()
+        local t = context(record)
+        test.fn(t)
+    end)
+    running.current = record
+    local function watch()
+        if coroutine.status(co) == "dead" then
+            finishTest(record)
+            return
+        end
+        if record.error then
+            finishTest(record)
+            return
+        end
+        C_Timer.After(0.05, watch)
+    end
+    local ok, err = coroutine.resume(co)
+    if not ok then
+        record.error = failure(co, err)
+    end
+    watch()
+end
+
+-- `which(s)`: whether to run suite `s`. `done(results)` gets every record.
+export function run(which: (s: Suite) -> boolean, done: (results: any[]) -> ())
+    if running then
+        say("a run is in progress")
+        return
+    end
+    -- Capture reported errors; keep them out of the error frame if the
+    -- client (or BugGrabber) lets us replace the handler.
+    local previous = geterrorhandler()
+    local function capture(msg: any)
+        captured[#captured + 1] = tostring(msg)
+    end
+    seterrorhandler(capture)
+    local locked = geterrorhandler() ~= capture
+    if locked then
+        say("|cffffb23fanother addon keeps the error handler: the intentional test errors will show up there too|r")
+    end
+    local listener = errors.onError(function(msg: string)
+        if locked then
+            captured[#captured + 1] = msg
+        end
+    end)
+    errors.configure({ rateLimit = 0 })
+
+    local queue: any[] = {}
+    for _, s in ipairs(suites) do
+        if which(s) then
+            for _, test in ipairs(s.tests) do
+                queue[#queue + 1] = { suite = s.name, test = test }
+            end
+        end
+    end
+    local results: any[] = {}
+    local i = 0
+    running = {}
+    running.next = function()
+        i += 1
+        local item = queue[i]
+        if not item then
+            listener:cancel()
+            errors.configure({ rateLimit = 10 })
+            if not locked then
+                seterrorhandler(previous)
+            end
+            running = nil
+            done(results)
+            return
+        end
+        local record: any = { suite = item.suite, name = item.test.name, checks = 0, failures = {} }
+        results[#results + 1] = record
+        runTest(item.test, record)
+    end
+    running.next()
+end
+
+export function skip()
+    if running and running.current then
+        skipRequested = true
+    else
+        say("nothing to skip")
+    end
+end
+
+export function isRunning(): boolean
+    return running ~= nil
+end
+
+-- One line per suite, then the failures.
+export function report(results: any[])
+    local order: string[] = {}
+    local bySuite: { [string]: any } = {}
+    local passed, failed, skipped = 0, 0, 0
+    for _, r in ipairs(results) do
+        local s = bySuite[r.suite]
+        if not s then
+            s = { passed = 0, failed = 0, skipped = 0, total = 0 }
+            bySuite[r.suite] = s
+            order[#order + 1] = r.suite
+        end
+        s.total += 1
+        if r.skipped then
+            s.skipped += 1
+            skipped += 1
+        elseif r.ok then
+            s.passed += 1
+            passed += 1
+        else
+            s.failed += 1
+            failed += 1
+        end
+    end
+    for _, name in ipairs(order) do
+        local s = bySuite[name]
+        local status = s.failed > 0 and FAIL or (s.passed == 0 and SKIP or PASS)
+        local dots = string.rep(".", math.max(2, 18 - #name))
+        local extra = s.skipped > 0 and ` ({s.skipped} skipped)` or ""
+        say(`{name} {dots} {s.passed}/{s.total - s.skipped} {status}{extra}`)
+    end
+    for _, r in ipairs(results) do
+        if not r.ok and not r.skipped then
+            say(`{FAIL} {r.suite}: {r.name}`)
+            for _, f in ipairs(r.failures) do
+                say("    " .. f)
+            end
+            if r.error then
+                say("    |cffff9a80" .. tostring(r.error):gsub("\n", "\n    ") .. "|r")
+            end
+        elseif r.skipped then
+            say(`{SKIP} {r.suite}: {r.name} ({r.skipped})`)
+        end
+    end
+    local color = failed > 0 and "|cffff5f5f" or "|cff3fdf6f"
+    say(`{color}{passed} passed, {failed} failed|r` .. (skipped > 0 and `, {skipped} skipped` or ""))
+end

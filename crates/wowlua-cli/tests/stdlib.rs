@@ -60,7 +60,30 @@ fn build(dir: &Path, profile: &str) -> String {
 /// what was printed, one line each.
 fn run(dir: &Path, profile: &str, setup: &str, script: &str) -> Vec<String> {
     let out = dir.join("dist").join(profile).join("Std");
-    let toc = fs::read_to_string(out.join("Std.toc")).unwrap();
+    load(
+        &out,
+        "Std",
+        "Std.toc",
+        &format!("{profile}: "),
+        setup,
+        script,
+    )
+}
+
+/// Loads the files `toc` (in AddOn folder `out`) lists into the mock
+/// client as addon `name`, between `setup` and `script`.
+fn load(out: &Path, name: &str, toc: &str, label: &str, setup: &str, script: &str) -> Vec<String> {
+    let lua = client(out, name, toc, label, setup);
+    lua.load(script)
+        .set_name("@test")
+        .exec()
+        .unwrap_or_else(|e| panic!("{label}{e}"));
+    printed(&lua)
+}
+
+/// A mock client with `setup` run and the addon's files loaded.
+fn client(out: &Path, name: &str, toc: &str, label: &str, setup: &str) -> mlua::Lua {
+    let toc = fs::read_to_string(out.join(toc)).unwrap();
     let lua = mlua::Lua::new();
     lua.load(MOCK).set_name("@wowmock.lua").exec().unwrap();
     lua.load(setup).set_name("@setup").exec().unwrap();
@@ -76,13 +99,14 @@ fn run(dir: &Path, profile: &str, setup: &str, script: &str) -> Vec<String> {
         let code = fs::read(out.join(&path)).unwrap();
         lua.load(code)
             .set_name(format!("@{path}"))
-            .call::<()>(("Std", ns.clone()))
-            .unwrap_or_else(|e| panic!("{profile}: {path}: {e}"));
+            .call::<()>((name, ns.clone()))
+            .unwrap_or_else(|e| panic!("{label}{path}: {e}"));
     }
-    lua.load(script)
-        .set_name("@test")
-        .exec()
-        .unwrap_or_else(|e| panic!("{profile}: {e}"));
+    lua
+}
+
+/// What the mock client printed, one line each.
+fn printed(lua: &mlua::Lua) -> Vec<String> {
     let printed: mlua::Table = lua.load("return Mock.out").eval().unwrap();
     printed
         .sequence_values::<String>()
@@ -1850,4 +1874,232 @@ print(n, loaded)
         .failure();
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
     assert!(stderr.contains("error[E2001]"), "{stderr}");
+}
+
+/// Functions under the standard library's decorators run later, not while
+/// their files load: what they define does not order files (W1033).
+#[test]
+fn stdlib_decorators_do_not_run_at_load_time() {
+    let dir = project(&[
+        (
+            "src/state.wowlua",
+            "export function state(): any\n    if type(StdDB) ~= \"table\" then\n        StdDB = {}\n    end\n    return StdDB\nend\n",
+        ),
+        (
+            "src/a.wowlua",
+            "import onLogin from \"wowlua:lifecycle\"\nimport state from \"/state\"\n@onLogin\nlocal function login() state().a = 1 end\n",
+        ),
+        (
+            "src/b.wowlua",
+            "import * as events from \"wowlua:events\"\nimport state from \"/state\"\n@events.event(\"PLAYER_LOGIN\")\nlocal function login() state().b = 1 end\n",
+        ),
+    ]);
+    let stderr = build(dir.path(), "dev");
+    assert!(
+        !stderr.contains("W1033") && !stderr.contains("W1034"),
+        "{stderr}"
+    );
+}
+
+/// Copies a directory tree (the in-game test addon, built outside the
+/// repository).
+fn copy_tree(from: &Path, to: &Path) {
+    fs::create_dir_all(to).unwrap();
+    for entry in fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if entry.file_name() == "dist" {
+            continue;
+        }
+        if path.is_dir() {
+            copy_tree(&path, &to.join(entry.file_name()));
+        } else {
+            fs::copy(&path, to.join(entry.file_name())).unwrap();
+        }
+    }
+}
+
+/// The in-game test addon (`tests/ingame`, `/stdtest` in WoW) builds
+/// without diagnostics, and its automatic suites pass in the mock client.
+#[test]
+fn ingame_suite_builds_and_passes_in_the_mock() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/ingame");
+    let dir = tempfile::tempdir().unwrap();
+    copy_tree(&source, dir.path());
+    let stderr = build(dir.path(), "dev");
+    assert!(
+        !stderr.contains("warning") && !stderr.contains("error"),
+        "{stderr}"
+    );
+    let out = dir.path().join("dist/dev/StdTest");
+    let toc = fs::read_to_string(out.join("StdTest_Camelot.toc")).unwrap();
+    let field = |name: &str| {
+        toc.lines()
+            .find_map(|l| l.strip_prefix(&format!("## {name}: ")))
+            .unwrap()
+            .to_string()
+    };
+    let setup = format!(
+        r#"Mock.interface = {}
+Mock.metadata.StdTest = {{ Version = "{}" }}
+Mock.onDemand.Blizzard_DebugTools = function() DevTools_Dump = function() end end
+"#,
+        field("Interface"),
+        field("Version")
+    );
+    let printed = load(
+        &out,
+        "StdTest",
+        "StdTest_Camelot.toc",
+        "",
+        &setup,
+        r#"Mock.loadAddon("StdTest")
+Mock.fire("PLAYER_LOGIN")
+Mock.fire("PLAYER_ENTERING_WORLD", true, false)
+Mock.out = {}
+Mock.slash("/stdtest auto")
+for _ = 1, 1200 do
+    Mock.advance(0.05)
+end
+"#,
+    );
+    let text = printed.join("\n");
+    let summary = printed
+        .iter()
+        .find(|l| l.contains(" passed, "))
+        .unwrap_or_else(|| panic!("no summary:\n{text}"));
+    assert!(summary.contains(" 0 failed"), "{text}");
+    for suite in [
+        "errors",
+        "events",
+        "lifecycle",
+        "timer",
+        "combat",
+        "hooks",
+        "slash",
+        "saved",
+        "callbacks",
+        "log",
+        "debug",
+        "reflect",
+        "meta",
+    ] {
+        assert!(
+            printed
+                .iter()
+                .any(|l| l.contains(&format!(" {suite} .")) && l.contains("PASS")),
+            "{suite}:\n{text}"
+        );
+    }
+}
+
+/// The guided run of the in-game suite, with the mock client playing the
+/// player: combat, a target change and a /reload (the SavedVariables are
+/// written at logout and loaded into a fresh client, as WoW does).
+#[test]
+fn ingame_suite_guided_run_through_a_reload() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/ingame");
+    let dir = tempfile::tempdir().unwrap();
+    copy_tree(&source, dir.path());
+    build(dir.path(), "dev");
+    let out = dir.path().join("dist/dev/StdTest");
+    let toc = "StdTest_Camelot.toc";
+    let toc_text = fs::read_to_string(out.join(toc)).unwrap();
+    let field = |name: &str| {
+        toc_text
+            .lines()
+            .find_map(|l| l.strip_prefix(&format!("## {name}: ")))
+            .unwrap()
+            .to_string()
+    };
+    let setup = format!(
+        r#"Mock.interface = {}
+Mock.metadata.StdTest = {{ Version = "{}" }}
+Mock.onDemand.Blizzard_DebugTools = function() DevTools_Dump = function() end end
+-- Advances the clock until a line containing `text` is printed.
+function Mock.awaitText(text)
+    for _ = 1, 4000 do
+        for _, line in ipairs(Mock.out) do
+            if line:find(text, 1, true) then return end
+        end
+        Mock.advance(0.05)
+    end
+    error("never printed: " .. text)
+end
+-- SavedVariables as WoW writes them (raw tables).
+function Mock.serialize(v)
+    if type(v) == "table" then
+        local parts = {{}}
+        for k, x in pairs(v) do
+            parts[#parts + 1] = "[" .. Mock.serialize(k) .. "] = " .. Mock.serialize(x)
+        end
+        return "{{ " .. table.concat(parts, ", ") .. " }}"
+    elseif type(v) == "string" then
+        return string.format("%q", v)
+    end
+    return tostring(v)
+end
+"#,
+        field("Interface"),
+        field("Version")
+    );
+    let lua = client(&out, "StdTest", toc, "", &setup);
+    lua.load(
+        r#"Mock.loadAddon("StdTest")
+Mock.fire("PLAYER_LOGIN")
+Mock.fire("PLAYER_ENTERING_WORLD", true, false)
+Mock.slash("/stdtest")
+Mock.awaitText("Enter combat")
+Mock.fire("PLAYER_REGEN_DISABLED")
+Mock.awaitText("Now leave combat")
+Mock.fire("PLAYER_REGEN_ENABLED")
+Mock.awaitText("Change your target")
+Mock.fire("PLAYER_TARGET_CHANGED")
+Mock.fire("UNIT_TARGET", "player")
+Mock.fire("UNIT_TARGET", "target")
+Mock.awaitText("Type /reload")
+Mock.fire("PLAYER_LOGOUT")
+local saved = {}
+for _, name in ipairs({ "StdTestState", "StdTestDB", "StdTestMigrateDB", "StdTestDBPerChar", "StdTestCharDB" }) do
+    saved[#saved + 1] = name .. " = " .. Mock.serialize(_G[name])
+end
+Mock.saved = table.concat(saved, "\n")
+"#,
+    )
+    .exec()
+    .unwrap();
+    let before = printed(&lua).join("\n");
+    let saved: String = lua.load("return Mock.saved").eval().unwrap();
+    drop(lua);
+    // After the reload: the run continues by itself.
+    let after = load(
+        &out,
+        "StdTest",
+        toc,
+        "",
+        &format!("{setup}\n{saved}"),
+        r#"Mock.loadAddon("StdTest")
+Mock.fire("PLAYER_LOGIN")
+Mock.fire("PLAYER_ENTERING_WORLD", false, true)
+Mock.awaitText(" passed, ")
+"#,
+    );
+    let text = after.join("\n");
+    let summary = after.iter().find(|l| l.contains(" passed, ")).unwrap();
+    assert!(summary.contains(" 0 failed"), "{before}\n----\n{text}");
+    assert!(!summary.contains("skipped"), "{before}\n----\n{text}");
+    for suite in [
+        "combat (guided)",
+        "events (target)",
+        "saved (reload)",
+        "saved (after reload)",
+        "timer",
+    ] {
+        assert!(
+            after
+                .iter()
+                .any(|l| l.contains(&format!(" {suite} .")) && l.contains("PASS")),
+            "{suite}:\n{before}\n----\n{text}"
+        );
+    }
 }

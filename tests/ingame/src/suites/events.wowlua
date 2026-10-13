@@ -1,0 +1,159 @@
+-- wowlua:events against the client's event system.
+import event, unitEvent, on, once, onUnit, off, offAll, send from "wowlua:events"
+import suite from "/harness"
+
+declare message STDTEST_PING(n: number)
+declare message STDTEST_HOLES(a: any, b: any, c: any)
+declare message STDTEST_ORDER()
+declare message STDTEST_FAIL()
+
+-- What the decorated handlers saw since loading.
+export const seen = { login = 0, world = 0, names = {} :: string[], playerTarget = 0 }
+
+@event("PLAYER_LOGIN")
+local function onPlayerLogin()
+    seen.login += 1
+end
+
+@event("PLAYER_ENTERING_WORLD", "PLAYER_LOGIN")
+local function both(name: string, ...: any)
+    seen.names[#seen.names + 1] = name
+    if name == "PLAYER_ENTERING_WORLD" then
+        seen.world += 1
+    end
+end
+
+@unitEvent("UNIT_TARGET", "player")
+local function playerTarget(unit: string)
+    if unit == "player" then
+        seen.playerTarget += 1
+    end
+end
+
+local s = suite("events")
+
+s:test("decorated handlers ran at login", function(t: any)
+    t:ok(seen.login >= 1, "@event(PLAYER_LOGIN)")
+    t:ok(seen.world >= 1, "@event with several names")
+    local first = seen.names[1]
+    t:eq(first, "PLAYER_LOGIN", "several names: the name comes first, in event order")
+end)
+
+s:test("messages: payload, order, once, off", function(t: any)
+    local got: any[] = {}
+    local sub = on("STDTEST_PING", function(n: number) got[#got + 1] = n end)
+    once("STDTEST_PING", function(n: number) got[#got + 1] = -n end)
+    send("STDTEST_PING", 1)
+    send("STDTEST_PING", 2)
+    off(sub)
+    send("STDTEST_PING", 3)
+    t:eq(table.concat(got, ","), "1,-1,2", "order, once and off")
+    local count, payload = 0, ""
+    local owner = {}
+    on("STDTEST_HOLES", function(...: any)
+        count = select("#", ...)
+        payload = tostring((select(1, ...))) .. "," .. tostring((select(2, ...)))
+    end, owner)
+    send("STDTEST_HOLES", nil, 2, nil)
+    t:eq(count, 3, "nil values in a payload keep their count")
+    t:eq(payload, "nil,2", "and their positions")
+    offAll(owner)
+    t:ok(not pcall(offAll, nil), "offAll(nil) is refused")
+end)
+
+s:test("changes during a dispatch apply to the next one", function(t: any)
+    local log: string[] = {}
+    local owner = {}
+    local added = false
+    local second: any = nil
+    on("STDTEST_ORDER", function()
+        log[#log + 1] = "first"
+        if not added then
+            added = true
+            on("STDTEST_ORDER", function() log[#log + 1] = "added" end, owner)
+        end
+        if second then off(second) end
+    end, owner)
+    second = on("STDTEST_ORDER", function() log[#log + 1] = "second" end, owner)
+    send("STDTEST_ORDER")
+    send("STDTEST_ORDER")
+    offAll(owner)
+    send("STDTEST_ORDER")
+    t:eq(table.concat(log, " "), "first second first added", "snapshot dispatch")
+end)
+
+s:test("a failing handler is reported, the others run", function(t: any)
+    local ran = false
+    local a = on("STDTEST_FAIL", function() error("handler failed") end)
+    local b = on("STDTEST_FAIL", function() ran = true end)
+    send("STDTEST_FAIL")
+    a:cancel()
+    b:cancel()
+    t:ok(ran, "the next handler ran")
+    t:ok(t:reported("handler failed"), "the error is reported")
+    t:ok(t:reported("[events: STDTEST_FAIL handler]"), "naming the handler")
+end)
+
+s:test("WoW events: registered while handled", function(t: any)
+    if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
+        t:skip("no addon messages in this client")
+        return
+    end
+    C_ChatInfo.RegisterAddonMessagePrefix("StdTest")
+    local function frames(): number
+        if not GetFramesRegisteredForEvent then
+            return -1
+        end
+        return select("#", GetFramesRegisteredForEvent("CHAT_MSG_ADDON"))
+    end
+    local before = frames()
+    local got: string? = nil
+    local sub = on("CHAT_MSG_ADDON", function(prefix: string, text: string)
+        if prefix == "StdTest" then
+            got = text
+        end
+    end)
+    if before >= 0 then
+        t:eq(frames(), before + 1, "registered with a handler")
+    end
+    C_ChatInfo.SendAddonMessage("StdTest", "ping", "WHISPER", UnitName("player") :: any)
+    if t:waitFor(function() return got ~= nil end, 5, "CHAT_MSG_ADDON arrives") then
+        t:eq(got, "ping", "with its payload")
+    end
+    sub:cancel()
+    if before >= 0 then
+        t:eq(frames(), before, "unregistered without handlers")
+    end
+end)
+
+s:test("unit events: limits and sending WoW events", function(t: any)
+    local three = { "player", "target", "focus" }
+    t:ok(not pcall(onUnit, "UNIT_HEALTH", three, function() end), "three units are refused")
+    local none: string[] = {}
+    t:ok(not pcall(onUnit, "UNIT_HEALTH", none, function() end), "no units are refused")
+    local sub = onUnit("UNIT_HEALTH", { "player", "target" }, function() end)
+    sub:cancel()
+    t:eq(sub.active, false, "a unit subscription cancels")
+    local name = "PLAYER_" .. "LOGIN"
+    t:ok(not pcall(send, name), "send refuses WoW events")
+end)
+
+-- Guided ----------------------------------------------------------------------
+
+local g = suite("events (target)", "guided")
+
+g:test("unit filter and plain handler see a target change", function(t: any)
+    local changed = 0
+    local units: string[] = {}
+    local a = on("PLAYER_TARGET_CHANGED", function() changed += 1 end)
+    local b = onUnit("UNIT_TARGET", { "player" }, function(unit: string) units[#units + 1] = unit end)
+    local before = seen.playerTarget
+    t:ask("Change your target (target or clear any unit)")
+    t:waitFor(function() return changed > 0 and #units > 0 end, 120, "target change")
+    a:cancel()
+    b:cancel()
+    if changed > 0 then
+        t:ok(#units > 0 and units[1] == "player", "UNIT_TARGET for the player only")
+        t:ok(seen.playerTarget > before, "@unitEvent handler ran")
+    end
+end)

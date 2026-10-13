@@ -1,0 +1,162 @@
+-- wowlua:saved with real SavedVariables, including what WoW writes at a
+-- /reload: stripping, the active profile per character, migrations and
+-- @onLogout running before the data is saved.
+import * as saved from "wowlua:saved"
+import onLogout from "wowlua:lifecycle"
+import suite from "/harness"
+import state from "/state"
+
+const DEFAULTS = { scale = 1, enabled = false, bars = { n = 1 }, list = {} }
+
+local db: any = saved.bind("StdTestDB", { version = 2, defaults = DEFAULTS, profiles = true })
+local migrated: any = saved.bind("StdTestMigrateDB", {
+    version = 2,
+    defaults = { scale = 1 },
+    migrate = {
+        [2] = function(old: any)
+            if old.oldScale then
+                old.scale = old.oldScale
+                old.oldScale = nil
+            end
+            old.migrations = (old.migrations or 0) + 1
+        end,
+    },
+})
+local char: any = saved.bind("StdTestCharDB", { version = 1, defaults = { n = 5 } })
+
+-- Locked while the files run.
+local earlyOk, earlyError = pcall(function() return db.scale end)
+local earlyWriteOk = pcall(function() db.scale = 2 end)
+
+@onLogout
+local function markLogout()
+    local reload = state().reload
+    if reload and reload.pending then
+        db.logoutMark = "set at logout"
+    end
+end
+
+local s = suite("saved")
+
+s:test("locked until loaded, then loaded", function(t: any)
+    t:eq(earlyOk, false, "a read before loading fails")
+    t:ok(tostring(earlyError):find("StdTest: StdTestDB accessed before it was loaded; use @onLoad", 1, true) ~= nil, "with the message")
+    t:eq(earlyWriteOk, false, "a write before loading fails")
+    t:ok(saved.handle(db):isLoaded(), "loaded now")
+    t:eq(_G.StdTestDB.__version, 2, "the stored version")
+    t:ok(not pcall(saved.handle, {}), "handle() of another table fails")
+    t:eq(saved.handle(migrated).profiles, nil, "no profiles without profiles = true")
+end)
+
+-- Runs `fn` in a scratch profile, then switches back and deletes it.
+local function scratch(name: string, fn: () -> ())
+    local profiles: any = saved.handle(db).profiles
+    local before = profiles:current()
+    profiles:use(name)
+    fn()
+    profiles:use(before)
+    profiles:delete(name)
+end
+
+s:test("lazy deep defaults", function(t: any)
+    scratch("StdTestScratch", function()
+        t:eq(db.scale, 1, "a default")
+        t:eq(db.enabled, false, "a false default")
+        t:eq(db.bars.n, 1, "a nested default")
+        db.bars.n = 2
+        local stored = _G.StdTestDB.profiles.StdTestScratch
+        t:eq(rawget(stored.bars, "n"), 2, "nested writes land in the stored data")
+        t:eq(DEFAULTS.bars.n, 1, "the defaults are untouched")
+    end)
+end)
+
+s:test("profiles: use, current, list, copy, delete, onChange", function(t: any)
+    local profiles: any = saved.handle(db).profiles
+    local before = profiles:current()
+    local changes: string[] = {}
+    local sub = profiles:onChange(function(name: string) changes[#changes + 1] = name end)
+    profiles:use("StdTestA")
+    db.scale = 2
+    db.bars.n = 4
+    profiles:use("StdTestB")
+    t:eq(db.scale, 1, "a new profile starts at the defaults")
+    profiles:copy("StdTestA")
+    t:eq(db.scale, 2, "copied")
+    db.bars.n = 5
+    t:eq(_G.StdTestDB.profiles.StdTestA.bars.n, 4, "a copy is not shared with its source")
+    profiles:copy("StdTestB")
+    t:ok(db.scale == 2 and db.bars.n == 5, "copying the active profile keeps it")
+    local listed = table.concat(profiles:list(), ",")
+    t:ok(listed:find("StdTestA,StdTestB", 1, true) ~= nil, "list, sorted")
+    t:eq(profiles:current(), "StdTestB", "current")
+    t:ok(not pcall(profiles.copy, profiles, "StdTestMissing"), "copy of a missing profile fails")
+    t:ok(not pcall(profiles.delete, profiles, "StdTestB"), "deleting the active profile fails")
+    t:ok(not pcall(profiles.use, profiles, nil), "a name must be a string")
+    sub:cancel()
+    profiles:use(before)
+    profiles:delete("StdTestA")
+    profiles:delete("StdTestB")
+    t:eq(table.concat(changes, ","), "StdTestA,StdTestB", "onChange until cancelled")
+    t:eq(_G.StdTestDBPerChar.profile, before, "the active profile is stored per character")
+end)
+
+s:test("reset", function(t: any)
+    scratch("StdTestReset", function()
+        db.scale = 9
+        db.extra = "x"
+        saved.handle(db):reset()
+        t:eq(db.scale, 1, "back to the default")
+        t:eq(db.extra, nil, "other values gone")
+    end)
+    char.n = 6
+    saved.handle(char):reset()
+    t:eq(char.n, 5, "a per-character table resets")
+    t:eq(rawget(char, "__version"), 1, "its version stays")
+end)
+
+-- Guided: through a /reload --------------------------------------------------
+
+local g = suite("saved (reload)", "guided")
+
+g:test("prepare data for the reload", function(t: any)
+    local profiles: any = saved.handle(db).profiles
+    local reload: any = { pending = true, profileBefore = profiles:current(), migrationsBefore = migrated.migrations or 0 }
+    profiles:use("StdTestReload")
+    db.scale = 3
+    db.enabled = false
+    t:eq(db.bars.n, 1, "a nested default read")
+    db.custom = {}
+    char.n = 7
+    -- Pretend the migrated table was saved by version 1.
+    rawset(migrated, "__version", 1)
+    migrated.oldScale = 4
+    state().reload = reload
+    t:ok(true, "prepared")
+end)
+
+local r = suite("saved (after reload)", "reload")
+
+r:test("what WoW saved, and what loading made of it", function(t: any)
+    local reload: any = state().reload
+    local profiles: any = saved.handle(db).profiles
+    t:eq(profiles:current(), "StdTestReload", "the active profile came back")
+    t:eq(_G.StdTestDBPerChar.profile, "StdTestReload", "stored per character")
+    local stored = _G.StdTestDB.profiles.StdTestReload
+    t:eq(rawget(stored, "scale"), 3, "a changed value is saved")
+    t:eq(rawget(stored, "enabled"), nil, "a value equal to its false default is stripped")
+    t:eq(rawget(stored, "bars"), nil, "a nested table back at its defaults is stripped")
+    t:eq(type(rawget(stored, "custom")), "table", "a table without defaults is kept")
+    t:eq(rawget(stored, "logoutMark"), "set at logout", "@onLogout ran before saving")
+    t:eq(_G.StdTestDB.__version, 2, "the version is saved")
+    t:eq(rawget(char, "n"), 7, "per-character data")
+    t:eq(migrated.scale, 4, "the migration ran")
+    t:eq(rawget(migrated, "oldScale"), nil, "and changed the data")
+    t:eq(migrated.migrations, reload.migrationsBefore + 1, "once")
+    t:eq(rawget(migrated, "__version"), 2, "to the current version")
+    -- Clean up.
+    profiles:use(reload.profileBefore)
+    profiles:delete("StdTestReload")
+    rawset(migrated, "migrations", reload.migrationsBefore + 1)
+    char.n = 5
+    state().reload = nil
+end)

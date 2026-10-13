@@ -1,0 +1,126 @@
+-- wowlua:timer on the client's C_Timer and frame clock.
+import after, every, throttle, debounce, nextFrame from "wowlua:timer"
+import suite from "/harness"
+
+local calls: { [string]: any[] } = { throttle = {}, debounce = {}, frame = {}, method = {} }
+
+@throttle(0.3)
+local function throttled(v: number)
+    calls.throttle[#calls.throttle + 1] = { v = v, at = GetTime() }
+end
+
+@debounce(0.3)
+local function debounced(v: number)
+    calls.debounce[#calls.debounce + 1] = { v = v, at = GetTime() }
+end
+
+@nextFrame
+local function redraw(v: number)
+    calls.frame[#calls.frame + 1] = v
+end
+
+class Panel
+    name: string
+    constructor(name: string) self.name = name end
+
+    @throttle(5)
+    function update(v: number)
+        calls.method[#calls.method + 1] = `{self.name}{v}`
+    end
+end
+
+local s = suite("timer")
+
+s:test("after runs once, cancelled timers never", function(t: any)
+    local start = GetTime()
+    local at: number? = nil
+    local timer = after(0.2, function() at = GetTime() end)
+    local cancelled = false
+    local never = after(0.1, function() cancelled = true end)
+    never:Cancel()
+    t:ok(never:IsCancelled(), "IsCancelled")
+    t:ok(not timer:IsCancelled(), "a running timer is not cancelled")
+    t:waitFor(function() return at ~= nil end, 3, "after(0.2)")
+    t:ok(at ~= nil and at - start >= 0.15, "not before its time")
+    t:wait(0.2)
+    t:ok(not cancelled, "the cancelled timer did not run")
+end)
+
+s:test("every repeats, gets its ticker, stops", function(t: any)
+    local ticks = 0
+    local limited = 0
+    every(0.1, function() limited += 1 end, 3)
+    every(0.1, function(ticker: any)
+        ticks += 1
+        if ticks == 2 then ticker:Cancel() end
+    end)
+    t:wait(0.8)
+    t:eq(limited, 3, "three iterations")
+    t:eq(ticks, 2, "cancelled from inside")
+end)
+
+s:test("timer callbacks are isolated", function(t: any)
+    local after2 = false
+    after(0.05, function() error("timer failed") end)
+    after(0.05, function() after2 = true end)
+    t:waitFor(function() return after2 end, 2, "the next timer")
+    t:ok(t:reported("timer failed"), "the error is reported")
+    t:ok(t:reported("[timer: after]"), "naming the timer")
+end)
+
+s:test("@throttle: first call now, one trailing call", function(t: any)
+    calls.throttle = {}
+    local start = GetTime()
+    throttled(1)
+    throttled(2)
+    throttled(3)
+    t:eq(#calls.throttle, 1, "the first call ran at once")
+    t:waitFor(function() return #calls.throttle == 2 end, 2, "the trailing call")
+    local last = calls.throttle[2]
+    t:ok(last and last.v == 3, "with the latest arguments")
+    t:ok(last and last.at - start >= 0.25, "after the window")
+    t:wait(0.4)
+    t:eq(#calls.throttle, 2, "nothing more")
+end)
+
+s:test("@throttle keeps state per instance", function(t: any)
+    calls.method = {}
+    local a, b = Panel.new("a"), Panel.new("b")
+    a:update(1)
+    b:update(1)
+    a:update(2)
+    t:eq(table.concat(calls.method, " "), "a1 b1", "each instance runs its first call")
+end)
+
+s:test("@debounce: once, after the last call", function(t: any)
+    calls.debounce = {}
+    debounced(1)
+    t:wait(0.15)
+    debounced(2)
+    t:wait(0.15)
+    local last = GetTime()
+    debounced(3)
+    t:eq(#calls.debounce, 0, "not yet")
+    t:waitFor(function() return #calls.debounce > 0 end, 2, "the call")
+    t:wait(0.4)
+    t:eq(#calls.debounce, 1, "once")
+    local c = calls.debounce[1]
+    t:ok(c and c.v == 3 and c.at - last >= 0.25, "with the last arguments, after the delay")
+end)
+
+s:test("nextFrame: coalesced as a decorator, not as a call", function(t: any)
+    calls.frame = {}
+    redraw(1)
+    redraw(2)
+    redraw(3)
+    local plain = 0
+    nextFrame(function() plain += 1 end)
+    nextFrame(function() plain += 1 end)
+    t:eq(#calls.frame, 0, "nothing ran in this frame")
+    t:wait(0.1)
+    t:eq(table.concat(calls.frame, ","), "3", "one call, the last arguments")
+    t:eq(plain, 2, "plain calls each run")
+    redraw(4)
+    t:wait(0.1)
+    t:eq(table.concat(calls.frame, ","), "3,4", "and again in a later frame")
+end)

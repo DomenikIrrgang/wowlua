@@ -236,6 +236,10 @@ cargo xtask corpus addons
                      # minification level (WOWLUA_CORPUS_FIX=1: also apply lint fixes)
 cargo xtask types fetch && cargo xtask types gen
                      # regenerate the embedded wow-api declarations
+(cd tests/ingame && wowlua install)
+                     # the standard library's in-game tests: /stdtest in WoW runs them all
+                     # (automatic, then guided: combat, a target change, a /reload);
+                     # /stdtest auto runs the automatic ones only
 ```
 
 ## Licence

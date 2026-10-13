@@ -1,0 +1,154 @@
+-- wowlua:log, wowlua:debug, wowlua:reflect and wowlua:meta in a dev build.
+import log, history, setLevel, sink from "wowlua:log"
+import assert, location, nameof, typeName, measure, time, timeEnd, stats, watch, unreachable from "wowlua:debug"
+import * as reflect from "wowlua:reflect"
+import addon, build, flavor from "wowlua:meta"
+import suite from "/harness"
+
+local captured: string[] = {}
+local capturing = false
+sink(function(level: string, message: string)
+    if capturing then
+        captured[#captured + 1] = `{level} {message}`
+    end
+end)
+
+local evaluated = false
+local function costly(): string
+    evaluated = true
+    return "costly"
+end
+
+local s = suite("log")
+
+s:test("levels, sinks and history", function(t: any)
+    captured = {}
+    capturing = true
+    log.trace(costly())
+    log.debug("cache", 42, true)
+    log.info("ready")
+    setLevel("error")
+    log.info("hidden")
+    setLevel("trace")
+    log.info("visible again")
+    capturing = false
+    -- dev builds keep debug and above; trace calls are removed with their
+    -- arguments.
+    t:eq(evaluated, false, "a removed call's arguments are not evaluated")
+    t:eq(table.concat(captured, " | "), "debug cache 42 true | info ready | info visible again", "sinks")
+    local entries = history(3)
+    t:eq(#entries, 3, "history")
+    local last = entries[3]
+    t:ok(last and last.message == "visible again" and last.level == "info", "the newest entry last")
+    t:ok(last and tostring(last.location):match("suites/devtools%.wowlua:%d+") ~= nil, `with its source location ({last and tostring(last.location)})`)
+end)
+
+local d = suite("debug")
+
+local Tracker = { total = 0 }
+
+s = d
+s:test("folded helpers", function(t: any)
+    t:eq(nameof(Tracker.total), "total", "nameof")
+    local amount = 3
+    t:eq(typeName(amount), "number", "typeName")
+    t:eq(typeName(Tracker), "{ total: number }", "typeName of a table")
+    t:ok(location():match("^src/suites/devtools%.wowlua:%d+") ~= nil, `location ({location()})`)
+end)
+
+s:test("assert and unreachable", function(t: any)
+    assert(1 + 1 == 2, "math")
+    local ok, err = pcall(function() assert(1 + 1 == 3, "math") end)
+    t:eq(ok, false, "a failed assertion raises")
+    t:ok(tostring(err):find("assertion failed: math", 1, true) ~= nil, "with its message")
+    t:ok(tostring(err):find("StdTest: src/suites/devtools.wowlua:", 1, true) ~= nil, "and its location")
+    local ok2, err2 = pcall(function() unreachable("never") end)
+    t:ok(not ok2 and tostring(err2):find("unreachable code reached: never", 1, true) ~= nil, "unreachable")
+end)
+
+s:test("measure, time, stats and watch", function(t: any)
+    local doubled = measure("stdtest.double", function(x: number): number return x * 2 end, 21)
+    t:eq(doubled, 42, "measure returns the result")
+    time("stdtest.timer")
+    timeEnd("stdtest.timer")
+    local st = stats()
+    t:ok(st["stdtest.double"] ~= nil, "measure recorded")
+    t:ok(st["stdtest.timer"] ~= nil, "time recorded")
+    watch("stdtest.watch", function() return Tracker.total end)
+    t:ok(true, "watch registered")
+end)
+
+-- reflect ---------------------------------------------------------------------
+
+interface Named
+    name: string
+end
+
+class Animal
+    name: string = "?"
+end
+
+@reflect
+class Dog extends Animal implements Named
+    scale: number = 1
+    nickname?: string
+    function bark(times: number): string return string.rep("woof", times) end
+end
+
+enum Direction { Up, Down, Left, Right }
+
+@reflect
+local function greet(who: string): string return "hi " .. who end
+
+s = suite("reflect")
+
+s:test("class identity", function(t: any)
+    local dog = Dog.new()
+    t:ok(reflect.isInstance(dog, Dog) and reflect.isInstance(dog, Animal), "isInstance")
+    t:eq(reflect.className(dog), "Dog", "className")
+    t:eq(reflect.superclass(Dog), Animal, "superclass")
+    t:ok(reflect.isSubclass(Dog, Animal) and not reflect.isSubclass(Animal, Dog), "isSubclass")
+    t:eq(reflect.classOf(dog), Dog, "classOf")
+end)
+
+s:test("enums", function(t: any)
+    t:eq(reflect.enumName(Direction, 2), "Down", "enumName")
+    t:eq(reflect.enumFrom(Direction, 9), nil, "enumFrom of a non-member")
+    local names: string[] = {}
+    for _, e in ipairs(reflect.enumEntries(Direction)) do
+        names[#names + 1] = e.name
+    end
+    t:eq(table.concat(names, " "), "Up Down Left Right", "declaration order")
+end)
+
+s:test("metadata of @reflect classes and functions", function(t: any)
+    local fields = reflect.fields(Dog)
+    t:ok(fields and fields[1].name == "scale" and fields[2].optional == true, "fields")
+    local m = reflect.methods(Dog)
+    t:ok(m and m[1].name == "bark" and m[1].params[1].type == "number", "methods")
+    t:eq(reflect.interfaces(Dog) and reflect.interfaces(Dog)[1], "Named", "interfaces")
+    t:eq(reflect.getClass("Dog"), Dog, "getClass")
+    t:eq(reflect.fields(Animal), nil, "no metadata without @reflect")
+    local info = reflect.functionInfo(greet)
+    t:ok(info and info.name == "greet" and info.returns == "string", "functionInfo")
+end)
+
+-- meta ------------------------------------------------------------------------
+
+s = suite("meta")
+
+s:test("the build matches the client", function(t: any)
+    t:eq(addon.name, "StdTest", "addon.name")
+    t:eq(addon.version, "0.1.0", "addon.version")
+    t:eq(build.profile, "dev", "build.profile")
+    t:eq(build.debug, true, "build.debug")
+    t:eq(C_AddOns.GetAddOnMetadata("StdTest", "Version"), build.version, "the TOC version is build.version")
+    local client = select(4, GetBuildInfo())
+    local matches = false
+    for _, v in ipairs(addon.interface) do
+        if v == client then
+            matches = true
+        end
+    end
+    t:ok(matches, `flavor {flavor} loaded for interface {client}`)
+end)

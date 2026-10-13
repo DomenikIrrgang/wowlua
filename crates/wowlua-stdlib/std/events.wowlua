@@ -146,6 +146,11 @@ end
 
 --- Cancels every subscription registered with `owner`.
 export function offAll(owner: any)
+    -- nil would match every subscription without an owner, the standard
+    -- library's own among them.
+    if owner == nil then
+        error("offAll: the owner is nil", 2)
+    end
     local subs: Subscription[] = {}
     for _, list in pairs(handlers) do
         for _, h in ipairs(list) do

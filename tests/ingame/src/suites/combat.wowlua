@@ -1,0 +1,101 @@
+-- wowlua:combat: the out-of-combat queue in real combat lockdown.
+import outOfCombat, defer, inCombat, onCombatChange from "wowlua:combat"
+import on from "wowlua:events"
+import suite from "/harness"
+
+local log: string[] = {}
+
+class Bar
+    name: string
+    constructor(name: string) self.name = name end
+
+    @outOfCombat
+    function layout(offset: number)
+        log[#log + 1] = `{self.name} {offset} {tostring(InCombatLockdown())}`
+    end
+end
+
+@outOfCombat
+local function failing()
+    error("queued call failed")
+end
+
+-- A secure frame: changing its attributes is forbidden in combat.
+local secure = CreateFrame("Button", "StdTestSecureButton", UIParent, "SecureActionButtonTemplate")
+secure:Hide()
+
+@outOfCombat
+local function protectedWork(v: number)
+    secure:SetAttribute("stdtest", v)
+    log[#log + 1] = `secure {secure:GetAttribute("stdtest")}`
+end
+
+local s = suite("combat")
+
+s:test("out of combat everything runs at once", function(t: any)
+    if InCombatLockdown() then
+        t:skip("in combat")
+        return
+    end
+    log = {}
+    t:eq(inCombat(), false, "inCombat")
+    local one = Bar.new("one")
+    one:layout(1)
+    local ran = false
+    defer(function() ran = true end)
+    t:eq(log[1], "one 1 false", "@outOfCombat ran")
+    t:ok(ran, "defer ran")
+end)
+
+local g = suite("combat (guided)", "guided")
+
+g:test("calls wait for the end of combat, in order", function(t: any)
+    log = {}
+    local changes: string[] = {}
+    local sub = onCombatChange(function(entering: boolean) changes[#changes + 1] = tostring(entering) end)
+    -- The client reports actions it blocked for this addon.
+    local blocked: string[] = {}
+    local function watchBlocked(addon: string, action: string)
+        if addon == "StdTest" then
+            blocked[#blocked + 1] = tostring(action)
+        end
+    end
+    local b1 = on("ADDON_ACTION_BLOCKED", watchBlocked)
+    local b2 = on("ADDON_ACTION_FORBIDDEN", watchBlocked)
+    if not InCombatLockdown() then
+        t:ask("Enter combat: attack a training dummy or a mob")
+        if not t:waitFor(function() return inCombat() end, 180, "entering combat") then
+            sub:cancel()
+            b1:cancel()
+            b2:cancel()
+            return
+        end
+    end
+    local one, two = Bar.new("one"), Bar.new("two")
+    one:layout(1)
+    two:layout(5)
+    one:layout(3)
+    failing()
+    local deferred = 0
+    local fn = function() deferred += 1 end
+    defer(fn)
+    defer(fn)
+    protectedWork(7)
+    t:eq(#log, 0, "nothing ran in combat")
+    t:ask("Now leave combat (stop attacking, walk away, wait for the timer)")
+    if not t:waitFor(function() return not inCombat() end, 300, "leaving combat") then
+        sub:cancel()
+        b1:cancel()
+        b2:cancel()
+        return
+    end
+    t:wait(0.2)
+    sub:cancel()
+    b1:cancel()
+    b2:cancel()
+    t:eq(table.concat(log, " | "), "one 3 false | two 5 false | secure 7", "coalesced, FIFO, out of combat")
+    t:eq(deferred, 2, "defer is not coalesced")
+    t:ok(t:reported("queued call failed"), "a failing call is reported, the rest ran")
+    t:eq(changes[#changes], "false", "onCombatChange saw the end")
+    t:eq(table.concat(blocked, ", "), "", "no blocked actions")
+end)

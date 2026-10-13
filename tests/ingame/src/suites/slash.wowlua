@@ -1,0 +1,93 @@
+-- wowlua:slash: SlashCmdList registration and the router.
+import slash, router from "wowlua:slash"
+import suite from "/harness"
+
+local echoed: string[] = {}
+
+@slash("/stdtestecho", "/stdtestecho2")
+local function echo(msg: string, _: any)
+    echoed[#echoed + 1] = msg
+end
+
+local got: string[] = {}
+local function record(...: any)
+    local parts = {}
+    for i = 1, select("#", ...) do
+        parts[i] = tostring((select(i, ...)))
+    end
+    got[#got + 1] = table.concat(parts, " ")
+end
+
+local commands = router({
+    show = { run = function() record("show") end, help = "Show the window", aliases = { "open" } },
+    scale = { args = { "number" }, run = function(v: number) record("scale", v) end },
+    mode = { args = { { "tank", "heal" }, "boolean?" }, run = function(m: string, on: boolean?) record("mode", m, on) end },
+    say = { args = { "string", "rest" }, flags = { "loud" }, run = function(who: string, text: string, flags: { loud: boolean }) record("say", who, "[" .. text .. "]", flags.loud) end },
+    move = { args = { "number", "number?" }, flags = { "smooth" }, run = function(x: number, y: number?, flags: { smooth: boolean }) record("move", x, y, flags.smooth) end },
+    boom = { run = function() error("command failed") end },
+})
+
+-- The SlashCmdList key of a command name.
+local function keyOf(command: string): string?
+    for key in pairs(SlashCmdList) do
+        if type(key) == "string" and _G["SLASH_" .. key .. "1"] == command then
+            return key
+        end
+    end
+    return nil
+end
+
+local s = suite("slash")
+
+s:test("commands are registered under unique keys", function(t: any)
+    local key = keyOf("/stdtestecho")
+    t:ok(key ~= nil and key:match("^WOWLUA_STDTEST_%d+$") ~= nil, `key {tostring(key)}`)
+    if key then
+        t:eq(_G["SLASH_" .. key .. "2"], "/stdtestecho2", "the alias")
+        echoed = {}
+        SlashCmdList[key]("hello  world", nil)
+        t:eq(echoed[1], "hello  world", "the handler gets the message")
+    end
+    t:ok(keyOf("/stdtest") ~= nil, "/stdtest itself")
+end)
+
+s:test("router: commands, aliases, typed arguments", function(t: any)
+    got = {}
+    t:eq(commands:dispatch("show"), true, "dispatched")
+    commands:dispatch("OPEN")
+    commands:dispatch("scale 1.5")
+    commands:dispatch("scale -2")
+    commands:dispatch("mode HEAL yes")
+    commands:dispatch("mode tank off")
+    commands:dispatch("mode tank")
+    t:eq(table.concat(got, " | "), "show | show | scale 1.5 | scale -2 | mode heal true | mode tank false | mode tank nil", "converted")
+end)
+
+s:test("router: rest text, quotes and flags", function(t: any)
+    got = {}
+    commands:dispatch([[say "two words" hello there  friend  ]])
+    commands:dispatch([[say 'it\'s' "a \"quoted\" word"]])
+    commands:dispatch("say --loud bob hello --loud")
+    commands:dispatch("say bob")
+    commands:dispatch("move --smooth 1")
+    commands:dispatch("move 1 2 --smooth")
+    t:eq(got[1], "say two words [hello there  friend] false", "rest as typed")
+    t:eq(got[2], "say it's [\"a \\\"quoted\\\" word\"] false", "quotes and escapes")
+    t:eq(got[3], "say bob [hello --loud] true", "flags before the rest")
+    t:eq(got[4], "say bob [] false", "empty rest")
+    t:eq(got[5], "move 1 nil true", "optional argument missing")
+    t:eq(got[6], "move 1 2 true", "flags after arguments")
+end)
+
+s:test("router: bad input, unknown commands, failures", function(t: any)
+    got = {}
+    -- Bad input prints the usage (one line in chat each).
+    commands:dispatch("scale big")
+    commands:dispatch("mode dps")
+    t:eq(#got, 0, "bad arguments do not run the command")
+    t:eq(commands:dispatch("boom"), true, "a failing command was dispatched")
+    t:ok(t:reported("command failed"), "its error is reported")
+    local help = commands.help()
+    t:ok(help:find("scale <number>", 1, true) ~= nil, "help lists usages")
+    t:ok(help:find("show - Show the window", 1, true) ~= nil, "with their help texts")
+end)

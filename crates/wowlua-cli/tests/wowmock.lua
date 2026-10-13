@@ -10,7 +10,8 @@ Mock = { now = 0, frames = {}, timers = {}, errors = {}, out = {}, loaded = {},
 Mock.events = {}
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_LOGOUT", "PLAYER_ENTERING_WORLD",
     "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PLAYER_STARTED_MOVING", "BAG_UPDATE",
-    "BAG_UPDATE_DELAYED", "UNIT_HEALTH", "UNIT_POWER_UPDATE", "PLAYER_TARGET_CHANGED" }) do
+    "BAG_UPDATE_DELAYED", "UNIT_HEALTH", "UNIT_POWER_UPDATE", "PLAYER_TARGET_CHANGED", "UNIT_TARGET",
+    "CHAT_MSG_ADDON", "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN" }) do
     Mock.events[e] = true
 end
 
@@ -36,6 +37,7 @@ function securecallfunction(fn, ...)
 end
 
 function debugstack() return "" end
+date = os.date
 function GetTime() return Mock.now end
 function InCombatLockdown() return Mock.combat end
 function IsLoggedIn() return Mock.loggedIn end
@@ -85,6 +87,12 @@ function Frame:Show() self.shown = true; Mock.script(self, "OnShow") end
 function Frame:Hide() self.shown = false; Mock.script(self, "OnHide") end
 function Frame:IsShown() return self.shown end
 function Frame:GetName() return self.name end
+function Frame:SetAttribute(k, v)
+    local a = rawget(self, "attributes") or {}
+    rawset(self, "attributes", a)
+    a[k] = v
+end
+function Frame:GetAttribute(k) local a = rawget(self, "attributes"); return a and a[k] end
 
 function CreateFrame(kind, name, parent, template)
     local f = setmetatable({ kind = kind, name = name, events = {}, units = {}, scripts = {}, hooks = {}, shown = true }, Frame)
@@ -119,7 +127,39 @@ function Mock.loadAddon(name)
     Mock.fire("ADDON_LOADED", name, false)
 end
 
-C_AddOns = { IsAddOnLoaded = function(name) return Mock.loaded[name] == true end }
+-- Load-on-demand addons: name → a function defining their globals.
+Mock.onDemand = {}
+Mock.metadata = {}
+C_AddOns = {
+    IsAddOnLoaded = function(name) return Mock.loaded[name] == true end,
+    IsAddOnLoadOnDemand = function(name) return Mock.onDemand[name] ~= nil end,
+    LoadAddOn = function(name)
+        local define = Mock.onDemand[name]
+        if not define or Mock.loaded[name] then return false end
+        define()
+        Mock.loadAddon(name)
+        return true
+    end,
+    GetAddOnMetadata = function(name, field) return Mock.metadata[name] and Mock.metadata[name][field] end,
+}
+GetAddOnMetadata = C_AddOns.GetAddOnMetadata
+Mock.interface = 11508
+function GetBuildInfo() return "1.0.0", "1", "Jan 1 2026", Mock.interface end
+function UnitName() return "Tester" end
+function GetFramesRegisteredForEvent(event)
+    local out = {}
+    for _, f in ipairs(Mock.frames) do
+        if f.events[event] then out[#out + 1] = f end
+    end
+    return unpack(out)
+end
+-- Addon messages arrive a moment later, like from the server.
+C_ChatInfo = {
+    RegisterAddonMessagePrefix = function() return true end,
+    SendAddonMessage = function(prefix, text, kind, target)
+        C_Timer.After(0.1, function() Mock.fire("CHAT_MSG_ADDON", prefix, text, kind, target) end)
+    end,
+}
 C_EventUtils = { IsEventValid = function(event) return Mock.events[event] == true end }
 
 -- Hooks ---------------------------------------------------------------------
@@ -189,6 +229,7 @@ function Mock.slash(line)
 end
 
 -- A few of Blizzard's globals for hooks.
+UIParent = CreateFrame("Frame", "UIParent")
 function ToggleGameMenu() print("menu") end
 GameTooltip = CreateFrame("GameTooltip", "GameTooltip")
 function GameTooltip:SetUnit(unit) print("SetUnit " .. unit) end

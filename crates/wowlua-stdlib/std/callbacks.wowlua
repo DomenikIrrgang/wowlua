@@ -66,6 +66,9 @@ export function registry(opts: { compat: string? }?): any
     end
 
     function r.offAll(_, owner: any)
+        if owner == nil then
+            error("offAll: the owner is nil", 2)
+        end
         local subs = {}
         for _, list in pairs(handlers) do
             for _, rec in ipairs(list) do

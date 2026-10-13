@@ -175,6 +175,8 @@ struct Walker<'a> {
     markers: &'a Markers,
     /// Keys known to be defined here (tested by an enclosing guard).
     guards: Vec<Key>,
+    /// Local names imported from the standard library (`wowlua:*`).
+    stdlib_imports: HashSet<String>,
 }
 
 /// The usage summary of one file.
@@ -248,6 +250,7 @@ impl<'a> Walker<'a> {
             current: 0,
             markers,
             guards: Vec::new(),
+            stdlib_imports: HashSet::new(),
         }
     }
 
@@ -477,7 +480,8 @@ impl<'a> Walker<'a> {
     }
 
     /// User decorators are called at load time with the declared function
-    /// (the first function the declaration created, if any).
+    /// (the first function the declaration created, if any). The standard
+    /// library's decorators only register or wrap it: it runs later.
     fn decorators(&mut self, decorators: &[Decorator], first: usize) {
         for d in decorators.iter().filter(|d| !d.is_core()) {
             let callee = self.expr(&d.expr());
@@ -485,7 +489,11 @@ impl<'a> Walker<'a> {
                 .then_some(Info::Function(first))
                 .into_iter()
                 .collect();
-            self.record_call(Self::call_target(&callee), &target, 0, d.span, false);
+            let deferred = d
+                .path
+                .first()
+                .is_some_and(|n| self.stdlib_imports.contains(n.text.as_ref()));
+            self.record_call(Self::call_target(&callee), &target, 0, d.span, deferred);
         }
     }
 
@@ -796,18 +804,27 @@ impl<'a> Walker<'a> {
                 };
                 self.declare(&name.text, local);
             }
-            StmtKind::Import(import) => match &import.clause {
-                ImportClause::Names(specs) => {
-                    for spec in specs {
-                        let local = spec.alias.as_ref().unwrap_or(&spec.name);
-                        self.declare(&local.text, Local::Import(local.text.to_string()));
+            StmtKind::Import(import) => {
+                let stdlib = import.from.value.starts_with(b"wowlua:");
+                match &import.clause {
+                    ImportClause::Names(specs) => {
+                        for spec in specs {
+                            let local = spec.alias.as_ref().unwrap_or(&spec.name);
+                            self.declare(&local.text, Local::Import(local.text.to_string()));
+                            if stdlib {
+                                self.stdlib_imports.insert(local.text.to_string());
+                            }
+                        }
                     }
+                    ImportClause::Namespace(n) => {
+                        self.declare(&n.text, Local::Import(n.text.to_string()));
+                        if stdlib {
+                            self.stdlib_imports.insert(n.text.to_string());
+                        }
+                    }
+                    ImportClause::SideEffect => {}
                 }
-                ImportClause::Namespace(n) => {
-                    self.declare(&n.text, Local::Import(n.text.to_string()))
-                }
-                ImportClause::SideEffect => {}
-            },
+            }
             StmtKind::Export(inner) => {
                 match &inner.kind {
                     StmtKind::Function { name, func } => {

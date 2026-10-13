@@ -1,0 +1,8 @@
+-- What a run keeps across a /reload: the SavedVariable `StdTestState`
+-- (available from @onLoad on).
+export function state(): any
+    if type(StdTestState) ~= "table" then
+        StdTestState = {}
+    end
+    return StdTestState
+end

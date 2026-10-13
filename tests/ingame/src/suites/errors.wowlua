@@ -1,0 +1,62 @@
+-- wowlua:errors: the error policy against the client's error handler.
+import * as errors from "wowlua:errors"
+import suite from "/harness"
+
+local s = suite("errors")
+
+s:test("reports with the addon prefix, once", function(t: any)
+    errors.report("prefix check")
+    errors.report("StdTest: already prefixed")
+    t:ok(t:reported("StdTest: prefix check"), "prefixed")
+    t:ok(t:reported("StdTest: already prefixed"), "prefixed message kept")
+    t:ok(not t:reported("StdTest: StdTest:"), "never prefixed twice")
+    errors.report({})
+    t:ok(t:reported("StdTest: table: "), "a table is converted")
+end)
+
+s:test("call and callIn isolate errors", function(t: any)
+    local ok, a, b = errors.call(function(x: number, y: number?) return x, y end, 1, nil)
+    t:ok(ok == true and a == 1 and b == nil, "call returns the results")
+    local failed = errors.call(function() error("in call") end)
+    t:eq(failed, false, "call returns false on error")
+    t:ok(t:reported("in call"), "the error is reported")
+    errors.callIn({ component = "unit test" }, function() error("in callIn") end)
+    -- Debug builds name the component.
+    t:ok(t:reported("[unit test]"), "the component is named")
+    local wrapped = errors.wrap(function(x: number) return x * 2 end)
+    t:eq(wrapped(2), nil, "wrap drops the results")
+end)
+
+s:test("listeners hear reports until cancelled", function(t: any)
+    local heard: string[] = {}
+    local sub = errors.onError(function(msg: string) heard[#heard + 1] = msg end)
+    errors.onError(function() error("listener broke") end):cancel()
+    errors.report("for listeners")
+    t:eq(#heard, 1, "listener called")
+    t:ok(heard[1] and heard[1]:find("for listeners", 1, true) ~= nil, "listener gets the message")
+    sub:cancel()
+    errors.report("after cancel")
+    t:eq(#heard, 1, "cancelled listener not called")
+end)
+
+s:test("a broken listener does not loop", function(t: any)
+    local sub = errors.onError(function() error("listener failed") end)
+    errors.report("with a broken listener")
+    sub:cancel()
+    t:ok(t:reported("with a broken listener"), "the report arrives")
+    t:ok(t:reported("listener failed"), "the listener's error arrives")
+end)
+
+s:test("the rate limit holds repeats back and counts them", function(t: any)
+    local before = errors.count()
+    errors.configure({ rateLimit = 1 })
+    errors.report("repeated")
+    errors.report("repeated")
+    errors.report("repeated")
+    t:eq(errors.count() - before, 1, "reported once within the window")
+    t:wait(1.2)
+    errors.report("repeated")
+    errors.configure({ rateLimit = 0 })
+    t:eq(errors.count() - before, 2, "reported again after the window")
+    t:ok(t:reported("StdTest: repeated (2 more)"), "with the count of repeats")
+end)
