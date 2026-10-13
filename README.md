@@ -158,7 +158,7 @@ The specification lives in [`spec/`](spec/README.md); implementation follows the
 | M5 | Debugging | done · 2026-10-12 |
 | M6 | Package manager | done · 2026-10-12 |
 | M7 | Optimization and publishing | done · 2026-10-13 |
-| M8 | Standard library | planned |
+| **M8** | **Standard library** | **in progress** (core set done) |
 | M9 | Test runner, language server, formatter | planned |
 | M10 | Registry | planned |
 | M11 | Performance optimization | planned |
@@ -170,14 +170,16 @@ What works today:
 | **Language** | Type annotations (erased), `+=`, `continue`, `?.`, `??`, string interpolation, bitwise operators, `//`, `const`, default parameters, destructuring, `import`/`export`, classes (abstract, generic, accessors), widget classes that extend native frame types, enums, core and user decorators, `wowlua:meta` with static conditions and `@if`. |
 | **Type checker** | Basic and strict mode, generics, narrowing and flavor guards for shared multi-flavor builds, against the WoW API of every flavor, generated from Blizzard's documentation. |
 | **Builds** | Per-flavor builds with generated TOC files; load order from imports and usage analysis of Lua, `.wowlua` and XML files; line numbers preserved in dev builds; bundling, minification levels, inlining, global caching and dead-code removal for release builds, within Lua's limits. |
-| **Debugging** | The profiler, monitor, error capture, runtime type checks and the `/wl` dev window; `wowlua:debug`, `wowlua:log` and `wowlua:reflect` are the first standard-library modules. |
+| **Debugging** | The profiler, monitor, error capture, runtime type checks and the `/wl` dev window, with `wowlua:debug`, `wowlua:log` and `wowlua:reflect`. |
+| **Standard library** | The core set, written in wowlua: `events` (WoW events, unit events, messages), `lifecycle`, `timer` (with `@throttle`, `@debounce`, `@nextFrame`), `combat` (`@outOfCombat`), `hooks`, `slash` (with a typed subcommand router), `saved` (defaults, migrations, profiles), `callbacks` and the `errors` policy, with compile-time checks of event names, slash commands and SavedVariables. |
 | **Packages** | git, SVN, path and archive dependencies in a global cache, locked in `wowlua.lock`; Lua libraries embedded (only the files the game loads), wowlua libraries compiled in; workspaces for addon suites. |
 | **Publishing** | `package` and `publish` to CurseForge, Wago, WoWInterface and GitHub Releases, with API tokens kept in the OS credential store. |
 
 The other standard-library modules arrive with later milestones; using a
 feature of a later milestone reports that milestone.
-[`examples/typed-demo`](examples/typed-demo) and
-[`examples/widget-demo`](examples/widget-demo) are sample addons.
+[`examples/typed-demo`](examples/typed-demo),
+[`examples/widget-demo`](examples/widget-demo) and
+[`examples/core-demo`](examples/core-demo) are sample addons.
 
 <details>
 <summary><b>Every command</b></summary>

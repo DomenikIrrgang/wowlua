@@ -16,12 +16,13 @@ follows it.
    job bodies, and menu, dialog, list and settings callbacks. An error in one
    never prevents other handlers from running, and never breaks the stdlib's
    own state.
-2. **Mechanism.** Isolation uses `securecallfunction(fn, ...)` where the flavor
-   table declares it. That function forwards errors to the error handler and
-   continues. Elsewhere it uses `xpcall` with a closure that captures the
-   arguments (Lua 5.1's `xpcall` passes none), plus `geterrorhandler()`. Job
-   bodies run in coroutines, so their errors are taken from `coroutine.resume`'s
-   results with the coroutine's stack (`debugstack(co)`).
+2. **Mechanism.** Isolation uses `xpcall` with a closure that captures the
+   arguments (Lua 5.1's `xpcall` passes none) and a handler of the policy's
+   own, in every flavor. `securecallfunction` is not used: it hands errors to
+   `geterrorhandler()` directly, which would bypass the prefix, the rate limit
+   and the listeners below. Job bodies run in coroutines, so their errors are
+   taken from `coroutine.resume`'s results with the coroutine's stack
+   (`debugstack(co)`).
 3. **Reporting.** Errors go to `geterrorhandler()`, so the default error frame
    and error-collecting addons (BugSack/BugGrabber) capture them. Messages are
    prefixed `"<AddonName>: "`. In debug builds, the module ID and the stdlib

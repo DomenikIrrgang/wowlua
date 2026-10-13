@@ -248,6 +248,24 @@ Notes on the delivered state:
 **Exit:** a sample addon uses no third-party libraries for its events, saved
 variables, settings, minimap button, keybindings and comms.
 
+**Status: in progress.** The stages follow the bullets above: S1 the core set,
+S2 `locale` to movable frames, S3 the helpers, registries, jobs, dialogs,
+menus and lists, then the widget themes.
+
+- S1 done 2026-10-14: `errors`, `events`, `lifecycle`, `timer`, `combat`,
+  `hooks`, `slash`, `saved` and `callbacks` (with `log`, `debug` and `reflect`
+  from M5), written in wowlua and type-checked, so their exports are typed
+  for importers. Their compile-time checks are E8001–E8003, E8010, E8020,
+  E8021, E8030, E8100–E8103, E8112, E8117 and W8011. Tests run every addon in
+  dev, release and fully minified builds against a mock client; the in-game
+  suite (`tests/ingame`, `/stdtest`) passed on the WoW: Forever client,
+  including combat lockdown and a `/reload` with real SavedVariables, and
+  runs against the mock in CI. `examples/core-demo` uses every core module.
+- Open from S1: typed handler payloads (`EventArgs<E>` for `on`, `once`,
+  `onUnit`, `send` and `@event`); W8040 and W8102 (hook targets); W8101 at
+  compile time (the runtime validity check exists); E8104 (`Secret<…>` in
+  `saved.bind` defaults).
+
 ## M9: Test runner, language server, formatter
 
 - `wowlua test` with `wowlua:test` and `wowlua:mock`, plus coverage.

@@ -69,7 +69,7 @@ end
 | `@unitEvent(name, ...units)` | WoW events only. Uses `RegisterUnitEvent` with **one or two** units (the API's limit). More than two units is error E8100. |
 | `on`, `once` | Dynamic registration. `owner` allows `offAll(owner)`. |
 | `onUnit` | Dynamic version of `@unitEvent`. More than two units is a runtime error. |
-| `off(sub)`, `offAll(owner)` | Unregister |
+| `off(sub)`, `offAll(owner)` | Unregister. `offAll(nil)` is a runtime error: it would cancel every subscription without an owner, the standard library's own included. |
 | `send(name, ...)` | Dispatches a **message** synchronously to this addon's handlers. Passing a WoW event is error E8001. |
 
 ### Semantics
@@ -83,10 +83,10 @@ end
   an internal pool. Two registrations with the same event and the same unit set
   share a frame. Unit filters never interfere with each other or with plain
   `@event` handlers.
-- **Order and isolation.** Handlers run in registration order. Each handler is
-  called through `securecallfunction`, so an error is reported through
-  `geterrorhandler()` and the remaining handlers still run (see the error policy
-  in [`wowlua:errors`](infrastructure.md#errors)).
+- **Order and isolation.** Handlers run in registration order. Each handler runs
+  isolated, so an error is reported through `geterrorhandler()` and the
+  remaining handlers still run (see the error policy in
+  [`wowlua:errors`](infrastructure.md#errors)).
 - **Changes during dispatch.** Registering or unregistering inside a handler
   takes effect after the current dispatch.
 - **Static methods.** `@event` on a static class method registers at class
