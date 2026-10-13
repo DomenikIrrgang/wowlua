@@ -252,7 +252,12 @@ one name per use.
   string's content), in its declaration files, the WoW API declarations, its
   XML files and its embedded libraries is a definition of such a method or an
   access the type checker resolved to one. The new name occurs in none of
-  them, and is the same in every class, so overrides stay overrides.
+  them, and is the same in every class, so overrides stay overrides. Classes
+  other addons can reach keep their method names, with every class of their
+  hierarchy: `@global` classes, classes named in the types of `@global`
+  declarations or held by their values, and classes whose instances or class
+  tables the code stores in a global (`X = obj`, `_G.X = obj`, `X.a = obj`),
+  since other addons may call or hook such methods by name (decision T168).
 
 Instance **fields** are never renamed: their names are the keys of saved
 variables and serialized data, which must stay readable across versions

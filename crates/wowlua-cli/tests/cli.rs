@@ -1233,6 +1233,43 @@ fn rename_private_renames_only_provably_private_methods() {
     assert!(base.contains("lookedUpByName"), "{base}");
 }
 
+/// `rename-private` leaves the methods of classes other addons can reach
+/// alone: `@global` classes, classes in `@global` signatures, and classes
+/// whose instances are stored in globals (with their whole hierarchy).
+#[test]
+fn rename_private_keeps_classes_reachable_from_globals() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "reach", "version": "1.0.0" },
+  "profiles": { "release": { "minify": "max", "bundle": false } } }
+"#,
+            ),
+            (
+                "src/main.wowlua",
+                "@global(\"ReachPanel\")\nclass Panel\n    private function refreshPanel(): string return \"panel\" end\n    function show(): string return self:refreshPanel() end\nend\nclass Base\n    protected function redrawBase(): string return \"base\" end\nend\nclass Widget extends Base\n    function draw(): string return self:redrawBase() end\nend\nReachWidget = Widget.new()\nclass Report\n    private function formatReport(): string return \"report\" end\n    function text(): string return self:formatReport() end\nend\n@global\nfunction ReachReport(): Report return Report.new() end\nclass Hidden\n    private function computeHidden(): string return \"hidden\" end\n    function value(): string return self:computeHidden() end\nend\nprint(Panel.new():show(), ReachWidget:draw(), ReachReport():text(), Hidden.new():value())\n",
+            ),
+        ],
+    );
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let release = dir.path().join("dist/release/Reach");
+    assert_eq!(run_addon(&release, "Reach"), "panel base report hidden");
+    let main = fs::read_to_string(release.join("src/main.lua")).unwrap();
+    for kept in ["refreshPanel", "redrawBase", "formatReport"] {
+        assert!(
+            main.contains(kept),
+            "{kept} is reachable from a global:\n{main}"
+        );
+    }
+    assert!(!main.contains("computeHidden"), "{main}");
+}
+
 /// Standard-library infrastructure (spec §8.1, compiler §13.2): `wowlua:*`
 /// modules compile into the addon when imported, and `@intrinsic`
 /// declarations give framework decorators their behavior.

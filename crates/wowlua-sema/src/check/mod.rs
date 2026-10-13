@@ -67,7 +67,9 @@ pub fn check_package_full(
 ) -> CheckOutput {
     let mut type_names = HashMap::new();
     let mut value_checks = HashMap::new();
-    let mut private_methods: HashSet<wowlua_span::Span> = HashSet::new();
+    use types::DefId;
+    let mut private_methods: HashMap<wowlua_span::Span, DefId> = HashMap::new();
+    let mut global_classes: HashSet<DefId> = HashSet::new();
     // Declaration sources: declaration files first, then modules.
     let mut sources: Vec<env::Source> = Vec::new();
     for (i, f) in files.iter().enumerate() {
@@ -238,17 +240,124 @@ pub fn check_package_full(
         });
         value_checks.extend(std::mem::take(&mut checker.value_checks));
         private_methods.extend(std::mem::take(&mut checker.private_methods));
+        // `@global` declarations hand their classes to other addons: the
+        // class itself, the types of its values, the types its signature
+        // names.
+        for st in &parse.chunk.block.stmts {
+            if !st.decorators.iter().any(|d| d.is_named("global")) {
+                continue;
+            }
+            let inner = match &st.kind {
+                StmtKind::Export(i) => i.as_ref(),
+                _ => st,
+            };
+            let mut names: Vec<&str> = Vec::new();
+            match &inner.kind {
+                StmtKind::Class(c) => names.push(&c.name.text),
+                StmtKind::Local { names: ns, values } => {
+                    for v in values {
+                        if let Some(&t) = checker.expr_types.get(&(v.span.start, v.span.end)) {
+                            checker.note_global_classes(t);
+                        }
+                    }
+                    for n in ns {
+                        if let Some(t) = &n.ty {
+                            type_refs(t, &mut names);
+                        }
+                    }
+                }
+                StmtKind::LocalFunction { func, .. } | StmtKind::Function { func, .. } => {
+                    for p in &func.params {
+                        if let Some(t) = &p.ty {
+                            type_refs(t, &mut names);
+                        }
+                    }
+                    match &func.ret {
+                        Some(wowlua_syntax::ast::RetType::Single(t)) => type_refs(t, &mut names),
+                        Some(wowlua_syntax::ast::RetType::List { types, .. }) => {
+                            types.iter().for_each(|t| type_refs(t, &mut names))
+                        }
+                        _ => {}
+                    }
+                }
+                StmtKind::Const { ty: Some(t), .. } => type_refs(t, &mut names),
+                _ => {}
+            }
+            for name in names {
+                let found = checker
+                    .env
+                    .module_types
+                    .get(&i)
+                    .and_then(|m| m.get(name))
+                    .or_else(|| checker.env.module_imports.get(&i).and_then(|m| m.get(name)))
+                    .or_else(|| checker.env.global_types.get(name))
+                    .copied();
+                if let Some(d) = found {
+                    global_classes.insert(d);
+                }
+            }
+        }
+        global_classes.extend(std::mem::take(&mut checker.global_classes));
         let file_exports = std::mem::take(&mut checker.exports);
         diagnostics.append(&mut checker.diagnostics);
         diagnostics.append(&mut env.diagnostics);
         exports.insert(i, file_exports);
     }
     private_methods.extend(env.renamable_defs.iter().copied());
+    // Classes reachable from globals, and every class of their hierarchies,
+    // keep their method names (`rename-private`).
+    let mut reachable = global_classes;
+    loop {
+        let before = reachable.len();
+        for (i, def) in env.defs.iter().enumerate() {
+            let id = DefId(i as u32);
+            for &b in &def.bases {
+                if let types::Ty::Named(base, _) = env.types.get(b).clone() {
+                    if reachable.contains(&id) {
+                        reachable.insert(base);
+                    }
+                    if reachable.contains(&base) {
+                        reachable.insert(id);
+                    }
+                }
+            }
+        }
+        if reachable.len() == before {
+            break;
+        }
+    }
+    let private_methods: HashSet<wowlua_span::Span> = private_methods
+        .into_iter()
+        .filter(|(_, owner)| !reachable.contains(owner))
+        .map(|(span, _)| span)
+        .collect();
     CheckOutput {
         diagnostics,
         type_names,
         value_checks,
         private_methods,
+    }
+}
+
+/// The type names a type annotation refers to.
+fn type_refs<'a>(t: &'a wowlua_syntax::ast::Type, out: &mut Vec<&'a str>) {
+    use wowlua_syntax::ast::TypeKind;
+    match &t.kind {
+        TypeKind::Ref { path, args } => {
+            if let Some(last) = path.last() {
+                out.push(&last.text);
+            }
+            for a in args {
+                if let wowlua_syntax::ast::TypeArg::Type(t) = a {
+                    type_refs(t, out);
+                }
+            }
+        }
+        TypeKind::Paren(t) | TypeKind::Optional(t) | TypeKind::Array(t) => type_refs(t, out),
+        TypeKind::Union(ts) | TypeKind::Intersection(ts) => {
+            ts.iter().for_each(|t| type_refs(t, out))
+        }
+        _ => {}
     }
 }
 

@@ -81,8 +81,11 @@ pub struct Checker<'e> {
     pub(crate) classes: Vec<(DefId, bool)>,
     /// Exported values of this module.
     pub exports: HashMap<Box<str>, TypeId>,
-    /// Name spans of accesses to renamable methods (`rename-private`).
-    pub private_methods: HashSet<wowlua_span::Span>,
+    /// Name spans of accesses to renamable methods (`rename-private`), with
+    /// the class that declares the method.
+    pub private_methods: HashMap<wowlua_span::Span, DefId>,
+    /// Classes whose instances or class tables this file stores in globals.
+    pub global_classes: HashSet<DefId>,
     reassigned: HashSet<u32>,
     pure_lua: bool,
     /// `...` at the top level: (addon name, addon table).
@@ -127,7 +130,8 @@ impl<'e> Checker<'e> {
             expr_types: HashMap::new(),
             classes: Vec::new(),
             exports: HashMap::new(),
-            private_methods: HashSet::new(),
+            private_methods: HashMap::new(),
+            global_classes: HashSet::new(),
             reassigned: reassigned_in_closures(&parse.chunk.block),
             pure_lua: info.pure_lua,
             top_vararg: None,
@@ -423,6 +427,10 @@ impl<'e> Checker<'e> {
                 let values = self.expr_list(values, &expected);
                 for (i, t) in targets.iter().enumerate() {
                     let value = values.get(i).copied().unwrap_or(Types::NIL);
+                    // Classes reachable from globals keep their method names.
+                    if self.global_rooted(t) {
+                        self.note_global_classes(value);
+                    }
                     self.assign_target(t, value);
                 }
             }
@@ -652,6 +660,31 @@ impl<'e> Checker<'e> {
                 }
             }
             StmtKind::Error => {}
+        }
+    }
+
+    /// The assignment target is a global or lies in one (`X`, `_G.X`,
+    /// `X.a.b`, `X[k]`): what it stores is reachable from other addons.
+    pub(crate) fn global_rooted(&self, target: &Expr) -> bool {
+        let mut e = target;
+        loop {
+            match &e.kind {
+                ExprKind::Name(n) => return self.lookup_var(&n.text).is_none(),
+                ExprKind::Field { obj, .. } | ExprKind::Index { obj, .. } => e = obj,
+                _ => return false,
+            }
+        }
+    }
+
+    /// Records the classes whose instances or class tables `t` holds.
+    pub(crate) fn note_global_classes(&mut self, t: TypeId) {
+        for m in self.env.types.members(t) {
+            match self.env.types.get(m).clone() {
+                Ty::Named(d, _) | Ty::ClassOf(d) if self.env.def(d).kind == DefKind::Class => {
+                    self.global_classes.insert(d);
+                }
+                _ => {}
+            }
         }
     }
 

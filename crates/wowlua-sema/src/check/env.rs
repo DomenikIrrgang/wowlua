@@ -156,8 +156,8 @@ pub struct Env {
     pub diagnostics: Vec<Diagnostic>,
     /// Types of `typeof(expr)` expressions, by span (set by the checker).
     pub typeof_types: HashMap<(u32, u32), TypeId>,
-    /// Name spans of the definitions of renamable methods.
-    pub renamable_defs: Vec<wowlua_span::Span>,
+    /// Name spans of the definitions of renamable methods, with their class.
+    pub renamable_defs: Vec<(wowlua_span::Span, DefId)>,
 }
 
 pub const ADDON_NAMESPACE: &str = "AddonNamespace";
@@ -706,7 +706,7 @@ impl Env {
                         && !m.modifiers.contains(&Modifier::Abstract)
                         && !name.text.starts_with("__");
                     if renamable {
-                        self.renamable_defs.push(name.span);
+                        self.renamable_defs.push((name.span, def));
                     }
                     let member = Member {
                         ty: t,

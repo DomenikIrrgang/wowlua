@@ -822,7 +822,7 @@ impl Checker<'_> {
                         match self.env.instance_member(d, &args, name) {
                             Some((mem, owner)) => {
                                 if mem.renamable {
-                                    self.private_methods.insert(span);
+                                    self.private_methods.insert(span, owner);
                                 }
                                 if !quiet {
                                     self.check_visibility(mem.visibility, owner, name, span);
@@ -941,7 +941,7 @@ impl Checker<'_> {
             _ => match self.env.static_member(d, name) {
                 Some(m) => {
                     if m.renamable {
-                        self.private_methods.insert(span);
+                        self.private_methods.insert(span, d);
                     }
                     Some(m.ty)
                 }
@@ -950,9 +950,9 @@ impl Checker<'_> {
                     let args: Vec<TypeId> =
                         self.env.def(d).params.iter().map(|_| Types::ANY).collect();
                     match self.env.instance_member(d, &args, name) {
-                        Some((m, _)) if m.kind == MemberKind::Method => {
+                        Some((m, owner)) if m.kind == MemberKind::Method => {
                             if m.renamable {
-                                self.private_methods.insert(span);
+                                self.private_methods.insert(span, owner);
                             }
                             let inst = self.env.instance(d);
                             Some(self.env.with_self(m.ty, inst))
@@ -993,7 +993,7 @@ impl Checker<'_> {
                     match self.env.instance_member(d, &args, name) {
                         Some((mem, owner)) => {
                             if mem.renamable {
-                                self.private_methods.insert(span);
+                                self.private_methods.insert(span, owner);
                             }
                             self.check_visibility(mem.visibility, owner, name, span);
                             match mem.kind {
