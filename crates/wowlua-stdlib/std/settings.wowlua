@@ -16,7 +16,7 @@ local wl = ns.__wowlua
 --- The registered options page.
 export interface SettingsCategory
     --- The category's id (set once the page exists).
-    id: number?
+    id: (number | string)?
     function open()
     --- Re-reads every control from the store.
     function refresh()
@@ -265,7 +265,7 @@ local function addControls(def: PageDef, store: table, category: SettingsCategor
     end
 end
 
-local categoryId: number? = nil
+local categoryId: (number | string)? = nil
 
 local function show()
     if InCombatLockdown() then
@@ -286,7 +286,7 @@ end
 
 --- The addon's one options page.
 class OptionsPage implements SettingsCategory
-    id: number? = nil
+    id: (number | string)? = nil
 
     function open()
         show()

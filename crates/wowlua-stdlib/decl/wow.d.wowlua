@@ -88,7 +88,18 @@ end
 type SettingsVarType = "boolean" | "string" | "number"
 
 interface SettingsCategoryMixin
-    function GetID(): number
+    --- A number; some addons replace it with the category's name (older
+    --- clients opened categories by name).
+    ID: number | string
+    name: string
+    order: number
+    parentCategory?: SettingsCategoryMixin
+    subcategories: SettingsCategoryMixin[]
+    expanded?: boolean
+    categorySet?: number
+    shouldSortAlphabetically?: boolean
+    tutorial?: table
+    function GetID(): number | string
     function GetName(): string
     function SetName(name: string)
     function GetOrder(): number
