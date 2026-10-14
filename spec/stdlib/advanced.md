@@ -214,6 +214,32 @@ end
 strings from other players is safe. Depth and size limits guard against
 malicious input.
 
+### Formats
+
+Other versions of an addon read these, so they are fixed:
+
+- **`encode`** starts with the format version byte `1`, then one value. Each
+  value is a type byte: `0` nil, `1` false, `2` true, `3`/`4` a non-negative /
+  negated integer below 2^52 as a varint (7 bits per byte, low first, high
+  bit continues), `5` any other finite number as a varint length and its
+  `%.17g` text, `6`/`7`/`8` +inf, -inf and NaN, `9` a string (varint length,
+  bytes; strings longer than one byte are numbered in order of appearance),
+  `10` a reference to such a string by number, `11` a table (varint count and
+  the values of its array part `1..n`, then a varint count and key/value
+  pairs). Decoding allows nesting up to 100 levels.
+- **`compress`** writes raw DEFLATE: stored blocks at level 0 or for
+  incompressible data, else dynamic Huffman blocks. `decompress` reads any raw
+  DEFLATE stream and refuses outputs over 16 MiB.
+- **`toPrintable`** encodes 3 bytes as 4 characters of
+  `a-z A-Z 0-9 ( )` (values 0 to 63 in that order, low bits first); a last
+  group of 1 or 2 bytes takes 2 or 3 characters. Surrounding whitespace is
+  ignored when reading.
+- **`toAddonChannel`** escapes with byte 1: `\0` becomes `\1\1`, `\1`
+  becomes `\1\2`.
+- **`exportString`** is `!<prefix>:<version>!` (prefix `WL` by default) and the
+  printable, compressed bytes of an Adler-32 checksum (4 bytes, big-endian) of
+  the encoded value, followed by the encoded value.
+
 ## log
 
 `wowlua:log` provides leveled logging with compile-time stripping

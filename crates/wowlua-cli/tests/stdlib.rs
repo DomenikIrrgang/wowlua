@@ -1932,9 +1932,11 @@ hookScript("StdOwnFrame", "OnShow", function() end)
 /// project, and their exports are typed for the code importing them.
 #[test]
 fn standard_library_is_typed_and_checks_clean() {
-    let dir = project(&[(
-        "src/main.wowlua",
-        r#"--!strict
+    let dir = project(&[
+        ("locales/enUS.json", "{ \"TITLE\": \"Std\" }"),
+        (
+            "src/main.wowlua",
+            r#"--!strict
 import * as errors from "wowlua:errors"
 import * as events from "wowlua:events"
 import * as lifecycle from "wowlua:lifecycle"
@@ -1947,12 +1949,19 @@ import * as callbacks from "wowlua:callbacks"
 import * as log from "wowlua:log"
 import * as debug from "wowlua:debug"
 import * as reflect from "wowlua:reflect"
+import * as locale from "wowlua:locale"
+import * as pool from "wowlua:pool"
+import * as settings from "wowlua:settings"
+import * as launcher from "wowlua:launcher"
+import * as serialize from "wowlua:serialize"
 print(errors, events, lifecycle, timer, combat, hooks, slash, saved, callbacks, log, debug, reflect)
+print(locale, pool, settings, launcher, serialize)
 local n: number = errors.count()
 local loaded: boolean = lifecycle.isLoaded()
 print(n, loaded)
 "#,
-    )]);
+        ),
+    ]);
     let manifest = fs::read_to_string(dir.path().join("wowlua.json")).unwrap();
     let manifest = manifest.replacen('{', "{ \"check\": { \"mode\": \"strict\" },", 1);
     fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
@@ -2087,6 +2096,7 @@ end
         "pool",
         "settings",
         "launcher",
+        "serialize",
     ] {
         assert!(
             printed
@@ -2837,4 +2847,212 @@ StdLauncher.launcher.refresh()
         ],
         "{out:?}"
     );
+}
+
+// -------------------------------------------------------------- serialize --
+
+/// Test inputs for compression: empty, tiny, repetitive, pseudo-random,
+/// every byte value, and real text.
+fn compression_inputs() -> Vec<Vec<u8>> {
+    let mut random = Vec::new();
+    let mut x: u32 = 12345;
+    for _ in 0..20000 {
+        x = x.wrapping_mul(1103515245).wrapping_add(12345);
+        random.push((x >> 16) as u8);
+    }
+    let text =
+        fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../spec/stdlib/core.md")).unwrap();
+    let mut big = Vec::new();
+    while big.len() < 100_000 {
+        big.extend_from_slice(&text);
+    }
+    vec![
+        Vec::new(),
+        b"a".to_vec(),
+        b"hello hello hello hello".to_vec(),
+        b"abc".repeat(5000),
+        (0..=255u8).collect(),
+        (0..=255u8).cycle().take(70_000).collect(),
+        random,
+        text,
+        big,
+    ]
+}
+
+#[test]
+fn serialize_deflate_interoperates_with_zlib() {
+    use flate2::Compression;
+    use flate2::read::{DeflateDecoder, DeflateEncoder};
+    use std::io::Read;
+    let dir = project(&[(
+        "src/main.wowlua",
+        "import * as serialize from \"wowlua:serialize\"\n_G.Ser = serialize\n",
+    )]);
+    for mode in ["dev", "max"] {
+        build(dir.path(), mode);
+        let out = dir.path().join("dist").join(mode).join("Std");
+        let lua = client(&out, "Std", "Std.toc", "", "");
+        let ser: mlua::Table = lua.globals().get("Ser").unwrap();
+        let compress: mlua::Function = ser.get("compress").unwrap();
+        let decompress: mlua::Function = ser.get("decompress").unwrap();
+        for (n, input) in compression_inputs().iter().enumerate() {
+            for level in [0, 1, 6, 9] {
+                // Ours, inflated by zlib.
+                let packed: mlua::LuaString = compress
+                    .call((lua.create_string(input).unwrap(), level))
+                    .unwrap_or_else(|e| panic!("{mode} input {n} level {level}: {e}"));
+                let packed = packed.as_bytes().to_vec();
+                let mut back = Vec::new();
+                DeflateDecoder::new(&packed[..])
+                    .read_to_end(&mut back)
+                    .unwrap_or_else(|e| panic!("{mode} input {n} level {level}: zlib: {e}"));
+                assert!(
+                    back == *input,
+                    "{mode} input {n} level {level}: zlib reads other bytes"
+                );
+                if level > 0 && input.len() > 1000 && n != 6 {
+                    assert!(
+                        packed.len() < input.len() / 2,
+                        "{mode} input {n}: {} of {}",
+                        packed.len(),
+                        input.len()
+                    );
+                }
+                // Ours, inflated by us.
+                let ours: Option<mlua::LuaString> = decompress
+                    .call(lua.create_string(&packed).unwrap())
+                    .unwrap();
+                assert!(
+                    ours.is_some_and(|s| *s.as_bytes() == **input),
+                    "{mode} input {n} level {level}: round trip"
+                );
+            }
+            // zlib's, inflated by us.
+            for level in [1, 6, 9] {
+                let mut packed = Vec::new();
+                DeflateEncoder::new(&input[..], Compression::new(level))
+                    .read_to_end(&mut packed)
+                    .unwrap();
+                let back: Option<mlua::LuaString> = decompress
+                    .call(lua.create_string(&packed).unwrap())
+                    .unwrap();
+                assert!(
+                    back.is_some_and(|s| *s.as_bytes() == **input),
+                    "{mode} input {n}: zlib level {level} not inflated"
+                );
+            }
+        }
+        // Corrupt data: nil, never an error.
+        for bad in [&b"\xff\xff\xff"[..], b"\x07", b"", b"\x05\x00\x00\x00"] {
+            let r: Option<mlua::LuaString> =
+                decompress.call(lua.create_string(bad).unwrap()).unwrap();
+            assert!(r.is_none(), "{mode}: {bad:?}");
+        }
+    }
+}
+
+#[test]
+fn serialize_round_trips_and_rejects() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as serialize from "wowlua:serialize"
+local C = Mock.check
+
+local function same(a: any, b: any): boolean
+    if type(a) ~= type(b) then return false end
+    if type(a) ~= "table" then
+        return a == b or (a ~= a and b ~= b)
+    end
+    for k, v in pairs(a) do
+        if not same(v, b[k]) then return false end
+    end
+    for k in pairs(b) do
+        if a[k] == nil then return false end
+    end
+    return true
+end
+
+local values: any[] = {
+    0, 1, -1, 127, 128, 300, -300, 2 ^ 40, -(2 ^ 40), 2 ^ 53, 0.5, -1.25, 1 / 3, 1e300, -1e-300,
+    math.huge, -math.huge, true, false, "", "a", "hello", string.rep("x", 1000),
+    "\000\001\255 bytes",
+    { 1, 2, 3 },
+    { a = 1, b = { c = "deep", d = { true, false } } },
+    { "same", "same", "same", key = "same" },
+    { [1] = "one", [3] = "three", [1.5] = "half", [true] = "yes" },
+}
+for i, v in ipairs(values) do
+    local ok, back = serialize.decode(serialize.encode(v))
+    C(ok and same(v, back), "round trip " .. i)
+end
+local ok, nan = serialize.decode(serialize.encode(0 / 0))
+C(ok and nan ~= nan, "NaN")
+local nilOk, nothing = serialize.decode(serialize.encode(nil))
+C(nilOk and nothing == nil, "nil")
+-- Deduplicated strings make repeats short.
+local repeated = {}
+for i = 1, 100 do repeated[i] = "a repeated string" end
+C(#serialize.encode(repeated) < 300, "strings deduplicated")
+
+-- What cannot be encoded.
+local cyclic: any = {}
+cyclic.self = cyclic
+C(not pcall(serialize.encode, cyclic), "a cycle")
+C(not pcall(serialize.encode, { f = print }), "a function")
+C(not pcall(serialize.encode, Mock.secret()), "a secret value")
+local deep: any = {}
+local node = deep
+for _ = 1, 150 do node.child = {}; node = node.child end
+C(not pcall(serialize.encode, deep), "too deep")
+
+-- Decoding damaged or hostile input: false and a reason, never an error.
+local good = serialize.encode({ 1, 2, { 3 } })
+for _, bad in ipairs({ "", "\002", good:sub(1, -2), good .. "x", "\001\011\255\255\255\255\015", "\001\010\005" }) do
+    local okBad, why = serialize.decode(bad)
+    C(okBad == false and type(why) == "string", "rejects " .. #bad)
+end
+-- Decoding never runs code.
+local evil = serialize.encode("os.exit()")
+local _, text = serialize.decode(evil)
+C(text == "os.exit()", "a string stays a string")
+
+-- Printable and addon-channel encodings.
+local all = {}
+for i = 0, 255 do all[#all + 1] = string.char(i) end
+local bytes = table.concat(all)
+for _, s in ipairs({ "", "a", "ab", "abc", "abcd", bytes }) do
+    local p = serialize.toPrintable(s)
+    C(not p:find("[^%w%(%)]"), "printable characters")
+    C(serialize.fromPrintable(p) == s, "printable round trip " .. #s)
+    local a = serialize.toAddonChannel(s)
+    C(not a:find("%z"), "no NUL")
+    C(serialize.fromAddonChannel(a) == s, "addon channel round trip " .. #s)
+end
+C(serialize.fromPrintable("abc!") == nil, "invalid characters")
+C(serialize.fromPrintable("  " .. serialize.toPrintable("x") .. "\n") == "x", "surrounding space")
+
+-- Export strings.
+local profile = { name = "Main", bars = { { id = 1, x = 10.5 }, { id = 2, x = -3 } }, enabled = true }
+local exported = serialize.exportString(profile, { version = 3, prefix = "STDTEST" })
+print(exported:sub(1, 11))
+local okImport, imported = serialize.importString(exported)
+C(okImport and same(profile, imported), "export round trip")
+local okDefault = serialize.importString(serialize.exportString(1, { version = 1 }))
+C(okDefault, "the default prefix")
+local damaged = exported:sub(1, 20) .. (exported:sub(21, 21) == "a" and "b" or "a") .. exported:sub(22)
+local okDamaged, why = serialize.importString(damaged)
+print("damaged", okDamaged, why)
+print("garbage", serialize.importString("hello"))
+"#,
+        )],
+        "",
+        "",
+    );
+    assert_eq!(out[0], "!STDTEST:3!", "{out:?}");
+    assert!(
+        out[1].starts_with("damaged false the export string is damaged"),
+        "{out:?}"
+    );
+    assert_eq!(out[2], "garbage false not an export string", "{out:?}");
 }

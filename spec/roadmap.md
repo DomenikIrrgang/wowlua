@@ -282,6 +282,9 @@ menus and lists, then the widget themes.
 - `launcher` done 2026-10-14 (Addon Compartment entry, minimap button through
   LibDBIcon or a built-in shape-aware draggable one, LDB launcher, position
   in LibDBIcon's shape, E8080). Its `theme` waits for the widget themes.
+- `serialize` done 2026-10-14 (binary encoding with limits, DEFLATE in plain
+  Lua checked against zlib both ways, printable and addon-channel encodings,
+  checksummed export strings).
 
 ## M9: Test runner, language server, formatter
 

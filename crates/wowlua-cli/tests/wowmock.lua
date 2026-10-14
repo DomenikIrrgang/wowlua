@@ -352,3 +352,4 @@ function Frame:SetTexture(t) rawset(self, "texture", t) end
 function Frame:GetPoint(i) local p = rawget(self, "points"); return unpack(p and p[i or 1] or {}) end
 AddonCompartmentFrame = { registeredAddons = {} }
 function AddonCompartmentFrame:RegisterAddon(data) table.insert(self.registeredAddons, data) end
+function debugprofilestop() return Mock.now * 1000 end

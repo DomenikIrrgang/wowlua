@@ -1,0 +1,57 @@
+-- wowlua:serialize in the client: round trips, compression, export strings.
+import * as serialize from "wowlua:serialize"
+import suite from "/harness"
+
+local s = suite("serialize")
+
+-- A profile-sized table.
+local function sample(): any
+    local t: any = { name = "Main", enabled = true, scale = 1.25, bars = {} }
+    for i = 1, 200 do
+        t.bars[i] = { id = i, x = i * 3.5, y = -i, label = "Bar " .. i, shown = i % 2 == 0, anchor = "CENTER" }
+    end
+    return t
+end
+
+local function same(a: any, b: any): boolean
+    if type(a) ~= type(b) then return false end
+    if type(a) ~= "table" then return a == b end
+    for k, v in pairs(a) do
+        if not same(v, b[k]) then return false end
+    end
+    for k in pairs(b) do
+        if a[k] == nil then return false end
+    end
+    return true
+end
+
+s:test("encode, compress and back", function(t: any)
+    local data = sample()
+    local encoded = serialize.encode(data)
+    local ok, back = serialize.decode(encoded)
+    t:ok(ok and same(data, back), "encode round trip")
+    local start = debugprofilestop()
+    local packed = serialize.compress(encoded)
+    local took = debugprofilestop() - start
+    t:ok(#packed < #encoded / 2, `compressed {#encoded} to {#packed} bytes`)
+    t:ok(took < 500, `compressing took {math.floor(took)} ms`)
+    t:eq(serialize.decompress(packed), encoded, "decompress")
+end)
+
+s:test("export strings survive chat-safe text", function(t: any)
+    local data = sample()
+    local exported = serialize.exportString(data, { version = 2, prefix = "STDTEST" })
+    t:ok(exported:find("^!STDTEST:2!") ~= nil, "the header")
+    t:ok(not exported:sub(12):find("[^%w%(%)]"), "printable characters")
+    local ok, back = serialize.importString("  " .. exported .. "\n")
+    t:ok(ok and same(data, back), "import round trip")
+    local bad = serialize.importString(exported:sub(1, -5))
+    t:eq(bad, false, "a truncated string is refused")
+end)
+
+s:test("addon-channel encoding", function(t: any)
+    local raw = "\000a\001b\000\255"
+    local enc = serialize.toAddonChannel(raw)
+    t:ok(not enc:find("%z"), "no NUL bytes")
+    t:eq(serialize.fromAddonChannel(enc), raw, "round trip")
+end)
