@@ -2115,7 +2115,13 @@ impl<'a> Lowerer<'a> {
     }
 
     fn table(&mut self, fields: &[TableField], span: Span) -> ir::ExprKind {
-        let mut operands: Vec<&Expr> = Vec::new();
+        // Both lists sized up front: the fields stay in the IR until the
+        // file is emitted, and pushing would leave room unused.
+        let keyed = fields
+            .iter()
+            .filter(|f| matches!(f, TableField::Keyed { .. }))
+            .count();
+        let mut operands: Vec<&Expr> = Vec::with_capacity(fields.len() + keyed);
         for f in fields {
             match f {
                 TableField::Keyed { key, value, .. } => {
@@ -2128,7 +2134,7 @@ impl<'a> Lowerer<'a> {
             }
         }
         let mut lowered = self.seq(&operands).into_iter();
-        let mut out = Vec::new();
+        let mut out = Vec::with_capacity(fields.len());
         for (i, f) in fields.iter().enumerate() {
             let mut lowered_field = match f {
                 TableField::Keyed { span, .. } => ir::Field::Keyed {

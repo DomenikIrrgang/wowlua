@@ -43,6 +43,13 @@ pub(crate) struct Parser<'a> {
     block_depth: u32,
     /// Position of the last error, to avoid reporting twice at one token.
     last_error_at: Option<usize>,
+    /// The fields of the tables being parsed, innermost last. A finished
+    /// table moves its own into a list of exactly their size: a list grown
+    /// by pushing keeps up to half of its room unused, which adds up to
+    /// gigabytes in the tables of a large data addon.
+    field_stack: Vec<TableField>,
+    /// The same for the expression lists being parsed.
+    expr_stack: Vec<Expr>,
 }
 
 fn is_block_follow(kind: TokenKind) -> bool {
@@ -133,6 +140,8 @@ impl<'a> Parser<'a> {
             }],
             block_depth: 0,
             last_error_at: None,
+            field_stack: Vec::new(),
+            expr_stack: Vec::new(),
         }
     }
 
@@ -338,6 +347,7 @@ impl<'a> Parser<'a> {
             let _ = self.syntax_error("'<eof>' expected");
             self.advance();
         }
+        debug_assert!(self.field_stack.is_empty() && self.expr_stack.is_empty());
         let span = Span {
             file: self.file,
             start: 0,
@@ -978,11 +988,22 @@ impl<'a> Parser<'a> {
     // ------------------------------------------------------- expressions --
 
     fn expr_list(&mut self) -> PResult<Vec<Expr>> {
-        let mut list = vec![self.expr()?];
+        // Taken off the stack on every path, so that a list that fails
+        // leaves nothing behind for the list it is nested in.
+        let mark = self.expr_stack.len();
+        let result = self.expr_items();
+        let list = self.expr_stack.drain(mark..).collect();
+        result.map(|()| list)
+    }
+
+    fn expr_items(&mut self) -> PResult<()> {
+        let first = self.expr()?;
+        self.expr_stack.push(first);
         while self.eat(T::Comma) {
-            list.push(self.expr()?);
+            let e = self.expr()?;
+            self.expr_stack.push(e);
         }
-        Ok(list)
+        Ok(())
     }
 
     pub(crate) fn expr(&mut self) -> PResult<Expr> {
@@ -1312,7 +1333,14 @@ impl<'a> Parser<'a> {
 
     fn table(&mut self) -> PResult<ExprKind> {
         let open = self.advance();
-        let mut fields = Vec::new();
+        // As in `expr_list`, the fields come off the stack on every path.
+        let mark = self.field_stack.len();
+        let result = self.table_fields(open.line);
+        let fields = self.field_stack.drain(mark..).collect();
+        result.map(|()| ExprKind::Table(fields))
+    }
+
+    fn table_fields(&mut self, line: u32) -> PResult<()> {
         loop {
             if self.check(T::RBrace) {
                 break;
@@ -1343,13 +1371,13 @@ impl<'a> Parser<'a> {
                 }
                 _ => TableField::Positional(self.expr()?),
             };
-            fields.push(field);
+            self.field_stack.push(field);
             if !(self.eat(T::Comma) || self.eat(T::Semi)) {
                 break;
             }
         }
-        self.expect_match(T::RBrace, "{", open.line)?;
-        Ok(ExprKind::Table(fields))
+        self.expect_match(T::RBrace, "{", line)?;
+        Ok(())
     }
 
     /// A backtick string (spec §1.2.4).

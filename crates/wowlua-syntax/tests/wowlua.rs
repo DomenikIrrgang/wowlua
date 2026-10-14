@@ -167,6 +167,60 @@ fn recovers_and_reports_several_errors() {
 }
 
 #[test]
+fn lists_that_fail_leave_nothing_in_the_lists_around_them() {
+    // A table and an argument list fail inside function bodies; their
+    // statements are recovered and the lists around them go on.
+    let p = parse_str(
+        "local t = {\n  a = 1,\n  b = function()\n    local x = { c = 2, d = = 3 }\n    print(4, 5 +)\n    return 6\n  end,\n  e = 7,\n}\nf(8, function()\n  g(9, { 10, 11 + })\nend, 12)\n",
+    );
+    assert!(p.has_errors());
+    let stmts = &p.chunk.block.stmts;
+    assert_eq!(stmts.len(), 2, "{stmts:?}");
+    let errors = |e: &Expr| -> Vec<bool> {
+        let ExprKind::Function(f) = &e.kind else {
+            panic!("{:?}", e.kind)
+        };
+        let stmts = &f.body.stmts;
+        stmts.iter().map(|s| s.kind == StmtKind::Error).collect()
+    };
+
+    let StmtKind::Local { values, .. } = &stmts[0].kind else {
+        panic!("{:?}", stmts[0].kind)
+    };
+    let ExprKind::Table(fields) = &values[0].kind else {
+        panic!("{:?}", values[0].kind)
+    };
+    let names: Vec<&str> = fields
+        .iter()
+        .map(|f| match f {
+            TableField::Named { name, .. } => &*name.text,
+            _ => panic!("{f:?}"),
+        })
+        .collect();
+    assert_eq!(names, ["a", "b", "e"]);
+    let TableField::Named { value, .. } = &fields[1] else {
+        panic!()
+    };
+    assert_eq!(errors(value), [true, true, false]);
+
+    let StmtKind::Call(call) = &stmts[1].kind else {
+        panic!("{:?}", stmts[1].kind)
+    };
+    let ExprKind::Call {
+        args: Args::Parens { args, .. },
+        ..
+    } = &call.kind
+    else {
+        panic!("{:?}", call.kind)
+    };
+    assert_eq!(args.len(), 3, "{args:?}");
+    for (arg, raw) in [(&args[0], "8"), (&args[2], "12")] {
+        assert!(matches!(&arg.kind, ExprKind::Number(n) if &*n.raw == raw));
+    }
+    assert_eq!(errors(&args[1]), [true]);
+}
+
+#[test]
 fn precedence_follows_the_spec() {
     let chunk = ok("x = -a :: number ^ 2 .. b .. c or d");
     let StmtKind::Assign { values, .. } = &chunk.block.stmts[0].kind else {
