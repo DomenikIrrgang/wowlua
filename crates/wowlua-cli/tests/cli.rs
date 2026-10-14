@@ -2891,6 +2891,45 @@ fn load_order_per_flavor_files() {
     assert!(pos("b_classic.lua") < pos("c_both.lua"), "{toc}");
 }
 
+/// A function passed to a known API function (`type`, `tinsert`) is not
+/// called by it: a registration helper that checks and stores its handler
+/// does not make the handler run at load time.
+#[test]
+fn load_order_api_functions_do_not_call_their_arguments() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"handlers\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/a_api.lua",
+                "local _, ns = ...\nlocal list = {}\nfunction ns.Register(fn)\n  if type(fn) ~= \"function\" then print(\"not a function\", fn) return end\n  tinsert(list, fn)\nend\n",
+            ),
+            (
+                "src/b_register.lua",
+                "local _, ns = ...\nns.Register(function() print(ns.Late) end)\n",
+            ),
+            ("src/c_late.lua", "local _, ns = ...\nns.Late = 1\n"),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(
+        !stderr.contains("W1034") && !stderr.contains("W1035"),
+        "{stderr}"
+    );
+    let toc = fs::read_to_string(dir.path().join("dist/dev/Handlers/Handlers.toc")).unwrap();
+    let pos = |name: &str| toc.find(name).unwrap_or_else(|| panic!("{name}: {toc}"));
+    assert!(pos("a_api.lua") < pos("b_register.lua"), "{toc}");
+    assert!(
+        pos("b_register.lua") < pos("c_late.lua"),
+        "the handler does not run while b_register loads: {toc}"
+    );
+}
+
 /// Files in another flavor's folder of a variable file (`db/[Game]/…`) do
 /// not load in this flavor: they define nothing for its load order (no
 /// W1033), and a build of some flavors leaves the others' out of the TOC.

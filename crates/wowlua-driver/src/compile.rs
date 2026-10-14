@@ -719,7 +719,7 @@ pub fn compile_flavor(
 
     // Load order (spec §5.4): files listed in `build.load-order` keep their
     // listed order; files outside this flavor do not take part.
-    let markers = wowlua_sema::usage::Markers::from_table();
+    let markers = wowlua_sema::usage::Markers::from_table().with_api(&inputs);
     let order = wowlua_sema::loadorder::analyze(&inputs, &analysis, layout, &markers);
     diagnostics.extend(order.diagnostics.iter().cloned());
     for &(a, b) in &order.constraints {

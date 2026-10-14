@@ -126,11 +126,17 @@ pub struct FileUsage {
     pub untracked_field_writes: Vec<(String, usize, Span)>,
 }
 
-/// APIs that run passed functions later (spec §5.4.3).
+/// APIs that run passed functions later (spec §5.4.3), those that run
+/// them at once, and the API functions the declarations know.
 #[derive(Clone, Debug, Default)]
 pub struct Markers {
     pub deferred_functions: HashSet<String>,
     pub deferred_methods: HashSet<String>,
+    pub immediate_functions: HashSet<String>,
+    /// Lua's and the game's C API functions (`declare function`, namespace
+    /// functions): they call no function passed to them, unless listed
+    /// in `immediate_functions`.
+    pub api_functions: HashSet<String>,
 }
 
 impl Markers {
@@ -139,7 +145,62 @@ impl Markers {
         Markers {
             deferred_functions: m.deferred_functions.iter().cloned().collect(),
             deferred_methods: m.deferred_methods.iter().cloned().collect(),
+            immediate_functions: m.immediate_functions.iter().cloned().collect(),
+            api_functions: HashSet::new(),
         }
+    }
+
+    /// Adds the functions the declaration files declare (`Name`,
+    /// `Namespace.Member`); declared globals of function type (Blizzard's
+    /// Lua UI code) are not among them.
+    pub fn with_api(mut self, files: &[crate::FileInput]) -> Markers {
+        fn members(prefix: &str, list: &[NsMember], out: &mut HashSet<String>) {
+            for m in list {
+                match &m.kind {
+                    NsMemberKind::Function { name, .. } => {
+                        out.insert(format!("{prefix}.{}", name.text));
+                    }
+                    NsMemberKind::Namespace {
+                        name,
+                        members: inner,
+                    } => {
+                        members(&format!("{prefix}.{}", name.text), inner, out);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        for f in files
+            .iter()
+            .filter(|f| f.kind == crate::FileKind::Declaration)
+        {
+            let Some(parse) = f.parse else { continue };
+            for s in &parse.chunk.block.stmts {
+                let StmtKind::Declare(d) = &s.kind else {
+                    continue;
+                };
+                match d.as_ref() {
+                    Declare::Function { name, .. } if name.method.is_none() => {
+                        let path: Vec<&str> = name.path.iter().map(|n| n.text.as_ref()).collect();
+                        self.api_functions.insert(path.join("."));
+                    }
+                    Declare::Namespace {
+                        name,
+                        members: list,
+                    } => {
+                        members(&name.text, list, &mut self.api_functions);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        self
+    }
+
+    /// Whether a call of `path` (a global function or namespace member)
+    /// cannot call the functions passed to it.
+    pub fn calls_no_args(&self, path: &str) -> bool {
+        self.api_functions.contains(path) && !self.immediate_functions.contains(path)
     }
 }
 

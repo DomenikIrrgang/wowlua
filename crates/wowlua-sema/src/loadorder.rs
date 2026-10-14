@@ -200,13 +200,29 @@ pub fn analyze(
             }
         }
     }
+    // An unresolved callee may call what it is passed, unless it is a
+    // known API function (`type`, `tinsert`, `C_Map.GetMapInfo`) that calls
+    // none of its arguments.
     let calls_arg = |called_params: &HashMap<(usize, usize), HashSet<usize>>,
+                     target: &CallTarget,
                      targets: &[(usize, usize)],
                      pos: usize| {
-        targets.is_empty()
-            || targets
-                .iter()
-                .any(|t| called_params.get(t).is_some_and(|s| s.contains(&pos)))
+        if targets.is_empty() {
+            return match target {
+                CallTarget::Path((Key::Global(g), fields)) => {
+                    let mut path = g.clone();
+                    for f in fields {
+                        path.push('.');
+                        path.push_str(f);
+                    }
+                    !markers.calls_no_args(&path)
+                }
+                _ => true,
+            };
+        }
+        targets
+            .iter()
+            .any(|t| called_params.get(t).is_some_and(|s| s.contains(&pos)))
     };
     loop {
         let mut added = Vec::new();
@@ -217,7 +233,7 @@ pub fn analyze(
                     for (pos, arg) in &call.args {
                         if let CallTarget::Param(p) = arg
                             && !called_params.get(&(file, f)).is_some_and(|s| s.contains(p))
-                            && calls_arg(&called_params, &targets, *pos)
+                            && calls_arg(&called_params, &call.target, &targets, *pos)
                         {
                             added.push(((file, f), *p));
                         }
@@ -254,7 +270,7 @@ pub fn analyze(
                 let mut called = targets.clone();
                 if !call.deferred {
                     for (pos, arg) in &call.args {
-                        if calls_arg(&called_params, &targets, *pos) {
+                        if calls_arg(&called_params, &call.target, &targets, *pos) {
                             called.extend(resolve(file, arg));
                         }
                     }
