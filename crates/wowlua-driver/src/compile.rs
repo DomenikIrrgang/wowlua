@@ -911,6 +911,8 @@ pub fn compile_flavor(
             );
             return None;
         }
+        // Freed before luacheck's Lua state and the source map are built.
+        drop(reparsed);
         if let Some(d) = luacheck::check(db, file, &emitted.text) {
             diagnostics.push(d);
         }

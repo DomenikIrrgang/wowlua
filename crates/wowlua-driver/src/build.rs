@@ -704,7 +704,6 @@ pub fn build(
                 .collect(),
         },
     };
-    let mut api_cache: HashMap<String, Vec<crate::compile::ParsedDeclaration>> = HashMap::new();
     // Shared flavor mode: where each API exists, for flavor guards (E2030).
     let shared_flavors = (build_cfg.flavor_mode == wowlua_manifest::model::FlavorMode::Shared
         && flavors.len() > 1)
@@ -958,23 +957,23 @@ pub fn build(
             .clone()
             .or_else(|| flavors.first().cloned())
             .unwrap_or_default();
-        if !api_cache.contains_key(&api_flavor) {
-            let mut list = Vec::new();
-            for f in wowlua_api::declarations(&api_flavor).into_iter().flatten() {
-                let file = session.db.add(f.path, f.text.to_string());
-                list.push(crate::compile::ParsedDeclaration {
-                    source: sources::Source {
-                        rel: f.path.to_string(),
-                        src_rel: f.path.to_string(),
-                        abs: PathBuf::new(),
-                        kind: SourceKind::Wowlua,
-                        output: None,
-                    },
-                    file,
-                    parse: wowlua_syntax::parse(f.text.as_bytes(), file),
-                });
-            }
-            api_cache.insert(api_flavor.clone(), list);
+        // No other flavor of the build types against this API (split
+        // flavors are distinct, and shared mode compiles once), so its parse
+        // is freed with the flavor.
+        let mut api = Vec::new();
+        for f in wowlua_api::declarations(&api_flavor).into_iter().flatten() {
+            let file = session.db.add(f.path, f.text.to_string());
+            api.push(crate::compile::ParsedDeclaration {
+                source: sources::Source {
+                    rel: f.path.to_string(),
+                    src_rel: f.path.to_string(),
+                    abs: PathBuf::new(),
+                    kind: SourceKind::Wowlua,
+                    output: None,
+                },
+                file,
+                parse: wowlua_syntax::parse(f.text.as_bytes(), file),
+            });
         }
         let units: HashMap<String, crate::compile::LibraryUnit> = wlibs
             .iter()
@@ -1014,7 +1013,7 @@ pub fn build(
                 active: &active,
                 loaded_by: &loaded_by,
             },
-            &api_cache[&api_flavor],
+            &api,
             &check_cfg,
             if flavor.is_none() {
                 shared_flavors.as_ref()
@@ -1031,6 +1030,10 @@ pub fn build(
             output,
         });
     }
+    // The parses are not read after compiling; freeing them here keeps them
+    // out of the memory that assembly and bundling add on top.
+    drop(parsed);
+    drop(declarations);
     // Packager flavor blocks: each flavor's variant of the file.
     for rel in &flavor_blocks {
         let is_xml = rel.to_ascii_lowercase().ends_with(".xml");
