@@ -279,6 +279,10 @@ launcher.register({
   a runtime error.
 - `launcher.setIcon`, `setLabel`, `showMinimap(bool)` and `refresh()` update
   the surfaces at runtime.
+- **Shapes.** The built-in button follows `GetMinimapShape()` (defined by
+  minimap addons; round without one): along the circle in round quadrants,
+  along the square's edge in square ones (`CORNER-*`, `SIDE-*`,
+  `TRICORNER-*` name the round parts).
 - **Look.** The built-in minimap button looks like the client's own minimap
   buttons by default. `theme` in `register`, or `launcher.setTheme(theme)`,
   restyles it with a `WidgetTheme`

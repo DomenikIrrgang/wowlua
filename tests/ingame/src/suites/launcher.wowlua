@@ -1,0 +1,66 @@
+-- wowlua:launcher: the minimap button and the Addon Compartment entry.
+import * as launcher from "wowlua:launcher"
+import suite from "/harness"
+
+local store = { minimap = {} }
+local clicks: string[] = {}
+
+launcher.register({
+    icon = "Interface\\Icons\\INV_Misc_QuestionMark",
+    label = "wowlua StdTest",
+    onClick = function(button: string) clicks[#clicks + 1] = button end,
+    tooltip = function(tip: GameTooltip)
+        tip:AddLine("wowlua StdTest")
+        tip:AddLine("Click: counts a click for the launcher test", 1, 1, 1)
+    end,
+    minimap = { store = store, key = "minimap" },
+    compartment = true,
+    ldb = true,
+})
+
+local libStub: any = _G.LibStub
+local dbicon = libStub and libStub("LibDBIcon-1.0", true)
+
+local s = suite("launcher")
+
+s:test("a minimap button and a compartment entry", function(t: any)
+    if dbicon then
+        t:ok(dbicon:GetMinimapButton("StdTest") ~= nil, "LibDBIcon's button (LibDBIcon is loaded)")
+    else
+        local b: any = _G.StdTestMinimapButton
+        t:ok(b ~= nil and b:IsShown(), "the built-in button")
+        t:ok(b and b:GetParent() == Minimap, "on the minimap")
+    end
+    if AddonCompartmentFrame and AddonCompartmentFrame.registeredAddons then
+        local found: any = nil
+        for _, entry in ipairs(AddonCompartmentFrame.registeredAddons) do
+            if entry.text == "wowlua StdTest" then found = entry end
+        end
+        t:ok(found ~= nil, "the compartment entry")
+        if found then
+            found.func(nil, { buttonName = "MiddleButton" })
+            t:eq(clicks[#clicks], "MiddleButton", "the entry's click with its button")
+        end
+    else
+        t:skip("no Addon Compartment in this client")
+    end
+end)
+
+s:test("hiding and showing the button", function(t: any)
+    launcher.showMinimap(false)
+    t:eq(store.minimap.hide, true, "stored hidden")
+    local b: any = _G.StdTestMinimapButton
+    if b then t:ok(not b:IsShown(), "hidden") end
+    launcher.showMinimap(true)
+    if b then t:ok(b:IsShown(), "shown again") end
+end)
+
+local g = suite("launcher (guided)", "guided")
+
+g:test("a real click on the minimap button", function(t: any)
+    local before = #clicks
+    t:ask("Click the question-mark button at the minimap's edge (any mouse button)")
+    if t:waitFor(function() return #clicks > before end, 120, "a click") then
+        t:ok(true, `clicked with {clicks[#clicks]}`)
+    end
+end)

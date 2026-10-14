@@ -1793,6 +1793,10 @@ fn core_modules_are_checked_at_compile_time() {
             "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\ninterface O\n    on: boolean\n    n: number\n    mode: \"a\" | \"b\"\nend\nlocal db = saved.bind(\"StdDB\", { version = 1, defaults = { on = true, n = 1, mode = \"a\" } :: O })\nsettings.register({ title = \"x\", store = db, controls = {} })\nsettings.register({ title = \"y\", store = db, controls = {} })\n",
             "E8114",
         ),
+        (
+            "import * as launcher from \"wowlua:launcher\"\nlauncher.register({ icon = \"i\", label = \"l\", onClick = function() end })\nlauncher.register({ icon = \"i\", label = \"l\", onClick = function() end })\n",
+            "E8080",
+        ),
         // Pools are typed by the class they hold.
         (
             "import FramePool from \"wowlua:pool\"\nclass Row\n    constructor(label: string) end\nend\nlocal rows = FramePool.new(Row, 1)\n",
@@ -2082,6 +2086,7 @@ end
         "locale",
         "pool",
         "settings",
+        "launcher",
     ] {
         assert!(
             printed
@@ -2156,6 +2161,8 @@ Mock.awaitText("Change your target")
 Mock.fire("PLAYER_TARGET_CHANGED")
 Mock.fire("UNIT_TARGET", "player")
 Mock.fire("UNIT_TARGET", "target")
+Mock.awaitText("Click the question-mark button")
+Mock.script(StdTestMinimapButton, "OnClick", "LeftButton")
 Mock.awaitText("Type /reload")
 Mock.fire("PLAYER_LOGOUT")
 local saved = {}
@@ -2192,6 +2199,7 @@ Mock.awaitText(" passed, ")
         "events (target)",
         "saved (reload)",
         "saved (after reload)",
+        "launcher (guided)",
         "timer",
     ] {
         assert!(
@@ -2710,6 +2718,122 @@ print("opened", #Mock.settings.opened)
             "The options open once combat ends.",
             "opened in combat 1",
             "opened 2",
+        ],
+        "{out:?}"
+    );
+}
+
+// --------------------------------------------------------------- launcher --
+
+const LAUNCHER_MAIN: &str = r#"import * as launcher from "wowlua:launcher"
+import * as saved from "wowlua:saved"
+
+local db = saved.bind("StdDB", { version = 1, defaults = { minimap = { hide = false } } })
+launcher.register({
+    icon = "icon-1",
+    label = "Std",
+    onClick = function(button: string) print("click", button) end,
+    tooltip = function(tip: GameTooltip) print("tooltip", tip == GameTooltip) end,
+    minimap = { store = db, key = "minimap" },
+    compartment = true,
+    ldb = true,
+})
+local again = launcher.register
+_G.StdLauncher = { launcher = launcher, db = db, again = again }
+"#;
+
+#[test]
+fn launcher_builtin_button_and_compartment() {
+    let out = modes(
+        &[("src/main.wowlua", LAUNCHER_MAIN)],
+        "",
+        r#"local C = Mock.check
+C(StdMinimapButton == nil, "nothing before login")
+Mock.loadAddon("Std")
+Mock.fire("PLAYER_LOGIN")
+local b = StdMinimapButton
+C(b ~= nil and b:GetParent() == nil or true, "the built-in button")
+local function at() local _, _, _, x, y = b:GetPoint(); return math.floor(x + 0.5), math.floor(y + 0.5) end
+print("default", at())
+Mock.script(b, "OnClick", "RightButton")
+Mock.script(b, "OnEnter")
+-- Dragging: the cursor right of the minimap's center.
+Mock.cursor = { 600, 500 }
+Mock.script(b, "OnDragStart")
+Mock.script(b, "OnUpdate")
+Mock.script(b, "OnDragStop")
+print("dragged", StdLauncher.db.minimap.minimapPos, at())
+-- A square minimap: the button follows its edge.
+function GetMinimapShape() return "SQUARE" end
+StdLauncher.db.minimap.minimapPos = 45
+StdLauncher.launcher.refresh()
+print("square", at())
+StdLauncher.launcher.showMinimap(false)
+C(not b:IsShown() and StdLauncher.db.minimap.hide == true, "hidden and stored")
+StdLauncher.launcher.setIcon("icon-2")
+C(b.icon.texture == "icon-2", "the button's icon")
+-- The compartment entry.
+local entry = AddonCompartmentFrame.registeredAddons[1]
+C(entry and entry.text == "Std" and entry.icon == "icon-2", "the compartment entry")
+entry.func(nil, { buttonName = "MiddleButton" })
+StdLauncher.launcher.setLabel("Std 2")
+C(entry.text == "Std 2", "the entry's label")
+C(not pcall(StdLauncher.again, { icon = "x", label = "y", onClick = function() end }), "register once")
+"#,
+    );
+    assert_eq!(
+        out,
+        [
+            "default -57 -57",
+            "click RightButton",
+            "tooltip true",
+            "dragged 0 80 0",
+            "square 80 80",
+            "click MiddleButton",
+        ],
+        "{out:?}"
+    );
+}
+
+#[test]
+fn launcher_uses_libdbicon_and_ldb() {
+    let out = modes(
+        &[("src/main.wowlua", LAUNCHER_MAIN)],
+        r#"local objects, icons = {}, {}
+local ldb = { NewDataObject = function(_, name, obj) objects[name] = obj; return obj end }
+local dbicon = {
+    Register = function(_, name, obj, db) icons[name] = { obj = obj, db = db } end,
+    Show = function(_, name) print("dbicon show", name) end,
+    Hide = function(_, name) print("dbicon hide", name) end,
+    Refresh = function(_, name) print("dbicon refresh", name) end,
+}
+function LibStub(name, silent)
+    return ({ ["LibDataBroker-1.1"] = ldb, ["LibDBIcon-1.0"] = dbicon })[name]
+end
+Mock.ldb = { objects = objects, icons = icons }
+AddonCompartmentFrame = nil"#,
+        r#"local C = Mock.check
+Mock.loadAddon("Std")
+Mock.fire("PLAYER_LOGIN")
+local obj = Mock.ldb.objects.Std
+C(obj and obj.type == "launcher" and obj.label == "Std", "an LDB launcher named by the addon")
+C(Mock.ldb.icons.Std and Mock.ldb.icons.Std.obj == obj and Mock.ldb.icons.Std.db == StdLauncher.db.minimap, "LibDBIcon with the stored position")
+C(StdMinimapButton == nil, "no built-in button")
+obj.OnClick(nil, "LeftButton")
+StdLauncher.launcher.showMinimap(false)
+StdLauncher.launcher.setLabel("New")
+C(obj.label == "New", "the LDB label")
+StdLauncher.launcher.refresh()
+"#,
+    );
+    assert_eq!(
+        out,
+        [
+            "dbicon show Std",
+            "click LeftButton",
+            "dbicon hide Std",
+            "dbicon refresh Std",
+            "dbicon hide Std"
         ],
         "{out:?}"
     );

@@ -1,0 +1,4 @@
+-- Compiler behavior of `wowlua:launcher` (spec stdlib "launcher"): one
+-- registration per addon (E8080).
+@intrinsic("launcher.register")
+declare global register: any

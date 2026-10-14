@@ -115,6 +115,8 @@ struct Ctx<'a> {
     bound_saved: HashMap<String, Span>,
     /// The first `settings.register` call.
     settings_registered: Option<Span>,
+    /// The first `launcher.register` call.
+    launcher_registered: Option<Span>,
 }
 
 fn string(e: &Expr) -> Option<String> {
@@ -367,6 +369,14 @@ impl Ctx<'_> {
                         .with_help("one options page per addon: put more pages in `subcategories`"),
                 ),
                 None => self.settings_registered = Some(e.span),
+            },
+            "launcher.register" => match self.launcher_registered {
+                Some(first) => self.diagnostics.push(
+                    Diagnostic::error("E8080", "`launcher.register` is called more than once")
+                        .with_label(e.span, "again")
+                        .with_label(first, "first registered here"),
+                ),
+                None => self.launcher_registered = Some(e.span),
             },
             "slash.router" => {
                 if let Some(ExprKind::Table(fields)) = args.first().map(|a| &a.kind) {
@@ -636,6 +646,7 @@ pub fn check(files: &[FileInput], analysis: &Analysis, config: &StdlibConfig) ->
         slash_seen: HashMap::new(),
         bound_saved: HashMap::new(),
         settings_registered: None,
+        launcher_registered: None,
     };
     for f in files {
         let Some(parse) = f.parse else { continue };

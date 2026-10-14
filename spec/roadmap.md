@@ -279,6 +279,9 @@ menus and lists, then the widget themes.
   profile refresh, combat-deferred open; `saved.bind` now returns its
   defaults' type). The `keybinding` control's E8353 waits for
   `wowlua:bindings`.
+- `launcher` done 2026-10-14 (Addon Compartment entry, minimap button through
+  LibDBIcon or a built-in shape-aware draggable one, LDB launcher, position
+  in LibDBIcon's shape, E8080). Its `theme` waits for the widget themes.
 
 ## M9: Test runner, language server, formatter
 

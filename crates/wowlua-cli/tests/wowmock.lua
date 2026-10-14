@@ -89,6 +89,8 @@ function Frame:Show() self.shown = true; Mock.script(self, "OnShow") end
 function Frame:Hide() self.shown = false; Mock.script(self, "OnHide") end
 function Frame:IsShown() return self.shown end
 function Frame:GetName() return self.name end
+function Frame:GetParent() return rawget(self, "parent") end
+function Frame:SetParent(p) rawset(self, "parent", p) end
 function Frame:GetObjectType() return self.kind end
 function Frame:SetPoint(...) local p = rawget(self, "points") or {}; rawset(self, "points", p); p[#p + 1] = { ... } end
 function Frame:ClearAllPoints() rawset(self, "points", {}) end
@@ -101,7 +103,7 @@ end
 function Frame:GetAttribute(k) local a = rawget(self, "attributes"); return a and a[k] end
 
 function CreateFrame(kind, name, parent, template)
-    local f = setmetatable({ kind = kind, name = name, events = {}, units = {}, scripts = {}, hooks = {}, shown = true }, Frame)
+    local f = setmetatable({ kind = kind, name = name, parent = parent, events = {}, units = {}, scripts = {}, hooks = {}, shown = true }, Frame)
     Mock.frames[#Mock.frames + 1] = f
     if name then _G[name] = f end
     return f
@@ -334,3 +336,19 @@ function CreateColorFromHexString(hex)
     local function part(i) return tonumber(hex:sub(i, i + 1), 16) / 255 end
     return CreateColor(part(3), part(5), part(7), part(1))
 end
+
+-- Minimap, cursor, textures, Addon Compartment ---------------------------------
+
+Minimap = CreateFrame("Frame", "Minimap")
+function Minimap:GetWidth() return 140 end
+function Minimap:GetHeight() return 140 end
+function Minimap:GetCenter() return 500, 500 end
+function Minimap:GetEffectiveScale() return 1 end
+Mock.cursor = { 0, 0 }
+function GetCursorPosition() return Mock.cursor[1], Mock.cursor[2] end
+function Frame:SetShown(v) if v then self:Show() else self:Hide() end end
+function Frame:CreateTexture() return CreateFrame("Texture") end
+function Frame:SetTexture(t) rawset(self, "texture", t) end
+function Frame:GetPoint(i) local p = rawget(self, "points"); return unpack(p and p[i or 1] or {}) end
+AddonCompartmentFrame = { registeredAddons = {} }
+function AddonCompartmentFrame:RegisterAddon(data) table.insert(self.registeredAddons, data) end
