@@ -28,4 +28,7 @@ jobs:
       - run: cargo run --release -p xtask -- corpus fetch
       - run: cargo run --release -p xtask -- corpus run
       # Adopt and build every addon, bundled at every minification level.
+      # The runner has 16 GB; AllTheThings alone peaks near 12.
       - run: cargo run --release -p xtask -- corpus addons
+        env:
+          WOWLUA_CORPUS_MEMORY: "13"
