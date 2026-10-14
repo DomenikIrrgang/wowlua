@@ -68,6 +68,8 @@ interface MockClient
     --- Each unit's auras (AuraData tables); reads refuse while restricted.
     auras: { [string]: table[] }
     aurasRestricted: boolean
+    --- Spells by ID (name, iconID, description, known, cooldown, charges).
+    spells: { [number]: table }
     auraContainers: any[]
     auraChanged: (unit: string) -> ()
     --- Units by token (`player`, `target`, `party1`, …): what the unit

@@ -357,7 +357,9 @@ menus and lists, then the widget themes.
   with `readable`, the engine's aura containers with filter groups, spell
   and dispel-type lists and the client's buff look, filter words per
   flavor E8310, containers E8300; decisions S27, S28; the mock client has
-  auras and containers).
+  auras and containers); `spell` done 2026-10-14 (cooldowns with secret
+  times but a readable `onCooldown`, duration objects, the legacy cooldown
+  API as fallback).
 
 ## M9: Test runner, language server, formatter
 

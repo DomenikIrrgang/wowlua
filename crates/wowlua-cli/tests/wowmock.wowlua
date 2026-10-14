@@ -877,7 +877,10 @@ UnitGUID = (function(unit: string): any
 end) :: any
 
 -- The tooltip data system (setups without it set TooltipDataProcessor to nil).
-_G.Enum = { TooltipDataType = { Item = 0, Spell = 1, Unit = 2, Currency = 5, Mount = 10 } }
+_G.Enum = {
+    TooltipDataType = { Item = 0, Spell = 1, Unit = 2, Currency = 5, Mount = 10 },
+    SpellBookSpellBank = { Player = 0, Pet = 1 },
+}
 Mock.tooltipCalls = {}
 _G.TooltipDataProcessor = {
     AddTooltipPostCall = function(kind: number, fn: (tip: any, data: table) -> ())
@@ -1291,6 +1294,69 @@ function Mock.auraChanged(unit: string)
             c:UpdateAllAuras()
         end
     end
+end
+
+-- Spells (C_Spell, C_SpellBook) ----------------------------------------------------
+
+--- Spells by ID: `name`, `iconID`, `description`, `known`, `cooldown`
+--- (a SpellCooldownInfo, any time a secret), `charges`.
+Mock.spells = {
+    [133] = { name = "Fireball", iconID = 135812, description = "Hurls a fiery ball.", known = true },
+    [6603] = {
+        name = "Auto Attack", iconID = 135641, known = true,
+        cooldown = { startTime = 0, duration = 0, modRate = 1, isEnabled = true, isActive = false },
+    },
+}
+
+local function mockSpell(spell: any): table?
+    if type(spell) == "string" then
+        for id, s in pairs(Mock.spells) do
+            if s.name == spell then
+                s.id = id
+                return s
+            end
+        end
+        return nil
+    end
+    const s = Mock.spells[spell]
+    if s then
+        s.id = spell
+    end
+    return s
+end
+
+C_Spell = {} :: any
+function C_Spell.GetSpellInfo(spell: any): any
+    const s = mockSpell(spell)
+    if not s then return nil end
+    return { name = s.name, iconID = s.iconID, originalIconID = s.iconID, castTime = 0, minRange = 0, maxRange = 40, spellID = s.id }
+end
+function C_Spell.GetSpellName(spell: any): string?
+    return mockSpell(spell)?.name
+end
+function C_Spell.GetSpellTexture(spell: any): number?
+    return mockSpell(spell)?.iconID
+end
+function C_Spell.GetSpellLink(spell: any): string?
+    const s = mockSpell(spell)
+    return s and `|cff71d5ff|Hspell:{s.id}|h[{s.name}]|h|r`
+end
+function C_Spell.GetSpellDescription(spell: any): string?
+    return mockSpell(spell)?.description
+end
+function C_Spell.GetSpellCooldown(spell: any): any
+    return mockSpell(spell)?.cooldown
+end
+function C_Spell.GetSpellCharges(spell: any): any
+    return mockSpell(spell)?.charges
+end
+C_SpellBook = {} :: any
+function C_SpellBook.IsSpellKnown(id: number, bank: any): boolean
+    const s = mockSpell(id)
+    if bank == 1 then
+        return s?.petKnown == true
+    end
+    return s?.known == true
 end
 
 -- The client's class and item quality colors (a few).

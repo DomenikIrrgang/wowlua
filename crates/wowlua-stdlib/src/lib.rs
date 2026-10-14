@@ -130,6 +130,7 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
     ),
     ("secret", include_str!("../std/secret.wowlua"), None),
     ("serialize", include_str!("../std/serialize.wowlua"), None),
+    ("spell", include_str!("../std/spell.wowlua"), None),
     (
         "settings",
         include_str!("../std/settings.wowlua"),

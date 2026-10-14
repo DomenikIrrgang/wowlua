@@ -3450,6 +3450,43 @@ print("again", engine.unit, engine.shown)
     );
 }
 
+// ------------------------------------------------------------------ spell --
+
+/// `wowlua:spell`: spell data, cooldowns with secret times (still telling
+/// whether they run), the legacy cooldown API.
+#[test]
+fn spell_info_and_cooldowns() {
+    let source = "import * as spell from \"wowlua:spell\"\n_G.StdSpell = spell\n";
+    let script = r#"Mock.loadAddon("Std")
+local spell = StdSpell
+local i = spell.info(133)
+print(i.name, i.iconID, spell.name("Fireball"), spell.icon(133), spell.link(133), spell.description(133))
+print(spell.info(1), spell.onCooldown(133), spell.isKnown(133), spell.isKnown(1), spell.isKnown(133, true))
+Mock.spells[133].cooldown = { startTime = Mock.secret(), duration = Mock.secret(), modRate = Mock.secret(), isEnabled = true, isActive = true }
+local cd = spell.cooldown(133)
+print(issecretvalue(cd.duration), cd.isActive, cd.isEnabled, spell.onCooldown(133), spell.cooldownDuration(133))
+Mock.spells[133].charges = { currentCharges = 1, maxCharges = 2, cooldownStartTime = 0, cooldownDuration = 8, chargeModRate = 1, isActive = true }
+print(spell.charges(133).currentCharges)
+"#;
+    let out = modes(&[("src/main.wowlua", source)], "", script);
+    assert_eq!(
+        plain(&out),
+        [
+            "Fireball 135812 Fireball 135812 |cff71d5ff|Hspell:133|h[Fireball]|h|r Hurls a fiery ball.",
+            "nil false true false false",
+            "true true true true nil",
+            "1",
+        ]
+    );
+    // Clients with the global API only.
+    let out = modes(
+        &[("src/main.wowlua", source)],
+        "C_Spell.GetSpellCooldown = nil\nfunction GetSpellCooldown(id) if id == 133 then return 100, 8, 1 end return 0, 0, 1 end",
+        "Mock.loadAddon(\"Std\")\nlocal cd = StdSpell.cooldown(133)\nprint(cd.startTime, cd.duration, cd.isEnabled, cd.isActive, cd.modRate, StdSpell.onCooldown(1))\n",
+    );
+    assert_eq!(plain(&out), ["100 8 true true 1 false"]);
+}
+
 // ------------------------------------------------------------------ color --
 
 /// A literal `color.hex` is validated at compile time (E8390).

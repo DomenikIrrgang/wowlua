@@ -168,14 +168,15 @@ local cd = spell.cooldown(133)       -- SpellCooldownInfo?
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `info` | `(spell: number \| string) -> SpellInfo?` | `name`, `iconID`, `originalIconID`, `castTime`, `minRange`, `maxRange`, `spellID`. Uses `C_Spell.GetSpellInfo` where available, otherwise wraps `GetSpellInfo`'s multiple returns into the same record. |
+| `info` | `(spell: number \| string) -> SpellInfo?` | `name`, `iconID`, `originalIconID`, `castTime`, `minRange`, `maxRange`, `spellID`, from `C_Spell.GetSpellInfo` (every flavor's client has it) |
 | `name`, `icon` | `(spell) -> string?`, `(spell) -> number?` | |
 | `link` | `(spell) -> string?` | |
 | `description` | `(spell: number) -> string?` | May be empty until the spell data is loaded. Use `wowlua:item`'s `loadSpell` first. |
-| `cooldown` | `(spell) -> SpellCooldownInfo?` | `startTime`, `duration`, `isEnabled`, `modRate`. Fields may be secret on restricted flavors. The legacy fallback wraps `GetSpellCooldown`. |
-| `cooldownDuration` | `(spell) -> DurationObject?` | Only on clients with duration objects (E8300 elsewhere). Use for secret-safe display with `Cooldown:SetCooldownFromDurationObject`. |
+| `cooldown` | `(spell) -> CooldownInfo?` | `startTime`, `duration`, `modRate` (each `number \| Secret<number>`: secret in combat on restricted clients), `isEnabled`, `isActive` (readable there), `isOnGCD?`. Falls back to the global `GetSpellCooldown` where `C_Spell.GetSpellCooldown` is missing. |
+| `onCooldown` | `(spell) -> boolean` | Whether it is cooling down: `isActive`, readable in combat too |
+| `cooldownDuration` | `(spell, ignoreGCD?: boolean) -> LuaDurationObject?` | For secret-safe display with `Cooldown:SetCooldownFromDurationObject`; `nil` where the client has no duration objects |
 | `charges` | `(spell) -> SpellChargeInfo?` | |
-| `isKnown` | `(spellId: number, isPet?: boolean) -> boolean` | |
+| `isKnown` | `(spellId: number, isPet?: boolean) -> boolean` | `C_SpellBook.IsSpellKnown`, in the player's or the pet's spellbook |
 
 ## item
 

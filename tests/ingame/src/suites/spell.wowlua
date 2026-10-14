@@ -1,0 +1,31 @@
+-- wowlua:spell: spell data and cooldowns from the client (Auto Attack,
+-- which every character knows).
+import * as spell from "wowlua:spell"
+import * as secret from "wowlua:secret"
+import suite, say from "/harness"
+
+const AUTO_ATTACK = 6603
+
+local s = suite("spell")
+
+s:test("spell data", function(t)
+    const info = spell.info(AUTO_ATTACK)
+    t:ok(info ~= nil, "info")
+    if not info then return end
+    t:eq(spell.name(AUTO_ATTACK), info.name, "name")
+    t:eq(spell.icon(AUTO_ATTACK), info.iconID, "icon")
+    t:ok((spell.link(AUTO_ATTACK) ?? ""):find("spell:6603", 1, true) ~= nil, "link")
+    t:ok(spell.isKnown(AUTO_ATTACK), "known")
+    t:eq(spell.info(-1), nil, "no spell -1")
+end)
+
+s:test("cooldowns", function(t)
+    const cd = spell.cooldown(AUTO_ATTACK)
+    t:ok(cd ~= nil, "a cooldown record")
+    if not cd then return end
+    t:eq(cd.isActive, false, "Auto Attack does not cool down")
+    t:eq(spell.onCooldown(AUTO_ATTACK), false, "onCooldown")
+    const d = spell.cooldownDuration(AUTO_ATTACK)
+    say(`spell: duration secret {secret.isSecret(cd.duration)}, duration object {d ~= nil}`)
+    t:ok(true, "read")
+end)

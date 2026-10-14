@@ -1,0 +1,107 @@
+-- wowlua:spell (spec stdlib "spell"): spell information across flavors.
+-- Cooldown times may be secret on restricted clients (WoW: Forever in
+-- combat): they are typed so, and `onCooldown` and `cooldownDuration` give
+-- what can be used then (decision S26).
+import * as secret from "wowlua:secret"
+
+--- A spell ID or name.
+export type SpellRef = number | string
+
+--- A cooldown: the times may be secret; `isActive` and `isEnabled` stay
+--- readable.
+export type CooldownInfo = {
+    startTime: number | Secret<number>,
+    duration: number | Secret<number>,
+    modRate: number | Secret<number>,
+    isEnabled: boolean,
+    isActive: boolean,
+    isOnGCD?: boolean,
+}
+
+--- Name, icon, cast time and range.
+export function info(spell: SpellRef): SpellInfo?
+    return C_Spell.GetSpellInfo(spell)
+end
+
+export function name(spell: SpellRef): string?
+    return C_Spell.GetSpellName(spell)
+end
+
+export function icon(spell: SpellRef): number?
+    return (C_Spell.GetSpellTexture(spell))
+end
+
+export function link(spell: SpellRef): string?
+    return C_Spell.GetSpellLink(spell)
+end
+
+--- May be empty until the spell's data is loaded (`item.loadSpell`).
+export function description(spell: SpellRef): string?
+    return C_Spell.GetSpellDescription(spell)
+end
+
+const legacyCooldown = _G.GetSpellCooldown :: ((spell: SpellRef) -> (number, number, number, number?))?
+
+--- The spell's cooldown (secret times on restricted clients).
+export function cooldown(spell: SpellRef): CooldownInfo?
+    const modern = (C_Spell :: table).GetSpellCooldown :: ((spell: SpellRef) -> any)?
+    if modern then
+        const c = modern(spell)
+        if c == nil or secret.isSecret(c) then
+            return nil
+        end
+        return {
+            startTime = c.startTime,
+            duration = c.duration,
+            modRate = c.modRate,
+            isEnabled = secret.flag(c.isEnabled),
+            isActive = secret.flag(c.isActive),
+            isOnGCD = c.isOnGCD,
+        }
+    end
+    if not legacyCooldown then
+        return nil
+    end
+    local start, duration, enabled, modRate = legacyCooldown(spell)
+    return {
+        startTime = start,
+        duration = duration,
+        modRate = modRate ?? 1,
+        isEnabled = enabled == 1,
+        isActive = duration > 0,
+    }
+end
+
+--- Whether the spell is cooling down (readable in combat too).
+export function onCooldown(spell: SpellRef): boolean
+    return cooldown(spell)?.isActive == true
+end
+
+--- The cooldown as a duration object, for secret-safe display
+--- (`Cooldown:SetCooldownFromDurationObject`); nil where the client has
+--- none.
+export function cooldownDuration(spell: SpellRef, ignoreGCD: boolean?): LuaDurationObject?
+    const f = (C_Spell :: table).GetSpellCooldownDuration :: ((spell: SpellRef, ignoreGCD: boolean?) -> LuaDurationObject?)?
+    if not f then
+        return nil
+    end
+    return f(spell, ignoreGCD)
+end
+
+--- Charges, for spells that have them.
+export function charges(spell: SpellRef): SpellChargeInfo?
+    const c = C_Spell.GetSpellCharges(spell)
+    if secret.isSecret(c) then
+        return nil
+    end
+    return c
+end
+
+--- Whether the player (or, with `isPet`, the pet) knows the spell.
+export function isKnown(spellId: number, isPet: boolean?): boolean
+    if isPet then
+        const pet = ((_G.Enum :: table).SpellBookSpellBank :: { Pet?: SpellBookSpellBank }?)?.Pet
+        return pet ~= nil and C_SpellBook.IsSpellKnown(spellId, pet)
+    end
+    return C_SpellBook.IsSpellKnown(spellId)
+end
