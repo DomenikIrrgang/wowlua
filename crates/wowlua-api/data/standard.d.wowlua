@@ -990,6 +990,8 @@ type OrderStatus = any
 type PartyPlaylistEntry = any
 type PurchaseHouseDisabledReason = any
 type ResidentType = any
+type TickerHandle = any
+type TimerHandle = any
 type Vocalerrorsounds = any
 type WeeklyRewardChestThresholdType = any
 type Window = any
@@ -31468,8 +31470,8 @@ end
 
 declare namespace C_Timer
     function After(seconds: number, callback: TimerCallback)
-    function NewTicker(seconds: number, callback: TickerCallback, iterations: number?): TickerCallback
-    function NewTimer(seconds: number, callback: TickerCallback): TickerCallback
+    function NewTicker(seconds: number, callback: (handle: TickerHandle) -> (), iterations: number?): TickerHandle
+    function NewTimer(seconds: number, callback: (handle: TimerHandle) -> ()): TimerHandle
 end
 
 declare namespace C_UIWidgetManager

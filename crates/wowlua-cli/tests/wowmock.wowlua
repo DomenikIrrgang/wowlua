@@ -23,7 +23,7 @@ end
 
 -- Error handling ------------------------------------------------------------
 
-local handler = function(msg)
+local handler: (msg: any) -> () = function(msg)
     Mock.errors[#Mock.errors + 1] = tostring(msg)
     print("ERROR: " .. tostring(msg))
 end
@@ -102,12 +102,13 @@ function Frame:SetAttribute(k, v)
 end
 function Frame:GetAttribute(k) local a = rawget(self, "attributes"); return a and a[k] end
 
-function CreateFrame(kind, name, parent, template)
+-- (The client's CreateFrame has an overload per frame type.)
+CreateFrame = (function(kind, name, parent, template)
     local f = setmetatable({ kind = kind, name = name, parent = parent, events = {}, units = {}, scripts = {}, hooks = {}, shown = true }, Frame)
     Mock.frames[#Mock.frames + 1] = f
     if name then _G[name] = f end
     return f
-end
+end) :: any
 
 function Mock.script(frame, name, ...)
     local fn = frame.scripts[name]
@@ -138,18 +139,25 @@ end
 -- Load-on-demand addons: name → a function defining their globals.
 Mock.onDemand = {}
 Mock.metadata = {}
-C_AddOns = {
-    IsAddOnLoaded = function(name) return Mock.loaded[name] == true end,
-    IsAddOnLoadOnDemand = function(name) return Mock.onDemand[name] ~= nil end,
-    LoadAddOn = function(name)
-        local define = Mock.onDemand[name]
-        if not define or Mock.loaded[name] then return false end
-        define()
-        Mock.loadAddon(name)
-        return true
-    end,
-    GetAddOnMetadata = function(name, field) return Mock.metadata[name] and Mock.metadata[name][field] end,
-}
+C_AddOns = {} :: any
+function C_AddOns.IsAddOnLoaded(name: string | number): (boolean, boolean)
+    return Mock.loaded[name] == true, Mock.loaded[name] == true
+end
+function C_AddOns.IsAddOnLoadOnDemand(name: string | number): boolean
+    return Mock.onDemand[name] ~= nil
+end
+function C_AddOns.LoadAddOn(name: string | number): (boolean?, string?)
+    local define = Mock.onDemand[name]
+    if not define or Mock.loaded[name] then
+        return false, "LOADED"
+    end
+    define()
+    Mock.loadAddon(name)
+    return true, nil
+end
+function C_AddOns.GetAddOnMetadata(name: string | number, field: string): string
+    return Mock.metadata[name] and Mock.metadata[name][field]
+end
 GetAddOnMetadata = C_AddOns.GetAddOnMetadata
 Mock.interface = 11508
 function GetBuildInfo() return "1.0.0", "1", "Jan 1 2026", Mock.interface end
@@ -165,7 +173,10 @@ end
 function RequestTimePlayed()
     C_Timer.After(0.2, function() Mock.fire("TIME_PLAYED_MSG", 3600, 60) end)
 end
-C_EventUtils = { IsEventValid = function(event) return Mock.events[event] == true end }
+C_EventUtils = {} :: any
+function C_EventUtils.IsEventValid(event: string): boolean
+    return Mock.events[event] == true
+end
 
 -- Hooks ---------------------------------------------------------------------
 
@@ -193,11 +204,16 @@ local function schedule(sec, fn, iterations)
     return t
 end
 
-C_Timer = {
-    After = function(sec, fn) schedule(sec, fn, 1) end,
-    NewTimer = function(sec, fn) return schedule(sec, fn, 1) end,
-    NewTicker = function(sec, fn, iterations) return schedule(sec, fn, iterations or math.huge) end,
-}
+C_Timer = {} :: any
+function C_Timer.After(seconds: number, callback: () -> ())
+    schedule(seconds, callback, 1)
+end
+function C_Timer.NewTimer(seconds: number, callback: (handle: TimerHandle) -> ()): TimerHandle
+    return schedule(seconds, callback, 1) :: any
+end
+function C_Timer.NewTicker(seconds: number, callback: (handle: TickerHandle) -> (), iterations: number?): TickerHandle
+    return schedule(seconds, callback, iterations or math.huge) :: any
+end
 
 -- Advances the clock, running due timers in order (a frame is 0 seconds).
 function Mock.advance(sec)
@@ -234,9 +250,9 @@ function Mock.slash(line)
 end
 
 -- A few of Blizzard's globals for hooks.
-UIParent = CreateFrame("Frame", "UIParent")
+UIParent = CreateFrame("Frame", "UIParent") :: any
 function ToggleGameMenu() print("menu") end
-GameTooltip = CreateFrame("GameTooltip", "GameTooltip")
+GameTooltip = CreateFrame("GameTooltip", "GameTooltip") :: any
 function GameTooltip:SetUnit(unit) print("SetUnit " .. unit) end
 CreateFrame("Frame", "PlayerFrame")
 
@@ -327,7 +343,9 @@ function Frame:GetText() return rawget(self, "text") end
 
 local Color = {}
 Color.__index = Color
-function CreateColor(r, g, b, a) return setmetatable({ r = r, g = g, b = b, a = a or 1 }, Color) end
+function CreateColor(r: number, g: number, b: number, a: number?): colorRGBA
+    return setmetatable({ r = r, g = g, b = b, a = a or 1 }, Color) :: any
+end
 function Color:GenerateHexColor()
     local function byte(v) return math.floor(v * 255 + 0.5) end
     return string.format("%02x%02x%02x%02x", byte(self.a), byte(self.r), byte(self.g), byte(self.b))
@@ -339,7 +357,7 @@ end
 
 -- Minimap, cursor, textures, Addon Compartment ---------------------------------
 
-Minimap = CreateFrame("Frame", "Minimap")
+Minimap = CreateFrame("Frame", "Minimap") :: any
 function Minimap:GetWidth() return 140 end
 function Minimap:GetHeight() return 140 end
 function Minimap:GetCenter() return 500, 500 end
@@ -350,7 +368,7 @@ function Frame:SetShown(v) if v then self:Show() else self:Hide() end end
 function Frame:CreateTexture() return CreateFrame("Texture") end
 function Frame:SetTexture(t) rawset(self, "texture", t) end
 function Frame:GetPoint(i) local p = rawget(self, "points"); return unpack(p and p[i or 1] or {}) end
-AddonCompartmentFrame = { registeredAddons = {} }
+AddonCompartmentFrame = { registeredAddons = {} } :: any
 function AddonCompartmentFrame:RegisterAddon(data) table.insert(self.registeredAddons, data) end
 function debugprofilestop() return Mock.now * 1000 end
 
@@ -373,12 +391,19 @@ local function addonMessage(prefix, msg, chatType, target)
     end
     return 0
 end
-C_ChatInfo = {
-    RegisterAddonMessagePrefix = function() return 0 end,
-    SendAddonMessage = addonMessage,
-    SendAddonMessageLogged = addonMessage,
-    InChatMessagingLockdown = function() return Mock.lockdown end,
-}
+C_ChatInfo = {} :: any
+function C_ChatInfo.RegisterAddonMessagePrefix(prefix: string): RegisterAddonMessagePrefixResult
+    return 0
+end
+function C_ChatInfo.SendAddonMessage(prefix: string, message: string, chatType: string?, target: string?): SendAddonMessageResult
+    return addonMessage(prefix, message, chatType, target)
+end
+function C_ChatInfo.SendAddonMessageLogged(prefix: string, message: string, chatType: string?, target: string?): SendAddonMessageResult?
+    return addonMessage(prefix, message, chatType, target)
+end
+function C_ChatInfo.InChatMessagingLockdown(): boolean
+    return Mock.lockdown
+end
 Mock.events.CHAT_MSG_ADDON = true
 function Ambiguate(name) return (name:gsub("%-MockRealm$", "")) end
 function IsInRaid() return Mock.group == "raid" end

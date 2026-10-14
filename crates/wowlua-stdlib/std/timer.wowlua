@@ -4,15 +4,15 @@
 import callIn from "wowlua:errors"
 
 --- A one-shot timer; the handle has `Cancel()` and `IsCancelled()`.
-export function after(sec: number, fn: () -> ()): any
+export function after(sec: number, fn: () -> ()): TimerHandle
     return C_Timer.NewTimer(sec, function()
         callIn({ component = "timer: after" }, fn)
     end)
 end
 
 --- A repeating timer; `fn` receives the ticker.
-export function every(sec: number, fn: (ticker: any) -> (), iterations: number?): any
-    return C_Timer.NewTicker(sec, function(ticker: any)
+export function every(sec: number, fn: (ticker: TickerHandle) -> (), iterations: number?): TickerHandle
+    return C_Timer.NewTicker(sec, function(ticker: TickerHandle)
         callIn({ component = "timer: every" }, fn, ticker)
     end, iterations)
 end

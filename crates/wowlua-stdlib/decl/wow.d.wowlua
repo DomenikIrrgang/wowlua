@@ -25,3 +25,12 @@ declare class LibStubLibrary
     function IterateLibraries(): ((t: table, key: string?) -> (string?, table), table, nil)
 end
 declare global LibStub: LibStubLibrary & ((major: string, silent: boolean?) -> any)
+
+-- The handles of `C_Timer.NewTimer` and `C_Timer.NewTicker` (Blizzard's
+-- documentation types them as the callback).
+declare class TimerHandle
+    function Cancel()
+    function IsCancelled(): boolean
+end
+declare class TickerHandle extends TimerHandle
+end

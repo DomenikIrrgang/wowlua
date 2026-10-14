@@ -37,6 +37,24 @@ pub struct FlavorDocs {
     pub lod_files: std::collections::HashMap<String, String>,
 }
 
+/// Where Blizzard's documentation is wrong: `C_Timer.NewTimer` and
+/// `NewTicker` return a handle with `Cancel()` and `IsCancelled()` (the
+/// documentation says the callback), and their callbacks receive it.
+/// `TimerHandle` and `TickerHandle` are declared by the compiler.
+fn corrections(d: &mut Decls) {
+    let Some(timer) = d.namespaces.get_mut("C_Timer") else {
+        return;
+    };
+    for (name, handle) in [("NewTimer", "TimerHandle"), ("NewTicker", "TickerHandle")] {
+        for sig in timer.functions.get_mut(name).into_iter().flatten() {
+            sig.returns = vec![handle.to_string()];
+            if let Some(callback) = sig.params.iter_mut().find(|p| p.name == "callback") {
+                callback.ty = format!("(handle: {handle}) -> ()");
+            }
+        }
+    }
+}
+
 /// Generates the declarations. `skip`: global names the compiler declares
 /// itself (Lua 5.1 and WoW's Lua environment). `annotation_source` goes
 /// into the shared file's header.
@@ -49,6 +67,7 @@ pub fn generate(
     let mut per_flavor: Vec<(String, String, Decls)> = Vec::new();
     for f in flavors {
         let mut d = blizzard::read(&f.files)?;
+        corrections(&mut d);
         d.functions.retain(|n, _| !skip.contains(n));
         d.namespaces.retain(|n, _| !skip.contains(n));
         per_flavor.push((f.id.clone(), f.source.clone(), d));
