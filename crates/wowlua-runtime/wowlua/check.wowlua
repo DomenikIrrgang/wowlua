@@ -16,6 +16,6 @@ wl.check = {
 	end,
 	-- A `::` assertion failed.
 	castFail = function(expected: string, value: any, location: string)
-		error(addonName .. ": " .. location .. ": bad value for '::' (" .. expected .. " expected, got " .. got(value) .. ")", 0)
+		error(`{addonName}: {location}: bad value for '::' ({expected} expected, got {got(value)})`, 0)
 	end,
 }

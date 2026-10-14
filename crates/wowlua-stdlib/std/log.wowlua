@@ -4,13 +4,25 @@
 local addonName, ns = ...
 local wl = ns.__wowlua
 
-const RANKS = { trace = 0, debug = 1, info = 2, warn = 3, error = 4, off = 5 }
-const COLORS = { trace = "7a7264", debug = "a39b8b", info = "f1eadb", warn = "ffb23f", error = "ff9a80" }
+--- The log levels, least severe first.
+export enum Level {
+    Trace = "trace",
+    Debug = "debug",
+    Info = "info",
+    Warn = "warn",
+    Error = "error",
+    Off = "off",
+}
+--- A level: a member of the enum, or its string.
+export type LevelValue = Level | "trace" | "debug" | "info" | "warn" | "error" | "off"
+
+const RANKS: { [string]: number } = { trace = 0, debug = 1, info = 2, warn = 3, error = 4, off = 5 }
+const COLORS: { [string]: string } = { trace = "7a7264", debug = "a39b8b", info = "f1eadb", warn = "ffb23f", error = "ff9a80" }
 
 local compiled = RANKS[wl.logLevel ?? "trace"] ?? 0
 local current = compiled
 local capacity = wl.logHistory ?? 500
-local buffer = {}
+local buffer: { [number]: WowluaLogEntry } = {}
 local first = 1
 local count = 0
 local sinks = {}
@@ -35,11 +47,11 @@ end
 
 -- The default sink: warn and above to the chat frame.
 local function chatSink(level: string, message: string, location: string?)
-    if RANKS[level] < RANKS.warn then
+    if (RANKS[level] ?? 0) < RANKS.warn then
         return
     end
     local frame = chatFrame()
-    local line = "|cff33ff99" .. addonName .. "|r |cff" .. COLORS[level] .. "[" .. level .. "]|r " .. message
+    local line = "|cff33ff99" .. addonName .. "|r |cff" .. (COLORS[level] ?? "ffffff") .. "[" .. level .. "]|r " .. message
     if frame then
         frame:AddMessage(line)
     else
@@ -47,6 +59,7 @@ local function chatSink(level: string, message: string, location: string?)
     end
 end
 
+-- (Compiled `log` calls and tracing come here with the level's string.)
 export function emitAt(level: string, location: string?, ...: any)
     local rank = RANKS[level] ?? 0
     if rank < current then
@@ -75,12 +88,18 @@ export function info(...: any) emitAt("info", nil, ...) end
 export function warn(...: any) emitAt("warn", nil, ...) end
 export function error(...: any) emitAt("error", nil, ...) end
 
--- The runtime level, never below the compiled one.
-export function setLevel(level: string)
+-- Sets the runtime level from a level's string (the dev console passes
+-- what the player typed; unknown names are ignored).
+local function setRank(level: string)
     local rank = RANKS[level]
     if rank then
         current = math.max(rank, compiled)
     end
+end
+
+--- The runtime level, never below the compiled one.
+export function setLevel(level: LevelValue)
+    setRank(level)
 end
 
 export function sink(fn: (level: string, message: string) -> ())
@@ -105,7 +124,7 @@ wl.logs = {
     first = function(): number return first end,
     count = function(): number return count end,
     history = history,
-    setLevel = setLevel,
+    setLevel = setRank,
 }
 
 local function say(frame: MessageFrame?, message: string)

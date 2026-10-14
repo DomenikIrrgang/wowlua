@@ -97,26 +97,29 @@ import * as comm from "wowlua:comm"
 
 local channel = comm.open("MyAddon")          -- prefix, registered automatically
 
-channel:onMessage(function(msg: string, sender: string, distribution: comm.Distribution)
+channel:onMessage(function(msg: string, sender: string, distribution: string)
     …
 end)
 
-channel:send("hello", "PARTY")
-channel:send(largePayload, "WHISPER", "Name-Realm", { priority = "bulk" })
+channel:send("hello", comm.Distribution.Party)
+channel:send(largePayload, "WHISPER", "Name-Realm", { priority = comm.Priority.Bulk })
 ```
 
 | API | Meaning |
 |-----|---------|
 | `open(prefix: string): Channel` | Registers the prefix through `C_ChatInfo.RegisterAddonMessagePrefix`. Prefixes over the API length limit are error E8050 (checked at compile time for literals). |
-| `Channel:send(msg, distribution, target?, opts?): SendStatus` | Sends a string of any length. Messages over the per-message size limit are split into chunks and reassembled by receivers. Returns `"sent"`, `"queued"` (throttled or in lockdown) or `"dropped"` (only with `opts.dropInLockdown`). |
+| `Channel:send(msg, distribution, target?, opts?): SendStatus` | Sends a string of any length. Messages over the per-message size limit are split into chunks and reassembled by receivers. Returns `SendStatus.Sent`, `Queued` (throttled or in lockdown) or `Dropped` (only with `opts.dropInLockdown`). |
 | `Channel:onMessage(fn)` | Receives complete, reassembled messages |
 | `Channel:sendObject(value, …)` / `onObject(fn)` | Serializes with `wowlua:serialize` (and optionally compresses) |
-| `opts.priority` | `"alert"`, `"normal"`, `"bulk"` |
+| `opts.priority` | A `Priority`: `Alert`, `Normal`, `Bulk` |
 | `opts.callback` | Progress callback `(sentBytes, totalBytes)` |
 | `opts.receiveOwn` | Deliver messages sent by the player themselves. Default `false`. |
-| `Distribution` | `"PARTY"`, `"RAID"`, `"INSTANCE_CHAT"`, `"GUILD"`, `"OFFICER"`, `"WHISPER"`, `"CHANNEL"`, plus `"GROUP"`, which picks the right one for the current group |
+| `Distribution` | `Party`, `Raid`, `Instance`, `Guild`, `Officer`, `Whisper`, `Channel`, plus `Group`, which picks the right one for the current group |
 
-`comm.Distribution` and `comm.SendStatus` are exported types. `receiveOwn` is
+`comm.Distribution`, `comm.Priority`, `comm.Format` and `comm.SendStatus` are
+exported string enums (`Distribution.Party` is `"PARTY"`). Parameters also
+take the strings (`"PARTY"`, `"bulk"`): their types are `DistributionValue`,
+`PriorityValue` and `FormatValue`, the enum or its strings. `receiveOwn` is
 an option of `open` (`comm.open(prefix, { receiveOwn = true })`). Objects
 travel as messages whose payload starts with the bytes `\255O`, so
 `onMessage` and `onObject` handlers of one channel each get their own. A namespace
@@ -269,7 +272,8 @@ object, so `import log from "wowlua:log"` (`log.info(…)`) and
 
 ```wowlua
 declare module "wowlua:log"
-    type Level = "trace" | "debug" | "info" | "warn" | "error"
+    enum Level { Trace = "trace", Debug = "debug", Info = "info", Warn = "warn", Error = "error", Off = "off" }
+    type LevelValue = Level | "trace" | "debug" | "info" | "warn" | "error" | "off"
     type Printer = ((...any) -> ()) & {
         color: (hex: string, ...any) -> (),
         to: (frame: ScrollingMessageFrame, ...any) -> (),
@@ -280,9 +284,9 @@ declare module "wowlua:log"
     function info(...: any)
     function warn(...: any)
     function error(...: any)
-    function setLevel(level: Level)
-    function sink(fn: (level: Level, message: string) -> ())
-    function history(n: number?): { time: number, level: Level, message: string }[]
+    function setLevel(level: LevelValue)
+    function sink(fn: (level: string, message: string) -> ())
+    function history(n: number?): { time: number, level: string, message: string, location?: string }[]
     const log: { trace: (...any) -> (), debug: (...any) -> (), info: (...any) -> (),
                  warn: (...any) -> (), error: (...any) -> () }
     const print: Printer

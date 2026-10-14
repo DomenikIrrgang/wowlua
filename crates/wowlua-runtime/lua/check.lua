@@ -16,6 +16,6 @@ fail = function(index, name, fname, location, expected, value)
 end,
 -- A `::` assertion failed.
 castFail = function(expected, value, location)
-	error(addonName .. ": " .. location .. ": bad value for '::' (" .. expected .. " expected, got " .. got(value) .. ")", 0)
+	error(tostring(addonName) .. ": " .. tostring(location) .. ": bad value for '::' (" .. tostring(expected) .. " expected, got " .. tostring(got(value)) .. ")", 0)
 end
 }

@@ -1,6 +1,6 @@
 -- wowlua runtime: widget (spec §3.2). Widget classes are mixins applied to
 -- frames created by CreateFrame; construction is threaded through __ctor.
-local SKIP: { [string]: boolean } = {
+const SKIP: { [string]: boolean } = {
 	new = true, __index = true, __name = true, __super = true, __init = true,
 	__ctor = true, __initFields = true, __mixin = true,
 }

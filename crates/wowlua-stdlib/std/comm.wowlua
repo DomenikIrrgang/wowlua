@@ -9,12 +9,42 @@ import report, callIn from "wowlua:errors"
 import toAddonChannel, fromAddonChannel, encode, decode, compress, decompress from "wowlua:serialize"
 
 --- Where a message goes; `GROUP` picks the current group's channel.
-export type Distribution = "PARTY" | "RAID" | "INSTANCE_CHAT" | "GUILD" | "OFFICER" | "WHISPER" | "CHANNEL" | "GROUP"
+export enum Distribution {
+    Party = "PARTY",
+    Raid = "RAID",
+    Instance = "INSTANCE_CHAT",
+    Guild = "GUILD",
+    Officer = "OFFICER",
+    Whisper = "WHISPER",
+    Channel = "CHANNEL",
+    Group = "GROUP",
+}
+--- A distribution: a member of the enum, or its string.
+export type DistributionValue = Distribution | "PARTY" | "RAID" | "INSTANCE_CHAT" | "GUILD" | "OFFICER" | "WHISPER" | "CHANNEL" | "GROUP"
 --- What `send` did: sent at once, queued, or dropped.
-export type SendStatus = "sent" | "queued" | "dropped"
+export enum SendStatus {
+    Sent = "sent",
+    Queued = "queued",
+    Dropped = "dropped",
+}
+
+--- How urgent a message is (ChatThrottleLib's priorities).
+export enum Priority {
+    Alert = "alert",
+    Normal = "normal",
+    Bulk = "bulk",
+}
+export type PriorityValue = Priority | "alert" | "normal" | "bulk"
+
+--- The wire format: wowlua's or AceComm-3.0's.
+export enum Format {
+    Wowlua = "wowlua",
+    AceComm = "acecomm",
+}
+export type FormatValue = Format | "wowlua" | "acecomm"
 
 export interface SendOptions
-    priority?: ("alert" | "normal" | "bulk")
+    priority?: PriorityValue
     --- Progress: bytes sent so far, and of the whole message.
     callback?: ((sent: number, total: number) -> ())
     --- `SendAddonMessageLogged` instead of `SendAddonMessage`.
@@ -25,10 +55,10 @@ end
 
 export interface Channel
     prefix: string
-    function send(msg: string, distribution: Distribution, target: string?, opts: SendOptions?): SendStatus
+    function send(msg: string, distribution: DistributionValue, target: string?, opts: SendOptions?): SendStatus
     function onMessage(fn: (msg: string, sender: string, distribution: string) -> ())
     --- Sends a value through wowlua:serialize (encoded and compressed).
-    function sendObject(value: any, distribution: Distribution, target: string?, opts: SendOptions?): SendStatus
+    function sendObject(value: any, distribution: DistributionValue, target: string?, opts: SendOptions?): SendStatus
     function onObject(fn: (value: any, sender: string, distribution: string) -> ())
 end
 
@@ -41,8 +71,12 @@ const PREFIX_BURST = 10
 const BYTES_BURST = 4000
 const BYTES_PER_SECOND = 800
 
-type Priority = "alert" | "normal" | "bulk"
-type Format = "wowlua" | "acecomm"
+-- What happened to one chunk.
+enum Outcome {
+    Sent,
+    Wait,
+    Failed,
+}
 
 --- The parts of ChatThrottleLib (embedded by other addons) used here.
 type CTLSend = (
@@ -83,7 +117,7 @@ end
 
 -- The channel `GROUP` means now, or nil out of a group.
 local function resolve(distribution: string): string?
-    if distribution ~= "GROUP" then
+    if distribution ~= Distribution.Group then
         return distribution
     end
     if IsInGroup and LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
@@ -101,10 +135,10 @@ end
 -- Wire formats ------------------------------------------------------------------
 
 -- The chunks of a message: control byte, then up to 254 bytes.
-local function chunksOf(msg: string, format: Format): string[]
+local function chunksOf(msg: string, format: FormatValue): string[]
     local chunks: string[] = {}
     local body = msg
-    if format == "acecomm" then
+    if format == Format.AceComm then
         -- A single message starting with a control byte is escaped (\004).
         if #body < MAX then
             if body:find("^[\001-\009]") then
@@ -154,18 +188,18 @@ local schedulePump: (delay: number) -> () = function() end
 
 -- Sends one chunk now; whether it went, and whether to wait (throttled or
 -- locked: retry later), or it failed for good.
-local function transmit(c: Chunk): string
+local function transmit(c: Chunk): Outcome
     local send = c.logged and C_ChatInfo.SendAddonMessageLogged or C_ChatInfo.SendAddonMessage
     -- Older clients return a boolean, newer ones a result code.
     local result: any = send(c.channel.prefix, c.text, c.distribution, c.target)
     if result == nil or result == true or result == 0 then
-        return "sent"
+        return Outcome.Sent
     end
     if result == 3 or result == 8 or result == 11 then
-        return "wait"
+        return Outcome.Wait
     end
     report(`comm: sending on {c.channel.prefix} failed (result {tostring(result)})`)
-    return "failed"
+    return Outcome.Failed
 end
 
 local function delivered(c: Chunk)
@@ -194,7 +228,7 @@ local function pump()
                     return
                 end
                 local outcome = transmit(c)
-                if outcome == "wait" then
+                if outcome == Outcome.Wait then
                     -- Throttled by the server: back off and retry this chunk.
                     c.channel.budget = 0
                     schedulePump(1)
@@ -203,7 +237,7 @@ local function pump()
                 table.remove(queue, 1)
                 byteBudget -= #c.text
                 c.channel.budget -= 1
-                if outcome == "sent" then
+                if outcome == Outcome.Sent then
                     delivered(c)
                 else
                     c.message.failed = true
@@ -222,9 +256,9 @@ end
 
 local function queueOf(opts: SendOptions?): Chunk[]
     local p = opts and opts.priority
-    if p == "alert" then
+    if p == Priority.Alert then
         return queues.alert
-    elseif p == "bulk" then
+    elseif p == Priority.Bulk then
         return queues.bulk
     end
     return queues.normal
@@ -241,7 +275,7 @@ local function sendChunks(channel: CommChannel, chunks: string[], distribution: 
     local ctl = _G.ChatThrottleLib :: ChatThrottleLibrary?
     local plainSend = ctl and ctl.SendAddonMessage
     if ctl and plainSend and not inLockdown() then
-        local priority = (opts and opts.priority or "normal"):upper()
+        local priority = (opts and opts.priority or Priority.Normal):upper()
         local pending = #chunks
         for _, text in ipairs(chunks) do
             local function done(_: any, didSend: boolean?)
@@ -253,10 +287,10 @@ local function sendChunks(channel: CommChannel, chunks: string[], distribution: 
             local sendFn = logged and ctl.SendAddonMessageLogged or plainSend
             sendFn(ctl, priority, channel.prefix, text, distribution, target, channel.prefix, done, nil)
         end
-        return pending == 0 and "sent" or "queued"
+        return pending == 0 and SendStatus.Sent or SendStatus.Queued
     end
     if inLockdown() and opts and opts.dropInLockdown then
-        return "dropped"
+        return SendStatus.Dropped
     end
     local queue = queueOf(opts)
     for _, text in ipairs(chunks) do
@@ -265,9 +299,9 @@ local function sendChunks(channel: CommChannel, chunks: string[], distribution: 
     -- What the budgets allow goes at once.
     pump()
     if message.failed then
-        return "dropped"
+        return SendStatus.Dropped
     end
-    return message.sent == total and "sent" or "queued"
+    return message.sent == total and SendStatus.Sent or SendStatus.Queued
 end
 
 -- Receiving ----------------------------------------------------------------------
@@ -278,7 +312,7 @@ local partial: { [string]: string[] } = {}
 local function deliver(channel: CommChannel, msg: string, sender: string, distribution: string)
     if msg:sub(1, #OBJECT) == OBJECT then
         local packed = msg:sub(#OBJECT + 1)
-        if channel.format == "acecomm" then
+        if channel.format == Format.AceComm then
             packed = fromAddonChannel(packed)
         end
         local raw = decompress(packed)
@@ -320,7 +354,7 @@ local function receive(prefix: string, text: string, distribution: string, sende
     local key = who .. "\000" .. prefix
     local control = text:byte(1) ?? 0
     local body = text:sub(2)
-    if channel.format == "acecomm" then
+    if channel.format == Format.AceComm then
         if control == 1 then
             partial[key] = { body }
         elseif control == 2 or control == 3 then
@@ -373,7 +407,7 @@ end
 --- A channel with its handlers and its share of the throttle.
 class CommChannel implements Channel
     readonly prefix: string
-    readonly format: Format
+    readonly format: FormatValue
     readonly receiveOwn: boolean
     handlers: ((msg: string, sender: string, distribution: string) -> ())[] = {}
     objectHandlers: ((value: any, sender: string, distribution: string) -> ())[] = {}
@@ -381,19 +415,19 @@ class CommChannel implements Channel
     budget: number = PREFIX_BURST
     budgetTime: number
 
-    constructor(prefix: string, format: Format, receiveOwn: boolean)
+    constructor(prefix: string, format: FormatValue, receiveOwn: boolean)
         self.prefix = prefix
         self.format = format
         self.receiveOwn = receiveOwn
         self.budgetTime = now()
     end
 
-    function send(msg: string, distribution: Distribution, target: string?, opts: SendOptions?): SendStatus
+    function send(msg: string, distribution: DistributionValue, target: string?, opts: SendOptions?): SendStatus
         local dist = resolve(distribution)
         if not dist then
-            return "dropped"
+            return SendStatus.Dropped
         end
-        if self.format == "acecomm" and msg:find("%z") then
+        if self.format == Format.AceComm and msg:find("%z") then
             error("comm: AceComm-format messages cannot contain NUL bytes", 2)
         end
         return sendChunks(self, chunksOf(msg, self.format), dist, target, opts)
@@ -403,9 +437,9 @@ class CommChannel implements Channel
         self.handlers[#self.handlers + 1] = fn
     end
 
-    function sendObject(value: any, distribution: Distribution, target: string?, opts: SendOptions?): SendStatus
+    function sendObject(value: any, distribution: DistributionValue, target: string?, opts: SendOptions?): SendStatus
         local payload = OBJECT .. compress(encode(value))
-        if self.format == "acecomm" then
+        if self.format == Format.AceComm then
             -- AceComm's format carries no NUL bytes.
             payload = OBJECT .. toAddonChannel(payload:sub(#OBJECT + 1))
         end
@@ -419,7 +453,7 @@ end
 
 --- A channel on `prefix` (registered with the client; at most 16
 --- characters).
-export function open(prefix: string, opts: { format?: Format, receiveOwn?: boolean }?): Channel
+export function open(prefix: string, opts: { format?: FormatValue, receiveOwn?: boolean }?): Channel
     if type(prefix) ~= "string" or #prefix == 0 or #prefix > 16 then
         error("comm.open: a prefix has 1 to 16 characters", 2)
     end
@@ -429,7 +463,7 @@ export function open(prefix: string, opts: { format?: Format, receiveOwn?: boole
     end
     C_ChatInfo.RegisterAddonMessagePrefix(prefix)
     listen()
-    local channel = CommChannel.new(prefix, opts and opts.format or "wowlua", opts and opts.receiveOwn or false)
+    local channel = CommChannel.new(prefix, opts and opts.format or Format.Wowlua, opts and opts.receiveOwn or false)
     channels[prefix] = channel
     return channel
 end

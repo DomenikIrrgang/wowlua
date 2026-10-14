@@ -11,7 +11,7 @@ local function show(v: any): string
 	elseif t == "table" then
 		local n = 0
 		for _ in pairs(v) do
-			n = n + 1
+			n += 1
 			if n > 99 then
 				break
 			end
@@ -32,11 +32,11 @@ local function out(line: string)
 	if emit then
 		emit("trace", nil, line)
 	else
-		print(addonName .. ": " .. line)
+		print(`{addonName}: {line}`)
 	end
 end
 local function finish(name: string, indent: string, ok: boolean, ...: any): ...any
-	trace.depth = trace.depth - 1
+	trace.depth -= 1
 	if not ok then
 		out(indent .. "x " .. name .. ": " .. tostring((...)))
 		error((...), 0)
@@ -53,7 +53,7 @@ function trace.wrap(fn: any, name: string, location: string, opts: { args: boole
 	return function(...: any): ...any
 		local indent = string.rep("  ", trace.depth)
 		out(indent .. "> " .. name .. (args and ("(" .. list(...) .. ")") or ""))
-		trace.depth = trace.depth + 1
+		trace.depth += 1
 		return finish(name, indent, pcall(fn, ...))
 	end
 end

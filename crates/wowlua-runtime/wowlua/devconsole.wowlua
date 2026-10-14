@@ -3,7 +3,7 @@
 -- surfaces, gilt hairlines, `arcane` for what is chosen, `amber` and
 -- `ember` only for warnings and errors.
 local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): Frame
-	local C = {
+	const C = {
 		glass = { 0.075, 0.067, 0.086, 0.94 },
 		sunk = { 0.082, 0.071, 0.059, 1 },
 		raised = { 0.110, 0.094, 0.082, 1 },
@@ -22,16 +22,18 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		onSignal = { 0.071, 0.055, 0.043, 1 },
 		progress = { 0.549, 0.482, 0.369, 1 },
 	}
-	local DIR = "Interface\\AddOns\\" .. addonName .. "\\wowlua\\fonts\\"
-	local FONTS = {
+	const DIR = `Interface\\AddOns\\{addonName}\\wowlua\\fonts\\`
+	const FONTS = {
 		display = DIR .. "MarcellusSC-Regular.ttf",
 		body = DIR .. "Figtree-Regular.ttf",
 		label = DIR .. "Figtree-SemiBold.ttf",
 		numeric = DIR .. "Figtree-Bold.ttf",
 	}
-	local FALLBACK = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
-	local W, H = 880, 640
-	local REFRESH_FAST, REFRESH_SLOW = 0.25, 1
+	const FALLBACK = STANDARD_TEXT_FONT ?? "Fonts\\FRIZQT__.TTF"
+	const W = 880
+	const H = 640
+	const REFRESH_FAST = 0.25
+	const REFRESH_SLOW = 1
 
 	local function text(parent: Frame, kind: string, size: number, color: number[]?): SimpleFontString
 		local fs = parent:CreateFontString(nil, "OVERLAY")
@@ -157,7 +159,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 			local w = math.max(56, (fs:GetStringWidth() or 40) + 20)
 			b:SetSize(w, 24)
 			b:SetPoint("TOPLEFT", x, -1)
-			x = x + w
+			x += w
 			local on = fill(b, C.arcaneSoft)
 			on:SetAllPoints()
 			b.on, b.fs, b.value = on, fs, opt.value
@@ -308,7 +310,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 			b:SetPoint("TOPLEFT", 1, y)
 			b:SetPoint("TOPRIGHT", -1, y)
 			b:Show()
-			y = y - 24
+			y -= 24
 		end
 		for i = #reg.order + 1, #addonRows do
 			addonRows[i]:Hide()
@@ -335,7 +337,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 	end)
 
 	-- Tabs.
-	local TABS = { "Overview", "Profiler", "Monitor", "Log", "Errors", "Watch", "Inspector" }
+	const TABS = { "Overview", "Profiler", "Monitor", "Log", "Errors", "Watch", "Inspector" }
 	local tabBar = CreateFrame("Frame", nil, win)
 	tabBar:SetPoint("TOPLEFT", 14, -40)
 	tabBar:SetPoint("TOPRIGHT", -14, -40)
@@ -353,7 +355,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		local w = (fs:GetStringWidth() or 60) + 4
 		b:SetSize(w, 26)
 		b:SetPoint("LEFT", tx, 0)
-		tx = tx + w + 12
+		tx += w + 12
 		local line = hairline(b, C.gilt)
 		line:SetPoint("BOTTOMLEFT")
 		line:SetPoint("BOTTOMRIGHT")
@@ -386,21 +388,21 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 	local thumb = fill(body, C.giltLine, "OVERLAY")
 	thumb:SetWidth(3)
 	local function layoutThumb()
-		local view, total = scroll:GetHeight() or 1, list:GetHeight() or 1
+		local view, total = scroll:GetHeight() ?? 1, list:GetHeight() ?? 1
 		if total <= view + 1 then
 			thumb:Hide()
 			return
 		end
 		thumb:Show()
 		local h = math.max(20, view * view / total)
-		local offset = (scroll:GetVerticalScroll() or 0) / (total - view) * (view - h)
+		local offset = (scroll:GetVerticalScroll() ?? 0) / (total - view) * (view - h)
 		thumb:ClearAllPoints()
 		thumb:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 6, -offset)
 		thumb:SetHeight(h)
 	end
 	scroll:SetScript("OnMouseWheel", function(self, delta)
-		local max = math.max(0, (list:GetHeight() or 0) - (self:GetHeight() or 0))
-		self:SetVerticalScroll(math.min(max, math.max(0, (self:GetVerticalScroll() or 0) - delta * 40)))
+		local max = math.max(0, (list:GetHeight() ?? 0) - (self:GetHeight() ?? 0))
+		self:SetVerticalScroll(math.min(max, math.max(0, (self:GetVerticalScroll() ?? 0) - delta * 40)))
 		layoutThumb()
 	end)
 
@@ -474,7 +476,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 			b:ClearAllPoints()
 			b:SetPoint("TOPLEFT", 1, y)
 			b:Show()
-			y = y - 24
+			y -= 24
 		end
 		menu:SetHeight(-y + 4)
 		local cx, cy = GetCursorPosition()
@@ -561,7 +563,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		list:SetWidth(width)
 		local fixed = 0
 		for _, c in ipairs(columns) do
-			fixed = fixed + (c.width or 0) + 12
+			fixed = fixed + (c.width ?? 0) + 12
 		end
 		local y = 0
 		local function x0(j: number): number
@@ -605,7 +607,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		end
 		hr.onClick = function()
 			-- Sorting: the column under the cursor.
-			local cx = GetCursorPosition() / UIParent:GetEffectiveScale() - (hr:GetLeft() or 0)
+			local cx = GetCursorPosition() / UIParent:GetEffectiveScale() - (hr:GetLeft() ?? 0)
 			for j, c in ipairs(columns) do
 				if c.sort and cx >= x0(j) and cx <= x0(j) + colWidth(j) then
 					state.sort = c.sort
@@ -662,7 +664,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 				r.badge:Hide()
 			end
 			r:Show()
-			y = y + h
+			y += h
 		end
 		for i = #data + 2, #rows do
 			rows[i]:Hide()
@@ -693,7 +695,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		return string.format((v or 0) >= 10 and "%.1f" or "%.2f", v or 0)
 	end
 	local function count(n: number): string
-		local s = tostring(math.floor(n or 0))
+		local s = tostring(math.floor(n ?? 0))
 		local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
 		return (out:gsub("^,", ""))
 	end
@@ -771,7 +773,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		for _, r in ipairs(console.sorted(prof and prof.stats or {}, state.sort)) do
 			if state.filter == "" or r.name:lower():find(state.filter, 1, true) then
 				local s = r.s
-				local slow = (s.max or 0) > 16.7
+				local slow = (s.max ?? 0) > 16.7
 				data[#data + 1] = {
 					cells = { r.name, count(s.calls), ms(s.total), ms(s.self), ms(s.max), ms(s.total / math.max(s.calls, 1)) },
 					subs = { s.location },
@@ -825,7 +827,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		if mon then
 			for _, r in ipairs(console.sorted(mon[state.monitor], "total")) do
 				local s = r.s
-				local slow = (s.max or 0) > 16.7
+				local slow = (s.max ?? 0) > 16.7
 				data[#data + 1] = {
 					cells = { r.name, count(s.count), ms(s.total), ms(s.max) },
 					subs = { s.detail },
@@ -844,7 +846,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 			{ title = "Max", width = 84, align = "RIGHT" },
 		}, data)
 	end
-	local LEVEL_RANK = { trace = 0, debug = 1, info = 2, warn = 3, error = 4 }
+	const LEVEL_RANK = { trace = 0, debug = 1, info = 2, warn = 3, error = 4 }
 	function views.log(d: WowluaDev)
 		local seg = tool("logSeg", function()
 			local s = segmented(toolbar, {
@@ -866,10 +868,10 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		if logs then
 			local min = state.level == "all" and -1 or LEVEL_RANK[state.level]
 			for _, e in ipairs(logs.history()) do
-				if (LEVEL_RANK[e.level] or 0) >= min then
+				if (LEVEL_RANK[e.level] ?? 0) >= min then
 					local tone = e.level == "error" and C.emberText or (e.level == "warn" and C.amber or C.inkMuted)
 					data[#data + 1] = {
-						cells = { string.format("%.1f", e.time or 0), e.level, e.message, e.location or "" },
+						cells = { string.format("%.1f", e.time ?? 0), e.level, e.message, e.location ?? "" },
 						colors = { C.inkMuted, tone, C.ink, C.inkMuted },
 						fonts = { "numeric", "display", "body", "body" },
 					}
@@ -938,7 +940,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		if type(v) == "table" and not (issecretvalue and issecretvalue(v)) then
 			local n = 0
 			for _ in pairs(v) do
-				n = n + 1
+				n += 1
 			end
 			return "table: " .. n .. " fields", C.arcane
 		end
@@ -1075,7 +1077,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		end
 		render({ { title = "Key", width = 0 }, { title = "Value", width = 300 }, { title = "Type", width = 80 } }, data)
 	end
-	local VIEW_KEYS = { "overview", "profiler", "monitor", "log", "errors", "watch", "inspector" }
+	const VIEW_KEYS = { "overview", "profiler", "monitor", "log", "errors", "watch", "inspector" }
 
 	function console.refresh()
 		local d = current()
@@ -1123,7 +1125,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 			selected = (saved.addon and reg.addons[saved.addon]) and saved.addon or selected
 			if saved.point then
 				win:ClearAllPoints()
-				win:SetPoint(saved.point, UIParent, saved.point, saved.x or 0, saved.y or 0)
+				win:SetPoint(saved.point, UIParent, saved.point, saved.x ?? 0, saved.y ?? 0)
 			end
 			if saved.width and saved.height then
 				win:SetSize(saved.width, saved.height)
@@ -1135,7 +1137,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 	-- Refreshed only while visible: watches and the inspector often.
 	local elapsed = 0
 	win:SetScript("OnUpdate", function(_, dt)
-		elapsed = elapsed + (dt or 0)
+		elapsed = elapsed + (dt ?? 0)
 		local every = (state.tab == 6 or state.tab == 7) and REFRESH_FAST or REFRESH_SLOW
 		if elapsed >= every and not menu:IsShown() then
 			elapsed = 0
@@ -1176,7 +1178,7 @@ if not reg.addons[addonName] then
 end
 reg.addons[addonName] = dev
 
-local VERSION = (wl.devInfo and wl.devInfo.runtime) or 0
+const VERSION = wl.devInfo?.runtime ?? 0
 
 -- This runtime's console replaces older ones.
 local function install()
@@ -1243,7 +1245,7 @@ function console.sorted(stats: { [string]: any }, key: string): { name: string, 
 		rows[#rows + 1] = { name = name, s = s }
 	end
 	table.sort(rows, function(a, b)
-		return (a.s[key] or 0) > (b.s[key] or 0)
+		return (a.s[key] ?? 0) > (b.s[key] ?? 0)
 	end)
 	return rows
 end
@@ -1254,9 +1256,9 @@ local function statTable(stats: { [string]: any }, sortKey: string, top: number,
 	for i = 1, math.min(top, #rows) do
 		local r = rows[i]
 		local s = r.s
-		say(pad(r.name, 34) .. pad(s.calls or s.count or 0, 8, true) .. pad(ms(s.total or 0), 9, true)
-			.. pad(ms(s.self or s.total or 0), 9, true) .. pad(ms(s.max or 0), 9, true)
-			.. pad(ms((s.total or 0) / math.max(s.calls or s.count or 1, 1)), 9, true))
+		say(pad(r.name, 34) .. pad(s.calls ?? s.count ?? 0, 8, true) .. pad(ms(s.total ?? 0), 9, true)
+			.. pad(ms(s.self ?? s.total ?? 0), 9, true) .. pad(ms(s.max ?? 0), 9, true)
+			.. pad(ms((s.total ?? 0) / math.max(s.calls ?? s.count ?? 1, 1)), 9, true))
 	end
 	if #rows == 0 then
 		say("(no data yet)")
@@ -1277,7 +1279,7 @@ console.commands = commands
 function commands.list()
 	for _, n in ipairs(reg.order) do
 		local i = reg.addons[n].info
-		say(n .. " " .. (i.version or "?") .. " · " .. (i.profile or "?") .. " · build " .. (i.build or "?"))
+		say(`{n} {i.version ?? "?"} · {i.profile ?? "?"} · build {i.build ?? "?"}`)
 	end
 end
 
@@ -1288,7 +1290,7 @@ function commands.prof(args: string[])
 	end
 	local prof = d.runtime.prof
 	if not prof then
-		return say(d.name .. ": the profiler is off in this build")
+		return say(`{d.name}: the profiler is off in this build`)
 	end
 	local top, sortKey = 20, "total"
 	local i = 2
@@ -1296,17 +1298,17 @@ function commands.prof(args: string[])
 		local w = args[i]:lower()
 		if w == "reset" then
 			prof.reset()
-			return say(d.name .. ": profiler statistics reset")
+			return say(`{d.name}: profiler statistics reset`)
 		elseif w == "top" then
 			top = tonumber(args[i + 1]) or top
-			i = i + 1
+			i += 1
 		elseif w == "sort" then
 			sortKey = (args[i + 1] or "total"):lower()
-			i = i + 1
+			i += 1
 		end
-		i = i + 1
+		i += 1
 	end
-	say(d.name .. " profiler (ms), by " .. sortKey .. ":")
+	say(`{d.name} profiler (ms), by {sortKey}:`)
 	statTable(prof.stats, sortKey, top, "calls")
 end
 
@@ -1317,14 +1319,14 @@ function commands.mon(args: string[])
 	end
 	local mon = d.runtime.mon
 	if not mon then
-		return say(d.name .. ": the monitor is off in this build")
+		return say(`{d.name}: the monitor is off in this build`)
 	end
 	if (args[2] or ""):lower() == "reset" then
 		mon.reset()
-		return say(d.name .. ": monitor reset")
+		return say(`{d.name}: monitor reset`)
 	end
 	for _, kind in ipairs({ "events", "scripts", "timers" }) do
-		say(d.name .. " " .. kind .. ":")
+		say(`{d.name} {kind}:`)
 		statTable(mon[kind], "total", 10, kind == "events" and "count" or "runs")
 	end
 	local mem = mon.memory[#mon.memory]
@@ -1340,17 +1342,17 @@ function commands.errors(args: string[])
 	end
 	local errors = d.runtime.errors
 	if not errors then
-		return say(d.name .. ": error capture is off in this build")
+		return say(`{d.name}: error capture is off in this build`)
 	end
 	if (args[2] or ""):lower() == "clear" then
 		errors.clear()
-		return say(d.name .. ": errors cleared")
+		return say(`{d.name}: errors cleared`)
 	end
 	if #errors.list == 0 then
-		return say(d.name .. ": no errors")
+		return say(`{d.name}: no errors`)
 	end
 	for _, e in ipairs(errors.list) do
-		say("|cffff9a80" .. e.message .. "|r ×" .. e.count .. " · " .. e.time)
+		say(`|cffff9a80{e.message}|r ×{e.count} · {e.time}`)
 	end
 end
 
@@ -1361,14 +1363,14 @@ function commands.log(args: string[])
 	end
 	local logs = d.runtime.logs
 	if not logs then
-		return say(d.name .. ": this addon does not use wowlua:log")
+		return say(`{d.name}: this addon does not use wowlua:log`)
 	end
 	if args[2] then
 		logs.setLevel(args[2]:lower())
-		return say(d.name .. ": log level " .. args[2]:lower())
+		return say(`{d.name}: log level {args[2]:lower()}`)
 	end
 	for _, e in ipairs(logs.history(20)) do
-		say(string.format("%.1f", e.time) .. " [" .. e.level .. "] " .. e.message)
+		say(`{string.format("%.1f", e.time)} [{e.level}] {e.message}`)
 	end
 end
 
@@ -1378,14 +1380,14 @@ function commands.meta(args: string[])
 		return say("which addon? /wl meta <addon>")
 	end
 	for k, v in pairs(d.info) do
-		say(d.name .. " " .. k .. " = " .. tostring(v))
+		say(`{d.name} {k} = {v}`)
 	end
 	local meta = d.runtime.meta
 	for kind, t in pairs(meta or {}) do
 		if type(t) == "table" then
 			for k, v in pairs(t) do
 				if type(v) ~= "table" then
-					say(d.name .. " " .. kind .. "." .. k .. " = " .. tostring(v))
+					say(`{d.name} {kind}.{k} = {v}`)
 				end
 			end
 		end
@@ -1435,7 +1437,7 @@ function commands.watch(args: string[])
 	end
 	local fn, problem = console.compile(d, expression)
 	if not fn then
-		return say("|cffff9a80" .. tostring(problem) .. "|r")
+		return say(`|cffff9a80{problem}|r`)
 	end
 	d.watches[#d.watches + 1] = { label = expression, fn = fn, source = "typed" }
 	local ok, value = pcall(fn)
@@ -1485,6 +1487,6 @@ if type(CreateFrame) == "function" then
 end
 dev.console = console
 end
-if (reg.version or -1) < VERSION then
+if (reg.version ?? -1) < VERSION then
 	install()
 end

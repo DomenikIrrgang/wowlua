@@ -4,29 +4,29 @@ local errors = {
 list = {},
 byMessage = {}
 }
-local folder = ("addons/" .. addonName .. "/"):lower()
+local FOLDER = ("addons/" .. tostring(addonName) .. "/"):lower()
 local function normal(s)
 	return tostring(s or ""):gsub("\\", "/"):lower()
 end
 -- The runtime's own errors start with the addon's name; otherwise the
 -- message's location decides (`path:line: text`), and without a path in
 -- it, the stack.
-local prefix = (addonName .. ": "):lower()
+local PREFIX = (tostring(addonName) .. ": "):lower()
 local function mine(message, stack)
 	local m = normal(message)
-	if m:sub(1, #prefix) == prefix then
+	if m:sub(1, #PREFIX) == PREFIX then
 		return true
 	end
 	local location = m:match("^(.-):%d+:")
 	if location and location:find("/", 1, true) then
-		return location:find(folder, 1, true) ~= nil
+		return location:find(FOLDER, 1, true) ~= nil
 	end
-	return normal(stack):find(folder, 1, true) ~= nil
+	return normal(stack):find(FOLDER, 1, true) ~= nil
 end
 -- `Interface/AddOns/<Name>/src/a.lua:12` → `src/a.lua:12`.
 local function shorten(s)
 	s = tostring(s or "")
-	local i, j = normal(s):find(folder, 1, true)
+	local i, j = normal(s):find(FOLDER, 1, true)
 	if i and j then
 		return s:sub(1, i - 1):gsub("[Ii]nterface[/\\]$", "") .. s:sub(j + 1)
 	end

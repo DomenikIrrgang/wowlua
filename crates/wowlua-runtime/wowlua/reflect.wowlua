@@ -1,11 +1,11 @@
--- wowlua runtime: reflection metadata (spec §7.8). A weak-keyed registry,
+-- wowlua runtime: reflection metadata (spec §7.8). A WEAK_KEYS-keyed registry,
 -- so class tables contain only their members.
-local weak = { __mode = "k" }
+const WEAK_KEYS = { __mode = "k" }
 local registry = {
-	classes = setmetatable({}, weak) :: { [table]: table },
+	classes = setmetatable({}, WEAK_KEYS) :: { [table]: table },
 	byName = {} :: { [string]: table },
-	functions = setmetatable({}, weak) :: { [function]: table },
-	enums = setmetatable({}, weak) :: { [table]: any[] },
+	functions = setmetatable({}, WEAK_KEYS) :: { [function]: table },
+	enums = setmetatable({}, WEAK_KEYS) :: { [table]: any[] },
 }
 wl.reflect = registry
 function wl.reflectClass(cls: table, meta: { name: string })

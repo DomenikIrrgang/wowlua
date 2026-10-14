@@ -9,7 +9,7 @@ local modules, loaded = {}, {}
 wl.ns, wl.modules = ns, modules
 --@placeholders
 local function fail(message)
-	error(addonName .. ": " .. message, 3)
+	error(tostring(addonName) .. ": " .. tostring(message), 3)
 end
 -- Creates (or completes) the export table of module `id`.
 function wl.module(id)

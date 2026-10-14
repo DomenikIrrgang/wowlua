@@ -23,7 +23,7 @@ function wl.deprecated(fn: (...any) -> ...any, name: string, message: string?): 
 	return function(...: any): ...any
 		if not warned then
 			warned = true
-			print(addonName .. ": " .. name .. " is deprecated" .. (message and (": " .. message) or ""))
+			print(`{addonName}: {name} is deprecated` .. (message and `: {message}` or ""))
 		end
 		return fn(...)
 	end

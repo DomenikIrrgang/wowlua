@@ -29,12 +29,12 @@ end
 prof.record = record
 local function finish(name, location, start, depth, ...)
 	local elapsed = clock() - start
-	local inner = child[depth] or 0
+	local __wl_t1 = child[depth] if __wl_t1 == nil then __wl_t1 = 0 end local inner = __wl_t1
 	for i = #child, depth, -1 do
 		child[i] = nil
 	end
 	if depth > 1 then
-		child[depth - 1] = (child[depth - 1] or 0) + elapsed
+		do local __wl_t2 = child[depth - 1] if __wl_t2 == nil then __wl_t2 = 0 end child[depth - 1] = (__wl_t2) + elapsed end
 	end
 	record(name, location, elapsed, elapsed - inner)
 	return...
@@ -74,7 +74,7 @@ function prof.wrap(fn, name, location, opts)
 			local s = prof.stats[name]
 			local function done(...)
 				s = prof.stats[name]
-				s.memory = (s.memory or 0) + math.max(memoryKiB() - before, 0)
+				do local __wl_t3 = s.memory if __wl_t3 == nil then __wl_t3 = 0 end s.memory = (__wl_t3) + math.max(memoryKiB() - before, 0) end
 				return...
 			end
 			return done(finish(name, location, clock(), depth, fn(...)))

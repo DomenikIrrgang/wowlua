@@ -13,10 +13,10 @@ channel:onObject(function(value: any) object = value end)
 
 local function where(): comm.Distribution?
     if IsInGroup() then
-        return "GROUP"
+        return comm.Distribution.Group
     end
     if IsInGuild() then
-        return "GUILD"
+        return comm.Distribution.Guild
     end
     return nil
 end
@@ -34,7 +34,7 @@ s:test("a long message comes back in one piece", function(t)
     local long = table.concat(parts)
     received = nil
     local status = channel:send(long, dist)
-    t:ok(status == "sent" or status == "queued", `sent ({status})`)
+    t:ok(status == comm.SendStatus.Sent or status == comm.SendStatus.Queued, `sent ({status})`)
     if t:waitFor(function() return received ~= nil end, 15, "the message arrives") then
         t:eq(received, long, "reassembled, NUL bytes included")
     end

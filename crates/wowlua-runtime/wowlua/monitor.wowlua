@@ -23,8 +23,8 @@ local function record(bucket: { [string]: WowluaMonitorStat }, key: string, deta
 		s = { count = 0, total = 0, max = 0, detail = detail }
 		bucket[key] = s
 	end
-	s.count = s.count + 1
-	s.total = s.total + elapsed
+	s.count += 1
+	s.total += elapsed
 	if elapsed > s.max then
 		s.max = elapsed
 	end

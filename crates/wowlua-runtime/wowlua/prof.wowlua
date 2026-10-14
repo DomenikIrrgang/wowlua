@@ -18,9 +18,9 @@ local function record(name: string, location: string?, elapsed: number, own: num
 		s = { calls = 0, total = 0, self = 0, max = 0, avg = 0, errors = 0, location = location }
 		prof.stats[name] = s
 	end
-	s.calls = s.calls + 1
-	s.total = s.total + elapsed
-	s.self = s.self + own
+	s.calls += 1
+	s.total += elapsed
+	s.self += own
 	if elapsed > s.max then
 		s.max = elapsed
 	end
@@ -29,12 +29,12 @@ end
 prof.record = record
 local function finish(name: string, location: string?, start: number, depth: number, ...: any): ...any
 	local elapsed = clock() - start
-	local inner = child[depth] or 0
+	local inner = child[depth] ?? 0
 	for i = #child, depth, -1 do
 		child[i] = nil
 	end
 	if depth > 1 then
-		child[depth - 1] = (child[depth - 1] or 0) + elapsed
+		child[depth - 1] = (child[depth - 1] ?? 0) + elapsed
 	end
 	record(name, location, elapsed, elapsed - inner)
 	return ...
@@ -50,7 +50,7 @@ local function failed(name: string, location: string?, depth: number, start: num
 	end
 	record(name, location, clock() - start, 0)
 	local s = assert(prof.stats[name])
-	s.errors = s.errors + 1
+	s.errors += 1
 	error(message, 0)
 end
 local function finishTracked(name: string, location: string?, start: number, depth: number, ok: boolean, ...: any): ...any
@@ -74,7 +74,7 @@ function prof.wrap(fn: any, name: string, location: string, opts: { errors: bool
 			local s = prof.stats[name]
 			local function done(...: any): ...any
 				s = prof.stats[name]
-				s.memory = (s.memory or 0) + math.max(memoryKiB() - before, 0)
+				s.memory = (s.memory ?? 0) + math.max(memoryKiB() - before, 0)
 				return ...
 			end
 			return done(finish(name, location, clock(), depth, fn(...)))

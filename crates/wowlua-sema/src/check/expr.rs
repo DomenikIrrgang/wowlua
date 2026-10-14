@@ -1266,6 +1266,8 @@ impl Checker<'_> {
                 self.env.types.union(&[lt, r])
             }
             BinOp::Coalesce => {
+                // `X ?? default` tests whether `X` exists, like `X or default`.
+                self.mark_probes(lhs);
                 let l = self.check(lhs, expected);
                 let r = self.check(rhs, expected);
                 let non_nil = self.env.types.non_nil(l);

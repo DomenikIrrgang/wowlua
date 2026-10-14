@@ -3,10 +3,10 @@
 function wl.enum(t, name)
 	return setmetatable(t, {
 	__index = function(_, k)
-		error("enum " .. name .. " has no member '" .. tostring(k) .. "'", 2)
+		error("enum " .. tostring(name) .. " has no member '" .. tostring(k) .. "'", 2)
 	end,
 	__newindex = function()
-		error("enum " .. name .. " cannot be changed", 2)
+		error("enum " .. tostring(name) .. " cannot be changed", 2)
 	end
 	})
 end

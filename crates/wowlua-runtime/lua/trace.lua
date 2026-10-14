@@ -32,7 +32,7 @@ local function out(line)
 	if emit then
 		emit("trace", nil, line)
 	else
-		print(addonName .. ": " .. line)
+		print(tostring(addonName) .. ": " .. tostring(line))
 	end
 end
 local function finish(name, indent, ok, ...)
