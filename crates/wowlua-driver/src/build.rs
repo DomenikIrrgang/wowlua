@@ -810,9 +810,11 @@ pub fn build(
         let active: Vec<bool> = files
             .iter()
             .map(|(source, _)| {
-                flavor
-                    .as_ref()
-                    .is_none_or(|f| restriction(&source.rel).is_none_or(|list| list.contains(f)))
+                flavor.as_ref().is_none_or(|f| {
+                    restriction(&source.rel).is_none_or(|list| list.contains(f))
+                        && (!in_other_variant(&source.rel, f, &build_cfg.variable_files)
+                            || build_cfg.load_order.contains(&source.rel))
+                })
             })
             .collect();
         // Shared mode types against the first flavor's API; flavor guards
@@ -867,7 +869,12 @@ pub fn build(
             &profile,
             std::sync::Arc::new(meta.clone()),
             wowlua_sema::loadorder::Layout {
-                listed: &listed_positions(&files, order_of(flavor.as_deref()), &xml),
+                listed: &listed_positions(
+                    &files,
+                    order_of(flavor.as_deref()),
+                    &xml,
+                    flavor.as_ref().map_or(&flavors[..], std::slice::from_ref),
+                ),
                 active: &active,
                 loaded_by: &loaded_by,
             },
@@ -1061,10 +1068,16 @@ pub fn build(
             .with_help("import it where it is needed, or list it in `build.keep`"),
         );
     }
+    // Expansions for flavors this build does not target (`--flavor`): not
+    // this build's files.
+    let variants = variant_files(&build_cfg.variable_files, &files);
     let mut toc_items: Vec<TocItem> = Vec::new();
     let mut emitted: Vec<&Source> = Vec::new();
     for (source, _) in &files {
         if removed.contains(&source.rel) {
+            continue;
+        }
+        if variants.contains(&source.rel) && !loaded_by_variable.contains(&source.rel) {
             continue;
         }
         let flavors_of = restriction(&source.rel);
@@ -2446,13 +2459,19 @@ fn order_by_dependencies(
 }
 
 /// The load position of each source listed in `build.load-order`: listed
-/// entries in order (a glob's matches by path), each followed by the
-/// sources its XML loads, depth first. Unlisted sources have none.
+/// entries in order (a glob's matches by path, TOC variables expanded for
+/// `flavors`), each followed by the sources its XML loads, depth first.
+/// Unlisted sources have none.
 fn listed_positions(
     files: &[(Source, FileId)],
     load_order: &[String],
     xml: &XmlInfo,
+    flavors: &[String],
 ) -> Vec<Option<usize>> {
+    let by_lower: HashMap<String, &str> = files
+        .iter()
+        .map(|(s, _)| (s.rel.to_ascii_lowercase(), s.rel.as_str()))
+        .collect();
     let index: HashMap<&str, usize> = files
         .iter()
         .enumerate()
@@ -2480,7 +2499,30 @@ fn listed_positions(
         }
     }
     for pattern in load_order {
-        let mut matched: Vec<&str> = if index.contains_key(pattern.as_str()) {
+        let lower = pattern.to_ascii_lowercase();
+        let variable = ["[game]", "[family]", "[textlocale]"]
+            .iter()
+            .any(|v| lower.contains(v));
+        let mut matched: Vec<&str> = if variable {
+            // `db/[Game]/Database.xml`: this flavor's file (each locale's).
+            let locales: Vec<&str> = if lower.contains("[textlocale]") {
+                wowlua_manifest::model::LOCALES.to_vec()
+            } else {
+                vec![""]
+            };
+            let mut out = Vec::new();
+            for f in flavors {
+                for l in &locales {
+                    let concrete = substitute(pattern, f, l).to_ascii_lowercase();
+                    if let Some(rel) = by_lower.get(&concrete)
+                        && !out.contains(rel)
+                    {
+                        out.push(*rel);
+                    }
+                }
+            }
+            out
+        } else if index.contains_key(pattern.as_str()) {
             vec![pattern.as_str()]
         } else if let Ok(glob) = globset::Glob::new(pattern) {
             let matcher = glob.compile_matcher();
@@ -2533,6 +2575,82 @@ fn order_by_load_order(entries: &mut Vec<TocItem>, load_order: &[String]) {
     ordered.extend(remaining);
     deps.extend(ordered);
     *entries = deps;
+}
+
+/// Whether `rel` lies in a folder a variable file names (`db/[Game]/…`,
+/// `[Family]/…`) other than this flavor's: the client loads only its own
+/// game's folder, so the others (and what they include) do not load.
+fn in_other_variant(
+    rel: &str,
+    flavor: &str,
+    entries: &[wowlua_manifest::model::VariableFile],
+) -> bool {
+    let lower = rel.to_ascii_lowercase();
+    for entry in entries {
+        let path = entry.path.replace('\\', "/");
+        let segments: Vec<&str> = path.split('/').collect();
+        // The folders up to the last one named by a variable.
+        let Some(last) = segments[..segments.len().saturating_sub(1)]
+            .iter()
+            .rposition(|s| s.contains('['))
+        else {
+            continue;
+        };
+        let prefix = segments[..=last].join("/");
+        if prefix.to_ascii_lowercase().contains("[textlocale]") {
+            continue;
+        }
+        // The folder holding the variants (`db/`), and this flavor's.
+        let parent = segments[..last].join("/").to_ascii_lowercase();
+        let parent = if parent.is_empty() {
+            parent
+        } else {
+            format!("{parent}/")
+        };
+        let own = format!("{}/", substitute(&prefix, flavor, "").to_ascii_lowercase());
+        if lower.starts_with(&parent) && !lower.starts_with(&own) {
+            // Only folders below the variable's position: `db/X/…`.
+            if lower[parent.len()..].contains('/') {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Every file a variable file expands to for some known flavor (and
+/// locale), whether or not this build targets that flavor.
+fn variant_files(
+    entries: &[wowlua_manifest::model::VariableFile],
+    files: &[(Source, FileId)],
+) -> BTreeSet<String> {
+    const ALL: &[&str] = &[
+        "standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla",
+    ];
+    let by_lower: HashMap<String, &str> = files
+        .iter()
+        .map(|(s, _)| (s.rel.to_ascii_lowercase(), s.rel.as_str()))
+        .collect();
+    let mut out = BTreeSet::new();
+    for entry in entries {
+        let locales: Vec<String> = if entry.path.to_ascii_lowercase().contains("[textlocale]") {
+            wowlua_manifest::model::LOCALES
+                .iter()
+                .map(|l| l.to_string())
+                .collect()
+        } else {
+            vec![String::new()]
+        };
+        for flavor in ALL {
+            for locale in &locales {
+                let concrete = substitute(&entry.path, flavor, locale).to_ascii_lowercase();
+                if let Some(rel) = by_lower.get(&concrete) {
+                    out.insert(rel.to_string());
+                }
+            }
+        }
+    }
+    out
 }
 
 /// `[Game]` values per flavor.

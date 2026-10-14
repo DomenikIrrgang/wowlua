@@ -2891,6 +2891,56 @@ fn load_order_per_flavor_files() {
     assert!(pos("b_classic.lua") < pos("c_both.lua"), "{toc}");
 }
 
+/// Files in another flavor's folder of a variable file (`db/[Game]/…`) do
+/// not load in this flavor: they define nothing for its load order (no
+/// W1033), and a build of some flavors leaves the others' out of the TOC.
+#[test]
+fn load_order_variable_file_folders() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "games", "version": "1.0.0" }, "flavors": { "camelot": {}, "vanilla": {} },
+  "build": { "variable-files": [ { "path": "src/db/[Game]/Data.lua" } ] } }
+"#,
+            ),
+            ("src/main.lua", "local _, ns = ...\nns.L = ns.L or {}\n"),
+            (
+                "src/db/Camelot/Data.lua",
+                "local _, ns = ...\nns.L.TITLE = \"camelot\"\n",
+            ),
+            (
+                "src/db/Vanilla/Data.lua",
+                "local _, ns = ...\nns.L.TITLE = \"vanilla\"\n",
+            ),
+            // A folder no flavor names (loaded by no TOC line).
+            (
+                "src/db/VanillaSOD/Data.lua",
+                "local _, ns = ...\nns.L.TITLE = \"sod\"\n",
+            ),
+            ("src/z_use.lua", "local _, ns = ...\nprint(ns.L.TITLE)\n"),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(!stderr.contains("W1033"), "{stderr}");
+    wowlua(dir.path())
+        .args(["build", "--flavor", "camelot"])
+        .assert()
+        .success();
+    let tocs: Vec<String> = fs::read_dir(dir.path().join("dist/dev/Games"))
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|e| e == "toc"))
+        .map(|p| fs::read_to_string(p).unwrap())
+        .collect();
+    let toc = tocs.join("\n");
+    assert!(toc.contains("[Game]"), "{toc}");
+    assert!(!toc.contains("Vanilla\\Data.lua"), "{toc}");
+}
+
 /// Usage analysis orders files without imports (spec §5.4.2–§5.4.4).
 #[test]
 fn load_order_from_usage_analysis() {
