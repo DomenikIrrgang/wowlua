@@ -2903,7 +2903,10 @@ fn load_order_ignores_shared_files() {
                 "wowlua.json",
                 "{ \"package\": { \"name\": \"core\", \"version\": \"1.0.0\" }, \"build\": { \"shared-files\": [\"src/options.lua\"] } }\n",
             ),
-            ("src/core.lua", "Core = {}\nfunction Core.Init() Core.db = {} end\n"),
+            (
+                "src/core.lua",
+                "Core = {}\nfunction Core.Init() Core.db = {} end\n",
+            ),
             // Loaded by the options addon, after Core.Init has run.
             ("src/options.lua", "print(Core.db)\n"),
         ],
