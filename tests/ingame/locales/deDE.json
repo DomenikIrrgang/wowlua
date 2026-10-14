@@ -1,0 +1,6 @@
+{
+  "TITLE": "wowlua StdTest (Deutsch)",
+  "GREETING": "Hallo, {name}!",
+  "ORDER": "{b} vor {a}",
+  "BRACES": "{{wörtlich}}"
+}

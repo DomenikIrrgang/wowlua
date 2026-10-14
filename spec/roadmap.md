@@ -269,6 +269,9 @@ menus and lists, then the widget themes.
   shared-mode flavor warn (W8101; the declarations now list each flavor's
   own events, from client dumps), and `Secret<…>` in `saved.bind` defaults
   is E8104.
+- S2 in progress: `locale` done 2026-10-14 (JSON locales checked against the
+  base locale and compiled into guarded Lua files that load first, with
+  `[AllowLoadTextLocale]` tags; `L` typed by the base locale).
 
 ## M9: Test runner, language server, formatter
 

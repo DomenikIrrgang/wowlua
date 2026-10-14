@@ -312,6 +312,8 @@ pub fn parse_sources(
 /// Adds the standard-library modules the sources import, transitively
 /// (tree-shaking at module granularity, spec §8.1): each is compiled into
 /// the addon as `wowlua/std/<name>.lua`.
+/// `declaration_overrides`: declarations generated for the project (the
+/// type of `wowlua:locale`'s `L`), by module name.
 pub fn add_stdlib(
     db: &mut SourceDb,
     diagnostics: &mut Vec<Diagnostic>,
@@ -319,6 +321,7 @@ pub fn add_stdlib(
     declarations: &mut Vec<Declaration>,
     raw: &mut HashMap<String, Vec<u8>>,
     parsed: &mut Parsed,
+    declaration_overrides: &HashMap<&str, String>,
 ) {
     // Modules added by an earlier call stay.
     let mut loaded: BTreeSet<String> = files
@@ -375,7 +378,11 @@ pub fn add_stdlib(
             files.push((source, file));
             parsed.parses.push(Some(parse));
             parsed.ok.push(ok);
-            if let Some(text) = module.declaration {
+            let declaration = declaration_overrides
+                .get(name.as_str())
+                .cloned()
+                .or(module.declaration);
+            if let Some(text) = declaration {
                 let rel = format!("<wowlua>/{name}.d.wowlua");
                 let file = db.add(&rel, text.clone());
                 let parse = wowlua_syntax::parse(text.as_bytes(), file);

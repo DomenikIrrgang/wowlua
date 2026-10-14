@@ -19,6 +19,7 @@ import _ from "/suites/slash"
 import _ from "/suites/saved"
 import _ from "/suites/callbacks"
 import _ from "/suites/devtools"
+import _ from "/suites/locale"
 
 local function concat(a: any[], b: any[]): any[]
     local out = {}

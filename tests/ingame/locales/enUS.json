@@ -1,0 +1,7 @@
+{
+  "TITLE": "wowlua StdTest",
+  "GREETING": "Hello, {name}!",
+  "ORDER": "{a} then {b}",
+  "BRACES": "{{literal}}",
+  "ONLY_BASE": "base only"
+}

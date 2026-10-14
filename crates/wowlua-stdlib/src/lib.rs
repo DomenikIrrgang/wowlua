@@ -70,6 +70,11 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         Some(include_str!("../std/lifecycle.d.wowlua")),
     ),
     (
+        "locale",
+        include_str!("../std/locale.wowlua"),
+        Some(include_str!("../std/locale.d.wowlua")),
+    ),
+    (
         "log",
         include_str!("../std/log.wowlua"),
         Some(include_str!("../std/log.d.wowlua")),

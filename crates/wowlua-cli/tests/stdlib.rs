@@ -1995,10 +1995,11 @@ fn ingame_suite_builds_and_passes_in_the_mock() {
     let dir = tempfile::tempdir().unwrap();
     copy_tree(&source, dir.path());
     let stderr = build(dir.path(), "dev");
-    assert!(
-        !stderr.contains("warning") && !stderr.contains("error"),
-        "{stderr}"
-    );
+    // W8062: its German locale lacks a key on purpose (the fallback test).
+    let unexpected = stderr
+        .lines()
+        .any(|l| (l.contains("warning[") && !l.contains("warning[W8062]")) || l.contains("error"));
+    assert!(!unexpected, "{stderr}");
     let out = dir.path().join("dist/dev/StdTest");
     let toc = fs::read_to_string(out.join("StdTest_Camelot.toc")).unwrap();
     let field = |name: &str| {
@@ -2051,6 +2052,7 @@ end
         "debug",
         "reflect",
         "meta",
+        "locale",
     ] {
         assert!(
             printed
@@ -2199,4 +2201,251 @@ end
     let lines: Vec<&str> = stderr.lines().filter(|l| l.contains("W8101")).collect();
     assert_eq!(lines.len(), 2, "{stderr}");
     assert!(stderr.contains("is not available in `vanilla`"), "{stderr}");
+}
+
+// ----------------------------------------------------------------- locale --
+
+const LOCALE_FILES: &[(&str, &str)] = &[
+    (
+        "locales/enUS.json",
+        r#"{ "TITLE": "Kill Tracker", "WELCOME": "Welcome back, {name}!", "KILLS": "{count} kills in {zone}", "BRACES": "{{x}} \"q\"\nline", "COLOR": "|cffff0000red|r" }"#,
+    ),
+    (
+        "locales/deDE.json",
+        r#"{ "TITLE": "Abschusszähler", "WELCOME": "Willkommen zurück, {name}!", "KILLS": "{zone}: {count} Abschüsse ({count})" }"#,
+    ),
+    ("locales/enGB.json", r#"{ "TITLE": "Kill Tracker (GB)" }"#),
+];
+
+const LOCALE_MAIN: &str = r#"import L from "wowlua:locale"
+print(L.TITLE)
+print(L.WELCOME({ name = "Sua" }))
+print(L.KILLS({ count = 3, zone = "Elwynn" }))
+print(L.BRACES)
+print(L.COLOR)
+"#;
+
+#[test]
+fn locale_strings_follow_the_client_language() {
+    let mut files = LOCALE_FILES.to_vec();
+    files.push(("src/main.wowlua", LOCALE_MAIN));
+    let out = modes(&files, "", "");
+    assert_eq!(
+        out,
+        [
+            "Kill Tracker",
+            "Welcome back, Sua!",
+            "3 kills in Elwynn",
+            "{x} \"q\"\nline",
+            "|cffff0000red|r"
+        ],
+        "{out:?}"
+    );
+    // German, with the base strings where the translation lacks one, and
+    // the placeholders in its own order.
+    let out = modes(&files, "Mock.locale = \"deDE\"", "");
+    assert_eq!(
+        out[..3],
+        [
+            "Abschusszähler",
+            "Willkommen zurück, Sua!",
+            "Elwynn: 3 Abschüsse (3)"
+        ],
+        "{out:?}"
+    );
+    assert_eq!(out[4], "|cffff0000red|r", "{out:?}");
+    // British clients: enUS, then enGB over it.
+    let out = modes(&files, "Mock.locale = \"enGB\"", "");
+    assert_eq!(
+        out[..2],
+        ["Kill Tracker (GB)", "Welcome back, Sua!"],
+        "{out:?}"
+    );
+    // Another language without a file: the base locale.
+    let out = modes(&files, "Mock.locale = \"frFR\"", "");
+    assert_eq!(out[0], "Kill Tracker", "{out:?}");
+}
+
+#[test]
+fn locale_files_load_first_with_their_client_tags() {
+    let mut files = LOCALE_FILES.to_vec();
+    files.push(("src/main.wowlua", LOCALE_MAIN));
+    let dir = project(&files);
+    let stderr = build(dir.path(), "dev");
+    // deDE lacks two keys.
+    assert!(
+        stderr.contains("W8062") && stderr.contains("`deDE` lacks 2 of 5"),
+        "{stderr}"
+    );
+    let toc = fs::read_to_string(dir.path().join("dist/dev/Std/Std.toc")).unwrap();
+    let lines: Vec<&str> = toc
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
+    assert_eq!(
+        lines[..4],
+        [
+            "wowlua\\locales\\enUS.lua",
+            "wowlua\\locales\\deDE.lua [AllowLoadTextLocale deDE]",
+            "wowlua\\locales\\enGB.lua [AllowLoadTextLocale enGB]",
+            "wowlua\\runtime.lua"
+        ],
+        "{toc}"
+    );
+    // Release builds bundle the code, never the locale files.
+    build(dir.path(), "release");
+    let toc = fs::read_to_string(dir.path().join("dist/release/Std/Std.toc")).unwrap();
+    assert!(
+        toc.contains("wowlua\\locales\\enUS.lua\nwowlua\\locales\\deDE.lua"),
+        "{toc}"
+    );
+    assert!(
+        dir.path()
+            .join("dist/release/Std/wowlua/locales/enUS.lua")
+            .exists()
+    );
+}
+
+#[test]
+fn locales_all_in_one_file() {
+    let mut files = LOCALE_FILES.to_vec();
+    files.push(("src/main.wowlua", LOCALE_MAIN));
+    let dir = project(&files);
+    let manifest = fs::read_to_string(dir.path().join("wowlua.json")).unwrap();
+    fs::write(
+        dir.path().join("wowlua.json"),
+        manifest.replacen('{', "{ \"build\": { \"locales\": \"all\" },", 1),
+    )
+    .unwrap();
+    for (locale, title) in [
+        ("deDE", "Abschusszähler"),
+        ("enGB", "Kill Tracker (GB)"),
+        ("frFR", "Kill Tracker"),
+    ] {
+        let out = modes_in(&dir, &format!("Mock.locale = \"{locale}\""), "");
+        assert_eq!(out[0], title, "{locale}: {out:?}");
+    }
+    let toc = fs::read_to_string(dir.path().join("dist/dev/Std/Std.toc")).unwrap();
+    assert!(toc.contains("wowlua\\locales\\locales.lua\n"), "{toc}");
+}
+
+/// The locale files' checks, and `L`'s type.
+#[test]
+fn locale_checks() {
+    let main = "import L from \"wowlua:locale\"\nprint(L.TITLE)\n";
+    type Case<'a> = (&'a [(&'a str, &'a str)], &'a str, &'a str);
+    let cases: &[Case] = &[
+        (
+            &[],
+            "E8106",
+            "the base locale `locales/enUS.json` is missing",
+        ),
+        (
+            &[
+                ("locales/enUS.json", "{ \"TITLE\": \"x\" }"),
+                ("locales/english.json", "{}"),
+            ],
+            "E8105",
+            "`english` is no locale code",
+        ),
+        (
+            &[(
+                "locales/enUS.json",
+                "{ \"TITLE\": \"x\", \"bad key\": \"y\" }",
+            )],
+            "E8060",
+            "`bad key`",
+        ),
+        (
+            &[
+                ("locales/enUS.json", "{ \"TITLE\": \"x\" }"),
+                (
+                    "locales/deDE.json",
+                    "{ \"TITLE\": \"x\", \"EXTRA\": \"y\" }",
+                ),
+            ],
+            "E8061",
+            "`EXTRA` in `locales/deDE.json`",
+        ),
+        (
+            &[
+                ("locales/enUS.json", "{ \"TITLE\": \"{name}\" }"),
+                ("locales/deDE.json", "{ \"TITLE\": \"{nom}\" }"),
+            ],
+            "E8063",
+            "placeholders [{nom}], the base locale [{name}]",
+        ),
+        (
+            &[("locales/enUS.json", "{ \"TITLE\": 1 }")],
+            "E8115",
+            "must be a string",
+        ),
+        (
+            &[("locales/enUS.json", "[ \"x\" ]")],
+            "E8115",
+            "must be an object",
+        ),
+        (
+            &[("locales/enUS.json", "{ nope")],
+            "E8115",
+            "is not valid JSON",
+        ),
+    ];
+    for (locales, code, text) in cases {
+        let mut files = locales.to_vec();
+        files.push(("src/main.wowlua", main));
+        let dir = project(&files);
+        let assert = wowlua(dir.path()).arg("build").assert().failure();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains(&format!("error[{code}]")) && stderr.contains(text),
+            "{code}: {stderr}"
+        );
+    }
+    // `L` is typed by the base locale.
+    let typed: &[(&str, &str)] = &[
+        ("print(L.TITEL)\n", "E2003"),
+        ("print(L.WELCOME())\n", "E2007"),
+        ("local n: number = L.TITLE\nprint(n)\n", "E2001"),
+        // A secret value makes a secret string.
+        (
+            "local s: string = L.WELCOME({ name = UnitName(\"player\") })\nprint(s)\n",
+            "E2001",
+        ),
+    ];
+    for (code, expected) in typed {
+        let mut files = LOCALE_FILES.to_vec();
+        let source = format!("import L from \"wowlua:locale\"\n{code}");
+        files.push(("src/main.wowlua", &source));
+        let dir = project(&files);
+        let assert = wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .assert()
+            .failure();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains(&format!("error[{expected}]")),
+            "{code}: {stderr}"
+        );
+    }
+}
+
+/// Without `wowlua:locale` the locale folder is not read (adopted addons
+/// keep their own `locales/` of Lua files).
+#[test]
+fn locales_unused_without_the_module() {
+    let dir = project(&[
+        ("locales/enUS.json", "{ nope"),
+        (
+            "locales/deDE.lua",
+            "print(\"an addon's own locale file\")\n",
+        ),
+        ("src/main.wowlua", "print(\"main\")\n"),
+    ]);
+    let stderr = build(dir.path(), "dev");
+    assert!(
+        !stderr.contains("E81") && !stderr.contains("W8062"),
+        "{stderr}"
+    );
+    assert!(!dir.path().join("dist/dev/Std/wowlua/locales").exists());
 }

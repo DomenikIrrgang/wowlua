@@ -201,6 +201,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E8112", summary: "Slash router: invalid `ArgSpec`, or `run` parameters don't match `args`/`flags`" },
     CodeInfo { code: "E8113", summary: "Settings control key not found in the store's type" },
     CodeInfo { code: "E8114", summary: "`settings.register` called more than once" },
+    CodeInfo { code: "E8115", summary: "Locale file is not a JSON object of strings" },
     CodeInfo { code: "E8117", summary: "`profiles = true` on a per-character SavedVariable" },
     CodeInfo { code: "E8118", summary: "`wowlua:log` level function used as a value (cannot be stripped)" },
     CodeInfo { code: "E8300", summary: "Standard-library function unavailable on a targeted flavor (no fallback)" },

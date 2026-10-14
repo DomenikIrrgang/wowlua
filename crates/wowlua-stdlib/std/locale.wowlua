@@ -1,0 +1,14 @@
+-- wowlua:locale (spec stdlib "locale"): the addon's translations. The build
+-- compiles `locales/*.json` into `wowlua/locales/*.lua`, which load before
+-- every other file and fill this table: the base locale's strings, then
+-- the client's language over them.
+local _, ns = ...
+local wl = ns.__wowlua
+
+if not wl.locale then
+    wl.locale = {}
+end
+
+--- The strings of the client's language; a key with placeholders is a
+--- function of a table of their values.
+export local L: any = wl.locale

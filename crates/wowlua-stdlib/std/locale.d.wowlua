@@ -1,0 +1,4 @@
+-- Compiler behavior of `wowlua:locale` (spec stdlib "locale"). The build
+-- replaces this declaration with the type of the project's locales.
+@intrinsic("locale.L")
+declare global L: any

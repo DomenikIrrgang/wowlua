@@ -16,6 +16,7 @@ pub mod format;
 mod fsutil;
 pub mod install;
 pub mod keywords;
+mod locale;
 pub mod lockfile;
 mod luacheck;
 mod meta;

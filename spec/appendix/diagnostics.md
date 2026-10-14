@@ -238,6 +238,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | E8112 | Slash router: invalid `ArgSpec`, or `run` parameters don't match `args`/`flags` |
 | E8113 | Settings control key not found in the store's type |
 | E8114 | `settings.register` called more than once |
+| E8115 | Locale file is not a JSON object of strings |
 | E8117 | `profiles = true` on a per-character SavedVariable |
 | E8118 | `wowlua:log` level function used as a value (cannot be stripped) |
 | E8300 | Standard-library function unavailable on a targeted flavor (no fallback) |

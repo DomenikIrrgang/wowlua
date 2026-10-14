@@ -230,6 +230,10 @@ impl Checker<'_> {
                 let c = self.stdlib_call_type(callee, args, c);
                 let results = self.call(c, None, args, e.span, expected);
                 self.stdlib_after_call(callee, args);
+                if self.secret_locale_call(callee, args) {
+                    let secret = self.env.types.intern(Ty::Secret(Types::STRING));
+                    return Pack::single(self.env.types.union(&[Types::STRING, secret]));
+                }
                 // `setmetatable(t, mt)`: `t` with `mt.__index` as fallback.
                 if let ExprKind::Name(n) = &callee.kind
                     && n.text.as_ref() == "setmetatable"
@@ -1551,6 +1555,25 @@ impl Checker<'_> {
             }
         }
         subst::apply_func(&mut self.env.types, f, &s)
+    }
+
+    /// `L.KEY(params)` of `wowlua:locale` with a value that may be secret:
+    /// the string made from it is secret too (spec stdlib "locale").
+    fn secret_locale_call(&mut self, callee: &Expr, args: &Args) -> bool {
+        let ExprKind::Field { obj, .. } = &callee.kind else {
+            return false;
+        };
+        if self.intrinsic_of(obj).as_deref() != Some("locale.L") {
+            return false;
+        }
+        args.exprs().first().is_some_and(|a| {
+            self.expr_types
+                .get(&(a.span.start, a.span.end))
+                .is_some_and(|&t| {
+                    self.secret_path(t, String::new(), &mut std::collections::HashSet::new())
+                        .is_some()
+                })
+        })
     }
 
     /// Checks of standard-library calls that need their arguments' types:

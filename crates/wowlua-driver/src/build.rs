@@ -138,6 +138,8 @@ fn flavor_xml(
 
 /// The runtime's output path (spec codegen §14.8).
 const RUNTIME_PATH: &str = "wowlua/runtime.lua";
+/// Where the compiled locale files go (spec stdlib "locale").
+const LOCALES_PATH: &str = "wowlua/locales/";
 
 /// Output entries that are reserved at the top level of the AddOn (§14.8).
 const RESERVED_DIRS: &[&str] = &["src", "wowlua", "libs"];
@@ -657,6 +659,17 @@ pub fn build(
         &mut parsed,
         &wlibs,
     );
+    // Locales (spec stdlib "locale"): read first, so `L` gets their type;
+    // reported and compiled only when the package uses `wowlua:locale`.
+    let mut locale_diagnostics = Vec::new();
+    let locales = crate::locale::load(
+        &root.join(&build_cfg.locales_dir),
+        &build_cfg.locales_dir,
+        &build_cfg.locale_base,
+        &mut locale_diagnostics,
+    );
+    let overrides: HashMap<&str, String> =
+        [("locale", crate::locale::declaration(locales.as_ref()))].into();
     crate::compile::add_stdlib(
         &mut session.db,
         &mut diagnostics,
@@ -664,7 +677,20 @@ pub fn build(
         &mut declarations,
         &mut raw,
         &mut parsed,
+        &overrides,
     );
+    let uses_locale = files
+        .iter()
+        .any(|(s, _)| s.src_rel == format!("{}locale.wowlua", wowlua_sema::STDLIB_PREFIX));
+    let locale_files = if uses_locale {
+        diagnostics.extend(locale_diagnostics);
+        locales
+            .as_ref()
+            .map(|l| crate::locale::emit(l, build_cfg.locales))
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     // Files of dependencies: their warnings and lints are not the package's.
     let dependency_files: HashSet<wowlua_span::FileId> = files
         .iter()
@@ -1229,6 +1255,29 @@ pub fn build(
             },
         );
     }
+    // Locale files before everything, the base first; `[AllowLoadTextLocale]`
+    // where every targeted client knows it (else their guards skip them).
+    let text_locale = flavors.iter().all(|f| {
+        wowlua_flavors::table()
+            .clients_of(f)
+            .all(|c| c.features.allow_load_text_locale)
+    });
+    for (i, file) in locale_files.iter().enumerate() {
+        toc_items.insert(
+            i,
+            TocItem {
+                rel: file.path.clone(),
+                path: file.path.clone(),
+                flavors: None,
+                locales: if text_locale {
+                    file.locales.clone()
+                } else {
+                    None
+                },
+                dependency: false,
+            },
+        );
+    }
     // Per-flavor variants take the place of the shared file in the order.
     let flavor_paths = |rel: &str| -> bool {
         per_flavor.contains(rel)
@@ -1275,7 +1324,10 @@ pub fn build(
                 let mut indices: Vec<usize> = toc_items
                     .iter()
                     .enumerate()
-                    .filter(|(_, item)| item.rel == RUNTIME_PATH && applies(item))
+                    .filter(|(_, item)| {
+                        (item.rel == RUNTIME_PATH || item.rel.starts_with(LOCALES_PATH))
+                            && applies(item)
+                    })
                     .map(|(i, _)| i)
                     .collect();
                 for rel in &rels {
@@ -1683,6 +1735,12 @@ pub fn build(
             );
         }
     }
+    for file in &locale_files {
+        out.insert(
+            file.path.clone(),
+            Content::Bytes(file.code.clone().into_bytes()),
+        );
+    }
     for asset in &assets {
         // A converted project's library folders hold what the libraries
         // ship (their files win, like the packager's externals).
@@ -1844,6 +1902,7 @@ pub fn build(
         let plain = &manifest.manifest.compat.plain_copy;
         for (path, content) in out.iter_mut() {
             let generated = path == RUNTIME_PATH
+                || path.starts_with(LOCALES_PATH)
                 || path == "LICENSES.txt"
                 || path.starts_with("wowlua/std/")
                 || path.starts_with("wowlua/fonts/")
@@ -3912,6 +3971,9 @@ fn bundle_output(
                 && !item.path.starts_with("../")
                 && !item.path.contains('[')
                 && item.locales.is_none()
+                // Locale files load alone, before everything (spec stdlib
+                // "locale").
+                && !item.path.starts_with(LOCALES_PATH)
                 && bundled_lib(&item.path)
                 && out
                     .get(&item.path)

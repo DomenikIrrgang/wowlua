@@ -25,9 +25,14 @@ locales/
 }
 ```
 
+- The folder is read when the package imports `wowlua:locale`, and only its
+  `*.json` files, so an adopted addon's own `locales/` of Lua files is left
+  alone.
+- Each file is a JSON object of strings (E8115 otherwise).
 - The **base locale** (default `enUS`, configurable with `build.locale-base`)
   defines the set of keys. A missing base-locale file is error E8106. Keys are
-  `[A-Z0-9_]+` (E8060).
+  `[A-Z0-9_]+` (E8060). A key starting with a digit is reachable only as
+  `L["1ST"]` and is not part of `L`'s type.
 - Other locales may omit keys, and the base string is used. Unknown keys are
   error E8061, and missing keys are warning W8062 with a per-locale summary.
 - File names must be a valid locale code plus `.json` (E8105). Valid codes:
@@ -93,8 +98,9 @@ bundled, which is why no bundle segments are needed for them.
 - Otherwise every locale file is listed without a directive, and the runtime
   guard skips the files that don't match.
 
-With `build.locales = "all"`, all locales are compiled into one table and the
-right one is selected at runtime with `GetLocale()`.
+With `build.locales = "all"`, all locales are compiled into one file
+(`wowlua/locales/locales.lua`): the base strings, then each locale's under a
+`GetLocale()` test.
 
 ## pool
 

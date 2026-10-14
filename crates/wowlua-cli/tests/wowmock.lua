@@ -39,6 +39,8 @@ end
 function debugstack() return "" end
 date = os.date
 function GetTime() return Mock.now end
+-- The client's language (`Mock.locale`).
+function GetLocale() return Mock.locale or "enUS" end
 function InCombatLockdown() return Mock.combat end
 function IsLoggedIn() return Mock.loggedIn end
 -- Values marked secret (the modern client hides them from addons).

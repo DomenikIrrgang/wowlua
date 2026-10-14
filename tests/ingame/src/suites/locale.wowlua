@@ -1,0 +1,14 @@
+-- wowlua:locale: the compiled locale files in the client's language.
+import L from "wowlua:locale"
+import suite from "/harness"
+
+local s = suite("locale")
+
+s:test("strings of the client's language, base strings as fallback", function(t: any)
+    local german = GetLocale() == "deDE"
+    t:eq(L.TITLE, german and "wowlua StdTest (Deutsch)" or "wowlua StdTest", "a plain string")
+    t:eq(L.GREETING({ name = "Sua" }), german and "Hallo, Sua!" or "Hello, Sua!", "a placeholder")
+    t:eq(L.ORDER({ a = 1, b = 2 }), german and "2 vor 1" or "1 then 2", "placeholders in the locale's order")
+    t:eq(L.BRACES, german and "{wörtlich}" or "{literal}", "literal braces")
+    t:eq(L.ONLY_BASE, "base only", "a key only the base locale has")
+end)
