@@ -449,6 +449,9 @@ pub fn analyze(
                             );
                         }
                     }
+                    // One definition run while several files load (a
+                    // function they all call): whichever runs defines it.
+                    several if several.iter().all(|d| d.2 == several[0].2) => {}
                     several => {
                         // Several files define the name at load time: their
                         // order is ambiguous unless `build.load-order` fixes it.

@@ -273,7 +273,12 @@ menus and lists, then the widget themes.
   base locale and compiled into guarded Lua files that load first, with
   `[AllowLoadTextLocale]` tags; `L` typed by the base locale); `pool` done
   2026-10-14 (frame and table pools; `FramePool.new` typed by the pooled
-  class's constructor; protected frames released after combat).
+  class's constructor; protected frames released after combat);
+  `settings` done 2026-10-14 (Settings API pages bound to `saved` stores,
+  every control kind, keys and types checked E8113/E8070/E8107/E8114,
+  profile refresh, combat-deferred open; `saved.bind` now returns its
+  defaults' type). The `keybinding` control's E8353 waits for
+  `wowlua:bindings`.
 
 ## M9: Test runner, language server, formatter
 

@@ -996,6 +996,7 @@ interface Settings
     enabled: boolean
     hidden: { [string]: boolean }
     window: { x: number, y: number }
+    custom?: { [string]: any }
 end
 
 local defaults = { scale = 1, enabled = false, hidden = {}, window = { x = 0, y = 0 } } :: Settings
@@ -1775,6 +1776,23 @@ fn core_modules_are_checked_at_compile_time() {
             "import * as saved from \"wowlua:saved\"\ninterface S\n    name: Secret<string>\nend\nlocal db = saved.bind(\"StdDB\", { version = 1, defaults = { inner = {} } :: { inner: S } })\n",
             "E8104",
         ),
+        // Settings controls against the store's type.
+        (
+            "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\ninterface O\n    on: boolean\n    n: number\n    mode: \"a\" | \"b\"\nend\nlocal db = saved.bind(\"StdDB\", { version = 1, defaults = { on = true, n = 1, mode = \"a\" } :: O })\nsettings.register({ title = \"x\", store = db, controls = { settings.checkbox(\"of\", { label = \"x\" }) } })\n",
+            "E8113",
+        ),
+        (
+            "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\ninterface O\n    on: boolean\n    n: number\n    mode: \"a\" | \"b\"\nend\nlocal db = saved.bind(\"StdDB\", { version = 1, defaults = { on = true, n = 1, mode = \"a\" } :: O })\nsettings.register({ title = \"x\", store = db, controls = { settings.slider(\"on\", { label = \"x\", min = 0, max = 1, step = 1 }) } })\n",
+            "E8070",
+        ),
+        (
+            "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\ninterface O\n    on: boolean\n    n: number\n    mode: \"a\" | \"b\"\nend\nlocal db = saved.bind(\"StdDB\", { version = 1, defaults = { on = true, n = 1, mode = \"a\" } :: O })\nsettings.register({ title = \"x\", store = db, controls = { settings.dropdown(\"mode\", { label = \"x\", options = { { value = \"c\", label = \"c\" } } }) } })\n",
+            "E8107",
+        ),
+        (
+            "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\ninterface O\n    on: boolean\n    n: number\n    mode: \"a\" | \"b\"\nend\nlocal db = saved.bind(\"StdDB\", { version = 1, defaults = { on = true, n = 1, mode = \"a\" } :: O })\nsettings.register({ title = \"x\", store = db, controls = {} })\nsettings.register({ title = \"y\", store = db, controls = {} })\n",
+            "E8114",
+        ),
         // Pools are typed by the class they hold.
         (
             "import FramePool from \"wowlua:pool\"\nclass Row\n    constructor(label: string) end\nend\nlocal rows = FramePool.new(Row, 1)\n",
@@ -2063,6 +2081,7 @@ end
         "meta",
         "locale",
         "pool",
+        "settings",
     ] {
         assert!(
             printed
@@ -2577,4 +2596,118 @@ print("foreign", pcall(tables.release, tables, {}))
             "{mode}: {out:?}"
         );
     }
+}
+
+// --------------------------------------------------------------- settings --
+
+#[test]
+fn settings_pages_bind_controls_to_the_store() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as settings from "wowlua:settings"
+import * as saved from "wowlua:saved"
+local C = Mock.check
+
+interface Options
+    showMinimap: boolean
+    scale: number
+    anchor: "TOPLEFT" | "CENTER"
+    tint: { r: number, g: number, b: number, a: number? }
+end
+
+local db = saved.bind("StdDB", {
+    version = 1,
+    defaults = { showMinimap = true, scale = 1, anchor = "CENTER", tint = { r = 1, g = 0, b = 0 } } :: Options,
+    profiles = true,
+})
+
+local built = 0
+local page = settings.register({
+    title = "Std",
+    store = db,
+    controls = {
+        settings.header("General"),
+        settings.text("Some text"),
+        settings.checkbox("showMinimap", { label = "Minimap", tooltip = "Show it" }),
+        settings.slider("scale", { label = "Scale", min = 0.5, max = 2, step = 0.1, format = function(v: number) return v * 100 .. "%" end }),
+        settings.dropdown("anchor", { label = "Anchor", options = { { value = "TOPLEFT", label = "Top left" }, { value = "CENTER", label = "Center" } } }),
+        settings.color("tint", { label = "Tint" }),
+        settings.keybinding("STD_TOGGLE", { label = "Toggle" }),
+        settings.button("Reset", function() print("reset clicked") end),
+        settings.custom(function(parent: Frame) built += 1; return parent end, { height = 40 }),
+    },
+    subcategories = { { title = "More", controls = { settings.checkbox("showMinimap", { label = "Again" }) } } },
+    onChange = function(key: string, value: any) print("changed", key, type(value) == "table" and "table" or tostring(value)) end,
+})
+C(#Mock.settings.categories == 0, "nothing before the store loads")
+C(not pcall(settings.register, { title = "x", store = db, controls = {} }), "register once")
+_G.StdSettings = { page = page, db = db, built = function() return built end, profiles = saved.handle(db).profiles }
+"#,
+        )],
+        r#"Mock.bindings = { "OTHER", "STD_TOGGLE" }"#,
+        r#"Mock.loadAddon("Std")
+local C = Mock.check
+local cats = Mock.settings.categories
+C(#cats == 2 and cats[1].registered and cats[2].parent == cats[1], "a category and its subcategory")
+C(StdSettings.page.id == cats[1].id, "the page knows its id")
+local items = cats[1].layout.items
+local kinds = {}
+for _, i in ipairs(items) do kinds[#kinds + 1] = i.kind end
+print(table.concat(kinds, " "))
+local vars = Mock.settings.variables
+local minimap = vars.WOWLUA_STD_showMinimap
+C(minimap.varType == "boolean" and minimap.default == true, "a boolean proxy with the store's default")
+C(minimap:GetValue() == true, "reads the store")
+minimap:SetValue(false)
+C(StdSettings.db.showMinimap == false, "writes the store")
+C(items[4].a.format(1.5) == "150%", "the slider formatter")
+local anchors = {}
+for _, o in ipairs(items[5].a()) do anchors[#anchors + 1] = o.value .. "=" .. o.label end
+print(table.concat(anchors, ","))
+local tint = vars.WOWLUA_STD_tint
+print("tint", tint:GetValue())
+tint:SetValue("ff00ff00")
+print("tint now", StdSettings.db.tint.r, StdSettings.db.tint.g, StdSettings.db.tint.b)
+C(items[7].index == 2, "the binding's index")
+items[8].click()
+-- Custom rows build their content once, when first shown.
+local frame = CreateFrame("Frame")
+items[9]:InitFrame(frame)
+items[9]:InitFrame(frame)
+C(StdSettings.built() == 1 and items[9]:GetExtent() == 40, "custom content built once")
+items[2]:InitFrame(frame)
+-- A profile switch re-reads the controls.
+StdSettings.profiles:use("Other")
+C((minimap.updates or 0) >= 1, "refreshed after a profile switch")
+C(minimap:GetValue() == true, "the new profile's value")
+-- Opening: now, or after combat.
+StdSettings.page:open()
+Mock.fire("PLAYER_REGEN_DISABLED")
+StdSettings.page:open()
+print("opened in combat", #Mock.settings.opened)
+Mock.fire("PLAYER_REGEN_ENABLED")
+print("opened", #Mock.settings.opened)
+"#,
+    );
+    let plain: Vec<String> = out
+        .iter()
+        .map(|l| l.replace("|cff33ff99Std|r: ", ""))
+        .collect();
+    assert_eq!(
+        plain,
+        [
+            "header element checkbox slider dropdown color keybinding button element",
+            "changed showMinimap false",
+            "TOPLEFT=Top left,CENTER=Center",
+            "tint ffff0000",
+            "changed tint table",
+            "tint now 0 1 0",
+            "reset clicked",
+            "The options open once combat ends.",
+            "opened in combat 1",
+            "opened 2",
+        ],
+        "{out:?}"
+    );
 }

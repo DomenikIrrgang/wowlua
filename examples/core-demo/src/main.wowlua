@@ -12,6 +12,7 @@ interface Settings
     logins: number
     greet: boolean
     scale: number
+    lastLogout?: string
 end
 
 local db = saved.bind("CoreDemoDB", {

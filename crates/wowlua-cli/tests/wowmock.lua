@@ -237,3 +237,90 @@ function ToggleGameMenu() print("menu") end
 GameTooltip = CreateFrame("GameTooltip", "GameTooltip")
 function GameTooltip:SetUnit(unit) print("SetUnit " .. unit) end
 CreateFrame("Frame", "PlayerFrame")
+
+-- Settings (Blizzard's Settings API: categories, rows, proxy settings) -------
+
+Mock.settings = { categories = {}, opened = {}, variables = {} }
+local Category = {}
+Category.__index = Category
+function Category:GetID() return self.id end
+local Layout = {}
+Layout.__index = Layout
+function Layout:AddInitializer(init) table.insert(self.items, init) end
+local function newCategory(name, parent)
+    local c = setmetatable({ id = #Mock.settings.categories + 1, name = name, parent = parent }, Category)
+    c.layout = setmetatable({ items = {} }, Layout)
+    table.insert(Mock.settings.categories, c)
+    return c, c.layout
+end
+local Setting = {}
+Setting.__index = Setting
+function Setting:GetValue() return self.get() end
+function Setting:SetValue(v) self.set(v) end
+function Setting:NotifyUpdate() self.updates = (self.updates or 0) + 1 end
+local function row(kind)
+    return function(category, setting, a, b)
+        local item = { kind = kind, setting = setting, a = a, b = b }
+        table.insert(category.layout.items, item)
+        return item
+    end
+end
+Settings = {
+    VarType = { Boolean = "boolean", Number = "number", String = "string" },
+    RegisterVerticalLayoutCategory = function(name) return newCategory(name) end,
+    RegisterVerticalLayoutSubcategory = function(parent, name) return newCategory(name, parent) end,
+    RegisterAddOnCategory = function(c) c.registered = true end,
+    RegisterProxySetting = function(category, variable, varType, name, default, get, set)
+        local s = setmetatable({ variable = variable, varType = varType, name = name, default = default, get = get, set = set }, Setting)
+        Mock.settings.variables[variable] = s
+        return s
+    end,
+    CreateCheckbox = row("checkbox"),
+    CreateSlider = row("slider"),
+    CreateDropdown = row("dropdown"),
+    CreateColorSwatch = row("color"),
+    CreateSliderOptions = function(min, max, step)
+        return { min = min, max = max, step = step, SetLabelFormatter = function(self, label, f) self.format = f end }
+    end,
+    CreateControlTextContainer = function()
+        local data = {}
+        return { Add = function(_, v, l) table.insert(data, { value = v, label = l }) end, GetData = function() return data end }
+    end,
+    CreateElementInitializer = function(template, data)
+        return { kind = "element", template = template, data = data, InitFrame = function() end, Resetter = function() end }
+    end,
+    OpenToCategory = function(id)
+        table.insert(Mock.settings.opened, id)
+        SettingsPanel:Show()
+        -- The list shows the category's rows.
+        for _, item in ipairs(Mock.settings.categories[id].layout.items) do
+            if item.InitFrame then item:InitFrame(CreateFrame("Frame")) end
+        end
+    end,
+    GetSetting = function(variable) return Mock.settings.variables[variable] end,
+}
+SettingsPanel = CreateFrame("Frame", "SettingsPanel")
+SettingsPanel:Hide()
+function HideUIPanel(frame) frame:Hide() end
+MinimalSliderWithSteppersMixin = { Label = { Right = "right" } }
+function CreateSettingsListSectionHeaderInitializer(name) return { kind = "header", name = name } end
+function CreateSettingsButtonInitializer(name, text, click) return { kind = "button", text = text, click = click } end
+function CreateKeybindingEntryInitializer(index) return { kind = "keybinding", index = index } end
+Mock.bindings = {}
+function GetNumBindings() return #Mock.bindings end
+function GetBinding(i) return Mock.bindings[i] end
+function Frame:CreateFontString() return CreateFrame("FontString") end
+function Frame:SetText(t) rawset(self, "text", t) end
+function Frame:GetText() return rawget(self, "text") end
+
+local Color = {}
+Color.__index = Color
+function CreateColor(r, g, b, a) return setmetatable({ r = r, g = g, b = b, a = a or 1 }, Color) end
+function Color:GenerateHexColor()
+    local function byte(v) return math.floor(v * 255 + 0.5) end
+    return string.format("%02x%02x%02x%02x", byte(self.a), byte(self.r), byte(self.g), byte(self.b))
+end
+function CreateColorFromHexString(hex)
+    local function part(i) return tonumber(hex:sub(i, i + 1), 16) / 255 end
+    return CreateColor(part(3), part(5), part(7), part(1))
+end

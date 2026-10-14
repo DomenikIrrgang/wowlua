@@ -113,6 +113,8 @@ struct Ctx<'a> {
     diagnostics: Vec<Diagnostic>,
     slash_seen: HashMap<String, Span>,
     bound_saved: HashMap<String, Span>,
+    /// The first `settings.register` call.
+    settings_registered: Option<Span>,
 }
 
 fn string(e: &Expr) -> Option<String> {
@@ -357,6 +359,15 @@ impl Ctx<'_> {
                 }
             }
             "saved.bind" => self.bind(e, &args),
+            "settings.register" => match self.settings_registered {
+                Some(first) => self.diagnostics.push(
+                    Diagnostic::error("E8114", "`settings.register` is called more than once")
+                        .with_label(e.span, "again")
+                        .with_label(first, "first registered here")
+                        .with_help("one options page per addon: put more pages in `subcategories`"),
+                ),
+                None => self.settings_registered = Some(e.span),
+            },
             "slash.router" => {
                 if let Some(ExprKind::Table(fields)) = args.first().map(|a| &a.kind) {
                     for field in fields {
@@ -624,6 +635,7 @@ pub fn check(files: &[FileInput], analysis: &Analysis, config: &StdlibConfig) ->
         diagnostics: Vec::new(),
         slash_seen: HashMap::new(),
         bound_saved: HashMap::new(),
+        settings_registered: None,
     };
     for f in files {
         let Some(parse) = f.parse else { continue };

@@ -208,10 +208,14 @@ settings.open()                                -- Settings.OpenToCategory for th
   control key in the `controls` literal against it. An unknown key is error
   E8113. A field of the wrong type for the control is error E8070.
 - **Binding mechanism.** Each control is registered with
-  `Settings.RegisterProxySetting`. Its getter and setter read and write the
-  store, so defaults apply and profile switches are reflected. The exact
-  signature differs between clients, so the module contains a per-flavor adapter
-  selected at compile time.
+  `Settings.RegisterProxySetting` (variable `WOWLUA_<ADDON>_<key>`). Its
+  getter and setter read and write the store, so defaults apply and profile
+  switches are reflected; the store's defaults are the settings' defaults.
+  A color is a hex string to the Settings API and `{ r, g, b, a? }` in the
+  store. Every current flavor's client has the same Settings API (checked
+  against Blizzard's UI source), so no per-flavor adapter is needed yet.
+- **Store type.** `saved.bind` returns its defaults' type, so the keys are
+  checked against that.
 - **Timing.** `register` may be called at top level. The category is created at
   `ADDON_LOADED`, after the store is loaded ([phase order](core.md#phase-order)).
 - **One registration.** `register` may be called once per addon (E8114). Use

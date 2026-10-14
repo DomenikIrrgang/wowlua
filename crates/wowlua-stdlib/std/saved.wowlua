@@ -257,6 +257,11 @@ local function makeHandle(b: Binding): any
             end
         end,
         isLoaded = function(_): boolean return b.loaded end,
+        -- For wowlua:settings: a key's default (the panel's Defaults button).
+        __default = function(_, key: string): any
+            local d = b.opts.defaults
+            return type(d) == "table" and d[key] or nil
+        end,
     }
     if b.opts.profiles then
         h.profiles = {

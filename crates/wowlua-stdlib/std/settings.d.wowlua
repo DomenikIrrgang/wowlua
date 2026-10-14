@@ -1,0 +1,12 @@
+-- Compiler behavior of `wowlua:settings` (spec stdlib "settings"): the
+-- controls of `register` are checked against its store's type.
+@intrinsic("settings.register")
+declare global register: any
+@intrinsic("settings.checkbox")
+declare global checkbox: any
+@intrinsic("settings.slider")
+declare global slider: any
+@intrinsic("settings.dropdown")
+declare global dropdown: any
+@intrinsic("settings.color")
+declare global color: any

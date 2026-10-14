@@ -767,7 +767,7 @@ fn module_errors() {
             "import m from \"/main\"\nexport local a = m\n",
             "E1014",
         ),
-        ("import _ from \"wowlua:settings\"\n", "", "E1015"),
+        ("import _ from \"wowlua:nonexistent\"\n", "", "E1015"),
         (
             "print(f())\nexport function f() return 1 end\n",
             "",
@@ -2889,6 +2889,31 @@ fn load_order_per_flavor_files() {
     };
     assert!(pos("a_retail.lua") < pos("b_classic.lua"), "{toc}");
     assert!(pos("b_classic.lua") < pos("c_both.lua"), "{toc}");
+}
+
+/// One definition that runs while several files load (a function they all
+/// call) is not an ambiguity between them (no W1033).
+#[test]
+fn load_order_shared_definitions_are_not_ambiguous() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"shared-def\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/a_lib.lua",
+                "local _, ns = ...\nfunction ns.make()\n  local t = {}\n  t.ready = true\n  return t.ready\nend\n",
+            ),
+            ("src/b_one.lua", "local _, ns = ...\nns.one = ns.make()\n"),
+            ("src/c_two.lua", "local _, ns = ...\nns.two = ns.make()\n"),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(!stderr.contains("W1033"), "{stderr}");
 }
 
 /// Files another AddOn loads (`build.shared-files`) are shipped, not

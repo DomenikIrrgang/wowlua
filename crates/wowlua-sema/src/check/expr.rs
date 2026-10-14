@@ -230,6 +230,9 @@ impl Checker<'_> {
                 let c = self.stdlib_call_type(callee, args, c);
                 let results = self.call(c, None, args, e.span, expected);
                 self.stdlib_after_call(callee, args);
+                if let Some(t) = self.saved_bind_type(callee, args) {
+                    return Pack::single(t);
+                }
                 if self.secret_locale_call(callee, args) {
                     let secret = self.env.types.intern(Ty::Secret(Types::STRING));
                     return Pack::single(self.env.types.union(&[Types::STRING, secret]));
@@ -1557,6 +1560,24 @@ impl Checker<'_> {
         subst::apply_func(&mut self.env.types, f, &s)
     }
 
+    /// `saved.bind(name, { defaults = … })` returns the data table: the
+    /// type of the defaults (spec stdlib "saved").
+    fn saved_bind_type(&mut self, callee: &Expr, args: &Args) -> Option<TypeId> {
+        if self.intrinsic_of(callee).as_deref() != Some("saved.bind") {
+            return None;
+        }
+        let ExprKind::Table(fields) = &args.exprs().get(1)?.kind else {
+            return None;
+        };
+        fields.iter().find_map(|f| match f {
+            TableField::Named { name, value, .. } if name.text.as_ref() == "defaults" => self
+                .expr_types
+                .get(&(value.span.start, value.span.end))
+                .copied(),
+            _ => None,
+        })
+    }
+
     /// `L.KEY(params)` of `wowlua:locale` with a value that may be secret:
     /// the string made from it is secret too (spec stdlib "locale").
     fn secret_locale_call(&mut self, callee: &Expr, args: &Args) -> bool {
@@ -1585,6 +1606,11 @@ impl Checker<'_> {
         if id.starts_with("hooks.") {
             self.check_hook_target(&id, &args.exprs(), false);
         }
+        if id == "settings.register"
+            && let Some(def) = args.exprs().first()
+        {
+            self.check_settings(def);
+        }
         if id == "saved.bind"
             && let Some(opts) = args.exprs().get(1)
             && let ExprKind::Table(fields) = &opts.kind
@@ -1605,6 +1631,168 @@ impl Checker<'_> {
                         "the defaults of `saved.bind` contain a `Secret<…>` type{at}: secret values cannot be compared or saved"
                     );
                     self.report("E8104", value.span, msg);
+                }
+            }
+        }
+    }
+
+    /// `settings.register({ store = …, controls = { … } })`: every control's
+    /// key is a field of the store (E8113) of the control's type (E8070),
+    /// and dropdown values are of the field's type (E8107).
+    fn check_settings(&mut self, def: &Expr) {
+        let ExprKind::Table(fields) = &def.kind else {
+            return;
+        };
+        let field = |name: &str| {
+            fields.iter().find_map(|f| match f {
+                TableField::Named { name: n, value, .. } if n.text.as_ref() == name => Some(value),
+                _ => None,
+            })
+        };
+        let Some(store) = field("store") else { return };
+        let Some(&store_type) = self.expr_types.get(&(store.span.start, store.span.end)) else {
+            return;
+        };
+        if matches!(
+            self.env.types.get(store_type),
+            Ty::Any | Ty::Unknown | Ty::Error | Ty::Table
+        ) {
+            return;
+        }
+        let mut lists: Vec<&Expr> = field("controls").into_iter().collect();
+        if let Some(subs) = field("subcategories")
+            && let ExprKind::Table(entries) = &subs.kind
+        {
+            for e in entries {
+                if let TableField::Positional(sub) = e
+                    && let ExprKind::Table(sub_fields) = &sub.kind
+                {
+                    lists.extend(sub_fields.iter().filter_map(|f| match f {
+                        TableField::Named { name, value, .. }
+                            if name.text.as_ref() == "controls" =>
+                        {
+                            Some(value)
+                        }
+                        _ => None,
+                    }));
+                }
+            }
+        }
+        for list in lists {
+            let ExprKind::Table(entries) = &list.kind else {
+                continue;
+            };
+            for e in entries {
+                let TableField::Positional(control) = e else {
+                    continue;
+                };
+                if let ExprKind::Call { callee, args } = &control.kind {
+                    self.check_settings_control(store_type, callee, &args.exprs());
+                }
+            }
+        }
+    }
+
+    fn check_settings_control(&mut self, store: TypeId, callee: &Expr, args: &[&Expr]) {
+        let Some(id) = self.intrinsic_of(callee) else {
+            return;
+        };
+        let kind = match id.as_str() {
+            "settings.checkbox" => "checkbox",
+            "settings.slider" => "slider",
+            "settings.dropdown" => "dropdown",
+            "settings.color" => "color",
+            _ => return,
+        };
+        let Some(&key_expr) = args.first() else {
+            return;
+        };
+        let ExprKind::String(lit) = &key_expr.kind else {
+            return;
+        };
+        let key = String::from_utf8_lossy(&lit.value).into_owned();
+        let found = match self.env.types.get(store).clone() {
+            Ty::Named(d, targs) => self.env.instance_member(d, &targs, &key).map(|(m, _)| m.ty),
+            Ty::Record(r) => r.fields.get(key.as_str()).map(|f| f.ty),
+            _ => return,
+        };
+        let Some(field) = found else {
+            let msg = format!(
+                "the store `{}` has no field `{key}`",
+                self.env.display(store)
+            );
+            self.report("E8113", key_expr.span, msg);
+            return;
+        };
+        let value = self.env.types.non_nil(field);
+        if matches!(self.env.types.get(value), Ty::Any | Ty::Unknown | Ty::Error) {
+            return;
+        }
+        let both = |c: &mut Self, t: TypeId| {
+            c.env.assignable(value, t, c.mode) && c.env.assignable(t, field, c.mode)
+        };
+        let fits = match kind {
+            "checkbox" => both(self, Types::BOOLEAN),
+            "slider" => both(self, Types::NUMBER),
+            "color" => ["r", "g", "b"].iter().all(|c| {
+                matches!(self.member_type(value, c, key_expr.span, true), Some(t)
+                    if t != Types::ERROR && self.env.assignable(t, Types::NUMBER, self.mode))
+            }),
+            _ => true,
+        };
+        if !fits {
+            let wanted = match kind {
+                "checkbox" => "`boolean`",
+                "slider" => "`number`",
+                _ => "`{ r: number, g: number, b: number, a: number? }`",
+            };
+            let msg = format!(
+                "`{key}` is `{}`; a {kind} needs {wanted}",
+                self.env.display(field)
+            );
+            self.report("E8070", key_expr.span, msg);
+            return;
+        }
+        if kind == "dropdown"
+            && let Some(opts) = args.get(1)
+            && let ExprKind::Table(opt_fields) = &opts.kind
+        {
+            for f in opt_fields {
+                let TableField::Named {
+                    name,
+                    value: options,
+                    ..
+                } = f
+                else {
+                    continue;
+                };
+                if name.text.as_ref() != "options" {
+                    continue;
+                }
+                let ExprKind::Table(entries) = &options.kind else {
+                    continue;
+                };
+                for entry in entries {
+                    let TableField::Positional(option) = entry else {
+                        continue;
+                    };
+                    let ExprKind::Table(parts) = &option.kind else {
+                        continue;
+                    };
+                    for p in parts {
+                        if let TableField::Named { name, value: v, .. } = p
+                            && name.text.as_ref() == "value"
+                            && let Some(&t) = self.expr_types.get(&(v.span.start, v.span.end))
+                            && !self.env.assignable(t, field, self.mode)
+                        {
+                            let msg = format!(
+                                "the option value `{}` is not a `{}` (the type of `{key}`)",
+                                self.env.display(t),
+                                self.env.display(field)
+                            );
+                            self.report("E8107", v.span, msg);
+                        }
+                    }
                 }
             }
         }

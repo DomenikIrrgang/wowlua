@@ -1,0 +1,72 @@
+-- wowlua:settings: an options page in Blizzard's Settings panel.
+import * as settings from "wowlua:settings"
+import * as saved from "wowlua:saved"
+import suite from "/harness"
+
+interface Options
+    enabled: boolean
+    scale: number
+    anchor: "TOPLEFT" | "CENTER"
+    tint: { r: number, g: number, b: number, a: number? }
+end
+
+local db = saved.bind("StdTestSettingsDB", {
+    version = 1,
+    defaults = { enabled = true, scale = 1, anchor = "CENTER", tint = { r = 1, g = 0.5, b = 0 } } :: Options,
+})
+
+local changes: string[] = {}
+local built = { text = 0, custom = 0 }
+
+local page = settings.register({
+    title = "wowlua StdTest",
+    store = db,
+    controls = {
+        settings.header("General"),
+        settings.text("Options of the in-game tests of wowlua's standard library."),
+        settings.checkbox("enabled", { label = "Enabled", tooltip = "A checkbox bound to the store" }),
+        settings.slider("scale", { label = "Scale", min = 0.5, max = 2, step = 0.05, format = function(v: number) return ("%.0f%%"):format(v * 100) end }),
+        settings.dropdown("anchor", { label = "Anchor", options = { { value = "TOPLEFT", label = "Top left" }, { value = "CENTER", label = "Center" } } }),
+        settings.color("tint", { label = "Tint" }),
+        settings.button("Print a line", function() print("StdTest settings button") end),
+        settings.custom(function(parent: Frame): Frame
+            built.custom += 1
+            local label = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+            label:SetPoint("LEFT", 0, 0)
+            label:SetText("A custom row")
+            return parent
+        end, { height = 30 }),
+    },
+    subcategories = { { title = "More", controls = { settings.checkbox("enabled", { label = "Enabled (again)" }) } } },
+    onChange = function(key: string) changes[#changes + 1] = key end,
+})
+
+local s = suite("settings")
+
+s:test("the page is registered and bound to the store", function(t: any)
+    t:ok(page.id ~= nil, "the category exists")
+    local setting = Settings.GetSetting("WOWLUA_STDTEST_enabled")
+    t:ok(setting ~= nil, "the proxy setting is registered")
+    if not setting then return end
+    local before = db.enabled
+    setting:SetValue(not before)
+    t:eq(db.enabled, not before, "the setting writes the store")
+    t:eq(changes[#changes], "enabled", "onChange")
+    setting:SetValue(before)
+    local tint = Settings.GetSetting("WOWLUA_STDTEST_tint")
+    t:ok(tint ~= nil and type(tint:GetValue()) == "string", "the color as a hex string")
+end)
+
+s:test("the page opens and builds its rows", function(t: any)
+    if InCombatLockdown() then
+        t:skip("in combat")
+        return
+    end
+    page:open()
+    t:waitFor(function() return SettingsPanel and SettingsPanel:IsShown() end, 3, "the Settings panel opens")
+    t:wait(0.5)
+    t:eq(built.custom, 1, "the custom row was built once")
+    if SettingsPanel and SettingsPanel:IsShown() then
+        HideUIPanel(SettingsPanel)
+    end
+end)

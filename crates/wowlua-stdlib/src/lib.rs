@@ -95,6 +95,11 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         Some(include_str!("../std/saved.d.wowlua")),
     ),
     (
+        "settings",
+        include_str!("../std/settings.wowlua"),
+        Some(include_str!("../std/settings.d.wowlua")),
+    ),
+    (
         "slash",
         include_str!("../std/slash.wowlua"),
         Some(include_str!("../std/slash.d.wowlua")),
