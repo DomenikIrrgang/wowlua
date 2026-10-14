@@ -22,7 +22,21 @@ pub struct StdlibConfig {
     /// Bindings of hand-written `Bindings*.xml` files (`settings.keybinding`
     /// may name them).
     pub xml_bindings: HashSet<String>,
+    /// The targeted flavors' tooltips (`wowlua:tooltip` kinds), by flavor.
+    pub tooltips: Vec<(String, FlavorTooltips)>,
 }
+
+/// What a flavor's tooltips offer: its `Enum.TooltipDataType` names, and
+/// whether it has the tooltip data system (else only `Item`, `Spell` and
+/// `Unit`, through the tooltips' scripts).
+#[derive(Clone, Debug, Default)]
+pub struct FlavorTooltips {
+    pub kinds: HashSet<String>,
+    pub data_system: bool,
+}
+
+/// The kinds clients without the tooltip data system have.
+const SCRIPT_KINDS: &[&str] = &["Item", "Spell", "Unit"];
 
 /// A keybinding declared with `@binding` (spec stdlib "bindings").
 #[derive(Clone, Debug)]
@@ -151,6 +165,8 @@ struct Ctx<'a> {
     /// The current declaration is removed by an `@if` in this build: its
     /// binding is checked, not collected.
     removed: bool,
+    /// The flavor of this compilation (split mode), else all targeted ones.
+    flavor: Option<String>,
 }
 
 /// Whether `name` is a valid keybinding name (E8352).
@@ -312,6 +328,13 @@ impl Ctx<'_> {
                     }
                 }
                 "bindings.binding" => self.binding(d, &args, top && func.is_some()),
+                "tooltip.onTooltip" => {
+                    if let Some(first) = args.first()
+                        && !self.removed
+                    {
+                        self.tooltip_kind(first);
+                    }
+                }
                 "timer.throttle" | "timer.debounce" | "timer.nextFrame" | "combat.outOfCombat" => {
                     if let Some(f) = func
                         && returns_values(&f.body)
@@ -453,6 +476,61 @@ impl Ctx<'_> {
         }
     }
 
+    /// A tooltip kind: known (E8330) and available on every flavor of this
+    /// compilation (E8300).
+    fn tooltip_kind(&mut self, e: &Expr) {
+        let Some(kind) = self.constant_string(e) else {
+            return;
+        };
+        let flavors: Vec<&(String, FlavorTooltips)> = self
+            .config
+            .tooltips
+            .iter()
+            .filter(|(f, _)| self.flavor.as_ref().is_none_or(|x| x == f))
+            .collect();
+        if flavors.is_empty() {
+            return;
+        }
+        if !flavors.iter().any(|(_, t)| t.kinds.contains(&kind)) {
+            self.diagnostics.push(
+                Diagnostic::error("E8330", format!("unknown tooltip kind `{kind}`"))
+                    .with_label(e.span, "not an `Enum.TooltipDataType` name")
+                    .with_help(
+                        "for example \"Item\", \"Spell\", \"Unit\", \"Mount\" or \"Currency\"",
+                    ),
+            );
+            return;
+        }
+        let lacking: Vec<&str> = flavors
+            .iter()
+            .filter(|(_, t)| {
+                if t.data_system {
+                    !t.kinds.contains(&kind)
+                } else {
+                    !SCRIPT_KINDS.contains(&kind.as_str())
+                }
+            })
+            .map(|(f, _)| f.as_str())
+            .collect();
+        if !lacking.is_empty() {
+            let mut d = Diagnostic::error(
+                "E8300",
+                format!(
+                    "`{kind}` tooltips are not available on {}",
+                    lacking.join(", ")
+                ),
+            )
+            .with_label(e.span, "not on every targeted flavor");
+            if flavors
+                .iter()
+                .any(|(f, t)| !t.data_system && lacking.contains(&f.as_str()))
+            {
+                d = d.with_help("without the tooltip data system only \"Item\", \"Spell\" and \"Unit\" tooltips are hooked; guard the hook with `@if(flavor == …)`");
+            }
+            self.diagnostics.push(d);
+        }
+    }
+
     fn slash_command(&mut self, e: &Expr) {
         let Some(name) = string(e) else { return };
         if !name.starts_with('/') || name.len() < 2 || name.chars().any(char::is_whitespace) {
@@ -541,6 +619,11 @@ impl Ctx<'_> {
             }
             "saved.bind" => self.bind(e, &args),
             "bindings.header" => self.binding_header(e, &args, top),
+            "tooltip.hook" => {
+                if let Some(first) = args.first() {
+                    self.tooltip_kind(first);
+                }
+            }
             "settings.keybinding" => {
                 if let Some(first) = args.first()
                     && let Some(name) = string(first)
@@ -859,6 +942,7 @@ pub fn check(
         keybinding_refs: Vec::new(),
         consts: HashMap::new(),
         removed: false,
+        flavor: meta.and_then(|m| m.flavor.clone()),
     };
     for f in files {
         let Some(parse) = f.parse else { continue };

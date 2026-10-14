@@ -219,7 +219,9 @@ Each edge is classified by **when** the use happens:
 - **Guarded uses** do not order files (decision T70): a name tested for
   existence (`if X then`, `X and …`, `X or …`, `not X`, `X ~= nil`,
   `type(X) == "table"`), and the uses that test guards (the `then` branch, the
-  right operand of `and`). If `X` is not defined yet, the guarded code is
+  right operand of `and`). The left operand of `??` and the object of an
+  optional link (`X?.f`, `X?.[k]`, `X?:m()`, `X?.()`) are existence tests too,
+  and an optional link guards the rest of its chain. If `X` is not defined yet, the guarded code is
   skipped, so the file still loads.
 - **XML**: creating an element reads its `mixin`, `secureMixin`, `parent` and
   `relativeTo` globals and its handlers' `function` attributes, runs its

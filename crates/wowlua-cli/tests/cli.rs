@@ -3246,6 +3246,11 @@ fn load_order_guards_callbacks_and_listed_order() {
                 "src/a_guarded.lua",
                 "if Later and Later.x then print(Later.x) end\nlocal y = Later and Later.y\nif type(Later) == \"table\" then print(Later.z) end\n",
             ),
+            // So are optional links and `??`: they expect nil.
+            (
+                "src/a_probe.wowlua",
+                "declare global Later: { x: number }?\nprint(Later?.x, Later ?? 0)\n",
+            ),
             // `ns.On` only stores the handler; `ns.Run` calls it.
             (
                 "src/b_register.lua",
@@ -3286,6 +3291,10 @@ fn load_order_guards_callbacks_and_listed_order() {
     assert!(
         pos("a_guarded.lua") < pos("z_later.lua"),
         "guarded uses do not order: {toc}"
+    );
+    assert!(
+        pos("a_probe.lua") < pos("z_later.lua"),
+        "probes do not order: {toc}"
     );
     assert!(pos("c_api.lua") < pos("b_register.lua"), "{toc}");
     assert!(

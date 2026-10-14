@@ -1,0 +1,179 @@
+-- wowlua:tooltip (spec stdlib "tooltip"): typed post-hooks for tooltips.
+-- With the client's tooltip data system, one `TooltipDataProcessor` post-call
+-- per kind covers every tooltip; elsewhere the standard tooltips'
+-- `OnTooltipSet*` scripts are hooked and the item, spell or unit is read
+-- from the tooltip. Post-hooks only: handlers add to tooltips, they cannot
+-- suppress or replace what the client shows.
+import callIn from "wowlua:errors"
+
+--- An `Enum.TooltipDataType` name: `"Item"`, `"Spell"`, `"Unit"`, … (the
+--- compiler checks it per flavor, E8330 and E8300).
+export type TooltipKind = string
+
+--- What a tooltip shows, the same on every client.
+export type TooltipData = {
+    kind: TooltipKind,
+    id?: number,
+    guid?: string | Secret<string>,
+    unit?: string,
+    link?: string,
+    --- The client's tooltip data, where it has the data system.
+    raw?: table,
+}
+
+type Handler = (tip: GameTooltip, data: TooltipData) -> ()
+
+--- The data system's entry point (declared only as a table).
+interface DataProcessor
+    AddTooltipPostCall: (kind: number, fn: (tip: GameTooltip, data: table) -> ()) -> ()
+end
+
+--- The tooltip getters the API declarations leave untyped.
+interface Getters
+    function GetItem(): (string?, string?)
+    function GetSpell(): (string?, any, any)
+    function GetUnit(): (string?, string?)
+end
+
+const processor = _G.TooltipDataProcessor :: DataProcessor?
+const dataTypes = (_G.Enum?.TooltipDataType ?? {}) :: { [string]: number }
+const modern = processor?.AddTooltipPostCall ~= nil
+
+-- Without the data system: the kinds there are, by the script that shows
+-- them, and the standard tooltips.
+const SCRIPTS: { [string]: string } = {
+    Item = "OnTooltipSetItem",
+    Spell = "OnTooltipSetSpell",
+    Unit = "OnTooltipSetUnit",
+}
+const STANDARD_TOOLTIPS = { "GameTooltip", "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2" }
+
+--- A registered handler. Hooks cannot be removed: disabling one stops
+--- calling its handler.
+export class TooltipHook
+    readonly kind: TooltipKind
+    private readonly fn: Handler
+    private enabled: boolean = true
+
+    constructor(kind: TooltipKind, fn: Handler)
+        self.kind = kind
+        self.fn = fn
+    end
+
+    function enable()
+        self.enabled = true
+    end
+
+    function disable()
+        self.enabled = false
+    end
+
+    function isEnabled(): boolean
+        return self.enabled
+    end
+
+    function run(tip: GameTooltip, data: TooltipData)
+        if self.enabled then
+            callIn({ component = `tooltip: {self.kind}` }, self.fn, tip, data)
+        end
+    end
+end
+
+local hooks: { [string]: TooltipHook[] } = {}
+
+local function dispatch(kind: TooltipKind, tip: GameTooltip, data: TooltipData)
+    for _, h in ipairs(hooks[kind] ?? {}) do
+        h:run(tip, data)
+    end
+end
+
+-- What the tooltip itself says it shows.
+local function read(kind: TooltipKind, tip: GameTooltip, data: TooltipData): TooltipData
+    const getters = tip :: Getters
+    if kind == "Item" then
+        local _, link = getters:GetItem()
+        data.link = data.link ?? link
+        data.id = data.id ?? (link and tonumber(link:match("item:(%d+)")))
+    elseif kind == "Spell" then
+        -- Clients return the spell id second or (with a rank) third.
+        local _, a, b = getters:GetSpell()
+        data.id = data.id ?? (type(a) == "number" and a or type(b) == "number" and b or nil)
+    elseif kind == "Unit" then
+        local _, unit = getters:GetUnit()
+        data.unit = unit
+        if unit and not data.guid then
+            data.guid = UnitGUID(unit)
+        end
+    end
+    return data
+end
+
+-- With the data system: one post-call per kind, for every tooltip.
+local registered: { [string]: boolean } = {}
+
+local function listen(kind: TooltipKind)
+    const dataType = dataTypes[kind]
+    if registered[kind] or not processor or not dataType then
+        return
+    end
+    registered[kind] = true
+    processor.AddTooltipPostCall(dataType, function(tip: GameTooltip, raw: table)
+        if tip:IsForbidden() then
+            return
+        end
+        const data: TooltipData = { kind = kind, id = raw.id, guid = raw.guid, link = raw.hyperlink, raw = raw }
+        dispatch(kind, tip, read(kind, tip, data))
+    end)
+end
+
+-- Without it: the scripts of each attached tooltip.
+local attached: { [GameTooltip]: boolean } = {}
+
+--- Applies the hooks to another tooltip too (clients without the data
+--- system; with it, every tooltip is covered already).
+export function attach(tip: GameTooltip)
+    if modern or attached[tip] then
+        return
+    end
+    attached[tip] = true
+    for kind, script in pairs(SCRIPTS) do
+        tip:HookScript(script, function(self: GameTooltip)
+            if hooks[kind] then
+                dispatch(kind, self, read(kind, self, { kind = kind }))
+            end
+        end)
+    end
+end
+
+if not modern then
+    for _, name in ipairs(STANDARD_TOOLTIPS) do
+        const tip = _G[name] :: GameTooltip?
+        if tip then
+            attach(tip)
+        end
+    end
+end
+
+--- Calls `fn` after the client fills a tooltip of `kind`.
+export function hook(kind: TooltipKind, fn: Handler): TooltipHook
+    local known = SCRIPTS[kind] ~= nil
+    if modern then
+        known = dataTypes[kind] ~= nil
+    end
+    if not known then
+        error(`tooltip.hook: no "{kind}" tooltips on this client`, 2)
+    end
+    const h = TooltipHook.new(kind, fn)
+    const list = hooks[kind] ?? {}
+    list[#list + 1] = h
+    hooks[kind] = list
+    listen(kind)
+    return h
+end
+
+--- `@onTooltip(kind)`: the function is a post-hook of that kind's tooltips.
+export function onTooltip(kind: TooltipKind)
+    return function(fn: Handler, _: DecoratorContext?)
+        hook(kind, fn)
+    end
+end

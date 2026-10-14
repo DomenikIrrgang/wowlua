@@ -46,8 +46,8 @@ pub(crate) fn intrinsic(id: &str) -> Option<Intrinsic> {
         }
         // wowlua:hooks, wowlua:slash
         "hooks.hook" | "hooks.hookScript" | "slash.slash" => Some(Intrinsic::Registering),
-        // wowlua:bindings
-        "bindings.binding" => Some(Intrinsic::Registering),
+        // wowlua:bindings, wowlua:tooltip
+        "bindings.binding" | "tooltip.onTooltip" => Some(Intrinsic::Registering),
         // wowlua:lifecycle
         "lifecycle.onLoad"
         | "lifecycle.onLogin"

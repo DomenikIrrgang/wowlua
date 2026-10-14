@@ -492,10 +492,123 @@ UIParent = CreateFrame("Frame", "UIParent") :: any
 function ToggleGameMenu()
     print("menu")
 end
-GameTooltip = CreateFrame("GameTooltip", "GameTooltip") :: any
-function GameTooltip:SetUnit(unit: string)
-    print(`SetUnit {unit}`)
+
+-- Tooltips -------------------------------------------------------------------
+
+--- What a mock tooltip shows, for its getters.
+type Shown = { kind: string, id?: number, guid?: string, unit?: string, link?: string, name?: string }
+
+--- A tooltip: the lines added to it and what it shows.
+class MockTooltip extends MockFrame
+    lines: string[] = {}
+    showing?: Shown
+
+    constructor(name: string)
+        super("GameTooltip", name, nil)
+        Mock.frames[#Mock.frames + 1] = self :: any
+        _G[name] = self
+    end
+
+    override function AddLine(text: string)
+        self.lines[#self.lines + 1] = text
+        -- The client's font strings for each line.
+        _G[`{self.name}TextLeft{#self.lines}`] = { GetText = function() return text end }
+    end
+
+    function NumLines(): number
+        return #self.lines
+    end
+
+    function SetItemByID(id: number)
+        Mock.showTooltip("Item", { kind = "Item", id = id, name = `item {id}`, link = `|Hitem:{id}::|h[item {id}]|h` }, self)
+    end
+
+    function SetSpellByID(id: number)
+        Mock.showTooltip("Spell", { kind = "Spell", id = id, name = `spell {id}` }, self)
+    end
+
+    function SetUnit(unit: string)
+        print(`SetUnit {unit}`)
+        Mock.showTooltip("Unit", { kind = "Unit", unit = unit, name = unit, guid = `GUID-{unit}` }, self)
+    end
+
+    function IsForbidden(): boolean
+        return false
+    end
+
+    function GetItem(): (string?, string?)
+        if self.showing?.kind == "Item" then
+            return self.showing.name, self.showing.link
+        end
+        return nil, nil
+    end
+
+    function GetSpell(): (string?, number?)
+        if self.showing?.kind == "Spell" then
+            return self.showing.name, self.showing.id
+        end
+        return nil, nil
+    end
+
+    function GetUnit(): (string?, string?)
+        if self.showing?.kind == "Unit" then
+            return self.showing.name, self.showing.unit
+        end
+        return nil, nil
+    end
 end
+
+for _, name in ipairs({ "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2" }) do
+    MockTooltip.new(name)
+end
+
+--- Another tooltip frame (an addon's own).
+function Mock.tooltip(name: string): any
+    return MockTooltip.new(name)
+end
+
+function UnitGUID(unit: string): string?
+    return `GUID-{unit}`
+end
+
+-- The tooltip data system (setups without it set TooltipDataProcessor to nil).
+_G.Enum = { TooltipDataType = { Item = 0, Spell = 1, Unit = 2, Currency = 5, Mount = 10 } }
+Mock.tooltipCalls = {}
+_G.TooltipDataProcessor = {
+    AddTooltipPostCall = function(kind: number, fn: (tip: any, data: table) -> ())
+        const list = Mock.tooltipCalls[kind] ?? {}
+        list[#list + 1] = fn
+        Mock.tooltipCalls[kind] = list
+    end,
+}
+
+const TOOLTIP_SCRIPTS: { [string]: string } = {
+    Item = "OnTooltipSetItem",
+    Spell = "OnTooltipSetSpell",
+    Unit = "OnTooltipSetUnit",
+}
+
+--- Shows `data` as a tooltip of `kind` (GameTooltip by default): runs the
+--- post-hooks as the client would and returns the lines they added.
+function Mock.showTooltip(kind: string, data: Shown?, tip: any): string[]
+    const t = (tip ?? GameTooltip) :: MockTooltip
+    const shown: Shown = data ?? { kind = kind }
+    shown.kind = kind
+    t.lines = {}
+    t.showing = shown
+    if _G.TooltipDataProcessor then
+        const dataType = _G.Enum.TooltipDataType[kind]
+        const raw = { type = dataType, id = shown.id, guid = shown.guid, hyperlink = shown.link }
+        for _, fn in ipairs(Mock.tooltipCalls[dataType] ?? {}) do
+            fn(t, raw)
+        end
+    else
+        Mock.script(t, TOOLTIP_SCRIPTS[kind])
+    end
+    return t.lines
+end
+
+GameTooltip = MockTooltip.new("GameTooltip") :: any
 CreateFrame("Frame", "PlayerFrame")
 
 -- Settings (Blizzard's Settings API: categories, rows, proxy settings) -------

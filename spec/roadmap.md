@@ -324,7 +324,16 @@ menus and lists, then the widget themes.
   client feature (W8354; decisions S19–S21). The mock client loads the
   generated file; on the WoW: Forever client the generated bindings are listed
   with their labels and shown in the settings page's keybinding row; a guided
-  step presses a key bound to one (`RunBinding` is Blizzard-only there).
+  step presses a key bound to one (`RunBinding` is Blizzard-only there);
+  all 66 in-game tests passed.
+- `tooltip` done 2026-10-14: `@onTooltip` and `hook` with a `TooltipHook`
+  class (enable/disable), `TooltipDataProcessor` post-calls where the client
+  has the tooltip data system, `OnTooltipSet*` script hooks on the standard
+  tooltips (and `attach`ed ones) elsewhere, normalized `TooltipData`, kinds
+  checked per flavor from the API declarations (E8330, E8300; decision S22).
+  The mock client shows tooltips both ways (`Mock.showTooltip`); the in-game
+  suite fills `GameTooltip` and waits for a real mouseover. The checker now
+  treats optional links as existence tests for load order.
 
 ## M9: Test runner, language server, formatter
 

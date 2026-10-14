@@ -2300,6 +2300,8 @@ Mock.fire("UNIT_TARGET", "player")
 Mock.fire("UNIT_TARGET", "target")
 Mock.awaitText("Click the question-mark button")
 Mock.script(StdTestMinimapButton, "OnClick", "LeftButton")
+Mock.awaitText("Mouse over any item in your bags")
+Mock.showTooltip("Item", { id = 6948, name = "Hearthstone", link = "|Hitem:6948::|h[Hearthstone]|h" })
 Mock.awaitText("Type /reload")
 Mock.fire("PLAYER_LOGOUT")
 local saved = {}
@@ -2877,6 +2879,113 @@ fn bindings_are_checked_at_compile_time() {
     fs::write(dir.path().join("Bindings.xml"), "<Bindings></Bindings>\n").unwrap();
     let assert = wowlua(dir.path()).args(["build"]).assert().failure();
     assert!(String::from_utf8_lossy(&assert.get_output().stderr).contains("E4334"));
+}
+
+// ---------------------------------------------------------------- tooltip --
+
+const TOOLTIP: &str = r#"import onTooltip, attach from "wowlua:tooltip"
+import * as tooltip from "wowlua:tooltip"
+import type TooltipData from "wowlua:tooltip"
+
+@onTooltip("Item")
+local function item(tip: GameTooltip, data: TooltipData)
+    tip:AddLine(`item {data.id} {data.link}`)
+end
+
+@onTooltip("Unit")
+local function unit(tip: GameTooltip, data: TooltipData)
+    tip:AddLine(`unit {data.unit} {tostring(data.guid)}`)
+end
+
+@onTooltip("Spell")
+local function boom()
+    error("boom")
+end
+
+@onTooltip("Spell")
+local function spell(tip: GameTooltip, data: TooltipData)
+    tip:AddLine(`spell {data.id}`)
+end
+
+_G.StdTip = tooltip.hook("Item", function(tip: GameTooltip) tip:AddLine("second") end)
+_G.StdAttach = attach
+"#;
+
+const TOOLTIP_SCRIPT: &str = r#"local thunderfury = { id = 19019, name = "Thunderfury", link = "|cffff8000|Hitem:19019::|h[Thunderfury]|h|r" }
+local function show(kind, data, tip)
+    print(kind .. ": " .. table.concat(Mock.showTooltip(kind, data, tip), " | "))
+end
+show("Item", thunderfury)
+show("Unit", { unit = "target", name = "Hogger", guid = "GUID-target" })
+show("Spell", { id = 133, name = "Fireball" })
+StdTip:disable()
+show("Item", thunderfury)
+print("enabled", StdTip:isEnabled())
+StdTip:enable()
+show("Item", thunderfury, ItemRefTooltip)
+local custom = Mock.tooltip("StdCustomTip")
+StdAttach(custom)
+StdAttach(custom)
+show("Item", thunderfury, custom)
+"#;
+
+/// `wowlua:tooltip`: the same post-hooks with the tooltip data system and
+/// through the tooltips' scripts, in every build mode.
+#[test]
+fn tooltip_post_hooks_with_and_without_the_data_system() {
+    let link = "|cffff8000|Hitem:19019::|h[Thunderfury]|h|r";
+    let expected = [
+        format!("Item: item 19019 {link} | second"),
+        "Unit: unit target GUID-target".to_string(),
+        "Spell: spell 133".to_string(),
+        format!("Item: item 19019 {link}"),
+        "enabled false".to_string(),
+        format!("Item: item 19019 {link} | second"),
+        format!("Item: item 19019 {link} | second"),
+    ];
+    for setup in ["", "TooltipDataProcessor = nil"] {
+        let out = modes(&[("src/main.wowlua", TOOLTIP)], setup, TOOLTIP_SCRIPT);
+        assert_eq!(plain(&out), expected, "setup {setup:?}");
+        // A failing handler is reported; the others still run.
+        assert_eq!(
+            errors(&out).iter().filter(|e| e.contains("boom")).count(),
+            1,
+            "{out:?}"
+        );
+    }
+}
+
+/// Tooltip kinds are checked per targeted flavor (E8330, E8300).
+#[test]
+fn tooltip_kinds_are_checked_per_flavor() {
+    let check_in = |flavors: &str, body: &str| {
+        let dir = project(&[(
+            "src/main.wowlua",
+            &format!("import onTooltip, hook from \"wowlua:tooltip\"\n{body}"),
+        )]);
+        fs::write(
+            dir.path().join("wowlua.json"),
+            format!(r#"{{ "package": {{ "name": "std", "version": "1.0.0" }}, "flavors": {{ {flavors} }}, "build": {{ "flavor-mode": "split" }} }}"#),
+        )
+        .unwrap();
+        let assert = wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .assert();
+        String::from_utf8_lossy(&assert.get_output().stderr).into_owned()
+    };
+    let both = r#""camelot": {}, "vanilla": {}"#;
+    let out = check_in(both, "hook(\"Itme\", function() end)\n");
+    assert!(out.contains("E8330"), "{out}");
+    let out = check_in(both, "hook(\"Mount\", function() end)\n");
+    assert!(out.contains("E8300") && out.contains("vanilla"), "{out}");
+    let out = check_in(r#""camelot": {}"#, "hook(\"Mount\", function() end)\n");
+    assert!(!out.contains("E83"), "{out}");
+    // Guarded by `@if`, a kind only some flavors have is fine.
+    let out = check_in(
+        both,
+        "import flavor from \"wowlua:meta\"\n@if(flavor == \"camelot\")\n@onTooltip(\"Currency\")\nlocal function f() end\nhook(\"Item\", function() end)\n",
+    );
+    assert!(!out.contains("E83"), "{out}");
 }
 
 // --------------------------------------------------------------- settings --

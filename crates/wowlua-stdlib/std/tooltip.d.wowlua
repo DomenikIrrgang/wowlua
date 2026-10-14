@@ -1,0 +1,7 @@
+-- Compiler behavior of `wowlua:tooltip` (spec stdlib "tooltip"): `@onTooltip`
+-- registers the final function value; the kinds of `@onTooltip` and `hook`
+-- are checked against each targeted flavor (E8330, E8300).
+@intrinsic("tooltip.onTooltip")
+declare global onTooltip: any
+@intrinsic("tooltip.hook")
+declare global hook: any

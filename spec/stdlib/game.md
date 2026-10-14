@@ -179,14 +179,16 @@ tooltip.attach(MyAddonTooltip)       -- also apply hooks to a custom tooltip (fa
 | `hook` | `(kind: TooltipKind, fn: (tip: GameTooltip, data: TooltipData) -> ()) -> TooltipHook` | |
 | `TooltipHook` | `enable()`, `disable()`, `isEnabled()` | |
 | `attach` | `(tip: GameTooltip)` | Fallback clients only: applies all hooks to an additional tooltip frame. A no-op on clients with the tooltip data system, which covers all tooltips. |
-| `TooltipKind` | `"Item" \| "Spell" \| "Unit" \| …` | The full set comes from the flavor table. On fallback clients only `"Item"`, `"Spell"` and `"Unit"` are available, and other literal kinds are E8300 for those flavors. Unknown kinds are E8330. |
-| `TooltipData` | record | Normalized: `kind`, `id?`, `guid?`, `unit?`, `link?`, `raw?` (the client's tooltip data where available). Values the client may return as secrets keep their `Secret` types. |
+| `TooltipKind` | `string`: an `Enum.TooltipDataType` name (`"Item"`, `"Spell"`, `"Unit"`, `"Mount"`, …) | Checked per targeted flavor from its API declarations (decision S22): a name in no flavor's `Enum.TooltipDataType` is E8330; a kind a targeted flavor lacks is E8300 for it. A flavor has the tooltip data system when its declarations include `C_TooltipInfo`; fallback flavors have only `"Item"`, `"Spell"` and `"Unit"`. A hook under `@if` is checked only for the flavors that keep it. At run time, `hook` errors for a kind the client lacks. |
+| `TooltipData` | record | Normalized: `kind`, `id?`, `guid?` (`string \| Secret<string>`), `unit?`, `link?`, `raw?` (the client's tooltip data where available). |
 
 - Fallback clients hook `GameTooltip`, `ItemRefTooltip` and the shopping
   tooltips with `HookScript`, reading the item, spell or unit with the
   tooltip's getter methods.
 - Handlers run through the stdlib error policy. A failing handler never breaks
   the tooltip or other handlers.
+- With the data system, forbidden tooltips (`tip:IsForbidden()`) are skipped.
+  `TooltipHook` is a class; hooks run in registration order.
 - These are post-hooks only. They cannot suppress or replace tooltip content.
 
 ## Testing

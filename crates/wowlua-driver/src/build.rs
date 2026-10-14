@@ -672,6 +672,19 @@ pub fn build(
                 })
                 .collect(),
             xml_bindings: xml_binding_names(&root),
+            tooltips: flavors
+                .iter()
+                .filter_map(|f| {
+                    let info = wowlua_api::tooltip_info(f)?;
+                    Some((
+                        f.clone(),
+                        wowlua_sema::stdlib::FlavorTooltips {
+                            kinds: info.kinds.into_iter().collect(),
+                            data_system: info.data_system,
+                        },
+                    ))
+                })
+                .collect(),
         },
     };
     let mut api_cache: HashMap<String, Vec<crate::compile::ParsedDeclaration>> = HashMap::new();

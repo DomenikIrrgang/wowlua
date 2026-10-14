@@ -236,6 +236,9 @@ struct Walker<'a> {
     markers: &'a Markers,
     /// Keys known to be defined here (tested by an enclosing guard).
     guards: Vec<Key>,
+    /// The expression being walked is the object of a chain link (`x` in
+    /// `x.f`, `x?.f`, `x(…)`, `x:m()`).
+    link: bool,
     /// Local names imported from the standard library (`wowlua:*`).
     stdlib_imports: HashSet<String>,
 }
@@ -311,6 +314,7 @@ impl<'a> Walker<'a> {
             current: 0,
             markers,
             guards: Vec::new(),
+            link: false,
             stdlib_imports: HashSet::new(),
         }
     }
@@ -495,6 +499,12 @@ impl<'a> Walker<'a> {
     fn test_operand(&mut self, e: &Expr) -> Vec<Key> {
         let start = self.out.uses.len();
         let info = self.expr(e);
+        self.probe(start, e, &info)
+    }
+
+    /// Marks the read of `e` (walked from use `start`, giving `info`) as an
+    /// existence probe.
+    fn probe(&mut self, start: usize, e: &Expr, info: &Info) -> Vec<Key> {
         let plain = matches!(
             e.kind,
             ExprKind::Name(_)
@@ -502,7 +512,7 @@ impl<'a> Walker<'a> {
                 | ExprKind::Index { .. }
                 | ExprKind::OptField { .. }
         );
-        if let Info::Path((key, fields)) = &info
+        if let Info::Path((key, fields)) = info
             && plain
         {
             let key = Key::of_path(key.clone(), fields.clone());
@@ -516,6 +526,16 @@ impl<'a> Walker<'a> {
             return vec![key];
         }
         Vec::new()
+    }
+
+    /// Walks the object of an optional link (`X?.f`, `X?:m()`, `X?.()`): an
+    /// existence probe of X.
+    fn probed(&mut self, e: &Expr) -> Info {
+        let start = self.out.uses.len();
+        let info = self.link(e);
+        let keys = self.probe(start, e, &info);
+        self.guards.extend(keys);
+        info
     }
 
     /// Walks a block with extra guarded keys.
@@ -1128,7 +1148,32 @@ impl<'a> Walker<'a> {
     }
 
     fn expr(&mut self, e: &Expr) -> Info {
-        grow(|| self.expr_inner(e))
+        // The probe of an optional link guards the rest of its chain: its
+        // keys stay guarded until the chain's outermost link is walked.
+        let chain = matches!(
+            e.kind,
+            ExprKind::Field { .. }
+                | ExprKind::OptField { .. }
+                | ExprKind::Index { .. }
+                | ExprKind::OptIndex { .. }
+                | ExprKind::Call { .. }
+                | ExprKind::OptCall { .. }
+                | ExprKind::Method { .. }
+                | ExprKind::OptMethod { .. }
+        );
+        let inner = std::mem::replace(&mut self.link, false);
+        let n = self.guards.len();
+        let info = grow(|| self.expr_inner(e));
+        if chain && !inner {
+            self.guards.truncate(n);
+        }
+        info
+    }
+
+    /// Walks the object of a chain link.
+    fn link(&mut self, e: &Expr) -> Info {
+        self.link = true;
+        self.expr(e)
     }
 
     fn expr_inner(&mut self, e: &Expr) -> Info {
@@ -1158,12 +1203,21 @@ impl<'a> Walker<'a> {
                     Info::Other
                 }
             }
-            ExprKind::Field { obj, name } | ExprKind::OptField { obj, name } => {
-                let o = self.expr(obj);
+            ExprKind::Field { obj, name } => {
+                let o = self.link(obj);
+                self.field(o, name.text.to_string(), name.span)
+            }
+            // `X?.f` probes X: it may be nil.
+            ExprKind::OptField { obj, name } => {
+                let o = self.probed(obj);
                 self.field(o, name.text.to_string(), name.span)
             }
             ExprKind::Index { obj, key } | ExprKind::OptIndex { obj, key } => {
-                let o = self.expr(obj);
+                let o = if matches!(e.kind, ExprKind::OptIndex { .. }) {
+                    self.probed(obj)
+                } else {
+                    self.link(obj)
+                };
                 self.expr(key);
                 match &key.kind {
                     ExprKind::String(s) => {
@@ -1173,7 +1227,11 @@ impl<'a> Walker<'a> {
                 }
             }
             ExprKind::Call { callee, args } | ExprKind::OptCall { callee, args } => {
-                let c = self.expr(callee);
+                let c = if matches!(e.kind, ExprKind::OptCall { .. }) {
+                    self.probed(callee)
+                } else {
+                    self.link(callee)
+                };
                 // `type(X)` tests X's existence.
                 let arg_infos = match (&c, args.exprs().as_slice()) {
                     (Info::Path((Key::Global(g), fields)), [only])
@@ -1220,7 +1278,11 @@ impl<'a> Walker<'a> {
                 Info::Other
             }
             ExprKind::Method { obj, name, args } | ExprKind::OptMethod { obj, name, args } => {
-                let o = self.expr(obj);
+                let o = if matches!(e.kind, ExprKind::OptMethod { .. }) {
+                    self.probed(obj)
+                } else {
+                    self.link(obj)
+                };
                 match &o {
                     Info::Path((k, fields)) => {
                         let mut fields = fields.clone();

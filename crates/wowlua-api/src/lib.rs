@@ -50,6 +50,34 @@ pub fn declarations(flavor: &str) -> Option<[File; 2]> {
     Some([SHARED, own])
 }
 
+/// What a flavor's tooltips offer (spec stdlib "tooltip"): the
+/// `Enum.TooltipDataType` names, and whether the client has the tooltip
+/// data system (`C_TooltipInfo`).
+#[derive(Clone, Debug)]
+pub struct TooltipInfo {
+    pub kinds: Vec<String>,
+    pub data_system: bool,
+}
+
+pub fn tooltip_info(flavor: &str) -> Option<TooltipInfo> {
+    let [_, own] = declarations(flavor)?;
+    let mut kinds = Vec::new();
+    let mut inside = false;
+    for line in own.text.lines() {
+        if line == "    namespace TooltipDataType" {
+            inside = true;
+        } else if inside && line == "    end" {
+            break;
+        } else if inside && let Some(rest) = line.trim_start().strip_prefix("const ") {
+            kinds.push(rest.split(':').next().unwrap_or("").trim().to_string());
+        }
+    }
+    Some(TooltipInfo {
+        kinds,
+        data_system: own.text.contains("declare namespace C_TooltipInfo"),
+    })
+}
+
 /// The APIs a declaration file declares: global functions and globals
 /// (`Name`), namespaces and their members (`Namespace.Member`).
 pub fn declared_names(text: &str) -> std::collections::HashSet<String> {
@@ -98,6 +126,20 @@ pub fn declared_names(text: &str) -> std::collections::HashSet<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn tooltip_kinds_and_data_system() {
+        let camelot = super::tooltip_info("camelot").unwrap();
+        assert!(camelot.data_system);
+        assert!(
+            ["Item", "Spell", "Unit", "Mount"]
+                .iter()
+                .all(|k| camelot.kinds.iter().any(|x| x == k))
+        );
+        let vanilla = super::tooltip_info("vanilla").unwrap();
+        assert!(!vanilla.data_system);
+        assert!(super::tooltip_info("nope").is_none());
+    }
+
     #[test]
     fn names() {
         let names = super::declared_names(

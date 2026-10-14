@@ -1,0 +1,93 @@
+-- wowlua:tooltip: post-hooks on the client's tooltips.
+import onTooltip, hook from "wowlua:tooltip"
+import type TooltipData from "wowlua:tooltip"
+import suite from "/harness"
+
+-- What the hooks saw last, by kind.
+type Seen = { Item?: TooltipData, Spell?: TooltipData, Unit?: TooltipData }
+local seen: Seen = {}
+
+@onTooltip("Item")
+local function item(tip: GameTooltip, data: TooltipData)
+    seen.Item = data
+    tip:AddLine(`StdTest item {data.id}`)
+end
+
+@onTooltip("Spell")
+local function spell(tip: GameTooltip, data: TooltipData)
+    seen.Spell = data
+    tip:AddLine(`StdTest spell {data.id}`)
+end
+
+@onTooltip("Unit")
+local function unit(tip: GameTooltip, data: TooltipData)
+    seen.Unit = data
+    tip:AddLine(`StdTest unit {data.unit}`)
+end
+
+const extra = hook("Item", function(tip: GameTooltip)
+    tip:AddLine("StdTest second")
+end)
+
+-- The tooltip's text, one line each.
+local function lines(): string[]
+    const out: string[] = {}
+    for i = 1, GameTooltip:NumLines() do
+        const left = _G[`GameTooltipTextLeft{i}`]
+        out[#out + 1] = left and left:GetText() or ""
+    end
+    return out
+end
+
+local function shows(text: string): boolean
+    for _, line in ipairs(lines()) do
+        if line == text then
+            return true
+        end
+    end
+    return false
+end
+
+const HEARTHSTONE = 6948
+
+local s = suite("tooltip")
+
+s:test("item, spell and unit tooltips run the hooks", function(t)
+    seen = {}
+    GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+    GameTooltip:SetItemByID(HEARTHSTONE)
+    t:waitFor(function() return seen.Item ~= nil end, 3, "the item hook")
+    t:eq(seen.Item?.id, HEARTHSTONE, "the item's id")
+    t:ok(shows(`StdTest item {HEARTHSTONE}`), "its line is on the tooltip")
+    t:ok(shows("StdTest second"), "and the second hook's")
+    GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+    GameTooltip:SetUnit("player")
+    t:waitFor(function() return seen.Unit ~= nil end, 3, "the unit hook")
+    t:eq(seen.Unit?.unit, "player", "the unit token")
+    -- The GUID may be a secret value: it is never compared.
+    const guid = seen.Unit?.guid
+    t:ok(issecretvalue(guid) or type(guid) == "string", "a GUID")
+    GameTooltip:Hide()
+end)
+
+s:test("a disabled hook adds nothing", function(t)
+    extra:disable()
+    seen = {}
+    GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+    GameTooltip:SetItemByID(HEARTHSTONE)
+    t:waitFor(function() return seen.Item ~= nil end, 3, "the item hook")
+    t:ok(not shows("StdTest second"), "no second line")
+    t:ok(not extra:isEnabled(), "isEnabled")
+    extra:enable()
+    GameTooltip:Hide()
+end)
+
+local g = suite("tooltip (guided)", "guided")
+
+g:test("a real mouseover runs the hooks", function(t)
+    seen = {}
+    t:ask("Mouse over any item in your bags")
+    if t:waitFor(function() return seen.Item ~= nil end, 120, "an item tooltip") then
+        t:ok(type(seen.Item?.id) == "number", `item {seen.Item?.id}`)
+    end
+end)
