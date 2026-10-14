@@ -1,0 +1,77 @@
+-- wowlua:aura: guarded reads and the engine's aura containers. On WoW:
+-- Forever every addon aura read refuses in combat; containers keep working.
+import * as aura from "wowlua:aura"
+import type AuraButton, AuraContainer from "wowlua:aura"
+import flavor from "wowlua:meta"
+import suite, say from "/harness"
+
+local s = suite("aura")
+
+s:test("reads out of combat", function(t)
+    if InCombatLockdown() then
+        t:skip("in combat")
+        return
+    end
+    t:ok(aura.readable("player"), "the player's auras can be read")
+    local count = 0
+    aura.forEach("player", "HELPFUL", function(_: AuraData)
+        count += 1
+        return false
+    end)
+    say(`aura: {count} buff(s) on you`)
+    t:eq(aura.find("player", -1, "HELPFUL"), nil, "no aura with spell -1")
+end)
+
+@if(flavor == "camelot" or flavor == "standard")
+local function containerTests()
+    local initialized = 0
+    local box: AuraContainer? = nil
+
+    local function show(): AuraContainer
+        if box then
+            return box
+        end
+        const holder = CreateFrame("Frame", "StdTestAuraHolder", UIParent)
+        holder:SetSize(200, 40)
+        holder:SetPoint("TOP", UIParent, "TOP", 0, -140)
+        box = aura.container(holder, {
+            unit = "player",
+            anchor = "TOPLEFT",
+            groups = {
+                { key = "buffs", filter = "HELPFUL", max = 8 },
+                {
+                    key = "counted",
+                    filter = "HELPFUL",
+                    max = 1,
+                    initialize = function(button: AuraButton)
+                        initialized += 1
+                        button:SetSize(20, 20)
+                    end,
+                },
+            },
+        })
+        return box
+    end
+
+    s:test("a container takes its groups", function(t)
+        const c = show()
+        t:ok(c.frame ~= nil, "the engine's container")
+        t:ok(#t:errors() == 0, "no group refused")
+        c:release()
+    end)
+
+    const g = suite("aura (guided)", "guided")
+
+    g:test("the engine fills a container", function(t)
+        const c = show()
+        c:setUnit("player")
+        t:ask("Have any buff on you (food, a spell, a scroll); the StdTest aura box is at the top of the screen")
+        if t:waitFor(function() return initialized > 0 end, 120, "a button for a buff") then
+            t:ok(true, "the engine built a button through the group's initializer")
+        end
+        c:release()
+    end)
+end
+
+@if(flavor == "camelot" or flavor == "standard")
+local _containers = containerTests()

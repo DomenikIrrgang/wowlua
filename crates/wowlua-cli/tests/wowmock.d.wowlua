@@ -63,6 +63,13 @@ interface MockClient
     --- Shows a tooltip of `kind` (GameTooltip by default); returns the
     --- lines the post-hooks added.
     tooltip: (name: string) -> any
+    --- Frame types with their own mock class.
+    frameTypes: { [string]: (name: string?, parent: any) -> any }
+    --- Each unit's auras (AuraData tables); reads refuse while restricted.
+    auras: { [string]: table[] }
+    aurasRestricted: boolean
+    auraContainers: any[]
+    auraChanged: (unit: string) -> ()
     --- Units by token (`player`, `target`, `party1`, …): what the unit
     --- functions return; values may be `secret()`s.
     units: { [string]: table }

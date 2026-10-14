@@ -85,39 +85,72 @@ choice.
 
 ## aura
 
-`wowlua:aura` iterates and queries auras.
+`wowlua:aura` reads auras and wraps the engine's aura containers. On
+clients with secret auras (retail 12.x, WoW: Forever) every addon read of
+auras errors in combat ("cannot be accessed when secret while tainted"), in
+the open world too. The reads here are guarded and find nothing then; the
+engine's **aura containers** are the way to show auras in combat: the
+engine fills them, the addon only styles their buttons (decision S26).
 
 ```wowlua
 import * as aura from "wowlua:aura"
 
-for a in aura.each("player", "HELPFUL") do
-    print(a.name, a.applications)
+if aura.readable("player") then
+    for a in aura.each("player", "HELPFUL") do
+        print(a.name, a.applications)
+    end
 end
 
 local debuff = aura.find("target", 589, "HARMFUL|PLAYER")    -- AuraData?
 
-local sub = aura.onChange("player", function(u: UnitToken, changes: AuraChanges?)
+local sub = aura.onChange("player", function(u: UnitToken, changes: UnitAuraUpdateInfo?)
     if changes == nil or changes.isFullUpdate then rescan() else applyDelta(changes) end
 end)
+
+-- Shown in combat too: the engine matches filters and spell lists itself.
+local box = aura.container(frame, {
+    unit = "target",
+    groups = {
+        { key = "mine", filter = "HARMFUL|PLAYER", max = 8 },
+        { key = "curses", filter = "HARMFUL", dispelTypes = { "Curse" } },
+        { key = "tracked", filter = "HELPFUL", spells = { 1459, 21562 } },
+    },
+    size = 26,
+    growth = { "LEFT", "DOWN" },
+})
 ```
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `each` | `(unit: UnitToken, filter: AuraFilter) -> (() -> AuraData?)` | Yields every aura, including ones with secret fields |
+| `readable` | `(unit: UnitToken) -> boolean` | Whether the unit's auras can be read right now (false in combat on clients with secret auras) |
+| `each` | `(unit: UnitToken, filter: AuraFilter) -> (() -> AuraData?)` | Every aura; nothing when they cannot be read. Auras the client hands back as a secret table end the iteration. |
 | `forEach` | `(unit: UnitToken, filter: AuraFilter, fn: (a: AuraData) -> boolean?)` | Allocation-free variant. Returning `true` stops iteration. |
-| `find` | `(unit: UnitToken, spellId: number, filter: AuraFilter) -> AuraData?` | Auras whose `spellId` is not accessible (secret) are **skipped** |
+| `find` | `(unit: UnitToken, spellId: number, filter: AuraFilter) -> AuraData?` | Auras whose `spellId` is secret are **skipped** |
 | `findByName` | `(unit: UnitToken, name: string, filter: AuraFilter) -> AuraData?` | Same skipping rule |
-| `byInstanceId` | `(unit: UnitToken, id: number) -> AuraData?` | Modern clients only. E8300 on flavors without aura instance IDs. |
-| `onChange` | `(unit: UnitToken, fn: (unit: UnitToken, changes: AuraChanges?) -> ()) -> Subscription` | `UNIT_AURA` filtered to `unit`, using a unit-filtered event frame (see [Core: events](core.md#events)). `changes` is the client's update info where available, otherwise `nil` (meaning: full rescan needed). |
+| `byInstanceId` | `(unit: UnitToken, id: number) -> AuraData?` | `nil` when the client refuses |
+| `onChange` | `(unit: UnitToken, fn: (unit: UnitToken, changes: UnitAuraUpdateInfo?) -> ()) -> Subscription` | `UNIT_AURA` filtered to `unit` (a unit-filtered event frame, [Core: events](core.md#events)). `changes` is the client's update info; `nil` or `isFullUpdate` means rescan. |
+| `container` | `(parent: Frame, opts: ContainerOptions) -> AuraContainer` | The engine's container (`CreateFrame("AuraContainer", …, "CustomAuraContainerTemplate")`, loading `Blizzard_AuraContainer`). E8300 on flavors without aura containers. |
+| `ContainerOptions` | `{ unit, groups: AuraGroup[], size?, spacing?, anchor?, growth?, lineWidth? }` | `size` 30 and `spacing` 2 by default; `anchor` the corner icons start from (`"TOPLEFT"`), `growth` `{ "RIGHT", "DOWN" }` by default; `lineWidth` before icons wrap |
+| `AuraGroup` | `{ key, filter, max?, spells?, dispelTypes?, size?, initialize? }` | `max` 16 by default; `spells`/`dispelTypes` become the engine's candidate filters (matched in combat too; spell IDs only where the client permits matching); `initialize(button: AuraButton)` builds each button once |
+| `AuraContainer` | `frame`, `setUnit(unit)`, `refresh()`, `setGroupMax(key, n)`, `setGroupSpells(key, ids?)`, `setFlow(anchor, growth?)`, `setLineWidth(width?)`, `release()` | Containers rescan when their token points at someone new (`PLAYER_TARGET_CHANGED`, `PLAYER_FOCUS_CHANGED`, boss and group changes). Engine containers cannot be freed: `release` parks one (no unit, hidden) until the next `setUnit`. |
+| `AuraButton` | `Button & AuraButtonApi` | The engine's button: `SetIcon`, `SetApplicationCount`, `SetDurationText`, `SetDurationBar`, `SetDurationCooldown`, `AddDispelTypeTexture`, `SetSpellName`, `SetCasterName`, `SetCancelAuraButtons`, `SetHideTooltipInCombat`, `SetTooltipAnchorPoint`. Register regions only in `initialize`; the engine then drives them. |
 
-- **`AuraData`** is the type declared by the flavor's `wow-api` package for
-  `C_UnitAuras` aura data. On clients without `C_UnitAuras`, the module builds
-  `AuraData` tables from the legacy `UnitAura` returns. Fields the legacy API
-  lacks are `nil`, and W8301 lists them.
-- **`AuraFilter`** is a string of `|`-separated tokens (`HELPFUL`, `HARMFUL`,
-  `PLAYER`, `RAID`, `CANCELABLE`, `NOT_CANCELABLE`, `INCLUDE_NAME_PLATE_ONLY`,
-  plus flavor-specific tokens from the flavor table). Literal filters are
-  validated at compile time (E8310).
+- **`AuraData`** is the type the flavor's `wow-api` declarations give
+  `C_UnitAuras` aura data. Every flavor has `C_UnitAuras`, so no legacy
+  `UnitAura` fallback is needed. On clients with secret auras its fields may
+  be secret; the module never compares them.
+- **`AuraFilter`** is a string of `|`-separated words. Each flavor's words
+  come from its client's `AuraUtil.AuraFilters`, extracted into the
+  `AuraFilterWord` type of its `wow-api` declarations (decision S27; `!`
+  negation where the flavor has it). Literal filters are checked for every
+  targeted flavor (E8310); container groups' filters too.
+- **The default button** (no `initialize`) looks like the client's buffs
+  (decisions S17, S28): the icon, the stack count at the bottom right, the
+  engine's duration text below the icon, a debuff-type border on harmful
+  auras, and right click cancels the player's own buffs.
+- Engine calls are guarded: an error inside one would abort the engine's
+  whole button batch. Layout methods renamed between client builds
+  (`SetFlowLayout…`/`SetAuraLayout…`) are tried in turn.
 - Iteration stops at the first missing index, matching the client APIs.
 
 ## spell

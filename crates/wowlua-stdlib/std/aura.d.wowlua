@@ -1,0 +1,13 @@
+-- Compiler behavior of `wowlua:aura` (spec stdlib "aura"): literal filters
+-- are checked against each targeted flavor's words (E8310); `container` is
+-- E8300 on flavors without aura containers.
+@intrinsic("aura.each")
+declare global each: any
+@intrinsic("aura.forEach")
+declare global forEach: any
+@intrinsic("aura.find")
+declare global find: any
+@intrinsic("aura.findByName")
+declare global findByName: any
+@intrinsic("aura.container")
+declare global container: any

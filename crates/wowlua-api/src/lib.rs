@@ -78,6 +78,31 @@ pub fn tooltip_info(flavor: &str) -> Option<TooltipInfo> {
     })
 }
 
+/// The aura filter words a flavor's client accepts (`"!"` when it negates
+/// words): its `AuraFilterWord` type.
+pub fn aura_filter_words(flavor: &str) -> Option<Vec<String>> {
+    let [_, own] = declarations(flavor)?;
+    let line = own
+        .text
+        .lines()
+        .find_map(|l| l.strip_prefix("type AuraFilterWord = "))?;
+    Some(
+        line.split('|')
+            .map(|w| w.trim().trim_matches('"').to_string())
+            .filter(|w| !w.is_empty())
+            .collect(),
+    )
+}
+
+/// Whether a flavor's client has the engine's aura containers
+/// (`CreateFrame("AuraContainer", …)`).
+pub fn has_aura_containers(flavor: &str) -> bool {
+    declarations(flavor).is_some_and(|[_, own]| {
+        own.text
+            .contains("declare global AuraContainerAuraGroupManagerMixin")
+    })
+}
+
 /// The APIs a declaration file declares: global functions and globals
 /// (`Name`), namespaces and their members (`Namespace.Member`).
 pub fn declared_names(text: &str) -> std::collections::HashSet<String> {
@@ -126,6 +151,16 @@ pub fn declared_names(text: &str) -> std::collections::HashSet<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn aura_filter_words_and_containers() {
+        let camelot = super::aura_filter_words("camelot").unwrap();
+        assert!(camelot.iter().any(|w| w == "!") && camelot.iter().any(|w| w == "DISPELLABLE"));
+        let vanilla = super::aura_filter_words("vanilla").unwrap();
+        assert!(!vanilla.iter().any(|w| w == "!") && vanilla.iter().any(|w| w == "HARMFUL"));
+        assert!(super::has_aura_containers("camelot") && super::has_aura_containers("standard"));
+        assert!(!super::has_aura_containers("vanilla"));
+    }
+
     #[test]
     fn tooltip_kinds_and_data_system() {
         let camelot = super::tooltip_info("camelot").unwrap();

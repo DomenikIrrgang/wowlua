@@ -47,6 +47,11 @@ pub struct Module {
 /// `@intrinsic` declarations.
 const MODULES: &[(&str, &str, Option<&str>)] = &[
     (
+        "aura",
+        include_str!("../std/aura.wowlua"),
+        Some(include_str!("../std/aura.d.wowlua")),
+    ),
+    (
         "bindings",
         include_str!("../std/bindings.wowlua"),
         Some(include_str!("../std/bindings.d.wowlua")),

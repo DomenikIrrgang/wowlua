@@ -672,6 +672,19 @@ pub fn build(
                 })
                 .collect(),
             xml_bindings: xml_binding_names(&root),
+            auras: flavors
+                .iter()
+                .filter_map(|f| {
+                    let words = wowlua_api::aura_filter_words(f)?;
+                    Some((
+                        f.clone(),
+                        wowlua_sema::stdlib::FlavorAuras {
+                            words: words.into_iter().collect(),
+                            containers: wowlua_api::has_aura_containers(f),
+                        },
+                    ))
+                })
+                .collect(),
             tooltips: flavors
                 .iter()
                 .filter_map(|f| {

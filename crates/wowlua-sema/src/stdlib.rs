@@ -24,6 +24,16 @@ pub struct StdlibConfig {
     pub xml_bindings: HashSet<String>,
     /// The targeted flavors' tooltips (`wowlua:tooltip` kinds), by flavor.
     pub tooltips: Vec<(String, FlavorTooltips)>,
+    /// The targeted flavors' auras (`wowlua:aura`), by flavor.
+    pub auras: Vec<(String, FlavorAuras)>,
+}
+
+/// What a flavor's auras offer: the filter words its client accepts
+/// (`"!"` when it negates them), and whether it has aura containers.
+#[derive(Clone, Debug, Default)]
+pub struct FlavorAuras {
+    pub words: HashSet<String>,
+    pub containers: bool,
 }
 
 /// What a flavor's tooltips offer: its `Enum.TooltipDataType` names, and
@@ -167,6 +177,8 @@ struct Ctx<'a> {
     removed: bool,
     /// The flavor of this compilation (split mode), else all targeted ones.
     flavor: Option<String>,
+    /// Statements `@if` removes in this build: calls inside are not checked.
+    removed_spans: Vec<Span>,
 }
 
 /// Whether `name` is a valid keybinding name (E8352).
@@ -476,6 +488,115 @@ impl Ctx<'_> {
         }
     }
 
+    /// The targeted flavors of this compilation's aura facts.
+    fn aura_flavors(&self) -> Vec<&(String, FlavorAuras)> {
+        self.config
+            .auras
+            .iter()
+            .filter(|(f, _)| self.flavor.as_ref().is_none_or(|x| x == f))
+            .collect()
+    }
+
+    /// A literal aura filter: every word known to every flavor of this
+    /// compilation, `!` only where the flavor negates (E8310).
+    fn aura_filter(&mut self, e: &Expr) {
+        let Some(filter) = self.constant_string(e) else {
+            return;
+        };
+        let flavors = self.aura_flavors();
+        if flavors.is_empty() {
+            return;
+        }
+        let mut problems: Vec<String> = Vec::new();
+        for raw in filter.split('|') {
+            let word = raw.strip_prefix('!').unwrap_or(raw);
+            if word.is_empty() {
+                problems.push(format!("`{filter}` has an empty word"));
+                continue;
+            }
+            if !self
+                .config
+                .auras
+                .iter()
+                .any(|(_, a)| a.words.contains(word))
+            {
+                problems.push(format!("`{word}` is not an aura filter word"));
+                continue;
+            }
+            let lacking: Vec<&str> = flavors
+                .iter()
+                .filter(|(_, a)| {
+                    !a.words.contains(word) || (raw.starts_with('!') && !a.words.contains("!"))
+                })
+                .map(|(f, _)| f.as_str())
+                .collect();
+            if !lacking.is_empty() {
+                problems.push(format!("`{raw}` is not a filter on {}", lacking.join(", ")));
+            }
+        }
+        for message in problems {
+            self.error("E8310", e.span, message, "in this aura filter");
+        }
+    }
+
+    /// `aura.container(parent, { groups = { … } })`: the groups' filters
+    /// (E8310), on flavors with aura containers (E8300).
+    fn aura_container(&mut self, e: &Expr, args: &[&Expr]) {
+        if self.removed {
+            return;
+        }
+        let lacking: Vec<String> = self
+            .aura_flavors()
+            .iter()
+            .filter(|(_, a)| !a.containers)
+            .map(|(f, _)| f.clone())
+            .collect();
+        if !lacking.is_empty() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E8300",
+                    format!(
+                        "`aura.container` needs aura containers, which {} lack",
+                        lacking.join(", ")
+                    ),
+                )
+                .with_label(e.span, "not on every targeted flavor")
+                .with_help(
+                    "guard it with `@if(flavor == …)`, or read auras with `aura.each` there",
+                ),
+            );
+        }
+        let Some(ExprKind::Table(fields)) = args.get(1).map(|a| &a.kind) else {
+            return;
+        };
+        for f in fields {
+            let TableField::Named { name, value, .. } = f else {
+                continue;
+            };
+            if name.text.as_ref() != "groups" {
+                continue;
+            }
+            let ExprKind::Table(groups) = &value.kind else {
+                continue;
+            };
+            for g in groups {
+                let TableField::Positional(group) = g else {
+                    continue;
+                };
+                let ExprKind::Table(group_fields) = &group.kind else {
+                    continue;
+                };
+                for gf in group_fields {
+                    if let TableField::Named { name, value, .. } = gf
+                        && name.text.as_ref() == "filter"
+                    {
+                        self.aura_filter(value);
+                    }
+                }
+            }
+        }
+    }
+
     /// A tooltip kind: known (E8330) and available on every flavor of this
     /// compilation (E8300).
     fn tooltip_kind(&mut self, e: &Expr) {
@@ -619,6 +740,17 @@ impl Ctx<'_> {
             }
             "saved.bind" => self.bind(e, &args),
             "bindings.header" => self.binding_header(e, &args, top),
+            "aura.each" | "aura.forEach" => {
+                if let Some(f) = args.get(1) {
+                    self.aura_filter(f);
+                }
+            }
+            "aura.find" | "aura.findByName" => {
+                if let Some(f) = args.get(2) {
+                    self.aura_filter(f);
+                }
+            }
+            "aura.container" => self.aura_container(e, &args),
             "tooltip.hook" => {
                 if let Some(first) = args.first() {
                     self.tooltip_kind(first);
@@ -943,6 +1075,7 @@ pub fn check(
         consts: HashMap::new(),
         removed: false,
         flavor: meta.and_then(|m| m.flavor.clone()),
+        removed_spans: Vec::new(),
     };
     for f in files {
         let Some(parse) = f.parse else { continue };
@@ -1026,6 +1159,9 @@ pub fn check(
                         .is_some_and(|c| !c.truthy())
                 })
             });
+            if ctx.removed {
+                ctx.removed_spans.push(s.span);
+            }
             match &inner.kind {
                 StmtKind::LocalFunction { func, .. } | StmtKind::Function { func, .. } => {
                     ctx.decorators(&bound, &s.decorators, false, Some(func), at_top);
@@ -1072,8 +1208,15 @@ pub fn check(
             })
             .collect();
         for e in calls {
-            ctx.call(&bound, e, top_calls.contains(&(e as *const Expr)));
+            let removed = ctx
+                .removed_spans
+                .iter()
+                .any(|r| r.file == e.span.file && r.start <= e.span.start && e.span.end <= r.end);
+            if !removed {
+                ctx.call(&bound, e, top_calls.contains(&(e as *const Expr)));
+            }
         }
+        ctx.removed_spans.clear();
     }
     let refs = std::mem::take(&mut ctx.keybinding_refs);
     for (name, span) in refs {

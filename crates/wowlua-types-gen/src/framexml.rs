@@ -8,6 +8,35 @@ use quick_xml::events::Event;
 use std::collections::HashSet;
 use wowlua_syntax::ast::*;
 
+/// The aura filter words of `AuraUtil.AuraFilters` in the UI code (`!`
+/// when the flavor negates words), sorted.
+pub fn aura_filter_words(ui_lua: &[(String, String)]) -> Vec<String> {
+    let mut words = std::collections::BTreeSet::new();
+    for (_, text) in ui_lua {
+        let Some(at) = text.find("AuraUtil.AuraFilters =") else {
+            continue;
+        };
+        let rest = &text[at..];
+        let (Some(open), Some(close)) = (rest.find('{'), rest.find("\n}")) else {
+            continue;
+        };
+        for part in rest[open..close].split('"').skip(1).step_by(2) {
+            if !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|b| b.is_ascii_uppercase() || b == b'_' || b == b'!')
+            {
+                words.insert(part.trim_start_matches('!').to_string());
+                if part.starts_with('!') {
+                    words.insert("!".to_string());
+                }
+            }
+        }
+    }
+    words.remove("");
+    words.into_iter().collect()
+}
+
 /// The globals of one flavor's UI code: name → type text.
 pub fn globals(
     lua: &[(String, String)],

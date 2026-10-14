@@ -423,8 +423,17 @@ class MockFrame
 end
 
 -- (The client's CreateFrame has an overload per frame type.)
+--- Frame types with their own mock class (`kind` → constructor).
+Mock.frameTypes = {}
+
 CreateFrame = (function(kind: string, name: string?, parent: any, _template: string?): MockFrame
-    local f = MockFrame.new(kind, name, parent)
+    const make = Mock.frameTypes[kind]
+    local f: MockFrame
+    if make then
+        f = make(name, parent)
+    else
+        f = MockFrame.new(kind, name, parent)
+    end
     Mock.frames[#Mock.frames + 1] = f :: any
     if name then
         _G[name] = f
@@ -1149,6 +1158,140 @@ CreateColorFromHexString = (function(hex: string): colorRGBA
     end
     return CreateColor(part(3), part(5), part(7), part(1))
 end) :: any
+
+-- Auras (C_UnitAuras) and the engine's aura containers ----------------------------
+
+--- Each unit's auras, as AuraData tables (any field may be a secret).
+Mock.auras = {}
+--- Reads refuse, as on clients with secret auras in combat.
+Mock.aurasRestricted = false
+
+local function auraMatches(a: table, filter: string?): boolean
+    for word in (filter ?? ""):gmatch("[^|]+") do
+        if word == "HELPFUL" and not a.isHelpful then return false end
+        if word == "HARMFUL" and not a.isHarmful then return false end
+        if word == "PLAYER" and not a.isFromPlayerOrPlayerPet then return false end
+        if word == "!PLAYER" and a.isFromPlayerOrPlayerPet then return false end
+    end
+    return true
+end
+
+local function aurasOf(unit: string, filter: string?): table[]
+    if Mock.aurasRestricted then
+        error("Auras cannot be accessed when secret while tainted")
+    end
+    const out: table[] = {}
+    for _, a in ipairs(Mock.auras[unit] ?? {}) do
+        if auraMatches(a, filter) then
+            out[#out + 1] = a
+        end
+    end
+    return out
+end
+
+C_UnitAuras = {} :: any
+function C_UnitAuras.GetAuraDataByIndex(unit: string, index: number, filter: string?): any
+    return aurasOf(unit, filter)[index]
+end
+function C_UnitAuras.GetAuraDataByAuraInstanceID(unit: string, id: number): any
+    for _, a in ipairs(aurasOf(unit, nil)) do
+        if a.auraInstanceID == id then
+            return a
+        end
+    end
+    return nil
+end
+
+--- An engine aura button: what was registered with it.
+class MockAuraButton extends MockFrame
+    icon?: any
+    count?: any
+    durationText?: any
+    dispel: any[] = {}
+    cancel?: string
+
+    constructor(parent: any)
+        super("AuraButton", nil, parent)
+    end
+
+    function SetIcon(texture: any) self.icon = texture end
+    function SetApplicationCount(fs: any, _: table?) self.count = fs end
+    function SetDurationText(fs: any, _: table?) self.durationText = fs end
+    function AddDispelTypeTexture(texture: any, _: table?) self.dispel[#self.dispel + 1] = texture end
+    function SetCancelAuraButtons(buttons: string?) self.cancel = buttons end
+end
+
+--- The engine's container: groups filled from `Mock.auras` on UpdateAllAuras.
+class MockAuraContainer extends MockFrame
+    unit?: string
+    groups: table[] = {}
+    --- What each group shows: spell IDs, by group key.
+    showing: { [string]: number[] } = {}
+
+    constructor(name: string?, parent: any)
+        super("AuraContainer", name, parent)
+    end
+
+    function SetUnit(unit: string) self.unit = unit end
+    function SetFlowLayoutAnchorPoint(_: string) end
+    function SetFlowLayoutGrowthDirection(_: any, _: any) end
+    function SetFlowLayoutMaximumLineSize(_: number?) end
+
+    function AddAuraGroup(key: string, filter: string, options: table)
+        if key == "" then
+            error("groupKey must be a non-empty string.")
+        end
+        self.groups[#self.groups + 1] = { key = key, filter = filter, options = options, buttons = {} }
+    end
+
+    private function group(key: string): table
+        for _, g in ipairs(self.groups) do
+            if g.key == key then return g end
+        end
+        error(`aura group '{key}' was not found with this key.`)
+    end
+
+    function SetAuraGroupMaxFrameCount(key: string, max: number) self:group(key).options.maxFrameCount = max end
+    function SetAuraGroupCandidateFilters(key: string, filters: table) self:group(key).options.candidateFilters = filters end
+
+    -- The engine reads auras itself: restricted reads do not stop it.
+    function UpdateAllAuras()
+        for _, g in ipairs(self.groups) do
+            const ids: number[] = {}
+            const filters = g.options.candidateFilters ?? {}
+            for _, a in ipairs(Mock.auras[self.unit ?? ""] ?? {}) do
+                const spells = filters.includeSpellIDs
+                const types = filters.includeDispelTypes
+                if auraMatches(a, g.filter) and #ids < (g.options.maxFrameCount ?? 16)
+                    and (not spells or spells[a.spellId]) and (not types or types[a.dispelName ?? ""]) then
+                    ids[#ids + 1] = a.spellId
+                    if not g.buttons[#ids] then
+                        const button = MockAuraButton.new(self)
+                        g.buttons[#ids] = button
+                        g.options.initializeFrame?.(button)
+                    end
+                end
+            end
+            self.showing[g.key] = ids
+        end
+    end
+end
+
+Mock.auraContainers = {}
+Mock.frameTypes.AuraContainer = function(name: string?, parent: any): any
+    const c = MockAuraContainer.new(name, parent)
+    Mock.auraContainers[#Mock.auraContainers + 1] = c
+    return c
+end
+
+--- The unit's auras changed: the engine updates its containers for it.
+function Mock.auraChanged(unit: string)
+    for _, c in ipairs(Mock.auraContainers) do
+        if c.unit == unit then
+            c:UpdateAllAuras()
+        end
+    end
+end
 
 -- The client's class and item quality colors (a few).
 RAID_CLASS_COLORS = {

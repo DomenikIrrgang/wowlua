@@ -325,6 +325,31 @@ pub fn generate(
             d.globals.entry(name).or_insert(ty);
         }
     }
+    // The aura filter words each flavor's UI code accepts (wowlua:aura
+    // checks literal filters against them); a flavor without the table
+    // takes the words every other flavor has.
+    let words: Vec<Vec<String>> = flavors
+        .iter()
+        .map(|f| framexml::aura_filter_words(&f.ui_lua))
+        .collect();
+    let known: Vec<&Vec<String>> = words.iter().filter(|w| !w.is_empty()).collect();
+    let fallback: Vec<String> = known
+        .first()
+        .map(|first| {
+            first
+                .iter()
+                .filter(|w| known.iter().all(|k| k.contains(w)))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    for ((_, _, d), w) in per_flavor.iter_mut().zip(&words) {
+        let w = if w.is_empty() { &fallback } else { w };
+        if !w.is_empty() {
+            let union: Vec<String> = w.iter().map(|x| format!("{x:?}")).collect();
+            d.aliases.insert("AuraFilterWord".into(), union.join(" | "));
+        }
+    }
     let shared_defs = shared.defined_types();
     let shared_refs = shared.referenced_types();
     let mut out_flavors = Vec::new();

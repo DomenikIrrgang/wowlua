@@ -2288,6 +2288,9 @@ end
 Mock.fire("PLAYER_LOGIN")
 Mock.fire("PLAYER_ENTERING_WORLD", true, false)
 Mock.slash("/stdtest")
+Mock.awaitText("Have any buff on you")
+Mock.auras.player = { { name = "Well Fed", spellId = 19705, auraInstanceID = 9, isHelpful = true, applications = 0 } }
+Mock.auraChanged("player")
 Mock.awaitText("Press and release CTRL-SHIFT-K")
 Mock.pressKey("CTRL-SHIFT-K")
 Mock.awaitText("Enter combat")
@@ -3278,6 +3281,173 @@ UnitHealthPercent = function(u, predicted, curve) print("native", u, curve) retu
         "Mock.loadAddon(\"Std\")\nprint(issecretvalue(StdUnit.healthPercent(\"player\")))\n",
     );
     assert_eq!(plain(&out), ["native player scale", "true"]);
+}
+
+// ------------------------------------------------------------------- aura --
+
+const AURA_SETUP: &str = r#"Mock.auras.player = {
+    { name = "Arcane Intellect", spellId = 1459, auraInstanceID = 1, isHelpful = true, isFromPlayerOrPlayerPet = true, applications = 0 },
+    { name = "Thorns", spellId = 467, auraInstanceID = 2, isHelpful = true, isFromPlayerOrPlayerPet = false, applications = 0 },
+    { name = Mock.secret(), spellId = Mock.secret(), auraInstanceID = 3, isHelpful = true, isFromPlayerOrPlayerPet = false, applications = 0 },
+    { name = "Curse of Agony", spellId = 980, auraInstanceID = 4, isHarmful = true, dispelName = "Curse", applications = 3 },
+    { name = "Frostbolt", spellId = 116, auraInstanceID = 5, isHarmful = true, dispelName = "Magic", applications = 0 },
+}"#;
+
+/// Literal aura filters are checked per targeted flavor (E8310), and
+/// containers need a flavor with aura containers (E8300).
+#[test]
+fn aura_filters_and_containers_are_checked_per_flavor() {
+    let check_in = |flavors: &str, body: &str| {
+        let dir = project(&[(
+            "src/main.wowlua",
+            &format!("import * as aura from \"wowlua:aura\"\n{body}"),
+        )]);
+        fs::write(
+            dir.path().join("wowlua.json"),
+            format!(r#"{{ "package": {{ "name": "std", "version": "1.0.0" }}, "flavors": {{ {flavors} }}, "build": {{ "flavor-mode": "split" }} }}"#),
+        )
+        .unwrap();
+        let assert = wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .assert();
+        String::from_utf8_lossy(&assert.get_output().stderr).into_owned()
+    };
+    let both = r#""camelot": {}, "vanilla": {}"#;
+    let out = check_in(both, "print(aura.find(\"player\", 1, \"HELPFUL|BOGUS\"))\n");
+    assert!(out.contains("E8310") && out.contains("BOGUS"), "{out}");
+    let out = check_in(both, "print(aura.each(\"player\", \"HARMFUL|!PLAYER\"))\n");
+    assert!(out.contains("E8310") && out.contains("vanilla"), "{out}");
+    let out = check_in(
+        r#""camelot": {}"#,
+        "print(aura.each(\"player\", \"HARMFUL|!PLAYER|DISPELLABLE\"))\n",
+    );
+    assert!(!out.contains("E8310"), "{out}");
+    let out = check_in(
+        both,
+        "local c = aura.container(UIParent, { unit = \"player\", groups = { { key = \"b\", filter = \"HELPFUL\" } } })\nprint(c)\n",
+    );
+    assert!(out.contains("E8300") && out.contains("vanilla"), "{out}");
+    let out = check_in(
+        both,
+        "import flavor from \"wowlua:meta\"\n@if(flavor == \"camelot\")\nlocal function show()\n    aura.container(UIParent, { unit = \"player\", groups = { { key = \"b\", filter = \"HELPFUL|IMPORTANT\" } } })\nend\n",
+    );
+    assert!(!out.contains("E8300") && !out.contains("E8310"), "{out}");
+}
+
+/// `wowlua:aura`: guarded reads (nothing found when the client refuses),
+/// secret IDs skipped, change notifications.
+#[test]
+fn aura_reads_are_guarded() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as aura from \"wowlua:aura\"\n_G.StdAura = aura\n",
+        )],
+        AURA_SETUP,
+        r#"Mock.loadAddon("Std")
+local aura = StdAura
+local names = {}
+for a in aura.each("player", "HELPFUL") do names[#names + 1] = issecretvalue(a.name) and "<secret>" or a.name end
+print(table.concat(names, ", "))
+local mine = 0
+aura.forEach("player", "HELPFUL|PLAYER", function(a) mine = mine + 1 end)
+print("mine", mine)
+print(aura.find("player", 467, "HELPFUL").name, aura.find("player", 999, "HELPFUL"), aura.findByName("player", "Curse of Agony", "HARMFUL").applications)
+print(aura.byInstanceId("player", 5).name, aura.readable("player"))
+local stops = 0
+aura.forEach("player", "HARMFUL", function(a) stops = stops + 1 return true end)
+print("stopped after", stops)
+-- In combat on restricted clients every read refuses: nothing, no error.
+Mock.aurasRestricted = true
+print(aura.readable("player"), aura.each("player", "HELPFUL")(), aura.find("player", 467, "HELPFUL"), aura.byInstanceId("player", 1))
+Mock.aurasRestricted = false
+Mock.events.UNIT_AURA = true
+aura.onChange("player", function(u, changes) print("changed", u, changes and changes.isFullUpdate) end)
+Mock.fire("UNIT_AURA", "player", { isFullUpdate = true })
+Mock.fire("UNIT_AURA", "target", { isFullUpdate = true })
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "Arcane Intellect, Thorns, <secret>",
+            "mine 1",
+            "Thorns nil 3",
+            "Frostbolt true",
+            "stopped after 1",
+            "false nil nil nil",
+            "changed player true",
+        ]
+    );
+}
+
+/// `aura.container`: the engine's container with filter groups, spell and
+/// dispel-type lists, the client look, working while reads refuse.
+#[test]
+fn aura_containers_are_filled_by_the_engine() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as aura from "wowlua:aura"
+import type AuraButton from "wowlua:aura"
+local c = aura.container(UIParent, {
+    unit = "player",
+    groups = {
+        { key = "buffs", filter = "PLAYER|HELPFUL" },
+        { key = "tracked", filter = "HELPFUL", spells = { 467 } },
+        { key = "curses", filter = "HARMFUL", dispelTypes = { "Curse" } },
+        { key = "custom", filter = "HARMFUL", max = 1, initialize = function(_: AuraButton) print("custom button") end },
+    },
+})
+_G.StdContainer = c
+"#,
+        )],
+        AURA_SETUP,
+        r#"Mock.loadAddon("Std")
+local c = StdContainer
+local engine = c.frame
+for _, g in ipairs(engine.groups) do print(g.key, g.filter) end
+local function show()
+    for _, key in ipairs({ "buffs", "tracked", "curses", "custom" }) do
+        print(key, table.concat(engine.showing[key], " "))
+    end
+end
+show()
+local curse = engine.groups[3].buttons[1]
+print("look", curse.icon ~= nil, curse.count ~= nil, curse.durationText ~= nil, #curse.dispel, engine.groups[1].buttons[1].cancel)
+-- The engine keeps working when addon reads refuse.
+Mock.aurasRestricted = true
+c:setGroupSpells("tracked", { 1459, 467 })
+c:refresh()
+print("tracked", table.concat(engine.showing.tracked, " "))
+c:setGroupMax("buffs", 0)
+c:refresh()
+print("buffs", #engine.showing.buffs)
+c:release()
+print("released", engine.unit, engine.shown)
+c:setUnit("target")
+print("again", engine.unit, engine.shown)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "custom button",
+            "buffs HELPFUL|PLAYER",
+            "tracked HELPFUL",
+            "curses HARMFUL",
+            "custom HARMFUL",
+            "buffs 1459",
+            "tracked 467",
+            "curses 980",
+            "custom 980",
+            "look true true true 1 RightButtonUp",
+            "tracked 1459 467",
+            "buffs 0",
+            "released none false",
+            "again target true",
+        ]
+    );
 }
 
 // ------------------------------------------------------------------ color --

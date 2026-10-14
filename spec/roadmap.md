@@ -353,7 +353,11 @@ menus and lists, then the widget themes.
   (`SecretArguments`) take `Secret<T>`, widget setters included. `unit` done
   2026-10-14 (records with secrets passed through, WoW: Forever's
   first-and-surname names, the client's health percentage, group tokens;
-  the mock client models units).
+  the mock client models units); `aura` done 2026-10-14 (guarded reads
+  with `readable`, the engine's aura containers with filter groups, spell
+  and dispel-type lists and the client's buff look, filter words per
+  flavor E8310, containers E8300; decisions S27, S28; the mock client has
+  auras and containers).
 
 ## M9: Test runner, language server, formatter
 

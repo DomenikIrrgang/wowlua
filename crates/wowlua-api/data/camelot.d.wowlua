@@ -963,6 +963,7 @@ type PetbattleTrapstatus = number
 type PetbattleType = number
 type TransmogIllisionFlags = number
 type VoiceTtsDestination = number
+type AuraFilterWord = "!" | "BIG_DEFENSIVE" | "CANCELABLE" | "CROWD_CONTROL" | "DISPELLABLE" | "EXTERNAL_DEFENSIVE" | "HARMFUL" | "HELPFUL" | "IMPORTANT" | "INCLUDE_NAME_PLATE_ONLY" | "MAW" | "NOT_CANCELABLE" | "PLAYER" | "RAID" | "RAID_IN_COMBAT" | "RAID_PLAYER_DISPELLABLE"
 type AccountStoreCategoryType = any
 type AccountStoreItemFlag = any
 type AccountStoreItemMode = any

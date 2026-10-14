@@ -1,0 +1,389 @@
+-- wowlua:aura (spec stdlib "aura"): aura queries, and the engine's aura
+-- containers. On clients with secret auras (retail 12.x, WoW: Forever)
+-- every addon read errors in combat; the reads here are guarded and simply
+-- find nothing then (`readable` says when), and containers are the way to
+-- show auras in combat: the engine fills them, addons only style the
+-- buttons (decision S26).
+import * as secret from "wowlua:secret"
+import onUnit from "wowlua:events"
+import type Subscription from "wowlua:events"
+import report from "wowlua:errors"
+
+--- `|`-separated filter words (`"HARMFUL|PLAYER"`); literal filters are
+--- checked against each targeted flavor (E8310).
+export type AuraFilter = string
+
+-- Reads ------------------------------------------------------------------------
+
+-- One aura, or nil when there is none, the client refuses (secret auras in
+-- combat) or hands back a secret table.
+local function read(unit: UnitToken, index: number, filter: AuraFilter): AuraData?
+    local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, filter)
+    if not ok or secret.isSecret(a) then
+        return nil
+    end
+    return a
+end
+
+--- Whether the unit's auras can be read right now (false in combat on
+--- clients with secret auras).
+export function readable(unit: UnitToken): boolean
+    local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, unit, 1, "HELPFUL")
+    return ok and not secret.isSecret(a)
+end
+
+--- Every aura matching `filter`; nothing when they cannot be read.
+export function each(unit: UnitToken, filter: AuraFilter): () -> AuraData?
+    local i = 0
+    return function(): AuraData?
+        i += 1
+        return read(unit, i, filter)
+    end
+end
+
+--- `fn` for each aura until it returns true (no iterator allocated).
+export function forEach(unit: UnitToken, filter: AuraFilter, fn: (a: AuraData) -> boolean?)
+    local i = 1
+    while true do
+        const a = read(unit, i, filter)
+        if not a or fn(a) == true then
+            return
+        end
+        i += 1
+    end
+end
+
+--- The first aura with this spell ID; auras whose ID is secret are skipped.
+export function find(unit: UnitToken, spellId: number, filter: AuraFilter): AuraData?
+    local i = 1
+    while true do
+        const a = read(unit, i, filter)
+        if not a then
+            return nil
+        end
+        const id = a.spellId
+        if not secret.isSecret(id) and id == spellId then
+            return a
+        end
+        i += 1
+    end
+end
+
+--- The first aura with this name; auras whose name is secret are skipped.
+export function findByName(unit: UnitToken, name: string, filter: AuraFilter): AuraData?
+    local i = 1
+    while true do
+        const a = read(unit, i, filter)
+        if not a then
+            return nil
+        end
+        const n = a.name
+        if not secret.isSecret(n) and n == name then
+            return a
+        end
+        i += 1
+    end
+end
+
+--- An aura by its instance ID (from `UNIT_AURA`'s changes).
+export function byInstanceId(unit: UnitToken, id: number): AuraData?
+    local ok, a = pcall(C_UnitAuras.GetAuraDataByAuraInstanceID, unit, id)
+    if not ok or secret.isSecret(a) then
+        return nil
+    end
+    return a
+end
+
+--- `fn` when the unit's auras change: `changes` is the client's update
+--- (nil, or `isFullUpdate`, means rescan).
+export function onChange(unit: UnitToken, fn: (unit: UnitToken, changes: UnitAuraUpdateInfo?) -> ()): Subscription
+    return onUnit("UNIT_AURA", { unit }, function(u: UnitToken, changes: UnitAuraUpdateInfo?)
+        fn(u, changes)
+    end)
+end
+
+-- Containers -------------------------------------------------------------------
+
+--- The setters of the engine's aura buttons (call them in `initialize`;
+--- the engine then drives what they show, secrets and combat included).
+export interface AuraButtonApi
+    function SetIcon(texture: Texture)
+    function SetApplicationCount(fontString: FontString, options: table?)
+    function SetDurationText(fontString: FontString, options: table?)
+    function SetDurationBar(statusBar: StatusBar, options: table?)
+    function SetDurationCooldown(cooldown: Cooldown)
+    function AddDispelTypeTexture(texture: Texture, options: table?)
+    function SetSpellName(fontString: FontString)
+    function SetCasterName(fontString: FontString, options: table?)
+    function SetCancelAuraButtons(buttons: string?)
+    function SetHideTooltipInCombat(hide: boolean)
+    function SetTooltipAnchorPoint(point: FramePoint, x: number?, y: number?)
+end
+
+--- An engine aura button.
+export type AuraButton = Button & AuraButtonApi
+
+export type AuraGroup = {
+    key: string,
+    filter: AuraFilter,
+    --- Buttons at most (default 16).
+    max?: number,
+    --- Only these spell IDs (the engine matches them, in combat too).
+    spells?: number[],
+    --- Only debuffs of these types (`"Magic"`, `"Curse"`, …).
+    dispelTypes?: string[],
+    --- Icon size (default: the container's).
+    size?: number,
+    --- Builds each button once; default: the client's buff look.
+    initialize?: (button: AuraButton) -> (),
+}
+
+export type ContainerOptions = {
+    unit: UnitToken,
+    groups: AuraGroup[],
+    --- Icon size (default 30) and the space between icons (default 2).
+    size?: number,
+    spacing?: number,
+    --- The corner icons start from (default "TOPLEFT"), and the directions
+    --- they grow (default { "RIGHT", "DOWN" }).
+    anchor?: FramePoint,
+    growth?: string[],
+    --- Width before icons wrap to the next line (default: never).
+    lineWidth?: number,
+}
+
+--- A container: the engine's frame and what can change later.
+export interface AuraContainer
+    readonly frame: Frame
+    function setUnit(unit: UnitToken)
+    function refresh()
+    function setGroupMax(key: string, max: number)
+    function setGroupSpells(key: string, spells: number[]?)
+    function setFlow(anchor: FramePoint, growth: string[]?)
+    function setLineWidth(width: number?)
+    --- Hidden, without a unit and deaf until the next `setUnit` (engine
+    --- containers cannot be freed: keep released ones for reuse).
+    function release()
+end
+
+-- What the engine's container answers to (names that changed between
+-- client builds are tried in turn).
+interface Engine
+    function AddAuraGroup(key: string, filter: string, options: table)
+    function SetAuraGroupMaxFrameCount(key: string, max: number)
+    function SetAuraGroupCandidateFilters(key: string, filters: table)
+    function SetUnit(unit: string)
+    function UpdateAllAuras()
+end
+
+type EngineFrame = Frame & Engine
+
+const DEBUFF_BORDER = "Interface\\Buttons\\UI-Debuff-Overlays"
+
+-- Calls the first method of `names` the container has; false if none
+-- worked.
+local function call(target: table, names: string[], ...: any): boolean
+    for _, name in ipairs(names) do
+        const f = target[name]
+        if f then
+            const ok = pcall(f, target, ...)
+            return ok
+        end
+    end
+    return false
+end
+
+-- Engine filters are parsed per exact string: the polarity first, then the
+-- other words sorted, so equal filters share one scan.
+local function canonical(filter: AuraFilter): string
+    local polarity: string? = nil
+    const rest: string[] = {}
+    for word in filter:gmatch("[^|]+") do
+        if word == "HELPFUL" or word == "HARMFUL" then
+            polarity = word
+        else
+            rest[#rest + 1] = word
+        end
+    end
+    table.sort(rest)
+    if polarity and #rest > 0 then
+        return `{polarity}|{table.concat(rest, "|")}`
+    end
+    return polarity ?? table.concat(rest, "|")
+end
+
+local function set(list: any[]?): { [any]: boolean }?
+    if not list then
+        return nil
+    end
+    const out: { [any]: boolean } = {}
+    for _, v in ipairs(list) do
+        out[v] = true
+    end
+    return out
+end
+
+local function candidates(group: AuraGroup): table
+    const filters: table = {}
+    filters.includeSpellIDs = set(group.spells)
+    filters.includeDispelTypes = set(group.dispelTypes)
+    return filters
+end
+
+-- The client's buff look: the icon, the stack count at the bottom right,
+-- the engine's duration text below, and a debuff-type border on harmful
+-- auras; right click cancels own buffs.
+local function clientLook(group: AuraGroup, size: number): (button: AuraButton) -> ()
+    const harmful = group.filter:find("HARMFUL", 1, true) ~= nil
+    return function(button: AuraButton)
+        button:SetSize(size, size)
+        const icon = button:CreateTexture(nil, "ARTWORK")
+        icon:SetAllPoints()
+        pcall(button.SetIcon, button, icon)
+        const count = button:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+        count:SetPoint("BOTTOMRIGHT", -1, 1)
+        pcall(button.SetApplicationCount, button, count)
+        const duration = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        duration:SetPoint("TOP", button, "BOTTOM", 0, -1)
+        pcall(button.SetDurationText, button, duration)
+        if harmful then
+            const border = button:CreateTexture(nil, "OVERLAY")
+            border:SetPoint("TOPLEFT", -1, 1)
+            border:SetPoint("BOTTOMRIGHT", 1, -1)
+            border:SetTexture(DEBUFF_BORDER)
+            border:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
+            const styles = (_G.Enum :: table).CustomAuraButtonDispelTypeTextureStyle :: { PreserveAsset?: number }?
+            pcall(button.AddDispelTypeTexture, button, border, {
+                style = styles?.PreserveAsset,
+                showWhenHarmful = true,
+                showWhenHelpful = false,
+            })
+        else
+            pcall(button.SetCancelAuraButtons, button, "RightButtonUp")
+        end
+    end
+end
+
+-- Units whose token may point at someone new, and the event saying so.
+const RESCAN: { [string]: string } = {
+    target = "PLAYER_TARGET_CHANGED",
+    focus = "PLAYER_FOCUS_CHANGED",
+}
+
+local function rescanEvent(unit: UnitToken): string?
+    if RESCAN[unit] then
+        return RESCAN[unit]
+    elseif unit:find("^boss") then
+        return "INSTANCE_ENCOUNTER_ENGAGE_UNIT"
+    elseif unit:find("^party") or unit:find("^raid") then
+        return "GROUP_ROSTER_UPDATE"
+    end
+    return nil
+end
+
+class Container implements AuraContainer
+    readonly frame: Frame
+    private readonly engine: EngineFrame
+    private watcher?: Frame
+    private released: boolean = false
+
+    constructor(engine: EngineFrame, opts: ContainerOptions)
+        self.engine = engine
+        self.frame = engine
+        -- A rectangle to lay out in from the start.
+        engine:SetSize(1, 1)
+        const size = opts.size ?? 30
+        const spacing = opts.spacing ?? 2
+        self:setFlow(opts.anchor ?? "TOPLEFT", opts.growth)
+        if opts.lineWidth then
+            self:setLineWidth(opts.lineWidth)
+        end
+        for _, group in ipairs(opts.groups) do
+            const groupSize = group.size ?? size
+            local ok, err = pcall(engine.AddAuraGroup, engine, group.key, canonical(group.filter), {
+                maxFrameCount = group.max ?? 16,
+                candidateFilters = candidates(group),
+                initializeFrame = group.initialize ?? clientLook(group, groupSize),
+                layout = { elementWidth = groupSize, elementHeight = groupSize, elementSpacing = spacing, lineSpacing = spacing },
+            })
+            if not ok then
+                report(`aura.container: the group "{group.key}" was refused: {err}`)
+            end
+        end
+        self:setUnit(opts.unit)
+    end
+
+    function setUnit(unit: UnitToken)
+        pcall(self.engine.SetUnit, self.engine, unit)
+        if self.released then
+            self.released = false
+            self.engine:Show()
+        end
+        self:listen(unit)
+        self:refresh()
+    end
+
+    -- A full rescan when the unit's token points at someone new.
+    private function listen(unit: UnitToken)
+        self.watcher?:UnregisterAllEvents()
+        const event = rescanEvent(unit)
+        if not event then
+            return
+        end
+        const watcher = self.watcher ?? CreateFrame("Frame")
+        self.watcher = watcher
+        watcher:RegisterEvent(event)
+        watcher:SetScript("OnEvent", function() self:refresh() end)
+    end
+
+    function refresh()
+        pcall(self.engine.UpdateAllAuras, self.engine)
+    end
+
+    function setGroupMax(key: string, max: number)
+        pcall(self.engine.SetAuraGroupMaxFrameCount, self.engine, key, max)
+    end
+
+    function setGroupSpells(key: string, spells: number[]?)
+        pcall(self.engine.SetAuraGroupCandidateFilters, self.engine, key, { includeSpellIDs = set(spells) })
+    end
+
+    function setFlow(anchor: FramePoint, growth: string[]?)
+        const flow = (_G.AnchorUtil :: table?)?.FlowDirection :: { [string]: any }?
+        call(self.engine, { "SetFlowLayoutAnchorPoint", "SetAuraLayoutAnchorPoint" }, anchor)
+        const g = growth ?? { "RIGHT", "DOWN" }
+        const h = flow?.[g[1] == "LEFT" and "Left" or "Right"]
+        const v = flow?.[g[2] == "UP" and "Up" or "Down"]
+        if h ~= nil and v ~= nil then
+            call(self.engine, { "SetFlowLayoutGrowthDirection", "SetAuraLayoutGrowthDirection" }, h, v)
+        end
+    end
+
+    function setLineWidth(width: number?)
+        call(self.engine, { "SetFlowLayoutMaximumLineSize", "SetAuraLayoutRowWidth" }, width)
+    end
+
+    function release()
+        if self.released then
+            return
+        end
+        pcall(self.engine.SetUnit, self.engine, "none")
+        self.watcher?:UnregisterAllEvents()
+        self.engine:Hide()
+        self.released = true
+    end
+end
+
+--- An engine aura container on `parent`, filled by the engine from
+--- `opts.groups` (E8300 on flavors without aura containers).
+export function container(parent: Frame, opts: ContainerOptions): AuraContainer
+    const addons = _G.C_AddOns :: { IsAddOnLoaded: (name: string) -> boolean, LoadAddOn: (name: string) -> any }?
+    if addons and not addons.IsAddOnLoaded("Blizzard_AuraContainer") then
+        pcall(addons.LoadAddOn, "Blizzard_AuraContainer")
+    end
+    local ok, frame = pcall(CreateFrame, "AuraContainer", nil, parent, "CustomAuraContainerTemplate")
+    if not ok then
+        error(`aura.container: the client has no aura containers ({frame})`, 2)
+    end
+    return Container.new(frame :: EngineFrame, opts)
+end

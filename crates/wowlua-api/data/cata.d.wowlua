@@ -963,6 +963,7 @@ type TraitVendorResetFailureReason = number
 type TransmogSettingsUpdateType = number
 type VoiceProviderID = number
 type WeatherType = number
+type AuraFilterWord = "BIG_DEFENSIVE" | "CANCELABLE" | "CROWD_CONTROL" | "EXTERNAL_DEFENSIVE" | "HARMFUL" | "HELPFUL" | "INCLUDE_NAME_PLATE_ONLY" | "MAW" | "NOT_CANCELABLE" | "PLAYER" | "RAID" | "RAID_IN_COMBAT" | "RAID_PLAYER_DISPELLABLE"
 type AbbreviatedNumberFormatter = any
 type AccountStoreCategoryType = any
 type AccountStoreItemFlag = any
