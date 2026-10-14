@@ -290,3 +290,113 @@ export function movable(frame: Frame, opts: MovableOptions): MovableHandle
     end
     return m
 end
+
+-- Widget themes ------------------------------------------------------------------
+
+--- A color: `{ r, g, b, a? }`, components 0 to 1.
+export type ThemeColor = number[]
+
+--- How the standard library's own widgets look (dialogs, the built-in
+--- minimap button). Every slot is optional; unset slots keep the client's
+--- look (decisions S17, S18).
+export type WidgetTheme = {
+    font?: { title?: string, body?: string, size?: number },
+    colors?: {
+        background?: ThemeColor,
+        border?: ThemeColor,
+        title?: ThemeColor,
+        text?: ThemeColor,
+        muted?: ThemeColor,
+        accent?: ThemeColor,
+        onAccent?: ThemeColor,
+        error?: ThemeColor,
+    },
+    borderSize?: number,
+    padding?: number,
+    button?: "template" | "flat",
+}
+
+--- What a piece of text is, for its font and color.
+export type TextRole = "title" | "body" | "muted" | "error"
+
+const WHITE = "Interface\\Buttons\\WHITE8X8"
+const FONT_OBJECTS: { [string]: string } = {
+    title = "GameFontNormal",
+    body = "GameFontHighlight",
+    muted = "GameFontDisable",
+    error = "GameFontRed",
+}
+
+--- The client's dialog backdrop, or with a theme's colors and border a
+--- flat one.
+export function applyBackdrop(frame: Frame, theme: WidgetTheme?)
+    const colors = theme?.colors
+    if colors?.background or colors?.border or theme?.borderSize then
+        const edge = theme?.borderSize ?? 1
+        frame:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = edge, insets = { left = edge, right = edge, top = edge, bottom = edge } })
+        const bg = colors?.background ?? { 0, 0, 0, 0.9 }
+        frame:SetBackdropColor(bg[1], bg[2], bg[3], bg[4] ?? 1)
+        const border = colors?.border ?? { 0.5, 0.5, 0.5, 1 }
+        frame:SetBackdropBorderColor(border[1], border[2], border[3], border[4] ?? 1)
+    else
+        frame:SetBackdrop(BACKDROP_DIALOG_32_32)
+        frame:SetBackdropColor(1, 1, 1, 1)
+        frame:SetBackdropBorderColor(1, 1, 1, 1)
+    end
+end
+
+--- Text in its role's font object, with a theme's font and color.
+export function styleText(text: FontString, role: TextRole, theme: WidgetTheme?)
+    text:SetFontObject(FONT_OBJECTS[role])
+    local file = theme?.font?.body
+    if role == "title" then
+        file = theme?.font?.title ?? file
+    end
+    if file or theme?.font?.size then
+        local path, size, flags = text:GetFont()
+        text:SetFont(file ?? path ?? "Fonts\\FRIZQT__.TTF", theme?.font?.size ?? size ?? 12, (flags ?? "") :: any)
+    end
+    const colors = theme?.colors
+    local color: ThemeColor? = nil
+    if role == "title" then
+        color = colors?.title
+    elseif role == "body" then
+        color = colors?.text
+    elseif role == "muted" then
+        color = colors?.muted
+    else
+        color = colors?.error
+    end
+    if color then
+        text:SetTextColor(color[1], color[2], color[3], color[4] ?? 1)
+    end
+end
+
+--- A button: the client's panel button, or a flat one with a theme's
+--- `button = "flat"`.
+export function button(parent: Frame, label: string, theme: WidgetTheme?): Button
+    if theme?.button ~= "flat" then
+        const b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+        b:SetSize(128, 21)
+        b:SetText(label)
+        return b
+    end
+    const b = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    b:SetSize(128, 21)
+    const edge = theme?.borderSize ?? 1
+    b:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = edge })
+    const accent = theme?.colors?.accent ?? { 0.3, 0.3, 0.3, 1 }
+    b:SetBackdropColor(accent[1], accent[2], accent[3], accent[4] ?? 1)
+    const border = theme?.colors?.border ?? accent
+    b:SetBackdropBorderColor(border[1], border[2], border[3], border[4] ?? 1)
+    const text = b:CreateFontString(nil, "OVERLAY")
+    text:SetPoint("CENTER")
+    styleText(text, "body", theme)
+    const on = theme?.colors?.onAccent
+    if on then
+        text:SetTextColor(on[1], on[2], on[3], on[4] ?? 1)
+    end
+    b:SetFontString(text)
+    b:SetText(label)
+    return b
+end

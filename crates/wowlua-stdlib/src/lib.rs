@@ -77,6 +77,7 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         include_str!("../std/debug.wowlua"),
         Some(include_str!("../std/debug.d.wowlua")),
     ),
+    ("dialog", include_str!("../std/dialog.wowlua"), None),
     ("errors", include_str!("../std/errors.wowlua"), None),
     (
         "frames",

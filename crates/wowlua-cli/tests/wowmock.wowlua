@@ -140,6 +140,7 @@ class MockFrame
     sizing: boolean = false
     protected: boolean = false
     resizeBounds?: number[]
+    enabled: boolean = true
 
     constructor(kind: string, name: string?, parent: any)
         self.kind = kind
@@ -395,6 +396,27 @@ class MockFrame
     function SetFrameLevel(...: any) end
     function SetMovable(...: any) end
     function SetResizable(...: any) end
+    function Click(button: string?)
+        Mock.script(self, "OnClick", button ?? "LeftButton")
+    end
+    function SetEnabled(enabled: boolean)
+        self.enabled = enabled
+    end
+    function IsEnabled(): boolean
+        return self.enabled
+    end
+    function SetToplevel(...: any) end
+    function SetAutoFocus(...: any) end
+    function SetMultiLine(...: any) end
+    function SetMaxLetters(...: any) end
+    function HighlightText(...: any) end
+    function SetFocus(...: any) end
+    function ClearFocus(...: any) end
+    function SetScrollChild(...: any) end
+    function SetFontString(...: any) end
+    function GetFont(): (string?, number?, string?)
+        return "Fonts\\FRIZQT__.TTF", 12, ""
+    end
     function SetMinMaxValues(...: any) end
     function SetValue(...: any) end
     function SetBackdrop(...: any) end
@@ -1478,6 +1500,45 @@ function Mock.sharedMedia(): table
         callbacks[#callbacks + 1] = fn
     end
     return lsm
+end
+
+-- Dialogs -------------------------------------------------------------------------
+
+UISpecialFrames = {} :: any
+
+--- The open wowlua:dialog (its `text`, `edit`, `accept`, `cancel`, `error`).
+function Mock.dialog(): any
+    for _, f in ipairs(Mock.frames) do
+        const d = (f :: any).dialog
+        if d and f.shown then
+            return d
+        end
+    end
+    return nil
+end
+
+--- Accepts the open dialog, typing `value` first.
+function Mock.dialogAccept(value: string?)
+    const d = Mock.dialog()
+    if value then
+        d.edit:SetText(value)
+        Mock.script(d.edit, "OnTextChanged", true)
+    end
+    Mock.script(d.accept, "OnClick", "LeftButton")
+end
+
+function Mock.dialogCancel()
+    Mock.script(Mock.dialog().cancel, "OnClick", "LeftButton")
+end
+
+--- Escape: hides the shown frames named in UISpecialFrames.
+function Mock.escape()
+    for _, name in ipairs(UISpecialFrames :: string[]) do
+        const f = _G[name]
+        if f and f.shown then
+            f:Hide()
+        end
+    end
 end
 
 -- The client's class and item quality colors (a few).

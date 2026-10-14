@@ -80,6 +80,10 @@ interface MockClient
     worked: number
     spend: (ms: number) -> ()
     advanceFrames: (n: number, ms: number?) -> ()
+    dialog: () -> any
+    dialogAccept: (value: string?) -> ()
+    dialogCancel: () -> ()
+    escape: () -> ()
     auraContainers: any[]
     auraChanged: (unit: string) -> ()
     --- Units by token (`player`, `target`, `party1`, …): what the unit

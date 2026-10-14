@@ -249,15 +249,22 @@ dialog.import({
   mechanism, so Escape closes it everywhere, including in combat (decision S11).
   These frame names are in the normative global list
   ([Code generation §14.1.1](../toolchain/codegen.md#1411-global-writes)).
-- Very large imports: the edit box accepts unlimited text (`SetMaxLetters(0)`),
-  and import parsing of large strings runs as a `wowlua:jobs` job.
-- **Look:** like the client's own dialogs by default; `dialog.setTheme(theme)`
-  restyles them ([Widget themes](#widget-themes)).
+- Very large imports: the edit box accepts unlimited text (`SetMaxLetters(0)`).
+  Parsing is `onImport`'s; for very large strings it can start a
+  `wowlua:jobs` job.
+- **Look** (decision S29): like the client's popups by default, with the
+  dialog backdrop, the client's font objects and panel buttons. `confirm` and
+  `prompt` show at the top center like `StaticPopup1`; `export` and `import`
+  are a larger dialog (about 500×300) at the center, with a title, a scrolling
+  multi-line box, an error line and buttons at the bottom.
+  `dialog.setTheme(theme)` restyles them ([Widget themes](#widget-themes)).
+- `export` is read-only: typing restores the value. `prompt` enables Accept
+  (and Enter) only while `validate` agrees.
 
 ## Widget themes
 
-`wowlua:dialog`, the fallback frame of `wowlua:menu` and the built-in minimap
-button of `wowlua:launcher` ([UI](ui.md#launcher)) draw frames that ship inside
+`wowlua:dialog` and the built-in minimap button of `wowlua:launcher`
+([UI](ui.md#launcher)) draw frames that ship inside
 the addon, in front of players who may never have heard of wowlua. By default
 they look like the client's own UI and carry no wowlua branding (decision
 S17): they are built from the client's templates and font objects
@@ -269,12 +276,14 @@ Where a template does not exist on a flavor, the flavor table names the
 equivalent.
 
 An addon restyles them with one `WidgetTheme`, a type exported by
-`wowlua:frames` (decision S18):
+`wowlua:frames` (decision S18), which also exports the builders the standard
+library's widgets use: `applyBackdrop(frame, theme?)`, `styleText(text, role,
+theme?)` (roles `"title"`, `"body"`, `"muted"`, `"error"`) and
+`button(parent, label, theme?)`.
 
 ```wowlua
 import type WidgetTheme from "wowlua:frames"
 import * as dialog from "wowlua:dialog"
-import * as menu from "wowlua:menu"
 
 const THEME: WidgetTheme = {
     font = { title = "Interface\\AddOns\\MyAddon\\media\\Title.ttf", size = 12 },
@@ -284,7 +293,6 @@ const THEME: WidgetTheme = {
 }
 
 dialog.setTheme(THEME)
-menu.setTheme(THEME)
 ```
 
 | Slot | Type | Default |
@@ -300,7 +308,8 @@ menu.setTheme(THEME)
   accent, and `setTheme(nil)` returns to the default look.
 - A theme is per addon and applies to frames created afterwards; pooled frames
   take it the next time they are shown.
-- Not themed: menus drawn by `MenuUtil`, minimap buttons drawn by LibDBIcon,
+- Not themed: menus (`wowlua:menu` uses `MenuUtil` on every client; decision
+  S30), minimap buttons drawn by LibDBIcon,
   the Addon Compartment and LDB displays. They belong to the client or to the
   player's other addons.
 

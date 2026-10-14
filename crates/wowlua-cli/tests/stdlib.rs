@@ -2297,6 +2297,8 @@ Mock.awaitText("Enter combat")
 Mock.fire("PLAYER_REGEN_DISABLED")
 Mock.awaitText("Now leave combat")
 Mock.fire("PLAYER_REGEN_ENABLED")
+Mock.awaitText("Type wowlua into the StdTest prompt")
+Mock.dialogAccept("wowlua")
 Mock.awaitText("Change your target")
 Mock.fire("PLAYER_TARGET_CHANGED")
 Mock.fire("UNIT_TARGET", "player")
@@ -3730,6 +3732,75 @@ end
             "loaded Thunderfury",
             "missing nil",
             "done"
+        ]
+    );
+}
+
+// ----------------------------------------------------------------- dialog --
+
+/// `wowlua:dialog`: confirm, prompt (validated), export (read-only),
+/// import (errors keep it open), one at a time, Escape, themes.
+#[test]
+fn dialogs_confirm_prompt_export_import() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as dialog from \"wowlua:dialog\"\n_G.StdDialog = dialog\n",
+        )],
+        "ACCEPT, CANCEL, CLOSE, BACKDROP_DIALOG_32_32 = \"Accept\", \"Cancel\", \"Close\", {}",
+        r#"Mock.loadAddon("Std")
+local dialog = StdDialog
+dialog.confirm({ text = "Reset?", onAccept = function() print("reset") end, onCancel = function() print("kept") end })
+local d = Mock.dialog()
+print(d.text:GetText(), d.frame:GetName(), UISpecialFrames[1])
+Mock.dialogAccept()
+print("open after accept", Mock.dialog())
+dialog.confirm({ text = "Again?", onAccept = function() print("never") end, onCancel = function() print("cancelled") end })
+Mock.escape()
+dialog.prompt({ text = "Name?", default = "x", validate = function(v) return #v >= 3 end, onAccept = function(v) print("named", v) end })
+d = Mock.dialog()
+print(d.edit:GetText(), d.accept:IsEnabled())
+Mock.dialogAccept("ab")
+print("still open", Mock.dialog() ~= nil)
+Mock.dialogAccept("abc")
+-- Opening another cancels the current one.
+dialog.prompt({ text = "First", onAccept = function() end, onCancel = function() print("first cancelled") end })
+dialog.export({ title = "Export", value = "!WL1!data" })
+d = Mock.dialog()
+print(d.text:GetText(), d.edit:GetText(), d.accept:IsShown())
+d.edit:SetText("typed")
+Mock.script(d.edit, "OnTextChanged", true)
+print("still", d.edit:GetText())
+Mock.dialogCancel()
+dialog.import({ title = "Import", onImport = function(text) if text ~= "good" then return "Invalid string" end print("imported", text) end })
+Mock.dialogAccept("bad")
+d = Mock.dialog()
+print("error", d.error:GetText())
+Mock.dialogAccept("good")
+print("closed", Mock.dialog())
+dialog.setTheme({ button = "flat", colors = { background = { 0, 0, 0, 1 } } })
+dialog.confirm({ text = "Themed", onAccept = function() end })
+dialog.close()
+print("closed", Mock.dialog())
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "Reset? StdDialog1 StdDialog1",
+            "reset",
+            "open after accept nil",
+            "cancelled",
+            "x false",
+            "still open true",
+            "named abc",
+            "first cancelled",
+            "Export !WL1!data false",
+            "still !WL1!data",
+            "error Invalid string",
+            "imported good",
+            "closed nil",
+            "closed nil",
         ]
     );
 }

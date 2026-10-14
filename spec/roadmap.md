@@ -369,7 +369,11 @@ menus and lists, then the widget themes.
   checker types table literals assigned to `t[i]` by the element type. `jobs` done 2026-10-14 (coroutines within a per-frame
   budget, weighted priorities, sleep, waiting for events, progress, combat
   pauses, W8430), with `item.await`; the mock client drives frames
-  (`Mock.advanceFrames`, `Mock.spend`).
+  (`Mock.advanceFrames`, `Mock.spend`). `dialog` done 2026-10-15 (confirm,
+  prompt, export, import on the addon's own frames in the client's popup
+  look, Escape, one at a time; decision S29), with `WidgetTheme` and the
+  theme-aware builders in `wowlua:frames`. Decision S30: `menu` and `list`
+  wrap `MenuUtil` and ScrollBox, which every flavor has.
 
 ## M9: Test runner, language server, formatter
 

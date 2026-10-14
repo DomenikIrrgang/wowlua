@@ -1,0 +1,302 @@
+-- wowlua:dialog (spec stdlib "dialog"): confirm, prompt, export and import
+-- dialogs on frames of the addon's own (never StaticPopupDialogs, a shared
+-- table that taints Blizzard's dialogs). They look like the client's popups
+-- (decisions S17, S29) unless `setTheme` restyles them, close on Escape
+-- (UISpecialFrames, decision S11), and one shows per addon at a time:
+-- opening another cancels the current one.
+import * as frames from "wowlua:frames"
+import type WidgetTheme from "wowlua:frames"
+import callIn, report from "wowlua:errors"
+
+local addonName = ...
+
+export type ConfirmOptions = {
+    text: string,
+    accept?: string,
+    cancel?: string,
+    onAccept: () -> (),
+    onCancel?: () -> (),
+}
+
+export type PromptOptions = {
+    text: string,
+    default?: string,
+    validate?: (value: string) -> boolean,
+    onAccept: (value: string) -> (),
+    onCancel?: () -> (),
+}
+
+export type ExportOptions = { title: string, value: string }
+
+export type ImportOptions = {
+    title: string,
+    --- A returned string is shown as an error and the dialog stays open.
+    onImport: (text: string) -> string?,
+    onCancel?: () -> (),
+}
+
+-- `<Addon>Dialog<N>`: the addon's name as a frame name.
+const NAME = addonName:gsub("[^%w_]", "_") .. "Dialog"
+
+local theme: WidgetTheme? = nil
+
+--- One of the addon's two dialog frames, built once, reused.
+class DialogFrame
+    readonly frame: Frame
+    readonly text: FontString
+    readonly edit: EditBox
+    readonly accept: Button
+    readonly cancel: Button
+    readonly error?: FontString
+    --- Called when the dialog closes without being accepted.
+    onCancel?: () -> ()
+    private settled: boolean = true
+
+    constructor(frame: Frame, text: FontString, edit: EditBox, accept: Button, cancel: Button, error: FontString?)
+        self.frame = frame
+        self.text = text
+        self.edit = edit
+        self.accept = accept
+        self.cancel = cancel
+        self.error = error
+        -- Found from the frame (tests read the open dialog through it).
+        const tagged = frame :: any
+        tagged.dialog = self
+        -- Escape (UISpecialFrames) and the cancel button hide it.
+        frame:HookScript("OnHide", function() self:closed() end)
+        cancel:SetScript("OnClick", function() frame:Hide() end)
+        edit:SetScript("OnEscapePressed", function() frame:Hide() end)
+    end
+
+    --- Opens it for a new dialog.
+    function open(onCancel: (() -> ())?)
+        self.onCancel = onCancel
+        self.settled = false
+        frames.applyBackdrop(self.frame, theme)
+        frames.styleText(self.text, "body", theme)
+        self.error?:SetText("")
+        self.frame:Show()
+    end
+
+    --- Closes it as accepted.
+    function done()
+        self.settled = true
+        self.frame:Hide()
+    end
+
+    private function closed()
+        if self.settled then
+            return
+        end
+        self.settled = true
+        const onCancel = self.onCancel
+        if onCancel then
+            callIn({ component = "dialog: onCancel" }, onCancel)
+        end
+    end
+
+    function isOpen(): boolean
+        return not self.settled
+    end
+end
+
+local popup: DialogFrame? = nil
+local textDialog: DialogFrame? = nil
+
+local function escapable(name: string)
+    const special = _G.UISpecialFrames :: string[]?
+    if special then
+        special[#special + 1] = name
+    end
+end
+
+-- The popup: text, an optional edit box, two buttons; top center.
+local function getPopup(): DialogFrame
+    if popup then
+        return popup
+    end
+    const name = `{NAME}1`
+    const frame = CreateFrame("Frame", name, UIParent, "BackdropTemplate")
+    frame:SetSize(320, 110)
+    frame:SetPoint("TOP", UIParent, "TOP", 0, -135)
+    frame:SetFrameStrata("DIALOG")
+    frame:SetToplevel(true)
+    frame:EnableMouse(true)
+    frame:Hide()
+    const text = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    text:SetPoint("TOP", 0, -18)
+    text:SetWidth(290)
+    const edit = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+    edit:SetSize(220, 32)
+    edit:SetPoint("TOP", text, "BOTTOM", 0, -6)
+    edit:SetAutoFocus(false)
+    const accept = frames.button(frame, ACCEPT, theme)
+    accept:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -6, 16)
+    const cancel = frames.button(frame, CANCEL, theme)
+    cancel:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 6, 16)
+    escapable(name)
+    popup = DialogFrame.new(frame, text, edit, accept, cancel, nil)
+    return popup
+end
+
+-- The text dialog: a title, a scrolling multi-line box, an error line and
+-- two buttons; centered.
+local function getTextDialog(): DialogFrame
+    if textDialog then
+        return textDialog
+    end
+    const name = `{NAME}2`
+    const frame = CreateFrame("Frame", name, UIParent, "BackdropTemplate")
+    frame:SetSize(500, 300)
+    frame:SetPoint("CENTER")
+    frame:SetFrameStrata("DIALOG")
+    frame:SetToplevel(true)
+    frame:EnableMouse(true)
+    frame:Hide()
+    const title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    title:SetPoint("TOP", 0, -18)
+    const scroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 20, -42)
+    scroll:SetPoint("BOTTOMRIGHT", -40, 48)
+    const edit = CreateFrame("EditBox", nil, scroll)
+    edit:SetMultiLine(true)
+    edit:SetMaxLetters(0)
+    edit:SetAutoFocus(false)
+    edit:SetFontObject(ChatFontNormal)
+    edit:SetWidth(430)
+    scroll:SetScrollChild(edit)
+    const error = frame:CreateFontString(nil, "ARTWORK", "GameFontRed")
+    error:SetPoint("BOTTOMLEFT", 22, 22)
+    error:SetPoint("RIGHT", frame, "CENTER", 0, 0)
+    error:SetJustifyH("LEFT")
+    const accept = frames.button(frame, ACCEPT, theme)
+    accept:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -150, 16)
+    const cancel = frames.button(frame, CLOSE, theme)
+    cancel:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -18, 16)
+    escapable(name)
+    textDialog = DialogFrame.new(frame, title, edit, accept, cancel, error)
+    return textDialog
+end
+
+-- Only one dialog at a time: the open one is cancelled.
+local function replace()
+    if popup and popup:isOpen() then
+        popup.frame:Hide()
+    end
+    if textDialog and textDialog:isOpen() then
+        textDialog.frame:Hide()
+    end
+end
+
+--- Asks to confirm; `onAccept` on Accept, `onCancel` otherwise.
+export function confirm(opts: ConfirmOptions)
+    replace()
+    const d = getPopup()
+    d.text:SetText(opts.text)
+    d.edit:Hide()
+    d.frame:SetHeight(110)
+    d.accept:SetText(opts.accept ?? ACCEPT)
+    d.cancel:SetText(opts.cancel ?? CANCEL)
+    d.accept:SetScript("OnClick", function()
+        d:done()
+        callIn({ component = "dialog: onAccept" }, opts.onAccept)
+    end)
+    d:open(opts.onCancel)
+end
+
+--- Asks for a line of text; Accept (or Enter) only when `validate` agrees.
+export function prompt(opts: PromptOptions)
+    replace()
+    const d = getPopup()
+    d.text:SetText(opts.text)
+    d.edit:Show()
+    d.edit:SetText(opts.default ?? "")
+    d.frame:SetHeight(140)
+    d.accept:SetText(ACCEPT)
+    d.cancel:SetText(CANCEL)
+    const validate = opts.validate
+    local function valid(): boolean
+        return validate == nil or validate(d.edit:GetText()) == true
+    end
+    local function submit()
+        if not valid() then
+            return
+        end
+        const value = d.edit:GetText()
+        d:done()
+        callIn({ component = "dialog: onAccept" }, opts.onAccept, value)
+    end
+    d.accept:SetScript("OnClick", submit)
+    d.edit:SetScript("OnEnterPressed", submit)
+    d.edit:SetScript("OnTextChanged", function()
+        d.accept:SetEnabled(valid())
+    end)
+    d.accept:SetEnabled(valid())
+    d:open(opts.onCancel)
+    d.edit:SetFocus()
+    d.edit:HighlightText()
+end
+
+--- Shows `value` selected, ready for Ctrl+C.
+export function export(opts: ExportOptions)
+    replace()
+    const d = getTextDialog()
+    d.text:SetText(opts.title)
+    d.edit:SetText(opts.value)
+    d.accept:Hide()
+    d.cancel:SetText(CLOSE)
+    -- Read-only: typing restores the value.
+    d.edit:SetScript("OnTextChanged", function(_: EditBox, byUser: boolean)
+        if byUser then
+            d.edit:SetText(opts.value)
+            d.edit:HighlightText()
+        end
+    end)
+    d:open(nil)
+    frames.styleText(d.text, "title", theme)
+    d.edit:SetFocus()
+    d.edit:HighlightText()
+end
+
+--- Asks for pasted text; `onImport` may return an error to show, keeping
+--- the dialog open.
+export function import(opts: ImportOptions)
+    replace()
+    const d = getTextDialog()
+    d.text:SetText(opts.title)
+    d.edit:SetText("")
+    d.edit:SetScript("OnTextChanged", nil)
+    d.accept:Show()
+    d.accept:SetText(ACCEPT)
+    d.cancel:SetText(CANCEL)
+    d.accept:SetScript("OnClick", function()
+        const text = d.edit:GetText()
+        local ok, problem = pcall(opts.onImport, text)
+        if not ok then
+            report(`dialog: onImport: {problem}`)
+            return
+        end
+        if problem then
+            d.error?:SetText(problem)
+            return
+        end
+        d:done()
+    end)
+    d:open(opts.onCancel)
+    frames.styleText(d.text, "title", theme)
+    if d.error then
+        frames.styleText(d.error, "error", theme)
+    end
+    d.edit:SetFocus()
+end
+
+--- Closes the current dialog (as cancelled).
+export function close()
+    replace()
+end
+
+--- Restyles the dialogs (nil: the client's look); applies the next time a
+--- dialog opens.
+export function setTheme(t: WidgetTheme?)
+    theme = t
+end

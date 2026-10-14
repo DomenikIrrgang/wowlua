@@ -1,0 +1,62 @@
+-- wowlua:dialog: the addon's own dialogs in the client's popup look.
+import * as dialog from "wowlua:dialog"
+import suite from "/harness"
+
+-- The open dialog's parts (the frames keep a reference for tests).
+local function open(): any
+    for _, name in ipairs({ "StdTestDialog1", "StdTestDialog2" }) do
+        const f = _G[name]
+        if f and f:IsShown() then
+            return f.dialog
+        end
+    end
+    return nil
+end
+
+local s = suite("dialog")
+
+s:test("confirm, export and import", function(t)
+    local accepted, cancelled = false, false
+    dialog.confirm({ text = "StdTest: accept me", onAccept = function() accepted = true end })
+    const d = open()
+    t:ok(d ~= nil, "a confirm dialog shows")
+    if not d then return end
+    d.accept:Click()
+    t:ok(accepted and open() == nil, "accepted and closed")
+    dialog.export({ title = "StdTest export", value = "!WL1!stdtest" })
+    t:eq(open()?.edit:GetText(), "!WL1!stdtest", "the exported text")
+    local imported: string? = nil
+    dialog.import({
+        title = "StdTest import",
+        onImport = function(text: string)
+            if text ~= "ok" then return "not ok" end
+            imported = text
+            return nil
+        end,
+        onCancel = function() cancelled = true end,
+    })
+    const im = open()
+    im.edit:SetText("nope")
+    im.accept:Click()
+    t:eq(im.error:GetText(), "not ok", "an error keeps it open")
+    im.edit:SetText("ok")
+    im.accept:Click()
+    t:eq(imported, "ok", "imported")
+    dialog.confirm({ text = "StdTest: closed by close()", onAccept = function() end, onCancel = function() cancelled = true end })
+    dialog.close()
+    t:ok(cancelled and open() == nil, "close() cancels")
+end)
+
+local g = suite("dialog (guided)", "guided")
+
+g:test("typing into a prompt", function(t)
+    local value: string? = nil
+    dialog.prompt({
+        text = "StdTest: type wowlua and press Enter",
+        validate = function(v: string) return v == "wowlua" end,
+        onAccept = function(v: string) value = v end,
+    })
+    t:ask("Type wowlua into the StdTest prompt at the top and press Enter")
+    t:waitFor(function() return value ~= nil end, 120, "the prompt accepted")
+    t:eq(value, "wowlua", "the typed value")
+end)
