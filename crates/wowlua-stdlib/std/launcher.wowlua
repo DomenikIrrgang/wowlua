@@ -118,18 +118,23 @@ local function createButton(): any
     b:RegisterForClicks("AnyUp")
     b:RegisterForDrag("LeftButton")
     b:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+    -- The client's round button: the tracking ring (its art sits in the
+    -- top left of the texture), a dark disc and the icon at the button's
+    -- center, cropped of its square frame; the ring covers its corners (a
+    -- mask distorts cropped icons).
     local overlay = b:CreateTexture(nil, "OVERLAY")
-    overlay:SetSize(53, 53)
+    overlay:SetSize(50, 50)
     overlay:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
     overlay:SetPoint("TOPLEFT")
     local background = b:CreateTexture(nil, "BACKGROUND")
-    background:SetSize(20, 20)
+    background:SetSize(24, 24)
     background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
-    background:SetPoint("TOPLEFT", 7, -5)
+    background:SetPoint("CENTER", b, "CENTER", 0, 1)
     local icon = b:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(17, 17)
+    icon:SetSize(18, 18)
     icon:SetTexture(opts.icon)
-    icon:SetPoint("TOPLEFT", 7, -6)
+    icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
+    icon:SetPoint("CENTER", b, "CENTER", 0, 1)
     b.icon = icon
     b:SetScript("OnClick", function(_, mouse: string) click(mouse) end)
     b:SetScript("OnEnter", function(self: any) showTooltip(self) end)
