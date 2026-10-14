@@ -1276,6 +1276,76 @@ fn release_builds_inline_expression_helpers() {
     assert_eq!(run_addon(&release, "Inl"), "5 0");
 }
 
+/// What finishing a file reports (W3031 from inlining, E5001 from checking
+/// the emitted code) comes after what lowering reports (W3030), for every
+/// file: whether each file is finished right after it is lowered, or all
+/// are lowered first because `rename-private` has private methods to rename.
+#[test]
+fn finishing_diagnostics_follow_lowering_diagnostics() {
+    let dir = tempfile::tempdir().unwrap();
+    // More than 200 locals in one function, all of them used.
+    let names: Vec<String> = (0..210).map(|n| format!("v{n}")).collect();
+    let locals: String = names
+        .iter()
+        .enumerate()
+        .map(|(n, v)| format!("    local {v} = seed + {n}\n"))
+        .collect();
+    let first = format!(
+        "@deprecated(\"use wide\")\nlocal function narrow(): number return 1 end\n@inline\nlocal function countdown(n: number): number\n    if n <= 0 then return 0 end\n    return countdown(n - 1)\nend\nlocal function wide(seed: number): number\n{locals}    local all = {{ {} }}\n    return #all\nend\nprint(wide(1), countdown(3), narrow())\n",
+        names.join(", ")
+    );
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "order", "version": "1.0.0" },
+  "build": { "load-order": ["src/first.wowlua", "src/second.wowlua"] },
+  "profiles": { "renamed": { "inherits": "release", "minify": "max", "bundle": false } } }
+"#,
+            ),
+            ("src/first.wowlua", first.as_str()),
+            (
+                "src/second.wowlua",
+                "import old from \"./old\"\nclass Counter\n    total: number = 0\n    private function bump() self.total = self.total + 1 end\n    function run(): number\n        self:bump()\n        return self.total\n    end\nend\nold()\nprint(Counter.new():run())\n",
+            ),
+            (
+                "src/old.wowlua",
+                "@deprecated(\"use something else\")\nexport function old() print(\"old\") end\n",
+            ),
+        ],
+    );
+    let reported = |args: &[&str]| -> Vec<String> {
+        let assert = wowlua(dir.path())
+            .args(args)
+            .args(["--message-format", "short"])
+            .assert()
+            .failure();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        stderr
+            .lines()
+            .filter_map(|line| {
+                let (path, rest) = line.split_once(':')?;
+                let code = rest.split_once('[')?.1.split_once(']')?.0;
+                Some(format!("{path} {code}"))
+            })
+            .collect()
+    };
+    let lowered = ["src/first.wowlua W3030", "src/second.wowlua W3030"];
+    assert_eq!(
+        reported(&["check"]),
+        [&lowered[..], &["src/first.wowlua E5001"]].concat()
+    );
+    let finished = ["src/first.wowlua W3031", "src/first.wowlua E5001"];
+    for profile in ["release", "renamed"] {
+        assert_eq!(
+            reported(&["build", "--profile", profile]),
+            [&lowered[..], &finished[..]].concat(),
+            "{profile}"
+        );
+    }
+}
+
 /// `rename-private` (spec optimization §15.4.1): private and protected
 /// methods get short names unless their names occur anywhere else.
 #[test]

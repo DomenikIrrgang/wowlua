@@ -931,6 +931,13 @@ pub fn compile_flavor(
             map,
         })
     };
+    // Each file is finished right after it is lowered, so only one file's
+    // IR is alive at a time. Renaming private methods needs every lowered
+    // file at once; without private methods it renames nothing.
+    let stream = !minify.passes.rename_private || private_methods.is_empty();
+    // What finishing reports comes after everything lowering reports, as
+    // when every file was lowered before any was finished.
+    let mut finish_diagnostics = Vec::new();
     let mut lowered_files: Vec<(usize, wowlua_luair::ir::Chunk)> = Vec::new();
     for (i, (source, file)) in files.iter().enumerate() {
         let plain_lua = source.kind == SourceKind::Lua && lower_lua.contains(&source.rel);
@@ -945,6 +952,11 @@ pub fn compile_flavor(
         // Plain Lua is only minified: it compiles to itself (spec §14.2).
         if minified_lua && !plain_lua {
             match wowlua_lower::lower(parse, bytes) {
+                Ok(chunk) if stream => {
+                    if let Some(compiled) = finish(chunk, source, *file, &mut finish_diagnostics) {
+                        out.compiled.insert(source.rel.clone(), compiled);
+                    }
+                }
                 Ok(chunk) => lowered_files.push((i, chunk)),
                 Err(errors) => diagnostics.extend(errors),
             }
@@ -1008,7 +1020,13 @@ pub fn compile_flavor(
         out.meta_used.extend(lowered.meta_used);
         out.slices.extend(lowered.slices);
         diagnostics.extend(lowered.warnings);
-        lowered_files.push((i, lowered.chunk));
+        if stream {
+            if let Some(compiled) = finish(lowered.chunk, source, *file, &mut finish_diagnostics) {
+                out.compiled.insert(source.rel.clone(), compiled);
+            }
+        } else {
+            lowered_files.push((i, lowered.chunk));
+        }
     }
     if minify.passes.rename_private {
         let mut parsed_files: Vec<crate::private_names::Parsed> = Vec::new();
@@ -1049,6 +1067,7 @@ pub fn compile_flavor(
             out.compiled.insert(source.rel.clone(), compiled);
         }
     }
+    diagnostics.append(&mut finish_diagnostics);
     out
 }
 
