@@ -2326,6 +2326,14 @@ Mock.clickMenu("Pick me")
 Mock.awaitText("Move any item to another slot in your bags")
 Mock.fire("BAG_UPDATE", 0)
 Mock.fire("BAG_UPDATE", 1)
+Mock.awaitText("Hold Shift for a moment")
+Mock.modifiers.SHIFT = true
+Mock.updateStateDrivers()
+Mock.modifiers.SHIFT = nil
+Mock.awaitText("Enter combat again")
+Mock.fire("PLAYER_REGEN_DISABLED")
+Mock.awaitText("Leave combat again")
+Mock.fire("PLAYER_REGEN_ENABLED")
 Mock.awaitText("Mouse over any item in your bags")
 Mock.showTooltip("Item", { id = 6948, name = "Hearthstone", link = "|Hitem:6948::|h[Hearthstone]|h" })
 Mock.awaitText("Click the [StdTest link]")
@@ -4377,6 +4385,92 @@ print(#Mock.errors)
             "1",
         ]
     );
+}
+
+// ----------------------------------------------------------------- secure --
+
+/// `secure.visibility` and `secure.state` drive frames through the client's
+/// state drivers; registering in combat waits for its end.
+#[test]
+fn secure_state_drivers() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as secure from "wowlua:secure"
+_G.StdSecure = secure
+_G.StdBox = CreateFrame("Frame")
+"#,
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local secure, box = StdSecure, StdBox
+secure.visibility(box, "[combat] show; hide")
+print("out of combat", box:IsShown())
+Mock.fire("PLAYER_REGEN_DISABLED")
+print("in combat", box:IsShown())
+local sub = secure.state(box, "Mode", "[mod:shift] fast; [group] group; solo", function(v) print("state", v) end)
+print("registered in combat:", #Mock.stateDrivers)
+Mock.fire("PLAYER_REGEN_ENABLED")
+print("after combat:", #Mock.stateDrivers, box:IsShown())
+Mock.group = "party"
+Mock.fire("GROUP_ROSTER_UPDATE")
+Mock.modifiers.SHIFT = true
+Mock.updateStateDrivers()
+Mock.modifiers.SHIFT = nil
+sub:cancel()
+Mock.group = nil
+Mock.fire("GROUP_ROSTER_UPDATE")
+secure.visibility(box, nil)
+Mock.fire("PLAYER_REGEN_DISABLED")
+print("no driver", box:IsShown(), #Mock.stateDrivers)
+print(secure.evaluate("[combat] a; b"), secure.evaluate("[nocombat] a"))
+print(#Mock.errors)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "out of combat false",
+            "in combat true",
+            "registered in combat: 1",
+            "state solo",
+            "after combat: 2 false",
+            "state group",
+            "state fast",
+            "no driver false 0",
+            "a nil",
+            "0",
+        ]
+    );
+}
+
+/// Literal macro conditionals are checked: brackets and conditions (E8440),
+/// and a visibility driver's values (E8441).
+#[test]
+fn secure_conditionals_are_checked() {
+    let cases = [
+        ("secure.visibility(f, \"[combat show; hide\")", "E8440"),
+        ("secure.visibility(f, \"[comabt] show; hide\")", "E8440"),
+        (
+            "secure.state(f, \"x\", \"[@] a; b\", function(v: string) end)",
+            "E8440",
+        ),
+        ("secure.visibility(f, \"[combat] shown; hide\")", "E8441"),
+        ("secure.evaluate(\"a ] b\")", "E8440"),
+    ];
+    for (call, code) in cases {
+        let out = check(&format!(
+            "import * as secure from \"wowlua:secure\"\nlocal f = CreateFrame(\"Frame\")\n{call}\n"
+        ));
+        assert!(out.contains(code), "{call}: {out}");
+    }
+    let out = check(
+        "import * as secure from \"wowlua:secure\"\nlocal f = CreateFrame(\"Frame\")\n\
+         secure.visibility(f, \"[petbattle][vehicleui] hide; [@target,exists,nodead,harm][combat,mod:shift/ctrl] show; hide;\")\n\
+         secure.state(f, \"page\", \"[bonusbar:5] 11; [form:1/2,target=focus] 7; 1\", function(v: string) end)\n\
+         secure.visibility(f, nil)\n",
+    );
+    assert!(!out.contains("E844"), "{out}");
 }
 
 // ------------------------------------------------------------------ color --

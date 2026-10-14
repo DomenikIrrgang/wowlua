@@ -1,0 +1,65 @@
+-- wowlua:secure (spec stdlib "secure"): the client's secure state drivers.
+-- A macro conditional ("[combat] show; hide") is evaluated by the client,
+-- also in combat, where addon code may not show or hide protected frames.
+-- Registering or removing a driver is itself blocked in combat, so it waits
+-- for the end of combat (wowlua:combat). Literal conditionals are checked
+-- at compile time (E8440, E8441).
+import * as combat from "wowlua:combat"
+import type Subscription from "wowlua:events"
+import callIn from "wowlua:errors"
+
+--- Shows and hides `frame` by a macro conditional whose values are `show`
+--- and `hide`; nil removes the driver (the frame stays as it is).
+export function visibility(frame: Frame, conditional: string?)
+    combat.defer(function()
+        if conditional then
+            RegisterStateDriver(frame, "visibility", conditional)
+        else
+            UnregisterStateDriver(frame, "visibility")
+        end
+    end)
+end
+
+class StateWatch implements Subscription
+    active: boolean = true
+    readonly frame: Frame
+    readonly name: string
+
+    constructor(frame: Frame, name: string)
+        self.frame = frame
+        self.name = name
+    end
+
+    function cancel()
+        if not self.active then
+            return
+        end
+        self.active = false
+        combat.defer(function() UnregisterStateDriver(self.frame, self.name) end)
+    end
+end
+
+--- Evaluates a macro conditional on `frame` as the state `name` and calls
+--- `fn(value)` with each new value (the first right away), also in combat.
+export function state(frame: Frame, name: string, conditional: string, fn: (value: string) -> ()): Subscription
+    const watch = StateWatch.new(frame, name)
+    -- The driver sets the attribute `state-<name>` (names are lowercase).
+    const attribute = `state-{name:lower()}`
+    frame:HookScript("OnAttributeChanged", function(_: any, key: string, value: any)
+        if watch.active and key == attribute then
+            callIn({ component = "secure: state" }, fn, tostring(value))
+        end
+    end)
+    combat.defer(function()
+        if watch.active then
+            RegisterStateDriver(frame, name, conditional)
+        end
+    end)
+    return watch
+end
+
+--- What a macro conditional gives now (nil: no clause matches).
+export function evaluate(conditional: string): string?
+    const value = SecureCmdOptionParse(conditional)
+    return value
+end

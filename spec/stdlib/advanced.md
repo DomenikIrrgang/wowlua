@@ -41,7 +41,43 @@ Queue semantics:
 - A queued function that errors is reported through `geterrorhandler()` without
   blocking the rest of the queue.
 
-## hooks
+## secure
+
+`wowlua:secure` uses the client's secure state drivers: the client evaluates a
+macro conditional (`[combat] show; hide`) and acts on it, also in combat, where
+addon code may not show or hide protected frames.
+
+```wowlua
+import * as secure from "wowlua:secure"
+
+secure.visibility(bar, "[petbattle][vehicleui] hide; [combat] show; hide")
+secure.state(bar, "page", "[bonusbar:5] 11; [mod:shift] 2; 1", function(page: string)
+    label:SetText(page)
+end)
+if secure.evaluate("[group:raid] yes") then … end
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `visibility` | `(frame: Frame, conditional: string?)` | `RegisterStateDriver(frame, "visibility", …)`; the values are `show` and `hide`. nil removes the driver; the frame stays as it is. |
+| `state` | `(frame: Frame, name: string, conditional: string, fn: (value: string) -> ()) -> Subscription` | A driver for the state `name`; `fn` gets each new value, the first right away. Cancelling removes the driver. |
+| `evaluate` | `(conditional: string) -> string?` | What the conditional gives now (`SecureCmdOptionParse`); nil when no clause matches |
+
+Semantics (decision S35):
+
+- **Combat.** Registering or removing a driver is blocked in combat, so it
+  waits for the end of combat through `wowlua:combat`'s `defer`, in call order.
+  The drivers themselves keep working in combat.
+- **Values.** `state` watches the frame's `state-<name>` attribute through
+  `OnAttributeChanged` (a hook, so it works on protected frames); `fn` runs as
+  ordinary addon code, which in combat may not touch protected frames.
+- **Compile-time check.** A literal conditional (or one folded from `const`s) is
+  parsed: brackets must pair, and each condition must be one the client knows,
+  with or without `no` (`combat`, `mod`, `group`, `form`, `bonusbar`, `exists`,
+  `help`, `harm`, `vehicleui`, `petbattle`, …), else E8440. `@unit` and
+  `target=unit` are accepted. A `visibility` value other than `show` or `hide`
+  is E8441. Arguments (`mod:shift`, `form:1/2`) are not checked.
+
 
 `wowlua:hooks` provides post-hooks through `hooksecurefunc` and `HookScript`.
 These do not taint the hooked Blizzard function itself, but the hook body still

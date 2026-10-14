@@ -54,6 +54,8 @@ interface MockClient
     check: (cond: any, label: string) -> ()
     script: (frame: any, name: string, ...any) -> ()
     fire: (event: string, ...any) -> ()
+    updateStateDrivers: () -> ()
+    stateDrivers: any[]
     loadAddon: (name: string | number) -> ()
     advance: (sec: number?) -> ()
     slash: (line: string) -> ()

@@ -53,6 +53,7 @@ libraries such as Ace3, LibDBIcon or LibSerialize.
 | `wowlua:settings` | Declarative options pages | [UI](ui.md#settings) |
 | `wowlua:launcher` | Minimap button, Addon Compartment, LDB launcher | [UI](ui.md#launcher) |
 | `wowlua:combat` | Combat lockdown handling | [Advanced](advanced.md#combat) |
+| `wowlua:secure` | Secure state drivers: visibility and states by macro conditionals | [Advanced](advanced.md#secure) |
 | `wowlua:hooks` | Secure post-hooks, including deferred hooks | [Advanced](advanced.md#hooks) |
 | `wowlua:comm` | Addon-to-addon messaging with chunking and throttling | [Advanced](advanced.md#comm) |
 | `wowlua:serialize` | Serialization, compression, print-safe encoding | [Advanced](advanced.md#serialize) |

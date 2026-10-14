@@ -1,0 +1,8 @@
+-- Compiler behavior of `wowlua:secure` (spec stdlib "secure"): literal
+-- macro conditionals are checked (E8440, E8441).
+@intrinsic("secure.visibility")
+declare global visibility: any
+@intrinsic("secure.state")
+declare global state: any
+@intrinsic("secure.evaluate")
+declare global evaluate: any

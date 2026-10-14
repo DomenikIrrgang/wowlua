@@ -218,4 +218,6 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E8400", summary: "Unknown media kind" },
     CodeInfo { code: "E8420", summary: "Unknown callback event name for the registry's event type" },
     CodeInfo { code: "W8430", summary: "Job yield call (`check`/`yield`/`sleep`/`waitFor`) inside `pcall`/`xpcall`/`securecall*`, a metamethod or a C-function callback" },
+    CodeInfo { code: "E8440", summary: "Invalid macro conditional in a literal state driver (brackets, or an unknown condition)" },
+    CodeInfo { code: "E8441", summary: "Visibility driver value other than `show` or `hide`" },
 ];

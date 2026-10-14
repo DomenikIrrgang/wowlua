@@ -252,6 +252,8 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | E8390 | Invalid color hex literal |
 | E8400 | Unknown media kind |
 | E8420 | Unknown callback event name for the registry's event type |
+| E8440 | Invalid macro conditional in a literal state driver (brackets, or an unknown condition) |
+| E8441 | Visibility driver value other than `show` or `hide` |
 
 ## B.3 Performance hints
 

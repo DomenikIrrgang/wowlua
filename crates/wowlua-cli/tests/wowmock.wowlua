@@ -365,6 +365,7 @@ class MockFrame
 
     function SetAttribute(key: string, value: any)
         self.attributes[key] = value
+        Mock.script(self, "OnAttributeChanged", key:lower(), value)
     end
 
     function GetAttribute(key: string): any
@@ -546,6 +547,118 @@ function Mock.fire(event: string, ...: any)
             Mock.script(f, "OnEvent", event, ...)
         end
     end
+    Mock.updateStateDrivers()
+end
+
+-- Secure state drivers ---------------------------------------------------------
+
+-- One macro condition (`combat`, `nogroup`, `mod:shift`, `exists`) for `unit`.
+local function macroCondition(cond: string, unit: string): boolean
+    local name, arg = cond:match("^(%a+):?(.*)$")
+    if not name then
+        return false
+    end
+    local negate = false
+    if name:sub(1, 2) == "no" and name ~= "known" then
+        negate = true
+        name = name:sub(3)
+    end
+    local holds = false
+    if name == "combat" then
+        holds = Mock.combat
+    elseif name == "group" then
+        holds = Mock.group ~= nil and (arg == "" or arg == Mock.group or (arg == "party" and Mock.group ~= "raid"))
+    elseif name == "mod" or name == "modifier" then
+        if arg == "" then
+            holds = next(Mock.modifiers) ~= nil
+        else
+            for key in arg:gmatch("[^/]+") do
+                const map: { [string]: string } = { shift = "SHIFT", ctrl = "CTRL", alt = "ALT" }
+                if Mock.modifiers[map[key] ?? ""] then holds = true end
+            end
+        end
+    elseif name == "exists" then
+        holds = Mock.units[unit] ~= nil
+    end
+    return holds ~= negate
+end
+
+-- The client's macro conditional evaluation (a subset of the conditions).
+function SecureCmdOptionParse(conditional: string): (string?, string?)
+    for clause in (conditional .. ";"):gmatch("([^;]*);") do
+        local rest = clause:match("^%s*(.-)%s*$") ?? ""
+        local groups = 0
+        local matched = false
+        while rest:sub(1, 1) == "[" do
+            local inner, after = rest:match("^%[([^%]]*)%]%s*(.*)$")
+            if not inner then
+                break
+            end
+            groups += 1
+            local unit = "target"
+            local all = true
+            for c in inner:gmatch("[^,]+") do
+                c = c:match("^%s*(.-)%s*$") ?? ""
+                if c:sub(1, 1) == "@" then
+                    unit = c:sub(2)
+                elseif c ~= "" and not macroCondition(c, unit) then
+                    all = false
+                end
+            end
+            if all then
+                matched = true
+            end
+            rest = after ?? ""
+        end
+        if groups == 0 or matched then
+            return rest, nil
+        end
+    end
+    return nil, nil
+end
+
+type MockDriver = { frame: any, name: string, conditional: string, value?: string }
+Mock.stateDrivers = {}
+
+--- Re-evaluates the state drivers (the client polls them); after every event.
+function Mock.updateStateDrivers()
+    for _, d in ipairs({ unpack(Mock.stateDrivers) }) do
+        const driver = d :: MockDriver
+        local value = SecureCmdOptionParse(driver.conditional)
+        if value ~= driver.value then
+            driver.value = value
+            if driver.name == "visibility" then
+                if value == "show" then
+                    driver.frame:Show()
+                elseif value == "hide" then
+                    driver.frame:Hide()
+                end
+            end
+            driver.frame:SetAttribute(`state-{driver.name}`, value)
+        end
+    end
+end
+
+function UnregisterStateDriver(frame: any, name: string)
+    if Mock.combat then
+        error("UnregisterStateDriver: blocked in combat")
+    end
+    for i, d in ipairs(Mock.stateDrivers) do
+        const driver = d :: MockDriver
+        if driver.frame == frame and driver.name == name then
+            table.remove(Mock.stateDrivers, i)
+            return
+        end
+    end
+end
+
+function RegisterStateDriver(frame: any, name: string, conditional: string)
+    UnregisterStateDriver(frame, name)
+    if Mock.combat then
+        error("RegisterStateDriver: blocked in combat")
+    end
+    Mock.stateDrivers[#Mock.stateDrivers + 1] = { frame = frame, name = name, conditional = conditional }
+    Mock.updateStateDrivers()
 end
 
 -- Loads an addon (fires ADDON_LOADED for it).

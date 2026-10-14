@@ -1,0 +1,74 @@
+-- wowlua:secure: state drivers, also in combat.
+import * as secure from "wowlua:secure"
+import suite, say from "/harness"
+
+local function square(r: number, g: number, b: number, x: number): Frame
+    const f = CreateFrame("Frame", nil, UIParent)
+    f:SetSize(40, 40)
+    f:SetPoint("TOPLEFT", x, -120)
+    const tex = f:CreateTexture(nil, "BACKGROUND")
+    tex:SetAllPoints()
+    tex:SetColorTexture(r, g, b, 0.8)
+    f:Hide()
+    return f
+end
+
+local s = suite("secure")
+
+s:test("a visibility driver", function(t)
+    const f = square(0, 1, 0, 20)
+    secure.visibility(f, "[nocombat] show; hide")
+    t:wait(0.3)
+    t:ok(f:IsShown(), "shown out of combat")
+    secure.visibility(f, "[combat] show; hide")
+    t:wait(0.3)
+    t:ok(not f:IsShown(), "hidden out of combat")
+    secure.visibility(f, nil)
+end)
+
+s:test("a state driver", function(t)
+    const f = CreateFrame("Frame")
+    local seen: string? = nil
+    const sub = secure.state(f, "stdtest", "[nocombat] calm; fight", function(v: string) seen = v end)
+    t:wait(0.3)
+    t:eq(seen, "calm", "the first value")
+    t:eq(secure.evaluate("[nocombat] calm; fight"), "calm", "evaluate")
+    say(`secure: group={secure.evaluate("[group] yes; no")}, mounted={secure.evaluate("[mounted] yes; no")}`)
+    sub:cancel()
+end)
+
+local g = suite("secure (guided)", "guided")
+
+g:test("a state driver follows Shift", function(t)
+    local seen: string? = nil
+    const sub = secure.state(CreateFrame("Frame"), "shift", "[mod:shift] down; up", function(v: string) seen = v end)
+    t:ask("Hold Shift for a moment")
+    t:waitFor(function() return seen == "down" end, 120, "Shift seen")
+    sub:cancel()
+end)
+
+g:test("visibility drivers in combat", function(t)
+    const red = square(1, 0, 0, 20)
+    secure.visibility(red, "[combat] show; hide")
+    t:ask("Enter combat again (a red StdTest square appears at the top left)")
+    if not t:waitFor(function() return InCombatLockdown() end, 180, "combat") then
+        return
+    end
+    t:wait(0.5)
+    t:ok(red:IsShown(), "the red square shows in combat")
+    -- Registered in combat: applies once combat ends.
+    const blue = square(0, 0.4, 1, 70)
+    secure.visibility(blue, "[combat] hide; show")
+    t:ask("Leave combat again (a blue square joins the red one, and the red one goes)")
+    if not t:waitFor(function() return not InCombatLockdown() end, 180, "combat ended") then
+        return
+    end
+    t:wait(0.5)
+    t:ok(not red:IsShown(), "the red square hides after combat")
+    t:ok(blue:IsShown(), "the driver registered in combat applies after it")
+    secure.visibility(red, nil)
+    secure.visibility(blue, nil)
+    t:wait(0.1)
+    red:Hide()
+    blue:Hide()
+end)

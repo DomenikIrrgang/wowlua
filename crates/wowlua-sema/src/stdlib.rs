@@ -192,6 +192,93 @@ fn binding_name(name: &str) -> bool {
             .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
 }
 
+/// The macro conditions a state driver understands (each also with `no`).
+const MACRO_CONDITIONS: &[&str] = &[
+    "actionbar",
+    "advflyable",
+    "bar",
+    "bonusbar",
+    "btn",
+    "button",
+    "canexitvehicle",
+    "channeling",
+    "combat",
+    "cursor",
+    "dead",
+    "equipped",
+    "exists",
+    "extrabar",
+    "flyable",
+    "flying",
+    "form",
+    "group",
+    "harm",
+    "help",
+    "indoors",
+    "known",
+    "mod",
+    "modifier",
+    "mounted",
+    "outdoors",
+    "overridebar",
+    "party",
+    "pet",
+    "petbattle",
+    "possessbar",
+    "pvptalent",
+    "raid",
+    "resting",
+    "shapeshift",
+    "spec",
+    "stance",
+    "stealth",
+    "swimming",
+    "talent",
+    "unithasvehicleui",
+    "vehicleui",
+    "worn",
+];
+
+/// Parses a macro conditional (`[combat,mod:shift] a; [@focus,help] b; c`):
+/// the values of its clauses, or what is wrong with it.
+fn macro_conditional(text: &str) -> Result<Vec<String>, String> {
+    let mut values = Vec::new();
+    for clause in text.split(';') {
+        let mut rest = clause.trim_start();
+        while let Some(inner) = rest.strip_prefix('[') {
+            let Some(end) = inner.find(']') else {
+                return Err(format!("`[` without `]` in `{}`", clause.trim()));
+            };
+            for cond in inner[..end].split(',').map(str::trim) {
+                if cond.is_empty() {
+                    continue;
+                }
+                if let Some(unit) = cond.strip_prefix('@') {
+                    if unit.trim().is_empty() {
+                        return Err("`@` without a unit".into());
+                    }
+                    continue;
+                }
+                let name = cond.split([':', '=']).next().unwrap_or("").trim();
+                let lower = name.to_ascii_lowercase();
+                if lower == "target" && cond.contains('=') {
+                    continue;
+                }
+                let known = |n: &str| MACRO_CONDITIONS.contains(&n);
+                if !known(&lower) && !lower.strip_prefix("no").is_some_and(known) {
+                    return Err(format!("unknown condition `{name}`"));
+                }
+            }
+            rest = inner[end + 1..].trim_start();
+        }
+        if rest.contains(['[', ']']) {
+            return Err(format!("misplaced bracket in `{}`", clause.trim()));
+        }
+        values.push(rest.trim().to_string());
+    }
+    Ok(values)
+}
+
 /// `f` or `a.b` as text, for a call's callee.
 fn call_name(callee: &Expr) -> Option<String> {
     match &callee.kind {
@@ -232,6 +319,39 @@ impl Ctx<'_> {
     fn warn(&mut self, code: &'static str, span: Span, message: String, label: &str) {
         self.diagnostics
             .push(Diagnostic::warning(code, message).with_label(span, label));
+    }
+
+    /// A literal macro conditional (E8440); `visibility`: its values must
+    /// be `show` or `hide` (E8441).
+    fn conditional(&mut self, e: &Expr, visibility: bool) {
+        let Some(text) = self.constant_string(e) else {
+            return;
+        };
+        match macro_conditional(&text) {
+            Err(why) => self.error(
+                "E8440",
+                e.span,
+                format!("invalid macro conditional: {why}"),
+                "here",
+            ),
+            Ok(values) if visibility => {
+                let last = values.len() - 1;
+                for (i, v) in values.iter().enumerate() {
+                    // A trailing `;` leaves an empty last clause.
+                    if v == "show" || v == "hide" || (v.is_empty() && i == last && i > 0) {
+                        continue;
+                    }
+                    self.error(
+                        "E8441",
+                        e.span,
+                        format!("a visibility driver's values are `show` and `hide`, not `{v}`"),
+                        "here",
+                    );
+                    break;
+                }
+            }
+            Ok(_) => {}
+        }
     }
 
     /// An event or message name: known, and of the expected kind.
@@ -830,6 +950,21 @@ impl Ctx<'_> {
                             "not declared",
                         );
                     }
+                }
+            }
+            "secure.visibility" => {
+                if let Some(c) = args.get(1) {
+                    self.conditional(c, true);
+                }
+            }
+            "secure.state" => {
+                if let Some(c) = args.get(2) {
+                    self.conditional(c, false);
+                }
+            }
+            "secure.evaluate" => {
+                if let Some(c) = args.first() {
+                    self.conditional(c, false);
                 }
             }
             "saved.bind" => self.bind(e, &args),
