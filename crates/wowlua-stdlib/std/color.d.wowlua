@@ -1,0 +1,5 @@
+-- Compiler behavior of `wowlua:color` (spec stdlib "color"): `hex` with a
+-- literal is validated (E8390) and folded to `CreateColor` with constant
+-- components.
+@intrinsic("color.hex")
+declare global hex: any

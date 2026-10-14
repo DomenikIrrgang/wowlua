@@ -3164,6 +3164,61 @@ fn frames_move_resize_scale_and_save() {
     );
 }
 
+// ------------------------------------------------------------------ color --
+
+/// A literal `color.hex` is validated at compile time (E8390).
+#[test]
+fn color_hex_literals_are_checked() {
+    for bad in ["\"ff88\"", "\"#gg8800\"", "\"ff88001122\""] {
+        let out = check(&format!(
+            "import * as color from \"wowlua:color\"\nlocal c = color.hex({bad})\nprint(c)\n"
+        ));
+        assert!(out.contains("E8390"), "{bad}: {out}");
+    }
+    let out = check("import * as color from \"wowlua:color\"\nprint(color.hex(\"#80ff8800\"))\n");
+    assert!(!out.contains("E8390"), "{out}");
+}
+
+/// `wowlua:color`: hex colors (folded when constant), escapes, class and
+/// quality colors, interpolation.
+#[test]
+fn colors_hex_escapes_class_and_quality() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r##"import * as color from "wowlua:color"
+
+const ORANGE = "#ff8800"
+local orange = color.hex(ORANGE)
+local runtime = "80ff0000"
+local red = color.hex(runtime)
+print(color.toHex(orange), color.toHex(red, true))
+print(color.wrap("Warning", orange))
+print(color.colorize("00ff00", "ok"), color.strip("|cff00ff00ok|r and |cnRED_FONT_COLOR:red|r"))
+print(color.toHex(color.lerp(color.hex("000000"), color.hex("ffffff"), 0.5)))
+print(color.toHex(assert(color.class("MAGE"))), color.class("NOPE"), color.toHex(assert(color.quality(4))))
+_G.CUSTOM_CLASS_COLORS = { MAGE = { r = 1, g = 0, b = 1 } }
+print(color.toHex(assert(color.class("MAGE"))), color.toHex(color.rgb(0, 0, 1, 0.5), true))
+print(pcall(color.hex, "nope"))
+"##,
+        )],
+        "",
+        "Mock.loadAddon(\"Std\")",
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "ff8800 80ff0000",
+            "|cffff8800Warning|r",
+            "|cff00ff00ok|r ok and red",
+            "808080",
+            "40c7eb nil a336ed",
+            "ff00ff 800000ff",
+            "false color.hex: \"nope\" is not rrggbb or aarrggbb",
+        ]
+    );
+}
+
 // --------------------------------------------------------------- settings --
 
 #[test]

@@ -320,14 +320,15 @@ local c = color.lerp(color.hex("ff0000"), color.hex("00ff00"), 0.25)
 
 | API | Signature | Notes |
 |-----|-----------|-------|
+| `Color` | type | What `CreateColor` returns: the API's `colorRGBA` (a `ColorMixin` with `r`, `g`, `b`, `a`). The functions below return it where this table says `ColorMixin`. |
 | `hex` | `(hex: string) -> ColorMixin` | `"rrggbb"` or `"aarrggbb"`, with an optional `#`. Literal arguments are validated (E8390) and folded to `CreateColor(r, g, b, a)` with constant components. |
 | `rgb` | `(r: number, g: number, b: number, a: number?) -> ColorMixin` | Components 0–1 |
 | `toHex` | `(c: ColorMixin, withAlpha?: boolean) -> string` | |
-| `class` | `(classFile: string) -> ColorMixin?` | Prefers `CUSTOM_CLASS_COLORS` (ClassColors addon) when present, then the client's class colors |
+| `class` | `(classFile: string) -> ColorMixin?` | Prefers `CUSTOM_CLASS_COLORS` (ClassColors addon) when present, then the client's class colors. A new color each call. |
 | `quality` | `(quality: number) -> ColorMixin?` | Item quality colors |
 | `wrap` | `(text: string \| Secret<string>, c: ColorMixin) -> string \| Secret<string>` | Uses concatenation only, so secret strings are allowed |
 | `colorize` | `(hex: string, text: string) -> string` | |
-| `strip` | `(text: string) -> string` | Removes `\|c…`/`\|r` escape sequences |
+| `strip` | `(text: string) -> string` | Removes `\|cAARRGGBB`, `\|cnNAME:` and `\|r` escape sequences |
 | `lerp` | `(a: ColorMixin, b: ColorMixin, t: number) -> ColorMixin` | |
 
 ## media

@@ -53,6 +53,11 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
     ),
     ("callbacks", include_str!("../std/callbacks.wowlua"), None),
     (
+        "color",
+        include_str!("../std/color.wowlua"),
+        Some(include_str!("../std/color.d.wowlua")),
+    ),
+    (
         "comm",
         include_str!("../std/comm.wowlua"),
         Some(include_str!("../std/comm.d.wowlua")),

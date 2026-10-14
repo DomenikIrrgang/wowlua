@@ -1,0 +1,89 @@
+-- wowlua:color (spec stdlib "color"): colors, class and item quality
+-- colors, and chat color escapes. `hex` with a literal is checked and folded
+-- by the compiler (E8390).
+
+--- A color: what the client's `CreateColor` returns (a `ColorMixin`).
+export type Color = colorRGBA
+
+-- One component from two hex digits.
+local function component(digits: string, at: number): number
+    return (tonumber(digits:sub(at, at + 1), 16) ?? 0) / 255
+end
+
+--- `"rrggbb"` or `"aarrggbb"`, with an optional `#`.
+export function hex(value: string): Color
+    local digits = value:gsub("^#", "")
+    if not digits:match("^%x+$") or (#digits ~= 6 and #digits ~= 8) then
+        error(`color.hex: "{value}" is not rrggbb or aarrggbb`, 2)
+    end
+    local alpha = 1
+    if #digits == 8 then
+        alpha = component(digits, 1)
+        digits = digits:sub(3)
+    end
+    return CreateColor(component(digits, 1), component(digits, 3), component(digits, 5), alpha)
+end
+
+--- Components from 0 to 1.
+export function rgb(r: number, g: number, b: number, a: number?): Color
+    return CreateColor(r, g, b, a ?? 1)
+end
+
+local function byte(v: number): string
+    return ("%02x"):format(math.floor(math.max(0, math.min(1, v)) * 255 + 0.5))
+end
+
+--- `"rrggbb"`, or `"aarrggbb"` with `withAlpha`.
+export function toHex(c: Color, withAlpha: boolean?): string
+    local r, g, b, a = c:GetRGBA()
+    const digits = byte(r) .. byte(g) .. byte(b)
+    if withAlpha then
+        return byte(a ?? 1) .. digits
+    end
+    return digits
+end
+
+--- A class's color (`"MAGE"`): the ClassColors addon's
+--- `CUSTOM_CLASS_COLORS` first, then the client's.
+export function class(classFile: string): Color?
+    const custom = _G.CUSTOM_CLASS_COLORS :: { [string]: ColorRGBData }?
+    const c = custom?.[classFile] ?? (RAID_CLASS_COLORS :: { [string]: ColorRGBData })[classFile]
+    if not c then
+        return nil
+    end
+    return CreateColor(c.r, c.g, c.b, 1)
+end
+
+--- An item quality's color (0 poor to 8 heirloom/WoW token).
+export function quality(q: number): Color?
+    const c = (ITEM_QUALITY_COLORS :: { [number]: ColorRGBData })[q]
+    if not c then
+        return nil
+    end
+    return CreateColor(c.r, c.g, c.b, 1)
+end
+
+--- `text` in a color escape. Only concatenation, so a secret string stays
+--- a (secret) string.
+export function wrap(text: string | Secret<string>, c: Color): string | Secret<string>
+    return "|c" .. toHex(c, true) .. text .. "|r"
+end
+
+--- `text` in the color `hexColor` (`"rrggbb"`/`"aarrggbb"`).
+export function colorize(hexColor: string, text: string): string
+    return "|c" .. toHex(hex(hexColor), true) .. text .. "|r"
+end
+
+--- `text` without color escapes.
+export function strip(text: string): string
+    local out = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[^:]*:", ""):gsub("|r", "")
+    return out
+end
+
+--- The color `t` (0 to 1) of the way from `a` to `b`.
+export function lerp(a: Color, b: Color, t: number): Color
+    local ar, ag, ab, aa = a:GetRGBA()
+    local br, bg, bb, ba = b:GetRGBA()
+    const mix = function(x: number, y: number): number return x + (y - x) * t end
+    return CreateColor(mix(ar, br), mix(ag, bg), mix(ab, bb), mix(aa ?? 1, ba ?? 1))
+end

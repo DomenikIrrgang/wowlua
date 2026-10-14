@@ -1008,6 +1008,14 @@ class MockColor
         self.r, self.g, self.b, self.a = r, g, b, a ?? 1
     end
 
+    function GetRGB(): (number, number, number)
+        return self.r, self.g, self.b
+    end
+
+    function GetRGBA(): (number, number, number, number)
+        return self.r, self.g, self.b, self.a
+    end
+
     function GenerateHexColor(): string
         local function byte(v: number): number
             return math.floor(v * 255 + 0.5)
@@ -1025,6 +1033,16 @@ CreateColorFromHexString = (function(hex: string): colorRGBA
     end
     return CreateColor(part(3), part(5), part(7), part(1))
 end) :: any
+
+-- The client's class and item quality colors (a few).
+RAID_CLASS_COLORS = {
+    MAGE = { r = 0.25, g = 0.78, b = 0.92, colorStr = "ff3fc7eb" },
+    WARRIOR = { r = 0.78, g = 0.61, b = 0.43, colorStr = "ffc69b6d" },
+}
+ITEM_QUALITY_COLORS = {
+    [0] = { r = 0.62, g = 0.62, b = 0.62 },
+    [4] = { r = 0.64, g = 0.21, b = 0.93 },
+}
 
 -- Minimap, cursor, textures, Addon Compartment ---------------------------------
 

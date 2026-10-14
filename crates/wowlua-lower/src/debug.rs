@@ -39,7 +39,10 @@ impl Lowerer<'_> {
             },
             _ => return None,
         };
-        (id.starts_with("debug.") || id.starts_with("reflect.") || log_rank(&id).is_some())
+        (id.starts_with("debug.")
+            || id.starts_with("reflect.")
+            || log_rank(&id).is_some()
+            || id == "color.hex")
             .then_some(id)
     }
 
@@ -204,6 +207,7 @@ impl Lowerer<'_> {
                 );
                 lit(ir::ExprKind::Nil, pos)
             }
+            "color.hex" => self.color_hex(callee, args, e),
             "debug.location" => self.string(&self.location(e.span), pos),
             "debug.nameof" => match exprs.first().and_then(|x| nameof(x)) {
                 Some(name) => self.string(&name, pos),
@@ -262,6 +266,54 @@ impl Lowerer<'_> {
     }
 
     /// The callee of an intrinsic call (a direct call is not a value use).
+    /// `color.hex("ff8800")`: a constant argument is validated (E8390) and
+    /// folded to `CreateColor(r, g, b, a)`; anything else calls the module.
+    fn color_hex(&mut self, callee: &Expr, args: &Args, e: &Expr) -> ir::Expr {
+        let pos = self.span_pos(e.span);
+        let exprs = args.exprs();
+        let text = match exprs.first().and_then(|x| self.const_value(x)) {
+            Some(Const::String(s)) if exprs.len() == 1 => String::from_utf8_lossy(&s).into_owned(),
+            _ => {
+                let f = self.intrinsic_callee(callee);
+                let a = self.args_list(args);
+                return call(f, a, pos);
+            }
+        };
+        let digits = text.strip_prefix('#').unwrap_or(&text);
+        let bytes: Option<Vec<f64>> = (digits.len() == 6 || digits.len() == 8)
+            .then(|| {
+                (0..digits.len())
+                    .step_by(2)
+                    .map(|i| {
+                        u8::from_str_radix(&digits[i..i + 2], 16)
+                            .ok()
+                            .map(|b| f64::from(b) / 255.0)
+                    })
+                    .collect()
+            })
+            .flatten();
+        let Some(mut c) = bytes.filter(|_| digits.is_ascii()) else {
+            self.error(
+                "E8390",
+                exprs[0].span,
+                format!("`{text}` is not a color: write \"rrggbb\" or \"aarrggbb\" in hex digits, optionally after `#`"),
+            );
+            return lit(ir::ExprKind::Nil, pos);
+        };
+        // `aarrggbb`: alpha first.
+        if c.len() == 4 {
+            c.rotate_left(1);
+        } else {
+            c.push(1.0);
+        }
+        let f = name_expr(ident("CreateColor", pos));
+        let a = c
+            .into_iter()
+            .map(|v| constant::number_expr(v, pos))
+            .collect();
+        call(f, a, pos)
+    }
+
     fn intrinsic_callee(&mut self, callee: &Expr) -> ir::Expr {
         match &callee.kind {
             ExprKind::Name(n) => name_expr(self.ident(n)),
