@@ -1,0 +1,44 @@
+-- wowlua:unit: unit information from the client (on WoW: Forever, names
+-- include the surname and health is secret even out of combat).
+import * as unit from "wowlua:unit"
+import * as secret from "wowlua:secret"
+import suite, say from "/harness"
+
+local s = suite("unit")
+
+s:test("the player's record", function(t)
+    const info = unit.info("player")
+    t:ok(info ~= nil, "the player exists")
+    if not info then return end
+    t:ok(not secret.isSecret(info.name), "the own name is readable")
+    t:ok(info.fullName ~= nil and info.fullName:find("-", 1, true) ~= nil, `full name {info.fullName}`)
+    t:eq(info.fullName, unit.fullName("player"), "fullName agrees")
+    t:ok(not secret.isSecret(info.classFile), "the own class is readable")
+    t:ok(info.level > 0, "a level")
+    t:ok(secret.flag(info.isPlayer), "a player")
+    say(`unit: {info.name} / {info.fullName} / {info.classFile} / role {secret.known(info.role, "?")}`)
+end)
+
+s:test("health, power and class color", function(t)
+    local hp, max = unit.health("player")
+    const pct = unit.healthPercent("player")
+    say(`unit: health secret {secret.isSecret(hp)}, max secret {secret.isSecret(max)}, percent {secret.isSecret(pct) and "secret" or tostring(pct)}`)
+    const bar = CreateFrame("StatusBar", nil, UIParent)
+    bar:SetMinMaxValues(0, max)
+    bar:SetValue(hp)
+    local power, powerMax = unit.power("player")
+    bar:SetMinMaxValues(0, powerMax)
+    bar:SetValue(power)
+    bar:Hide()
+    t:ok(unit.classColor("player") ~= nil, "a class color")
+end)
+
+s:test("the group's tokens", function(t)
+    const tokens: string[] = {}
+    for token in unit.group({ includePlayer = true }) do
+        tokens[#tokens + 1] = token
+    end
+    t:ok(#tokens >= 1, `tokens: {table.concat(tokens, " ")}`)
+    t:eq(unit.groupSize() >= 1, true, "a size")
+    t:ok(secret.flag(unit.isSame("player", "player")), "the player is the player")
+end)

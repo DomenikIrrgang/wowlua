@@ -639,6 +639,20 @@ UnitRace = (function(unit: string): (string?, string?)
     const r = mockUnit(unit)?.race
     return r, r
 end) :: any
+function GetNumGroupMembers(_: number?): number
+    local n = 0
+    if Mock.group == "raid" then
+        for i = 1, 40 do
+            if mockUnit(`raid{i}`) then n += 1 end
+        end
+    elseif Mock.group then
+        n = 1
+        for i = 1, 4 do
+            if mockUnit(`party{i}`) then n += 1 end
+        end
+    end
+    return n
+end
 UnitGroupRolesAssigned = (function(unit: string): string
     return mockUnit(unit)?.role ?? "NONE"
 end) :: any

@@ -350,7 +350,10 @@ menus and lists, then the widget themes.
   secret string stays a string through `wrap`); `secret` done 2026-10-14
   (decision S26, from SuuUI's probes of the WoW: Forever client); the
   generated API declarations now let documented secret-accepting arguments
-  (`SecretArguments`) take `Secret<T>`, widget setters included.
+  (`SecretArguments`) take `Secret<T>`, widget setters included. `unit` done
+  2026-10-14 (records with secrets passed through, WoW: Forever's
+  first-and-surname names, the client's health percentage, group tokens;
+  the mock client models units).
 
 ## M9: Test runner, language server, formatter
 

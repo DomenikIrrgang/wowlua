@@ -1,0 +1,192 @@
+-- wowlua:unit (spec stdlib "unit"): unit information across flavors.
+-- Values the client may return as secrets (names, classes, health, yes/no
+-- answers in combat) are typed `T | Secret<T>` and passed through: nothing
+-- here compares or tests them (decision S26).
+import * as secret from "wowlua:secret"
+import * as color from "wowlua:color"
+import type Color from "wowlua:color"
+
+export type UnitInfo = {
+    --- Without the realm (WoW: Forever's names include the surname).
+    name: string | Secret<string>,
+    --- Only for players of another realm.
+    realm?: string,
+    --- `"Name-Realm"`, the own realm filled in; nil when the name is secret.
+    fullName?: string,
+    guid?: string | Secret<string>,
+    class?: string | Secret<string>,
+    classFile?: string | Secret<string>,
+    level: number,
+    isPlayer: boolean | Secret<boolean>,
+    isConnected: boolean | Secret<boolean>,
+    faction?: string,
+    race?: string | Secret<string>,
+    role?: string | Secret<string>,
+}
+
+export type GroupOptions = { includePlayer?: boolean, includePets?: boolean }
+
+-- `GetUnitName(unit, true)`: the name with `-Realm` for other realms.
+const getUnitName = _G.GetUnitName :: ((unit: string, showServer: boolean) -> (string | Secret<string>)?)?
+
+local function ownRealm(): string
+    const normalized = GetNormalizedRealmName()
+    if normalized then
+        return normalized
+    end
+    const realm = GetRealmName():gsub("[%s%-]", "")
+    return realm
+end
+
+-- The name and (for another realm) the realm.
+local function nameAndRealm(unit: UnitToken): (string | Secret<string>, string?)
+    local full: (string | Secret<string>)? = nil
+    if getUnitName then
+        full = getUnitName(unit, true)
+    else
+        full = (UnitName(unit))
+    end
+    if secret.isSecret(full) then
+        return full, nil
+    end
+    if full == nil then
+        return "", nil
+    end
+    local name, realm = full:match("^(.-)%-(.+)$")
+    if name and realm then
+        return name, realm
+    end
+    return full, nil
+end
+
+--- Whether the unit exists.
+export function exists(unit: UnitToken): boolean
+    return secret.flag(UnitExists(unit))
+end
+
+--- `"Name-Realm"`, the own realm filled in; nil when the name is secret
+--- or the unit does not exist.
+export function fullName(unit: UnitToken): string?
+    if not exists(unit) then
+        return nil
+    end
+    local name, realm = nameAndRealm(unit)
+    if secret.isSecret(name) then
+        return nil
+    end
+    return `{name}-{realm ?? ownRealm()}`
+end
+
+--- What the client says about a unit; nil when it does not exist.
+export function info(unit: UnitToken): UnitInfo?
+    if not exists(unit) then
+        return nil
+    end
+    local name, realm = nameAndRealm(unit)
+    local className, classFile = UnitClass(unit)
+    local faction = UnitFactionGroup(unit)
+    local race = UnitRace(unit)
+    local fullText: string? = nil
+    if not secret.isSecret(name) then
+        fullText = `{name}-{realm ?? ownRealm()}`
+    end
+    return {
+        name = name,
+        realm = realm,
+        fullName = fullText,
+        guid = UnitGUID(unit),
+        class = className,
+        classFile = classFile,
+        level = UnitLevel(unit),
+        isPlayer = UnitIsPlayer(unit),
+        isConnected = UnitIsConnected(unit),
+        faction = faction,
+        race = race,
+        role = UnitGroupRolesAssigned(unit),
+    }
+end
+
+--- `UnitIsUnit`: may be a secret boolean in combat (`secret.flag` reads
+--- it as false).
+export function isSame(a: UnitToken, b: UnitToken): boolean | Secret<boolean>
+    return UnitIsUnit(a, b)
+end
+
+--- Current and maximum health (secret on restricted clients).
+export function health(unit: UnitToken): (number | Secret<number>, number | Secret<number>)
+    return UnitHealth(unit), UnitHealthMax(unit)
+end
+
+const unitHealthPercent = _G.UnitHealthPercent :: ((unit: string, usePredicted: boolean?, curve: any) -> number | Secret<number>)?
+
+--- Health in percent (0 to 100): the client's own (possibly secret) where
+--- it has one, else computed when both values can be read, else nil.
+export function healthPercent(unit: UnitToken): (number | Secret<number>)?
+    if unitHealthPercent then
+        const scale = (_G.CurveConstants :: { ScaleTo100?: any }?)?.ScaleTo100
+        return unitHealthPercent(unit, false, scale)
+    end
+    local hp, max = UnitHealth(unit), UnitHealthMax(unit)
+    if secret.isSecret(hp) or secret.isSecret(max) or max == 0 then
+        return nil
+    end
+    return hp / max * 100
+end
+
+--- Current and maximum power (of `powerType`, else the unit's own).
+export function power(unit: UnitToken, powerType: number?): (number | Secret<number>, number | Secret<number>)
+    return UnitPower(unit, powerType), UnitPowerMax(unit, powerType)
+end
+
+--- The unit's class color (wowlua:color); nil when the class is secret.
+export function classColor(unit: UnitToken): Color?
+    local _, classFile = UnitClass(unit)
+    if secret.isSecret(classFile) or classFile == nil then
+        return nil
+    end
+    return color.class(classFile)
+end
+
+--- The group's unit tokens: `raid1..raidN` in a raid, `party1..party4` in a
+--- party, and `player` (with `includePlayer`, or alone when solo).
+export function group(opts: GroupOptions?): () -> UnitToken?
+    const tokens: UnitToken[] = {}
+    const pets = opts?.includePets == true
+    local function add(token: UnitToken, pet: UnitToken)
+        if exists(token) then
+            tokens[#tokens + 1] = token
+            if pets and exists(pet) then
+                tokens[#tokens + 1] = pet
+            end
+        end
+    end
+    const withPlayer = opts?.includePlayer == true
+    if secret.flag(IsInRaid()) then
+        for i = 1, 40 do
+            const token = `raid{i}`
+            -- The player is one of the raid's tokens.
+            if withPlayer or not secret.flag(UnitIsUnit(token, "player")) then
+                add(token, `raidpet{i}`)
+            end
+        end
+    else
+        if withPlayer or not secret.flag(IsInGroup()) then
+            add("player", "pet")
+        end
+        if secret.flag(IsInGroup()) then
+            for i = 1, 4 do
+                add(`party{i}`, `partypet{i}`)
+            end
+        end
+    end
+    local i = 0
+    return function(): UnitToken?
+        i += 1
+        return tokens[i]
+    end
+end
+
+--- The group's size: 1 when solo.
+export function groupSize(): number
+    return math.max(1, GetNumGroupMembers())
+end

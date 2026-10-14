@@ -145,6 +145,7 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         include_str!("../std/tooltip.wowlua"),
         Some(include_str!("../std/tooltip.d.wowlua")),
     ),
+    ("unit", include_str!("../std/unit.wowlua"), None),
 ];
 
 /// A standard-library module by name (`events` for `wowlua:events`).

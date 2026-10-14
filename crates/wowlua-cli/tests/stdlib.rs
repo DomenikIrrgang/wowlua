@@ -3197,6 +3197,89 @@ print(secret.abbreviate(1234))
     );
 }
 
+// ------------------------------------------------------------------- unit --
+
+/// `wowlua:unit`: unit records (secrets passed through), names with realms,
+/// health, class colors and group iteration.
+#[test]
+fn unit_info_health_and_groups() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as unit from "wowlua:unit"
+_G.StdUnit = unit
+"#,
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local unit = StdUnit
+local function show(i)
+    print(i.name, i.realm, i.fullName, i.class, i.classFile, i.level, i.isPlayer, i.isConnected, i.faction, i.race, i.role)
+end
+show(unit.info("player"))
+print(unit.info("target"), unit.exists("target"), unit.fullName("target"))
+Mock.units.party1 = { name = "Ally", realm = "Other", guid = "Player-2-1", class = "Warrior", classFile = "WARRIOR", level = 60, health = 10, healthMax = 40, power = 0, powerMax = 100, isPlayer = true, connected = true }
+show(unit.info("party1"))
+-- A secret name: passed through, no full name.
+Mock.units.target = { name = Mock.secret(), guid = Mock.secret(), class = "Mage", classFile = Mock.secret(), level = 70, health = Mock.secret(), healthMax = Mock.secret(), power = 0, powerMax = 0, isPlayer = false, connected = true }
+local t = unit.info("target")
+print(issecretvalue(t.name), t.fullName, unit.fullName("target"), unit.classColor("target"))
+print(unit.health("player"))
+print(unit.healthPercent("party1"), unit.healthPercent("target"))
+print(issecretvalue((unit.health("target"))))
+print(unit.classColor("player"):GenerateHexColor())
+local function members(opts)
+    local out = {}
+    for token in unit.group(opts) do out[#out + 1] = token end
+    return table.concat(out, " ")
+end
+print("solo", members(), members({ includePlayer = true }), unit.groupSize())
+Mock.group = "party"
+Mock.units.party2 = Mock.units.target
+Mock.units.partypet1 = { name = "Wolf", guid = "Pet-1", class = "", classFile = "", level = 1, health = 1, healthMax = 1, power = 0, powerMax = 0, isPlayer = false, connected = true }
+print("party", members(), members({ includePlayer = true, includePets = true }), unit.groupSize())
+Mock.group = "raid"
+Mock.units.raid1 = Mock.units.player
+Mock.units.raid2 = Mock.units.party1
+print("raid", members(), members({ includePlayer = true }), unit.groupSize())
+print(unit.isSame("raid1", "player"), unit.isSame("raid2", "player"))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "Tester nil Tester-MockRealm Mage MAGE 70 true true Alliance Human NONE",
+            "nil false nil",
+            "Ally Other Ally-Other Warrior WARRIOR 60 true true nil nil NONE",
+            "true nil nil nil",
+            "800 1000",
+            "25 nil",
+            "true",
+            "ff40c7eb",
+            "solo player player 1",
+            "party party1 party2 player party1 partypet1 party2 3",
+            "raid raid2 raid1 raid2 2",
+            "true false",
+        ]
+    );
+}
+
+/// `unit.healthPercent` uses the client's own percentage where it has one
+/// (scaled to 100), which may be secret.
+#[test]
+fn unit_health_percent_from_the_client() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as unit from \"wowlua:unit\"\n_G.StdUnit = unit\n",
+        )],
+        r#"CurveConstants = { ScaleTo100 = "scale" }
+UnitHealthPercent = function(u, predicted, curve) print("native", u, curve) return Mock.secret() end"#,
+        "Mock.loadAddon(\"Std\")\nprint(issecretvalue(StdUnit.healthPercent(\"player\")))\n",
+    );
+    assert_eq!(plain(&out), ["native player scale", "true"]);
+}
+
 // ------------------------------------------------------------------ color --
 
 /// A literal `color.hex` is validated at compile time (E8390).

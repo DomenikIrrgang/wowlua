@@ -68,16 +68,20 @@ end
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `info` | `(unit: UnitToken) -> UnitInfo?` | `nil` if the unit does not exist. Fields: `name`, `realm?`, `fullName`, `guid`, `class`, `classFile`, `level`, `isPlayer`, `isConnected`, `faction?`, `race?`, `role?`. Fields the client may return as secrets are typed `T \| Secret<T>`. |
+| `info` | `(unit: UnitToken) -> UnitInfo?` | `nil` if the unit does not exist. Fields: `name` (without the realm; on WoW: Forever it includes the surname), `realm?` (other realms only), `fullName?` (nil when the name is secret), `guid?`, `class?`, `classFile?`, `level`, `isPlayer`, `isConnected`, `faction?`, `race?`, `role?`. Fields the client may return as secrets, the yes/no ones included, are typed `T \| Secret<T>`. |
 | `exists` | `(unit: UnitToken) -> boolean` | |
-| `fullName` | `(unit: UnitToken) -> string?` | `"Name-Realm"`. The local realm is filled in (normalized like `Ambiguate`'s inverse). `nil` if the name is not accessible. |
-| `isSame` | `(a: UnitToken, b: UnitToken) -> boolean` | `UnitIsUnit` |
+| `fullName` | `(unit: UnitToken) -> string?` | `"Name-Realm"`, from `GetUnitName(unit, true)`; the own realm is filled in (`GetNormalizedRealmName`). `nil` if the name is secret. |
+| `isSame` | `(a: UnitToken, b: UnitToken) -> boolean \| Secret<boolean>` | `UnitIsUnit`; may be secret in combat (read it with `secret.flag`) |
 | `health` | `(unit: UnitToken) -> (number \| Secret<number>, number \| Secret<number>)` | Current and maximum |
-| `healthPercent` | `(unit: UnitToken) -> (number \| Secret<number>)?` | Uses the client's native percent API where the flavor table declares one, which may return a secret. Otherwise computed from `health` only when both values are accessible, else `nil`. |
+| `healthPercent` | `(unit: UnitToken) -> (number \| Secret<number>)?` | 0 to 100. The client's `UnitHealthPercent` (with `CurveConstants.ScaleTo100`) where it has one, which may return a secret. Otherwise computed from `health` only when both values are accessible, else `nil`. |
 | `power` | `(unit: UnitToken, powerType?: number) -> (number \| Secret<number>, number \| Secret<number>)` | |
-| `classColor` | `(unit: UnitToken) -> ColorMixin?` | From `wowlua:color` (honors `CUSTOM_CLASS_COLORS`) |
-| `group` | `(opts?: { includePlayer: boolean?, includePets: boolean? }) -> (() -> UnitToken?)` | Iterates `raid1..raidN` in a raid, `party1..party4` (plus `player` when requested) in a party, and only `player` when solo |
+| `classColor` | `(unit: UnitToken) -> ColorMixin?` | From `wowlua:color` (honors `CUSTOM_CLASS_COLORS`); `nil` when the class is secret |
+| `group` | `(opts?: { includePlayer: boolean?, includePets: boolean? }) -> (() -> UnitToken?)` | Iterates `raid1..raidN` in a raid (the player's own raid token only with `includePlayer`), `party1..party4` (plus `player` when requested) in a party, and only `player` when solo. Pets follow their owner with `includePets`. A secret answer to "in a raid/group" or "is it me" counts as no. |
 | `groupSize` | `() -> number` | `GetNumGroupMembers()`, with 1 when solo |
+
+The client's newer APIs (`UnitHealthPercent`, `GetUnitName`) are detected at
+run time in every flavor mode; the result is the same as a compile-time
+choice.
 
 ## aura
 
