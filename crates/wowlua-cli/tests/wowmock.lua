@@ -271,6 +271,9 @@ Settings = {
     RegisterVerticalLayoutSubcategory = function(parent, name) return newCategory(name, parent) end,
     RegisterAddOnCategory = function(c) c.registered = true end,
     RegisterProxySetting = function(category, variable, varType, name, default, get, set)
+        if Mock.settings.variables[variable] then
+            error("Setting variable '" .. variable .. "' was previously registered.")
+        end
         local s = setmetatable({ variable = variable, varType = varType, name = name, default = default, get = get, set = set }, Setting)
         Mock.settings.variables[variable] = s
         return s

@@ -2681,6 +2681,9 @@ items[2]:InitFrame(frame)
 StdSettings.profiles:use("Other")
 C((minimap.updates or 0) >= 1, "refreshed after a profile switch")
 C(minimap:GetValue() == true, "the new profile's value")
+-- The subcategory's control for the same field: its own variable.
+local again = vars.WOWLUA_STD_showMinimap_2
+C(again ~= nil and again:GetValue() == true, "a second control of a field")
 -- Opening: now, or after combat.
 StdSettings.page:open()
 Mock.fire("PLAYER_REGEN_DISABLED")

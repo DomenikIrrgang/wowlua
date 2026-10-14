@@ -76,6 +76,20 @@ end
 local registered = false
 local page: any = { id = nil }
 local proxies: any[] = {}
+-- Variables in use: the Settings API takes each name once, and a field may
+-- have several controls (on a page and its subcategory).
+local variables: { [string]: boolean } = {}
+
+local function variableFor(key: string): string
+    local name = prefix .. key
+    local n = 1
+    while variables[name] do
+        n += 1
+        name = prefix .. key .. "_" .. n
+    end
+    variables[name] = true
+    return name
+end
 local pendingOpen = false
 
 -- A row of arbitrary content: `build(holder)` once, shown in its row.
@@ -123,7 +137,7 @@ local function addControls(def: any, store: any, category: any, layout: any, con
     end
     -- A proxy setting reading and writing `store[key]`.
     local function proxy(key: string, varType: any, label: string, default: any, get: () -> any, set: (any) -> ()): any
-        local setting = Settings.RegisterProxySetting(category, prefix .. key, varType, label, default, get, set)
+        local setting = Settings.RegisterProxySetting(category, variableFor(key), varType, label, default, get, set)
         proxies[#proxies + 1] = setting
         return setting
     end
