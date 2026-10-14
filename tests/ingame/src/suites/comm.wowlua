@@ -1,0 +1,53 @@
+-- wowlua:comm: addon messages through the real server. A message to the
+-- guild or group comes back to the sender, so a channel with receiveOwn
+-- reads its own long, chunked message.
+import * as comm from "wowlua:comm"
+import suite from "/harness"
+
+local received: string? = nil
+local object: any = nil
+local channel = comm.open("StdTestComm", { receiveOwn = true })
+channel:onMessage(function(msg: string) received = msg end)
+channel:onObject(function(value: any) object = value end)
+
+local function where(): comm.Distribution?
+    if IsInGroup() then
+        return "GROUP"
+    end
+    if IsInGuild() then
+        return "GUILD"
+    end
+    return nil
+end
+
+local s = suite("comm")
+
+s:test("a long message comes back in one piece", function(t: any)
+    local dist = where()
+    if not dist then
+        t:skip("needs a group or a guild")
+        return
+    end
+    local parts = {}
+    for i = 1, 900 do parts[i] = string.char(i % 256) end
+    local long = table.concat(parts)
+    received = nil
+    local status = channel:send(long, dist)
+    t:ok(status == "sent" or status == "queued", `sent ({status})`)
+    if t:waitFor(function() return received ~= nil end, 15, "the message arrives") then
+        t:eq(received, long, "reassembled, NUL bytes included")
+    end
+end)
+
+s:test("an object comes back", function(t: any)
+    local dist = where()
+    if not dist then
+        t:skip("needs a group or a guild")
+        return
+    end
+    object = nil
+    channel:sendObject({ name = "StdTest", values = { 1, 2, 3 } }, dist)
+    if t:waitFor(function() return object ~= nil end, 15, "the object arrives") then
+        t:ok(object.name == "StdTest" and #object.values == 3, "decoded")
+    end
+end)

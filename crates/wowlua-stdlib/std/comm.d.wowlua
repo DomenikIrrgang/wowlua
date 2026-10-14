@@ -1,0 +1,4 @@
+-- Compiler behavior of `wowlua:comm` (spec stdlib "comm"): a literal
+-- prefix longer than the client allows (16 characters) is E8050.
+@intrinsic("comm.open")
+declare global open: any

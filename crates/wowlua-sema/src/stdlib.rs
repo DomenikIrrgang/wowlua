@@ -370,6 +370,21 @@ impl Ctx<'_> {
                 ),
                 None => self.settings_registered = Some(e.span),
             },
+            "comm.open" => {
+                if let Some(prefix) = args.first().and_then(|a| string(a))
+                    && (prefix.is_empty() || prefix.len() > 16)
+                {
+                    self.error(
+                        "E8050",
+                        args[0].span,
+                        format!(
+                            "the addon message prefix `{prefix}` has {} characters; the client takes 1 to 16",
+                            prefix.len()
+                        ),
+                        "this prefix",
+                    );
+                }
+            }
             "launcher.register" => match self.launcher_registered {
                 Some(first) => self.diagnostics.push(
                     Diagnostic::error("E8080", "`launcher.register` is called more than once")

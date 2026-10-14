@@ -24,6 +24,7 @@ import _ from "/suites/pool"
 import _ from "/suites/settings"
 import _ from "/suites/launcher"
 import _ from "/suites/serialize"
+import _ from "/suites/comm"
 
 local function concat(a: any[], b: any[]): any[]
     local out = {}

@@ -508,6 +508,24 @@ impl<'e> Checker<'e> {
                     .iter()
                     .map(|n| n.ty.as_ref().map(|t| self.annotation(t)))
                     .collect();
+                // Fresh literals widen (`local s = "a"` is a string); values
+                // typed elsewhere (a call's declared result, a variable,
+                // a field) keep their type, unions of literals included.
+                let keep: Vec<bool> = values
+                    .iter()
+                    .map(|v| {
+                        matches!(
+                            v.kind,
+                            ExprKind::Call { .. }
+                                | ExprKind::OptCall { .. }
+                                | ExprKind::Method { .. }
+                                | ExprKind::OptMethod { .. }
+                                | ExprKind::Name(_)
+                                | ExprKind::Field { .. }
+                                | ExprKind::Index { .. }
+                        )
+                    })
+                    .collect();
                 let values = self.expr_list(values, &expected);
                 let no_values = values.is_empty();
                 for (i, n) in names.iter().enumerate() {
@@ -522,6 +540,9 @@ impl<'e> Checker<'e> {
                         self.check_assignable(span, value, d);
                     }
                     let id = self.declare(&n.name.text, declared, value, false, Some(n.name.span));
+                    if declared.is_none() && keep.get(i).copied().unwrap_or(false) {
+                        self.flow.insert(id, value);
+                    }
                     if declared.is_some() && no_values {
                         self.flow.insert(id, Types::NIL);
                     } else if let Some(d) = declared {

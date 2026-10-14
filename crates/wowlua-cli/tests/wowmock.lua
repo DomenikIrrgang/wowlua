@@ -353,3 +353,37 @@ function Frame:GetPoint(i) local p = rawget(self, "points"); return unpack(p and
 AddonCompartmentFrame = { registeredAddons = {} }
 function AddonCompartmentFrame:RegisterAddon(data) table.insert(self.registeredAddons, data) end
 function debugprofilestop() return Mock.now * 1000 end
+
+-- Addon messages: a server that checks, records and echoes ---------------------
+
+Mock.sent = {}
+Mock.sendResults = {}      -- results to return next (else 0, success)
+Mock.lockdown = false
+Mock.group = nil           -- "party", "raid", "instance"
+Mock.echoAs = nil          -- deliver sent messages as from this player
+LE_PARTY_CATEGORY_HOME, LE_PARTY_CATEGORY_INSTANCE = 1, 2
+local function addonMessage(prefix, msg, chatType, target)
+    if #msg > 255 or msg:find("%z") then return 2 end
+    local result = table.remove(Mock.sendResults, 1) or 0
+    if result ~= 0 then return result end
+    table.insert(Mock.sent, { prefix = prefix, msg = msg, chatType = chatType, target = target })
+    if Mock.echoAs then
+        local sender = Mock.echoAs .. "-MockRealm"
+        C_Timer.After(0.05, function() Mock.fire("CHAT_MSG_ADDON", prefix, msg, chatType, sender) end)
+    end
+    return 0
+end
+C_ChatInfo = {
+    RegisterAddonMessagePrefix = function() return 0 end,
+    SendAddonMessage = addonMessage,
+    SendAddonMessageLogged = addonMessage,
+    InChatMessagingLockdown = function() return Mock.lockdown end,
+}
+Mock.events.CHAT_MSG_ADDON = true
+function Ambiguate(name) return (name:gsub("%-MockRealm$", "")) end
+function IsInRaid() return Mock.group == "raid" end
+function IsInGroup(category)
+    if category == LE_PARTY_CATEGORY_INSTANCE then return Mock.group == "instance" end
+    return Mock.group ~= nil
+end
+function IsInGuild() return Mock.guild == true end

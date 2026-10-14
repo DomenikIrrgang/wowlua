@@ -116,7 +116,10 @@ channel:send(largePayload, "WHISPER", "Name-Realm", { priority = "bulk" })
 | `opts.receiveOwn` | Deliver messages sent by the player themselves. Default `false`. |
 | `Distribution` | `"PARTY"`, `"RAID"`, `"INSTANCE_CHAT"`, `"GUILD"`, `"OFFICER"`, `"WHISPER"`, `"CHANNEL"`, plus `"GROUP"`, which picks the right one for the current group |
 
-`comm.Distribution` and `comm.SendStatus` are exported types. A namespace
+`comm.Distribution` and `comm.SendStatus` are exported types. `receiveOwn` is
+an option of `open` (`comm.open(prefix, { receiveOwn = true })`). Objects
+travel as messages whose payload starts with the bytes `\255O`, so
+`onMessage` and `onObject` handlers of one channel each get their own. A namespace
 import (`import * as comm`) exposes a module's exported types as `comm.<Type>`
 in type positions.
 
@@ -127,8 +130,11 @@ in type positions.
   `ChatThrottleLib:SendAddonMessage` with the matching priority
   (`"ALERT"`, `"NORMAL"`, `"BULK"`). This shares bandwidth with every other addon
   that uses it.
-- Otherwise a built-in throttle with **conservative** limits from the flavor
-  table is used, shared by all channels of the addon.
+- Otherwise a built-in throttle with **conservative** limits is used, shared by
+  all channels of the addon: 10 messages per prefix, regained at one a second,
+  and ChatThrottleLib's byte budget (bursts of 4000 bytes, 800 a second). The
+  limits are the same on every current flavor, so they are not in the flavor
+  table yet.
 - Where the send API reports a result (`Enum.SendAddonMessageResult`), a
   throttled result requeues the chunk with backoff. Other failures are reported
   through `wowlua:errors`.

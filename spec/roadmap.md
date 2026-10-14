@@ -284,7 +284,9 @@ menus and lists, then the widget themes.
   in LibDBIcon's shape, E8080). Its `theme` waits for the widget themes.
 - `serialize` done 2026-10-14 (binary encoding with limits, DEFLATE in plain
   Lua checked against zlib both ways, printable and addon-channel encodings,
-  checksummed export strings).
+  checksummed export strings); `comm` done 2026-10-14 (chunked messages in
+  wire format 1 or AceComm's, ChatThrottleLib or a built-in throttle,
+  server-throttle backoff, messaging lockdown, objects, E8050).
 
 ## M9: Test runner, language server, formatter
 

@@ -44,6 +44,11 @@ pub struct Module {
 const MODULES: &[(&str, &str, Option<&str>)] = &[
     ("callbacks", include_str!("../std/callbacks.wowlua"), None),
     (
+        "comm",
+        include_str!("../std/comm.wowlua"),
+        Some(include_str!("../std/comm.d.wowlua")),
+    ),
+    (
         "combat",
         include_str!("../std/combat.wowlua"),
         Some(include_str!("../std/combat.d.wowlua")),

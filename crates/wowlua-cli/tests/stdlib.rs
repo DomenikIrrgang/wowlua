@@ -1797,6 +1797,10 @@ fn core_modules_are_checked_at_compile_time() {
             "import * as launcher from \"wowlua:launcher\"\nlauncher.register({ icon = \"i\", label = \"l\", onClick = function() end })\nlauncher.register({ icon = \"i\", label = \"l\", onClick = function() end })\n",
             "E8080",
         ),
+        (
+            "import * as comm from \"wowlua:comm\"\nlocal c = comm.open(\"ThisPrefixIsTooLong\")\n",
+            "E8050",
+        ),
         // Pools are typed by the class they hold.
         (
             "import FramePool from \"wowlua:pool\"\nclass Row\n    constructor(label: string) end\nend\nlocal rows = FramePool.new(Row, 1)\n",
@@ -1954,6 +1958,8 @@ import * as pool from "wowlua:pool"
 import * as settings from "wowlua:settings"
 import * as launcher from "wowlua:launcher"
 import * as serialize from "wowlua:serialize"
+import * as comm from "wowlua:comm"
+print(comm)
 print(errors, events, lifecycle, timer, combat, hooks, slash, saved, callbacks, log, debug, reflect)
 print(locale, pool, settings, launcher, serialize)
 local n: number = errors.count()
@@ -2052,6 +2058,9 @@ fn ingame_suite_builds_and_passes_in_the_mock() {
         r#"Mock.interface = {}
 Mock.metadata.StdTest = {{ Version = "{}" }}
 Mock.onDemand.Blizzard_DebugTools = function() DevTools_Dump = function() end end
+-- In a guild, whose messages come back to the sender.
+Mock.guild = true
+Mock.echoAs = "Tester"
 "#,
         field("Interface"),
         field("Version")
@@ -2097,6 +2106,7 @@ end
         "settings",
         "launcher",
         "serialize",
+        "comm",
     ] {
         assert!(
             printed
@@ -2130,6 +2140,8 @@ fn ingame_suite_guided_run_through_a_reload() {
         r#"Mock.interface = {}
 Mock.metadata.StdTest = {{ Version = "{}" }}
 Mock.onDemand.Blizzard_DebugTools = function() DevTools_Dump = function() end end
+Mock.guild = true
+Mock.echoAs = "Tester"
 -- Advances the clock until a line containing `text` is printed.
 function Mock.awaitText(text)
     for _ = 1, 4000 do
@@ -3055,4 +3067,156 @@ print("garbage", serialize.importString("hello"))
         "{out:?}"
     );
     assert_eq!(out[2], "garbage false not an export string", "{out:?}");
+}
+
+// ------------------------------------------------------------------- comm --
+
+const COMM_MAIN: &str = r#"import * as comm from "wowlua:comm"
+
+local got: string[] = {}
+local ch = comm.open("StdComm")
+ch:onMessage(function(msg: string, sender: string, dist: string)
+    got[#got + 1] = `{sender} {dist} {#msg} {msg:sub(1, 12)}`
+    _G.StdLast = msg
+end)
+ch:onObject(function(value: any, sender: string) got[#got + 1] = `object from {sender}: {value.name} {#value.list}` end)
+local own = comm.open("StdOwn", { receiveOwn = true })
+own:onMessage(function(msg: string, sender: string) got[#got + 1] = `own {sender} {msg}` end)
+local ace = comm.open("StdAce", { format = "acecomm" })
+ace:onMessage(function(msg: string, sender: string) got[#got + 1] = `ace {sender} {#msg} {msg:byte(1)}` end)
+ace:onObject(function(value: any) got[#got + 1] = `ace object {value.name}` end)
+_G.StdComm = { comm = comm, ch = ch, own = own, ace = ace, got = got }
+"#;
+
+#[test]
+fn comm_sends_chunks_and_reassembles() {
+    let out = modes(
+        &[("src/main.wowlua", COMM_MAIN)],
+        r#"Mock.group = "party"; Mock.echoAs = "Other""#,
+        r#"local C = Mock.check
+local S = StdComm
+-- A short message.
+C(S.ch:send("hello", "PARTY") == "sent", "sent at once")
+Mock.advance(0.1)
+-- A long one with NUL bytes, in chunks, with progress.
+local parts = {}
+for i = 1, 600 do parts[i] = string.char(i % 256) end
+local long = table.concat(parts)
+local progress = {}
+S.ch:send(long, "GUILD", nil, { callback = function(sent, total) progress[#progress + 1] = sent .. "/" .. total end })
+Mock.advance(0.5)
+C(StdLast == long, "the long message reassembled")
+for _, m in ipairs(Mock.sent) do C(#m.msg <= 255 and not m.msg:find("%z"), "chunks fit the channel") end
+C(progress[#progress]:match("^(%d+)/(%d+)$"), "progress reported")
+-- GROUP picks the channel.
+Mock.group = "raid"
+S.ch:send("to the raid", "GROUP")
+C(Mock.sent[#Mock.sent].chatType == "RAID", "GROUP in a raid")
+Mock.group = nil
+C(S.ch:send("alone", "GROUP") == "dropped", "GROUP out of a group")
+Mock.group = "party"
+-- The player's own echo: only on a receiveOwn channel.
+Mock.echoAs = "Tester"
+S.ch:send("not for me", "PARTY")
+S.own:send("for me", "PARTY")
+Mock.advance(0.2)
+Mock.echoAs = "Other"
+-- Objects.
+S.ch:sendObject({ name = "profile", list = { 1, 2, 3 } }, "PARTY")
+Mock.advance(0.2)
+print(table.concat(S.got, " | "))
+"#,
+    );
+    assert_eq!(
+        out,
+        [
+            "Other PARTY 5 hello | Other GUILD 600 \u{1}\u{2}\u{3}\u{4}\u{5}\u{6}\u{7}\u{8}\t\n\u{b}\u{c} | Other RAID 11 to the raid | own Tester for me | object from Other: profile 3"
+        ],
+        "{out:?}"
+    );
+}
+
+#[test]
+fn comm_throttles_and_waits() {
+    let out = modes(
+        &[("src/main.wowlua", COMM_MAIN)],
+        r#"Mock.group = "party"; Mock.echoAs = "Other""#,
+        r#"local C = Mock.check
+local S = StdComm
+-- More than the built-in budgets allow at once: queued, then sent.
+local big = string.rep("x", 6000)
+C(S.ch:send(big, "PARTY") == "queued", "queued over the budget")
+local first = #Mock.sent
+C(first > 0 and first < 25, "a first burst " .. first)
+Mock.advance(30)
+C(StdLast == big, "all sent and reassembled")
+-- The server throttles: the chunk is retried.
+Mock.sendResults = { 3 }
+C(S.ch:send("retry me", "PARTY") == "queued", "queued after a throttle")
+Mock.advance(2)
+C(StdLast == "retry me", "sent after the throttle")
+-- Messaging lockdown: queued, or dropped on request; sent when it ends.
+Mock.lockdown = true
+C(S.ch:send("later", "PARTY") == "queued", "queued in lockdown")
+C(S.ch:send("never", "PARTY", nil, { dropInLockdown = true }) == "dropped", "dropped in lockdown")
+Mock.advance(3)
+C(StdLast ~= "later", "nothing during lockdown")
+Mock.lockdown = false
+Mock.advance(2)
+C(StdLast == "later", "sent once lockdown ends")
+-- A failure: reported, the message dropped.
+Mock.sendResults = { 5 }
+C(S.ch:send("fails", "PARTY") == "dropped", "a failed send")
+print("done")
+"#,
+    );
+    assert_eq!(plain(&out), ["done"], "{out:?}");
+    assert!(
+        errors(&out)
+            .iter()
+            .any(|e| e.contains("sending on StdComm failed (result 5)")),
+        "{out:?}"
+    );
+}
+
+#[test]
+fn comm_acecomm_format_and_chatthrottlelib() {
+    let out = modes(
+        &[("src/main.wowlua", COMM_MAIN)],
+        r#"Mock.group = "party"; Mock.echoAs = "Other"
+Mock.ctl = {}
+ChatThrottleLib = {
+    SendAddonMessage = function(self, prio, prefix, text, chattype, target, queueName, callback, arg)
+        table.insert(Mock.ctl, prio .. " " .. queueName)
+        C_ChatInfo.SendAddonMessage(prefix, text, chattype, target)
+        callback(arg, true)
+    end,
+}"#,
+        r#"local C = Mock.check
+local S = StdComm
+-- Through ChatThrottleLib, with the priority.
+C(S.ace:send("\002starts with a control byte", "PARTY", nil, { priority = "bulk" }) == "sent", "sent through ChatThrottleLib")
+C(Mock.ctl[1] == "BULK StdAce", "priority and queue " .. tostring(Mock.ctl[1]))
+C(Mock.sent[1].msg:sub(1, 1) == "\004", "AceComm escapes a leading control byte")
+local long = string.rep("y", 600)
+S.ace:send(long, "PARTY")
+local markers = {}
+for i = 2, #Mock.sent do markers[#markers + 1] = Mock.sent[i].msg:byte(1) end
+print("markers", table.concat(markers, " "))
+S.ace:sendObject({ name = "ace profile" }, "PARTY")
+-- A chunk without its start, and an unknown control byte: ignored.
+Mock.fire("CHAT_MSG_ADDON", "StdComm", "\003orphan", "PARTY", "Someone-MockRealm")
+Mock.fire("CHAT_MSG_ADDON", "StdComm", "\009future", "PARTY", "Someone-MockRealm")
+Mock.advance(0.5)
+print(table.concat(S.got, " | "))
+"#,
+    );
+    assert_eq!(
+        out,
+        [
+            "markers 1 2 3",
+            "ace Other 27 2 | ace Other 600 121 | ace object ace profile"
+        ],
+        "{out:?}"
+    );
 }

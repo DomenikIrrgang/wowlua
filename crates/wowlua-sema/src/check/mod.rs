@@ -902,6 +902,15 @@ mod tests {
         );
         ok("local x = 1\nx = \"s\"\nprint(x:upper())\n");
         err("local x = \"s\"\nx = 1\nprint(x:upper())\n", "E2003");
+        // A local keeps a declared union of literals (a call's result);
+        // fresh literals still widen, and the local takes other strings.
+        ok(
+            "type D = \"a\" | \"b\"\nlocal function f(): D return \"a\" end\nlocal function g(d: D) end\nlocal d = f()\ng(d)\nlocal s = \"a\"\ns = \"c\"\nlocal t = f()\nt = \"b\"\n",
+        );
+        err(
+            "local s = \"a\"\nlocal function g(d: \"a\") end\ng(s)\n",
+            "E2001",
+        );
         // A declared `any` is not narrowed to its initializer.
         ok(
             "interface S\n active: boolean\n function cancel()\nend\nlocal function f(): S\n local s: any = { active = true }\n s.cancel = function() end\n return s\nend\n",
