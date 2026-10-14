@@ -3,7 +3,7 @@
   "package": {
     "name": "core-demo",
     "version": "0.1.0",
-    "description": "wowlua sample addon: the core standard library (events, lifecycle, slash, saved, timer, combat, hooks)",
+    "description": "wowlua sample addon: the standard library without third-party libraries (events, saved variables, settings, minimap button, keybindings, comms)",
     "authors": ["wowlua contributors"],
     "license": "MIT",
     "wowlua": "^0.8"

@@ -1,4 +1,6 @@
--- Core Demo: the core standard library in one addon. Type /coredemo.
+-- Core Demo: the core standard library in one addon, without third-party
+-- libraries: events, saved variables, a settings page, a minimap button,
+-- keybindings and addon messages. Type /coredemo.
 import onLoad, onLogin, onLogout from "wowlua:lifecycle"
 import event from "wowlua:events"
 import slash, router from "wowlua:slash"
@@ -8,17 +10,21 @@ import outOfCombat, onCombatChange, inCombat from "wowlua:combat"
 import hook from "wowlua:hooks"
 import print from "wowlua:log"
 import binding, header from "wowlua:bindings"
+import * as settings from "wowlua:settings"
+import * as launcher from "wowlua:launcher"
+import * as comm from "wowlua:comm"
 
 interface Settings
     logins: number
     greet: boolean
     scale: number
     lastLogout?: string
+    minimap: { hide?: boolean, minimapPos?: number }
 end
 
 local db = saved.bind("CoreDemoDB", {
     version = 1,
-    defaults = { logins = 0, greet = true, scale = 1 } :: Settings,
+    defaults = { logins = 0, greet = true, scale = 1, minimap = {} } :: Settings,
     profiles = true,
 })
 
@@ -80,6 +86,57 @@ local function toggleBox()
     showBox()
 end
 
+-- Interface > AddOns > Core Demo: controls bound to the saved settings.
+settings.register({
+    title = "Core Demo",
+    store = db,
+    controls = {
+        settings.header("Core Demo"),
+        settings.checkbox("greet", { label = "Greet at login" }),
+        settings.slider("scale", { label = "Box scale", min = 0.5, max = 2, step = 0.1 }),
+        settings.keybinding("COREDEMO_TOGGLE_BOX", { label = "Toggle the box" }),
+    },
+})
+
+-- A minimap button (or LibDBIcon's, when another addon loaded it) and an
+-- Addon Compartment entry.
+launcher.register({
+    icon = "Interface\\Icons\\INV_Misc_QuestionMark",
+    label = "Core Demo",
+    onClick = function(button: string)
+        if button == "RightButton" then
+            settings.open()
+        else
+            showBox()
+        end
+    end,
+    tooltip = function(tip: GameTooltip)
+        tip:AddLine("Core Demo")
+        tip:AddLine("Left click: toggle the box. Right click: settings.", 1, 1, 1)
+    end,
+    minimap = { store = db, key = "minimap" },
+})
+
+-- Addon messages: /coredemo ping asks the guild or group, every Core Demo
+-- answers with its login count.
+local channel = comm.open("CoreDemo")
+channel:onMessage(function(msg: string, sender: string, distribution: string)
+    if msg == "ping" then
+        channel:send(`pong {db.logins}`, comm.Distribution.Whisper, sender)
+    elseif msg:find("^pong") then
+        print(`{sender} answered: {msg} ({distribution})`)
+    end
+end)
+
+local function ping()
+    local where = comm.Distribution.Guild
+    if IsInGroup() then
+        where = comm.Distribution.Group
+    end
+    channel:send("ping", where)
+    print("ping sent")
+end
+
 @hook("ToggleGameMenu")
 local function afterGameMenu()
     print("game menu toggled (wowlua:hooks)")
@@ -118,6 +175,8 @@ local commands = router({
         end,
     },
     box = { help = "Toggle the box (waits for the end of combat)", run = function() showBox() end },
+    ping = { help = "Ask other Core Demo users in your guild or group", run = function() ping() end },
+    options = { help = "Open the settings page", run = function() settings.open() end },
     reset = {
         help = "Reset this profile",
         run = function()

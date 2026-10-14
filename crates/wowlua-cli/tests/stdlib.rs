@@ -3945,6 +3945,56 @@ print(l.stats())
     );
 }
 
+// -------------------------------------------------------------- core-demo --
+
+/// M8's exit criterion: `examples/core-demo` has events, saved variables,
+/// a settings page, a minimap button, keybindings and addon messages, all
+/// from the standard library.
+#[test]
+fn core_demo_needs_no_third_party_libraries() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/core-demo");
+    let dir = tempfile::tempdir().unwrap();
+    copy_tree(&source, dir.path());
+    let stderr = build(dir.path(), "dev");
+    assert!(
+        !stderr.contains("warning[") && !stderr.contains("error"),
+        "{stderr}"
+    );
+    let out = dir.path().join("dist/dev/CoreDemo");
+    // No embedded libraries.
+    assert!(!out.join("libs").exists());
+    let printed = load(
+        &out,
+        "CoreDemo",
+        "CoreDemo.toc",
+        "",
+        "Mock.guild = true\nMock.echoAs = \"Friend\"",
+        r#"Mock.loadAddon("CoreDemo")
+Mock.fire("PLAYER_LOGIN")
+Mock.advance(4)
+local C = Mock.check
+C(#Mock.settings.categories == 1, "a settings page")
+C(CoreDemoMinimapButton ~= nil, "a minimap button")
+C(AddonCompartmentFrame.registeredAddons[1].text == "Core Demo", "an Addon Compartment entry")
+Mock.pressBinding("COREDEMO_TOGGLE_BOX")
+Mock.slash("/coredemo ping")
+Mock.advance(2)
+Mock.slash("/coredemo status")
+"#,
+    );
+    let text = plain(&printed).join("\n");
+    assert!(!text.contains("FAIL"), "{text}");
+    for expected in [
+        "login #1",
+        "box toggled",
+        "ping sent",
+        "Friend answered: pong 1 (WHISPER)",
+        "logins 1",
+    ] {
+        assert!(text.contains(expected), "{expected:?} missing:\n{text}");
+    }
+}
+
 // ------------------------------------------------------------------ color --
 
 /// A literal `color.hex` is validated at compile time (E8390).

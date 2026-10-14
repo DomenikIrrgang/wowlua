@@ -381,6 +381,11 @@ menus and lists, then the widget themes.
   themes done 2026-10-15 for dialogs and the launcher's built-in minimap
   button (decision S31). **S3 is complete**; its in-game run is pending
   (the WoW: Forever beta was down), StdTest has suites for every module.
+- Exit criterion 2026-10-15: `examples/core-demo` uses events, saved
+  variables, a settings page, a minimap button, keybindings and addon
+  messages from the standard library alone; a test runs it in the mock
+  client (login, settings page, minimap button and compartment entry, a
+  key press, a ping answered over addon messages).
 
 ## M9: Test runner, language server, formatter
 
