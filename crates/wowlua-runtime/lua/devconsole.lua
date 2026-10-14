@@ -1151,14 +1151,20 @@ end
 -- wowlua runtime: dev console (spec §7.7). This addon's dev data, the
 -- shared `WOWLUA_DEV` registry, and — from the newest runtime loaded — the
 -- `/wl` command and the dev window.
-local dev = {name = addonName, info = wl.devInfo or {}, watches = {}, schema = 1}
+local dev
+do
+
+	local __wl_t1 = wl.devInfo if __wl_t1 == nil then __wl_t1 = {} end dev = {name = addonName, info = __wl_t1,
+	watches = {},
+	schema = 1,
+	-- The data the console reads, through one versioned interface.
+	runtime = wl,
+	-- A watch from code (`debug.watch`): `fn()` shown live under `label`.
+	watch = function(label, fn)
+		dev.watches[#dev.watches + 1] = {label = label, fn = fn, source = "code"}
+	end
+	} end
 wl.dev = dev
--- A watch from code (`debug.watch`): `fn()` shown live under `label`.
-function dev.watch(label, fn)
-	dev.watches[#dev.watches + 1] = {label = label, fn = fn, source = "code"}
-end
--- The data the console reads, through one versioned interface.
-dev.runtime = wl
 local reg = WOWLUA_DEV
 if type(reg) ~= "table" then
 	reg = {addons = {}, order = {}}
@@ -1450,7 +1456,7 @@ local function install()
 	end
 
 	if type(SlashCmdList) == "table" then
-		SLASH_WOWLUA1 = "/wl"
+		_G.SLASH_WOWLUA1 = "/wl"
 		SlashCmdList.WOWLUA = function(msg)
 			reg.console.command(msg)
 		end

@@ -107,7 +107,7 @@ export function onError(fn: (msg: string) -> ()): { active: boolean, cancel: (an
     }
 end
 
-export function configure(opts: { rateLimit: number? })
+export function configure(opts: { rateLimit?: number })
     if opts.rateLimit then
         rateLimit = opts.rateLimit
     end

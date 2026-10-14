@@ -152,6 +152,12 @@ pub fn check_package_full(
     }
     let mut env = env::Env::build(&sources);
     let mut diagnostics = std::mem::take(&mut env.diagnostics);
+    env.callbacks_registry = files
+        .iter()
+        .position(|f| f.src_rel == format!("{}callbacks.wowlua", crate::STDLIB_PREFIX))
+        .and_then(|i| env.module_types.get(&i))
+        .and_then(|t| t.get("Registry"))
+        .copied();
     // Shared mode: APIs only some flavors declare are known (as `any`), so
     // that their uses report E2030.
     if let Some(shared) = shared {

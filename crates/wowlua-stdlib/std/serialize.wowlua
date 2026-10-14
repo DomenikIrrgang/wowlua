@@ -694,7 +694,7 @@ local function huffman(lengths: number[], n: number): any
             error("corrupt: over-subscribed code", 0)
         end
     end
-    local offs = { [1] = 0 }
+    local offs: number[] = { 0 }
     for l = 1, 14 do
         offs[l + 1] = offs[l] + count[l]
     end
@@ -794,7 +794,7 @@ export function decompress(s: string): string?
             if btype == 0 then
                 bitbuf, bitcnt = 0, 0
                 local a, b2, c, d = byte(s, pos, pos + 3)
-                if not d then
+                if not (a and b2 and c and d) then
                     error("corrupt: truncated", 0)
                 end
                 pos += 4
@@ -896,7 +896,7 @@ end
 const ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789()"
 local alphabetValue: { [number]: number } = {}
 for i = 1, 64 do
-    alphabetValue[byte(ALPHABET, i)] = i - 1
+    alphabetValue[byte(ALPHABET, i) ?? 0] = i - 1
 end
 
 --- Encodes bytes into letters, digits and parentheses (safe in chat).
@@ -906,7 +906,7 @@ export function toPrintable(s: string): string
     local i = 1
     while i <= n do
         local a, b, c = byte(s, i, i + 2)
-        local v = a + (b or 0) * 256 + (c or 0) * 65536
+        local v = (a ?? 0) + (b or 0) * 256 + (c or 0) * 65536
         local count = c and 4 or b and 3 or 2
         for _ = 1, count do
             local d = v % 64
@@ -920,7 +920,7 @@ end
 
 --- Reverses `toPrintable`; nil if `s` holds other characters.
 export function fromPrintable(s: string): string?
-    s = s:match("^%s*(.-)%s*$")
+    s = s:match("^%s*(.-)%s*$") ?? s
     local n = #s
     if n % 4 == 1 then
         return nil
@@ -985,7 +985,7 @@ end
 
 --- `!PREFIX:version!` and the value encoded, compressed and printable,
 --- with a checksum.
-export function exportString(value: any, opts: { version: number, prefix: string? }): string
+export function exportString(value: any, opts: { version: number, prefix?: string }): string
     local data = encode(value)
     local body = toPrintable(compress(checksumBytes(adler32(data)) .. data))
     return "!" .. (opts.prefix ?? "WL") .. ":" .. tostring(opts.version) .. "!" .. body
@@ -997,7 +997,7 @@ export function importString(s: string): (boolean, any)
         return false, "not a string"
     end
     local prefix, version, body = s:match("^%s*!([^:!]+):(%d+)!(.-)%s*$")
-    if not prefix then
+    if not (prefix and version and body) then
         return false, "not an export string"
     end
     local packed = fromPrintable(body)

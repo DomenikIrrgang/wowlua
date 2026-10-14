@@ -4,7 +4,7 @@ import suite from "/harness"
 
 local s = suite("locale")
 
-s:test("strings of the client's language, base strings as fallback", function(t: any)
+s:test("strings of the client's language, base strings as fallback", function(t)
     local german = GetLocale() == "deDE"
     t:eq(L.TITLE, german and "wowlua StdTest (Deutsch)" or "wowlua StdTest", "a plain string")
     t:eq(L.GREETING({ name = "Sua" }), german and "Hallo, Sua!" or "Hello, Sua!", "a placeholder")

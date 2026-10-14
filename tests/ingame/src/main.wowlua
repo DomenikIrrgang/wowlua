@@ -8,6 +8,7 @@ import slash, router from "wowlua:slash"
 import onLogin from "wowlua:lifecycle"
 import after from "wowlua:timer"
 import run, report, skip, isRunning, say from "/harness"
+import type Suite, TestRecord from "/harness"
 import state from "/state"
 import _ from "/suites/errors"
 import _ from "/suites/events"
@@ -26,14 +27,14 @@ import _ from "/suites/launcher"
 import _ from "/suites/serialize"
 import _ from "/suites/comm"
 
-local function concat(a: any[], b: any[]): any[]
-    local out = {}
+local function concat(a: TestRecord[], b: TestRecord[]): TestRecord[]
+    local out: TestRecord[] = {}
     for _, r in ipairs(a) do out[#out + 1] = r end
     for _, r in ipairs(b) do out[#out + 1] = r end
     return out
 end
 
-local function finish(results: any[])
+local function finish(results: TestRecord[])
     local st = state()
     st.results = results
     st.time = date("%Y-%m-%d %H:%M:%S")
@@ -42,15 +43,15 @@ end
 
 local function automatic()
     say("running the automatic tests...")
-    run(function(s: any): boolean return s.kind == "auto" end, finish)
+    run(function(s: Suite): boolean return s.kind == "auto" end, finish)
 end
 
 local function everything()
     say("running the automatic tests, then the guided ones...")
-    run(function(s: any): boolean return s.kind == "auto" end, function(auto: any[])
+    run(function(s: Suite): boolean return s.kind == "auto" end, function(auto: TestRecord[])
         report(auto)
         say("now the guided tests: follow the yellow instructions")
-        run(function(s: any): boolean return s.kind == "guided" end, function(guided: any[])
+        run(function(s: Suite): boolean return s.kind == "guided" end, function(guided: TestRecord[])
             local all = concat(auto, guided)
             local st = state()
             if st.reload and st.reload.pending then
@@ -74,7 +75,7 @@ local function continueAfterReload()
     end
     after(3, function()
         say("continuing after the reload...")
-        run(function(s: any): boolean return s.kind == "reload" end, function(results: any[])
+        run(function(s: Suite): boolean return s.kind == "reload" end, function(results: TestRecord[])
             finish(concat(st.results or {}, results))
         end)
     end)

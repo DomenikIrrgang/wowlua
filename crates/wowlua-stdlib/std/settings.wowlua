@@ -22,59 +22,76 @@ export interface SettingsCategory
     function refresh()
 end
 
+type Labeled = { label: string, tooltip?: string }
+
+--- A control of an options page (made by the functions below).
+export type Control =
+    { kind: "header", text: string }
+    | { kind: "text", text: string }
+    | { kind: "checkbox", key: string, opts: Labeled }
+    | {
+        kind: "slider",
+        key: string,
+        opts: { label: string, tooltip?: string, min: number, max: number, step: number, format?: ((v: number) -> string) },
+    }
+    | { kind: "dropdown", key: string, opts: { label: string, tooltip?: string, options: { value: any, label: string }[] } }
+    | { kind: "color", key: string, opts: { label: string, tooltip?: string, alpha?: boolean } }
+    | { kind: "keybinding", key: string, opts: { label: string } }
+    | { kind: "button", text: string, fn: () -> () }
+    | { kind: "custom", fn: (parent: Frame) -> Frame, opts: { height?: number } }
+
 -- Variable names of the proxy settings, unique across addons.
 local prefix = "WOWLUA_" .. addonName:upper():gsub("[^A-Z0-9]", "_") .. "_"
 
 --- A section header.
-export function header(text: string): any
+export function header(text: string): Control
     return { kind = "header", text = text }
 end
 
 --- A line of text.
-export function text(content: string): any
+export function text(content: string): Control
     return { kind = "text", text = content }
 end
 
 --- A checkbox for a `boolean` field.
-export function checkbox(key: string, opts: { label: string, tooltip: string? }): any
+export function checkbox(key: string, opts: { label: string, tooltip?: string }): Control
     return { kind = "checkbox", key = key, opts = opts }
 end
 
 --- A slider for a `number` field.
 export function slider(
     key: string,
-    opts: { label: string, tooltip: string?, min: number, max: number, step: number, format: ((v: number) -> string)? }
-): any
+    opts: { label: string, tooltip?: string, min: number, max: number, step: number, format?: ((v: number) -> string) }
+): Control
     return { kind = "slider", key = key, opts = opts }
 end
 
 --- A dropdown; its options are shown in their order.
-export function dropdown(key: string, opts: { label: string, tooltip: string?, options: { value: any, label: string }[] }): any
+export function dropdown(key: string, opts: { label: string, tooltip?: string, options: { value: any, label: string }[] }): Control
     return { kind = "dropdown", key = key, opts = opts }
 end
 
 --- A color swatch for a `{ r, g, b, a? }` field.
-export function color(key: string, opts: { label: string, tooltip: string?, alpha: boolean? }): any
+export function color(key: string, opts: { label: string, tooltip?: string, alpha?: boolean }): Control
     return { kind = "color", key = key, opts = opts }
 end
 
 --- A key binding row for the binding `name`.
-export function keybinding(name: string, opts: { label: string }): any
+export function keybinding(name: string, opts: { label: string }): Control
     return { kind = "keybinding", key = name, opts = opts }
 end
 
 --- A button.
-export function button(label: string, onClick: () -> ()): any
+export function button(label: string, onClick: () -> ()): Control
     return { kind = "button", text = label, fn = onClick }
 end
 
 --- An area of arbitrary UI: `factory` builds it once into the parent frame.
-export function custom(factory: (parent: Frame) -> Frame, opts: { height: number? }?): any
+export function custom(factory: (parent: Frame) -> Frame, opts: { height?: number }?): Control
     return { kind = "custom", fn = factory, opts = opts or {} }
 end
 
 local registered = false
-local page: any = { id = nil }
 local proxies: any[] = {}
 -- Variables in use: the Settings API takes each name once, and a field may
 -- have several controls (on a page and its subcategory).
@@ -95,9 +112,9 @@ local pendingOpen = false
 -- A row of arbitrary content: `build(holder)` once, shown in its row. The
 -- row is a plain frame (Blizzard's element templates need set-up of their
 -- own controls), so the list's initializer does nothing to it.
-local function element(layout: any, height: number, build: (holder: any) -> ())
+local function element(layout: any, height: number, build: (holder: Frame) -> ())
     local init: any = Settings.CreateElementInitializer("Frame", { name = "" })
-    local holder: any = nil
+    local holder: Frame? = nil
     local baseInit = init.InitFrame
     local baseReset = init.Resetter
     init.GetExtent = function(): number
@@ -106,8 +123,9 @@ local function element(layout: any, height: number, build: (holder: any) -> ())
     init.InitFrame = function(self: any, frame: any)
         baseInit(self, frame)
         if not holder then
-            holder = CreateFrame("Frame")
-            callIn({ component = "settings: custom control" }, build, holder)
+            local created = CreateFrame("Frame")
+            holder = created
+            callIn({ component = "settings: custom control" }, build, created)
         end
         holder:SetParent(frame)
         holder:ClearAllPoints()
@@ -125,13 +143,26 @@ local function element(layout: any, height: number, build: (holder: any) -> ())
     layout:AddInitializer(init)
 end
 
-local function colorHex(c: any): string
+type Color = { r: number, g: number, b: number, a?: number }
+
+local function colorHex(c: Color?): string
     local value = c or { r = 1, g = 1, b = 1 }
     return CreateColor(value.r or 1, value.g or 1, value.b or 1, value.a or 1):GenerateHexColor()
 end
 
-local function addControls(def: any, store: any, category: any, layout: any, controls: any[])
-    local h: any = handle(store)
+type PageDef = {
+    title: string,
+    store: table,
+    controls: Control[],
+    subcategories?: { title: string, controls: Control[] }[],
+    onChange?: ((key: string, value: any) -> ()),
+}
+
+local function addControls(def: PageDef, store: table, category: any, layout: any, controls: Control[])
+    local h = handle(store)
+    local function default(key: string): any
+        return h.__default and h:__default(key)
+    end
     local function changed(key: string, value: any)
         if def.onChange then
             callIn({ component = "settings: onChange" }, def.onChange, key, value)
@@ -143,13 +174,12 @@ local function addControls(def: any, store: any, category: any, layout: any, con
         proxies[#proxies + 1] = setting
         return setting
     end
-    local function plain(c: any, varType: any): any
-        local key = c.key
-        local default = h:__default(key)
-        if default == nil then
-            default = store[key]
+    local function plain(key: string, label: string, varType: any): any
+        local value = default(key)
+        if value == nil then
+            value = store[key]
         end
-        return proxy(key, varType, c.opts.label, default, function(): any
+        return proxy(key, varType, label, value, function(): any
             return store[key]
         end, function(value: any)
             store[key] = value
@@ -157,44 +187,45 @@ local function addControls(def: any, store: any, category: any, layout: any, con
         end)
     end
     for _, c in ipairs(controls) do
-        local kind = c.kind
-        if kind == "header" then
+        if c.kind == "header" then
             layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(c.text))
-        elseif kind == "text" then
-            element(layout, 20, function(holder: any)
+        elseif c.kind == "text" then
+            local content = c.text
+            element(layout, 20, function(holder: Frame)
                 local line = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
                 line:SetPoint("LEFT", holder, "LEFT", 0, 0)
                 line:SetPoint("RIGHT", holder, "RIGHT", -20, 0)
                 line:SetJustifyH("LEFT")
-                line:SetText(c.text)
+                line:SetText(content)
             end)
-        elseif kind == "checkbox" then
-            Settings.CreateCheckbox(category, plain(c, Settings.VarType.Boolean), c.opts.tooltip)
-        elseif kind == "slider" then
+        elseif c.kind == "checkbox" then
+            Settings.CreateCheckbox(category, plain(c.key, c.opts.label, Settings.VarType.Boolean), c.opts.tooltip)
+        elseif c.kind == "slider" then
             local o = c.opts
             local options = Settings.CreateSliderOptions(o.min, o.max, o.step)
             if o.format then
                 options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, o.format)
             end
-            Settings.CreateSlider(category, plain(c, Settings.VarType.Number), options, o.tooltip)
-        elseif kind == "dropdown" then
+            Settings.CreateSlider(category, plain(c.key, o.label, Settings.VarType.Number), options, o.tooltip)
+        elseif c.kind == "dropdown" then
             local first = c.opts.options[1]
             local valueType = first and type(first.value)
             local varType = valueType == "number" and Settings.VarType.Number
                 or valueType == "boolean" and Settings.VarType.Boolean
                 or Settings.VarType.String
+            local choices = c.opts.options
             local function options(): any
                 local container = Settings.CreateControlTextContainer()
-                for _, option in ipairs(c.opts.options) do
+                for _, option in ipairs(choices) do
                     container:Add(option.value, option.label)
                 end
                 return container:GetData()
             end
-            Settings.CreateDropdown(category, plain(c, varType), options, c.opts.tooltip)
-        elseif kind == "color" then
+            Settings.CreateDropdown(category, plain(c.key, c.opts.label, varType), options, c.opts.tooltip)
+        elseif c.kind == "color" then
             local key = c.key
             local alpha = c.opts.alpha == true
-            local setting = proxy(key, Settings.VarType.String, c.opts.label, colorHex(h:__default(key)), function(): any
+            local setting = proxy(key, Settings.VarType.String, c.opts.label, colorHex(default(key)), function(): any
                 return colorHex(store[key])
             end, function(hex: any)
                 local picked = CreateColorFromHexString(hex)
@@ -206,10 +237,11 @@ local function addControls(def: any, store: any, category: any, layout: any, con
                 changed(key, value)
             end)
             Settings.CreateColorSwatch(category, setting, c.opts.tooltip)
-        elseif kind == "keybinding" then
+        elseif c.kind == "keybinding" then
             local index: number? = nil
+            local binding = c.key
             for i = 1, GetNumBindings() do
-                if GetBinding(i) == c.key then
+                if GetBinding(i) == binding then
                     index = i
                     break
                 end
@@ -217,26 +249,23 @@ local function addControls(def: any, store: any, category: any, layout: any, con
             if index then
                 layout:AddInitializer(CreateKeybindingEntryInitializer(index, true))
             else
-                error("settings.keybinding: no binding `" .. tostring(c.key) .. "`", 0)
+                error("settings.keybinding: no binding `" .. binding .. "`", 0)
             end
-        elseif kind == "button" then
+        elseif c.kind == "button" then
             local onClick = c.fn
             layout:AddInitializer(CreateSettingsButtonInitializer("", c.text, function()
                 callIn({ component = "settings: button" }, onClick)
             end, nil, true))
-        elseif kind == "custom" then
-            element(layout, c.opts.height or 100, function(holder: any)
-                c.fn(holder)
+        elseif c.kind == "custom" then
+            local factory = c.fn
+            element(layout, c.opts.height or 100, function(holder: Frame)
+                factory(holder)
             end)
         end
     end
 end
 
-function page.refresh(_)
-    for _, setting in ipairs(proxies) do
-        setting:NotifyUpdate()
-    end
-end
+local categoryId: any = nil
 
 local function show()
     if InCombatLockdown() then
@@ -250,24 +279,26 @@ local function show()
         end
         return
     end
-    if page.id ~= nil then
-        Settings.OpenToCategory(page.id)
+    if categoryId ~= nil then
+        Settings.OpenToCategory(categoryId)
     end
 end
 
-function page.open(_)
-    show()
-end
+local page: SettingsCategory = {
+    id = nil,
+    open = function(_: SettingsCategory)
+        show()
+    end,
+    refresh = function(_: SettingsCategory)
+        for _, setting in ipairs(proxies) do
+            setting:NotifyUpdate()
+        end
+    end,
+}
 
 --- Registers the addon's options page (once): created when the store has
 --- loaded.
-export function register(def: {
-    title: string,
-    store: any,
-    controls: any[],
-    subcategories: { title: string, controls: any[] }[]?,
-    onChange: ((key: string, value: any) -> ())?,
-}): SettingsCategory
+export function register(def: PageDef): SettingsCategory
     if registered then
         error("settings.register: called more than once (use subcategories)", 2)
     end
@@ -280,9 +311,10 @@ export function register(def: {
             addControls(def, def.store, subcategory, subLayout, sub.controls)
         end
         Settings.RegisterAddOnCategory(category)
-        page.id = category:GetID()
+        categoryId = category:GetID()
+        page.id = categoryId
         -- Profile switches re-read every control.
-        local profiles: any = handle(def.store).profiles
+        local profiles = handle(def.store).profiles
         if profiles then
             profiles:onChange(function() page:refresh() end)
         end
@@ -290,7 +322,7 @@ export function register(def: {
     if isLoaded() then
         callIn({ component = "settings: register" }, build)
     else
-        local tasks = wl.lifecycleTasks
+        local tasks = assert(wl.lifecycleTasks)
         tasks.afterLoad[#tasks.afterLoad + 1] = build
     end
     return page

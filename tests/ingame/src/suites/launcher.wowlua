@@ -18,21 +18,22 @@ launcher.register({
     ldb = true,
 })
 
-local libStub: any = _G.LibStub
+-- LibStub and LibDBIcon are untyped libraries.
+local libStub: ((major: string, silent: boolean) -> any)? = _G.LibStub
 local dbicon = libStub and libStub("LibDBIcon-1.0", true)
 
 local s = suite("launcher")
 
-s:test("a minimap button and a compartment entry", function(t: any)
+s:test("a minimap button and a compartment entry", function(t)
     if dbicon then
         t:ok(dbicon:GetMinimapButton("StdTest") ~= nil, "LibDBIcon's button (LibDBIcon is loaded)")
     else
-        local b: any = _G.StdTestMinimapButton
+        local b: Button? = _G.StdTestMinimapButton
         t:ok(b ~= nil and b:IsShown(), "the built-in button")
-        t:ok(b and b:GetParent() == Minimap, "on the minimap")
+        t:ok(b ~= nil and b:GetParent() == Minimap, "on the minimap")
     end
     if AddonCompartmentFrame and AddonCompartmentFrame.registeredAddons then
-        local found: any = nil
+        local found: { text: string, func: (button: any, input: { buttonName: string }) -> () }? = nil
         for _, entry in ipairs(AddonCompartmentFrame.registeredAddons) do
             if entry.text == "wowlua StdTest" then found = entry end
         end
@@ -46,10 +47,10 @@ s:test("a minimap button and a compartment entry", function(t: any)
     end
 end)
 
-s:test("hiding and showing the button", function(t: any)
+s:test("hiding and showing the button", function(t)
     launcher.showMinimap(false)
     t:eq(store.minimap.hide, true, "stored hidden")
-    local b: any = _G.StdTestMinimapButton
+    local b: Button? = _G.StdTestMinimapButton
     if b then t:ok(not b:IsShown(), "hidden") end
     launcher.showMinimap(true)
     if b then t:ok(b:IsShown(), "shown again") end
@@ -57,7 +58,7 @@ end)
 
 local g = suite("launcher (guided)", "guided")
 
-g:test("a real click on the minimap button", function(t: any)
+g:test("a real click on the minimap button", function(t)
     local before = #clicks
     t:ask("Click the question-mark button at the minimap's edge (any mouse button)")
     if t:waitFor(function() return #clicks > before end, 120, "a click") then

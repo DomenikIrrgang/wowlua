@@ -6,7 +6,7 @@ local seen: string[] = {}
 
 -- Targets of this suite (globals, as hooks of Blizzard code would be).
 _G.StdTestAdd = function(a: number, b: number): (number, string) return a + b, "sum" end
-_G.StdTestObject = { get = function(self: any, k: string): string return k .. "!" end }
+_G.StdTestObject = { get = function(_: table, k: string): string return k .. "!" end }
 _G.StdTestDecorated = function(_: number) end
 local frame = CreateFrame("Frame", "StdTestHookFrame", UIParent)
 frame:Hide()
@@ -17,13 +17,13 @@ local function afterDecorated(v: number)
 end
 
 @hookScript("StdTestHookFrame", "OnShow")
-local function shown(f: any)
+local function shown(f: Frame)
     seen[#seen + 1] = `shown {f:GetName()}`
 end
 
 local s = suite("hooks")
 
-s:test("decorated hooks", function(t: any)
+s:test("decorated hooks", function(t)
     seen = {}
     _G.StdTestDecorated(4)
     frame:Show()
@@ -31,7 +31,7 @@ s:test("decorated hooks", function(t: any)
     t:eq(table.concat(seen, ", "), "decorated 4, shown StdTestHookFrame", "@hook and @hookScript ran")
 end)
 
-s:test("results are kept, errors isolated", function(t: any)
+s:test("results are kept, errors isolated", function(t)
     local args = ""
     hook("StdTestAdd", function(a: number, b: number) args = `{a},{b}` end)
     hook("StdTestAdd", function() error("hook failed") end)
@@ -43,13 +43,13 @@ s:test("results are kept, errors isolated", function(t: any)
     t:ok(t:reported("[hooks: StdTestAdd]"), "naming the hook")
 end)
 
-s:test("methods, objects and Blizzard widgets", function(t: any)
+s:test("methods, objects and Blizzard widgets", function(t)
     local key = ""
-    hook("StdTestObject", "get", function(self: any, k: string) key = k end)
+    hook("StdTestObject", "get", function(_: table, k: string) key = k end)
     t:eq(_G.StdTestObject:get("x"), "x!", "method result")
     t:eq(key, "x", "method hook")
     local text = ""
-    hook(GameTooltip, "SetText", function(tip: any, value: string) text = value end)
+    hook(GameTooltip, "SetText", function(_: GameTooltip, value: string) text = value end)
     GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
     GameTooltip:SetText("StdTest tooltip")
     GameTooltip:Hide()
@@ -61,7 +61,7 @@ s:test("methods, objects and Blizzard widgets", function(t: any)
     t:eq(hidden, 1, "hookScript on a frame object")
 end)
 
-s:test("missing targets are refused", function(t: any)
+s:test("missing targets are refused", function(t)
     t:ok(not pcall(hook, "StdTestMissing", "Show", function() end), "a missing table")
     t:ok(not pcall(hookScript, "StdTestMissingFrame", "OnShow", function() end), "a missing frame")
 end)

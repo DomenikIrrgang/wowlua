@@ -25,7 +25,7 @@ local function same(a: any, b: any): boolean
     return true
 end
 
-s:test("encode, compress and back", function(t: any)
+s:test("encode, compress and back", function(t)
     local data = sample()
     local encoded = serialize.encode(data)
     local ok, back = serialize.decode(encoded)
@@ -38,7 +38,7 @@ s:test("encode, compress and back", function(t: any)
     t:eq(serialize.decompress(packed), encoded, "decompress")
 end)
 
-s:test("export strings survive chat-safe text", function(t: any)
+s:test("export strings survive chat-safe text", function(t)
     local data = sample()
     local exported = serialize.exportString(data, { version = 2, prefix = "STDTEST" })
     t:ok(exported:find("^!STDTEST:2!") ~= nil, "the header")
@@ -49,7 +49,7 @@ s:test("export strings survive chat-safe text", function(t: any)
     t:eq(bad, false, "a truncated string is refused")
 end)
 
-s:test("addon-channel encoding", function(t: any)
+s:test("addon-channel encoding", function(t)
     local raw = "\000a\001b\000\255"
     local enc = serialize.toAddonChannel(raw)
     t:ok(not enc:find("%z"), "no NUL bytes")

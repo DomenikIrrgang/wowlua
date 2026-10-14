@@ -1,7 +1,9 @@
 -- wowlua runtime: error capture (spec §7.10). Errors raised by this
 -- addon's code are recorded; the previous handler always runs as well.
-local errors = {list = {}, byMessage = {}}
-wl.errors = errors
+local errors = {
+list = {},
+byMessage = {}
+}
 local folder = ("addons/" .. addonName .. "/"):lower()
 local function normal(s)
 	return tostring(s or ""):gsub("\\", "/"):lower()
@@ -25,7 +27,7 @@ end
 local function shorten(s)
 	s = tostring(s or "")
 	local i, j = normal(s):find(folder, 1, true)
-	if i then
+	if i and j then
 		return s:sub(1, i - 1):gsub("[Ii]nterface[/\\]$", "") .. s:sub(j + 1)
 	end
 	return s
@@ -58,13 +60,16 @@ function errors.record(message, stack)
 	end
 	if #errors.list > 50 then
 		local old = table.remove(errors.list)
-		errors.byMessage[old.message] = nil
+		if old then
+			errors.byMessage[old.message] = nil
+		end
 	end
 end
 function errors.clear()
 	errors.list = {}
 	errors.byMessage = {}
 end
+wl.errors = errors
 -- BugGrabber keeps the error handler to itself: listen to it instead.
 local grabber = _G.BugGrabber
 if type(grabber) == "table" and type(grabber.RegisterCallback) == "function" then

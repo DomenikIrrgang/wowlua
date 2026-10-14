@@ -26,6 +26,10 @@ pub struct Var {
     pub is_const: bool,
     /// Assigned after its declaration from inside a nested function.
     pub reassigned_in_closure: bool,
+    /// Assigned from inside a nested function: a call may change it.
+    pub assigned_in_closure: bool,
+    /// Never assigned after its declaration: closures see its narrowing.
+    pub never_reassigned: bool,
 }
 
 /// The function being checked.
@@ -70,6 +74,10 @@ pub struct Checker<'e> {
     pub(crate) vars: Vec<Var>,
     scopes: Vec<HashMap<Box<str>, VarId>>,
     pub(crate) flow: Flow,
+    /// Fields of locals that conditions narrowed (`a.b`, `a.b.c`, spec
+    /// §2.5): each path is a synthetic variable, so flows narrow and join
+    /// it like a local. Keyed by the root local and the dotted path.
+    pub(crate) field_vars: HashMap<(VarId, Box<str>), VarId>,
     /// The current path can still run.
     pub(crate) live: bool,
     fns: Vec<FnCtx>,
@@ -89,6 +97,9 @@ pub struct Checker<'e> {
     /// Classes whose instances or class tables this file stores in globals.
     pub global_classes: HashSet<DefId>,
     reassigned: HashSet<u32>,
+    assigned_in_closures: HashSet<u32>,
+    /// Locals assigned after their declaration (anywhere).
+    assigned_later: HashSet<u32>,
     pure_lua: bool,
     /// `...` at the top level: (addon name, addon table).
     pub(crate) top_vararg: Option<(TypeId, TypeId)>,
@@ -130,6 +141,7 @@ impl<'e> Checker<'e> {
             vars: Vec::new(),
             scopes: vec![HashMap::new()],
             flow: Flow::new(),
+            field_vars: HashMap::new(),
             live: true,
             fns: Vec::new(),
             depth: 0,
@@ -141,7 +153,9 @@ impl<'e> Checker<'e> {
             exports: HashMap::new(),
             private_methods: HashMap::new(),
             global_classes: HashSet::new(),
-            reassigned: reassigned_in_closures(&parse.chunk.block),
+            reassigned: reassigned_in_closures(&parse.chunk.block).0,
+            assigned_in_closures: reassigned_in_closures(&parse.chunk.block).1,
+            assigned_later: reassigned_in_closures(&parse.chunk.block).2,
             pure_lua: info.pure_lua,
             top_vararg: None,
             dynamic_env: calls_setfenv(&parse.chunk.block),
@@ -233,6 +247,8 @@ impl<'e> Checker<'e> {
             depth: self.depth,
             is_const,
             reassigned_in_closure: span.is_some_and(|s| self.reassigned.contains(&s.start)),
+            assigned_in_closure: span.is_some_and(|s| self.assigned_in_closures.contains(&s.start)),
+            never_reassigned: span.is_some_and(|s| !self.assigned_later.contains(&s.start)),
         });
         self.scopes
             .last_mut()
@@ -294,12 +310,17 @@ impl<'e> Checker<'e> {
     /// Assigns a value to a local: checks it against the annotation and
     /// updates the narrowed type.
     pub fn assign_var(&mut self, v: VarId, value: TypeId, span: Span) {
+        self.forget_fields(v, None);
         let var = self.vars[v.0 as usize].clone();
         match var.declared {
             Some(d) => {
                 self.check_assignable(span, value, d);
-                let narrowed = if self.env.assignable(value, d, self.mode) && value != Types::ANY {
-                    value
+                // A declared `any` opts out, as in `local` (above).
+                let narrowed = if d != Types::ANY
+                    && self.env.assignable(value, d, self.mode)
+                    && value != Types::ANY
+                {
+                    self.narrow_to_assigned(d, value)
                 } else {
                     d
                 };
@@ -313,6 +334,38 @@ impl<'e> Checker<'e> {
                 self.vars[v.0 as usize].base = base;
             }
         }
+    }
+
+    /// The declared type `d` after assigning `value`: the members of `d`
+    /// the value's members fit (a literal stays a literal where `d` is a
+    /// literal union; a record or interface stays as declared).
+    fn narrow_to_assigned(&mut self, d: TypeId, value: TypeId) -> TypeId {
+        let declared = self.env.types.members(d);
+        let mut out = Vec::new();
+        for vm in self.env.types.members(value) {
+            let literal = matches!(
+                self.env.types.get(vm),
+                Ty::Nil | Ty::Bool(_) | Ty::Str(_) | Ty::Num(_)
+            );
+            if literal
+                && declared
+                    .iter()
+                    .any(|&m| self.env.types.widen(m) == self.env.types.widen(vm))
+            {
+                out.push(vm);
+                continue;
+            }
+            let fits: Vec<TypeId> = declared
+                .iter()
+                .copied()
+                .filter(|&m| self.env.assignable(vm, m, self.mode))
+                .collect();
+            if fits.is_empty() {
+                return d;
+            }
+            out.extend(fits);
+        }
+        self.env.types.union(&out)
     }
 
     // ------------------------------------------------------------ files --
@@ -553,7 +606,7 @@ impl<'e> Checker<'e> {
                             && value != Types::ANY
                             && value != Types::NIL
                         {
-                            value
+                            self.narrow_to_assigned(d, value)
                         } else {
                             d
                         };
@@ -870,8 +923,14 @@ impl<'e> Checker<'e> {
         // The table the function is stored in gives `self`'s type.
         let mut owner: Option<TypeId> = None;
         if name.path.len() > 1 || method {
+            // `t.a.f` is stored in `t.a`; `t.a:m` in `t.a` too.
+            let parents = if method {
+                &name.path[1..]
+            } else {
+                &name.path[1..name.path.len() - 1]
+            };
             let mut t = self.name_type(&name.path[0]);
-            for n in &name.path[1..] {
+            for n in parents {
                 t = self
                     .member_type(t, &n.text, n.span, false)
                     .unwrap_or(Types::ANY);
@@ -965,6 +1024,17 @@ impl<'e> Checker<'e> {
                 .as_ref()
                 .is_some_and(|e| !(e.ret.types.is_empty() && e.ret.rest.is_some()));
         let saved_flow = std::mem::take(&mut self.flow);
+        // Locals never assigned after their declaration keep their
+        // narrowing inside the closure (it cannot change).
+        let vars = &self.vars;
+        self.flow = saved_flow
+            .iter()
+            .filter(|(v, _)| {
+                vars.get(v.0 as usize)
+                    .is_some_and(|var| var.never_reassigned)
+            })
+            .map(|(&v, &t)| (v, t))
+            .collect();
         let saved_live = self.live;
         let saved_scope = self.scope.clone();
         for &tp in &sig.type_params {
@@ -1295,6 +1365,9 @@ impl<'e> Checker<'e> {
         if !r.open || r.fields.contains_key(name) {
             return;
         }
+        // The field may hold other values of the type later (as in a
+        // literal without an expected type).
+        let value = self.env.types.widen(value);
         r.fields.insert(
             name.into(),
             Field {
@@ -1329,13 +1402,43 @@ impl<'e> Checker<'e> {
     }
 }
 
+/// Whether the file sets the environment of its own code: `setfenv` with a
+/// stack level, or with a function the file defines (by name). Setting the
+/// environment of other code (a chunk from `loadstring`) does not change
+/// how this file's names resolve.
 fn calls_setfenv(b: &Block) -> bool {
+    // Names of the functions this file defines.
+    let mut defined: HashSet<Box<str>> = HashSet::new();
+    wowlua_syntax::visit::walk_stmts(b, &mut |s| match &s.kind {
+        StmtKind::LocalFunction { name, .. } => {
+            defined.insert(name.text.clone());
+        }
+        StmtKind::Function { name, .. } => {
+            defined.insert(name.path[name.path.len() - 1].text.clone());
+        }
+        StmtKind::Local { names, values, .. } => {
+            for (n, v) in names.iter().zip(values) {
+                if matches!(v.kind, ExprKind::Function(_)) {
+                    defined.insert(n.name.text.clone());
+                }
+            }
+        }
+        _ => {}
+    });
     let mut found = false;
     wowlua_syntax::visit::walk_block(b, &mut |e| {
-        if let ExprKind::Call { callee, .. } = &e.kind
+        if let ExprKind::Call { callee, args } = &e.kind
             && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "setfenv")
         {
-            found = true;
+            let own = match args.exprs().first().map(|a| &a.kind) {
+                Some(ExprKind::Number(_)) | None => true,
+                Some(ExprKind::Name(n)) => defined.contains(&n.text),
+                Some(ExprKind::Function(_)) => true,
+                _ => true,
+            };
+            if own {
+                found = true;
+            }
         }
     });
     found
@@ -1412,8 +1515,9 @@ fn synthetic_body(
 }
 
 /// The declarations (by name start) of locals that are assigned from a
-/// nested function after their declaration.
-fn reassigned_in_closures(b: &Block) -> HashSet<u32> {
+/// nested function after their declaration or captured and assigned later;
+/// and of those assigned from a nested function.
+fn reassigned_in_closures(b: &Block) -> (HashSet<u32>, HashSet<u32>, HashSet<u32>) {
     struct Walk {
         scopes: Vec<HashMap<Box<str>, (u32, u32)>>,
         depth: u32,
@@ -1591,9 +1695,10 @@ fn reassigned_in_closures(b: &Block) -> HashSet<u32> {
     w.block(b);
     // A captured local assigned later (a forward declaration) may hold
     // any of its values when the closure runs.
+    let in_closures = w.out.clone();
     let mut out = w.out;
     out.extend(w.captured.intersection(&w.assigned).copied());
-    out
+    (out, in_closures, w.assigned)
 }
 
 fn literal_string(e: &Expr) -> Option<String> {

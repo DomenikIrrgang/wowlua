@@ -162,6 +162,9 @@ pub struct Env {
     /// The handler signature of each event and message (its declared
     /// parameters, any results).
     pub handlers: HashMap<Box<str>, Func>,
+    /// `Registry` of `wowlua:callbacks`, whose `on`, `once` and `fire` the
+    /// checker specializes by its event type.
+    pub callbacks_registry: Option<DefId>,
     /// Globals only a load-on-demand Blizzard addon defines (`@onDemand`):
     /// name → addon.
     pub on_demand: HashMap<Box<str>, String>,
@@ -228,6 +231,14 @@ impl Env {
             for s in &src.parse.chunk.block.stmts {
                 env.register_stmt(src, s, &mut pending);
             }
+        }
+        // `ns.__wowlua`: the runtime's table (its interface is declared in
+        // the compiler's `runtime.d.wowlua`).
+        if let Some(&rt) = env.global_types.get("WowluaRuntime") {
+            let ty = env.types.intern(Ty::Named(rt, Vec::new()));
+            let mut m = Member::field(ty);
+            m.optional = true;
+            env.def_mut(ns_id).members.insert("__wowlua".into(), m);
         }
         for src in sources {
             let mut imports = HashMap::new();

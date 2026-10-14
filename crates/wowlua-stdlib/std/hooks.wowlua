@@ -5,7 +5,7 @@
 import onAddonLoaded from "wowlua:lifecycle"
 import callIn from "wowlua:errors"
 
-type Options = { addon: string? }
+type Options = { addon?: string }
 
 local function resolve(target: any): any
     if type(target) == "string" then

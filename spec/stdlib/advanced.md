@@ -203,7 +203,7 @@ declare module "wowlua:serialize"
     function fromPrintable(s: string): string?
     function toAddonChannel(s: string): string
     function fromAddonChannel(s: string): string
-    function exportString(value: any, opts: { version: number, prefix: string? }): string
+    function exportString(value: any, opts: { version: number, prefix?: string }): string
     function importString(s: string): (boolean, any)
 end
 ```

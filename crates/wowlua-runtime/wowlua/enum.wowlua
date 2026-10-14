@@ -2,7 +2,7 @@
 -- member or assigning to an enum table raises an error.
 function wl.enum(t: table, name: string): table
 	return setmetatable(t, {
-		__index = function(_, k: any)
+		__index = function(_: table, k: any)
 			error("enum " .. name .. " has no member '" .. tostring(k) .. "'", 2)
 		end,
 		__newindex = function()

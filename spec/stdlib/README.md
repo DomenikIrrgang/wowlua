@@ -17,8 +17,10 @@ libraries such as Ace3, LibDBIcon or LibSerialize.
   through globals, except where the WoW API requires a global (§8.4).
 - **Typed.** Every API is fully typed. Decorators are checked against event
   payloads, slash handler signatures, and so on. APIs whose checks go beyond the
-  type system (settings keys, router arguments) are intrinsic-checked by the
-  compiler.
+  type system (settings keys, router arguments, callback registries) are
+  intrinsic-checked by the compiler. The modules are checked in strict mode
+  whatever the project's settings; what they share with the runtime
+  (`ns.__wowlua`) is typed by the compiler's `WowluaRuntime` interface.
 - **Compile-time where possible.** Framework decorators generate registration
   code at compile time, and debug features disappear in release builds.
 - **Flavor-aware.** Modules adapt to the flavor at compile time. A module that

@@ -25,6 +25,7 @@
   "check": {
     "lints": {
       "W1033": "allow"
-    }
+    },
+    "mode": "strict"
   }
 }

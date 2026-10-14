@@ -15,8 +15,6 @@ local first = 1
 local count = 0
 local sinks = {}
 
--- The ring buffer, shared with the dev console.
-wl.logs = { entries = buffer, first = function() return first end, count = function() return count end }
 
 local function text(...: any): string
     local parts = {}
@@ -90,7 +88,7 @@ export function sink(fn: (level: string, message: string) -> ())
 end
 
 -- The newest `n` entries (all by default), oldest first.
-export function history(n: number?): { time: number, level: string, message: string, location: string? }[]
+export function history(n: number?): { time: number, level: string, message: string, location?: string }[]
     local take = math.min(n ?? count, count)
     local out = {}
     for i = count - take, count - 1 do
@@ -101,9 +99,14 @@ end
 
 export const log = { trace = trace, debug = debug, info = info, warn = warn, error = error }
 
--- The dev console's view of the log.
-wl.logs.history = history
-wl.logs.setLevel = setLevel
+-- The ring buffer, shared with the dev console.
+wl.logs = {
+    entries = buffer,
+    first = function(): number return first end,
+    count = function(): number return count end,
+    history = history,
+    setLevel = setLevel,
+}
 
 local function say(frame: any, message: string)
     local line = "|cff33ff99" .. addonName .. "|r: " .. message
@@ -123,7 +126,7 @@ export const print = setmetatable({
         say(frame, text(...))
     end,
 }, {
-    __call = function(_, ...: any)
+    __call = function(_: table, ...: any)
         say(chatFrame(), text(...))
     end,
 })

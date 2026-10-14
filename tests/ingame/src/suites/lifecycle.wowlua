@@ -6,7 +6,7 @@ import hook from "wowlua:hooks"
 import suite from "/harness"
 
 const phases: string[] = {}
-local world: { initial: any, reload: any } = { initial = nil, reload = nil }
+local world: { initial?: boolean, reload?: boolean } = {}
 local loadedAtTop = isLoaded()
 
 @onLoad
@@ -30,14 +30,14 @@ end
 
 local s = suite("lifecycle")
 
-s:test("phases ran once, in order", function(t: any)
+s:test("phases ran once, in order", function(t)
     t:eq(loadedAtTop, false, "not loaded while the files run")
     t:eq(table.concat(phases, " "), "load login world", "load, login, enter world")
     t:ok(isLoaded() and isLoggedIn(), "isLoaded and isLoggedIn")
     t:ok(type(world.initial) == "boolean" and type(world.reload) == "boolean", "@onEnterWorld gets its flags")
 end)
 
-s:test("onAddonLoaded runs at once for a loaded addon", function(t: any)
+s:test("onAddonLoaded runs at once for a loaded addon", function(t)
     local ran = false
     onAddonLoaded("StdTest", function() ran = true end)
     t:ok(ran, "ran synchronously")
@@ -52,19 +52,22 @@ const CANDIDATES = {
     { addon = "Blizzard_MacroUI", fn = "MacroFrame_Show" },
 }
 
-s:test("a load-on-demand addon: callbacks and deferred hooks", function(t: any)
-    local pick: any = nil
-    for _, c in ipairs(CANDIDATES) do
-        if C_AddOns.IsAddOnLoadOnDemand(c.addon) and not C_AddOns.IsAddOnLoaded(c.addon) then
-            pick = c
-            break
+s:test("a load-on-demand addon: callbacks and deferred hooks", function(t)
+    local function candidate(): { addon: string, fn: string }?
+        for _, c in ipairs(CANDIDATES) do
+            if C_AddOns.IsAddOnLoadOnDemand(c.addon) and not C_AddOns.IsAddOnLoaded(c.addon) then
+                return c
+            end
         end
+        return nil
     end
+    local pick = candidate()
     if not pick then
         t:skip("every candidate addon is loaded already (this test needs a fresh session)")
         return
     end
     local order: string[] = {}
+    -- The global before the hook wraps it (any value: a dynamic global).
     local original: any = nil
     -- Registered first, so it sees the function before the hook wraps it.
     local sub = on("ADDON_LOADED", function(name: string)

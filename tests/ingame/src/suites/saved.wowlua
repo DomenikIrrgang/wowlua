@@ -5,13 +5,31 @@ import * as saved from "wowlua:saved"
 import onLogout from "wowlua:lifecycle"
 import suite from "/harness"
 import state from "/state"
+import type ReloadCheck from "/state"
 
-const DEFAULTS = { scale = 1, enabled = false, bars = { n = 1 }, list = {} }
+interface TestDB
+    scale: number
+    enabled: boolean
+    bars: { n: number }
+    list: number[]
+    -- Written by the tests.
+    extra: string?
+    custom: table?
+    logoutMark: string?
+end
 
-local db: any = saved.bind("StdTestDB", { version = 2, defaults = DEFAULTS, profiles = true })
-local migrated: any = saved.bind("StdTestMigrateDB", {
+interface MigrateDB
+    scale: number
+    oldScale: number?
+    migrations: number?
+end
+
+const DEFAULTS = { scale = 1, enabled = false, bars = { n = 1 }, list = {} } :: TestDB
+
+local db = saved.bind("StdTestDB", { version = 2, defaults = DEFAULTS, profiles = true })
+local migrated = saved.bind("StdTestMigrateDB", {
     version = 2,
-    defaults = { scale = 1 },
+    defaults = { scale = 1 } :: MigrateDB,
     migrate = {
         [2] = function(old: any)
             if old.oldScale then
@@ -22,7 +40,7 @@ local migrated: any = saved.bind("StdTestMigrateDB", {
         end,
     },
 })
-local char: any = saved.bind("StdTestCharDB", { version = 1, defaults = { n = 5 } })
+local char = saved.bind("StdTestCharDB", { version = 1, defaults = { n = 5 } })
 
 -- Locked while the files run.
 local earlyOk, earlyError = pcall(function() return db.scale end)
@@ -38,7 +56,7 @@ end
 
 local s = suite("saved")
 
-s:test("locked until loaded, then loaded", function(t: any)
+s:test("locked until loaded, then loaded", function(t)
     t:eq(earlyOk, false, "a read before loading fails")
     t:ok(tostring(earlyError):find("StdTest: StdTestDB accessed before it was loaded; use @onLoad", 1, true) ~= nil, "with the message")
     t:eq(earlyWriteOk, false, "a write before loading fails")
@@ -50,7 +68,7 @@ end)
 
 -- Runs `fn` in a scratch profile, then switches back and deletes it.
 local function scratch(name: string, fn: () -> ())
-    local profiles: any = saved.handle(db).profiles
+    local profiles = assert(saved.handle(db).profiles)
     local before = profiles:current()
     profiles:use(name)
     fn()
@@ -58,7 +76,7 @@ local function scratch(name: string, fn: () -> ())
     profiles:delete(name)
 end
 
-s:test("lazy deep defaults", function(t: any)
+s:test("lazy deep defaults", function(t)
     scratch("StdTestScratch", function()
         t:eq(db.scale, 1, "a default")
         t:eq(db.enabled, false, "a false default")
@@ -70,8 +88,8 @@ s:test("lazy deep defaults", function(t: any)
     end)
 end)
 
-s:test("profiles: use, current, list, copy, delete, onChange", function(t: any)
-    local profiles: any = saved.handle(db).profiles
+s:test("profiles: use, current, list, copy, delete, onChange", function(t)
+    local profiles = assert(saved.handle(db).profiles)
     local before = profiles:current()
     local changes: string[] = {}
     local sub = profiles:onChange(function(name: string) changes[#changes + 1] = name end)
@@ -100,7 +118,7 @@ s:test("profiles: use, current, list, copy, delete, onChange", function(t: any)
     t:eq(_G.StdTestDBPerChar.profile, before, "the active profile is stored per character")
 end)
 
-s:test("reset", function(t: any)
+s:test("reset", function(t)
     scratch("StdTestReset", function()
         db.scale = 9
         db.extra = "x"
@@ -118,9 +136,9 @@ end)
 
 local g = suite("saved (reload)", "guided")
 
-g:test("prepare data for the reload", function(t: any)
-    local profiles: any = saved.handle(db).profiles
-    local reload: any = { pending = true, profileBefore = profiles:current(), migrationsBefore = migrated.migrations or 0 }
+g:test("prepare data for the reload", function(t)
+    local profiles = assert(saved.handle(db).profiles)
+    local reload: ReloadCheck = { pending = true, profileBefore = profiles:current(), migrationsBefore = migrated.migrations or 0 }
     profiles:use("StdTestReload")
     db.scale = 3
     db.enabled = false
@@ -136,9 +154,9 @@ end)
 
 local r = suite("saved (after reload)", "reload")
 
-r:test("what WoW saved, and what loading made of it", function(t: any)
-    local reload: any = state().reload
-    local profiles: any = saved.handle(db).profiles
+r:test("what WoW saved, and what loading made of it", function(t)
+    local reload = assert(state().reload)
+    local profiles = assert(saved.handle(db).profiles)
     t:eq(profiles:current(), "StdTestReload", "the active profile came back")
     t:eq(_G.StdTestDBPerChar.profile, "StdTestReload", "stored per character")
     local stored = _G.StdTestDB.profiles.StdTestReload

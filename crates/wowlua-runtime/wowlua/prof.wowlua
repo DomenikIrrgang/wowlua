@@ -1,13 +1,17 @@
 -- wowlua runtime: profiler (spec §7.3). Statistics per function or label:
 -- calls, total, self (total minus instrumented callees), max, avg (ms).
-local prof: any = { stats = {}, timers = {}, errors = wl.profErrors }
-wl.prof = prof
+local prof = {
+	stats = {} :: { [string]: WowluaProfStat },
+	timers = {} :: { [string]: number },
+	errors = wl.profErrors,
+}
 local clock: () -> number = debugprofilestop or function(): number
 	return os.clock() * 1000
 end
 prof.clock = clock
--- Time spent in instrumented callees, per active call (innermost last).
-local child: number[] = {}
+-- Time spent in instrumented callees, per active call (innermost last;
+-- finished calls are cleared to nil).
+local child: { [number]: number } = {}
 local function record(name: string, location: string?, elapsed: number, own: number)
 	local s = prof.stats[name]
 	if not s then
@@ -45,7 +49,8 @@ local function failed(name: string, location: string?, depth: number, start: num
 		child[i] = nil
 	end
 	record(name, location, clock() - start, 0)
-	prof.stats[name].errors = prof.stats[name].errors + 1
+	local s = assert(prof.stats[name])
+	s.errors = s.errors + 1
 	error(message, 0)
 end
 local function finishTracked(name: string, location: string?, start: number, depth: number, ok: boolean, ...: any): ...any
@@ -114,3 +119,4 @@ end
 function prof.reset()
 	prof.stats = {}
 end
+wl.prof = prof

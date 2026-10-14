@@ -14,13 +14,13 @@ export type Distribution = "PARTY" | "RAID" | "INSTANCE_CHAT" | "GUILD" | "OFFIC
 export type SendStatus = "sent" | "queued" | "dropped"
 
 export interface SendOptions
-    priority: ("alert" | "normal" | "bulk")?
+    priority?: ("alert" | "normal" | "bulk")
     --- Progress: bytes sent so far, and of the whole message.
-    callback: ((sent: number, total: number) -> ())?
+    callback?: ((sent: number, total: number) -> ())
     --- `SendAddonMessageLogged` instead of `SendAddonMessage`.
-    logged: boolean?
+    logged?: boolean
     --- Drop the message (instead of queueing it) during messaging lockdown.
-    dropInLockdown: boolean?
+    dropInLockdown?: boolean
 end
 
 export interface Channel
@@ -41,10 +41,26 @@ const PREFIX_BURST = 10
 const BYTES_BURST = 4000
 const BYTES_PER_SECOND = 800
 
-type Chunk = { channel: any, text: string, distribution: string, target: string?, logged: boolean, message: any }
+type Priority = "alert" | "normal" | "bulk"
+type Format = "wowlua" | "acecomm"
 
-local channels: { [string]: any } = {}
-local queues: { [string]: Chunk[] } = { alert = {}, normal = {}, bulk = {} }
+--- A channel with its handlers and its share of the throttle.
+interface ChannelState extends Channel
+    format: Format
+    receiveOwn: boolean
+    handlers: ((msg: string, sender: string, distribution: string) -> ())[]
+    objectHandlers: ((value: any, sender: string, distribution: string) -> ())[]
+    budget: number
+    budgetTime: number
+end
+
+--- One sent message: its progress.
+type Message = { sent: number, total: number, callback?: ((sent: number, total: number) -> ()), failed: boolean }
+
+type Chunk = { channel: ChannelState, text: string, distribution: string, target?: string, logged: boolean, message: Message }
+
+local channels: { [string]: ChannelState } = {}
+local queues: { alert: Chunk[], normal: Chunk[], bulk: Chunk[] } = { alert = {}, normal = {}, bulk = {} }
 local pumping = false
 local byteBudget = BYTES_BURST
 local lastRefill = 0
@@ -78,8 +94,8 @@ end
 -- Wire formats ------------------------------------------------------------------
 
 -- The chunks of a message: control byte, then up to 254 bytes.
-local function chunksOf(msg: string, format: string): string[]
-    local chunks = {}
+local function chunksOf(msg: string, format: Format): string[]
+    local chunks: string[] = {}
     local body = msg
     if format == "acecomm" then
         -- A single message starting with a control byte is escaped (\004).
@@ -133,6 +149,7 @@ local schedulePump: (delay: number) -> () = function() end
 -- locked: retry later), or it failed for good.
 local function transmit(c: Chunk): string
     local send = c.logged and C_ChatInfo.SendAddonMessageLogged or C_ChatInfo.SendAddonMessage
+    -- Older clients return a boolean, newer ones a result code.
     local result: any = send(c.channel.prefix, c.text, c.distribution, c.target)
     if result == nil or result == true or result == 0 then
         return "sent"
@@ -159,8 +176,7 @@ local function pump()
         return
     end
     refill()
-    for _, priority in ipairs({ "alert", "normal", "bulk" }) do
-        local queue = queues[priority]
+    for _, queue in ipairs({ queues.alert, queues.normal, queues.bulk }) do
         while #queue > 0 do
             local c = queue[1]
             if c.message.failed then
@@ -197,22 +213,28 @@ schedulePump = function(delay: number)
     end
 end
 
-local function priorityOf(opts: SendOptions?): string
+local function queueOf(opts: SendOptions?): Chunk[]
     local p = opts and opts.priority
-    return (p == "alert" or p == "bulk") and p or "normal"
+    if p == "alert" then
+        return queues.alert
+    elseif p == "bulk" then
+        return queues.bulk
+    end
+    return queues.normal
 end
 
-local function sendChunks(channel: any, chunks: string[], distribution: string, target: string?, opts: SendOptions?): SendStatus
+local function sendChunks(channel: ChannelState, chunks: string[], distribution: string, target: string?, opts: SendOptions?): SendStatus
     local total = 0
     for _, text in ipairs(chunks) do
         total += #text
     end
-    local message: any = { sent = 0, total = total, callback = opts and opts.callback, failed = false }
+    local message: Message = { sent = 0, total = total, callback = opts and opts.callback, failed = false }
     local logged = opts and opts.logged or false
-    -- ChatThrottleLib shares the bandwidth with every addon using it.
+    -- ChatThrottleLib shares the bandwidth with every addon using it (an
+    -- untyped library).
     local ctl: any = _G.ChatThrottleLib
     if ctl and ctl.SendAddonMessage and not inLockdown() then
-        local priority = priorityOf(opts):upper()
+        local priority = (opts and opts.priority or "normal"):upper()
         local pending = #chunks
         for _, text in ipairs(chunks) do
             local function done(_: any, didSend: boolean?)
@@ -229,7 +251,7 @@ local function sendChunks(channel: any, chunks: string[], distribution: string, 
     if inLockdown() and opts and opts.dropInLockdown then
         return "dropped"
     end
-    local queue = queues[priorityOf(opts)]
+    local queue = queueOf(opts)
     for _, text in ipairs(chunks) do
         queue[#queue + 1] = { channel = channel, text = text, distribution = distribution, target = target, logged = logged, message = message }
     end
@@ -246,7 +268,7 @@ end
 -- Partial messages by sender and prefix.
 local partial: { [string]: string[] } = {}
 
-local function deliver(channel: any, msg: string, sender: string, distribution: string)
+local function deliver(channel: ChannelState, msg: string, sender: string, distribution: string)
     if msg:sub(1, #OBJECT) == OBJECT then
         local packed = msg:sub(#OBJECT + 1)
         if channel.format == "acecomm" then
@@ -277,15 +299,19 @@ local function receive(prefix: string, text: string, distribution: string, sende
     end
     local who = Ambiguate and Ambiguate(sender, "none") or sender
     -- (A secret name cannot be compared: then nothing is filtered.)
-    local me: any = UnitName("player")
-    if issecretvalue and issecretvalue(me) then
-        me = nil
+    local name = UnitName("player")
+    local me: string? = nil
+    if not issecretvalue then
+        -- Clients without secret values.
+        me = name :: string
+    elseif not issecretvalue(name) then
+        me = name
     end
     if not channel.receiveOwn and me ~= nil and who == me then
         return
     end
     local key = who .. "\000" .. prefix
-    local control = text:byte(1)
+    local control = text:byte(1) ?? 0
     local body = text:sub(2)
     if channel.format == "acecomm" then
         if control == 1 then
@@ -339,7 +365,7 @@ end
 
 --- A channel on `prefix` (registered with the client; at most 16
 --- characters).
-export function open(prefix: string, opts: { format: ("wowlua" | "acecomm")?, receiveOwn: boolean? }?): Channel
+export function open(prefix: string, opts: { format?: Format, receiveOwn?: boolean }?): Channel
     if type(prefix) ~= "string" or #prefix == 0 or #prefix > 16 then
         error("comm.open: a prefix has 1 to 16 characters", 2)
     end
@@ -349,7 +375,8 @@ export function open(prefix: string, opts: { format: ("wowlua" | "acecomm")?, re
     end
     C_ChatInfo.RegisterAddonMessagePrefix(prefix)
     listen()
-    local channel: any = {
+    local channel: ChannelState
+    channel = {
         prefix = prefix,
         format = opts and opts.format or "wowlua",
         receiveOwn = opts and opts.receiveOwn or false,
@@ -357,31 +384,31 @@ export function open(prefix: string, opts: { format: ("wowlua" | "acecomm")?, re
         objectHandlers = {},
         budget = PREFIX_BURST,
         budgetTime = now(),
+        send = function(_: Channel, msg: string, distribution: Distribution, target: string?, sendOpts: SendOptions?): SendStatus
+            local dist = resolve(distribution)
+            if not dist then
+                return "dropped"
+            end
+            if channel.format == "acecomm" and msg:find("%z") then
+                error("comm: AceComm-format messages cannot contain NUL bytes", 2)
+            end
+            return sendChunks(channel, chunksOf(msg, channel.format), dist, target, sendOpts)
+        end,
+        onMessage = function(_: Channel, fn: (msg: string, sender: string, distribution: string) -> ())
+            channel.handlers[#channel.handlers + 1] = fn
+        end,
+        sendObject = function(self: Channel, value: any, distribution: Distribution, target: string?, sendOpts: SendOptions?): SendStatus
+            local payload = OBJECT .. compress(encode(value))
+            if channel.format == "acecomm" then
+                -- AceComm's format carries no NUL bytes.
+                payload = OBJECT .. toAddonChannel(payload:sub(#OBJECT + 1))
+            end
+            return self:send(payload, distribution, target, sendOpts)
+        end,
+        onObject = function(_: Channel, fn: (value: any, sender: string, distribution: string) -> ())
+            channel.objectHandlers[#channel.objectHandlers + 1] = fn
+        end,
     }
-    function channel.send(self: any, msg: string, distribution: Distribution, target: string?, sendOpts: SendOptions?): SendStatus
-        local dist = resolve(distribution)
-        if not dist then
-            return "dropped"
-        end
-        if self.format == "acecomm" and msg:find("%z") then
-            error("comm: AceComm-format messages cannot contain NUL bytes", 2)
-        end
-        return sendChunks(self, chunksOf(msg, self.format), dist, target, sendOpts)
-    end
-    function channel.onMessage(self: any, fn: (msg: string, sender: string, distribution: string) -> ())
-        self.handlers[#self.handlers + 1] = fn
-    end
-    function channel.sendObject(self: any, value: any, distribution: Distribution, target: string?, sendOpts: SendOptions?): SendStatus
-        local payload = OBJECT .. compress(encode(value))
-        if self.format == "acecomm" then
-            -- AceComm's format carries no NUL bytes.
-            payload = OBJECT .. toAddonChannel(payload:sub(#OBJECT + 1))
-        end
-        return self:send(payload, distribution, target, sendOpts)
-    end
-    function channel.onObject(self: any, fn: (value: any, sender: string, distribution: string) -> ())
-        self.objectHandlers[#self.objectHandlers + 1] = fn
-    end
     channels[prefix] = channel
     return channel
 end

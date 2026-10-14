@@ -82,8 +82,10 @@ local function flatten(cls)
 	rawset(cls, "__mixin", m)
 	return m
 end
+-- The class slice (required by this one) comes first.
+local class, finalize = assert(wl.class), assert(wl.finalize)
 function wl.widgetClass(name, super)
-	local cls = wl.class(name, super)
+	local cls = class(name, super)
 	cls.new = function(...)
 		local self = cls.__ctor(cls, ...)
 		installScripts(self, cls)
@@ -92,7 +94,7 @@ function wl.widgetClass(name, super)
 	return cls
 end
 function wl.finalizeWidget(cls)
-	wl.finalize(cls)
+	finalize(cls)
 	flatten(cls)
 	scriptList(cls)
 	return cls

@@ -127,7 +127,7 @@ function wl.abstract(cls, name)
 	end)
 end
 -- The class of a value (widget instances carry `__class`).
-function wl.classOf(v)
+local function classOf(v)
 	if type(v) ~= "table" then
 		return nil
 	end
@@ -141,8 +141,9 @@ function wl.classOf(v)
 	end
 	return nil
 end
+wl.classOf = classOf
 function wl.isInstance(v, cls)
-	local c = wl.classOf(v)
+	local c = classOf(v)
 	while c do
 		if c == cls then
 			return true

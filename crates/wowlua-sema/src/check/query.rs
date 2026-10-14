@@ -63,7 +63,21 @@ impl Env {
                     .fields
                     .iter()
                     .take(4)
-                    .map(|(n, f)| format!("{n}{}: {}", if f.optional { "?" } else { "" }, d(f.ty)))
+                    .map(|(n, f)| {
+                        // `x?: T` (the type includes `nil`; not shown twice).
+                        let ty = match (f.optional, self.types.get(f.ty)) {
+                            (true, Ty::Union(m)) => {
+                                let rest: Vec<String> = m
+                                    .iter()
+                                    .filter(|&&x| !matches!(self.types.get(x), Ty::Nil))
+                                    .map(|&x| d(x))
+                                    .collect();
+                                rest.join(" | ")
+                            }
+                            _ => d(f.ty),
+                        };
+                        format!("{n}{}: {ty}", if f.optional { "?" } else { "" })
+                    })
                     .collect();
                 if r.fields.len() > 4 {
                     parts.push("…".into());
@@ -372,8 +386,19 @@ impl Env {
             (Ty::Named(d, _), Ty::Table) => self.def(d).kind != DefKind::Enum,
             (Ty::Func(_) | Ty::Function, Ty::Function) => true,
             // Basic mode: values typed only `table` / `function` are trusted.
+            // `{ [any]: any }` is every table.
+            (Ty::Table, Ty::Map(k, v)) if k == Types::ANY && v == Types::ANY => true,
             (Ty::Table, Ty::Record(_) | Ty::Array(_) | Ty::Map(..) | Ty::Named(..)) => {
                 mode == Mode::Basic
+            }
+            // `(...any) -> ...any` is every function.
+            (Ty::Function, Ty::Func(g))
+                if g.params.is_empty()
+                    && matches!(g.rest, Some(Rest::Variadic(t)) if t == Types::ANY)
+                    && g.ret.types.is_empty()
+                    && matches!(g.ret.rest, Some(Rest::Variadic(t)) if t == Types::ANY) =>
+            {
+                true
             }
             (Ty::Function, Ty::Func(_)) => mode == Mode::Basic,
             (Ty::Array(a), Ty::Array(b)) => self.element(a, b, mode, assuming),
@@ -397,13 +422,15 @@ impl Env {
                 });
                 fields_ok && indexer_ok
             }
-            (Ty::Record(r), Ty::Array(e)) => {
-                r.fields.is_empty()
-                    && r.indexer.is_none_or(|(rk, rv)| {
-                        self.assignable_in(rk, Types::NUMBER, mode, assuming)
-                            && self.assignable_in(rv, e, mode, assuming)
-                    })
-            }
+            // A table used both as an array and a record (`{ ..., n = … }`,
+            // spec §2.2.4) is an array of its numeric indexer's values.
+            (Ty::Record(r), Ty::Array(e)) => match r.indexer {
+                Some((rk, rv)) => {
+                    self.assignable_in(rk, Types::NUMBER, mode, assuming)
+                        && self.assignable_in(rv, e, mode, assuming)
+                }
+                None => r.fields.is_empty(),
+            },
             (_, Ty::Record(target)) => self.satisfies_record(s, &target, mode, assuming),
             (Ty::Named(sd, sargs), Ty::Named(td, targs)) => {
                 if sd == td {

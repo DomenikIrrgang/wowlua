@@ -3,17 +3,36 @@
 -- iterates a snapshot, and owners are held weakly. With
 -- `compat = "CallbackHandler"` a registry also offers RegisterCallback,
 -- UnregisterCallback and UnregisterAllCallbacks for plain Lua consumers.
+-- The compiler checks `on`, `once` and `fire` against the event type `E`:
+-- names are its keys (E8420), handlers and arguments its function types.
 import callIn from "wowlua:errors"
 import Subscription from "wowlua:events"
 
-type Record = { fn: (...any) -> (), sub: any }
+type Record = { fn: (...any) -> (), sub: Subscription }
 
---- A callback registry.
-export function registry(opts: { compat: string? }?): any
+export type RegistryOptions = { compat?: "CallbackHandler" }
+
+--- A registry of the events `E` (an interface of function types).
+export interface Registry<E>
+    function on(name: string, handler: (...any) -> (), owner: any?): Subscription
+    function once(name: string, handler: (...any) -> (), owner: any?): Subscription
+    function off(sub: Subscription)
+    --- Cancels every subscription of `owner`.
+    function offAll(owner: any)
+    function fire(name: string, ...: any)
+    --- Whether any handler is subscribed to `name`.
+    function has(name: string): boolean
+    -- `compat = "CallbackHandler"` only.
+    RegisterCallback?: (owner: any, name: string, method: any, ...any) -> ()
+    UnregisterCallback?: (owner: any, name: string) -> ()
+    UnregisterAllCallbacks?: (owner: any) -> ()
+end
+
+--- A callback registry; `E` comes from the expected type.
+export function registry<E>(opts: RegistryOptions?): Registry<E>
     local handlers: { [string]: Record[] } = {}
     -- Owners by record, weakly: a registry never keeps an owner alive.
-    local owners = setmetatable({}, { __mode = "v" })
-    local r: any = {}
+    local owners: { [Record]: any } = setmetatable({}, { __mode = "v" })
 
     local function remove(name: string, record: Record)
         local list = handlers[name]
@@ -37,72 +56,77 @@ export function registry(opts: { compat: string? }?): any
             list = {}
             handlers[name] = list
         end
-        local sub: any = { active = true }
-        local record: Record = { fn = fn, sub = sub }
-        sub.cancel = function()
-            sub.active = false
-            remove(name, record)
-        end
+        local record: Record
+        local sub: Subscription = {
+            active = true,
+            cancel = function(self: Subscription)
+                self.active = false
+                remove(name, record)
+            end,
+        }
+        record = { fn = fn, sub = sub }
         owners[record] = owner
         list[#list + 1] = record
         return sub
     end
 
-    function r.on(_, name: string, fn: (...any) -> (), owner: any?): Subscription
-        return subscribe(name, fn, owner)
-    end
+    local r: Registry<E> = {
+        on = function(_, name: string, fn: (...any) -> (), owner: any?): Subscription
+            return subscribe(name, fn, owner)
+        end,
 
-    function r.once(_, name: string, fn: (...any) -> (), owner: any?): Subscription
-        local sub: Subscription
-        sub = subscribe(name, function(...)
+        once = function(_, name: string, fn: (...any) -> (), owner: any?): Subscription
+            local sub: Subscription
+            sub = subscribe(name, function(...: any)
+                sub:cancel()
+                fn(...)
+            end, owner)
+            return sub
+        end,
+
+        off = function(_, sub: Subscription)
             sub:cancel()
-            fn(...)
-        end, owner)
-        return sub
-    end
+        end,
 
-    function r.off(_, sub: Subscription)
-        sub:cancel()
-    end
-
-    function r.offAll(_, owner: any)
-        if owner == nil then
-            error("offAll: the owner is nil", 2)
-        end
-        local subs = {}
-        for _, list in pairs(handlers) do
-            for _, rec in ipairs(list) do
-                if owners[rec] == owner then
-                    subs[#subs + 1] = rec.sub
+        offAll = function(_, owner: any)
+            if owner == nil then
+                error("offAll: the owner is nil", 2)
+            end
+            local subs: Subscription[] = {}
+            for _, list in pairs(handlers) do
+                for _, rec in ipairs(list) do
+                    if owners[rec] == owner then
+                        subs[#subs + 1] = rec.sub
+                    end
                 end
             end
-        end
-        for _, sub in ipairs(subs) do
-            sub:cancel()
-        end
-    end
+            for _, sub in ipairs(subs) do
+                sub:cancel()
+            end
+        end,
 
-    function r.fire(_, name: string, ...: any)
-        local list = handlers[name]
-        if not list then
-            return
-        end
-        for _, rec in ipairs({ unpack(list) }) do
-            callIn({ component = "callbacks: " .. name }, rec.fn, ...)
-        end
-    end
+        fire = function(_, name: string, ...: any)
+            local list = handlers[name]
+            if not list then
+                return
+            end
+            for _, rec in ipairs({ unpack(list) }) do
+                callIn({ component = "callbacks: " .. name }, rec.fn, ...)
+            end
+        end,
 
-    function r.has(_, name: string): boolean
-        return handlers[name] ~= nil
-    end
+        has = function(_, name: string): boolean
+            return handlers[name] ~= nil
+        end,
+    }
 
     if opts and opts.compat == "CallbackHandler" then
         -- `Registry.RegisterCallback(owner, name, method?, arg?)`, as in
         -- CallbackHandler: a method name is called on the owner, a function
         -- directly; either gets `arg` first when one is passed (even nil),
         -- then the event name and the payload.
-        local byOwner = setmetatable({}, { __mode = "k" })
-        function r.RegisterCallback(owner: any, name: string, method: any, ...: any)
+        local byOwner: { [any]: { [string]: Subscription } } = setmetatable({}, { __mode = "k" })
+        r.RegisterCallback = function(owner: any, name: string, method: any, ...: any)
             method = method or name
             local hasArg = select("#", ...) > 0
             -- Not named `arg`: Lua 5.1 gives every vararg function an
@@ -111,33 +135,35 @@ export function registry(opts: { compat: string? }?): any
             local fn: (...any) -> ()
             if type(method) == "string" then
                 if hasArg then
-                    fn = function(...) owner[method](owner, extra, name, ...) end
+                    fn = function(...: any) owner[method](owner, extra, name, ...) end
                 else
-                    fn = function(...) owner[method](owner, name, ...) end
+                    fn = function(...: any) owner[method](owner, name, ...) end
                 end
             elseif hasArg then
-                fn = function(...) method(extra, name, ...) end
+                fn = function(...: any) method(extra, name, ...) end
             else
-                fn = function(...) method(name, ...) end
+                fn = function(...: any) method(name, ...) end
             end
             local subs = byOwner[owner]
             if not subs then
                 subs = {}
                 byOwner[owner] = subs
             end
-            if subs[name] then
-                subs[name]:cancel()
+            local old = subs[name]
+            if old then
+                old:cancel()
             end
             subs[name] = subscribe(name, fn, owner)
         end
-        function r.UnregisterCallback(owner: any, name: string)
+        r.UnregisterCallback = function(owner: any, name: string)
             local subs = byOwner[owner]
-            if subs and subs[name] then
-                subs[name]:cancel()
+            local sub = subs and subs[name]
+            if subs and sub then
+                sub:cancel()
                 subs[name] = nil
             end
         end
-        function r.UnregisterAllCallbacks(owner: any)
+        r.UnregisterAllCallbacks = function(owner: any)
             local subs = byOwner[owner]
             if subs then
                 for _, sub in pairs(subs) do

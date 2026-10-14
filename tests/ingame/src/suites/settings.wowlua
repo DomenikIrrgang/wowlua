@@ -43,7 +43,7 @@ local page = settings.register({
 
 local s = suite("settings")
 
-s:test("the page is registered and bound to the store", function(t: any)
+s:test("the page is registered and bound to the store", function(t)
     t:ok(page.id ~= nil, "the category exists")
     local setting = Settings.GetSetting("WOWLUA_STDTEST_enabled")
     t:ok(setting ~= nil, "the proxy setting is registered")
@@ -57,7 +57,7 @@ s:test("the page is registered and bound to the store", function(t: any)
     t:ok(tint ~= nil and type(tint:GetValue()) == "string", "the color as a hex string")
 end)
 
-s:test("the page opens and builds its rows", function(t: any)
+s:test("the page opens and builds its rows", function(t)
     if InCombatLockdown() then
         t:skip("in combat")
         return

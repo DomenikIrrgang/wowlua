@@ -303,6 +303,10 @@ becomes **sealed** when it escapes (passed as an argument, returned, stored in
 another table, or captured by a closure). Adding unknown fields to a sealed
 table is an error in strict mode (E2051) and allowed in basic mode.
 
+A field added by an assignment takes the assigned value's widened type
+(`t.enabled = true` adds `enabled: boolean`), as a literal's fields do
+without an expected type.
+
 Writes with non-constant keys (`t[k] = v`) to an open table add an indexer: the
 table's type becomes its known fields plus `[K]: V`, where `K` and `V` are the
 unions of all such keys and values.
@@ -459,7 +463,11 @@ The checker narrows union types along control flow using:
 - truthiness: `if x then`, `x and x.y`, `if not x then return end`
 - nil comparison: `x ~= nil`, `x == nil`
 - `type(x) == "string"` (and the other Lua type names)
-- literal equality: `if kind == "spell" then` on discriminated unions
+- literal equality: `if kind == "spell" then` on discriminated unions; a
+  comparison of a field, `if x.kind == "spell" then`, narrows `x` to the
+  members whose `kind` can be that literal (and the false branch drops the
+  members whose `kind` is exactly that literal). Comparing a local that holds
+  the field (`local kind = x.kind`) does not narrow `x`.
 - type predicates (§2.2.8), in both the true and the false branch, including
   `reflect.isInstance(x, Class)`, `issecretvalue` and `canaccessvalue`
 - `assert(x)`, `assert(type(x) == "table")`, and `error(...)` / functions
@@ -469,9 +477,26 @@ The checker narrows union types along control flow using:
   `C_EditMode` to non-nil in the branch, also for globals the current flavor does
   not declare (see [Build metadata §6.5](06-meta.md#65-runtime-flavor-checks-shared-mode))
 
-Narrowing of a field (`a.b`) is invalidated by any call or assignment that could
-modify `a`. Narrowing of a local is invalidated by assignments to it, including
-assignments inside closures that capture it.
+`assert(v)` also returns `v` without `nil` and `false`, so
+`local p = assert(t.profiles)` is non-nil.
+
+**Fields.** A field path of a local or of a declared global (`a.b`, `a.b.c`,
+`G.x`) is narrowed like a local, and assigning it narrows it by the value's
+`nil`-ness (to the declared type without `nil`, or to `nil`). Its narrowing
+is invalidated by an assignment to the root, to the path or to a path above
+it, and by a call that may modify the table: one that receives the root, or a
+path below it, as an argument or as its receiver (`a:m()`). Calls that do not
+receive the table keep the narrowing. A method call on a narrowed optional
+function field (`if t.f then t:f() end`) uses the narrowed type.
+
+**Locals.** Narrowing of a local is invalidated by assignments to it. Assigning
+a declared local narrows it to the members of its declared type that the value
+fits (a literal stays a literal where the declared type is a literal union; a
+record or interface stays as declared), except a declared `any`. A closure sees
+the narrowing of the locals that are never assigned after their declaration (it
+cannot change); other locals are their declared type inside closures. A local
+narrowed to `nil` that a closure assigns is its declared type again after any
+call, which may run that closure.
 
 ## 2.6 Assignability
 
@@ -496,7 +521,12 @@ assignments inside closures that capture it.
   structurally satisfies through its **public** fields, accessors and methods;
 - `S` is a record and `T` is an interface that `S` structurally satisfies
   (interfaces are **structural**);
-- `S` is an enum member type and `T` is that enum or its underlying primitive.
+- `S` is an enum member type and `T` is that enum or its underlying primitive;
+- `S` is `table` and `T` is `{ [any]: any }`, or `S` is `function` and `T` is
+  `(...any) -> ...any` (the types every table and every function have);
+- `S` is a record with a numeric indexer (`{ [number]: V, n: number }`) and `T`
+  is an array of `V`'s supertype: the table used both as an array and a
+  record (§2.2.4).
 
 ## 2.7 Calls and arity
 
@@ -550,8 +580,10 @@ globals are a common source of addon bugs and taint. Explicit
 
 A global that any file of the package assigns can be read everywhere (typed
 `any`); the assignment itself is still W1002/E1002 unless declared. A file
-that calls `setfenv` gets no global diagnostics, because its names resolve in
-an environment the checker cannot see. Existence tests (`if GetPetHappiness
+that sets the environment of its own code gets no global diagnostics, because
+its names resolve in an environment the checker cannot see: a `setfenv` with a
+stack level or with a function the file defines. Setting the environment of
+other code (`setfenv(chunk, env)` for a chunk from `loadstring`) keeps them. Existence tests (`if GetPetHappiness
 then … end`) never report the tested name, and the guarded code may use it
 (feature detection, [Build metadata §6.5](06-meta.md#65-runtime-flavor-checks-shared-mode),
 decision T89).

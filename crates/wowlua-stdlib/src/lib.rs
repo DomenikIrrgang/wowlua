@@ -27,6 +27,10 @@ pub fn declarations() -> &'static [File] {
             path: "<wowlua>/wow.d.wowlua",
             text: include_str!("../decl/wow.d.wowlua"),
         },
+        File {
+            path: "<wowlua>/runtime.d.wowlua",
+            text: include_str!("../decl/runtime.d.wowlua"),
+        },
     ]
 }
 

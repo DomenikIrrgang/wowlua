@@ -17,7 +17,7 @@ end
 
 local s = suite("pool")
 
-s:test("frames from a template are hidden and reused", function(t: any)
+s:test("frames from a template are hidden and reused", function(t)
     local buttons = FramePool.fromTemplate("Button", UIParent)
     local b, made = buttons:acquire()
     t:ok(made and b:GetObjectType() == "Button", "a new button")
@@ -31,7 +31,7 @@ s:test("frames from a template are hidden and reused", function(t: any)
     t:eq(select(1, buttons:count()), 1, "one active")
 end)
 
-s:test("class instances with constructor arguments and onRelease", function(t: any)
+s:test("class instances with constructor arguments and onRelease", function(t)
     local rows = FramePool.new(PoolRow, "row")
     local r1 = rows:acquire()
     local r2 = rows:acquire()
@@ -45,7 +45,7 @@ s:test("class instances with constructor arguments and onRelease", function(t: a
     t:ok(active == 0 and waiting == 2, "all released")
 end)
 
-s:test("tables are wiped and capped", function(t: any)
+s:test("tables are wiped and capped", function(t)
     local tables = TablePool.new({ max = 1 })
     local a = tables:acquire()
     local b = tables:acquire()

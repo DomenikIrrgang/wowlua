@@ -742,7 +742,7 @@ pub fn compile_flavor(
     let settings: Vec<Option<wowlua_sema::check::FileSettings>> = (0..inputs.len())
         .map(
             |i| match (files.get(i), parsed.parses.get(i).and_then(Option::as_ref)) {
-                // The standard library's modules are checked in basic mode
+                // The standard library's modules are checked in strict mode
                 // whatever the project's settings, so their exports are typed
                 // for the code that imports them.
                 (Some((source, _)), Some(_))
@@ -750,7 +750,7 @@ pub fn compile_flavor(
                         && wowlua_sema::module_id(&source.src_rel).starts_with("wowlua:") =>
                 {
                     Some(wowlua_sema::check::FileSettings {
-                        mode: wowlua_sema::check::query::Mode::Basic,
+                        mode: wowlua_sema::check::query::Mode::Strict,
                         pure_lua: false,
                     })
                 }

@@ -27,5 +27,8 @@
     "standard": {},
     "camelot": {},
     "vanilla": {}
+  },
+  "check": {
+    "mode": "strict"
   }
 }

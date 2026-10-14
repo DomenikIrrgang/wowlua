@@ -1281,13 +1281,16 @@ fn standard_library_modules_and_intrinsics() {
         &[
             (
                 "fixture.wowlua",
-                "import helper from \"wowlua:helper\"\nexport function wrap(tag: string)\n    return function(fn, ctx) return function(...) return tag .. fn(...) end end\nend\nexport function register(name: string)\n    return function(fn, ctx) print(\"registered\", name, ctx.name, fn()) end\nend\nexport local version = helper()\n",
+                "import helper from \"wowlua:helper\"\nexport function wrap(tag: string)\n    return function(fn: (...any) -> string, ctx: DecoratorContext) return function(...: any): string return tag .. fn(...) end end\nend\nexport function register(name: string)\n    return function(fn: () -> any, ctx: DecoratorContext) print(\"registered\", name, ctx.name, fn()) end\nend\nexport local version = helper()\n",
             ),
             (
                 "fixture.d.wowlua",
                 "@intrinsic(\"internal.wrap\")\ndeclare function wrap(tag: string): any\n@intrinsic(\"internal.register\")\ndeclare function register(name: string): any\n",
             ),
-            ("helper.wowlua", "export function helper() return 7 end\n"),
+            (
+                "helper.wowlua",
+                "export function helper(): number return 7 end\n",
+            ),
             ("unused.wowlua", "print(\"never loaded\")\n"),
         ],
     );

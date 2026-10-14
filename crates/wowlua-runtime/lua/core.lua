@@ -1,7 +1,8 @@
 -- wowlua runtime: core (MIT License). Generated into every build that uses
 -- modules or build metadata. Stored in the addon table, never in globals.
 local addonName, ns = ...
-local wl = ns.__wowlua or {}
+-- Completed below (locale files may have created it, spec §14.9.2).
+local wl = (ns.__wowlua or {})
 ns.__wowlua = wl
 local modules, loaded = {}, {}
 -- The addon table and the module export tables (dev console watches).

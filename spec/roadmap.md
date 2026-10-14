@@ -294,6 +294,17 @@ menus and lists, then the widget themes.
   bundling). Found on the way: `C_Timer.NewTimer`/`NewTicker` returned their
   callback type (now `TimerHandle`/`TickerHandle`), error handlers took no
   extra arguments, and the dev window created an unused frame.
+- Typing everything (2026-10-14): the standard library, the runtime and the
+  in-game suite are checked in strict mode, with `any` left only for values
+  that are dynamic by nature. `callbacks.Registry<E>` is typed as specified
+  (E8420; it returned `any`). The checker gained what this needed: field
+  narrowing (locals and globals), discriminated unions on `x.kind ==`,
+  `assert` results, narrowing in closures for locals never reassigned,
+  interface methods written as function fields or `function t.m(_, …)`,
+  method calls on narrowed optional fields, contextual typing of generic call
+  arguments, `#` on possibly-nil values (E2005), and a `setfenv` that only
+  disables global checks when it targets the file's own code. Stdlib option
+  types use `x?: T` for omittable fields.
 
 ## M9: Test runner, language server, formatter
 

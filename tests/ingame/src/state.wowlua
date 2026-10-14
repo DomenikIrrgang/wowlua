@@ -1,6 +1,13 @@
 -- What a run keeps across a /reload: the SavedVariable `StdTestState`
 -- (available from @onLoad on).
-export function state(): any
+import type TestRecord from "/harness"
+
+--- The saved suite's data for the test after the /reload.
+export type ReloadCheck = { pending: boolean, profileBefore: string, migrationsBefore: number }
+
+export type RunState = { results: TestRecord[]?, time: string?, reload: ReloadCheck? }
+
+export function state(): RunState
     if type(StdTestState) ~= "table" then
         StdTestState = {}
     end

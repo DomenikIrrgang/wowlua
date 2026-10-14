@@ -136,7 +136,7 @@ declare module "wowlua:pool"
     end
 
     namespace TablePool
-        function new(opts: { max: number? }?): Pool<table>
+        function new(opts: { max?: number }?): Pool<table>
     end
 end
 ```

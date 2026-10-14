@@ -32,14 +32,14 @@ end
 
 local s = suite("events")
 
-s:test("decorated handlers ran at login", function(t: any)
+s:test("decorated handlers ran at login", function(t)
     t:ok(seen.login >= 1, "@event(PLAYER_LOGIN)")
     t:ok(seen.world >= 1, "@event with several names")
     local first = seen.names[1]
     t:eq(first, "PLAYER_LOGIN", "several names: the name comes first, in event order")
 end)
 
-s:test("messages: payload, order, once, off", function(t: any)
+s:test("messages: payload, order, once, off", function(t)
     local got: any[] = {}
     local sub = on("STDTEST_PING", function(n: number) got[#got + 1] = n end)
     once("STDTEST_PING", function(n: number) got[#got + 1] = -n end)
@@ -61,7 +61,7 @@ s:test("messages: payload, order, once, off", function(t: any)
     t:ok(not pcall(offAll, nil), "offAll(nil) is refused")
 end)
 
-s:test("changes during a dispatch apply to the next one", function(t: any)
+s:test("changes during a dispatch apply to the next one", function(t)
     local log: string[] = {}
     local owner = {}
     local added = false
@@ -82,7 +82,7 @@ s:test("changes during a dispatch apply to the next one", function(t: any)
     t:eq(table.concat(log, " "), "first second first added", "snapshot dispatch")
 end)
 
-s:test("a failing handler is reported, the others run", function(t: any)
+s:test("a failing handler is reported, the others run", function(t)
     local ran = false
     local a = on("STDTEST_FAIL", function() error("handler failed") end)
     local b = on("STDTEST_FAIL", function() ran = true end)
@@ -94,7 +94,7 @@ s:test("a failing handler is reported, the others run", function(t: any)
     t:ok(t:reported("[events: STDTEST_FAIL handler]"), "naming the handler")
 end)
 
-s:test("WoW events: registered while handled", function(t: any)
+s:test("WoW events: registered while handled", function(t)
     local function frames(): number
         if not GetFramesRegisteredForEvent then
             return -1
@@ -118,7 +118,7 @@ s:test("WoW events: registered while handled", function(t: any)
     end
 end)
 
-s:test("unit events: limits and sending WoW events", function(t: any)
+s:test("unit events: limits and sending WoW events", function(t)
     local three = { "player", "target", "focus" }
     t:ok(not pcall(onUnit, "UNIT_HEALTH", three, function() end), "three units are refused")
     local none: string[] = {}
@@ -134,7 +134,7 @@ end)
 
 local g = suite("events (target)", "guided")
 
-g:test("unit filter and plain handler see a target change", function(t: any)
+g:test("unit filter and plain handler see a target change", function(t)
     local changed = 0
     local units: string[] = {}
     local a = on("PLAYER_TARGET_CHANGED", function() changed += 1 end)

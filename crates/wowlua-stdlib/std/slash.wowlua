@@ -6,11 +6,31 @@ import print as say from "wowlua:log"
 
 local addonName, ns = ...
 
+--- How a positional argument converts: a type (`?` when optional),
+--- `"rest"`, or a list of choices.
+export type ArgSpec = string | string[]
+
+--- A router command.
+export type Command = {
+    args?: ArgSpec[],
+    flags?: string[],
+    aliases?: string[],
+    help?: string,
+    run: (...any) -> (),
+}
+
+export interface Router
+    function dispatch(msg: string): boolean
+    function help(): string
+end
+
+type Handler = (msg: string, editBox: EditBox?) -> ()
+
 local prefix = "WOWLUA_" .. addonName:upper():gsub("[^A-Z0-9]", "_") .. "_"
 local registered = 0
 local commands: { [string]: boolean } = {}
 
-local function register(names: string[], fn: any)
+local function register(names: string[], fn: Handler)
     registered += 1
     local key = prefix .. registered
     for i, name in ipairs(names) do
@@ -24,7 +44,7 @@ local function register(names: string[], fn: any)
         commands[lower] = true
         _G["SLASH_" .. key .. i] = name
     end
-    SlashCmdList[key] = function(msg: string, editBox: any)
+    SlashCmdList[key] = function(msg: string, editBox: EditBox?)
         callIn({ component = "slash: " .. names[1] }, fn, msg, editBox)
     end
 end
@@ -32,7 +52,7 @@ end
 --- `@slash("/cmd", ...)`: the handler gets the message and the edit box.
 export function slash(...: string)
     local names = { ... }
-    return function(fn: any, ctx: any)
+    return function(fn: Handler, _: DecoratorContext?)
         register(names, fn)
     end
 end
@@ -42,14 +62,14 @@ end
 -- Splits on whitespace; "two words" and 'two words' are one token, \"
 -- escapes. Also returns where each token starts in `msg`.
 local function tokenize(msg: string): (string[], number[])
-    local tokens, starts = {}, {}
+    local tokens: string[], starts: number[] = {}, {}
     local i, n = 1, #msg
     while i <= n do
         local c = msg:sub(i, i)
         if c:match("%s") then
             i += 1
         elseif c == "\"" or c == "'" then
-            local buf = {}
+            local buf: string[] = {}
             starts[#starts + 1] = i
             i += 1
             while i <= n and msg:sub(i, i) ~= c do
@@ -78,7 +98,7 @@ const BOOLEANS = { ["true"] = true, on = true, yes = true, ["1"] = true,
                    ["false"] = false, off = false, no = false, ["0"] = false }
 
 -- Converts one argument by its spec; returns ok and the value.
-local function convert(spec: any, token: string?): (boolean, any)
+local function convert(spec: ArgSpec, token: string?): (boolean, any)
     if type(spec) == "table" then
         if token == nil then
             return false, nil
@@ -107,7 +127,7 @@ local function convert(spec: any, token: string?): (boolean, any)
     return false, nil
 end
 
-local function describe(spec: any): string
+local function describe(spec: ArgSpec): string
     if type(spec) == "table" then
         return "<" .. table.concat(spec, "|") .. ">"
     end
@@ -119,49 +139,48 @@ local function describe(spec: any): string
     return optional and "[" .. kind .. "]" or "<" .. kind .. ">"
 end
 
-local function usage(name: string, command: any): string
+local function usage(name: string, command: Command): string
     local parts = { name }
-    for _, spec in ipairs(command.args or {}) do
+    for _, spec in ipairs(command.args ?? {}) do
         parts[#parts + 1] = describe(spec)
     end
-    for _, flag in ipairs(command.flags or {}) do
+    for _, flag in ipairs(command.flags ?? {}) do
         parts[#parts + 1] = "[--" .. flag .. "]"
     end
     return table.concat(parts, " ")
 end
 
 --- A router: `router:dispatch(msg)` runs the matching command.
-export function router(defs: { [string]: any }): any
+export function router(defs: { [string]: Command }): Router
     local byName: { [string]: string } = {}
     for name, command in pairs(defs) do
         byName[name:lower()] = name
-        for _, alias in ipairs(command.aliases or {}) do
+        for _, alias in ipairs(command.aliases ?? {}) do
             byName[alias:lower()] = name
         end
     end
-    local r: any = {}
 
-    function r.help(): string
-        local names = {}
+    local function help(): string
+        local names: string[] = {}
         for name in pairs(defs) do
             names[#names + 1] = name
         end
         table.sort(names)
-        local lines = {}
+        local lines: string[] = {}
         for _, name in ipairs(names) do
-            local command = defs[name]
+            local command = assert(defs[name])
             lines[#lines + 1] = usage(name, command) .. (command.help and " - " .. command.help or "")
         end
         return table.concat(lines, "\n")
     end
 
     local function printHelp()
-        for line in r.help():gmatch("[^\n]+") do
+        for line in help():gmatch("[^\n]+") do
             say(line)
         end
     end
 
-    function r.dispatch(_, msg: string): boolean
+    local function dispatch(msg: string): boolean
         local tokens, starts = tokenize(msg)
         if #tokens == 0 or tokens[1]:lower() == "help" then
             printHelp()
@@ -172,8 +191,8 @@ export function router(defs: { [string]: any }): any
             printHelp()
             return false
         end
-        local command = defs[name]
-        local args = command.args or {}
+        local command = assert(defs[name])
+        local args = command.args ?? {}
         -- A `rest` argument takes the text as typed from the first token
         -- after the arguments before it (flags must come before it).
         local restAt: number? = nil
@@ -186,11 +205,11 @@ export function router(defs: { [string]: any }): any
         -- Flags anywhere after the command; the rest are positional.
         local flags: { [string]: boolean } = {}
         local known: { [string]: boolean } = {}
-        for _, f in ipairs(command.flags or {}) do
+        for _, f in ipairs(command.flags ?? {}) do
             known[f] = true
             flags[f] = false
         end
-        local positional = {}
+        local positional: string[] = {}
         local rest = ""
         for i = 2, #tokens do
             if restAt and #positional == restAt - 1 then
@@ -208,7 +227,7 @@ export function router(defs: { [string]: any }): any
                 positional[#positional + 1] = tokens[i]
             end
         end
-        local values = {}
+        local values: any[] = {}
         for i, spec in ipairs(args) do
             if i == restAt then
                 values[i] = rest
@@ -234,5 +253,8 @@ export function router(defs: { [string]: any }): any
         return true
     end
 
-    return r
+    return {
+        dispatch = function(_: Router, msg: string): boolean return dispatch(msg) end,
+        help = function(_: Router): string return help() end,
+    }
 end

@@ -1,0 +1,159 @@
+-- The wowlua runtime's table, `ns.__wowlua` (spec codegen §14.7): what the
+-- runtime's slices and the standard library share. The runtime's slices
+-- (`crates/wowlua-runtime/wowlua`) define it; the standard library reads
+-- it. User code cannot reach it (`__wowlua` is reserved, E2003). Members of
+-- optional slices are optional.
+
+type WowluaLogEntry = { time: number, level: string, message: string, location?: string }
+
+type WowluaProfStat = {
+    calls: number,
+    total: number,
+    self: number,
+    max: number,
+    avg: number,
+    errors: number,
+    location?: string,
+    memory?: number,
+}
+
+--- The profiler (slice `prof`).
+interface WowluaProfiler
+    stats: { [string]: WowluaProfStat }
+    timers: { [string]: number }
+    --- Count errors of every wrapped function (`profile-errors`).
+    errors?: boolean
+    clock: () -> number
+    record: (name: string, location: string?, elapsed: number, own: number) -> ()
+    wrap: (fn: any, name: string, location: string, opts: { errors?: boolean, memory?: boolean }?) -> any
+    measure: (label: string, fn: (...any) -> ...any, ...any) -> ...any
+    time: (label: string) -> ()
+    timeEnd: (label: string) -> ()
+    reset: () -> ()
+end
+
+type WowluaMonitorStat = { count: number, total: number, max: number, detail: string }
+
+--- The event, script and timer monitor (slice `monitor`).
+interface WowluaMonitor
+    events: { [string]: WowluaMonitorStat }
+    scripts: { [string]: WowluaMonitorStat }
+    timers: { [string]: WowluaMonitorStat }
+    --- Memory samples in KiB, the newest last.
+    memory: number[]
+    setScript: (frame: any, script: string, fn: any, location: string) -> any
+    hookScript: (frame: any, script: string, fn: any, location: string) -> any
+    after: (seconds: number, fn: any, location: string) -> ()
+    newTimer: (seconds: number, fn: any, location: string) -> TimerHandle
+    newTicker: (seconds: number, fn: any, iterations: number?, location: string) -> TickerHandle
+    reset: () -> ()
+end
+
+type WowluaErrorEntry = { message: string, stack: string, count: number, time: string }
+
+--- Captured errors (slice `errors`).
+interface WowluaErrorLog
+    --- Newest first.
+    list: WowluaErrorEntry[]
+    byMessage: { [string]: WowluaErrorEntry }
+    record: (message: any, stack: string?) -> ()
+    clear: () -> ()
+end
+
+--- What the dev console knows about this addon (slice `devconsole`).
+interface WowluaDev
+    name: string
+    info: { [string]: any }
+    watches: { label: string, fn: () -> any, source: string }[]
+    schema: number
+    runtime: WowluaRuntime
+    watch: (label: string, fn: () -> any) -> ()
+    --- The `/wl` console, on the addon whose runtime installed it.
+    console?: table
+end
+
+--- The log's ring buffer (wowlua:log), for the dev console.
+interface WowluaLogs
+    entries: { [number]: WowluaLogEntry }
+    first: () -> number
+    count: () -> number
+    history: (n: number?) -> WowluaLogEntry[]
+    setLevel: (level: string) -> ()
+end
+
+--- The standard library's work per lifecycle phase (wowlua:lifecycle).
+interface WowluaLifecycleTasks
+    beforeLoad: (() -> ())[]
+    afterLoad: (() -> ())[]
+    afterLogin: (() -> ())[]
+    afterLogout: (() -> ())[]
+end
+
+interface WowluaRuntime
+    -- core
+    ns: table
+    modules: { [string]: table }
+    --- A debug build.
+    debug: boolean
+    profErrors?: boolean
+    savedFirst?: boolean
+    --- Dev builds: what the dev console shows about the build.
+    devInfo?: { [string]: any }
+    logLevel?: string
+    logHistory?: number
+    --- Build metadata tables (wowlua:meta).
+    meta?: table
+    module: (id: string) -> table
+    require: (id: string, lazy: boolean?) -> table
+    define: (id: string, exports: table) -> table
+
+    -- class and widget
+    class?: (name: string, super: any) -> any
+    accessor?: (cls: any, kind: string, name: string, fn: (...any) -> ...any) -> ()
+    finalize?: (cls: any) -> any
+    abstract?: (cls: any, name: string) -> ()
+    classOf?: (v: any) -> any
+    isInstance?: (v: any, cls: any) -> boolean
+    widgetClass?: (name: string, super: any) -> any
+    finalizeWidget?: (cls: any) -> any
+    mixin?: (frame: any, cls: any) -> any
+    xmlMixin?: (cls: any) -> { [string]: any }
+    script?: (cls: any, script: string, method: string, hook: boolean?) -> ()
+
+    -- enum, decorate
+    enum?: (t: table, name: string) -> table
+    decorate?: (value: any, ctx: table, ...((value: any, ctx: table) -> any)) -> any
+    decorateField?: (ctx: table, ...((value: any, ctx: table) -> any)) -> ()
+    deprecated?: (fn: (...any) -> ...any, name: string, message: string?) -> (...any) -> ...any
+    register?: (value: any, ctx: table, ...((value: any, ctx: table) -> any)) -> any
+
+    -- runtime checks
+    check?: {
+        fail: (index: number, name: string, fname: string, location: string, expected: string, value: any) -> (),
+        castFail: (expected: string, value: any, location: string) -> (),
+    }
+
+    -- reflection
+    reflect?: {
+        classes: { [table]: table },
+        byName: { [string]: table },
+        functions: { [function]: table },
+        enums: { [table]: any[] },
+    }
+    reflectClass?: (cls: table, meta: { name: string }) -> ()
+    reflectFn?: (fn: any, meta: table) -> ()
+    reflectEnum?: (e: table, order: any[]) -> ()
+
+    -- dev tooling
+    trace?: { depth: number, wrap: (fn: any, name: string, location: string, opts: { args?: boolean }?) -> any }
+    prof?: WowluaProfiler
+    mon?: WowluaMonitor
+    errors?: WowluaErrorLog
+    dev?: WowluaDev
+
+    -- the standard library's
+    lifecycleTasks?: WowluaLifecycleTasks
+    locale?: { [string]: string }
+    logs?: WowluaLogs
+    logEmit?: (level: string, location: string?, ...any) -> ()
+end

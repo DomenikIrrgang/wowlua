@@ -2,7 +2,13 @@
 import after, every, throttle, debounce, nextFrame from "wowlua:timer"
 import suite from "/harness"
 
-local calls: { [string]: any[] } = { throttle = {}, debounce = {}, frame = {}, method = {} }
+type Call = { v: number, at: number }
+local calls: { throttle: Call[], debounce: Call[], frame: number[], method: string[] } = {
+    throttle = {},
+    debounce = {},
+    frame = {},
+    method = {},
+}
 
 @throttle(0.3)
 local function throttled(v: number)
@@ -31,7 +37,7 @@ end
 
 local s = suite("timer")
 
-s:test("after runs once, cancelled timers never", function(t: any)
+s:test("after runs once, cancelled timers never", function(t)
     local start = GetTime()
     local at: number? = nil
     local timer = after(0.2, function() at = GetTime() end)
@@ -46,11 +52,11 @@ s:test("after runs once, cancelled timers never", function(t: any)
     t:ok(not cancelled, "the cancelled timer did not run")
 end)
 
-s:test("every repeats, gets its ticker, stops", function(t: any)
+s:test("every repeats, gets its ticker, stops", function(t)
     local ticks = 0
     local limited = 0
     every(0.1, function() limited += 1 end, 3)
-    every(0.1, function(ticker: any)
+    every(0.1, function(ticker: TickerHandle)
         ticks += 1
         if ticks == 2 then ticker:Cancel() end
     end)
@@ -59,7 +65,7 @@ s:test("every repeats, gets its ticker, stops", function(t: any)
     t:eq(ticks, 2, "cancelled from inside")
 end)
 
-s:test("timer callbacks are isolated", function(t: any)
+s:test("timer callbacks are isolated", function(t)
     -- Timers due at the same time run in no fixed order.
     local failed, after2 = false, false
     after(0.05, function()
@@ -72,7 +78,7 @@ s:test("timer callbacks are isolated", function(t: any)
     t:ok(t:reported("[timer: after]"), "naming the timer")
 end)
 
-s:test("@throttle: first call now, one trailing call", function(t: any)
+s:test("@throttle: first call now, one trailing call", function(t)
     calls.throttle = {}
     local start = GetTime()
     throttled(1)
@@ -87,7 +93,7 @@ s:test("@throttle: first call now, one trailing call", function(t: any)
     t:eq(#calls.throttle, 2, "nothing more")
 end)
 
-s:test("@throttle keeps state per instance", function(t: any)
+s:test("@throttle keeps state per instance", function(t)
     calls.method = {}
     local a, b = Panel.new("a"), Panel.new("b")
     a:update(1)
@@ -96,7 +102,7 @@ s:test("@throttle keeps state per instance", function(t: any)
     t:eq(table.concat(calls.method, " "), "a1 b1", "each instance runs its first call")
 end)
 
-s:test("@debounce: once, after the last call", function(t: any)
+s:test("@debounce: once, after the last call", function(t)
     calls.debounce = {}
     debounced(1)
     t:wait(0.15)
@@ -112,7 +118,7 @@ s:test("@debounce: once, after the last call", function(t: any)
     t:ok(c and c.v == 3 and c.at - last >= 0.25, "with the last arguments, after the delay")
 end)
 
-s:test("nextFrame: coalesced as a decorator, not as a call", function(t: any)
+s:test("nextFrame: coalesced as a decorator, not as a call", function(t)
     calls.frame = {}
     redraw(1)
     redraw(2)

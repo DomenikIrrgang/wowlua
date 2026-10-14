@@ -4,7 +4,8 @@
 
 --- The addon's name (the chunk's first argument).
 declare global addonName: string
---- The runtime table, `ns.__wowlua`.
-declare global wl: any
+--- The runtime table, `ns.__wowlua` (its interface is the compiler's
+--- `runtime.d.wowlua`).
+declare global wl: WowluaRuntime
 --- The dev console's registry, shared by every addon's runtime.
 declare global WOWLUA_DEV: any

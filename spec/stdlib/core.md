@@ -198,10 +198,10 @@ declare module "wowlua:slash"
                  | string[]                      -- choices (literal union)
 
     interface Command
-        args: ArgSpec[]?
-        flags: string[]?
-        aliases: string[]?
-        help: string?
+        args?: ArgSpec[]
+        flags?: string[]
+        aliases?: string[]
+        help?: string
         run: (...any) -> ()                      -- checked against args/flags (intrinsic)
     end
 
@@ -235,7 +235,7 @@ import onLoad from "wowlua:lifecycle"
 
 interface Settings
     scale: number
-    position: { x: number, y: number }?
+    position?: { x: number, y: number }
     hidden: { [string]: boolean }
 end
 
@@ -264,9 +264,9 @@ declare module "wowlua:saved"
     interface BindOptions<T>
         version: number
         defaults: T
-        migrate: { [number]: (data: any) -> () }?
-        profiles: boolean?
-        stripDefaults: boolean?            -- default true
+        migrate?: { [number]: (data: any) -> () }
+        profiles?: boolean
+        stripDefaults?: boolean            -- default true
     end
 
     interface Profiles
@@ -279,7 +279,7 @@ declare module "wowlua:saved"
     end
 
     interface SavedHandle
-        profiles: Profiles?                -- nil unless bound with profiles = true
+        profiles?: Profiles                -- nil unless bound with profiles = true
         function reset()                   -- current profile (or the whole data) back to defaults
         function isLoaded(): boolean
     end

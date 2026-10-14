@@ -33,7 +33,7 @@ local function buildDevWindow(console: any, reg: any): any
 	local W, H = 880, 640
 	local REFRESH_FAST, REFRESH_SLOW = 0.25, 1
 
-	local function text(parent, kind, size, color)
+	local function text(parent: Frame, kind: string, size: number, color: number[]?): SimpleFontString
 		local fs = parent:CreateFontString(nil, "OVERLAY")
 		if not fs:SetFont(FONTS[kind] or FONTS.body, size, "") then
 			fs:SetFont(FALLBACK, size, "")
@@ -43,13 +43,13 @@ local function buildDevWindow(console: any, reg: any): any
 		fs:SetWordWrap(false)
 		return fs
 	end
-	local function fill(parent, color, layer)
+	local function fill(parent: Frame, color: number[], layer: DrawLayer?): SimpleTexture
 		local t = parent:CreateTexture(nil, layer or "BACKGROUND")
 		t:SetColorTexture(unpack(color))
 		return t
 	end
 	-- A 1px border inside `frame`.
-	local function border(frame, color)
+	local function border(frame: Frame, color: number[]): SimpleTexture[]
 		local edges = {}
 		for i = 1, 4 do
 			edges[i] = fill(frame, color, "BORDER")
@@ -68,13 +68,13 @@ local function buildDevWindow(console: any, reg: any): any
 		edges[4]:SetWidth(1)
 		return edges
 	end
-	local function hairline(parent, color)
+	local function hairline(parent: Frame, color: number[]?): SimpleTexture
 		local t = fill(parent, color or C.giltFaint, "ARTWORK")
 		t:SetHeight(1)
 		return t
 	end
 	-- The Jewel: a small rotated square.
-	local function diamond(parent, size, color)
+	local function diamond(parent: Frame, size: number, color: number[]?): SimpleTexture
 		local t = fill(parent, color or C.gilt, "OVERLAY")
 		t:SetSize(size, size)
 		if t.SetRotation then
@@ -83,7 +83,7 @@ local function buildDevWindow(console: any, reg: any): any
 		return t
 	end
 	-- A quiet button (or `primary`, the one action of a view).
-	local function button(parent, label, onClick, primary)
+	local function button(parent: Frame, label: string, onClick: () -> (), primary: boolean?): Button
 		local b = CreateFrame("Button", nil, parent)
 		b:SetHeight(26)
 		local bg = fill(b, primary and C.arcane or C.raised)
@@ -110,7 +110,7 @@ local function buildDevWindow(console: any, reg: any): any
 		return b
 	end
 	-- A field on `surface-sunk`.
-	local function field(parent, width, placeholder, onEnter)
+	local function field(parent: Frame, width: number, placeholder: string, onEnter: ((text: string) -> ())?): EditBox
 		local box = CreateFrame("EditBox", nil, parent)
 		box:SetSize(width, 26)
 		box:SetAutoFocus(false)
@@ -141,7 +141,7 @@ local function buildDevWindow(console: any, reg: any): any
 		return box
 	end
 	-- Two to five named options; the chosen one in `arcane`.
-	local function segmented(parent, options, onPick)
+	local function segmented(parent: Frame, options: { label: string, value: any }[], onPick: (value: any) -> ()): Frame
 		local f = CreateFrame("Frame", nil, parent)
 		f:SetHeight(26)
 		local bg = fill(f, C.sunk)
@@ -168,7 +168,7 @@ local function buildDevWindow(console: any, reg: any): any
 			f.buttons[#f.buttons + 1] = b
 		end
 		f:SetWidth(x + 1)
-		function f:Select(value)
+		function f:Select(value: any)
 			for _, b in ipairs(self.buttons) do
 				local chosen = b.value == value
 				b.on:SetShown(chosen)
@@ -442,7 +442,7 @@ local function buildDevWindow(console: any, reg: any): any
 	menuBg:SetAllPoints()
 	border(menu, C.giltLine)
 	local menuItems = {}
-	local function openMenu(items)
+	local function openMenu(items: { label: string, run: () -> () }[])
 		for _, b in ipairs(menuItems) do
 			b:Hide()
 		end
@@ -491,7 +491,7 @@ local function buildDevWindow(console: any, reg: any): any
 	copyBox:SetScript("OnEditFocusLost", function(self)
 		self:Hide()
 	end)
-	local function copy(value)
+	local function copy(value: string)
 		copyBox:SetText(value)
 		copyBox:Show()
 		copyBox:SetFocus()
@@ -500,7 +500,7 @@ local function buildDevWindow(console: any, reg: any): any
 
 	-- Rows: a pool of frames with cells at column offsets.
 	local rows = {}
-	local function row(i)
+	local function row(i: number): any
 		local r = rows[i]
 		if not r then
 			r = CreateFrame("Button", nil, list)
@@ -535,7 +535,7 @@ local function buildDevWindow(console: any, reg: any): any
 		end
 		return r
 	end
-	local function cell(r, j)
+	local function cell(r: any, j: number): any
 		local fs = r.cells[j]
 		if not fs then
 			fs = text(r, "numeric", 12, C.ink)
@@ -543,7 +543,7 @@ local function buildDevWindow(console: any, reg: any): any
 		end
 		return fs
 	end
-	local function sub(r, j)
+	local function sub(r: any, j: number): any
 		local fs = r.subs[j]
 		if not fs then
 			fs = text(r, "body", 11, C.inkMuted)
@@ -555,7 +555,7 @@ local function buildDevWindow(console: any, reg: any): any
 	-- columns: { title, width (0 = rest), align, sort key }; data rows:
 	-- { cells = {}, subs = {}, colors = {}, fonts = {}, badge, indent,
 	--   tall, onClick, onRightClick }.
-	local function render(columns, data)
+	local function render(columns: any[], data: any[])
 		width = scroll:GetWidth() or (W - 40)
 		list:SetWidth(width)
 		local fixed = 0
@@ -563,7 +563,7 @@ local function buildDevWindow(console: any, reg: any): any
 			fixed = fixed + (c.width or 0) + 12
 		end
 		local y = 0
-		local function x0(j)
+		local function x0(j: number): number
 			local xpos = 8
 			for k = 1, j - 1 do
 				local w = columns[k].width
@@ -571,7 +571,7 @@ local function buildDevWindow(console: any, reg: any): any
 			end
 			return xpos
 		end
-		local function colWidth(j)
+		local function colWidth(j: number): number
 			local w = columns[j].width
 			return (w and w > 0) and w or (width - fixed - 16)
 		end
@@ -672,13 +672,13 @@ local function buildDevWindow(console: any, reg: any): any
 
 	-- Toolbar widgets per tab (created once, shown when their tab is open).
 	local tools = {}
-	local function tool(name, make)
+	local function tool(name: string, make: () -> any): any
 		if not tools[name] then
 			tools[name] = make()
 		end
 		return tools[name]
 	end
-	local function showTools(names)
+	local function showTools(names: string[])
 		for name, w in pairs(tools) do
 			local shown = false
 			for _, n in ipairs(names) do
@@ -688,10 +688,10 @@ local function buildDevWindow(console: any, reg: any): any
 		end
 	end
 
-	local function ms(v)
+	local function ms(v: number): string
 		return string.format((v or 0) >= 10 and "%.1f" or "%.2f", v or 0)
 	end
-	local function count(n)
+	local function count(n: number): string
 		local s = tostring(math.floor(n or 0))
 		local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
 		return (out:gsub("^,", ""))
@@ -702,13 +702,13 @@ local function buildDevWindow(console: any, reg: any): any
 		local d = current()
 		return d and d.runtime.ns
 	end }
-	local function inspect(label, get)
+	local function inspect(label: string, get: () -> any)
 		inspected = { label = label, get = get }
 		state.expanded = { [""] = true }
 		state.tab = 7
 		console.refresh(true)
 	end
-	local function addWatch(label, fn, source)
+	local function addWatch(label: string, fn: () -> any, source: string)
 		local d = current()
 		if d then
 			d.watches[#d.watches + 1] = { label = label, fn = fn, source = source }
@@ -718,7 +718,7 @@ local function buildDevWindow(console: any, reg: any): any
 	end
 
 	local views = {}
-	function views.overview(d)
+	function views.overview(d: WowluaDev)
 		showTools({})
 		local data = {}
 		for _, k in ipairs({ "version", "profile", "build", "flavors", "compiler" }) do
@@ -742,11 +742,11 @@ local function buildDevWindow(console: any, reg: any): any
 		}
 		render({ { title = "Build", width = 200 }, { title = "", width = 0 } }, data)
 	end
-	function views.profiler(d)
+	function views.profiler(d: WowluaDev)
 		local filter = tool("filter", function()
 			local f = field(toolbar, 260, "Filter functions")
 			f:SetPoint("LEFT")
-			f.onChange = function(value)
+			f.onChange = function(value: string)
 				state.filter = value:lower()
 				console.refresh(true)
 			end
@@ -793,7 +793,7 @@ local function buildDevWindow(console: any, reg: any): any
 			{ title = "", width = 44 },
 		}, data)
 	end
-	function views.monitor(d)
+	function views.monitor(d: WowluaDev)
 		local seg = tool("monSeg", function()
 			local s = segmented(toolbar, {
 				{ value = "events", label = "Events" },
@@ -844,7 +844,7 @@ local function buildDevWindow(console: any, reg: any): any
 		}, data)
 	end
 	local LEVEL_RANK = { trace = 0, debug = 1, info = 2, warn = 3, error = 4 }
-	function views.log(d)
+	function views.log(d: WowluaDev)
 		local seg = tool("logSeg", function()
 			local s = segmented(toolbar, {
 				{ value = "all", label = "All" },
@@ -885,7 +885,7 @@ local function buildDevWindow(console: any, reg: any): any
 		}, data)
 	end
 	local openError
-	function views.errors(d)
+	function views.errors(d: WowluaDev)
 		tool("errClear", function()
 			local b = button(toolbar, "Clear", function()
 				local cur = current()
@@ -930,7 +930,7 @@ local function buildDevWindow(console: any, reg: any): any
 		end
 		render({ { title = "Error", width = 0 }, { title = "", width = 48, align = "RIGHT" }, { title = "", width = 70, align = "RIGHT" } }, data)
 	end
-	local function valueText(ok, v)
+	local function valueText(ok: boolean, v: any): (string, number[])
 		if not ok then
 			return tostring(v), C.emberText
 		end
@@ -944,7 +944,7 @@ local function buildDevWindow(console: any, reg: any): any
 		local shown = console.show(v)
 		return shown, shown == "<secret>" and C.inkMuted or C.ink
 	end
-	function views.watch(d)
+	function views.watch(d: WowluaDev)
 		local input = tool("watchInput", function()
 			local f = field(toolbar, 520, "Lua expression: ns.db.profile.scale, UnitHealth(\"player\")", function(expression)
 				local cur = current()
@@ -1004,12 +1004,12 @@ local function buildDevWindow(console: any, reg: any): any
 		end
 		render({ { title = "Watch", width = 0 }, { title = "Value", width = 280 }, { title = "From", width = 120 } }, data)
 	end
-	function views.inspector(d)
+	function views.inspector(d: WowluaDev)
 		local _ = d
 		showTools({})
 		local data = {}
 		local ok, root = pcall(inspected.get)
-		local function walk(value, path, label, depth, seen, getter)
+		local function walk(value: any, path: string, label: string, depth: number, seen: { [table]: boolean }, getter: () -> any)
 			local open = state.expanded[path]
 			local isTable = type(value) == "table" and not (issecretvalue and issecretvalue(value))
 			local shown, color = valueText(true, value)
@@ -1095,13 +1095,13 @@ local function buildDevWindow(console: any, reg: any): any
 		views[VIEW_KEYS[state.tab]](d)
 	end
 
-	function console.setTab(i)
+	function console.setTab(i: number)
 		state.tab = i
 		console.refresh()
 	end
 
 	-- Saved per addon (`WowluaDevDB_<Addon>`), written to every loaded one.
-	local function savedName(name)
+	local function savedName(name: string): string
 		return "WowluaDevDB_" .. name:gsub("[^%w_]", "_")
 	end
 	function console.saveState()
@@ -1151,14 +1151,20 @@ end
 -- wowlua runtime: dev console (spec §7.7). This addon's dev data, the
 -- shared `WOWLUA_DEV` registry, and — from the newest runtime loaded — the
 -- `/wl` command and the dev window.
-local dev = { name = addonName, info = wl.devInfo or {}, watches = {}, schema = 1 }
+local dev: WowluaDev
+dev = {
+	name = addonName,
+	info = wl.devInfo ?? {},
+	watches = {},
+	schema = 1,
+	-- The data the console reads, through one versioned interface.
+	runtime = wl,
+	-- A watch from code (`debug.watch`): `fn()` shown live under `label`.
+	watch = function(label: string, fn: () -> any)
+		dev.watches[#dev.watches + 1] = { label = label, fn = fn, source = "code" }
+	end,
+}
 wl.dev = dev
--- A watch from code (`debug.watch`): `fn()` shown live under `label`.
-function dev.watch(label, fn)
-	dev.watches[#dev.watches + 1] = { label = label, fn = fn, source = "code" }
-end
--- The data the console reads, through one versioned interface.
-dev.runtime = wl
 local reg = WOWLUA_DEV
 if type(reg) ~= "table" then
 	reg = { addons = {}, order = {} }
@@ -1177,7 +1183,7 @@ local console = {}
 reg.version = VERSION
 reg.console = console
 
-local function say(text)
+local function say(text: string)
 	local frame = DEFAULT_CHAT_FRAME
 	local line = "|cff33ff99wowlua|r " .. text
 	if frame then
@@ -1190,7 +1196,7 @@ console.say = say
 
 -- The addon a command names: exact, then by prefix, case-insensitive; the
 -- only loaded one when none is named.
-function console.find(name)
+function console.find(name: string): WowluaDev?
 	if not name or name == "" then
 		if #reg.order == 1 then
 			return reg.addons[reg.order[1]]
@@ -1211,7 +1217,7 @@ function console.find(name)
 	return nil
 end
 
-local function pad(s, n, right)
+local function pad(s: any, n: number, right: boolean?): string
 	s = tostring(s)
 	if #s >= n then
 		return s
@@ -1219,13 +1225,13 @@ local function pad(s, n, right)
 	local fill = string.rep(" ", n - #s)
 	return right and (fill .. s) or (s .. fill)
 end
-local function ms(v)
+local function ms(v: number): string
 	return string.format(v >= 10 and "%.1f" or "%.2f", v)
 end
 
 -- Rows of a statistics table, sorted by `key` (descending).
-function console.sorted(stats, key)
-	local rows = {}
+function console.sorted(stats: { [string]: any }, key: string): { name: string, s: any }[]
+	local rows: { name: string, s: any }[] = {}
 	for name, s in pairs(stats or {}) do
 		rows[#rows + 1] = { name = name, s = s }
 	end
@@ -1235,7 +1241,7 @@ function console.sorted(stats, key)
 	return rows
 end
 
-local function statTable(stats, sortKey, top, countHead)
+local function statTable(stats: { [string]: any }, sortKey: string, top: number, countHead: string)
 	local rows = console.sorted(stats, sortKey)
 	say(pad("name", 34) .. pad(countHead, 8, true) .. pad("total", 9, true) .. pad("self", 9, true) .. pad("max", 9, true) .. pad("avg", 9, true))
 	for i = 1, math.min(top, #rows) do
@@ -1250,7 +1256,7 @@ local function statTable(stats, sortKey, top, countHead)
 	end
 end
 
-local function words(msg)
+local function words(msg: string): string[]
 	local out = {}
 	for w in (msg or ""):gmatch("%S+") do
 		out[#out + 1] = w
@@ -1268,7 +1274,7 @@ function commands.list()
 	end
 end
 
-function commands.prof(args)
+function commands.prof(args: string[])
 	local d = console.find(args[1])
 	if not d then
 		return say("which addon? /wl prof <addon> [top N] [sort calls|total|self|max] [reset]")
@@ -1297,7 +1303,7 @@ function commands.prof(args)
 	statTable(prof.stats, sortKey, top, "calls")
 end
 
-function commands.mon(args)
+function commands.mon(args: string[])
 	local d = console.find(args[1])
 	if not d then
 		return say("which addon? /wl mon <addon> [reset]")
@@ -1320,7 +1326,7 @@ function commands.mon(args)
 	end
 end
 
-function commands.errors(args)
+function commands.errors(args: string[])
 	local d = console.find(args[1])
 	if not d then
 		return say("which addon? /wl errors <addon> [clear]")
@@ -1341,7 +1347,7 @@ function commands.errors(args)
 	end
 end
 
-function commands.log(args)
+function commands.log(args: string[])
 	local d = console.find(args[1])
 	if not d then
 		return say("which addon? /wl log <addon> [level]")
@@ -1359,7 +1365,7 @@ function commands.log(args)
 	end
 end
 
-function commands.meta(args)
+function commands.meta(args: string[])
 	local d = console.find(args[1])
 	if not d then
 		return say("which addon? /wl meta <addon>")
@@ -1379,7 +1385,7 @@ function commands.meta(args)
 	end
 end
 
-function commands.inspect(args)
+function commands.inspect(args: string[])
 	local d = console.find(args[1])
 	if not d or not args[2] then
 		return say("/wl inspect <addon> <module>")
@@ -1394,7 +1400,7 @@ function commands.inspect(args)
 end
 
 -- A typed watch: a Lua expression over `ns`, `modules` and globals.
-function console.compile(d, expression)
+function console.compile(d: WowluaDev, expression: string): ((() -> any)?, string?)
 	local chunk, problem = loadstring("return " .. expression, "=watch")
 	if not chunk then
 		return nil, problem
@@ -1404,7 +1410,7 @@ function console.compile(d, expression)
 	return chunk
 end
 
-function console.show(v)
+function console.show(v: any): string
 	if issecretvalue and issecretvalue(v) then
 		return "<secret>"
 	end
@@ -1414,7 +1420,7 @@ function console.show(v)
 	return tostring(v)
 end
 
-function commands.watch(args)
+function commands.watch(args: string[])
 	local d = console.find(args[1])
 	local expression = table.concat(args, " ", 2)
 	if not d or expression == "" then
@@ -1433,7 +1439,7 @@ function commands.reload()
 	ReloadUI()
 end
 
-function console.command(msg)
+function console.command(msg: string)
 	local args = words(msg)
 	local name = table.remove(args, 1)
 	if not name then
@@ -1450,8 +1456,8 @@ function console.command(msg)
 end
 
 if type(SlashCmdList) == "table" then
-	SLASH_WOWLUA1 = "/wl"
-	SlashCmdList.WOWLUA = function(msg)
+	_G.SLASH_WOWLUA1 = "/wl"
+	SlashCmdList.WOWLUA = function(msg: string)
 		reg.console.command(msg)
 	end
 end

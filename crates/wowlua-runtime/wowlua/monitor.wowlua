@@ -1,11 +1,15 @@
 -- wowlua runtime: monitor (spec §7.9). The compiler routes this addon's
 -- SetScript, HookScript and C_Timer calls here; nothing global is hooked.
-local mon: any = { events = {}, scripts = {}, timers = {}, memory = {} }
-wl.mon = mon
+local mon = {
+	events = {} :: { [string]: WowluaMonitorStat },
+	scripts = {} :: { [string]: WowluaMonitorStat },
+	timers = {} :: { [string]: WowluaMonitorStat },
+	memory = {} :: number[],
+}
 local clock: () -> number = debugprofilestop or function(): number
 	return os.clock() * 1000
 end
-local function record(bucket: table, key: string, detail: string, elapsed: number)
+local function record(bucket: { [string]: WowluaMonitorStat }, key: string, detail: string, elapsed: number)
 	local s = bucket[key]
 	if not s then
 		s = { count = 0, total = 0, max = 0, detail = detail }
@@ -17,7 +21,7 @@ local function record(bucket: table, key: string, detail: string, elapsed: numbe
 		s.max = elapsed
 	end
 end
-local function timed(bucket: table, key: string, detail: string, start: number, ...: any): ...any
+local function timed(bucket: { [string]: WowluaMonitorStat }, key: string, detail: string, start: number, ...: any): ...any
 	record(bucket, key, detail, clock() - start)
 	return ...
 end
@@ -27,7 +31,8 @@ local function label(frame: any, location: string): string
 	if name then
 		return name
 	end
-	local cls = wl.classOf and wl.classOf(frame)
+	local classOf = wl.classOf
+	local cls = classOf and classOf(frame)
 	if cls then
 		return cls.__name
 	end
@@ -74,6 +79,7 @@ end
 function mon.reset()
 	mon.events, mon.scripts, mon.timers = {}, {}, {}
 end
+wl.mon = mon
 -- Memory every 5 seconds outside combat, the last 10 minutes.
 if C_Timer and C_Timer.NewTicker and UpdateAddOnMemoryUsage and GetAddOnMemoryUsage then
 	C_Timer.NewTicker(5, function()

@@ -98,7 +98,7 @@ function wl.finalize(cls: any): any
 	if sgetters or ssetters then
 		sgetters, ssetters = sgetters or {}, ssetters or {}
 		local mt: any = getmetatable(cls)
-		mt.__index = function(_, k: any): any
+		mt.__index = function(_: table, k: any): any
 			local g = sgetters[k]
 			if g then
 				return g()
@@ -127,7 +127,7 @@ function wl.abstract(cls: any, name: string)
 	end)
 end
 -- The class of a value (widget instances carry `__class`).
-function wl.classOf(v: any): any
+local function classOf(v: any): any
 	if type(v) ~= "table" then
 		return nil
 	end
@@ -141,8 +141,9 @@ function wl.classOf(v: any): any
 	end
 	return nil
 end
+wl.classOf = classOf
 function wl.isInstance(v: any, cls: any): boolean
-	local c = wl.classOf(v)
+	local c = classOf(v)
 	while c do
 		if c == cls then
 			return true

@@ -13,22 +13,53 @@ type Options = {
     icon: string,
     label: string,
     onClick: (button: string) -> (),
-    tooltip: ((tip: GameTooltip) -> ())?,
-    minimap: { store: any, key: string }?,
-    compartment: boolean?,
-    ldb: boolean?,
+    tooltip?: ((tip: GameTooltip) -> ()),
+    minimap?: { store: table, key: string },
+    compartment?: boolean,
+    ldb?: boolean,
+}
+
+--- LibDBIcon's position table.
+type Position = { hide?: boolean, minimapPos?: number }
+
+--- The parts of LibDataBroker-1.1 and LibDBIcon-1.0 used here.
+interface DataObject
+    icon: string
+    label: string
+    text: string
+end
+interface LibDataBroker
+    function NewDataObject(name: string, data: table): DataObject?
+end
+interface LibDBIcon
+    function Register(name: string, object: DataObject, position: Position?)
+    function Show(name: string)
+    function Hide(name: string)
+    function Refresh(name: string, position: Position?)
+end
+
+--- An Addon Compartment entry.
+type CompartmentEntry = {
+    text: string,
+    icon: string,
+    notCheckable: boolean,
+    registerForAnyClick: boolean,
+    func: (button: any, input: { buttonName?: string }?) -> (),
+    funcOnEnter: (entry: any) -> (),
+    funcOnLeave: () -> (),
 }
 
 local registered = false
-local opts: any = nil
-local compartmentEntry: any = nil
-local dataObject: any = nil
-local libIcon: any = nil
-local button: any = nil
+local opts: Options? = nil
+local compartmentEntry: CompartmentEntry? = nil
+local dataObject: DataObject? = nil
+local libIcon: LibDBIcon? = nil
+local button: Button? = nil
+local buttonIcon: Texture? = nil
 
 -- The minimap position table in the store (created if missing).
-local function position(): any
-    local m = opts.minimap
+local function position(): Position?
+    local m = opts and opts.minimap
     if not m then
         return nil
     end
@@ -37,22 +68,27 @@ local function position(): any
         t = {}
         m.store[m.key] = t
     end
-    if t.minimapPos == nil then
-        t.minimapPos = 225
+    -- The store's data has no declared shape.
+    local p = t :: Position
+    if p.minimapPos == nil then
+        p.minimapPos = 225
     end
-    return t
+    return p
 end
 
 local function click(mouse: string)
-    callIn({ component = "launcher: onClick" }, opts.onClick, mouse)
+    if opts then
+        callIn({ component = "launcher: onClick" }, opts.onClick, mouse)
+    end
 end
 
 local function showTooltip(owner: any)
-    if not opts.tooltip then
+    local tooltip = opts and opts.tooltip
+    if not tooltip then
         return
     end
     GameTooltip:SetOwner(owner, "ANCHOR_LEFT")
-    callIn({ component = "launcher: tooltip" }, opts.tooltip, GameTooltip)
+    callIn({ component = "launcher: tooltip" }, tooltip, GameTooltip)
     GameTooltip:Show()
 end
 
@@ -76,17 +112,18 @@ const ROUNDED: { [string]: boolean[] } = {
     ["TRICORNER-BOTTOMLEFT"] = { false, true, true, true },
     ["TRICORNER-BOTTOMRIGHT"] = { true, false, true, true },
 }
+const ALL_ROUND = { true, true, true, true }
 
 local function place()
     local t = position()
     if not (button and t) then
         return
     end
-    local angle = math.rad(t.minimapPos or 225)
+    local angle = math.rad(t.minimapPos ?? 225)
     local x, y = math.cos(angle), math.sin(angle)
     local quadrant = y >= 0 and (x >= 0 and 1 or 2) or (x < 0 and 3 or 4)
     local shape = GetMinimapShape and GetMinimapShape() or "ROUND"
-    local rounded = (ROUNDED[shape] or ROUNDED.ROUND)[quadrant]
+    local rounded = (ROUNDED[shape] ?? ALL_ROUND)[quadrant]
     local w = Minimap:GetWidth() / 2 + 10
     local h = Minimap:GetHeight() / 2 + 10
     if rounded then
@@ -102,15 +139,18 @@ local function place()
 end
 
 local function dragUpdate()
+    local t = position()
+    if not t then
+        return
+    end
     local mx, my = Minimap:GetCenter()
     local px, py = GetCursorPosition()
     local scale = Minimap:GetEffectiveScale()
-    local t = position()
     t.minimapPos = math.deg(math.atan2(py / scale - my, px / scale - mx)) % 360
     place()
 end
 
-local function createButton(): any
+local function createButton(icon: string): (Button, Texture)
     local b = CreateFrame("Button", addonName .. "MinimapButton", Minimap)
     b:SetSize(31, 31)
     b:SetFrameStrata("MEDIUM")
@@ -130,22 +170,22 @@ local function createButton(): any
     background:SetSize(24, 24)
     background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
     background:SetPoint("CENTER", b, "CENTER", 0, 1)
-    local icon = b:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(18, 18)
-    icon:SetTexture(opts.icon)
-    icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
-    icon:SetPoint("CENTER", b, "CENTER", 0, 1)
-    b.icon = icon
-    b:SetScript("OnClick", function(_, mouse: string) click(mouse) end)
-    b:SetScript("OnEnter", function(self: any) showTooltip(self) end)
+    local texture = b:CreateTexture(nil, "ARTWORK")
+    texture:SetSize(18, 18)
+    texture:SetTexture(icon)
+    texture:SetTexCoord(0.05, 0.95, 0.05, 0.95)
+    texture:SetPoint("CENTER", b, "CENTER", 0, 1)
+    b.icon = texture
+    b:SetScript("OnClick", function(_: Button, mouse: string) click(mouse) end)
+    b:SetScript("OnEnter", function(self: Button) showTooltip(self) end)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    b:SetScript("OnDragStart", function(self: any)
+    b:SetScript("OnDragStart", function(self: Button)
         self:SetScript("OnUpdate", dragUpdate)
     end)
-    b:SetScript("OnDragStop", function(self: any)
+    b:SetScript("OnDragStop", function(self: Button)
         self:SetScript("OnUpdate", nil)
     end)
-    return b
+    return b, texture
 end
 
 local function applyVisibility()
@@ -167,47 +207,52 @@ end
 -- Surfaces ---------------------------------------------------------------------
 
 local function create()
-    local libStub: any = _G.LibStub
-    local ldb = libStub and libStub("LibDataBroker-1.1", true)
-    local dbicon = opts.minimap and libStub and libStub("LibDBIcon-1.0", true)
+    local o = opts
+    if not o then
+        return
+    end
+    local libStub: ((major: string, silent: boolean) -> any)? = _G.LibStub
+    local ldb: LibDataBroker? = libStub and libStub("LibDataBroker-1.1", true)
+    local dbicon: LibDBIcon? = o.minimap and libStub and libStub("LibDBIcon-1.0", true)
     -- LibDBIcon draws from an LDB object, so it needs one too.
-    if ldb and (opts.ldb or dbicon) then
+    if ldb and (o.ldb or dbicon) then
         dataObject = ldb:NewDataObject(addonName, {
             type = "launcher",
-            icon = opts.icon,
-            label = opts.label,
-            text = opts.label,
-            OnClick = function(_, mouse: string) click(mouse) end,
-            OnTooltipShow = function(tip: any)
-                if opts.tooltip then
-                    callIn({ component = "launcher: tooltip" }, opts.tooltip, tip)
+            icon = o.icon,
+            label = o.label,
+            text = o.label,
+            OnClick = function(_: any, mouse: string) click(mouse) end,
+            OnTooltipShow = function(tip: GameTooltip)
+                if o.tooltip then
+                    callIn({ component = "launcher: tooltip" }, o.tooltip, tip)
                 end
             end,
         })
     end
-    if opts.minimap then
+    if o.minimap then
         if dbicon and dataObject then
             libIcon = dbicon
-            libIcon:Register(addonName, dataObject, position())
+            dbicon:Register(addonName, dataObject, position())
         else
-            button = createButton()
+            button, buttonIcon = createButton(o.icon)
             place()
         end
         applyVisibility()
     end
-    if opts.compartment ~= false and AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
-        compartmentEntry = {
-            text = opts.label,
-            icon = opts.icon,
+    if o.compartment ~= false and AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
+        local entry: CompartmentEntry = {
+            text = o.label,
+            icon = o.icon,
             notCheckable = true,
             registerForAnyClick = true,
-            func = function(_, input: any)
+            func = function(_: any, input: { buttonName?: string }?)
                 click(input and input.buttonName or "LeftButton")
             end,
-            funcOnEnter = function(entry: any) showTooltip(entry) end,
+            funcOnEnter = function(owner: any) showTooltip(owner) end,
             funcOnLeave = function() GameTooltip:Hide() end,
         }
-        AddonCompartmentFrame:RegisterAddon(compartmentEntry)
+        compartmentEntry = entry
+        AddonCompartmentFrame:RegisterAddon(entry)
     end
 end
 
@@ -221,7 +266,7 @@ export function register(options: Options)
     if isLoggedIn() then
         callIn({ component = "launcher: register" }, create)
     else
-        local tasks = wl.lifecycleTasks
+        local tasks = assert(wl.lifecycleTasks)
         tasks.afterLogin[#tasks.afterLogin + 1] = create
     end
 end
@@ -238,8 +283,8 @@ export function setIcon(icon: string)
     if compartmentEntry then
         compartmentEntry.icon = icon
     end
-    if button then
-        button.icon:SetTexture(icon)
+    if buttonIcon then
+        buttonIcon:SetTexture(icon)
     end
 end
 
@@ -260,7 +305,7 @@ end
 
 --- Shows or hides the minimap button (stored with its position).
 export function showMinimap(show: boolean)
-    local t = opts and position()
+    local t = position()
     if not t then
         return
     end

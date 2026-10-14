@@ -23,28 +23,41 @@ end
 
 --- The housekeeping of a bound table: `saved.handle(db)`.
 export interface SavedHandle
-    profiles: Profiles?
+    profiles?: Profiles
     --- The current profile (or the whole data) back to its defaults.
     function reset()
     function isLoaded(): boolean
+    --- For wowlua:settings: a key's default (the panel's Defaults button).
+    __default?: (self: SavedHandle, key: string) -> any
 end
+
+export type BindOptions<T> = {
+    version: number,
+    defaults: T,
+    migrate?: { [number]: (data: any) -> () },
+    profiles?: boolean,
+    stripDefaults?: boolean,
+}
 
 type Binding = {
     name: string,
-    opts: any,
-    db: any,
-    root: any,
-    data: any,
+    opts: BindOptions<any>,
+    --- The table `bind` returned.
+    db: table,
+    --- The SavedVariable's table and the active data (the profile's, or
+    --- `db` itself), once loaded.
+    root?: table,
+    data?: table,
     loaded: boolean,
-    failed: string?,
+    failed?: string,
     strip: boolean,
-    profile: string?,
-    listeners: any[],
-    handle: any,
+    profile?: string,
+    listeners: ((name: string) -> ())[],
+    handle?: SavedHandle,
 }
 
 local bindings: Binding[] = {}
-local handles = setmetatable({}, { __mode = "k" })
+local handles: { [table]: SavedHandle } = setmetatable({}, { __mode = "k" })
 
 local function copy(value: any): any
     if type(value) ~= "table" then
@@ -59,7 +72,7 @@ end
 
 -- Lazy deep defaults: a missing key reads its default; a table default is
 -- created in the data on first read, so writes never reach the defaults.
-local function attach(data: any, defaults: any): any
+local function attach(data: table, defaults: any): table
     if type(defaults) ~= "table" then
         return data
     end
@@ -70,7 +83,7 @@ local function attach(data: any, defaults: any): any
         end
     end
     return setmetatable(data, {
-        __index = function(t: any, k: any): any
+        __index = function(t: table, k: any): any
             local d = defaults[k]
             if type(d) == "table" then
                 local child = attach({}, d)
@@ -85,7 +98,7 @@ end
 -- Removes values equal to their defaults, recursively, and secret values
 -- (they cannot be saved) anywhere; returns whether a secret was dropped.
 -- Empty tables go only where their default is a table.
-local function strip(data: any, defaults: any, seen: { [any]: boolean }?): boolean
+local function strip(data: table, defaults: any, seen: { [table]: boolean }?): boolean
     seen = seen or {}
     if seen[data] then
         return false
@@ -115,7 +128,7 @@ local function strip(data: any, defaults: any, seen: { [any]: boolean }?): boole
     return secrets
 end
 
-local function locked(b: Binding): any
+local function locked(b: Binding): table
     local message = function(): string
         return b.failed or (addonName .. ": " .. b.name .. " accessed before it was loaded; use @onLoad")
     end
@@ -125,19 +138,19 @@ local function locked(b: Binding): any
     }
 end
 
-local function perChar(b: Binding): any
+local function perChar(b: Binding): { profile?: string }
     local key = b.name .. "PerChar"
     local store = _G[key]
     if type(store) ~= "table" then
         store = {}
         _G[key] = store
     end
-    return store
+    return store :: { profile?: string }
 end
 
 -- Points the returned table at the active profile's data.
 local function useProfile(b: Binding, name: string)
-    local profiles = b.root.profiles
+    local profiles = assert(b.root).profiles
     if type(profiles[name]) ~= "table" then
         profiles[name] = {}
     end
@@ -184,8 +197,9 @@ local function load(b: Binding)
         _G[b.name] = stored
         useProfile(b, perChar(b).profile or DEFAULT_PROFILE)
         setmetatable(b.db, {
-            __index = function(_, k: any): any return b.data[k] end,
-            __newindex = function(_, k: any, v: any) b.data[k] = v end,
+            -- Set by `useProfile` above.
+            __index = function(_: table, k: any): any return (b.data :: table)[k] end,
+            __newindex = function(_: table, k: any, v: any) (b.data :: table)[k] = v end,
         })
     else
         -- The returned table becomes the data (its identity never changes).
@@ -207,7 +221,7 @@ local function stripAll(b: Binding)
     end
     local secrets = false
     if b.opts.profiles then
-        for _, data in pairs(b.root.profiles) do
+        for _, data in pairs(assert(b.root).profiles) do
             if strip(data, b.opts.defaults) then
                 secrets = true
             end
@@ -224,7 +238,7 @@ end
 
 -- Loading before the addon's `@onLoad` hooks, stripping after `@onLogout`
 -- (the phase order of wowlua:lifecycle).
-local tasks = wl.lifecycleTasks
+local tasks = assert(wl.lifecycleTasks)
 tasks.beforeLoad[#tasks.beforeLoad + 1] = function()
     for _, b in ipairs(bindings) do
         if not b.loaded and not b.failed then
@@ -238,16 +252,19 @@ tasks.afterLogout[#tasks.afterLogout + 1] = function()
     end
 end
 
-local function makeHandle(b: Binding): any
-    local function need(what: string)
-        if not b.loaded then
+local function makeHandle(b: Binding): SavedHandle
+    -- The loaded binding's root and data.
+    local function need(what: string): (table, table)
+        local root, data = b.root, b.data
+        if not (b.loaded and root and data) then
             error(what .. ": " .. b.name .. " is not loaded", 3)
         end
+        return root, data
     end
-    local h: any = {
-        reset = function(_)
-            need("reset")
-            local data = b.data
+    local h: SavedHandle = {
+        profiles = nil,
+        reset = function(_: SavedHandle)
+            local _, data = need("reset")
             local version = rawget(data, "__version")
             for k in pairs(data) do
                 rawset(data, k, nil)
@@ -256,16 +273,15 @@ local function makeHandle(b: Binding): any
                 rawset(data, "__version", version)
             end
         end,
-        isLoaded = function(_): boolean return b.loaded end,
-        -- For wowlua:settings: a key's default (the panel's Defaults button).
-        __default = function(_, key: string): any
+        isLoaded = function(_: SavedHandle): boolean return b.loaded end,
+        __default = function(_: SavedHandle, key: string): any
             local d = b.opts.defaults
             return type(d) == "table" and d[key] or nil
         end,
     }
     if b.opts.profiles then
         h.profiles = {
-            use = function(_, name: string)
+            use = function(_: Profiles, name: string)
                 need("profiles:use")
                 if type(name) ~= "string" then
                     error("profiles:use: the profile name must be a string, not " .. type(name), 2)
@@ -275,25 +291,24 @@ local function makeHandle(b: Binding): any
                     callIn({ component = "saved: profile change" }, fn, name)
                 end
             end,
-            current = function(_): string return b.profile or DEFAULT_PROFILE end,
-            list = function(_): string[]
-                need("profiles:list")
-                local names = {}
-                for name in pairs(b.root.profiles) do
+            current = function(_: Profiles): string return b.profile or DEFAULT_PROFILE end,
+            list = function(_: Profiles): string[]
+                local root = need("profiles:list")
+                local names: string[] = {}
+                for name in pairs(root.profiles) do
                     names[#names + 1] = name
                 end
                 table.sort(names)
                 return names
             end,
-            copy = function(_, from: string)
-                need("profiles:copy")
-                local source = b.root.profiles[from]
+            copy = function(_: Profiles, from: string)
+                local root, data = need("profiles:copy")
+                local source = root.profiles[from]
                 if type(source) ~= "table" then
                     error("no profile `" .. tostring(from) .. "`", 2)
                 end
                 -- Copied first: `from` may be the active profile itself.
                 local values = copy(source)
-                local data = b.data
                 for k in pairs(data) do
                     rawset(data, k, nil)
                 end
@@ -302,27 +317,28 @@ local function makeHandle(b: Binding): any
                 end
                 attach(data, b.opts.defaults)
             end,
-            delete = function(_, name: string)
-                need("profiles:delete")
+            delete = function(_: Profiles, name: string)
+                local root = need("profiles:delete")
                 if name == b.profile then
                     error("cannot delete the active profile `" .. name .. "`", 2)
                 end
-                b.root.profiles[name] = nil
+                root.profiles[name] = nil
             end,
-            onChange = function(_, fn: (name: string) -> ()): Subscription
+            onChange = function(_: Profiles, fn: (name: string) -> ()): Subscription
                 local list = b.listeners
                 list[#list + 1] = fn
-                local sub: any = { active = true }
-                sub.cancel = function()
-                    sub.active = false
-                    for i, f in ipairs(list) do
-                        if f == fn then
-                            table.remove(list, i)
-                            break
+                return {
+                    active = true,
+                    cancel = function(self: Subscription)
+                        self.active = false
+                        for i, f in ipairs(list) do
+                            if f == fn then
+                                table.remove(list, i)
+                                break
+                            end
                         end
-                    end
-                end
-                return sub
+                    end,
+                }
             end,
         }
     end
@@ -331,29 +347,26 @@ end
 
 --- Binds the SavedVariable `name`; returns its data table (locked until
 --- the addon's SavedVariables load).
-export function bind(name: string, opts: any): any
+export function bind<T>(name: string, opts: BindOptions<T>): T
     for _, b in ipairs(bindings) do
         if b.name == name then
             error("bind: " .. name .. " is bound already", 2)
         end
     end
-    local db = {}
+    -- The proxy the caller sees as `T` (its fields are the saved data's).
+    local db: any = {}
     local b: Binding = {
         name = name,
         opts = opts,
         db = db,
-        root = nil,
-        data = nil,
         loaded = false,
-        failed = nil,
         strip = true,
-        profile = nil,
         listeners = {},
-        handle = nil,
     }
     setmetatable(db, locked(b))
-    b.handle = makeHandle(b)
-    handles[db] = b.handle
+    local h = makeHandle(b)
+    b.handle = h
+    handles[db] = h
     bindings[#bindings + 1] = b
     -- Bound after the addon loaded, or the SavedVariables load first
     -- (`addon.load-saved-variables-first`).
@@ -364,7 +377,7 @@ export function bind(name: string, opts: any): any
 end
 
 --- The housekeeping handle of a bound table.
-export function handle(db: any): SavedHandle
+export function handle(db: table): SavedHandle
     local h = handles[db]
     if not h then
         error("handle: not a table from saved.bind", 2)

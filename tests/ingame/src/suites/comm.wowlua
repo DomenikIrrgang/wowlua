@@ -5,7 +5,8 @@ import * as comm from "wowlua:comm"
 import suite from "/harness"
 
 local received: string? = nil
-local object: any = nil
+-- The decoded object of the last `sendObject` (its shape is the test's).
+local object: { name: string, values: number[] }? = nil
 local channel = comm.open("StdTestComm", { receiveOwn = true })
 channel:onMessage(function(msg: string) received = msg end)
 channel:onObject(function(value: any) object = value end)
@@ -22,7 +23,7 @@ end
 
 local s = suite("comm")
 
-s:test("a long message comes back in one piece", function(t: any)
+s:test("a long message comes back in one piece", function(t)
     local dist = where()
     if not dist then
         t:skip("needs a group or a guild")
@@ -39,7 +40,7 @@ s:test("a long message comes back in one piece", function(t: any)
     end
 end)
 
-s:test("an object comes back", function(t: any)
+s:test("an object comes back", function(t)
     local dist = where()
     if not dist then
         t:skip("needs a group or a guild")
@@ -48,6 +49,7 @@ s:test("an object comes back", function(t: any)
     object = nil
     channel:sendObject({ name = "StdTest", values = { 1, 2, 3 } }, dist)
     if t:waitFor(function() return object ~= nil end, 15, "the object arrives") then
-        t:ok(object.name == "StdTest" and #object.values == 3, "decoded")
+        local got = object
+        t:ok(got ~= nil and got.name == "StdTest" and #got.values == 3, "decoded")
     end
 end)

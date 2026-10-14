@@ -1,11 +1,27 @@
 -- wowlua:callbacks: registries and their CallbackHandler face.
 import * as callbacks from "wowlua:callbacks"
 import suite from "/harness"
+import type Subscription from "wowlua:events"
+
+interface KillEvents
+    Kill: (n: number) -> ()
+    Reset: () -> ()
+    Solo: () -> ()
+end
+
+interface TickEvents
+    Tick: () -> ()
+end
+
+-- What CallbackHandler passes: the event name first.
+interface CompatEvents
+    Kill: (n: number) -> ()
+end
 
 local s = suite("callbacks")
 
-s:test("on, once, off, offAll, has", function(t: any)
-    local r = callbacks.registry()
+s:test("on, once, off, offAll, has", function(t)
+    local r: callbacks.Registry<KillEvents> = callbacks.registry()
     local got: string[] = {}
     local owner = {}
     r:on("Kill", function(n: number) got[#got + 1] = `kill {n}` end, owner)
@@ -23,10 +39,10 @@ s:test("on, once, off, offAll, has", function(t: any)
     t:ok(not pcall(r.offAll, r, nil), "offAll(nil) is refused")
 end)
 
-s:test("isolated handlers, snapshot fires", function(t: any)
-    local r = callbacks.registry()
+s:test("isolated handlers, snapshot fires", function(t)
+    local r: callbacks.Registry<TickEvents> = callbacks.registry()
     local log: string[] = {}
-    local second: any = nil
+    local second: Subscription? = nil
     local added = false
     r:on("Tick", function()
         log[#log + 1] = "one"
@@ -44,22 +60,25 @@ s:test("isolated handlers, snapshot fires", function(t: any)
     t:ok(t:reported("callback broke"), "the error is reported")
 end)
 
-s:test("CallbackHandler compatibility", function(t: any)
-    local r = callbacks.registry({ compat = "CallbackHandler" })
+s:test("CallbackHandler compatibility", function(t)
+    local r: callbacks.Registry<CompatEvents> = callbacks.registry({ compat = "CallbackHandler" })
+    local register = assert(r.RegisterCallback)
+    local unregister = assert(r.UnregisterCallback)
+    local unregisterAll = assert(r.UnregisterAllCallbacks)
     local got: string[] = {}
-    local consumer: any = {}
-    function consumer.OnKill(self: any, name: string, n: number) got[#got + 1] = `method {self == consumer} {name} {n}` end
-    function consumer.OnArg(self: any, arg: any, name: string, n: number) got[#got + 1] = `arg {arg} {name} {n}` end
-    r.RegisterCallback(consumer, "Kill", "OnKill")
+    local consumer = {}
+    function consumer.OnKill(self: table, name: string, n: number) got[#got + 1] = `method {self == consumer} {name} {n}` end
+    function consumer.OnArg(_: table, arg: string, name: string, n: number) got[#got + 1] = `arg {arg} {name} {n}` end
+    register(consumer, "Kill", "OnKill")
     r:fire("Kill", 1)
-    r.RegisterCallback(consumer, "Kill", "OnArg", "x")
+    register(consumer, "Kill", "OnArg", "x")
     r:fire("Kill", 2)
-    r.RegisterCallback(consumer, "Kill", function(arg: any, name: string, n: number) got[#got + 1] = `fn {arg} {name} {n}` end, "y")
+    register(consumer, "Kill", function(arg: string, name: string, n: number) got[#got + 1] = `fn {arg} {name} {n}` end, "y")
     r:fire("Kill", 3)
-    r.RegisterCallback("SomeAddon", "Kill", function(name: string, n: number) got[#got + 1] = `string {n}` end)
+    register("SomeAddon", "Kill", function(_: string, n: number) got[#got + 1] = `string {n}` end)
     r:fire("Kill", 4)
-    r.UnregisterCallback(consumer, "Kill")
-    r.UnregisterAllCallbacks("SomeAddon")
+    unregister(consumer, "Kill")
+    unregisterAll("SomeAddon")
     r:fire("Kill", 5)
     t:eq(table.concat(got, ", "), "method true Kill 1, arg x Kill 2, fn y Kill 3, fn y Kill 4, string 4", "CallbackHandler semantics")
     t:eq(r:has("Kill"), false, "unregistered")

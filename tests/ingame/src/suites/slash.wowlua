@@ -5,7 +5,7 @@ import suite from "/harness"
 local echoed: string[] = {}
 
 @slash("/stdtestecho", "/stdtestecho2")
-local function echo(msg: string, _: any)
+local function echo(msg: string, _: EditBox?)
     echoed[#echoed + 1] = msg
 end
 
@@ -41,19 +41,19 @@ end
 
 local s = suite("slash")
 
-s:test("commands are registered under unique keys", function(t: any)
+s:test("commands are registered under unique keys", function(t)
     local key = keyOf("/stdtestecho")
     t:ok(key ~= nil and key:match("^WOWLUA_STDTEST_%d+$") ~= nil, `key {tostring(key)}`)
     if key then
         t:eq(_G["SLASH_" .. key .. "2"], "/stdtestecho2", "the alias")
         echoed = {}
-        SlashCmdList[key]("hello  world", nil)
+        assert(SlashCmdList[key])("hello  world", nil)
         t:eq(echoed[1], "hello  world", "the handler gets the message")
     end
     t:ok(keyOf("/stdtest") ~= nil, "/stdtest itself")
 end)
 
-s:test("router: commands, aliases, typed arguments", function(t: any)
+s:test("router: commands, aliases, typed arguments", function(t)
     got = {}
     t:eq(commands:dispatch("show"), true, "dispatched")
     commands:dispatch("OPEN")
@@ -65,7 +65,7 @@ s:test("router: commands, aliases, typed arguments", function(t: any)
     t:eq(table.concat(got, " | "), "show | show | scale 1.5 | scale -2 | mode heal true | mode tank false | mode tank nil", "converted")
 end)
 
-s:test("router: rest text, quotes and flags", function(t: any)
+s:test("router: rest text, quotes and flags", function(t)
     got = {}
     commands:dispatch([[say "two words" hello there  friend  ]])
     commands:dispatch([[say 'it\'s' "a \"quoted\" word"]])
@@ -81,7 +81,7 @@ s:test("router: rest text, quotes and flags", function(t: any)
     t:eq(got[6], "move 1 2 true", "flags after arguments")
 end)
 
-s:test("router: bad input, unknown commands, failures", function(t: any)
+s:test("router: bad input, unknown commands, failures", function(t)
     got = {}
     -- Bad input prints the usage (one line in chat each).
     commands:dispatch("scale big")

@@ -32,7 +32,7 @@ end
 
 local s = suite("combat")
 
-s:test("out of combat everything runs at once", function(t: any)
+s:test("out of combat everything runs at once", function(t)
     if InCombatLockdown() then
         t:skip("in combat")
         return
@@ -49,7 +49,7 @@ end)
 
 local g = suite("combat (guided)", "guided")
 
-g:test("calls wait for the end of combat, in order", function(t: any)
+g:test("calls wait for the end of combat, in order", function(t)
     log = {}
     local changes: string[] = {}
     local sub = onCombatChange(function(entering: boolean) changes[#changes + 1] = tostring(entering) end)

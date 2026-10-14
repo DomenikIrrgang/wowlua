@@ -9,27 +9,62 @@ const PASS = "|cff3fdf6fPASS|r"
 const FAIL = "|cffff5f5fFAIL|r"
 const SKIP = "|cffa39b8bSKIP|r"
 
-type Test = { name: string, fn: (t: any) -> () }
+--- What a test sees.
+export interface TestContext
+    --- Counts a check; fails the test with `label` when `cond` is falsy.
+    function ok(cond: any, label: string): boolean
+    function eq<T>(actual: T, expected: T, label: string): boolean
+    --- Waits `sec` seconds of game time.
+    function wait(sec: number)
+    --- Waits until `pred()` is true (checked every 0.05 s); false after
+    --- `timeout` seconds, or when the player skips a guided step.
+    function waitFor(pred: () -> any, timeout: number, label: string): boolean
+    --- A guided step: what the player should do now.
+    function ask(text: string)
+    function skip(reason: string)
+    --- Errors reported (through the error policy) since the test started.
+    function errors(): string[]
+    --- Whether one of those errors contains `text`.
+    function reported(text: string): boolean
+end
+
+type Test = { name: string, fn: (t: TestContext) -> () }
 
 -- `kind`: "auto" (runs alone), "guided" (asks the player to do things) or
 -- "reload" (runs after the /reload a guided test asked for).
-export type Suite = { name: string, kind: string, tests: Test[] }
+export type Suite = { name: string, kind: "auto" | "guided" | "reload", tests: Test[] }
+
+--- Adds tests to a suite.
+export interface SuiteHandle
+    function test(name: string, fn: (t: TestContext) -> ())
+end
+
+--- The outcome of one test.
+export type TestRecord = {
+    suite: string,
+    name: string,
+    checks: number,
+    failures: string[],
+    error?: string,
+    skipped?: string,
+    ok?: boolean,
+    errorsFrom: number,
+}
 
 local suites: Suite[] = {}
 
--- `Suite.test(name, fn)` adds a test to a suite.
-export function suite(name: string, kind: string?): any
+export function suite(name: string, kind: ("auto" | "guided" | "reload")?): SuiteHandle
     local s: Suite = { name = name, kind = kind ?? "auto", tests = {} }
     suites[#suites + 1] = s
     return {
-        test = function(_, testName: string, fn: (t: any) -> ())
+        test = function(_: SuiteHandle, testName: string, fn: (t: TestContext) -> ())
             s.tests[#s.tests + 1] = { name = testName, fn = fn }
         end,
     }
 end
 
 export function say(...: any)
-    local parts = {}
+    local parts: string[] = {}
     for i = 1, select("#", ...) do
         parts[i] = tostring((select(i, ...)))
     end
@@ -37,22 +72,22 @@ export function say(...: any)
 end
 
 -- The state of a run.
-local running: any = nil
+local running: { current?: TestRecord, next: () -> () }? = nil
 local captured: string[] = {}
 local skipRequested = false
 
 -- An error in a test, with the test's stack.
-local function failure(co: any, err: any): string
+local function failure(co: thread, err: any): string
     local stack = debugstack and debugstack(co, 1, 6, 0) or ""
     return tostring(err) .. "\n" .. stack
 end
 
--- What tests see.
-local function context(record: any): any
-    local t: any = {}
-    local co = coroutine.running()
+local function context(record: TestRecord): TestContext
+    local t = {}
+    -- Tests run in their own coroutine.
+    local co = assert(coroutine.running())
 
-    function t.ok(_, cond: any, label: string)
+    function t.ok(_: TestContext, cond: any, label: string): boolean
         record.checks += 1
         if not cond then
             record.failures[#record.failures + 1] = label
@@ -60,12 +95,11 @@ local function context(record: any): any
         return cond and true or false
     end
 
-    function t.eq(self: any, actual: any, expected: any, label: string)
+    function t.eq<T>(self: TestContext, actual: T, expected: T, label: string): boolean
         return self:ok(actual == expected, `{label}: expected {tostring(expected)}, got {tostring(actual)}`)
     end
 
-    -- Waits `sec` seconds of game time.
-    function t.wait(_, sec: number)
+    function t.wait(_: TestContext, sec: number)
         C_Timer.After(sec, function()
             local ok, err = coroutine.resume(co)
             if not ok then
@@ -75,9 +109,7 @@ local function context(record: any): any
         coroutine.yield()
     end
 
-    -- Waits until `pred()` is true (checked every 0.05 s); false after
-    -- `timeout` seconds, or when the player skips a guided step.
-    function t.waitFor(self: any, pred: () -> any, timeout: number, label: string): boolean
+    function t.waitFor(self: TestContext, pred: () -> any, timeout: number, label: string): boolean
         local deadline = GetTime() + timeout
         while not pred() do
             if skipRequested then
@@ -94,26 +126,23 @@ local function context(record: any): any
         return true
     end
 
-    -- A guided step: what the player should do now.
-    function t.ask(_, text: string)
+    function t.ask(_: TestContext, text: string)
         say("|cffffd200>>> " .. text .. "|r  (/stdtest skip to skip)")
     end
 
-    function t.skip(_, reason: string)
+    function t.skip(_: TestContext, reason: string)
         record.skipped = reason
     end
 
-    -- Errors reported (through the error policy) since this test started.
-    function t.errors(): string[]
-        local out = {}
+    function t.errors(_: TestContext): string[]
+        local out: string[] = {}
         for i = record.errorsFrom, #captured do
             out[#out + 1] = captured[i]
         end
         return out
     end
 
-    -- Whether one of the errors since the test started contains `text`.
-    function t.reported(self: any, text: string): boolean
+    function t.reported(self: TestContext, text: string): boolean
         for _, e in ipairs(self:errors()) do
             if e:find(text, 1, true) then
                 return true
@@ -125,21 +154,22 @@ local function context(record: any): any
     return t
 end
 
-local function finishTest(record: any)
+local function finishTest(record: TestRecord)
     local passed = record.error == nil and #record.failures == 0
     record.ok = passed
-    running.current = nil
-    C_Timer.After(0, running.next)
+    local active = assert(running)
+    active.current = nil
+    C_Timer.After(0, active.next)
 end
 
 -- Runs one test in its own coroutine; calls `finishTest` when it is done.
-local function runTest(test: Test, record: any)
+local function runTest(test: Test, record: TestRecord)
     record.errorsFrom = #captured + 1
     local co = coroutine.create(function()
         local t = context(record)
         test.fn(t)
     end)
-    running.current = record
+    assert(running).current = record
     local function watch()
         if coroutine.status(co) == "dead" then
             finishTest(record)
@@ -159,7 +189,7 @@ local function runTest(test: Test, record: any)
 end
 
 -- `which(s)`: whether to run suite `s`. `done(results)` gets every record.
-export function run(which: (s: Suite) -> boolean, done: (results: any[]) -> ())
+export function run(which: (s: Suite) -> boolean, done: (results: TestRecord[]) -> ())
     if running then
         say("a run is in progress")
         return
@@ -182,7 +212,7 @@ export function run(which: (s: Suite) -> boolean, done: (results: any[]) -> ())
     end)
     errors.configure({ rateLimit = 0 })
 
-    local queue: any[] = {}
+    local queue: { suite: string, test: Test }[] = {}
     for _, s in ipairs(suites) do
         if which(s) then
             for _, test in ipairs(s.tests) do
@@ -190,10 +220,9 @@ export function run(which: (s: Suite) -> boolean, done: (results: any[]) -> ())
             end
         end
     end
-    local results: any[] = {}
+    local results: TestRecord[] = {}
     local i = 0
-    running = {}
-    running.next = function()
+    local function nextTest()
         i += 1
         local item = queue[i]
         if not item then
@@ -206,11 +235,12 @@ export function run(which: (s: Suite) -> boolean, done: (results: any[]) -> ())
             done(results)
             return
         end
-        local record: any = { suite = item.suite, name = item.test.name, checks = 0, failures = {} }
+        local record: TestRecord = { suite = item.suite, name = item.test.name, checks = 0, failures = {}, errorsFrom = 0 }
         results[#results + 1] = record
         runTest(item.test, record)
     end
-    running.next()
+    running = { next = nextTest }
+    nextTest()
 end
 
 export function skip()
@@ -226,9 +256,9 @@ export function isRunning(): boolean
 end
 
 -- One line per suite, then the failures.
-export function report(results: any[])
+export function report(results: TestRecord[])
     local order: string[] = {}
-    local bySuite: { [string]: any } = {}
+    local bySuite: { [string]: { passed: number, failed: number, skipped: number, total: number } } = {}
     local passed, failed, skipped = 0, 0, 0
     for _, r in ipairs(results) do
         local s = bySuite[r.suite]
@@ -250,7 +280,7 @@ export function report(results: any[])
         end
     end
     for _, name in ipairs(order) do
-        local s = bySuite[name]
+        local s = assert(bySuite[name])
         local status = s.failed > 0 and FAIL or (s.passed == 0 and SKIP or PASS)
         local dots = string.rep(".", math.max(2, 18 - #name))
         local extra = s.skipped > 0 and ` ({s.skipped} skipped)` or ""

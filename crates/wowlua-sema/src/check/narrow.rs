@@ -9,6 +9,10 @@ use wowlua_syntax::ast::*;
 /// The narrowed types of locals at one point of a function.
 pub type Flow = HashMap<VarId, TypeId>;
 
+/// The root of the field paths of declared globals (`G.a.b`: the path
+/// `G.a.b` under this root).
+pub const GLOBAL_ROOT: VarId = VarId(u32::MAX);
+
 impl Checker<'_> {
     /// Merges the flows of two paths that meet.
     pub fn join(&mut self, a: &Flow, b: &Flow, a_live: bool, b_live: bool) -> Flow {
@@ -66,11 +70,160 @@ impl Checker<'_> {
     }
 
     /// The local a condition operand refers to (`x`, `(x)`).
-    fn narrowable(&self, e: &Expr) -> Option<VarId> {
+    fn narrowable(&mut self, e: &Expr) -> Option<VarId> {
         match &e.kind {
             ExprKind::Name(n) => self.lookup_var(&n.text),
             ExprKind::Paren(inner) => self.narrowable(inner),
+            ExprKind::Field { .. } => self.field_var(e, true),
             _ => None,
+        }
+    }
+
+    /// The root local and dotted path of `a.b.c` (`a` a local).
+    pub fn field_path(&self, e: &Expr) -> Option<(VarId, String)> {
+        match &e.kind {
+            ExprKind::Paren(inner) => self.field_path(inner),
+            ExprKind::Field { obj, name } => match &obj.kind {
+                ExprKind::Name(n) => match self.lookup_var(&n.text) {
+                    Some(v) => Some((v, name.text.to_string())),
+                    // A declared global: its paths start with its name.
+                    None if self.env.globals.contains_key(n.text.as_ref()) => {
+                        Some((GLOBAL_ROOT, format!("{}.{}", n.text, name.text)))
+                    }
+                    None => None,
+                },
+                _ => {
+                    let (root, path) = self.field_path(obj)?;
+                    Some((root, format!("{path}.{}", name.text)))
+                }
+            },
+            _ => None,
+        }
+    }
+
+    /// The synthetic variable of a field path; `create` makes one (its base
+    /// is the field's type as declared).
+    pub fn field_var(&mut self, e: &Expr, create: bool) -> Option<VarId> {
+        let (root, path) = self.field_path(e)?;
+        if let Some(&v) = self.field_vars.get(&(root, path.as_str().into())) {
+            return Some(v);
+        }
+        if !create {
+            return None;
+        }
+        let base = self.path_type(e)?;
+        if base == Types::ANY || base == Types::ERROR {
+            return None;
+        }
+        let depth = self.vars.get(root.0 as usize).map_or(0, |r| r.depth);
+        let v = VarId(self.vars.len() as u32);
+        self.vars.push(super::body::Var {
+            name: path.as_str().into(),
+            declared: Some(base),
+            base,
+            depth,
+            is_const: false,
+            reassigned_in_closure: false,
+            assigned_in_closure: false,
+            never_reassigned: false,
+        });
+        self.field_vars.insert((root, path.into()), v);
+        Some(v)
+    }
+
+    /// The type of a field path, without diagnostics: the root's narrowed
+    /// type, then each field (narrowed where a condition did).
+    fn path_type(&mut self, e: &Expr) -> Option<TypeId> {
+        match &e.kind {
+            ExprKind::Paren(inner) => self.path_type(inner),
+            ExprKind::Name(n) => match self.lookup_var(&n.text) {
+                Some(v) => Some(self.var_type(v)),
+                None => self.env.globals.get(n.text.as_ref()).copied(),
+            },
+            ExprKind::Field { obj, name } => {
+                if let Some(v) = self.field_var(e, false)
+                    && let Some(&t) = self.flow.get(&v)
+                {
+                    return Some(t);
+                }
+                let o = self.path_type(obj)?;
+                let o = self.env.types.non_nil(o);
+                self.field_type_quiet(o, &name.text)
+            }
+            _ => None,
+        }
+    }
+
+    /// Drops the narrowing of `root`'s fields: all of them, or `prefix`
+    /// and the fields below it.
+    pub fn forget_fields(&mut self, root: VarId, prefix: Option<&str>) {
+        if self.field_vars.is_empty() {
+            return;
+        }
+        let gone: Vec<VarId> = self
+            .field_vars
+            .iter()
+            .filter(|((r, path), _)| {
+                *r == root
+                    && prefix.is_none_or(|p| {
+                        path.as_ref() == p
+                            || path
+                                .strip_prefix(p)
+                                .is_some_and(|rest| rest.starts_with('.'))
+                    })
+            })
+            .map(|(_, &v)| v)
+            .collect();
+        for v in gone {
+            self.flow.remove(&v);
+        }
+    }
+
+    /// After a call: locals narrowed to `nil` that closures assign lose
+    /// that narrowing (the call may have run such a closure), and so do the
+    /// fields of locals passed to it or called as its receiver (it may
+    /// change them).
+    pub fn forget_passed(&mut self, receiver: Option<&Expr>, args: &Args) {
+        // A local narrowed to `nil` that closures assign may hold a value
+        // after the call (a callback set it).
+        let vars = &self.vars;
+        self.flow.retain(|v, t| {
+            !(*t == Types::NIL
+                && vars
+                    .get(v.0 as usize)
+                    .is_some_and(|var| var.assigned_in_closure))
+        });
+        if self.field_vars.is_empty() {
+            return;
+        }
+        let mut roots = Vec::new();
+        let mut note = |c: &Checker<'_>, e: &Expr| {
+            let root = match &e.kind {
+                ExprKind::Name(n) => c.lookup_var(&n.text).map(|v| (v, None)).or_else(|| {
+                    c.env
+                        .globals
+                        .contains_key(n.text.as_ref())
+                        .then(|| (GLOBAL_ROOT, Some(n.text.to_string())))
+                }),
+                _ => c.field_path(e).map(|(r, p)| {
+                    // A global's path: only that global's fields.
+                    let global =
+                        (r == GLOBAL_ROOT).then(|| p.split('.').next().unwrap_or("").to_string());
+                    (r, global)
+                }),
+            };
+            if let Some(r) = root {
+                roots.push(r);
+            }
+        };
+        if let Some(r) = receiver {
+            note(self, r);
+        }
+        for a in args.exprs() {
+            note(self, a);
+        }
+        for (r, prefix) in roots {
+            self.forget_fields(r, prefix.as_deref());
         }
     }
 
@@ -140,7 +293,11 @@ impl Checker<'_> {
     fn narrow_eq(&mut self, lhs: &Expr, rhs: &Expr, flow: &Flow) -> (Flow, Flow) {
         let mut t_flow = flow.clone();
         let mut f_flow = flow.clone();
-        let (subject, other) = if self.narrowable(lhs).is_some() || type_call(lhs).is_some() {
+        let field_of_local = |e: &Expr, c: &Self| matches!(&e.kind, ExprKind::Field { obj, .. } if c.field_path(e).is_some() || matches!(&obj.kind, ExprKind::Name(n) if c.lookup_var(&n.text).is_some()));
+        let (subject, other) = if field_of_local(lhs, self)
+            || self.narrowable(lhs).is_some()
+            || type_call(lhs).is_some()
+        {
             (lhs, rhs)
         } else {
             (rhs, lhs)
@@ -156,6 +313,49 @@ impl Checker<'_> {
             t_flow.insert(v, yes);
             f_flow.insert(v, no);
             return (t_flow, f_flow);
+        }
+        let literal = self.literal_of(other);
+        // `obj.kind == "a"`: a discriminated union `obj` narrows to the
+        // members whose `kind` can be "a" (spec §2.5).
+        if let ExprKind::Field { obj, name } = &subject.kind
+            && let Some(lit) = literal
+            && let Some(owner) = self.narrowable(obj)
+        {
+            let current = self.var_type_in(owner, flow);
+            let members = self.env.types.members(current);
+            if members.len() > 1 {
+                let mut yes = Vec::new();
+                let mut no = Vec::new();
+                for m in members {
+                    let field = match self.env.types.get(m) {
+                        Ty::Record(_) | Ty::Named(..) => self.field_type_quiet(m, &name.text),
+                        _ => None,
+                    };
+                    match field {
+                        Some(ft) => {
+                            let can = self.env.types.members(ft).into_iter().any(|f| {
+                                f == lit
+                                    || matches!(self.env.types.get(f), Ty::Any | Ty::Unknown)
+                                    || self.literal_fits(lit, f)
+                            });
+                            if can {
+                                yes.push(m);
+                            }
+                            if ft != lit {
+                                no.push(m);
+                            }
+                        }
+                        None => {
+                            yes.push(m);
+                            no.push(m);
+                        }
+                    }
+                }
+                let yes = self.env.types.union(&yes);
+                let no = self.env.types.union(&no);
+                t_flow.insert(owner, yes);
+                f_flow.insert(owner, no);
+            }
         }
         let Some(v) = self.narrowable(subject) else {
             return (t_flow, f_flow);
@@ -196,6 +396,18 @@ impl Checker<'_> {
             f_flow.insert(v, no);
         }
         (t_flow, f_flow)
+    }
+
+    /// The literal type of `nil`, `true`, `false`, a string or a number.
+    fn literal_of(&mut self, e: &Expr) -> Option<TypeId> {
+        match &e.kind {
+            ExprKind::Nil => Some(Types::NIL),
+            ExprKind::True => Some(Types::TRUE),
+            ExprKind::False => Some(Types::FALSE),
+            ExprKind::String(s) => Some(self.env.types.str(&String::from_utf8_lossy(&s.value))),
+            ExprKind::Number(n) => n.value.map(|x| self.env.types.num(x)),
+            _ => None,
+        }
     }
 
     fn literal_fits(&self, lit: TypeId, member: TypeId) -> bool {

@@ -1,7 +1,11 @@
 -- wowlua runtime: monitor (spec §7.9). The compiler routes this addon's
 -- SetScript, HookScript and C_Timer calls here; nothing global is hooked.
-local mon = {events = {}, scripts = {}, timers = {}, memory = {}}
-wl.mon = mon
+local mon = {
+events = {},
+scripts = {},
+timers = {},
+memory = {}
+}
 local clock = debugprofilestop or function()
 	return os.clock() * 1000
 end
@@ -27,7 +31,8 @@ local function label(frame, location)
 	if name then
 		return name
 	end
-	local cls = wl.classOf and wl.classOf(frame)
+	local classOf = wl.classOf
+	local cls = classOf and classOf(frame)
 	if cls then
 		return cls.__name
 	end
@@ -74,6 +79,7 @@ end
 function mon.reset()
 	mon.events, mon.scripts, mon.timers = {}, {}, {}
 end
+wl.mon = mon
 -- Memory every 5 seconds outside combat, the last 10 minutes.
 if C_Timer and C_Timer.NewTicker and UpdateAddOnMemoryUsage and GetAddOnMemoryUsage then
 	C_Timer.NewTicker(5, function()
