@@ -1,0 +1,85 @@
+-- wowlua:frames: movable, resizable frames with a saved position.
+import * as frames from "wowlua:frames"
+import type FramePosition from "wowlua:frames"
+import suite from "/harness"
+
+type Layout = { box?: FramePosition }
+
+-- A plain table store: the automatic tests set positions themselves.
+local store: Layout = {}
+
+local box = CreateFrame("Frame", "StdTestMovableBox", UIParent, "BackdropTemplate")
+box:SetSize(220, 120)
+box:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+box:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+box:SetBackdropColor(0.1, 0.1, 0.12, 0.9)
+box:SetBackdropBorderColor(1, 0.82, 0, 1)
+const label = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+label:SetPoint("CENTER")
+label:SetText("StdTest box")
+box:Hide()
+
+const handle = frames.movable(box, {
+    store = store,
+    key = "box",
+    clamp = true,
+    resize = { min = { 160, 90 }, max = { 600, 400 } },
+    scaleWheel = "CTRL",
+})
+
+local function near(a: number, b: number): boolean
+    return math.abs(a - b) < 1
+end
+
+local s = suite("frames")
+
+s:test("save anchors at the frame's screen third", function(t)
+    box:ClearAllPoints()
+    box:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -40, -120)
+    handle:save()
+    const pos = store.box
+    t:eq(pos?.point, "TOPRIGHT", "anchored top right")
+    t:ok(pos ~= nil and near(pos.x, -40) and near(pos.y, -120), `offsets {pos?.x}, {pos?.y}`)
+    box:ClearAllPoints()
+    box:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 30, 25)
+    handle:save()
+    t:eq(store.box?.point, "BOTTOMLEFT", "anchored bottom left")
+end)
+
+s:test("restore and reset", function(t)
+    store.box = { point = "TOP", relativePoint = "TOP", x = 0, y = -200, width = 300, height = 150, scale = 1.2 }
+    handle:restore()
+    local point, _, relPoint = box:GetPoint(1)
+    t:eq(point, "TOP", "the saved anchor")
+    t:eq(relPoint, "TOP", "relative to UIParent's top")
+    t:ok(near(box:GetWidth(), 300) and near(box:GetHeight(), 150), "the saved size")
+    t:ok(near(box:GetScale() * 100, 120), "the saved scale")
+    handle:reset()
+    t:eq(store.box, nil, "reset forgets the position")
+    t:eq((box:GetPoint(1)), "CENTER", "back to the original anchor")
+    t:ok(near(box:GetWidth(), 220) and near(box:GetScale(), 1), "and size and scale")
+end)
+
+local g = suite("frames (guided)", "guided")
+
+g:test("drag, resize and Ctrl + wheel", function(t)
+    handle:reset()
+    box:Show()
+    t:ask("Drag the StdTest box into the top right of the screen")
+    t:waitFor(function() return store.box?.point == "TOPRIGHT" end, 120, "dragged top right")
+    t:eq(store.box?.point, "TOPRIGHT", "saved top right")
+    t:ask("Resize the box with the grip at its bottom right corner")
+    t:waitFor(function()
+        const width = store.box?.width
+        return width ~= nil and not near(width, 220)
+    end, 120, "resized")
+    t:ok(store.box?.width ~= nil, `saved size {store.box?.width} x {store.box?.height}`)
+    t:ask("Hold Ctrl and turn the mouse wheel over the box")
+    t:waitFor(function()
+        const scale = store.box?.scale
+        return scale ~= nil and not near(scale * 100, 100)
+    end, 120, "scaled")
+    t:ok(store.box?.scale ~= nil, `saved scale {store.box?.scale}`)
+    handle:reset()
+    box:Hide()
+end)

@@ -169,6 +169,9 @@ pub struct Env {
     /// name → addon.
     pub on_demand: HashMap<Box<str>, String>,
     pub diagnostics: Vec<Diagnostic>,
+    /// Aliases whose bodies are not resolved yet (while building), with the
+    /// module of their scope.
+    lazy_aliases: HashMap<DefId, (TypeAlias, Option<usize>)>,
     /// Types of `typeof(expr)` expressions, by span (set by the checker).
     pub typeof_types: HashMap<(u32, u32), TypeId>,
     /// Name spans of the definitions of renamable methods, with their class.
@@ -269,9 +272,21 @@ impl Env {
                 env.def_mut(*def).params = ids;
             }
         }
-        // Pass 2: bodies.
+        // Pass 2: bodies. An alias is resolved where it is first used if its
+        // own turn has not come yet (aliases of other modules, too, refer to
+        // each other in any order).
         for (def, p) in &pending {
-            env.resolve_pending(*def, p, sources);
+            if let Pending::Alias(a, m) = p {
+                let module = env.scope_of(*m, sources).module;
+                env.lazy_aliases.insert(*def, ((*a).clone(), module));
+            }
+        }
+        for (def, p) in &pending {
+            if matches!(p, Pending::Alias(..)) {
+                env.force_alias(*def);
+            } else {
+                env.resolve_pending(*def, p, sources);
+            }
         }
         // Pass 3: global values, events and messages.
         for src in sources {
@@ -438,6 +453,21 @@ impl Env {
         }
         pending.push((id, Pending::Namespace(members, src.index, path.to_string())));
         id
+    }
+
+    /// Resolves an alias's body now, if it is still pending (a cycle reads
+    /// the alias as `any`).
+    fn force_alias(&mut self, def: DefId) {
+        let Some((a, module)) = self.lazy_aliases.remove(&def) else {
+            return;
+        };
+        let mut scope = Scope {
+            module,
+            ..Scope::default()
+        };
+        self.def_type_params(def, &a.type_params, &mut scope);
+        let body = self.resolve(&a.ty, &scope);
+        self.def_mut(def).alias = Some(body);
     }
 
     fn scope_of(&self, module: usize, sources: &[Source]) -> Scope {
@@ -1355,6 +1385,9 @@ impl Env {
         full_args.resize(expected, Types::ANY);
         match self.def(def).kind {
             DefKind::Alias => {
+                if self.def(def).alias.is_none() {
+                    self.force_alias(def);
+                }
                 let body = self.def(def).alias.unwrap_or(Types::ANY);
                 if expected == 0 {
                     body

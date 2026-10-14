@@ -1,0 +1,4 @@
+-- Compiler behavior of `wowlua:frames` (spec stdlib "frames"): the store
+-- field of `movable` is `FramePosition?` (E8340).
+@intrinsic("frames.movable")
+declare global movable: any

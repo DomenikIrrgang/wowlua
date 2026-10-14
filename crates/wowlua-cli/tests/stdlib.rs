@@ -2298,6 +2298,17 @@ Mock.awaitText("Change your target")
 Mock.fire("PLAYER_TARGET_CHANGED")
 Mock.fire("UNIT_TARGET", "player")
 Mock.fire("UNIT_TARGET", "target")
+Mock.awaitText("Drag the StdTest box")
+Mock.modifiers = {}
+Mock.drag(StdTestMovableBox, 400, 300)
+Mock.awaitText("Resize the box")
+for _, f in ipairs(Mock.frames) do
+    if f.parent == StdTestMovableBox and f.kind == "Button" then Mock.sizeBy(f, 60, 30) end
+end
+Mock.awaitText("Hold Ctrl")
+Mock.modifiers.CTRL = true
+Mock.wheel(StdTestMovableBox, 1)
+Mock.modifiers.CTRL = nil
 Mock.awaitText("Click the question-mark button")
 Mock.script(StdTestMinimapButton, "OnClick", "LeftButton")
 Mock.awaitText("Mouse over any item in your bags")
@@ -2986,6 +2997,171 @@ fn tooltip_kinds_are_checked_per_flavor() {
         "import flavor from \"wowlua:meta\"\n@if(flavor == \"camelot\")\n@onTooltip(\"Currency\")\nlocal function f() end\nhook(\"Item\", function() end)\n",
     );
     assert!(!out.contains("E83"), "{out}");
+}
+
+// ----------------------------------------------------------------- frames --
+
+const FRAMES: &str = r#"import * as frames from "wowlua:frames"
+import type FramePosition from "wowlua:frames"
+import * as saved from "wowlua:saved"
+
+interface Layout
+    window?: FramePosition
+    guarded?: FramePosition
+end
+
+local db = saved.bind("StdDB", { version = 1, defaults = {} :: Layout })
+
+local window = CreateFrame("Frame", "StdWindow", UIParent)
+window:SetSize(300, 200)
+window:SetPoint("CENTER")
+local changes = 0
+_G.StdMove = frames.movable(window, {
+    store = db,
+    key = "window",
+    resize = { min = { 200, 120 }, max = { 500, 400 } },
+    scaleWheel = "CTRL",
+    onChange = function(pos: FramePosition?) changes += 1 end,
+})
+
+local guarded = CreateFrame("Frame", "StdGuarded", UIParent)
+guarded:SetSize(100, 100)
+guarded:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 10, 10)
+_G.StdGuardedMove = frames.movable(guarded, { store = db, key = "guarded", modifier = "SHIFT" })
+
+_G.StdFrames = { db = db, changes = function() return changes end }
+"#;
+
+const FRAMES_SCRIPT: &str = r#"Mock.loadAddon("Std")
+local db = StdFrames.db
+local function show(label, pos)
+    if not pos then
+        print(label, "nil")
+        return
+    end
+    print(label, pos.point, pos.relativePoint, math.floor(pos.x + 0.5), math.floor(pos.y + 0.5), pos.width or "-", pos.height or "-", pos.scale or "-")
+end
+-- Dragged into the top right third: anchored there.
+Mock.drag(StdWindow, 300, 250)
+show("dragged", db.window)
+-- Resized by the built-in grip (clamped to the bounds).
+local grip = StdWindow.grip
+for _, f in ipairs(Mock.frames) do
+    if f.parent == StdWindow and f.kind == "Button" then grip = f end
+end
+Mock.sizeBy(grip, 300, 50)
+show("resized", db.window)
+-- Ctrl + wheel scales around the anchor.
+Mock.wheel(StdWindow, 1)
+show("no ctrl", db.window)
+Mock.modifiers.CTRL = true
+Mock.wheel(StdWindow, 2)
+Mock.modifiers.CTRL = nil
+show("scaled", db.window)
+-- Locked: nothing moves.
+StdMove:lock(true)
+Mock.drag(StdWindow, -300, 0)
+Mock.sizeBy(grip, -100, 0)
+print("locked", StdMove:isLocked(), grip.shown)
+show("still", db.window)
+StdMove:lock(false)
+-- Back to the original anchor, size and scale.
+StdMove:reset()
+show("reset", db.window)
+print("anchor", StdWindow:GetPoint(1), StdWindow:GetWidth(), StdWindow:GetHeight(), StdWindow:GetScale())
+print("changes", StdFrames.changes())
+-- A modifier is needed to drag the second frame.
+Mock.drag(StdGuarded, 500, 0)
+show("no shift", db.guarded)
+Mock.modifiers.SHIFT = true
+Mock.drag(StdGuarded, 450, 0)
+Mock.modifiers.SHIFT = nil
+show("shift", db.guarded)
+-- Protected frames stay put in combat; a restore waits for its end.
+StdGuarded.protected = true
+Mock.fire("PLAYER_REGEN_DISABLED")
+Mock.modifiers.SHIFT = true
+Mock.drag(StdGuarded, -200, 0)
+Mock.modifiers.SHIFT = nil
+db.guarded = { point = "TOPLEFT", relativePoint = "TOPLEFT", x = 20, y = -20 }
+StdGuardedMove:restore()
+local function anchor(label, frame)
+    local point, rel, relPoint, x, y = frame:GetPoint(1)
+    print(label, point, rel:GetName(), relPoint, x, y)
+end
+anchor("in combat", StdGuarded)
+Mock.fire("PLAYER_REGEN_ENABLED")
+anchor("after combat", StdGuarded)
+"#;
+
+/// `wowlua:frames`: the store's field is `FramePosition?` (E8340).
+#[test]
+fn frames_store_field_is_checked() {
+    let source = |field: &str, key: &str| {
+        format!(
+            "import * as frames from \"wowlua:frames\"\nimport type FramePosition from \"wowlua:frames\"\nimport * as saved from \"wowlua:saved\"\ninterface L\n    {field}\nend\nlocal db = saved.bind(\"StdDB\", {{ version = 1, defaults = {{}} :: L }})\nlocal f = CreateFrame(\"Frame\", nil, UIParent)\nframes.movable(f, {{ store = db, key = \"{key}\" }})\n"
+        )
+    };
+    let out = check(&source("pos?: FramePosition", "pos"));
+    assert!(!out.contains("E8340"), "{out}");
+    let out = check(&source("pos?: number", "pos"));
+    assert!(out.contains("E8340"), "{out}");
+    let out = check(&source("pos: FramePosition", "pos"));
+    assert!(
+        out.contains("E8340"),
+        "a required field cannot start empty: {out}"
+    );
+    let out = check(&source("pos?: FramePosition", "other"));
+    assert!(out.contains("E8340"), "{out}");
+}
+
+/// `wowlua:frames`: a saved position is applied once the store loads.
+#[test]
+fn frames_restore_the_saved_position_at_load() {
+    let out = modes(
+        &[("src/main.wowlua", FRAMES)],
+        r#"StdDB = { __version = 1, window = { point = "TOPLEFT", relativePoint = "TOPLEFT", x = 40, y = -60, width = 420, height = 260, scale = 0.8 } }"#,
+        r#"print("before", StdWindow:GetPoint(1))
+Mock.loadAddon("Std")
+local point, rel, relPoint, x, y = StdWindow:GetPoint(1)
+print("after", point, rel:GetName(), relPoint, x, y, StdWindow:GetWidth(), StdWindow:GetHeight(), StdWindow:GetScale())
+"#,
+    );
+    // Offsets are in the frame's own (scaled) units: 40 / 0.8, -60 / 0.8.
+    assert_eq!(
+        plain(&out),
+        [
+            "before CENTER",
+            "after TOPLEFT UIParent TOPLEFT 50 -75 420 260 0.8"
+        ]
+    );
+}
+
+/// `wowlua:frames`: dragging, resizing, wheel scaling, locking, resetting
+/// and restoring, with positions anchored at the frame's screen third.
+#[test]
+fn frames_move_resize_scale_and_save() {
+    let out = modes(&[("src/main.wowlua", FRAMES)], "", FRAMES_SCRIPT);
+    assert_eq!(
+        plain(&out),
+        [
+            "dragged TOPRIGHT TOPRIGHT -62 -34 300 200 1",
+            // The top left stays: the frame now reaches past the screen.
+            "resized TOPRIGHT TOPRIGHT 138 -34 500 250 1",
+            "no ctrl TOPRIGHT TOPRIGHT 138 -34 500 250 1",
+            "scaled TOPRIGHT TOPRIGHT 138 -34 500 250 1.1",
+            "locked true false",
+            "still TOPRIGHT TOPRIGHT 138 -34 500 250 1.1",
+            "reset nil",
+            "anchor CENTER 300 200 1",
+            "changes 4",
+            "no shift nil",
+            "shift BOTTOM BOTTOM -2 10 - - 1",
+            "in combat BOTTOMLEFT UIParent BOTTOMLEFT 460 10",
+            "after combat TOPLEFT UIParent TOPLEFT 20 -20",
+        ],
+        "{out:?}"
+    );
 }
 
 // --------------------------------------------------------------- settings --

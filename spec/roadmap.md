@@ -269,7 +269,7 @@ menus and lists, then the widget themes.
   shared-mode flavor warn (W8101; the declarations now list each flavor's
   own events, from client dumps), and `Secret<…>` in `saved.bind` defaults
   is E8104.
-- S2 in progress: `locale` done 2026-10-14 (JSON locales checked against the
+- S2 done 2026-10-14: `locale` done 2026-10-14 (JSON locales checked against the
   base locale and compiled into guarded Lua files that load first, with
   `[AllowLoadTextLocale]` tags; `L` typed by the base locale); `pool` done
   2026-10-14 (frame and table pools; `FramePool.new` typed by the pooled
@@ -333,7 +333,18 @@ menus and lists, then the widget themes.
   checked per flavor from the API declarations (E8330, E8300; decision S22).
   The mock client shows tooltips both ways (`Mock.showTooltip`); the in-game
   suite fills `GameTooltip` and waits for a real mouseover. The checker now
-  treats optional links as existence tests for load order.
+  treats optional links as existence tests for load order. All 69 in-game
+  tests passed.
+- `frames` done 2026-10-14: `frames.movable` with drag (button, modifier),
+  a resize grip or your own, Ctrl + wheel scale, clamping, lock, reset,
+  restore and save; positions anchored at the frame's screen third
+  (decisions S23–S25); restored once the store loads and on profile changes;
+  protected frames wait for the end of combat; the store field checked
+  (E8340). The mock client has frame geometry (`Mock.drag`, `Mock.sizeBy`,
+  `Mock.wheel`). Found on the way: an imported type alias used in an
+  interface or alias of another module resolved to `any` when that module's
+  declarations came later; aliases now resolve where they are first used.
+  **S2 is complete.**
 
 ## M9: Test runner, language server, formatter
 

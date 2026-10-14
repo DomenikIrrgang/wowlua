@@ -1744,6 +1744,11 @@ impl Checker<'_> {
         {
             self.check_settings(def);
         }
+        if id == "frames.movable"
+            && let Some(opts) = args.exprs().get(1)
+        {
+            self.check_movable(opts);
+        }
         if id == "saved.bind"
             && let Some(opts) = args.exprs().get(1)
             && let ExprKind::Table(fields) = &opts.kind
@@ -1766,6 +1771,53 @@ impl Checker<'_> {
                     self.report("E8104", value.span, msg);
                 }
             }
+        }
+    }
+
+    /// `frames.movable(frame, { store = …, key = "…" })`: the store's field
+    /// holds an optional position (E8340): `nil`, or a table with
+    /// `point`, `relativePoint`, `x` and `y`.
+    fn check_movable(&mut self, opts: &Expr) {
+        let ExprKind::Table(fields) = &opts.kind else {
+            return;
+        };
+        let field = |name: &str| {
+            fields.iter().find_map(|f| match f {
+                TableField::Named { name: n, value, .. } if n.text.as_ref() == name => Some(value),
+                _ => None,
+            })
+        };
+        let (Some(store), Some(key_expr)) = (field("store"), field("key")) else {
+            return;
+        };
+        let ExprKind::String(lit) = &key_expr.kind else {
+            return;
+        };
+        let Some(&store_type) = self.expr_types.get(&(store.span.start, store.span.end)) else {
+            return;
+        };
+        let key = String::from_utf8_lossy(&lit.value).into_owned();
+        let found = match self.env.types.get(store_type).clone() {
+            Ty::Named(d, targs) => self.env.instance_member(d, &targs, &key).map(|(m, _)| m.ty),
+            Ty::Record(r) => r.fields.get(key.as_str()).map(|f| f.ty),
+            _ => return,
+        };
+        let fits = found.is_some_and(|t| {
+            let value = self.env.types.non_nil(t);
+            matches!(self.env.types.get(value), Ty::Any | Ty::Unknown | Ty::Error)
+                || (self.env.types.is_optional(t)
+                    && ["point", "relativePoint", "x", "y"].iter().all(|m| {
+                        matches!(self.member_type(value, m, key_expr.span, true), Some(t) if t != Types::ERROR)
+                    }))
+        });
+        if !fits {
+            let shown = found.map_or("missing".to_string(), |t| {
+                format!("`{}`", self.env.display(t))
+            });
+            let msg = format!(
+                "the store's `{key}` is {shown}; a movable frame keeps its position in a `FramePosition?` field"
+            );
+            self.report("E8340", key_expr.span, msg);
         }
     }
 

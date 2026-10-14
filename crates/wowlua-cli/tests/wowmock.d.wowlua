@@ -63,6 +63,11 @@ interface MockClient
     --- Shows a tooltip of `kind` (GameTooltip by default); returns the
     --- lines the post-hooks added.
     tooltip: (name: string) -> any
+    --- Held modifier keys (`SHIFT`, `CTRL`, `ALT`).
+    modifiers: { [string]: boolean }
+    drag: (frame: any, dx: number, dy: number) -> ()
+    sizeBy: (grip: any, dw: number, dh: number) -> ()
+    wheel: (frame: any, delta: number) -> ()
     showTooltip: (kind: string, data: { id?: number, guid?: string, unit?: string, link?: string, name?: string }?, tip: any) -> string[]
 
     -- Set by some tests' setups.

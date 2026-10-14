@@ -28,6 +28,7 @@ import _ from "/suites/serialize"
 import _ from "/suites/comm"
 import _ from "/suites/bindings"
 import _ from "/suites/tooltip"
+import _ from "/suites/frames"
 
 local function concat(a: TestRecord[], b: TestRecord[]): TestRecord[]
     local out: TestRecord[] = {}

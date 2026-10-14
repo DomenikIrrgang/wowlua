@@ -1,0 +1,292 @@
+-- wowlua:frames (spec stdlib "frames"): movable and resizable frames whose
+-- position, size and scale live in a wowlua:saved store. Positions are
+-- stored relative to UIParent, anchored at the screen third the frame sits
+-- in (a frame near the right edge stays there when the screen size
+-- changes), and restored once the store is loaded.
+import isLoaded from "wowlua:lifecycle"
+import callIn from "wowlua:errors"
+import defer from "wowlua:combat"
+import handle from "wowlua:saved"
+import type SavedHandle from "wowlua:saved"
+
+local _, ns = ...
+local wl = ns.__wowlua
+
+export type AnchorPoint = FramePoint
+
+--- Where a frame is: always relative to UIParent.
+export type FramePosition = {
+    point: AnchorPoint,
+    relativePoint: AnchorPoint,
+    x: number,
+    y: number,
+    width?: number,
+    height?: number,
+    scale?: number,
+}
+
+export type Modifier = "SHIFT" | "CTRL" | "ALT"
+
+export type MovableOptions = {
+    --- A wowlua:saved store; `store[key]` is `FramePosition?` (E8340).
+    store: table,
+    key: string,
+    clamp?: boolean,
+    --- The mouse button that drags (default "LeftButton").
+    button?: mouseButton,
+    --- Drag only while this key is held.
+    modifier?: Modifier,
+    --- `min`/`max` as `{ width, height }`; `grip`: your own resize handle.
+    resize?: { min?: number[], max?: number[], grip?: Frame },
+    --- This key + mouse wheel changes the scale.
+    scaleWheel?: Modifier,
+    --- `{ min, max }` (default `{ 0.5, 2 }`).
+    scaleRange?: number[],
+    --- After a save, or a reset (nil).
+    onChange?: (pos: FramePosition?) -> (),
+}
+
+export interface MovableHandle
+    --- A locked frame cannot be moved, resized or scaled with the mouse.
+    function lock(locked: boolean)
+    function isLocked(): boolean
+    --- Back to the frame's original anchor, size and scale (forgets the
+    --- saved position).
+    function reset()
+    --- Applies the saved position again.
+    function restore()
+    --- Saves the current position.
+    function save()
+end
+
+const WHEEL_STEP = 0.05
+const GRIP_TEXTURES = {
+    normal = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up",
+    pushed = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down",
+    highlight = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight",
+}
+
+local function held(modifier: Modifier?): boolean
+    if modifier == "SHIFT" then
+        return IsShiftKeyDown()
+    elseif modifier == "CTRL" then
+        return IsControlKeyDown()
+    elseif modifier == "ALT" then
+        return IsAltKeyDown()
+    end
+    return true
+end
+
+-- The frame's position in UIParent units, anchored at its screen third.
+local function measure(frame: Frame): FramePosition
+    const s = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    const left = (frame:GetLeft() ?? 0) * s
+    const right = (frame:GetRight() ?? 0) * s
+    const bottom = (frame:GetBottom() ?? 0) * s
+    const top = (frame:GetTop() ?? 0) * s
+    const width = UIParent:GetWidth()
+    const height = UIParent:GetHeight()
+    const cx = (left + right) / 2
+    const cy = (bottom + top) / 2
+    local horizontal, x = "", cx - width / 2
+    if cx < width / 3 then
+        horizontal, x = "LEFT", left
+    elseif cx > width * 2 / 3 then
+        horizontal, x = "RIGHT", right - width
+    end
+    local vertical, y = "", cy - height / 2
+    if cy < height / 3 then
+        vertical, y = "BOTTOM", bottom
+    elseif cy > height * 2 / 3 then
+        vertical, y = "TOP", top - height
+    end
+    local point = vertical .. horizontal
+    if point == "" then
+        point = "CENTER"
+    end
+    return { point = point :: AnchorPoint, relativePoint = point :: AnchorPoint, x = x, y = y }
+end
+
+-- Anchors the frame at `pos` (UIParent units, converted to the frame's).
+local function place(frame: Frame, pos: FramePosition)
+    const s = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    frame:ClearAllPoints()
+    frame:SetPoint(pos.point, UIParent, pos.relativePoint, pos.x / s, pos.y / s)
+end
+
+class Movable implements MovableHandle
+    private readonly frame: Frame
+    private readonly opts: MovableOptions
+    private locked: boolean = false
+    -- A drag or resize the mouse started (only those save).
+    private active: boolean = false
+    private grip?: Frame
+    -- The frame as it was set up: its anchors, size and scale.
+    private readonly points: any[][] = {}
+    private readonly width: number
+    private readonly height: number
+    private readonly scale: number
+
+    constructor(frame: Frame, opts: MovableOptions)
+        self.frame = frame
+        self.opts = opts
+        for i = 1, frame:GetNumPoints() do
+            self.points[i] = { frame:GetPoint(i) }
+        end
+        self.width, self.height = frame:GetSize()
+        self.scale = frame:GetScale()
+        frame:SetMovable(true)
+        frame:EnableMouse(true)
+        frame:RegisterForDrag(opts.button ?? "LeftButton")
+        if opts.clamp then
+            frame:SetClampedToScreen(true)
+        end
+        frame:HookScript("OnDragStart", function() self:dragStart() end)
+        frame:HookScript("OnDragStop", function() self:dragStop() end)
+        if opts.resize then
+            self:resizable(opts.resize)
+        end
+        if opts.scaleWheel then
+            frame:EnableMouseWheel(true)
+            frame:HookScript("OnMouseWheel", function(_: Frame, delta: number) self:wheel(delta) end)
+        end
+    end
+
+    -- Protected frames stay put in combat.
+    private function blocked(): boolean
+        return self.locked or (self.frame:IsProtected() and InCombatLockdown())
+    end
+
+    private function dragStart()
+        if not self:blocked() and held(self.opts.modifier) then
+            self.active = true
+            self.frame:StartMoving()
+        end
+    end
+
+    private function dragStop()
+        if not self.active then
+            return
+        end
+        self.active = false
+        self.frame:StopMovingOrSizing()
+        self.frame:SetUserPlaced(false)
+        self:save()
+    end
+
+    private function resizable(resize: { min?: number[], max?: number[], grip?: Frame })
+        const frame = self.frame
+        frame:SetResizable(true)
+        const min = resize.min ?? { 0, 0 }
+        const max = resize.max
+        frame:SetResizeBounds(min[1], min[2], max?.[1], max?.[2])
+        local grip = resize.grip
+        if not grip then
+            const button = CreateFrame("Button", nil, frame)
+            button:SetSize(16, 16)
+            button:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -2, 2)
+            button:SetNormalTexture(GRIP_TEXTURES.normal)
+            button:SetPushedTexture(GRIP_TEXTURES.pushed)
+            button:SetHighlightTexture(GRIP_TEXTURES.highlight)
+            grip = button
+        end
+        self.grip = grip
+        grip:EnableMouse(true)
+        grip:HookScript("OnMouseDown", function()
+            if not self:blocked() then
+                self.active = true
+                frame:StartSizing("BOTTOMRIGHT")
+            end
+        end)
+        grip:HookScript("OnMouseUp", function() self:dragStop() end)
+    end
+
+    -- Scales around the frame's anchor, which stays where it is.
+    private function wheel(delta: number)
+        if self:blocked() or not held(self.opts.scaleWheel) then
+            return
+        end
+        const range = self.opts.scaleRange ?? { 0.5, 2 }
+        const scale = math.max(range[1], math.min(range[2], self.frame:GetScale() + delta * WHEEL_STEP))
+        const pos = measure(self.frame)
+        self.frame:SetScale(scale)
+        place(self.frame, pos)
+        self:save()
+    end
+
+    function lock(locked: boolean)
+        self.locked = locked
+        self.grip?:SetShown(not locked)
+    end
+
+    function isLocked(): boolean
+        return self.locked
+    end
+
+    function save()
+        const pos = measure(self.frame)
+        pos.scale = self.frame:GetScale()
+        if self.opts.resize then
+            pos.width, pos.height = self.frame:GetSize()
+        end
+        self.opts.store[self.opts.key] = pos
+        self:changed(pos)
+    end
+
+    function restore()
+        const pos = self.opts.store[self.opts.key] :: FramePosition?
+        if not pos then
+            return
+        end
+        defer(function()
+            const frame = self.frame
+            frame:SetScale(pos.scale ?? self.scale)
+            if self.opts.resize and pos.width and pos.height then
+                frame:SetSize(pos.width, pos.height)
+            end
+            place(frame, pos)
+        end)
+    end
+
+    function reset()
+        self.opts.store[self.opts.key] = nil
+        defer(function()
+            const frame = self.frame
+            frame:SetScale(self.scale)
+            frame:SetSize(self.width, self.height)
+            frame:ClearAllPoints()
+            for _, p in ipairs(self.points) do
+                frame:SetPoint(unpack(p))
+            end
+        end)
+        self:changed(nil)
+    end
+
+    private function changed(pos: FramePosition?)
+        const onChange = self.opts.onChange
+        if onChange then
+            callIn({ component = `frames: {self.opts.key}` }, onChange, pos)
+        end
+    end
+end
+
+--- Makes `frame` movable (and resizable), keeping its position in
+--- `opts.store[opts.key]`; restored once the store is loaded.
+export function movable(frame: Frame, opts: MovableOptions): MovableHandle
+    const m = Movable.new(frame, opts)
+    local function start()
+        m:restore()
+        -- A profile switch brings that profile's position.
+        local ok, h = pcall(handle, opts.store)
+        if ok then
+            (h :: SavedHandle).profiles?:onChange(function() m:restore() end)
+        end
+    end
+    if isLoaded() then
+        start()
+    else
+        const tasks = assert(wl.lifecycleTasks)
+        tasks.afterLoad[#tasks.afterLoad + 1] = start
+    end
+    return m
+end

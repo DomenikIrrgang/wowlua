@@ -69,6 +69,11 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
     ),
     ("errors", include_str!("../std/errors.wowlua"), None),
     (
+        "frames",
+        include_str!("../std/frames.wowlua"),
+        Some(include_str!("../std/frames.d.wowlua")),
+    ),
+    (
         "events",
         include_str!("../std/events.wowlua"),
         Some(include_str!("../std/events.d.wowlua")),

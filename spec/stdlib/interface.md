@@ -29,15 +29,26 @@ handle:reset()                                -- back to the frame's original an
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `movable` | `(frame: Frame, opts: MovableOptions) -> MovableHandle` | |
-| `MovableOptions` | `store`, `key`, `clamp?`, `button?` (default `"LeftButton"`), `modifier?` (`"SHIFT" \| "CTRL" \| "ALT"`), `resize?` (`{ min: {number, number}?, max: {number, number}?, grip: Frame? }`), `scaleWheel?`, `scaleRange?` (default `{0.5, 2}`), `onChange?` | |
-| `MovableHandle` | `lock(locked: boolean)`, `isLocked()`, `reset()`, `restore()`, `save()` | |
+| `MovableOptions` | `store`, `key`, `clamp?`, `button?` (default `"LeftButton"`), `modifier?` (`"SHIFT" \| "CTRL" \| "ALT"`), `resize?` (`{ min: number[]?, max: number[]?, grip: Frame? }`, sizes as `{ width, height }`), `scaleWheel?` (a modifier), `scaleRange?` (default `{ 0.5, 2 }`), `onChange?` (`(pos: FramePosition?) -> ()`, after a save, or `nil` after a reset) | |
+| `MovableHandle` | `lock(locked: boolean)`, `isLocked()`, `reset()`, `restore()`, `save()` | A locked frame cannot be moved, resized or scaled with the mouse; the built-in grip is hidden (decision S24). |
 | `FramePosition` | `{ point: AnchorPoint, relativePoint: AnchorPoint, x: number, y: number, width: number?, height: number?, scale: number? }` | Positions are always stored relative to `UIParent`, never to named frames that may not exist on the next load |
 
 Semantics:
 
 - `store[key]` must have type `FramePosition?` (E8340). The store is a
-  `wowlua:saved` binding. Positions are restored once the store is loaded
-  (decision S3), so calling `movable` at module top level is fine.
+  `wowlua:saved` binding (a plain table works too). Positions are restored
+  once the store is loaded (decision S3), so calling `movable` at module top
+  level is fine, and again when the store's profile changes.
+- **Anchoring** (decision S23): a saved position is anchored at the screen
+  third the frame's center is in, horizontally and vertically (`TOPLEFT`,
+  `TOP`, …, `CENTER`), with offsets in UIParent units from that edge. A
+  frame near an edge stays there when the screen size or UI scale changes,
+  and resizing grows away from that edge.
+- Only a drag or resize the mouse actually started saves (not a press
+  without the modifier, or on a locked frame).
+- `scaleWheel`: each wheel notch changes the scale by 0.05 (decision S25),
+  within `scaleRange`, keeping the frame's anchor where it is. The frame then
+  takes the mouse wheel.
 - The module calls `SetMovable`, `RegisterForDrag`,
   `StartMoving`/`StopMovingOrSizing`, and `SetUserPlaced(false)`, so the game's
   own layout cache does not fight with the saved position.
@@ -45,7 +56,8 @@ Semantics:
   `InCombatLockdown()` is true, and `restore`/`reset` are deferred through
   `wowlua:combat` until combat ends.
 - A built-in resize grip (bottom-right) is created when `resize` is given
-  without `grip`.
+  without `grip`, with the client's chat-frame size grabber textures
+  (decision S17).
 
 ## bindings
 
