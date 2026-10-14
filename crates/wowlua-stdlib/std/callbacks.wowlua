@@ -54,7 +54,7 @@ class CallbackRegistry<E> implements Registry<E>
     UnregisterAllCallbacks?: (owner: any) -> ()
 
     constructor(opts: RegistryOptions?)
-        if opts and opts.compat == "CallbackHandler" then
+        if opts?.compat == "CallbackHandler" then
             self:installCompat()
         end
     end
@@ -173,7 +173,7 @@ class CallbackRegistry<E> implements Registry<E>
         end
         self.UnregisterCallback = function(owner: any, name: string)
             local subs = byOwner[owner]
-            local sub = subs and subs[name]
+            local sub = subs?.[name]
             if subs and sub then
                 sub:cancel()
                 subs[name] = nil

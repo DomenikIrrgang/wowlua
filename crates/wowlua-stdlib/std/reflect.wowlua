@@ -91,7 +91,7 @@ end
 -- Member names in declaration order (registered), else sorted by value.
 local function order(e: any): string[]
     local reg = registry()
-    local known = reg and reg.enums[e]
+    local known = reg?.enums[e]
     if known then
         return known
     end
@@ -134,28 +134,28 @@ end
 local function meta(cls: any): ClassMeta?
     local reg = registry()
     -- The registry holds what the compiler generated for `@reflect` classes.
-    local m = reg and reg.classes[cls]
+    local m = reg?.classes[cls]
     return m and m :: ClassMeta or nil
 end
 
 export function fields(cls: any): FieldInfo[]?
     local m = meta(cls)
-    return m and m.fields or nil
+    return m?.fields
 end
 
 export function methods(cls: any): MethodInfo[]?
     local m = meta(cls)
-    return m and m.methods or nil
+    return m?.methods
 end
 
 export function properties(cls: any): PropertyInfo[]?
     local m = meta(cls)
-    return m and m.properties or nil
+    return m?.properties
 end
 
 export function interfaces(cls: any): string[]?
     local m = meta(cls)
-    return m and m.interfaces or nil
+    return m?.interfaces
 end
 
 -- The class's decorators, or a member's.
@@ -187,13 +187,13 @@ end
 
 export function functionInfo(fn: any): FunctionInfo?
     local reg = registry()
-    local info = reg and reg.functions[fn]
+    local info = reg?.functions[fn]
     return info and info :: FunctionInfo or nil
 end
 
 export function getClass(name: string): any
     local reg = registry()
-    return reg and reg.byName[name] or nil
+    return reg?.byName[name]
 end
 
 export function classes(): any[]

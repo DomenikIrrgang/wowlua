@@ -47,7 +47,7 @@ export function report(err: any, context: { [string]: any }?)
         seen.more += 1
         return
     end
-    local more = seen and seen.more or 0
+    local more = seen?.more ?? 0
     recent[message] = { time = t, more = 0 }
     reported += 1
     deliver(more > 0 and message .. " (" .. more .. " more)" or message)
@@ -57,11 +57,12 @@ export function report(err: any, context: { [string]: any }?)
     end
     notifying = true
     for _, l in ipairs(listeners) do
-        if l.active then
-            local ok, e = pcall(l.fn, message)
-            if not ok then
-                deliver(text(e))
-            end
+        if not l.active then
+            continue
+        end
+        local ok, e = pcall(l.fn, message)
+        if not ok then
+            deliver(text(e))
         end
     end
     notifying = false

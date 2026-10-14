@@ -54,7 +54,7 @@ local function everything()
         run(function(s: Suite): boolean return s.kind == "guided" end, function(guided: TestRecord[])
             local all = concat(auto, guided)
             local st = state()
-            if st.reload and st.reload.pending then
+            if st.reload?.pending then
                 -- The rest runs after the reload.
                 st.results = all
                 say("|cffffd200>>> Type /reload to finish (the saved-variables test continues after it)|r")
@@ -70,7 +70,7 @@ end
 @onLogin
 local function continueAfterReload()
     local st = state()
-    if not (st.reload and st.reload.pending) then
+    if not st.reload?.pending then
         return
     end
     after(3, function()

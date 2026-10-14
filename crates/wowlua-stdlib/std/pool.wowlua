@@ -164,7 +164,7 @@ end
 local function tablePool(opts: { max?: number }?): Pool<table>
     return ObjectPool.new(function(): table
         return {}
-    end, wipeTable, opts and opts.max)
+    end, wipeTable, opts?.max)
 end
 
 export local FramePool = { new = framePool, fromTemplate = templatePool }

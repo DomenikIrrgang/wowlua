@@ -171,12 +171,9 @@ impl Checker<'_> {
                 let guarded = path
                     .as_ref()
                     .is_some_and(|p| self.guard.present.contains(p));
-                let o = self.infer(obj);
-                let o = if matches!(e.kind, ExprKind::OptField { .. }) {
-                    self.env.types.non_nil(o)
-                } else {
-                    o
-                };
+                let (o, chained) = self.chain_obj(obj);
+                let opt = matches!(e.kind, ExprKind::OptField { .. });
+                let o = if opt { self.env.types.non_nil(o) } else { o };
                 // A member the type lacks, in an existence test (`nil`) or
                 // in the region such a test guards (`any`).
                 let missing = (probed || guarded)
@@ -187,8 +184,8 @@ impl Checker<'_> {
                     self.member_type(o, &name.text, name.span, false)
                         .unwrap_or(Types::ANY)
                 };
-                let t = if matches!(e.kind, ExprKind::OptField { .. }) {
-                    self.env.types.optional(t)
+                let t = if opt || chained {
+                    self.chain_end(e, t)
                 } else {
                     t
                 };
@@ -201,9 +198,16 @@ impl Checker<'_> {
                 single(t)
             }
             ExprKind::Index { obj, key } | ExprKind::OptIndex { obj, key } => {
-                let o = self.infer(obj);
+                let (o, chained) = self.chain_obj(obj);
+                let opt = matches!(e.kind, ExprKind::OptIndex { .. });
+                let o = if opt { self.env.types.non_nil(o) } else { o };
                 let k = self.infer(key);
-                single(self.index_type(o, k, key, e.span))
+                let t = self.index_type(o, k, key, e.span);
+                single(if opt || chained {
+                    self.chain_end(e, t)
+                } else {
+                    t
+                })
             }
             ExprKind::Call { callee, args } | ExprKind::OptCall { callee, args } => {
                 self.mark_callbacks(args);
@@ -214,12 +218,9 @@ impl Checker<'_> {
                     self.args_types(args, &[]);
                     return Pack::empty();
                 }
-                let c = self.infer(callee);
-                let c = if matches!(e.kind, ExprKind::OptCall { .. }) {
-                    self.env.types.non_nil(c)
-                } else {
-                    c
-                };
+                let (c, chained) = self.chain_obj(callee);
+                let opt = matches!(e.kind, ExprKind::OptCall { .. });
+                let c = if opt { self.env.types.non_nil(c) } else { c };
                 // A method called with `.` and no receiver (E2008).
                 if args.exprs().is_empty()
                     && let ExprKind::Field { obj, name } = &callee.kind
@@ -260,6 +261,12 @@ impl Checker<'_> {
                 {
                     return Pack::single(self.with_metatable(t, mt));
                 }
+                // The end of an optional chain: one value, `nil` when it
+                // short-circuits.
+                if opt || chained {
+                    let first = results.types.first().copied().unwrap_or(Types::NIL);
+                    return single(self.chain_end(e, first));
+                }
                 results
             }
             ExprKind::Method { obj, name, args } | ExprKind::OptMethod { obj, name, args } => {
@@ -269,12 +276,9 @@ impl Checker<'_> {
                     let instance = self.scope.self_ty.unwrap_or(Types::ANY);
                     return self.call(m, Some(instance), args, e.span, expected);
                 }
-                let o = self.infer(obj);
-                let o = if matches!(e.kind, ExprKind::OptMethod { .. }) {
-                    self.env.types.non_nil(o)
-                } else {
-                    o
-                };
+                let (o, chained) = self.chain_obj(obj);
+                let opt = matches!(e.kind, ExprKind::OptMethod { .. });
+                let o = if opt { self.env.types.non_nil(o) } else { o };
                 // A function field a condition narrowed (`if t.f then t:f() end`).
                 let narrowed = self
                     .field_path(obj)
@@ -304,6 +308,10 @@ impl Checker<'_> {
                 let m = self.registry_method_type(o, &name.text, args, m);
                 let results = self.call(m, Some(o), args, e.span, expected);
                 self.forget_passed(Some(obj), args);
+                if opt || chained {
+                    let first = results.types.first().copied().unwrap_or(Types::NIL);
+                    return single(self.chain_end(e, first));
+                }
                 results
             }
             ExprKind::Binary { op, lhs, rhs } => {
@@ -490,6 +498,25 @@ impl Checker<'_> {
     }
 
     /// A field's declared type, without diagnostics.
+    /// The object of a chain link (`obj` in `obj.f`, `obj[k]`, `obj:m()`,
+    /// `obj()`): its type, and whether it is part of an optional chain,
+    /// which continues from its type before the short-circuit's `nil`
+    /// (spec §1.4.1).
+    fn chain_obj(&mut self, obj: &Expr) -> (TypeId, bool) {
+        let t = self.infer(obj);
+        match self.chain_inner.get(&(obj.span.start, obj.span.end)) {
+            Some(&inner) => (inner, true),
+            None => (t, false),
+        }
+    }
+
+    /// A link of an optional chain: its type is `t`, or `nil` when the chain
+    /// short-circuits.
+    fn chain_end(&mut self, e: &Expr, t: TypeId) -> TypeId {
+        self.chain_inner.insert((e.span.start, e.span.end), t);
+        self.env.types.optional(t)
+    }
+
     /// E2005's message: the value is `nil`, or may be.
     fn nil_message(&self, t: TypeId) -> String {
         if t == Types::NIL {

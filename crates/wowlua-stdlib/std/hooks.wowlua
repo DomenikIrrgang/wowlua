@@ -34,7 +34,7 @@ local function hookNow(target: any, name: any, fn: any, opts: Options?)
         install(nil, function() hooksecurefunc(target, isolated(fn, target)) end)
         return
     end
-    install(opts and opts.addon, function()
+    install(opts?.addon, function()
         local t = resolve(target)
         if t == nil then
             error("hook: `" .. tostring(target) .. "` does not exist", 0)
@@ -44,7 +44,7 @@ local function hookNow(target: any, name: any, fn: any, opts: Options?)
 end
 
 local function hookScriptNow(frame: any, script: string, fn: any, opts: Options?)
-    install(opts and opts.addon, function()
+    install(opts?.addon, function()
         local f = resolve(frame)
         if f == nil then
             error("hookScript: `" .. tostring(frame) .. "` does not exist", 0)

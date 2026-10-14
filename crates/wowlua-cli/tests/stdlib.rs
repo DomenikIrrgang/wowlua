@@ -11,14 +11,21 @@ use std::path::Path;
 /// The model of the client, compiled like a test snippet.
 const MOCK: &str = include_str!("wowmock.wowlua");
 
+/// A compiled snippet: the runtime (when its code needs one) and its Lua.
+#[derive(Clone)]
+struct Snippet {
+    runtime: Option<String>,
+    lua: String,
+}
+
 /// Compiles a test snippet (a setup or a script driving the mock client)
 /// as wowlua, so it is type-checked like any wowlua code: an error fails
 /// the test with its diagnostics. Snippets are plain scripts (no imports);
-/// `Mock` and the addons' globals are `any`. Compiled once per source.
-fn wowlua_snippet(source: &str) -> String {
+/// `Mock` is typed by `wowmock.d.wowlua`. Compiled once per source.
+fn wowlua_snippet(source: &str) -> Snippet {
     use std::collections::HashMap;
     use std::sync::{Mutex, OnceLock};
-    static CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    static CACHE: OnceLock<Mutex<HashMap<String, Snippet>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(lua) = cache.lock().unwrap().get(source) {
         return lua.clone();
@@ -66,6 +73,12 @@ fn wowlua_snippet(source: &str) -> String {
         errors.join("\n")
     );
     let built = built.expect("the snippet builds");
+    let runtime = match built.files.get("wowlua/runtime.lua") {
+        Some(wowlua_driver::build::Content::Bytes(b)) => {
+            Some(String::from_utf8(b.clone()).unwrap())
+        }
+        _ => None,
+    };
     let lua = match built.files.get("src/main.lua") {
         Some(wowlua_driver::build::Content::Bytes(b)) => String::from_utf8(b.clone()).unwrap(),
         _ => panic!(
@@ -73,11 +86,27 @@ fn wowlua_snippet(source: &str) -> String {
             built.files.keys().collect::<Vec<_>>()
         ),
     };
+    let snippet = Snippet { runtime, lua };
     cache
         .lock()
         .unwrap()
-        .insert(source.to_string(), lua.clone());
-    lua
+        .insert(source.to_string(), snippet.clone());
+    snippet
+}
+
+/// Runs a snippet in `lua` (its runtime first, if any), with an addon
+/// table of its own, as the client runs an addon's files.
+fn exec_snippet(lua: &mlua::Lua, source: &str, name: &str) -> mlua::Result<()> {
+    let snippet = wowlua_snippet(source);
+    let ns = lua.create_table()?;
+    if let Some(runtime) = &snippet.runtime {
+        lua.load(runtime.as_str())
+            .set_name(format!("{name} (runtime)"))
+            .call::<()>(("Snippet", ns.clone()))?;
+    }
+    lua.load(snippet.lua.as_str())
+        .set_name(name)
+        .call::<()>(("Snippet", ns))
 }
 
 /// The builds every runtime test runs in.
@@ -144,10 +173,7 @@ fn run(dir: &Path, profile: &str, setup: &str, script: &str) -> Vec<String> {
 /// client as addon `name`, between `setup` and `script`.
 fn load(out: &Path, name: &str, toc: &str, label: &str, setup: &str, script: &str) -> Vec<String> {
     let lua = client(out, name, toc, label, setup);
-    lua.load(wowlua_snippet(script))
-        .set_name("@test")
-        .exec()
-        .unwrap_or_else(|e| panic!("{label}{e}"));
+    exec_snippet(&lua, script, "@test").unwrap_or_else(|e| panic!("{label}{e}"));
     printed(&lua)
 }
 
@@ -155,14 +181,8 @@ fn load(out: &Path, name: &str, toc: &str, label: &str, setup: &str, script: &st
 fn client(out: &Path, name: &str, toc: &str, label: &str, setup: &str) -> mlua::Lua {
     let toc = fs::read_to_string(out.join(toc)).unwrap();
     let lua = mlua::Lua::new();
-    lua.load(wowlua_snippet(MOCK))
-        .set_name("@wowmock.wowlua")
-        .exec()
-        .unwrap();
-    lua.load(wowlua_snippet(setup))
-        .set_name("@setup")
-        .exec()
-        .unwrap_or_else(|e| panic!("{label}setup: {e}"));
+    exec_snippet(&lua, MOCK, "@wowmock.wowlua").unwrap();
+    exec_snippet(&lua, setup, "@setup").unwrap_or_else(|e| panic!("{label}setup: {e}"));
     let ns = lua.create_table().unwrap();
     for line in toc
         .lines()
@@ -2246,7 +2266,8 @@ end
         field("Version")
     );
     let lua = client(&out, "StdTest", toc, "", &setup);
-    lua.load(wowlua_snippet(
+    exec_snippet(
+        &lua,
         r#"Mock.loadAddon("StdTest")
 Mock.fire("PLAYER_LOGIN")
 Mock.fire("PLAYER_ENTERING_WORLD", true, false)
@@ -2269,8 +2290,8 @@ for _, name in ipairs({ "StdTestState", "StdTestDB", "StdTestMigrateDB", "StdTes
 end
 Mock.saved = table.concat(saved, "\n")
 "#,
-    ))
-    .exec()
+        "@test",
+    )
     .unwrap();
     let before = printed(&lua).join("\n");
     let saved: String = lua.load("return Mock.saved").eval().unwrap();

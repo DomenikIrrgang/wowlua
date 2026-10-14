@@ -299,7 +299,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 			b.fs:SetTextColor(unpack(chosen and C.ink or C.inkMuted))
 			b.mark:SetShown(chosen)
 			local entry = reg.addons[name]
-			b.info:SetText(entry and entry.info.version or "")
+			b.info:SetText(entry?.info.version ?? "")
 			b:SetScript("OnClick", function()
 				selected = name
 				addonList:Hide()
@@ -627,11 +627,11 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 			r.onClick, r.onRightClick = d.onClick, d.onRightClick
 			for j = 1, #columns do
 				local fs = cell(r, j)
-				local font = (d.fonts and d.fonts[j]) or (j == 1 and "label" or "numeric")
+				local font = d.fonts?.[j] ?? (j == 1 and "label" or "numeric")
 				if not fs:SetFont(FONTS[font], 12, "") then
 					fs:SetFont(FALLBACK, 12, "")
 				end
-				fs:SetTextColor(unpack((d.colors and d.colors[j]) or C.ink))
+				fs:SetTextColor(unpack(d.colors?.[j] ?? C.ink))
 				fs:SetText(d.cells[j] or "")
 				fs:ClearAllPoints()
 				local indent = (j == 1 and d.indent) or 0
@@ -703,7 +703,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 	-- Inspector: the value shown and how to reach it again.
 	local inspected = { label = "ns", get = function()
 		local d = current()
-		return d and d.runtime.ns
+		return d?.runtime.ns
 	end }
 	local function inspect(label: string, get: () -> any)
 		inspected = { label = label, get = get }
@@ -737,7 +737,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		for _, t in ipairs(toolRows) do
 			data[#data + 1] = { cells = { t[1], t[2] }, colors = { C.ink, C.inkMuted }, fonts = { "label", "body" } }
 		end
-		local mem = rt.mon and rt.mon.memory or {}
+		local mem = rt.mon?.memory ?? {}
 		local last = mem[#mem]
 		data[#data + 1] = {
 			cells = { "Memory", last and string.format("%.2f MB · %d samples", last / 1024, #mem) or "no samples yet" },
@@ -770,18 +770,19 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		local _ = filter, reset
 		local prof = d.runtime.prof
 		local data = {}
-		for _, r in ipairs(console.sorted(prof and prof.stats or {}, state.sort)) do
-			if state.filter == "" or r.name:lower():find(state.filter, 1, true) then
-				local s = r.s
-				local slow = (s.max ?? 0) > 16.7
-				data[#data + 1] = {
-					cells = { r.name, count(s.calls), ms(s.total), ms(s.self), ms(s.max), ms(s.total / math.max(s.calls, 1)) },
-					subs = { s.location },
-					colors = { C.ink, C.ink, C.ink, C.ink, slow and C.amber or C.ink, C.ink },
-					badge = slow and { text = "Slow", color = C.amber } or nil,
-					tall = s.location ~= nil,
-				}
+		for _, r in ipairs(console.sorted(prof?.stats ?? {}, state.sort)) do
+			if not (state.filter == "" or r.name:lower():find(state.filter, 1, true)) then
+				continue
 			end
+			local s = r.s
+			local slow = (s.max ?? 0) > 16.7
+			data[#data + 1] = {
+				cells = { r.name, count(s.calls), ms(s.total), ms(s.self), ms(s.max), ms(s.total / math.max(s.calls, 1)) },
+				subs = { s.location },
+				colors = { C.ink, C.ink, C.ink, C.ink, slow and C.amber or C.ink, C.ink },
+				badge = slow and { text = "Slow", color = C.amber } or nil,
+				tall = s.location ~= nil,
+			}
 		end
 		if not prof then
 			data[1] = { cells = { "The profiler is off in this build" }, colors = { C.inkMuted } }
@@ -868,14 +869,15 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		if logs then
 			local min = state.level == "all" and -1 or LEVEL_RANK[state.level]
 			for _, e in ipairs(logs.history()) do
-				if (LEVEL_RANK[e.level] ?? 0) >= min then
-					local tone = e.level == "error" and C.emberText or (e.level == "warn" and C.amber or C.inkMuted)
-					data[#data + 1] = {
-						cells = { string.format("%.1f", e.time ?? 0), e.level, e.message, e.location ?? "" },
-						colors = { C.inkMuted, tone, C.ink, C.inkMuted },
-						fonts = { "numeric", "display", "body", "body" },
-					}
+				if (LEVEL_RANK[e.level] ?? 0) < min then
+					continue
 				end
+				local tone = e.level == "error" and C.emberText or (e.level == "warn" and C.amber or C.inkMuted)
+				data[#data + 1] = {
+					cells = { string.format("%.1f", e.time ?? 0), e.level, e.message, e.location ?? "" },
+					colors = { C.inkMuted, tone, C.ink, C.inkMuted },
+					fonts = { "numeric", "display", "body", "body" },
+				}
 			end
 		else
 			data[1] = { cells = { "", "", "This addon does not use wowlua:log" }, colors = { C.ink, C.ink, C.inkMuted } }
@@ -1384,11 +1386,12 @@ function commands.meta(args: string[])
 	end
 	local meta = d.runtime.meta
 	for kind, t in pairs(meta or {}) do
-		if type(t) == "table" then
-			for k, v in pairs(t) do
-				if type(v) ~= "table" then
-					say(`{d.name} {kind}.{k} = {v}`)
-				end
+		if type(t) ~= "table" then
+			continue
+		end
+		for k, v in pairs(t) do
+			if type(v) ~= "table" then
+				say(`{d.name} {kind}.{k} = {v}`)
 			end
 		end
 	end

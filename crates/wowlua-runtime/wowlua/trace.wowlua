@@ -49,7 +49,7 @@ function trace.wrap(fn: any, name: string, location: string, opts: { args: boole
 	if type(fn) ~= "function" then
 		return fn
 	end
-	local args = not (opts and opts.args == false)
+	local args = opts?.args ~= false
 	return function(...: any): ...any
 		local indent = string.rep("  ", trace.depth)
 		out(indent .. "> " .. name .. (args and ("(" .. list(...) .. ")") or ""))

@@ -42,7 +42,7 @@ local button: MinimapButton? = nil
 
 -- The minimap position table in the store (created if missing).
 local function position(): Position?
-    local m = opts and opts.minimap
+    local m = opts?.minimap
     if not m then
         return nil
     end
@@ -66,7 +66,7 @@ local function click(mouse: string)
 end
 
 local function showTooltip(owner: any)
-    local tooltip = opts and opts.tooltip
+    local tooltip = opts?.tooltip
     if not tooltip then
         return
     end
@@ -249,7 +249,7 @@ local function create()
             notCheckable = true,
             registerForAnyClick = true,
             func = function(_: any, input: { buttonName?: string }?)
-                click(input and input.buttonName or "LeftButton")
+                click(input?.buttonName ?? "LeftButton")
             end,
             funcOnEnter = function(owner: any) showTooltip(owner) end,
             funcOnLeave = function() GameTooltip:Hide() end,

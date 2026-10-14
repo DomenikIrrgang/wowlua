@@ -89,7 +89,7 @@ export function timeEnd(label: string)
 end
 
 export function stats(): { [string]: any }
-    return wl.prof and wl.prof.stats or {}
+    return wl.prof?.stats ?? {}
 end
 
 export function resetStats()

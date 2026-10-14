@@ -244,7 +244,7 @@ export function run(which: (s: Suite) -> boolean, done: (results: TestRecord[]) 
 end
 
 export function skip()
-    if running and running.current then
+    if running?.current then
         skipRequested = true
     else
         say("nothing to skip")

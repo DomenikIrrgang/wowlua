@@ -64,8 +64,8 @@ function prof.wrap(fn, name, location, opts)
 	if type(fn) ~= "function" then
 		return fn
 	end
-	local errors = prof.errors or (opts and opts.errors)
-	local memory = opts and opts.memory
+	local __wl_t4 = prof.errors if not __wl_t4 then local __wl_t3 = opts if __wl_t3 ~= nil then __wl_t3 = __wl_t3.errors end __wl_t4 = __wl_t3 end local errors = __wl_t4
+	local __wl_t5 = opts if __wl_t5 ~= nil then __wl_t5 = __wl_t5.memory end local memory = __wl_t5
 	if memory then
 		return function(...)
 			local before = memoryKiB()
@@ -74,7 +74,7 @@ function prof.wrap(fn, name, location, opts)
 			local s = prof.stats[name]
 			local function done(...)
 				s = prof.stats[name]
-				do local __wl_t3 = s.memory if __wl_t3 == nil then __wl_t3 = 0 end s.memory = (__wl_t3) + math.max(memoryKiB() - before, 0) end
+				do local __wl_t6 = s.memory if __wl_t6 == nil then __wl_t6 = 0 end s.memory = (__wl_t6) + math.max(memoryKiB() - before, 0) end
 				return...
 			end
 			return done(finish(name, location, clock(), depth, fn(...)))

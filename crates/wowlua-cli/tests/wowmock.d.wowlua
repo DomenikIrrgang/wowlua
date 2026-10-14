@@ -2,7 +2,7 @@
 
 --- A frame of the mock client (its own fields; the API comes from the
 --- frame's class).
-type MockFrame = {
+type MockFrameFields = {
     scripts: { [string]: (...any) -> ...any },
     hooks: { [string]: ((...any) -> ...any)[] },
     events: { [string]: boolean },
@@ -14,7 +14,7 @@ interface MockClient
     --- The clock (seconds), advanced by `advance`.
     now: number
     --- Every frame created, in order.
-    frames: MockFrame[]
+    frames: MockFrameFields[]
     timers: table[]
     --- Reported errors and printed lines.
     errors: string[]

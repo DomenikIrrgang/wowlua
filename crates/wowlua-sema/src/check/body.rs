@@ -87,6 +87,9 @@ pub struct Checker<'e> {
     pub assigned_globals: HashSet<String>,
     /// Types of expressions already checked, by span.
     pub(crate) expr_types: HashMap<(u32, u32), TypeId>,
+    /// Links of optional chains: their type before the short-circuit's
+    /// `nil`, which the rest of the chain continues from.
+    pub(crate) chain_inner: HashMap<(u32, u32), TypeId>,
     /// Classes whose bodies are being checked: (def, static member).
     pub(crate) classes: Vec<(DefId, bool)>,
     /// Exported values of this module.
@@ -149,6 +152,7 @@ impl<'e> Checker<'e> {
             extra_globals: info.extra_globals.clone(),
             assigned_globals: info.assigned_globals.clone(),
             expr_types: HashMap::new(),
+            chain_inner: HashMap::new(),
             classes: Vec::new(),
             exports: HashMap::new(),
             private_methods: HashMap::new(),

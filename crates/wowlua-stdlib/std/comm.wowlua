@@ -100,7 +100,6 @@ type Message = { sent: number, total: number, callback?: ((sent: number, total: 
 
 type Chunk = { channel: CommChannel, text: string, distribution: string, target?: string, logged: boolean, message: Message }
 
-local channels: { [string]: CommChannel } = {}
 local queues: { alert: Chunk[], normal: Chunk[], bulk: Chunk[] } = { alert = {}, normal = {}, bulk = {} }
 local pumping = false
 local byteBudget = BYTES_BURST
@@ -178,7 +177,7 @@ local function refill()
     local t = now()
     byteBudget = math.min(BYTES_BURST, byteBudget + (t - lastRefill) * BYTES_PER_SECOND)
     lastRefill = t
-    for _, channel in pairs(channels) do
+    for _, channel in pairs(CommChannel.byPrefix) do
         channel.budget = math.min(PREFIX_BURST, channel.budget + (t - channel.budgetTime))
         channel.budgetTime = t
     end
@@ -255,7 +254,7 @@ schedulePump = function(delay: number)
 end
 
 local function queueOf(opts: SendOptions?): Chunk[]
-    local p = opts and opts.priority
+    local p = opts?.priority
     if p == Priority.Alert then
         return queues.alert
     elseif p == Priority.Bulk then
@@ -269,13 +268,13 @@ local function sendChunks(channel: CommChannel, chunks: string[], distribution: 
     for _, text in ipairs(chunks) do
         total += #text
     end
-    local message: Message = { sent = 0, total = total, callback = opts and opts.callback, failed = false }
-    local logged = opts and opts.logged or false
+    local message: Message = { sent = 0, total = total, callback = opts?.callback, failed = false }
+    local logged = opts?.logged ?? false
     -- ChatThrottleLib shares the bandwidth with every addon using it.
     local ctl = _G.ChatThrottleLib :: ChatThrottleLibrary?
-    local plainSend = ctl and ctl.SendAddonMessage
+    local plainSend = ctl?.SendAddonMessage
     if ctl and plainSend and not inLockdown() then
-        local priority = (opts and opts.priority or Priority.Normal):upper()
+        local priority = (opts?.priority ?? Priority.Normal):upper()
         local pending = #chunks
         for _, text in ipairs(chunks) do
             local function done(_: any, didSend: boolean?)
@@ -289,7 +288,7 @@ local function sendChunks(channel: CommChannel, chunks: string[], distribution: 
         end
         return pending == 0 and SendStatus.Sent or SendStatus.Queued
     end
-    if inLockdown() and opts and opts.dropInLockdown then
+    if inLockdown() and opts?.dropInLockdown then
         return SendStatus.Dropped
     end
     local queue = queueOf(opts)
@@ -334,7 +333,7 @@ local function deliver(channel: CommChannel, msg: string, sender: string, distri
 end
 
 local function receive(prefix: string, text: string, distribution: string, sender: string)
-    local channel = channels[prefix]
+    local channel = CommChannel.byPrefix[prefix]
     if not channel or type(text) ~= "string" or #text == 0 then
         return
     end
@@ -406,6 +405,8 @@ end
 
 --- A channel with its handlers and its share of the throttle.
 class CommChannel implements Channel
+    --- The open channels, by prefix.
+    static byPrefix: { [string]: CommChannel } = {}
     readonly prefix: string
     readonly format: FormatValue
     readonly receiveOwn: boolean
@@ -457,13 +458,13 @@ export function open(prefix: string, opts: { format?: FormatValue, receiveOwn?: 
     if type(prefix) ~= "string" or #prefix == 0 or #prefix > 16 then
         error("comm.open: a prefix has 1 to 16 characters", 2)
     end
-    local existing = channels[prefix]
+    local existing = CommChannel.byPrefix[prefix]
     if existing then
         return existing
     end
     C_ChatInfo.RegisterAddonMessagePrefix(prefix)
     listen()
-    local channel = CommChannel.new(prefix, opts and opts.format or Format.Wowlua, opts and opts.receiveOwn or false)
-    channels[prefix] = channel
+    local channel = CommChannel.new(prefix, opts?.format ?? Format.Wowlua, opts?.receiveOwn ?? false)
+    CommChannel.byPrefix[prefix] = channel
     return channel
 end

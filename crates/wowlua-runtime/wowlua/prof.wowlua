@@ -64,8 +64,8 @@ function prof.wrap(fn: any, name: string, location: string, opts: { errors: bool
 	if type(fn) ~= "function" then
 		return fn
 	end
-	local errors = prof.errors or (opts and opts.errors)
-	local memory = opts and opts.memory
+	local errors = prof.errors or opts?.errors
+	local memory = opts?.memory
 	if memory then
 		return function(...)
 			local before = memoryKiB()

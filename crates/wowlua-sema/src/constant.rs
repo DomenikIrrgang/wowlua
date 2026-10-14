@@ -132,8 +132,16 @@ fn trim_zeros(s: &str) -> &str {
     }
 }
 
-/// A Lua string literal for `bytes`.
+/// A Lua string literal for `bytes`; bytes outside valid UTF-8 are
+/// escaped, so the emitted file stays UTF-8.
 pub fn quote(bytes: &[u8]) -> Vec<u8> {
+    let mut raw = vec![true; bytes.len()];
+    let mut at = 0;
+    for chunk in bytes.utf8_chunks() {
+        at += chunk.valid().len();
+        raw[at..at + chunk.invalid().len()].fill(false);
+        at += chunk.invalid().len();
+    }
     let mut out = vec![b'"'];
     for (i, &c) in bytes.iter().enumerate() {
         match c {
@@ -142,7 +150,7 @@ pub fn quote(bytes: &[u8]) -> Vec<u8> {
             b'\n' => out.extend_from_slice(b"\\n"),
             b'\r' => out.extend_from_slice(b"\\r"),
             b'\t' => out.extend_from_slice(b"\\t"),
-            0..=31 | 127 => {
+            _ if c < 32 || c == 127 || !raw[i] => {
                 // `\ddd`: three digits when a digit follows, so it cannot merge.
                 let next_digit = bytes.get(i + 1).is_some_and(u8::is_ascii_digit);
                 if next_digit {
@@ -356,5 +364,6 @@ mod tests {
             quote(b"a\"b\\\n\x01\x012"),
             b"\"a\\\"b\\\\\\n\\1\\0012\"".to_vec()
         );
+        assert_eq!(quote(b"\xffO \xc3\xa9"), b"\"\\255O \xc3\xa9\"".to_vec());
     }
 }

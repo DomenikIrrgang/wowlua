@@ -3,126 +3,317 @@
 -- C_Timer on a controlled clock, combat state, addon loading and slash
 -- commands. Test scripts drive it through `Mock`.
 
+type Handler = (...any) -> ...any
+
 -- Completed below.
-Mock = { now = 0, frames = {}, timers = {}, errors = {}, out = {}, loaded = {},
-         combat = false, loggedIn = false } :: MockClient
+Mock = {
+    now = 0,
+    frames = {},
+    timers = {},
+    errors = {},
+    out = {},
+    loaded = {},
+    combat = false,
+    loggedIn = false,
+} :: MockClient
 
 -- The client's events (anything else is unknown, like an addon's messages).
-Mock.events = {}
-for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_LOGOUT", "PLAYER_ENTERING_WORLD",
+const CLIENT_EVENTS = {
+    "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_LOGOUT", "PLAYER_ENTERING_WORLD",
     "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PLAYER_STARTED_MOVING", "BAG_UPDATE",
     "BAG_UPDATE_DELAYED", "UNIT_HEALTH", "UNIT_POWER_UPDATE", "PLAYER_TARGET_CHANGED", "UNIT_TARGET",
-    "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN", "TIME_PLAYED_MSG" }) do
+    "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN", "TIME_PLAYED_MSG", "CHAT_MSG_ADDON",
+}
+Mock.events = {}
+for _, e in ipairs(CLIENT_EVENTS) do
     Mock.events[e] = true
 end
 
-function print(...)
-    local parts = {}
-    for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+function print(...: any)
+    local parts: string[] = {}
+    for i = 1, select("#", ...) do
+        parts[i] = tostring((select(i, ...)))
+    end
     Mock.out[#Mock.out + 1] = table.concat(parts, " ")
 end
 
 -- Error handling ------------------------------------------------------------
 
-local handler: (msg: any) -> () = function(msg)
+local handler: (msg: any, ...any) -> any = function(msg: any)
     Mock.errors[#Mock.errors + 1] = tostring(msg)
-    print("ERROR: " .. tostring(msg))
+    print(`ERROR: {msg}`)
 end
-function geterrorhandler() return handler end
-function seterrorhandler(fn) handler = fn end
+function geterrorhandler(): (err: any, ...any) -> any
+    return handler
+end
+function seterrorhandler(fn: (err: any, ...any) -> any)
+    handler = fn
+end
 
-function securecallfunction(fn, ...)
+function securecallfunction(fn: Handler, ...: any): ...any
     local n, args = select("#", ...), { ... }
-    local results = { xpcall(function() return fn(unpack(args, 1, n)) end, function(e) geterrorhandler()(e) return e end) }
-    if results[1] then return unpack(results, 2) end
+    local results = { xpcall(function(): ...any
+        return fn(unpack(args, 1, n))
+    end, function(e: any): any
+        geterrorhandler()(e)
+        return e
+    end) }
+    if results[1] then
+        return unpack(results, 2)
+    end
 end
 
-function debugstack() return "" end
+function debugstack(): string
+    return ""
+end
 date = os.date
-function GetTime() return Mock.now end
+function GetTime(): number
+    return Mock.now
+end
 -- The client's language (`Mock.locale`).
-function GetLocale() return Mock.locale or "enUS" end
-function InCombatLockdown() return Mock.combat end
-function IsLoggedIn() return Mock.loggedIn end
+function GetLocale(): string
+    return Mock.locale ?? "enUS"
+end
+function InCombatLockdown(): boolean
+    return Mock.combat
+end
+function IsLoggedIn(): boolean
+    return Mock.loggedIn
+end
 -- Values marked secret (the modern client hides them from addons).
 Mock.secrets = setmetatable({}, { __mode = "k" })
-function issecretvalue(v) return type(v) == "table" and Mock.secrets[v] == true end
-function Mock.secret() local v = {}; Mock.secrets[v] = true; return v end
-
--- An assertion inside a test script.
-function Mock.check(cond, label)
-    if not cond then print("FAIL: " .. tostring(label)) end
+issecretvalue = (function(v: any): boolean
+    return type(v) == "table" and Mock.secrets[v] == true
+end) :: any
+function Mock.secret(): table
+    local v = {}
+    Mock.secrets[v] = true
+    return v
 end
 
--- (A fake: only what the tests use.)
-DEFAULT_CHAT_FRAME = { AddMessage = function(_, msg) print(msg) end } :: any
+-- An assertion inside a test script.
+function Mock.check(cond: any, label: string)
+    if not cond then
+        print(`FAIL: {label}`)
+    end
+end
 
 -- Frames --------------------------------------------------------------------
 
-local Frame = {}
-Frame.__index = function(self, key)
-    local method = Frame[key]
-    if method then return method end
-    -- Layout and drawing methods do nothing.
-    return function() end
-end
+--- A frame, texture or font string. Layout and drawing calls are recorded
+--- where tests read them back, and otherwise do nothing.
+class MockFrame
+    readonly kind: string
+    readonly name?: string
+    parent?: any
+    events: { [string]: boolean } = {}
+    units: { [string]: { [string]: boolean } } = {}
+    scripts: { [string]: Handler } = {}
+    hooks: { [string]: Handler[] } = {}
+    shown: boolean = true
+    points: any[][] = {}
+    attributes: { [string]: any } = {}
+    text?: string
+    texture?: any
 
-function Frame:RegisterEvent(event)
-    if not Mock.events[event] then error("Attempt to register unknown event \"" .. event .. "\"", 2) end
-    self.events[event] = true
-    self.units[event] = nil
+    constructor(kind: string, name: string?, parent: any)
+        self.kind = kind
+        self.name = name
+        self.parent = parent
+    end
+
+    private function checkEvent(event: string)
+        if not Mock.events[event] then
+            error(`Attempt to register unknown event "{event}"`, 3)
+        end
+    end
+
+    function RegisterEvent(event: string)
+        self:checkEvent(event)
+        self.events[event] = true
+        self.units[event] = nil
+    end
+
+    function RegisterUnitEvent(event: string, u1: string, u2: string?)
+        self:checkEvent(event)
+        self.events[event] = true
+        local units = { [u1] = true }
+        if u2 then
+            units[u2] = true
+        end
+        self.units[event] = units
+    end
+
+    function UnregisterEvent(event: string)
+        self.events[event] = nil
+        self.units[event] = nil
+    end
+
+    function UnregisterAllEvents()
+        self.events = {}
+        self.units = {}
+    end
+
+    function IsEventRegistered(event: string): boolean
+        return self.events[event] == true
+    end
+
+    function SetScript(name: string, fn: Handler?)
+        self.scripts[name] = fn
+        self.hooks[name] = nil
+    end
+
+    function GetScript(name: string): Handler?
+        return self.scripts[name]
+    end
+
+    function HookScript(name: string, fn: Handler)
+        local list = self.hooks[name] ?? {}
+        list[#list + 1] = fn
+        self.hooks[name] = list
+    end
+
+    function Show()
+        self.shown = true
+        Mock.script(self, "OnShow")
+    end
+
+    function Hide()
+        self.shown = false
+        Mock.script(self, "OnHide")
+    end
+
+    function SetShown(shown: boolean)
+        if shown then
+            self:Show()
+        else
+            self:Hide()
+        end
+    end
+
+    function IsShown(): boolean
+        return self.shown
+    end
+
+    function GetName(): string?
+        return self.name
+    end
+
+    function GetParent(): any
+        return self.parent
+    end
+
+    function SetParent(parent: any)
+        self.parent = parent
+    end
+
+    function GetObjectType(): string
+        return self.kind
+    end
+
+    function SetPoint(...: any)
+        self.points[#self.points + 1] = { ... }
+    end
+
+    function ClearAllPoints()
+        self.points = {}
+    end
+
+    function GetNumPoints(): number
+        return #self.points
+    end
+
+    function GetPoint(i: number?): ...any
+        return unpack(self.points[i ?? 1] ?? {})
+    end
+
+    function SetAttribute(key: string, value: any)
+        self.attributes[key] = value
+    end
+
+    function GetAttribute(key: string): any
+        return self.attributes[key]
+    end
+
+    function CreateFontString(): MockFrame
+        return MockFrame.new("FontString", nil, self)
+    end
+
+    function CreateTexture(): MockFrame
+        return MockFrame.new("Texture", nil, self)
+    end
+
+    function SetText(text: string?)
+        self.text = text
+    end
+
+    function GetText(): string?
+        return self.text
+    end
+
+    function SetTexture(texture: any)
+        self.texture = texture
+    end
+
+    -- Calls whose effect no test reads.
+    function SetSize(...: any) end
+    function SetWidth(...: any) end
+    function SetHeight(...: any) end
+    function SetAllPoints(...: any) end
+    function SetFrameStrata(...: any) end
+    function SetFrameLevel(...: any) end
+    function SetMovable(...: any) end
+    function EnableMouse(...: any) end
+    function RegisterForClicks(...: any) end
+    function RegisterForDrag(...: any) end
+    function SetHighlightTexture(...: any) end
+    function SetTexCoord(...: any) end
+    function SetColorTexture(...: any) end
+    function SetTextColor(...: any) end
+    function SetJustifyH(...: any) end
+    function SetJustifyV(...: any) end
+    function SetWordWrap(...: any) end
+    function SetFont(...: any): boolean return true end
+    function SetFontObject(...: any) end
+    function SetAlpha(...: any) end
+    function SetScale(...: any) end
+    function SetOwner(...: any) end
+    function AddLine(...: any) end
+    function AddDoubleLine(...: any) end
+    function ClearLines(...: any) end
+    function StartMoving(...: any) end
+    function StopMovingOrSizing(...: any) end
 end
-function Frame:RegisterUnitEvent(event, u1, u2)
-    if not Mock.events[event] then error("Attempt to register unknown event \"" .. event .. "\"", 2) end
-    self.events[event] = true
-    self.units[event] = { [u1] = true }
-    if u2 then self.units[event][u2] = true end
-end
-function Frame:UnregisterEvent(event) self.events[event] = nil; self.units[event] = nil end
-function Frame:UnregisterAllEvents() self.events = {}; self.units = {} end
-function Frame:IsEventRegistered(event) return self.events[event] == true end
-function Frame:SetScript(name, fn) self.scripts[name] = fn; self.hooks[name] = nil end
-function Frame:GetScript(name) return self.scripts[name] end
-function Frame:HookScript(name, fn)
-    self.hooks[name] = self.hooks[name] or {}
-    table.insert(self.hooks[name], fn)
-end
-function Frame:Show() self.shown = true; Mock.script(self, "OnShow") end
-function Frame:Hide() self.shown = false; Mock.script(self, "OnHide") end
-function Frame:IsShown() return self.shown end
-function Frame:GetName() return self.name end
-function Frame:GetParent() return rawget(self, "parent") end
-function Frame:SetParent(p) rawset(self, "parent", p) end
-function Frame:GetObjectType() return self.kind end
-function Frame:SetPoint(...) local p = rawget(self, "points") or {}; rawset(self, "points", p); p[#p + 1] = { ... } end
-function Frame:ClearAllPoints() rawset(self, "points", {}) end
-function Frame:GetNumPoints() local p = rawget(self, "points"); return p and #p or 0 end
-function Frame:SetAttribute(k, v)
-    local a = rawget(self, "attributes") or {}
-    rawset(self, "attributes", a)
-    a[k] = v
-end
-function Frame:GetAttribute(k) local a = rawget(self, "attributes"); return a and a[k] end
 
 -- (The client's CreateFrame has an overload per frame type.)
-CreateFrame = (function(kind, name, parent, template)
-    local f = setmetatable({ kind = kind, name = name, parent = parent, events = {}, units = {}, scripts = {}, hooks = {}, shown = true }, Frame)
-    Mock.frames[#Mock.frames + 1] = f
-    if name then _G[name] = f end
+CreateFrame = (function(kind: string, name: string?, parent: any, _template: string?): MockFrame
+    local f = MockFrame.new(kind, name, parent)
+    Mock.frames[#Mock.frames + 1] = f :: any
+    if name then
+        _G[name] = f
+    end
     return f
 end) :: any
 
-function Mock.script(frame, name, ...)
+function Mock.script(frame: any, name: string, ...: any)
     local fn = frame.scripts[name]
-    if fn then fn(frame, ...) end
-    for _, h in ipairs(frame.hooks[name] or {}) do h(frame, ...) end
+    if fn then
+        fn(frame, ...)
+    end
+    for _, h in ipairs(frame.hooks[name] ?? {}) do
+        h(frame, ...)
+    end
 end
 
 -- Fires a WoW event at every frame registered for it, in creation order.
-function Mock.fire(event, ...)
-    if event == "PLAYER_REGEN_DISABLED" then Mock.combat = true end
-    if event == "PLAYER_REGEN_ENABLED" then Mock.combat = false end
-    if event == "PLAYER_LOGIN" then Mock.loggedIn = true end
+function Mock.fire(event: string, ...: any)
+    if event == "PLAYER_REGEN_DISABLED" then
+        Mock.combat = true
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        Mock.combat = false
+    elseif event == "PLAYER_LOGIN" then
+        Mock.loggedIn = true
+    end
     local unit = ...
     for _, f in ipairs({ unpack(Mock.frames) }) do
         local units = f.units[event]
@@ -133,7 +324,7 @@ function Mock.fire(event, ...)
 end
 
 -- Loads an addon (fires ADDON_LOADED for it).
-function Mock.loadAddon(name)
+function Mock.loadAddon(name: string | number)
     Mock.loaded[name] = true
     Mock.fire("ADDON_LOADED", name, false)
 end
@@ -143,7 +334,8 @@ Mock.onDemand = {}
 Mock.metadata = {}
 C_AddOns = {} :: any
 function C_AddOns.IsAddOnLoaded(name: string | number): (boolean, boolean)
-    return Mock.loaded[name] == true, Mock.loaded[name] == true
+    local loaded = Mock.loaded[name] == true
+    return loaded, loaded
 end
 function C_AddOns.IsAddOnLoadOnDemand(name: string | number): boolean
     return Mock.onDemand[name] ~= nil
@@ -158,22 +350,31 @@ function C_AddOns.LoadAddOn(name: string | number): (boolean?, string?)
     return true, nil
 end
 function C_AddOns.GetAddOnMetadata(name: string | number, field: string): string
-    return Mock.metadata[name] and Mock.metadata[name][field]
+    return Mock.metadata[name]?.[field] :: any
 end
-GetAddOnMetadata = C_AddOns.GetAddOnMetadata
+-- (The pre-C_AddOns name, which older clients have.)
+_G.GetAddOnMetadata = C_AddOns.GetAddOnMetadata
 Mock.interface = 11508
-function GetBuildInfo() return "1.0.0", "1", "Jan 1 2026", Mock.interface end
-function UnitName() return "Tester" end
-function GetFramesRegisteredForEvent(event)
-    local out = {}
+function GetBuildInfo(): (string, string, string, number)
+    return "1.0.0", "1", "Jan 1 2026", Mock.interface
+end
+UnitName = (function(): string
+    return "Tester"
+end) :: any
+function GetFramesRegisteredForEvent(event: string): ...any
+    local out: any[] = {}
     for _, f in ipairs(Mock.frames) do
-        if f.events[event] then out[#out + 1] = f end
+        if f.events[event] then
+            out[#out + 1] = f
+        end
     end
     return unpack(out)
 end
 -- Server answers arrive a moment later.
 function RequestTimePlayed()
-    C_Timer.After(0.2, function() Mock.fire("TIME_PLAYED_MSG", 3600, 60) end)
+    C_Timer.After(0.2, function()
+        Mock.fire("TIME_PLAYED_MSG", 3600, 60)
+    end)
 end
 C_EventUtils = {} :: any
 function C_EventUtils.IsEventValid(event: string): boolean
@@ -182,27 +383,48 @@ end
 
 -- Hooks ---------------------------------------------------------------------
 
-function hooksecurefunc(target, name, fn)
-    if type(target) == "string" then target, name, fn = _G, target, name end
+hooksecurefunc = (function(target: any, name: any, fn: any)
+    if type(target) == "string" then
+        target, name, fn = _G, target, name
+    end
     local original = target[name]
-    assert(type(original) == "function", "hooksecurefunc: " .. tostring(name) .. " is not a function")
-    target[name] = function(...)
+    assert(type(original) == "function", `hooksecurefunc: {name} is not a function`)
+    target[name] = function(...: any): ...any
         local r = { original(...) }
         fn(...)
         return unpack(r)
     end
-end
+end) :: any
 
 -- Timers --------------------------------------------------------------------
 
-local Timer = {}
-Timer.__index = Timer
-function Timer:Cancel() self.cancelled = true end
-function Timer:IsCancelled() return self.cancelled == true end
+--- A scheduled callback: `left` more runs, every `every` seconds.
+class MockTimer
+    due: number
+    readonly every: number
+    readonly fn: Handler
+    left: number
+    cancelled: boolean = false
 
-local function schedule(sec, fn, iterations)
-    local t = setmetatable({ due = Mock.now + sec, every = sec, fn = fn, left = iterations, cancelled = false }, Timer)
-    Mock.timers[#Mock.timers + 1] = t
+    constructor(sec: number, fn: Handler, iterations: number)
+        self.due = Mock.now + sec
+        self.every = sec
+        self.fn = fn
+        self.left = iterations
+    end
+
+    function Cancel()
+        self.cancelled = true
+    end
+
+    function IsCancelled(): boolean
+        return self.cancelled
+    end
+end
+
+local function schedule(sec: number, fn: Handler, iterations: number): MockTimer
+    local t = MockTimer.new(sec, fn, iterations)
+    Mock.timers[#Mock.timers + 1] = t :: any
     return t
 end
 
@@ -214,21 +436,29 @@ function C_Timer.NewTimer(seconds: number, callback: (handle: TimerHandle) -> ()
     return schedule(seconds, callback, 1) :: any
 end
 function C_Timer.NewTicker(seconds: number, callback: (handle: TickerHandle) -> (), iterations: number?): TickerHandle
-    return schedule(seconds, callback, iterations or math.huge) :: any
+    return schedule(seconds, callback, iterations ?? math.huge) :: any
 end
 
 -- Advances the clock, running due timers in order (a frame is 0 seconds).
-function Mock.advance(sec)
-    local target = Mock.now + (sec or 0)
+function Mock.advance(sec: number?)
+    local target = Mock.now + (sec ?? 0)
     while true do
-        local next
-        for _, t in ipairs(Mock.timers) do
-            if not t.cancelled and t.left > 0 and t.due <= target and (not next or t.due < next.due) then next = t end
+        local next: MockTimer? = nil
+        for _, entry in ipairs(Mock.timers) do
+            local t = entry :: MockTimer
+            if t.cancelled or t.left <= 0 or t.due > target then
+                continue
+            end
+            if not next or t.due < next.due then
+                next = t
+            end
         end
-        if not next then break end
+        if not next then
+            break
+        end
         Mock.now = math.max(Mock.now, next.due)
-        next.left = next.left - 1
-        next.due = next.due + next.every
+        next.left -= 1
+        next.due += next.every
         next.fn(next)
     end
     Mock.now = target
@@ -239,63 +469,129 @@ end
 SlashCmdList = {}
 
 -- Runs "/cmd args" like the chat box.
-function Mock.slash(line)
+function Mock.slash(line: string)
     local cmd, msg = line:match("^(%S+)%s*(.-)$")
+    if not (cmd and msg) then
+        return
+    end
     for key, fn in pairs(SlashCmdList) do
         local i = 1
-        while _G["SLASH_" .. key .. i] do
-            if _G["SLASH_" .. key .. i]:lower() == cmd:lower() then return fn(msg, {}) end
-            i = i + 1
+        while _G[`SLASH_{key}{i}`] do
+            if _G[`SLASH_{key}{i}`]:lower() == cmd:lower() then
+                -- (A stand-in for the chat edit box.)
+                return fn(msg, {} :: any)
+            end
+            i += 1
         end
     end
-    print("unknown command " .. cmd)
+    print(`unknown command {cmd}`)
 end
 
 -- A few of Blizzard's globals for hooks.
 UIParent = CreateFrame("Frame", "UIParent") :: any
-function ToggleGameMenu() print("menu") end
+function ToggleGameMenu()
+    print("menu")
+end
 GameTooltip = CreateFrame("GameTooltip", "GameTooltip") :: any
-function GameTooltip:SetUnit(unit) print("SetUnit " .. unit) end
+function GameTooltip:SetUnit(unit: string)
+    print(`SetUnit {unit}`)
+end
 CreateFrame("Frame", "PlayerFrame")
 
 -- Settings (Blizzard's Settings API: categories, rows, proxy settings) -------
 
+type Row = { kind: string, [string]: any }
+
+class MockLayout
+    items: Row[] = {}
+
+    function AddInitializer(init: Row)
+        self.items[#self.items + 1] = init
+    end
+end
+
+class MockCategory
+    readonly id: number
+    readonly name: string
+    readonly parent?: MockCategory
+    readonly layout: MockLayout = MockLayout.new()
+    registered: boolean = false
+
+    constructor(name: string, parent: MockCategory?)
+        self.id = #Mock.settings.categories + 1
+        self.name = name
+        self.parent = parent
+    end
+
+    function GetID(): number
+        return self.id
+    end
+end
+
+class MockSetting
+    readonly variable: string
+    readonly varType: string
+    readonly name: string
+    readonly default: any
+    private readonly get: () -> any
+    private readonly set: (value: any) -> ()
+    updates: number = 0
+
+    constructor(variable: string, varType: string, name: string, default: any, get: () -> any, set: (value: any) -> ())
+        self.variable = variable
+        self.varType = varType
+        self.name = name
+        self.default = default
+        self.get = get
+        self.set = set
+    end
+
+    function GetValue(): any
+        return self.get()
+    end
+
+    function SetValue(value: any)
+        self.set(value)
+    end
+
+    function NotifyUpdate()
+        self.updates += 1
+    end
+end
+
 Mock.settings = { categories = {}, opened = {}, variables = {} }
-local Category = {}
-Category.__index = Category
-function Category:GetID() return self.id end
-local Layout = {}
-Layout.__index = Layout
-function Layout:AddInitializer(init) table.insert(self.items, init) end
-local function newCategory(name, parent)
-    local c = setmetatable({ id = #Mock.settings.categories + 1, name = name, parent = parent }, Category)
-    c.layout = setmetatable({ items = {} }, Layout)
-    table.insert(Mock.settings.categories, c)
+
+local function newCategory(name: string, parent: MockCategory?): (MockCategory, MockLayout)
+    local c = MockCategory.new(name, parent)
+    Mock.settings.categories[#Mock.settings.categories + 1] = c
     return c, c.layout
 end
-local Setting = {}
-Setting.__index = Setting
-function Setting:GetValue() return self.get() end
-function Setting:SetValue(v) self.set(v) end
-function Setting:NotifyUpdate() self.updates = (self.updates or 0) + 1 end
-local function row(kind)
-    return function(category, setting, a, b)
-        local item = { kind = kind, setting = setting, a = a, b = b }
-        table.insert(category.layout.items, item)
+
+local function row(kind: string): (category: MockCategory, setting: MockSetting, a: any, b: any) -> Row
+    return function(category: MockCategory, setting: MockSetting, a: any, b: any): Row
+        local item: Row = { kind = kind, setting = setting, a = a, b = b }
+        category.layout:AddInitializer(item)
         return item
     end
 end
+
 -- (A fake of the Settings API: what wowlua:settings uses.)
 Settings = ({
     VarType = { Boolean = "boolean", Number = "number", String = "string" },
-    RegisterVerticalLayoutCategory = function(name) return newCategory(name) end,
-    RegisterVerticalLayoutSubcategory = function(parent, name) return newCategory(name, parent) end,
-    RegisterAddOnCategory = function(c) c.registered = true end,
-    RegisterProxySetting = function(category, variable, varType, name, default, get, set)
+    RegisterVerticalLayoutCategory = function(name: string): (MockCategory, MockLayout)
+        return newCategory(name)
+    end,
+    RegisterVerticalLayoutSubcategory = function(parent: MockCategory, name: string): (MockCategory, MockLayout)
+        return newCategory(name, parent)
+    end,
+    RegisterAddOnCategory = function(c: MockCategory)
+        c.registered = true
+    end,
+    RegisterProxySetting = function(_: any, variable: string, varType: string, name: string, default: any, get: () -> any, set: (value: any) -> ()): MockSetting
         if Mock.settings.variables[variable] then
-            error("Setting variable '" .. variable .. "' was previously registered.")
+            error(`Setting variable '{variable}' was previously registered.`)
         end
-        local s = setmetatable({ variable = variable, varType = varType, name = name, default = default, get = get, set = set }, Setting)
+        local s = MockSetting.new(variable, varType, name, default, get, set)
         Mock.settings.variables[variable] = s
         return s
     end,
@@ -303,15 +599,29 @@ Settings = ({
     CreateSlider = row("slider"),
     CreateDropdown = row("dropdown"),
     CreateColorSwatch = row("color"),
-    CreateSliderOptions = function(min, max, step)
-        return { min = min, max = max, step = step, SetLabelFormatter = function(self, label, f) self.format = f end }
+    CreateSliderOptions = function(min: number, max: number, step: number): table
+        return {
+            min = min,
+            max = max,
+            step = step,
+            SetLabelFormatter = function(self: table, _: any, f: any)
+                self.format = f
+            end,
+        }
     end,
-    CreateControlTextContainer = function()
-        local data = {}
-        return { Add = function(_, v, l) table.insert(data, { value = v, label = l }) end, GetData = function() return data end }
+    CreateControlTextContainer = function(): table
+        local data: { value: any, label: string }[] = {}
+        return {
+            Add = function(_: table, value: any, label: string)
+                data[#data + 1] = { value = value, label = label }
+            end,
+            GetData = function(): table
+                return data
+            end,
+        }
     end,
-    CreateElementInitializer = function(template, data)
-        local init = { kind = "element", template = template, data = data, Resetter = function() end }
+    CreateElementInitializer = function(template: string, data: table?): Row
+        local init: Row = { kind = "element", template = template, data = data, Resetter = function() end }
         init.InitFrame = function()
             -- The client's element template needs set-up an element row lacks.
             if template == "SettingsListElementTemplate" then
@@ -320,60 +630,98 @@ Settings = ({
         end
         return init
     end,
-    OpenToCategory = function(id)
-        table.insert(Mock.settings.opened, id)
+    OpenToCategory = function(id: number)
+        Mock.settings.opened[#Mock.settings.opened + 1] = id
         SettingsPanel:Show()
         -- The list shows the category's rows.
         for _, item in ipairs(Mock.settings.categories[id].layout.items) do
-            if item.InitFrame then item:InitFrame(CreateFrame("Frame")) end
+            if item.InitFrame then
+                item:InitFrame(CreateFrame("Frame"))
+            end
         end
     end,
-    GetSetting = function(variable) return Mock.settings.variables[variable] end,
+    GetSetting = function(variable: string): MockSetting?
+        return Mock.settings.variables[variable]
+    end,
 }) :: any
-SettingsPanel = CreateFrame("Frame", "SettingsPanel")
+SettingsPanel = CreateFrame("Frame", "SettingsPanel") :: any
 SettingsPanel:Hide()
-function HideUIPanel(frame) frame:Hide() end
-MinimalSliderWithSteppersMixin = { Label = { Right = "right" } }
-function CreateSettingsListSectionHeaderInitializer(name) return { kind = "header", name = name } end
-function CreateSettingsButtonInitializer(name, text, click) return { kind = "button", text = text, click = click } end
-function CreateKeybindingEntryInitializer(index) return { kind = "keybinding", index = index } end
+HideUIPanel = (function(frame: any)
+    frame:Hide()
+end) :: any
+MinimalSliderWithSteppersMixin = { Label = { Right = "right" } } :: any
+CreateSettingsListSectionHeaderInitializer = (function(name: string): Row
+    return { kind = "header", name = name }
+end) :: any
+CreateSettingsButtonInitializer = (function(_: string, text: string, click: () -> ()): Row
+    return { kind = "button", text = text, click = click }
+end) :: any
+CreateKeybindingEntryInitializer = (function(index: number): Row
+    return { kind = "keybinding", index = index }
+end) :: any
 Mock.bindings = {}
-function GetNumBindings() return #Mock.bindings end
-function GetBinding(i) return Mock.bindings[i] end
-function Frame:CreateFontString() return CreateFrame("FontString") end
-function Frame:SetText(t) rawset(self, "text", t) end
-function Frame:GetText() return rawget(self, "text") end
+function GetNumBindings(): number
+    return #Mock.bindings
+end
+GetBinding = (function(i: number): any
+    return Mock.bindings[i]
+end) :: any
 
-local Color = {}
-Color.__index = Color
+--- A color (Blizzard's ColorMixin, what the tests use).
+class MockColor
+    readonly r: number
+    readonly g: number
+    readonly b: number
+    readonly a: number
+
+    constructor(r: number, g: number, b: number, a: number?)
+        self.r, self.g, self.b, self.a = r, g, b, a ?? 1
+    end
+
+    function GenerateHexColor(): string
+        local function byte(v: number): number
+            return math.floor(v * 255 + 0.5)
+        end
+        return string.format("%02x%02x%02x%02x", byte(self.a), byte(self.r), byte(self.g), byte(self.b))
+    end
+end
+
 function CreateColor(r: number, g: number, b: number, a: number?): colorRGBA
-    return setmetatable({ r = r, g = g, b = b, a = a or 1 }, Color) :: any
+    return MockColor.new(r, g, b, a) :: any
 end
-function Color:GenerateHexColor()
-    local function byte(v) return math.floor(v * 255 + 0.5) end
-    return string.format("%02x%02x%02x%02x", byte(self.a), byte(self.r), byte(self.g), byte(self.b))
-end
-function CreateColorFromHexString(hex)
-    local function part(i) return tonumber(hex:sub(i, i + 1), 16) / 255 end
+CreateColorFromHexString = (function(hex: string): colorRGBA
+    local function part(i: number): number
+        return (tonumber(hex:sub(i, i + 1), 16) ?? 0) / 255
+    end
     return CreateColor(part(3), part(5), part(7), part(1))
-end
+end) :: any
 
 -- Minimap, cursor, textures, Addon Compartment ---------------------------------
 
 Minimap = CreateFrame("Frame", "Minimap") :: any
-function Minimap:GetWidth() return 140 end
-function Minimap:GetHeight() return 140 end
-function Minimap:GetCenter() return 500, 500 end
-function Minimap:GetEffectiveScale() return 1 end
+function Minimap:GetWidth(): number
+    return 140
+end
+function Minimap:GetHeight(): number
+    return 140
+end
+function Minimap:GetCenter(): (number, number)
+    return 500, 500
+end
+function Minimap:GetEffectiveScale(): number
+    return 1
+end
 Mock.cursor = { 0, 0 }
-function GetCursorPosition() return Mock.cursor[1], Mock.cursor[2] end
-function Frame:SetShown(v) if v then self:Show() else self:Hide() end end
-function Frame:CreateTexture() return CreateFrame("Texture") end
-function Frame:SetTexture(t) rawset(self, "texture", t) end
-function Frame:GetPoint(i) local p = rawget(self, "points"); return unpack(p and p[i or 1] or {}) end
+function GetCursorPosition(): (number, number)
+    return Mock.cursor[1], Mock.cursor[2]
+end
 AddonCompartmentFrame = { registeredAddons = {} } :: any
-function AddonCompartmentFrame:RegisterAddon(data) table.insert(self.registeredAddons, data) end
-function debugprofilestop() return Mock.now * 1000 end
+function AddonCompartmentFrame:RegisterAddon(data: any)
+    self.registeredAddons[#self.registeredAddons + 1] = data
+end
+function debugprofilestop(): number
+    return Mock.now * 1000
+end
 
 -- Addon messages: a server that checks, records and echoes ---------------------
 
@@ -382,20 +730,31 @@ Mock.sendResults = {}      -- results to return next (else 0, success)
 Mock.lockdown = false
 Mock.group = nil           -- "party", "raid", "instance"
 Mock.echoAs = nil          -- deliver sent messages as from this player
-LE_PARTY_CATEGORY_HOME, LE_PARTY_CATEGORY_INSTANCE = 1, 2
-local function addonMessage(prefix, msg, chatType, target)
-    if #msg > 255 or msg:find("%z") then return 2 end
-    local result = table.remove(Mock.sendResults, 1) or 0
-    if result ~= 0 then return result end
-    table.insert(Mock.sent, { prefix = prefix, msg = msg, chatType = chatType, target = target })
-    if Mock.echoAs then
-        local sender = Mock.echoAs .. "-MockRealm"
-        C_Timer.After(0.05, function() Mock.fire("CHAT_MSG_ADDON", prefix, msg, chatType, sender) end)
+const PARTY_INSTANCE = 2
+_G.LE_PARTY_CATEGORY_HOME = 1
+_G.LE_PARTY_CATEGORY_INSTANCE = PARTY_INSTANCE
+
+local function addonMessage(prefix: string, msg: string, chatType: string?, target: string?): any
+    if #msg > 255 or msg:find("%z") then
+        return 2
+    end
+    local result = table.remove(Mock.sendResults, 1) ?? 0
+    if result ~= 0 then
+        return result
+    end
+    Mock.sent[#Mock.sent + 1] = { prefix = prefix, msg = msg, chatType = chatType, target = target }
+    local echoAs = Mock.echoAs
+    if echoAs then
+        local sender = `{echoAs}-MockRealm`
+        C_Timer.After(0.05, function()
+            Mock.fire("CHAT_MSG_ADDON", prefix, msg, chatType, sender)
+        end)
     end
     return 0
 end
+
 C_ChatInfo = {} :: any
-function C_ChatInfo.RegisterAddonMessagePrefix(prefix: string): RegisterAddonMessagePrefixResult
+function C_ChatInfo.RegisterAddonMessagePrefix(_prefix: string): RegisterAddonMessagePrefixResult
     return 0
 end
 function C_ChatInfo.SendAddonMessage(prefix: string, message: string, chatType: string?, target: string?): SendAddonMessageResult
@@ -407,11 +766,25 @@ end
 function C_ChatInfo.InChatMessagingLockdown(): boolean
     return Mock.lockdown
 end
-Mock.events.CHAT_MSG_ADDON = true
-function Ambiguate(name) return (name:gsub("%-MockRealm$", "")) end
-function IsInRaid() return Mock.group == "raid" end
-function IsInGroup(category)
-    if category == LE_PARTY_CATEGORY_INSTANCE then return Mock.group == "instance" end
-    return Mock.group ~= nil
+Ambiguate = (function(name: string): string
+    return (name:gsub("%-MockRealm$", ""))
+end) :: any
+function IsInRaid(): boolean
+    return Mock.group == "raid"
 end
-function IsInGuild() return Mock.guild == true end
+IsInGroup = (function(category: number?): boolean
+    if category == PARTY_INSTANCE then
+        return Mock.group == "instance"
+    end
+    return Mock.group ~= nil
+end) :: any
+function IsInGuild(): boolean
+    return Mock.guild == true
+end
+
+-- (A fake: only what the tests use.)
+DEFAULT_CHAT_FRAME = {
+    AddMessage = function(_: any, msg: string)
+        print(msg)
+    end,
+} :: any
