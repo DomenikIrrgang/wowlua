@@ -503,10 +503,15 @@ end
 --- Drags a frame by (dx, dy) screen units, if it starts moving.
 function Mock.drag(frame: any, dx: number, dy: number)
     Mock.script(frame, "OnDragStart", "LeftButton")
-    if frame.moving then
-        const b = frame:bounds()
-        const s = frame:GetEffectiveScale()
-        frame.points = { { "BOTTOMLEFT", UIParent, "BOTTOMLEFT", (b.left + dx) / s, (b.bottom + dy) / s } }
+    -- An overlay (Edit Mode's selection) moves its parent.
+    local moved = frame
+    if not frame.moving and frame.parent?.moving then
+        moved = frame.parent
+    end
+    if moved.moving then
+        const b = moved:bounds()
+        const s = moved:GetEffectiveScale()
+        moved.points = { { "BOTTOMLEFT", UIParent, "BOTTOMLEFT", (b.left + dx) / s, (b.bottom + dy) / s } }
     end
     Mock.script(frame, "OnDragStop")
 end
@@ -1925,6 +1930,51 @@ SetItemRef = (function(link: string, text: string, button: string, frame: any)
         EventRegistry:TriggerEvent("SetItemRef", link, text, button, frame)
     end
 end) :: any
+
+--- Edit Mode: the manager, the selection overlay template, entering and
+--- leaving, and switching layouts.
+Mock.templates.EditModeSystemSelectionTemplate = function(name: string?, parent: any): any
+    const f = MockFrame.new("Frame", name, parent) :: any
+    f.ShowHighlighted = function(self: any)
+        self.mode = "highlighted"
+        self:Show()
+    end
+    f.ShowSelected = function(self: any)
+        self.mode = "selected"
+        self:Show()
+    end
+    f.IsSelected = function(self: any): boolean
+        return self.mode == "selected"
+    end
+    return f
+end
+Mock.editModeLayout = "Modern"
+Mock.editModeCleared = 0
+EditModeManagerFrame = {
+    active = false,
+    IsEditModeActive = function(self: any): boolean return self.active end,
+    GetActiveLayoutInfo = function(): any return { layoutName = Mock.editModeLayout } end,
+    ClearSelectedSystem = function() Mock.editModeCleared += 1 end,
+    SelectSystem = function() end,
+    UpdateLayoutInfo = function() end,
+} :: any
+function Mock.editMode(active: boolean)
+    EditModeManagerFrame.active = active
+    EventRegistry:TriggerEvent(active and "EditMode.Enter" or "EditMode.Exit")
+end
+function Mock.editModeSwitch(layout: string)
+    Mock.editModeLayout = layout
+    EditModeManagerFrame:UpdateLayoutInfo({})
+end
+--- The Edit Mode overlay of a frame.
+function Mock.selectionOf(frame: any): any
+    for _, f in ipairs(Mock.frames) do
+        if f.parent == frame and (f :: any).ShowSelected then
+            return f
+        end
+    end
+    return nil
+end
 
 -- The client's class and item quality colors (a few).
 RAID_CLASS_COLORS = {

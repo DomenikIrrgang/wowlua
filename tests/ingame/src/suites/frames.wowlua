@@ -1,7 +1,7 @@
 -- wowlua:frames: movable, resizable frames with a saved position.
 import * as frames from "wowlua:frames"
 import type FramePosition from "wowlua:frames"
-import suite from "/harness"
+import suite, say from "/harness"
 
 type Layout = { box?: FramePosition }
 
@@ -82,4 +82,42 @@ g:test("drag, resize and Ctrl + wheel", function(t)
     t:ok(store.box?.scale ~= nil, `saved scale {store.box?.scale}`)
     handle:reset()
     box:Hide()
+end)
+
+-- Edit Mode: a box that joins it, with a store of its own.
+type EditLayout = { edit?: FramePosition }
+local editStore: EditLayout = {}
+local editBox = CreateFrame("Frame", "StdTestEditModeBox", UIParent, "BackdropTemplate")
+editBox:SetSize(160, 80)
+editBox:SetPoint("CENTER", UIParent, "CENTER", 0, -150)
+editBox:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+editBox:SetBackdropColor(0.05, 0.1, 0.2, 0.9)
+editBox:SetBackdropBorderColor(0.3, 0.6, 1, 1)
+const editLabel = editBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+editLabel:SetPoint("CENTER")
+editLabel:SetText("StdTest Edit Mode box")
+editBox:Hide()
+frames.movable(editBox, { store = editStore, key = "edit", editMode = { label = "StdTest Edit Mode box" } })
+
+g:test("Edit Mode", function(t)
+    const manager = _G.EditModeManagerFrame :: { IsEditModeActive: (self: any) -> boolean? }?
+    if not manager then
+        t:skip("this client has no Edit Mode")
+        return
+    end
+    editBox:Show()
+    t:ask("Open Edit Mode (Game Menu > Edit Mode) and drag the blue StdTest Edit Mode box")
+    if not t:waitFor(function() return editStore.edit?.layouts ~= nil end, 180, "dragged in Edit Mode") then
+        editBox:Hide()
+        return
+    end
+    const layouts: string[] = {}
+    for name in pairs(editStore.edit?.layouts ?? {}) do
+        layouts[#layouts + 1] = name
+    end
+    t:ok(#layouts == 1, "saved for the active layout")
+    say(`frames: Edit Mode layout {table.concat(layouts, ", ")}`)
+    t:ask("Close Edit Mode (Save or Exit)")
+    t:waitFor(function() return not manager:IsEditModeActive() end, 120, "Edit Mode closed")
+    editBox:Hide()
 end)

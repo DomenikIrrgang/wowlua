@@ -2,7 +2,9 @@
 -- position, size and scale live in a wowlua:saved store. Positions are
 -- stored relative to UIParent, anchored at the screen third the frame sits
 -- in (a frame near the right edge stays there when the screen size
--- changes), and restored once the store is loaded.
+-- changes), and restored once the store is loaded. With `editMode` the
+-- frame joins the client's Edit Mode: it shows the selection overlay there,
+-- keeps a position per Edit Mode layout and is locked outside it.
 import isLoaded from "wowlua:lifecycle"
 import callIn from "wowlua:errors"
 import defer from "wowlua:combat"
@@ -23,6 +25,9 @@ export type FramePosition = {
     width?: number,
     height?: number,
     scale?: number,
+    --- With `editMode`: the position in each Edit Mode layout, by name (the
+    --- fields above are the last one saved, used by layouts without one).
+    layouts?: { [string]: FramePosition },
 }
 
 export type Modifier = "SHIFT" | "CTRL" | "ALT"
@@ -44,6 +49,9 @@ export type MovableOptions = {
     scaleRange?: number[],
     --- After a save, or a reset (nil).
     onChange?: (pos: FramePosition?) -> (),
+    --- Joins the client's Edit Mode (decision S36): `label` names the frame
+    --- there; `lock = false` keeps it movable outside Edit Mode too.
+    editMode?: { label: string, lock?: boolean },
 }
 
 export interface MovableHandle
@@ -114,6 +122,28 @@ local function place(frame: Frame, pos: FramePosition)
     frame:SetPoint(pos.point, UIParent, pos.relativePoint, pos.x / s, pos.y / s)
 end
 
+-- The client's Edit Mode selection overlay (EditModeSystemSelectionTemplate).
+type Selection = Frame & {
+    system: { GetSystemName: (self: any) -> string },
+    ShowHighlighted: (self: Selection) -> (),
+    ShowSelected: (self: Selection) -> (),
+    IsSelected: (self: Selection) -> boolean?,
+}
+
+-- Edit Mode's manager (nil on clients without Edit Mode).
+type EditModeManager = {
+    IsEditModeActive: (self: EditModeManager) -> boolean?,
+    GetActiveLayoutInfo: (self: EditModeManager) -> { layoutName?: string }?,
+    ClearSelectedSystem: (self: EditModeManager) -> (),
+}
+local function editModeManager(): EditModeManager?
+    return _G.EditModeManagerFrame :: EditModeManager?
+end
+
+-- This addon's frames in Edit Mode.
+local editModeFrames: Movable[] = {}
+local editModeHooked = false
+
 class Movable implements MovableHandle
     private readonly frame: Frame
     private readonly opts: MovableOptions
@@ -126,6 +156,8 @@ class Movable implements MovableHandle
     private readonly width: number
     private readonly height: number
     private readonly scale: number
+    private selection?: Selection
+    private editing: boolean = false
 
     constructor(frame: Frame, opts: MovableOptions)
         self.frame = frame
@@ -150,11 +182,104 @@ class Movable implements MovableHandle
             frame:EnableMouseWheel(true)
             frame:HookScript("OnMouseWheel", function(_: Frame, delta: number) self:wheel(delta) end)
         end
+        if opts.editMode and editModeManager() then
+            self:joinEditMode(opts.editMode.label)
+        end
     end
 
-    -- Protected frames stay put in combat.
+    -- Protected frames stay put in combat; Edit Mode frames outside it
+    -- unless `lock = false`.
     private function blocked(): boolean
+        if self.editing then
+            return false
+        end
+        if self.selection and self.opts.editMode?.lock ~= false then
+            return true
+        end
         return self.locked or (self.frame:IsProtected() and InCombatLockdown())
+    end
+
+    private function joinEditMode(label: string)
+        const sel = CreateFrame("Frame", nil, self.frame, "EditModeSystemSelectionTemplate") :: Selection
+        sel:SetAllPoints()
+        sel:Hide()
+        -- The template asks its system for the label and selects through
+        -- the manager, which knows only Blizzard's frames.
+        sel.system = { GetSystemName = function() return label end }
+        sel:SetScript("OnMouseDown", function() self:select() end)
+        sel:SetScript("OnDragStart", function() self:dragStart() end)
+        sel:SetScript("OnDragStop", function() self:dragStop() end)
+        if self.opts.scaleWheel then
+            sel:EnableMouseWheel(true)
+            sel:SetScript("OnMouseWheel", function(_: Frame, delta: number) self:wheel(delta) end)
+        end
+        self.selection = sel
+        self.grip?:SetShown(not self:blocked())
+        editModeFrames[#editModeFrames + 1] = self
+        const manager = editModeManager()
+        if manager and not editModeHooked then
+            editModeHooked = true
+            EventRegistry:RegisterCallback("EditMode.Enter", function()
+                for _, m in ipairs(editModeFrames) do
+                    m:editMode(true)
+                end
+            end, editModeFrames)
+            EventRegistry:RegisterCallback("EditMode.Exit", function()
+                for _, m in ipairs(editModeFrames) do
+                    m:editMode(false)
+                end
+            end, editModeFrames)
+            -- A layout switch or a revert re-reads the layouts.
+            hooksecurefunc(manager :: any, "UpdateLayoutInfo", function()
+                for _, m in ipairs(editModeFrames) do
+                    m:restore()
+                end
+            end)
+            -- Selecting one of Blizzard's frames deselects ours.
+            hooksecurefunc(manager :: any, "SelectSystem", function()
+                for _, m in ipairs(editModeFrames) do
+                    if m.editing then
+                        m.selection?:ShowHighlighted()
+                    end
+                end
+            end)
+        end
+        if manager?:IsEditModeActive() then
+            self:editMode(true)
+        end
+    end
+
+    private function editMode(active: boolean)
+        self.editing = active
+        if active then
+            self.selection?:ShowHighlighted()
+        else
+            self.selection?:Hide()
+        end
+        const grip = self.grip
+        if grip then
+            grip:SetShown(not self:blocked())
+            -- Above the overlay.
+            grip:SetFrameLevel(self.frame:GetFrameLevel() + 1000)
+        end
+    end
+
+    private function select()
+        editModeManager()?:ClearSelectedSystem()
+        for _, m in ipairs(editModeFrames) do
+            if m ~= self and m.editing then
+                m.selection?:ShowHighlighted()
+            end
+        end
+        self.selection?:ShowSelected()
+    end
+
+    -- The active Edit Mode layout's name (nil without Edit Mode).
+    private function layout(): string?
+        if not self.selection then
+            return nil
+        end
+        return editModeManager()?:GetActiveLayoutInfo()?.layoutName
     end
 
     private function dragStart()
@@ -216,7 +341,7 @@ class Movable implements MovableHandle
 
     function lock(locked: boolean)
         self.locked = locked
-        self.grip?:SetShown(not locked)
+        self.grip?:SetShown(not self:blocked())
     end
 
     function isLocked(): boolean
@@ -229,14 +354,37 @@ class Movable implements MovableHandle
         if self.opts.resize then
             pos.width, pos.height = self.frame:GetSize()
         end
-        self.opts.store[self.opts.key] = pos
+        const name = self:layout()
+        if name then
+            -- Kept: the other layouts' positions.
+            const layouts = (self.opts.store[self.opts.key] :: FramePosition?)?.layouts ?? {}
+            layouts[name] = pos
+            self.opts.store[self.opts.key] = {
+                point = pos.point,
+                relativePoint = pos.relativePoint,
+                x = pos.x,
+                y = pos.y,
+                width = pos.width,
+                height = pos.height,
+                scale = pos.scale,
+                layouts = layouts,
+            }
+        else
+            local layouts = (self.opts.store[self.opts.key] :: FramePosition?)?.layouts
+            pos.layouts = layouts
+            self.opts.store[self.opts.key] = pos
+        end
         self:changed(pos)
     end
 
     function restore()
-        const pos = self.opts.store[self.opts.key] :: FramePosition?
+        local pos = self.opts.store[self.opts.key] :: FramePosition?
         if not pos then
             return
+        end
+        const name = self:layout()
+        if name and pos.layouts?.[name] then
+            pos = pos.layouts[name]
         end
         defer(function()
             const frame = self.frame

@@ -2314,6 +2314,11 @@ Mock.awaitText("Hold Ctrl")
 Mock.modifiers.CTRL = true
 Mock.wheel(StdTestMovableBox, 1)
 Mock.modifiers.CTRL = nil
+Mock.awaitText("Open Edit Mode")
+Mock.editMode(true)
+Mock.drag(Mock.selectionOf(StdTestEditModeBox), 50, 0)
+Mock.awaitText("Close Edit Mode")
+Mock.editMode(false)
 Mock.awaitText("Click the question-mark button")
 Mock.script(StdTestMinimapButton, "OnClick", "LeftButton")
 Mock.awaitText("Click StdTest entry 3")
@@ -3186,6 +3191,80 @@ fn frames_move_resize_scale_and_save() {
             "after combat TOPLEFT UIParent TOPLEFT 20 -20",
         ],
         "{out:?}"
+    );
+}
+
+/// `frames.movable` with `editMode`: the client's selection overlay in Edit
+/// Mode, a position per layout, locked outside Edit Mode unless
+/// `lock = false`.
+#[test]
+fn frames_join_edit_mode() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as frames from "wowlua:frames"
+import type FramePosition from "wowlua:frames"
+import * as saved from "wowlua:saved"
+
+interface Layout
+    box?: FramePosition
+    free?: FramePosition
+end
+
+local db = saved.bind("StdDB", { version = 1, defaults = {} :: Layout })
+local box = CreateFrame("Frame", "StdBox", UIParent)
+box:SetSize(100, 100)
+box:SetPoint("CENTER")
+frames.movable(box, { store = db, key = "box", editMode = { label = "Std Box" } })
+local free = CreateFrame("Frame", "StdFree", UIParent)
+free:SetSize(100, 100)
+free:SetPoint("CENTER")
+frames.movable(free, { store = db, key = "free", editMode = { label = "Std Free", lock = false } })
+"#,
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local box, sel = StdBox, Mock.selectionOf(StdBox)
+local function at(f) local p, _, _, x, y = f:GetPoint(1) return p .. " " .. x .. " " .. y end
+print("overlay", sel ~= nil, sel:IsShown(), sel.system:GetSystemName())
+Mock.drag(box, 50, 0)
+print("locked outside", StdDB.box)
+Mock.drag(StdFree, 50, 0)
+print("lock = false", StdDB.free ~= nil)
+Mock.editMode(true)
+print("in edit mode", sel:IsShown(), sel.mode)
+Mock.drag(sel, 100, 0)
+print("Modern", at(box), StdDB.box.layouts.Modern.x, StdDB.box.x)
+Mock.script(sel, "OnMouseDown", "LeftButton")
+print("selected", sel.mode, Mock.editModeCleared)
+Mock.editModeSwitch("Raid")
+print("Raid (no own position)", at(box))
+Mock.drag(sel, 0, -100)
+print("Raid moved", at(box), StdDB.box.layouts.Raid.y)
+Mock.editModeSwitch("Modern")
+print("Modern again", at(box))
+Mock.editMode(false)
+print("left", sel:IsShown())
+Mock.drag(box, 50, 0)
+print("locked again", at(box))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "overlay true false Std Box",
+            "locked outside nil",
+            "lock = false true",
+            "in edit mode true highlighted",
+            "Modern BOTTOMLEFT 562 334 100 100",
+            "selected selected 1",
+            // A layout without its own position takes the last one saved.
+            "Raid (no own position) CENTER 100 0",
+            "Raid moved BOTTOMLEFT 562 234 -100",
+            "Modern again CENTER 100 0",
+            "left false",
+            "locked again CENTER 100 0",
+        ]
     );
 }
 

@@ -29,9 +29,9 @@ handle:reset()                                -- back to the frame's original an
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `movable` | `(frame: Frame, opts: MovableOptions) -> MovableHandle` | |
-| `MovableOptions` | `store`, `key`, `clamp?`, `button?` (default `"LeftButton"`), `modifier?` (`"SHIFT" \| "CTRL" \| "ALT"`), `resize?` (`{ min: number[]?, max: number[]?, grip: Frame? }`, sizes as `{ width, height }`), `scaleWheel?` (a modifier), `scaleRange?` (default `{ 0.5, 2 }`), `onChange?` (`(pos: FramePosition?) -> ()`, after a save, or `nil` after a reset) | |
+| `MovableOptions` | `store`, `key`, `clamp?`, `button?` (default `"LeftButton"`), `modifier?` (`"SHIFT" \| "CTRL" \| "ALT"`), `resize?` (`{ min: number[]?, max: number[]?, grip: Frame? }`, sizes as `{ width, height }`), `scaleWheel?` (a modifier), `scaleRange?` (default `{ 0.5, 2 }`), `onChange?` (`(pos: FramePosition?) -> ()`, after a save, or `nil` after a reset), `editMode?` (`{ label: string, lock: boolean? }`, see [Edit Mode](#edit-mode)) | |
 | `MovableHandle` | `lock(locked: boolean)`, `isLocked()`, `reset()`, `restore()`, `save()` | A locked frame cannot be moved, resized or scaled with the mouse; the built-in grip is hidden (decision S24). |
-| `FramePosition` | `{ point: AnchorPoint, relativePoint: AnchorPoint, x: number, y: number, width: number?, height: number?, scale: number? }` | Positions are always stored relative to `UIParent`, never to named frames that may not exist on the next load |
+| `FramePosition` | `{ point: AnchorPoint, relativePoint: AnchorPoint, x: number, y: number, width: number?, height: number?, scale: number?, layouts: { [string]: FramePosition }? }` | Positions are always stored relative to `UIParent`, never to named frames that may not exist on the next load |
 
 Semantics:
 
@@ -58,6 +58,34 @@ Semantics:
 - A built-in resize grip (bottom-right) is created when `resize` is given
   without `grip`, with the client's chat-frame size grabber textures
   (decision S17).
+
+### Edit Mode
+
+With `editMode = { label = … }` the frame joins the client's Edit Mode, which
+every active client has (decision S36):
+
+```wowlua
+frames.movable(bar, { store = db, key = "bar", editMode = { label = "MyAddon Bar" } })
+```
+
+- **In Edit Mode** the frame shows the client's selection overlay
+  (`EditModeSystemSelectionTemplate`): highlighted like Blizzard's frames, with
+  `label` as its name, and selected on click (which deselects the others).
+  It is dragged through the overlay; the resize grip sits above the overlay,
+  and `scaleWheel` works on it.
+- **Per layout.** A save in Edit Mode stores the position under the active
+  layout's name in `layouts`, and as the top-level fields. A layout without
+  its own position uses the top-level fields (the last position saved).
+  Switching layouts, or reverting Edit Mode's changes, moves the frame to that
+  layout's position.
+- **Saved at once.** Positions are saved when the drag ends, like
+  LibEditMode's, not with Edit Mode's Save button; leaving Edit Mode without
+  saving does not undo them.
+- **Locked outside Edit Mode**, so the player arranges frames in one place;
+  `lock = false` keeps the frame movable outside Edit Mode too (then
+  `MovableHandle:lock` applies there).
+- On a client without Edit Mode (`EditModeManagerFrame` missing) the option is
+  ignored and the frame is an ordinary movable frame.
 
 ## bindings
 

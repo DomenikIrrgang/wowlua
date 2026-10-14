@@ -386,10 +386,11 @@ menus and lists, then the widget themes.
   messages from the standard library alone; a test runs it in the mock
   client (login, settings page, minimap button and compartment entry, a
   key press, a ping answered over addon messages).
-- S4 in progress (patterns found across the corpus): `table` and `format`
-  done 2026-10-15 (decision S32); `version` (S33), `alert` and `links` done
-  2026-10-15; `unit.roster`, `events.bucket` and `launcher.dataSource` done
-  2026-10-15 (S34); `secure` done 2026-10-15 (S35).
+- S4 complete 2026-10-15 (patterns found across the corpus): `table` and
+  `format` (decision S32), `version` (S33), `alert`, `links`, `unit.roster`,
+  `events.bucket` and `launcher.dataSource` (S34), `secure` (S35), and Edit
+  Mode on `frames.movable` (S36). Not yet run in game (the WoW: Forever beta
+  was down); StdTest has suites and guided steps for all of them.
 
 ## M9: Test runner, language server, formatter
 

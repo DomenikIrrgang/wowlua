@@ -55,6 +55,11 @@ interface MockClient
     script: (frame: any, name: string, ...any) -> ()
     fire: (event: string, ...any) -> ()
     updateStateDrivers: () -> ()
+    editMode: (active: boolean) -> ()
+    editModeSwitch: (layout: string) -> ()
+    editModeLayout: string
+    editModeCleared: number
+    selectionOf: (frame: any) -> any
     stateDrivers: any[]
     loadAddon: (name: string | number) -> ()
     advance: (sec: number?) -> ()
