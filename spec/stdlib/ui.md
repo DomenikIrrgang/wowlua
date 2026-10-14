@@ -286,5 +286,9 @@ launcher.register({
 - **Look.** The built-in minimap button looks like the client's own minimap
   buttons by default. `theme` in `register`, or `launcher.setTheme(theme)`,
   restyles it with a `WidgetTheme`
-  ([Interface: widget themes](interface.md#widget-themes)). A button drawn by
+  ([Interface: widget themes](interface.md#widget-themes)) (decision S31):
+  `colors.border` tints the ring and `colors.background` the disc behind the
+  icon; `button = "flat"` replaces the ring with a plain round disc in the
+  background color and a thin round border in the border color
+  (`borderSize` thickens it). `setTheme(nil)` returns to the client's look. A button drawn by
   LibDBIcon, the Addon Compartment entry and LDB displays are not themed.

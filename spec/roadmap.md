@@ -377,7 +377,10 @@ menus and lists, then the widget themes.
   2026-10-15 (a chainable `MenuBuilder` over MenuUtil: titles, buttons,
   checkboxes, radios, submenus, dividers, disabled entries). `list` done
   2026-10-15 (ScrollBox holders showing pooled rows of a widget class,
-  selection, refresh, scrolling; the mock client has a ScrollBox).
+  selection, refresh, scrolling; the mock client has a ScrollBox). Widget
+  themes done 2026-10-15 for dialogs and the launcher's built-in minimap
+  button (decision S31). **S3 is complete**; its in-game run is pending
+  (the WoW: Forever beta was down), StdTest has suites for every module.
 
 ## M9: Test runner, language server, formatter
 

@@ -56,6 +56,13 @@ s:test("hiding and showing the button", function(t)
     if b then t:ok(b:IsShown(), "shown again") end
 end)
 
+s:test("themes restyle the built-in button", function(t)
+    launcher.setTheme({ colors = { border = { 0.2, 0.6, 1 }, background = { 0, 0, 0, 0.8 } } })
+    launcher.setTheme({ button = "flat", colors = { border = { 1, 0.8, 0.2 } } })
+    launcher.setTheme(nil)
+    t:ok(#t:errors() == 0, "no errors switching looks")
+end)
+
 local g = suite("launcher (guided)", "guided")
 
 g:test("a real click on the minimap button", function(t)

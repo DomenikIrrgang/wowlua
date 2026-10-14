@@ -4179,6 +4179,14 @@ entry.func(nil, { buttonName = "MiddleButton" })
 StdLauncher.launcher.setLabel("Std 2")
 C(entry.text == "Std 2", "the entry's label")
 C(not pcall(StdLauncher.again, { icon = "x", label = "y", onClick = function() end }), "register once")
+-- Themes: tinted, flat, and back.
+C(b.ring.shown and b.disc.shown and b.flatDisc == nil, "the client's look")
+StdLauncher.launcher.setTheme({ colors = { border = { 1, 0, 0 }, background = { 0, 0, 1, 0.5 } } })
+C(b.ring.vertex[1] == 1 and b.ring.vertex[2] == 0 and b.disc.vertex[3] == 1 and b.disc.vertex[4] == 0.5, "tinted ring and disc")
+StdLauncher.launcher.setTheme({ button = "flat", colors = { border = { 0, 1, 0 } } })
+C(not b.ring.shown and not b.disc.shown and b.flatDisc.shown and b.flatBorder.vertex[2] == 1, "flat: a disc and a border")
+StdLauncher.launcher.setTheme(nil)
+C(b.ring.shown and b.disc.shown and not b.flatDisc.shown and b.ring.vertex[2] == 1, "back to the client's look")
 "#,
     );
     assert_eq!(

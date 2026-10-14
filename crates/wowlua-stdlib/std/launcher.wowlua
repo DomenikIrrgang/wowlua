@@ -5,6 +5,7 @@
 -- (`hide`, `minimapPos`), so switching between them keeps it.
 import isLoggedIn from "wowlua:lifecycle"
 import callIn from "wowlua:errors"
+import type WidgetTheme from "wowlua:frames"
 
 local addonName, ns = ...
 local wl = ns.__wowlua
@@ -17,6 +18,8 @@ type Options = {
     minimap?: { store: table, key: string },
     compartment?: boolean,
     ldb?: boolean,
+    --- Restyles the built-in minimap button (decision S31).
+    theme?: WidgetTheme,
 }
 
 --- LibDBIcon's position table.
@@ -139,6 +142,11 @@ end
 -- cropped icons).
 class MinimapButton extends Button
     readonly icon: Texture
+    private readonly ring: Texture
+    private readonly disc: Texture
+    -- The flat look's round border and disc, made when first needed.
+    private flatBorder?: Texture
+    private flatDisc?: Texture
 
     constructor(texture: string)
         super(addonName .. "MinimapButton", Minimap)
@@ -152,16 +160,52 @@ class MinimapButton extends Button
         overlay:SetSize(50, 50)
         overlay:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
         overlay:SetPoint("TOPLEFT")
+        self.ring = overlay
         local background = self:CreateTexture(nil, "BACKGROUND")
         background:SetSize(24, 24)
         background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
         background:SetPoint("CENTER", self, "CENTER", 0, 1)
+        self.disc = background
         local icon = self:CreateTexture(nil, "ARTWORK")
         icon:SetSize(18, 18)
         icon:SetTexture(texture)
         icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
         icon:SetPoint("CENTER", self, "CENTER", 0, 1)
         self.icon = icon
+    end
+
+    -- A round texture of `size` in `color` (masked to a circle).
+    private function round(size: number, layer: DrawLayer, sublevel: number): Texture
+        const t = self:CreateTexture(nil, layer, nil, sublevel)
+        t:SetSize(size, size)
+        t:SetPoint("CENTER", self, "CENTER", 0, 1)
+        t:SetTexture("Interface\\Buttons\\WHITE8X8")
+        const mask = self:CreateMaskTexture()
+        mask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+        mask:SetAllPoints(t)
+        t:AddMaskTexture(mask)
+        return t
+    end
+
+    --- The client's look tinted by the theme's colors, or with
+    --- `button = "flat"` a plain round disc with a thin border.
+    function applyTheme(theme: WidgetTheme?)
+        const border = theme?.colors?.border
+        const background = theme?.colors?.background
+        const flat = theme?.button == "flat"
+        self.ring:SetShown(not flat)
+        self.disc:SetShown(not flat)
+        self.ring:SetVertexColor(border?.[1] ?? 1, border?.[2] ?? 1, border?.[3] ?? 1, border?.[4] ?? 1)
+        self.disc:SetVertexColor(background?.[1] ?? 1, background?.[2] ?? 1, background?.[3] ?? 1, background?.[4] ?? 1)
+        if flat then
+            const edge = self.flatBorder ?? self:round(26, "BACKGROUND", 0)
+            const disc = self.flatDisc ?? self:round(24 - 2 * ((theme?.borderSize ?? 1) - 1), "BACKGROUND", 1)
+            self.flatBorder, self.flatDisc = edge, disc
+            edge:SetVertexColor(border?.[1] ?? 0.5, border?.[2] ?? 0.5, border?.[3] ?? 0.5, border?.[4] ?? 1)
+            disc:SetVertexColor(background?.[1] ?? 0, background?.[2] ?? 0, background?.[3] ?? 0, background?.[4] ?? 0.85)
+        end
+        self.flatBorder?:SetShown(flat)
+        self.flatDisc?:SetShown(flat)
     end
 
     @script("OnClick")
@@ -238,6 +282,7 @@ local function create()
             dbicon:Register(addonName, dataObject, position())
         else
             button = MinimapButton.new(o.icon)
+            button:applyTheme(o.theme)
             place()
         end
         applyVisibility()
@@ -327,4 +372,12 @@ export function refresh()
         place()
     end
     applyVisibility()
+end
+
+--- Restyles the built-in minimap button (nil: the client's look).
+export function setTheme(theme: WidgetTheme?)
+    if opts then
+        opts.theme = theme
+    end
+    button?:applyTheme(theme)
 end

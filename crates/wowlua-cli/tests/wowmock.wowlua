@@ -141,6 +141,7 @@ class MockFrame
     protected: boolean = false
     resizeBounds?: number[]
     enabled: boolean = true
+    vertex?: number[]
 
     constructor(kind: string, name: string?, parent: any)
         self.kind = kind
@@ -396,6 +397,13 @@ class MockFrame
     function SetFrameLevel(...: any) end
     function SetMovable(...: any) end
     function SetResizable(...: any) end
+    function SetVertexColor(r: number, g: number, b: number, a: number?)
+        self.vertex = { r, g, b, a ?? 1 }
+    end
+    function CreateMaskTexture(): MockFrame
+        return MockFrame.new("MaskTexture", nil, self)
+    end
+    function AddMaskTexture(...: any) end
     function Click(button: string?)
         Mock.script(self, "OnClick", button ?? "LeftButton")
     end
