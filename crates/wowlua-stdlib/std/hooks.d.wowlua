@@ -1,6 +1,6 @@
 -- Compiler behavior of `wowlua:hooks` (spec stdlib "hooks"): the hook
 -- decorators register the final function value.
 @intrinsic("hooks.hook")
-declare function hook(a: any, b: any?, c: any?, d: any?): any
+declare global hook: any
 @intrinsic("hooks.hookScript")
-declare function hookScript(frame: any, script: string, c: any?, d: any?): any
+declare global hookScript: any

@@ -2,7 +2,7 @@
 -- console loaded. Its look follows the SuuUI design system: neutral
 -- surfaces, gilt hairlines, `arcane` for what is chosen, `amber` and
 -- `ember` only for warnings and errors.
-local function buildDevWindow(console: any, reg: any): any
+local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): Frame
 	local C = {
 		glass = { 0.075, 0.067, 0.086, 0.94 },
 		sunk = { 0.082, 0.071, 0.059, 1 },
@@ -296,7 +296,8 @@ local function buildDevWindow(console: any, reg: any): any
 			b.fs:SetText(name)
 			b.fs:SetTextColor(unpack(chosen and C.ink or C.inkMuted))
 			b.mark:SetShown(chosen)
-			b.info:SetText(reg.addons[name].info.version or "")
+			local entry = reg.addons[name]
+			b.info:SetText(entry and entry.info.version or "")
 			b:SetScript("OnClick", function()
 				selected = name
 				addonList:Hide()
@@ -1179,7 +1180,13 @@ local VERSION = (wl.devInfo and wl.devInfo.runtime) or 0
 
 -- This runtime's console replaces older ones.
 local function install()
-local console = {}
+-- Its functions are defined below; the window's are no-ops until it
+-- exists.
+local console = {
+	refresh = function() end,
+	setTab = function() end,
+	saveState = function() end,
+} :: WowluaConsole
 reg.version = VERSION
 reg.console = console
 

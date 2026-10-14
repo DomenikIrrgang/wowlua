@@ -1,6 +1,6 @@
 -- Compiler behavior of `wowlua:slash` (spec stdlib "slash"): `@slash`
 -- registers the final function value.
 @intrinsic("slash.slash")
-declare function slash(...: string): any
+declare global slash: any
 @intrinsic("slash.router")
-declare function router(commands: { [string]: any }): any
+declare global router: any

@@ -21,6 +21,10 @@ libraries such as Ace3, LibDBIcon or LibSerialize.
   intrinsic-checked by the compiler. The modules are checked in strict mode
   whatever the project's settings; what they share with the runtime
   (`ns.__wowlua`) is typed by the compiler's `WowluaRuntime` interface.
+  Their objects are classes where they hold state (pools, callback registries,
+  comm channels, slash routers, the options page, the built-in minimap button
+  as a widget class), so an addon importing them includes the runtime's class
+  slice.
 - **Compile-time where possible.** Framework decorators generate registration
   code at compile time, and debug features disappear in release builds.
 - **Flavor-aware.** Modules adapt to the flavor at compile time. A module that

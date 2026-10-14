@@ -24,7 +24,54 @@ declare class LibStubLibrary
     function GetLibrary(major: string, silent: boolean?): (table?, number?)
     function IterateLibraries(): ((t: table, key: string?) -> (string?, table), table, nil)
 end
-declare global LibStub: LibStubLibrary & ((major: string, silent: boolean?) -> any)
+-- The common libraries, by name: `LibStub("LibDBIcon-1.0")` is typed (a
+-- silent lookup may give nil). Members not declared here read as `any`.
+
+--- A LibDataBroker data object (any attributes; these are the common ones).
+type LibDataBrokerObject = {
+    type?: string,
+    text?: string,
+    label?: string,
+    icon?: string | number,
+    value?: any,
+    OnClick?: (frame: Frame, button: string) -> (),
+    OnTooltipShow?: (tooltip: GameTooltip) -> (),
+    OnEnter?: (frame: Frame) -> (),
+    OnLeave?: (frame: Frame) -> (),
+    [string]: any,
+}
+type LibDataBroker = {
+    NewDataObject: (self: LibDataBroker, name: string, data: table?) -> LibDataBrokerObject?,
+    GetDataObjectByName: (self: LibDataBroker, name: string) -> LibDataBrokerObject?,
+    GetNameByDataObject: (self: LibDataBroker, object: LibDataBrokerObject) -> string?,
+    DataObjectIterator: (self: LibDataBroker) -> ((...any) -> (string?, LibDataBrokerObject), table, nil),
+    [string]: any,
+}
+--- LibDBIcon's saved position table.
+type LibDBIconPosition = { hide?: boolean, minimapPos?: number, lock?: boolean, [string]: any }
+type LibDBIcon = {
+    Register: (self: LibDBIcon, name: string, object: LibDataBrokerObject, db: LibDBIconPosition?, customCompartmentIcon: (string | number)?) -> (),
+    Show: (self: LibDBIcon, name: string) -> (),
+    Hide: (self: LibDBIcon, name: string) -> (),
+    Lock: (self: LibDBIcon, name: string) -> (),
+    Unlock: (self: LibDBIcon, name: string) -> (),
+    IsRegistered: (self: LibDBIcon, name: string) -> boolean,
+    Refresh: (self: LibDBIcon, name: string, db: LibDBIconPosition?) -> (),
+    GetMinimapButton: (self: LibDBIcon, name: string) -> Button?,
+    GetButtonList: (self: LibDBIcon) -> string[],
+    IsButtonCompartmentAvailable: (self: LibDBIcon) -> boolean,
+    IsButtonInCompartment: (self: LibDBIcon, name: string) -> boolean,
+    AddButtonToCompartment: (self: LibDBIcon, name: string, customIcon: (string | number)?) -> (),
+    RemoveButtonFromCompartment: (self: LibDBIcon, name: string) -> (),
+    [string]: any,
+}
+
+declare global LibStub: LibStubLibrary
+    & ((major: "LibDataBroker-1.1", silent: false?) -> LibDataBroker)
+    & ((major: "LibDataBroker-1.1", silent: boolean?) -> LibDataBroker?)
+    & ((major: "LibDBIcon-1.0", silent: false?) -> LibDBIcon)
+    & ((major: "LibDBIcon-1.0", silent: boolean?) -> LibDBIcon?)
+    & ((major: string, silent: boolean?) -> any)
 
 -- The handles of `C_Timer.NewTimer` and `C_Timer.NewTicker` (Blizzard's
 -- documentation types them as the callback).
@@ -34,3 +81,128 @@ declare class TimerHandle
 end
 declare class TickerHandle extends TimerHandle
 end
+
+-- Blizzard's Settings API (Blizzard_Settings_Shared): the objects it hands
+-- to addons, and the `Settings` functions they use. Members not declared
+-- here read as `any`.
+type SettingsVarType = "boolean" | "string" | "number"
+
+interface SettingsCategoryMixin
+    function GetID(): number
+    function GetName(): string
+    function SetName(name: string)
+    function GetOrder(): number
+    function SetOrder(order: number)
+    function GetQualifiedName(): string
+    function GetParentCategory(): SettingsCategoryMixin?
+    function SetParentCategory(category: SettingsCategoryMixin)
+    function HasParentCategory(): boolean
+    function GetSubcategories(): SettingsCategoryMixin[]
+    function HasSubcategories(): boolean
+    function CreateSubcategory(name: string, description: string?): SettingsCategoryMixin
+    function SetExpanded(expanded: boolean)
+    function IsExpanded(): boolean
+    function ShouldSortAlphabetically(): boolean
+    function SetShouldSortAlphabetically(should: boolean)
+end
+
+interface SettingMixin
+    function GetName(): string
+    function GetVariable(): string
+    function GetVariableType(): SettingsVarType
+    function GetValue(): any
+    function SetValue(value: any, immediate: boolean?)
+    function GetDefaultValue(): any
+    function SetValueToDefault()
+    function NotifyUpdate()
+    function IsModified(): boolean
+    function SetLocked(locked: boolean)
+    function IsLocked(): boolean
+    function SetValueChangedCallback(callback: (setting: SettingMixin, value: any) -> ())
+end
+
+--- An element of a vertical settings layout. Addons may replace
+--- `InitFrame`, `Resetter` and `GetExtent` to draw rows of their own.
+interface SettingsListElementInitializer
+    InitFrame: (self: SettingsListElementInitializer, frame: Frame) -> ()
+    Resetter: (self: SettingsListElementInitializer, frame: Frame) -> ()
+    GetExtent: (self: SettingsListElementInitializer) -> number
+    function Indent()
+    function GetData(): table
+    function GetName(): string?
+    function GetSetting(): SettingMixin?
+    function SetSetting(setting: SettingMixin)
+    function SetParentInitializer(parent: SettingsListElementInitializer, modifyPredicate: (() -> boolean)?)
+    function GetParentInitializer(): SettingsListElementInitializer?
+    function AddModifyPredicate(func: () -> boolean)
+end
+
+interface SettingsVerticalLayoutMixin
+    function GetInitializers(): SettingsListElementInitializer[]
+    function IsEmpty(): boolean
+    function AddInitializer(initializer: SettingsListElementInitializer)
+    function AddMirroredInitializer(initializer: SettingsListElementInitializer)
+end
+
+interface SettingsCanvasLayoutMixin
+    function GetFrame(): Frame
+    function AddAnchorPoint(point: string, x: number, y: number)
+end
+
+interface SettingsSliderOptionsMixin
+    minValue: number
+    maxValue: number
+    steps: number
+    function SetLabelFormatter(labelType: number, formatter: ((value: number) -> string) | string)
+end
+
+interface SettingsControlTextContainerMixin
+    function Add(value: any, label: string, tooltip: string?): table
+    function AddCheckbox(value: any, label: string, tooltip: string?): table
+    function GetData(): table[]
+end
+
+type SettingsAPI = {
+    VarType: { Boolean: "boolean", String: "string", Number: "number" },
+    Default: { True: true, False: false },
+    CreateCategory: (name: string) -> SettingsCategoryMixin,
+    RegisterCategory: (category: SettingsCategoryMixin, group: any?) -> (),
+    RegisterAddOnCategory: (category: SettingsCategoryMixin) -> (),
+    OpenToCategory: (categoryID: number | string, scrollToElementName: string?) -> (),
+    GetCategory: (name: string) -> SettingsCategoryMixin?,
+    RegisterVerticalLayoutCategory: (name: string) -> (SettingsCategoryMixin, SettingsVerticalLayoutMixin),
+    RegisterVerticalLayoutSubcategory: (parent: SettingsCategoryMixin, name: string) -> (SettingsCategoryMixin, SettingsVerticalLayoutMixin),
+    RegisterCanvasLayoutCategory: (frame: Frame, name: string) -> (SettingsCategoryMixin, SettingsCanvasLayoutMixin),
+    RegisterCanvasLayoutSubcategory: (parent: SettingsCategoryMixin, frame: Frame, name: string) -> (SettingsCategoryMixin, SettingsCanvasLayoutMixin),
+    RegisterInitializer: (category: SettingsCategoryMixin, initializer: SettingsListElementInitializer) -> (),
+    RegisterAddOnSetting: (category: SettingsCategoryMixin, variable: string, variableKey: string, variableTbl: table, variableType: SettingsVarType, name: string, defaultValue: any) -> SettingMixin,
+    RegisterProxySetting: (category: SettingsCategoryMixin, variable: string, variableType: SettingsVarType, name: string, defaultValue: any, getValue: () -> any, setValue: (value: any) -> ()) -> SettingMixin,
+    RegisterCVarSetting: (category: SettingsCategoryMixin, variable: string, variableType: SettingsVarType, name: string) -> SettingMixin,
+    GetSetting: (variable: string) -> SettingMixin?,
+    GetValue: (variable: string) -> any,
+    SetValue: (variable: string, value: any, force: boolean?) -> (),
+    NotifyUpdate: (variable: string) -> (),
+    SetOnValueChangedCallback: (variable: string, callback: (...any) -> (), owner: any?) -> any,
+    CreateControlTextContainer: () -> SettingsControlTextContainerMixin,
+    CreateSliderOptions: (minValue: number?, maxValue: number?, rate: number?) -> SettingsSliderOptionsMixin,
+    CreateElementInitializer: (frameTemplate: string, data: table?) -> SettingsListElementInitializer,
+    CreateSettingInitializer: (frameTemplate: string, data: table?) -> SettingsListElementInitializer,
+    CreatePanelInitializer: (frameTemplate: string, data: table?) -> SettingsListElementInitializer,
+    CreateCheckbox: (category: SettingsCategoryMixin, setting: SettingMixin, tooltip: string?) -> SettingsListElementInitializer,
+    CreateCheckboxWithOptions: (category: SettingsCategoryMixin, setting: SettingMixin, options: any, tooltip: string?) -> SettingsListElementInitializer,
+    CreateSlider: (category: SettingsCategoryMixin, setting: SettingMixin, options: SettingsSliderOptionsMixin, tooltip: string?) -> SettingsListElementInitializer,
+    CreateDropdown: (category: SettingsCategoryMixin, setting: SettingMixin, options: () -> table[], tooltip: string?) -> SettingsListElementInitializer,
+    CreateColorSwatch: (category: SettingsCategoryMixin, setting: SettingMixin, tooltip: string?, options: any?) -> SettingsListElementInitializer,
+    [string]: any,
+}
+declare global Settings: SettingsAPI
+
+--- The 3D world's frame, which the client creates (no FrameXML file
+--- declares it on every flavor).
+declare global WorldFrame: Frame
+
+-- The chat windows (ScrollingMessageFrames). Members beyond MessageFrame's
+-- read as `any`.
+type ChatFrame = MessageFrame & { [string]: any }
+declare global DEFAULT_CHAT_FRAME: ChatFrame
+declare global SELECTED_CHAT_FRAME: ChatFrame

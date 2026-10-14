@@ -44,22 +44,29 @@ const BYTES_PER_SECOND = 800
 type Priority = "alert" | "normal" | "bulk"
 type Format = "wowlua" | "acecomm"
 
---- A channel with its handlers and its share of the throttle.
-interface ChannelState extends Channel
-    format: Format
-    receiveOwn: boolean
-    handlers: ((msg: string, sender: string, distribution: string) -> ())[]
-    objectHandlers: ((value: any, sender: string, distribution: string) -> ())[]
-    budget: number
-    budgetTime: number
+--- The parts of ChatThrottleLib (embedded by other addons) used here.
+type CTLSend = (
+    self: ChatThrottleLibrary,
+    priority: string,
+    prefix: string,
+    text: string,
+    chatType: string,
+    target: string?,
+    queueName: string?,
+    callback: ((arg: any, didSend: boolean?) -> ())?,
+    callbackArg: any
+) -> ()
+interface ChatThrottleLibrary
+    SendAddonMessage?: CTLSend
+    SendAddonMessageLogged?: CTLSend
 end
 
 --- One sent message: its progress.
 type Message = { sent: number, total: number, callback?: ((sent: number, total: number) -> ()), failed: boolean }
 
-type Chunk = { channel: ChannelState, text: string, distribution: string, target?: string, logged: boolean, message: Message }
+type Chunk = { channel: CommChannel, text: string, distribution: string, target?: string, logged: boolean, message: Message }
 
-local channels: { [string]: ChannelState } = {}
+local channels: { [string]: CommChannel } = {}
 local queues: { alert: Chunk[], normal: Chunk[], bulk: Chunk[] } = { alert = {}, normal = {}, bulk = {} }
 local pumping = false
 local byteBudget = BYTES_BURST
@@ -223,17 +230,17 @@ local function queueOf(opts: SendOptions?): Chunk[]
     return queues.normal
 end
 
-local function sendChunks(channel: ChannelState, chunks: string[], distribution: string, target: string?, opts: SendOptions?): SendStatus
+local function sendChunks(channel: CommChannel, chunks: string[], distribution: string, target: string?, opts: SendOptions?): SendStatus
     local total = 0
     for _, text in ipairs(chunks) do
         total += #text
     end
     local message: Message = { sent = 0, total = total, callback = opts and opts.callback, failed = false }
     local logged = opts and opts.logged or false
-    -- ChatThrottleLib shares the bandwidth with every addon using it (an
-    -- untyped library).
-    local ctl: any = _G.ChatThrottleLib
-    if ctl and ctl.SendAddonMessage and not inLockdown() then
+    -- ChatThrottleLib shares the bandwidth with every addon using it.
+    local ctl = _G.ChatThrottleLib :: ChatThrottleLibrary?
+    local plainSend = ctl and ctl.SendAddonMessage
+    if ctl and plainSend and not inLockdown() then
         local priority = (opts and opts.priority or "normal"):upper()
         local pending = #chunks
         for _, text in ipairs(chunks) do
@@ -243,7 +250,7 @@ local function sendChunks(channel: ChannelState, chunks: string[], distribution:
                     delivered({ channel = channel, text = text, distribution = distribution, target = target, logged = logged, message = message })
                 end
             end
-            local sendFn = logged and ctl.SendAddonMessageLogged or ctl.SendAddonMessage
+            local sendFn = logged and ctl.SendAddonMessageLogged or plainSend
             sendFn(ctl, priority, channel.prefix, text, distribution, target, channel.prefix, done, nil)
         end
         return pending == 0 and "sent" or "queued"
@@ -268,7 +275,7 @@ end
 -- Partial messages by sender and prefix.
 local partial: { [string]: string[] } = {}
 
-local function deliver(channel: ChannelState, msg: string, sender: string, distribution: string)
+local function deliver(channel: CommChannel, msg: string, sender: string, distribution: string)
     if msg:sub(1, #OBJECT) == OBJECT then
         local packed = msg:sub(#OBJECT + 1)
         if channel.format == "acecomm" then
@@ -363,6 +370,53 @@ local function listen()
     end
 end
 
+--- A channel with its handlers and its share of the throttle.
+class CommChannel implements Channel
+    readonly prefix: string
+    readonly format: Format
+    readonly receiveOwn: boolean
+    handlers: ((msg: string, sender: string, distribution: string) -> ())[] = {}
+    objectHandlers: ((value: any, sender: string, distribution: string) -> ())[] = {}
+    --- The built-in throttle's messages left, and when it was refilled.
+    budget: number = PREFIX_BURST
+    budgetTime: number
+
+    constructor(prefix: string, format: Format, receiveOwn: boolean)
+        self.prefix = prefix
+        self.format = format
+        self.receiveOwn = receiveOwn
+        self.budgetTime = now()
+    end
+
+    function send(msg: string, distribution: Distribution, target: string?, opts: SendOptions?): SendStatus
+        local dist = resolve(distribution)
+        if not dist then
+            return "dropped"
+        end
+        if self.format == "acecomm" and msg:find("%z") then
+            error("comm: AceComm-format messages cannot contain NUL bytes", 2)
+        end
+        return sendChunks(self, chunksOf(msg, self.format), dist, target, opts)
+    end
+
+    function onMessage(fn: (msg: string, sender: string, distribution: string) -> ())
+        self.handlers[#self.handlers + 1] = fn
+    end
+
+    function sendObject(value: any, distribution: Distribution, target: string?, opts: SendOptions?): SendStatus
+        local payload = OBJECT .. compress(encode(value))
+        if self.format == "acecomm" then
+            -- AceComm's format carries no NUL bytes.
+            payload = OBJECT .. toAddonChannel(payload:sub(#OBJECT + 1))
+        end
+        return self:send(payload, distribution, target, opts)
+    end
+
+    function onObject(fn: (value: any, sender: string, distribution: string) -> ())
+        self.objectHandlers[#self.objectHandlers + 1] = fn
+    end
+end
+
 --- A channel on `prefix` (registered with the client; at most 16
 --- characters).
 export function open(prefix: string, opts: { format?: Format, receiveOwn?: boolean }?): Channel
@@ -375,40 +429,7 @@ export function open(prefix: string, opts: { format?: Format, receiveOwn?: boole
     end
     C_ChatInfo.RegisterAddonMessagePrefix(prefix)
     listen()
-    local channel: ChannelState
-    channel = {
-        prefix = prefix,
-        format = opts and opts.format or "wowlua",
-        receiveOwn = opts and opts.receiveOwn or false,
-        handlers = {},
-        objectHandlers = {},
-        budget = PREFIX_BURST,
-        budgetTime = now(),
-        send = function(_: Channel, msg: string, distribution: Distribution, target: string?, sendOpts: SendOptions?): SendStatus
-            local dist = resolve(distribution)
-            if not dist then
-                return "dropped"
-            end
-            if channel.format == "acecomm" and msg:find("%z") then
-                error("comm: AceComm-format messages cannot contain NUL bytes", 2)
-            end
-            return sendChunks(channel, chunksOf(msg, channel.format), dist, target, sendOpts)
-        end,
-        onMessage = function(_: Channel, fn: (msg: string, sender: string, distribution: string) -> ())
-            channel.handlers[#channel.handlers + 1] = fn
-        end,
-        sendObject = function(self: Channel, value: any, distribution: Distribution, target: string?, sendOpts: SendOptions?): SendStatus
-            local payload = OBJECT .. compress(encode(value))
-            if channel.format == "acecomm" then
-                -- AceComm's format carries no NUL bytes.
-                payload = OBJECT .. toAddonChannel(payload:sub(#OBJECT + 1))
-            end
-            return self:send(payload, distribution, target, sendOpts)
-        end,
-        onObject = function(_: Channel, fn: (value: any, sender: string, distribution: string) -> ())
-            channel.objectHandlers[#channel.objectHandlers + 1] = fn
-        end,
-    }
+    local channel = CommChannel.new(prefix, opts and opts.format or "wowlua", opts and opts.receiveOwn or false)
     channels[prefix] = channel
     return channel
 end

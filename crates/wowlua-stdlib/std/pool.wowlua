@@ -38,97 +38,102 @@ local function blocked(obj: any): boolean
         or false
 end
 
--- A pool that makes objects with `create` and resets them with `reset`;
--- at most `max` wait for reuse.
-local function makePool<T>(create: () -> T, reset: (obj: T) -> (), max: number?): Pool<T>
-    local acquired: { [T]: boolean } = {}
-    local waiting: T[] = {}
+--- A pool that makes objects with `create` and resets them with `reset`;
+--- at most `max` wait for reuse.
+class ObjectPool<T> implements Pool<T>
+    private readonly make: () -> T
+    private readonly clean: (obj: T) -> ()
+    private readonly max?: number
+    private acquired: { [T]: boolean } = {}
+    private waiting: T[] = {}
     -- Releases waiting for the end of combat.
-    local pending: { [T]: boolean } = {}
+    private pending: { [T]: boolean } = {}
 
-    local function misuse(what: string)
+    constructor(make: () -> T, clean: (obj: T) -> (), max: number?)
+        self.make = make
+        self.clean = clean
+        self.max = max
+    end
+
+    private function misuse(what: string)
         if wl.debug then
             error("pool: " .. what, 3)
         end
     end
 
-    local function finish(obj: T)
-        pending[obj] = nil
-        acquired[obj] = nil
-        reset(obj)
-        if max == nil or #waiting < max then
-            waiting[#waiting + 1] = obj
+    private function finish(obj: T)
+        self.pending[obj] = nil
+        self.acquired[obj] = nil
+        self.clean(obj)
+        if self.max == nil or #self.waiting < self.max then
+            self.waiting[#self.waiting + 1] = obj
         end
     end
 
-    local pool: Pool<T>
-    pool = {
-        acquire = function(_: Pool<T>): (T, boolean)
-            local obj = table.remove(waiting)
-            local created = false
-            if obj == nil then
-                obj = create()
-                created = true
-            end
-            acquired[obj] = true
-            return obj, created
-        end,
+    function acquire(): (T, boolean)
+        local obj = table.remove(self.waiting)
+        local created = false
+        if obj == nil then
+            obj = self.make()
+            created = true
+        end
+        self.acquired[obj] = true
+        return obj, created
+    end
 
-        release = function(_: Pool<T>, obj: T)
-            if not acquired[obj] then
-                misuse("released an object that is not acquired from this pool (released twice?)")
-                return
-            end
-            if pending[obj] then
-                misuse("released an object twice")
-                return
-            end
-            if blocked(obj) then
-                -- Hiding a protected frame in combat is blocked: later.
-                pending[obj] = true
-                defer(function()
-                    if pending[obj] then
-                        finish(obj)
-                    end
-                end)
-                return
-            end
-            finish(obj)
-        end,
-
-        releaseAll = function(self: Pool<T>)
-            local list: T[] = {}
-            for obj in pairs(acquired) do
-                if not pending[obj] then
-                    list[#list + 1] = obj
+    function release(obj: T)
+        if not self.acquired[obj] then
+            self:misuse("released an object that is not acquired from this pool (released twice?)")
+            return
+        end
+        if self.pending[obj] then
+            self:misuse("released an object twice")
+            return
+        end
+        if blocked(obj) then
+            -- Hiding a protected frame in combat is blocked: later.
+            self.pending[obj] = true
+            defer(function()
+                if self.pending[obj] then
+                    self:finish(obj)
                 end
-            end
-            for _, obj in ipairs(list) do
-                self:release(obj)
-            end
-        end,
+            end)
+            return
+        end
+        self:finish(obj)
+    end
 
-        active = function(_: Pool<T>): () -> T?
-            local list: T[] = {}
-            for obj in pairs(acquired) do
+    function releaseAll()
+        local list: T[] = {}
+        for obj in pairs(self.acquired) do
+            if not self.pending[obj] then
                 list[#list + 1] = obj
             end
-            local i = 0
-            return function(): T?
-                i += 1
-                return list[i]
-            end
-        end,
+        end
+        for _, obj in ipairs(list) do
+            self:release(obj)
+        end
+    end
 
-        count = function(_: Pool<T>): (number, number)
-            local n = 0
-            for _ in pairs(acquired) do
-                n += 1
-            end
-            return n, #waiting
-        end,
-    }
-    return pool
+    function active(): () -> T?
+        local list: T[] = {}
+        for obj in pairs(self.acquired) do
+            list[#list + 1] = obj
+        end
+        local i = 0
+        return function(): T?
+            i += 1
+            return list[i]
+        end
+    end
+
+    function count(): (number, number)
+        local n = 0
+        for _ in pairs(self.acquired) do
+            n += 1
+        end
+        return n, #self.waiting
+    end
 end
 
 local function resetFrame(frame: any)
@@ -143,21 +148,21 @@ end
 local function framePool(cls: any, ...: any): Pool<any>
     local n = select("#", ...)
     local args = { ... }
-    return makePool(function(): any
+    return ObjectPool.new(function(): any
         return cls.new(unpack(args, 1, n))
     end, resetFrame)
 end
 
 --- A pool of plain frames of `frameType` (with `template`, under `parent`).
 local function templatePool(frameType: FrameType, parent: Frame?, template: string?): Pool<Frame>
-    return makePool(function(): Frame
+    return ObjectPool.new(function(): Frame
         return CreateFrame(frameType, nil, parent, template)
     end, resetFrame)
 end
 
 --- A pool of tables, wiped when released; `opts.max` caps the tables kept.
 local function tablePool(opts: { max?: number }?): Pool<table>
-    return makePool(function(): table
+    return ObjectPool.new(function(): table
         return {}
     end, wipeTable, opts and opts.max)
 end

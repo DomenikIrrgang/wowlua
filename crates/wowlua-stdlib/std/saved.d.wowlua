@@ -1,4 +1,4 @@
 -- Compiler checks of `wowlua:saved` (spec stdlib "saved"): `bind` takes a
 -- literal name declared in the manifest, once.
 @intrinsic("saved.bind")
-declare function bind(name: string, opts: any): any
+declare global bind: any

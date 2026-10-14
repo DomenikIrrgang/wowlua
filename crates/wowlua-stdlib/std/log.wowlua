@@ -29,7 +29,7 @@ local function text(...: any): string
     return table.concat(parts, " ")
 end
 
-local function chatFrame(): any
+local function chatFrame(): ChatFrame?
     return DEFAULT_CHAT_FRAME
 end
 
@@ -108,7 +108,7 @@ wl.logs = {
     setLevel = setLevel,
 }
 
-local function say(frame: any, message: string)
+local function say(frame: MessageFrame?, message: string)
     local line = "|cff33ff99" .. addonName .. "|r: " .. message
     if frame then
         frame:AddMessage(line)
@@ -122,7 +122,7 @@ export const print = setmetatable({
     color = function(hex: string, ...: any)
         say(chatFrame(), "|cff" .. hex .. text(...) .. "|r")
     end,
-    to = function(frame: any, ...: any)
+    to = function(frame: MessageFrame?, ...: any)
         say(frame, text(...))
     end,
 }, {

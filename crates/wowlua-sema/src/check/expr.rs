@@ -618,7 +618,13 @@ impl Checker<'_> {
                         {
                             self.report("E2010", span, format!("`{name}` is read-only"));
                         }
-                        self.check_assignable(span, value, mem.ty);
+                        // A method's stored value takes `self` first.
+                        let want = if mem.kind == MemberKind::Method {
+                            self.env.with_self(mem.ty, m)
+                        } else {
+                            mem.ty
+                        };
+                        self.check_assignable(span, value, want);
                     }
                     None => {
                         if self.env.indexer_of(d).is_none() && self.env.def(d).kind != DefKind::Enum
@@ -699,6 +705,10 @@ impl Checker<'_> {
                     )
                 })
                 .collect();
+            // One table member (`string | string[]`): the literal is that one.
+            if tables.len() == 1 {
+                return self.table(fields, Some(tables[0]));
+            }
             if tables.len() >= 2 {
                 for m in tables {
                     let mark = self.diagnostics.len();

@@ -9,6 +9,14 @@ memory = {}
 local clock = debugprofilestop or function()
 	return os.clock() * 1000
 end
+--- A frame, animation or other script object (what compiled code passes).
+
+
+
+--- Frames have names; animations do not.
+
+
+
 local function record(bucket, key, detail, elapsed)
 	local s = bucket[key]
 	if not s then
@@ -27,9 +35,11 @@ local function timed(bucket, key, detail, start, ...)
 end
 -- A frame's label: its name, its wowlua class, or where it was set up.
 local function label(frame, location)
-	local name = type(frame) == "table" and frame.GetName and frame:GetName()
-	if name then
-		return name
+	if type(frame) == "table" and frame.GetName then
+		local name = frame:GetName()
+		if name then
+			return name
+		end
 	end
 	local classOf = wl.classOf
 	local cls = classOf and classOf(frame)

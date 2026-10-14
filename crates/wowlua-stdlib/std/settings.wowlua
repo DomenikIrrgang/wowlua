@@ -16,7 +16,7 @@ local wl = ns.__wowlua
 --- The registered options page.
 export interface SettingsCategory
     --- The category's id (set once the page exists).
-    id: any
+    id: number?
     function open()
     --- Re-reads every control from the store.
     function refresh()
@@ -92,7 +92,7 @@ export function custom(factory: (parent: Frame) -> Frame, opts: { height?: numbe
 end
 
 local registered = false
-local proxies: any[] = {}
+local proxies: SettingMixin[] = {}
 -- Variables in use: the Settings API takes each name once, and a field may
 -- have several controls (on a page and its subcategory).
 local variables: { [string]: boolean } = {}
@@ -112,15 +112,15 @@ local pendingOpen = false
 -- A row of arbitrary content: `build(holder)` once, shown in its row. The
 -- row is a plain frame (Blizzard's element templates need set-up of their
 -- own controls), so the list's initializer does nothing to it.
-local function element(layout: any, height: number, build: (holder: Frame) -> ())
-    local init: any = Settings.CreateElementInitializer("Frame", { name = "" })
+local function element(layout: SettingsVerticalLayoutMixin, height: number, build: (holder: Frame) -> ())
+    local init = Settings.CreateElementInitializer("Frame", { name = "" })
     local holder: Frame? = nil
     local baseInit = init.InitFrame
     local baseReset = init.Resetter
     init.GetExtent = function(): number
         return height
     end
-    init.InitFrame = function(self: any, frame: any)
+    init.InitFrame = function(self: SettingsListElementInitializer, frame: Frame)
         baseInit(self, frame)
         if not holder then
             local created = CreateFrame("Frame")
@@ -133,7 +133,7 @@ local function element(layout: any, height: number, build: (holder: Frame) -> ()
         holder:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
         holder:Show()
     end
-    init.Resetter = function(self: any, frame: any)
+    init.Resetter = function(self: SettingsListElementInitializer, frame: Frame)
         if holder then
             holder:Hide()
             holder:SetParent(nil)
@@ -158,7 +158,7 @@ type PageDef = {
     onChange?: ((key: string, value: any) -> ()),
 }
 
-local function addControls(def: PageDef, store: table, category: any, layout: any, controls: Control[])
+local function addControls(def: PageDef, store: table, category: SettingsCategoryMixin, layout: SettingsVerticalLayoutMixin, controls: Control[])
     local h = handle(store)
     local function default(key: string): any
         return h.__default and h:__default(key)
@@ -169,12 +169,12 @@ local function addControls(def: PageDef, store: table, category: any, layout: an
         end
     end
     -- A proxy setting reading and writing `store[key]`.
-    local function proxy(key: string, varType: any, label: string, default: any, get: () -> any, set: (any) -> ()): any
+    local function proxy(key: string, varType: SettingsVarType, label: string, default: any, get: () -> any, set: (any) -> ()): SettingMixin
         local setting = Settings.RegisterProxySetting(category, variableFor(key), varType, label, default, get, set)
         proxies[#proxies + 1] = setting
         return setting
     end
-    local function plain(key: string, label: string, varType: any): any
+    local function plain(key: string, label: string, varType: SettingsVarType): SettingMixin
         local value = default(key)
         if value == nil then
             value = store[key]
@@ -210,11 +210,11 @@ local function addControls(def: PageDef, store: table, category: any, layout: an
         elseif c.kind == "dropdown" then
             local first = c.opts.options[1]
             local valueType = first and type(first.value)
-            local varType = valueType == "number" and Settings.VarType.Number
+            local varType: SettingsVarType = valueType == "number" and Settings.VarType.Number
                 or valueType == "boolean" and Settings.VarType.Boolean
                 or Settings.VarType.String
             local choices = c.opts.options
-            local function options(): any
+            local function options(): table[]
                 local container = Settings.CreateControlTextContainer()
                 for _, option in ipairs(choices) do
                     container:Add(option.value, option.label)
@@ -227,7 +227,7 @@ local function addControls(def: PageDef, store: table, category: any, layout: an
             local alpha = c.opts.alpha == true
             local setting = proxy(key, Settings.VarType.String, c.opts.label, colorHex(default(key)), function(): any
                 return colorHex(store[key])
-            end, function(hex: any)
+            end, function(hex: string)
                 local picked = CreateColorFromHexString(hex)
                 local value = store[key]
                 value.r, value.g, value.b = picked.r, picked.g, picked.b
@@ -265,7 +265,7 @@ local function addControls(def: PageDef, store: table, category: any, layout: an
     end
 end
 
-local categoryId: any = nil
+local categoryId: number? = nil
 
 local function show()
     if InCombatLockdown() then
@@ -284,17 +284,22 @@ local function show()
     end
 end
 
-local page: SettingsCategory = {
-    id = nil,
-    open = function(_: SettingsCategory)
+--- The addon's one options page.
+class OptionsPage implements SettingsCategory
+    id: number? = nil
+
+    function open()
         show()
-    end,
-    refresh = function(_: SettingsCategory)
+    end
+
+    function refresh()
         for _, setting in ipairs(proxies) do
             setting:NotifyUpdate()
         end
-    end,
-}
+    end
+end
+
+local page = OptionsPage.new()
 
 --- Registers the addon's options page (once): created when the store has
 --- loaded.

@@ -296,7 +296,8 @@ local function buildDevWindow(console, reg)
 			b.fs:SetText(name)
 			b.fs:SetTextColor(unpack(chosen and C.ink or C.inkMuted))
 			b.mark:SetShown(chosen)
-			b.info:SetText(reg.addons[name].info.version or "")
+			local entry = reg.addons[name]
+			b.info:SetText(entry and entry.info.version or "")
 			b:SetScript("OnClick", function()
 				selected = name
 				addonList:Hide()
@@ -1179,7 +1180,13 @@ local VERSION = (wl.devInfo and wl.devInfo.runtime) or 0
 
 -- This runtime's console replaces older ones.
 local function install()
-	local console = {}
+	-- Its functions are defined below; the window's are no-ops until it
+	-- exists.
+	local console = {
+	refresh = function() end,
+	setTab = function() end,
+	saveState = function() end
+	}
 	reg.version = VERSION
 	reg.console = console
 

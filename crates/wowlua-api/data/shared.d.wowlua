@@ -6703,7 +6703,6 @@ declare global ChatFrameMenuButtonMixin: table
 declare global DisplayInterfaceActionBlockedMessage: (...any) -> ...any
 declare global ChatFrameUtil: table
 declare global SELECTED_DOCK_FRAME: any
-declare global SELECTED_CHAT_FRAME: any
 declare global DOCKED_CHAT_FRAMES: table
 declare global DOCK_COPY: table
 declare global MOVING_CHATFRAME: any
@@ -6854,7 +6853,6 @@ declare global CHAT_CATEGORY_LIST: table
 declare global CHAT_INVERTED_CATEGORY_LIST: table
 declare global ChatEdit_CustomTabPressed: (...any) -> ...any
 declare global ChatTypeGroupInverted: table
-declare global DEFAULT_CHAT_FRAME: any
 declare global CHAT_FOCUS_OVERRIDE: any
 declare global ACTIVE_CHAT_EDIT_BOX: any
 declare global LAST_ACTIVE_CHAT_EDIT_BOX: any
@@ -10216,7 +10214,6 @@ declare global SettingsKeybindingSectionMixin: any
 declare global CreateKeybindingSectionInitializer: (...any) -> ...any
 declare global AccessibilityOverrides: table
 declare global ColorblindOverrides: table
-declare global Settings: table
 declare global CombatOverrides: table
 declare global ControlsOverrides: table
 declare global CUSTOM_GAMEPLAY_SETTINGS_ORDER: table

@@ -7,5 +7,31 @@ declare global addonName: string
 --- The runtime table, `ns.__wowlua` (its interface is the compiler's
 --- `runtime.d.wowlua`).
 declare global wl: WowluaRuntime
+--- The `/wl` console (installed by the newest runtime loaded); the dev
+--- window replaces `refresh`, `setTab` and `saveState` (no-ops until then)
+--- once it is built.
+interface WowluaConsole
+    commands: { [string]: (args: string[]) -> () }
+    window?: Frame
+    say: (text: string) -> ()
+    find: (name: string) -> WowluaDev?
+    sorted: (stats: { [string]: any }, key: string) -> { name: string, s: any }[]
+    compile: (d: WowluaDev, expression: string) -> ((() -> any)?, string?)
+    show: (v: any) -> string
+    command: (msg: string) -> ()
+    toggle: () -> ()
+    refresh: (force: boolean?) -> ()
+    setTab: (i: number) -> ()
+    saveState: () -> ()
+end
+
 --- The dev console's registry, shared by every addon's runtime.
-declare global WOWLUA_DEV: any
+interface WowluaDevRegistry
+    addons: { [string]: WowluaDev }
+    --- Addon names in load order.
+    order: string[]
+    --- The newest runtime version that installed the console.
+    version?: number
+    console?: WowluaConsole
+end
+declare global WOWLUA_DEV: WowluaDevRegistry?

@@ -1,10 +1,10 @@
 -- Compiler behavior of `wowlua:lifecycle` (spec stdlib "lifecycle"): the
 -- hooks register the final function value.
 @intrinsic("lifecycle.onLoad")
-declare function onLoad(fn: () -> (), ctx: any)
+declare global onLoad: any
 @intrinsic("lifecycle.onLogin")
-declare function onLogin(fn: () -> (), ctx: any)
+declare global onLogin: any
 @intrinsic("lifecycle.onEnterWorld")
-declare function onEnterWorld(fn: (isInitialLogin: boolean, isReloadingUi: boolean) -> (), ctx: any)
+declare global onEnterWorld: any
 @intrinsic("lifecycle.onLogout")
-declare function onLogout(fn: () -> (), ctx: any)
+declare global onLogout: any

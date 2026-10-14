@@ -78,6 +78,13 @@ variable `WOWLUA_STDLIB_DIR` replaces the shipped modules with a directory of
 `<name>.wowlua` / `<name>.d.wowlua` files, for developing the standard library
 (decision T79).
 
+A module's `.d.wowlua` binds exports to intrinsics. A declaration typed `any`
+(`@intrinsic("events.on") declare global on: any`) only binds: callers see the
+module's own type of the export. A declaration with a type of its own replaces
+the module's type for callers; it is used where the compiler fills in
+arguments, so the caller's signature differs (`wowlua:debug`'s and
+`wowlua:log`'s functions, which take their source location).
+
 ## 13.3 Pipeline
 
 ```

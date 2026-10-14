@@ -54,7 +54,8 @@ function Mock.check(cond, label)
     if not cond then print("FAIL: " .. tostring(label)) end
 end
 
-DEFAULT_CHAT_FRAME = { AddMessage = function(_, msg) print(msg) end }
+-- (A fake: only what the tests use.)
+DEFAULT_CHAT_FRAME = { AddMessage = function(_, msg) print(msg) end } :: any
 
 -- Frames --------------------------------------------------------------------
 
@@ -284,7 +285,8 @@ local function row(kind)
         return item
     end
 end
-Settings = {
+-- (A fake of the Settings API: what wowlua:settings uses.)
+Settings = ({
     VarType = { Boolean = "boolean", Number = "number", String = "string" },
     RegisterVerticalLayoutCategory = function(name) return newCategory(name) end,
     RegisterVerticalLayoutSubcategory = function(parent, name) return newCategory(name, parent) end,
@@ -327,7 +329,7 @@ Settings = {
         end
     end,
     GetSetting = function(variable) return Mock.settings.variables[variable] end,
-}
+}) :: any
 SettingsPanel = CreateFrame("Frame", "SettingsPanel")
 SettingsPanel:Hide()
 function HideUIPanel(frame) frame:Hide() end

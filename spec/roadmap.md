@@ -304,7 +304,12 @@ menus and lists, then the widget themes.
   method calls on narrowed optional fields, contextual typing of generic call
   arguments, `#` on possibly-nil values (E2005), and a `setfenv` that only
   disables global checks when it targets the file's own code. Stdlib option
-  types use `x?: T` for omittable fields.
+  types use `x?: T` for omittable fields. Then: Blizzard's Settings API,
+  the chat frames, `WorldFrame` and LibStub's LibDataBroker/LibDBIcon are
+  declared; the stdlib's stateful objects are classes (the minimap button a
+  widget class); intrinsic-only declarations no longer hide the modules'
+  types from callers (`events.on` returned `any`), and the API generator no
+  longer aliases the compiler's types to `any` (`TimerHandle` was `any`).
 
 ## M9: Test runner, language server, formatter
 

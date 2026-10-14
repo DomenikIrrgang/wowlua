@@ -20,23 +20,7 @@ type Options = {
 }
 
 --- LibDBIcon's position table.
-type Position = { hide?: boolean, minimapPos?: number }
-
---- The parts of LibDataBroker-1.1 and LibDBIcon-1.0 used here.
-interface DataObject
-    icon: string
-    label: string
-    text: string
-end
-interface LibDataBroker
-    function NewDataObject(name: string, data: table): DataObject?
-end
-interface LibDBIcon
-    function Register(name: string, object: DataObject, position: Position?)
-    function Show(name: string)
-    function Hide(name: string)
-    function Refresh(name: string, position: Position?)
-end
+type Position = LibDBIconPosition
 
 --- An Addon Compartment entry.
 type CompartmentEntry = {
@@ -52,10 +36,9 @@ type CompartmentEntry = {
 local registered = false
 local opts: Options? = nil
 local compartmentEntry: CompartmentEntry? = nil
-local dataObject: DataObject? = nil
+local dataObject: LibDataBrokerObject? = nil
 local libIcon: LibDBIcon? = nil
-local button: Button? = nil
-local buttonIcon: Texture? = nil
+local button: MinimapButton? = nil
 
 -- The minimap position table in the store (created if missing).
 local function position(): Position?
@@ -150,42 +133,61 @@ local function dragUpdate()
     place()
 end
 
-local function createButton(icon: string): (Button, Texture)
-    local b = CreateFrame("Button", addonName .. "MinimapButton", Minimap)
-    b:SetSize(31, 31)
-    b:SetFrameStrata("MEDIUM")
-    b:SetFrameLevel(8)
-    b:RegisterForClicks("AnyUp")
-    b:RegisterForDrag("LeftButton")
-    b:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-    -- The client's round button: the tracking ring (its art sits in the
-    -- top left of the texture), a dark disc and the icon at the button's
-    -- center, cropped of its square frame; the ring covers its corners (a
-    -- mask distorts cropped icons).
-    local overlay = b:CreateTexture(nil, "OVERLAY")
-    overlay:SetSize(50, 50)
-    overlay:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-    overlay:SetPoint("TOPLEFT")
-    local background = b:CreateTexture(nil, "BACKGROUND")
-    background:SetSize(24, 24)
-    background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
-    background:SetPoint("CENTER", b, "CENTER", 0, 1)
-    local texture = b:CreateTexture(nil, "ARTWORK")
-    texture:SetSize(18, 18)
-    texture:SetTexture(icon)
-    texture:SetTexCoord(0.05, 0.95, 0.05, 0.95)
-    texture:SetPoint("CENTER", b, "CENTER", 0, 1)
-    b.icon = texture
-    b:SetScript("OnClick", function(_: Button, mouse: string) click(mouse) end)
-    b:SetScript("OnEnter", function(self: Button) showTooltip(self) end)
-    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    b:SetScript("OnDragStart", function(self: Button)
+-- The client's round button: the tracking ring (its art sits in the top
+-- left of the texture), a dark disc and the icon at the button's center,
+-- cropped of its square frame; the ring covers its corners (a mask distorts
+-- cropped icons).
+class MinimapButton extends Button
+    readonly icon: Texture
+
+    constructor(texture: string)
+        super(addonName .. "MinimapButton", Minimap)
+        self:SetSize(31, 31)
+        self:SetFrameStrata("MEDIUM")
+        self:SetFrameLevel(8)
+        self:RegisterForClicks("AnyUp")
+        self:RegisterForDrag("LeftButton")
+        self:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+        local overlay = self:CreateTexture(nil, "OVERLAY")
+        overlay:SetSize(50, 50)
+        overlay:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+        overlay:SetPoint("TOPLEFT")
+        local background = self:CreateTexture(nil, "BACKGROUND")
+        background:SetSize(24, 24)
+        background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+        background:SetPoint("CENTER", self, "CENTER", 0, 1)
+        local icon = self:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(18, 18)
+        icon:SetTexture(texture)
+        icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
+        icon:SetPoint("CENTER", self, "CENTER", 0, 1)
+        self.icon = icon
+    end
+
+    @script("OnClick")
+    function clicked(mouse: string)
+        click(mouse)
+    end
+
+    @script("OnEnter")
+    function entered()
+        showTooltip(self)
+    end
+
+    @script("OnLeave")
+    function left()
+        GameTooltip:Hide()
+    end
+
+    @script("OnDragStart")
+    function dragStarted()
         self:SetScript("OnUpdate", dragUpdate)
-    end)
-    b:SetScript("OnDragStop", function(self: Button)
+    end
+
+    @script("OnDragStop")
+    function dragStopped()
         self:SetScript("OnUpdate", nil)
-    end)
-    return b, texture
+    end
 end
 
 local function applyVisibility()
@@ -211,9 +213,10 @@ local function create()
     if not o then
         return
     end
-    local libStub: ((major: string, silent: boolean) -> any)? = _G.LibStub
-    local ldb: LibDataBroker? = libStub and libStub("LibDataBroker-1.1", true)
-    local dbicon: LibDBIcon? = o.minimap and libStub and libStub("LibDBIcon-1.0", true)
+    -- LibStub is embedded by addons: it may be missing.
+    local libStub = _G.LibStub :: typeof(LibStub)?
+    local ldb = libStub and libStub("LibDataBroker-1.1", true)
+    local dbicon = o.minimap and libStub and libStub("LibDBIcon-1.0", true) or nil
     -- LibDBIcon draws from an LDB object, so it needs one too.
     if ldb and (o.ldb or dbicon) then
         dataObject = ldb:NewDataObject(addonName, {
@@ -234,7 +237,7 @@ local function create()
             libIcon = dbicon
             dbicon:Register(addonName, dataObject, position())
         else
-            button, buttonIcon = createButton(o.icon)
+            button = MinimapButton.new(o.icon)
             place()
         end
         applyVisibility()
@@ -283,8 +286,8 @@ export function setIcon(icon: string)
     if compartmentEntry then
         compartmentEntry.icon = icon
     end
-    if buttonIcon then
-        buttonIcon:SetTexture(icon)
+    if button then
+        button.icon:SetTexture(icon)
     end
 end
 

@@ -988,8 +988,6 @@ type OrderStatus = any
 type PartyPlaylistEntry = any
 type PurchaseHouseDisabledReason = any
 type ResidentType = any
-type TickerHandle = any
-type TimerHandle = any
 type Vocalerrorsounds = any
 type WeeklyRewardChestThresholdType = any
 type Window = any
@@ -18895,7 +18893,6 @@ declare global RIGHT_OFFSET_BUFFER: Frame
 declare global PANEl_SPACING_X: Frame
 declare global UIParentBottomManagedFrameContainer: Frame
 declare global UIParentRightManagedFrameContainer: Frame
-declare global WorldFrame: Frame
 declare global UIWidgetCenterScreenContainerFrame: Frame
 declare global UIWidgetPowerBarContainerFrame: Frame
 declare global UIWidgetSubZoneTextContainerFrame: Frame

@@ -9,6 +9,14 @@ local mon = {
 local clock: () -> number = debugprofilestop or function(): number
 	return os.clock() * 1000
 end
+--- A frame, animation or other script object (what compiled code passes).
+interface Scriptable
+	function SetScript(script: string, fn: any)
+	function HookScript(script: string, fn: any)
+	--- Frames have names; animations do not.
+	GetName?: (self: Scriptable) -> string?
+end
+
 local function record(bucket: { [string]: WowluaMonitorStat }, key: string, detail: string, elapsed: number)
 	local s = bucket[key]
 	if not s then
@@ -26,10 +34,12 @@ local function timed(bucket: { [string]: WowluaMonitorStat }, key: string, detai
 	return ...
 end
 -- A frame's label: its name, its wowlua class, or where it was set up.
-local function label(frame: any, location: string): string
-	local name = type(frame) == "table" and frame.GetName and frame:GetName()
-	if name then
-		return name
+local function label(frame: Scriptable, location: string): string
+	if type(frame) == "table" and frame.GetName then
+		local name = frame:GetName()
+		if name then
+			return name
+		end
 	end
 	local classOf = wl.classOf
 	local cls = classOf and classOf(frame)
@@ -38,7 +48,7 @@ local function label(frame: any, location: string): string
 	end
 	return "frame at " .. location
 end
-local function wrap(frame: any, script: string, fn: any, location: string): any
+local function wrap(frame: Scriptable, script: string, fn: any, location: string): any
 	if type(fn) ~= "function" then
 		return fn
 	end
@@ -52,10 +62,10 @@ local function wrap(frame: any, script: string, fn: any, location: string): any
 		return timed(mon.scripts, key, location, clock(), fn(...))
 	end
 end
-function mon.setScript(frame: any, script: string, fn: any, location: string): any
+function mon.setScript(frame: Scriptable, script: string, fn: any, location: string): any
 	return frame:SetScript(script, wrap(frame, script, fn, location))
 end
-function mon.hookScript(frame: any, script: string, fn: any, location: string): any
+function mon.hookScript(frame: Scriptable, script: string, fn: any, location: string): any
 	return frame:HookScript(script, wrap(frame, script, fn, location))
 end
 local function timer(kind: string, fn: any, location: string): any

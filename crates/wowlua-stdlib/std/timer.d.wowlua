@@ -1,8 +1,8 @@
 -- Compiler behavior of `wowlua:timer` (spec stdlib "timer"): the decorators
 -- wrap the function.
 @intrinsic("timer.throttle")
-declare function throttle(sec: number): any
+declare global throttle: any
 @intrinsic("timer.debounce")
-declare function debounce(sec: number): any
+declare global debounce: any
 @intrinsic("timer.nextFrame")
-declare function nextFrame(fn: any, ctx: any?): any
+declare global nextFrame: any

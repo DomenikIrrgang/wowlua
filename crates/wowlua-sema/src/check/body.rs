@@ -1025,13 +1025,16 @@ impl<'e> Checker<'e> {
                 .is_some_and(|e| !(e.ret.types.is_empty() && e.ret.rest.is_some()));
         let saved_flow = std::mem::take(&mut self.flow);
         // Locals never assigned after their declaration keep their
-        // narrowing inside the closure (it cannot change).
+        // narrowing inside the closure (it cannot change); open tables are
+        // sealed for closures (spec §2.4.2), so not theirs.
         let vars = &self.vars;
+        let types = &self.env.types;
         self.flow = saved_flow
             .iter()
-            .filter(|(v, _)| {
+            .filter(|(v, t)| {
                 vars.get(v.0 as usize)
                     .is_some_and(|var| var.never_reassigned)
+                    && !matches!(types.get(**t), Ty::Record(r) if r.open)
             })
             .map(|(&v, &t)| (v, t))
             .collect();
@@ -1366,13 +1369,18 @@ impl<'e> Checker<'e> {
             return;
         }
         // The field may hold other values of the type later (as in a
-        // literal without an expected type).
-        let value = self.env.types.widen(value);
+        // literal without an expected type); one added as `nil` may hold
+        // anything.
+        let (value, optional) = if value == Types::NIL {
+            (Types::ANY, true)
+        } else {
+            (self.env.types.widen(value), false)
+        };
         r.fields.insert(
             name.into(),
             Field {
                 ty: value,
-                optional: false,
+                optional,
                 readonly: false,
             },
         );

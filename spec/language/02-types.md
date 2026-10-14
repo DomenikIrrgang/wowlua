@@ -305,7 +305,8 @@ table is an error in strict mode (E2051) and allowed in basic mode.
 
 A field added by an assignment takes the assigned value's widened type
 (`t.enabled = true` adds `enabled: boolean`), as a literal's fields do
-without an expected type.
+without an expected type. A field added as `nil` (`t.mode = nil`) is optional
+and `any`.
 
 Writes with non-constant keys (`t[k] = v`) to an open table add an indexer: the
 table's type becomes its known fields plus `[K]: V`, where `K` and `V` are the
@@ -332,9 +333,12 @@ expression:
   strict mode),
 - a table literal for a union of table types is checked against the first
   member it fits, so literal fields can discriminate
-  (`local c: Earned | Spent = { kind = "spent", amount = 1 }`),
+  (`local c: Earned | Spent = { kind = "spent", amount = 1 }`); for a union
+  with one table member (`string | string[]`), against that member,
 - empty table literals take the expected type (`local xs: string[] = {}`),
-- generic calls use the expected return type to infer type arguments.
+- generic calls use the expected return type to infer type arguments, and
+  arguments for parameters that do not mention a type parameter are typed by
+  those parameters.
 
 Overloads with literal parameters let WoW APIs provide precise callback types:
 
@@ -494,7 +498,8 @@ a declared local narrows it to the members of its declared type that the value
 fits (a literal stays a literal where the declared type is a literal union; a
 record or interface stays as declared), except a declared `any`. A closure sees
 the narrowing of the locals that are never assigned after their declaration (it
-cannot change); other locals are their declared type inside closures. A local
+cannot change), except open tables, which are sealed for closures (§2.4.2);
+other locals are their declared type inside closures. A local
 narrowed to `nil` that a closure assigns is its declared type again after any
 call, which may run that closure.
 

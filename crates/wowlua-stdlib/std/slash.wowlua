@@ -150,48 +150,53 @@ local function usage(name: string, command: Command): string
     return table.concat(parts, " ")
 end
 
---- A router: `router:dispatch(msg)` runs the matching command.
-export function router(defs: { [string]: Command }): Router
-    local byName: { [string]: string } = {}
-    for name, command in pairs(defs) do
-        byName[name:lower()] = name
-        for _, alias in ipairs(command.aliases ?? {}) do
-            byName[alias:lower()] = name
+class SlashRouter implements Router
+    private readonly defs: { [string]: Command }
+    -- Command names and aliases, lowercase, to command names.
+    private byName: { [string]: string } = {}
+
+    constructor(defs: { [string]: Command })
+        self.defs = defs
+        for name, command in pairs(defs) do
+            self.byName[name:lower()] = name
+            for _, alias in ipairs(command.aliases ?? {}) do
+                self.byName[alias:lower()] = name
+            end
         end
     end
 
-    local function help(): string
+    function help(): string
         local names: string[] = {}
-        for name in pairs(defs) do
+        for name in pairs(self.defs) do
             names[#names + 1] = name
         end
         table.sort(names)
         local lines: string[] = {}
         for _, name in ipairs(names) do
-            local command = assert(defs[name])
+            local command = assert(self.defs[name])
             lines[#lines + 1] = usage(name, command) .. (command.help and " - " .. command.help or "")
         end
         return table.concat(lines, "\n")
     end
 
-    local function printHelp()
-        for line in help():gmatch("[^\n]+") do
+    private function printHelp()
+        for line in self:help():gmatch("[^\n]+") do
             say(line)
         end
     end
 
-    local function dispatch(msg: string): boolean
+    function dispatch(msg: string): boolean
         local tokens, starts = tokenize(msg)
         if #tokens == 0 or tokens[1]:lower() == "help" then
-            printHelp()
+            self:printHelp()
             return true
         end
-        local name = byName[tokens[1]:lower()]
+        local name = self.byName[tokens[1]:lower()]
         if not name then
-            printHelp()
+            self:printHelp()
             return false
         end
-        local command = assert(defs[name])
+        local command = assert(self.defs[name])
         local args = command.args ?? {}
         -- A `rest` argument takes the text as typed from the first token
         -- after the arguments before it (flags must come before it).
@@ -252,9 +257,9 @@ export function router(defs: { [string]: Command }): Router
         callIn({ component = "slash: " .. name }, command.run, unpack(values, 1, n))
         return true
     end
+end
 
-    return {
-        dispatch = function(_: Router, msg: string): boolean return dispatch(msg) end,
-        help = function(_: Router): string return help() end,
-    }
+--- A router: `router:dispatch(msg)` runs the matching command.
+export function router(defs: { [string]: Command }): Router
+    return SlashRouter.new(defs)
 end

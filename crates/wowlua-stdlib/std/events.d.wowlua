@@ -1,14 +1,14 @@
 -- Compiler behavior of `wowlua:events` (spec stdlib "events"): `@event` and
 -- `@unitEvent` register the final function value.
 @intrinsic("events.event")
-declare function event(...: string): any
+declare global event: any
 @intrinsic("events.unitEvent")
-declare function unitEvent(name: string, ...: string): any
+declare global unitEvent: any
 @intrinsic("events.on")
-declare function on(event: string, handler: (...any) -> (), owner: any?): any
+declare global on: any
 @intrinsic("events.once")
-declare function once(event: string, handler: (...any) -> (), owner: any?): any
+declare global once: any
 @intrinsic("events.onUnit")
-declare function onUnit(event: string, units: string[], handler: (...any) -> (), owner: any?): any
+declare global onUnit: any
 @intrinsic("events.send")
-declare function send(name: string, ...: any)
+declare global send: any

@@ -63,6 +63,7 @@ pub fn generate(
     annotations: &[(String, String)],
     annotation_source: &str,
     skip: &HashSet<String>,
+    compiler_types: &HashSet<String>,
 ) -> Result<Output, String> {
     let mut per_flavor: Vec<(String, String, Decls)> = Vec::new();
     for f in flavors {
@@ -299,9 +300,11 @@ pub fn generate(
     let shared_refs = shared.referenced_types();
     let mut out_flavors = Vec::new();
     for (id, source, mut d) in per_flavor {
-        // Names referred to but declared nowhere become `any`.
+        // Names referred to but declared nowhere become `any` (the
+        // compiler's own declarations define some).
         let mut defined: BTreeSet<String> = shared_defs.clone();
         defined.extend(d.defined_types());
+        defined.extend(compiler_types.iter().cloned());
         let mut refs = shared_refs.clone();
         refs.extend(d.referenced_types());
         for name in refs.difference(&defined) {

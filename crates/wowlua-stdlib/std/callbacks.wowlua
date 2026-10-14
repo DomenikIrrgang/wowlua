@@ -8,8 +8,6 @@
 import callIn from "wowlua:errors"
 import Subscription from "wowlua:events"
 
-type Record = { fn: (...any) -> (), sub: Subscription }
-
 export type RegistryOptions = { compat?: "CallbackHandler" }
 
 --- A registry of the events `E` (an interface of function types).
@@ -28,105 +26,123 @@ export interface Registry<E>
     UnregisterAllCallbacks?: (owner: any) -> ()
 end
 
---- A callback registry; `E` comes from the expected type.
-export function registry<E>(opts: RegistryOptions?): Registry<E>
-    local handlers: { [string]: Record[] } = {}
-    -- Owners by record, weakly: a registry never keeps an owner alive.
-    local owners: { [Record]: any } = setmetatable({}, { __mode = "v" })
+--- One subscription: its handler, until cancelled.
+class Handler implements Subscription
+    active: boolean = true
+    readonly fn: (...any) -> ()
+    private readonly registry: CallbackRegistry<any>
+    private readonly name: string
 
-    local function remove(name: string, record: Record)
-        local list = handlers[name]
+    constructor(registry: CallbackRegistry<any>, name: string, fn: (...any) -> ())
+        self.registry = registry
+        self.name = name
+        self.fn = fn
+    end
+
+    function cancel()
+        self.active = false
+        self.registry:detach(self.name, self)
+    end
+end
+
+class CallbackRegistry<E> implements Registry<E>
+    private handlers: { [string]: Handler[] } = {}
+    -- Owners by handler, weakly: a registry never keeps an owner alive.
+    private owners: { [Handler]: any } = setmetatable({}, { __mode = "v" })
+    RegisterCallback?: (owner: any, name: string, method: any, ...any) -> ()
+    UnregisterCallback?: (owner: any, name: string) -> ()
+    UnregisterAllCallbacks?: (owner: any) -> ()
+
+    constructor(opts: RegistryOptions?)
+        if opts and opts.compat == "CallbackHandler" then
+            self:installCompat()
+        end
+    end
+
+    --- Removes a cancelled handler (for `Handler`).
+    function detach(name: string, handler: Handler)
+        local list = self.handlers[name]
         if not list then
             return
         end
-        for i, rec in ipairs(list) do
-            if rec == record then
+        for i, h in ipairs(list) do
+            if h == handler then
                 table.remove(list, i)
                 break
             end
         end
         if #list == 0 then
-            handlers[name] = nil
+            self.handlers[name] = nil
         end
     end
 
-    local function subscribe(name: string, fn: (...any) -> (), owner: any): Subscription
-        local list = handlers[name]
+    private function subscribe(name: string, fn: (...any) -> (), owner: any): Handler
+        local list = self.handlers[name]
         if not list then
             list = {}
-            handlers[name] = list
+            self.handlers[name] = list
         end
-        local record: Record
-        local sub: Subscription = {
-            active = true,
-            cancel = function(self: Subscription)
-                self.active = false
-                remove(name, record)
-            end,
-        }
-        record = { fn = fn, sub = sub }
-        owners[record] = owner
-        list[#list + 1] = record
+        local handler = Handler.new(self, name, fn)
+        self.owners[handler] = owner
+        list[#list + 1] = handler
+        return handler
+    end
+
+    function on(name: string, fn: (...any) -> (), owner: any?): Subscription
+        return self:subscribe(name, fn, owner)
+    end
+
+    function once(name: string, fn: (...any) -> (), owner: any?): Subscription
+        local sub: Subscription
+        sub = self:subscribe(name, function(...: any)
+            sub:cancel()
+            fn(...)
+        end, owner)
         return sub
     end
 
-    local r: Registry<E> = {
-        on = function(_, name: string, fn: (...any) -> (), owner: any?): Subscription
-            return subscribe(name, fn, owner)
-        end,
+    function off(sub: Subscription)
+        sub:cancel()
+    end
 
-        once = function(_, name: string, fn: (...any) -> (), owner: any?): Subscription
-            local sub: Subscription
-            sub = subscribe(name, function(...: any)
-                sub:cancel()
-                fn(...)
-            end, owner)
-            return sub
-        end,
-
-        off = function(_, sub: Subscription)
-            sub:cancel()
-        end,
-
-        offAll = function(_, owner: any)
-            if owner == nil then
-                error("offAll: the owner is nil", 2)
-            end
-            local subs: Subscription[] = {}
-            for _, list in pairs(handlers) do
-                for _, rec in ipairs(list) do
-                    if owners[rec] == owner then
-                        subs[#subs + 1] = rec.sub
-                    end
+    function offAll(owner: any)
+        if owner == nil then
+            error("offAll: the owner is nil", 2)
+        end
+        local subs: Handler[] = {}
+        for _, list in pairs(self.handlers) do
+            for _, h in ipairs(list) do
+                if self.owners[h] == owner then
+                    subs[#subs + 1] = h
                 end
             end
-            for _, sub in ipairs(subs) do
-                sub:cancel()
-            end
-        end,
+        end
+        for _, h in ipairs(subs) do
+            h:cancel()
+        end
+    end
 
-        fire = function(_, name: string, ...: any)
-            local list = handlers[name]
-            if not list then
-                return
-            end
-            for _, rec in ipairs({ unpack(list) }) do
-                callIn({ component = "callbacks: " .. name }, rec.fn, ...)
-            end
-        end,
+    function fire(name: string, ...: any)
+        local list = self.handlers[name]
+        if not list then
+            return
+        end
+        for _, h in ipairs({ unpack(list) }) do
+            callIn({ component = "callbacks: " .. name }, h.fn, ...)
+        end
+    end
 
-        has = function(_, name: string): boolean
-            return handlers[name] ~= nil
-        end,
-    }
+    function has(name: string): boolean
+        return self.handlers[name] ~= nil
+    end
 
-    if opts and opts.compat == "CallbackHandler" then
-        -- `Registry.RegisterCallback(owner, name, method?, arg?)`, as in
-        -- CallbackHandler: a method name is called on the owner, a function
-        -- directly; either gets `arg` first when one is passed (even nil),
-        -- then the event name and the payload.
+    -- `Registry.RegisterCallback(owner, name, method?, arg?)`, as in
+    -- CallbackHandler: a method name is called on the owner, a function
+    -- directly; either gets `arg` first when one is passed (even nil), then
+    -- the event name and the payload.
+    private function installCompat()
         local byOwner: { [any]: { [string]: Subscription } } = setmetatable({}, { __mode = "k" })
-        r.RegisterCallback = function(owner: any, name: string, method: any, ...: any)
+        self.RegisterCallback = function(owner: any, name: string, method: any, ...: any)
             method = method or name
             local hasArg = select("#", ...) > 0
             -- Not named `arg`: Lua 5.1 gives every vararg function an
@@ -153,9 +169,9 @@ export function registry<E>(opts: RegistryOptions?): Registry<E>
             if old then
                 old:cancel()
             end
-            subs[name] = subscribe(name, fn, owner)
+            subs[name] = self:subscribe(name, fn, owner)
         end
-        r.UnregisterCallback = function(owner: any, name: string)
+        self.UnregisterCallback = function(owner: any, name: string)
             local subs = byOwner[owner]
             local sub = subs and subs[name]
             if subs and sub then
@@ -163,7 +179,7 @@ export function registry<E>(opts: RegistryOptions?): Registry<E>
                 subs[name] = nil
             end
         end
-        r.UnregisterAllCallbacks = function(owner: any)
+        self.UnregisterAllCallbacks = function(owner: any)
             local subs = byOwner[owner]
             if subs then
                 for _, sub in pairs(subs) do
@@ -173,6 +189,9 @@ export function registry<E>(opts: RegistryOptions?): Registry<E>
             end
         end
     end
+end
 
-    return r
+--- A callback registry; `E` comes from the expected type.
+export function registry<E>(opts: RegistryOptions?): Registry<E>
+    return CallbackRegistry.new(opts)
 end

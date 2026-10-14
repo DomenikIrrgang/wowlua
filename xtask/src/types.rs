@@ -444,6 +444,38 @@ fn compiler_globals(root: &Path) -> Result<HashSet<String>> {
     Ok(out)
 }
 
+/// The type names the compiler's declaration files define (classes,
+/// interfaces, aliases).
+fn compiler_type_names(root: &Path) -> Result<HashSet<String>> {
+    let mut out = HashSet::new();
+    for entry in fs::read_dir(root.join("crates/wowlua-stdlib/decl"))? {
+        for line in fs::read_to_string(entry?.path())?.lines() {
+            // `@widget("Frame") declare class Frame …`: after a decorator.
+            let line = match line.strip_prefix('@') {
+                Some(rest) => rest.split_once(") ").map_or("", |(_, r)| r),
+                None => line,
+            };
+            for prefix in [
+                "declare class ",
+                "declare interface ",
+                "interface ",
+                "type ",
+            ] {
+                if let Some(rest) = line.strip_prefix(prefix) {
+                    let name: String = rest
+                        .chars()
+                        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                        .collect();
+                    if !name.is_empty() {
+                        out.insert(name);
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
 pub fn generate(root: &Path, dir: &Path) -> Result<()> {
     let mut flavors = Vec::new();
     for (flavor, tag) in flavor_tags()? {
@@ -503,9 +535,11 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
         annotations.push((path.to_string_lossy().into_owned(), text));
     }
     let skip = compiler_globals(root)?;
+    let compiler_types = compiler_type_names(root)?;
     let source = format!("Ketho's vscode-wow-api annotations (MIT License, commit {KETHO_COMMIT})");
-    let output = wowlua_types_gen::generate(&flavors, &annotations, &source, &skip)
-        .map_err(anyhow::Error::msg)?;
+    let output =
+        wowlua_types_gen::generate(&flavors, &annotations, &source, &skip, &compiler_types)
+            .map_err(anyhow::Error::msg)?;
     let data = root.join("crates/wowlua-api/data");
     fs::create_dir_all(&data)?;
     // The MIT notice of the annotations goes with the generated files.

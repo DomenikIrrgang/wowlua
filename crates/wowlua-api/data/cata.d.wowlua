@@ -989,8 +989,6 @@ type PartyPlaylistEntry = any
 type PurchaseHouseDisabledReason = any
 type ResidentType = any
 type SecondsFormatter = any
-type TickerHandle = any
-type TimerHandle = any
 type Vocalerrorsounds = any
 type WeeklyRewardChestThresholdType = any
 type Window = any
@@ -17078,7 +17076,6 @@ declare global RIGHT_OFFSET: Frame
 declare global RIGHT_OFFSET_BUFFER: Frame
 declare global PANEl_SPACING_X: Frame
 declare global UIParentBottomManagedFrameContainer: Frame
-declare global WorldFrame: Frame
 declare global EclipseBarFrame: Frame
 declare global PaladinPowerBar: Frame
 declare global Rune1: Button
