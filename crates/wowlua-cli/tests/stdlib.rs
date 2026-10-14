@@ -2262,7 +2262,7 @@ function Mock.awaitText(text)
         end
         Mock.advanceFrames(3, 50 / 3)
     end
-    error("never printed: " .. text)
+    error("never printed: " .. text .. "\n" .. table.concat(Mock.out, "\n", math.max(1, #Mock.out - 40)))
 end
 -- SavedVariables as WoW writes them (raw tables).
 function Mock.serialize(v)
@@ -2325,6 +2325,8 @@ Mock.script(StdTestMenuButton, "OnMouseUp", "RightButton")
 Mock.clickMenu("Pick me")
 Mock.awaitText("Mouse over any item in your bags")
 Mock.showTooltip("Item", { id = 6948, name = "Hearthstone", link = "|Hitem:6948::|h[Hearthstone]|h" })
+Mock.awaitText("Click the [StdTest link]")
+SetItemRef("addon:StdTest:guided", "[StdTest link]", "LeftButton")
 Mock.awaitText("Type /reload")
 Mock.fire("PLAYER_LOGOUT")
 local saved = {}
@@ -4062,6 +4064,130 @@ print(type(format.date()))
             "12g 34s 56c 12 Gold 34 Silver 56 Copper 0 Copper",
             "1,234,567 8.5K 46% 45.6%",
             "string",
+        ]
+    );
+}
+
+// ---------------------------------------------------------------- version --
+
+/// `wowlua:version`: semantic version order, the shared registry of
+/// installed addons, and newer versions learned over addon messages
+/// (callback only).
+#[test]
+fn versions_registry_and_newer_versions() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as version from \"wowlua:version\"\nimport * as comm from \"wowlua:comm\"\n_G.StdVersion = version\n_G.StdComm = comm\n",
+        )],
+        "WowluaVersions = { Other = \"2.1.0\" }\nMock.guild = true\nMock.echoAs = \"Friend\"",
+        r#"Mock.loadAddon("Std")
+local version = StdVersion
+local c = version.compare
+print(c("1.0.0", "1.0.0"), c("1.0.1", "1.0.0"), c("1.0.0", "1.0.0-beta.2"), c("1.0.0-beta.2", "1.0.0-beta.10"), c("1.0.0-alpha", "1.0.0-beta"), c("1.0.0+abc", "1.0.0+def"), c("2.0", "1.9.9"))
+local mine = version.current()
+print(version.of("Std") == mine, version.of("Other"), version.of("Nope"), version.installed().Other)
+version.onNewer(function(newest, sender) print("newer", newest, sender) end)
+Mock.fire("PLAYER_LOGIN")
+Mock.advance(11)
+print("announced", Mock.sent[1] and Mock.sent[1].chatType)
+-- Another player with a newer version, then an older one.
+local channel = StdComm.open("WowluaVersion")
+channel:send("1:Std:9.0.0", "GUILD")
+Mock.advance(1)
+channel:send("1:Other:99.0.0", "GUILD")
+Mock.advance(1)
+local before = #Mock.sent
+channel:send("1:Std:0.0.1", "GUILD")
+Mock.advance(1)
+local reply = Mock.sent[before + 2]
+print("told", reply and reply.chatType, reply and reply.target)
+-- The echoed whisper carried our own version back.
+print(version.newest(), version.peers().Friend == mine)
+version.onNewer(function(newest) print("late", newest) end)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "0 1 1 -1 -1 0 1",
+            "true 2.1.0 nil 2.1.0",
+            "announced GUILD",
+            "newer 9.0.0 Friend",
+            "told WHISPER Friend",
+            "9.0.0 true",
+            "late 9.0.0",
+        ]
+    );
+}
+
+// ----------------------------------------------------------- alert, links --
+
+/// `wowlua:alert`: sound kits, files and media names, raid warnings,
+/// flashing, throttled warnings.
+#[test]
+fn alerts_sounds_and_warnings() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as alert from \"wowlua:alert\"\nimport * as media from \"wowlua:media\"\nimport * as color from \"wowlua:color\"\nmedia.register(\"sound\", \"Std Ping\", \"Interface\\\\AddOns\\\\Std\\\\ping.ogg\")\n_G.StdAlert = { alert = alert, color = color }\n",
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local alert, color = StdAlert.alert, StdAlert.color
+alert.sound(8959)
+alert.sound("Std Ping", "SFX")
+alert.sound(567890123)
+alert.raidWarning("Pull in 5")
+alert.warn("Boss!", { sound = 8959, flash = true, color = color.rgb(0, 1, 0) })
+alert.warn("Boss!", { sound = 8959 })
+Mock.advance(2)
+alert.warn("Boss!")
+print(table.concat(Mock.sounds, " | "))
+print(table.concat(Mock.warnings, " | "))
+print("flashes", Mock.flashes)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "kit 8959 Master | file Interface\\AddOns\\Std\\ping.ogg SFX | file 567890123 Master | kit 8959 Master",
+            "Pull in 5 (1.00 0.28 0.00) | Boss! (0.00 1.00 0.00) | Boss! (1.00 0.28 0.00)",
+            "flashes 1",
+        ]
+    );
+}
+
+/// `wowlua:links`: addon links in chat, clicks reach this addon only.
+#[test]
+fn links_in_chat() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as links from \"wowlua:links\"\n_G.StdLinks = links\n",
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local links = StdLinks
+local text = links.link("Open the log", "log:42")
+print(text)
+local sub = links.onClick(function(data, button) print("clicked", data, button) end)
+links.onClick(function(data) print("second", data) end)
+SetItemRef("addon:Std:log:42", "[Open the log]", "LeftButton")
+SetItemRef("addon:Other:x", "[x]", "LeftButton")
+sub:cancel()
+SetItemRef("addon:Std:again", "[again]", "RightButton")
+print(pcall(links.link, "x", "a|b"))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "|cff71d5ff|Haddon:Std:log:42|h[Open the log]|h|r",
+            "clicked log:42 LeftButton",
+            "second log:42",
+            "second again",
+            "false links.link: the data may not contain `|`",
         ]
     );
 }

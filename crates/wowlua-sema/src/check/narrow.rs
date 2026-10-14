@@ -74,7 +74,7 @@ impl Checker<'_> {
         match &e.kind {
             ExprKind::Name(n) => self.lookup_var(&n.text),
             ExprKind::Paren(inner) => self.narrowable(inner),
-            ExprKind::Field { .. } => self.field_var(e, true),
+            ExprKind::Field { .. } | ExprKind::OptField { .. } => self.field_var(e, true),
             _ => None,
         }
     }
@@ -83,7 +83,9 @@ impl Checker<'_> {
     pub fn field_path(&self, e: &Expr) -> Option<(VarId, String)> {
         match &e.kind {
             ExprKind::Paren(inner) => self.field_path(inner),
-            ExprKind::Field { obj, name } => match &obj.kind {
+            // `a?.b` names the same field as `a.b`: where it has a value,
+            // so does `a.b`.
+            ExprKind::Field { obj, name } | ExprKind::OptField { obj, name } => match &obj.kind {
                 ExprKind::Name(n) => match self.lookup_var(&n.text) {
                     Some(v) => Some((v, name.text.to_string())),
                     // A declared global: its paths start with its name.
@@ -140,7 +142,7 @@ impl Checker<'_> {
                 Some(v) => Some(self.var_type(v)),
                 None => self.env.globals.get(n.text.as_ref()).copied(),
             },
-            ExprKind::Field { obj, name } => {
+            ExprKind::Field { obj, name } | ExprKind::OptField { obj, name } => {
                 if let Some(v) = self.field_var(e, false)
                     && let Some(&t) = self.flow.get(&v)
                 {

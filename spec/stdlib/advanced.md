@@ -176,6 +176,45 @@ rules instead of the wowlua format, so an addon migrating from Ace3 still
 interoperates with older versions of itself in a group. The default is
 `"wowlua"`. Both formats use the same throttling and lockdown handling.
 
+## version
+
+`wowlua:version` tells an addon which versions of itself and of other addons
+are around. It shows the player nothing: a newer version only reaches the
+addon through `onNewer`, and what the player sees is the addon's choice
+(decision S33).
+
+```wowlua
+import * as version from "wowlua:version"
+
+version.onNewer(function(newest: string, sender: string)
+    log.info(`{newest} is out ({sender} has it); you have {version.current()}`)
+end)
+if version.of("OtherAddon") then … end              -- installed, with this module
+if version.compare(version.current(), "2.0.0") < 0 then … end
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `current` | `() -> string` | This addon's build version |
+| `compare` | `(a: string, b: string) -> number` | -1, 0 or 1 in semantic version order: numeric parts, a pre-release before its release, build metadata ignored |
+| `installed` | `() -> { [string]: string }` | Every installed addon that uses this module, and its version |
+| `of` | `(name: string) -> string?` | One addon's version; nil when it is not installed or does not use this module |
+| `onNewer` | `(fn: (newest: string, sender: string) -> ()) -> Subscription` | Once for each newer version seen; right away when one was seen already |
+| `newest` | `() -> string` | The newest version of this addon seen (this one's, if none is newer) |
+| `peers` | `() -> { [string]: string }` | Other players' versions of this addon, by player |
+
+Semantics:
+
+- **Registry.** Every addon that uses this module writes its build version to
+  the shared global table `WowluaVersions[addonName]` at load, so the registry
+  holds every such installed addon whatever its load order
+  ([Code generation §14.1.1](../toolchain/codegen.md#1411-global-writes)).
+- **Exchange.** Over `wowlua:comm` with the prefix `WowluaVersion`, one prefix
+  for all addons; a message is `1:<Addon>:<version>`. The addon tells its guild
+  10 seconds after login and each group 3 seconds after joining it. A player
+  who announces an older version is whispered this one's, once per session.
+- Messages for other addons, and other protocol versions, are ignored.
+
 ## serialize
 
 `wowlua:serialize` serializes, compresses and encodes data, for import/export

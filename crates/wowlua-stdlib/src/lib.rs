@@ -46,6 +46,7 @@ pub struct Module {
 /// The modules shipped with this compiler version: name, source and
 /// `@intrinsic` declarations.
 const MODULES: &[(&str, &str, Option<&str>)] = &[
+    ("alert", include_str!("../std/alert.wowlua"), None),
     (
         "aura",
         include_str!("../std/aura.wowlua"),
@@ -96,6 +97,7 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         Some(include_str!("../std/hooks.d.wowlua")),
     ),
     ("item", include_str!("../std/item.wowlua"), None),
+    ("links", include_str!("../std/links.wowlua"), None),
     ("list", include_str!("../std/list.wowlua"), None),
     (
         "jobs",
@@ -168,6 +170,7 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         Some(include_str!("../std/tooltip.d.wowlua")),
     ),
     ("unit", include_str!("../std/unit.wowlua"), None),
+    ("version", include_str!("../std/version.wowlua"), None),
 ];
 
 /// A standard-library module by name (`events` for `wowlua:events`).

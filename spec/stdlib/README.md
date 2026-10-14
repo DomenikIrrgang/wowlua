@@ -57,6 +57,7 @@ libraries such as Ace3, LibDBIcon or LibSerialize.
 | `wowlua:comm` | Addon-to-addon messaging with chunking and throttling | [Advanced](advanced.md#comm) |
 | `wowlua:serialize` | Serialization, compression, print-safe encoding | [Advanced](advanced.md#serialize) |
 | `wowlua:log` | Leveled logging and chat output | [Advanced](advanced.md#log) |
+| `wowlua:version` | Installed addon versions; newer versions seen in the guild and group | [Advanced](advanced.md#version) |
 | `wowlua:secret` | Helpers for secret values | [Game data](game.md#secret) |
 | `wowlua:unit` | Unit information across flavors | [Game data](game.md#unit) |
 | `wowlua:aura` | Aura queries across flavors, secret-value aware | [Game data](game.md#aura) |
@@ -70,6 +71,8 @@ libraries such as Ace3, LibDBIcon or LibSerialize.
 | `wowlua:dialog` | Import/export and confirm dialogs | [Interface](interface.md#dialog) |
 | `wowlua:color` | Colors, class colors, color escapes | [Interface](interface.md#color) |
 | `wowlua:media` | SharedMedia interop for fonts, textures and sounds | [Interface](interface.md#media) |
+| `wowlua:alert` | Sounds, raid warnings, taskbar flash | [Interface](interface.md#alert) |
+| `wowlua:links` | Clickable links in the player's chat | [Interface](interface.md#links) |
 | `wowlua:errors` | Error-handling policy and reporting | [Infrastructure](infrastructure.md#errors) |
 | `wowlua:callbacks` | Callback registries and public APIs for other addons | [Infrastructure](infrastructure.md#callbacks) |
 | `wowlua:jobs` | Background jobs spread across frames | [Infrastructure](infrastructure.md#jobs) |
@@ -118,6 +121,7 @@ library's entries are:
 | `wowlua:dialog` | Frame names `<Addon>Dialog<N>`, registered in `UISpecialFrames` | Escape closes dialogs (the standard WoW mechanism) |
 | `wowlua:bindings` | `BINDING_HEADER_*`, `BINDING_NAME_*`, the dispatch table `<Addon>_Bindings` | Required by `Bindings.xml` |
 | `wowlua:saved` | The manifest's SavedVariables (`_G[name]` is pointed at the bound table) | WoW saves SavedVariables from globals |
+| `wowlua:version` | The shared table `WowluaVersions` (addon name → version) | One registry every addon using the module can read |
 
 The chapters of the game-data, interface and infrastructure modules list any
 further globals they need, and each is mirrored in the normative list.

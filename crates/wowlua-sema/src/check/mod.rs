@@ -925,6 +925,10 @@ mod tests {
             "type T = { link: string }\nlocal function f(t: T?)\n if t?.link ~= nil then return end\n print(t.link)\nend\n",
             "E2005",
         );
+        // `x?.f` narrows the field `x.f` too.
+        strict_ok(
+            "type O = { sound?: number }\nlocal function play(id: number) end\nlocal function f(o: O?)\n if o?.sound then play(o.sound) end\nend\n",
+        );
         // A declared `any` is not narrowed to its initializer.
         ok(
             "interface S\n active: boolean\n function cancel()\nend\nlocal function f(): S\n local s: any = { active = true }\n s.cancel = function() end\n return s\nend\n",

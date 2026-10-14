@@ -1,0 +1,67 @@
+-- wowlua:links (spec stdlib "links"): clickable links in the player's own
+-- chat. `link` makes `|Haddon:<Addon>:<data>|h[text]|h`, the client's
+-- addon link type; clicks arrive through EventRegistry's "SetItemRef" and
+-- reach this addon's handlers only. Addon links are local: the client does
+-- not send them to other players.
+import callIn from "wowlua:errors"
+import type Subscription from "wowlua:events"
+import * as color from "wowlua:color"
+import type Color from "wowlua:color"
+
+local addonName = ...
+
+const PREFIX = `addon:{addonName}:`
+-- The color of spell links, by default.
+const LINK_COLOR = "ff71d5ff"
+
+--- A clickable link showing `[text]`; `data` comes back to `onClick`
+--- (it may not contain `|`).
+export function link(text: string, data: string, linkColor: Color?): string
+    if data:find("|", 1, true) then
+        error("links.link: the data may not contain `|`", 2)
+    end
+    local hex = LINK_COLOR
+    if linkColor then
+        hex = color.toHex(linkColor, true)
+    end
+    return `|c{hex}|H{PREFIX}{data}|h[{text}]|h|r`
+end
+
+class Handler implements Subscription
+    active: boolean = true
+    readonly fn: (data: string, button: string) -> ()
+
+    constructor(fn: (data: string, button: string) -> ())
+        self.fn = fn
+    end
+
+    function cancel()
+        self.active = false
+    end
+end
+
+local handlers: Handler[] = {}
+local listening = false
+
+local function clicked(_: any, target: string, _text: string, button: string)
+    if target:sub(1, #PREFIX) ~= PREFIX then
+        return
+    end
+    const data = target:sub(#PREFIX + 1)
+    for _, h in ipairs(handlers) do
+        if h.active then
+            callIn({ component = "links: onClick" }, h.fn, data, button)
+        end
+    end
+end
+
+--- `fn(data, mouseButton)` when one of this addon's links is clicked.
+export function onClick(fn: (data: string, button: string) -> ()): Subscription
+    const h = Handler.new(fn)
+    handlers[#handlers + 1] = h
+    if not listening then
+        listening = true
+        EventRegistry:RegisterCallback("SetItemRef", clicked, PREFIX)
+    end
+    return h
+end

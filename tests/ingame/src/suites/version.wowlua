@@ -1,0 +1,45 @@
+-- wowlua:version, wowlua:alert and wowlua:links.
+import * as version from "wowlua:version"
+import * as alert from "wowlua:alert"
+import * as links from "wowlua:links"
+import suite, say from "/harness"
+
+local s = suite("version, alert, links")
+
+s:test("versions", function(t)
+    t:eq(version.of("StdTest"), version.current(), "registered")
+    t:eq(version.compare("1.2.0", "1.10.0"), -1, "numeric order")
+    t:eq(version.compare("1.0.0", "1.0.0-beta"), 1, "release after pre-release")
+    const installed: string[] = {}
+    for name, v in pairs(version.installed()) do
+        installed[#installed + 1] = `{name} {v}`
+    end
+    say(`version: {table.concat(installed, ", ")}`)
+end)
+
+s:test("a sound and a raid warning", function(t)
+    t:ok(alert.sound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON, "SFX"), "a sound kit plays")
+    alert.warn("StdTest: a raid warning", { throttle = 5 })
+    alert.warn("StdTest: a raid warning", { throttle = 5 })
+    t:ok(true, "shown")
+end)
+
+s:test("a link click reaches the handler", function(t)
+    local got: string? = nil
+    const sub = links.onClick(function(data: string) got = data end)
+    SetItemRef("addon:StdTest:auto", "[auto]", "LeftButton", DEFAULT_CHAT_FRAME)
+    t:eq(got, "auto", "through SetItemRef")
+    sub:cancel()
+end)
+
+local g = suite("links (guided)", "guided")
+
+g:test("clicking a link in chat", function(t)
+    local clicked: string? = nil
+    const sub = links.onClick(function(data: string) clicked = data end)
+    say(`click this: {links.link("StdTest link", "guided")}`)
+    t:ask("Click the [StdTest link] in your chat")
+    t:waitFor(function() return clicked ~= nil end, 120, "the link clicked")
+    t:eq(clicked, "guided", "its data")
+    sub:cancel()
+end)

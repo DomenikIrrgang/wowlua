@@ -387,7 +387,8 @@ menus and lists, then the widget themes.
   client (login, settings page, minimap button and compartment entry, a
   key press, a ping answered over addon messages).
 - S4 in progress (patterns found across the corpus): `table` and `format`
-  done 2026-10-15 (decision S32).
+  done 2026-10-15 (decision S32); `version` (S33), `alert` and `links` done
+  2026-10-15.
 
 ## M9: Test runner, language server, formatter
 

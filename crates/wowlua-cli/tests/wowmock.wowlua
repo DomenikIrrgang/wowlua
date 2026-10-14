@@ -1769,6 +1769,50 @@ AbbreviateNumbers = (function(n: any): string
     return tostring(n)
 end) :: any
 
+-- Sounds, alerts and chat links -------------------------------------------------
+
+SOUNDKIT = { IG_MAINMENU_OPTION_CHECKBOX_ON = 856, RAID_WARNING = 8959 } :: any
+
+--- Sounds played, raid warnings shown, icon flashes.
+Mock.sounds = {}
+Mock.warnings = {}
+Mock.flashes = 0
+function PlaySound(kit: number, channel: string?): (boolean, number?)
+    Mock.sounds[#Mock.sounds + 1] = `kit {kit} {channel ?? "SFX"}`
+    return true, 1
+end
+PlaySoundFile = (function(path: any, channel: string?): (boolean, number?)
+    Mock.sounds[#Mock.sounds + 1] = `file {path} {channel ?? "SFX"}`
+    return true, 1
+end) :: any
+function FlashClientIcon()
+    Mock.flashes += 1
+end
+RaidWarningFrame = CreateFrame("Frame", "RaidWarningFrame") :: any
+RaidNotice_AddMessage = (function(_: any, text: string, color: { r: number, g: number, b: number })
+    Mock.warnings[#Mock.warnings + 1] = string.format("%s (%.2f %.2f %.2f)", text, color.r, color.g, color.b)
+end) :: any
+
+--- EventRegistry's callbacks, and the client's handling of addon links.
+const registry: { [string]: { fn: (...any) -> (), owner: any }[] } = {}
+EventRegistry = {} :: any
+function EventRegistry:RegisterCallback(event: string, fn: (...any) -> (), owner: any)
+    const list = registry[event] ?? {}
+    list[#list + 1] = { fn = fn, owner = owner }
+    registry[event] = list
+end
+function EventRegistry:TriggerEvent(event: string, ...: any)
+    for _, cb in ipairs(registry[event] ?? {}) do
+        cb.fn(cb.owner, ...)
+    end
+end
+--- A click on a chat link: addon links reach EventRegistry's SetItemRef.
+SetItemRef = (function(link: string, text: string, button: string, frame: any)
+    if link:sub(1, 6) == "addon:" then
+        EventRegistry:TriggerEvent("SetItemRef", link, text, button, frame)
+    end
+end) :: any
+
 -- The client's class and item quality colors (a few).
 RAID_CLASS_COLORS = {
     MAGE = { r = 0.25, g = 0.78, b = 0.92, colorStr = "ff3fc7eb" },

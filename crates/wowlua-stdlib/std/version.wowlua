@@ -1,0 +1,192 @@
+-- wowlua:version (spec stdlib "version"): addon versions. Every addon with
+-- this module records its build version in one shared registry, so any
+-- addon can ask which versions are installed; and versions are exchanged
+-- over addon messages with the guild and the group, so an addon learns when
+-- a newer version of itself is out. It says so only through `onNewer`
+-- (decision S33): what the player sees is the addon's choice.
+import build from "wowlua:meta"
+import * as comm from "wowlua:comm"
+import on from "wowlua:events"
+import type Subscription from "wowlua:events"
+import after from "wowlua:timer"
+import callIn from "wowlua:errors"
+
+local addonName = ...
+
+-- One prefix for every addon with this module; messages name the addon.
+const PREFIX = "WowluaVersion"
+const PROTOCOL = "1"
+
+-- The shared registry: build version by addon.
+const registry = (_G.WowluaVersions ?? {}) :: { [string]: string }
+_G.WowluaVersions = registry
+registry[addonName] = build.version
+
+-- A version's parts: numbers, then the pre-release identifiers (build
+-- metadata after `+` is ignored).
+local function parse(v: string): (number[], string[])
+    local core, pre = v:match("^([%d%.]+)%-?([^+]*)")
+    const numbers: number[] = {}
+    for n in (core ?? ""):gmatch("%d+") do
+        numbers[#numbers + 1] = tonumber(n) ?? 0
+    end
+    const identifiers: string[] = {}
+    for id in (pre ?? ""):gmatch("[^%.]+") do
+        identifiers[#identifiers + 1] = id
+    end
+    return numbers, identifiers
+end
+
+--- Semantic version order: -1, 0 or 1 (a pre-release sorts before its
+--- release; build metadata is ignored).
+export function compare(a: string, b: string): number
+    local an, ap = parse(a)
+    local bn, bp = parse(b)
+    for i = 1, math.max(#an, #bn) do
+        local x, y = an[i] ?? 0, bn[i] ?? 0
+        if x ~= y then
+            return x < y and -1 or 1
+        end
+    end
+    if #ap == 0 or #bp == 0 then
+        if #ap == #bp then
+            return 0
+        end
+        return #ap == 0 and 1 or -1
+    end
+    for i = 1, math.max(#ap, #bp) do
+        local x, y = ap[i], bp[i]
+        if x == nil then
+            return -1
+        elseif y == nil then
+            return 1
+        elseif x ~= y then
+            local xn, yn = tonumber(x), tonumber(y)
+            if xn and yn then
+                return xn < yn and -1 or 1
+            elseif xn then
+                return -1
+            elseif yn then
+                return 1
+            end
+            return x < y and -1 or 1
+        end
+    end
+    return 0
+end
+
+--- This addon's build version.
+export function current(): string
+    return build.version
+end
+
+--- Every installed addon with this module, and its version.
+export function installed(): { [string]: string }
+    const out: { [string]: string } = {}
+    for name, v in pairs(registry) do
+        out[name] = v
+    end
+    return out
+end
+
+--- An installed addon's version (nil: not installed, or without this
+--- module).
+export function of(name: string): string?
+    return registry[name]
+end
+
+-- What other players run.
+const peerVersions: { [string]: string } = {}
+local newestSeen = build.version
+-- Players told about our version already (once a session each).
+const answered: { [string]: boolean } = {}
+
+class Listener implements Subscription
+    active: boolean = true
+    readonly fn: (newest: string, sender: string) -> ()
+
+    constructor(fn: (newest: string, sender: string) -> ())
+        self.fn = fn
+    end
+
+    function cancel()
+        self.active = false
+    end
+end
+
+local listeners: Listener[] = {}
+local newestSender: string? = nil
+
+local channel = comm.open(PREFIX)
+
+local function announce(where: comm.DistributionValue, target: string?)
+    channel:send(`{PROTOCOL}:{addonName}:{build.version}`, where, target)
+end
+
+channel:onMessage(function(msg: string, sender: string)
+    local protocol, name, theirs = msg:match("^(%d+):([^:]+):(.+)$")
+    if protocol ~= PROTOCOL or name ~= addonName or not theirs then
+        return
+    end
+    peerVersions[sender] = theirs
+    const order = compare(theirs, build.version)
+    if order > 0 and compare(theirs, newestSeen) > 0 then
+        newestSeen = theirs
+        newestSender = sender
+        for _, l in ipairs(listeners) do
+            if l.active then
+                callIn({ component = "version: onNewer" }, l.fn, theirs, sender)
+            end
+        end
+    elseif order < 0 and not answered[sender] then
+        answered[sender] = true
+        announce(comm.Distribution.Whisper, sender)
+    end
+end)
+
+--- `fn(newest, sender)` once for each newer version seen (right away if
+--- one was seen already).
+export function onNewer(fn: (newest: string, sender: string) -> ()): Subscription
+    const l = Listener.new(fn)
+    listeners[#listeners + 1] = l
+    const seenFrom = newestSender
+    if seenFrom then
+        callIn({ component = "version: onNewer" }, fn, newestSeen, seenFrom)
+    end
+    return l
+end
+
+--- The newest version of this addon seen (this one's, if none is newer).
+export function newest(): string
+    return newestSeen
+end
+
+--- Other players' versions of this addon, by player.
+export function peers(): { [string]: string }
+    const out: { [string]: string } = {}
+    for player, v in pairs(peerVersions) do
+        out[player] = v
+    end
+    return out
+end
+
+-- Tells the guild after login, and each group on joining it.
+local grouped = false
+on("PLAYER_LOGIN", function()
+    after(10, function()
+        if IsInGuild() then
+            announce(comm.Distribution.Guild)
+        end
+    end)
+end)
+on("GROUP_ROSTER_UPDATE", function()
+    const now = IsInGroup()
+    if now and not grouped then
+        after(3, function()
+            if IsInGroup() then
+                announce(comm.Distribution.Group)
+            end
+        end)
+    end
+    grouped = now
+end)

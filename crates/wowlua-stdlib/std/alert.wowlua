@@ -1,0 +1,72 @@
+-- wowlua:alert (spec stdlib "alert"): getting the player's attention:
+-- sounds (sound kits, files or wowlua:media names), raid-warning text,
+-- flashing the client's taskbar icon, or all at once with `warn`. Repeated
+-- identical alerts within `throttle` seconds play once.
+import * as media from "wowlua:media"
+import type Color from "wowlua:color"
+
+--- The channel a sound plays on.
+export type SoundChannel = "Master" | "SFX" | "Music" | "Ambience" | "Dialog"
+
+--- A sound kit ID (`SOUNDKIT.RAID_WARNING`), a wowlua:media sound name, or
+--- a file path or file ID.
+export type SoundRef = number | string
+
+export type WarnOptions = {
+    sound?: SoundRef,
+    channel?: SoundChannel,
+    --- Flash the taskbar icon (when the client is in the background).
+    flash?: boolean,
+    color?: Color,
+    --- Seconds in which the same text is not shown again (default 1).
+    throttle?: number,
+}
+
+--- Plays a sound; returns whether it plays.
+export function sound(ref: SoundRef, channel: SoundChannel?): boolean
+    const on = channel ?? "Master"
+    if type(ref) == "number" and ref < 1000000 then
+        -- Sound kits have small IDs; file IDs are large.
+        local willPlay = PlaySound(ref, on)
+        return willPlay == true
+    end
+    local path: string | number = ref
+    if type(ref) == "string" then
+        path = media.fetch("sound", ref, { noDefault = true }) ?? ref
+    end
+    local willPlay = PlaySoundFile(path, on)
+    return willPlay == true
+end
+
+--- Flashes the client's taskbar icon.
+export function flash()
+    FlashClientIcon()
+end
+
+local lastShown: { [string]: number } = {}
+
+--- Raid-warning text in the middle of the screen.
+export function raidWarning(text: string, color: Color?)
+    local r, g, b = 1, 0.28, 0
+    if color then
+        r, g, b = color:GetRGB()
+    end
+    RaidNotice_AddMessage(RaidWarningFrame, text, { r = r, g = g, b = b })
+end
+
+--- Raid-warning text with an optional sound and flash, once per
+--- `throttle` seconds per text.
+export function warn(text: string, opts: WarnOptions?)
+    const now = GetTime()
+    if now - (lastShown[text] ?? -math.huge) < (opts?.throttle ?? 1) then
+        return
+    end
+    lastShown[text] = now
+    raidWarning(text, opts?.color)
+    if opts?.sound then
+        sound(opts.sound, opts.channel)
+    end
+    if opts?.flash then
+        flash()
+    end
+end

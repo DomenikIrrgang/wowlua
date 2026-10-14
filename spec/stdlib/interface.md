@@ -372,6 +372,52 @@ Registrations are therefore queued, and the module looks up the library through
 `LibStub(…, true)` at load, on `PLAYER_LOGIN`, and after each later
 `ADDON_LOADED` until it is found. Queued registrations are then flushed to it.
 
+## alert
+
+`wowlua:alert` gets the player's attention: sounds, raid-warning text and the
+taskbar flash, or all of them at once with `warn`.
+
+```wowlua
+import * as alert from "wowlua:alert"
+
+alert.sound(SOUNDKIT.RAID_WARNING)                 -- a sound kit
+alert.sound("MyAddon Ping")                        -- a wowlua:media sound
+alert.warn("Interrupt!", { sound = SOUNDKIT.RAID_WARNING, flash = true })
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `sound` | `(ref: SoundRef, channel?: SoundChannel) -> boolean` | A number below 1000000 is a sound kit (`PlaySound`); other numbers and paths go to `PlaySoundFile`, and names are looked up in `wowlua:media` first. The channel defaults to `"Master"`. Returns whether it plays. |
+| `flash` | `()` | Flashes the client's taskbar icon (`FlashClientIcon`) |
+| `raidWarning` | `(text: string, color?: Color)` | Text in the middle of the screen through `RaidWarningFrame`, orange by default |
+| `warn` | `(text: string, opts?: { sound?, channel?, flash?, color?, throttle? })` | A raid warning with an optional sound and flash. The same text again within `throttle` seconds (default 1) does nothing. |
+| `SoundRef`, `SoundChannel` | `number \| string`, `"Master" \| "SFX" \| "Music" \| "Ambience" \| "Dialog"` | |
+
+## links
+
+`wowlua:links` puts clickable links into the player's own chat, using the
+client's `addon` link type. A click reaches the handlers of the addon that made
+the link, and no other addon.
+
+```wowlua
+import * as links from "wowlua:links"
+
+print(`Import failed: {links.link("Show details", "import-log")}`)
+links.onClick(function(data: string, button: string)
+    if data == "import-log" then showLog() end
+end)
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `link` | `(text: string, data: string, color?: Color) -> string` | `\|Haddon:<Addon>:<data>\|h[text]\|h`, colored like spell links by default. `data` may not contain `\|` (runtime error). |
+| `onClick` | `(fn: (data: string, button: string) -> ()) -> Subscription` | The link's `data` and the mouse button |
+
+Clicks arrive through the client's `EventRegistry` callback `SetItemRef`,
+which every supported client fires for `addon` links. The client does not
+send addon links to other players, so they are for the player's own chat
+frames only.
+
 ## Testing
 
 `wowlua:mock` support used by this chapter: `mock.drag(frame, dx, dy)`,
