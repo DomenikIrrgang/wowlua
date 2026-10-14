@@ -2891,6 +2891,31 @@ fn load_order_per_flavor_files() {
     assert!(pos("b_classic.lua") < pos("c_both.lua"), "{toc}");
 }
 
+/// Files another AddOn loads (`build.shared-files`) are shipped, not
+/// loaded by this one: their reads do not order or warn here.
+#[test]
+fn load_order_ignores_shared_files() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"core\", \"version\": \"1.0.0\" }, \"build\": { \"shared-files\": [\"src/options.lua\"] } }\n",
+            ),
+            ("src/core.lua", "Core = {}\nfunction Core.Init() Core.db = {} end\n"),
+            // Loaded by the options addon, after Core.Init has run.
+            ("src/options.lua", "print(Core.db)\n"),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(
+        !stderr.contains("W1033") && !stderr.contains("W1034"),
+        "{stderr}"
+    );
+}
+
 /// A function passed to a known API function (`type`, `tinsert`) is not
 /// called by it: a registration helper that checks and stores its handler
 /// does not make the handler run at load time.

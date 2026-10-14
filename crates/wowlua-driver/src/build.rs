@@ -810,11 +810,14 @@ pub fn build(
         let active: Vec<bool> = files
             .iter()
             .map(|(source, _)| {
-                flavor.as_ref().is_none_or(|f| {
-                    restriction(&source.rel).is_none_or(|list| list.contains(f))
-                        && (!in_other_variant(&source.rel, f, &build_cfg.variable_files)
-                            || build_cfg.load_order.contains(&source.rel))
-                })
+                // Files another AddOn's TOC loads (`build.shared-files`) are
+                // shipped, not loaded by this one.
+                !build_cfg.shared_files.contains(&source.rel)
+                    && flavor.as_ref().is_none_or(|f| {
+                        restriction(&source.rel).is_none_or(|list| list.contains(f))
+                            && (!in_other_variant(&source.rel, f, &build_cfg.variable_files)
+                                || build_cfg.load_order.contains(&source.rel))
+                    })
             })
             .collect();
         // Shared mode types against the first flavor's API; flavor guards
