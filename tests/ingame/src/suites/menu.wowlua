@@ -1,0 +1,41 @@
+-- wowlua:menu: context menus through the client's MenuUtil.
+import * as menu from "wowlua:menu"
+import type MenuBuilder from "wowlua:menu"
+import suite from "/harness"
+
+local function closeMenus()
+    const manager = (_G.Menu :: table?)?.GetManager
+    if manager then
+        pcall(function() manager():CloseMenus() end)
+    end
+end
+
+local s = suite("menu")
+
+s:test("a menu opens and builds its entries", function(t)
+    local built = 0
+    menu.open(UIParent, function(m: MenuBuilder)
+        built += 1
+        m:title("StdTest"):button("Entry", function() end):checkbox("Box", function() return true end, function() end)
+    end)
+    t:eq(built, 1, "the generator ran")
+    closeMenus()
+end)
+
+local g = suite("menu (guided)", "guided")
+
+g:test("a right click opens it", function(t)
+    local picked = false
+    const button = CreateFrame("Button", "StdTestMenuButton", UIParent, "UIPanelButtonTemplate")
+    button:SetSize(160, 24)
+    button:SetPoint("TOP", UIParent, "TOP", 0, -200)
+    button:SetText("StdTest menu")
+    menu.attach(button, function(m: MenuBuilder)
+        m:title("StdTest"):button("Pick me", function() picked = true end)
+    end)
+    button:Show()
+    t:ask("Right-click the StdTest menu button at the top and choose Pick me")
+    t:waitFor(function() return picked end, 120, "the entry picked")
+    t:ok(picked, "picked")
+    button:Hide()
+end)

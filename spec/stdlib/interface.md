@@ -136,10 +136,9 @@ globals are part of the normative list of global writes
 
 ## menu
 
-`wowlua:menu` builds context and dropdown menus. It uses Blizzard's
-`MenuUtil` on clients where the flavor table declares it, and a built-in,
-taint-free menu frame elsewhere. It never uses `UIDropDownMenu`, which spreads
-taint.
+`wowlua:menu` builds context menus through Blizzard's `MenuUtil`, which
+every supported client has (decision S30). It never uses `UIDropDownMenu`,
+which spreads taint.
 
 ```wowlua
 import * as menu from "wowlua:menu"
@@ -163,16 +162,13 @@ menu.open(anchor, generator)                  -- open immediately at a frame
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `open` | `(owner: Frame, gen: (m: MenuBuilder) -> ())` | Opens at the cursor, owned by `owner` |
-| `attach` | `(frame: Frame, gen: (m: MenuBuilder) -> (), opts?: { button: string? })` | Opens on right-click (default) |
+| `attach` | `(frame: Frame, gen: (m: MenuBuilder) -> (), opts?: { button: string? })` | Opens on a mouse-up of `button` (default the right button); the frame must receive mouse input |
 | `MenuBuilder` | `title(text)`, `button(text, onClick)`, `checkbox(text, isChecked, toggle)`, `radio(text, isSelected, select)`, `divider()`, `spacer()`, `submenu(text, gen)`, `disabled(text)` | All return the builder, so calls can be chained |
 
 The generator runs every time the menu opens, so it always reflects current
-state. On fallback clients, menu buttons are pooled (`wowlua:pool`) and the
-menu closes on Escape, on an outside click, or when the owner hides.
-
-The fallback frame looks like the client's own menus by default and can be
-restyled with `menu.setTheme(theme)` ([Widget themes](#widget-themes)).
-Menus drawn by `MenuUtil` are Blizzard's own and are not themed.
+state. The menus are Blizzard's own (they close on Escape and outside
+clicks) and are not themed. Entry callbacks and the generator run through
+the stdlib error policy.
 
 ## list
 

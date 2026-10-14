@@ -84,6 +84,9 @@ interface MockClient
     dialogAccept: (value: string?) -> ()
     dialogCancel: () -> ()
     escape: () -> ()
+    menu: any
+    lastMenu: () -> string
+    clickMenu: (path: string) -> ()
     auraContainers: any[]
     auraChanged: (unit: string) -> ()
     --- Units by token (`player`, `target`, `party1`, …): what the unit

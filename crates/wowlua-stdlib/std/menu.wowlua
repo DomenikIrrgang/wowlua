@@ -1,0 +1,85 @@
+-- wowlua:menu (spec stdlib "menu"): context menus through the client's
+-- MenuUtil, which every supported client has (decision S30); never
+-- UIDropDownMenu, which spreads taint. The generator runs each time a menu
+-- opens, so it always shows the current state.
+import callIn from "wowlua:errors"
+
+--- Builds a menu: every method returns the builder, so calls chain.
+export class MenuBuilder
+    private readonly desc: SharedMenuDescriptionProxy
+
+    constructor(desc: SharedMenuDescriptionProxy)
+        self.desc = desc
+    end
+
+    function title(text: string): MenuBuilder
+        self.desc:CreateTitle(text)
+        return self
+    end
+
+    function button(text: string, onClick: () -> ()): MenuBuilder
+        self.desc:CreateButton(text, function()
+            callIn({ component = "menu: button" }, onClick)
+            return nil
+        end)
+        return self
+    end
+
+    function checkbox(text: string, isChecked: () -> boolean, toggle: () -> ()): MenuBuilder
+        self.desc:CreateCheckbox(text, function() return isChecked() end, function()
+            callIn({ component = "menu: checkbox" }, toggle)
+            return nil
+        end)
+        return self
+    end
+
+    function radio(text: string, isSelected: () -> boolean, select: () -> ()): MenuBuilder
+        self.desc:CreateRadio(text, function() return isSelected() end, function()
+            callIn({ component = "menu: radio" }, select)
+            return nil
+        end)
+        return self
+    end
+
+    function divider(): MenuBuilder
+        self.desc:CreateDivider()
+        return self
+    end
+
+    function spacer(): MenuBuilder
+        self.desc:CreateSpacer()
+        return self
+    end
+
+    --- A greyed-out entry.
+    function disabled(text: string): MenuBuilder
+        self.desc:CreateButton(text):SetEnabled(false)
+        return self
+    end
+
+    --- An entry opening a nested menu built by `gen`.
+    function submenu(text: string, gen: (m: MenuBuilder) -> ()): MenuBuilder
+        gen(MenuBuilder.new(self.desc:CreateButton(text)))
+        return self
+    end
+end
+
+type Generator = (m: MenuBuilder) -> ()
+
+--- Opens a menu at the cursor, owned by `owner`.
+export function open(owner: Frame, gen: Generator)
+    MenuUtil.CreateContextMenu(owner, function(_: Region, root: RootMenuDescriptionProxy)
+        callIn({ component = "menu: generator" }, gen, MenuBuilder.new(root))
+    end)
+end
+
+--- Opens the menu when `frame` is clicked with `opts.button` (default the
+--- right button). The frame must receive mouse input.
+export function attach(frame: Frame, gen: Generator, opts: { button?: string }?)
+    const wanted = opts?.button ?? "RightButton"
+    frame:HookScript("OnMouseUp", function(_: Frame, mouse: string)
+        if mouse == wanted then
+            open(frame, gen)
+        end
+    end)
+end

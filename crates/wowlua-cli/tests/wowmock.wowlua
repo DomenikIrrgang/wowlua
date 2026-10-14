@@ -1541,6 +1541,90 @@ function Mock.escape()
     end
 end
 
+-- Menus (MenuUtil) --------------------------------------------------------------
+
+--- One menu entry as MenuUtil builds it.
+class MockMenuEntry
+    readonly kind: string
+    readonly text: string
+    readonly callback?: (...any) -> any
+    readonly isSelected?: (...any) -> boolean
+    enabled: boolean = true
+    children: MockMenuEntry[] = {}
+
+    constructor(kind: string, text: string, callback: ((...any) -> any)?, isSelected: ((...any) -> boolean)?)
+        self.kind = kind
+        self.text = text
+        self.callback = callback
+        self.isSelected = isSelected
+    end
+
+    private function add(e: MockMenuEntry): MockMenuEntry
+        self.children[#self.children + 1] = e
+        return e
+    end
+
+    function CreateTitle(text: string): MockMenuEntry return self:add(MockMenuEntry.new("title", text, nil, nil)) end
+    function CreateButton(text: string, cb: any): MockMenuEntry return self:add(MockMenuEntry.new("button", text, cb, nil)) end
+    function CreateCheckbox(text: string, sel: any, cb: any): MockMenuEntry return self:add(MockMenuEntry.new("checkbox", text, cb, sel)) end
+    function CreateRadio(text: string, sel: any, cb: any): MockMenuEntry return self:add(MockMenuEntry.new("radio", text, cb, sel)) end
+    function CreateDivider(): MockMenuEntry return self:add(MockMenuEntry.new("divider", "", nil, nil)) end
+    function CreateSpacer(): MockMenuEntry return self:add(MockMenuEntry.new("spacer", "", nil, nil)) end
+    function SetEnabled(enabled: boolean) self.enabled = enabled end
+
+    --- `text` lines, indented by depth: `[x]`/`( )` for checkboxes and radios.
+    function lines(out: string[], depth: number)
+        for _, e in ipairs(self.children) do
+            local mark = ""
+            if e.isSelected then
+                const on = e.isSelected(nil)
+                if e.kind == "checkbox" then
+                    mark = on and "[x] " or "[ ] "
+                else
+                    mark = on and "(o) " or "( ) "
+                end
+            end
+            const label = e.kind == "divider" and "---" or `{mark}{e.text}{e.enabled and "" or " (disabled)"}`
+            out[#out + 1] = string.rep("  ", depth) .. label
+            e:lines(out, depth + 1)
+        end
+    end
+end
+
+Mock.menu = nil
+MenuUtil = {} :: any
+function MenuUtil.CreateContextMenu(owner: any, generator: (owner: any, root: any) -> ())
+    const root = MockMenuEntry.new("root", "", nil, nil)
+    generator(owner, root)
+    Mock.menu = root
+end
+
+--- The last menu opened, one line per entry.
+function Mock.lastMenu(): string
+    const out: string[] = {}
+    if Mock.menu then
+        (Mock.menu :: MockMenuEntry):lines(out, 0)
+    end
+    return table.concat(out, "\n")
+end
+
+--- Clicks the entry at `path` ("Move to/Bags") in the last menu.
+function Mock.clickMenu(path: string)
+    local e: MockMenuEntry? = Mock.menu
+    for part in path:gmatch("[^/]+") do
+        local found: MockMenuEntry? = nil
+        for _, child in ipairs(e?.children ?? {}) do
+            if child.text == part then
+                found = child
+            end
+        end
+        e = found
+    end
+    if e and e.enabled and e.callback then
+        e.callback(nil, {}, {})
+    end
+end
+
 -- The client's class and item quality colors (a few).
 RAID_CLASS_COLORS = {
     MAGE = { r = 0.25, g = 0.78, b = 0.92, colorStr = "ff3fc7eb" },

@@ -2316,6 +2316,9 @@ Mock.wheel(StdTestMovableBox, 1)
 Mock.modifiers.CTRL = nil
 Mock.awaitText("Click the question-mark button")
 Mock.script(StdTestMinimapButton, "OnClick", "LeftButton")
+Mock.awaitText("Right-click the StdTest menu button")
+Mock.script(StdTestMenuButton, "OnMouseUp", "RightButton")
+Mock.clickMenu("Pick me")
 Mock.awaitText("Mouse over any item in your bags")
 Mock.showTooltip("Item", { id = 6948, name = "Hearthstone", link = "|Hitem:6948::|h[Hearthstone]|h" })
 Mock.awaitText("Type /reload")
@@ -3802,6 +3805,69 @@ print("closed", Mock.dialog())
             "closed nil",
             "closed nil",
         ]
+    );
+}
+
+// ------------------------------------------------------------------- menu --
+
+/// `wowlua:menu`: menus built through MenuUtil each time they open, with
+/// checkboxes, radios, submenus and disabled entries.
+#[test]
+fn menus_build_through_menu_util() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as menu from "wowlua:menu"
+import type MenuBuilder from "wowlua:menu"
+local pinned = false
+local folder = "bags"
+const row = CreateFrame("Button", "StdRow", UIParent)
+menu.attach(row, function(m: MenuBuilder)
+    m:title("Thunderfury")
+        :button("Open", function() print("opened") end)
+        :checkbox("Pinned", function() return pinned end, function() pinned = not pinned end)
+        :divider()
+        :submenu("Move to", function(sub: MenuBuilder)
+            for _, f in ipairs({ "bags", "bank" }) do
+                sub:radio(f, function() return folder == f end, function() folder = f end)
+            end
+        end)
+        :disabled("Sell")
+        :button("Boom", function() error("boom") end)
+end)
+"#,
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+Mock.script(StdRow, "OnMouseUp", "LeftButton")
+print("left click", Mock.menu)
+Mock.script(StdRow, "OnMouseUp", "RightButton")
+print(Mock.lastMenu())
+Mock.clickMenu("Open")
+Mock.clickMenu("Pinned")
+Mock.clickMenu("Move to/bank")
+Mock.clickMenu("Sell")
+Mock.clickMenu("Boom")
+Mock.script(StdRow, "OnMouseUp", "RightButton")
+print(Mock.lastMenu())
+"#,
+    );
+    let menu = |pinned: &str, bags: &str, bank: &str| {
+        format!(
+            "Thunderfury\nOpen\n{pinned} Pinned\n---\nMove to\n  {bags} bags\n  {bank} bank\nSell (disabled)\nBoom"
+        )
+    };
+    let expected = [
+        "left click nil".to_string(),
+        menu("[ ]", "(o)", "( )"),
+        "opened".to_string(),
+        menu("[x]", "( )", "(o)"),
+    ];
+    assert_eq!(plain(&out), expected);
+    assert_eq!(
+        errors(&out).iter().filter(|e| e.contains("boom")).count(),
+        1,
+        "{out:?}"
     );
 }
 

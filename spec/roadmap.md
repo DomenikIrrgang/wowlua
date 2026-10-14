@@ -373,7 +373,9 @@ menus and lists, then the widget themes.
   prompt, export, import on the addon's own frames in the client's popup
   look, Escape, one at a time; decision S29), with `WidgetTheme` and the
   theme-aware builders in `wowlua:frames`. Decision S30: `menu` and `list`
-  wrap `MenuUtil` and ScrollBox, which every flavor has.
+  wrap `MenuUtil` and ScrollBox, which every flavor has. `menu` done
+  2026-10-15 (a chainable `MenuBuilder` over MenuUtil: titles, buttons,
+  checkboxes, radios, submenus, dividers, disabled entries).
 
 ## M9: Test runner, language server, formatter
 
