@@ -1138,7 +1138,7 @@ impl<'a> Parser<'a> {
                 span: self.span_from(start),
                 kind: ExprKind::Cast {
                     expr: Box::new(e),
-                    ty,
+                    ty: Box::new(ty),
                 },
             };
         }
@@ -1223,7 +1223,7 @@ impl<'a> Parser<'a> {
                     ExprKind::Method {
                         obj: Box::new(e),
                         name,
-                        args,
+                        args: Box::new(args),
                     }
                 }
                 T::LParen | T::LBrace | T::String | T::LongString => {
@@ -1268,7 +1268,7 @@ impl<'a> Parser<'a> {
                     ExprKind::OptMethod {
                         obj: Box::new(e),
                         name,
-                        args,
+                        args: Box::new(args),
                     }
                 }
                 _ => return Ok(e),
@@ -1354,7 +1354,7 @@ impl<'a> Parser<'a> {
                     self.expect(T::Eq, "=")?;
                     let value = self.expr()?;
                     TableField::Keyed {
-                        key,
+                        key: Box::new(key),
                         value,
                         span: self.span_from(start),
                     }

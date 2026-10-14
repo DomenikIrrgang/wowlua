@@ -277,6 +277,9 @@ pub struct Expr {
     pub kind: ExprKind,
 }
 
+// Every file's tree stays alive through the build, and expressions are its
+// most common node. Method arguments and cast types are boxed so that the
+// other expressions stay small.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExprKind {
     Nil,
@@ -304,7 +307,7 @@ pub enum ExprKind {
     Method {
         obj: Box<Expr>,
         name: Name,
-        args: Args,
+        args: Box<Args>,
     },
     OptField {
         obj: Box<Expr>,
@@ -317,7 +320,7 @@ pub enum ExprKind {
     OptMethod {
         obj: Box<Expr>,
         name: Name,
-        args: Args,
+        args: Box<Args>,
     },
     OptCall {
         callee: Box<Expr>,
@@ -336,7 +339,7 @@ pub enum ExprKind {
     /// `e :: T`
     Cast {
         expr: Box<Expr>,
-        ty: Type,
+        ty: Box<Type>,
     },
     Error,
 }
@@ -387,10 +390,15 @@ impl Args {
     }
 }
 
+// The key is boxed for the same reason: most fields are named or positional.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TableField {
     /// `[k] = v`
-    Keyed { key: Expr, value: Expr, span: Span },
+    Keyed {
+        key: Box<Expr>,
+        value: Expr,
+        span: Span,
+    },
     /// `name = v`
     Named { name: Name, value: Expr, span: Span },
     /// `v`
@@ -836,4 +844,17 @@ pub enum ImportClause {
 pub struct ImportSpec {
     pub name: Name,
     pub alias: Option<Name>,
+}
+
+#[cfg(all(test, target_pointer_width = "64"))]
+mod tests {
+    use super::*;
+
+    // A large addon holds millions of expressions and table fields, so a
+    // variant that grows them raises the build's peak memory.
+    #[test]
+    fn expressions_and_table_fields_stay_small() {
+        assert!(std::mem::size_of::<Expr>() <= 72);
+        assert!(std::mem::size_of::<TableField>() <= 120);
+    }
 }
