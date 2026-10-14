@@ -2,7 +2,7 @@
 -- shutdown hooks, in a fixed phase order around the standard library's own
 -- work (saved variables before `@onLoad`, default stripping after
 -- `@onLogout`).
-import on from "wowlua:events"
+import on, Subscription from "wowlua:events"
 import callIn from "wowlua:errors"
 
 local addonName, ns = ...
@@ -21,7 +21,7 @@ local loaded = false
 local loggedIn = false
 local loginDone = false
 
-local function runAll(list: { any }, component: string, ...: any)
+local function runAll(list: ((...any) -> ...any)[], component: string, ...: any)
     for _, fn in ipairs(list) do
         callIn({ component = component }, fn, ...)
     end
@@ -67,8 +67,8 @@ on("PLAYER_LOGOUT", function()
     runAll(tasks.afterLogout, "lifecycle: logout")
 end)
 
-local function hookOf(list: { any }, what: string)
-    return function(fn: any, ctx: any)
+local function hookOf(list: ((...any) -> ...any)[], what: string): (fn: (...any) -> ...any, ctx: DecoratorContext?) -> ()
+    return function(fn: (...any) -> ...any, ctx: DecoratorContext?)
         if ctx and ctx.kind == "method" and not ctx.static then
             error("@" .. what .. " on the instance method `" .. tostring(ctx.name) .. "`", 2)
         end
@@ -92,7 +92,7 @@ export function onAddonLoaded(name: string, fn: () -> ())
         callIn({ component = "lifecycle: onAddonLoaded " .. name }, fn)
         return
     end
-    local sub: any
+    local sub: Subscription
     sub = on("ADDON_LOADED", function(loadedName: string)
         if loadedName == name then
             sub:cancel()

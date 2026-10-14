@@ -3,7 +3,50 @@
 local _, ns = ...
 local wl = ns.__wowlua
 
-local function registry(): any
+--- A decorator as written: its name and its compile-time constant
+--- arguments (others appear as `"<expr>"`).
+export type DecoratorInfo = { name: string, args: any[] }
+export type ParamInfo = { name: string, type: string, optional: boolean }
+export type FieldInfo = {
+    name: string,
+    type: string,
+    visibility: string,
+    optional: boolean,
+    static: boolean,
+    readonly: boolean,
+    hasDefault: boolean,
+    decorators: DecoratorInfo[],
+}
+export type MethodInfo = {
+    name: string,
+    params: ParamInfo[],
+    returns: string,
+    visibility: string,
+    static: boolean,
+    abstract: boolean,
+    overloads: string[],
+    decorators: DecoratorInfo[],
+}
+export type PropertyInfo = {
+    name: string,
+    type: string,
+    visibility: string,
+    static: boolean,
+    hasGetter: boolean,
+    hasSetter: boolean,
+    decorators: DecoratorInfo[],
+}
+export type FunctionInfo = { name: string, location: string, params: ParamInfo[], returns: string }
+type ClassMeta = {
+    name: string,
+    decorators: DecoratorInfo[],
+    fields: FieldInfo[],
+    methods: MethodInfo[],
+    properties: PropertyInfo[],
+    interfaces: string[],
+}
+
+local function registry()
     return wl.reflect
 end
 
@@ -12,11 +55,13 @@ local function super(cls: any): any
 end
 
 export function isInstance(value: any, cls: any): boolean
-    return wl.isInstance ~= nil and wl.isInstance(value, cls)
+    local check = wl.isInstance
+    return check ~= nil and check(value, cls)
 end
 
 export function classOf(value: any): any
-    return wl.classOf and wl.classOf(value) or nil
+    local get = wl.classOf
+    return get and get(value) or nil
 end
 
 -- The class name of an instance or a class.
@@ -50,7 +95,7 @@ local function order(e: any): string[]
     if known then
         return known
     end
-    local names = {}
+    local names: string[] = {}
     for name in pairs(e) do
         names[#names + 1] = name
     end
@@ -86,33 +131,35 @@ export function enumFrom(e: any, raw: any): any
     return enumName(e, raw) and raw or nil
 end
 
-local function meta(cls: any): any
+local function meta(cls: any): ClassMeta?
     local reg = registry()
-    return reg and reg.classes[cls] or nil
+    -- The registry holds what the compiler generated for `@reflect` classes.
+    local m = reg and reg.classes[cls]
+    return m and m :: ClassMeta or nil
 end
 
-export function fields(cls: any): any
+export function fields(cls: any): FieldInfo[]?
     local m = meta(cls)
     return m and m.fields or nil
 end
 
-export function methods(cls: any): any
+export function methods(cls: any): MethodInfo[]?
     local m = meta(cls)
     return m and m.methods or nil
 end
 
-export function properties(cls: any): any
+export function properties(cls: any): PropertyInfo[]?
     local m = meta(cls)
     return m and m.properties or nil
 end
 
-export function interfaces(cls: any): any
+export function interfaces(cls: any): string[]?
     local m = meta(cls)
     return m and m.interfaces or nil
 end
 
 -- The class's decorators, or a member's.
-export function decorators(cls: any, member: string?): any
+export function decorators(cls: any, member: string?): DecoratorInfo[]?
     local m = meta(cls)
     if not m then
         return nil
@@ -120,19 +167,28 @@ export function decorators(cls: any, member: string?): any
     if member == nil then
         return m.decorators
     end
-    for _, list in ipairs({ m.fields, m.methods, m.properties }) do
-        for _, entry in ipairs(list) do
-            if entry.name == member then
-                return entry.decorators
-            end
+    for _, entry in ipairs(m.fields) do
+        if entry.name == member then
+            return entry.decorators
+        end
+    end
+    for _, entry in ipairs(m.methods) do
+        if entry.name == member then
+            return entry.decorators
+        end
+    end
+    for _, entry in ipairs(m.properties) do
+        if entry.name == member then
+            return entry.decorators
         end
     end
     return nil
 end
 
-export function functionInfo(fn: any): any
+export function functionInfo(fn: any): FunctionInfo?
     local reg = registry()
-    return reg and reg.functions[fn] or nil
+    local info = reg and reg.functions[fn]
+    return info and info :: FunctionInfo or nil
 end
 
 export function getClass(name: string): any
@@ -141,7 +197,7 @@ export function getClass(name: string): any
 end
 
 export function classes(): any[]
-    local out = {}
+    local out: any[] = {}
     local reg = registry()
     if reg then
         for _, cls in pairs(reg.byName) do

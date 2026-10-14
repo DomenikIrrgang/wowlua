@@ -3,8 +3,9 @@
 -- C_Timer on a controlled clock, combat state, addon loading and slash
 -- commands. Test scripts drive it through `Mock`.
 
+-- Completed below.
 Mock = { now = 0, frames = {}, timers = {}, errors = {}, out = {}, loaded = {},
-         combat = false, loggedIn = false }
+         combat = false, loggedIn = false } :: MockClient
 
 -- The client's events (anything else is unknown, like an addon's messages).
 Mock.events = {}

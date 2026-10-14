@@ -18,7 +18,7 @@ type Handler = {
 -- Handlers by event or message name, in registration order.
 local handlers: { [string]: Handler[] } = {}
 -- Unit-event registrations: one frame per event and unit set.
-local unitFrames: { [string]: { frame: any, handlers: Handler[] } } = {}
+local unitFrames: { [string]: { frame: Frame, handlers: Handler[] } } = {}
 local driver = CreateFrame("Frame")
 local gameEvents: { [string]: boolean } = {}
 
@@ -82,8 +82,10 @@ local function cancel(name: string, sub: Subscription)
 end
 
 local function subscribe(name: string, fn: (...any) -> (), owner: any): Subscription
-    local sub: any = { active = true }
-    sub.cancel = function() cancel(name, sub) end
+    local sub: Subscription = {
+        active = true,
+        cancel = function(self: Subscription) cancel(name, self) end,
+    }
     local list = handlers[name]
     if not list then
         list = {}
@@ -129,13 +131,15 @@ export function onUnit(event: string, units: string[], handler: (...any) -> (), 
     if #entry.handlers == 0 then
         entry.frame:RegisterUnitEvent(event, units[1], units[2])
     end
-    local sub: any = { active = true }
-    sub.cancel = function()
-        sub.active = false
-        if remove(entry.handlers, sub) and #entry.handlers == 0 then
-            entry.frame:UnregisterEvent(event)
-        end
-    end
+    local sub: Subscription = {
+        active = true,
+        cancel = function(self: Subscription)
+            self.active = false
+            if remove(entry.handlers, self) and #entry.handlers == 0 then
+                entry.frame:UnregisterEvent(event)
+            end
+        end,
+    }
     entry.handlers[#entry.handlers + 1] = { fn = handler, owner = owner, sub = sub }
     return sub
 end
@@ -179,7 +183,7 @@ export function send(name: string, ...: any)
     dispatch(name, ...)
 end
 
-local function decorated(ctx: any, what: string)
+local function decorated(ctx: DecoratorContext?, what: string)
     if ctx and ctx.kind == "method" and not ctx.static then
         error("@" .. what .. " on the instance method `" .. tostring(ctx.name) .. "`: use on() in the constructor", 3)
     end
@@ -189,13 +193,13 @@ end
 --- the handler gets the name first.
 export function event(...: string)
     local names = { ... }
-    return function(fn: (...any) -> (), ctx: any)
+    return function(fn: (...any) -> (), ctx: DecoratorContext?)
         decorated(ctx, "event")
         if #names == 1 then
             subscribe(names[1], fn, nil)
         else
             for _, name in ipairs(names) do
-                subscribe(name, function(...) fn(name, ...) end, nil)
+                subscribe(name, function(...: any) fn(name, ...) end, nil)
             end
         end
     end
@@ -204,7 +208,7 @@ end
 --- `@unitEvent(name, unit, unit?)`.
 export function unitEvent(name: string, ...: string)
     local units = { ... }
-    return function(fn: (...any) -> (), ctx: any)
+    return function(fn: (...any) -> (), ctx: DecoratorContext?)
         decorated(ctx, "unitEvent")
         onUnit(name, units, fn, nil)
     end

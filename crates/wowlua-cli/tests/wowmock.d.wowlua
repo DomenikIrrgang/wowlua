@@ -1,0 +1,62 @@
+-- The mock client's control table (wowmock.wowlua), for test scripts.
+
+--- A frame of the mock client (its own fields; the API comes from the
+--- frame's class).
+type MockFrame = {
+    scripts: { [string]: (...any) -> ...any },
+    hooks: { [string]: ((...any) -> ...any)[] },
+    events: { [string]: boolean },
+    shown: boolean,
+    [string]: any,
+}
+
+interface MockClient
+    --- The clock (seconds), advanced by `advance`.
+    now: number
+    --- Every frame created, in order.
+    frames: MockFrame[]
+    timers: table[]
+    --- Reported errors and printed lines.
+    errors: string[]
+    out: string[]
+    --- Loaded addons; load-on-demand ones (name → their code) and TOC
+    --- metadata.
+    loaded: { [string | number]: boolean }
+    onDemand: { [string | number]: () -> () }
+    metadata: { [string | number]: { [string]: string } }
+    combat: boolean
+    loggedIn: boolean
+    --- The events the client knows.
+    events: { [string]: boolean }
+    secrets: { [table]: boolean }
+    interface: number
+    locale?: string
+    settings: { categories: table[], opened: any[], variables: { [string]: any } }
+    bindings: table
+    cursor: number[]
+    --- Addon messages: sent ones, results to return next, lockdown, the
+    --- group and guild, and who sent messages come back as.
+    sent: table[]
+    sendResults: number[]
+    lockdown: boolean
+    group?: "party" | "raid" | "instance"
+    guild?: boolean
+    echoAs?: string
+
+    secret: () -> table
+    check: (cond: any, label: string) -> ()
+    script: (frame: any, name: string, ...any) -> ()
+    fire: (event: string, ...any) -> ()
+    loadAddon: (name: string | number) -> ()
+    advance: (sec: number?) -> ()
+    slash: (line: string) -> ()
+
+    -- Set by some tests' setups.
+    awaitText?: (text: string) -> ()
+    serialize?: (value: any) -> string
+    saved?: string
+    ldb?: table
+    ctl?: string[]
+end
+
+declare global Mock: MockClient

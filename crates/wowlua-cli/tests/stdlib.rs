@@ -34,7 +34,7 @@ fn wowlua_snippet(source: &str) -> String {
     fs::create_dir_all(dir.path().join("src")).unwrap();
     fs::write(
         dir.path().join("src/mock.d.wowlua"),
-        "declare global Mock: any\n",
+        include_str!("wowmock.d.wowlua"),
     )
     .unwrap();
     fs::write(dir.path().join("src/main.wowlua"), source).unwrap();
@@ -105,7 +105,7 @@ fn project(files: &[(&str, &str)]) -> tempfile::TempDir {
     fs::create_dir_all(dir.path().join("src")).unwrap();
     fs::write(
         dir.path().join("src/mock.d.wowlua"),
-        "declare global Mock: any\n",
+        include_str!("wowmock.d.wowlua"),
     )
     .unwrap();
     for (path, text) in files {

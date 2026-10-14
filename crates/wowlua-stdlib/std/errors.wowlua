@@ -94,13 +94,19 @@ export function wrap(fn: (...any) -> ...any): (...any) -> ()
     end
 end
 
+--- An `onError` listener (a wowlua:events `Subscription`).
+export interface ErrorListener
+    active: boolean
+    function cancel()
+end
+
 --- Calls `fn` with every error this addon reports.
-export function onError(fn: (msg: string) -> ()): { active: boolean, cancel: (any) -> () }
+export function onError(fn: (msg: string) -> ()): ErrorListener
     local entry = { fn = fn, active = true }
     listeners[#listeners + 1] = entry
     return {
         active = true,
-        cancel = function(self)
+        cancel = function(self: ErrorListener)
             self.active = false
             entry.active = false
         end,

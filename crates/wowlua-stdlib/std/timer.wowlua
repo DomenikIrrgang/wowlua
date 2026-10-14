@@ -17,11 +17,16 @@ export function every(sec: number, fn: (ticker: TickerHandle) -> (), iterations:
     end, iterations)
 end
 
+type Args = { [number]: any, n: number }
+--- A decorated function's state (per instance for methods).
+type State = { args?: Args, pending?: boolean, last?: number, scheduled?: boolean, timer?: TimerHandle }
+type Fn = (...any) -> ...any
+
 -- Per-instance state of a decorated method, or one state for a function.
-local function states(ctx: any): (any) -> any
+local function states(ctx: DecoratorContext?): (self: any) -> State
     if ctx and ctx.kind == "method" and not ctx.static then
-        local byInstance = setmetatable({}, { __mode = "k" })
-        return function(self: any): any
+        local byInstance: { [any]: State } = setmetatable({}, { __mode = "k" })
+        return function(self: any): State
             local s = byInstance[self]
             if not s then
                 s = {}
@@ -30,15 +35,15 @@ local function states(ctx: any): (any) -> any
             return s
         end
     end
-    local single = {}
-    return function(): any return single end
+    local single: State = {}
+    return function(): State return single end
 end
 
 local function now(): number
     return GetTime and GetTime() or 0
 end
 
-local function pack(...: any): any
+local function pack(...: any): Args
     return { n = select("#", ...), ... }
 end
 
@@ -51,13 +56,13 @@ end
 
 --- `nextFrame(fn)` runs `fn` on the next frame; as `@nextFrame`, calls in
 --- one frame coalesce into one, with the last call's arguments.
-export function nextFrame(fn: any, ctx: any?): any
+export function nextFrame(fn: Fn, ctx: DecoratorContext?): Fn?
     if ctx == nil then
         defer(fn)
         return nil
     end
     local state = states(ctx)
-    return function(...)
+    return function(...: any)
         local s = state((...))
         s.args = pack(...)
         if s.pending then
@@ -66,7 +71,7 @@ export function nextFrame(fn: any, ctx: any?): any
         s.pending = true
         defer(function()
             s.pending = false
-            local args = s.args
+            local args = assert(s.args)
             fn(unpack(args, 1, args.n))
         end)
     end
@@ -75,9 +80,9 @@ end
 --- `@throttle(sec)`: the first call runs at once; later calls within `sec`
 --- become one trailing call with the latest arguments.
 export function throttle(sec: number)
-    return function(fn: any, ctx: any): any
+    return function(fn: Fn, ctx: DecoratorContext?): Fn
         local state = states(ctx)
-        return function(...)
+        return function(...: any)
             local s = state((...))
             local t = now()
             if not s.scheduled and (s.last == nil or t - s.last >= sec) then
@@ -90,10 +95,10 @@ export function throttle(sec: number)
                 return
             end
             s.scheduled = true
-            C_Timer.After(math.max(0, s.last + sec - t), function()
+            C_Timer.After(math.max(0, (s.last ?? t) + sec - t), function()
                 s.scheduled = false
                 s.last = now()
-                local args = s.args
+                local args = assert(s.args)
                 callIn({ component = "timer: @throttle" }, fn, unpack(args, 1, args.n))
             end)
         end
@@ -103,9 +108,9 @@ end
 --- `@debounce(sec)`: runs `sec` seconds after the last call, with its
 --- arguments.
 export function debounce(sec: number)
-    return function(fn: any, ctx: any): any
+    return function(fn: Fn, ctx: DecoratorContext?): Fn
         local state = states(ctx)
-        return function(...)
+        return function(...: any)
             local s = state((...))
             s.args = pack(...)
             if s.timer then
@@ -113,7 +118,7 @@ export function debounce(sec: number)
             end
             s.timer = C_Timer.NewTimer(sec, function()
                 s.timer = nil
-                local args = s.args
+                local args = assert(s.args)
                 callIn({ component = "timer: @debounce" }, fn, unpack(args, 1, args.n))
             end)
         end
