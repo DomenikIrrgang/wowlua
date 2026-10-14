@@ -48,8 +48,10 @@ impl Renderer {
             }
             ColorChoice::Auto => termcolor::ColorChoice::Auto,
         };
-        let stream = termcolor::StandardStream::stderr(choice);
-        let mut out = stream.lock();
+        // Buffered: rendering writes many small pieces, and stderr is
+        // unbuffered, so each was its own write call; with tens of MB of
+        // diagnostics those calls took much of the run. Same bytes.
+        let mut out = termcolor::BufferedStandardStream::stderr(choice);
         for diagnostic in diagnostics {
             self.write(db, diagnostic, &mut out)?;
         }
