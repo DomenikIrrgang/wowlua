@@ -10,6 +10,7 @@
 //! - names are ASCII letters, digits and `_` (the C locale).
 
 use crate::token::{Token, TokenKind, Trivia, TriviaKind};
+use std::borrow::Cow;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::{FileId, Span};
 
@@ -683,7 +684,12 @@ impl<'a> Lexer<'a> {
 /// separators and binary literals (spec §1.2.2).
 pub fn number_value(raw: &[u8]) -> Result<f64, &'static str> {
     let text = std::str::from_utf8(raw).map_err(|_| "malformed number")?;
-    let lower = text.to_ascii_lowercase();
+    // Most numerals have no upper-case letter: those are read in place.
+    let lower = if text.bytes().any(|b| b.is_ascii_uppercase()) {
+        Cow::Owned(text.to_ascii_lowercase())
+    } else {
+        Cow::Borrowed(text)
+    };
     let wowlua_form = text.contains('_') || lower.starts_with("0b");
     if !wowlua_form {
         return lua_number(&lower).ok_or("malformed number");
@@ -694,7 +700,7 @@ pub fn number_value(raw: &[u8]) -> Result<f64, &'static str> {
     } else if let Some(rest) = lower.strip_prefix("0b") {
         ("0b", rest, 2)
     } else {
-        ("", lower.as_str(), 10)
+        ("", &*lower, 10)
     };
     let is_digit = |c: u8| match radix {
         16 => c.is_ascii_hexdigit(),

@@ -151,6 +151,29 @@ fn syntax_errors_have_codes() {
 }
 
 #[test]
+fn numerals_read_the_same_in_either_case() {
+    use wowlua_syntax::lexer::number_value;
+    let cases: &[(&str, Option<f64>)] = &[
+        ("0x1f", Some(31.0)),
+        ("1e5", Some(1e5)),
+        ("2.5e-3", Some(2.5e-3)),
+        ("0x1p4", Some(16.0)),
+        ("0b101", Some(5.0)),
+        ("0b1_01", Some(5.0)),
+        ("0x1_f", Some(31.0)),
+        ("1_0e5", Some(1e6)),
+        ("0b2", None),
+        ("0x_1", None),
+        ("1e_5", None),
+    ];
+    for (numeral, value) in cases {
+        for text in [numeral.to_string(), numeral.to_ascii_uppercase()] {
+            assert_eq!(number_value(text.as_bytes()).ok(), *value, "{text}");
+        }
+    }
+}
+
+#[test]
 fn recovers_and_reports_several_errors() {
     let p = parse_str("local = 1\nprint('ok')\nlocal function (\nx = 2\nif then end\n");
     let errors = p.diagnostics.iter().filter(|d| d.is_error()).count();
