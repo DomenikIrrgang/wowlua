@@ -1,0 +1,5 @@
+-- Compiler behavior of `wowlua:pool` (spec stdlib "pool"): `FramePool.new`
+-- is typed by the class it pools (its constructor's parameters, its
+-- instances). Declarations typed `any` keep the module's own types.
+@intrinsic("pool.FramePool")
+declare global FramePool: any

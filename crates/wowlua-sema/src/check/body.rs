@@ -402,16 +402,22 @@ impl<'e> Checker<'e> {
 
     /// The standard-library `@intrinsic` id a callee (`on`, `events.on`)
     /// names through an import that no local shadows.
+    /// A member of an intrinsic is named by the intrinsic's id and the
+    /// member (`FramePool.new` → `pool.FramePool.new`).
     pub(crate) fn intrinsic_of(&self, callee: &Expr) -> Option<String> {
-        let (local, member) = match &callee.kind {
-            ExprKind::Name(n) => (n, None),
-            ExprKind::Field { obj, name } => match &obj.kind {
-                ExprKind::Name(m) => (m, Some(name.text.as_ref())),
-                _ => return None,
-            },
-            _ => return None,
-        };
-        self.intrinsic_path(&local.text, member)
+        match &callee.kind {
+            ExprKind::Name(n) => self.intrinsic_path(&n.text, None),
+            ExprKind::Field { obj, name } => {
+                if let ExprKind::Name(m) = &obj.kind
+                    && let Some(id) = self.intrinsic_path(&m.text, Some(&name.text))
+                {
+                    return Some(id);
+                }
+                self.intrinsic_of(obj)
+                    .map(|id| format!("{id}.{}", name.text))
+            }
+            _ => None,
+        }
     }
 
     fn intrinsic_path(&self, local: &str, member: Option<&str>) -> Option<String> {

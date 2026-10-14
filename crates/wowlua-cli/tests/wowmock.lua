@@ -89,6 +89,10 @@ function Frame:Show() self.shown = true; Mock.script(self, "OnShow") end
 function Frame:Hide() self.shown = false; Mock.script(self, "OnHide") end
 function Frame:IsShown() return self.shown end
 function Frame:GetName() return self.name end
+function Frame:GetObjectType() return self.kind end
+function Frame:SetPoint(...) local p = rawget(self, "points") or {}; rawset(self, "points", p); p[#p + 1] = { ... } end
+function Frame:ClearAllPoints() rawset(self, "points", {}) end
+function Frame:GetNumPoints() local p = rawget(self, "points"); return p and #p or 0 end
 function Frame:SetAttribute(k, v)
     local a = rawget(self, "attributes") or {}
     rawset(self, "attributes", a)

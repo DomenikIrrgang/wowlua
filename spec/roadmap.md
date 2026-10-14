@@ -271,7 +271,9 @@ menus and lists, then the widget themes.
   is E8104.
 - S2 in progress: `locale` done 2026-10-14 (JSON locales checked against the
   base locale and compiled into guarded Lua files that load first, with
-  `[AllowLoadTextLocale]` tags; `L` typed by the base locale).
+  `[AllowLoadTextLocale]` tags; `L` typed by the base locale); `pool` done
+  2026-10-14 (frame and table pools; `FramePool.new` typed by the pooled
+  class's constructor; protected frames released after combat).
 
 ## M9: Test runner, language server, formatter
 

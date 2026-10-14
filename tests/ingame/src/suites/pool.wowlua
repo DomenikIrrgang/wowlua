@@ -1,0 +1,60 @@
+-- wowlua:pool with real frames.
+import FramePool, TablePool from "wowlua:pool"
+import suite from "/harness"
+
+class PoolRow
+    frame: Frame
+    label: string
+    released: number = 0
+    constructor(label: string)
+        self.label = label
+        self.frame = CreateFrame("Frame", nil, UIParent)
+    end
+    function Hide() self.frame:Hide() end
+    function ClearAllPoints() self.frame:ClearAllPoints() end
+    function onRelease() self.released += 1 end
+end
+
+local s = suite("pool")
+
+s:test("frames from a template are hidden and reused", function(t: any)
+    local buttons = FramePool.fromTemplate("Button", UIParent)
+    local b, made = buttons:acquire()
+    t:ok(made and b:GetObjectType() == "Button", "a new button")
+    b:SetPoint("CENTER")
+    b:Show()
+    buttons:release(b)
+    t:ok(not b:IsShown(), "hidden on release")
+    t:eq(b:GetNumPoints(), 0, "its points cleared")
+    local again, madeAgain = buttons:acquire()
+    t:ok(again == b and not madeAgain, "reused")
+    t:eq(select(1, buttons:count()), 1, "one active")
+end)
+
+s:test("class instances with constructor arguments and onRelease", function(t: any)
+    local rows = FramePool.new(PoolRow, "row")
+    local r1 = rows:acquire()
+    local r2 = rows:acquire()
+    t:eq(r1.label, "row", "constructed with the arguments")
+    local n = 0
+    for _ in rows:active() do n += 1 end
+    t:eq(n, 2, "active iterates them")
+    rows:releaseAll()
+    t:ok(r1.released == 1 and r2.released == 1, "onRelease ran")
+    local active, waiting = rows:count()
+    t:ok(active == 0 and waiting == 2, "all released")
+end)
+
+s:test("tables are wiped and capped", function(t: any)
+    local tables = TablePool.new({ max = 1 })
+    local a = tables:acquire()
+    local b = tables:acquire()
+    a.x = 1
+    tables:release(a)
+    tables:release(b)
+    local _, waiting = tables:count()
+    t:eq(waiting, 1, "max caps the waiting tables")
+    local again = tables:acquire()
+    t:ok(again == a and next(again) == nil, "wiped and reused")
+    t:ok(not pcall(tables.release, tables, {}), "a foreign table is refused (debug build)")
+end)

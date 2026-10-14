@@ -328,8 +328,14 @@ pub fn check_package_full(
         diagnostics.append(&mut env.diagnostics);
         // A standard-library module's declarations give its exports as
         // callers see them (the compiler fills in some arguments).
+        // (A declaration typed `any` only binds an intrinsic.)
         if let Some(declared) = env.declared_exports.get(&i) {
-            file_exports.extend(declared.iter().map(|(k, &t)| (k.clone(), t)));
+            file_exports.extend(
+                declared
+                    .iter()
+                    .filter(|(_, t)| **t != Types::ANY)
+                    .map(|(k, &t)| (k.clone(), t)),
+            );
         }
         exports.insert(i, file_exports);
     }

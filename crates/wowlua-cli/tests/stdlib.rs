@@ -1775,6 +1775,15 @@ fn core_modules_are_checked_at_compile_time() {
             "import * as saved from \"wowlua:saved\"\ninterface S\n    name: Secret<string>\nend\nlocal db = saved.bind(\"StdDB\", { version = 1, defaults = { inner = {} } :: { inner: S } })\n",
             "E8104",
         ),
+        // Pools are typed by the class they hold.
+        (
+            "import FramePool from \"wowlua:pool\"\nclass Row\n    constructor(label: string) end\nend\nlocal rows = FramePool.new(Row, 1)\n",
+            "E2001",
+        ),
+        (
+            "import FramePool from \"wowlua:pool\"\nclass Row\n    constructor(label: string) end\nend\nlocal rows = FramePool.new(Row, \"x\")\nlocal n: number = rows:acquire()\n",
+            "E2001",
+        ),
         // The handle's methods are typed (spec stdlib "saved").
         (
             "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"StdDB\", { version = 1, defaults = {}, profiles = true })\nsaved.handle(db).reset()\n",
@@ -2053,6 +2062,7 @@ end
         "reflect",
         "meta",
         "locale",
+        "pool",
     ] {
         assert!(
             printed
@@ -2448,4 +2458,123 @@ fn locales_unused_without_the_module() {
         "{stderr}"
     );
     assert!(!dir.path().join("dist/dev/Std/wowlua/locales").exists());
+}
+
+// ------------------------------------------------------------------- pool --
+
+#[test]
+fn pools_reuse_tables_and_frames() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import FramePool, TablePool from "wowlua:pool"
+local C = Mock.check
+
+-- Tables: wiped on release, reused, capped by `max`.
+local tables = TablePool.new({ max = 1 })
+local a, newA = tables:acquire()
+a.x = 1
+local b = tables:acquire()
+C(newA, "a new table")
+print("count", tables:count())
+tables:release(a)
+tables:release(b)
+print("after release", tables:count())
+local again, newAgain = tables:acquire()
+C(again == a and not newAgain and next(again) == nil, "the wiped table is reused")
+
+-- Frames of a class: made with the constructor's arguments, reset on release.
+class Row
+    label: string
+    released: number = 0
+    frame: any
+    constructor(label: string, n: number)
+        self.label = label .. n
+        self.frame = CreateFrame("Frame")
+    end
+    function Hide() self.frame:Hide() end
+    function ClearAllPoints() print("points cleared", self.label) end
+    function onRelease() self.released += 1 end
+end
+
+local rows = FramePool.new(Row, "row", 1)
+local r1 = rows:acquire()
+local r2 = rows:acquire()
+print("rows", r1.label, rows:count())
+local seen = 0
+for row in rows:active() do
+    seen += 1
+end
+C(seen == 2, "active iterates the acquired rows")
+rows:releaseAll()
+C(r1.released == 1 and r2.released == 1, "onRelease ran")
+print("rows after releaseAll", rows:count())
+C(rows:acquire() ~= nil, "reacquired")
+
+-- Plain frames from a template.
+local frames = FramePool.fromTemplate("Button", UIParent)
+local f, made = frames:acquire()
+C(made and f.kind == "Button", "a new button")
+f:Show()
+frames:release(f)
+C(not f:IsShown(), "hidden on release")
+C(frames:acquire() == f, "reused")
+
+-- A protected frame released in combat: released once combat ends.
+local guarded = FramePool.fromTemplate("Frame")
+local g = guarded:acquire()
+g.IsProtected = function() return true end
+_G.StdPool = { pool = guarded, frame = g }
+"#,
+        )],
+        "",
+        r#"Mock.fire("PLAYER_REGEN_DISABLED")
+StdPool.pool:release(StdPool.frame)
+print("in combat", StdPool.pool:count())
+Mock.fire("PLAYER_REGEN_ENABLED")
+print("after combat", StdPool.pool:count())
+"#,
+    );
+    assert_eq!(
+        out,
+        [
+            "count 2 0",
+            "after release 0 1",
+            "rows row1 2 0",
+            "points cleared row1",
+            "points cleared row1",
+            "rows after releaseAll 0 2",
+            "in combat 1 0",
+            "after combat 0 1",
+        ],
+        "{out:?}"
+    );
+}
+
+/// Releasing twice or a foreign object is an error in debug builds only.
+#[test]
+fn pool_misuse_raises_in_debug_builds() {
+    let dir = project(&[(
+        "src/main.wowlua",
+        r#"import TablePool from "wowlua:pool"
+local tables = TablePool.new()
+local t = tables:acquire()
+tables:release(t)
+print("twice", pcall(tables.release, tables, t))
+print("foreign", pcall(tables.release, tables, {}))
+"#,
+    )]);
+    for mode in MODES {
+        build(dir.path(), mode);
+        let out = run(dir.path(), mode, "", "");
+        let expected = if *mode == "dev" { "false" } else { "true" };
+        assert!(
+            out[0].starts_with(&format!("twice {expected}")),
+            "{mode}: {out:?}"
+        );
+        assert!(
+            out[1].starts_with(&format!("foreign {expected}")),
+            "{mode}: {out:?}"
+        );
+    }
 }

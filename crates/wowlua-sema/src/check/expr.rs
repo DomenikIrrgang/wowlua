@@ -1780,6 +1780,37 @@ impl Checker<'_> {
         }
     }
 
+    /// `FramePool.new(cls, ...)`: the rest of the arguments are `cls`'s
+    /// constructor's, and the pool holds `cls`'s instances.
+    fn frame_pool_type(&mut self, mut f: Func, exprs: &[&Expr]) -> Option<TypeId> {
+        let first = exprs.first()?;
+        if !matches!(first.kind, ExprKind::Name(_) | ExprKind::Field { .. }) {
+            return None;
+        }
+        let cls = self.infer(first);
+        let Ty::ClassOf(d) = self.env.types.get(cls).clone() else {
+            return None;
+        };
+        if self.env.def(d).kind != DefKind::Class {
+            return None;
+        }
+        let ctor = self.env.def(d).statics.get("new").map(|m| m.ty)?;
+        let Ty::Func(ctor) = self.env.types.get(ctor).clone() else {
+            return None;
+        };
+        let targs = vec![Types::ANY; self.env.def(d).params.len()];
+        let instance = self.env.types.intern(Ty::Named(d, targs));
+        let pool = f.ret.types.first().copied()?;
+        let Ty::Named(pool_def, _) = self.env.types.get(pool).clone() else {
+            return None;
+        };
+        f.params.truncate(1);
+        f.params.extend(ctor.params);
+        f.rest = ctor.rest;
+        f.ret = Pack::single(self.env.types.intern(Ty::Named(pool_def, vec![instance])));
+        Some(self.env.types.func(f))
+    }
+
     /// A standard-library call typed by its event or message: the handler
     /// of `on`, `once` and `onUnit` gets the event's parameters, and `send`
     /// takes the message's.
@@ -1791,6 +1822,9 @@ impl Checker<'_> {
             return c;
         };
         let exprs = args.exprs();
+        if id == "pool.FramePool.new" {
+            return self.frame_pool_type(f, &exprs).unwrap_or(c);
+        }
         let (name, name_span) = match exprs.first().map(|e| (&e.kind, e.span)) {
             Some((ExprKind::String(lit), span)) => {
                 (String::from_utf8_lossy(&lit.value).into_owned(), span)
