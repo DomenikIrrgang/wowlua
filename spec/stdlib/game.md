@@ -187,13 +187,13 @@ uncached item returns `nil`, and the data arrives later.
 ```wowlua
 import * as item from "wowlua:item"
 
-item.load(19019, function(info: ItemInfo?)
-    if info then print(info.link, info.itemLevel) end
+item.load(19019, function(data: ItemData?)
+    if data then print(data.link, data.itemLevel) end
 end)
 
-local cached = item.get(19019)                   -- ItemInfo? (nil and starts loading if uncached)
+local cached = item.get(19019)                   -- ItemData? (nil and starts loading if uncached)
 
-item.loadMany({ 19019, 17182 }, function(infos: { [number]: ItemInfo? }) … end)
+item.loadMany({ 19019, 17182 }, function(all: { [number]: ItemData? }) … end)
 
 item.loadSpell(133, function(ok: boolean) print(spell.description(133)) end)
 
@@ -203,22 +203,24 @@ local info = item.await(ctx, 19019)              -- yields until loaded
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `get` | `(item: number \| string) -> ItemInfo?` | Returns immediately. On a cache miss, it starts loading and returns `nil`. |
-| `load` | `(item: number \| string, fn: (info: ItemInfo?) -> (), opts?: LoadOptions) -> LoadHandle` | `fn` runs once the data is available. It receives `nil` if the item does not exist or loading timed out. If the item is already cached, `fn` runs synchronously before `load` returns. |
-| `loadMany` | `(items: (number \| string)[], fn: (infos: { [number]: ItemInfo? }) -> (), opts?) -> LoadHandle` | One callback after all items have resolved |
+| `get` | `(item: number \| string) -> ItemData?` | Returns immediately. On a cache miss, it starts loading and returns `nil`. A string is an item link, or a name the client has cached. |
+| `load` | `(item: number \| string, fn: (data: ItemData?) -> (), opts?: LoadOptions) -> LoadHandle` | `fn` runs once the data is available. It receives `nil` if the item does not exist or loading timed out. If the item is already cached, `fn` runs synchronously before `load` returns. |
+| `loadMany` | `(items: (number \| string)[], fn: (all: { [number]: ItemData? }) -> (), opts?) -> LoadHandle` | One callback after all items have resolved |
+| `configure` | `(opts: { cacheSize: number? })` | The cache's size (default 500) |
 | `loadSpell` | `(spellId: number, fn: (ok: boolean) -> (), opts?) -> LoadHandle` | Ensures spell data (name, description) is loaded |
-| `await` | `(ctx: JobContext, item: number \| string) -> ItemInfo?` | Yields the job until loaded ([Infrastructure: jobs](infrastructure.md#jobs)) |
+| `await` | `(ctx: JobContext, item: number \| string) -> ItemData?` | Yields the job until loaded ([Infrastructure: jobs](infrastructure.md#jobs)); comes with `wowlua:jobs` |
 | `LoadOptions` | `{ timeout: number? }` | Default timeout: 10 seconds |
 | `LoadHandle` | `Cancel()`-style handle: `cancel()`, `isDone(): boolean` | A cancelled load never calls its callback |
-| `ItemInfo` | record | `id`, `name`, `link`, `quality`, `itemLevel`, `minLevel`, `type`, `subType`, `stackCount`, `equipLoc`, `icon`, `sellPrice`, `classID`, `subclassID`, `bindType`, `expansionID` |
+| `ItemData` | record | `id`, `name`, `link`, `quality`, `itemLevel`, `minLevel`, `type`, `subType`, `stackCount`, `equipLoc`, `icon`, `sellPrice`, `classID`, `subclassID`, `bindType`, `expansionID`. (The API's own `ItemInfo` is the item reference, `number \| string`; the record has its own name so the two do not shadow each other.) |
 
-Implementation: the item and spell mixins (`Item:CreateFromItemID(id):ContinueOnItemLoad`,
-`Spell:CreateFromSpellID(id):ContinueOnSpellLoad`) where the flavor table
-declares them. Otherwise `GET_ITEM_INFO_RECEIVED` plus the client's
-item-data request function. Concurrent loads of the same item share one
-request. Loaded `ItemInfo` records are cached per addon. The cache holds at most
-`item.configure({ cacheSize = 500 })` entries, with least-recently-used eviction.
-Callbacks run through the stdlib error policy ([Infrastructure: errors](infrastructure.md#errors)).
+Implementation: `C_Item.RequestLoadItemDataByID` and `C_Spell.RequestLoadSpellData`,
+answered by `ITEM_DATA_LOAD_RESULT` (or `GET_ITEM_INFO_RECEIVED`) and
+`SPELL_DATA_LOAD_RESULT`; every flavor's client has them, so no item or
+spell mixins are needed. Concurrent loads of the same item (and `get`s
+while it loads) share one request. Loaded `ItemData` records are cached per
+addon. The cache holds at most `item.configure({ cacheSize = 500 })`
+entries, with least-recently-used eviction. Callbacks run through the stdlib
+error policy ([Infrastructure: errors](infrastructure.md#errors)).
 
 ## tooltip
 

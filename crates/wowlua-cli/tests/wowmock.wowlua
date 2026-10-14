@@ -23,6 +23,8 @@ const CLIENT_EVENTS = {
     "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PLAYER_STARTED_MOVING", "BAG_UPDATE",
     "BAG_UPDATE_DELAYED", "UNIT_HEALTH", "UNIT_POWER_UPDATE", "PLAYER_TARGET_CHANGED", "UNIT_TARGET",
     "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN", "TIME_PLAYED_MSG", "CHAT_MSG_ADDON",
+    "UNIT_AURA", "PLAYER_FOCUS_CHANGED", "GROUP_ROSTER_UPDATE", "INSTANCE_ENCOUNTER_ENGAGE_UNIT",
+    "ITEM_DATA_LOAD_RESULT", "GET_ITEM_INFO_RECEIVED", "SPELL_DATA_LOAD_RESULT",
 }
 Mock.events = {}
 for _, e in ipairs(CLIENT_EVENTS) do
@@ -1357,6 +1359,73 @@ function C_SpellBook.IsSpellKnown(id: number, bank: any): boolean
         return s?.petKnown == true
     end
     return s?.known == true
+end
+
+-- Items (C_Item) and spell data loading -----------------------------------------
+
+--- Items by ID: `info` (GetItemInfo's values, by name), whether the client
+--- has it `cached`, the seconds it takes to arrive (`delay`, default 0.2),
+--- and `missing` for items that do not exist.
+Mock.items = {
+    [6948] = { cached = true, info = { name = "Hearthstone", link = "|cffffffff|Hitem:6948::|h[Hearthstone]|h|r", quality = 1, icon = 134414 } },
+    [19019] = { delay = 0.5, info = { name = "Thunderfury", link = "|cffff8000|Hitem:19019::|h[Thunderfury]|h|r", quality = 5, itemLevel = 80 } },
+}
+--- Items the client was asked to load.
+Mock.itemRequests = {}
+C_Item = {} :: any
+
+function C_Item.GetItemInfo(item: any): ...any
+    const id = C_Item.GetItemInfoInstant(item)
+    const it = Mock.items[id ?? 0]
+    if not it or not it.cached then
+        return nil
+    end
+    const i = it.info
+    return i.name, i.link, i.quality, i.itemLevel, i.minLevel, i.type, i.subType, i.stackCount,
+        i.equipLoc, i.icon, i.sellPrice, i.classID, i.subclassID, i.bindType, i.expansionID
+end
+
+function C_Item.GetItemInfoInstant(item: any): number?
+    if type(item) == "number" then
+        return item
+    end
+    const id = tonumber(tostring(item):match("item:(%d+)"))
+    if id then
+        return id
+    end
+    for itemId, it in pairs(Mock.items) do
+        if it.cached and it.info.name == item then
+            return itemId
+        end
+    end
+    return nil
+end
+
+function C_Item.RequestLoadItemDataByID(id: number)
+    Mock.itemRequests[#Mock.itemRequests + 1] = id
+    const it = Mock.items[id]
+    C_Timer.After(it?.delay ?? 0.2, function()
+        if it and not it.missing then
+            it.cached = true
+            Mock.fire("ITEM_DATA_LOAD_RESULT", id, true)
+        else
+            Mock.fire("ITEM_DATA_LOAD_RESULT", id, false)
+        end
+    end)
+end
+
+function C_Spell.IsSpellDataCached(id: number): boolean
+    return Mock.spells[id]?.cached == true
+end
+
+function C_Spell.RequestLoadSpellData(id: number)
+    C_Timer.After(0.2, function()
+        const s = Mock.spells[id]
+        if s then
+            s.cached = true
+        end
+        Mock.fire("SPELL_DATA_LOAD_RESULT", id, s ~= nil)
+    end)
 end
 
 -- The client's class and item quality colors (a few).

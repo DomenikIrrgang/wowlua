@@ -3487,6 +3487,79 @@ print(spell.charges(133).currentCharges)
     assert_eq!(plain(&out), ["100 8 true true 1 false"]);
 }
 
+// ------------------------------------------------------------------- item --
+
+/// `wowlua:item`: cached and loading items, shared requests, failures,
+/// timeouts, cancelling, several items at once, spell data.
+#[test]
+fn items_load_and_cache() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as item from \"wowlua:item\"\n_G.StdItem = item\n",
+        )],
+        r#"Mock.items = {
+    [6948] = { cached = true, info = { name = "Hearthstone", link = "|Hitem:6948|h[Hearthstone]|h", quality = 1 } },
+    [19019] = { delay = 0.3, info = { name = "Thunderfury", link = "|Hitem:19019|h[Thunderfury]|h", quality = 5, itemLevel = 80 } },
+    [404] = { missing = true },
+    [17182] = { delay = 30, info = { name = "Sulfuras", link = "|Hitem:17182|h[Sulfuras]|h", quality = 5 } },
+    [12345] = { delay = 0.3, info = { name = "Cancelled", link = "|Hitem:12345|h[Cancelled]|h" } },
+}"#,
+        r#"Mock.loadAddon("Std")
+local item = StdItem
+print(item.get(6948).name, item.get("|Hitem:6948|h[Hearthstone]|h").quality, item.get("Hearthstone").name, item.get(19019))
+item.load(6948, function(d) print("sync", d.name) end)
+print("after load")
+item.load(19019, function(d) print("first", d.name, d.itemLevel) end)
+item.load(19019, function(d) print("second", d.name) end)
+item.load(19019, function(d) error("boom") end)
+item.load(404, function(d) print("missing", d) end)
+item.load(17182, function(d) print("timed out", d) end, { timeout = 1 })
+local h = item.load(12345, function(d) print("never") end)
+h:cancel()
+print("done?", h:isDone())
+Mock.advance(0.5)
+local requests = 0
+for _, id in ipairs(Mock.itemRequests) do if id == 19019 then requests = requests + 1 end end
+print("requests for 19019", requests)
+Mock.advance(1)
+item.loadMany({ 6948, 19019, 404 }, function(all) print("many", all[6948].name, all[19019].name, all[404]) end)
+Mock.advance(0.5)
+item.loadMany({}, function(all) print("none", next(all)) end)
+Mock.spells[133].cached = false
+item.loadSpell(133, function(ok) print("spell", ok) end)
+item.loadSpell(999, function(ok) print("no spell", ok) end)
+Mock.advance(0.5)
+item.loadSpell(133, function(ok) print("spell cached", ok) end)
+Mock.advance(40)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "Hearthstone 1 Hearthstone nil",
+            "sync Hearthstone",
+            "after load",
+            "done? true",
+            "missing nil",
+            "first Thunderfury 80",
+            "second Thunderfury",
+            "requests for 19019 1",
+            "timed out nil",
+            "many Hearthstone Thunderfury nil",
+            "none nil",
+            "spell true",
+            "no spell false",
+            "spell cached true",
+        ]
+    );
+    assert_eq!(
+        errors(&out).iter().filter(|e| e.contains("boom")).count(),
+        1,
+        "{out:?}"
+    );
+}
+
 // ------------------------------------------------------------------ color --
 
 /// A literal `color.hex` is validated at compile time (E8390).

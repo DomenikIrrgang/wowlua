@@ -917,6 +917,14 @@ mod tests {
             "local s = \"a\"\nlocal function g(d: \"a\") end\ng(s)\n",
             "E2001",
         );
+        // An optional chain with a value means its base exists.
+        strict_ok(
+            "type T = { link: string }\nlocal function f(t: T?)\n if t?.link ~= nil then print(t.link:upper()) end\n if t?.link then print(t.link) end\n if t?.link == \"x\" then print(t.link) end\n if t?.link == nil then return end\n print(t.link)\nend\n",
+        );
+        strict_err(
+            "type T = { link: string }\nlocal function f(t: T?)\n if t?.link ~= nil then return end\n print(t.link)\nend\n",
+            "E2005",
+        );
         // A declared `any` is not narrowed to its initializer.
         ok(
             "interface S\n active: boolean\n function cancel()\nend\nlocal function f(): S\n local s: any = { active = true }\n s.cancel = function() end\n return s\nend\n",

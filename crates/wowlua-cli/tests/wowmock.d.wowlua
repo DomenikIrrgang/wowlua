@@ -70,6 +70,9 @@ interface MockClient
     aurasRestricted: boolean
     --- Spells by ID (name, iconID, description, known, cooldown, charges).
     spells: { [number]: table }
+    --- Items by ID (`info`, `cached`, `delay`, `missing`) and load requests.
+    items: { [number]: table }
+    itemRequests: number[]
     auraContainers: any[]
     auraChanged: (unit: string) -> ()
     --- Units by token (`player`, `target`, `party1`, …): what the unit

@@ -1,0 +1,41 @@
+-- wowlua:item: item and spell data from the server, cached.
+import * as item from "wowlua:item"
+import type ItemData from "wowlua:item"
+import suite, say from "/harness"
+
+const HEARTHSTONE = 6948
+const THUNDERFURY = 19019
+
+local s = suite("item")
+
+s:test("an item the client has", function(t)
+    local got: ItemData? = nil
+    item.load(HEARTHSTONE, function(d: ItemData?) got = d end)
+    t:waitFor(function() return got ~= nil end, 5, "the Hearthstone")
+    t:eq(got?.id, HEARTHSTONE, "its id")
+    t:ok(got?.link ~= nil and got.link:find(`item:{HEARTHSTONE}`, 1, true) ~= nil, "its link")
+    t:eq(item.get(HEARTHSTONE)?.id, HEARTHSTONE, "cached now")
+end)
+
+s:test("an item from the server, and one that does not exist", function(t)
+    local arrived = false
+    local data: ItemData? = nil
+    item.load(THUNDERFURY, function(d: ItemData?)
+        arrived = true
+        data = d
+    end)
+    t:waitFor(function() return arrived end, 12, "Thunderfury's data")
+    say(`item: {data?.name ?? "nothing"} ({data?.quality ?? "?"})`)
+    t:eq(data?.id, THUNDERFURY, "loaded")
+    local missing = false
+    item.load(9999999, function(d: ItemData?) missing = d == nil end, { timeout = 5 })
+    t:waitFor(function() return missing end, 6, "no such item")
+    t:ok(missing, "nil for a missing item")
+end)
+
+s:test("spell data", function(t)
+    local ok: boolean? = nil
+    item.loadSpell(6603, function(loaded: boolean) ok = loaded end)
+    t:waitFor(function() return ok ~= nil end, 5, "Auto Attack's data")
+    t:eq(ok, true, "loaded")
+end)

@@ -230,6 +230,21 @@ impl Checker<'_> {
     /// The flows where `cond` is true and where it is false. The condition
     /// itself must already have been checked.
     pub fn narrow(&mut self, cond: &Expr, flow: &Flow) -> (Flow, Flow) {
+        let (mut t_flow, mut f_flow) = self.narrow_cond(cond, flow);
+        // `x?.f ~= nil` (or truthy, or equal to a literal): where the chain
+        // gives a value, the object of its first optional link exists.
+        if let Some((base, when_true)) = chain_value(cond)
+            && let Some(v) = self.narrowable(base)
+        {
+            let target = if when_true { &mut t_flow } else { &mut f_flow };
+            let current = self.var_type_in(v, target);
+            let present = self.env.types.non_nil(current);
+            target.insert(v, present);
+        }
+        (t_flow, f_flow)
+    }
+
+    fn narrow_cond(&mut self, cond: &Expr, flow: &Flow) -> (Flow, Flow) {
         let mut t_flow = flow.clone();
         let mut f_flow = flow.clone();
         match &cond.kind {
@@ -517,6 +532,52 @@ impl Checker<'_> {
 }
 
 /// `type(x)`: its argument.
+/// The object of an optional chain's first optional link (`x` in
+/// `x?.f.g`, `x.y` in `x.y?:m()`).
+fn optional_base(e: &Expr) -> Option<&Expr> {
+    match &e.kind {
+        ExprKind::OptField { obj, .. }
+        | ExprKind::OptIndex { obj, .. }
+        | ExprKind::OptMethod { obj, .. } => optional_base(obj).or(Some(obj)),
+        ExprKind::OptCall { callee, .. } => optional_base(callee).or(Some(callee)),
+        ExprKind::Field { obj, .. }
+        | ExprKind::Index { obj, .. }
+        | ExprKind::Method { obj, .. } => optional_base(obj),
+        ExprKind::Call { callee, .. } => optional_base(callee),
+        _ => None,
+    }
+}
+
+/// A condition that holds only when an optional chain gives a value: the
+/// chain's base, and whether that is the true branch.
+fn chain_value(cond: &Expr) -> Option<(&Expr, bool)> {
+    match &cond.kind {
+        ExprKind::Paren(inner) => chain_value(inner),
+        ExprKind::Binary {
+            op: op @ (BinOp::Eq | BinOp::Ne),
+            lhs,
+            rhs,
+        } => {
+            let (chain, other) = if optional_base(lhs).is_some() {
+                (lhs, rhs)
+            } else {
+                (rhs, lhs)
+            };
+            let base = optional_base(chain)?;
+            match (&other.kind, op) {
+                (ExprKind::Nil, BinOp::Ne) => Some((base, true)),
+                (ExprKind::Nil, BinOp::Eq) => Some((base, false)),
+                (
+                    ExprKind::String(_) | ExprKind::Number(_) | ExprKind::True | ExprKind::False,
+                    BinOp::Eq,
+                ) => Some((base, true)),
+                _ => None,
+            }
+        }
+        _ => optional_base(cond).map(|b| (b, true)),
+    }
+}
+
 fn type_call(e: &Expr) -> Option<&Expr> {
     let ExprKind::Call { callee, args } = &e.kind else {
         return None;

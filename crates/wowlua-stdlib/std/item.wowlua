@@ -1,0 +1,291 @@
+-- wowlua:item (spec stdlib "item"): item and spell data, which the client
+-- loads from the server on demand. The first query for an uncached item
+-- finds nothing; `load` calls back once the data is there (or the load
+-- timed out). Loaded items are cached per addon, least recently used out.
+import on from "wowlua:events"
+import after from "wowlua:timer"
+import callIn from "wowlua:errors"
+
+--- An item's data (`C_Item.GetItemInfo`).
+export type ItemData = {
+    id: number,
+    name: string,
+    link: string,
+    quality?: number,
+    itemLevel?: number,
+    minLevel?: number,
+    type?: string,
+    subType?: string,
+    stackCount?: number,
+    equipLoc?: string,
+    icon?: number,
+    sellPrice?: number,
+    classID?: number,
+    subclassID?: number,
+    bindType?: number,
+    expansionID?: number,
+}
+
+--- An item ID, link or (cached) name.
+export type ItemRef = number | string
+
+export type LoadOptions = {
+    --- Seconds before the load gives up and calls back with nothing
+    --- (default 10).
+    timeout?: number,
+}
+
+export interface LoadHandle
+    --- A cancelled load never calls back.
+    function cancel()
+    function isDone(): boolean
+end
+
+const DEFAULT_TIMEOUT = 10
+
+-- The cache: data by item ID, and when each was last used.
+local cacheSize = 500
+local cache: { [number]: ItemData } = {}
+local lastUse: { [number]: number } = {}
+local cached = 0
+local clock = 0
+
+-- Loads waiting for an item or a spell; concurrent loads of the same one
+-- share the client's request.
+local waitingItems: { [number]: Load<ItemData?>[] } = {}
+local waitingSpells: { [number]: Load<boolean>[] } = {}
+-- Items the client was asked for and has not answered yet.
+local requested: { [number]: boolean } = {}
+
+local function request(id: number)
+    if not requested[id] then
+        requested[id] = true
+        C_Item.RequestLoadItemDataByID(id)
+    end
+end
+
+local function touch(id: number)
+    clock += 1
+    lastUse[id] = clock
+end
+
+local function remember(data: ItemData)
+    if not cache[data.id] then
+        cached += 1
+        if cached > cacheSize then
+            local oldest: number? = nil
+            local oldestAt = math.huge
+            for id, at in pairs(lastUse) do
+                if at < oldestAt then
+                    oldest, oldestAt = id, at
+                end
+            end
+            if oldest then
+                cache[oldest] = nil
+                lastUse[oldest] = nil
+                cached -= 1
+            end
+        end
+    end
+    cache[data.id] = data
+    touch(data.id)
+end
+
+local function idOf(item: ItemRef): number?
+    if type(item) == "number" then
+        return item
+    end
+    return (C_Item.GetItemInfoInstant(item))
+end
+
+-- The client's data for the item, if it has it.
+local function read(id: number): ItemData?
+    local name, link, quality, itemLevel, minLevel, itemType, subType, stackCount, equipLoc, icon, sellPrice, classID, subclassID, bindType, expansionID = C_Item.GetItemInfo(id)
+    if not name or not link then
+        return nil
+    end
+    return {
+        id = id,
+        name = name,
+        link = link,
+        quality = quality,
+        itemLevel = itemLevel,
+        minLevel = minLevel,
+        type = itemType,
+        subType = subType,
+        stackCount = stackCount,
+        equipLoc = equipLoc,
+        icon = icon,
+        sellPrice = sellPrice,
+        classID = classID,
+        subclassID = subclassID,
+        bindType = bindType,
+        expansionID = expansionID,
+    }
+end
+
+--- The item's data now: from the cache or the client; nil (and the
+--- client starts loading it) when neither has it.
+export function get(item: ItemRef): ItemData?
+    const id = idOf(item)
+    if not id then
+        return nil
+    end
+    const hit = cache[id]
+    if hit then
+        touch(id)
+        return hit
+    end
+    const data = read(id)
+    if data then
+        remember(data)
+        return data
+    end
+    request(id)
+    return nil
+end
+
+--- How many items the cache keeps (default 500).
+export function configure(opts: { cacheSize?: number })
+    cacheSize = opts.cacheSize ?? cacheSize
+end
+
+-- One waiting callback.
+class Load<T> implements LoadHandle
+    private readonly fn: (value: T) -> ()
+    private done: boolean = false
+
+    constructor(fn: (value: T) -> ())
+        self.fn = fn
+    end
+
+    function finish(value: T)
+        if self.done then
+            return
+        end
+        self.done = true
+        callIn({ component = "item: load" }, self.fn, value)
+    end
+
+    function cancel()
+        self.done = true
+    end
+
+    function isDone(): boolean
+        return self.done
+    end
+end
+
+local function itemLoaded(id: number, success: boolean)
+    requested[id] = nil
+    const list = waitingItems[id]
+    if not list then
+        return
+    end
+    waitingItems[id] = nil
+    local data: ItemData? = nil
+    if success then
+        data = read(id)
+        if data then
+            remember(data)
+        end
+    end
+    for _, l in ipairs(list) do
+        l:finish(data)
+    end
+end
+
+on("ITEM_DATA_LOAD_RESULT", itemLoaded)
+on("GET_ITEM_INFO_RECEIVED", itemLoaded)
+
+local function spellLoaded(id: number, success: boolean)
+    const list = waitingSpells[id]
+    if not list then
+        return
+    end
+    waitingSpells[id] = nil
+    for _, l in ipairs(list) do
+        l:finish(success)
+    end
+end
+
+on("SPELL_DATA_LOAD_RESULT", spellLoaded)
+
+-- Gives up on a load after `opts.timeout`.
+local function expire<T>(load: Load<T>, opts: LoadOptions?, value: T)
+    after(opts?.timeout ?? DEFAULT_TIMEOUT, function()
+        load:finish(value)
+    end)
+end
+
+--- Calls `fn` with the item's data once the client has it (right away,
+--- before returning, when it is cached), or with nil when the item does
+--- not exist or loading timed out.
+export function load(item: ItemRef, fn: (data: ItemData?) -> (), opts: LoadOptions?): LoadHandle
+    const l = Load.new(fn)
+    const id = idOf(item)
+    if not id then
+        l:finish(nil)
+        return l
+    end
+    local data = cache[id]
+    if not data then
+        data = read(id)
+        if data then
+            remember(data)
+        end
+    end
+    if data then
+        touch(id)
+        l:finish(data)
+        return l
+    end
+    const list = waitingItems[id] ?? {}
+    list[#list + 1] = l
+    waitingItems[id] = list
+    request(id)
+    expire(l, opts, nil)
+    return l
+end
+
+--- Calls `fn` once with every item's data (by item ID; nil for those that
+--- failed).
+export function loadMany(items: ItemRef[], fn: (data: { [number]: ItemData? }) -> (), opts: LoadOptions?): LoadHandle
+    const results: { [number]: ItemData? } = {}
+    const handles: LoadHandle[] = {}
+    local remaining = #items
+    const all = Load.new(fn)
+    if remaining == 0 then
+        all:finish(results)
+        return all
+    end
+    for _, item in ipairs(items) do
+        handles[#handles + 1] = load(item, function(data: ItemData?)
+            const id = idOf(item)
+            if id then
+                results[id] = data
+            end
+            remaining -= 1
+            if remaining == 0 then
+                all:finish(results)
+            end
+        end, opts)
+    end
+    return all
+end
+
+--- Calls `fn(true)` once the spell's data (name, description) is loaded,
+--- `fn(false)` when that fails or times out.
+export function loadSpell(spellId: number, fn: (ok: boolean) -> (), opts: LoadOptions?): LoadHandle
+    const l = Load.new(fn)
+    if C_Spell.IsSpellDataCached(spellId) then
+        l:finish(true)
+        return l
+    end
+    const list = waitingSpells[spellId] ?? {}
+    list[#list + 1] = l
+    waitingSpells[spellId] = list
+    C_Spell.RequestLoadSpellData(spellId)
+    expire(l, opts, false)
+    return l
+end

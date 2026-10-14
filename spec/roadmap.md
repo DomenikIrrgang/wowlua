@@ -359,7 +359,11 @@ menus and lists, then the widget themes.
   flavor E8310, containers E8300; decisions S27, S28; the mock client has
   auras and containers); `spell` done 2026-10-14 (cooldowns with secret
   times but a readable `onCooldown`, duration objects, the legacy cooldown
-  API as fallback).
+  API as fallback); `item` done 2026-10-14 (shared requests, timeouts,
+  cancelling, an LRU cache, spell data; `await` comes with `jobs`; the
+  record is `ItemData`, as the API's `ItemInfo` names the item reference).
+  The checker now narrows an optional chain's base where the chain has a
+  value (`if x?.f ~= nil then x.f … end`).
 
 ## M9: Test runner, language server, formatter
 
