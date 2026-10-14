@@ -35,7 +35,10 @@ pub struct Context {
     pub module: Option<String>,
     /// Resolved imports, by the start offset of the import statement.
     pub imports: HashMap<u32, ImportContext>,
-    /// `wowlua:meta` values of the build configuration and flavor.
+    /// `wowlua:meta` values of the build configuration and flavor. The
+    /// lowering reads them only through `Lowerer::meta`, which records the
+    /// read ([`Lowered::reads_meta`]): a file lowered without reading them
+    /// lowers the same with any other `meta`, and the build reuses it.
     pub meta: Option<Arc<Meta>>,
     /// The source path (`src/core/cache.wowlua`), for decorator contexts.
     pub file: String,
@@ -59,7 +62,7 @@ pub struct Context {
 }
 
 /// The debugging settings of the build profile (spec chapter 7).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Tools {
     /// `assertions`: `wowlua:debug` assertions are kept.
     pub assertions: bool,
@@ -92,6 +95,8 @@ pub struct Lowered {
     /// Runtime slices the file needs.
     pub slices: BTreeSet<Slice>,
     pub warnings: Vec<Diagnostic>,
+    /// The lowering read `wowlua:meta` ([`Context::meta`]).
+    pub reads_meta: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -112,6 +117,98 @@ pub enum ImportContext {
     Meta,
     /// XML or plain Lua: load order only.
     LoadOnly,
+}
+
+impl Context {
+    /// The same context apart from `meta`: lowering with either gives the
+    /// same result when it does not read `meta` ([`Lowered::reads_meta`]).
+    /// Constants compare bit for bit ([`Const::same`]).
+    pub fn same_except_meta(&self, other: &Context) -> bool {
+        // Destructured so that a new field cannot be left out.
+        let Context {
+            module,
+            imports,
+            meta: _,
+            file,
+            classes,
+            enums,
+            debug,
+            compiler_known,
+            dependency,
+            tools,
+            type_names,
+            value_checks,
+        } = self;
+        *module == other.module
+            && *file == other.file
+            && *debug == other.debug
+            && *compiler_known == other.compiler_known
+            && *dependency == other.dependency
+            && *tools == other.tools
+            && *classes == other.classes
+            && same_map(enums, &other.enums, |a, b| same_enum(a, b))
+            && same_map(imports, &other.imports, same_import)
+            && *type_names == other.type_names
+            && *value_checks == other.value_checks
+    }
+}
+
+fn same_map<K: Eq + std::hash::Hash, V>(
+    a: &HashMap<K, V>,
+    b: &HashMap<K, V>,
+    same: impl Fn(&V, &V) -> bool,
+) -> bool {
+    a.len() == b.len() && a.iter().all(|(k, v)| b.get(k).is_some_and(|w| same(v, w)))
+}
+
+fn same_enum(a: &EnumInfo, b: &EnumInfo) -> bool {
+    // Destructured so that a new field cannot be left out.
+    let EnumInfo { name, members } = a;
+    *name == b.name
+        && members.len() == b.members.len()
+        && members
+            .iter()
+            .zip(&b.members)
+            .all(|((n, c), (m, d))| n == m && c.same(d))
+}
+
+fn same_export(a: &wowlua_sema::Export, b: &wowlua_sema::Export) -> bool {
+    use wowlua_sema::Export;
+    match (a, b) {
+        (Export::Const(Some(x)), Export::Const(Some(y))) => x.same(y),
+        (Export::Enum(x), Export::Enum(y)) => same_enum(x, y),
+        _ => a == b,
+    }
+}
+
+fn same_import(a: &ImportContext, b: &ImportContext) -> bool {
+    match (a, b) {
+        (
+            ImportContext::Module {
+                id,
+                lazy,
+                exports,
+                attrs,
+                intrinsics,
+            },
+            ImportContext::Module {
+                id: id2,
+                lazy: lazy2,
+                exports: exports2,
+                attrs: attrs2,
+                intrinsics: intrinsics2,
+            },
+        ) => {
+            id == id2
+                && lazy == lazy2
+                && attrs == attrs2
+                && intrinsics == intrinsics2
+                && same_map(exports, exports2, same_export)
+        }
+        (ImportContext::Meta, ImportContext::Meta)
+        | (ImportContext::LoadOnly, ImportContext::LoadOnly) => true,
+        _ => false,
+    }
 }
 
 /// Lowers a parsed file without errors, as a script (no package context).
@@ -152,6 +249,7 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         next_fn_marks: FnMarks::default(),
         class_marks: None,
         fn_marks: HashMap::new(),
+        meta_read: std::cell::Cell::new(false),
     };
     // Exported functions, classes and enums are hoisted (spec §5.1,
     // decisions L24 and T76).
@@ -230,12 +328,15 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         comments: lowerer.comments(),
     };
     wowlua_luair::hygiene::apply(&mut chunk);
+    let reads_meta = lowerer.meta_read.get();
+    debug_assert!(lowerer.meta_used.is_empty() || reads_meta);
     Ok(Lowered {
         chunk,
         meta_used: lowerer.meta_used,
         uses_runtime: lowerer.uses_runtime,
         slices: lowerer.slices,
         warnings: lowerer.warnings,
+        reads_meta,
     })
 }
 
@@ -493,11 +594,21 @@ struct Lowerer<'a> {
     class_marks: Option<FnMarks>,
     /// Marks of lowered functions, by the position of their `(`.
     fn_marks: HashMap<Pos, FnMarks>,
+    /// `ctx.meta` was read ([`Lowerer::meta`]).
+    meta_read: std::cell::Cell<bool>,
 }
 
 const LICENSE_WORDS: &[&str] = &["license", "copyright", "spdx-license-identifier"];
 
 impl<'a> Lowerer<'a> {
+    /// `wowlua:meta`, recording that it was read (also when there is none).
+    /// Every read of `ctx.meta` goes through here: the build reuses a file's
+    /// lowering in the other flavors only when it never read it.
+    fn meta(&self) -> Option<&Arc<Meta>> {
+        self.meta_read.set(true);
+        self.ctx.meta.as_ref()
+    }
+
     // ---------------------------------------------------------- positions --
 
     fn pos(&self, offset: u32) -> Pos {
@@ -749,7 +860,7 @@ impl<'a> Lowerer<'a> {
                 Some(c) => keep &= c.truthy(),
                 // Conditions on imports are checked by the module analysis.
                 None if import => {}
-                None if self.ctx.meta.as_ref().is_some_and(|m| m.flavor.is_none())
+                None if self.meta().is_some_and(|m| m.flavor.is_none())
                     && self.uses_flavor(cond) =>
                 {
                     self.error(
@@ -2390,7 +2501,7 @@ impl<'a> Lowerer<'a> {
     /// The value of a `wowlua:meta` path or (with `consts`) a `const`.
     fn leaf_value(&self, leaf: &Expr, consts: bool) -> Option<Const> {
         if let Some((kind, path)) = self.meta_path(leaf) {
-            let meta = self.ctx.meta.as_ref()?;
+            let meta = self.meta()?;
             return match meta.lookup(kind, &path) {
                 Lookup::Const(c) => Some(c),
                 _ => None,
@@ -2441,7 +2552,7 @@ impl<'a> Lowerer<'a> {
     /// otherwise (spec §6.2).
     fn meta_expr(&mut self, kind: MetaKind, path: Vec<String>, e: &Expr) -> ir::Expr {
         let pos = self.span_pos(e.span);
-        let Some(meta) = self.ctx.meta.clone() else {
+        let Some(meta) = self.meta().cloned() else {
             self.error(
                 "E1015",
                 e.span,
@@ -2517,7 +2628,7 @@ impl<'a> Lowerer<'a> {
                 return lit(ir::ExprKind::Nil, pos);
             }
         };
-        let Some(meta) = self.ctx.meta.clone() else {
+        let Some(meta) = self.meta().cloned() else {
             self.error("E1015", e.span, "`wowlua:meta` needs the package context");
             return lit(ir::ExprKind::Nil, pos);
         };

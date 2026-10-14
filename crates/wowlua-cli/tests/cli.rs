@@ -868,6 +868,17 @@ print(build.debug and debugOnly() or "release")
         toc.contains("src\\retail.lua\n"),
         "identical files are stored once: {toc}"
     );
+    // Only the file that reads `wowlua:meta` is stored per flavor, with the
+    // runtime, which carries each flavor's metadata.
+    assert_eq!(
+        files_in(&dist.join("wowlua/flavors")),
+        [
+            "standard/src/main.lua",
+            "standard/wowlua/runtime.lua",
+            "vanilla/src/main.lua",
+            "vanilla/wowlua/runtime.lua"
+        ]
+    );
     let standard = run_addon_as(&dist, "MetaDemo", Some(("standard", "mainline")));
     let vanilla = run_addon_as(&dist, "MetaDemo", Some(("vanilla", "classic")));
     let icon = r"Interface\AddOns\MetaDemo\media\icon.tga";
@@ -900,6 +911,81 @@ print(build.debug and debugOnly() or "release")
     let release = dir.path().join("dist/release/MetaDemo");
     let out = run_addon_as(&release, "MetaDemo", Some(("standard", "mainline")));
     assert!(out.ends_with("release"), "{out}");
+}
+
+/// In split mode a file compiles the same for every flavor unless it reads
+/// `wowlua:meta` or imports a value that differs: only those are stored per
+/// flavor, and what the others report is reported once.
+#[test]
+fn split_flavors_share_what_compiles_the_same() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "share", "version": "1.0.0" },
+  "flavors": { "standard": {}, "vanilla": {} },
+  "build": { "load-order": ["src/plain.lua", "src/util.wowlua", "src/flavored.wowlua", "src/label.wowlua", "src/main.wowlua"] },
+  "profiles": { "release": { "bundle": false } } }
+"#,
+            ),
+            ("src/plain.lua", "local _, ns = ...\nns.plain = \"plain\"\n"),
+            (
+                "src/util.wowlua",
+                "@deprecated(\"use twice\")\nexport function double(n: number): number return n * 2 end\nexport function twice(n: number): number return n * 2 end\n",
+            ),
+            (
+                "src/flavored.wowlua",
+                "import flavor from \"wowlua:meta\"\nexport const NAME = flavor\n",
+            ),
+            (
+                "src/label.wowlua",
+                "import NAME from \"./flavored\"\nprint(NAME)\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import double, twice from \"./util\"\n@inline\nlocal function countdown(n: number): number\n    if n <= 0 then return 0 end\n    return countdown(n - 1)\nend\nlocal _, ns = ...\nprint(ns.plain, double(1), twice(2), countdown(3))\n",
+            ),
+        ],
+    );
+    // Dev builds also warn about `@deprecated` at run time.
+    let deprecated = "Share: double is deprecated: use twice\n";
+    for (profile, warnings, at_run_time) in [
+        ("dev", &["W3030"][..], deprecated),
+        ("release", &["W3030", "W3031"], ""),
+    ] {
+        let assert = wowlua(dir.path())
+            .args(["build", "--profile", profile])
+            .assert()
+            .success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        for code in warnings {
+            assert_eq!(
+                stderr.matches(&format!("warning[{code}]")).count(),
+                1,
+                "{profile}: {stderr}"
+            );
+        }
+        let dist = dir.path().join(format!("dist/{profile}/Share"));
+        assert_eq!(
+            files_in(&dist.join("wowlua/flavors")),
+            [
+                "standard/src/flavored.lua",
+                "standard/src/label.lua",
+                "vanilla/src/flavored.lua",
+                "vanilla/src/label.lua"
+            ],
+            "{profile}"
+        );
+        for (flavor, family) in [("standard", "mainline"), ("vanilla", "classic")] {
+            assert_eq!(
+                run_addon_as(&dist, "Share", Some((flavor, family))),
+                format!("{flavor}\n{at_run_time}plain 2 4 0"),
+                "{profile}"
+            );
+        }
+    }
 }
 
 #[test]

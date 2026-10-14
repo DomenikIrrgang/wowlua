@@ -924,7 +924,9 @@ pub fn build(
         vec![None]
     };
     let mut builds: Vec<FlavorBuild> = Vec::new();
-    for flavor in &compile_flavors {
+    // Files a flavor compiles the same as an earlier one are taken from it.
+    let mut flavor_cache = crate::compile::FlavorCache::default();
+    for (idx, flavor) in compile_flavors.iter().enumerate() {
         let meta = crate::meta::build_meta(
             project,
             &crate::meta::MetaInput {
@@ -1023,6 +1025,8 @@ pub fn build(
             &lower_lua,
             &units,
             &minify,
+            &mut flavor_cache,
+            idx + 1 < compile_flavors.len(),
         );
         builds.push(FlavorBuild {
             flavor: flavor.clone(),
@@ -1030,10 +1034,12 @@ pub fn build(
             output,
         });
     }
-    // The parses are not read after compiling; freeing them here keeps them
-    // out of the memory that assembly and bundling add on top.
+    // The parses and the flavor cache are not read after compiling; freeing
+    // them here keeps them out of the memory that assembly and bundling add
+    // on top. The cache is never kept for the next build (`wowlua dev`).
     drop(parsed);
     drop(declarations);
+    drop(flavor_cache);
     // Packager flavor blocks: each flavor's variant of the file.
     for rel in &flavor_blocks {
         let is_xml = rel.to_ascii_lowercase().ends_with(".xml");
@@ -1049,10 +1055,10 @@ pub fn build(
             let code = crate::keywords::apply_flavor(&String::from_utf8_lossy(&base), &f, is_xml);
             b.output.compiled.insert(
                 rel.clone(),
-                crate::compile::Compiled {
+                std::sync::Arc::new(crate::compile::Compiled {
                     code: code.into_bytes(),
                     map: None,
-                },
+                }),
             );
         }
     }

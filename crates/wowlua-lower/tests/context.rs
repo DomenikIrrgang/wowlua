@@ -1,0 +1,116 @@
+//! What lowering reads of its context: a build reuses a file's lowering in
+//! another flavor when the two contexts are the same apart from
+//! `wowlua:meta` and the lowering did not read that.
+
+use std::collections::HashMap;
+use std::sync::Arc;
+use wowlua_lower::{Context, ImportContext, Lowered};
+use wowlua_luair::{EmitOptions, emit};
+use wowlua_sema::Export;
+use wowlua_sema::classes::EnumInfo;
+use wowlua_sema::constant::Const;
+use wowlua_sema::meta::{Meta, MetaValue};
+use wowlua_span::SourceDb;
+
+fn meta(flavor: &str) -> Option<Arc<Meta>> {
+    Some(Arc::new(Meta {
+        addon: MetaValue::Nil,
+        build: MetaValue::Nil,
+        config: MetaValue::Nil,
+        features: MetaValue::Nil,
+        flavor: Some(flavor.to_string()),
+        assets: HashMap::new(),
+    }))
+}
+
+fn lower(src: &str, ctx: &Context) -> Lowered {
+    let mut db = SourceDb::new();
+    let file = db.add("t.wowlua", src.to_string());
+    let parse = wowlua_syntax::parse(src.as_bytes(), file);
+    assert!(!parse.has_errors(), "{src}\n{:?}", parse.diagnostics);
+    match wowlua_lower::lower_module(&parse, src.as_bytes(), ctx) {
+        Ok(lowered) => lowered,
+        Err(e) => panic!(
+            "{src}\n{:?}",
+            e.iter().map(|d| &d.message).collect::<Vec<_>>()
+        ),
+    }
+}
+
+fn code(lowered: &Lowered) -> String {
+    String::from_utf8(emit(&lowered.chunk, &EmitOptions::default()).text).unwrap()
+}
+
+#[test]
+fn lowering_records_whether_it_reads_meta() {
+    let plain = Context {
+        meta: meta("vanilla"),
+        ..Context::default()
+    };
+    assert!(!lower("local x = 1\nprint(x)\n", &plain).reads_meta);
+    let imports = Context {
+        meta: meta("vanilla"),
+        imports: HashMap::from([(0, ImportContext::Meta)]),
+        ..Context::default()
+    };
+    let unused = "import flavor from \"wowlua:meta\"\nprint(1)\n";
+    assert!(!lower(unused, &imports).reads_meta);
+    let used = "import flavor from \"wowlua:meta\"\nprint(flavor)\n";
+    let lowered = lower(used, &imports);
+    assert!(lowered.reads_meta);
+    assert!(
+        code(&lowered).contains("print(\"vanilla\")"),
+        "{}",
+        code(&lowered)
+    );
+}
+
+/// `0` and `-0` are equal numbers that are emitted differently, so contexts
+/// that differ only by them are not the same; a NaN is the same as itself.
+#[test]
+fn contexts_compare_constants_bit_for_bit() {
+    let with_export = |z: f64, flavor: &str| Context {
+        meta: meta(flavor),
+        file: "src/b.wowlua".to_string(),
+        imports: HashMap::from([(
+            0,
+            ImportContext::Module {
+                id: "a".to_string(),
+                lazy: false,
+                exports: HashMap::from([("Z".to_string(), Export::Const(Some(Const::Number(z))))]),
+                attrs: HashMap::new(),
+                intrinsics: HashMap::new(),
+            },
+        )]),
+        ..Context::default()
+    };
+    let positive = with_export(0.0, "standard");
+    assert!(positive.same_except_meta(&with_export(0.0, "vanilla")));
+    assert!(!positive.same_except_meta(&with_export(-0.0, "vanilla")));
+    assert!(!positive.same_except_meta(&with_export(1.0, "vanilla")));
+    assert!(with_export(f64::NAN, "standard").same_except_meta(&with_export(f64::NAN, "vanilla")));
+    let src = "import Z from \"./a\"\nprint(Z)\n";
+    let a = lower(src, &positive);
+    let b = lower(src, &with_export(-0.0, "vanilla"));
+    assert!(!a.reads_meta && !b.reads_meta);
+    assert_ne!(code(&a), code(&b));
+
+    let with_enum = |member: f64| Context {
+        enums: HashMap::from([(
+            "E".to_string(),
+            Arc::new(EnumInfo {
+                name: "E".to_string(),
+                members: vec![("A".to_string(), Const::Number(member))],
+            }),
+        )]),
+        ..Context::default()
+    };
+    assert!(with_enum(0.0).same_except_meta(&with_enum(0.0)));
+    assert!(!with_enum(0.0).same_except_meta(&with_enum(-0.0)));
+
+    let debug = Context {
+        debug: true,
+        ..Context::default()
+    };
+    assert!(!debug.same_except_meta(&Context::default()));
+}

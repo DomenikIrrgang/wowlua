@@ -17,6 +17,15 @@ impl Const {
         !matches!(self, Const::Nil | Const::Bool(false))
     }
 
+    /// The same constant, numbers bit for bit: unlike `==`, `0` and `-0`
+    /// differ (they are emitted differently) and a NaN equals itself.
+    pub fn same(&self, other: &Const) -> bool {
+        match (self, other) {
+            (Const::Number(a), Const::Number(b)) => a.to_bits() == b.to_bits(),
+            _ => self == other,
+        }
+    }
+
     /// The constant as an expression that reads back exactly.
     pub fn to_expr(&self, pos: Pos) -> ir::Expr {
         use ir::ExprKind as K;
@@ -356,6 +365,16 @@ mod tests {
         assert_eq!(fold_bit(BitOp::Shr, &[-1.0, 28.0]), Some(15.0));
         assert_eq!(fold_bit(BitOp::Shl, &[1.0, 33.0]), Some(2.0));
         assert_eq!(fold_bit(BitOp::Or, &[4294967295.0, 0.0]), Some(-1.0));
+    }
+
+    #[test]
+    fn same_compares_numbers_bit_for_bit() {
+        assert_eq!(Const::Number(0.0), Const::Number(-0.0));
+        assert!(!Const::Number(0.0).same(&Const::Number(-0.0)));
+        assert!(Const::Number(f64::NAN).same(&Const::Number(f64::NAN)));
+        assert!(Const::Number(1.5).same(&Const::Number(1.5)));
+        assert!(Const::String(b"a".to_vec()).same(&Const::String(b"a".to_vec())));
+        assert!(!Const::Nil.same(&Const::Bool(false)));
     }
 
     #[test]
