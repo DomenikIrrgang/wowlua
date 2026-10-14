@@ -1428,6 +1428,58 @@ function C_Spell.RequestLoadSpellData(id: number)
     end)
 end
 
+-- Libraries (LibStub) ----------------------------------------------------------
+
+--- Libraries another addon embedded, by major version.
+Mock.libraries = {}
+
+--- Makes a library available through LibStub (as if an addon loaded it).
+function Mock.provideLibrary(major: string, impl: table)
+    Mock.libraries[major] = impl
+    _G.LibStub = function(name: string, silent: boolean?): any
+        const found = Mock.libraries[name]
+        if not found and not silent then
+            error(`Cannot find a library instance of "{name}".`, 2)
+        end
+        return found
+    end
+end
+
+--- A minimal LibSharedMedia-3.0: media by kind and name, and its
+--- registration callbacks.
+function Mock.sharedMedia(): table
+    const media: { [string]: { [string]: any } } = {}
+    const callbacks: ((...any) -> ())[] = {}
+    const lsm: table = {}
+    function lsm.Register(_: any, kind: string, name: string, path: any): boolean
+        media[kind] = media[kind] ?? {}
+        media[kind][name] = path
+        for _, cb in ipairs(callbacks) do
+            cb("LibSharedMedia_Registered", kind, name)
+        end
+        return true
+    end
+    function lsm.Fetch(_: any, kind: string, name: string?, noDefault: boolean?): any
+        const found = name and (media[kind] ?? {})[name]
+        if found or noDefault then
+            return found
+        end
+        return `lsm-default-{kind}`
+    end
+    function lsm.List(_: any, kind: string): string[]
+        const names: string[] = {}
+        for n in pairs(media[kind] ?? {}) do
+            names[#names + 1] = n
+        end
+        table.sort(names)
+        return names
+    end
+    function lsm.RegisterCallback(_: any, _event: string, fn: (...any) -> ())
+        callbacks[#callbacks + 1] = fn
+    end
+    return lsm
+end
+
 -- The client's class and item quality colors (a few).
 RAID_CLASS_COLORS = {
     MAGE = { r = 0.25, g = 0.78, b = 0.92, colorStr = "ff3fc7eb" },

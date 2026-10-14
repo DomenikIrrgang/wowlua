@@ -353,9 +353,9 @@ media.onRegistered(function(kind: MediaType, name: string) refreshDropdowns() en
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `register` | `(kind: MediaType, name: string, path: string \| number)` | Paths from `asset()` are checked at compile time ([Build metadata](../language/06-meta.md)) |
-| `fetch` | `(kind: MediaType, name: string?, opts?: { noDefault: boolean? }) -> (string \| number)?` | Unknown names return the kind's default (e.g. the standard UI font) unless `noDefault` |
+| `fetch` | `(kind: MediaType, name: string?, opts?: { noDefault: boolean? }) -> (string \| number)?` | Unknown names return the kind's default unless `noDefault`: the client's `STANDARD_TEXT_FONT`, its status bar, tooltip border and tooltip background; sounds have none. With LibSharedMedia, its defaults. |
 | `list` | `(kind: MediaType) -> string[]` | Sorted |
-| `onRegistered` | `(fn: (kind: MediaType, name: string) -> ()) -> Subscription` | Fires for registrations by any addon when LibSharedMedia is present |
+| `onRegistered` | `(fn: (kind: MediaType, name: string) -> ()) -> Subscription` | Fires for this addon's registrations, and with LibSharedMedia for every addon's |
 | `MediaType` | `"font" \| "statusbar" \| "border" \| "background" \| "sound"` | Unknown literal kinds are E8400 |
 
 LibSharedMedia may be embedded in an addon that loads after this one.

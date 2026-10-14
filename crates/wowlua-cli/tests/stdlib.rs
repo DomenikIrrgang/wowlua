@@ -3560,6 +3560,49 @@ Mock.advance(40)
     );
 }
 
+// ------------------------------------------------------------------ media --
+
+/// `wowlua:media`: an own registry without LibSharedMedia; with it (loaded
+/// later by another addon) the waiting media is handed over.
+#[test]
+fn media_registry_and_shared_media() {
+    let source = r#"import * as media from "wowlua:media"
+media.register("statusbar", "Std Flat", "Interface\\AddOns\\Std\\flat")
+_G.StdMedia = media
+"#;
+    let out = modes(
+        &[("src/main.wowlua", source)],
+        "STANDARD_TEXT_FONT = \"Fonts\\\\FRIZQT__.TTF\"",
+        r#"Mock.loadAddon("Std")
+local media = StdMedia
+media.onRegistered(function(kind, name) print("registered", kind, name) end)
+media.register("font", "Std Bold", "Interface\\AddOns\\Std\\bold.ttf")
+media.register("font", "Std Alpha", 12345)
+print(media.fetch("statusbar", "Std Flat"), media.fetch("font", "Nope"), media.fetch("font", "Nope", { noDefault = true }), media.fetch("sound", nil))
+print(table.concat(media.list("font"), ", "), #media.list("border"))
+-- Another addon loads LibSharedMedia.
+local lsm = Mock.sharedMedia()
+Mock.provideLibrary("LibSharedMedia-3.0", lsm)
+Mock.fire("ADDON_LOADED", "Other")
+print(table.concat(media.list("font"), ", "), media.fetch("statusbar", "Std Flat"), media.fetch("font", "Nope"))
+lsm:Register("font", "Other Font", "x.ttf")
+media.register("sound", "Std Ping", 567)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "registered font Std Bold",
+            "registered font Std Alpha",
+            "Interface\\AddOns\\Std\\flat Fonts\\FRIZQT__.TTF nil nil",
+            "Std Alpha, Std Bold 0",
+            "Std Alpha, Std Bold Interface\\AddOns\\Std\\flat lsm-default-font",
+            "registered font Other Font",
+            "registered sound Std Ping",
+        ]
+    );
+}
+
 // ------------------------------------------------------------------ color --
 
 /// A literal `color.hex` is validated at compile time (E8390).

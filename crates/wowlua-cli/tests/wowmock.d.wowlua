@@ -73,6 +73,9 @@ interface MockClient
     --- Items by ID (`info`, `cached`, `delay`, `missing`) and load requests.
     items: { [number]: table }
     itemRequests: number[]
+    libraries: { [string]: table }
+    provideLibrary: (major: string, impl: table) -> ()
+    sharedMedia: () -> table
     auraContainers: any[]
     auraChanged: (unit: string) -> ()
     --- Units by token (`player`, `target`, `party1`, …): what the unit

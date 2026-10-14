@@ -478,6 +478,17 @@ impl Checker<'_> {
                 let o = self.peek_or_infer(obj);
                 self.field_type_quiet(o, &name.text)
             }
+            // `list[i] = …`, `map[k] = …`: the element type.
+            ExprKind::Index { obj, .. } => {
+                let o = self.peek_or_infer(obj);
+                let o = self.env.types.non_nil(o);
+                match self.env.types.get(o).clone() {
+                    Ty::Array(element) => Some(element),
+                    Ty::Map(_, value) => Some(value),
+                    Ty::Record(r) => r.indexer.map(|(_, value)| value),
+                    _ => None,
+                }
+            }
             _ => None,
         }
     }

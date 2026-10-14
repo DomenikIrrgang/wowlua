@@ -1,0 +1,23 @@
+-- wowlua:media: media by name, with LibSharedMedia when an addon loads it.
+import * as media from "wowlua:media"
+import suite, say from "/harness"
+
+const NARROW = "Fonts\\ARIALN.TTF"
+
+local s = suite("media")
+
+s:test("register, fetch and list", function(t)
+    media.register("font", "StdTest Narrow", NARROW)
+    t:eq(media.fetch("font", "StdTest Narrow"), NARROW, "fetched by name")
+    t:ok(media.fetch("font", "StdTest Missing") ~= nil, "a default for unknown names")
+    t:eq(media.fetch("font", "StdTest Missing", { noDefault = true }), nil, "noDefault")
+    local listed = false
+    for _, name in ipairs(media.list("font")) do
+        if name == "StdTest Narrow" then
+            listed = true
+        end
+    end
+    t:ok(listed, "listed")
+    const libStub = _G.LibStub :: typeof(LibStub)?
+    say(`media: LibSharedMedia {libStub and libStub("LibSharedMedia-3.0", true) and "present" or "absent"}`)
+end)

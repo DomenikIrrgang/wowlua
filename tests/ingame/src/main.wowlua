@@ -34,6 +34,7 @@ import _ from "/suites/unit"
 import _ from "/suites/aura"
 import _ from "/suites/spell"
 import _ from "/suites/item"
+import _ from "/suites/media"
 
 local function concat(a: TestRecord[], b: TestRecord[]): TestRecord[]
     local out: TestRecord[] = {}

@@ -1,0 +1,137 @@
+-- wowlua:media (spec stdlib "media"): fonts, textures and sounds by name.
+-- With LibSharedMedia-3.0 (loaded by any addon) media is registered with it
+-- and fetched through it, so players can pick shared media; without it a
+-- registry of this addon's own is used. The library may be embedded in an
+-- addon that loads later: registrations wait, and the module looks for it at
+-- load, at login and after every addon that loads until it is found.
+import on from "wowlua:events"
+import type Subscription from "wowlua:events"
+import callIn from "wowlua:errors"
+
+--- The kinds of media (unknown literal kinds are E8400).
+export type MediaType = "font" | "statusbar" | "border" | "background" | "sound"
+
+--- A file path or a file ID.
+export type MediaPath = string | number
+
+-- What `fetch` falls back to for unknown names: the client's own.
+const DEFAULTS: { [string]: MediaPath } = {
+    font = _G.STANDARD_TEXT_FONT ?? "Fonts\\FRIZQT__.TTF",
+    statusbar = "Interface\\TargetingFrame\\UI-StatusBar",
+    border = "Interface\\Tooltips\\UI-Tooltip-Border",
+    background = "Interface\\Tooltips\\UI-Tooltip-Background",
+}
+
+-- The addon's own media, by kind and name.
+const own: { [string]: { [string]: MediaPath } } = {
+    font = {},
+    statusbar = {},
+    border = {},
+    background = {},
+    sound = {},
+}
+
+type Registration = { kind: MediaType, name: string, path: MediaPath }
+local waiting: Registration[] = {}
+local shared: LibSharedMedia? = nil
+
+class Listener implements Subscription
+    active: boolean = true
+    readonly fn: (kind: MediaType, name: string) -> ()
+
+    constructor(fn: (kind: MediaType, name: string) -> ())
+        self.fn = fn
+    end
+
+    function cancel()
+        self.active = false
+    end
+end
+
+local listeners: Listener[] = {}
+
+local function notify(kind: MediaType, name: string)
+    for _, l in ipairs(listeners) do
+        if l.active then
+            callIn({ component = "media: onRegistered" }, l.fn, kind, name)
+        end
+    end
+end
+
+-- Looks for LibSharedMedia; once found, hands it the waiting media.
+local lookups: Subscription[] = {}
+local function find()
+    if shared then
+        return
+    end
+    const libStub = _G.LibStub :: typeof(LibStub)?
+    const lib = libStub and libStub("LibSharedMedia-3.0", true)
+    if not lib then
+        return
+    end
+    shared = lib
+    for _, r in ipairs(waiting) do
+        lib:Register(r.kind, r.name, r.path)
+    end
+    waiting = {}
+    lib.RegisterCallback(own, "LibSharedMedia_Registered", function(_: any, kind: MediaType, name: string)
+        notify(kind, name)
+    end)
+    for _, sub in ipairs(lookups) do
+        sub:cancel()
+    end
+end
+
+find()
+lookups[#lookups + 1] = on("PLAYER_LOGIN", find)
+lookups[#lookups + 1] = on("ADDON_LOADED", find)
+
+--- Registers media under a name (with LibSharedMedia for every addon).
+export function register(kind: MediaType, name: string, path: MediaPath)
+    own[kind][name] = path
+    if shared then
+        shared:Register(kind, name, path)
+    else
+        waiting[#waiting + 1] = { kind = kind, name = name, path = path }
+        notify(kind, name)
+    end
+end
+
+--- The media's path; for unknown names the kind's default (the client's
+--- standard font, bar, border or background) unless `noDefault`.
+export function fetch(kind: MediaType, name: string?, opts: { noDefault?: boolean }?): MediaPath?
+    if shared then
+        return shared:Fetch(kind, name, opts?.noDefault)
+    end
+    if name then
+        const path = own[kind][name]
+        if path then
+            return path
+        end
+    end
+    if opts?.noDefault then
+        return nil
+    end
+    return DEFAULTS[kind]
+end
+
+--- The names of a kind, sorted.
+export function list(kind: MediaType): string[]
+    if shared then
+        return shared:List(kind)
+    end
+    const names: string[] = {}
+    for name in pairs(own[kind]) do
+        names[#names + 1] = name
+    end
+    table.sort(names)
+    return names
+end
+
+--- `fn` for every registration: this addon's, and with LibSharedMedia every
+--- addon's.
+export function onRegistered(fn: (kind: MediaType, name: string) -> ()): Subscription
+    const l = Listener.new(fn)
+    listeners[#listeners + 1] = l
+    return l
+end

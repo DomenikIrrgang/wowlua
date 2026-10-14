@@ -363,7 +363,10 @@ menus and lists, then the widget themes.
   cancelling, an LRU cache, spell data; `await` comes with `jobs`; the
   record is `ItemData`, as the API's `ItemInfo` names the item reference).
   The checker now narrows an optional chain's base where the chain has a
-  value (`if x?.f ~= nil then x.f … end`).
+  value (`if x?.f ~= nil then x.f … end`). `media` done 2026-10-14 (own
+  registry, LibSharedMedia when any addon loads it, waiting registrations
+  handed over, E8400; LibSharedMedia is declared for `LibStub`). The
+  checker types table literals assigned to `t[i]` by the element type.
 
 ## M9: Test runner, language server, formatter
 

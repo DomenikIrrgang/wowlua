@@ -66,11 +66,27 @@ type LibDBIcon = {
     [string]: any,
 }
 
+--- LibSharedMedia-3.0: media shared between addons, by type and name.
+type LibSharedMedia = {
+    Register: (self: LibSharedMedia, mediatype: string, key: string, data: string | number, langmask: number?) -> boolean,
+    Fetch: (self: LibSharedMedia, mediatype: string, key: string?, noDefault: boolean?) -> (string | number)?,
+    List: (self: LibSharedMedia, mediatype: string) -> string[],
+    HashTable: (self: LibSharedMedia, mediatype: string) -> { [string]: string | number },
+    IsValid: (self: LibSharedMedia, mediatype: string, key: string?) -> boolean,
+    GetDefault: (self: LibSharedMedia, mediatype: string) -> string?,
+    --- CallbackHandler: `LSM.RegisterCallback(owner, "LibSharedMedia_Registered", fn)`.
+    RegisterCallback: (owner: any, event: string, method: any) -> (),
+    UnregisterCallback: (owner: any, event: string) -> (),
+    [string]: any,
+}
+
 declare global LibStub: LibStubLibrary
     & ((major: "LibDataBroker-1.1", silent: false?) -> LibDataBroker)
     & ((major: "LibDataBroker-1.1", silent: boolean?) -> LibDataBroker?)
     & ((major: "LibDBIcon-1.0", silent: false?) -> LibDBIcon)
     & ((major: "LibDBIcon-1.0", silent: boolean?) -> LibDBIcon?)
+    & ((major: "LibSharedMedia-3.0", silent: false?) -> LibSharedMedia)
+    & ((major: "LibSharedMedia-3.0", silent: boolean?) -> LibSharedMedia?)
     & ((major: string, silent: boolean?) -> any)
 
 -- The handles of `C_Timer.NewTimer` and `C_Timer.NewTicker` (Blizzard's

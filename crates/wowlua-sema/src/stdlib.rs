@@ -45,6 +45,9 @@ pub struct FlavorTooltips {
     pub data_system: bool,
 }
 
+/// The media kinds of `wowlua:media` (LibSharedMedia's).
+const MEDIA_KINDS: &[&str] = &["font", "statusbar", "border", "background", "sound"];
+
 /// The kinds clients without the tooltip data system have.
 const SCRIPT_KINDS: &[&str] = &["Item", "Spell", "Unit"];
 
@@ -751,6 +754,19 @@ impl Ctx<'_> {
                 }
             }
             "aura.container" => self.aura_container(e, &args),
+            "media.register" | "media.fetch" | "media.list" => {
+                if let Some(first) = args.first()
+                    && let Some(kind) = self.constant_string(first)
+                    && !MEDIA_KINDS.contains(&kind.as_str())
+                {
+                    self.error(
+                        "E8400",
+                        first.span,
+                        format!("`{kind}` is not a media kind: \"font\", \"statusbar\", \"border\", \"background\" or \"sound\""),
+                        "unknown kind",
+                    );
+                }
+            }
             "tooltip.hook" => {
                 if let Some(first) = args.first() {
                     self.tooltip_kind(first);

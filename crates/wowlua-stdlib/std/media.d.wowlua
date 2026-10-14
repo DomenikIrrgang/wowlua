@@ -1,0 +1,8 @@
+-- Compiler behavior of `wowlua:media` (spec stdlib "media"): literal media
+-- kinds are checked (E8400).
+@intrinsic("media.register")
+declare global register: any
+@intrinsic("media.fetch")
+declare global fetch: any
+@intrinsic("media.list")
+declare global list: any
