@@ -3380,3 +3380,135 @@ fn load_order_diagnostics() {
         assert.stderr(predicate::str::contains(*code).and(predicate::str::contains(*text)));
     }
 }
+
+/// Runs compiled files in order in one Lua state, each as a chunk called
+/// with `("Compiled", ns)` like the client does; returns what they printed.
+fn run_compiled(files: &[std::path::PathBuf]) -> String {
+    let lua = mlua::Lua::new();
+    lua.load("OUT = {} print = function(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((select(i, ...))) end OUT[#OUT + 1] = table.concat(t, ' ') end")
+        .exec()
+        .unwrap();
+    let ns = lua.create_table().unwrap();
+    for file in files {
+        let code = fs::read_to_string(file).unwrap();
+        lua.load(&code)
+            .set_name(file.to_string_lossy())
+            .call::<()>(("Compiled", ns.clone()))
+            .unwrap();
+    }
+    lua.load("return table.concat(OUT, '\\n')").eval().unwrap()
+}
+
+/// `wowlua compile`: files without a project compile with the defaults;
+/// one output goes to stdout, several into `-o <dir>` with the load order;
+/// `--bundle` gives one file in the build's bundle format.
+#[test]
+fn compile_without_a_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    write(
+        root,
+        &[
+            (
+                "x/plain.wowlua",
+                "local function add(a: number, b: number): number\n    return a + b\nend\nlocal total = 0\ntotal += add(1, 2)\nprint(total)\n",
+            ),
+            (
+                "x/util.wowlua",
+                "export function double(n: number): number\n    return n * 2\nend\n",
+            ),
+            (
+                "x/main.wowlua",
+                "import double from \"./util\"\nprint(double(21))\n",
+            ),
+            ("x/bad.wowlua", "local n: number = \"no\"\nprint(n)\n"),
+        ],
+    );
+    // One plain file: plain Lua on stdout, no runtime.
+    let out = wowlua(root)
+        .args(["compile", "--release", "--no-bundle", "x/plain.wowlua"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let lua = String::from_utf8(out).unwrap();
+    assert!(lua.contains("total = total + "), "{lua}");
+    assert!(!lua.contains(": number"), "{lua}");
+
+    // Several outputs need a directory.
+    wowlua(root)
+        .args(["compile", "x/util.wowlua", "x/main.wowlua"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("pass `-o <dir>`"));
+    wowlua(root)
+        .args(["compile", "x/util.wowlua", "x/main.wowlua", "-o", "out"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Load order:\n  wowlua/runtime.lua\n  src/util.lua\n  src/main.lua\n",
+        ));
+    let order: Vec<_> = ["wowlua/runtime.lua", "src/util.lua", "src/main.lua"]
+        .iter()
+        .map(|p| root.join("out").join(p))
+        .collect();
+    assert_eq!(run_compiled(&order), "42");
+
+    // A bundle runs on its own.
+    wowlua(root)
+        .args([
+            "compile",
+            "--bundle",
+            "x/util.wowlua",
+            "x/main.wowlua",
+            "-o",
+            "all.lua",
+        ])
+        .assert()
+        .success();
+    let bundle = fs::read_to_string(root.join("all.lua")).unwrap();
+    assert!(bundle.contains("__wl_load(\"src/main\""), "{bundle}");
+    assert_eq!(run_compiled(&[root.join("all.lua")]), "42");
+
+    // Type errors fail.
+    wowlua(root)
+        .args(["compile", "x/bad.wowlua"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("E2001"));
+}
+
+/// Inside a project, `wowlua compile` uses its manifest: its profiles and
+/// its declaration files.
+#[test]
+fn compile_in_a_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    write(
+        root,
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"demo\", \"version\": \"1.0.0\" },\n  \"profiles\": { \"plain\": { \"inherits\": \"release\", \"bundle\": false, \"minify\": \"none\", \"optimize\": { \"cache-globals\": \"off\" } } } }\n",
+            ),
+            (
+                "src/api.d.wowlua",
+                "declare global Greet: (name: string) -> string\n",
+            ),
+            ("src/main.wowlua", "print(Greet(\"you\"))\n"),
+            ("src/other.wowlua", "local s: string = Greet(1)\nprint(s)\n"),
+        ],
+    );
+    wowlua(root)
+        .args(["compile", "--profile", "plain", "src/main.wowlua"])
+        .assert()
+        .success()
+        .stdout("print(Greet(\"you\"))\n");
+    // Only the given files are compiled.
+    wowlua(root)
+        .args(["compile", "--profile", "plain", "src/other.wowlua"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("E2001").or(predicate::str::contains("E2012")));
+}

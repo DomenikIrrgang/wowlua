@@ -10,9 +10,9 @@ end
 -- A parameter failed its check.
 function check.fail(index, name, fname, location, expected, value)
 	error(
-		addonName .. ": " .. location .. ": bad argument #" .. index .. " '" .. name .. "' to '" .. fname .. "' ("
-			.. expected .. " expected, got " .. got(value) .. ")",
-		0
+	addonName .. ": " .. location .. ": bad argument #" .. index .. " '" .. name .. "' to '" .. fname .. "' ("
+	.. expected .. " expected, got " .. got(value) .. ")",
+	0
 	)
 end
 -- A `::` assertion failed.

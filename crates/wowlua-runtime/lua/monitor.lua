@@ -1,6 +1,6 @@
 -- wowlua runtime: monitor (spec §7.9). The compiler routes this addon's
 -- SetScript, HookScript and C_Timer calls here; nothing global is hooked.
-local mon = { events = {}, scripts = {}, timers = {}, memory = {} }
+local mon = {events = {}, scripts = {}, timers = {}, memory = {}}
 wl.mon = mon
 local clock = debugprofilestop or function()
 	return os.clock() * 1000
@@ -8,7 +8,7 @@ end
 local function record(bucket, key, detail, elapsed)
 	local s = bucket[key]
 	if not s then
-		s = { count = 0, total = 0, max = 0, detail = detail }
+		s = {count = 0, total = 0, max = 0, detail = detail}
 		bucket[key] = s
 	end
 	s.count = s.count + 1
@@ -19,7 +19,7 @@ local function record(bucket, key, detail, elapsed)
 end
 local function timed(bucket, key, detail, start, ...)
 	record(bucket, key, detail, clock() - start)
-	return ...
+	return...
 end
 -- A frame's label: its name, its wowlua class, or where it was set up.
 local function label(frame, location)

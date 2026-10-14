@@ -32,6 +32,20 @@ pub struct BuildRequest {
     /// A publish target's `minify` / `bundle` over the profile's.
     pub minify: Option<String>,
     pub bundle: Option<bool>,
+    /// `wowlua compile`: only these files, without assets and without the
+    /// in-game dev tooling (there is no AddOn folder to load it from).
+    pub only: Option<Only>,
+}
+
+/// The files `wowlua compile` compiles.
+#[derive(Clone, Debug, Default)]
+pub struct Only {
+    /// Absolute paths of `.wowlua` and `.lua` files, and `.d.wowlua`
+    /// declaration files, all under the package root.
+    pub files: Vec<PathBuf>,
+    /// The project's own declaration files apply too (a real project; a
+    /// standalone compile has only the given ones).
+    pub project_declarations: bool,
 }
 
 impl BuildRequest {
@@ -44,6 +58,7 @@ impl BuildRequest {
             nolib: false,
             minify: None,
             bundle: None,
+            only: None,
         }
     }
 }
@@ -68,6 +83,35 @@ pub struct BuildOutput {
     pub tocs: Vec<TocFile>,
     /// Output files by path relative to the AddOn folder.
     pub files: BTreeMap<String, Content>,
+}
+
+/// The Lua files of a build in load order (the TOCs' order, then files
+/// loaded otherwise), with their content (`wowlua compile`).
+pub fn lua_outputs(build: &BuildOutput) -> Vec<(String, Vec<u8>)> {
+    let mut order: Vec<String> = Vec::new();
+    for toc in &build.tocs {
+        for line in toc.content.lines() {
+            let path = line.trim().replace('\\', "/");
+            if path.ends_with(".lua") && build.files.contains_key(&path) && !order.contains(&path) {
+                order.push(path);
+            }
+        }
+    }
+    for path in build.files.keys() {
+        if path.ends_with(".lua") && !order.contains(path) {
+            order.push(path.clone());
+        }
+    }
+    order
+        .into_iter()
+        .map(|path| {
+            let bytes = match &build.files[&path] {
+                Content::Bytes(b) => b.clone(),
+                Content::Copy(from) => std::fs::read(from).unwrap_or_default(),
+            };
+            (path, bytes)
+        })
+        .collect()
 }
 
 /// The dependency edges of one compilation's flavor (`None` in shared mode).
@@ -182,6 +226,11 @@ pub fn build(
             if let Some(b) = request.bundle {
                 profile.bundle = b;
             }
+            if request.only.is_some() {
+                profile.dev_console = false;
+                profile.monitor = false;
+                profile.capture_errors = false;
+            }
             profile
         }
         Err(_) => {
@@ -224,7 +273,17 @@ pub fn build(
     // Sources and assets.
     let build_cfg = &manifest.manifest.build;
     let exclude = sources::glob_set(&build_cfg.exclude);
-    let sources = sources::discover_sources(&root, &build_cfg.src, &build_cfg.out, &exclude);
+    let (sources, given_declarations) = match &request.only {
+        Some(only) => {
+            let (sources, declarations) =
+                sources::given(session, &only.files, &root, &build_cfg.src);
+            (sources, Some(declarations))
+        }
+        None => (
+            sources::discover_sources(&root, &build_cfg.src, &build_cfg.out, &exclude),
+            None,
+        ),
+    };
     let mut assets = sources::discover_assets(
         &root,
         &build_cfg.out,
@@ -232,6 +291,9 @@ pub fn build(
         &exclude,
     );
     let mut sources = sources;
+    if request.only.is_some() {
+        assets.clear();
+    }
     // Release builds of a packager project ship only what git tracks, like
     // the packager, which leaves out every untracked file (decision T147).
     if manifest.manifest.compat.packager_keywords && !profile.debug {
@@ -285,7 +347,20 @@ pub fn build(
         }
     }
     let mut declarations = Vec::new();
-    for source in sources::discover_declarations(&root, &build_cfg.src, &build_cfg.out, &exclude) {
+    let declaration_sources = match (&request.only, given_declarations) {
+        (Some(only), Some(given)) if !only.project_declarations => given,
+        (_, given) => {
+            let mut all =
+                sources::discover_declarations(&root, &build_cfg.src, &build_cfg.out, &exclude);
+            for source in given.unwrap_or_default() {
+                if !all.iter().any(|d| d.abs == source.abs) {
+                    all.push(source);
+                }
+            }
+            all
+        }
+    };
+    for source in declaration_sources {
         match std::fs::read(&source.abs) {
             Ok(bytes) => {
                 let file = session

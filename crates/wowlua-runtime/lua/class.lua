@@ -1,10 +1,10 @@
 -- wowlua runtime: class (spec §3.1). Class tables, finalization (inherited
 -- metamethods, property dispatch), abstract stubs and class identity.
 local METAMETHODS = {
-	"__tostring", "__eq", "__lt", "__le", "__add", "__sub", "__mul", "__div",
-	"__mod", "__pow", "__unm", "__concat", "__call",
+"__tostring", "__eq", "__lt", "__le", "__add", "__sub", "__mul", "__div",
+"__mod", "__pow", "__unm", "__concat", "__call"
 }
-local ACCESSORS = { get = "__getters", set = "__setters", sget = "__sgetters", sset = "__ssetters" }
+local ACCESSORS = {get = "__getters", set = "__setters", sget = "__sgetters", sset = "__ssetters"}
 local function noop() end
 local function isClass(v)
 	return type(v) == "table" and rawget(v, "__name") ~= nil and rawget(v, "new") ~= nil
@@ -14,7 +14,7 @@ function wl.class(name, super)
 	if super ~= nil and not isClass(super) then
 		error(addonName .. ": class " .. name .. " extends a value that is not a class", 2)
 	end
-	local cls = { __name = name, __super = super }
+	local cls = {__name = name, __super = super}
 	cls.__index = cls
 	cls.new = function(...)
 		local self = setmetatable({}, cls)
@@ -25,10 +25,10 @@ function wl.class(name, super)
 		cls.__init = noop
 	end
 	setmetatable(cls, {
-		__index = super,
-		__call = function(c, ...)
-			return c.new(...)
-		end,
+	__index = super,
+	__call = function(c, ...)
+		return c.new(...)
+	end
 	})
 	return cls
 end

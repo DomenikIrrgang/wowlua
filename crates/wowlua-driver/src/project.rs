@@ -73,6 +73,23 @@ pub struct Project {
     pub bundled: bool,
 }
 
+impl Project {
+    /// Applies the manifest's `check.lints` severities to the session's
+    /// diagnostics.
+    pub fn apply_lints(&self, session: &mut Session) {
+        use wowlua_diagnostics::LintLevel;
+        use wowlua_manifest::model::LintSetting;
+        let lints = &self.manifest.manifest.check.lints;
+        session.diagnostics.apply_lint_levels(|code| {
+            lints.get(code).map(|level| match level {
+                LintSetting::Allow => LintLevel::Allow,
+                LintSetting::Warn => LintLevel::Warn,
+                LintSetting::Deny => LintLevel::Deny,
+            })
+        });
+    }
+}
+
 /// An AddOn fetched and shipped as it is (`workspace.external-addons`).
 #[derive(Debug, Clone)]
 pub struct ExternalAddon {
@@ -355,6 +372,32 @@ pub fn load_projects(session: &mut Session, options: &LoadOptions) -> Option<Vec
         }
         Some(root) => load_workspace(session, options, &root, (!is_root).then_some(dir.as_path())),
     }
+}
+
+/// The project of a standalone `wowlua compile` (no `wowlua.json`): an
+/// addon at `root` with the built-in defaults, its sources there. Nothing
+/// is written (no lockfile) and there are no dependencies.
+pub fn standalone_project(
+    session: &mut Session,
+    options: &LoadOptions,
+    root: &Path,
+) -> Option<Project> {
+    let text = "{ \"package\": { \"name\": \"compiled\", \"version\": \"0.0.0\" }, \"build\": { \"src\": \".\" } }\n";
+    let path = root.join(wowlua_manifest::MANIFEST_FILE);
+    let manifest = parse_manifest(session, options, &path, text.to_string())?;
+    let lock = lockfile::required(None, &manifest.flavors);
+    let interfaces = interfaces_of(&manifest, &lock);
+    Some(Project {
+        manifest,
+        lock,
+        interfaces,
+        deps: wowlua_pkg::Resolution::default(),
+        workspace_root: None,
+        workspace_addons: Vec::new(),
+        external_addons: Vec::new(),
+        selected: true,
+        bundled: false,
+    })
 }
 
 /// A package outside any workspace.

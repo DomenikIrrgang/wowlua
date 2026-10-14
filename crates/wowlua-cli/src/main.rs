@@ -210,6 +210,8 @@ enum Command {
         #[arg(long, value_delimiter = ',')]
         flavor: Vec<String>,
     },
+    /// Compile files to Lua without making an AddOn folder
+    Compile(CompileArgs),
     /// Format .wowlua files (and .lua files with `fmt.lua`)
     Fmt {
         /// Exit with status 1 if any file would change, without writing
@@ -417,6 +419,31 @@ impl ProfileArgs {
 }
 
 #[derive(Args, Debug, Clone)]
+pub struct CompileArgs {
+    /// `.wowlua` and `.lua` files, and `.d.wowlua` declaration files
+    #[arg(required = true)]
+    pub files: Vec<PathBuf>,
+    #[command(flatten)]
+    pub profile: ProfileArgs,
+    /// Restrict to these flavors
+    #[arg(long, value_delimiter = ',')]
+    pub flavor: Vec<String>,
+    /// Bundle into one file (the default of release profiles)
+    #[arg(long, conflicts_with = "no_bundle")]
+    pub bundle: bool,
+    /// Keep one output file per source
+    #[arg(long)]
+    pub no_bundle: bool,
+    /// Minification level (default: the profile's)
+    #[arg(long, value_name = "LEVEL")]
+    pub minify: Option<String>,
+    /// Output file, or directory for several files (default: stdout when
+    /// there is one output file)
+    #[arg(short, long, value_name = "PATH")]
+    pub out: Option<PathBuf>,
+}
+
+#[derive(Args, Debug, Clone)]
 pub struct BuildArgs {
     #[command(flatten)]
     pub profile: ProfileArgs,
@@ -481,6 +508,7 @@ fn main() -> ExitCode {
         Command::Check { profile, flavor } => {
             commands::check(&out, &cli.global, &profile.name("dev"), flavor)
         }
+        Command::Compile(args) => commands::compile(&out, &cli.global, &args),
         Command::Fmt { check, paths } => commands::fmt(&out, &cli.global, check, paths),
         Command::Dev { target, link } => commands::dev(&out, &cli.global, &target, link),
         Command::Install { profile, target } => {

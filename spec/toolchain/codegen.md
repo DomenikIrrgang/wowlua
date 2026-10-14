@@ -192,7 +192,15 @@ The `class` slice provides `class`, `accessor`, `finalize`, `abstract`,
 `finalizeWidget`, `xmlMixin` and `script`; `enum` provides `enum`; `decorate` provides
 `decorate`, `decorateField`, `register` and `deprecated`.
 
-The runtime is written in Lua in `crates/wowlua-runtime/lua/`. Each slice
+The runtime is written in wowlua in `crates/wowlua-runtime/wowlua/`, one
+file per slice, and compiled into the Lua the compiler embeds
+(`crates/wowlua-runtime/lua/`, committed) by `cargo xtask runtime`; the
+compiler cannot compile its own runtime while it is being built. The slices
+are concatenated into one chunk, so each is compiled on its own with the
+runtime package's `runtime` profile (no instrumentation, checks,
+optimizations or minification; line numbers preserved), the slices after
+`core` seeing its locals through declarations. `cargo xtask check` (CI) fails
+when the committed Lua is out of date or a slice has a warning. Each slice
 declares its dependencies on other slices. The driver computes the closure from
 the features recorded during lowering. **Standard-library modules** are not part
 of the runtime. They are wowlua modules compiled into the addon like any

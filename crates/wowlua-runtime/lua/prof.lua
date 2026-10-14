@@ -1,6 +1,6 @@
 -- wowlua runtime: profiler (spec §7.3). Statistics per function or label:
 -- calls, total, self (total minus instrumented callees), max, avg (ms).
-local prof = { stats = {}, timers = {}, errors = wl.profErrors }
+local prof = {stats = {}, timers = {}, errors = wl.profErrors}
 wl.prof = prof
 local clock = debugprofilestop or function()
 	return os.clock() * 1000
@@ -11,7 +11,7 @@ local child = {}
 local function record(name, location, elapsed, own)
 	local s = prof.stats[name]
 	if not s then
-		s = { calls = 0, total = 0, self = 0, max = 0, avg = 0, errors = 0, location = location }
+		s = {calls = 0, total = 0, self = 0, max = 0, avg = 0, errors = 0, location = location}
 		prof.stats[name] = s
 	end
 	s.calls = s.calls + 1
@@ -33,7 +33,7 @@ local function finish(name, location, start, depth, ...)
 		child[depth - 1] = (child[depth - 1] or 0) + elapsed
 	end
 	record(name, location, elapsed, elapsed - inner)
-	return ...
+	return...
 end
 local function memoryKiB()
 	return collectgarbage("count")
@@ -70,7 +70,7 @@ function prof.wrap(fn, name, location, opts)
 			local function done(...)
 				s = prof.stats[name]
 				s.memory = (s.memory or 0) + math.max(memoryKiB() - before, 0)
-				return ...
+				return...
 			end
 			return done(finish(name, location, clock(), depth, fn(...)))
 		end
@@ -79,9 +79,10 @@ function prof.wrap(fn, name, location, opts)
 		return function(...)
 			local depth = #child + 1
 			child[depth] = 0
-			local args = { n = select("#", ...), ... }
+			local n = select("#", ...)
+			local args = {...}
 			return finishTracked(name, location, clock(), depth, xpcall(function()
-				return fn(unpack(args, 1, args.n))
+				return fn(unpack(args, 1, n))
 			end, function(message)
 				return message
 			end))

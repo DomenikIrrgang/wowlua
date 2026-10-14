@@ -1,7 +1,8 @@
 //! The wowlua runtime (`__wl`, spec codegen §14.7): Lua code emitted as
 //! `wowlua/runtime.lua`, sliced by feature: `core` (module registry,
 //! `define` for plain Lua, build metadata tables) plus the slices the
-//! compiled code uses.
+//! compiled code uses. The slices are written in wowlua (`wowlua/`) and
+//! compiled into `lua/` by `cargo xtask runtime`.
 
 use std::collections::BTreeSet;
 
@@ -47,11 +48,7 @@ impl Slice {
             Slice::Reflect => include_str!("../lua/reflect.lua"),
             Slice::Monitor => include_str!("../lua/monitor.lua"),
             Slice::Errors => include_str!("../lua/errors.lua"),
-            // The window's builder first: the console calls it.
-            Slice::DevConsole => concat!(
-                include_str!("../lua/devwindow.lua"),
-                include_str!("../lua/devconsole.lua")
-            ),
+            Slice::DevConsole => include_str!("../lua/devconsole.lua"),
         }
     }
 

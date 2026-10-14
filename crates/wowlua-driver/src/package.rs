@@ -591,6 +591,7 @@ fn package_native(
                         nolib: config.nolib,
                         minify: config.minify.clone(),
                         bundle: config.bundle,
+                        only: None,
                     };
                     let build = crate::build(session, project, &build_request)?;
                     // The package's own license files ship next to the AddOn.
@@ -776,6 +777,7 @@ fn package_like_the_packager(
                     nolib,
                     minify: None,
                     bundle: None,
+                    only: None,
                 };
                 builds.push(crate::build(session, project, &build_request)?);
             }

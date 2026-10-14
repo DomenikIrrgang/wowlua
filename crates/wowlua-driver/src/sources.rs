@@ -195,6 +195,72 @@ pub fn discover_sources(root: &Path, src: &str, out: &str, exclude: &GlobSet) ->
         .collect()
 }
 
+/// The files given to `wowlua compile` (absolute, under `root`): sources
+/// and declaration files. Paths are relative to `src` when inside it, else
+/// to the root.
+pub fn given(
+    session: &mut crate::Session,
+    files: &[PathBuf],
+    root: &Path,
+    src: &str,
+) -> (Vec<Source>, Vec<Source>) {
+    // Compared canonically (the given paths are canonical).
+    let root = &root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let src_dir = root.join(src);
+    let src_dir = src_dir.canonicalize().unwrap_or(src_dir);
+    let mut sources: Vec<Source> = Vec::new();
+    let mut declarations = Vec::new();
+    for abs in files {
+        let Some(rel) = crate::fsutil::relative_slash(abs, root) else {
+            session.push(wowlua_diagnostics::Diagnostic::plain_error(format!(
+                "`{}` is outside the package at `{}`",
+                abs.display(),
+                root.display()
+            )));
+            continue;
+        };
+        let src_rel = crate::fsutil::relative_slash(abs, &src_dir).unwrap_or_else(|| rel.clone());
+        let lower = rel.to_ascii_lowercase();
+        let kind = if lower.ends_with(".d.wowlua") {
+            None
+        } else {
+            match SourceKind::of(abs) {
+                Some(SourceKind::Xml) | None => {
+                    session.push(
+                        wowlua_diagnostics::Diagnostic::plain_error(
+                            "compiles `.wowlua` and `.lua` files (and `.d.wowlua` declarations)",
+                        )
+                        .with_path(&rel),
+                    );
+                    continue;
+                }
+                kind => kind,
+            }
+        };
+        if sources
+            .iter()
+            .chain(&declarations)
+            .any(|s: &Source| s.abs == *abs)
+        {
+            continue;
+        }
+        let source = Source {
+            rel,
+            src_rel,
+            abs: abs.clone(),
+            kind: kind.unwrap_or(SourceKind::Wowlua),
+            output: None,
+        };
+        if kind.is_some() {
+            sources.push(source);
+        } else {
+            declarations.push(source);
+        }
+    }
+    sources.sort_by(|a, b| a.rel.cmp(&b.rel));
+    (sources, declarations)
+}
+
 /// Declaration files (`.d.wowlua`) under `src`: types only, never part of
 /// the output; they type plain-Lua modules for imports (spec §5.3).
 pub fn discover_declarations(root: &Path, src: &str, out: &str, exclude: &GlobSet) -> Vec<Source> {

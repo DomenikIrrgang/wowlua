@@ -3,6 +3,8 @@
 //! - `cargo xtask codes`: regenerate the diagnostic code table from
 //!   `spec/appendix/diagnostics.md`.
 //! - `cargo xtask schema`: regenerate the manifest JSON schema in `schema/`.
+//! - `cargo xtask runtime`: compile the runtime's wowlua sources into the
+//!   Lua the compiler embeds (`crates/wowlua-runtime/lua`).
 //! - `cargo xtask check`: fail if generated files are out of date (used in CI).
 //! - `cargo xtask corpus fetch|run [dir]`: the conformance corpus.
 //! - `cargo xtask types fetch|gen [dir]`: the embedded wow-api declarations.
@@ -15,6 +17,7 @@ use std::path::{Path, PathBuf};
 
 mod corpus;
 mod packager_diff;
+mod runtime;
 mod types;
 
 fn main() -> Result<()> {
@@ -23,13 +26,35 @@ fn main() -> Result<()> {
     match task.as_str() {
         "codes" => write_if_changed(&codes_path(&root), &generate_codes(&root)?),
         "schema" => write_if_changed(&schema_path(&root), &wowlua_manifest::schema_json()),
+        "runtime" => {
+            let slices = runtime::generate(&root)?;
+            for stale in stale_runtime_files(&root, &slices)? {
+                fs::remove_file(&stale)?;
+                println!("removed {}", stale.display());
+            }
+            for (path, lua) in &slices {
+                write_if_changed(path, lua)?;
+            }
+            Ok(())
+        }
         "check" => {
             check_current(&codes_path(&root), &generate_codes(&root)?, "codes")?;
             check_current(
                 &schema_path(&root),
                 &wowlua_manifest::schema_json(),
                 "schema",
-            )
+            )?;
+            let slices = runtime::generate(&root)?;
+            if let Some(stale) = stale_runtime_files(&root, &slices)?.first() {
+                bail!(
+                    "{} is not generated: run `cargo xtask runtime`",
+                    stale.display()
+                );
+            }
+            for (path, lua) in &slices {
+                check_current(path, lua, "runtime")?;
+            }
+            Ok(())
         }
         "corpus" => {
             let dir = std::env::args()
@@ -133,6 +158,18 @@ fn check_current(path: &Path, expected: &str, task: &str) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Lua files of the runtime that no wowlua source generates.
+fn stale_runtime_files(root: &Path, slices: &[(PathBuf, String)]) -> Result<Vec<PathBuf>> {
+    let mut stale = Vec::new();
+    for entry in fs::read_dir(root.join("crates/wowlua-runtime/lua"))? {
+        let path = entry?.path().canonicalize()?;
+        if path.extension().is_some_and(|e| e == "lua") && !slices.iter().any(|(p, _)| *p == path) {
+            stale.push(path);
+        }
+    }
+    Ok(stale)
 }
 
 fn write_if_changed(path: &Path, content: &str) -> Result<()> {

@@ -1,5 +1,7 @@
 -- wowlua runtime: decorate (spec §4.5). Decorators were evaluated top to
 -- bottom; they are applied bottom to top, each receiving the context table.
+
+
 function wl.decorate(value, ctx, ...)
 	for i = select("#", ...), 1, -1 do
 		local result = (select(i, ...))(value, ctx)

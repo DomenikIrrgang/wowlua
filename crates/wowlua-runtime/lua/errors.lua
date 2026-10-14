@@ -1,6 +1,6 @@
 -- wowlua runtime: error capture (spec §7.10). Errors raised by this
 -- addon's code are recorded; the previous handler always runs as well.
-local errors = { list = {}, byMessage = {} }
+local errors = {list = {}, byMessage = {}}
 wl.errors = errors
 local folder = ("addons/" .. addonName .. "/"):lower()
 local function normal(s)
@@ -43,10 +43,10 @@ function errors.record(message, stack)
 		return
 	end
 	e = {
-		message = short,
-		stack = shorten(stack),
-		count = 1,
-		time = date and date("%H:%M:%S") or "",
+	message = short,
+	stack = shorten(stack),
+	count = 1,
+	time = date and date("%H:%M:%S") or ""
 	}
 	errors.byMessage[short] = e
 	table.insert(errors.list, 1, e)
@@ -54,7 +54,7 @@ function errors.record(message, stack)
 	local chat = DEFAULT_CHAT_FRAME
 	if chat then
 		chat:AddMessage("|cff33ff99" .. addonName .. "|r |cffff9a80error captured:|r " .. short
-			.. " |cffa39b8b(/wl errors " .. addonName .. ")|r")
+		.. " |cffa39b8b(/wl errors " .. addonName .. ")|r")
 	end
 	if #errors.list > 50 then
 		local old = table.remove(errors.list)
@@ -66,7 +66,7 @@ function errors.clear()
 	errors.byMessage = {}
 end
 -- BugGrabber keeps the error handler to itself: listen to it instead.
-local grabber = BugGrabber
+local grabber = _G.BugGrabber
 if type(grabber) == "table" and type(grabber.RegisterCallback) == "function" then
 	grabber.RegisterCallback(errors, "BugGrabber_BugGrabbed", function(_, e)
 		errors.record(e.message, e.stack)

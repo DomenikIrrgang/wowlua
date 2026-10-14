@@ -1,0 +1,10 @@
+-- The names the runtime's slices share: they are concatenated into one
+-- chunk after `core`, whose locals they see. Each slice is compiled on its
+-- own with these declarations (`cargo xtask runtime`).
+
+--- The addon's name (the chunk's first argument).
+declare global addonName: string
+--- The runtime table, `ns.__wowlua`.
+declare global wl: any
+--- The dev console's registry, shared by every addon's runtime.
+declare global WOWLUA_DEV: any

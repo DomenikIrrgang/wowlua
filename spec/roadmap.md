@@ -287,6 +287,13 @@ menus and lists, then the widget themes.
   checksummed export strings); `comm` done 2026-10-14 (chunked messages in
   wire format 1 or AceComm's, ChatThrottleLib or a built-in throttle,
   server-throttle backoff, messaging lockdown, objects, E8050).
+- Dogfooding 2026-10-14: the test scripts and the mock client are compiled
+  as wowlua (type errors fail the tests), and the runtime is written in
+  wowlua and compiled into the embedded Lua by `cargo xtask runtime`. New:
+  `wowlua compile` (files to Lua without an AddOn folder, with imports and
+  bundling). Found on the way: `C_Timer.NewTimer`/`NewTicker` returned their
+  callback type (now `TimerHandle`/`TickerHandle`), error handlers took no
+  extra arguments, and the dev window created an unused frame.
 
 ## M9: Test runner, language server, formatter
 

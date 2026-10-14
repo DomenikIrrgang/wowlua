@@ -42,6 +42,35 @@ wowlua <command> [options]
 | `wowlua explain <code>` | Explain a diagnostic code, with examples (works offline) |
 | `wowlua lsp` | Start the language server on stdio |
 | `wowlua toc [--flavor <f>]` | Print the TOC(s) that would be generated |
+| `wowlua compile <files…> [--profile <p> \| --release] [--flavor <f>…] [--bundle \| --no-bundle] [--minify <level>] [-o <path>]` | Compile files to Lua without making an AddOn folder (§12.2.1) |
+
+### 12.2.1 `wowlua compile`
+
+Compiles the given `.wowlua` and `.lua` files (and applies the given
+`.d.wowlua` declaration files) as a build restricted to them: type checks,
+imports among them and from `wowlua:*`, profiles, optimizations and
+bundling work as in `wowlua build`.
+
+- **Project.** Inside a project (a `wowlua.json` is found as for every
+  command), its manifest applies: profiles, flavors, API versions, lint
+  levels and its own declaration files. The files must be inside the
+  package. Elsewhere, the files compile with the built-in defaults (profile
+  `dev`, flavor `standard`), rooted at the deepest folder containing them.
+- **Output.** The Lua files the build makes for them: the compiled files
+  (`src/<path>.lua`), and the runtime (`wowlua/runtime.lua`) and
+  standard-library modules (`wowlua/std/<name>.lua`) when the code needs them.
+  One output file is printed to stdout, or written to `-o <file>`. Several
+  need `-o <dir>`: they are written under it, and their load order is
+  printed. TOC, XML, assets and fonts are not written.
+- **Bundling.** `--bundle` (the default of `release`) makes one file in the
+  bundle format of builds ([Optimization §15.3](optimization.md#153-bundling));
+  `--no-bundle` keeps one file per source.
+- **No dev tooling.** `dev-console`, `monitor` and `capture-errors` are off:
+  they need an installed AddOn folder. Instrumentation and runtime checks
+  follow the profile (a `dev` compile of a plain script includes the runtime
+  for its profiler; `--release` gives plain Lua).
+- Output files expect the arguments the client passes to an addon's files,
+  `(addonName, addonTable)`.
 
 ## 12.3 Dependency commands
 

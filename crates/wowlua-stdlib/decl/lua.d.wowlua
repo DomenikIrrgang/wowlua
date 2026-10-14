@@ -182,8 +182,8 @@ declare function debugstack(thread: (thread | number)?, start: number?, count1: 
 declare function debuglocals(level: number?): string
 declare function debugprofilestart()
 declare function debugprofilestop(): number
-declare function geterrorhandler(): (err: any) -> any
-declare function seterrorhandler(handler: (err: any) -> any)
+declare function geterrorhandler(): (err: any, ...any) -> any
+declare function seterrorhandler(handler: (err: any, ...any) -> any)
 declare function securecall<A..., R...>(f: ((A...) -> R...) | string, ...: A...): R...
 declare function securecallfunction<A..., R...>(f: (A...) -> R..., ...: A...): R...
 declare function secureexecuterange(t: table, f: (key: any, value: any, ...any) -> any, ...: any)

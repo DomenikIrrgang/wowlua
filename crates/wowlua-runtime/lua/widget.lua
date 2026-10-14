@@ -1,8 +1,8 @@
 -- wowlua runtime: widget (spec §3.2). Widget classes are mixins applied to
 -- frames created by CreateFrame; construction is threaded through __ctor.
 local SKIP = {
-	new = true, __index = true, __name = true, __super = true, __init = true,
-	__ctor = true, __initFields = true, __mixin = true,
+new = true, __index = true, __name = true, __super = true, __init = true,
+__ctor = true, __initFields = true, __mixin = true
 }
 -- The `@script` handlers of a widget class and its superclasses: a handler
 -- set with SetScript replaces one for the same script from a superclass;
@@ -62,7 +62,7 @@ function wl.script(cls, script, method, hook)
 		list = {}
 		rawset(cls, "__scripts", list)
 	end
-	list[#list + 1] = { script, method, hook or false }
+	list[#list + 1] = {script, method, hook or false}
 end
 -- The methods of a widget class and its superclasses, flattened.
 local function flatten(cls)

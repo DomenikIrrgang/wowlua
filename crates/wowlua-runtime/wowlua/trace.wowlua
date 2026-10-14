@@ -1,0 +1,60 @@
+-- wowlua runtime: tracing (spec §7.4). Entry with arguments, exit with
+-- results and errors, indented by call depth, at the `trace` log level.
+local trace: any = { depth = 0 }
+wl.trace = trace
+local function show(v: any): string
+	if issecretvalue and issecretvalue(v) then
+		return "<secret>"
+	end
+	local t = type(v)
+	if t == "string" then
+		return string.format("%q", #v > 40 and v:sub(1, 40) .. "..." or v)
+	elseif t == "table" then
+		local n = 0
+		for _ in pairs(v) do
+			n = n + 1
+			if n > 99 then
+				break
+			end
+		end
+		return "table(" .. (n > 99 and "99+" or n) .. ")"
+	end
+	return tostring(v)
+end
+local function list(...: any): string
+	local parts: string[] = {}
+	for i = 1, select("#", ...) do
+		parts[i] = show((select(i, ...)))
+	end
+	return table.concat(parts, ", ")
+end
+local function out(line: string)
+	local emit = wl.logEmit
+	if emit then
+		emit("trace", nil, line)
+	else
+		print(addonName .. ": " .. line)
+	end
+end
+local function finish(name: string, indent: string, ok: boolean, ...: any): ...any
+	trace.depth = trace.depth - 1
+	if not ok then
+		out(indent .. "x " .. name .. ": " .. tostring((...)))
+		error((...), 0)
+	end
+	out(indent .. "< " .. name .. (select("#", ...) > 0 and (" = " .. list(...)) or ""))
+	return ...
+end
+-- Wraps `fn`: each call logs entry, exit and errors under `name`.
+function trace.wrap(fn: any, name: string, location: string, opts: { args: boolean? }?): any
+	if type(fn) ~= "function" then
+		return fn
+	end
+	local args = not (opts and opts.args == false)
+	return function(...: any): ...any
+		local indent = string.rep("  ", trace.depth)
+		out(indent .. "> " .. name .. (args and ("(" .. list(...) .. ")") or ""))
+		trace.depth = trace.depth + 1
+		return finish(name, indent, pcall(fn, ...))
+	end
+end

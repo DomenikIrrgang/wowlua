@@ -1,0 +1,30 @@
+{
+  "package": {
+    "name": "wowlua-runtime",
+    "version": "0.0.0",
+    "kind": "addon"
+  },
+  "build": {
+    "src": "wowlua"
+  },
+  "profiles": {
+    "runtime": {
+      "inherits": "release",
+      "bundle": false,
+      "minify": "none",
+      "line-mode": "preserve",
+      "reflection": "none",
+      "source-maps": false,
+      "optimize": {
+        "inline": false,
+        "cache-globals": "off",
+        "dead-code": false
+      }
+    }
+  },
+  "check": {
+    "lints": {
+      "W1033": "allow"
+    }
+  }
+}

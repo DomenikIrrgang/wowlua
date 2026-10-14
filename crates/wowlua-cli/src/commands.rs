@@ -5,11 +5,11 @@ use crate::{AddArgs, BuildArgs, GlobalArgs, InstallTarget, Kind};
 use notify_debouncer_mini::{DebouncedEvent, new_debouncer, notify::RecursiveMode};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use wowlua_diagnostics::{Diagnostic, LintLevel};
+use wowlua_diagnostics::Diagnostic;
 use wowlua_driver::install::{self, InstallRequest};
 use wowlua_driver::scaffold::{self, InitRequest, NewRequest};
 use wowlua_driver::{BuildOutput, BuildRequest, LoadOptions, Project, Session};
-use wowlua_manifest::model::{LintSetting, PackageKind};
+use wowlua_manifest::model::PackageKind;
 
 fn cwd() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
@@ -33,14 +33,7 @@ fn load_options(out: &Output, global: &GlobalArgs) -> LoadOptions {
 
 /// Applies `check.lints` from the manifest to the collected diagnostics.
 fn apply_lints(session: &mut Session, project: &Project) {
-    let lints = project.manifest.manifest.check.lints.clone();
-    session.diagnostics.apply_lint_levels(|code| {
-        lints.get(code).map(|level| match level {
-            LintSetting::Allow => LintLevel::Allow,
-            LintSetting::Warn => LintLevel::Warn,
-            LintSetting::Deny => LintLevel::Deny,
-        })
-    });
+    project.apply_lints(session);
 }
 
 fn relative(path: &Path) -> String {
@@ -156,6 +149,7 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
         nolib: false,
         minify: None,
         bundle: None,
+        only: None,
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -458,6 +452,7 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
         nolib: false,
         minify: None,
         bundle: None,
+        only: None,
     };
     let result = load_and_build(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -490,6 +485,7 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
         nolib: false,
         minify: None,
         bundle: None,
+        only: None,
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -509,6 +505,170 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
         }
         _ => false,
     }
+}
+
+/// `wowlua compile <files…>`: the build of only these files, in the
+/// project's settings when run inside one, else the defaults (rooted at
+/// the files' common folder). Writes the Lua outputs: to stdout when there
+/// is one, else into `--out`, printing the load order.
+pub fn compile(out: &Output, global: &GlobalArgs, args: &crate::CompileArgs) -> bool {
+    let started = Instant::now();
+    let mut session = Session::new();
+    let cwd = cwd();
+    let mut files = Vec::new();
+    for file in &args.files {
+        match cwd.join(file).canonicalize() {
+            Ok(path) => files.push(path),
+            Err(error) => session.push(Diagnostic::plain_error(format!(
+                "cannot read `{}`: {error}",
+                file.display()
+            ))),
+        }
+    }
+    if !out.flush(&mut session) {
+        return false;
+    }
+    let options = load_options(out, global);
+    let in_project =
+        wowlua_manifest::find_manifest(&options.cwd, options.manifest.as_deref()).is_some();
+    let project = if in_project {
+        wowlua_driver::load_project(&mut session, &options)
+    } else {
+        let root = common_folder(&files);
+        wowlua_driver::standalone_project(&mut session, &options, &root)
+    };
+    let Some(project) = project else {
+        out.flush(&mut session);
+        return false;
+    };
+    let request = BuildRequest {
+        profile: args.profile.name("dev"),
+        flavors: (!args.flavor.is_empty()).then(|| args.flavor.clone()),
+        out_dir: None,
+        write: false,
+        nolib: false,
+        minify: args.minify.clone(),
+        bundle: (args.bundle || args.no_bundle).then_some(args.bundle),
+        only: Some(wowlua_driver::Only {
+            files,
+            project_declarations: in_project,
+        }),
+    };
+    let build = wowlua_driver::build(&mut session, &project, &request);
+    apply_lints(&mut session, &project);
+    let ok = out.flush(&mut session);
+    let Some(build) = build.filter(|_| ok) else {
+        return false;
+    };
+    let lua = wowlua_driver::build::lua_outputs(&build);
+    let order: Vec<&String> = lua.iter().map(|(path, _)| path).collect();
+    let content = |path: &str| -> Option<Vec<u8>> {
+        lua.iter().find(|(p, _)| p == path).map(|(_, b)| b.clone())
+    };
+    let target = args.out.as_ref().map(|o| cwd.join(o));
+    let to_file = |path: &Path, bytes: &[u8]| -> bool {
+        let written = path
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(path, bytes));
+        if let Err(error) = written {
+            session_error(out, format!("cannot write `{}`: {error}", relative(path)));
+            return false;
+        }
+        true
+    };
+    match (order.as_slice(), &target) {
+        ([], _) => {
+            out.status("Compiled", "nothing (no Lua output)");
+            true
+        }
+        ([one], None) => {
+            let bytes = content(one).unwrap_or_default();
+            out.print(String::from_utf8_lossy(&bytes));
+            true
+        }
+        ([one], Some(path)) if !path.is_dir() && !names_folder(args.out.as_deref()) => {
+            if !to_file(path, &content(one).unwrap_or_default()) {
+                return false;
+            }
+            out.status(
+                "Compiled",
+                format!(
+                    "in {:.2}s → {}",
+                    started.elapsed().as_secs_f64(),
+                    relative(path)
+                ),
+            );
+            true
+        }
+        (_, None) => {
+            session_error(
+                out,
+                format!(
+                    "the compilation has {} output files; pass `-o <dir>` to write them",
+                    order.len()
+                ),
+            );
+            false
+        }
+        (_, Some(dir)) => {
+            for path in &order {
+                if !to_file(&dir.join(path), &content(path).unwrap_or_default()) {
+                    return false;
+                }
+            }
+            out.status(
+                "Compiled",
+                format!(
+                    "{} files in {:.2}s → {}",
+                    order.len(),
+                    started.elapsed().as_secs_f64(),
+                    relative(dir)
+                ),
+            );
+            out.print("Load order:\n");
+            for path in &order {
+                out.print(format!("  {path}\n"));
+            }
+            true
+        }
+    }
+}
+
+/// `-o dir/`: a trailing separator names a folder.
+fn names_folder(path: Option<&Path>) -> bool {
+    path.is_some_and(|p| {
+        let s = p.to_string_lossy();
+        s.ends_with('/') || s.ends_with('\\')
+    })
+}
+
+/// The deepest folder containing every file.
+fn common_folder(files: &[PathBuf]) -> PathBuf {
+    let mut common: Option<PathBuf> = None;
+    for file in files {
+        let parent = file.parent().map(Path::to_path_buf).unwrap_or_default();
+        common = Some(match common {
+            None => parent,
+            Some(c) => {
+                let mut shared = PathBuf::new();
+                for (a, b) in c.components().zip(parent.components()) {
+                    if a != b {
+                        break;
+                    }
+                    shared.push(a);
+                }
+                shared
+            }
+        });
+    }
+    common.unwrap_or_else(cwd)
+}
+
+fn session_error(out: &Output, message: String) {
+    let mut session = Session::new();
+    session.push(Diagnostic::plain_error(message));
+    out.flush(&mut session);
 }
 
 /// `wowlua fmt [--check] [paths…]`.
@@ -590,6 +750,7 @@ pub fn install(out: &Output, global: &GlobalArgs, profile: &str, target: &Instal
         nolib: false,
         minify: None,
         bundle: None,
+        only: None,
     };
     let Some(built) = load_and_build_all(out, &mut session, global, &request) else {
         out.flush(&mut session);
@@ -881,6 +1042,7 @@ pub fn dev(out: &Output, global: &GlobalArgs, target: &InstallTarget, link: bool
         nolib: false,
         minify: None,
         bundle: None,
+        only: None,
     };
     let install = install_request(target, link);
 
@@ -977,6 +1139,7 @@ fn apply_fixes(out: &Output, global: &GlobalArgs, lints_only: bool) -> Option<us
         nolib: false,
         minify: None,
         bundle: None,
+        only: None,
     };
     let mut total = 0;
     let mut files: std::collections::BTreeSet<PathBuf> = Default::default();
@@ -1033,6 +1196,7 @@ pub fn lint(out: &Output, global: &GlobalArgs, fix: bool) -> bool {
         nolib: false,
         minify: None,
         bundle: None,
+        only: None,
     };
     let Some(project) = wowlua_driver::load_project(&mut session, &load_options(out, global))
     else {
@@ -1093,6 +1257,7 @@ pub fn fix(out: &Output, global: &GlobalArgs, manifest: bool) -> bool {
         nolib: false,
         minify: None,
         bundle: None,
+        only: None,
     };
     let _ = load_and_build(out, &mut session, global, &request);
     out.flush(&mut session)

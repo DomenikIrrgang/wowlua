@@ -1,6 +1,6 @@
 -- wowlua runtime: tracing (spec §7.4). Entry with arguments, exit with
 -- results and errors, indented by call depth, at the `trace` log level.
-local trace = { depth = 0 }
+local trace = {depth = 0}
 wl.trace = trace
 local function show(v)
 	if issecretvalue and issecretvalue(v) then
@@ -43,7 +43,7 @@ local function finish(name, indent, ok, ...)
 		error((...), 0)
 	end
 	out(indent .. "< " .. name .. (select("#", ...) > 0 and (" = " .. list(...)) or ""))
-	return ...
+	return...
 end
 -- Wraps `fn`: each call logs entry, exit and errors under `name`.
 function trace.wrap(fn, name, location, opts)
