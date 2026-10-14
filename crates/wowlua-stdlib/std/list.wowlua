@@ -1,0 +1,178 @@
+-- wowlua:list (spec stdlib "list"): a virtualized scrolling list on the
+-- client's ScrollBox, which every supported client has (decision S30). Only
+-- visible rows exist: ScrollBox recycles small holder frames, and each holds
+-- a row of the given widget class from a wowlua:pool frame pool (real
+-- instances, constructed with the list's frame as their parent).
+import FramePool from "wowlua:pool"
+import type Pool from "wowlua:pool"
+import callIn from "wowlua:errors"
+
+export type ListOptions<T, R> = {
+    rowHeight: number,
+    --- The rows' widget class.
+    row: ClassOf<R>,
+    --- Shows an entry in a row.
+    init: (row: R, entry: T, index: number) -> (),
+    --- Runs when a row is released.
+    reset?: (row: R) -> (),
+    --- Space between rows.
+    spacing?: number,
+}
+
+export interface ListView<T>
+    readonly frame: Frame
+    function setData(data: T[])
+    --- Shows the visible entries again (after they changed).
+    function refresh()
+    function scrollTo(index: number)
+    function onSelect(fn: (entry: T, index: number) -> ())
+    function selected(): T?
+    function data(): T[]
+end
+
+-- What the data provider holds: the entry and its position.
+type Slot<T> = { entry: T, index: number }
+
+class List<T, R> implements ListView<T>
+    readonly frame: Frame
+    private readonly box: any
+    private readonly opts: ListOptions<T, R>
+    private readonly pool: Pool<any>
+    private entries: T[] = {}
+    private chosen?: T
+    private selectHandler?: (entry: T, index: number) -> ()
+    -- The row each holder shows, the slot it shows, and each row's holder.
+    private rows: { [Frame]: R } = {}
+    private slots: { [Frame]: Slot<T> } = {}
+    private holders: { [any]: Frame } = {}
+    private hooked: { [any]: boolean } = {}
+
+    constructor(parent: Frame, opts: ListOptions<T, R>)
+        self.opts = opts
+        const frame = CreateFrame("Frame", nil, parent)
+        frame:SetAllPoints()
+        self.frame = frame
+        const box = CreateFrame("Frame", nil, frame, "WowScrollBoxList")
+        box:SetPoint("TOPLEFT")
+        box:SetPoint("BOTTOMRIGHT", -16, 0)
+        const bar = CreateFrame("EventFrame", nil, frame, "MinimalScrollBar")
+        bar:SetPoint("TOPLEFT", box, "TOPRIGHT", 4, 0)
+        bar:SetPoint("BOTTOMLEFT", box, "BOTTOMRIGHT", 4, 0)
+        self.box = box
+        self.pool = FramePool.new(opts.row, frame)
+        const view = CreateScrollBoxListLinearView()
+        view:SetElementExtent(opts.rowHeight)
+        if opts.spacing then
+            view:SetPadding(0, 0, 0, 0, opts.spacing)
+        end
+        view:SetElementInitializer("Frame", function(holder: Frame, slot: Slot<T>)
+            self:show(holder, slot)
+        end)
+        view:SetElementResetter(function(holder: Frame)
+            self:hide(holder)
+        end)
+        ScrollUtil.InitScrollBoxListWithScrollBar(box, bar, view)
+    end
+
+    private function show(holder: Frame, slot: Slot<T>)
+        local row = self.rows[holder]
+        if row == nil then
+            local fresh = self.pool:acquire()
+            const r = fresh :: R
+            const f = fresh :: Frame
+            f:SetParent(holder)
+            f:ClearAllPoints()
+            f:SetAllPoints(holder)
+            f:Show()
+            -- Clicks select the entry of the holder the row is in now.
+            if not self.hooked[fresh] then
+                self.hooked[fresh] = true
+                f:HookScript("OnMouseUp", function(_: Frame, mouse: string)
+                    const current = self.holders[fresh]
+                    if mouse == "LeftButton" and current then
+                        self:pick(current)
+                    end
+                end)
+            end
+            self.holders[fresh] = holder
+            self.rows[holder] = r
+            row = r
+        end
+        self.slots[holder] = slot
+        callIn({ component = "list: init" }, self.opts.init, row, slot.entry, slot.index)
+    end
+
+    private function hide(holder: Frame)
+        const row = self.rows[holder]
+        if row == nil then
+            return
+        end
+        const reset = self.opts.reset
+        if reset then
+            callIn({ component = "list: reset" }, reset, row)
+        end
+        self.pool:release(row)
+        self.holders[row] = nil
+        self.rows[holder] = nil
+        self.slots[holder] = nil
+    end
+
+    private function pick(holder: Frame)
+        const slot = self.slots[holder]
+        if not slot then
+            return
+        end
+        self.chosen = slot.entry
+        const handler = self.selectHandler
+        if handler then
+            callIn({ component = "list: onSelect" }, handler, slot.entry, slot.index)
+        end
+    end
+
+    function setData(data: T[])
+        self.entries = data
+        const slots: Slot<T>[] = {}
+        for i, entry in ipairs(data) do
+            slots[i] = { entry = entry, index = i }
+        end
+        self.box:SetDataProvider(CreateDataProvider(slots))
+    end
+
+    function refresh()
+        const shown: Frame[] = {}
+        for holder in pairs(self.slots) do
+            shown[#shown + 1] = holder
+        end
+        table.sort(shown, function(a: Frame, b: Frame): boolean
+            return (self.slots[a]?.index ?? 0) < (self.slots[b]?.index ?? 0)
+        end)
+        for _, holder in ipairs(shown) do
+            const slot = self.slots[holder]
+            const row = self.rows[holder]
+            if slot and row ~= nil then
+                callIn({ component = "list: init" }, self.opts.init, row, slot.entry, slot.index)
+            end
+        end
+    end
+
+    function scrollTo(index: number)
+        self.box:ScrollToElementDataIndex(index)
+    end
+
+    function onSelect(fn: (entry: T, index: number) -> ())
+        self.selectHandler = fn
+    end
+
+    function selected(): T?
+        return self.chosen
+    end
+
+    function data(): T[]
+        return self.entries
+    end
+end
+
+--- A list in `parent` (it fills it), with a scroll bar on the right.
+export function create<T, R>(parent: Frame, opts: ListOptions<T, R>): ListView<T>
+    return List.new(parent, opts)
+end

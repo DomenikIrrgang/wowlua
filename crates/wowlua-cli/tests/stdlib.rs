@@ -2316,6 +2316,10 @@ Mock.wheel(StdTestMovableBox, 1)
 Mock.modifiers.CTRL = nil
 Mock.awaitText("Click the question-mark button")
 Mock.script(StdTestMinimapButton, "OnClick", "LeftButton")
+Mock.awaitText("Click StdTest entry 3")
+for _, f in ipairs(Mock.frames) do
+    if f.label and f.label:GetText() == "StdTest entry 3" then Mock.script(f, "OnMouseUp", "LeftButton") end
+end
 Mock.awaitText("Right-click the StdTest menu button")
 Mock.script(StdTestMenuButton, "OnMouseUp", "RightButton")
 Mock.clickMenu("Pick me")
@@ -3868,6 +3872,76 @@ print(Mock.lastMenu())
         errors(&out).iter().filter(|e| e.contains("boom")).count(),
         1,
         "{out:?}"
+    );
+}
+
+// ------------------------------------------------------------------- list --
+
+/// `wowlua:list`: only visible rows exist, rows are instances of the widget
+/// class recycled through a pool, selection, refresh and scrolling.
+#[test]
+fn lists_recycle_rows() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as list from "wowlua:list"
+type Entry = { name: string }
+local made, resets = 0, 0
+class RowButton extends Button
+    readonly label: FontString
+    constructor(parent: Frame)
+        super(nil, parent)
+        made += 1
+        self.label = self:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    end
+end
+const entries: Entry[] = {}
+for i = 1, 20 do entries[i] = { name = `entry {i}` } end
+local shown: string[] = {}
+local view = list.create(UIParent, {
+    rowHeight = 20,
+    row = RowButton,
+    init = function(row: RowButton, entry: Entry, index: number)
+        row.label:SetText(entry.name)
+        shown[#shown + 1] = `{index}`
+    end,
+    reset = function(_: RowButton) resets += 1 end,
+})
+view:onSelect(function(entry: Entry, index: number) print("selected", entry.name, index) end)
+_G.StdList = { view = view, stats = function() return made, resets, table.concat(shown, " ") end, clear = function() shown = {} end }
+"#,
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local l = StdList
+l.view:setData((function() local t = {} for i = 1, 20 do t[i] = { name = "entry " .. i } end return t end)())
+print(l.stats())
+l.clear()
+l.view:scrollTo(12)
+print(l.stats())
+-- Clicking a row selects its entry.
+for _, f in ipairs(Mock.frames) do
+    if f.label and f.label:GetText() == "entry 9" then Mock.script(f, "OnMouseUp", "LeftButton") end
+end
+print(l.view:selected().name, #l.view:data())
+l.clear()
+Mock.scroll(l.view, 15)
+print(l.stats())
+l.clear()
+l.view:refresh()
+print(l.stats())
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "5 0 1 2 3 4 5",
+            "5 5 8 9 10 11 12",
+            "selected entry 9 9",
+            "entry 9 20",
+            "5 10 16 17 18 19 20",
+            "5 10 16 17 18 19 20",
+        ]
     );
 }
 

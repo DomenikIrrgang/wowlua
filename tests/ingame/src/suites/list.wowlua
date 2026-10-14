@@ -1,0 +1,77 @@
+-- wowlua:list: a virtualized list on the client's ScrollBox.
+import * as list from "wowlua:list"
+import type ListView from "wowlua:list"
+import suite from "/harness"
+
+type Entry = { name: string }
+
+local made = 0
+
+class StdTestRow extends Button
+    readonly label: FontString
+
+    constructor(parent: Frame)
+        super(nil, parent)
+        made += 1
+        self.label = self:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        self.label:SetPoint("LEFT", 6, 0)
+        self:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+    end
+end
+
+local box: Frame? = nil
+local view: ListView<Entry>? = nil
+
+local function build(): ListView<Entry>
+    if view then
+        return view
+    end
+    const holder = CreateFrame("Frame", "StdTestListBox", UIParent, "BackdropTemplate")
+    holder:SetSize(240, 220)
+    holder:SetPoint("LEFT", UIParent, "LEFT", 120, 0)
+    holder:SetBackdrop(BACKDROP_DIALOG_32_32)
+    const inner = CreateFrame("Frame", nil, holder)
+    inner:SetPoint("TOPLEFT", 14, -14)
+    inner:SetPoint("BOTTOMRIGHT", -14, 14)
+    box = holder
+    const v = list.create(inner, {
+        rowHeight = 20,
+        row = StdTestRow,
+        init = function(row: StdTestRow, entry: Entry) row.label:SetText(entry.name) end,
+    })
+    const entries: Entry[] = {}
+    for i = 1, 100 do
+        entries[i] = { name = `StdTest entry {i}` }
+    end
+    v:setData(entries)
+    view = v
+    return v
+end
+
+local s = suite("list")
+
+s:test("only visible rows exist", function(t)
+    const v = build()
+    t:waitFor(function() return made > 0 end, 2, "rows")
+    t:ok(made > 0 and made < 30, `{made} rows for 100 entries`)
+    const before = made
+    v:scrollTo(80)
+    t:wait(0.2)
+    t:ok(made <= before + 2, "scrolling reuses rows")
+    t:eq(#v:data(), 100, "the data")
+    v:scrollTo(1)
+    box?:Hide()
+end)
+
+local g = suite("list (guided)", "guided")
+
+g:test("clicking an entry selects it", function(t)
+    const v = build()
+    box?:Show()
+    local picked: string? = nil
+    v:onSelect(function(entry: Entry) picked = entry.name end)
+    t:ask("Click StdTest entry 3 in the list on the left")
+    t:waitFor(function() return picked ~= nil end, 120, "an entry clicked")
+    t:eq(picked, "StdTest entry 3", "the clicked entry")
+    box?:Hide()
+end)

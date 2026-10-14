@@ -95,6 +95,7 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         Some(include_str!("../std/hooks.d.wowlua")),
     ),
     ("item", include_str!("../std/item.wowlua"), None),
+    ("list", include_str!("../std/list.wowlua"), None),
     (
         "jobs",
         include_str!("../std/jobs.wowlua"),

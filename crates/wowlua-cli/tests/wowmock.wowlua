@@ -450,8 +450,11 @@ end
 --- Frame types with their own mock class (`kind` → constructor).
 Mock.frameTypes = {}
 
-CreateFrame = (function(kind: string, name: string?, parent: any, _template: string?): MockFrame
-    const make = Mock.frameTypes[kind]
+--- Templates with their own mock class (`template` → constructor).
+Mock.templates = {}
+
+CreateFrame = (function(kind: string, name: string?, parent: any, template: string?): MockFrame
+    const make = Mock.templates[template ?? ""] ?? Mock.frameTypes[kind]
     local f: MockFrame
     if make then
         f = make(name, parent)
@@ -1622,6 +1625,89 @@ function Mock.clickMenu(path: string)
     end
     if e and e.enabled and e.callback then
         e.callback(nil, {}, {})
+    end
+end
+
+-- Scrolling lists (ScrollBox) ----------------------------------------------------
+
+--- How many rows a mock ScrollBox shows.
+Mock.listRows = 5
+
+class MockListView
+    extent: number = 0
+    initializer?: (holder: any, data: any) -> ()
+    resetter?: (holder: any) -> ()
+
+    function SetElementExtent(extent: number) self.extent = extent end
+    function SetPadding(...: any) end
+    function SetElementInitializer(_: string, fn: (holder: any, data: any) -> ()) self.initializer = fn end
+    function SetElementResetter(fn: (holder: any) -> ()) self.resetter = fn end
+end
+
+class MockScrollBox extends MockFrame
+    view?: MockListView
+    items: any[] = {}
+    offset: number = 0
+    holders: any[] = {}
+
+    constructor(name: string?, parent: any)
+        super("Frame", name, parent)
+    end
+
+    -- Shows the window starting after `offset`, recycling the holders.
+    function layout()
+        const view = self.view
+        if not view then return end
+        for k = 1, Mock.listRows do
+            local holder = self.holders[k]
+            if holder and view.resetter then
+                view.resetter(holder)
+            end
+            const item = self.items[self.offset + k]
+            if item then
+                if not holder then
+                    holder = CreateFrame("Frame", nil, self)
+                    self.holders[k] = holder
+                end
+                view.initializer?.(holder, item)
+            end
+        end
+    end
+
+    function SetDataProvider(provider: any)
+        self.items = provider.items
+        self.offset = 0
+        self:layout()
+    end
+
+    function ScrollToElementDataIndex(index: number)
+        self.offset = math.max(0, math.min(index - Mock.listRows, #self.items - Mock.listRows))
+        self:layout()
+    end
+end
+
+Mock.templates.WowScrollBoxList = function(name: string?, parent: any): any
+    return MockScrollBox.new(name, parent)
+end
+_G.CreateScrollBoxListLinearView = function(): any
+    return MockListView.new()
+end
+_G.CreateDataProvider = function(items: any[]?): any
+    return { items = items ?? {} }
+end
+ScrollUtil = {} :: any
+function ScrollUtil.InitScrollBoxListWithScrollBar(box: any, _: any, view: any)
+    box.view = view
+end
+
+--- Scrolls a wowlua:list view so that row `offset + 1` is the first shown.
+function Mock.scroll(list: any, offset: number)
+    for _, f in ipairs(Mock.frames) do
+        if f.parent == list.frame and (f :: any).layout then
+            const box = f :: any
+            box.offset = offset
+            box:layout()
+        end
     end
 end
 

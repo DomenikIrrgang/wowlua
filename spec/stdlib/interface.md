@@ -172,9 +172,9 @@ the stdlib error policy.
 
 ## list
 
-`wowlua:list` is a virtualized scrolling list on top of `wowlua:pool`. It
-uses Blizzard's ScrollBox/DataProvider where the flavor table declares it, and
-a built-in faux-scroll implementation elsewhere.
+`wowlua:list` is a virtualized scrolling list on Blizzard's
+ScrollBox/DataProvider, which every supported client has (decision S30), and
+`wowlua:pool`.
 
 ```wowlua
 import * as list from "wowlua:list"
@@ -196,8 +196,12 @@ view:scrollTo(42)
 | `ListOptions<T, R>` | `{ rowHeight: number, row: ClassOf<R>, init: (row: R, entry: T, index: number) -> (), reset: ((row: R) -> ())?, spacing: number? }` | |
 | `ListView<T>` | `setData(data: T[])`, `refresh()`, `scrollTo(index)`, `onSelect(fn)`, `selected(): T?`, `data(): T[]` | |
 
-Only visible rows exist. Rows are recycled through a `FramePool` of the given
-widget class, and `reset` runs on release.
+Only visible rows exist. ScrollBox recycles small holder frames; each shows a
+row from a `FramePool` of the given widget class (real instances, constructed
+with the list's frame as their only argument), and `reset` runs when a row is
+released. The list fills `parent`, with a scroll bar on the right. A left
+click on a row selects its entry. Callbacks run through the stdlib error
+policy.
 
 ## dialog
 

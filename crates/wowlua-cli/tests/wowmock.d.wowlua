@@ -87,6 +87,9 @@ interface MockClient
     menu: any
     lastMenu: () -> string
     clickMenu: (path: string) -> ()
+    templates: { [string]: (name: string?, parent: any) -> any }
+    listRows: number
+    scroll: (list: any, offset: number) -> ()
     auraContainers: any[]
     auraChanged: (unit: string) -> ()
     --- Units by token (`player`, `target`, `party1`, …): what the unit
