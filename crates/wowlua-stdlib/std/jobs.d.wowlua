@@ -1,0 +1,5 @@
+-- Compiler behavior of `wowlua:jobs` (spec stdlib "jobs"): yielding where a
+-- coroutine cannot (inside pcall, xpcall, a sort comparator or a gsub
+-- callback) is W8430.
+@intrinsic("jobs.start")
+declare global start: any

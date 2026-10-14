@@ -1513,8 +1513,29 @@ AddonCompartmentFrame = { registeredAddons = {} } :: any
 function AddonCompartmentFrame:RegisterAddon(data: any)
     self.registeredAddons[#self.registeredAddons + 1] = data
 end
+-- Milliseconds of simulated work (`Mock.spend`), on top of the clock.
+Mock.worked = 0
 function debugprofilestop(): number
-    return Mock.now * 1000
+    return Mock.now * 1000 + Mock.worked
+end
+
+--- Simulates `ms` milliseconds of work (job budgets measure it).
+function Mock.spend(ms: number)
+    Mock.worked += ms
+end
+
+--- `n` frames of `ms` milliseconds each (default 16): timers, then every
+--- shown frame's OnUpdate.
+function Mock.advanceFrames(n: number, ms: number?)
+    const step = (ms ?? 16) / 1000
+    for _ = 1, n do
+        Mock.advance(step)
+        for _, f in ipairs(Mock.frames) do
+            if f.shown and (f.scripts.OnUpdate or f.hooks.OnUpdate) then
+                Mock.script(f, "OnUpdate", step)
+            end
+        end
+    end
 end
 
 -- Addon messages: a server that checks, records and echoes ---------------------

@@ -1,0 +1,41 @@
+-- wowlua:jobs: work spread over frames within a budget.
+import * as jobs from "wowlua:jobs"
+import type JobContext from "wowlua:jobs"
+import * as item from "wowlua:item"
+import suite, say from "/harness"
+
+local s = suite("jobs")
+
+s:test("a long job runs over several frames", function(t)
+    local frames = 0
+    local counter = CreateFrame("Frame")
+    counter:SetScript("OnUpdate", function() frames += 1 end)
+    const total = 200000
+    local sum = 0
+    const job = jobs.start(function(ctx: JobContext)
+        for i = 1, total do
+            sum += i % 7
+            if i % 1000 == 0 then
+                ctx:progress(i / total)
+            end
+            ctx:check()
+        end
+        return sum
+    end, { name = "stdtest sum" })
+    t:waitFor(function() return job:status() == "done" end, 10, "the job finishes")
+    counter:SetScript("OnUpdate", nil)
+    t:eq(job:progress(), 1, "progress")
+    t:eq((job:result()), sum, "the result")
+    t:ok(frames > 1, `over {frames} frames`)
+    say(`jobs: {total} steps over {frames} frames`)
+end)
+
+s:test("sleeping and awaiting an item", function(t)
+    local seen: string? = nil
+    const job = jobs.start(function(ctx: JobContext)
+        ctx:sleep(0.3)
+        seen = item.await(ctx, 19019)?.link
+    end)
+    t:waitFor(function() return job:status() == "done" end, 12, "the job finishes")
+    t:ok(seen ~= nil, "the item arrived inside the job")
+end)

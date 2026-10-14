@@ -208,7 +208,7 @@ local info = item.await(ctx, 19019)              -- yields until loaded
 | `loadMany` | `(items: (number \| string)[], fn: (all: { [number]: ItemData? }) -> (), opts?) -> LoadHandle` | One callback after all items have resolved |
 | `configure` | `(opts: { cacheSize: number? })` | The cache's size (default 500) |
 | `loadSpell` | `(spellId: number, fn: (ok: boolean) -> (), opts?) -> LoadHandle` | Ensures spell data (name, description) is loaded |
-| `await` | `(ctx: JobContext, item: number \| string) -> ItemData?` | Yields the job until loaded ([Infrastructure: jobs](infrastructure.md#jobs)); comes with `wowlua:jobs` |
+| `await` | `(ctx: JobContext, item: number \| string, opts?: LoadOptions) -> ItemData?` | Yields the job until loaded ([Infrastructure: jobs](infrastructure.md#jobs)) |
 | `LoadOptions` | `{ timeout: number? }` | Default timeout: 10 seconds |
 | `LoadHandle` | `Cancel()`-style handle: `cancel()`, `isDone(): boolean` | A cancelled load never calls its callback |
 | `ItemData` | record | `id`, `name`, `link`, `quality`, `itemLevel`, `minLevel`, `type`, `subType`, `stackCount`, `equipLoc`, `icon`, `sellPrice`, `classID`, `subclassID`, `bindType`, `expansionID`. (The API's own `ItemInfo` is the item reference, `number \| string`; the record has its own name so the two do not shadow each other.) |

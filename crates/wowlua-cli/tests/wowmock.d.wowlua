@@ -76,6 +76,10 @@ interface MockClient
     libraries: { [string]: table }
     provideLibrary: (major: string, impl: table) -> ()
     sharedMedia: () -> table
+    --- Simulated work (ms) and frames driving OnUpdate.
+    worked: number
+    spend: (ms: number) -> ()
+    advanceFrames: (n: number, ms: number?) -> ()
     auraContainers: any[]
     auraChanged: (unit: string) -> ()
     --- Units by token (`player`, `target`, `party1`, …): what the unit

@@ -192,6 +192,18 @@ fn binding_name(name: &str) -> bool {
             .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
 }
 
+/// `f` or `a.b` as text, for a call's callee.
+fn call_name(callee: &Expr) -> Option<String> {
+    match &callee.kind {
+        ExprKind::Name(n) => Some(n.text.to_string()),
+        ExprKind::Field { obj, name } => match &obj.kind {
+            ExprKind::Name(o) => Some(format!("{}.{}", o.text, name.text)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 fn string(e: &Expr) -> Option<String> {
     match &e.kind {
         ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value).into_owned()),
@@ -600,6 +612,61 @@ impl Ctx<'_> {
         }
     }
 
+    /// W8430: a job's `ctx:check/yield/sleep/waitFor` inside a function
+    /// handed to `pcall`, `xpcall`, `securecallfunction`, `table.sort` or
+    /// `gsub`, which a coroutine cannot yield across.
+    fn job_yields(&mut self, body: &Block, ctx: &str) {
+        let mut boundaries: Vec<&Expr> = Vec::new();
+        wowlua_syntax::visit::walk_block(body, &mut |e| {
+            let (callee_name, args) = match &e.kind {
+                ExprKind::Call { callee, args } => (call_name(callee), args),
+                ExprKind::Method { name, args, .. } => (Some(name.text.to_string()), args),
+                _ => return,
+            };
+            if matches!(
+                callee_name.as_deref(),
+                Some(
+                    "pcall"
+                        | "xpcall"
+                        | "securecallfunction"
+                        | "securecall"
+                        | "table.sort"
+                        | "sort"
+                        | "string.gsub"
+                        | "gsub"
+                )
+            ) {
+                for a in args.exprs() {
+                    if matches!(a.kind, ExprKind::Function(_)) {
+                        boundaries.push(a);
+                    }
+                }
+            }
+        });
+        for boundary in boundaries {
+            let ExprKind::Function(f) = &boundary.kind else {
+                continue;
+            };
+            let mut yields: Vec<Span> = Vec::new();
+            wowlua_syntax::visit::walk_block(&f.body, &mut |e| {
+                if let ExprKind::Method { obj, name, .. } = &e.kind
+                    && matches!(&obj.kind, ExprKind::Name(n) if n.text.as_ref() == ctx)
+                    && matches!(name.text.as_ref(), "check" | "yield" | "sleep" | "waitFor")
+                {
+                    yields.push(e.span);
+                }
+            });
+            for span in yields {
+                self.warn(
+                    "W8430",
+                    span,
+                    "a job cannot yield here: the coroutine would cross a pcall, sort or gsub callback".into(),
+                    "yields inside a C call",
+                );
+            }
+        }
+    }
+
     /// A tooltip kind: known (E8330) and available on every flavor of this
     /// compilation (E8300).
     fn tooltip_kind(&mut self, e: &Expr) {
@@ -754,6 +821,13 @@ impl Ctx<'_> {
                 }
             }
             "aura.container" => self.aura_container(e, &args),
+            "jobs.start" => {
+                if let Some(ExprKind::Function(f)) = args.first().map(|a| &a.kind)
+                    && let Some(ctx) = f.params.first()
+                {
+                    self.job_yields(&f.body, ctx.name.text.as_ref());
+                }
+            }
             "media.register" | "media.fetch" | "media.list" => {
                 if let Some(first) = args.first()
                     && let Some(kind) = self.constant_string(first)

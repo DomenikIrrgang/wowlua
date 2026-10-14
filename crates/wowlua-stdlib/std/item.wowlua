@@ -5,6 +5,7 @@
 import on from "wowlua:events"
 import after from "wowlua:timer"
 import callIn from "wowlua:errors"
+import type JobContext from "wowlua:jobs"
 
 --- An item's data (`C_Item.GetItemInfo`).
 export type ItemData = {
@@ -288,4 +289,19 @@ export function loadSpell(spellId: number, fn: (ok: boolean) -> (), opts: LoadOp
     C_Spell.RequestLoadSpellData(spellId)
     expire(l, opts, false)
     return l
+end
+
+--- Inside a wowlua:jobs job: waits (yielding the job) until the item's
+--- data is there; nil for missing items or after the timeout.
+export function await(ctx: JobContext, item: ItemRef, opts: LoadOptions?): ItemData?
+    local done = false
+    local data: ItemData? = nil
+    load(item, function(d: ItemData?)
+        done = true
+        data = d
+    end, opts)
+    while not done do
+        ctx:yield()
+    end
+    return data
 end

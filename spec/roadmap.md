@@ -366,7 +366,10 @@ menus and lists, then the widget themes.
   value (`if x?.f ~= nil then x.f … end`). `media` done 2026-10-14 (own
   registry, LibSharedMedia when any addon loads it, waiting registrations
   handed over, E8400; LibSharedMedia is declared for `LibStub`). The
-  checker types table literals assigned to `t[i]` by the element type.
+  checker types table literals assigned to `t[i]` by the element type. `jobs` done 2026-10-14 (coroutines within a per-frame
+  budget, weighted priorities, sleep, waiting for events, progress, combat
+  pauses, W8430), with `item.await`; the mock client drives frames
+  (`Mock.advanceFrames`, `Mock.spend`).
 
 ## M9: Test runner, language server, formatter
 

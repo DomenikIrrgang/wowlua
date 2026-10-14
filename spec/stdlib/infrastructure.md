@@ -147,9 +147,9 @@ job:cancel()
 
 | API | Declared signature | Notes |
 |-----|--------------------|-------|
-| `start` | `function start<R...>(fn: (ctx: JobContext) -> R..., opts: JobOptions<R...>?): Job<R...>` | Starts on the next frame |
-| `JobOptions<R...>` | `{ name: string?, priority: ("high" \| "normal" \| "low")?, pauseInCombat: boolean?, onDone: ((R...) -> ())?, onError: ((err: string) -> ())?, onProgress: ((p: number) -> ())? }` | |
-| `Job<R...>` | `cancel()`, `status(): "pending" \| "running" \| "paused" \| "done" \| "failed" \| "cancelled"`, `progress(): number`, `result(): R...` | |
+| `start` | `function start(fn: (ctx: JobContext) -> ...any, opts: JobOptions?): Job` | Starts on the next frame |
+| `JobOptions` | `{ name: string?, priority: ("high" \| "normal" \| "low")?, pauseInCombat: boolean?, onDone: ((...any) -> ())?, onError: ((err: string) -> ())?, onProgress: ((p: number) -> ())? }` | |
+| `Job` | `cancel()`, `status(): "pending" \| "running" \| "paused" \| "done" \| "failed" \| "cancelled"`, `progress(): number`, `result(): ...any` | The function's results go to `onDone` and `result()` untyped (typed result packs may follow). |
 | `JobContext:check` | `()` | Yields only if the budget is exhausted. Cheap to call often. |
 | `JobContext:yield` | `()` | Always yields until the next frame |
 | `JobContext:sleep` | `(seconds: number)` | |
@@ -160,9 +160,10 @@ job:cancel()
 Semantics:
 
 - **Scheduler:** one hidden frame's `OnUpdate`. Each frame, jobs resume in
-  weighted round-robin by priority until the addon's budget (measured with
-  `debugprofilestop()`) is used up. The scheduler stops its `OnUpdate` when no
-  job is runnable.
+  smooth weighted round-robin by priority (weights high 4, normal 2, low 1)
+  until the addon's budget (measured with `debugprofilestop()`) is used up;
+  a job runs at most once per frame, so `yield` waits for the next frame.
+  The scheduler stops its `OnUpdate` when no job is left.
 - **Budget scope:** every addon has its own copy of the module (T10), so
   budgets are per addon, not global.
 - **Errors:** a failing job is reported through the error policy, ends with
@@ -171,9 +172,11 @@ Semantics:
   `PLAYER_REGEN_DISABLED` and resumed after `PLAYER_REGEN_ENABLED`.
 - **Lua 5.1 limitation:** a coroutine cannot yield across `pcall`, `xpcall`,
   `securecall*`, metamethods or C functions (e.g. inside a `table.sort`
-  comparator or a `gsub` callback). Calling `check`, `yield`, `sleep` or `waitFor`
-  lexically inside such a context is warning W8430. At runtime it raises
-  "attempt to yield across metamethod/C-call boundary".
+  comparator or a `gsub` callback). In a function passed to `jobs.start`,
+  calling `check`, `yield`, `sleep` or `waitFor` on its context parameter
+  inside a function literal handed to `pcall`, `xpcall`,
+  `securecallfunction`, `table.sort` or `gsub` is warning W8430. At runtime it
+  raises "attempt to yield across metamethod/C-call boundary".
 - `wowlua:item`'s `await` and the import parsing of large strings in
   `wowlua:dialog` ([Interface: dialog](interface.md#dialog)) are built on this module.
 

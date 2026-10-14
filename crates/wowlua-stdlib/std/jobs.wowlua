@@ -1,0 +1,257 @@
+-- wowlua:jobs (spec stdlib "jobs"): background jobs. Heavy work runs in
+-- coroutines spread across frames within a per-frame time budget, so frames
+-- do not drop and the client's "script ran too long" watchdog never fires.
+-- One hidden frame's OnUpdate schedules them, by priority (smooth weighted
+-- round-robin: high 4, normal 2, low 1), and stops when nothing can run.
+import on, once from "wowlua:events"
+import type Subscription from "wowlua:events"
+import report, callIn from "wowlua:errors"
+
+export type Priority = "high" | "normal" | "low"
+export type Status = "pending" | "running" | "paused" | "done" | "failed" | "cancelled"
+
+export type JobOptions = {
+    name?: string,
+    priority?: Priority,
+    --- Paused while the player is in combat.
+    pauseInCombat?: boolean,
+    onDone?: (...any) -> (),
+    onError?: (err: string) -> (),
+    onProgress?: (p: number) -> (),
+}
+
+--- What a job's function gets.
+export interface JobContext
+    --- Yields when this frame's budget is used up (cheap: call it often).
+    function check()
+    --- Yields until the next frame.
+    function yield()
+    function sleep(seconds: number)
+    --- Waits for an event or message; returns its payload.
+    function waitFor(event: string): ...any
+    --- 0 to 1.
+    function progress(p: number)
+end
+
+export interface Job
+    function cancel()
+    function status(): Status
+    function progress(): number
+    function result(): ...any
+end
+
+const WEIGHT: { [string]: number } = { high = 4, normal = 2, low = 1 }
+
+local budget = 4
+-- When this frame's budget runs out (debugprofilestop's milliseconds).
+local deadline = 0
+
+class Task implements Job
+    co?: thread
+    ctx?: JobContext
+    readonly opts: JobOptions
+    state: Status = "pending"
+    fraction: number = 0
+    results: any[] = {}
+    count: number = 0
+    --- Smooth weighted round-robin credit.
+    credit: number = 0
+    readonly weight: number
+    --- Asleep until (GetTime), or waiting for an event.
+    wakeAt: number = 0
+    waiting?: Subscription
+    payload?: any[]
+    combatPaused: boolean = false
+    --- The frame it last ran in (once a frame: `yield` waits for the next).
+    ranIn: number = 0
+
+    constructor(opts: JobOptions)
+        self.opts = opts
+        self.weight = WEIGHT[opts.priority ?? "normal"] ?? 2
+    end
+
+    --- Whether the scheduler may resume it now.
+    function runnable(now: number, frameNumber: number): boolean
+        return (self.state == "pending" or self.state == "running")
+            and self.ranIn ~= frameNumber
+            and not self.combatPaused
+            and self.waiting == nil
+            and self.wakeAt <= now
+    end
+
+    function alive(): boolean
+        return self.state == "pending" or self.state == "running"
+    end
+
+    function step()
+        const co = self.co
+        const ctx = self.ctx
+        if not co or not ctx then
+            return
+        end
+        self.state = "running"
+        const packed = { coroutine.resume(co, ctx) }
+        if not packed[1] then
+            self.state = "failed"
+            const err = tostring(packed[2])
+            report(`job {self.opts.name ?? "?"}: {err}`)
+            if self.opts.onError then
+                callIn({ component = "jobs: onError" }, self.opts.onError, err)
+            end
+        elseif coroutine.status(co) == "dead" then
+            self.state = "done"
+            self.fraction = 1
+            self.count = #packed - 1
+            for i = 2, #packed do
+                self.results[i - 1] = packed[i]
+            end
+            if self.opts.onDone then
+                callIn({ component = "jobs: onDone" }, self.opts.onDone, unpack(self.results, 1, self.count))
+            end
+        end
+    end
+
+    function cancel()
+        if self:alive() then
+            self.state = "cancelled"
+            self.waiting?:cancel()
+            self.waiting = nil
+        end
+    end
+
+    function status(): Status
+        if self.combatPaused and self:alive() then
+            return "paused"
+        end
+        return self.state
+    end
+
+    function progress(): number
+        return self.fraction
+    end
+
+    function result(): ...any
+        return unpack(self.results, 1, self.count)
+    end
+end
+
+--- What the job's function gets: yields and progress for its task.
+class Context implements JobContext
+    private readonly task: Task
+
+    constructor(task: Task)
+        self.task = task
+    end
+
+    function check()
+        if debugprofilestop() >= deadline then
+            coroutine.yield()
+        end
+    end
+
+    function yield()
+        coroutine.yield()
+    end
+
+    function sleep(seconds: number)
+        self.task.wakeAt = GetTime() + seconds
+        coroutine.yield()
+    end
+
+    function waitFor(event: string): ...any
+        const task = self.task
+        task.waiting = once(event, function(...: any)
+            task.payload = { ... }
+            task.waiting = nil
+        end)
+        coroutine.yield()
+        const payload = task.payload ?? {}
+        task.payload = nil
+        return unpack(payload)
+    end
+
+    function progress(p: number)
+        self.task.fraction = p
+        const onProgress = self.task.opts.onProgress
+        if onProgress then
+            callIn({ component = "jobs: onProgress" }, onProgress, p)
+        end
+    end
+end
+
+local tasks: Task[] = {}
+local frame: Frame? = nil
+
+local frameNumber = 0
+
+local function runFrame()
+    const now = GetTime()
+    frameNumber += 1
+    deadline = debugprofilestop() + budget
+    local alive = 0
+    repeat
+        -- The runnable task with the most credit.
+        local best: Task? = nil
+        local total = 0
+        for _, t in ipairs(tasks) do
+            if t:runnable(now, frameNumber) then
+                t.credit += t.weight
+                total += t.weight
+                if best == nil or t.credit > best.credit then
+                    best = t
+                end
+            end
+        end
+        if not best then
+            break
+        end
+        best.credit -= total
+        best.ranIn = frameNumber
+        best:step()
+    until debugprofilestop() >= deadline
+    -- Forget finished tasks; stop when none is left.
+    const kept: Task[] = {}
+    for _, t in ipairs(tasks) do
+        if t:alive() then
+            kept[#kept + 1] = t
+            alive += 1
+        end
+    end
+    tasks = kept
+    if alive == 0 and frame then
+        frame:SetScript("OnUpdate", nil)
+    end
+end
+
+local function schedule()
+    const f = frame ?? CreateFrame("Frame")
+    frame = f
+    f:SetScript("OnUpdate", runFrame)
+end
+
+-- Combat pauses the jobs that ask for it.
+local function combat(entering: boolean)
+    for _, t in ipairs(tasks) do
+        if t.opts.pauseInCombat then
+            t.combatPaused = entering
+        end
+    end
+end
+on("PLAYER_REGEN_DISABLED", function() combat(true) end)
+on("PLAYER_REGEN_ENABLED", function() combat(false) end)
+
+--- Starts `fn` as a job on the next frame.
+export function start(fn: (ctx: JobContext) -> ...any, opts: JobOptions?): Job
+    const t = Task.new(opts ?? {})
+    t.co = coroutine.create(fn)
+    t.combatPaused = (opts?.pauseInCombat == true) and InCombatLockdown()
+    t.ctx = Context.new(t)
+    tasks[#tasks + 1] = t
+    schedule()
+    return t
+end
+
+--- Milliseconds per frame for all of this addon's jobs (default 4).
+export function configure(opts: { budget?: number })
+    budget = opts.budget ?? budget
+end

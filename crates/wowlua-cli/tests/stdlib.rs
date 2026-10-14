@@ -2189,7 +2189,7 @@ Mock.fire("PLAYER_ENTERING_WORLD", true, false)
 Mock.out = {}
 Mock.slash("/stdtest auto")
 for _ = 1, 1200 do
-    Mock.advance(0.05)
+    Mock.advanceFrames(3, 50 / 3)
 end
 "#,
     );
@@ -2260,7 +2260,7 @@ function Mock.awaitText(text)
         for _, line in ipairs(Mock.out) do
             if line:find(text, 1, true) then return end
         end
-        Mock.advance(0.05)
+        Mock.advanceFrames(3, 50 / 3)
     end
     error("never printed: " .. text)
 end
@@ -3599,6 +3599,137 @@ media.register("sound", "Std Ping", 567)
             "Std Alpha, Std Bold Interface\\AddOns\\Std\\flat lsm-default-font",
             "registered font Other Font",
             "registered sound Std Ping",
+        ]
+    );
+}
+
+// ------------------------------------------------------------------- jobs --
+
+/// `wowlua:jobs`: work spread over frames within the budget, priorities,
+/// sleeping, waiting for events, progress, results, errors, cancelling and
+/// combat pauses.
+#[test]
+fn jobs_spread_work_over_frames() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as jobs from \"wowlua:jobs\"\n_G.StdJobs = jobs\n",
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local jobs = StdJobs
+local frames, perFrame = 0, {}
+-- 10 items of 1 ms each with a 4 ms budget: 3 frames.
+local j = jobs.start(function(ctx)
+    for i = 1, 10 do
+        Mock.spend(1)
+        perFrame[frames] = (perFrame[frames] or 0) + 1
+        ctx:progress(i / 10)
+        ctx:check()
+    end
+    return "indexed", 10
+end, { name = "index", onDone = function(a, b) print("done", a, b) end, onProgress = function(p) end })
+print(j:status())
+for _ = 1, 5 do frames = frames + 1; Mock.advanceFrames(1) end
+print(j:status(), j:progress(), j:result())
+print("frames", perFrame[1], perFrame[2], perFrame[3])
+-- Priorities: high runs about four times as often as low.
+local runs = { high = 0, low = 0 }
+local function busy(kind)
+    return function(ctx)
+        while true do runs[kind] = runs[kind] + 1; Mock.spend(1); ctx:check() end
+    end
+end
+local high = jobs.start(busy("high"), { priority = "high" })
+local low = jobs.start(busy("low"), { priority = "low" })
+Mock.advanceFrames(20)
+print("ratio", math.floor(runs.high / runs.low + 0.5))
+high:cancel(); low:cancel()
+print(high:status())
+-- Sleeping and waiting for an event.
+local s = jobs.start(function(ctx)
+    ctx:sleep(1)
+    print("woke")
+    local a, b = ctx:waitFor("BAG_UPDATE")
+    print("event", a, b)
+end)
+Mock.advanceFrames(10)
+print("still", s:status())
+Mock.advanceFrames(60)
+Mock.fire("BAG_UPDATE", 3, "x")
+Mock.advanceFrames(2)
+print(s:status())
+-- Errors end the job, others go on.
+local bad = jobs.start(function(ctx) error("broken") end, { onError = function(e) print("onError", e:find("broken") ~= nil) end })
+Mock.advanceFrames(1)
+print(bad:status())
+-- Paused in combat.
+local c = jobs.start(function(ctx) while true do ctx:yield() end end, { pauseInCombat = true })
+Mock.advanceFrames(1)
+Mock.fire("PLAYER_REGEN_DISABLED")
+print(c:status())
+Mock.fire("PLAYER_REGEN_ENABLED")
+Mock.advanceFrames(1)
+print(c:status())
+c:cancel()
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "pending",
+            "done indexed 10",
+            "done 1 indexed 10",
+            "frames 4 4 2",
+            "ratio 4",
+            "cancelled",
+            "still running",
+            "woke",
+            "event 3 x",
+            "done",
+            "onError true",
+            "failed",
+            "paused",
+            "running",
+        ]
+    );
+    assert_eq!(
+        errors(&out).iter().filter(|e| e.contains("broken")).count(),
+        1,
+        "{out:?}"
+    );
+}
+
+/// `item.await` inside a job: the job waits for the item's data.
+#[test]
+fn items_await_in_jobs() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as jobs from "wowlua:jobs"
+import * as item from "wowlua:item"
+import type JobContext from "wowlua:jobs"
+_G.StdRun = function()
+    return jobs.start(function(ctx: JobContext)
+        const cached = item.await(ctx, 6948)
+        print("cached", cached?.name)
+        const loaded = item.await(ctx, 19019)
+        print("loaded", loaded?.name)
+        return item.await(ctx, 404)
+    end, { onDone = function(missing: any) print("missing", missing) end })
+end
+"#,
+        )],
+        "Mock.items[404] = { missing = true }",
+        "Mock.loadAddon(\"Std\")\nlocal j = StdRun()\nMock.advanceFrames(60)\nprint(j:status())\n",
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "cached Hearthstone",
+            "loaded Thunderfury",
+            "missing nil",
+            "done"
         ]
     );
 }
