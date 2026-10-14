@@ -46,6 +46,11 @@ pub struct Module {
 /// The modules shipped with this compiler version: name, source and
 /// `@intrinsic` declarations.
 const MODULES: &[(&str, &str, Option<&str>)] = &[
+    (
+        "bindings",
+        include_str!("../std/bindings.wowlua"),
+        Some(include_str!("../std/bindings.d.wowlua")),
+    ),
     ("callbacks", include_str!("../std/callbacks.wowlua"), None),
     (
         "comm",

@@ -1,0 +1,7 @@
+-- Compiler behavior of `wowlua:bindings` (spec stdlib "bindings"): `@binding`
+-- registers the final function value; `@binding` and `header` are collected
+-- into the generated Bindings.xml.
+@intrinsic("bindings.binding")
+declare global binding: any
+@intrinsic("bindings.header")
+declare global header: any

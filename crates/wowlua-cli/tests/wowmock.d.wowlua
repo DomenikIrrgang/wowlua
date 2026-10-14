@@ -32,7 +32,10 @@ interface MockClient
     interface: number
     locale?: string
     settings: { categories: table[], opened: any[], variables: { [string]: any } }
-    bindings: table
+    --- Keybindings the client knows, in order, and what each runs (from
+    --- the addon's Bindings.xml).
+    bindings: string[]
+    bindingActions: { [string]: (keystate: string) -> () }
     cursor: number[]
     --- Addon messages: sent ones, results to return next, lockdown, the
     --- group and guild, and who sent messages come back as.
@@ -50,6 +53,8 @@ interface MockClient
     loadAddon: (name: string | number) -> ()
     advance: (sec: number?) -> ()
     slash: (line: string) -> ()
+    addBinding: (name: string, action: (keystate: string) -> ()) -> ()
+    pressBinding: (name: string, keystate: string?) -> ()
 
     -- Set by some tests' setups.
     awaitText?: (text: string) -> ()

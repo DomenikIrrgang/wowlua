@@ -1,5 +1,6 @@
 -- Compiler behavior of `wowlua:settings` (spec stdlib "settings"): the
--- controls of `register` are checked against its store's type.
+-- controls of `register` are checked against its store's type, and a
+-- `keybinding` names a binding declared with `@binding` (E8353).
 @intrinsic("settings.register")
 declare global register: any
 @intrinsic("settings.checkbox")
@@ -10,3 +11,5 @@ declare global slider: any
 declare global dropdown: any
 @intrinsic("settings.color")
 declare global color: any
+@intrinsic("settings.keybinding")
+declare global keybinding: any

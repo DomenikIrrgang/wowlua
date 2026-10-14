@@ -1,0 +1,50 @@
+-- wowlua:bindings (spec stdlib "bindings"): keybindings declared in code.
+-- The compiler collects `@binding` and `header` across the addon and
+-- generates Bindings.xml, whose entries call the addon's dispatch table
+-- `<Addon>_Bindings`; this module fills the table and sets the
+-- `BINDING_HEADER_*` and `BINDING_NAME_*` labels the Key Bindings UI shows.
+import callIn from "wowlua:errors"
+
+local addonName = ...
+
+--- The key's state: `"up"` reaches only bindings with `runOnUp`.
+export type KeyState = "down" | "up"
+
+export type Options = {
+    label: string,
+    header?: string,
+    runOnUp?: boolean,
+    default?: string,
+}
+
+type Handler = (keystate: KeyState) -> ()
+
+local function noop() end
+
+-- A binding whose handler `@if` removed on this flavor stays in the shared
+-- Bindings.xml: it does nothing.
+local dispatch: { [string]: Handler } = setmetatable({}, { __index = function() return noop end })
+
+-- The addon's name as a Lua name (the compiler derives the same one).
+local globalName = addonName:gsub("[^%w_]", "_"):gsub("^%d", "_%0") .. "_Bindings"
+_G[globalName] = dispatch
+
+--- `header(id, label)`: the heading of the bindings that name `id`.
+export function header(id: string, label: string)
+    _G[`BINDING_HEADER_{id}`] = label
+end
+
+--- `@binding(name, opts)`: the function runs when the binding's key goes
+--- down (and up, with `runOnUp`).
+export function binding(name: string, opts: Options)
+    return function(fn: Handler, _: DecoratorContext?)
+        if rawget(dispatch, name) then
+            error(`@binding: {name} is declared twice`, 2)
+        end
+        _G[`BINDING_NAME_{name}`] = opts.label
+        const component = `binding: {name}`
+        dispatch[name] = function(keystate: KeyState)
+            callIn({ component = component }, fn, keystate)
+        end
+    end
+end

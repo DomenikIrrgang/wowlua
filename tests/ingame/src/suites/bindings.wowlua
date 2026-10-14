@@ -1,0 +1,44 @@
+-- wowlua:bindings: keybindings declared in code; the compiler generates
+-- Bindings.xml, which the client reads from the AddOn root.
+import binding, header from "wowlua:bindings"
+import type KeyState from "wowlua:bindings"
+import suite from "/harness"
+
+const HEADER = "STDTEST"
+header(HEADER, "wowlua StdTest")
+
+local pressed: string[] = {}
+
+@binding("STDTEST_PING", { label = "Ping (StdTest)", header = HEADER })
+local function ping()
+    pressed[#pressed + 1] = "ping"
+end
+
+@binding("STDTEST_HOLD", { label = "Hold (StdTest)", header = HEADER, runOnUp = true })
+local function hold(state: KeyState)
+    pressed[#pressed + 1] = state
+end
+
+local s = suite("bindings")
+
+s:test("the client lists the generated bindings", function(t)
+    local listed: { [string]: boolean } = {}
+    for i = 1, GetNumBindings() do
+        const command = GetBinding(i)
+        if command then
+            listed[command] = true
+        end
+    end
+    t:ok(listed.STDTEST_PING, "STDTEST_PING is listed")
+    t:ok(listed.STDTEST_HOLD, "STDTEST_HOLD is listed")
+    t:eq(_G.BINDING_HEADER_STDTEST, "wowlua StdTest", "the header's label")
+    t:eq(_G.BINDING_NAME_STDTEST_PING, "Ping (StdTest)", "the binding's label")
+end)
+
+s:test("RunBinding reaches the handlers through Bindings.xml", function(t)
+    pressed = {}
+    RunBinding("STDTEST_PING")
+    RunBinding("STDTEST_HOLD")
+    RunBinding("STDTEST_HOLD", "up")
+    t:eq(table.concat(pressed, " "), "ping down up", "down, then up with runOnUp")
+end)

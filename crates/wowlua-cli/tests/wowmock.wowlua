@@ -660,6 +660,27 @@ CreateKeybindingEntryInitializer = (function(index: number): Row
     return { kind = "keybinding", index = index }
 end) :: any
 Mock.bindings = {}
+Mock.bindingActions = {}
+
+--- Bindings.xml as the client reads it: one action per binding.
+function Mock.addBinding(name: string, action: (keystate: string) -> ())
+    Mock.bindings[#Mock.bindings + 1] = name
+    Mock.bindingActions[name] = action
+end
+
+--- Presses (or, with `"up"`, releases) a binding's key.
+function Mock.pressBinding(name: string, keystate: string?)
+    const action = Mock.bindingActions[name]
+    if not action then
+        error(`no binding {name}`, 2)
+    end
+    action(keystate ?? "down")
+end
+
+_G.RunBinding = function(command: string, up: string?)
+    Mock.pressBinding(command, up ?? "down")
+end
+
 function GetNumBindings(): number
     return #Mock.bindings
 end

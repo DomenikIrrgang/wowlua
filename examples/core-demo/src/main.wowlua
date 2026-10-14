@@ -7,6 +7,7 @@ import after, throttle from "wowlua:timer"
 import outOfCombat, onCombatChange, inCombat from "wowlua:combat"
 import hook from "wowlua:hooks"
 import print from "wowlua:log"
+import binding, header from "wowlua:bindings"
 
 interface Settings
     logins: number
@@ -69,6 +70,14 @@ local function showBox()
     box:SetScale(db.scale)
     box:SetShown(not box:IsShown())
     print("box toggled (out of combat)")
+end
+
+-- A keybinding under the "Core Demo" header (the compiler generates Bindings.xml).
+header("COREDEMO", "Core Demo")
+
+@binding("COREDEMO_TOGGLE_BOX", { label = "Toggle the box", header = "COREDEMO" })
+local function toggleBox()
+    showBox()
 end
 
 @hook("ToggleGameMenu")

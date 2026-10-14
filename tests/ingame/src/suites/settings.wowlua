@@ -35,6 +35,7 @@ local page = settings.register({
         settings.slider("scale", { label = "Scale", min = 0.5, max = 2, step = 0.05, format = function(v: number) return ("%.0f%%"):format(v * 100) end }),
         settings.dropdown("anchor", { label = "Anchor", options = { { value = "TOPLEFT", label = "Top left" }, { value = "CENTER", label = "Center" } } }),
         settings.color("tint", { label = "Tint" }),
+        settings.keybinding("STDTEST_PING", { label = "Ping" }),
         settings.button("Print a line", function() print("StdTest settings button") end),
     },
     subcategories = { { title = "More", controls = { settings.checkbox("enabled", { label = "Enabled (again)" }) } } },

@@ -671,6 +671,7 @@ pub fn build(
                     )
                 })
                 .collect(),
+            xml_bindings: xml_binding_names(&root),
         },
     };
     let mut api_cache: HashMap<String, Vec<crate::compile::ParsedDeclaration>> = HashMap::new();
@@ -1780,7 +1781,68 @@ pub fn build(
             );
         }
     }
-    for (name, mut bytes) in bindings_files(session, &root) {
+    let hand_written = bindings_files(session, &root);
+    // `wowlua:bindings` (spec stdlib "bindings"): every flavor's bindings in
+    // one generated Bindings.xml.
+    let mut declared: Vec<&wowlua_sema::stdlib::BindingDecl> = Vec::new();
+    for b in &builds {
+        for d in &b.output.bindings {
+            if !declared.iter().any(|x| x.name == d.name) {
+                declared.push(d);
+            }
+        }
+    }
+    if let Some(first) = declared.first() {
+        if let Some((name, _)) = hand_written.first() {
+            session.push(
+                Diagnostic::error(
+                    "E4334",
+                    format!("`{name}` is hand-written, and `wowlua:bindings` would generate one"),
+                )
+                .with_label(first.span, "a `@binding`")
+                .with_help("declare every binding with `@binding`, or keep the hand-written file and drop `wowlua:bindings`"),
+            );
+        } else {
+            let clients: Vec<&wowlua_flavors::Client> = flavors
+                .iter()
+                .flat_map(|f| wowlua_flavors::table().clients_of(f))
+                .collect();
+            let lacking: Vec<&str> = clients
+                .iter()
+                .filter(|c| !c.features.binding_defaults)
+                .map(|c| c.name.as_str())
+                .collect();
+            let defaults = lacking.len() < clients.len();
+            for d in &declared {
+                let Some((key, span)) = &d.default else {
+                    continue;
+                };
+                let message = if defaults {
+                    format!(
+                        "the default key `{key}` of `{}` is ignored on {}",
+                        d.name,
+                        lacking.join(", ")
+                    )
+                } else {
+                    format!(
+                        "the default key `{key}` of `{}` is ignored: no targeted client supports default keys",
+                        d.name
+                    )
+                };
+                if !lacking.is_empty() {
+                    session.push(
+                        Diagnostic::warning("W8354", message)
+                            .with_label(*span, "no default key there"),
+                    );
+                }
+            }
+            out.insert(
+                "Bindings.xml".into(),
+                Content::Bytes(bindings_xml(&declared, &addon_name, defaults).into_bytes()),
+            );
+        }
+    }
+    for (name, mut bytes) in hand_written {
         // The packager processes them like the TOC's XML files.
         if let Some(info) = &keyword_info
             && !crate::keywords::plain_copy(&manifest.manifest.compat.plain_copy, &[&name])
@@ -3725,6 +3787,103 @@ fn bindings_files(session: &mut Session, root: &Path) -> Vec<(String, Vec<u8>)> 
         }
     }
     files
+}
+
+/// The global table Bindings.xml calls through: the addon's name as a Lua
+/// name (the `wowlua:bindings` module derives the same one).
+fn bindings_global(addon: &str) -> String {
+    let mut name: String = addon
+        .bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b == b'_' {
+                b as char
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if name.starts_with(|c: char| c.is_ascii_digit()) {
+        name.insert(0, '_');
+    }
+    name + "_Bindings"
+}
+
+fn xml_attribute(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('"', "&quot;")
+}
+
+/// The generated Bindings.xml: headerless bindings first, then each
+/// header's bindings together (the attribute on the first), in order of
+/// first use; `defaults`: emit the default keys.
+fn bindings_xml(
+    bindings: &[&wowlua_sema::stdlib::BindingDecl],
+    addon: &str,
+    defaults: bool,
+) -> String {
+    let mut groups: Vec<(Option<&str>, Vec<&wowlua_sema::stdlib::BindingDecl>)> =
+        vec![(None, Vec::new())];
+    for b in bindings {
+        let header = b.header.as_deref();
+        match groups.iter_mut().find(|(h, _)| *h == header) {
+            Some((_, list)) => list.push(b),
+            None => groups.push((header, vec![b])),
+        }
+    }
+    let dispatch = bindings_global(addon);
+    let mut xml = String::from("<Bindings>\n");
+    for (header, list) in groups {
+        for (i, b) in list.iter().enumerate() {
+            xml.push_str(&format!("  <Binding name=\"{}\"", b.name));
+            if let Some(h) = header
+                && i == 0
+            {
+                xml.push_str(&format!(" header=\"{}\"", xml_attribute(h)));
+            }
+            if b.run_on_up {
+                xml.push_str(" runOnUp=\"true\"");
+            }
+            if defaults && let Some((key, _)) = &b.default {
+                xml.push_str(&format!(" default=\"{}\"", xml_attribute(key)));
+            }
+            xml.push_str(&format!(
+                ">{dispatch}[\"{}\"](keystate)</Binding>\n",
+                b.name
+            ));
+        }
+    }
+    xml.push_str("</Bindings>\n");
+    xml
+}
+
+/// The binding names of the hand-written keybinding files in `root`.
+fn xml_binding_names(root: &Path) -> HashSet<String> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return HashSet::new();
+    };
+    let mut names = HashSet::new();
+    for e in entries.filter_map(Result::ok) {
+        if !is_bindings_file(&e.file_name().to_string_lossy()) {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(e.path()) else {
+            continue;
+        };
+        for tag in text.split("<Binding").skip(1) {
+            let Some(rest) = tag.split_once("name=").map(|(_, r)| r) else {
+                continue;
+            };
+            let Some(quote) = rest.chars().next().filter(|c| *c == '"' || *c == '\'') else {
+                continue;
+            };
+            if let Some(name) = rest[1..].split(quote).next() {
+                names.insert(name.to_string());
+            }
+        }
+    }
+    names
 }
 
 fn licenses_text(dev_fonts: bool, libs: &[(String, String)]) -> String {

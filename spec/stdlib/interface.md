@@ -55,9 +55,10 @@ root, and the required `BINDING_HEADER_*` / `BINDING_NAME_*` globals.
 
 ```wowlua
 import binding, header from "wowlua:bindings"
+import type KeyState from "wowlua:bindings"
 import L from "wowlua:locale"
 
-header("MYADDON", L.BINDING_HEADER)           -- category shown in the Key Bindings UI
+header("MYADDON", L.BINDING_HEADER)           -- heading shown in the Key Bindings UI
 
 @binding("MYADDON_TOGGLE", { label = L.TOGGLE_WINDOW, header = "MYADDON" })
 local function toggleWindow()
@@ -65,26 +66,32 @@ local function toggleWindow()
 end
 
 @binding("MYADDON_PUSH_TO_TALK", { label = "Push to talk", runOnUp = true })
-local function pushToTalk(keystate: "down" | "up") … end
+local function pushToTalk(keystate: KeyState) … end
 ```
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `header` | `(id: string, label: string)` | Statement at module top level. `id` must be a literal. |
-| `@binding(name, opts)` | function decorator | `name` is a literal matching `[A-Z][A-Z0-9_]*` (E8352), unique within the addon (E8351) |
-| `opts` | `{ label: string, header: string?, runOnUp: boolean?, default: string? }` | All fields except `label` must be compile-time constants. `label` may be any string expression, e.g. a locale entry. |
-| Handler | `() -> ()` or `(keystate: "down" \| "up") -> ()` (with `runOnUp`) | |
+| `header` | `(id: string, label: string)` | Statement at module top level. `id` must be a constant. |
+| `@binding(name, opts)` | function decorator | `name` is a constant matching `[A-Z][A-Z0-9_]*` (E8352), unique within the addon (E8351) |
+| `opts` | `{ label: string, header: string?, runOnUp: boolean?, default: string? }` | All fields except `label` must be constants. `label` may be any string expression, e.g. a locale entry. |
+| Handler | `() -> ()` or `(keystate: KeyState) -> ()` (with `runOnUp`) | `KeyState` is `"down" \| "up"`. Runs through the stdlib error policy: a failing handler is reported, not raised into the client. |
+
+A constant is a literal or a value folded from the file's top-level `const`
+declarations (`const HEADER = "MYADDON"`).
 
 **Compile-time collection.** `@binding` is allowed only on top-level function
 declarations, and `header` only as a top-level statement, both with constant
 arguments as described (E8350). The compiler collects all of them across the
-addon, per flavor, and generates:
+addon, per flavor, and generates one `Bindings.xml` with every flavor's
+bindings. Bindings without a header come first, then each header's bindings
+together, in order of first use; the `header` attribute is on the first
+binding of its group, so the Key Bindings UI shows each header once:
 
 ```xml
 <!-- Bindings.xml (generated) -->
 <Bindings>
-  <Binding name="MYADDON_TOGGLE" header="MYADDON">MyAddon_Bindings["MYADDON_TOGGLE"](keystate)</Binding>
   <Binding name="MYADDON_PUSH_TO_TALK" runOnUp="true">MyAddon_Bindings["MYADDON_PUSH_TO_TALK"](keystate)</Binding>
+  <Binding name="MYADDON_TOGGLE" header="MYADDON">MyAddon_Bindings["MYADDON_TOGGLE"](keystate)</Binding>
 </Bindings>
 ```
 
@@ -95,14 +102,22 @@ entries forward to the private handlers. This table and the `BINDING_*`
 globals are part of the normative list of global writes
 ([Code generation §14.1.1](../toolchain/codegen.md#1411-global-writes)).
 
-- `default` is emitted as the binding's default-key attribute only on clients
-  whose flavor table declares support for it. Elsewhere it is ignored, with
-  W8354. The module never calls `SetBinding` on the player's behalf.
-- In single-TOC builds, `Bindings.xml` is shared by all flavors. It contains the
-  union of all flavors' bindings, and on flavors where a binding's handler was
-  removed by `@if`, the dispatch table has a no-op entry for it.
+- The dispatch table's name is the AddOn's name with every byte other than
+  `[A-Za-z0-9_]` replaced by `_` (and `_` in front of a leading digit),
+  followed by `_Bindings`.
+- `default` is emitted as the binding's default-key attribute only when a
+  targeted client's flavor table entry declares the `binding-defaults`
+  feature; for clients without it, W8354. No client declares it yet. The
+  module never calls `SetBinding` on the player's behalf.
+- `Bindings.xml` is shared by all flavors, in every TOC layout (the client
+  reads one per AddOn). It contains the union of all flavors' bindings; on a
+  flavor where `@if` removed a binding's handler, the dispatch table runs
+  nothing for it. A binding that `@if` removes on every flavor is left out.
+- A package root with its own `Bindings.xml` (or `Bindings_<Suffix>.xml`) and
+  `@binding` declarations is E4334 ([Code generation
+  §14.8.5](../toolchain/codegen.md#1485-keybindings)).
 - `settings.keybinding(name)` ([UI: settings](ui.md#settings)) checks that `name`
-  is declared with `@binding` (E8353).
+  is declared with `@binding`, or in the package's own `Bindings.xml` (E8353).
 - Bindings also fire in combat. Handlers that call protected functions are
   subject to the usual combat restrictions (use `@outOfCombat` where
   appropriate).

@@ -198,6 +198,22 @@ fn client(out: &Path, name: &str, toc: &str, label: &str, setup: &str) -> mlua::
             .call::<()>((name, ns.clone()))
             .unwrap_or_else(|e| panic!("{label}{path}: {e}"));
     }
+    // The client reads Bindings.xml from the AddOn root: each body runs
+    // with `keystate`, key releases only with `runOnUp`.
+    if let Ok(xml) = fs::read_to_string(out.join("Bindings.xml")) {
+        for tag in xml.split("<Binding ").skip(1) {
+            let (attrs, rest) = tag.split_once('>').expect("a binding tag");
+            let body = rest.split("</Binding>").next().unwrap_or("");
+            let binding = attrs.split('"').nth(1).expect("a binding name");
+            let on_up = attrs.contains("runOnUp=\"true\"");
+            lua.load(format!(
+                "Mock.addBinding({binding:?}, function(keystate) if keystate == 'up' and not {on_up} then return end {body} end)"
+            ))
+            .set_name("@Bindings.xml")
+            .exec()
+            .unwrap_or_else(|e| panic!("{label}Bindings.xml: {e}"));
+        }
+    }
     lua
 }
 
@@ -2725,6 +2741,142 @@ print("foreign", pcall(tables.release, tables, {}))
     }
 }
 
+// --------------------------------------------------------------- bindings --
+
+const BINDINGS: &str = r#"import binding, header from "wowlua:bindings"
+import KeyState from "wowlua:bindings"
+local C = Mock.check
+
+const MAIN = "STD"
+const NEVER = false
+header(MAIN, "Std Addon")
+
+@binding("STD_PLAIN", { label = "Plain" })
+local function plain()
+    print("plain")
+end
+
+@binding("STD_TOGGLE", { label = "Toggle", header = MAIN })
+local function toggle()
+    print("toggle")
+end
+
+@binding("STD_PUSH", { label = `Push {1 + 1}`, header = MAIN, runOnUp = true })
+local function push(state: KeyState)
+    print(`push {state}`)
+end
+
+@binding("STD_BOOM", { label = "Boom", header = "DEV" })
+local function boom()
+    error("boom")
+end
+
+@if(NEVER)
+@binding("STD_NEVER", { label = "Never", header = MAIN })
+local function never()
+    print("never")
+end
+
+C(BINDING_HEADER_STD == "Std Addon", "the header's label")
+C(BINDING_NAME_STD_PUSH == "Push 2", "a computed label")
+"#;
+
+/// `wowlua:bindings`: the generated Bindings.xml calls the handlers through
+/// the addon's dispatch table, in every build mode.
+#[test]
+fn bindings_run_through_the_generated_file() {
+    let dir = project(&[("src/main.wowlua", BINDINGS)]);
+    build(dir.path(), "dev");
+    let xml = fs::read_to_string(dir.path().join("dist/dev/Std/Bindings.xml")).unwrap();
+    assert_eq!(
+        xml,
+        "<Bindings>\n  <Binding name=\"STD_PLAIN\">Std_Bindings[\"STD_PLAIN\"](keystate)</Binding>\n  <Binding name=\"STD_TOGGLE\" header=\"STD\">Std_Bindings[\"STD_TOGGLE\"](keystate)</Binding>\n  <Binding name=\"STD_PUSH\" runOnUp=\"true\">Std_Bindings[\"STD_PUSH\"](keystate)</Binding>\n  <Binding name=\"STD_BOOM\" header=\"DEV\">Std_Bindings[\"STD_BOOM\"](keystate)</Binding>\n</Bindings>\n"
+    );
+    let out = modes_in(
+        &dir,
+        "",
+        r#"Mock.pressBinding("STD_PLAIN")
+Mock.pressBinding("STD_PLAIN", "up")
+Mock.pressBinding("STD_TOGGLE")
+Mock.pressBinding("STD_PUSH")
+Mock.pressBinding("STD_PUSH", "up")
+Mock.pressBinding("STD_BOOM")
+Std_Bindings.STD_NEVER("down")
+print("labels", BINDING_NAME_STD_PLAIN, BINDING_NAME_STD_TOGGLE)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "plain",
+            "toggle",
+            "push down",
+            "push up",
+            "labels Plain Toggle"
+        ]
+    );
+    // A failing handler is reported, not raised into the client.
+    assert!(errors(&out).iter().any(|e| e.contains("boom")), "{out:?}");
+}
+
+/// `wowlua:bindings`' compile-time checks (E8350–E8353, W8354, E4334).
+#[test]
+fn bindings_are_checked_at_compile_time() {
+    let import = "import binding, header from \"wowlua:bindings\"\n";
+    let cases: &[(&str, &str)] = &[
+        (
+            "local n = \"STD_X\"\n@binding(n, { label = \"x\" })\nlocal function f() end\n",
+            "E8350",
+        ),
+        (
+            "local h = \"H\"\n@binding(\"STD_X\", { label = \"x\", header = h })\nlocal function f() end\n",
+            "E8350",
+        ),
+        (
+            "do\n    @binding(\"STD_X\", { label = \"x\" })\n    local function f() end\nend\n",
+            "E8350",
+        ),
+        (
+            "class A\n    @binding(\"STD_X\", { label = \"x\" })\n    static function f() end\nend\n",
+            "E8350",
+        ),
+        ("if true then\n    header(\"H\", \"x\")\nend\n", "E8350"),
+        (
+            "@binding(\"std_x\", { label = \"x\" })\nlocal function f() end\n",
+            "E8352",
+        ),
+        (
+            "@binding(\"STD_X\", { label = \"x\" })\nlocal function f() end\n@binding(\"STD_X\", { label = \"y\" })\nlocal function g() end\n",
+            "E8351",
+        ),
+        (
+            "@binding(\"STD_X\", { label = \"x\", default = \"CTRL-X\" })\nlocal function f() end\n",
+            "W8354",
+        ),
+    ];
+    for (body, code) in cases {
+        let out = check(&format!("{import}{body}"));
+        assert!(out.contains(code), "{code} expected for:\n{body}\n{out}");
+    }
+    let out = check(
+        "import * as settings from \"wowlua:settings\"\nlocal c = settings.keybinding(\"STD_NOPE\", { label = \"x\" })\nprint(c)\n",
+    );
+    assert!(out.contains("E8353"), "{out}");
+    // Constants count as constant arguments.
+    let out = check(&format!(
+        "{import}const N = \"STD_X\"\nconst H = \"STD\"\nheader(H, \"x\")\n@binding(N, {{ label = \"x\", header = H, runOnUp = not false }})\nlocal function f() end\n"
+    ));
+    assert!(!out.contains("E83"), "{out}");
+    // A hand-written Bindings.xml and `@binding` together.
+    let dir = project(&[(
+        "src/main.wowlua",
+        &format!("{import}@binding(\"STD_X\", {{ label = \"x\" }})\nlocal function f() end\n"),
+    )]);
+    fs::write(dir.path().join("Bindings.xml"), "<Bindings></Bindings>\n").unwrap();
+    let assert = wowlua(dir.path()).args(["build"]).assert().failure();
+    assert!(String::from_utf8_lossy(&assert.get_output().stderr).contains("E4334"));
+}
+
 // --------------------------------------------------------------- settings --
 
 #[test]
@@ -2734,7 +2886,11 @@ fn settings_pages_bind_controls_to_the_store() {
             "src/main.wowlua",
             r#"import * as settings from "wowlua:settings"
 import * as saved from "wowlua:saved"
+import binding from "wowlua:bindings"
 local C = Mock.check
+
+@binding("STD_TOGGLE", { label = "Toggle" })
+local function toggle() end
 
 interface Options
     showMinimap: boolean
@@ -2772,7 +2928,9 @@ C(not pcall(settings.register, { title = "x", store = db, controls = {} }), "reg
 _G.StdSettings = { page = page, db = db, built = function() return built end, profiles = saved.handle(db).profiles }
 "#,
         )],
-        r#"Mock.bindings = { "OTHER", "STD_TOGGLE" }"#,
+        // The client's own binding first; the addon's comes from its
+        // Bindings.xml.
+        r#"Mock.bindings = { "OTHER" }"#,
         r#"Mock.loadAddon("Std")
 local C = Mock.check
 local cats = Mock.settings.categories

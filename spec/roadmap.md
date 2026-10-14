@@ -277,8 +277,7 @@ menus and lists, then the widget themes.
   `settings` done 2026-10-14 (Settings API pages bound to `saved` stores,
   every control kind, keys and types checked E8113/E8070/E8107/E8114,
   profile refresh, combat-deferred open; `saved.bind` now returns its
-  defaults' type). The `keybinding` control's E8353 waits for
-  `wowlua:bindings`.
+  defaults' type).
 - `launcher` done 2026-10-14 (Addon Compartment entry, minimap button through
   LibDBIcon or a built-in shape-aware draggable one, LDB launcher, position
   in LibDBIcon's shape, E8080). Its `theme` waits for the widget themes.
@@ -310,6 +309,21 @@ menus and lists, then the widget themes.
   widget class); intrinsic-only declarations no longer hide the modules'
   types from callers (`events.on` returned `any`), and the API generator no
   longer aliases the compiler's types to `any` (`TimerHandle` was `any`).
+- Idiomatic wowlua (2026-10-14): the stdlib, the runtime, the mock client and
+  the in-game suite use enums (`comm.Distribution`, `log.Level`, members or
+  their strings accepted), classes and static fields where state lives,
+  `const`, `?.`, `??`, compound assignment and `continue`. The checker gained
+  short-circuiting optional chains and `??` as an existence probe; inlined
+  constant strings escape bytes outside UTF-8. The conformance corpus runs in
+  parallel within a memory budget (nightly 40 → 24 minutes).
+- `bindings` done 2026-10-14: `@binding` and `header` collected at compile
+  time (constants, E8350–E8352), one generated `Bindings.xml` for every
+  flavor calling the addon's dispatch table, `BINDING_*` labels at load time,
+  `settings.keybinding` checked (E8353, also against a hand-written
+  `Bindings.xml`), E4334, and `default` keys behind the `binding-defaults`
+  client feature (W8354; decisions S19–S21). The mock client loads the
+  generated file; the in-game suite checks that the client lists the
+  bindings and that `RunBinding` reaches the handlers.
 
 ## M9: Test runner, language server, formatter
 

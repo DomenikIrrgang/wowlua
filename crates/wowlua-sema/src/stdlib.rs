@@ -1,8 +1,11 @@
 //! Compile-time checks of the core standard library (spec stdlib, "core"):
 //! names given to `wowlua:events`, `wowlua:slash` and `wowlua:saved`, and
-//! the deferring decorators of `wowlua:timer` and `wowlua:combat`. Calls and
-//! decorators are recognized through the imports' `@intrinsic` ids.
+//! the deferring decorators of `wowlua:timer` and `wowlua:combat`, and the
+//! keybindings of `wowlua:bindings`, collected for the generated
+//! Bindings.xml. Calls and decorators are recognized through the imports'
+//! `@intrinsic` ids.
 
+use crate::constant::Const;
 use crate::{Analysis, FileInput, FileKind, Target, is_compiler_known};
 use std::collections::{HashMap, HashSet};
 use wowlua_diagnostics::Diagnostic;
@@ -16,6 +19,29 @@ pub struct StdlibConfig {
     pub saved: HashSet<String>,
     /// `addon.saved-variables-per-character`.
     pub saved_per_char: HashSet<String>,
+    /// Bindings of hand-written `Bindings*.xml` files (`settings.keybinding`
+    /// may name them).
+    pub xml_bindings: HashSet<String>,
+}
+
+/// A keybinding declared with `@binding` (spec stdlib "bindings").
+#[derive(Clone, Debug)]
+pub struct BindingDecl {
+    pub name: String,
+    pub header: Option<String>,
+    pub run_on_up: bool,
+    /// The default key, and where it is given.
+    pub default: Option<(String, Span)>,
+    pub span: Span,
+}
+
+/// What the checks found: diagnostics, and the declarations the build
+/// generates files from.
+#[derive(Clone, Debug, Default)]
+pub struct StdlibOutput {
+    pub diagnostics: Vec<Diagnostic>,
+    /// `@binding` declarations, in load order.
+    pub bindings: Vec<BindingDecl>,
 }
 
 /// Slash commands of the game; registering one again is W8011.
@@ -117,6 +143,22 @@ struct Ctx<'a> {
     settings_registered: Option<Span>,
     /// The first `launcher.register` call.
     launcher_registered: Option<Span>,
+    bindings: Vec<BindingDecl>,
+    /// `settings.keybinding` names, checked once every binding is known.
+    keybinding_refs: Vec<(String, Span)>,
+    /// The current file's top-level `const` values.
+    consts: HashMap<String, Const>,
+    /// The current declaration is removed by an `@if` in this build: its
+    /// binding is checked, not collected.
+    removed: bool,
+}
+
+/// Whether `name` is a valid keybinding name (E8352).
+fn binding_name(name: &str) -> bool {
+    name.starts_with(|c: char| c.is_ascii_uppercase())
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
 }
 
 fn string(e: &Expr) -> Option<String> {
@@ -127,6 +169,18 @@ fn string(e: &Expr) -> Option<String> {
 }
 
 impl Ctx<'_> {
+    /// A constant (a literal or folded from the file's `const`s).
+    fn constant(&self, e: &Expr) -> Option<Const> {
+        crate::constant::eval(e, &|name| self.consts.get(name).cloned())
+    }
+
+    fn constant_string(&self, e: &Expr) -> Option<String> {
+        match self.constant(e)? {
+            Const::String(s) => Some(String::from_utf8_lossy(&s).into_owned()),
+            _ => None,
+        }
+    }
+
     fn error(&mut self, code: &'static str, span: Span, message: String, label: &str) {
         self.diagnostics
             .push(Diagnostic::error(code, message).with_label(span, label));
@@ -199,13 +253,15 @@ impl Ctx<'_> {
     }
 
     /// The decorators of a declaration; `instance_method`: an instance
-    /// method of a class; `func`: the decorated function.
+    /// method of a class; `func`: the decorated function; `top`: a
+    /// statement at the module's top level.
     fn decorators(
         &mut self,
         bindings: &HashMap<String, Bound>,
         decorators: &[Decorator],
         instance_method: bool,
         func: Option<&FuncBody>,
+        top: bool,
     ) {
         for d in decorators {
             let Some(id) = self.decorator(bindings, d) else {
@@ -255,6 +311,7 @@ impl Ctx<'_> {
                         self.slash_command(a);
                     }
                 }
+                "bindings.binding" => self.binding(d, &args, top && func.is_some()),
                 "timer.throttle" | "timer.debounce" | "timer.nextFrame" | "combat.outOfCombat" => {
                     if let Some(f) = func
                         && returns_values(&f.body)
@@ -272,6 +329,127 @@ impl Ctx<'_> {
                 }
                 _ => {}
             }
+        }
+    }
+
+    /// `@binding(name, opts)`: on a top-level function, with a literal name
+    /// and constant options but the label.
+    fn binding(&mut self, d: &Decorator, args: &[&Expr], placed: bool) {
+        if !placed {
+            self.error(
+                "E8350",
+                d.span,
+                "`@binding` is allowed only on top-level function declarations".into(),
+                "not a top-level function",
+            );
+            return;
+        }
+        let Some(first) = args.first() else {
+            return;
+        };
+        let Some(name) = self.constant_string(first) else {
+            self.error(
+                "E8350",
+                first.span,
+                "`@binding` needs the binding's name as a constant string".into(),
+                "not a constant",
+            );
+            return;
+        };
+        if !binding_name(&name) {
+            self.error(
+                "E8352",
+                first.span,
+                format!("`{name}` is no keybinding name: it matches `[A-Z][A-Z0-9_]*`"),
+                "invalid",
+            );
+        }
+        let mut decl = BindingDecl {
+            name: name.clone(),
+            header: None,
+            run_on_up: false,
+            default: None,
+            span: first.span,
+        };
+        match args.get(1).map(|a| &a.kind) {
+            Some(ExprKind::Table(fields)) => {
+                for f in fields {
+                    let TableField::Named {
+                        name: key, value, ..
+                    } = f
+                    else {
+                        continue;
+                    };
+                    let key = key.text.as_ref();
+                    match key {
+                        "header" | "default" => match self.constant_string(value) {
+                            Some(v) if key == "header" => decl.header = Some(v),
+                            Some(v) => decl.default = Some((v, value.span)),
+                            None => self.error(
+                                "E8350",
+                                value.span,
+                                format!("`{key}` of `@binding` must be a constant string"),
+                                "not a constant",
+                            ),
+                        },
+                        "runOnUp" => match self.constant(value) {
+                            Some(Const::Bool(on)) => decl.run_on_up = on,
+                            _ => self.error(
+                                "E8350",
+                                value.span,
+                                "`runOnUp` of `@binding` must be a constant boolean".into(),
+                                "not a constant",
+                            ),
+                        },
+                        _ => {}
+                    }
+                }
+            }
+            Some(_) => {
+                self.error(
+                    "E8350",
+                    args[1].span,
+                    "the options of `@binding` must be a table literal".into(),
+                    "not a table literal",
+                );
+            }
+            None => {}
+        }
+        if self.removed {
+            return;
+        }
+        if let Some(first_decl) = self.bindings.iter().find(|b| b.name == name) {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E8351",
+                    format!("the keybinding `{name}` is declared twice"),
+                )
+                .with_label(decl.span, "again")
+                .with_label(first_decl.span, "first declared here"),
+            );
+            return;
+        }
+        self.bindings.push(decl);
+    }
+
+    /// `header(id, label)`: a top-level statement with a literal id.
+    fn binding_header(&mut self, e: &Expr, args: &[&Expr], top: bool) {
+        if !top {
+            self.error(
+                "E8350",
+                e.span,
+                "`header` is allowed only as a statement at the module's top level".into(),
+                "not a top-level statement",
+            );
+        } else if let Some(first) = args.first()
+            && self.constant_string(first).is_none()
+        {
+            self.error(
+                "E8350",
+                first.span,
+                "`header` needs the header's id as a constant string".into(),
+                "not a constant",
+            );
         }
     }
 
@@ -307,7 +485,8 @@ impl Ctx<'_> {
         }
     }
 
-    fn call(&mut self, bindings: &HashMap<String, Bound>, e: &Expr) {
+    /// A call to the standard library; `top`: a top-level call statement.
+    fn call(&mut self, bindings: &HashMap<String, Bound>, e: &Expr, top: bool) {
         let ExprKind::Call { callee, args } = &e.kind else {
             return;
         };
@@ -361,6 +540,14 @@ impl Ctx<'_> {
                 }
             }
             "saved.bind" => self.bind(e, &args),
+            "bindings.header" => self.binding_header(e, &args, top),
+            "settings.keybinding" => {
+                if let Some(first) = args.first()
+                    && let Some(name) = string(first)
+                {
+                    self.keybinding_refs.push((name, first.span));
+                }
+            }
             "settings.register" => match self.settings_registered {
                 Some(first) => self.diagnostics.push(
                     Diagnostic::error("E8114", "`settings.register` is called more than once")
@@ -650,8 +837,14 @@ impl Intrinsics {
     }
 }
 
-/// Runs the checks over every file of the package.
-pub fn check(files: &[FileInput], analysis: &Analysis, config: &StdlibConfig) -> Vec<Diagnostic> {
+/// Runs the checks over every file of the package; `meta`: the build's
+/// (for `@if`), where a file has none of its own.
+pub fn check(
+    files: &[FileInput],
+    analysis: &Analysis,
+    config: &StdlibConfig,
+    meta: Option<&crate::meta::Meta>,
+) -> StdlibOutput {
     let mut ctx = Ctx {
         analysis,
         events: HashSet::new(),
@@ -662,6 +855,10 @@ pub fn check(files: &[FileInput], analysis: &Analysis, config: &StdlibConfig) ->
         bound_saved: HashMap::new(),
         settings_registered: None,
         launcher_registered: None,
+        bindings: Vec::new(),
+        keybinding_refs: Vec::new(),
+        consts: HashMap::new(),
+        removed: false,
     };
     for f in files {
         let Some(parse) = f.parse else { continue };
@@ -685,15 +882,38 @@ pub fn check(files: &[FileInput], analysis: &Analysis, config: &StdlibConfig) ->
             }
         }
     }
-    for (i, f) in files.iter().enumerate() {
+    for (file, f) in files.iter().enumerate() {
         if f.kind != FileKind::Wowlua || is_compiler_known(&f.src_rel) {
             continue;
         }
         let Some(parse) = f.parse else { continue };
-        let bound = bindings(analysis, i, parse);
+        let bound = bindings(analysis, file, parse);
         if bound.is_empty() {
             continue;
         }
+        ctx.consts.clear();
+        for s in &parse.chunk.block.stmts {
+            let inner = match &s.kind {
+                StmtKind::Export(inner) => inner.as_ref(),
+                _ => s,
+            };
+            if let StmtKind::Const {
+                name,
+                value: Some(value),
+                ..
+            } = &inner.kind
+                && let Some(c) = ctx.constant(value)
+            {
+                ctx.consts.insert(name.text.to_string(), c);
+            }
+        }
+        let top: HashSet<*const Stmt> = parse
+            .chunk
+            .block
+            .stmts
+            .iter()
+            .map(|s| s as *const Stmt)
+            .collect();
         let mut stmts: Vec<&Stmt> = Vec::new();
         wowlua_syntax::visit::walk_stmts(&parse.chunk.block, &mut |s| stmts.push(s));
         let mut i = 0;
@@ -704,20 +924,38 @@ pub fn check(files: &[FileInput], analysis: &Analysis, config: &StdlibConfig) ->
                 StmtKind::Export(inner) => inner.as_ref(),
                 _ => s,
             };
+            let at_top = top.contains(&(s as *const Stmt));
+            ctx.removed = f.meta.or(meta).is_some_and(|meta| {
+                let kind_of = |n: &str| {
+                    analysis.modules[file]
+                        .as_ref()
+                        .and_then(|m| m.meta_bindings.get(n).copied())
+                };
+                s.decorators.iter().any(|d| {
+                    crate::meta::if_condition(d)
+                        .flatten()
+                        .and_then(|cond| {
+                            crate::meta::static_value(cond, meta, &kind_of, &|n| {
+                                ctx.consts.get(n).cloned()
+                            })
+                        })
+                        .is_some_and(|c| !c.truthy())
+                })
+            });
             match &inner.kind {
                 StmtKind::LocalFunction { func, .. } | StmtKind::Function { func, .. } => {
-                    ctx.decorators(&bound, &s.decorators, false, Some(func));
+                    ctx.decorators(&bound, &s.decorators, false, Some(func), at_top);
                 }
                 StmtKind::Class(c) => {
                     for m in &c.members {
                         let static_ = m.modifiers.contains(&Modifier::Static);
                         if let ClassMemberKind::Method { func, .. } = &m.kind {
-                            ctx.decorators(&bound, &m.decorators, !static_, Some(func));
+                            ctx.decorators(&bound, &m.decorators, !static_, Some(func), false);
                             wowlua_syntax::visit::walk_stmts(&func.body, &mut |s| stmts.push(s));
                         }
                     }
                 }
-                _ => ctx.decorators(&bound, &s.decorators, false, None),
+                _ => ctx.decorators(&bound, &s.decorators, false, None, at_top),
             }
         }
         let mut calls: Vec<&Expr> = Vec::new();
@@ -739,9 +977,33 @@ pub fn check(files: &[FileInput], analysis: &Analysis, config: &StdlibConfig) ->
                 }
             }
         }
+        let top_calls: HashSet<*const Expr> = parse
+            .chunk
+            .block
+            .stmts
+            .iter()
+            .filter_map(|s| match &s.kind {
+                StmtKind::Call(e) => Some(e as *const Expr),
+                _ => None,
+            })
+            .collect();
         for e in calls {
-            ctx.call(&bound, e);
+            ctx.call(&bound, e, top_calls.contains(&(e as *const Expr)));
         }
     }
-    ctx.diagnostics
+    let refs = std::mem::take(&mut ctx.keybinding_refs);
+    for (name, span) in refs {
+        if !ctx.bindings.iter().any(|b| b.name == name) && !config.xml_bindings.contains(&name) {
+            ctx.error(
+                "E8353",
+                span,
+                format!("`{name}` is not a keybinding of this addon: declare it with `@binding`"),
+                "not declared",
+            );
+        }
+    }
+    StdlibOutput {
+        diagnostics: ctx.diagnostics,
+        bindings: ctx.bindings,
+    }
 }

@@ -131,6 +131,9 @@ pub struct ClientFeatures {
     /// `[Game]`, `[Family]` and `[TextLocale]` in TOC file lines.
     #[serde(default)]
     pub file_variables: bool,
+    /// The `default` key attribute on addon keybindings (W8354 where not).
+    #[serde(default)]
+    pub binding_defaults: bool,
 }
 
 #[derive(Debug, Deserialize)]

@@ -48,6 +48,8 @@ pub struct CompileOutput {
     /// Modules `dead-code` removed (by `Source::rel`, spec optimization
     /// §15.2.1).
     pub removed: BTreeSet<String>,
+    /// `@binding` declarations, for the generated Bindings.xml.
+    pub bindings: Vec<wowlua_sema::stdlib::BindingDecl>,
 }
 
 /// A declaration file with its contents.
@@ -703,11 +705,9 @@ pub fn compile_flavor(
     let analysis = wowlua_sema::analyze(&inputs, Some(&meta));
     diagnostics.extend(analysis.diagnostics.iter().cloned());
     // The standard library's compile-time checks (spec stdlib, "core").
-    diagnostics.extend(wowlua_sema::stdlib::check(
-        &inputs,
-        &analysis,
-        &check.stdlib,
-    ));
+    let stdlib = wowlua_sema::stdlib::check(&inputs, &analysis, &check.stdlib, Some(&meta));
+    diagnostics.extend(stdlib.diagnostics);
+    out.bindings = stdlib.bindings;
     // Dead modules (spec optimization §15.2.1); the build leaves out those
     // dead in every flavor.
     let dead: std::collections::HashSet<usize> = if profile.optimize.dead_code {
