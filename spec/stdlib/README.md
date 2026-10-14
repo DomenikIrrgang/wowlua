@@ -86,6 +86,7 @@ libraries such as Ace3, LibDBIcon or LibSerialize.
 |-----------|--------|--------|--------|
 | `@event(name, ...)` | `wowlua:events` | function, static method | Handles one or more WoW events or messages. Only WoW events are registered with the game. |
 | `@unitEvent(name, unit, unit?)` | `wowlua:events` | function, static method | `RegisterUnitEvent` for one or two units, on its own frame |
+| `@bucket(interval, name, ...)` | `wowlua:events` | function, static method | Coalesces bursts of events; the handler gets their counts |
 | `@onLoad` | `wowlua:lifecycle` | function | Runs once this addon's SavedVariables are loaded (`ADDON_LOADED` for this addon) |
 | `@onLogin` | `wowlua:lifecycle` | function | Runs on `PLAYER_LOGIN`, or right after `@onLoad` if already logged in (load-on-demand addons) |
 | `@onEnterWorld` | `wowlua:lifecycle` | function | Runs on every `PLAYER_ENTERING_WORLD` |

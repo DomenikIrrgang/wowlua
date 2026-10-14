@@ -4,6 +4,8 @@
 -- loaded, else a built-in one; its position uses LibDBIcon's table shape
 -- (`hide`, `minimapPos`), so switching between them keeps it.
 import isLoggedIn from "wowlua:lifecycle"
+import on from "wowlua:events"
+import type Subscription from "wowlua:events"
 import callIn from "wowlua:errors"
 import type WidgetTheme from "wowlua:frames"
 
@@ -380,4 +382,105 @@ export function setTheme(theme: WidgetTheme?)
         opts.theme = theme
     end
     button?:applyTheme(theme)
+end
+
+-- LDB data sources ------------------------------------------------------------
+
+export type DataSourceOptions = {
+    text: string,
+    label?: string,
+    icon?: string,
+    onClick?: (button: string) -> (),
+    tooltip?: (tip: GameTooltip) -> (),
+}
+
+--- A LibDataBroker data source: text that display addons (Titan Panel,
+--- ChocolateBar, ...) show and keep current.
+class DataSource
+    readonly name: string
+    readonly opts: DataSourceOptions
+    object: LibDataBrokerObject? = nil
+
+    constructor(name: string, opts: DataSourceOptions)
+        self.name = name
+        self.opts = opts
+    end
+
+    -- Creates the LDB object once LibDataBroker is there.
+    function attach(ldb: LibDataBroker)
+        const o = self.opts
+        const object = ldb:NewDataObject(self.name, {
+            type = "data source",
+            text = o.text,
+            label = o.label ?? self.name,
+            icon = o.icon,
+            OnClick = function(_: any, mouse: string)
+                if o.onClick then
+                    callIn({ component = "launcher: data source onClick" }, o.onClick, mouse)
+                end
+            end,
+            OnTooltipShow = function(tip: GameTooltip)
+                if o.tooltip then
+                    callIn({ component = "launcher: data source tooltip" }, o.tooltip, tip)
+                end
+            end,
+        })
+        if not object then
+            error(`launcher.dataSource: LibDataBroker already has a data object named "{self.name}"`)
+        end
+        self.object = object
+    end
+
+    function setText(text: string)
+        self.opts.text = text
+        if self.object then
+            self.object.text = text
+        end
+    end
+
+    function setIcon(icon: string)
+        self.opts.icon = icon
+        if self.object then
+            self.object.icon = icon
+        end
+    end
+
+    function setLabel(label: string)
+        self.opts.label = label
+        if self.object then
+            self.object.label = label
+        end
+    end
+end
+
+-- Data sources waiting for LibDataBroker (another addon may embed it and
+-- load later).
+local waiting: DataSource[] = {}
+local watch: Subscription? = nil
+
+local function attachWaiting()
+    const libStub = _G.LibStub :: typeof(LibStub)?
+    const ldb = libStub and libStub("LibDataBroker-1.1", true)
+    if not ldb then
+        return
+    end
+    const ready = waiting
+    waiting = {}
+    watch?:cancel()
+    watch = nil
+    for _, source in ipairs(ready) do
+        callIn({ component = "launcher: dataSource" }, function() source:attach(ldb) end)
+    end
+end
+
+--- Publishes `name` as a LibDataBroker data source; without the library
+--- (embedded by any addon) it waits for it.
+export function dataSource(name: string, opts: DataSourceOptions): DataSource
+    const source = DataSource.new(name, opts)
+    waiting[#waiting + 1] = source
+    attachWaiting()
+    if #waiting > 0 and not watch then
+        watch = on("ADDON_LOADED", attachWaiting)
+    end
+    return source
 end

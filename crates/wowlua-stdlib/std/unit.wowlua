@@ -5,6 +5,10 @@
 import * as secret from "wowlua:secret"
 import * as color from "wowlua:color"
 import type Color from "wowlua:color"
+import on from "wowlua:events"
+import type Subscription from "wowlua:events"
+import after from "wowlua:timer"
+import callIn from "wowlua:errors"
 
 export type UnitInfo = {
     --- Without the realm (WoW: Forever's names include the surname).
@@ -190,3 +194,170 @@ end
 export function groupSize(): number
     return math.max(1, GetNumGroupMembers())
 end
+
+-- The roster ------------------------------------------------------------------
+
+--- A group member (the player included).
+export type RosterMember = {
+    guid: string,
+    --- The current unit token (`raid3`, `party1`, `player`).
+    unit: UnitToken,
+    name: string | Secret<string>,
+    --- nil while the name is secret.
+    fullName?: string,
+    classFile?: string | Secret<string>,
+}
+
+class RosterListener implements Subscription
+    active: boolean = true
+    readonly fn: (joined: RosterMember[], left: RosterMember[]) -> ()
+
+    constructor(fn: (joined: RosterMember[], left: RosterMember[]) -> ())
+        self.fn = fn
+    end
+
+    function cancel()
+        self.active = false
+    end
+end
+
+-- By GUID; built on first use and kept current from then on.
+local byGuidMap: { [string]: RosterMember } = {}
+local byUnitMap: { [string]: RosterMember } = {}
+local started = false
+local dirty = true
+local rebuildQueued = false
+local rosterListeners: RosterListener[] = {}
+
+local function member(token: UnitToken, guid: string): RosterMember
+    local name, realm = nameAndRealm(token)
+    local _, classFile = UnitClass(token)
+    local full: string? = nil
+    if not secret.isSecret(name) then
+        full = `{name}-{realm ?? ownRealm()}`
+    end
+    return { guid = guid, unit = token, name = name, fullName = full, classFile = classFile }
+end
+
+-- The player first, then by group index.
+local function tokenOrder(token: UnitToken): number
+    if token == "player" then
+        return 0
+    end
+    return tonumber(token:match("%d+$")) ?? 99
+end
+
+-- Re-reads the group; tells the listeners who joined and left.
+local function rebuild()
+    dirty = false
+    const nextGuid: { [string]: RosterMember } = {}
+    const nextUnit: { [string]: RosterMember } = {}
+    local function add(token: UnitToken)
+        const guid = UnitGUID(token)
+        if secret.isSecret(guid) then
+            -- Unreadable now: keep who was there.
+            const known = byUnitMap[token]
+            if known then
+                nextGuid[known.guid] = known
+                nextUnit[token] = known
+            end
+            return
+        end
+        if guid == nil or nextGuid[guid] then
+            return
+        end
+        const m = member(token, guid)
+        nextGuid[guid] = m
+        nextUnit[token] = m
+    end
+    add("player")
+    for token in group() do
+        add(token)
+    end
+    const joined: RosterMember[] = {}
+    const left: RosterMember[] = {}
+    for guid, m in pairs(nextGuid) do
+        if not byGuidMap[guid] then
+            joined[#joined + 1] = m
+        end
+    end
+    for guid, m in pairs(byGuidMap) do
+        if not nextGuid[guid] then
+            left[#left + 1] = m
+        end
+    end
+    byGuidMap = nextGuid
+    byUnitMap = nextUnit
+    if #joined == 0 and #left == 0 then
+        return
+    end
+    for _, l in ipairs(rosterListeners) do
+        if l.active then
+            callIn({ component = "unit.roster: onChange" }, l.fn, joined, left)
+        end
+    end
+end
+
+-- Bursts of roster events rebuild once.
+local function changed()
+    dirty = true
+    if rebuildQueued then
+        return
+    end
+    rebuildQueued = true
+    after(0.2, function()
+        rebuildQueued = false
+        if dirty then
+            rebuild()
+        end
+    end)
+end
+
+local function current()
+    if not started then
+        started = true
+        on("GROUP_ROSTER_UPDATE", changed)
+        on("PLAYER_ENTERING_WORLD", changed)
+        on("UNIT_NAME_UPDATE", changed)
+        -- The roster as it is now counts as the start, not as joins.
+        rebuild()
+    elseif dirty then
+        rebuild()
+    end
+end
+
+--- The group's members (the player included) by GUID, kept current, and
+--- who joins and leaves. Starts on first use; members whose GUID is secret
+--- keep their last known entry.
+export const roster = {
+    --- The member with this GUID; nil when not in the group.
+    byGuid = function(guid: string): RosterMember?
+        current()
+        return byGuidMap[guid]
+    end,
+    --- The member behind a unit token of the group.
+    byUnit = function(token: UnitToken): RosterMember?
+        current()
+        return byUnitMap[token]
+    end,
+    --- Every member, in unit token order.
+    members = function(): RosterMember[]
+        current()
+        const out: RosterMember[] = {}
+        for _, m in pairs(byGuidMap) do
+            out[#out + 1] = m
+        end
+        table.sort(out, function(a: RosterMember, b: RosterMember): boolean
+            return tokenOrder(a.unit) < tokenOrder(b.unit)
+        end)
+        return out
+    end,
+    --- `fn(joined, left)` after each change (bursts of roster events
+    --- coalesced); the group at the first call counts as already there.
+    onChange = function(fn: (joined: RosterMember[], left: RosterMember[]) -> ()): Subscription
+        current()
+        const l = RosterListener.new(fn)
+        rosterListeners[#rosterListeners + 1] = l
+        return l
+    end,
+}

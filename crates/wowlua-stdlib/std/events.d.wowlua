@@ -1,5 +1,5 @@
--- Compiler behavior of `wowlua:events` (spec stdlib "events"): `@event` and
--- `@unitEvent` register the final function value.
+-- Compiler behavior of `wowlua:events` (spec stdlib "events"): `@event`,
+-- `@unitEvent` and `@bucket` register the final function value.
 @intrinsic("events.event")
 declare global event: any
 @intrinsic("events.unitEvent")
@@ -12,3 +12,7 @@ declare global once: any
 declare global onUnit: any
 @intrinsic("events.send")
 declare global send: any
+@intrinsic("events.bucket")
+declare global bucket: any
+@intrinsic("events.onBucket")
+declare global onBucket: any

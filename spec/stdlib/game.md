@@ -81,6 +81,40 @@ The client's newer APIs (`UnitHealthPercent`, `GetUnitName`) are detected at
 run time in every flavor mode; the result is the same as a compile-time
 choice.
 
+### Roster
+
+`unit.roster` keeps the group's members (the player included) by GUID and
+reports who joins and leaves.
+
+```wowlua
+const m = unit.roster.byGuid(sourceGuid)            -- RosterMember?
+if m then print(m.fullName, m.unit) end
+unit.roster.onChange(function(joined: RosterMember[], left: RosterMember[])
+    for _, m in ipairs(joined) do print(`{m.name} joined`) end
+end)
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `roster.byGuid` | `(guid: string) -> RosterMember?` | |
+| `roster.byUnit` | `(unit: UnitToken) -> RosterMember?` | The member behind a group token |
+| `roster.members` | `() -> RosterMember[]` | The player first, then by group index |
+| `roster.onChange` | `(fn: (joined: RosterMember[], left: RosterMember[]) -> ()) -> Subscription` | After each change |
+| `RosterMember` | `{ guid: string, unit: UnitToken, name: string \| Secret<string>, fullName?: string, classFile?: string \| Secret<string> }` | `fullName` is nil while the name is secret |
+
+Semantics (decision S34):
+
+- **Lazy.** The roster starts on first use: it registers `GROUP_ROSTER_UPDATE`,
+  `PLAYER_ENTERING_WORLD` and `UNIT_NAME_UPDATE`, and the group at that moment
+  counts as already there (no joins are reported for it).
+- **Coalesced.** A burst of roster events rebuilds once, 0.2 seconds after the
+  first. A query while a rebuild is pending rebuilds first, so queries are
+  always current.
+- **Moves are not changes.** A member whose unit token changes (party to raid,
+  a raid reshuffle) keeps their entry with the new token.
+- **Secrets.** A member whose GUID reads as secret keeps the last known entry
+  for that unit token; one never seen is left out until it can be read.
+
 ## aura
 
 `wowlua:aura` reads auras and wraps the engine's aura containers. On

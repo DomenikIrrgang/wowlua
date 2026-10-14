@@ -1,0 +1,79 @@
+-- unit.roster, events.onBucket and @bucket, launcher.dataSource.
+import * as unit from "wowlua:unit"
+import * as events from "wowlua:events"
+import * as launcher from "wowlua:launcher"
+import * as secret from "wowlua:secret"
+import type BucketCounts from "wowlua:events"
+import suite, say from "/harness"
+
+declare message STDTEST_BUCKET(key: string)
+
+local s = suite("roster, bucket, data source")
+
+s:test("the roster has the player", function(t)
+    const me = unit.roster.byUnit("player")
+    t:ok(me ~= nil, "the player is in the roster")
+    if me then
+        t:eq(unit.roster.byGuid(me.guid), me, "found by GUID")
+    end
+    const listed: string[] = {}
+    for _, m in ipairs(unit.roster.members()) do
+        listed[#listed + 1] = `{secret.known(m.name, "?")}@{m.unit}`
+    end
+    say(`roster: {table.concat(listed, ", ")}`)
+end)
+
+s:test("a bucket coalesces a burst", function(t)
+    local got: BucketCounts? = nil
+    local calls = 0
+    const sub = events.onBucket("STDTEST_BUCKET", 0.2, function(counts: BucketCounts)
+        got = counts
+        calls += 1
+    end)
+    events.send("STDTEST_BUCKET", "a")
+    events.send("STDTEST_BUCKET", "a")
+    events.send("STDTEST_BUCKET", "b")
+    t:eq(calls, 0, "nothing yet")
+    t:wait(0.4)
+    t:eq(calls, 1, "one call")
+    t:eq(got?.args.a, 2, "counted by argument")
+    t:eq(got?.events.STDTEST_BUCKET, 3, "counted by event")
+    sub:cancel()
+end)
+
+s:test("an LDB data source", function(t)
+    const source = launcher.dataSource("StdTest Data", { text = "ready" })
+    source:setText("set")
+    const libStub = _G.LibStub :: typeof(LibStub)?
+    const ldb = libStub and libStub("LibDataBroker-1.1", true)
+    if ldb then
+        t:eq(ldb:GetDataObjectByName("StdTest Data")?.text, "set", "published")
+        say("data source: published (LibDataBroker is loaded)")
+    else
+        t:ok(source.object == nil, "waits for LibDataBroker")
+        say("data source: waiting (no addon loaded LibDataBroker)")
+    end
+end)
+
+-- Moving items fires BAG_UPDATE in bursts.
+local bagCounts: BucketCounts? = nil
+
+@events.bucket(0.5, "BAG_UPDATE")
+local function bagsChanged(counts: BucketCounts)
+    bagCounts = counts
+end
+
+local g = suite("bucket (guided)", "guided")
+
+g:test("moving an item in the bags", function(t)
+    bagCounts = nil
+    t:ask("Move any item to another slot in your bags")
+    if t:waitFor(function() return bagCounts ~= nil end, 120, "bag updates") then
+        const bags: string[] = {}
+        for bag, n in pairs(bagCounts?.args ?? {}) do
+            bags[#bags + 1] = `bag {bag} x{n}`
+        end
+        t:ok(#bags > 0, "bags collected")
+        say(`bucket: {table.concat(bags, ", ")}`)
+    end
+end)

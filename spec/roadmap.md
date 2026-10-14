@@ -388,7 +388,8 @@ menus and lists, then the widget themes.
   key press, a ping answered over addon messages).
 - S4 in progress (patterns found across the corpus): `table` and `format`
   done 2026-10-15 (decision S32); `version` (S33), `alert` and `links` done
-  2026-10-15.
+  2026-10-15; `unit.roster`, `events.bucket` and `launcher.dataSource` done
+  2026-10-15 (S34).
 
 ## M9: Test runner, language server, formatter
 

@@ -292,3 +292,33 @@ launcher.register({
   background color and a thin round border in the border color
   (`borderSize` thickens it). `setTheme(nil)` returns to the client's look. A button drawn by
   LibDBIcon, the Addon Compartment entry and LDB displays are not themed.
+
+### Data sources
+
+`launcher.dataSource(name, opts)` publishes a LibDataBroker **data source**:
+text that display addons (Titan Panel, ChocolateBar, …) show and keep current,
+independent of `register`.
+
+```wowlua
+const gold = launcher.dataSource("MyAddon Gold", {
+    text = format.money(GetMoney()),
+    icon = "Interface\\Icons\\INV_Misc_Coin_01",
+    onClick = function(button: string) window:Toggle() end,
+    tooltip = function(tip: GameTooltip) tip:AddLine("Gold") end,
+})
+@event("PLAYER_MONEY")
+local function money() gold:setText(format.money(GetMoney())) end
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `dataSource` | `(name: string, opts: { text: string, label?: string, icon?: string, onClick?, tooltip? }) -> DataSource` | `label` defaults to `name` |
+| `DataSource:setText`, `setIcon`, `setLabel` | `(value: string)` | Updates the LDB object, or the values it will be created with |
+| `DataSource.object` | `LibDataBrokerObject?` | nil until LibDataBroker is found |
+
+- **Waiting for the library** (decision S34). LibDataBroker is embedded by
+  addons, so it may arrive with an addon that loads later. A data source is
+  created at once when the library is there, else after the next
+  `ADDON_LOADED` that brings it. There is no hard dependency.
+- **Names** are LibDataBroker's, shared by all addons: a name already taken is
+  a reported error and that data source stays unpublished.

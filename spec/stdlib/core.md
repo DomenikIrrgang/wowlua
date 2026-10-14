@@ -57,6 +57,7 @@ declare module "wowlua:events"
     function on<E extends EventName | MessageName>(event: E, handler: (EventArgs<E>...) -> (), owner: any?): Subscription
     function once<E extends EventName | MessageName>(event: E, handler: (EventArgs<E>...) -> (), owner: any?): Subscription
     function onUnit<E extends EventName>(event: E, units: UnitToken[], handler: (EventArgs<E>...) -> (), owner: any?): Subscription
+    function onBucket(events: (EventName | MessageName) | (EventName | MessageName)[], interval: number, handler: (counts: BucketCounts) -> (), owner: any?): Subscription
     function off(sub: Subscription)
     function offAll(owner: any)
     function send<M extends MessageName>(name: M, ...: EventArgs<M>...)   -- EventArgs<M> is a type pack
@@ -69,6 +70,7 @@ end
 | `@unitEvent(name, ...units)` | WoW events only. Uses `RegisterUnitEvent` with **one or two** units (the API's limit). More than two units is error E8100. |
 | `on`, `once` | Dynamic registration. `owner` allows `offAll(owner)`. |
 | `onUnit` | Dynamic version of `@unitEvent`. More than two units is a runtime error. |
+| `@bucket(interval, ...names)`, `onBucket` | Coalesces bursts (like AceBucket): the first of the events starts an `interval`-second wait, and the handler then gets one `BucketCounts`: `args` counts by first argument (the units of unit events, the bags of `BAG_UPDATE`), `events` by event. |
 | `off(sub)`, `offAll(owner)` | Unregister. `offAll(nil)` is a runtime error: it would cancel every subscription without an owner, the standard library's own included. |
 | `send(name, ...)` | Dispatches a **message** synchronously to this addon's handlers. Passing a WoW event is error E8001. |
 
@@ -93,8 +95,13 @@ end
   definition. Instance methods cannot be decorated with `@event` (E8002). Use
   `on(event, function(...) self:handle(...) end, self)` in the constructor and
   `offAll(self)` when the object is discarded.
+- **Buckets.** A burst longer than the interval gives one call per interval.
+  A first argument that is nil or secret is counted only under `events`
+  (secrets cannot be table keys). Cancelling the subscription drops what is
+  pending (decision S34).
 - **Name checking.** Names are checked against `EventName | MessageName`. An
-  unknown name is error E8003 (useful when an event is removed in a patch). In
+  unknown name is error E8003 (useful when an event is removed in a patch); the
+  names of `@bucket` and of literal `onBucket` lists are checked too. In
   `split` flavor mode, events missing from a flavor are reported for that flavor.
 - **Shared flavor mode.** In `shared` mode
   ([Build metadata §6.3](../language/06-meta.md#63-flavors)), an event that does

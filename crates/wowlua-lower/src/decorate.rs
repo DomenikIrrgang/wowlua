@@ -39,7 +39,7 @@ pub(crate) fn intrinsic(id: &str) -> Option<Intrinsic> {
         "internal.wrap" => Some(Intrinsic::Wrapping),
         "internal.register" => Some(Intrinsic::Registering),
         // wowlua:events
-        "events.event" | "events.unitEvent" => Some(Intrinsic::Registering),
+        "events.event" | "events.unitEvent" | "events.bucket" => Some(Intrinsic::Registering),
         // wowlua:timer, wowlua:combat
         "timer.throttle" | "timer.debounce" | "timer.nextFrame" | "combat.outOfCombat" => {
             Some(Intrinsic::Wrapping)

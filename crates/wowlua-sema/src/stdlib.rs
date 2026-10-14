@@ -325,6 +325,19 @@ impl Ctx<'_> {
                         self.event_name(a, false);
                     }
                 }
+                "events.bucket" => {
+                    if instance_method {
+                        self.error(
+                            "E8002",
+                            d.span,
+                            "`@bucket` on an instance method: register with `onBucket(…, self)` in the constructor".into(),
+                            "an instance method",
+                        );
+                    }
+                    for a in args.iter().skip(1) {
+                        self.event_name(a, false);
+                    }
+                }
                 "events.unitEvent" => {
                     if instance_method {
                         self.error(
@@ -769,6 +782,17 @@ impl Ctx<'_> {
                     self.event_name(first, false);
                 }
             }
+            "events.onBucket" => match args.first().map(|a| &a.kind) {
+                Some(ExprKind::Table(fields)) => {
+                    for field in fields {
+                        if let TableField::Positional(v) = field {
+                            self.event_name(v, false);
+                        }
+                    }
+                }
+                Some(_) => self.event_name(args[0], false),
+                None => {}
+            },
             "events.onUnit" => {
                 if let Some(first) = args.first() {
                     self.event_name(first, true);

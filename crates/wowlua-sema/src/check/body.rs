@@ -499,12 +499,13 @@ impl<'e> Checker<'e> {
             let Some(id) = id else { continue };
             let args = d.args.as_ref().map(|a| a.exprs()).unwrap_or_default();
             let names: Vec<String> = args.iter().map_while(|e| literal_string(e)).collect();
-            let event_names = match id.as_str() {
-                "events.event" => args.len(),
-                "events.unitEvent" => 1,
-                _ => 0,
+            let (skip, event_names) = match id.as_str() {
+                "events.event" => (0, args.len()),
+                "events.unitEvent" => (0, 1),
+                "events.bucket" => (1, args.len()),
+                _ => (0, 0),
             };
-            for e in args.iter().take(event_names) {
+            for e in args.iter().skip(skip).take(event_names) {
                 if let Some(n) = literal_string(e) {
                     self.check_event_available(&n, e.span);
                 }

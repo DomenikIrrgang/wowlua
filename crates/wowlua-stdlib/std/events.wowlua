@@ -3,6 +3,7 @@
 -- handlers exist; unit events get frames of their own, so their unit filters
 -- never clear each other. Messages are dispatched in Lua only.
 import callIn from "wowlua:errors"
+import * as secret from "wowlua:secret"
 
 export interface Subscription
     active: boolean
@@ -183,6 +184,59 @@ export function send(name: string, ...: any)
     dispatch(name, ...)
 end
 
+--- What a bucket collected: counts by first argument (units, bag IDs) and
+--- by event.
+export type BucketCounts = { args: { [any]: number }, events: { [string]: number } }
+
+class Bucket implements Subscription
+    active: boolean = true
+    readonly subs: Subscription[] = {}
+
+    function cancel()
+        self.active = false
+        for _, sub in ipairs(self.subs) do
+            sub:cancel()
+        end
+    end
+end
+
+--- Coalesces bursts: the first of `events` starts an `interval`-second
+--- wait, and `handler` then gets everything that arrived in it, counted
+--- by first argument and by event (like AceBucket).
+export function onBucket(events: string | string[], interval: number, handler: (counts: BucketCounts) -> (), owner: any?): Subscription
+    local names: string[]
+    if type(events) == "string" then
+        names = { events }
+    else
+        names = events
+    end
+    const bucket = Bucket.new()
+    local pending: BucketCounts? = nil
+    local function flush()
+        const counts = pending
+        pending = nil
+        if counts and bucket.active then
+            callIn({ component = "events: bucket handler" }, handler, counts)
+        end
+    end
+    for _, name in ipairs(names) do
+        bucket.subs[#bucket.subs + 1] = subscribe(name, function(first: any)
+            local counts = pending
+            if not counts then
+                counts = { args = {}, events = {} }
+                pending = counts
+                C_Timer.After(interval, flush)
+            end
+            counts.events[name] = (counts.events[name] ?? 0) + 1
+            -- Secrets cannot be table keys; nil has no count.
+            if first ~= nil and not secret.isSecret(first) then
+                counts.args[first] = (counts.args[first] ?? 0) + 1
+            end
+        end, owner)
+    end
+    return bucket
+end
+
 local function decorated(ctx: DecoratorContext?, what: string)
     if ctx and ctx.kind == "method" and not ctx.static then
         error("@" .. what .. " on the instance method `" .. tostring(ctx.name) .. "`: use on() in the constructor", 3)
@@ -211,5 +265,14 @@ export function unitEvent(name: string, ...: string)
     return function(fn: (...any) -> (), ctx: DecoratorContext?)
         decorated(ctx, "unitEvent")
         onUnit(name, units, fn, nil)
+    end
+end
+
+--- `@bucket(interval, name, ...)`: `onBucket` for a function.
+export function bucket(interval: number, ...: string)
+    local names = { ... }
+    return function(fn: (counts: BucketCounts) -> (), ctx: DecoratorContext?)
+        decorated(ctx, "bucket")
+        onBucket(names, interval, fn, nil)
     end
 end

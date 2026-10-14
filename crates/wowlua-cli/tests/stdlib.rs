@@ -2323,6 +2323,9 @@ end
 Mock.awaitText("Right-click the StdTest menu button")
 Mock.script(StdTestMenuButton, "OnMouseUp", "RightButton")
 Mock.clickMenu("Pick me")
+Mock.awaitText("Move any item to another slot in your bags")
+Mock.fire("BAG_UPDATE", 0)
+Mock.fire("BAG_UPDATE", 1)
 Mock.awaitText("Mouse over any item in your bags")
 Mock.showTooltip("Item", { id = 6948, name = "Hearthstone", link = "|Hitem:6948::|h[Hearthstone]|h" })
 Mock.awaitText("Click the [StdTest link]")
@@ -4188,6 +4191,190 @@ print(pcall(links.link, "x", "a|b"))
             "second log:42",
             "second again",
             "false links.link: the data may not contain `|`",
+        ]
+    );
+}
+
+// ----------------------------------------------------- roster, bucket, LDB --
+
+/// `unit.roster` maps GUIDs to group members, coalesces roster events and
+/// reports who joined and left; secret GUIDs keep the last known member.
+#[test]
+fn unit_roster_tracks_joins_and_leaves() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as unit from \"wowlua:unit\"\n_G.StdUnit = unit\n",
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local roster = StdUnit.roster
+local function names(list)
+    local out = {}
+    for _, m in ipairs(list) do out[#out + 1] = m.name .. "@" .. m.unit end
+    table.sort(out)
+    return table.concat(out, ",")
+end
+print("solo", names(roster.members()), roster.byGuid("Player-1-00000001").fullName)
+roster.onChange(function(joined, left) print("change", names(joined), names(left)) end)
+local ally = { name = "Ally", realm = "Other", guid = "Player-2-1", class = "Warrior", classFile = "WARRIOR", level = 60, health = 1, healthMax = 1, power = 0, powerMax = 1, isPlayer = true, connected = true }
+local friend = { name = "Friend", guid = "Player-3-1", class = "Priest", classFile = "PRIEST", level = 60, health = 1, healthMax = 1, power = 0, powerMax = 1, isPlayer = true, connected = true }
+Mock.group = "party"
+Mock.units.party1 = ally
+Mock.fire("GROUP_ROSTER_UPDATE")
+Mock.units.party2 = friend
+Mock.fire("GROUP_ROSTER_UPDATE")
+Mock.fire("GROUP_ROSTER_UPDATE")
+print("coalesced")
+Mock.advance(0.3)
+print(roster.byUnit("party2").fullName, roster.byGuid("Player-2-1").unit)
+-- Into a raid: the same people, other tokens; no change reported.
+Mock.group = "raid"
+Mock.units.party1, Mock.units.party2 = nil, nil
+Mock.units.raid1, Mock.units.raid2, Mock.units.raid3 = Mock.units.player, friend, ally
+Mock.fire("GROUP_ROSTER_UPDATE")
+Mock.advance(0.3)
+print(names(roster.members()), roster.byGuid("Player-2-1").unit)
+-- A secret GUID keeps the member; leaving is reported.
+Mock.units.raid3 = { name = Mock.secret(), guid = Mock.secret(), class = "Warrior", classFile = "WARRIOR", level = 60, health = 1, healthMax = 1, power = 0, powerMax = 1, isPlayer = true, connected = true }
+Mock.units.raid2 = nil
+Mock.fire("GROUP_ROSTER_UPDATE")
+Mock.advance(0.3)
+print(roster.byGuid("Player-2-1") ~= nil, roster.byGuid("Player-3-1"))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "solo Tester@player Tester-MockRealm",
+            "coalesced",
+            "change Ally@party1,Friend@party2 ",
+            "Friend-MockRealm party1",
+            "Ally@raid3,Friend@raid2,Tester@player raid3",
+            "change  Friend@raid2",
+            "true nil",
+        ]
+    );
+}
+
+/// `events.onBucket` and `@bucket` coalesce bursts and count them by first
+/// argument and by event.
+#[test]
+fn events_buckets_coalesce_bursts() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as events from "wowlua:events"
+import bucket from "wowlua:events"
+import type BucketCounts from "wowlua:events"
+_G.StdEvents = events
+
+@bucket(0.5, "BAG_UPDATE")
+function bags(counts: BucketCounts)
+    local ids: string[] = {}
+    for id, n in pairs(counts.args) do ids[#ids + 1] = `{id}x{n}` end
+    table.sort(ids)
+    print("bags", table.concat(ids, " "))
+end
+"#,
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local events = StdEvents
+local sub = events.onBucket({ "UNIT_HEALTH", "UNIT_POWER_UPDATE" }, 1, function(c)
+    print("units", c.args.player, c.args.target, c.events.UNIT_HEALTH, c.events.UNIT_POWER_UPDATE)
+end)
+Mock.fire("BAG_UPDATE", 0)
+Mock.fire("BAG_UPDATE", 0)
+Mock.fire("BAG_UPDATE", 2)
+Mock.fire("UNIT_HEALTH", "player")
+Mock.fire("UNIT_HEALTH", "target")
+Mock.fire("UNIT_POWER_UPDATE", "player")
+Mock.fire("UNIT_HEALTH", Mock.secret())
+Mock.advance(0.6)
+print("half")
+Mock.advance(0.5)
+Mock.fire("BAG_UPDATE", 1)
+sub:cancel()
+Mock.fire("UNIT_HEALTH", "player")
+Mock.advance(2)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        ["bags 0x2 2x1", "half", "units 2 1 3 1", "bags 1x1"]
+    );
+}
+
+/// Bucket event names are checked like `on`'s (E8003).
+#[test]
+fn bucket_event_names_are_checked() {
+    for src in [
+        "import onBucket from \"wowlua:events\"\nonBucket({ \"BAG_UPDATE\", \"NOT_AN_EVENT\" }, 1, function() end)\n",
+        "import onBucket from \"wowlua:events\"\nonBucket(\"NOT_AN_EVENT\", 1, function() end)\n",
+        "import bucket from \"wowlua:events\"\n@bucket(1, \"BAG_UPDATE\", \"NOT_AN_EVENT\")\nlocal function f() end\n",
+    ] {
+        let out = check(src);
+        assert!(
+            out.contains("E8003") && out.contains("NOT_AN_EVENT"),
+            "{src}: {out}"
+        );
+    }
+    let out = check(
+        "import bucket, onBucket from \"wowlua:events\"\nonBucket({ \"BAG_UPDATE\" }, 1, function() end)\n@bucket(1, \"BAG_UPDATE\")\nlocal function f() end\n",
+    );
+    assert!(!out.contains("E8003"), "{out}");
+}
+
+/// `launcher.dataSource` publishes an LDB data source, waiting for
+/// LibDataBroker when another addon embeds it later.
+#[test]
+fn launcher_data_sources() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as launcher from "wowlua:launcher"
+_G.StdLauncher = launcher
+_G.StdGold = launcher.dataSource("Std Gold", {
+    text = "12g",
+    icon = "Interface\\Icons\\INV_Misc_Coin_01",
+    onClick = function(button: string) print("clicked", button) end,
+    tooltip = function(tip: GameTooltip) tip:AddLine("Gold") end,
+})
+"#,
+        )],
+        "_G.LibStub = nil",
+        r#"Mock.loadAddon("Std")
+StdGold:setText("13g")
+local objects = {}
+Mock.provideLibrary("LibDataBroker-1.1", {
+    NewDataObject = function(_, name, obj)
+        if objects[name] then return nil end
+        objects[name] = obj
+        return obj
+    end,
+})
+Mock.fire("ADDON_LOADED", "Titan")
+local obj = objects["Std Gold"]
+print(obj.type, obj.text, obj.label, obj.icon)
+StdGold:setText("14g")
+StdGold:setLabel("Gold")
+print(obj.text, obj.label)
+obj.OnClick(nil, "RightButton")
+local now = StdLauncher.dataSource("Std Bags", { text = "5/20" })
+print(objects["Std Bags"].text, now.object == objects["Std Bags"])
+StdLauncher.dataSource("Std Bags", { text = "again" })
+print(#Mock.errors)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "data source 13g Std Gold Interface\\Icons\\INV_Misc_Coin_01",
+            "14g Gold",
+            "clicked RightButton",
+            "5/20 true",
+            "1",
         ]
     );
 }

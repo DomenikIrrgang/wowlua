@@ -2263,6 +2263,25 @@ impl Checker<'_> {
         if id == "pool.FramePool.new" {
             return self.frame_pool_type(f, &exprs).unwrap_or(c);
         }
+        if id == "events.onBucket" {
+            let names: Vec<&Expr> = match exprs.first().map(|e| &e.kind) {
+                Some(ExprKind::Table(fields)) => fields
+                    .iter()
+                    .filter_map(|f| match f {
+                        TableField::Positional(v) => Some(v),
+                        _ => None,
+                    })
+                    .collect(),
+                Some(_) => vec![exprs[0]],
+                None => Vec::new(),
+            };
+            for e in names {
+                if let ExprKind::String(lit) = &e.kind {
+                    self.check_event_available(&String::from_utf8_lossy(&lit.value), e.span);
+                }
+            }
+            return c;
+        }
         let (name, name_span) = match exprs.first().map(|e| (&e.kind, e.span)) {
             Some((ExprKind::String(lit), span)) => {
                 (String::from_utf8_lossy(&lit.value).into_owned(), span)
