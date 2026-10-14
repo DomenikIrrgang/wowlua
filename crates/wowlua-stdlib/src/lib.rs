@@ -123,6 +123,7 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         include_str!("../std/saved.wowlua"),
         Some(include_str!("../std/saved.d.wowlua")),
     ),
+    ("secret", include_str!("../std/secret.wowlua"), None),
     ("serialize", include_str!("../std/serialize.wowlua"), None),
     (
         "settings",

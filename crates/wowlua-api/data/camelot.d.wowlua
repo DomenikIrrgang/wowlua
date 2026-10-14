@@ -8981,7 +8981,7 @@ declare class Tooltip
     function GetRightLine(line: number): FontString
     function SetMinimumWidth(width: number, force: boolean?)
     function SetPadding(right: number, bottom: number, left: number?, top: number?)
-    function SetText(text: string, colorR: number, colorG: number, colorB: number, alpha: number?, wrap: boolean?)
+    function SetText(text: string | Secret<string>, colorR: number | Secret<number>, colorG: number | Secret<number>, colorB: number | Secret<number>, alpha: (number | Secret<number>)?, wrap: (boolean | Secret<boolean>)?)
 end
 
 declare class DurationClockObject
@@ -8996,28 +8996,28 @@ declare class DurationManualClock
 end
 
 declare class LocaleContext
-    function CompareStrings(left: string, right: string, strength: CollationStrength): number?
-    function FindBreaks(text: string, breakType: BreakType): number[]?
-    function FindStringMatches(text: string, pattern: string, strength: CollationStrength): number[]?
-    function FoldCase(text: string): string?
-    function FormatCurrency(number: number, currencyCode: string): string?
-    function FormatDate(unixTimeSeconds: number, style: DateTimeStyle, timeZone: string): string?
-    function FormatDateTime(unixTimeSeconds: number, dateStyle: DateTimeStyle, timeStyle: DateTimeStyle, timeZone: string): string?
-    function FormatNumber(number: number, style: NumberStyle): string?
-    function FormatTime(unixTimeSeconds: number, style: DateTimeStyle, timeZone: string): string?
-    function GetCurrencyName(currencyCode: string, style: CurrencyNameStyle): string?
-    function GetDisplayName(displayLocale: string): string?
+    function CompareStrings(left: string | Secret<string>, right: string | Secret<string>, strength: CollationStrength | Secret<CollationStrength>): number?
+    function FindBreaks(text: string | Secret<string>, breakType: BreakType | Secret<BreakType>): number[]?
+    function FindStringMatches(text: string | Secret<string>, pattern: string | Secret<string>, strength: CollationStrength | Secret<CollationStrength>): number[]?
+    function FoldCase(text: string | Secret<string>): string?
+    function FormatCurrency(number: number | Secret<number>, currencyCode: string | Secret<string>): string?
+    function FormatDate(unixTimeSeconds: number | Secret<number>, style: DateTimeStyle | Secret<DateTimeStyle>, timeZone: string | Secret<string>): string?
+    function FormatDateTime(unixTimeSeconds: number | Secret<number>, dateStyle: DateTimeStyle | Secret<DateTimeStyle>, timeStyle: DateTimeStyle | Secret<DateTimeStyle>, timeZone: string | Secret<string>): string?
+    function FormatNumber(number: number | Secret<number>, style: NumberStyle | Secret<NumberStyle>): string?
+    function FormatTime(unixTimeSeconds: number | Secret<number>, style: DateTimeStyle | Secret<DateTimeStyle>, timeZone: string | Secret<string>): string?
+    function GetCurrencyName(currencyCode: string | Secret<string>, style: CurrencyNameStyle | Secret<CurrencyNameStyle>): string?
+    function GetDisplayName(displayLocale: string | Secret<string>): string?
     function GetLocale(): string
-    function GetSortKey(text: string, strength: CollationStrength): string?
-    function Length(text: string): number?
-    function ParseCurrency(text: string): CurrencyParseResult?
-    function ParseNumber(text: string, style: NumberStyle): number?
-    function SelectPlural(number: number, pluralType: PluralType): string?
+    function GetSortKey(text: string | Secret<string>, strength: CollationStrength | Secret<CollationStrength>): string?
+    function Length(text: string | Secret<string>): number?
+    function ParseCurrency(text: string | Secret<string>): CurrencyParseResult?
+    function ParseNumber(text: string | Secret<string>, style: NumberStyle | Secret<NumberStyle>): number?
+    function SelectPlural(number: number | Secret<number>, pluralType: PluralType | Secret<PluralType>): string?
     function SetLocale(locale: string): boolean
-    function ToLower(text: string): string?
-    function ToTitle(text: string): string?
-    function ToUpper(text: string): string?
-    function TransformLocale(transform: LocaleTransform): string?
+    function ToLower(text: string | Secret<string>): string?
+    function ToTitle(text: string | Secret<string>): string?
+    function ToUpper(text: string | Secret<string>): string?
+    function TransformLocale(transform: LocaleTransform | Secret<LocaleTransform>): string?
 end
 
 declare class NumericFormatter
@@ -9358,9 +9358,9 @@ declare function GetAvailableLocales(ignoreLocaleRestrictions: boolean?): (...st
 declare function GetCurrentRegion(): number
 declare function GetLocale(): string
 declare function GetOSLocale(): string
-declare function AbbreviateLargeNumbers(number: number, options: NumberAbbrevOptions?): string
-declare function AbbreviateNumbers(number: number, options: NumberAbbrevOptions?): string
-declare function BreakUpLargeNumbers(largeNumber: number, natural: boolean?): string
+declare function AbbreviateLargeNumbers(number: number | Secret<number>, options: (NumberAbbrevOptions | Secret<NumberAbbrevOptions>)?): string
+declare function AbbreviateNumbers(number: number | Secret<number>, options: (NumberAbbrevOptions | Secret<NumberAbbrevOptions>)?): string
+declare function BreakUpLargeNumbers(largeNumber: number | Secret<number>, natural: boolean?): string
 declare function CaseAccentInsensitiveParse(name: string): string
 declare function CreateAbbreviateConfig(data: NumberAbbreviationBreakpoint[]): AbbreviateConfig
 declare function DeclineName(name: string, gender: UnitSex?, declensionSet: number, namePartType: NamePartType?): (...string)
@@ -9392,7 +9392,7 @@ declare function UpdateAddOnMemoryUsage()
 declare function AcceptAreaSpiritHeal()
 declare function AcceptGuild()
 declare function AcceptResurrect()
-declare function Ambiguate(fullName: string, context: string): string
+declare function Ambiguate(fullName: string | Secret<string>, context: string): string
 declare function AutoEquipCursorItem()
 declare function BeginTrade()
 declare function CanDualWield(): boolean
@@ -9471,7 +9471,7 @@ declare function GetPetMeleeHaste(): number | Secret<number>
 declare function GetPetSpellBonusDamage(): number | Secret<number>
 declare function GetPetSpellHitChanceModifier(): number | Secret<number>
 declare function GetPlayerFacing(): number?
-declare function GetPlayerInfoByGUID(guid: string): (string?, string?, string?, string?, number?, string?, string?, number?)
+declare function GetPlayerInfoByGUID(guid: string | Secret<string>): (string?, string?, string?, string?, number?, string?, string?, number?)
 declare function GetPowerRegen(): (number | Secret<number>, number | Secret<number>)
 declare function GetPowerRegenForPowerType(powerType: number): (number | Secret<number>, number | Secret<number>)
 declare function GetPvpPowerDamage(): number | Secret<number>
@@ -9707,7 +9707,7 @@ declare function UnitChannelInfo(unit: string): (string | Secret<string>, string
 declare function UnitChromieTimeID(unit: string): number
 declare function UnitClass(unit: string): ((string | Secret<string>)?, (string | Secret<string>)?, (number | Secret<number>)?)
 declare function UnitClassBase(unit: string): ((string | Secret<string>)?, (number | Secret<number>)?)
-declare function UnitClassFromGUID(unitGUID: string): (string?, string?, number?)
+declare function UnitClassFromGUID(unitGUID: string | Secret<string>): (string?, string?, number?)
 declare function UnitClassification(unit: string): string
 declare function UnitControllingVehicle(unit: string): boolean
 declare function UnitCreatureFamily(unit: string): (string | Secret<string>, number | Secret<number>)
@@ -9804,8 +9804,8 @@ declare function UnitIsVisible(unit: string?): boolean
 declare function UnitIsWildBattlePet(unit: string): boolean
 declare function UnitLeadsAnyGroup(unit: string): boolean | Secret<boolean>
 declare function UnitLevel(name: string): number
-declare function UnitName(unit: string): (string | Secret<string>, string | Secret<string>)
-declare function UnitNameFromGUID(unitGUID: string): (string | Secret<string>, string | Secret<string>)
+declare function UnitName(unit: string | Secret<string>): (string | Secret<string>, string | Secret<string>)
+declare function UnitNameFromGUID(unitGUID: string | Secret<string>): (string | Secret<string>, string | Secret<string>)
 declare function UnitNameUnmodified(unit: string): (string | Secret<string>, string | Secret<string>)
 declare function UnitNameplateShowsWidgetsOnly(unit: string): boolean
 declare function UnitNumPowerBarTimers(unit: string): number
@@ -9813,7 +9813,7 @@ declare function UnitOnTaxi(unit: string): boolean
 declare function UnitOwnerGUID(unit: string): string | Secret<string>
 declare function UnitPVPName(unit: string): string | Secret<string>
 declare function UnitPartialPower(unitToken: string, powerType: PowerType?, unmodified: boolean?): number | Secret<number>
-declare function UnitPercentHealthFromGUID(unitGUID: string): (number | Secret<number>)?
+declare function UnitPercentHealthFromGUID(unitGUID: string | Secret<string>): (number | Secret<number>)?
 declare function UnitPhaseReason(unit: string): (PhaseReason | Secret<PhaseReason>)?
 declare function UnitPlayerControlled(unit: string?): boolean
 declare function UnitPlayerOrPetInParty(unit: string?, partyIndex: number?): boolean
@@ -9852,7 +9852,7 @@ declare function UnitTargetsVehicleInRaidUI(unit: string?): boolean
 declare function UnitThreatLeadSituation(unit: string, mobGUID: string): (number | Secret<number>)?
 declare function UnitThreatPercentageOfLead(unit: string, mobGUID: string): (number | Secret<number>)?
 declare function UnitThreatSituation(unit: string, mobGUID: string?): (number | Secret<number>)?
-declare function UnitTokenFromGUID(unitGUID: string): (string | Secret<string>)?
+declare function UnitTokenFromGUID(unitGUID: string | Secret<string>): (string | Secret<string>)?
 declare function UnitTreatAsPlayerForDisplay(unit: string): boolean
 declare function UnitTrialBankedLevels(unit: string): (number, number, number)
 declare function UnitTrialXP(unit: string): number
@@ -28507,7 +28507,7 @@ declare namespace C_ActionBar
     function FindAssistedCombatActionButtons(setToSearch: ActionBarSet?): number[]?
     function FindFlyoutActionButtons(flyoutID: number, setToSearch: ActionBarSet?): number[]?
     function FindPetActionButtons(petActionID: number, setToSearch: ActionBarSet?): number[]?
-    function FindSpellActionButtons(spellID: SpellIdentifier, setToSearch: ActionBarSet?): number[]?
+    function FindSpellActionButtons(spellID: SpellIdentifier | Secret<SpellIdentifier>, setToSearch: ActionBarSet?): number[]?
     function ForceUpdateAction(slotID: number, suppressEvents: boolean?)
     function GetActionAutocast(actionID: number): (boolean, boolean)
     function GetActionBarPage(): number
@@ -28544,7 +28544,7 @@ declare namespace C_ActionBar
     function HasPetActionButtons(petActionID: number, setToSearch: ActionBarSet?): boolean
     function HasPetActionPetBarIndices(petActionID: number, setToSearch: ActionBarSet?): boolean
     function HasRangeRequirements(actionID: number): boolean
-    function HasSpellActionButtons(spellID: SpellIdentifier, setToSearch: ActionBarSet?): boolean
+    function HasSpellActionButtons(spellID: SpellIdentifier | Secret<SpellIdentifier>, setToSearch: ActionBarSet?): boolean
     function HasTempShapeshiftActionBar(): boolean
     function HasVehicleActionBar(): boolean
     function IsActionInRange(actionID: number, target: string?): boolean?
@@ -28562,7 +28562,7 @@ declare namespace C_ActionBar
     function IsInterruptAction(slotID: number): boolean
     function IsItemAction(actionID: number): boolean
     function IsMacroActionWithShowTooltip(actionID: number): boolean
-    function IsOnBarOrSpecialBar(spellID: SpellIdentifier, setToSearch: ActionBarSet?): boolean
+    function IsOnBarOrSpecialBar(spellID: SpellIdentifier | Secret<SpellIdentifier>, setToSearch: ActionBarSet?): boolean
     function IsPossessBarVisible(): boolean
     function IsStackableAction(actionID: number): boolean
     function IsUsableAction(actionID: number): (boolean, boolean)
@@ -29244,12 +29244,12 @@ declare namespace C_ChatInfo
     function IsLoggingCombat(): (boolean, boolean)
     function IsPartyChannelType(channelType: ChatChannelType): boolean
     function IsRegionalServiceAvailable(): boolean
-    function IsTimerunningPlayer(playerGUID: string): boolean
+    function IsTimerunningPlayer(playerGUID: string | Secret<string>): boolean
     function IsValidChatLine(chatLine: number?): boolean
     function IsValidCombatFilterName(name: string): boolean
     function PerformEmote(emoteName: string, targetName: string?, suppressMoveError: boolean?): boolean
     function RegisterAddonMessagePrefix(prefix: string): RegisterAddonMessagePrefixResult
-    function ReplaceIconAndGroupExpressions(input: string, noIconReplacement: boolean?, noGroupReplacement: boolean?): string
+    function ReplaceIconAndGroupExpressions(input: string | Secret<string>, noIconReplacement: boolean?, noGroupReplacement: boolean?): string
     function RequestCanLocalWhisperTarget(whisperTarget: string)
     function ResetDefaultZoneChannels()
     function SendAddonMessage(prefix: string, message: string, chatType: string?, target: string?): SendAddonMessageResult
@@ -29272,7 +29272,7 @@ declare namespace C_CinematicList
 end
 
 declare namespace C_ClassColor
-    function GetClassColor(className: string, tintColor: ColorMixin?): ColorMixin?
+    function GetClassColor(className: string | Secret<string>, tintColor: (ColorMixin | Secret<ColorMixin>)?): ColorMixin?
 end
 
 declare namespace C_ClassTalents
@@ -29310,7 +29310,7 @@ declare namespace C_ClassTalents
 end
 
 declare namespace C_ClickBindings
-    function CanSpellBeClickBound(spellID: SpellIdentifier): boolean
+    function CanSpellBeClickBound(spellID: SpellIdentifier | Secret<SpellIdentifier>): boolean
     function ExecuteBinding(targetToken: string, button: string, modifiers: number)
     function GetBindingType(button: string, modifiers: number): ClickBindingType
     function GetEffectiveInteractionButton(button: string, modifiers: number): string
@@ -29484,9 +29484,9 @@ declare namespace C_ColorUtil
     function ConvertHSVToHSL(hsvH: number, hsvS: number, hsvV: number): (number, number, number)
     function ConvertHSVToRGB(hsvH: number, hsvS: number, hsvV: number): (number, number, number)
     function ConvertRGBToHSV(rgbR: number, rgbG: number, rgbB: number): (number, number, number)
-    function GenerateTextColorCode(color: ColorMixin): string
-    function WrapTextInColor(text: string, color: ColorMixin): string
-    function WrapTextInColorCode(text: string, textColorCode: string): string
+    function GenerateTextColorCode(color: ColorMixin | Secret<ColorMixin>): string
+    function WrapTextInColor(text: string | Secret<string>, color: ColorMixin | Secret<ColorMixin>): string
+    function WrapTextInColorCode(text: string | Secret<string>, textColorCode: string | Secret<string>): string
 end
 
 declare namespace C_CombatAudioAlert
@@ -29945,8 +29945,8 @@ end
 declare namespace C_CurveUtil
     function CreateColorCurve(): LuaColorCurveObject
     function CreateCurve(): LuaCurveObject
-    function EvaluateColorFromBoolean(boolean: boolean, valueIfTrue: ColorMixin, valueIfFalse: ColorMixin): ColorMixin
-    function EvaluateColorValueFromBoolean(boolean: boolean, valueIfTrue: number, valueIfFalse: number): number
+    function EvaluateColorFromBoolean(boolean: boolean | Secret<boolean>, valueIfTrue: ColorMixin | Secret<ColorMixin>, valueIfFalse: ColorMixin | Secret<ColorMixin>): ColorMixin
+    function EvaluateColorValueFromBoolean(boolean: boolean | Secret<boolean>, valueIfTrue: number | Secret<number>, valueIfFalse: number | Secret<number>): number
     function EvaluateGameCurve(curveID: number, x: number): number
 end
 
@@ -29994,7 +29994,7 @@ declare namespace C_DelvesUI
     function GetActiveDelveTier(): TieredEntranceTierInfo
     function GetCompanionInfoForActivePlayer(): number
     function GetCreatureDisplayInfoForCompanion(companionID: number?): number
-    function GetCurioLink(spellID: SpellIdentifier, rarity: CurioRarity): string
+    function GetCurioLink(spellID: SpellIdentifier | Secret<SpellIdentifier>, rarity: CurioRarity): string
     function GetCurioNodeForCompanion(curioType: CurioType, companionID: number?): number
     function GetCurioRarityByTraitCondAccountElementID(traitCondAccountElementID: number): CurioRarity
     function GetCurrentDelvesSeasonNumber(): number
@@ -30249,11 +30249,11 @@ declare namespace C_ExternalEventURL
 end
 
 declare namespace C_Flyout
-    function FlyoutHasSpell(flyoutID: number, spellID: number): boolean?
-    function GetFlyoutID(index: number): number?
-    function GetFlyoutInfo(flyoutID: number): FlyoutInfo?
-    function GetFlyoutSlotInfo(flyoutID: number, slotIndex: number): FlyoutSlotInfo?
-    function GetFlyoutTexture(flyoutID: number): number?
+    function FlyoutHasSpell(flyoutID: number | Secret<number>, spellID: number | Secret<number>): boolean?
+    function GetFlyoutID(index: number | Secret<number>): number?
+    function GetFlyoutInfo(flyoutID: number | Secret<number>): FlyoutInfo?
+    function GetFlyoutSlotInfo(flyoutID: number | Secret<number>, slotIndex: number | Secret<number>): FlyoutSlotInfo?
+    function GetFlyoutTexture(flyoutID: number | Secret<number>): number?
     function GetNumFlyouts(): number
 end
 
@@ -31103,33 +31103,33 @@ declare namespace C_InterfaceFileManifest
 end
 
 declare namespace C_Intl
-    function CompareStrings(left: string, right: string, strength: CollationStrength): number?
+    function CompareStrings(left: string | Secret<string>, right: string | Secret<string>, strength: CollationStrength | Secret<CollationStrength>): number?
     function CreateLocaleContext(locale: string): LuaLocaleContext
-    function FindBreaks(text: string, breakType: BreakType): number[]?
-    function FindStringMatches(text: string, pattern: string, strength: CollationStrength): number[]?
-    function FoldCase(text: string): string?
-    function FormatCurrency(number: number, currencyCode: string): string?
-    function FormatDate(unixTimeSeconds: number, style: DateTimeStyle, timeZone: string): string?
-    function FormatDateTime(unixTimeSeconds: number, dateStyle: DateTimeStyle, timeStyle: DateTimeStyle, timeZone: string): string?
-    function FormatNumber(number: number, style: NumberStyle): string?
-    function FormatTime(unixTimeSeconds: number, style: DateTimeStyle, timeZone: string): string?
-    function GetCharacterProperties(text: string): CharacterProperties?
-    function GetCurrencyFractionDigits(currencyCode: string): number?
-    function GetCurrencyName(currencyCode: string, nameStyle: CurrencyNameStyle): string?
+    function FindBreaks(text: string | Secret<string>, breakType: BreakType | Secret<BreakType>): number[]?
+    function FindStringMatches(text: string | Secret<string>, pattern: string | Secret<string>, strength: CollationStrength | Secret<CollationStrength>): number[]?
+    function FoldCase(text: string | Secret<string>): string?
+    function FormatCurrency(number: number | Secret<number>, currencyCode: string | Secret<string>): string?
+    function FormatDate(unixTimeSeconds: number | Secret<number>, style: DateTimeStyle | Secret<DateTimeStyle>, timeZone: string | Secret<string>): string?
+    function FormatDateTime(unixTimeSeconds: number | Secret<number>, dateStyle: DateTimeStyle | Secret<DateTimeStyle>, timeStyle: DateTimeStyle | Secret<DateTimeStyle>, timeZone: string | Secret<string>): string?
+    function FormatNumber(number: number | Secret<number>, style: NumberStyle | Secret<NumberStyle>): string?
+    function FormatTime(unixTimeSeconds: number | Secret<number>, style: DateTimeStyle | Secret<DateTimeStyle>, timeZone: string | Secret<string>): string?
+    function GetCharacterProperties(text: string | Secret<string>): CharacterProperties?
+    function GetCurrencyFractionDigits(currencyCode: string | Secret<string>): number?
+    function GetCurrencyName(currencyCode: string | Secret<string>, nameStyle: CurrencyNameStyle | Secret<CurrencyNameStyle>): string?
     function GetCurrentLocale(): string
-    function GetDisplayName(displayLocale: string): string?
-    function GetSortKey(text: string, strength: CollationStrength): string?
-    function IsNormalized(text: string, form: NormalizationForm): boolean
-    function Length(text: string): number?
-    function Normalize(text: string, form: NormalizationForm): string?
-    function ParseCurrency(text: string): CurrencyParseResult?
-    function ParseNumber(text: string, style: NumberStyle): number?
-    function SelectPlural(number: number, pluralType: PluralType): string?
-    function ToLower(text: string): string?
-    function ToTitle(text: string): string?
-    function ToUpper(text: string): string?
-    function TransformLocale(transform: LocaleTransform): string?
-    function Transliterate(text: string, transliteratorID: string): string?
+    function GetDisplayName(displayLocale: string | Secret<string>): string?
+    function GetSortKey(text: string | Secret<string>, strength: CollationStrength | Secret<CollationStrength>): string?
+    function IsNormalized(text: string | Secret<string>, form: NormalizationForm | Secret<NormalizationForm>): boolean
+    function Length(text: string | Secret<string>): number?
+    function Normalize(text: string | Secret<string>, form: NormalizationForm | Secret<NormalizationForm>): string?
+    function ParseCurrency(text: string | Secret<string>): CurrencyParseResult?
+    function ParseNumber(text: string | Secret<string>, style: NumberStyle | Secret<NumberStyle>): number?
+    function SelectPlural(number: number | Secret<number>, pluralType: PluralType | Secret<PluralType>): string?
+    function ToLower(text: string | Secret<string>): string?
+    function ToTitle(text: string | Secret<string>): string?
+    function ToUpper(text: string | Secret<string>): string?
+    function TransformLocale(transform: LocaleTransform | Secret<LocaleTransform>): string?
+    function Transliterate(text: string | Secret<string>, transliteratorID: string | Secret<string>): string?
 end
 
 declare namespace C_InvasionInfo
@@ -31695,7 +31695,7 @@ declare namespace C_MountJournal
     function GetMountAllCreatureDisplayInfoByID(mountID: number): MountCreatureDisplayInfo[]?
     function GetMountEquipmentUnlockLevel(): number
     function GetMountFromItem(itemID: number): number?
-    function GetMountFromSpell(spellID: SpellIdentifier): number?
+    function GetMountFromSpell(spellID: SpellIdentifier | Secret<SpellIdentifier>): number?
     function GetMountIDs(): number[]
     function GetMountInfoByID(mountID: number): (string?, number?, number?, boolean?, boolean?, number?, boolean?, boolean?, PvPFaction?, boolean?, boolean?, number?, boolean?)
     function GetMountInfoExtraByID(mountID: number): (number?, string?, string?, boolean?, number?, number?, number?, number?, boolean?)
@@ -32976,66 +32976,66 @@ declare namespace C_Spell
     function DoesSpellExist(spellIdentifier: SpellIdentifier): boolean
     function EnableSpellRangeCheck(spellIdentifier: SpellIdentifier, enable: boolean)
     function GetAuraStatChanges(spellID: number): (number, PowerTypeChange[])
-    function GetBaseSpell(spellIdentifier: SpellIdentifier, spec: number?): number
-    function GetDeadlyDebuffInfo(spellIdentifier: SpellIdentifier): DeadlyDebuffInfo?
-    function GetItemCooldown(itemID: number): SpellCooldownInfo?
+    function GetBaseSpell(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, spec: number?): number
+    function GetDeadlyDebuffInfo(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): DeadlyDebuffInfo?
+    function GetItemCooldown(itemID: number | Secret<number>): SpellCooldownInfo?
     function GetItemModifiedAppearancesApplied(spellID: number): number[]
-    function GetLastCategoryCooldownSource(spellCategory: number): ((number | Secret<number>)?, (number | Secret<number>)?)
-    function GetMawPowerLinkBySpellID(spellID: SpellIdentifier): string?
-    function GetMawPowerRarityInfoBySpellID(spellID: SpellIdentifier): (number?, string?)
+    function GetLastCategoryCooldownSource(spellCategory: number | Secret<number>): ((number | Secret<number>)?, (number | Secret<number>)?)
+    function GetMawPowerLinkBySpellID(spellID: SpellIdentifier | Secret<SpellIdentifier>): string?
+    function GetMawPowerRarityInfoBySpellID(spellID: SpellIdentifier | Secret<SpellIdentifier>): (number?, string?)
     function GetOverrideSpell(spellIdentifier: SpellIdentifier, spec: number?, onlyKnown: boolean?, ignoreOverrideSpellID: number?): number
-    function GetSchoolString(schoolMask: number): string
-    function GetSpellAutoCast(spellIdentifier: SpellIdentifier): (boolean?, boolean?)
-    function GetSpellCastCount(spellIdentifier: SpellIdentifier): number | Secret<number>
-    function GetSpellChargeDuration(spellIdentifier: SpellIdentifier): LuaDurationObject?
-    function GetSpellCharges(spellIdentifier: SpellIdentifier): (SpellChargeInfo | Secret<SpellChargeInfo>)?
-    function GetSpellCooldown(spellIdentifier: SpellIdentifier): (SpellCooldownInfo | Secret<SpellCooldownInfo>)?
-    function GetSpellCooldownDuration(spellIdentifier: SpellIdentifier, ignoreGCD: boolean?): LuaDurationObject?
-    function GetSpellDescription(spellIdentifier: SpellIdentifier): string?
-    function GetSpellDescriptionForItemLocation(spellIdentifier: SpellIdentifier, itemLocation: ItemLocationMixin): string?
+    function GetSchoolString(schoolMask: number | Secret<number>): string
+    function GetSpellAutoCast(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (boolean?, boolean?)
+    function GetSpellCastCount(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): number | Secret<number>
+    function GetSpellChargeDuration(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): LuaDurationObject?
+    function GetSpellCharges(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (SpellChargeInfo | Secret<SpellChargeInfo>)?
+    function GetSpellCooldown(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (SpellCooldownInfo | Secret<SpellCooldownInfo>)?
+    function GetSpellCooldownDuration(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, ignoreGCD: (boolean | Secret<boolean>)?): LuaDurationObject?
+    function GetSpellDescription(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): string?
+    function GetSpellDescriptionForItemLocation(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, itemLocation: ItemLocationMixin | Secret<ItemLocationMixin>): string?
     function GetSpellDisplayCount(spellIdentifier: SpellIdentifier, maxDisplayCount: number?, replacementString: string?): string | Secret<string>
-    function GetSpellIDForSpellIdentifier(spellIdentifier: SpellIdentifier): number?
-    function GetSpellInfo(spellIdentifier: SpellIdentifier): SpellInfo?
-    function GetSpellLevelLearned(spellIdentifier: SpellIdentifier): number
-    function GetSpellLink(spellIdentifier: SpellIdentifier, glyphID: number?): string?
-    function GetSpellLossOfControlCooldownDuration(spellIdentifier: SpellIdentifier): LuaDurationObject?
-    function GetSpellLossOfControlCooldownInfo(spellIdentifier: SpellIdentifier): (SpellLossOfControlInfo | Secret<SpellLossOfControlInfo>)?
-    function GetSpellMaxCumulativeAuraApplications(spellID: SpellIdentifier): number | Secret<number>
-    function GetSpellName(spellIdentifier: SpellIdentifier): string?
-    function GetSpellPowerCost(spellIdentifier: SpellIdentifier): SpellPowerCostInfo[]?
+    function GetSpellIDForSpellIdentifier(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): number?
+    function GetSpellInfo(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): SpellInfo?
+    function GetSpellLevelLearned(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): number
+    function GetSpellLink(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, glyphID: number?): string?
+    function GetSpellLossOfControlCooldownDuration(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): LuaDurationObject?
+    function GetSpellLossOfControlCooldownInfo(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (SpellLossOfControlInfo | Secret<SpellLossOfControlInfo>)?
+    function GetSpellMaxCumulativeAuraApplications(spellID: SpellIdentifier | Secret<SpellIdentifier>): number | Secret<number>
+    function GetSpellName(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): string?
+    function GetSpellPowerCost(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): SpellPowerCostInfo[]?
     function GetSpellQueueWindow(): number
-    function GetSpellSkillLineAbilityRank(spellIdentifier: SpellIdentifier): number?
-    function GetSpellSubtext(spellIdentifier: SpellIdentifier): string?
-    function GetSpellTexture(spellIdentifier: SpellIdentifier): (number?, number?, number?)
-    function GetSpellTradeSkillLink(spellIdentifier: SpellIdentifier): string?
+    function GetSpellSkillLineAbilityRank(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): number?
+    function GetSpellSubtext(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): string?
+    function GetSpellTexture(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (number?, number?, number?)
+    function GetSpellTradeSkillLink(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): string?
     function GetTargetSpellID(): number
     function GetVisibilityInfo(spellID: number, visibilityType: SpellAuraVisibilityType): (boolean?, boolean?, boolean?)
-    function IsActiveSpell(spellIdentifier: SpellIdentifier, targetUnit: string?): boolean | Secret<boolean>
-    function IsAutoAttackSpell(spellIdentifier: SpellIdentifier): boolean
-    function IsAutoRepeatSpell(spellIdentifier: SpellIdentifier): boolean
-    function IsClassTalentSpell(spellIdentifier: SpellIdentifier): boolean
-    function IsConsumableSpell(spellIdentifier: SpellIdentifier): boolean
-    function IsCurrentSpell(spellIdentifier: SpellIdentifier): boolean
+    function IsActiveSpell(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, targetUnit: (string | Secret<string>)?): boolean | Secret<boolean>
+    function IsAutoAttackSpell(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
+    function IsAutoRepeatSpell(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
+    function IsClassTalentSpell(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
+    function IsConsumableSpell(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
+    function IsCurrentSpell(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
     function IsExternalDefensive(spellID: number): boolean
-    function IsPressHoldReleaseSpell(spellIdentifier: SpellIdentifier): boolean
+    function IsPressHoldReleaseSpell(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
     function IsPriorityAura(spellID: number): boolean
-    function IsPvPTalentSpell(spellIdentifier: SpellIdentifier): boolean
-    function IsRangedAutoAttackSpell(spellIdentifier: SpellIdentifier): boolean
+    function IsPvPTalentSpell(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
+    function IsRangedAutoAttackSpell(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
     function IsSelfBuff(spellID: number): boolean
-    function IsSpellCrowdControl(spellIdentifier: SpellIdentifier): boolean
+    function IsSpellCrowdControl(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
     function IsSpellDataCached(spellIdentifier: SpellIdentifier): boolean
-    function IsSpellDisabled(spellIdentifier: SpellIdentifier): boolean
-    function IsSpellHarmful(spellIdentifier: SpellIdentifier): boolean
-    function IsSpellHelpful(spellIdentifier: SpellIdentifier): boolean
-    function IsSpellImportant(spellIdentifier: SpellIdentifier): boolean
-    function IsSpellInRange(spellIdentifier: SpellIdentifier, targetUnit: string?): boolean?
-    function IsSpellPassive(spellIdentifier: SpellIdentifier): boolean
-    function IsSpellUsable(spellIdentifier: SpellIdentifier): (boolean, boolean)
+    function IsSpellDisabled(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
+    function IsSpellHarmful(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
+    function IsSpellHelpful(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
+    function IsSpellImportant(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
+    function IsSpellInRange(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, targetUnit: (string | Secret<string>)?): boolean?
+    function IsSpellPassive(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
+    function IsSpellUsable(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (boolean, boolean)
     function PickupSpell(spellIdentifier: SpellIdentifier)
     function PlaceTargetingSpellAtCursor()
     function RequestLoadSpellData(spellIdentifier: SpellIdentifier)
     function SetSpellAutoCastEnabled(spellIdentifier: SpellIdentifier, enabled: boolean)
-    function SpellHasRange(spellIdentifier: SpellIdentifier): boolean
+    function SpellHasRange(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
     function TargetSpellChecksItemCondition(): boolean
     function TargetSpellIsEnchanting(): boolean
     function TargetSpellJumpsUpgradeTrack(): boolean
@@ -33081,17 +33081,17 @@ declare namespace C_StringUtil
     function CreateAbbreviatedNumberFormatter(): AbbreviatedNumberFormatter
     function CreateNumericRuleFormatter(): NumericRuleFormatter
     function CreateSecondsFormatter(): SecondsFormatter
-    function EscapeDecimalNonPrintables(text: stringView): string
-    function EscapeLuaFormatString(text: string): stringView
-    function EscapeLuaPatterns(text: stringView): string
-    function EscapeQuotedCodes(text: string): stringView
-    function FloorToNearestString(number: number): string
-    function RemoveContiguousSpaces(text: stringView, maxAllowedSpaces: number): string
-    function RoundToNearestString(number: number): string
-    function StripHyperlinks(text: string, maintainColor: boolean?, maintainBrackets: boolean?, stripNewlines: boolean?, maintainAtlases: boolean?, maintainTextures: boolean?): stringView
-    function StripTextureMarkupForLooseFiles(text: string): stringView
-    function TruncateWhenZero(number: number): string
-    function WrapString(infix: stringView, prefix: stringView?, suffix: stringView?): string
+    function EscapeDecimalNonPrintables(text: stringView | Secret<stringView>): string
+    function EscapeLuaFormatString(text: string | Secret<string>): stringView
+    function EscapeLuaPatterns(text: stringView | Secret<stringView>): string
+    function EscapeQuotedCodes(text: string | Secret<string>): stringView
+    function FloorToNearestString(number: number | Secret<number>): string
+    function RemoveContiguousSpaces(text: stringView | Secret<stringView>, maxAllowedSpaces: number): string
+    function RoundToNearestString(number: number | Secret<number>): string
+    function StripHyperlinks(text: string | Secret<string>, maintainColor: (boolean | Secret<boolean>)?, maintainBrackets: (boolean | Secret<boolean>)?, stripNewlines: (boolean | Secret<boolean>)?, maintainAtlases: (boolean | Secret<boolean>)?, maintainTextures: (boolean | Secret<boolean>)?): stringView
+    function StripTextureMarkupForLooseFiles(text: string | Secret<string>): stringView
+    function TruncateWhenZero(number: number | Secret<number>): string
+    function WrapString(infix: stringView | Secret<stringView>, prefix: (stringView | Secret<stringView>)?, suffix: (stringView | Secret<stringView>)?): string
     function GetDefaultAbbreviationBreakpoints(...: any): (...any)
 end
 
@@ -33228,7 +33228,7 @@ declare namespace C_TooltipInfo
     function GetMerchantCostItem(slot: number, costIndex: number): TooltipData?
     function GetMerchantItem(slot: number): TooltipData?
     function GetMinimapMouseover(): TooltipData?
-    function GetMountBySpellID(spellID: SpellIdentifier, checkIndoors: boolean?): TooltipData?
+    function GetMountBySpellID(spellID: SpellIdentifier | Secret<SpellIdentifier>, checkIndoors: boolean?): TooltipData?
     function GetOutfit(outfitID: number): TooltipData?
     function GetOwnedItemByID(itemID: number): TooltipData?
     function GetPetAction(slot: number): TooltipData?
@@ -33253,7 +33253,7 @@ declare namespace C_TooltipInfo
     function GetSocketedItem(): TooltipData?
     function GetSocketedRelic(slotIndex: number): TooltipData?
     function GetSpellBookItem(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): TooltipData?
-    function GetSpellByID(spellID: SpellIdentifier, isPet: boolean?, showSubtext: boolean?, dontOverride: boolean?, difficultyID: number?, isLink: boolean?): TooltipData?
+    function GetSpellByID(spellID: SpellIdentifier | Secret<SpellIdentifier>, isPet: boolean?, showSubtext: boolean?, dontOverride: boolean?, difficultyID: number?, isLink: boolean?): TooltipData?
     function GetTalent(talentID: number, isInspect: boolean?, groupIndex: number?): TooltipData?
     function GetTotem(slot: number): TooltipData?
     function GetToyByItemID(itemID: number): TooltipData?
@@ -33780,14 +33780,14 @@ declare namespace C_UnitAuras
     function AddAuraSound(trigger: UnitAuraSoundTrigger, sound: UnitAuraSoundInfo): number?
     function AddBlockedAura(unit: UnitTokenRestrictedForAddOns, auraInstanceID: number)
     function AddPrivateAuraAnchor(args: AddPrivateAuraAnchorArgs): number?
-    function AuraIsBigDefensive(spellID: SpellIdentifier): boolean
-    function AuraIsPrivate(spellID: SpellIdentifier): boolean
+    function AuraIsBigDefensive(spellID: SpellIdentifier | Secret<SpellIdentifier>): boolean
+    function AuraIsPrivate(spellID: SpellIdentifier | Secret<SpellIdentifier>): boolean
     function CancelAuraByInstanceID(unit: UnitTokenRestrictedForAddOns, auraInstanceID: number)
     function ClearBlockedAuras(unit: UnitTokenRestrictedForAddOns)
     function DoesAuraHaveExpirationTime(auraInstanceUnit: string, auraInstanceID: number): boolean | Secret<boolean>
     function GetAuraApplicationDisplayCount(auraInstanceUnit: string, auraInstanceID: number, minDisplayCount: number?, maxDisplayCount: number?): string | Secret<string>
-    function GetAuraBaseDuration(auraInstanceUnit: string, auraInstanceID: number, spellID: SpellIdentifier?): (number | Secret<number>)?
-    function GetAuraCasterGUID(auraInstanceUnit: string, auraInstanceID: number): (string | Secret<string>)?
+    function GetAuraBaseDuration(auraInstanceUnit: string | Secret<string>, auraInstanceID: number | Secret<number>, spellID: (SpellIdentifier | Secret<SpellIdentifier>)?): (number | Secret<number>)?
+    function GetAuraCasterGUID(auraInstanceUnit: string | Secret<string>, auraInstanceID: number | Secret<number>): (string | Secret<string>)?
     function GetAuraDataByAuraInstanceID(unit: UnitTokenRestrictedForAddOns, auraInstanceID: number): (AuraData | Secret<AuraData>)?
     function GetAuraDataByIndex(unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): (AuraData | Secret<AuraData>)?
     function GetAuraDataBySlot(unit: UnitTokenRestrictedForAddOns, slot: number): (AuraData | Secret<AuraData>)?
@@ -33796,14 +33796,14 @@ declare namespace C_UnitAuras
     function GetAuraDuration(auraInstanceUnit: string, auraInstanceID: number): LuaDurationObject
     function GetAuraSlots(unit: UnitTokenRestrictedForAddOns, filter: AuraFilters?, maxSlots: number?, continuationToken: number?): (number?, ...number)
     function GetBuffDataByIndex(unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): (AuraData | Secret<AuraData>)?
-    function GetCooldownAuraBySpellID(spellID: SpellIdentifier): number?
+    function GetCooldownAuraBySpellID(spellID: SpellIdentifier | Secret<SpellIdentifier>): number?
     function GetDebuffDataByIndex(unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): (AuraData | Secret<AuraData>)?
     function GetGroupBuffVisualAlerts(): GroupBuffVisualAlertInfo[]
     function GetHiddenGroupBuffs(): number[]
-    function GetPlayerAuraBySpellID(spellID: SpellIdentifier): (AuraData | Secret<AuraData>)?
-    function GetRefreshCarryOverDuration(auraInstanceUnit: string, auraInstanceID: number, spellID: SpellIdentifier?): (number | Secret<number>)?
-    function GetRefreshExtendedDuration(auraInstanceUnit: string, auraInstanceID: number, spellID: SpellIdentifier?): (number | Secret<number>)?
-    function GetUnitAuraBySpellID(unit: UnitTokenRestrictedForAddOns, spellID: SpellIdentifier): (AuraData | Secret<AuraData>)?
+    function GetPlayerAuraBySpellID(spellID: SpellIdentifier | Secret<SpellIdentifier>): (AuraData | Secret<AuraData>)?
+    function GetRefreshCarryOverDuration(auraInstanceUnit: string | Secret<string>, auraInstanceID: number | Secret<number>, spellID: (SpellIdentifier | Secret<SpellIdentifier>)?): (number | Secret<number>)?
+    function GetRefreshExtendedDuration(auraInstanceUnit: string | Secret<string>, auraInstanceID: number | Secret<number>, spellID: (SpellIdentifier | Secret<SpellIdentifier>)?): (number | Secret<number>)?
+    function GetUnitAuraBySpellID(unit: UnitTokenRestrictedForAddOns, spellID: SpellIdentifier | Secret<SpellIdentifier>): (AuraData | Secret<AuraData>)?
     function GetUnitAuraInstanceIDs(unit: UnitTokenRestrictedForAddOns, filter: AuraFilters, maxCount: number?, sortRule: UnitAuraSortRule?, sortDirection: UnitAuraSortDirection?): number[]
     function GetUnitAuras(unit: UnitTokenRestrictedForAddOns, filter: AuraFilters, maxCount: number?, sortRule: UnitAuraSortRule?, sortDirection: UnitAuraSortDirection?): AuraData[]
     function IsAuraFilteredOutByInstanceID(unit: UnitTokenRestrictedForAddOns, auraInstanceID: number, filter: AuraFilters): boolean
@@ -33923,7 +33923,7 @@ declare namespace C_VoiceChat
     function SetVADSensitivity(sensitivity: number)
     function ShouldDiscoverChannels(): boolean
     function SpeakRemoteTextSample(text: string)
-    function SpeakText(voiceID: number, text: string, rate: number, volume: number, overlap: boolean?)
+    function SpeakText(voiceID: number, text: string | Secret<string>, rate: number, volume: number, overlap: boolean?)
     function StopSpeakingText()
     function ToggleDeafened()
     function ToggleMemberMuted(playerLocation: PlayerLocationMixin)

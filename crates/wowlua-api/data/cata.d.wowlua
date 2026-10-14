@@ -9013,9 +9013,9 @@ declare function SimulateMouseDown(button: string)
 declare function SimulateMouseUp(button: string)
 declare function SimulateMouseWheel(delta: number)
 declare function GetBaseDifficultyID(difficultyID: number): number
-declare function AbbreviateLargeNumbers(number: number, options: NumberAbbrevOptions?): string
-declare function AbbreviateNumbers(number: number, options: NumberAbbrevOptions?): string
-declare function BreakUpLargeNumbers(largeNumber: number, natural: boolean?): string
+declare function AbbreviateLargeNumbers(number: number | Secret<number>, options: (NumberAbbrevOptions | Secret<NumberAbbrevOptions>)?): string
+declare function AbbreviateNumbers(number: number | Secret<number>, options: (NumberAbbrevOptions | Secret<NumberAbbrevOptions>)?): string
+declare function BreakUpLargeNumbers(largeNumber: number | Secret<number>, natural: boolean?): string
 declare function CaseAccentInsensitiveParse(name: string): string
 declare function CreateAbbreviateConfig(data: NumberAbbreviationBreakpoint[]): AbbreviateConfig
 declare function CancelPreloadingMovie(movieId: number)
@@ -9057,7 +9057,7 @@ declare function GetParryChanceFromAttribute(): number | Secret<number>
 declare function GetPetMeleeHaste(): number | Secret<number>
 declare function GetPetSpellBonusDamage(): number | Secret<number>
 declare function GetPlayerFacing(): number?
-declare function GetPlayerInfoByGUID(guid: string): (string?, string?, string?, string?, number?, string?, string?)
+declare function GetPlayerInfoByGUID(guid: string | Secret<string>): (string?, string?, string?, string?, number?, string?, string?)
 declare function GetPowerRegen(): (number | Secret<number>, number | Secret<number>)
 declare function GetPowerRegenForPowerType(powerType: number): (number | Secret<number>, number | Secret<number>)
 declare function GetPvpPowerDamage(): number | Secret<number>
@@ -9161,7 +9161,7 @@ declare function UnitCastingDuration(unit: string): (LuaDurationObject | Secret<
 declare function UnitCastingInfo(unit: string): (string | Secret<string>, string | Secret<string>, number | Secret<number>, number | Secret<number>, number | Secret<number>, boolean | Secret<boolean>, string | Secret<string>, (boolean | Secret<boolean>)?, number | Secret<number>, (number | Secret<number>)?, number | Secret<number>)
 declare function UnitChannelDuration(unit: string): LuaDurationObject?
 declare function UnitChannelInfo(unit: string): (string | Secret<string>, string | Secret<string>, number | Secret<number>, number | Secret<number>, number | Secret<number>, boolean | Secret<boolean>, (boolean | Secret<boolean>)?, number | Secret<number>, boolean | Secret<boolean>, number | Secret<number>, (number | Secret<number>)?)
-declare function UnitClassFromGUID(unitGUID: string): (string?, string?, number?)
+declare function UnitClassFromGUID(unitGUID: string | Secret<string>): (string?, string?, number?)
 declare function UnitClassification(unit: string): string
 declare function UnitControllingVehicle(unit: string): boolean
 declare function UnitCreatureFamily(unit: string): (string | Secret<string>, number | Secret<number>)
@@ -9240,14 +9240,14 @@ declare function UnitIsVisible(unit: string?): boolean
 declare function UnitIsWildBattlePet(unit: string): boolean
 declare function UnitLeadsAnyGroup(unit: string): boolean | Secret<boolean>
 declare function UnitLevel(name: string): number
-declare function UnitName(unit: string): (string | Secret<string>, string | Secret<string>)
+declare function UnitName(unit: string | Secret<string>): (string | Secret<string>, string | Secret<string>)
 declare function UnitNameUnmodified(unit: string): (string | Secret<string>, string | Secret<string>)
 declare function UnitNameplateShowsWidgetsOnly(unit: string): boolean
 declare function UnitOnTaxi(unit: string): boolean
 declare function UnitOwnerGUID(unit: string): string | Secret<string>
 declare function UnitPVPName(unit: string): string | Secret<string>
 declare function UnitPartialPower(unitToken: string, powerType: PowerType?, unmodified: boolean?): number | Secret<number>
-declare function UnitPercentHealthFromGUID(unitGUID: string): (number | Secret<number>)?
+declare function UnitPercentHealthFromGUID(unitGUID: string | Secret<string>): (number | Secret<number>)?
 declare function UnitPhaseReason(unit: string): (PhaseReason | Secret<PhaseReason>)?
 declare function UnitPlayerControlled(unit: string?): boolean
 declare function UnitPlayerOrPetInParty(unit: string?, partyIndex: number?): boolean
@@ -9275,7 +9275,7 @@ declare function UnitTargetsVehicleInRaidUI(unit: string?): boolean
 declare function UnitThreatLeadSituation(unit: string, mobGUID: string): (number | Secret<number>)?
 declare function UnitThreatPercentageOfLead(unit: string, mobGUID: string): (number | Secret<number>)?
 declare function UnitThreatSituation(unit: string, mobGUID: string?): (number | Secret<number>)?
-declare function UnitTokenFromGUID(unitGUID: string): (string | Secret<string>)?
+declare function UnitTokenFromGUID(unitGUID: string | Secret<string>): (string | Secret<string>)?
 declare function UnitTreatAsPlayerForDisplay(unit: string): boolean
 declare function UnitTrialBankedLevels(unit: string): (number, number, number)
 declare function UnitTrialXP(unit: string): number
@@ -18762,7 +18762,7 @@ declare namespace C_ChatInfo
     function DropCautionaryChatMessage(confirmNumber: number)
     function InChatMessagingLockdown(): boolean
     function PerformEmote(emoteName: string, targetName: string?, suppressMoveError: boolean?): boolean
-    function ReplaceIconAndGroupExpressions(input: string, noIconReplacement: boolean?, noGroupReplacement: boolean?): string
+    function ReplaceIconAndGroupExpressions(input: string | Secret<string>, noIconReplacement: boolean?, noGroupReplacement: boolean?): string
     function SendCautionaryChatMessage(confirmNumber: number)
     function SendChatMessage(message: string, chatType: SendChatMessageType?, languageID: number?, target: string?)
 end
@@ -20226,22 +20226,22 @@ declare namespace C_Spell
     function TargetSpellReplacesBonusTree(): boolean
     function CancelSpellByID(spellID: number)
     function EnableSpellRangeCheck(spellIdentifier: SpellIdentifier, enable: boolean)
-    function GetSpellChargeDuration(spellIdentifier: SpellIdentifier): LuaDurationObject?
-    function GetSpellCooldown(spellIdentifier: SpellIdentifier): (SpellCooldownInfo | Secret<SpellCooldownInfo>)?
-    function GetSpellCooldownDuration(spellIdentifier: SpellIdentifier, ignoreGCD: boolean?): LuaDurationObject?
+    function GetSpellChargeDuration(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): LuaDurationObject?
+    function GetSpellCooldown(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (SpellCooldownInfo | Secret<SpellCooldownInfo>)?
+    function GetSpellCooldownDuration(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, ignoreGCD: (boolean | Secret<boolean>)?): LuaDurationObject?
     function GetSpellDisplayCount(spellIdentifier: SpellIdentifier, maxDisplayCount: number?, replacementString: string?): string | Secret<string>
-    function GetSpellLevelLearned(spellIdentifier: SpellIdentifier): number
-    function GetSpellLossOfControlCooldownDuration(spellIdentifier: SpellIdentifier): LuaDurationObject?
-    function GetSpellLossOfControlCooldownInfo(spellIdentifier: SpellIdentifier): (SpellLossOfControlInfo | Secret<SpellLossOfControlInfo>)?
-    function GetSpellMaxCumulativeAuraApplications(spellID: SpellIdentifier): number | Secret<number>
+    function GetSpellLevelLearned(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): number
+    function GetSpellLossOfControlCooldownDuration(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): LuaDurationObject?
+    function GetSpellLossOfControlCooldownInfo(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (SpellLossOfControlInfo | Secret<SpellLossOfControlInfo>)?
+    function GetSpellMaxCumulativeAuraApplications(spellID: SpellIdentifier | Secret<SpellIdentifier>): number | Secret<number>
     function GetVisibilityInfo(spellID: number, visibilityType: SpellAuraVisibilityType): (boolean?, boolean?, boolean?)
-    function IsConsumableSpell(spellIdentifier: SpellIdentifier): boolean
+    function IsConsumableSpell(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
     function IsExternalDefensive(spellID: number): boolean
-    function IsPressHoldReleaseSpell(spellIdentifier: SpellIdentifier): boolean
+    function IsPressHoldReleaseSpell(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
     function IsPriorityAura(spellID: number): boolean
     function IsSelfBuff(spellID: number): boolean
-    function IsSpellCrowdControl(spellIdentifier: SpellIdentifier): boolean
-    function IsSpellImportant(spellIdentifier: SpellIdentifier): boolean
+    function IsSpellCrowdControl(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
+    function IsSpellImportant(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): boolean
 end
 
 declare namespace C_StableInfo
@@ -20568,15 +20568,15 @@ declare namespace C_UnitAuras
     function SetPrivateWarningTextAnchor(parent: Frame, anchor: AnchorBinding?)
     function WantsAlteredForm(unitToken: string): boolean
     function AddBlockedAura(unit: UnitTokenRestrictedForAddOns, auraInstanceID: number)
-    function AuraIsBigDefensive(spellID: SpellIdentifier): boolean
+    function AuraIsBigDefensive(spellID: SpellIdentifier | Secret<SpellIdentifier>): boolean
     function ClearBlockedAuras(unit: UnitTokenRestrictedForAddOns)
     function DoesAuraHaveExpirationTime(auraInstanceUnit: string, auraInstanceID: number): boolean | Secret<boolean>
     function GetAuraApplicationDisplayCount(auraInstanceUnit: string, auraInstanceID: number, minDisplayCount: number?, maxDisplayCount: number?): string | Secret<string>
-    function GetAuraBaseDuration(auraInstanceUnit: string, auraInstanceID: number, spellID: SpellIdentifier?): (number | Secret<number>)?
+    function GetAuraBaseDuration(auraInstanceUnit: string | Secret<string>, auraInstanceID: number | Secret<number>, spellID: (SpellIdentifier | Secret<SpellIdentifier>)?): (number | Secret<number>)?
     function GetAuraDispelTypeColor(auraInstanceUnit: string, auraInstanceID: number, curve: LuaColorCurveObject): ColorMixin | Secret<ColorMixin>
     function GetAuraDuration(auraInstanceUnit: string, auraInstanceID: number): LuaDurationObject
-    function GetRefreshExtendedDuration(auraInstanceUnit: string, auraInstanceID: number, spellID: SpellIdentifier?): (number | Secret<number>)?
-    function GetUnitAuraBySpellID(unit: UnitTokenRestrictedForAddOns, spellID: SpellIdentifier): (AuraData | Secret<AuraData>)?
+    function GetRefreshExtendedDuration(auraInstanceUnit: string | Secret<string>, auraInstanceID: number | Secret<number>, spellID: (SpellIdentifier | Secret<SpellIdentifier>)?): (number | Secret<number>)?
+    function GetUnitAuraBySpellID(unit: UnitTokenRestrictedForAddOns, spellID: SpellIdentifier | Secret<SpellIdentifier>): (AuraData | Secret<AuraData>)?
     function GetUnitAuraInstanceIDs(unit: UnitTokenRestrictedForAddOns, filter: AuraFilters, maxCount: number?, sortRule: UnitAuraSortRule?, sortDirection: UnitAuraSortDirection?): number[]
     function GetUnitAuras(unit: UnitTokenRestrictedForAddOns, filter: AuraFilters, maxCount: number?, sortRule: UnitAuraSortRule?, sortDirection: UnitAuraSortDirection?): AuraData[]
     function ResetAuraDataProvider()
@@ -20773,7 +20773,7 @@ declare namespace C_ChallengeMode
 end
 
 declare namespace C_ClassColor
-    function GetClassColor(className: string): ColorMixin?
+    function GetClassColor(className: string | Secret<string>): ColorMixin?
 end
 
 declare namespace C_ColorUtil
@@ -20781,9 +20781,9 @@ declare namespace C_ColorUtil
     function ConvertHSVToHSL(hsvH: number, hsvS: number, hsvV: number): (number, number, number)
     function ConvertHSVToRGB(hsvH: number, hsvS: number, hsvV: number): (number, number, number)
     function ConvertRGBToHSV(rgbR: number, rgbG: number, rgbB: number): (number, number, number)
-    function GenerateTextColorCode(color: ColorMixin): string
-    function WrapTextInColor(text: string, color: ColorMixin): string
-    function WrapTextInColorCode(text: string, textColorCode: string): string
+    function GenerateTextColorCode(color: ColorMixin | Secret<ColorMixin>): string
+    function WrapTextInColor(text: string | Secret<string>, color: ColorMixin | Secret<ColorMixin>): string
+    function WrapTextInColorCode(text: string | Secret<string>, textColorCode: string | Secret<string>): string
 end
 
 declare namespace C_CombatAudioAlert
@@ -20843,8 +20843,8 @@ end
 declare namespace C_CurveUtil
     function CreateColorCurve(): LuaColorCurveObject
     function CreateCurve(): LuaCurveObject
-    function EvaluateColorFromBoolean(boolean: boolean, valueIfTrue: ColorMixin, valueIfFalse: ColorMixin): ColorMixin
-    function EvaluateColorValueFromBoolean(boolean: boolean, valueIfTrue: number, valueIfFalse: number): number
+    function EvaluateColorFromBoolean(boolean: boolean | Secret<boolean>, valueIfTrue: ColorMixin | Secret<ColorMixin>, valueIfFalse: ColorMixin | Secret<ColorMixin>): ColorMixin
+    function EvaluateColorValueFromBoolean(boolean: boolean | Secret<boolean>, valueIfTrue: number | Secret<number>, valueIfFalse: number | Secret<number>): number
     function EvaluateGameCurve(curveID: number, x: number): number
 end
 
@@ -21543,17 +21543,17 @@ declare namespace C_StringUtil
     function CreateAbbreviatedNumberFormatter(): AbbreviatedNumberFormatter
     function CreateNumericRuleFormatter(): NumericRuleFormatter
     function CreateSecondsFormatter(): SecondsFormatter
-    function EscapeDecimalNonPrintables(text: stringView): string
-    function EscapeLuaFormatString(text: string): stringView
-    function EscapeLuaPatterns(text: stringView): string
-    function EscapeQuotedCodes(text: string): stringView
-    function FloorToNearestString(number: number): string
-    function RemoveContiguousSpaces(text: stringView, maxAllowedSpaces: number): string
-    function RoundToNearestString(number: number): string
-    function StripHyperlinks(text: string, maintainColor: boolean?, maintainBrackets: boolean?, stripNewlines: boolean?, maintainAtlases: boolean?, maintainTextures: boolean?): stringView
-    function StripTextureMarkupForLooseFiles(text: string): stringView
-    function TruncateWhenZero(number: number): string
-    function WrapString(infix: stringView, prefix: stringView?, suffix: stringView?): string
+    function EscapeDecimalNonPrintables(text: stringView | Secret<stringView>): string
+    function EscapeLuaFormatString(text: string | Secret<string>): stringView
+    function EscapeLuaPatterns(text: stringView | Secret<stringView>): string
+    function EscapeQuotedCodes(text: string | Secret<string>): stringView
+    function FloorToNearestString(number: number | Secret<number>): string
+    function RemoveContiguousSpaces(text: stringView | Secret<stringView>, maxAllowedSpaces: number): string
+    function RoundToNearestString(number: number | Secret<number>): string
+    function StripHyperlinks(text: string | Secret<string>, maintainColor: (boolean | Secret<boolean>)?, maintainBrackets: (boolean | Secret<boolean>)?, stripNewlines: (boolean | Secret<boolean>)?, maintainAtlases: (boolean | Secret<boolean>)?, maintainTextures: (boolean | Secret<boolean>)?): stringView
+    function StripTextureMarkupForLooseFiles(text: string | Secret<string>): stringView
+    function TruncateWhenZero(number: number | Secret<number>): string
+    function WrapString(infix: stringView | Secret<stringView>, prefix: (stringView | Secret<stringView>)?, suffix: (stringView | Secret<stringView>)?): string
     function GetDefaultAbbreviationBreakpoints(...: any): (...any)
 end
 

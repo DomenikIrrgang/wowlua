@@ -14,6 +14,36 @@ passed through unchanged. The modules never compare, index or do arithmetic on
 them internally. Where a function needs such an operation (e.g. matching a
 spell ID), it skips values it cannot access and says so in its contract.
 
+## secret
+
+`wowlua:secret` holds the small helpers secret values need (decision S26).
+Each tests for secrecy first, so it never compares, tests or does arithmetic
+on a secret. On clients without secret values nothing is secret.
+
+```wowlua
+import * as secret from "wowlua:secret"
+
+local hp = UnitHealth("target")                       -- number | Secret<number>
+bar:SetValue(secret.amount(hp))                       -- secrets pass, nil becomes 0
+local shown = secret.known(hp, 0)                     -- number: 0 when secret
+if secret.flag(UnitIsUnit("target", "focus")) then … end   -- a secret boolean reads as false
+label:SetText(secret.abbreviate(hp))                  -- "8.5K", a secret string when secret
+if not secret.isSecret(hp) then print(hp + 1) end     -- narrows like issecretvalue
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `isSecret` | `(v: unknown) -> v is Secret<unknown>` | `issecretvalue`, or `false` where the client has none |
+| `known` | `<T>(v: T \| Secret<T> \| nil, fallback: T) -> T` | `fallback` when `v` is secret or nil |
+| `flag` | `(b: boolean \| Secret<boolean> \| nil) -> boolean` | For conditions: secret and nil read as `false` |
+| `amount` | `(v: number \| Secret<number> \| nil) -> number \| Secret<number>` | For widgets that take secrets: nil becomes 0 |
+| `abbreviate` | `(v: number \| Secret<number>) -> string \| Secret<string>` | The client's `AbbreviateNumbers`, else `%d` |
+
+The generated `wow-api` declarations type the arguments Blizzard documents
+with `SecretArguments = "AllowedWhenTainted"` (widget setters such as
+`StatusBar:SetValue`, `FontString:SetText`) as `T | Secret<T>`, except those
+marked `NeverSecret`.
+
 ## unit
 
 `wowlua:unit` provides unit information helpers.

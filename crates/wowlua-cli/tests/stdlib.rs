@@ -3164,6 +3164,39 @@ fn frames_move_resize_scale_and_save() {
     );
 }
 
+// ----------------------------------------------------------------- secret --
+
+/// `wowlua:secret`: helpers that test for secrecy before anything else.
+#[test]
+fn secret_helpers() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as secret from "wowlua:secret"
+_G.StdSecret = secret
+"#,
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local secret = StdSecret
+local s = Mock.secret()
+print(secret.isSecret(s), secret.isSecret(1), secret.known(s, 5), secret.known(nil, 6), secret.known(7, 0))
+print(secret.flag(s), secret.flag(true), secret.flag(nil), secret.flag(false))
+print(secret.amount(s) == s, secret.amount(nil), secret.amount(3))
+print(secret.abbreviate(1234))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "true false 5 6 7",
+            "false true false false",
+            "true 0 3",
+            "1234"
+        ]
+    );
+}
+
 // ------------------------------------------------------------------ color --
 
 /// A literal `color.hex` is validated at compile time (E8390).

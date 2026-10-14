@@ -57,6 +57,7 @@ libraries such as Ace3, LibDBIcon or LibSerialize.
 | `wowlua:comm` | Addon-to-addon messaging with chunking and throttling | [Advanced](advanced.md#comm) |
 | `wowlua:serialize` | Serialization, compression, print-safe encoding | [Advanced](advanced.md#serialize) |
 | `wowlua:log` | Leveled logging and chat output | [Advanced](advanced.md#log) |
+| `wowlua:secret` | Helpers for secret values | [Game data](game.md#secret) |
 | `wowlua:unit` | Unit information across flavors | [Game data](game.md#unit) |
 | `wowlua:aura` | Aura queries across flavors, secret-value aware | [Game data](game.md#aura) |
 | `wowlua:spell` | Spell information across flavors | [Game data](game.md#spell) |

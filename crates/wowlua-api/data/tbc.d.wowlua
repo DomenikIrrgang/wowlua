@@ -9504,7 +9504,7 @@ declare function IsRightShiftKeyDown(): boolean
 declare function IsShiftKeyDown(): boolean
 declare function IsUsingGamepad(): boolean
 declare function IsUsingMouse(): boolean
-declare function BreakUpLargeNumbers(largeNumber: number, natural: boolean?): string
+declare function BreakUpLargeNumbers(largeNumber: number | Secret<number>, natural: boolean?): string
 declare function CaseAccentInsensitiveParse(name: string): string
 declare function CancelPreloadingMovie(movieId: number)
 declare function GetMovieDownloadProgress(movieId: number): (boolean, string, string)

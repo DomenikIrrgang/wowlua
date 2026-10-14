@@ -212,8 +212,29 @@ fn function_sig(f: &Table) -> Sig {
     // Entries with `StrideIndex` repeat: they become the variadic tail.
     let args = list(f, "Arguments");
     let fixed_args: Vec<&Table> = args.iter().take_while(|a| !has(a, "StrideIndex")).collect();
-    let stride_args: Vec<String> = args.iter().skip(fixed_args.len()).map(field_type).collect();
-    let params: Vec<ParamDecl> = fixed_args.iter().map(|a| param(a)).collect();
+    // `SecretArguments = "AllowedWhenTainted"`: addon code may pass
+    // secrets (to the arguments not marked `NeverSecret`).
+    let secret_args = s(f, "SecretArguments").as_deref() == Some("AllowedWhenTainted");
+    let accept = |a: &Table, ty: String| {
+        if secret_args && !b(a, "NeverSecret") {
+            format!("{ty} | Secret<{ty}>")
+        } else {
+            ty
+        }
+    };
+    let stride_args: Vec<String> = args
+        .iter()
+        .skip(fixed_args.len())
+        .map(|a| accept(a, field_type(a)))
+        .collect();
+    let params: Vec<ParamDecl> = fixed_args
+        .iter()
+        .map(|a| {
+            let mut p = param(a);
+            p.ty = accept(a, p.ty);
+            p
+        })
+        .collect();
     let vararg = (!stride_args.is_empty()).then(|| stride_args.join(" | "));
     let secret = b(f, "SecretReturns")
         || has(f, "SecretReturnsForAspect")

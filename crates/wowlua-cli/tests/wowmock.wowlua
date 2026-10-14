@@ -393,6 +393,8 @@ class MockFrame
     function SetFrameLevel(...: any) end
     function SetMovable(...: any) end
     function SetResizable(...: any) end
+    function SetMinMaxValues(...: any) end
+    function SetValue(...: any) end
     function SetBackdrop(...: any) end
     function SetBackdropColor(...: any) end
     function SetBackdropBorderColor(...: any) end
@@ -537,8 +539,108 @@ Mock.interface = 11508
 function GetBuildInfo(): (string, string, string, number)
     return "1.0.0", "1", "Jan 1 2026", Mock.interface
 end
-UnitName = (function(): string
-    return "Tester"
+
+-- Units -------------------------------------------------------------------------
+
+--- What the client knows about a unit; any value may be a `Mock.secret()`.
+type MockUnit = {
+    name: any,
+    realm?: string,
+    guid: any,
+    class: string,
+    classFile: string,
+    level: number,
+    health: any,
+    healthMax: any,
+    power: any,
+    powerMax: any,
+    isPlayer: any,
+    connected: any,
+    faction?: string,
+    race?: string,
+    role?: string,
+}
+
+Mock.units = {
+    player = {
+        name = "Tester", guid = "Player-1-00000001", class = "Mage", classFile = "MAGE", level = 70,
+        health = 800, healthMax = 1000, power = 50, powerMax = 100, isPlayer = true, connected = true,
+        faction = "Alliance", race = "Human", role = "NONE",
+    },
+}
+
+local function mockUnit(unit: string): MockUnit?
+    return Mock.units[unit] :: MockUnit?
+end
+
+function UnitExists(unit: string): boolean
+    return mockUnit(unit) ~= nil
+end
+UnitName = (function(unit: string): (any, string?)
+    const u = mockUnit(unit)
+    if u then
+        return u.name, u.realm
+    end
+    return nil, nil
+end) :: any
+GetUnitName = (function(unit: string, showServer: boolean?): any
+    const u = mockUnit(unit)
+    if not u then
+        return nil
+    end
+    if showServer and u.realm then
+        return `{u.name}-{u.realm}`
+    end
+    return u.name
+end) :: any
+function GetRealmName(): string
+    return "MockRealm"
+end
+function GetNormalizedRealmName(): string
+    return "MockRealm"
+end
+UnitClass = (function(unit: string): (string?, string?, number?)
+    const u = mockUnit(unit)
+    if u then
+        return u.class, u.classFile, 8
+    end
+    return nil, nil, nil
+end) :: any
+UnitLevel = (function(unit: string): number
+    return mockUnit(unit)?.level ?? 0
+end) :: any
+UnitHealth = (function(unit: string): any
+    return mockUnit(unit)?.health ?? 0
+end) :: any
+UnitHealthMax = (function(unit: string): any
+    return mockUnit(unit)?.healthMax ?? 0
+end) :: any
+UnitPower = (function(unit: string): any
+    return mockUnit(unit)?.power ?? 0
+end) :: any
+UnitPowerMax = (function(unit: string): any
+    return mockUnit(unit)?.powerMax ?? 0
+end) :: any
+UnitIsPlayer = (function(unit: string): any
+    return mockUnit(unit)?.isPlayer ?? false
+end) :: any
+UnitIsConnected = (function(unit: string): any
+    return mockUnit(unit)?.connected ?? false
+end) :: any
+UnitIsUnit = (function(a: string, b: string): any
+    const x = mockUnit(a)
+    return x ~= nil and x == mockUnit(b)
+end) :: any
+UnitFactionGroup = (function(unit: string): (string?, string?)
+    const f = mockUnit(unit)?.faction
+    return f, f
+end) :: any
+UnitRace = (function(unit: string): (string?, string?)
+    const r = mockUnit(unit)?.race
+    return r, r
+end) :: any
+UnitGroupRolesAssigned = (function(unit: string): string
+    return mockUnit(unit)?.role ?? "NONE"
 end) :: any
 function GetFramesRegisteredForEvent(event: string): ...any
     local out: any[] = {}
@@ -747,9 +849,9 @@ function Mock.tooltip(name: string): any
     return MockTooltip.new(name)
 end
 
-function UnitGUID(unit: string): string?
-    return `GUID-{unit}`
-end
+UnitGUID = (function(unit: string): any
+    return mockUnit(unit)?.guid ?? `GUID-{unit}`
+end) :: any
 
 -- The tooltip data system (setups without it set TooltipDataProcessor to nil).
 _G.Enum = { TooltipDataType = { Item = 0, Spell = 1, Unit = 2, Currency = 5, Mount = 10 } }

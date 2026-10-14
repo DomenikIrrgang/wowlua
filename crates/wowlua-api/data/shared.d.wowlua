@@ -369,8 +369,8 @@ end
 declare class VertexColor extends Animation
     function GetEndColor(): colorRGBA
     function GetStartColor(): colorRGBA
-    function SetEndColor(color: colorRGBA)
-    function SetStartColor(color: colorRGBA)
+    function SetEndColor(color: colorRGBA | Secret<colorRGBA>)
+    function SetStartColor(color: colorRGBA | Secret<colorRGBA>)
 end
 
 declare class vertexcolor extends VertexColor
@@ -510,14 +510,14 @@ declare class Region extends ScriptRegion
     function IsIgnoringParentAlpha(): boolean
     function IsIgnoringParentScale(): boolean
     function IsObjectLoaded(): boolean
-    function SetAlpha(alpha: SingleColorValue)
-    function SetAlphaFromBoolean(value: boolean, alphaIfTrue: SingleColorValue?, alphaIfFalse: SingleColorValue?)
+    function SetAlpha(alpha: SingleColorValue | Secret<SingleColorValue>)
+    function SetAlphaFromBoolean(value: boolean | Secret<boolean>, alphaIfTrue: (SingleColorValue | Secret<SingleColorValue>)?, alphaIfFalse: (SingleColorValue | Secret<SingleColorValue>)?)
     function SetDrawLayer(layer: DrawLayer, sublevel: number?)
     function SetIgnoreParentAlpha(ignore: boolean)
     function SetIgnoreParentScale(ignore: boolean)
     function SetScale(scale: number)
-    function SetVertexColor(colorR: number, colorG: number, colorB: number, a: SingleColorValue?)
-    function SetVertexColorFromBoolean(value: boolean, colorIfTrue: colorRGBA, colorIfFalse: colorRGBA)
+    function SetVertexColor(colorR: number | Secret<number>, colorG: number | Secret<number>, colorB: number | Secret<number>, a: (SingleColorValue | Secret<SingleColorValue>)?)
+    function SetVertexColorFromBoolean(value: boolean | Secret<boolean>, colorIfTrue: colorRGBA | Secret<colorRGBA>, colorIfFalse: colorRGBA | Secret<colorRGBA>)
     function AdjustPointsOffset(x: uiUnit, y: uiUnit)
     function ClearAllPoints()
     function ClearPoint(point: FramePoint)
@@ -640,22 +640,22 @@ declare class TextureBase extends Region
     function IsDesaturated(): boolean
     function IsSnappingToPixelGrid(): boolean
     function ResetTexCoord()
-    function SetAtlas(atlas: textureAtlas, useAtlasSize: boolean?, filterMode: FilterMode?, resetTexCoords: boolean?, wrapModeHorizontal: string?, wrapModeVertical: string?)
+    function SetAtlas(atlas: textureAtlas | Secret<textureAtlas>, useAtlasSize: boolean?, filterMode: FilterMode?, resetTexCoords: boolean?, wrapModeHorizontal: string?, wrapModeVertical: string?)
     function SetBlendMode(blendMode: BlendMode)
     function SetBlockingLoadsRequested(blocking: boolean?)
-    function SetColorTexture(colorR: number, colorG: number, colorB: number, a: SingleColorValue?)
-    function SetDesaturated(desaturated: boolean?)
-    function SetDesaturation(desaturation: normalizedValue)
+    function SetColorTexture(colorR: number | Secret<number>, colorG: number | Secret<number>, colorB: number | Secret<number>, a: (SingleColorValue | Secret<SingleColorValue>)?)
+    function SetDesaturated(desaturated: (boolean | Secret<boolean>)?)
+    function SetDesaturation(desaturation: normalizedValue | Secret<normalizedValue>)
     function SetGradient(orientation: Orientation, minColor: colorRGBA, maxColor: colorRGBA)
     function SetHorizTile(tiling: boolean?)
     function SetMask(file: string)
-    function SetRotation(radians: number, normalizedRotationPoint: vector2?)
+    function SetRotation(radians: number | Secret<number>, normalizedRotationPoint: (vector2 | Secret<vector2>)?)
     function SetSnapToPixelGrid(snap: boolean?)
-    function SetSpriteSheetCell(cell: number, numRows: number, numColumns: number, cellWidth: number?, cellHeight: number?)
-    function SetTexCoord(left: number, right: number, top: number, bottom: number)
+    function SetSpriteSheetCell(cell: number | Secret<number>, numRows: number, numColumns: number, cellWidth: number?, cellHeight: number?)
+    function SetTexCoord(left: number | Secret<number>, right: number | Secret<number>, top: number, bottom: number)
     function SetTexCoord(ulX: number, ulY: number, llX: number, llY: number, urX: number, urY: number, lrX: number, lrY: number)
     function SetTexelSnappingBias(bias: normalizedValue)
-    function SetTexture(textureAsset: (string | number)?, wrapModeHorizontal: WrapMode?, wrapModeVertical: WrapMode?, filterMode: FilterMode?): boolean
+    function SetTexture(textureAsset: (string | number | Secret<string | number>)?, wrapModeHorizontal: (WrapMode | Secret<WrapMode>)?, wrapModeVertical: (WrapMode | Secret<WrapMode>)?, filterMode: (FilterMode | Secret<FilterMode>)?): boolean
     function SetTextureSliceMargins(left: number, top: number, right: number, bottom: number)
     function SetTextureSliceMode(sliceMode: number)
     function SetVertTile(tiling: boolean?)
@@ -726,7 +726,7 @@ declare class FontString extends Region
     function SetFont(fontFile: FontFile, fontHeight: uiUnit, flags: TBFFlags?)
     function SetFontHeight(height: uiUnit)
     function SetFontObject(font: FontObject | nil)
-    function SetFormattedText(text: string, ...: string | number)
+    function SetFormattedText(text: string | Secret<string>, ...: string | number)
     function SetIndentedWordWrap(wrap: boolean)
     function SetJustifyH(justifyH: JustifyHorizontal)
     function SetJustifyV(justifyV: JustifyVertical)
@@ -737,11 +737,11 @@ declare class FontString extends Region
     function SetShadowColor(colorR: number, colorG: number, colorB: number, a: SingleColorValue?)
     function SetShadowOffset(offsetX: number, offsetY: number)
     function SetSpacing(spacing: uiUnit)
-    function SetText(text: string?)
-    function SetTextColor(colorR: number, colorG: number, colorB: number, a: SingleColorValue?)
+    function SetText(text: (string | Secret<string>)?)
+    function SetTextColor(colorR: number | Secret<number>, colorG: number | Secret<number>, colorB: number | Secret<number>, a: (SingleColorValue | Secret<SingleColorValue>)?)
     function SetTextHeight(height: uiUnit)
     function SetTextScale(textScale: number)
-    function SetTextToFit(text: string?)
+    function SetTextToFit(text: (string | Secret<string>)?)
     function SetWordWrap(wrap: boolean)
 end
 
@@ -887,10 +887,10 @@ declare class Cooldown extends Frame
     function SetCooldownUNIX(start: number, duration: number, modRate: number?)
     function SetCountdownAbbrevThreshold(seconds: number)
     function SetCountdownFont(fontName: string)
-    function SetDrawBling(drawBling: boolean?)
-    function SetDrawEdge(drawEdge: boolean?)
-    function SetDrawSwipe(drawSwipe: boolean?)
-    function SetEdgeColor(colorR: number, colorG: number, colorB: number, a: SingleColorValue?)
+    function SetDrawBling(drawBling: (boolean | Secret<boolean>)?)
+    function SetDrawEdge(drawEdge: (boolean | Secret<boolean>)?)
+    function SetDrawSwipe(drawSwipe: (boolean | Secret<boolean>)?)
+    function SetEdgeColor(colorR: number | Secret<number>, colorG: number | Secret<number>, colorB: number | Secret<number>, a: (SingleColorValue | Secret<SingleColorValue>)?)
     function SetEdgeScale(scale: number)
     function SetEdgeTexture(texture: FileAsset, colorR: number, colorG: number, colorB: number, colorA: number)
     function SetHideCountdownNumbers(hideNumbers: boolean?)
@@ -898,7 +898,7 @@ declare class Cooldown extends Frame
     function SetPaused(paused: boolean)
     function SetReverse(reverse: boolean?)
     function SetRotation(rotationRadians: number)
-    function SetSwipeColor(colorR: number, colorG: number, colorB: number, a: SingleColorValue?)
+    function SetSwipeColor(colorR: number | Secret<number>, colorG: number | Secret<number>, colorB: number | Secret<number>, a: (SingleColorValue | Secret<SingleColorValue>)?)
     function SetSwipeTexture(texture: FileAsset, colorR: number, colorG: number, colorB: number, colorA: number)
     function SetTexCoordRange(low: vector2, high: vector2)
     function SetUseAuraDisplayTime(useAuraDisplayTime: boolean?)
@@ -1113,7 +1113,7 @@ declare class Frame extends Region
     function RegisterUnitEvent(eventName: FrameEvent, ...: UnitToken): boolean
     function RegisterUnitEventCallback(eventName: string, cb: FrameEventCallbackType, ...: string): boolean
     function RotateTextures(radians: number, x: number?, y: number?)
-    function SetAlpha(alpha: SingleColorValue)
+    function SetAlpha(alpha: SingleColorValue | Secret<SingleColorValue>)
     function SetAlphaGradient(index: number, gradient: vector2)
     function SetAttribute(attributeName: string, value: any)
     function SetAttributeNoHandler(attributeName: string, value: any)
@@ -1131,7 +1131,7 @@ declare class Frame extends Region
     function SetHitRectInsets(left: uiUnit, right: uiUnit, top: uiUnit, bottom: uiUnit)
     function SetHyperlinkPropagateToParent(canPropagate: boolean)
     function SetHyperlinksEnabled(enabled: boolean?)
-    function SetID(id: number)
+    function SetID(id: number | Secret<number>)
     function SetIgnoreParentAlpha(ignore: boolean)
     function SetIgnoreParentScale(ignore: boolean)
     function SetIgnoringChildrenForBounds(ignore: boolean)
@@ -1810,17 +1810,17 @@ declare class StatusBar extends Frame
     function IsStatusBarDesaturated(): boolean
     function SetColorFill(colorR: number, colorG: number, colorB: number, a: SingleColorValue?)
     function SetFillStyle(fillStyle: StatusBarFillStyle)
-    function SetMinMaxValues(minValue: number, maxValue: number, interpolation: number?)
+    function SetMinMaxValues(minValue: number | Secret<number>, maxValue: number | Secret<number>, interpolation: number?)
     function SetOrientation(orientation: Orientation)
     function SetReverseFill(isReverseFill: boolean)
     function SetRotatesTexture(rotatesTexture: boolean)
-    function SetStatusBarColor(colorR: number, colorG: number, colorB: number, a: SingleColorValue?)
-    function SetStatusBarDesaturated(desaturated: boolean?)
-    function SetStatusBarDesaturation(desaturation: normalizedValue)
+    function SetStatusBarColor(colorR: number | Secret<number>, colorG: number | Secret<number>, colorB: number | Secret<number>, a: (SingleColorValue | Secret<SingleColorValue>)?)
+    function SetStatusBarDesaturated(desaturated: (boolean | Secret<boolean>)?)
+    function SetStatusBarDesaturation(desaturation: normalizedValue | Secret<normalizedValue>)
     function SetStatusBarTexture(asset: TextureAsset): boolean
     function SetTimerDuration(duration: LuaDurationObject, interpolation: number?, direction: number?)
     function SetToTargetValue()
-    function SetValue(value: number, interpolation: number?)
+    function SetValue(value: number | Secret<number>, interpolation: number?)
 end
 
 declare class statusbar extends StatusBar

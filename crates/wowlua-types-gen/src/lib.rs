@@ -159,6 +159,35 @@ pub fn generate(
     }
     create.push(create_frame_sig("string", "Frame"));
     shared.functions.insert("CreateFrame".into(), create);
+    // Arguments Blizzard documents as accepting secrets
+    // (`SecretArguments`) accept them in the annotated methods too.
+    for (_, _, d) in &per_flavor {
+        for (class_name, class) in &d.classes {
+            let Some(target) = shared.classes.get_mut(class_name) else {
+                continue;
+            };
+            for (method, sigs) in &class.methods {
+                let Some(targets) = target.methods.get_mut(method) else {
+                    continue;
+                };
+                for sig in sigs {
+                    for (i, p) in sig.params.iter().enumerate() {
+                        if !p.ty.contains("Secret<") {
+                            continue;
+                        }
+                        for t in targets.iter_mut() {
+                            if let Some(tp) = t.params.get_mut(i)
+                                && tp.name == p.name
+                                && !tp.ty.contains("Secret<")
+                            {
+                                tp.ty = format!("{} | Secret<{}>", tp.ty, tp.ty);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     // Classes only Blizzard knows stay in the flavor files; methods of
     // classes the annotations declare come from the annotations.
     for (_, _, d) in per_flavor.iter_mut() {

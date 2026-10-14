@@ -345,6 +345,12 @@ menus and lists, then the widget themes.
   interface or alias of another module resolved to `any` when that module's
   declarations came later; aliases now resolve where they are first used.
   **S2 is complete.**
+- S3 in progress: `color` done 2026-10-14 (hex colors folded at compile
+  time, E8390; class colors honoring `CUSTOM_CLASS_COLORS`; escapes; a
+  secret string stays a string through `wrap`); `secret` done 2026-10-14
+  (decision S26, from SuuUI's probes of the WoW: Forever client); the
+  generated API declarations now let documented secret-accepting arguments
+  (`SecretArguments`) take `Secret<T>`, widget setters included.
 
 ## M9: Test runner, language server, formatter
 
