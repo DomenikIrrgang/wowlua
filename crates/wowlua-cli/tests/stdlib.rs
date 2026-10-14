@@ -2288,6 +2288,8 @@ end
 Mock.fire("PLAYER_LOGIN")
 Mock.fire("PLAYER_ENTERING_WORLD", true, false)
 Mock.slash("/stdtest")
+Mock.awaitText("Press and release CTRL-SHIFT-K")
+Mock.pressKey("CTRL-SHIFT-K")
 Mock.awaitText("Enter combat")
 Mock.fire("PLAYER_REGEN_DISABLED")
 Mock.awaitText("Now leave combat")

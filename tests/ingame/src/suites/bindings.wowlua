@@ -35,10 +35,35 @@ s:test("the client lists the generated bindings", function(t)
     t:eq(_G.BINDING_NAME_STDTEST_PING, "Ping (StdTest)", "the binding's label")
 end)
 
-s:test("RunBinding reaches the handlers through Bindings.xml", function(t)
+-- What each Bindings.xml body does (`RunBinding` is Blizzard-only, so the
+-- automatic test calls the dispatch table; the guided one presses a key).
+s:test("the dispatch table runs the handlers", function(t)
+    const dispatch = _G.StdTest_Bindings
+    t:ok(type(dispatch) == "table", "StdTest_Bindings exists")
+    if type(dispatch) ~= "table" then return end
     pressed = {}
-    RunBinding("STDTEST_PING")
-    RunBinding("STDTEST_HOLD")
-    RunBinding("STDTEST_HOLD", "up")
-    t:eq(table.concat(pressed, " "), "ping down up", "down, then up with runOnUp")
+    dispatch.STDTEST_PING("down")
+    dispatch.STDTEST_HOLD("down")
+    dispatch.STDTEST_HOLD("up")
+    dispatch.STDTEST_MISSING("down")
+    t:eq(table.concat(pressed, " "), "ping down up", "the handlers, unknown bindings do nothing")
+end)
+
+-- An unusual key, bound for this test only (not saved) and restored.
+const KEY = "CTRL-SHIFT-K"
+
+local g = suite("bindings (guided)", "guided")
+
+g:test("a real key press runs the binding", function(t)
+    if InCombatLockdown() then
+        t:skip("in combat")
+        return
+    end
+    const previous = GetBindingAction(KEY)
+    t:ok(SetBinding(KEY, "STDTEST_HOLD"), `{KEY} bound to Hold (StdTest)`)
+    pressed = {}
+    t:ask(`Press and release {KEY}`)
+    t:waitFor(function() return #pressed >= 2 end, 120, "a press and a release")
+    t:eq(table.concat(pressed, " "), "down up", "down, then up with runOnUp")
+    SetBinding(KEY, previous ~= "" and previous or nil)
 end)

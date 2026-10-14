@@ -322,8 +322,9 @@ menus and lists, then the widget themes.
   `settings.keybinding` checked (E8353, also against a hand-written
   `Bindings.xml`), E4334, and `default` keys behind the `binding-defaults`
   client feature (W8354; decisions S19–S21). The mock client loads the
-  generated file; the in-game suite checks that the client lists the
-  bindings and that `RunBinding` reaches the handlers.
+  generated file; on the WoW: Forever client the generated bindings are listed
+  with their labels and shown in the settings page's keybinding row; a guided
+  step presses a key bound to one (`RunBinding` is Blizzard-only there).
 
 ## M9: Test runner, language server, formatter
 

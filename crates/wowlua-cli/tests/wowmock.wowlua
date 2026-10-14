@@ -677,8 +677,24 @@ function Mock.pressBinding(name: string, keystate: string?)
     action(keystate ?? "down")
 end
 
-_G.RunBinding = function(command: string, up: string?)
-    Mock.pressBinding(command, up ?? "down")
+Mock.keys = {}
+
+--- Presses and releases a key, running the binding it is bound to.
+function Mock.pressKey(key: string)
+    const command = Mock.keys[key]
+    if command then
+        Mock.pressBinding(command, "down")
+        Mock.pressBinding(command, "up")
+    end
+end
+
+function SetBinding(key: string, command: string?, _: number?): boolean
+    Mock.keys[key] = command
+    return true
+end
+
+function GetBindingAction(key: string, _: boolean?): string
+    return Mock.keys[key] ?? ""
 end
 
 function GetNumBindings(): number
