@@ -23,12 +23,6 @@ local page = settings.register({
     store = db,
     controls = {
         settings.header("General"),
-        settings.text("Options of the in-game tests of wowlua's standard library."),
-        settings.checkbox("enabled", { label = "Enabled", tooltip = "A checkbox bound to the store" }),
-        settings.slider("scale", { label = "Scale", min = 0.5, max = 2, step = 0.05, format = function(v: number) return ("%.0f%%"):format(v * 100) end }),
-        settings.dropdown("anchor", { label = "Anchor", options = { { value = "TOPLEFT", label = "Top left" }, { value = "CENTER", label = "Center" } } }),
-        settings.color("tint", { label = "Tint" }),
-        settings.button("Print a line", function() print("StdTest settings button") end),
         settings.custom(function(parent: Frame): Frame
             built.custom += 1
             local label = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -36,6 +30,12 @@ local page = settings.register({
             label:SetText("A custom row")
             return parent
         end, { height = 30 }),
+        settings.text("Options of the in-game tests of wowlua's standard library."),
+        settings.checkbox("enabled", { label = "Enabled", tooltip = "A checkbox bound to the store" }),
+        settings.slider("scale", { label = "Scale", min = 0.5, max = 2, step = 0.05, format = function(v: number) return ("%.0f%%"):format(v * 100) end }),
+        settings.dropdown("anchor", { label = "Anchor", options = { { value = "TOPLEFT", label = "Top left" }, { value = "CENTER", label = "Center" } } }),
+        settings.color("tint", { label = "Tint" }),
+        settings.button("Print a line", function() print("StdTest settings button") end),
     },
     subcategories = { { title = "More", controls = { settings.checkbox("enabled", { label = "Enabled (again)" }) } } },
     onChange = function(key: string) changes[#changes + 1] = key end,

@@ -92,9 +92,11 @@ local function variableFor(key: string): string
 end
 local pendingOpen = false
 
--- A row of arbitrary content: `build(holder)` once, shown in its row.
+-- A row of arbitrary content: `build(holder)` once, shown in its row. The
+-- row is a plain frame (Blizzard's element templates need set-up of their
+-- own controls), so the list's initializer does nothing to it.
 local function element(layout: any, height: number, build: (holder: any) -> ())
-    local init: any = Settings.CreateElementInitializer("SettingsListElementTemplate", { name = "" })
+    local init: any = Settings.CreateElementInitializer("Frame", { name = "" })
     local holder: any = nil
     local baseInit = init.InitFrame
     local baseReset = init.Resetter

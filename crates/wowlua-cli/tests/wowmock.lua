@@ -290,7 +290,14 @@ Settings = {
         return { Add = function(_, v, l) table.insert(data, { value = v, label = l }) end, GetData = function() return data end }
     end,
     CreateElementInitializer = function(template, data)
-        return { kind = "element", template = template, data = data, InitFrame = function() end, Resetter = function() end }
+        local init = { kind = "element", template = template, data = data, Resetter = function() end }
+        init.InitFrame = function()
+            -- The client's element template needs set-up an element row lacks.
+            if template == "SettingsListElementTemplate" then
+                error("attempt to index field 'cbrHandles' (a nil value)")
+            end
+        end
+        return init
     end,
     OpenToCategory = function(id)
         table.insert(Mock.settings.opened, id)
