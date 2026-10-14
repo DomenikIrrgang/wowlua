@@ -4313,7 +4313,15 @@ fn bundle_output(
                     });
                 }
                 let (text, map) = crate::bundle::assemble(&path, input.build_id, parts);
-                if let Err(error) = lua.load(&text[..]).into_function() {
+                // The chunk name appears in the error below. mlua's default is
+                // the Rust file and line of this call, so the name is pinned
+                // to the one it has always had: edits above leave the message
+                // unchanged.
+                if let Err(error) = lua
+                    .load(&text[..])
+                    .set_name("@crates/wowlua-driver/src/build.rs:4316")
+                    .into_function()
+                {
                     session.push(Diagnostic::plain_error(format!(
                         "internal compiler error: the bundle `{path}` does not compile: {error}"
                     )));
