@@ -386,6 +386,8 @@ menus and lists, then the widget themes.
   messages from the standard library alone; a test runs it in the mock
   client (login, settings page, minimap button and compartment entry, a
   key press, a ping answered over addon messages).
+- S4 in progress (patterns found across the corpus): `table` and `format`
+  done 2026-10-15 (decision S32).
 
 ## M9: Test runner, language server, formatter
 

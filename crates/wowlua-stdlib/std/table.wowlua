@@ -1,0 +1,167 @@
+-- wowlua:table (spec stdlib "table"): the table helpers addons keep
+-- rewriting: deep copies, merging defaults, deep equality, keys and values,
+-- and list helpers. Secret values are copied as they are and never equal
+-- anything (comparing them would error).
+import * as secret from "wowlua:secret"
+
+-- A deep copy that keeps shared and cyclic references shared.
+local function deep(v: any, seen: { [table]: table }): any
+    if type(v) ~= "table" or secret.isSecret(v) then
+        return v
+    end
+    const known = seen[v]
+    if known then
+        return known
+    end
+    const out: table = {}
+    seen[v] = out
+    for k, x in pairs(v) do
+        out[deep(k, seen)] = deep(x, seen)
+    end
+    return out
+end
+
+--- A deep copy (nested tables copied, cycles kept, metatables dropped).
+export function copy<T>(t: T): T
+    return deep(t, {})
+end
+
+--- A copy of the top level only.
+export function shallowCopy<T extends table>(t: T): T
+    const out: table = {}
+    for k, v in pairs(t) do
+        out[k] = v
+    end
+    return out :: any
+end
+
+--- Copies `source` into `target` (nested tables merged, other values
+--- replaced); returns `target`.
+export function merge<T extends table>(target: T, source: table): T
+    const into: table = target
+    for k, v in pairs(source) do
+        if type(v) == "table" and type(into[k]) == "table" then
+            merge(into[k], v)
+        elseif type(v) == "table" then
+            into[k] = copy(v)
+        else
+            into[k] = v
+        end
+    end
+    return target
+end
+
+--- Fills in what `target` lacks from `defaults` (nested too); returns
+--- `target`.
+export function defaults<T extends table>(target: T, from: table): T
+    const into: table = target
+    for k, v in pairs(from) do
+        if into[k] == nil then
+            into[k] = copy(v)
+        elseif type(v) == "table" and type(into[k]) == "table" then
+            defaults(into[k], v)
+        end
+    end
+    return target
+end
+
+--- Deep equality: the same keys with equal values (secrets never equal).
+export function equal(a: any, b: any): boolean
+    if secret.isSecret(a) or secret.isSecret(b) then
+        return false
+    end
+    if a == b then
+        return true
+    end
+    if type(a) ~= "table" or type(b) ~= "table" then
+        return false
+    end
+    for k, v in pairs(a) do
+        if not equal(v, b[k]) then
+            return false
+        end
+    end
+    for k in pairs(b) do
+        if a[k] == nil then
+            return false
+        end
+    end
+    return true
+end
+
+--- The keys, sorted when they are all numbers or all strings.
+export function keys<K, V>(t: { [K]: V }): K[]
+    const out: K[] = {}
+    for k in pairs(t) do
+        out[#out + 1] = k
+    end
+    local sortable = true
+    const first = type(out[1])
+    for _, k in ipairs(out) do
+        if type(k) ~= first or (first ~= "number" and first ~= "string") then
+            sortable = false
+        end
+    end
+    if sortable then
+        table.sort(out :: any[])
+    end
+    return out
+end
+
+export function values<K, V>(t: { [K]: V }): V[]
+    const out: V[] = {}
+    for _, v in pairs(t) do
+        out[#out + 1] = v
+    end
+    return out
+end
+
+--- How many entries (pairs, not just the array part).
+export function count(t: table): number
+    local n = 0
+    for _ in pairs(t) do
+        n += 1
+    end
+    return n
+end
+
+export function isEmpty(t: table): boolean
+    return next(t) == nil
+end
+
+export function filter<T>(list: T[], keep: (v: T, i: number) -> boolean): T[]
+    const out: T[] = {}
+    for i, v in ipairs(list) do
+        if keep(v, i) then
+            out[#out + 1] = v
+        end
+    end
+    return out
+end
+
+export function map<T, U>(list: T[], fn: (v: T, i: number) -> U): U[]
+    const out: U[] = {}
+    for i, v in ipairs(list) do
+        out[i] = fn(v, i)
+    end
+    return out
+end
+
+--- The first element `pred` accepts, and its index.
+export function find<T>(list: T[], pred: (v: T, i: number) -> boolean): (T?, number?)
+    for i, v in ipairs(list) do
+        if pred(v, i) then
+            return v, i
+        end
+    end
+    return nil, nil
+end
+
+export function contains<T>(list: T[], value: T): boolean
+    for _, v in ipairs(list) do
+        if v == value then
+            return true
+        end
+    end
+    return false
+end

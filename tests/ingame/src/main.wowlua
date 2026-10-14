@@ -39,6 +39,7 @@ import _ from "/suites/jobs"
 import _ from "/suites/dialog"
 import _ from "/suites/menu"
 import _ from "/suites/list"
+import _ from "/suites/format"
 
 local function concat(a: TestRecord[], b: TestRecord[]): TestRecord[]
     local out: TestRecord[] = {}

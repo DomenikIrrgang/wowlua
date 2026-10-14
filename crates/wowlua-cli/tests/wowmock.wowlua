@@ -1719,6 +1719,56 @@ function Mock.scroll(list: any, offset: number)
     end
 end
 
+-- The client's formatting helpers (English stand-ins) -----------------------------
+
+COPPER_PER_SILVER, SILVER_PER_GOLD = 100, 100
+GOLD_AMOUNT, SILVER_AMOUNT, COPPER_AMOUNT = "%d Gold", "%d Silver", "%d Copper"
+function SecondsToTime(seconds: number, noSeconds: boolean?, notAbbreviated: boolean?, maxCount: number?): string
+    const units = { { 3600, notAbbreviated and "Hours" or "Hr" }, { 60, notAbbreviated and "Minutes" or "Min" }, { 1, notAbbreviated and "Seconds" or "Sec" } }
+    const parts: string[] = {}
+    local rest = math.floor(seconds)
+    for i, u in ipairs(units) do
+        const n = math.floor(rest / (u[1] :: number))
+        rest = rest % (u[1] :: number)
+        if n > 0 and #parts < (maxCount ?? 2) and not (i == 3 and noSeconds) then
+            parts[#parts + 1] = `{n} {u[2]}`
+        end
+    end
+    return table.concat(parts, " ")
+end
+function SecondsToTimeAbbrev(seconds: number): (string, number)
+    if seconds >= 3600 then return `{math.floor(seconds / 3600)} h`, 0 end
+    if seconds >= 60 then return `{math.floor(seconds / 60)} m`, 0 end
+    return `{math.floor(seconds)} s`, 0
+end
+function SecondsToClock(seconds: number, hours: boolean?): string
+    local h, m, sec = math.floor(seconds / 3600), math.floor(seconds / 60) % 60, math.floor(seconds) % 60
+    if h > 0 or hours then
+        return string.format("%d:%02d:%02d", h, m, sec)
+    end
+    return string.format("%d:%02d", m, sec)
+end
+function FormatShortDate(day: number, month: number, year: number): string
+    return string.format("%d/%d/%02d", month, day, year % 100)
+end
+function GetMoneyString(copper: number, _: boolean?): string
+    return `{math.floor(copper / 10000)}g {math.floor(copper / 100) % 100}s {copper % 100}c`
+end
+BreakUpLargeNumbers = (function(n: number): string
+    local text = tostring(math.floor(n))
+    local k = 0
+    repeat
+        text, k = text:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+    until k == 0
+    return text
+end) :: any
+AbbreviateNumbers = (function(n: any): string
+    if issecretvalue(n) then error("secret") end
+    if n >= 1000000 then return string.format("%.1fM", n / 1000000) end
+    if n >= 1000 then return string.format("%.1fK", n / 1000) end
+    return tostring(n)
+end) :: any
+
 -- The client's class and item quality colors (a few).
 RAID_CLASS_COLORS = {
     MAGE = { r = 0.25, g = 0.78, b = 0.92, colorStr = "ff3fc7eb" },

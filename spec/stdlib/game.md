@@ -27,7 +27,6 @@ local hp = UnitHealth("target")                       -- number | Secret<number>
 bar:SetValue(secret.amount(hp))                       -- secrets pass, nil becomes 0
 local shown = secret.known(hp, 0)                     -- number: 0 when secret
 if secret.flag(UnitIsUnit("target", "focus")) then … end   -- a secret boolean reads as false
-label:SetText(secret.abbreviate(hp))                  -- "8.5K", a secret string when secret
 if not secret.isSecret(hp) then print(hp + 1) end     -- narrows like issecretvalue
 ```
 
@@ -37,7 +36,6 @@ if not secret.isSecret(hp) then print(hp + 1) end     -- narrows like issecretva
 | `known` | `<T>(v: T \| Secret<T> \| nil, fallback: T) -> T` | `fallback` when `v` is secret or nil |
 | `flag` | `(b: boolean \| Secret<boolean> \| nil) -> boolean` | For conditions: secret and nil read as `false` |
 | `amount` | `(v: number \| Secret<number> \| nil) -> number \| Secret<number>` | For widgets that take secrets: nil becomes 0 |
-| `abbreviate` | `(v: number \| Secret<number>) -> string \| Secret<string>` | The client's `AbbreviateNumbers`, else `%d` |
 
 The generated `wow-api` declarations type the arguments Blizzard documents
 with `SecretArguments = "AllowedWhenTainted"` (widget setters such as

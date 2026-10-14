@@ -180,6 +180,51 @@ Semantics:
 - `wowlua:item`'s `await` and the import parsing of large strings in
   `wowlua:dialog` ([Interface: dialog](interface.md#dialog)) are built on this module.
 
+## table
+
+`wowlua:table` holds the table helpers addons keep rewriting. Secret values
+are copied as they are and never equal anything (comparing them would error).
+
+```wowlua
+import * as tbl from "wowlua:table"
+
+local copy = tbl.copy(profile)                     -- deep; cycles kept
+tbl.defaults(db.window, { width = 300, height = 200 })
+if not tbl.equal(a, b) then … end
+for _, key in ipairs(tbl.keys(map)) do … end       -- sorted when all numbers or all strings
+local names = tbl.map(units, function(u: Unit) return u.name end)
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `copy` | `<T>(t: T) -> T` | Deep; shared and cyclic references stay shared; metatables dropped |
+| `shallowCopy` | `<T extends table>(t: T) -> T` | |
+| `merge` | `<T extends table>(target: T, source: table) -> T` | Copies `source` in: nested tables merge, other values replace |
+| `defaults` | `<T extends table>(target: T, defaults: table) -> T` | Fills in what `target` lacks, nested too |
+| `equal` | `(a: any, b: any) -> boolean` | Deep |
+| `keys`, `values` | `<K, V>(t: { [K]: V }) -> K[]`, `-> V[]` | `keys` is sorted when it can be |
+| `count`, `isEmpty` | `(t: table) -> number`, `-> boolean` | All entries, not just the array part |
+| `filter`, `map`, `find`, `contains` | list helpers | `find` returns the element and its index |
+
+## format
+
+`wowlua:format` formats durations, clocks, dates, money and numbers in the
+client's own localized formats (decision S32): its `SecondsToTime`,
+`SecondsToClock`, `FormatShortDate`, `GetMoneyString`, `BreakUpLargeNumbers`
+and `AbbreviateNumbers`, and its `GOLD_AMOUNT`-style strings, which every
+supported client has.
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `duration` | `(seconds: number, opts?: { noSeconds?, long?, units? }) -> string` | "1 Hr 5 Min" (`long`: unit words; `units` at most, default 2) |
+| `short` | `(seconds: number) -> string` | The largest unit, like aura and cooldown times |
+| `clock` | `(seconds: number, hours?: boolean) -> string` | "3:07", "1:03:07" |
+| `date` | `(time?: number) -> string` | The locale's short date (default today) |
+| `money` | `(copper: number, opts?: { text?, separate? }) -> string` | Coin icons, or with `text` the client's words |
+| `number` | `(n: number \| Secret<number>) -> string \| Secret<string>` | Thousands separators |
+| `abbreviate` | `(n: number \| Secret<number>) -> string \| Secret<string>` | "8.5K"; a secret gives a secret string |
+| `percent` | `(fraction: number, decimals?: number) -> string` | "46%" |
+
 ## Testing
 
 `wowlua:mock` support used by this chapter: `mock.errors()` (the list of

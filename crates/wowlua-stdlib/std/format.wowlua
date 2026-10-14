@@ -1,0 +1,85 @@
+-- wowlua:format (spec stdlib "format"): durations, clocks, dates, money and
+-- numbers in the client's own localized formats (decision S32), so output
+-- reads like the rest of the player's UI. Secret numbers stay secret
+-- strings where the client's formatter takes them.
+import * as secret from "wowlua:secret"
+
+export type DurationOptions = {
+    --- Leave out the seconds (from a minute on).
+    noSeconds?: boolean,
+    --- Unit words instead of abbreviations ("1 Hour" for "1 Hr").
+    long?: boolean,
+    --- How many units at most (default 2: "1 Hr 5 Min").
+    units?: number,
+}
+
+--- "1 Hr 5 Min" (the client's words and abbreviations).
+export function duration(seconds: number, opts: DurationOptions?): string
+    return SecondsToTime(math.max(0, seconds), opts?.noSeconds, opts?.long, opts?.units ?? 2)
+end
+
+--- The single largest unit, the way the client shows aura and cooldown
+--- times ("5 m", "30 s").
+export function short(seconds: number): string
+    const text = SecondsToTimeAbbrev(math.max(0, seconds))
+    return text
+end
+
+--- "3:07", or "1:03:07" from an hour on (`hours` always shows them).
+export function clock(seconds: number, hours: boolean?): string
+    return SecondsToClock(math.max(0, seconds), hours)
+end
+
+--- A date in the locale's short form (`time`: a Unix time, default now).
+export function date(time: number?): string
+    const t = os.date("*t", time ?? os.time()) :: { day: number, month: number, year: number }
+    return FormatShortDate(t.day, t.month, t.year)
+end
+
+--- Money from copper: with coin icons ("12[g] 5[s] 3[c]"), or with `text`
+--- the client's words ("12 Gold 5 Silver 3 Copper").
+export function money(copper: number, opts: { text?: boolean, separate?: boolean }?): string
+    if not opts?.text then
+        return GetMoneyString(copper, opts?.separate)
+    end
+    const gold = math.floor(copper / (COPPER_PER_SILVER * SILVER_PER_GOLD))
+    const silver = math.floor(copper / COPPER_PER_SILVER) % SILVER_PER_GOLD
+    const rest = copper % COPPER_PER_SILVER
+    const parts: string[] = {}
+    if gold > 0 then
+        parts[#parts + 1] = GOLD_AMOUNT:format(gold)
+    end
+    if silver > 0 then
+        parts[#parts + 1] = SILVER_AMOUNT:format(silver)
+    end
+    if rest > 0 or #parts == 0 then
+        parts[#parts + 1] = COPPER_AMOUNT:format(rest)
+    end
+    return table.concat(parts, " ")
+end
+
+--- A number with the locale's thousands separators ("1,234,567").
+export function number(n: number | Secret<number>): string | Secret<string>
+    return BreakUpLargeNumbers(n)
+end
+
+--- A short number ("8.5K", "1.2M"); a secret gives a secret string.
+export function abbreviate(n: number | Secret<number>): string | Secret<string>
+    local ok, text = pcall(AbbreviateNumbers, n)
+    if ok then
+        return text
+    end
+    if secret.isSecret(n) then
+        local formatted, digits = pcall(string.format, "%d", n)
+        if formatted then
+            return digits
+        end
+        return ""
+    end
+    return tostring(math.floor(n))
+end
+
+--- "45%" (`decimals` digits after the point, default none).
+export function percent(fraction: number, decimals: number?): string
+    return string.format(`%.{decimals ?? 0}f%%`, fraction * 100)
+end

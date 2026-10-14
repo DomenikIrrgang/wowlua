@@ -79,6 +79,7 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
     ),
     ("dialog", include_str!("../std/dialog.wowlua"), None),
     ("errors", include_str!("../std/errors.wowlua"), None),
+    ("format", include_str!("../std/format.wowlua"), None),
     (
         "frames",
         include_str!("../std/frames.wowlua"),
@@ -155,6 +156,7 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         include_str!("../std/slash.wowlua"),
         Some(include_str!("../std/slash.d.wowlua")),
     ),
+    ("table", include_str!("../std/table.wowlua"), None),
     (
         "timer",
         include_str!("../std/timer.wowlua"),

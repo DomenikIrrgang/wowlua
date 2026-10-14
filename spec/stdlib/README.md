@@ -73,6 +73,8 @@ libraries such as Ace3, LibDBIcon or LibSerialize.
 | `wowlua:errors` | Error-handling policy and reporting | [Infrastructure](infrastructure.md#errors) |
 | `wowlua:callbacks` | Callback registries and public APIs for other addons | [Infrastructure](infrastructure.md#callbacks) |
 | `wowlua:jobs` | Background jobs spread across frames | [Infrastructure](infrastructure.md#jobs) |
+| `wowlua:table` | Copies, merging, defaults, equality, list helpers | [Infrastructure](infrastructure.md#table) |
+| `wowlua:format` | Durations, dates, money and numbers in the client's formats | [Infrastructure](infrastructure.md#format) |
 | `wowlua:test`, `wowlua:mock` | Testing (test files only, E8108 elsewhere) | [Tooling](../toolchain/tooling.md#161-test-runner-wowlua-test) |
 
 ## 8.3 Decorator index

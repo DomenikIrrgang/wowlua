@@ -3195,17 +3195,11 @@ local s = Mock.secret()
 print(secret.isSecret(s), secret.isSecret(1), secret.known(s, 5), secret.known(nil, 6), secret.known(7, 0))
 print(secret.flag(s), secret.flag(true), secret.flag(nil), secret.flag(false))
 print(secret.amount(s) == s, secret.amount(nil), secret.amount(3))
-print(secret.abbreviate(1234))
 "#,
     );
     assert_eq!(
         plain(&out),
-        [
-            "true false 5 6 7",
-            "false true false false",
-            "true 0 3",
-            "1234"
-        ]
+        ["true false 5 6 7", "false true false false", "true 0 3",]
     );
 }
 
@@ -3993,6 +3987,83 @@ Mock.slash("/coredemo status")
     ] {
         assert!(text.contains(expected), "{expected:?} missing:\n{text}");
     }
+}
+
+// ---------------------------------------------------------- table, format --
+
+/// `wowlua:table`: copies (cycles kept), merging, defaults, equality, keys,
+/// list helpers.
+#[test]
+fn table_helpers() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as tbl from \"wowlua:table\"\n_G.StdTable = tbl\n",
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local tbl = StdTable
+local t = { a = 1, nested = { b = 2 }, list = { 1, 2, 3 } }
+t.self = t
+local c = tbl.copy(t)
+print(c ~= t, c.nested ~= t.nested, c.nested.b, c.self == c, tbl.equal(t.nested, c.nested))
+local target = { a = 1, keep = { x = 1 } }
+tbl.merge(target, { a = 2, keep = { y = 2 }, new = { z = 3 } })
+print(target.a, target.keep.x, target.keep.y, target.new.z)
+local settings = { scale = 2, colors = { r = 1 } }
+tbl.defaults(settings, { scale = 1, greet = true, colors = { r = 0, g = 0 } })
+print(settings.scale, settings.greet, settings.colors.r, settings.colors.g)
+print(tbl.equal({ 1, { 2 } }, { 1, { 2 } }), tbl.equal({ 1 }, { 1, 2 }), tbl.equal(Mock.secret(), 1))
+print(table.concat(tbl.keys({ b = 1, a = 2, c = 3 }), ","), tbl.count({ a = 1, 2, 3 }), tbl.isEmpty({}))
+local doubled = tbl.map({ 1, 2, 3 }, function(v) return v * 2 end)
+local odd = tbl.filter({ 1, 2, 3, 4 }, function(v) return v % 2 == 1 end)
+local found, at = tbl.find({ "a", "b" }, function(v) return v == "b" end)
+print(table.concat(doubled, ","), table.concat(odd, ","), found, at, tbl.contains({ "x" }, "x"))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "true true 2 true true",
+            "2 1 2 3",
+            "2 true 1 0",
+            "true false false",
+            "a,b,c 3 true",
+            "2,4,6 1,3 b 2 true",
+        ]
+    );
+}
+
+/// `wowlua:format`: the client's localized formats (the mock's are
+/// English), secret numbers stay secret.
+#[test]
+fn format_uses_the_client_formats() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as format from \"wowlua:format\"\n_G.StdFormat = format\n",
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local format = StdFormat
+print(format.duration(3725), format.duration(3725, { long = true, units = 3 }), format.duration(125, { noSeconds = true }))
+print(format.short(300), format.clock(187), format.clock(3787), format.clock(65, true))
+print(format.money(123456), format.money(123456, { text = true }), format.money(0, { text = true }))
+print(format.number(1234567), format.abbreviate(8500), format.percent(0.456), format.percent(0.456, 1))
+local s = format.abbreviate(Mock.secret())
+print(type(format.date()))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "1 Hr 2 Min 1 Hours 2 Minutes 5 Seconds 2 Min",
+            "5 m 3:07 1:03:07 0:01:05",
+            "12g 34s 56c 12 Gold 34 Silver 56 Copper 0 Copper",
+            "1,234,567 8.5K 46% 45.6%",
+            "string",
+        ]
+    );
 }
 
 // ------------------------------------------------------------------ color --

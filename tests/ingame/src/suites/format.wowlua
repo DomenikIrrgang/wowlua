@@ -1,0 +1,35 @@
+-- wowlua:table and wowlua:format: helpers, and the client's own formats.
+import * as tbl from "wowlua:table"
+import * as format from "wowlua:format"
+import * as secret from "wowlua:secret"
+import suite, say from "/harness"
+
+local s = suite("table and format")
+
+s:test("table helpers", function(t)
+    const original = { a = 1, nested = { b = 2 } }
+    const copy = tbl.copy(original)
+    t:ok(copy ~= original and copy.nested ~= original.nested and tbl.equal(copy, original), "a deep copy")
+    const filled = tbl.defaults({ a = 5 }, { a = 1, b = 2 })
+    t:eq(filled.a, 5, "kept")
+    t:eq(filled.b, 2, "filled")
+    t:eq(table.concat(tbl.keys({ b = 1, a = 2 }), ","), "a,b", "sorted keys")
+end)
+
+s:test("the client's formats", function(t)
+    const samples = {
+        format.duration(3725),
+        format.short(300),
+        format.clock(187),
+        format.date(),
+        format.money(123456),
+        format.money(123456, { text = true }),
+        secret.known(format.number(1234567), "?"),
+        secret.known(format.abbreviate(8500), "?"),
+        format.percent(0.456),
+    }
+    for _, sample in ipairs(samples) do
+        t:ok(type(sample) == "string" and #sample > 0, "a formatted value")
+    end
+    say(`format: {table.concat(samples, " | ")}`)
+end)
