@@ -24,6 +24,25 @@ fn write(root: &Path, files: &[(&str, &str)]) {
     }
 }
 
+/// The files under `dir`, relative to it with `/`, sorted.
+fn files_in(dir: &Path) -> Vec<String> {
+    fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {
+        for entry in fs::read_dir(dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(root, &path, out);
+            } else {
+                let rel = path.strip_prefix(root).unwrap();
+                out.push(rel.to_string_lossy().replace('\\', "/"));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, dir, &mut out);
+    out.sort();
+    out
+}
+
 /// An addon as it exists before wowlua: two TOCs, an embedded library loaded
 /// through XML, a nested XML include, an asset and an in-game path.
 fn legacy_addon(root: &Path) {
@@ -1088,6 +1107,79 @@ fn bundled_builds_run_the_same() {
     // The source map leads back to the files.
     let map = fs::read_to_string(dir.path().join("dist/release/.maps/Bun/Bun.lua.map")).unwrap();
     assert!(map.contains("src/broken.lua"), "{map}");
+}
+
+/// A build that writes nothing (`check`, `toc`, `compile`) makes no source
+/// maps; its files are still exactly the ones a written build writes.
+#[test]
+fn unwritten_builds_make_the_written_files() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "same", "version": "1.0.0" },
+  "build": { "load-order": ["src/first.lua", "src/util.wowlua", "src/main.wowlua"] } }
+"#,
+            ),
+            (
+                "src/first.lua",
+                "local _, ns = ...\nns.order = { \"first\" }\n",
+            ),
+            (
+                "src/util.wowlua",
+                "export function twice(n: number): number\n\treturn n * 2\nend\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import twice from \"./util\"\nlocal _, ns = ...\nprint(twice(#ns.order))\n",
+            ),
+        ],
+    );
+    for profile in ["dev", "release"] {
+        let mut cmd = wowlua(dir.path());
+        cmd.arg("build");
+        if profile == "release" {
+            cmd.arg("--release");
+        }
+        cmd.assert().success();
+        assert!(
+            dir.path()
+                .join(format!("dist/{profile}/.maps/Same"))
+                .is_dir()
+        );
+        let mut session = wowlua_driver::Session::new();
+        let options = wowlua_driver::LoadOptions {
+            manifest: None,
+            cwd: dir.path().to_path_buf(),
+            ..Default::default()
+        };
+        let project = wowlua_driver::load_projects(&mut session, &options)
+            .and_then(|ps| ps.into_iter().next())
+            .expect("the project loads");
+        let mut request = wowlua_driver::BuildRequest::new(profile);
+        request.write = false;
+        let built = wowlua_driver::build(&mut session, &project, &request).expect("it builds");
+        let addon = dir.path().join(format!("dist/{profile}/Same"));
+        let written = files_in(&addon);
+        assert_eq!(
+            built.files.keys().cloned().collect::<Vec<_>>(),
+            written,
+            "{profile}"
+        );
+        for (path, content) in &built.files {
+            let bytes = match content {
+                wowlua_driver::build::Content::Bytes(b) => b.clone(),
+                wowlua_driver::build::Content::Copy(from) => fs::read(from).unwrap(),
+            };
+            assert_eq!(
+                bytes,
+                fs::read(addon.join(path)).unwrap(),
+                "{profile}: {path}"
+            );
+        }
+    }
 }
 
 /// `dead-code` (spec optimization §15.2.1): side-effect-free modules nothing

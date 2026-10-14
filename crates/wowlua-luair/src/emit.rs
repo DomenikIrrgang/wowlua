@@ -32,6 +32,9 @@ pub struct EmitOptions {
     pub indent: String,
     /// Only the spaces Lua's lexer needs (the `compact` pass).
     pub compact: bool,
+    /// Collect `Emitted::mappings`; off when no source map is made. The
+    /// text is the same either way.
+    pub mappings: bool,
 }
 
 impl Default for EmitOptions {
@@ -41,6 +44,7 @@ impl Default for EmitOptions {
             comments: CommentMode::All,
             indent: "\t".into(),
             compact: false,
+            mappings: true,
         }
     }
 }
@@ -256,11 +260,13 @@ impl<'a> Emitter<'a> {
         }
         self.pending_space = false;
         if pos.is_some() {
-            self.mappings.push(Mapping {
-                out_line: self.line,
-                out_col: self.col,
-                src: pos,
-            });
+            if self.opts.mappings {
+                self.mappings.push(Mapping {
+                    out_line: self.line,
+                    out_col: self.col,
+                    src: pos,
+                });
+            }
             self.last_src_line = pos.line;
         }
         self.write_raw(text);

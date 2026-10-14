@@ -22,7 +22,8 @@ use wowlua_syntax::Parse;
 /// The compiled form of a `.wowlua` source.
 pub struct Compiled {
     pub code: Vec<u8>,
-    /// Source Map v3 (when the profile enables source maps).
+    /// Source Map v3 (when the profile enables source maps and the build
+    /// writes its output).
     pub map: Option<String>,
 }
 
@@ -230,7 +231,10 @@ pub fn minify_lua(
     }
     let mut chunk = wowlua_lower::lower(&parse, code).ok()?;
     wowlua_luair::minify::apply(&mut chunk, passes, line_mode);
-    let emitted = wowlua_luair::emit(&chunk, &passes.emit_options(line_mode));
+    // Only the text is used: these files get no source maps.
+    let mut options = passes.emit_options(line_mode);
+    options.mappings = false;
+    let emitted = wowlua_luair::emit(&chunk, &options);
     let ok = !wowlua_syntax::parse(&emitted.text, file).has_errors()
         && luacheck::check(db, file, &emitted.text).is_none();
     ok.then_some(emitted.text)
@@ -645,6 +649,7 @@ pub fn compile_flavor(
     raw: &HashMap<String, Vec<u8>>,
     parsed: &Parsed,
     profile: &Profile,
+    source_maps: bool,
     meta: Arc<Meta>,
     layout: wowlua_sema::loadorder::Layout,
     api: &[ParsedDeclaration],
@@ -654,7 +659,8 @@ pub fn compile_flavor(
     libraries: &HashMap<String, LibraryUnit>,
     minify: &Minify,
 ) -> CompileOutput {
-    let options = minify.passes.emit_options(line_mode(profile));
+    let mut options = minify.passes.emit_options(line_mode(profile));
+    options.mappings = source_maps;
     let mut out = CompileOutput::default();
 
     let unit_of = |src_rel: &str| wowlua_sema::package_of(src_rel).and_then(|n| libraries.get(n));
@@ -909,7 +915,7 @@ pub fn compile_flavor(
             diagnostics.push(d);
         }
         let output = source.output_path();
-        let map = profile.source_maps.then(|| {
+        let map = source_maps.then(|| {
             let name = output.rsplit('/').next().unwrap_or(&output);
             wowlua_luair::sourcemap::source_map_named(
                 &emitted.mappings,

@@ -25,6 +25,7 @@ fn compile(src: &str, mode: LineMode, comments: CommentMode) -> Vec<u8> {
         comments,
         indent: "\t".into(),
         compact: false,
+        mappings: true,
     };
     emit(&chunk, &options).text
 }
@@ -107,6 +108,38 @@ fn sample_round_trips_in_every_line_mode() {
     }
     let (_, full, out) = round_trip(SAMPLE, LineMode::Preserve, CommentMode::All);
     assert!(full, "preserve mode should keep line info:\n{out}");
+}
+
+/// A build that makes no source maps emits without mappings; the text must
+/// be the same.
+#[test]
+fn mappings_leave_the_text_unchanged() {
+    let mut db = SourceDb::new();
+    let file = db.add("t.wowlua", SAMPLE.to_string());
+    let parsed = wowlua_syntax::parse(SAMPLE.as_bytes(), file);
+    let chunk = wowlua_lower::lower(&parsed, SAMPLE.as_bytes()).expect("lowers");
+    for line_mode in [LineMode::Preserve, LineMode::Statement, LineMode::Pretty] {
+        for comments in [CommentMode::None, CommentMode::License, CommentMode::All] {
+            for compact in [false, true] {
+                let with = EmitOptions {
+                    line_mode,
+                    comments,
+                    indent: "\t".into(),
+                    compact,
+                    mappings: true,
+                };
+                let without = EmitOptions {
+                    mappings: false,
+                    ..with.clone()
+                };
+                let (a, b) = (emit(&chunk, &with), emit(&chunk, &without));
+                assert_eq!(a.text, b.text, "{line_mode:?} {comments:?} {compact}");
+                assert_eq!(a.drift, b.drift, "{line_mode:?} {comments:?} {compact}");
+                assert!(!a.mappings.is_empty());
+                assert!(b.mappings.is_empty());
+            }
+        }
+    }
 }
 
 #[test]

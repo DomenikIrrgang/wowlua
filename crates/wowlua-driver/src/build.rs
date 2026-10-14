@@ -241,6 +241,10 @@ pub fn build(
             return None;
         }
     };
+    // Source maps are only ever written next to the AddOn folder, so a
+    // build that writes nothing (check, toc, compile) does not make them.
+    // The profile keeps its value: `meta` and the runtime read the profile.
+    let source_maps = profile.source_maps && request.write;
     let Some(level) = wowlua_manifest::minify_passes(&manifest.manifest, &profile.minify) else {
         session.push(
             Diagnostic::error(
@@ -998,6 +1002,7 @@ pub fn build(
             &raw,
             &parsed,
             &profile,
+            source_maps,
             std::sync::Arc::new(meta.clone()),
             wowlua_sema::loadorder::Layout {
                 listed: &listed_positions(
@@ -2097,7 +2102,7 @@ pub fn build(
                 libs: &libs,
                 files: &files,
                 raw: &raw,
-                source_maps: profile.source_maps,
+                source_maps,
             },
             toc_items,
             flavor_orders,
