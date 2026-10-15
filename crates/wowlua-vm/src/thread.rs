@@ -33,6 +33,8 @@ pub struct Frame {
     pub tail: bool,
     /// The first frame of a nested `execute` (a native function called Lua).
     pub entry: bool,
+    /// The function gave up its access to secrets (`dropsecretaccess`).
+    pub secrets_dropped: bool,
 }
 
 #[derive(Default)]

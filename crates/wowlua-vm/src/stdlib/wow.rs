@@ -80,6 +80,7 @@ pub fn open(vm: &mut Vm) {
     // Reads taint the execution, writes take its taint.
     vm.taint_mut().mode = crate::taint::READ | crate::taint::WRITE;
     crate::stdlib::secure::open(vm);
+    crate::stdlib::secrets::open(vm);
     // What the client does not have.
     vm.set_global("load", Value::Nil);
     let math = global_table(vm, "math");
@@ -231,13 +232,19 @@ fn usage_bytes(
     n: usize,
     usage: &str,
 ) -> Result<std::rc::Rc<[u8]>, LuaError> {
-    if !matches!(c.arg(n), Value::Str(_) | Value::Num(_)) {
+    if matches!(c.arg(n), Value::Secret(_)) && !vm.can_access_secrets() {
+        return Err(vm.secret_usage_error(n, usage));
+    }
+    if !matches!(vm.hidden(c.arg(n)), Value::Str(_) | Value::Num(_)) {
         return Err(vm.arg_error(n, usage));
     }
     vm.check_bytes(c, n)
 }
 
 fn usage_table(vm: &mut Vm, c: &NativeCall, n: usize, usage: &str) -> Result<TableRef, LuaError> {
+    if matches!(c.arg(n), Value::Secret(_)) && !vm.can_access_secrets() {
+        return Err(vm.secret_usage_error(n, usage));
+    }
     match c.arg(n) {
         Value::Table(t) => Ok(t),
         _ => Err(vm.arg_error(n, usage)),
@@ -730,6 +737,9 @@ fn rtrim(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// Argument `n` as a number, or the client's usage error for the function.
 fn usage_num(vm: &mut Vm, c: &NativeCall, n: usize, usage: &str) -> Result<f64, LuaError> {
+    if matches!(c.arg(n), Value::Secret(_)) && !vm.can_access_secrets() {
+        return Err(vm.secret_usage_error(n, usage));
+    }
     match vm.tonumber(c.arg(n)) {
         Some(x) => Ok(x),
         None => Err(vm.arg_error(n, usage)),

@@ -55,6 +55,8 @@ pub(crate) fn print(vm: &mut Vm, c: NativeCall) -> Ret {
     let mut out = Vec::new();
     for (i, &v) in c.args.iter().enumerate() {
         let r = vm.call(tostring_fn, &[v])?;
+        // A secret's text is printed as it is.
+        let r: Vec<Value> = r.iter().map(|&v| vm.hidden(v)).collect();
         match r.first() {
             Some(Value::Str(s)) => {
                 if i > 0 {
@@ -78,11 +80,17 @@ pub(crate) fn print(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn type_(vm: &mut Vm, c: NativeCall) -> Ret {
     let v = vm.check_any(&c, 1)?;
-    Ok(vec![vm.str(v.type_name())])
+    Ok(vec![vm.str(vm.type_of(v))])
 }
 
+/// A secret's text is secret.
 fn tostring(vm: &mut Vm, c: NativeCall) -> Ret {
     let v = vm.check_any(&c, 1)?;
+    if let Value::Secret(_) = v {
+        let h = vm.hidden(v);
+        let s = vm.tostring(h)?;
+        return Ok(vec![vm.secret_wrap(s)]);
+    }
     Ok(vec![vm.tostring(v)?])
 }
 
@@ -90,6 +98,17 @@ fn tonumber(vm: &mut Vm, c: NativeCall) -> Ret {
     let base = vm.opt_int(&c, 2, 10)?;
     if base == 10 {
         let v = vm.check_any(&c, 1)?;
+        // A secret number is itself; a secret string does not convert.
+        if let Value::Secret(_) = v {
+            return Ok(vec![match vm.hidden(v) {
+                Value::Num(_) => v,
+                h if vm.can_access_secrets() => {
+                    let n = vm.tonumber(h).map_or(Value::Nil, Value::Num);
+                    vm.secret_wrap(n)
+                }
+                _ => Value::Nil,
+            }]);
+        }
         return Ok(vec![vm.tonumber(v).map_or(Value::Nil, Value::Num)]);
     }
     let s = vm.check_bytes(&c, 1)?;
@@ -152,6 +171,7 @@ fn strtoul(s: &[u8], base: u32) -> Option<f64> {
 fn rawget(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = vm.check_table(&c, 1)?;
     let k = vm.check_any(&c, 2)?;
+    let k = vm.secret_key(k, false)?;
     let s = vm.heap.table(t).get_slot(k);
     let s = vm.taint_mut().copy(s);
     Ok(vm.return_slots(vec![s]))
@@ -160,6 +180,7 @@ fn rawget(vm: &mut Vm, c: NativeCall) -> Ret {
 fn rawset(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = vm.check_table(&c, 1)?;
     let k = vm.check_any(&c, 2)?;
+    let k = vm.secret_key(k, true)?;
     vm.check_any(&c, 3)?;
     if let Err(e) = vm.heap.table_mut(t).set_slot(k, c.slot(3)) {
         return Err(vm.rt_error(e.message()));
@@ -170,6 +191,9 @@ fn rawset(vm: &mut Vm, c: NativeCall) -> Ret {
 fn rawequal(vm: &mut Vm, c: NativeCall) -> Ret {
     let a = vm.check_any(&c, 1)?;
     let b = vm.check_any(&c, 2)?;
+    if matches!(a, Value::Secret(_)) || matches!(b, Value::Secret(_)) {
+        return Ok(vec![Value::Bool(vm.secret_equals(a, b, (None, None))?)]);
+    }
     Ok(vec![Value::Bool(a.raw_eq(b))])
 }
 
@@ -195,6 +219,14 @@ fn setmetatable(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn getmetatable(vm: &mut Vm, c: NativeCall) -> Ret {
     let v = vm.check_any(&c, 1)?;
+    if let Value::Secret(_) = v {
+        if !vm.can_access_secrets() {
+            return Err(vm.secret_error(v, "get metatable of", None));
+        }
+        let h = vm.hidden(v);
+        let mt = vm.get_metatable(h).map_or(Value::Nil, Value::Table);
+        return Ok(vec![vm.secret_wrap(mt)]);
+    }
     let Some(mt) = vm.get_metatable(v) else {
         return Ok(vec![Value::Nil]);
     };
@@ -208,7 +240,11 @@ fn getmetatable(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn assert(vm: &mut Vm, c: NativeCall) -> Ret {
     let v = vm.check_any(&c, 1)?;
-    if v.truthy() {
+    let truthy = match v {
+        Value::Secret(_) => vm.secret_truthy(v, "perform boolean test on", None)?,
+        _ => v.truthy(),
+    };
+    if truthy {
         let all = c.slots(1);
         return Ok(vm.return_slots(all));
     }

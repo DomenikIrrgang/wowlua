@@ -86,16 +86,11 @@ fn fixture(name: &str) -> Option<(BTreeMap<String, String>, BTreeMap<String, Str
 /// Cases whose behaviour the VM does not have yet, with why: they are
 /// listed, not failed.
 const PENDING: &[(&str, &str)] = &[
+    ("CreateFrame(", "frames are the engine's (S3)"),
     (
         "local m = getmetatable('')",
         "string.rtgsub is Blizzard's Lua (S3)",
     ),
-    ("secretwrap", "secret values (S2.3)"),
-    ("canaccess", "secret values (S2.3)"),
-    ("scrubsecretvalues", "secret values (S2.3)"),
-    ("hasanysecretvalues", "secret values (S2.3)"),
-    ("issecrettable", "secret values (S2.3)"),
-    ("issecretvalue", "secret values (S2.3)"),
     (
         "assertf",
         "Blizzard's Lua (SharedXML), loaded with the engine (S3)",

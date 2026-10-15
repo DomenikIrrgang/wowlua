@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use crate::error::LuaError;
 use crate::function::{Function, Upval};
-use crate::heap::UdRef;
+use crate::heap::{SecretRef, UdRef};
 use crate::proto::Proto;
 use crate::thread::ThreadState;
 use crate::value::Value;
@@ -292,6 +292,12 @@ impl Vm {
                     m.gray.push(Gray::Value(Value::Table(env)));
                 }
             }
+            Value::Secret(s) => {
+                if s == SecretRef::NIL || !self.heap.secrets.mark(s.idx, s.generation) {
+                    return;
+                }
+                m.gray.push(Gray::Value(self.heap.secret(s)));
+            }
             Value::Nil | Value::Bool(_) | Value::Num(_) => {}
         }
     }
@@ -308,6 +314,9 @@ impl Vm {
             Value::Func(f) => !self.heap.funcs.is_marked(f.idx, f.generation),
             Value::Thread(t) => !self.heap.threads.is_marked(t.idx, t.generation),
             Value::Userdata(u) => !self.heap.userdata.is_marked(u.idx, u.generation),
+            Value::Secret(s) => {
+                s != SecretRef::NIL && !self.heap.secrets.is_marked(s.idx, s.generation)
+            }
             _ => false,
         }
     }
@@ -338,6 +347,7 @@ impl Vm {
         self.heap.funcs.sweep(|_| {});
         self.heap.upvals.sweep(|_| {});
         self.heap.threads.sweep(|_| {});
+        self.heap.secrets.sweep(|_| {});
         let finalized = &mut self.finalized;
         let mut freed = Vec::new();
         self.heap

@@ -1,6 +1,7 @@
 //! Lua 5.1's string library (`lstrlib.c`), without `string.dump` (WoW has
 //! none). Strings index this table through their metatable.
 
+use crate::error::LuaError;
 use crate::function::NativeCall;
 use crate::number::fmt_g;
 use crate::stdlib::pattern::{Capture, MatchState, SPECIALS};
@@ -371,10 +372,28 @@ fn addquoted(out: &mut Vec<u8>, s: &[u8]) {
     out.push(b'"');
 }
 
+/// A number `string.format` takes: a secret number's value (the result
+/// is secret); a secret of another type formats as 0, as the client's.
+fn format_number(vm: &mut Vm, c: &NativeCall, arg: usize) -> Result<f64, LuaError> {
+    if let v @ Value::Secret(_) = c.arg(arg) {
+        match vm.hidden(v) {
+            Value::Num(n) => {
+                vm.secret_used = true;
+                return Ok(n);
+            }
+            Value::Nil => {}
+            _ => return Ok(0.0),
+        }
+    }
+    vm.check_number(c, arg)
+}
+
 fn format(vm: &mut Vm, c: NativeCall) -> Ret {
     if vm.rules.client_format {
         return format_client(vm, c);
     }
+    // Secrets format, into a secret result, even while tainted.
+    vm.secret_reveal = true;
     let fmt = vm.check_bytes(&c, 1)?;
     let top = c.len();
     let mut arg = 1;
@@ -439,16 +458,16 @@ fn format(vm: &mut Vm, c: NativeCall) -> Ret {
         i += 1;
         let item = match conv {
             b'c' => {
-                let n = vm.check_number(&c, arg)?;
+                let n = format_number(vm, &c, arg)?;
                 let ch = (n as i64) as u8;
                 pad(&spec, b"", &[ch], false)
             }
             b'd' | b'i' => {
-                let n = vm.check_number(&c, arg)?;
+                let n = format_number(vm, &c, arg)?;
                 fmt_int(&spec, n as i64)
             }
             b'o' | b'u' | b'x' | b'X' => {
-                let n = vm.check_number(&c, arg)?;
+                let n = format_number(vm, &c, arg)?;
                 // C converts a negative double to unsigned differently per
                 // CPU (undefined behavior); this follows ARM (and Rust):
                 // saturation.
@@ -456,7 +475,7 @@ fn format(vm: &mut Vm, c: NativeCall) -> Ret {
                 fmt_unsigned(&spec, u, conv)
             }
             b'e' | b'E' | b'f' | b'g' | b'G' => {
-                let n = vm.check_number(&c, arg)?;
+                let n = format_number(vm, &c, arg)?;
                 fmt_float(&spec, n, conv)
             }
             b'q' => {
@@ -490,6 +509,8 @@ fn format(vm: &mut Vm, c: NativeCall) -> Ret {
 /// arguments beyond the argument checks themselves.
 fn format_client(vm: &mut Vm, c: NativeCall) -> Ret {
     const MAX_MATCH_LEN: usize = 20 - 4;
+    // Secrets format, into a secret result, even while tainted.
+    vm.secret_reveal = true;
     let fmt = vm.check_bytes(&c, 1)?;
     let mut arg = 1;
     let mut out = Vec::new();
@@ -560,21 +581,30 @@ fn format_client(vm: &mut Vm, c: NativeCall) -> Ret {
         i += 1;
         let item = match conv {
             b'c' => {
-                let n = vm.check_number(&c, arg)?;
+                let n = format_number(vm, &c, arg)?;
                 pad(&spec, b"", &[(n as i64) as u8], false)
             }
             b'd' | b'i' => {
-                let n = vm.tonumber(c.arg(arg)).unwrap_or(0.0);
+                // Anything but a number formats as 0; a secret number's value
+                // makes the result secret.
+                let v = c.arg(arg);
+                let n = match vm.hidden(v) {
+                    Value::Num(n) if matches!(v, Value::Secret(_)) => {
+                        vm.secret_used = true;
+                        n
+                    }
+                    _ => vm.tonumber(v).unwrap_or(0.0),
+                };
                 vm.check_overflow(n)?;
                 fmt_int(&spec, n as i64)
             }
             b'o' | b'u' | b'x' | b'X' => {
-                let n = vm.check_number(&c, arg)?;
+                let n = format_number(vm, &c, arg)?;
                 // `(unsigned long)` of a negative double: ARM saturates.
                 fmt_unsigned(&spec, n as u64, conv)
             }
             b'e' | b'E' | b'f' | b'g' | b'G' | b'F' => {
-                let n = vm.check_number(&c, arg)?;
+                let n = format_number(vm, &c, arg)?;
                 let conv = if conv == b'F' { b'f' } else { conv };
                 fmt_float(&spec, n, conv)
             }

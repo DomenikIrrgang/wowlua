@@ -65,6 +65,18 @@ handle!(
     /// A full userdata.
     UdRef
 );
+handle!(
+    /// A secret value (`secretwrap`): it holds the value it hides.
+    SecretRef
+);
+
+impl SecretRef {
+    /// A secret `nil`: falsy like `nil`, so it needs no slot.
+    pub const NIL: SecretRef = SecretRef {
+        idx: u32::MAX,
+        generation: 0,
+    };
+}
 
 struct Entry<T> {
     value: T,
@@ -222,6 +234,7 @@ pub struct Heap {
     pub(crate) upvals: Arena<Upval>,
     pub(crate) threads: Arena<Thread>,
     pub(crate) userdata: Arena<Userdata>,
+    pub(crate) secrets: Arena<Value>,
     /// Approximate bytes allocated since the last collection.
     pub(crate) debt: usize,
     /// The last userdata's creation serial.
@@ -319,6 +332,23 @@ impl Heap {
         UdRef { idx, generation }
     }
 
+    pub fn alloc_secret(&mut self, v: Value) -> SecretRef {
+        if v.is_nil() {
+            return SecretRef::NIL;
+        }
+        self.debt += 32;
+        let (idx, generation) = self.secrets.alloc(v);
+        SecretRef { idx, generation }
+    }
+
+    /// The value a secret hides.
+    pub fn secret(&self, s: SecretRef) -> Value {
+        if s == SecretRef::NIL {
+            return Value::Nil;
+        }
+        *self.secrets.get(s.idx, s.generation)
+    }
+
     pub fn userdata(&self, u: UdRef) -> &Userdata {
         self.userdata.get(u.idx, u.generation)
     }
@@ -364,6 +394,7 @@ impl Heap {
             + self.upvals.live() * 32
             + self.threads.live() * 256
             + self.userdata.live() * 64
+            + self.secrets.live() * 32
     }
 
     /// The value's object identity, for `tostring` and table keys.

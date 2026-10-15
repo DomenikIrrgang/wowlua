@@ -131,12 +131,43 @@ The client's security model, in the VM:
 
 ## 17.5 Secret values
 
-Secret values (the 12.x clients) are a native value kind of the VM: what may be
-done with them (pass, store, hand to the APIs that take them) works; what may
-not (compare, do arithmetic, index, concatenate, test) raises the client's
-errors. `issecretvalue`, `canaccessvalue` and the related API behave as in the
-client, and the engine returns secrets where the client does (from the
-documentation's `SecretReturns` and `SecretArguments` flags).
+Secret values (WoW Forever and the 12.x clients) are a value kind of the VM,
+as the client has them (probed on WoW Forever 1.60.1, `/stdtest probe`):
+
+- **What tainted code may do.** A secret keeps its type: `type`, passing,
+  storing as a table value, `select`, `unpack`, `pcall` and `error` work,
+  and so does whatever needs only the type: truth tests of a secret number,
+  string or table (a secret `nil` is false), `not` of those, and `==` with
+  a value of another type (false) or of a secret `nil` with `nil` (true).
+  Secret strings and numbers concatenate into a secret string, and
+  `tostring`, `string.format`, `strjoin` and `strconcat` of a secret give a
+  secret string.
+- **What it may not.** Arithmetic, comparisons (`==` of two values of one
+  type too), `#`, indexing, calls, `..` of other types, and a secret
+  boolean's truth test fail with the client's error, naming the operand as
+  Lua does: "attempt to compare local 's' (a secret number value, while
+  execution tainted by 'MyAddon')", or without a name "attempt to compare a
+  secret number value (execution tainted by 'MyAddon')". A secret table key
+  fails for reads and writes ("attempted to index a table that cannot be
+  indexed with secret keys"). Library functions see the type `secret` ("table
+  expected, got secret") and refuse to convert one ("attempt to perform
+  string conversion on a secret string value (execution tainted by …)");
+  the client's own functions with usage messages add "Secret values are only
+  allowed during untainted execution for this argument".
+- **The functions.** `secretwrap`, `issecretvalue`, `hasanysecretvalues`,
+  `scrubsecretvalues`, `scrub`, `canaccesssecrets`, `canaccessvalue`,
+  `canaccessallvalues`, `canaccesstable`, `issecrettable`,
+  `dropsecretaccess`, `mapvalues`, `dumpobject`, `settablesecurity` and
+  `securecopy` behave as in the client.
+- **Secure code** may use secrets; what it computes from one is secret again
+  (decision T195, from Blizzard's documentation: addon code cannot observe
+  it).
+
+The engine returns secrets where the client does: from the documentation's
+`SecretReturns`, `SecretArguments` and `SecretWhen…` flags, under the
+addon restrictions in effect (combat, encounters, challenge modes, PvP
+matches, restricted maps and chat lockdown; `/stdtest restrictions`
+records the client's in and out of combat).
 
 ## 17.6 The engine
 

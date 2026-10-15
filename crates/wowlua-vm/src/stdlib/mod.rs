@@ -5,6 +5,7 @@ pub mod base;
 pub mod coroutine;
 pub mod math;
 pub mod pattern;
+pub mod secrets;
 pub mod secure;
 pub mod string;
 pub mod table;
@@ -96,15 +97,43 @@ impl Vm {
         }
     }
 
+    /// Argument `n` as a conversion takes it: a secret's value where it may
+    /// be used (`kind`: "string" or "numeric" names the refused conversion).
+    pub fn plain_arg(&mut self, c: &NativeCall, n: usize, kind: &str) -> Result<Value, LuaError> {
+        match c.arg(n) {
+            v @ Value::Secret(_) => {
+                // A value no conversion takes is a type error ("got secret").
+                let h = self.hidden(v);
+                let converts = matches!(h, Value::Num(_) | Value::Str(_) | Value::Nil);
+                if !converts && !self.can_access_secrets() && !self.secret_reveal {
+                    let expected = if kind == "numeric" {
+                        "number"
+                    } else {
+                        "string"
+                    };
+                    return Err(self.type_arg_error(n, expected, Some(v)));
+                }
+                self.secret_arg(v, kind)
+            }
+            v => Ok(v),
+        }
+    }
+
+    /// Whether argument `n` is absent or nil (a secret nil too).
+    pub fn arg_is_nil(&self, c: &NativeCall, n: usize) -> bool {
+        self.hidden(c.arg(n)).is_nil()
+    }
+
     pub fn check_number(&mut self, c: &NativeCall, n: usize) -> Result<f64, LuaError> {
-        match self.tonumber(c.arg(n)) {
+        let v = self.plain_arg(c, n, "numeric")?;
+        match self.tonumber(v) {
             Some(x) => Ok(x),
-            None => Err(self.type_arg_error(n, "number", c.args.get(n - 1).copied())),
+            None => Err(self.type_arg_error(n, "number", c.args.get(n - 1).map(|_| v))),
         }
     }
 
     pub fn opt_number(&mut self, c: &NativeCall, n: usize, default: f64) -> Result<f64, LuaError> {
-        if c.arg(n).is_nil() {
+        if self.arg_is_nil(c, n) {
             Ok(default)
         } else {
             self.check_number(c, n)
@@ -119,7 +148,7 @@ impl Vm {
     }
 
     pub fn opt_int(&mut self, c: &NativeCall, n: usize, default: i64) -> Result<i64, LuaError> {
-        if c.arg(n).is_nil() {
+        if self.arg_is_nil(c, n) {
             Ok(default)
         } else {
             self.check_int(c, n)
@@ -128,10 +157,10 @@ impl Vm {
 
     /// `luaL_checklstring`: a string, or a number converted to one.
     pub fn check_str(&mut self, c: &NativeCall, n: usize) -> Result<StrRef, LuaError> {
-        match c.arg(n) {
+        match self.plain_arg(c, n, "string")? {
             Value::Str(s) => Ok(s),
             Value::Num(x) => Ok(self.heap.intern(fmt_num(x).as_bytes())),
-            _ => Err(self.type_arg_error(n, "string", c.args.get(n - 1).copied())),
+            v => Err(self.type_arg_error(n, "string", c.args.get(n - 1).map(|_| v))),
         }
     }
 
@@ -141,7 +170,7 @@ impl Vm {
     }
 
     pub fn opt_str(&mut self, c: &NativeCall, n: usize) -> Result<Option<StrRef>, LuaError> {
-        if c.arg(n).is_nil() {
+        if self.arg_is_nil(c, n) {
             Ok(None)
         } else {
             self.check_str(c, n).map(Some)

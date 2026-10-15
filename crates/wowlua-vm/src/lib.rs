@@ -11,6 +11,7 @@ pub mod heap;
 pub mod luac;
 pub mod number;
 pub mod proto;
+pub mod secret;
 pub mod stdlib;
 pub mod table;
 pub mod taint;

@@ -244,6 +244,7 @@ open for review.
 | T192 | Coroutines are stackless: each is its own VM stack **(user, M9)** | No native stacks or overflow; yields still stop at `pcall`, metamethods and native calls, as in the client. |
 | T193 | Taint is exact: every stack slot, table field, upvalue and object carries the taint of the code that wrote it, as in the client **(user, M9)** | Taint spreads through locals and upvalues in real addons; tracking only tables would miss it. Costs memory per slot, always on. |
 | T194 | A call that crashes the client (such as `strsplit` or `unpack` with thousands of results tripping its Lua assertion) fails in the emulation with an error naming the call and the client's assertion; the run continues **(user, M9)** | The test shows the line that would take the game down; stopping the run or only warning would hide it or the other results. Limits come from crash-search probes, run separately from `/stdtest probe`. |
+| T195 | Secure (untainted) code may use secret values; what it computes from one is secret again. Addon code always runs tainted, so no probe can observe it: the rule follows Blizzard's documentation ("preventing most operations on them from occurring on tainted code paths") and is marked unverified in the emulation's coverage report **(user, M9)** | Blizzard's UI code wraps values with `secretwrap` at their source and hands them on; a secure helper that returned plain results would leak them to addons. |
 
 ## Standard library
 

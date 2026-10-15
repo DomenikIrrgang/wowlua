@@ -60,7 +60,17 @@ pub struct Table {
     pub meta: Option<TableRef>,
     /// Frozen by `table.freeze`: raw writes fail.
     pub frozen: bool,
+    /// `settablesecurity` options set ([`DISALLOW_TAINTED_ACCESS`] and the
+    /// others, as bits).
+    pub security: u8,
 }
+
+/// `Enum.TableSecurityOption.DisallowTaintedAccess`, as a bit.
+pub const DISALLOW_TAINTED_ACCESS: u8 = 1;
+/// `Enum.TableSecurityOption.DisallowSecretKeys`, as a bit.
+pub const DISALLOW_SECRET_KEYS: u8 = 2;
+/// `Enum.TableSecurityOption.SecretWrapContents`, as a bit.
+pub const SECRET_WRAP_CONTENTS: u8 = 4;
 
 /// `lua_number2int` then the integer check (`arrayindex`).
 fn arrayindex(key: Value) -> i64 {

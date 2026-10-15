@@ -184,6 +184,11 @@ pub struct Vm {
     pub string_meta: Option<TableRef>,
     pub names: Names,
     pub(crate) c_depth: usize,
+    /// The running native took a secret's value: its results are secret.
+    pub(crate) secret_used: bool,
+    /// The running native may take secrets' values even while tainted
+    /// (`tostring`, `string.format`, `strjoin`: their results are secret).
+    pub(crate) secret_reveal: bool,
     pub(crate) cstack: Vec<CEntry>,
     pub(crate) errfunc: Option<Value>,
     in_errfunc: bool,
@@ -256,6 +261,8 @@ impl Vm {
             string_meta: None,
             names,
             c_depth: 0,
+            secret_used: false,
+            secret_reveal: false,
             cstack: Vec::new(),
             errfunc: None,
             in_errfunc: false,
@@ -692,6 +699,7 @@ impl Vm {
                     nvarargs,
                     tail: false,
                     entry: false,
+                    secrets_dropped: false,
                 });
                 Ok(true)
             }
@@ -711,6 +719,8 @@ impl Vm {
                 });
                 self.result_taints.clear();
                 self.cur.natives += 1;
+                let outer_used = std::mem::replace(&mut self.secret_used, false);
+                let outer_reveal = std::mem::replace(&mut self.secret_reveal, false);
                 let r = native(
                     self,
                     NativeCall {
@@ -722,7 +732,13 @@ impl Vm {
                 );
                 self.cur.natives -= 1;
                 self.cstack.pop();
+                let used = std::mem::replace(&mut self.secret_used, outer_used);
+                self.secret_reveal = outer_reveal;
                 let results = match r {
+                    // What a native computed from a secret is secret.
+                    Ok(results) if used => {
+                        results.into_iter().map(|v| self.secret_wrap(v)).collect()
+                    }
                     Ok(results) => results,
                     Err(e) => {
                         self.result_taints.clear();
@@ -931,7 +947,7 @@ impl Vm {
                         let t = self.reg(base + b as usize);
                         let key = self.rk(base, k, c);
                         let s = match t {
-                            Value::Table(tr) => {
+                            Value::Table(tr) if !matches!(key, Value::Secret(_)) => {
                                 let s = self.heap.table(tr).get_slot(key);
                                 if s.v.is_nil() && self.heap.table(tr).meta.is_some() {
                                     self.index_slot(t, key, Some(b))?
@@ -1007,7 +1023,11 @@ impl Vm {
                     }
                     Op::Not { a, b } => {
                         let x = self.reg(base + b as usize);
-                        self.set_fresh(base + a as usize, Value::Bool(!x.truthy()));
+                        let t = match x {
+                            Value::Secret(_) => self.secret_truthy(x, "negate", Some(b))?,
+                            _ => x.truthy(),
+                        };
+                        self.set_fresh(base + a as usize, Value::Bool(!t));
                     }
                     Op::Len { a, b } => {
                         let x = self.reg(base + b as usize);
@@ -1025,28 +1045,40 @@ impl Vm {
                     Op::Eq { a, b, c } => {
                         let x = self.rk(base, k, b);
                         let y = self.rk(base, k, c);
-                        let r = self.equals(x, y)?;
+                        let r = self.equals_at(x, y, (rk_reg(b), rk_reg(c)))?;
                         self.cond_jump(fi, &proto, r == a);
                     }
                     Op::Lt { a, b, c } => {
                         let x = self.rk(base, k, b);
                         let y = self.rk(base, k, c);
-                        let r = self.less_than(x, y)?;
+                        let r = self.less_than_at(x, y, (rk_reg(b), rk_reg(c)))?;
                         self.cond_jump(fi, &proto, r == a);
                     }
                     Op::Le { a, b, c } => {
                         let x = self.rk(base, k, b);
                         let y = self.rk(base, k, c);
-                        let r = self.less_equal(x, y)?;
+                        let r = self.less_equal_at(x, y, (rk_reg(b), rk_reg(c)))?;
                         self.cond_jump(fi, &proto, r == a);
                     }
                     Op::Test { a, c } => {
-                        let t = self.reg(base + a as usize).truthy();
+                        let x = self.reg(base + a as usize);
+                        let t = match x {
+                            Value::Secret(_) => {
+                                self.secret_truthy(x, "perform boolean test on", Some(a))?
+                            }
+                            _ => x.truthy(),
+                        };
                         self.cond_jump(fi, &proto, t == c);
                     }
                     Op::TestSet { a, b, c } => {
                         let s = self.cur.stack[base + b as usize];
-                        if s.v.truthy() == c {
+                        let t = match s.v {
+                            Value::Secret(_) => {
+                                self.secret_truthy(s.v, "perform boolean test on", Some(b))?
+                            }
+                            _ => s.v.truthy(),
+                        };
+                        if t == c {
                             self.set_copy(base + a as usize, s);
                             self.cond_jump(fi, &proto, true);
                         } else {
@@ -1324,6 +1356,9 @@ impl Vm {
 
     /// [`index`](Self::index) with the result's taint.
     pub fn index_slot(&mut self, t: Value, key: Value, reg: Option<u8>) -> Result<Slot, LuaError> {
+        if matches!(t, Value::Secret(_)) || matches!(key, Value::Secret(_)) {
+            return self.secret_index(t, key, reg);
+        }
         let mut t = Slot::secure(t);
         let mut reg = reg;
         for _ in 0..MAXTAGLOOP {
@@ -1380,6 +1415,9 @@ impl Vm {
         v: Slot,
         reg: Option<u8>,
     ) -> Result<(), LuaError> {
+        if matches!(t, Value::Secret(_)) || matches!(key, Value::Secret(_)) {
+            return self.secret_set_index(t, key, v, reg);
+        }
         let mut t = Slot::secure(t);
         let mut reg = reg;
         for _ in 0..MAXTAGLOOP {
@@ -1467,6 +1505,12 @@ impl Vm {
             let v = self.arith_num(op, a, b)?;
             return Ok(self.cur.taint.fresh(v));
         }
+        if self.secret_usable(x, y) {
+            let (hx, hy) = (self.hidden(x), self.hidden(y));
+            let r = self.arith_values(op, hx, hy)?;
+            let r = self.secret_wrap(r);
+            return Ok(self.cur.taint.fresh(r));
+        }
         let event = self.arith_tm(op);
         let mut tm = self.get_tm_slot(x, event);
         if tm.v.is_nil() {
@@ -1541,6 +1585,12 @@ impl Vm {
         if let Some(n) = self.tonumber(x) {
             return Ok(self.cur.taint.fresh(Value::Num(-n)));
         }
+        if self.secret_usable(x, Value::Nil) {
+            let h = self.hidden(x);
+            let r = self.arith_values(ArithOp::Sub, Value::Num(0.0), h)?;
+            let r = self.secret_wrap(r);
+            return Ok(self.cur.taint.fresh(r));
+        }
         let tm = self.get_tm_slot(x, self.names.unm);
         if tm.v.is_nil() {
             return Err(self.type_error(x, "perform arithmetic on", Some(reg)));
@@ -1555,6 +1605,12 @@ impl Vm {
     }
 
     fn len_slot(&mut self, v: Value, reg: Option<u8>) -> Result<Slot, LuaError> {
+        if self.secret_usable(v, Value::Nil) {
+            let h = self.hidden(v);
+            let r = self.len(h, None)?;
+            let r = self.secret_wrap(r);
+            return Ok(self.cur.taint.fresh(r));
+        }
         match v {
             Value::Table(t) => {
                 let n = self.heap.table(t).border() as f64;
@@ -1583,6 +1639,15 @@ impl Vm {
             let xslot = self.cur.stack[top - 2];
             let yslot = self.cur.stack[top - 1];
             let (x, y) = (xslot.v, yslot.v);
+            if matches!(x, Value::Secret(_)) || matches!(y, Value::Secret(_)) {
+                // Secret strings and numbers join into a secret string, even
+                // while tainted; anything else blames the secret.
+                let r = self.secret_concat(x, y, top - 2 - base, top - 1 - base)?;
+                self.set_fresh(top - 2, r);
+                top -= 1;
+                total -= 1;
+                continue;
+            }
             let xs = self.is_strlike(x);
             let ys = self.is_strlike(y);
             if !xs || !ys {
@@ -1633,6 +1698,9 @@ impl Vm {
 
     /// Concatenates two values from native code.
     pub fn concat_values(&mut self, x: Value, y: Value) -> Result<Value, LuaError> {
+        if matches!(x, Value::Secret(_)) || matches!(y, Value::Secret(_)) {
+            return self.secret_concat_values(x, y, (None, None));
+        }
         if self.is_strlike(x) && self.is_strlike(y) {
             let mut buf = Vec::new();
             self.append_strlike(&mut buf, x);
@@ -1654,6 +1722,19 @@ impl Vm {
 
     /// `__eq` applies to two tables or two userdata with the same handler.
     pub fn equals(&mut self, x: Value, y: Value) -> Result<bool, LuaError> {
+        self.equals_at(x, y, (None, None))
+    }
+
+    /// [`equals`](Self::equals) naming the operands' registers in errors.
+    pub(crate) fn equals_at(
+        &mut self,
+        x: Value,
+        y: Value,
+        regs: (Option<u8>, Option<u8>),
+    ) -> Result<bool, LuaError> {
+        if matches!(x, Value::Secret(_)) || matches!(y, Value::Secret(_)) {
+            return self.secret_equals(x, y, regs);
+        }
         if x.raw_eq(y) {
             return Ok(true);
         }
@@ -1712,6 +1793,22 @@ impl Vm {
     }
 
     pub fn less_than(&mut self, x: Value, y: Value) -> Result<bool, LuaError> {
+        self.less_than_at(x, y, (None, None))
+    }
+
+    pub(crate) fn less_than_at(
+        &mut self,
+        x: Value,
+        y: Value,
+        regs: (Option<u8>, Option<u8>),
+    ) -> Result<bool, LuaError> {
+        if matches!(x, Value::Secret(_)) || matches!(y, Value::Secret(_)) {
+            if self.can_access_secrets() {
+                let (hx, hy) = (self.hidden(x), self.hidden(y));
+                return self.less_than(hx, hy);
+            }
+            return Err(self.blame_secret(x, y, "compare", regs));
+        }
         match (x, y) {
             (Value::Num(a), Value::Num(b)) => Ok(a < b),
             (Value::Str(a), Value::Str(b)) => Ok(self.heap.str_bytes(a) < self.heap.str_bytes(b)),
@@ -1724,6 +1821,22 @@ impl Vm {
     }
 
     pub fn less_equal(&mut self, x: Value, y: Value) -> Result<bool, LuaError> {
+        self.less_equal_at(x, y, (None, None))
+    }
+
+    pub(crate) fn less_equal_at(
+        &mut self,
+        x: Value,
+        y: Value,
+        regs: (Option<u8>, Option<u8>),
+    ) -> Result<bool, LuaError> {
+        if matches!(x, Value::Secret(_)) || matches!(y, Value::Secret(_)) {
+            if self.can_access_secrets() {
+                let (hx, hy) = (self.hidden(x), self.hidden(y));
+                return self.less_equal(hx, hy);
+            }
+            return Err(self.blame_secret(x, y, "compare", regs));
+        }
         match (x, y) {
             (Value::Num(a), Value::Num(b)) => Ok(a <= b),
             (Value::Str(a), Value::Str(b)) => Ok(self.heap.str_bytes(a) <= self.heap.str_bytes(b)),
@@ -1818,6 +1931,9 @@ impl Vm {
     }
 
     fn type_error(&mut self, v: Value, op: &str, reg: Option<u8>) -> LuaError {
+        if let Value::Secret(_) = v {
+            return self.secret_error(v, op, reg);
+        }
         let t = v.type_name();
         let named = reg.and_then(|r| self.reg_name(r));
         match named {
@@ -1839,6 +1955,9 @@ impl Vm {
             }
         });
         let reg = if self.running_native() { None } else { reg };
+        if let Value::Secret(_) = v {
+            return self.secret_error(v, "call", reg);
+        }
         // The client reports the missing `__call` metamethod: always "a nil
         // value", never a name.
         if self.rules.client_errors {
@@ -2081,7 +2200,7 @@ impl Vm {
 
     /// The kind and name of register `reg` in the running Lua frame
     /// (`getobjname`).
-    fn reg_name(&self, reg: u8) -> Option<(&'static str, String)> {
+    pub(crate) fn reg_name(&self, reg: u8) -> Option<(&'static str, String)> {
         let f = self.cur.frames.last()?;
         obj_name(&self.heap, &f.proto, f.pc.saturating_sub(1), reg)
     }
@@ -2334,4 +2453,12 @@ fn symbexec(p: &Proto, lastpc: usize, reg: u8) -> Option<Op> {
         pc += 1;
     }
     last.map(|pc| p.code[pc])
+}
+
+/// The register an RK operand names, if it is one.
+fn rk_reg(rk: Rk) -> Option<u8> {
+    match rk {
+        Rk::R(r) => Some(r),
+        Rk::K(_) => None,
+    }
 }

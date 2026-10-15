@@ -1,7 +1,7 @@
 //! Lua values. A value is small and `Copy`; collectable objects are handles
 //! into the [`Heap`](crate::heap::Heap).
 
-use crate::heap::{FuncRef, StrRef, TableRef, ThreadRef, UdRef};
+use crate::heap::{FuncRef, SecretRef, StrRef, TableRef, ThreadRef, UdRef};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Value {
@@ -14,6 +14,9 @@ pub enum Value {
     Func(FuncRef),
     Thread(ThreadRef),
     Userdata(UdRef),
+    /// A secret value (WoW's `secretwrap`): it acts as the value it hides
+    /// only where secrets may be used (spec emulator §17.5).
+    Secret(SecretRef),
 }
 
 impl Value {
@@ -28,12 +31,18 @@ impl Value {
             Value::Func(_) => "function",
             Value::Thread(_) => "thread",
             Value::Userdata(_) => "userdata",
+            // `type()` gives the hidden value's (`Vm::type_name`).
+            Value::Secret(_) => "secret",
         }
     }
 
-    /// Lua truthiness: everything but `nil` and `false`.
+    /// Lua truthiness: everything but `nil` and `false` (and a secret
+    /// `nil`; a secret boolean's test is the caller's to refuse).
     pub fn truthy(self) -> bool {
-        !matches!(self, Value::Nil | Value::Bool(false))
+        !matches!(
+            self,
+            Value::Nil | Value::Bool(false) | Value::Secret(SecretRef::NIL)
+        )
     }
 
     pub fn is_nil(self) -> bool {
@@ -52,6 +61,7 @@ impl Value {
             (Value::Func(a), Value::Func(b)) => a == b,
             (Value::Thread(a), Value::Thread(b)) => a == b,
             (Value::Userdata(a), Value::Userdata(b)) => a == b,
+            (Value::Secret(a), Value::Secret(b)) => a == b,
             _ => false,
         }
     }
