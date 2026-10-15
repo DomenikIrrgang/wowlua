@@ -502,7 +502,9 @@ impl<'a> Lexer<'a> {
             self.pos += 1;
         }
         let raw = &self.src[start..self.pos];
-        if let Err(message) = number_value(raw) {
+        if !is_plain_decimal(raw)
+            && let Err(message) = number_value(raw)
+        {
             let text = String::from_utf8_lossy(raw).into_owned();
             self.error("E0103", start, self.pos, format!("{message} near '{text}'"));
         }
@@ -702,10 +704,30 @@ pub fn is_wowlua_numeral(raw: &str) -> bool {
             .is_some_and(|p| p.eq_ignore_ascii_case(b"0b"))
 }
 
+/// Digits with at most one `.` (`12`, `0.5`, `3.`, `.5`): always a valid
+/// numeral, known without converting it. Most numerals are like this.
+fn is_plain_decimal(raw: &[u8]) -> bool {
+    let mut dots = 0;
+    let mut digits = 0;
+    for &c in raw {
+        match c {
+            b'0'..=b'9' => digits += 1,
+            b'.' => dots += 1,
+            _ => return false,
+        }
+    }
+    digits > 0 && dots <= 1
+}
+
 /// The value of a numeral, or why it is malformed. Lua 5.1 numerals follow
 /// `luaO_str2d` (C `strtod`, hexadecimal through `strtoul`); wowlua adds digit
 /// separators and binary literals (spec §1.2.2).
 pub fn number_value(raw: &[u8]) -> Result<f64, &'static str> {
+    if is_plain_decimal(raw) {
+        // What `lua_number` ends with for these.
+        let text = std::str::from_utf8(raw).expect("ASCII");
+        return Ok(text.parse().expect("a plain decimal"));
+    }
     let text = std::str::from_utf8(raw).map_err(|_| "malformed number")?;
     // Most numerals have no upper-case letter: those are read in place.
     let lower = if text.bytes().any(|b| b.is_ascii_uppercase()) {
@@ -823,7 +845,33 @@ fn lua_number(text: &str) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::is_wowlua_numeral;
+    use super::{is_plain_decimal, is_wowlua_numeral, number_value};
+
+    // The fast path gives what the full conversion gives.
+    #[test]
+    fn plain_decimals_are_valid_numerals() {
+        let parts = ["", "0", "7", "00", "123", ".", "..", "e", "_", "x"];
+        let mut plain = 0;
+        for a in parts {
+            for b in parts {
+                for c in parts {
+                    let raw = format!("{a}{b}{c}");
+                    if is_plain_decimal(raw.as_bytes()) {
+                        plain += 1;
+                        // As before the fast path: lowercased, then `lua_number`.
+                        let slow = super::lua_number(&raw.to_ascii_lowercase());
+                        assert_eq!(number_value(raw.as_bytes()).ok(), slow, "{raw:?}");
+                        assert!(slow.is_some(), "{raw:?}");
+                    }
+                }
+            }
+        }
+        assert!(plain > 50);
+        let long = "9".repeat(400) + "." + &"9".repeat(400);
+        assert!(is_plain_decimal(long.as_bytes()));
+        assert_eq!(number_value(long.as_bytes()).ok(), super::lua_number(&long));
+        assert!(!is_plain_decimal(b".") && !is_plain_decimal(b"1.2.3"));
+    }
 
     // The same answer as lowercasing the numeral and testing for `_` and a
     // leading `0b`, which is what callers did before.
