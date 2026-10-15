@@ -753,7 +753,7 @@ impl Ctx<'_> {
         wowlua_syntax::visit::walk_block(body, &mut |e| {
             let (callee_name, args) = match &e.kind {
                 ExprKind::Call { callee, args } => (call_name(callee), args),
-                ExprKind::Method { name, args, .. } => (Some(name.text.to_string()), args),
+                ExprKind::Method { name, args, .. } => (Some(name.text.to_string()), &**args),
                 _ => return,
             };
             if matches!(

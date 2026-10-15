@@ -151,6 +151,29 @@ fn syntax_errors_have_codes() {
 }
 
 #[test]
+fn numerals_read_the_same_in_either_case() {
+    use wowlua_syntax::lexer::number_value;
+    let cases: &[(&str, Option<f64>)] = &[
+        ("0x1f", Some(31.0)),
+        ("1e5", Some(1e5)),
+        ("2.5e-3", Some(2.5e-3)),
+        ("0x1p4", Some(16.0)),
+        ("0b101", Some(5.0)),
+        ("0b1_01", Some(5.0)),
+        ("0x1_f", Some(31.0)),
+        ("1_0e5", Some(1e6)),
+        ("0b2", None),
+        ("0x_1", None),
+        ("1e_5", None),
+    ];
+    for (numeral, value) in cases {
+        for text in [numeral.to_string(), numeral.to_ascii_uppercase()] {
+            assert_eq!(number_value(text.as_bytes()).ok(), *value, "{text}");
+        }
+    }
+}
+
+#[test]
 fn recovers_and_reports_several_errors() {
     let p = parse_str("local = 1\nprint('ok')\nlocal function (\nx = 2\nif then end\n");
     let errors = p.diagnostics.iter().filter(|d| d.is_error()).count();
@@ -164,6 +187,60 @@ fn recovers_and_reports_several_errors() {
         .filter(|s| matches!(s.kind, StmtKind::Call(_)))
         .count();
     assert_eq!(calls, 1);
+}
+
+#[test]
+fn lists_that_fail_leave_nothing_in_the_lists_around_them() {
+    // A table and an argument list fail inside function bodies; their
+    // statements are recovered and the lists around them go on.
+    let p = parse_str(
+        "local t = {\n  a = 1,\n  b = function()\n    local x = { c = 2, d = = 3 }\n    print(4, 5 +)\n    return 6\n  end,\n  e = 7,\n}\nf(8, function()\n  g(9, { 10, 11 + })\nend, 12)\n",
+    );
+    assert!(p.has_errors());
+    let stmts = &p.chunk.block.stmts;
+    assert_eq!(stmts.len(), 2, "{stmts:?}");
+    let errors = |e: &Expr| -> Vec<bool> {
+        let ExprKind::Function(f) = &e.kind else {
+            panic!("{:?}", e.kind)
+        };
+        let stmts = &f.body.stmts;
+        stmts.iter().map(|s| s.kind == StmtKind::Error).collect()
+    };
+
+    let StmtKind::Local { values, .. } = &stmts[0].kind else {
+        panic!("{:?}", stmts[0].kind)
+    };
+    let ExprKind::Table(fields) = &values[0].kind else {
+        panic!("{:?}", values[0].kind)
+    };
+    let names: Vec<&str> = fields
+        .iter()
+        .map(|f| match f {
+            TableField::Named { name, .. } => &*name.text,
+            _ => panic!("{f:?}"),
+        })
+        .collect();
+    assert_eq!(names, ["a", "b", "e"]);
+    let TableField::Named { value, .. } = &fields[1] else {
+        panic!()
+    };
+    assert_eq!(errors(value), [true, true, false]);
+
+    let StmtKind::Call(call) = &stmts[1].kind else {
+        panic!("{:?}", stmts[1].kind)
+    };
+    let ExprKind::Call {
+        args: Args::Parens { args, .. },
+        ..
+    } = &call.kind
+    else {
+        panic!("{:?}", call.kind)
+    };
+    assert_eq!(args.len(), 3, "{args:?}");
+    for (arg, raw) in [(&args[0], "8"), (&args[2], "12")] {
+        assert!(matches!(&arg.kind, ExprKind::Number(n) if &*n.raw == raw));
+    }
+    assert_eq!(errors(&args[1]), [true]);
 }
 
 #[test]

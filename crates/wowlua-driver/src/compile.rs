@@ -20,16 +20,19 @@ use wowlua_span::{FileId, SourceDb};
 use wowlua_syntax::Parse;
 
 /// The compiled form of a `.wowlua` source.
+#[derive(Debug)]
 pub struct Compiled {
     pub code: Vec<u8>,
-    /// Source Map v3 (when the profile enables source maps).
+    /// Source Map v3 (when the profile enables source maps and the build
+    /// writes its output).
     pub map: Option<String>,
 }
 
 #[derive(Default)]
 pub struct CompileOutput {
-    /// Compiled `.wowlua` sources by `Source::rel`.
-    pub compiled: HashMap<String, Compiled>,
+    /// Compiled `.wowlua` sources by `Source::rel`. Flavors that compile a
+    /// file the same share it; it is replaced, never changed.
+    pub compiled: HashMap<String, Arc<Compiled>>,
     /// `(a, b)`: source `a` must load before source `b` (by `Source::rel`).
     pub edges: Vec<(String, String)>,
     /// Why each edge exists (the use and a description).
@@ -230,7 +233,10 @@ pub fn minify_lua(
     }
     let mut chunk = wowlua_lower::lower(&parse, code).ok()?;
     wowlua_luair::minify::apply(&mut chunk, passes, line_mode);
-    let emitted = wowlua_luair::emit(&chunk, &passes.emit_options(line_mode));
+    // Only the text is used: these files get no source maps.
+    let mut options = passes.emit_options(line_mode);
+    options.mappings = false;
+    let emitted = wowlua_luair::emit(&chunk, &options);
     let ok = !wowlua_syntax::parse(&emitted.text, file).has_errors()
         && luacheck::check(db, file, &emitted.text).is_none();
     ok.then_some(emitted.text)
@@ -635,7 +641,55 @@ pub struct LibraryUnit {
     pub meta: Arc<Meta>,
 }
 
-/// Compiles the package for one build configuration and flavor.
+/// What compiling files gave in the earlier flavors of one build. Lowering
+/// reads nothing of the flavor but its context, and finishing nothing but
+/// the lowered chunk and the build's settings: a file whose context is the
+/// same apart from `wowlua:meta`, and whose lowering never read that,
+/// compiles to the same code with the same diagnostics.
+#[derive(Default)]
+pub(crate) struct FlavorCache {
+    /// By file index; one entry per context the file was compiled with.
+    entries: Vec<Vec<CacheEntry>>,
+}
+
+struct CacheEntry {
+    file: FileId,
+    /// The lowering context without `meta`; `None` for plain Lua lowered
+    /// as a script, which has no context.
+    ctx: Option<Context>,
+    /// What lowering reported.
+    lowering: Vec<Diagnostic>,
+    uses_runtime: bool,
+    slices: BTreeSet<wowlua_runtime::Slice>,
+    /// What finishing reported.
+    finishing: Vec<Diagnostic>,
+    /// `None` when finishing failed.
+    compiled: Option<Arc<Compiled>>,
+}
+
+impl FlavorCache {
+    fn get(&self, i: usize, file: FileId, ctx: Option<&Context>) -> Option<&CacheEntry> {
+        self.entries.get(i)?.iter().find(|e| {
+            e.file == file
+                && match (&e.ctx, ctx) {
+                    (None, None) => true,
+                    (Some(a), Some(b)) => a.same_except_meta(b),
+                    _ => false,
+                }
+        })
+    }
+
+    fn insert(&mut self, i: usize, entry: CacheEntry) {
+        if self.entries.len() <= i {
+            self.entries.resize_with(i + 1, Vec::new);
+        }
+        self.entries[i].push(entry);
+    }
+}
+
+/// Compiles the package for one build configuration and flavor. Files
+/// compiled the same in an earlier flavor are taken from `cache`; with
+/// `store`, a later flavor can take this flavor's from it.
 #[allow(clippy::too_many_arguments)]
 pub fn compile_flavor(
     db: &SourceDb,
@@ -645,6 +699,7 @@ pub fn compile_flavor(
     raw: &HashMap<String, Vec<u8>>,
     parsed: &Parsed,
     profile: &Profile,
+    source_maps: bool,
     meta: Arc<Meta>,
     layout: wowlua_sema::loadorder::Layout,
     api: &[ParsedDeclaration],
@@ -653,8 +708,11 @@ pub fn compile_flavor(
     lower_lua: &std::collections::HashSet<String>,
     libraries: &HashMap<String, LibraryUnit>,
     minify: &Minify,
+    cache: &mut FlavorCache,
+    store: bool,
 ) -> CompileOutput {
-    let options = minify.passes.emit_options(line_mode(profile));
+    let mut options = minify.passes.emit_options(line_mode(profile));
+    options.mappings = source_maps;
     let mut out = CompileOutput::default();
 
     let unit_of = |src_rel: &str| wowlua_sema::package_of(src_rel).and_then(|n| libraries.get(n));
@@ -905,11 +963,13 @@ pub fn compile_flavor(
             );
             return None;
         }
+        // Freed before luacheck's Lua state and the source map are built.
+        drop(reparsed);
         if let Some(d) = luacheck::check(db, file, &emitted.text) {
             diagnostics.push(d);
         }
         let output = source.output_path();
-        let map = profile.source_maps.then(|| {
+        let map = source_maps.then(|| {
             let name = output.rsplit('/').next().unwrap_or(&output);
             wowlua_luair::sourcemap::source_map_named(
                 &emitted.mappings,
@@ -923,65 +983,46 @@ pub fn compile_flavor(
             map,
         })
     };
+    // Each file is finished right after it is lowered, so only one file's
+    // IR is alive at a time. Renaming private methods needs every lowered
+    // file at once; without private methods it renames nothing.
+    let stream = !minify.passes.rename_private || private_methods.is_empty();
+    // What finishing reports comes after everything lowering reports, as
+    // when every file was lowered before any was finished.
+    let mut finish_diagnostics = Vec::new();
     let mut lowered_files: Vec<(usize, wowlua_luair::ir::Chunk)> = Vec::new();
-    for (i, (source, file)) in files.iter().enumerate() {
-        let plain_lua = source.kind == SourceKind::Lua && lower_lua.contains(&source.rel);
-        let minified_lua = source.kind == SourceKind::Lua && minify.lua.contains(&source.rel);
-        // Dead modules are compiled still: the build removes a module only
-        // if it is dead in every flavor.
-        if (source.kind != SourceKind::Wowlua && !plain_lua && !minified_lua) || !parsed.ok[i] {
-            continue;
-        }
+    // Lowers file `i` with its context, or as a script without one, and
+    // adds what lowering reports to `diagnostics`; `None` when it fails.
+    let lower_file = |i: usize, ctx: Option<&Context>, diagnostics: &mut Vec<Diagnostic>| {
+        let source = &files[i].0;
         let parse = parsed.parses[i].as_ref().expect("parsed");
         let bytes = &raw[&source.rel];
-        // Plain Lua is only minified: it compiles to itself (spec §14.2).
-        if minified_lua && !plain_lua {
-            match wowlua_lower::lower(parse, bytes) {
-                Ok(chunk) => lowered_files.push((i, chunk)),
-                Err(errors) => diagnostics.extend(errors),
-            }
-            continue;
-        }
-        let unit = unit_of(&source.src_rel);
-        let file_meta = unit.map_or_else(|| meta.clone(), |u| u.meta.clone());
-        let mut ctx = context(&analysis, i, &inputs, file_meta, &order.lazy);
-        ctx.file = source.rel.clone();
-        ctx.debug = profile.debug;
-        ctx.tools = wowlua_lower::Tools {
-            assertions: profile.assertions,
-            dev_console: profile.dev_console,
-            profiling: profile.instrument != wowlua_manifest::model::Instrument::None,
-            log_level: profile.log_level as u8,
-            instrument: profile.instrument as u8,
-            runtime_checks: profile.runtime_checks as u8,
-            reflection: profile.reflection as u8,
-            reflect_used,
-            monitor: profile.monitor,
+        let Some(ctx) = ctx else {
+            return match wowlua_lower::lower(parse, bytes) {
+                Ok(chunk) => Some(wowlua_lower::Lowered {
+                    chunk,
+                    meta_used: BTreeSet::new(),
+                    uses_runtime: false,
+                    slices: BTreeSet::new(),
+                    warnings: Vec::new(),
+                    reads_meta: false,
+                }),
+                Err(errors) => {
+                    diagnostics.extend(errors);
+                    None
+                }
+            };
         };
-        ctx.value_checks = out
-            .value_checks
-            .iter()
-            .filter(|(span, _)| span.file == *file)
-            .map(|(span, c)| ((span.start, span.end), c.clone()))
-            .collect();
-        ctx.type_names = out
-            .type_names
-            .iter()
-            .filter(|(span, _)| span.file == *file)
-            .map(|(span, name)| ((span.start, span.end), name.clone()))
-            .collect();
-        ctx.compiler_known = wowlua_sema::is_compiler_known(&source.src_rel);
-        ctx.dependency = unit.is_some();
-        let lowered = match wowlua_lower::lower_module(parse, bytes, &ctx) {
+        let mut lowered = match wowlua_lower::lower_module(parse, bytes, ctx) {
             Ok(lowered) => lowered,
             Err(errors) => {
                 diagnostics.extend(errors);
-                continue;
+                return None;
             }
         };
         // The runtime's `config` and `features` tables are the addon's: a
         // library may only use their constant (scalar) values.
-        if unit.is_some()
+        if ctx.dependency
             && let Some((kind, path)) = lowered
                 .meta_used
                 .iter()
@@ -996,11 +1037,137 @@ pub fn compile_flavor(
                 .with_path(&source.rel),
             );
         }
+        diagnostics.append(&mut lowered.warnings);
+        Some(lowered)
+    };
+    for (i, (source, file)) in files.iter().enumerate() {
+        let plain_lua = source.kind == SourceKind::Lua && lower_lua.contains(&source.rel);
+        let minified_lua = source.kind == SourceKind::Lua && minify.lua.contains(&source.rel);
+        // Dead modules are compiled still: the build removes a module only
+        // if it is dead in every flavor.
+        if (source.kind != SourceKind::Wowlua && !plain_lua && !minified_lua) || !parsed.ok[i] {
+            continue;
+        }
+        // Plain Lua is only minified: it compiles to itself (spec §14.2).
+        let ctx = if minified_lua && !plain_lua {
+            None
+        } else {
+            let unit = unit_of(&source.src_rel);
+            let file_meta = unit.map_or_else(|| meta.clone(), |u| u.meta.clone());
+            let mut ctx = context(&analysis, i, &inputs, file_meta, &order.lazy);
+            ctx.file = source.rel.clone();
+            ctx.debug = profile.debug;
+            ctx.tools = wowlua_lower::Tools {
+                assertions: profile.assertions,
+                dev_console: profile.dev_console,
+                profiling: profile.instrument != wowlua_manifest::model::Instrument::None,
+                log_level: profile.log_level as u8,
+                instrument: profile.instrument as u8,
+                runtime_checks: profile.runtime_checks as u8,
+                reflection: profile.reflection as u8,
+                reflect_used,
+                monitor: profile.monitor,
+            };
+            ctx.value_checks = out
+                .value_checks
+                .iter()
+                .filter(|(span, _)| span.file == *file)
+                .map(|(span, c)| ((span.start, span.end), c.clone()))
+                .collect();
+            ctx.type_names = out
+                .type_names
+                .iter()
+                .filter(|(span, _)| span.file == *file)
+                .map(|(span, name)| ((span.start, span.end), name.clone()))
+                .collect();
+            ctx.compiler_known = wowlua_sema::is_compiler_known(&source.src_rel);
+            ctx.dependency = unit.is_some();
+            Some(ctx)
+        };
+        // A file an earlier flavor compiled the same: what it reported goes
+        // where compiling it again would put it. Only streamed files are
+        // reused, as nothing renames their chunks.
+        if stream && let Some(reused) = cache.get(i, *file, ctx.as_ref()) {
+            // Debug builds (and so the tests) compile it again and compare.
+            #[cfg(debug_assertions)]
+            {
+                let mut lowering = Vec::new();
+                let lowered = lower_file(i, ctx.as_ref(), &mut lowering).expect("it lowered");
+                let mut finishing = Vec::new();
+                let compiled = finish(lowered.chunk, source, *file, &mut finishing);
+                assert_eq!(
+                    format!(
+                        "{:?}",
+                        (
+                            &lowering,
+                            lowered.uses_runtime,
+                            &lowered.slices,
+                            lowered.meta_used.len(),
+                            lowered.reads_meta,
+                            &finishing,
+                            &compiled
+                        )
+                    ),
+                    format!(
+                        "{:?}",
+                        (
+                            &reused.lowering,
+                            reused.uses_runtime,
+                            &reused.slices,
+                            0,
+                            false,
+                            &reused.finishing,
+                            &reused.compiled.as_deref()
+                        )
+                    ),
+                    "{} is reused but compiles differently",
+                    source.rel
+                );
+            }
+            diagnostics.extend(reused.lowering.iter().cloned());
+            out.needs_runtime |= reused.uses_runtime;
+            out.slices.extend(reused.slices.iter().copied());
+            finish_diagnostics.extend(reused.finishing.iter().cloned());
+            if let Some(compiled) = &reused.compiled {
+                out.compiled
+                    .insert(source.rel.clone(), Arc::clone(compiled));
+            }
+            continue;
+        }
+        let mark = diagnostics.len();
+        let Some(lowered) = lower_file(i, ctx.as_ref(), diagnostics) else {
+            continue;
+        };
+        // Kept only for a later flavor, and only when the flavor's
+        // `wowlua:meta` did not shape it.
+        let keep = stream && store && !lowered.reads_meta;
         out.needs_runtime |= lowered.uses_runtime;
         out.meta_used.extend(lowered.meta_used);
-        out.slices.extend(lowered.slices);
-        diagnostics.extend(lowered.warnings);
-        lowered_files.push((i, lowered.chunk));
+        out.slices.extend(lowered.slices.iter().copied());
+        if !stream {
+            lowered_files.push((i, lowered.chunk));
+            continue;
+        }
+        let fmark = finish_diagnostics.len();
+        let compiled = finish(lowered.chunk, source, *file, &mut finish_diagnostics).map(Arc::new);
+        if let Some(compiled) = &compiled {
+            out.compiled
+                .insert(source.rel.clone(), Arc::clone(compiled));
+        }
+        if keep {
+            cache.insert(
+                i,
+                CacheEntry {
+                    file: *file,
+                    ctx: ctx.map(|ctx| Context { meta: None, ..ctx }),
+                    lowering: diagnostics[mark..].to_vec(),
+                    uses_runtime: lowered.uses_runtime,
+                    slices: lowered.slices,
+                    finishing: finish_diagnostics[fmark..].to_vec(),
+                    compiled,
+                },
+            );
+        }
     }
     if minify.passes.rename_private {
         let mut parsed_files: Vec<crate::private_names::Parsed> = Vec::new();
@@ -1038,9 +1205,10 @@ pub fn compile_flavor(
     for (i, chunk) in lowered_files {
         let (source, file) = &files[i];
         if let Some(compiled) = finish(chunk, source, *file, diagnostics) {
-            out.compiled.insert(source.rel.clone(), compiled);
+            out.compiled.insert(source.rel.clone(), Arc::new(compiled));
         }
     }
+    diagnostics.append(&mut finish_diagnostics);
     out
 }
 

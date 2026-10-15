@@ -75,6 +75,7 @@ impl Passes {
                 "\t".into()
             },
             compact: self.compact,
+            mappings: true,
         }
     }
 }

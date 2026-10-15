@@ -241,6 +241,10 @@ pub fn build(
             return None;
         }
     };
+    // Source maps are only ever written next to the AddOn folder, so a
+    // build that writes nothing (check, toc, compile) does not make them.
+    // The profile keeps its value: `meta` and the runtime read the profile.
+    let source_maps = profile.source_maps && request.write;
     let Some(level) = wowlua_manifest::minify_passes(&manifest.manifest, &profile.minify) else {
         session.push(
             Diagnostic::error(
@@ -700,7 +704,6 @@ pub fn build(
                 .collect(),
         },
     };
-    let mut api_cache: HashMap<String, Vec<crate::compile::ParsedDeclaration>> = HashMap::new();
     // Shared flavor mode: where each API exists, for flavor guards (E2030).
     let shared_flavors = (build_cfg.flavor_mode == wowlua_manifest::model::FlavorMode::Shared
         && flavors.len() > 1)
@@ -921,7 +924,9 @@ pub fn build(
         vec![None]
     };
     let mut builds: Vec<FlavorBuild> = Vec::new();
-    for flavor in &compile_flavors {
+    // Files a flavor compiles the same as an earlier one are taken from it.
+    let mut flavor_cache = crate::compile::FlavorCache::default();
+    for (idx, flavor) in compile_flavors.iter().enumerate() {
         let meta = crate::meta::build_meta(
             project,
             &crate::meta::MetaInput {
@@ -954,23 +959,23 @@ pub fn build(
             .clone()
             .or_else(|| flavors.first().cloned())
             .unwrap_or_default();
-        if !api_cache.contains_key(&api_flavor) {
-            let mut list = Vec::new();
-            for f in wowlua_api::declarations(&api_flavor).into_iter().flatten() {
-                let file = session.db.add(f.path, f.text.to_string());
-                list.push(crate::compile::ParsedDeclaration {
-                    source: sources::Source {
-                        rel: f.path.to_string(),
-                        src_rel: f.path.to_string(),
-                        abs: PathBuf::new(),
-                        kind: SourceKind::Wowlua,
-                        output: None,
-                    },
-                    file,
-                    parse: wowlua_syntax::parse(f.text.as_bytes(), file),
-                });
-            }
-            api_cache.insert(api_flavor.clone(), list);
+        // No other flavor of the build types against this API (split
+        // flavors are distinct, and shared mode compiles once), so its parse
+        // is freed with the flavor.
+        let mut api = Vec::new();
+        for f in wowlua_api::declarations(&api_flavor).into_iter().flatten() {
+            let file = session.db.add(f.path, f.text.to_string());
+            api.push(crate::compile::ParsedDeclaration {
+                source: sources::Source {
+                    rel: f.path.to_string(),
+                    src_rel: f.path.to_string(),
+                    abs: PathBuf::new(),
+                    kind: SourceKind::Wowlua,
+                    output: None,
+                },
+                file,
+                parse: wowlua_syntax::parse(f.text.as_bytes(), file),
+            });
         }
         let units: HashMap<String, crate::compile::LibraryUnit> = wlibs
             .iter()
@@ -998,6 +1003,7 @@ pub fn build(
             &raw,
             &parsed,
             &profile,
+            source_maps,
             std::sync::Arc::new(meta.clone()),
             wowlua_sema::loadorder::Layout {
                 listed: &listed_positions(
@@ -1009,7 +1015,7 @@ pub fn build(
                 active: &active,
                 loaded_by: &loaded_by,
             },
-            &api_cache[&api_flavor],
+            &api,
             &check_cfg,
             if flavor.is_none() {
                 shared_flavors.as_ref()
@@ -1019,6 +1025,8 @@ pub fn build(
             &lower_lua,
             &units,
             &minify,
+            &mut flavor_cache,
+            idx + 1 < compile_flavors.len(),
         );
         builds.push(FlavorBuild {
             flavor: flavor.clone(),
@@ -1026,6 +1034,12 @@ pub fn build(
             output,
         });
     }
+    // The parses and the flavor cache are not read after compiling; freeing
+    // them here keeps them out of the memory that assembly and bundling add
+    // on top. The cache is never kept for the next build (`wowlua dev`).
+    drop(parsed);
+    drop(declarations);
+    drop(flavor_cache);
     // Packager flavor blocks: each flavor's variant of the file.
     for rel in &flavor_blocks {
         let is_xml = rel.to_ascii_lowercase().ends_with(".xml");
@@ -1041,10 +1055,10 @@ pub fn build(
             let code = crate::keywords::apply_flavor(&String::from_utf8_lossy(&base), &f, is_xml);
             b.output.compiled.insert(
                 rel.clone(),
-                crate::compile::Compiled {
+                std::sync::Arc::new(crate::compile::Compiled {
                     code: code.into_bytes(),
                     map: None,
-                },
+                }),
             );
         }
     }
@@ -2097,7 +2111,7 @@ pub fn build(
                 libs: &libs,
                 files: &files,
                 raw: &raw,
-                source_maps: profile.source_maps,
+                source_maps,
             },
             toc_items,
             flavor_orders,
@@ -4313,7 +4327,15 @@ fn bundle_output(
                     });
                 }
                 let (text, map) = crate::bundle::assemble(&path, input.build_id, parts);
-                if let Err(error) = lua.load(&text[..]).into_function() {
+                // The chunk name appears in the error below. mlua's default is
+                // the Rust file and line of this call, so the name is pinned
+                // to the one it has always had: edits above leave the message
+                // unchanged.
+                if let Err(error) = lua
+                    .load(&text[..])
+                    .set_name("@crates/wowlua-driver/src/build.rs:4316")
+                    .into_function()
+                {
                     session.push(Diagnostic::plain_error(format!(
                         "internal compiler error: the bundle `{path}` does not compile: {error}"
                     )));

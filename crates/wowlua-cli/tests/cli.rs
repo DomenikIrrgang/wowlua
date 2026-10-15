@@ -24,6 +24,25 @@ fn write(root: &Path, files: &[(&str, &str)]) {
     }
 }
 
+/// The files under `dir`, relative to it with `/`, sorted.
+fn files_in(dir: &Path) -> Vec<String> {
+    fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {
+        for entry in fs::read_dir(dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(root, &path, out);
+            } else {
+                let rel = path.strip_prefix(root).unwrap();
+                out.push(rel.to_string_lossy().replace('\\', "/"));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, dir, &mut out);
+    out.sort();
+    out
+}
+
 /// An addon as it exists before wowlua: two TOCs, an embedded library loaded
 /// through XML, a nested XML include, an asset and an in-game path.
 fn legacy_addon(root: &Path) {
@@ -849,6 +868,17 @@ print(build.debug and debugOnly() or "release")
         toc.contains("src\\retail.lua\n"),
         "identical files are stored once: {toc}"
     );
+    // Only the file that reads `wowlua:meta` is stored per flavor, with the
+    // runtime, which carries each flavor's metadata.
+    assert_eq!(
+        files_in(&dist.join("wowlua/flavors")),
+        [
+            "standard/src/main.lua",
+            "standard/wowlua/runtime.lua",
+            "vanilla/src/main.lua",
+            "vanilla/wowlua/runtime.lua"
+        ]
+    );
     let standard = run_addon_as(&dist, "MetaDemo", Some(("standard", "mainline")));
     let vanilla = run_addon_as(&dist, "MetaDemo", Some(("vanilla", "classic")));
     let icon = r"Interface\AddOns\MetaDemo\media\icon.tga";
@@ -881,6 +911,81 @@ print(build.debug and debugOnly() or "release")
     let release = dir.path().join("dist/release/MetaDemo");
     let out = run_addon_as(&release, "MetaDemo", Some(("standard", "mainline")));
     assert!(out.ends_with("release"), "{out}");
+}
+
+/// In split mode a file compiles the same for every flavor unless it reads
+/// `wowlua:meta` or imports a value that differs: only those are stored per
+/// flavor, and what the others report is reported once.
+#[test]
+fn split_flavors_share_what_compiles_the_same() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "share", "version": "1.0.0" },
+  "flavors": { "standard": {}, "vanilla": {} },
+  "build": { "load-order": ["src/plain.lua", "src/util.wowlua", "src/flavored.wowlua", "src/label.wowlua", "src/main.wowlua"] },
+  "profiles": { "release": { "bundle": false } } }
+"#,
+            ),
+            ("src/plain.lua", "local _, ns = ...\nns.plain = \"plain\"\n"),
+            (
+                "src/util.wowlua",
+                "@deprecated(\"use twice\")\nexport function double(n: number): number return n * 2 end\nexport function twice(n: number): number return n * 2 end\n",
+            ),
+            (
+                "src/flavored.wowlua",
+                "import flavor from \"wowlua:meta\"\nexport const NAME = flavor\n",
+            ),
+            (
+                "src/label.wowlua",
+                "import NAME from \"./flavored\"\nprint(NAME)\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import double, twice from \"./util\"\n@inline\nlocal function countdown(n: number): number\n    if n <= 0 then return 0 end\n    return countdown(n - 1)\nend\nlocal _, ns = ...\nprint(ns.plain, double(1), twice(2), countdown(3))\n",
+            ),
+        ],
+    );
+    // Dev builds also warn about `@deprecated` at run time.
+    let deprecated = "Share: double is deprecated: use twice\n";
+    for (profile, warnings, at_run_time) in [
+        ("dev", &["W3030"][..], deprecated),
+        ("release", &["W3030", "W3031"], ""),
+    ] {
+        let assert = wowlua(dir.path())
+            .args(["build", "--profile", profile])
+            .assert()
+            .success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        for code in warnings {
+            assert_eq!(
+                stderr.matches(&format!("warning[{code}]")).count(),
+                1,
+                "{profile}: {stderr}"
+            );
+        }
+        let dist = dir.path().join(format!("dist/{profile}/Share"));
+        assert_eq!(
+            files_in(&dist.join("wowlua/flavors")),
+            [
+                "standard/src/flavored.lua",
+                "standard/src/label.lua",
+                "vanilla/src/flavored.lua",
+                "vanilla/src/label.lua"
+            ],
+            "{profile}"
+        );
+        for (flavor, family) in [("standard", "mainline"), ("vanilla", "classic")] {
+            assert_eq!(
+                run_addon_as(&dist, "Share", Some((flavor, family))),
+                format!("{flavor}\n{at_run_time}plain 2 4 0"),
+                "{profile}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -1090,6 +1195,79 @@ fn bundled_builds_run_the_same() {
     assert!(map.contains("src/broken.lua"), "{map}");
 }
 
+/// A build that writes nothing (`check`, `toc`, `compile`) makes no source
+/// maps; its files are still exactly the ones a written build writes.
+#[test]
+fn unwritten_builds_make_the_written_files() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "same", "version": "1.0.0" },
+  "build": { "load-order": ["src/first.lua", "src/util.wowlua", "src/main.wowlua"] } }
+"#,
+            ),
+            (
+                "src/first.lua",
+                "local _, ns = ...\nns.order = { \"first\" }\n",
+            ),
+            (
+                "src/util.wowlua",
+                "export function twice(n: number): number\n\treturn n * 2\nend\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import twice from \"./util\"\nlocal _, ns = ...\nprint(twice(#ns.order))\n",
+            ),
+        ],
+    );
+    for profile in ["dev", "release"] {
+        let mut cmd = wowlua(dir.path());
+        cmd.arg("build");
+        if profile == "release" {
+            cmd.arg("--release");
+        }
+        cmd.assert().success();
+        assert!(
+            dir.path()
+                .join(format!("dist/{profile}/.maps/Same"))
+                .is_dir()
+        );
+        let mut session = wowlua_driver::Session::new();
+        let options = wowlua_driver::LoadOptions {
+            manifest: None,
+            cwd: dir.path().to_path_buf(),
+            ..Default::default()
+        };
+        let project = wowlua_driver::load_projects(&mut session, &options)
+            .and_then(|ps| ps.into_iter().next())
+            .expect("the project loads");
+        let mut request = wowlua_driver::BuildRequest::new(profile);
+        request.write = false;
+        let built = wowlua_driver::build(&mut session, &project, &request).expect("it builds");
+        let addon = dir.path().join(format!("dist/{profile}/Same"));
+        let written = files_in(&addon);
+        assert_eq!(
+            built.files.keys().cloned().collect::<Vec<_>>(),
+            written,
+            "{profile}"
+        );
+        for (path, content) in &built.files {
+            let bytes = match content {
+                wowlua_driver::build::Content::Bytes(b) => b.clone(),
+                wowlua_driver::build::Content::Copy(from) => fs::read(from).unwrap(),
+            };
+            assert_eq!(
+                bytes,
+                fs::read(addon.join(path)).unwrap(),
+                "{profile}: {path}"
+            );
+        }
+    }
+}
+
 /// `dead-code` (spec optimization §15.2.1): side-effect-free modules nothing
 /// uses go (W6002); modules with effects, imported ones and `build.keep`
 /// stay.
@@ -1182,6 +1360,76 @@ fn release_builds_inline_expression_helpers() {
     assert!(main.contains("print(size / 2,"), "{main}");
     assert!(!main.contains("half"), "{main}");
     assert_eq!(run_addon(&release, "Inl"), "5 0");
+}
+
+/// What finishing a file reports (W3031 from inlining, E5001 from checking
+/// the emitted code) comes after what lowering reports (W3030), for every
+/// file: whether each file is finished right after it is lowered, or all
+/// are lowered first because `rename-private` has private methods to rename.
+#[test]
+fn finishing_diagnostics_follow_lowering_diagnostics() {
+    let dir = tempfile::tempdir().unwrap();
+    // More than 200 locals in one function, all of them used.
+    let names: Vec<String> = (0..210).map(|n| format!("v{n}")).collect();
+    let locals: String = names
+        .iter()
+        .enumerate()
+        .map(|(n, v)| format!("    local {v} = seed + {n}\n"))
+        .collect();
+    let first = format!(
+        "@deprecated(\"use wide\")\nlocal function narrow(): number return 1 end\n@inline\nlocal function countdown(n: number): number\n    if n <= 0 then return 0 end\n    return countdown(n - 1)\nend\nlocal function wide(seed: number): number\n{locals}    local all = {{ {} }}\n    return #all\nend\nprint(wide(1), countdown(3), narrow())\n",
+        names.join(", ")
+    );
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "order", "version": "1.0.0" },
+  "build": { "load-order": ["src/first.wowlua", "src/second.wowlua"] },
+  "profiles": { "renamed": { "inherits": "release", "minify": "max", "bundle": false } } }
+"#,
+            ),
+            ("src/first.wowlua", first.as_str()),
+            (
+                "src/second.wowlua",
+                "import old from \"./old\"\nclass Counter\n    total: number = 0\n    private function bump() self.total = self.total + 1 end\n    function run(): number\n        self:bump()\n        return self.total\n    end\nend\nold()\nprint(Counter.new():run())\n",
+            ),
+            (
+                "src/old.wowlua",
+                "@deprecated(\"use something else\")\nexport function old() print(\"old\") end\n",
+            ),
+        ],
+    );
+    let reported = |args: &[&str]| -> Vec<String> {
+        let assert = wowlua(dir.path())
+            .args(args)
+            .args(["--message-format", "short"])
+            .assert()
+            .failure();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        stderr
+            .lines()
+            .filter_map(|line| {
+                let (path, rest) = line.split_once(':')?;
+                let code = rest.split_once('[')?.1.split_once(']')?.0;
+                Some(format!("{path} {code}"))
+            })
+            .collect()
+    };
+    let lowered = ["src/first.wowlua W3030", "src/second.wowlua W3030"];
+    assert_eq!(
+        reported(&["check"]),
+        [&lowered[..], &["src/first.wowlua E5001"]].concat()
+    );
+    let finished = ["src/first.wowlua W3031", "src/first.wowlua E5001"];
+    for profile in ["release", "renamed"] {
+        assert_eq!(
+            reported(&["build", "--profile", profile]),
+            [&lowered[..], &finished[..]].concat(),
+            "{profile}"
+        );
+    }
 }
 
 /// `rename-private` (spec optimization §15.4.1): private and protected

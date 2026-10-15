@@ -35,7 +35,10 @@ pub struct Context {
     pub module: Option<String>,
     /// Resolved imports, by the start offset of the import statement.
     pub imports: HashMap<u32, ImportContext>,
-    /// `wowlua:meta` values of the build configuration and flavor.
+    /// `wowlua:meta` values of the build configuration and flavor. The
+    /// lowering reads them only through `Lowerer::meta`, which records the
+    /// read ([`Lowered::reads_meta`]): a file lowered without reading them
+    /// lowers the same with any other `meta`, and the build reuses it.
     pub meta: Option<Arc<Meta>>,
     /// The source path (`src/core/cache.wowlua`), for decorator contexts.
     pub file: String,
@@ -59,7 +62,7 @@ pub struct Context {
 }
 
 /// The debugging settings of the build profile (spec chapter 7).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Tools {
     /// `assertions`: `wowlua:debug` assertions are kept.
     pub assertions: bool,
@@ -92,6 +95,8 @@ pub struct Lowered {
     /// Runtime slices the file needs.
     pub slices: BTreeSet<Slice>,
     pub warnings: Vec<Diagnostic>,
+    /// The lowering read `wowlua:meta` ([`Context::meta`]).
+    pub reads_meta: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -112,6 +117,98 @@ pub enum ImportContext {
     Meta,
     /// XML or plain Lua: load order only.
     LoadOnly,
+}
+
+impl Context {
+    /// The same context apart from `meta`: lowering with either gives the
+    /// same result when it does not read `meta` ([`Lowered::reads_meta`]).
+    /// Constants compare bit for bit ([`Const::same`]).
+    pub fn same_except_meta(&self, other: &Context) -> bool {
+        // Destructured so that a new field cannot be left out.
+        let Context {
+            module,
+            imports,
+            meta: _,
+            file,
+            classes,
+            enums,
+            debug,
+            compiler_known,
+            dependency,
+            tools,
+            type_names,
+            value_checks,
+        } = self;
+        *module == other.module
+            && *file == other.file
+            && *debug == other.debug
+            && *compiler_known == other.compiler_known
+            && *dependency == other.dependency
+            && *tools == other.tools
+            && *classes == other.classes
+            && same_map(enums, &other.enums, |a, b| same_enum(a, b))
+            && same_map(imports, &other.imports, same_import)
+            && *type_names == other.type_names
+            && *value_checks == other.value_checks
+    }
+}
+
+fn same_map<K: Eq + std::hash::Hash, V>(
+    a: &HashMap<K, V>,
+    b: &HashMap<K, V>,
+    same: impl Fn(&V, &V) -> bool,
+) -> bool {
+    a.len() == b.len() && a.iter().all(|(k, v)| b.get(k).is_some_and(|w| same(v, w)))
+}
+
+fn same_enum(a: &EnumInfo, b: &EnumInfo) -> bool {
+    // Destructured so that a new field cannot be left out.
+    let EnumInfo { name, members } = a;
+    *name == b.name
+        && members.len() == b.members.len()
+        && members
+            .iter()
+            .zip(&b.members)
+            .all(|((n, c), (m, d))| n == m && c.same(d))
+}
+
+fn same_export(a: &wowlua_sema::Export, b: &wowlua_sema::Export) -> bool {
+    use wowlua_sema::Export;
+    match (a, b) {
+        (Export::Const(Some(x)), Export::Const(Some(y))) => x.same(y),
+        (Export::Enum(x), Export::Enum(y)) => same_enum(x, y),
+        _ => a == b,
+    }
+}
+
+fn same_import(a: &ImportContext, b: &ImportContext) -> bool {
+    match (a, b) {
+        (
+            ImportContext::Module {
+                id,
+                lazy,
+                exports,
+                attrs,
+                intrinsics,
+            },
+            ImportContext::Module {
+                id: id2,
+                lazy: lazy2,
+                exports: exports2,
+                attrs: attrs2,
+                intrinsics: intrinsics2,
+            },
+        ) => {
+            id == id2
+                && lazy == lazy2
+                && attrs == attrs2
+                && intrinsics == intrinsics2
+                && same_map(exports, exports2, same_export)
+        }
+        (ImportContext::Meta, ImportContext::Meta)
+        | (ImportContext::LoadOnly, ImportContext::LoadOnly) => true,
+        _ => false,
+    }
 }
 
 /// Lowers a parsed file without errors, as a script (no package context).
@@ -152,6 +249,9 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         next_fn_marks: FnMarks::default(),
         class_marks: None,
         fn_marks: HashMap::new(),
+        meta_read: std::cell::Cell::new(false),
+        line_hint: std::cell::Cell::new(0),
+        token_hint: std::cell::Cell::new(0),
     };
     // Exported functions, classes and enums are hoisted (spec §5.1,
     // decisions L24 and T76).
@@ -230,12 +330,15 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         comments: lowerer.comments(),
     };
     wowlua_luair::hygiene::apply(&mut chunk);
+    let reads_meta = lowerer.meta_read.get();
+    debug_assert!(lowerer.meta_used.is_empty() || reads_meta);
     Ok(Lowered {
         chunk,
         meta_used: lowerer.meta_used,
         uses_runtime: lowerer.uses_runtime,
         slices: lowerer.slices,
         warnings: lowerer.warnings,
+        reads_meta,
     })
 }
 
@@ -259,6 +362,47 @@ fn grow<R>(f: impl FnOnce() -> R) -> R {
 }
 
 // ------------------------------------------------------------- helpers --
+
+/// `slice.partition_point(pred)`, searched outward from `hint` (any value;
+/// past the end counts as the end). `pred` must hold on a prefix of `slice`
+/// and nowhere after it, so the point is unique and the hint only decides how
+/// fast it is found: a few probes next to the hint instead of a binary search
+/// over a whole large file.
+fn partition_point_near<T>(slice: &[T], hint: usize, pred: impl Fn(&T) -> bool) -> usize {
+    let hint = hint.min(slice.len());
+    // The point lies in `lo..=hi`.
+    let (mut lo, mut hi) = (0, slice.len());
+    let mut step = 1;
+    if hint == 0 || pred(&slice[hint - 1]) {
+        // At `hint` or after it: probe `hint`, `hint + 1`, `hint + 3`, …
+        lo = hint;
+        loop {
+            let probe = hint + step - 1;
+            if probe >= hi {
+                break;
+            }
+            if !pred(&slice[probe]) {
+                hi = probe;
+                break;
+            }
+            lo = probe + 1;
+            step *= 2;
+        }
+    } else {
+        // Before `hint - 1`: probe `hint - 2`, `hint - 3`, `hint - 5`, …
+        hi = hint - 1;
+        while step < hint {
+            let probe = hint - 1 - step;
+            if pred(&slice[probe]) {
+                lo = probe + 1;
+                break;
+            }
+            hi = probe;
+            step *= 2;
+        }
+    }
+    lo + slice[lo..hi].partition_point(&pred)
+}
 
 fn ident(name: &str, pos: Pos) -> ir::Ident {
     ir::Ident::new(name, pos)
@@ -493,16 +637,48 @@ struct Lowerer<'a> {
     class_marks: Option<FnMarks>,
     /// Marks of lowered functions, by the position of their `(`.
     fn_marks: HashMap<Pos, FnMarks>,
+    /// `ctx.meta` was read ([`Lowerer::meta`]).
+    meta_read: std::cell::Cell<bool>,
+    /// Where the last position lookups landed in `line_starts` and `tokens`:
+    /// lowering walks a file mostly forward, so the next lookup starts its
+    /// search there ([`partition_point_near`]).
+    line_hint: std::cell::Cell<usize>,
+    token_hint: std::cell::Cell<usize>,
 }
 
 const LICENSE_WORDS: &[&str] = &["license", "copyright", "spdx-license-identifier"];
 
 impl<'a> Lowerer<'a> {
+    /// `wowlua:meta`, recording that it was read (also when there is none).
+    /// Every read of `ctx.meta` goes through here: the build reuses a file's
+    /// lowering in the other flavors only when it never read it.
+    fn meta(&self) -> Option<&Arc<Meta>> {
+        self.meta_read.set(true);
+        self.ctx.meta.as_ref()
+    }
+
     // ---------------------------------------------------------- positions --
 
+    /// The Lua line (1-based) containing byte `offset`, the same line
+    /// [`Lexed::line_of`](wowlua_syntax::Lexed::line_of) finds: line starts
+    /// are strictly increasing, so it is the number of starts at or before
+    /// `offset`.
+    fn line_of(&self, offset: u32) -> u32 {
+        let starts = &self.parse.lexed.line_starts;
+        let line = partition_point_near(starts, self.line_hint.get(), |&s| s <= offset);
+        self.line_hint.set(line);
+        line as u32
+    }
+
     fn pos(&self, offset: u32) -> Pos {
-        let lexed = &self.parse.lexed;
-        Pos::new(lexed.line_of(offset), lexed.column_of(offset))
+        let line = self.line_of(offset);
+        let start = self.parse.lexed.line_starts[line as usize - 1];
+        Pos::new(line, offset - start)
+    }
+
+    /// The column (0-based, in bytes) of byte `offset`.
+    fn column_of(&self, offset: u32) -> u32 {
+        self.pos(offset).col
     }
 
     fn span_pos(&self, span: Span) -> Pos {
@@ -511,9 +687,10 @@ impl<'a> Lowerer<'a> {
 
     fn next_token_pos(&self, offset: u32) -> Pos {
         let tokens = &self.parse.lexed.tokens;
-        let i = tokens.partition_point(|t| t.start < offset);
+        let i = partition_point_near(tokens, self.token_hint.get(), |t| t.start < offset);
+        self.token_hint.set(i);
         match tokens.get(i) {
-            Some(t) => Pos::new(t.line, self.parse.lexed.column_of(t.start)),
+            Some(t) => Pos::new(t.line, self.column_of(t.start)),
             None => Pos::NONE,
         }
     }
@@ -534,14 +711,16 @@ impl<'a> Lowerer<'a> {
                 _ => continue,
             };
             let text = self.src[trivia.start as usize..trivia.end as usize].to_vec();
-            let lower = String::from_utf8_lossy(&text).to_ascii_lowercase();
-            if i < first && LICENSE_WORDS.iter().any(|w| lower.contains(w)) {
-                leading_license = true;
+            if i < first {
+                let lower = String::from_utf8_lossy(&text).to_ascii_lowercase();
+                if LICENSE_WORDS.iter().any(|w| lower.contains(w)) {
+                    leading_license = true;
+                }
             }
             out.push((
                 i < first,
                 ir::Comment {
-                    pos: Pos::new(trivia.line, lexed.column_of(trivia.start)),
+                    pos: Pos::new(trivia.line, self.column_of(trivia.start)),
                     license: text.starts_with(b"--[[!"),
                     text,
                     block,
@@ -749,7 +928,7 @@ impl<'a> Lowerer<'a> {
                 Some(c) => keep &= c.truthy(),
                 // Conditions on imports are checked by the module analysis.
                 None if import => {}
-                None if self.ctx.meta.as_ref().is_some_and(|m| m.flavor.is_none())
+                None if self.meta().is_some_and(|m| m.flavor.is_none())
                     && self.uses_flavor(cond) =>
                 {
                     self.error(
@@ -1035,7 +1214,7 @@ impl<'a> Lowerer<'a> {
     }
 
     fn ident(&self, n: &Name) -> ir::Ident {
-        ir::Ident::new(n.text.to_string(), self.span_pos(n.span))
+        ir::Ident::new(&*n.text, self.span_pos(n.span))
     }
 
     fn set_separators(&self, es: &[Expr], out: &mut [ir::Expr]) {
@@ -1823,10 +2002,15 @@ impl<'a> Lowerer<'a> {
             ExprKind::True => K::True,
             ExprKind::False => K::False,
             ExprKind::Number(n) => {
-                if n.raw.contains('_') || n.raw.to_ascii_lowercase().starts_with("0b") {
+                let binary = n
+                    .raw
+                    .as_bytes()
+                    .get(..2)
+                    .is_some_and(|p| p.eq_ignore_ascii_case(b"0b"));
+                if n.raw.contains('_') || binary {
                     K::Number(format_number(n.value.unwrap_or(0.0)))
                 } else {
-                    K::Number(n.raw.to_string())
+                    K::Number(String::from(&*n.raw))
                 }
             }
             ExprKind::String(s) => K::String(s.raw.to_vec()),
@@ -2004,7 +2188,13 @@ impl<'a> Lowerer<'a> {
     }
 
     fn table(&mut self, fields: &[TableField], span: Span) -> ir::ExprKind {
-        let mut operands: Vec<&Expr> = Vec::new();
+        // Both lists sized up front: the fields stay in the IR until the
+        // file is emitted, and pushing would leave room unused.
+        let keyed = fields
+            .iter()
+            .filter(|f| matches!(f, TableField::Keyed { .. }))
+            .count();
+        let mut operands: Vec<&Expr> = Vec::with_capacity(fields.len() + keyed);
         for f in fields {
             match f {
                 TableField::Keyed { key, value, .. } => {
@@ -2017,7 +2207,7 @@ impl<'a> Lowerer<'a> {
             }
         }
         let mut lowered = self.seq(&operands).into_iter();
-        let mut out = Vec::new();
+        let mut out = Vec::with_capacity(fields.len());
         for (i, f) in fields.iter().enumerate() {
             let mut lowered_field = match f {
                 TableField::Keyed { span, .. } => ir::Field::Keyed {
@@ -2390,7 +2580,7 @@ impl<'a> Lowerer<'a> {
     /// The value of a `wowlua:meta` path or (with `consts`) a `const`.
     fn leaf_value(&self, leaf: &Expr, consts: bool) -> Option<Const> {
         if let Some((kind, path)) = self.meta_path(leaf) {
-            let meta = self.ctx.meta.as_ref()?;
+            let meta = self.meta()?;
             return match meta.lookup(kind, &path) {
                 Lookup::Const(c) => Some(c),
                 _ => None,
@@ -2441,7 +2631,7 @@ impl<'a> Lowerer<'a> {
     /// otherwise (spec §6.2).
     fn meta_expr(&mut self, kind: MetaKind, path: Vec<String>, e: &Expr) -> ir::Expr {
         let pos = self.span_pos(e.span);
-        let Some(meta) = self.ctx.meta.clone() else {
+        let Some(meta) = self.meta().cloned() else {
             self.error(
                 "E1015",
                 e.span,
@@ -2517,7 +2707,7 @@ impl<'a> Lowerer<'a> {
                 return lit(ir::ExprKind::Nil, pos);
             }
         };
-        let Some(meta) = self.ctx.meta.clone() else {
+        let Some(meta) = self.meta().cloned() else {
             self.error("E1015", e.span, "`wowlua:meta` needs the package context");
             return lit(ir::ExprKind::Nil, pos);
         };
@@ -2756,4 +2946,41 @@ fn flatten_chain(e: &Expr) -> (&Expr, Vec<Link<'_>>) {
     }
     links.reverse();
     (current, links)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::partition_point_near;
+
+    #[test]
+    fn partition_point_near_finds_the_point_from_every_hint() {
+        let long: Vec<u32> = (0..200).map(|i| i / 3 * 2).collect();
+        let slices: [&[u32]; 6] = [
+            &[],
+            &[0],
+            &[4],
+            &[0, 1, 2],
+            &[0, 2, 2, 2, 5, 7, 7, 9, 12, 12, 12, 12, 20],
+            &long,
+        ];
+        for slice in slices {
+            let max = slice.last().copied().unwrap_or(0);
+            for key in 0..=max + 2 {
+                let below = slice.partition_point(|&s| s < key);
+                let at_or_below = slice.partition_point(|&s| s <= key);
+                for hint in (0..=slice.len() + 1).chain([usize::MAX]) {
+                    assert_eq!(
+                        partition_point_near(slice, hint, |&s| s < key),
+                        below,
+                        "{slice:?} < {key} from {hint}"
+                    );
+                    assert_eq!(
+                        partition_point_near(slice, hint, |&s| s <= key),
+                        at_or_below,
+                        "{slice:?} <= {key} from {hint}"
+                    );
+                }
+            }
+        }
+    }
 }

@@ -272,11 +272,14 @@ impl Lowerer<'_> {
             return None;
         }
         let (helper, items, arity): (&str, Vec<&Expr>, usize) = match &e.kind {
-            ExprKind::Method {
-                obj,
-                name,
-                args: Args::Parens { args, .. },
-            } if args.len() == 2 && matches!(name.text.as_ref(), "SetScript" | "HookScript") => {
+            // Other method calls are not routed (`None`, as in the last arm).
+            ExprKind::Method { obj, name, args } => {
+                let Args::Parens { args, .. } = &**args else {
+                    return None;
+                };
+                if args.len() != 2 || !matches!(name.text.as_ref(), "SetScript" | "HookScript") {
+                    return None;
+                }
                 let helper = if name.text.as_ref() == "SetScript" {
                     "setScript"
                 } else {

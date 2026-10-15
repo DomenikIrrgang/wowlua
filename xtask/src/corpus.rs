@@ -347,6 +347,7 @@ fn check_file(lua: &mlua::Lua, dir: &Path, path: &Path) -> Result<Stats> {
                 comments,
                 indent: "\t".into(),
                 compact: false,
+                mappings: true,
             },
         );
         match dump(lua, &out.text) {
