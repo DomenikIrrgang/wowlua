@@ -4,7 +4,7 @@
 use super::env::{DefKind, Env, Member, MemberKind, Visibility};
 use super::subst;
 use super::types::*;
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 
 /// The checking mode of a file (spec §2.1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -177,7 +177,7 @@ impl Env {
         args: &[TypeId],
         name: &str,
     ) -> Option<(Member, DefId)> {
-        let mut seen = HashSet::new();
+        let mut seen = FxHashSet::default();
         self.instance_member_inner(def, args, name, &mut seen)
     }
 
@@ -186,7 +186,7 @@ impl Env {
         def: DefId,
         args: &[TypeId],
         name: &str,
-        seen: &mut HashSet<DefId>,
+        seen: &mut FxHashSet<DefId>,
     ) -> Option<(Member, DefId)> {
         if !seen.insert(def) {
             return None;
@@ -265,7 +265,7 @@ impl Env {
     /// `sub` is `sup` or one of its subclasses / sub-interfaces.
     pub fn derives(&self, sub: DefId, sup: DefId) -> bool {
         let mut stack = vec![sub];
-        let mut seen = HashSet::new();
+        let mut seen = FxHashSet::default();
         while let Some(d) = stack.pop() {
             if d == sup {
                 return true;
@@ -284,7 +284,7 @@ impl Env {
 
     /// Is `s` assignable to `t`?
     pub fn assignable(&mut self, s: TypeId, t: TypeId, mode: Mode) -> bool {
-        let mut assuming = HashSet::new();
+        let mut assuming = FxHashSet::default();
         self.assignable_in(s, t, mode, &mut assuming)
     }
 
@@ -293,7 +293,7 @@ impl Env {
         s: TypeId,
         t: TypeId,
         mode: Mode,
-        assuming: &mut HashSet<(TypeId, TypeId)>,
+        assuming: &mut FxHashSet<(TypeId, TypeId)>,
     ) -> bool {
         if s == t {
             return true;
@@ -311,7 +311,7 @@ impl Env {
         s: TypeId,
         t: TypeId,
         mode: Mode,
-        assuming: &mut HashSet<(TypeId, TypeId)>,
+        assuming: &mut FxHashSet<(TypeId, TypeId)>,
     ) -> bool {
         let st = self.types.get(s).clone();
         let tt = self.types.get(t).clone();
@@ -474,7 +474,7 @@ impl Env {
         a: TypeId,
         b: TypeId,
         mode: Mode,
-        assuming: &mut HashSet<(TypeId, TypeId)>,
+        assuming: &mut FxHashSet<(TypeId, TypeId)>,
     ) -> bool {
         match mode {
             Mode::Basic => self.assignable_in(a, b, mode, assuming),
@@ -540,7 +540,7 @@ impl Env {
         s: TypeId,
         target: &Record,
         mode: Mode,
-        assuming: &mut HashSet<(TypeId, TypeId)>,
+        assuming: &mut FxHashSet<(TypeId, TypeId)>,
     ) -> bool {
         match self.types.get(s) {
             Ty::Record(_) | Ty::Named(..) => {}
@@ -579,12 +579,12 @@ impl Env {
         iface: DefId,
         args: &[TypeId],
         mode: Mode,
-        assuming: &mut HashSet<(TypeId, TypeId)>,
+        assuming: &mut FxHashSet<(TypeId, TypeId)>,
     ) -> bool {
         // All members, inherited ones included.
         let mut names: Vec<Box<str>> = Vec::new();
         let mut stack = vec![iface];
-        let mut seen = HashSet::new();
+        let mut seen = FxHashSet::default();
         while let Some(d) = stack.pop() {
             if !seen.insert(d) {
                 continue;
@@ -625,7 +625,7 @@ impl Env {
         f: &Func,
         g: &Func,
         mode: Mode,
-        assuming: &mut HashSet<(TypeId, TypeId)>,
+        assuming: &mut FxHashSet<(TypeId, TypeId)>,
     ) -> bool {
         // Generic sources are compared with their parameters as `any`.
         let f = if f.type_params.is_empty() {

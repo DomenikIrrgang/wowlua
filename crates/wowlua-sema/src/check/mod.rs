@@ -15,6 +15,7 @@ pub mod types;
 use crate::{Analysis, Export, FileInput, FileKind, Target};
 use body::{Checker, FileInfo};
 use query::Mode;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::{HashMap, HashSet};
 use types::{Field, Record, Ty, TypeId, Types};
 use wowlua_diagnostics::Diagnostic;
@@ -92,7 +93,7 @@ pub fn check_package_full(
                 declaration: true,
                 imports: Vec::new(),
                 namespaces: Vec::new(),
-                enums: HashMap::new(),
+                enums: FxHashMap::default(),
                 declares,
             });
         }
@@ -194,8 +195,8 @@ pub fn check_package_full(
     }
     // Globals created with `@global` are declared (spec §4.3); globals the
     // package assigns are known (their assignments are W1002).
-    let mut extra_globals = extra_globals.clone();
-    let mut assigned_globals = HashSet::new();
+    let mut extra_globals: FxHashSet<String> = extra_globals.iter().cloned().collect();
+    let mut assigned_globals = FxHashSet::default();
     let markers = crate::usage::Markers::default();
     for (i, f) in files.iter().enumerate() {
         let Some(parse) = f.parse else { continue };
@@ -224,7 +225,7 @@ pub fn check_package_full(
 
     // Modules before their importers, so export types are known.
     let order = check_order(files.len(), &analysis.edges);
-    let mut exports: HashMap<usize, HashMap<Box<str>, TypeId>> = HashMap::new();
+    let mut exports: FxHashMap<usize, FxHashMap<Box<str>, TypeId>> = FxHashMap::default();
     for i in order {
         let (Some(settings), Some(parse)) = (settings.get(i).copied().flatten(), files[i].parse)
         else {
@@ -404,7 +405,7 @@ fn type_refs<'a>(t: &'a wowlua_syntax::ast::Type, out: &mut Vec<&'a str>) {
 }
 
 /// Names of declarations decorated with `@global`.
-fn global_decorated(block: &wowlua_syntax::ast::Block, out: &mut HashSet<String>) {
+fn global_decorated(block: &wowlua_syntax::ast::Block, out: &mut FxHashSet<String>) {
     use wowlua_syntax::ast::ExprKind;
     for s in &block.stmts {
         let Some(d) = s.decorators.iter().find(|d| d.is_named("global")) else {
@@ -470,9 +471,9 @@ fn import_types(
     files: &[FileInput],
     analysis: &Analysis,
     file: usize,
-    exports: &HashMap<usize, HashMap<Box<str>, TypeId>>,
-) -> HashMap<Box<str>, TypeId> {
-    let mut out = HashMap::new();
+    exports: &FxHashMap<usize, FxHashMap<Box<str>, TypeId>>,
+) -> FxHashMap<Box<str>, TypeId> {
+    let mut out = FxHashMap::default();
     let (Some(parse), Some(info)) = (files[file].parse, &analysis.modules[file]) else {
         return out;
     };

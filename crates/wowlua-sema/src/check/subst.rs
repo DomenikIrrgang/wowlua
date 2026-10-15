@@ -1,13 +1,13 @@
 //! Substitution of type and pack parameters (generic instantiation).
 
 use super::types::*;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 /// What each type and pack parameter stands for.
 #[derive(Clone, Debug, Default)]
 pub struct Subst {
-    pub types: HashMap<ParamId, TypeId>,
-    pub packs: HashMap<ParamId, Pack>,
+    pub types: FxHashMap<ParamId, TypeId>,
+    pub packs: FxHashMap<ParamId, Pack>,
 }
 
 impl Subst {

@@ -2654,6 +2654,7 @@ version = "0.9.0"
 dependencies = [
  "hashbrown",
  "indexmap",
+ "rustc-hash",
  "stacker",
  "wowlua-diagnostics",
  "wowlua-flavors",

@@ -6,7 +6,7 @@ use super::narrow::Flow;
 use super::query::Mode;
 use super::types::Field;
 use super::types::*;
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
 use wowlua_syntax::ast::*;
@@ -50,19 +50,19 @@ pub struct FileInfo<'a> {
     /// and type ranges are warnings (spec §2.1).
     pub pure_lua: bool,
     /// Extra allowed globals (`check.globals`, SavedVariables, `@global`).
-    pub extra_globals: &'a HashSet<String>,
+    pub extra_globals: &'a FxHashSet<String>,
     /// Globals the package assigns: reading them is fine (the assignments
     /// themselves are W1002).
-    pub assigned_globals: &'a HashSet<String>,
+    pub assigned_globals: &'a FxHashSet<String>,
     /// Imported bindings: local name → type.
-    pub imports: HashMap<Box<str>, TypeId>,
+    pub imports: FxHashMap<Box<str>, TypeId>,
     /// The file is a module (top-level `...` is not the addon arguments
     /// for imports; it still is in WoW).
     pub is_module: bool,
     /// Shared flavor mode: the flavors and API availability.
     pub shared: Option<&'a super::flavors::SharedFlavors>,
     /// Names bound to `wowlua:meta`'s `flavor`.
-    pub meta_flavor: HashSet<String>,
+    pub meta_flavor: FxHashSet<String>,
     /// Imports bound to the standard library's `@intrinsic` ids.
     pub intrinsics: crate::stdlib::Intrinsics,
 }
@@ -72,37 +72,37 @@ pub struct Checker<'e> {
     pub mode: Mode,
     pub scope: Scope,
     pub(crate) vars: Vec<Var>,
-    scopes: Vec<HashMap<Box<str>, VarId>>,
+    scopes: Vec<FxHashMap<Box<str>, VarId>>,
     pub(crate) flow: Flow,
     /// Fields of locals that conditions narrowed (`a.b`, `a.b.c`, spec
     /// §2.5): each path is a synthetic variable, so flows narrow and join
     /// it like a local. Keyed by the root local and the dotted path.
-    pub(crate) field_vars: HashMap<(VarId, Box<str>), VarId>,
+    pub(crate) field_vars: FxHashMap<(VarId, Box<str>), VarId>,
     /// The current path can still run.
     pub(crate) live: bool,
     fns: Vec<FnCtx>,
     pub depth: u32,
     pub diagnostics: Vec<Diagnostic>,
-    pub extra_globals: HashSet<String>,
-    pub assigned_globals: HashSet<String>,
+    pub extra_globals: FxHashSet<String>,
+    pub assigned_globals: FxHashSet<String>,
     /// Types of expressions already checked, by span.
-    pub(crate) expr_types: HashMap<(u32, u32), TypeId>,
+    pub(crate) expr_types: FxHashMap<(u32, u32), TypeId>,
     /// Links of optional chains: their type before the short-circuit's
     /// `nil`, which the rest of the chain continues from.
-    pub(crate) chain_inner: HashMap<(u32, u32), TypeId>,
+    pub(crate) chain_inner: FxHashMap<(u32, u32), TypeId>,
     /// Classes whose bodies are being checked: (def, static member).
     pub(crate) classes: Vec<(DefId, bool)>,
     /// Exported values of this module.
-    pub exports: HashMap<Box<str>, TypeId>,
+    pub exports: FxHashMap<Box<str>, TypeId>,
     /// Name spans of accesses to renamable methods (`rename-private`), with
     /// the class that declares the method.
-    pub private_methods: HashMap<wowlua_span::Span, DefId>,
+    pub private_methods: FxHashMap<wowlua_span::Span, DefId>,
     /// Classes whose instances or class tables this file stores in globals.
-    pub global_classes: HashSet<DefId>,
-    reassigned: HashSet<u32>,
-    assigned_in_closures: HashSet<u32>,
+    pub global_classes: FxHashSet<DefId>,
+    reassigned: FxHashSet<u32>,
+    assigned_in_closures: FxHashSet<u32>,
     /// Locals assigned after their declaration (anywhere).
-    assigned_later: HashSet<u32>,
+    assigned_later: FxHashSet<u32>,
     pure_lua: bool,
     /// `...` at the top level: (addon name, addon table).
     pub(crate) top_vararg: Option<(TypeId, TypeId)>,
@@ -111,22 +111,22 @@ pub struct Checker<'e> {
     pub(crate) dynamic_env: bool,
     pub(crate) shared: Option<super::flavors::SharedFlavors>,
     pub(crate) guard: super::flavors::Guard,
-    pub(crate) meta_flavor: HashSet<String>,
+    pub(crate) meta_flavor: FxHashSet<String>,
     /// Expressions that are existence tests (`if C_X then`): no E2030.
-    pub(crate) probes: HashSet<wowlua_span::Span>,
+    pub(crate) probes: FxHashSet<wowlua_span::Span>,
     /// Inside code already reported as unreachable (W1005).
     in_dead: bool,
     is_module: bool,
     /// Function expressions passed as call arguments (callbacks: no E2050).
-    pub(crate) callbacks: HashSet<wowlua_span::Span>,
+    pub(crate) callbacks: FxHashSet<wowlua_span::Span>,
     /// The next `function_body` checks a callback.
     pub(crate) callback_next: bool,
     /// Runtime checks of annotated parameters, `...: T` and `::`, by span.
-    pub(crate) value_checks: HashMap<wowlua_span::Span, super::runtime::ValueCheck>,
+    pub(crate) value_checks: FxHashMap<wowlua_span::Span, super::runtime::ValueCheck>,
     /// Imports bound to the standard library's `@intrinsic` ids, and the
     /// variables of those imports (a shadowing local is not the import).
     intrinsics: crate::stdlib::Intrinsics,
-    import_vars: HashMap<Box<str>, VarId>,
+    import_vars: FxHashMap<Box<str>, VarId>,
     /// The handler type the decorators of the statement being checked give
     /// its function (`@event("X")`): (type, what it handles).
     next_handler: Option<(Func, String)>,
@@ -142,21 +142,21 @@ impl<'e> Checker<'e> {
                 ..Scope::default()
             },
             vars: Vec::new(),
-            scopes: vec![HashMap::new()],
-            flow: Flow::new(),
-            field_vars: HashMap::new(),
+            scopes: vec![FxHashMap::default()],
+            flow: Flow::default(),
+            field_vars: FxHashMap::default(),
             live: true,
             fns: Vec::new(),
             depth: 0,
             diagnostics: Vec::new(),
             extra_globals: info.extra_globals.clone(),
             assigned_globals: info.assigned_globals.clone(),
-            expr_types: HashMap::new(),
-            chain_inner: HashMap::new(),
+            expr_types: FxHashMap::default(),
+            chain_inner: FxHashMap::default(),
             classes: Vec::new(),
-            exports: HashMap::new(),
-            private_methods: HashMap::new(),
-            global_classes: HashSet::new(),
+            exports: FxHashMap::default(),
+            private_methods: FxHashMap::default(),
+            global_classes: FxHashSet::default(),
             reassigned: reassigned_in_closures(&parse.chunk.block).0,
             assigned_in_closures: reassigned_in_closures(&parse.chunk.block).1,
             assigned_later: reassigned_in_closures(&parse.chunk.block).2,
@@ -166,14 +166,14 @@ impl<'e> Checker<'e> {
             shared: info.shared.cloned(),
             guard: super::flavors::Guard::default(),
             meta_flavor: info.meta_flavor.clone(),
-            probes: HashSet::new(),
+            probes: FxHashSet::default(),
             in_dead: false,
             is_module: info.is_module,
-            callbacks: HashSet::new(),
+            callbacks: FxHashSet::default(),
             callback_next: false,
-            value_checks: HashMap::new(),
+            value_checks: FxHashMap::default(),
             intrinsics: info.intrinsics.clone(),
-            import_vars: HashMap::new(),
+            import_vars: FxHashMap::default(),
             next_handler: None,
         };
         for (name, &t) in &info.imports {
@@ -220,7 +220,7 @@ impl<'e> Checker<'e> {
     // ------------------------------------------------------------ scopes --
 
     pub fn push_scope(&mut self) {
-        self.scopes.push(HashMap::new());
+        self.scopes.push(FxHashMap::default());
     }
 
     pub fn pop_scope(&mut self) {
@@ -909,7 +909,7 @@ impl<'e> Checker<'e> {
     /// Locals assigned in a loop body lose their narrowing at the loop
     /// start (the body may run again).
     fn forget_assigned(&mut self, body: &Block) {
-        let mut names = HashSet::new();
+        let mut names = FxHashSet::default();
         wowlua_syntax::visit::walk_stmts(body, &mut |s| match &s.kind {
             StmtKind::Assign { targets, .. } => {
                 for t in targets {
@@ -1336,7 +1336,7 @@ impl<'e> Checker<'e> {
             } => Some(func),
             _ => None,
         });
-        let mut assigned: HashSet<Box<str>> = HashSet::new();
+        let mut assigned: FxHashSet<Box<str>> = FxHashSet::default();
         if let Some(f) = ctor {
             for s in &f.body.stmts {
                 if let StmtKind::Assign { targets, .. } = &s.kind {
@@ -1437,7 +1437,7 @@ impl<'e> Checker<'e> {
 /// how this file's names resolve.
 fn calls_setfenv(b: &Block) -> bool {
     // Names of the functions this file defines.
-    let mut defined: HashSet<Box<str>> = HashSet::new();
+    let mut defined: FxHashSet<Box<str>> = FxHashSet::default();
     wowlua_syntax::visit::walk_stmts(b, &mut |s| match &s.kind {
         StmtKind::LocalFunction { name, .. } => {
             defined.insert(name.text.clone());
@@ -1508,7 +1508,7 @@ fn typeof_exprs<'t>(t: &'t Type, out: &mut Vec<&'t Expr>) {
 /// `E2001` → `W2001` (spec §2.1).
 fn warning_code(code: &'static str) -> &'static str {
     use std::sync::{Mutex, OnceLock};
-    static CODES: OnceLock<Mutex<HashMap<&'static str, &'static str>>> = OnceLock::new();
+    static CODES: OnceLock<Mutex<FxHashMap<&'static str, &'static str>>> = OnceLock::new();
     let mut map = CODES.get_or_init(Default::default).lock().expect("codes");
     map.entry(code)
         .or_insert_with(|| Box::leak(format!("W{}", &code[1..]).into_boxed_str()))
@@ -1546,15 +1546,15 @@ fn synthetic_body(
 /// The declarations (by name start) of locals that are assigned from a
 /// nested function after their declaration or captured and assigned later;
 /// and of those assigned from a nested function.
-fn reassigned_in_closures(b: &Block) -> (HashSet<u32>, HashSet<u32>, HashSet<u32>) {
+fn reassigned_in_closures(b: &Block) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashSet<u32>) {
     struct Walk {
-        scopes: Vec<HashMap<Box<str>, (u32, u32)>>,
+        scopes: Vec<FxHashMap<Box<str>, (u32, u32)>>,
         depth: u32,
-        out: HashSet<u32>,
+        out: FxHashSet<u32>,
         /// Locals captured by a nested function.
-        captured: HashSet<u32>,
+        captured: FxHashSet<u32>,
         /// Locals assigned after their declaration.
-        assigned: HashSet<u32>,
+        assigned: FxHashSet<u32>,
     }
     impl Walk {
         fn lookup(&self, n: &str) -> Option<(u32, u32)> {
@@ -1583,7 +1583,7 @@ fn reassigned_in_closures(b: &Block) -> (HashSet<u32>, HashSet<u32>, HashSet<u32
             }
         }
         fn block(&mut self, b: &Block) {
-            self.scopes.push(HashMap::new());
+            self.scopes.push(FxHashMap::default());
             for s in &b.stmts {
                 self.stmt(s);
             }
@@ -1591,7 +1591,7 @@ fn reassigned_in_closures(b: &Block) -> (HashSet<u32>, HashSet<u32>, HashSet<u32
         }
         fn func(&mut self, f: &FuncBody) {
             self.depth += 1;
-            self.scopes.push(HashMap::new());
+            self.scopes.push(FxHashMap::default());
             for p in &f.params {
                 self.declare(&p.name);
             }
@@ -1658,7 +1658,7 @@ fn reassigned_in_closures(b: &Block) -> (HashSet<u32>, HashSet<u32>, HashSet<u32
                     }
                 }
                 StmtKind::NumericFor { var, body, .. } => {
-                    self.scopes.push(HashMap::new());
+                    self.scopes.push(FxHashMap::default());
                     self.declare(&var.name);
                     self.block(body);
                     self.scopes.pop();
@@ -1667,7 +1667,7 @@ fn reassigned_in_closures(b: &Block) -> (HashSet<u32>, HashSet<u32>, HashSet<u32
                     for e in exprs {
                         self.expr(e);
                     }
-                    self.scopes.push(HashMap::new());
+                    self.scopes.push(FxHashMap::default());
                     for v in vars {
                         self.declare(&v.name);
                     }
@@ -1715,11 +1715,11 @@ fn reassigned_in_closures(b: &Block) -> (HashSet<u32>, HashSet<u32>, HashSet<u32
         }
     }
     let mut w = Walk {
-        scopes: vec![HashMap::new()],
+        scopes: vec![FxHashMap::default()],
         depth: 0,
-        out: HashSet::new(),
-        captured: HashSet::new(),
-        assigned: HashSet::new(),
+        out: FxHashSet::default(),
+        captured: FxHashSet::default(),
+        assigned: FxHashSet::default(),
     };
     w.block(b);
     // A captured local assigned later (a forward declaration) may hold

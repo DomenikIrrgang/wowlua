@@ -15,6 +15,7 @@
 //! right operand of `and`) are *guarded*: they do not order files (decision
 //! T70).
 
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::{HashMap, HashSet};
 use wowlua_span::{FileId, Span};
 use wowlua_syntax::Parse;
@@ -231,7 +232,7 @@ enum Info {
 
 struct Walker<'a> {
     out: FileUsage,
-    scopes: Vec<HashMap<String, Local>>,
+    scopes: Vec<FxHashMap<String, Local>>,
     current: usize,
     markers: &'a Markers,
     /// Keys known to be defined here (tested by an enclosing guard).
@@ -240,7 +241,7 @@ struct Walker<'a> {
     /// `x.f`, `x?.f`, `x(…)`, `x:m()`).
     link: bool,
     /// Local names imported from the standard library (`wowlua:*`).
-    stdlib_imports: HashSet<String>,
+    stdlib_imports: FxHashSet<String>,
 }
 
 /// The usage summary of one file.
@@ -310,12 +311,12 @@ impl<'a> Walker<'a> {
                 }],
                 ..FileUsage::default()
             },
-            scopes: vec![HashMap::new()],
+            scopes: vec![FxHashMap::default()],
             current: 0,
             markers,
             guards: Vec::new(),
             link: false,
-            stdlib_imports: HashSet::new(),
+            stdlib_imports: FxHashSet::default(),
         }
     }
 
@@ -353,7 +354,7 @@ impl<'a> Walker<'a> {
             );
             let functions = self.out.functions.len();
             let calls = self.out.functions[self.current].calls.len();
-            self.scopes.push(HashMap::new());
+            self.scopes.push(FxHashMap::default());
             self.declare("self", Local::Plain);
             for s in &parse.chunk.block.stmts {
                 self.stmt(s);
@@ -547,7 +548,7 @@ impl<'a> Walker<'a> {
     }
 
     fn block(&mut self, b: &Block) {
-        self.scopes.push(HashMap::new());
+        self.scopes.push(FxHashMap::default());
         for s in &b.stmts {
             self.stmt(s);
         }
@@ -673,7 +674,7 @@ impl<'a> Walker<'a> {
         let saved = self.current;
         let saved_guards = std::mem::take(&mut self.guards);
         self.current = id;
-        self.scopes.push(HashMap::new());
+        self.scopes.push(FxHashMap::default());
         if method {
             self.declare("self", Local::Param(0));
         }
@@ -751,7 +752,7 @@ impl<'a> Walker<'a> {
                 self.guarded_block(keys, body);
             }
             StmtKind::Repeat { body, cond } => {
-                self.scopes.push(HashMap::new());
+                self.scopes.push(FxHashMap::default());
                 for s in &body.stmts {
                     self.stmt(s);
                 }
@@ -786,7 +787,7 @@ impl<'a> Walker<'a> {
                 if let Some(s) = step {
                     self.expr(s);
                 }
-                self.scopes.push(HashMap::new());
+                self.scopes.push(FxHashMap::default());
                 self.declare(&var.name.text, Local::Plain);
                 self.block(body);
                 self.scopes.pop();
@@ -795,7 +796,7 @@ impl<'a> Walker<'a> {
                 for e in exprs {
                     self.expr(e);
                 }
-                self.scopes.push(HashMap::new());
+                self.scopes.push(FxHashMap::default());
                 for v in vars {
                     self.declare(&v.name.text, Local::Plain);
                 }
@@ -1077,7 +1078,7 @@ impl<'a> Walker<'a> {
         let saved = self.current;
         let saved_guards = std::mem::take(&mut self.guards);
         self.current = id;
-        self.scopes.push(HashMap::new());
+        self.scopes.push(FxHashMap::default());
         if method {
             self.declare("self", Local::Param(0));
         }

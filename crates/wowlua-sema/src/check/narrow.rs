@@ -3,11 +3,11 @@
 
 use super::body::{Checker, VarId};
 use super::types::*;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use wowlua_syntax::ast::*;
 
 /// The narrowed types of locals at one point of a function.
-pub type Flow = HashMap<VarId, TypeId>;
+pub type Flow = FxHashMap<VarId, TypeId>;
 
 /// The root of the field paths of declared globals (`G.a.b`: the path
 /// `G.a.b` under this root).
@@ -22,7 +22,7 @@ impl Checker<'_> {
             (false, false) => return a.clone(),
             _ => {}
         }
-        let mut out = Flow::new();
+        let mut out = Flow::default();
         for (v, &ta) in a {
             let tb = b.get(v).copied().unwrap_or_else(|| self.var_base(*v));
             out.insert(*v, self.env.types.union(&[ta, tb]));
