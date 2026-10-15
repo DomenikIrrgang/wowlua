@@ -2,7 +2,7 @@
 //! functions, enums and constants, with each function's documentation entry
 //! as it is (every flag Blizzard's tables carry).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::sync::{Mutex, OnceLock};
 
@@ -29,6 +29,11 @@ pub struct Api {
     pub enums: Vec<(&'static str, Vec<(String, f64)>)>,
     /// `Constants.X` tables: name → (field, value).
     pub constants: Vec<(&'static str, Vec<(String, Json)>)>,
+    /// The documentation's enumerations and structures, by name.
+    pub enum_names: HashSet<String>,
+    pub structures: HashSet<String>,
+    /// Type aliases from the declarations (`type ClubId = string`).
+    pub aliases: HashMap<String, String>,
 }
 
 /// Names live as long as the process: natives' names are `&'static str`.
@@ -45,7 +50,20 @@ pub fn api(flavor: &str) -> Option<&'static Api> {
         return Some(api);
     }
     let bytes = wowlua_api::documentation(flavor)?;
-    let api: &'static Api = Box::leak(Box::new(parse(bytes)));
+    let mut parsed = parse(bytes);
+    if let Some(files) = wowlua_api::declarations(flavor) {
+        for file in files {
+            for line in file.text.lines() {
+                if let Some((name, ty)) = line
+                    .strip_prefix("type ")
+                    .and_then(|rest| rest.split_once(" = "))
+                {
+                    parsed.aliases.insert(name.to_string(), ty.to_string());
+                }
+            }
+        }
+    }
+    let api: &'static Api = Box::leak(Box::new(parsed));
     cache.insert(flavor.to_string(), api);
     Some(api)
 }
@@ -61,6 +79,9 @@ fn parse(gz: &[u8]) -> Api {
         functions: Vec::new(),
         enums: Vec::new(),
         constants: Vec::new(),
+        enum_names: HashSet::new(),
+        structures: HashSet::new(),
+        aliases: HashMap::new(),
     };
     let str_of = |v: &Json, k: &str| v.get(k).and_then(Json::as_str).map(str::to_string);
     let list = |v: &Json, k: &str| {
@@ -72,12 +93,22 @@ fn parse(gz: &[u8]) -> Api {
     for system in &systems {
         let kind = str_of(system, "Type").unwrap_or_default();
         let sname = leak(&str_of(system, "Name").unwrap_or_default());
-        let namespace = str_of(system, "Namespace").filter(|n| !n.is_empty());
+        let system_namespace = str_of(system, "Namespace").filter(|n| !n.is_empty());
+        let system_env = str_of(system, "Environment");
         if kind != "ScriptObject" {
             for f in list(system, "Functions") {
                 let Some(short) = str_of(&f, "Name") else {
                     continue;
                 };
+                // Blizzard's code only: addons do not have it.
+                let env = str_of(&f, "Environment").or_else(|| system_env.clone());
+                if env.as_deref() == Some("SecureOnly") {
+                    continue;
+                }
+                // A function may name its own namespace.
+                let namespace = str_of(&f, "Namespace")
+                    .filter(|n| !n.is_empty())
+                    .or_else(|| system_namespace.clone());
                 let name = match &namespace {
                     Some(ns) => format!("{ns}.{short}"),
                     None => short.clone(),
@@ -96,7 +127,11 @@ fn parse(gz: &[u8]) -> Api {
                 continue;
             };
             match str_of(&t, "Type").as_deref() {
+                Some("Structure") => {
+                    api.structures.insert(tname);
+                }
                 Some("Enumeration") => {
+                    api.enum_names.insert(tname.clone());
                     let fields = list(&t, "Fields")
                         .iter()
                         .filter_map(|f| Some((str_of(f, "Name")?, f.get("EnumValue")?.as_f64()?)))

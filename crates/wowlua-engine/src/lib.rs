@@ -4,6 +4,7 @@
 //! with "`<name>` is not mocked", so gaps are visible.
 
 pub mod api;
+pub mod args;
 
 use std::collections::HashMap;
 
@@ -101,8 +102,11 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(engine) = Engine::of(vm) else {
         return Err(vm.error("the engine is not installed"));
     };
-    let f = &engine.api.functions[i as usize];
-    match engine.behaviours.get(f.name).copied() {
+    let api = engine.api;
+    let f = &api.functions[i as usize];
+    let behaviour = engine.behaviours.get(f.name).copied();
+    args::check(vm, api, f, &c)?;
+    match behaviour {
         Some(behaviour) => behaviour(vm, c),
         None => Err(vm.error(&format!("{} is not mocked", f.name))),
     }
