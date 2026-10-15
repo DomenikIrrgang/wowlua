@@ -239,10 +239,26 @@ impl<'e> Checker<'e> {
         is_const: bool,
         span: Option<Span>,
     ) -> VarId {
+        self.declare_with(name, declared, ty, is_const, span, true)
+    }
+
+    /// `widen`: an unannotated variable holds its value's literals widened
+    /// (`local x = "a"` is a `string`); a generic `for`'s variables take
+    /// the iterator's result types as they are (spec §2.4.4).
+    fn declare_with(
+        &mut self,
+        name: &str,
+        declared: Option<TypeId>,
+        ty: TypeId,
+        is_const: bool,
+        span: Option<Span>,
+        widen: bool,
+    ) -> VarId {
         let id = VarId(self.vars.len() as u32);
         let base = match declared {
             Some(d) => d,
-            None => self.env.types.widen(ty),
+            None if widen => self.env.types.widen(ty),
+            None => ty,
         };
         self.vars.push(Var {
             name: name.into(),
@@ -260,7 +276,7 @@ impl<'e> Checker<'e> {
             .insert(name.into(), id);
         if declared.is_none() {
             // Unannotated locals hold widened literals (spec §2.4).
-            let t = if is_const {
+            let t = if is_const || !widen {
                 ty
             } else {
                 self.env.types.widen(ty)
@@ -766,7 +782,7 @@ impl<'e> Checker<'e> {
                 for (i, v) in vars.iter().enumerate() {
                     let declared = v.ty.as_ref().map(|t| self.annotation(t));
                     let t = loop_types.get(i).copied().unwrap_or(Types::ANY);
-                    self.declare(&v.name.text, declared, t, false, Some(v.name.span));
+                    self.declare_with(&v.name.text, declared, t, false, Some(v.name.span), false);
                 }
                 let entry = self.flow.clone();
                 self.block(body);

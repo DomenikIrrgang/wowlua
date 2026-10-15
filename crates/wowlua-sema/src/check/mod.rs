@@ -835,6 +835,21 @@ mod tests {
         assert!(d.iter().all(|x| !x.is_error()), "{src}\n{:#?}", codes(&d));
     }
 
+    /// A literal binds as its base type at the top level only: inside a
+    /// table type the declared element type binds as it is (tables are
+    /// invariant).
+    #[test]
+    fn generic_inference_keeps_declared_element_types() {
+        strict_ok(
+            "local m: { [string]: { [string]: string } | false } = {}\nfor _, v in pairs(m) do\n    if v then print(v.x) end\nend\n",
+        );
+        strict_ok("local l: (false | number)[] = {}\nfor _, v in ipairs(l) do print(v) end\n");
+        // Top-level literals still widen: `T` is `string`, not `\"x\"`.
+        strict_ok(
+            "local function id<T>(v: T): T return v end\nlocal s = id(\"x\")\ns = \"y\"\nprint(s)\n",
+        );
+    }
+
     #[test]
     fn strict_mode() {
         strict_err("local function f(a) return a end\n", "E2050");

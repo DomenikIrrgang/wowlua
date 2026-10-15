@@ -2498,12 +2498,24 @@ impl Checker<'_> {
     /// Infers type arguments: binds parameters in `pattern` to the
     /// corresponding parts of `actual`.
     pub fn unify(&mut self, pattern: TypeId, actual: TypeId, s: &mut Subst) {
+        self.unify_at(pattern, actual, s, true);
+    }
+
+    /// `widen`: a literal binds as its base type (`"x"` as `string`). Not
+    /// inside a table's element or value type, which is declared (literal
+    /// tables widen their own entries) and invariant: `{ [string]: false }`
+    /// binds `V` to `false`, not `boolean`.
+    fn unify_at(&mut self, pattern: TypeId, actual: TypeId, s: &mut Subst, widen: bool) {
         match (
             self.env.types.get(pattern).clone(),
             self.env.types.get(actual).clone(),
         ) {
             (Ty::Param(p), _) => {
-                let widened = self.env.types.widen(actual);
+                let widened = if widen {
+                    self.env.types.widen(actual)
+                } else {
+                    actual
+                };
                 match s.types.get(&p).copied() {
                     Some(existing) if existing != widened => {
                         let u = self.env.types.union(&[existing, widened]);
@@ -2515,19 +2527,19 @@ impl Checker<'_> {
                     }
                 }
             }
-            (Ty::Array(a), Ty::Array(b)) => self.unify(a, b, s),
+            (Ty::Array(a), Ty::Array(b)) => self.unify_at(a, b, s, false),
             (Ty::Map(k1, v1), Ty::Map(k2, v2)) => {
-                self.unify(k1, k2, s);
-                self.unify(v1, v2, s);
+                self.unify_at(k1, k2, s, false);
+                self.unify_at(v1, v2, s, false);
             }
             (Ty::Map(k, v), Ty::Array(e)) => {
                 self.unify(k, Types::NUMBER, s);
-                self.unify(v, e, s);
+                self.unify_at(v, e, s, false);
             }
             (Ty::Map(k, v), Ty::Record(r)) => {
                 if let Some((rk, rv)) = r.indexer {
-                    self.unify(k, rk, s);
-                    self.unify(v, rv, s);
+                    self.unify_at(k, rk, s, false);
+                    self.unify_at(v, rv, s, false);
                 } else if !r.fields.is_empty() {
                     let keys: Vec<TypeId> =
                         r.fields.keys().map(|n| self.env.types.str(n)).collect();
@@ -2545,12 +2557,12 @@ impl Checker<'_> {
                     ps.iter().copied().filter(|&x| x != Types::NIL).collect();
                 if non_nil.len() == 1 {
                     let a = self.env.types.non_nil(actual);
-                    self.unify(non_nil[0], a, s);
+                    self.unify_at(non_nil[0], a, s, widen);
                 }
             }
             (Ty::Named(d1, a1), Ty::Named(d2, a2)) if d1 == d2 => {
                 for (x, y) in a1.iter().zip(&a2) {
-                    self.unify(*x, *y, s);
+                    self.unify_at(*x, *y, s, false);
                 }
             }
             (Ty::Func(pf), Ty::Func(af)) => {

@@ -1,0 +1,76 @@
+-- `/stdtest probe`: records the client's Lua environment in the saved
+-- `StdTestState.luaEnv`, to compare with the declarations of
+-- `lua.d.wowlua` (after a /reload writes it to disk).
+import state from "/state"
+import say from "/harness"
+
+-- Standard library tables a Lua 5.1 host (or a later one) may have.
+const LIBRARIES = {
+    "string", "table", "math", "coroutine", "os", "io", "debug", "package",
+    "bit", "bit32", "utf8", "jit", "ffi",
+}
+
+export type LuaEnvironment = {
+    version: string,
+    --- Library → its members and their types; `false`: absent.
+    libraries: { [string]: { [string]: string } | false },
+    --- Every global function whose name is all lowercase (the Lua aliases
+    --- WoW adds, such as `date`, `strsplit`, `tinsert`).
+    lowercase: string[],
+    --- Calls that must work for wowlua:format and the runtime.
+    calls: { [string]: string },
+}
+
+local function try(fn: () -> any): string
+    local ok, result = pcall(fn)
+    if ok then
+        return `ok: {type(result)}`
+    end
+    return `error: {tostring(result)}`
+end
+
+export function probe()
+    const env: LuaEnvironment = {
+        version = tostring(_VERSION),
+        libraries = {},
+        lowercase = {},
+        calls = {},
+    }
+    for _, name in ipairs(LIBRARIES) do
+        const lib = _G[name]
+        if type(lib) == "table" then
+            const members: { [string]: string } = {}
+            for key, value in pairs(lib :: table) do
+                members[tostring(key)] = type(value)
+            end
+            env.libraries[name] = members
+        else
+            env.libraries[name] = false
+        end
+    end
+    for key, value in pairs(_G) do
+        if type(key) == "string" and type(value) == "function" and key:match("^[a-z_][a-z0-9_]*$") then
+            env.lowercase[#env.lowercase + 1] = key
+        end
+    end
+    table.sort(env.lowercase)
+    env.calls = {
+        ["date()"] = try(function() return _G.date() end),
+        ['date("*t")'] = try(function() return _G.date("*t") end),
+        ["time()"] = try(function() return _G.time() end),
+        ["difftime(1, 0)"] = try(function() return _G.difftime(1, 0) end),
+        ["os.time()"] = try(function() return (_G.os :: any).time() end),
+        ["os.date()"] = try(function() return (_G.os :: any).date() end),
+        ["os.clock()"] = try(function() return (_G.os :: any).clock() end),
+        ["debugprofilestop()"] = try(function() return _G.debugprofilestop() end),
+    }
+    state().luaEnv = env
+    local present = 0
+    for _, name in ipairs(LIBRARIES) do
+        if env.libraries[name] then
+            present += 1
+        end
+    end
+    say(`probe: {env.version}, {present} libraries, {#env.lowercase} lowercase functions; os {env.libraries.os and "present" or "absent"}`)
+    say("probe: saved; type /reload so the file is written")
+end
