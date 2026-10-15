@@ -135,6 +135,13 @@ local function widgets(): { [string]: any }
     out.Line = widget(parent:CreateLine())
     out.MaskTexture = widget(parent:CreateMaskTexture())
     out.UIParent = widget(UIParent)
+    -- The aura container type the stdlib uses on WoW Forever, made as it
+    -- makes it (with its template, after loading Blizzard_AuraContainer).
+    if G.C_AddOns then
+        pcall(G.C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
+    end
+    local ok, container = pcall(CreateFrame, "AuraContainer", nil, UIParent, "CustomAuraContainerTemplate")
+    out.AuraContainer = ok and widget(container) or { error = tostring(container) }
     return out
 end
 
@@ -249,6 +256,71 @@ local function order(): { [string]: string }
     }
 end
 
+--- What the engine infers for methods it has no recording of: defaults of
+--- getters, Is/Enable pairs, unit registrations, fonts, enable scripts.
+local function behaviours(): { [string]: string }
+    const f = CreateFrame("Frame", nil, UIParent)
+    const fs = f:CreateFontString()
+    const t = f:CreateTexture()
+    const b = CreateFrame("Button", nil, UIParent)
+    const enables: string[] = {}
+    b:SetScript("OnEnable", function() enables[#enables + 1] = "enable" end)
+    b:SetScript("OnDisable", function() enables[#enables + 1] = "disable" end)
+    const u = CreateFrame("Frame")
+    u:RegisterUnitEvent("UNIT_HEALTH", "player", "target")
+    u:RegisterEvent("PLAYER_LOGIN")
+    return {
+        ["IsEventRegistered (two units)"] = results(u.IsEventRegistered, u, "UNIT_HEALTH"),
+        ["IsEventRegistered (plain)"] = results(u.IsEventRegistered, u, "PLAYER_LOGIN"),
+        ["IsEventRegistered (not)"] = results(u.IsEventRegistered, u, "BAG_UPDATE"),
+        ["IsEventRegistered (unknown)"] = results(u.IsEventRegistered, u, "NO_SUCH_EVENT"),
+        ["GetFramesRegisteredForEvent type"] = type(G.GetFramesRegisteredForEvent),
+        ["IsMovable fresh"] = results(f.IsMovable, f),
+        ["IsMouseEnabled fresh"] = results(f.IsMouseEnabled, f),
+        ["IsMouseEnabled fresh Button"] = results(b.IsMouseEnabled, b),
+        ["IsToplevel fresh"] = results(f.IsToplevel, f),
+        ["IsMovable after SetMovable(1)"] = results(function() f:SetMovable(1 :: any) return f:IsMovable() end),
+        ["IsMouseEnabled after EnableMouse(true)"] = results(function() f:EnableMouse(true) return f:IsMouseEnabled() end),
+        ["GetResizeBounds fresh"] = results(f.GetResizeBounds, f),
+        ["GetResizeBounds after (10, 20)"] = results(function() f:SetResizeBounds(10, 20) return f:GetResizeBounds() end),
+        ["StartMoving unmovable"] = results(function() const g = CreateFrame("Frame", nil, UIParent) g:StartMoving() g:StopMovingOrSizing() end),
+        ["GetVertexColor fresh"] = results(t.GetVertexColor, t),
+        ["GetVertexColor after (1, 0, 0)"] = results(function() t:SetVertexColor(1, 0, 0) return t:GetVertexColor() end),
+        ["GetFont fresh FontString"] = results(fs.GetFont, fs),
+        ["SetText without a font"] = results(fs.SetText, fs, "x"),
+        ["SetFont returns"] = results(fs.SetFont, fs, "Fonts\\FRIZQT__.TTF", 12, ""),
+        ["SetFontObject('GameFontNormal')"] = results(fs.SetFontObject, fs, "GameFontNormal"),
+        ["SetFontObject('NoSuchFont')"] = results(fs.SetFontObject, fs, "NoSuchFont"),
+        ["SetFontObject(nil)"] = results(fs.SetFontObject, fs, nil),
+        ["GetFontObject after a name"] = results(function() fs:SetFontObject("GameFontNormal") return fs:GetFontObject() == G.GameFontNormal end),
+        ["CreateFont"] = results(function()
+            const font = CreateFont("StdTestEngineProbeFont")
+            return font:GetObjectType(), font == G.StdTestEngineProbeFont, font:GetFont()
+        end),
+        ["CreateFrame('EventFrame')"] = results(function() return CreateFrame("EventFrame"):GetObjectType() end),
+        ["IsForbidden"] = results(f.IsForbidden, f),
+        ["Disable, Disable, Enable"] = (function()
+            b:Disable()
+            b:Disable()
+            b:Enable()
+            return `{table.concat(enables, " ")}; IsEnabled {tostring(b:IsEnabled())}`
+        end)(),
+        ["GetPoint after SetPoint('CENTER')"] = results(function()
+            const g = CreateFrame("Frame", nil, UIParent)
+            g:SetPoint("CENTER")
+            local p, rel, rp, x, y = g:GetPoint(1)
+            return p, rel == UIParent, rp, x, y
+        end),
+        ["Show while shown runs OnShow"] = (function()
+            local n = 0
+            const g = CreateFrame("Frame", nil, UIParent)
+            g:SetScript("OnShow", function() n += 1 end)
+            g:Show()
+            return tostring(n)
+        end)(),
+    }
+end
+
 local function units(): { [string]: string }
     const out: { [string]: string } = {}
     for _, call in ipairs({
@@ -327,6 +399,7 @@ export function engineProbe(arg: string?)
         identities = identities(),
         errors = errors(),
         order = order(),
+        behaviours = behaviours(),
         units = units(),
         getTime = show(GetTime()),
     }

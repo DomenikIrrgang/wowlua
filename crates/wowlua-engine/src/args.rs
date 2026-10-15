@@ -31,6 +31,9 @@ enum Family {
     Table { mixin: bool },
     /// A widget (a table holding its object).
     Object,
+    /// A font object, or the name of one (`"GameFontNormal"`; names
+    /// unverified, `'x'` refused as recorded).
+    Font,
     /// A function.
     Func,
     /// Anything: enums, booleans, some IDs, Lua values.
@@ -50,7 +53,7 @@ fn family(api: &Api, ty: &str, arg: &Json) -> Family {
         "CalendarEventID" | "ClubId" | "WeeklyRewardItemDBID" | "InventorySlots" => {
             return Family::Any;
         }
-        "SimpleFont" => return Family::Table { mixin: true },
+        "SimpleFont" => return Family::Font,
         "UnitTokenNamePlate"
         | "UnitTokenRestrictedForAddOns"
         | "UnitTokenPvPRestrictedForAddOns" => {
@@ -249,7 +252,7 @@ fn refuses_secret(vm: &Vm, f: &Function, arg: &Json) -> Option<&'static str> {
     }
 }
 
-fn refuses_type(vm: &Vm, family: Family, v: Value) -> Option<Refusal> {
+fn refuses_type(vm: &mut Vm, family: Family, v: Value) -> Option<Refusal> {
     let is_str = matches!(v, Value::Str(_) | Value::Num(_));
     match family {
         Family::Any => None,
@@ -267,6 +270,17 @@ fn refuses_type(vm: &Vm, family: Family, v: Value) -> Option<Refusal> {
         Family::Str => (!is_str).then_some(Refusal::Type),
         Family::StrictStr => (!is_str).then_some(Refusal::String),
         Family::Table { .. } => (!matches!(v, Value::Table(_))).then_some(Refusal::Type),
+        Family::Font => {
+            let font = match v {
+                Value::Table(_) => true,
+                Value::Str(s) => {
+                    let name = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+                    matches!(vm.get_global(&name), Value::Table(_))
+                }
+                _ => false,
+            };
+            (!font).then_some(Refusal::Type)
+        }
         Family::Object => {
             let object = match v {
                 Value::Table(t) => {

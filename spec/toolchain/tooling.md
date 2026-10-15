@@ -95,7 +95,12 @@ documentation with the client's argument checks, and reads a **simulated
 game world** that tests set up and change. A change to the world fires the
 events the client fires for it, in the client's order (decision T201).
 Functions the flavor lacks are absent, as in the game; a function without
-behaviour raises `"<name> is not mocked"` unless a test fakes it.
+behaviour raises `"<name> is not mocked"` unless a test fakes it. A widget
+method without behaviour follows its name: `SetX(...)` and `EnableX(...)`
+store their arguments, `GetX()` returns what `SetX` stored, `IsX()` whether
+its first value was true (`IsXEnabled` reads `EnableX`), and another method
+that returns nothing does nothing; only a method with results and nothing
+stored is not mocked.
 
 ```wowlua
 @test("shows the target's name")
@@ -118,8 +123,8 @@ end
 | Combat and restrictions | `mock.player:enterCombat()`, `:leaveCombat()`; `mock.enterInstance(kind)` (a restricted map), encounters, challenge modes, PvP matches, chat lockdown. The client's addon restrictions follow ([WoW client emulation §17.5](emulator.md#175-secret-values)): `ADDON_RESTRICTION_STATE_CHANGED`, secret API results, protected functions refused. |
 | Time | `GetTime` and `C_Timer` on a virtual clock: `mock.advanceTime(sec)`; `OnUpdate` per simulated frame: `mock.nextFrame()`, `mock.advanceFrames(n, ms?)` |
 | Lifecycle | `mock.login()` (`ADDON_LOADED`, `PLAYER_LOGIN`, `PLAYER_ENTERING_WORLD`), `mock.loadAddon(name)`, `mock.reloadUI()` (keeps only the SavedVariables) |
-| Input | `mock.slash(line)`, `mock.pressBinding(name)`, `mock.click(frame, button?)`, `mock.drag(frame, dx, dy)`, `mock.setModifiers(...)` |
-| UI | tooltips (`mock.showTooltip(kind, data)`), menus and dialogs, Settings, the screen size, locale, CVars, other addons and libraries (`mock.provideLibrary`) |
+| Input | `mock.slash(line)`, `mock.pressBinding(name)`, `mock.click(frame, button?)`, `mock.drag(frame, dx, dy)` (the frame, or an overlay's parent, moves if it starts moving), `mock.sizeBy(grip, dw, dh)` (a resize grip's frame), `mock.wheel(frame, delta)`, `mock.script(frame, name, ...)` (any other user action), `mock.setModifiers(...)` |
+| UI | tooltips (`mock.showTooltip(kind, data)`), menus and dialogs, Settings, the screen size, locale, CVars, other addons and libraries (`mock.provideLibrary`); `mock.frames()` (every frame, in creation order); stand-ins for Blizzard's UI code: `mock.defineTemplate(name, fn)` (`CreateFrame` with the template calls `fn(frame)`; an undefined template only warns) and `mock.defineFrameType(name, base, fn)` (an intrinsic frame type such as `EventFrame`) |
 | Output | `mock.printed()`, `mock.errors()` |
 
 **Raw events.** `mock.fireEvent(name, ...)` and `mock.fireUnitEvent(name,

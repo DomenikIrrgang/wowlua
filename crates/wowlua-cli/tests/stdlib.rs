@@ -495,8 +495,9 @@ local C = Mock.check
 
 -- The shared frame registers plain events (without a unit filter).
 local function registered(name: string): boolean
-    for _, f in ipairs(Mock.frames) do
-        if f.events[name] and not f.units[name] then return true end
+    for _, f in ipairs(Mock.frames()) do
+        local on, unit = f:IsEventRegistered(name)
+        if on and unit == nil then return true end
     end
     return false
 end
@@ -519,18 +520,18 @@ on("STD_LOCAL", function() end)
 C(not registered("STD_LOCAL"), "a message is not registered")
 
 -- Unit events: one frame per event and unit set, shared by equal sets.
-local frames = #Mock.frames
+local frames = #Mock.frames()
 local u1 = onUnit("UNIT_HEALTH", { "player" }, function() end)
 local u2 = onUnit("UNIT_HEALTH", { "player" }, function() end)
-C(#Mock.frames == frames + 1, "equal unit sets share a frame")
+C(#Mock.frames() == frames + 1, "equal unit sets share a frame")
 local u3 = onUnit("UNIT_HEALTH", { "target", "focus" }, function() end)
-C(#Mock.frames == frames + 2, "another unit set gets its own frame")
-local frame = Mock.frames[frames + 1]
-C(frame.units.UNIT_HEALTH.player == true, "unit filter set")
+C(#Mock.frames() == frames + 2, "another unit set gets its own frame")
+local frame = Mock.frames()[frames + 1]
+C(select(2, frame:IsEventRegistered("UNIT_HEALTH")) == "player", "unit filter set")
 u1:cancel()
-C(frame.events.UNIT_HEALTH == true, "still registered for the second handler")
+C(frame:IsEventRegistered("UNIT_HEALTH"), "still registered for the second handler")
 u2:cancel()
-C(frame.events.UNIT_HEALTH == nil, "unregistered without handlers")
+C(not frame:IsEventRegistered("UNIT_HEALTH"), "unregistered without handlers")
 u3:cancel()
 
 -- WoW's limit of two units, at run time too.
@@ -1064,6 +1065,7 @@ local function lateShown(frame: any) print("late shown") end
         r#"Mock.loadAddon("Std")
 ToggleGameMenu()
 GameTooltip:SetUnit("target")
+PlayerFrame:Hide()
 PlayerFrame:Show()
 CreateFrame("Frame", "LateFrame")
 Mock.loadAddon("Blizzard_Late")
@@ -2362,8 +2364,8 @@ Mock.awaitText("Drag the StdTest box")
 Mock.modifiers = {}
 Mock.drag(StdTestMovableBox, 400, 300)
 Mock.awaitText("Resize the box")
-for _, f in ipairs(Mock.frames) do
-    if f.parent == StdTestMovableBox and f.kind == "Button" then Mock.sizeBy(f, 60, 30) end
+for _, f in ipairs(Mock.frames()) do
+    if f:GetParent() == StdTestMovableBox and f:GetObjectType() == "Button" then Mock.sizeBy(f, 60, 30) end
 end
 Mock.awaitText("Hold Ctrl")
 Mock.modifiers.CTRL = true
@@ -2377,7 +2379,7 @@ Mock.editMode(false)
 Mock.awaitText("Click the question-mark button")
 Mock.script(StdTestMinimapButton, "OnClick", "LeftButton")
 Mock.awaitText("Click StdTest entry 3")
-for _, f in ipairs(Mock.frames) do
+for _, f in ipairs(Mock.frames()) do
     if f.label and f.label:GetText() == "StdTest entry 3" then Mock.script(f, "OnMouseUp", "LeftButton") end
 end
 Mock.awaitText("Right-click the StdTest menu button")
@@ -2776,7 +2778,7 @@ C(rows:acquire() ~= nil, "reacquired")
 -- Plain frames from a template.
 local frames = FramePool.fromTemplate("Button", UIParent)
 local f, made = frames:acquire()
-C(made and f.kind == "Button", "a new button")
+C(made and f:GetObjectType() == "Button", "a new button")
 f:Show()
 frames:release(f)
 C(not f:IsShown(), "hidden on release")
@@ -3131,8 +3133,8 @@ Mock.drag(StdWindow, 300, 250)
 show("dragged", db.window)
 -- Resized by the built-in grip (clamped to the bounds).
 local grip = StdWindow.grip
-for _, f in ipairs(Mock.frames) do
-    if f.parent == StdWindow and f.kind == "Button" then grip = f end
+for _, f in ipairs(Mock.frames()) do
+    if f:GetParent() == StdWindow and f:GetObjectType() == "Button" then grip = f end
 end
 Mock.sizeBy(grip, 300, 50)
 show("resized", db.window)
@@ -3147,7 +3149,7 @@ show("scaled", db.window)
 StdMove:lock(true)
 Mock.drag(StdWindow, -300, 0)
 Mock.sizeBy(grip, -100, 0)
-print("locked", StdMove:isLocked(), grip.shown)
+print("locked", StdMove:isLocked(), grip:IsShown())
 show("still", db.window)
 StdMove:lock(false)
 -- Back to the original anchor, size and scale.
@@ -3163,7 +3165,7 @@ Mock.drag(StdGuarded, 450, 0)
 Mock.modifiers.SHIFT = nil
 show("shift", db.guarded)
 -- Protected frames stay put in combat; a restore waits for its end.
-StdGuarded.protected = true
+Mock.protect(StdGuarded)
 Mock.fire("PLAYER_REGEN_DISABLED")
 Mock.modifiers.SHIFT = true
 Mock.drag(StdGuarded, -200, 0)
@@ -3206,7 +3208,8 @@ fn frames_restore_the_saved_position_at_load() {
     let out = modes(
         &[("src/main.wowlua", FRAMES)],
         r#"StdDB = { __version = 1, window = { point = "TOPLEFT", relativePoint = "TOPLEFT", x = 40, y = -60, width = 420, height = 260, scale = 0.8 } }"#,
-        r#"print("before", StdWindow:GetPoint(1))
+        r#"local p, r, rp, x, y = StdWindow:GetPoint(1)
+print("before", p, r:GetName(), rp, x, y)
 Mock.loadAddon("Std")
 local point, rel, relPoint, x, y = StdWindow:GetPoint(1)
 print("after", point, rel:GetName(), relPoint, x, y, StdWindow:GetWidth(), StdWindow:GetHeight(), StdWindow:GetScale())
@@ -3216,7 +3219,7 @@ print("after", point, rel:GetName(), relPoint, x, y, StdWindow:GetWidth(), StdWi
     assert_eq!(
         plain(&out),
         [
-            "before CENTER",
+            "before CENTER UIParent CENTER 0 0",
             "after TOPLEFT UIParent TOPLEFT 50 -75 420 260 0.8"
         ]
     );
@@ -3511,7 +3514,6 @@ print("stopped after", stops)
 Mock.aurasRestricted = true
 print(aura.readable("player"), aura.each("player", "HELPFUL")(), aura.find("player", 467, "HELPFUL"), aura.byInstanceId("player", 1))
 Mock.aurasRestricted = false
-Mock.events.UNIT_AURA = true
 aura.onChange("player", function(u, changes) print("changed", u, changes and changes.isFullUpdate) end)
 Mock.fire("UNIT_AURA", "player", { isFullUpdate = true })
 Mock.fire("UNIT_AURA", "target", { isFullUpdate = true })
@@ -3574,9 +3576,9 @@ c:setGroupMax("buffs", 0)
 c:refresh()
 print("buffs", #engine.showing.buffs)
 c:release()
-print("released", engine.unit, engine.shown)
+print("released", engine.unit, engine:IsShown())
 c:setUnit("target")
-print("again", engine.unit, engine.shown)
+print("again", engine.unit, engine:IsShown())
 "#,
     );
     assert_eq!(
@@ -3733,7 +3735,7 @@ print(table.concat(media.list("font"), ", "), #media.list("border"))
 -- Another addon loads LibSharedMedia.
 local lsm = Mock.sharedMedia()
 Mock.provideLibrary("LibSharedMedia-3.0", lsm)
-Mock.fire("ADDON_LOADED", "Other")
+Mock.fire("ADDON_LOADED", "Other", false)
 print(table.concat(media.list("font"), ", "), media.fetch("statusbar", "Std Flat"), media.fetch("font", "Nope"))
 lsm:Register("font", "Other Font", "x.ttf")
 media.register("sound", "Std Ping", 567)
@@ -3800,13 +3802,13 @@ print(high:status())
 local s = jobs.start(function(ctx)
     ctx:sleep(1)
     print("woke")
-    local a, b = ctx:waitFor("BAG_UPDATE")
+    local a, b = ctx:waitFor("GET_ITEM_INFO_RECEIVED")
     print("event", a, b)
 end)
 Mock.advanceFrames(10)
 print("still", s:status())
 Mock.advanceFrames(60)
-Mock.fire("BAG_UPDATE", 3, "x")
+Mock.fire("GET_ITEM_INFO_RECEIVED", 3, true)
 Mock.advanceFrames(2)
 print(s:status())
 -- Errors end the job, others go on.
@@ -3835,7 +3837,7 @@ c:cancel()
             "cancelled",
             "still running",
             "woke",
-            "event 3 x",
+            "event 3 true",
             "done",
             "onError true",
             "failed",
@@ -4061,7 +4063,7 @@ l.clear()
 l.view:scrollTo(12)
 print(l.stats())
 -- Clicking a row selects its entry.
-for _, f in ipairs(Mock.frames) do
+for _, f in ipairs(Mock.frames()) do
     if f.label and f.label:GetText() == "entry 9" then Mock.script(f, "OnMouseUp", "LeftButton") end
 end
 print(l.view:selected().name, #l.view:data())
@@ -4431,7 +4433,7 @@ Mock.fire("BAG_UPDATE", 0)
 Mock.fire("BAG_UPDATE", 2)
 Mock.fire("UNIT_HEALTH", "player")
 Mock.fire("UNIT_HEALTH", "target")
-Mock.fire("UNIT_POWER_UPDATE", "player")
+Mock.fire("UNIT_POWER_UPDATE", "player", "MANA")
 Mock.fire("UNIT_HEALTH", Mock.secret())
 Mock.advance(0.6)
 print("half")
@@ -4496,7 +4498,7 @@ Mock.provideLibrary("LibDataBroker-1.1", {
         return obj
     end,
 })
-Mock.fire("ADDON_LOADED", "Titan")
+Mock.fire("ADDON_LOADED", "Titan", false)
 local obj = objects["Std Gold"]
 print(obj.type, obj.text, obj.label, obj.icon)
 StdGold:setText("14g")
@@ -4833,7 +4835,7 @@ print("square", at())
 StdLauncher.launcher.showMinimap(false)
 C(not b:IsShown() and StdLauncher.db.minimap.hide == true, "hidden and stored")
 StdLauncher.launcher.setIcon("icon-2")
-C(b.icon.texture == "icon-2", "the button's icon")
+C(b.icon:GetTexture() == "icon-2", "the button's icon")
 -- The compartment entry.
 local entry = AddonCompartmentFrame.registeredAddons[1]
 C(entry and entry.text == "Std" and entry.icon == "icon-2", "the compartment entry")
@@ -4842,13 +4844,14 @@ StdLauncher.launcher.setLabel("Std 2")
 C(entry.text == "Std 2", "the entry's label")
 C(not pcall(StdLauncher.again, { icon = "x", label = "y", onClick = function() end }), "register once")
 -- Themes: tinted, flat, and back.
-C(b.ring.shown and b.disc.shown and b.flatDisc == nil, "the client's look")
+local function vertex(t: any): number[] return { t:GetVertexColor() } end
+C(b.ring:IsShown() and b.disc:IsShown() and b.flatDisc == nil, "the client's look")
 StdLauncher.launcher.setTheme({ colors = { border = { 1, 0, 0 }, background = { 0, 0, 1, 0.5 } } })
-C(b.ring.vertex[1] == 1 and b.ring.vertex[2] == 0 and b.disc.vertex[3] == 1 and b.disc.vertex[4] == 0.5, "tinted ring and disc")
+C(vertex(b.ring)[1] == 1 and vertex(b.ring)[2] == 0 and vertex(b.disc)[3] == 1 and vertex(b.disc)[4] == 0.5, "tinted ring and disc")
 StdLauncher.launcher.setTheme({ button = "flat", colors = { border = { 0, 1, 0 } } })
-C(not b.ring.shown and not b.disc.shown and b.flatDisc.shown and b.flatBorder.vertex[2] == 1, "flat: a disc and a border")
+C(not b.ring:IsShown() and not b.disc:IsShown() and b.flatDisc:IsShown() and vertex(b.flatBorder)[2] == 1, "flat: a disc and a border")
 StdLauncher.launcher.setTheme(nil)
-C(b.ring.shown and b.disc.shown and not b.flatDisc.shown and b.ring.vertex[2] == 1, "back to the client's look")
+C(b.ring:IsShown() and b.disc:IsShown() and not b.flatDisc:IsShown() and vertex(b.ring)[2] == 1, "back to the client's look")
 "#,
     );
     assert_eq!(
@@ -5266,8 +5269,8 @@ for i = 2, #Mock.sent do markers[#markers + 1] = Mock.sent[i].msg:byte(1) end
 print("markers", table.concat(markers, " "))
 S.ace:sendObject({ name = "ace profile" }, "PARTY")
 -- A chunk without its start, and an unknown control byte: ignored.
-Mock.fire("CHAT_MSG_ADDON", "StdComm", "\003orphan", "PARTY", "Someone-MockRealm")
-Mock.fire("CHAT_MSG_ADDON", "StdComm", "\009future", "PARTY", "Someone-MockRealm")
+Mock.addonMessage("StdComm", "\003orphan", "PARTY", "Someone-MockRealm")
+Mock.addonMessage("StdComm", "\009future", "PARTY", "Someone-MockRealm")
 Mock.advance(0.5)
 print(table.concat(S.got, " | "))
 "#,

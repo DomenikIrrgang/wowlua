@@ -3,9 +3,9 @@
 //! code never sees it.
 
 use wowlua_vm::stdlib::Ret;
-use wowlua_vm::{NativeCall, Value, Vm};
+use wowlua_vm::{LuaError, NativeCall, Value, Vm};
 
-use crate::{clock, engine, units, widgets};
+use crate::{clock, engine, engine_mut, units, widgets};
 
 /// `fireEvent(name, ...)`: fires an event the flavor knows, the payload
 /// checked against its documentation (decision T202).
@@ -116,6 +116,100 @@ fn spend(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `frames()`: every frame, in creation order (UIParent and the frames
+/// `CreateFrame` made; not textures or font strings).
+fn frames(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let e = engine(vm);
+    let list: Vec<Value> = e
+        .world
+        .widgets
+        .iter()
+        .filter(|w| widgets::is_a(e, &w.class, "Frame"))
+        .map(|w| Value::Table(w.table))
+        .collect();
+    let t = vm.new_table();
+    for (i, f) in list.into_iter().enumerate() {
+        let _ = vm.heap.table_mut(t).set(Value::Num(i as f64 + 1.0), f);
+    }
+    Ok(vec![Value::Table(t)])
+}
+
+fn widget_arg(vm: &mut Vm, c: &NativeCall, n: usize) -> Result<widgets::WidgetId, LuaError> {
+    widgets::widget_of(vm, c.arg(n))
+        .ok_or_else(|| vm.error(&format!("bad argument #{n} (a frame expected)")))
+}
+
+/// `script(frame, name, ...)`: runs a frame's script and hooks as the client
+/// does (a user's action: a click, a key in an edit box).
+fn script(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = widget_arg(vm, &c, 1)?;
+    let name = vm.check_str(&c, 2)?;
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    let args: Vec<Value> = c.args.iter().skip(2).copied().collect();
+    widgets::run_script(vm, id, &name, &args);
+    Ok(vec![])
+}
+
+/// `drag(frame, dx, dy)`: drags a frame by (dx, dy) screen units.
+fn drag(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = widget_arg(vm, &c, 1)?;
+    let dx = vm.check_number(&c, 2)?;
+    let dy = vm.check_number(&c, 3)?;
+    widgets::drag(vm, id, dx, dy);
+    Ok(vec![])
+}
+
+/// `sizeBy(grip, dw, dh)`: drags a resize grip by (dw, dh) screen units.
+fn size_by(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = widget_arg(vm, &c, 1)?;
+    let dw = vm.check_number(&c, 2)?;
+    let dh = vm.check_number(&c, 3)?;
+    widgets::size_by(vm, id, dw, dh);
+    Ok(vec![])
+}
+
+/// `wheel(frame, delta)`: turns the mouse wheel over a frame.
+fn wheel(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = widget_arg(vm, &c, 1)?;
+    let delta = vm.check_number(&c, 2)?;
+    widgets::run_script(vm, id, "OnMouseWheel", &[Value::Num(delta)]);
+    Ok(vec![])
+}
+
+/// `defineTemplate(name, fn)`: `CreateFrame(type, name, parent, template)`
+/// calls `fn(frame)` (a stand-in for a template of Blizzard's UI code).
+fn define_template(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = vm.check_str(&c, 1)?;
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    let f = c.arg(2);
+    widgets::keep(vm, f);
+    engine_mut(vm).world.templates.insert(name, f);
+    Ok(vec![])
+}
+
+/// `defineFrameType(name, base, fn)`: `CreateFrame(name, …)` makes a `base`
+/// frame and calls `fn(frame)` (a frame type the flavor's documentation
+/// lacks); for a documented type, `fn` runs after it is made.
+fn define_frame_type(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = vm.check_str(&c, 1)?;
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    let base = vm.check_str(&c, 2)?;
+    let base = String::from_utf8_lossy(vm.str_bytes(base)).into_owned();
+    let f = c.arg(3);
+    widgets::keep(vm, f);
+    engine_mut(vm).world.frame_types.insert(name, (base, f));
+    Ok(vec![])
+}
+
+/// `protect(frame [, on])`: makes a frame protected (as a secure template
+/// would).
+fn protect(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = widget_arg(vm, &c, 1)?;
+    let on = !c.has(2) || c.arg(2).truthy();
+    engine_mut(vm).world.widgets[id.0].protected = on;
+    Ok(vec![])
+}
+
 fn warnings(vm: &mut Vm, _c: NativeCall) -> Ret {
     let list = engine(vm).world.warnings.clone();
     let t = vm.new_table();
@@ -137,6 +231,14 @@ pub fn install(vm: &mut Vm, name: &str) {
         ("nextFrame", next_frame),
         ("advanceFrames", advance_frames),
         ("warnings", warnings),
+        ("frames", frames),
+        ("script", script),
+        ("drag", drag),
+        ("sizeBy", size_by),
+        ("wheel", wheel),
+        ("defineTemplate", define_template),
+        ("defineFrameType", define_frame_type),
+        ("protect", protect),
         ("spend", spend),
         ("spawnUnit", units::spawn),
         ("addToGroup", units::add_to_group),

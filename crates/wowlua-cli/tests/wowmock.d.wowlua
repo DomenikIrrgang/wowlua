@@ -1,21 +1,10 @@
 -- The mock client's control table (wowmock.wowlua), for test scripts.
 
---- A frame of the mock client (its own fields; the API comes from the
---- frame's class).
-type MockFrameFields = {
-    scripts: { [string]: (...any) -> ...any },
-    hooks: { [string]: ((...any) -> ...any)[] },
-    events: { [string]: boolean },
-    shown: boolean,
-    [string]: any,
-}
-
 interface MockClient
-    --- The clock (seconds), advanced by `advance`.
-    now: number
-    --- Every frame created, in order.
-    frames: MockFrameFields[]
-    timers: table[]
+    --- Every frame, in creation order (the engine's).
+    frames: () -> any[]
+    --- Makes a frame protected.
+    protect: (frame: any) -> ()
     --- Reported errors and printed lines.
     errors: string[]
     out: string[]
@@ -26,8 +15,6 @@ interface MockClient
     metadata: { [string | number]: { [string]: string } }
     combat: boolean
     loggedIn: boolean
-    --- The events the client knows.
-    events: { [string]: boolean }
     secrets: { [table]: boolean }
     interface: number
     locale?: string
@@ -49,6 +36,7 @@ interface MockClient
     group?: "party" | "raid" | "instance"
     guild?: boolean
     echoAs?: string
+    addonMessage: (prefix: string, msg: string, chatType: string, sender: string) -> ()
 
     secret: () -> table
     check: (cond: any, label: string) -> ()
@@ -70,8 +58,6 @@ interface MockClient
     --- Shows a tooltip of `kind` (GameTooltip by default); returns the
     --- lines the post-hooks added.
     tooltip: (name: string) -> any
-    --- Frame types with their own mock class.
-    frameTypes: { [string]: (name: string?, parent: any) -> any }
     --- Each unit's auras (AuraData tables); reads refuse while restricted.
     auras: { [string]: table[] }
     aurasRestricted: boolean
@@ -94,7 +80,6 @@ interface MockClient
     menu: any
     lastMenu: () -> string
     clickMenu: (path: string) -> ()
-    templates: { [string]: (name: string?, parent: any) -> any }
     listRows: number
     scroll: (list: any, offset: number) -> ()
     sounds: string[]
@@ -129,4 +114,12 @@ declare global __engine: {
     nextFrame: (ms: number?) -> (),
     advanceFrames: (n: number, ms: number?) -> (),
     fireEvent: (name: string, ...any) -> (),
+    frames: () -> any[],
+    script: (frame: any, name: string, ...any) -> (),
+    drag: (frame: any, dx: number, dy: number) -> (),
+    sizeBy: (grip: any, dw: number, dh: number) -> (),
+    wheel: (frame: any, delta: number) -> (),
+    defineTemplate: (name: string, fn: (frame: any) -> ()) -> (),
+    defineFrameType: (name: string, base: string, fn: (frame: any) -> ()) -> (),
+    protect: (frame: any, on: boolean?) -> (),
 }

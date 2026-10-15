@@ -115,6 +115,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(units::behaviours())
             .chain(units::more_behaviours())
             .chain(curves::behaviours())
+            .chain(widgets::functions())
             .collect(),
         methods: widgets::behaviours()
             .into_iter()

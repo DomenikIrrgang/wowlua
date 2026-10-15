@@ -1,35 +1,18 @@
--- A small model of the WoW client for the standard library's tests: frames
--- and events (with unit filters), scripts and hooks, error handlers,
--- C_Timer on a controlled clock, combat state, addon loading and slash
--- commands. Test scripts drive it through `Mock`.
+-- The M8 model of the WoW client for the standard library's tests, on top of
+-- wowlua's engine (frames, events, scripts, timers and the clock come from
+-- it): error handlers, combat state, addon loading, slash commands and
+-- stand-ins for Blizzard's UI code. Test scripts drive it through `Mock`.
 
 type Handler = (...any) -> ...any
 
 -- Completed below.
 Mock = {
-    now = 0,
-    frames = {},
-    timers = {},
     errors = {},
     out = {},
     loaded = {},
     combat = false,
     loggedIn = false,
 } :: MockClient
-
--- The client's events (anything else is unknown, like an addon's messages).
-const CLIENT_EVENTS = {
-    "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_LOGOUT", "PLAYER_ENTERING_WORLD",
-    "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PLAYER_STARTED_MOVING", "BAG_UPDATE",
-    "BAG_UPDATE_DELAYED", "UNIT_HEALTH", "UNIT_POWER_UPDATE", "PLAYER_TARGET_CHANGED", "UNIT_TARGET",
-    "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN", "TIME_PLAYED_MSG", "CHAT_MSG_ADDON",
-    "UNIT_AURA", "PLAYER_FOCUS_CHANGED", "GROUP_ROSTER_UPDATE", "INSTANCE_ENCOUNTER_ENGAGE_UNIT",
-    "ITEM_DATA_LOAD_RESULT", "GET_ITEM_INFO_RECEIVED", "SPELL_DATA_LOAD_RESULT",
-}
-Mock.events = {}
-for _, e in ipairs(CLIENT_EVENTS) do
-    Mock.events[e] = true
-end
 
 function print(...: any)
     local parts: string[] = {}
@@ -94,390 +77,53 @@ end
 
 -- Frames --------------------------------------------------------------------
 
-type MockRect = { left: number, bottom: number, width: number, height: number }
+-- The engine's frames (CreateFrame, UIParent, scripts, events); the mock
+-- adds stand-ins for Blizzard's templates and frame types below.
 
--- Where an anchor point sits along a frame's width and height (0 to 1).
-local function anchorX(point: string): number
-    if point:find("LEFT") then return 0 end
-    if point:find("RIGHT") then return 1 end
-    return 0.5
+--- Every frame, in creation order.
+function Mock.frames(): any[]
+    return __engine.frames()
 end
 
-local function anchorY(point: string): number
-    if point:find("BOTTOM") then return 0 end
-    if point:find("TOP") then return 1 end
-    return 0.5
-end
-
---- A frame, texture or font string. Layout and drawing calls are recorded
---- where tests read them back, and otherwise do nothing.
-class MockFrame
-    readonly kind: string
-    readonly name?: string
-    parent?: any
-    events: { [string]: boolean } = {}
-    units: { [string]: { [string]: boolean } } = {}
-    scripts: { [string]: Handler } = {}
-    hooks: { [string]: Handler[] } = {}
-    shown: boolean = true
-    points: any[][] = {}
-    attributes: { [string]: any } = {}
-    text?: string
-    texture?: any
-    -- Geometry (screen units are UIParent's: 1024 x 768 at scale 1).
-    width: number = 0
-    height: number = 0
-    scale: number = 1
-    moving: boolean = false
-    sizing: boolean = false
-    protected: boolean = false
-    resizeBounds?: number[]
-    enabled: boolean = true
-    vertex?: number[]
-
-    constructor(kind: string, name: string?, parent: any)
-        self.kind = kind
-        self.name = name
-        self.parent = parent
-    end
-
-    private function checkEvent(event: string)
-        if not Mock.events[event] then
-            error(`Attempt to register unknown event "{event}"`, 3)
-        end
-    end
-
-    function RegisterEvent(event: string)
-        self:checkEvent(event)
-        self.events[event] = true
-        self.units[event] = nil
-    end
-
-    function RegisterUnitEvent(event: string, u1: string, u2: string?)
-        self:checkEvent(event)
-        self.events[event] = true
-        local units = { [u1] = true }
-        if u2 then
-            units[u2] = true
-        end
-        self.units[event] = units
-    end
-
-    function UnregisterEvent(event: string)
-        self.events[event] = nil
-        self.units[event] = nil
-    end
-
-    function UnregisterAllEvents()
-        self.events = {}
-        self.units = {}
-    end
-
-    function IsEventRegistered(event: string): boolean
-        return self.events[event] == true
-    end
-
-    function SetScript(name: string, fn: Handler?)
-        self.scripts[name] = fn
-        self.hooks[name] = nil
-    end
-
-    function GetScript(name: string): Handler?
-        return self.scripts[name]
-    end
-
-    function HookScript(name: string, fn: Handler)
-        local list = self.hooks[name] ?? {}
-        list[#list + 1] = fn
-        self.hooks[name] = list
-    end
-
-    function Show()
-        self.shown = true
-        Mock.script(self, "OnShow")
-    end
-
-    function Hide()
-        self.shown = false
-        Mock.script(self, "OnHide")
-    end
-
-    function SetShown(shown: boolean)
-        if shown then
-            self:Show()
-        else
-            self:Hide()
-        end
-    end
-
-    function IsShown(): boolean
-        return self.shown
-    end
-
-    function GetName(): string?
-        return self.name
-    end
-
-    function GetParent(): any
-        return self.parent
-    end
-
-    function SetParent(parent: any)
-        self.parent = parent
-    end
-
-    function GetObjectType(): string
-        return self.kind
-    end
-
-    function SetPoint(...: any)
-        self.points[#self.points + 1] = { ... }
-    end
-
-    function ClearAllPoints()
-        self.points = {}
-    end
-
-    function GetNumPoints(): number
-        return #self.points
-    end
-
-    function GetPoint(i: number?): ...any
-        return unpack(self.points[i ?? 1] ?? {})
-    end
-
-    function SetSize(width: number, height: number)
-        self.width = width
-        self.height = height
-    end
-
-    function SetWidth(width: number)
-        self.width = width
-    end
-
-    function SetHeight(height: number)
-        self.height = height
-    end
-
-    function GetSize(): (number, number)
-        return self.width, self.height
-    end
-
-    function GetWidth(): number
-        return self.width
-    end
-
-    function GetHeight(): number
-        return self.height
-    end
-
-    function SetScale(scale: number)
-        self.scale = scale
-    end
-
-    function GetScale(): number
-        return self.scale
-    end
-
-    function GetEffectiveScale(): number
-        const parent = self.parent
-        if parent and parent ~= self and parent.GetEffectiveScale then
-            return self.scale * parent:GetEffectiveScale()
-        end
-        return self.scale
-    end
-
-    --- The frame's rectangle in screen units, from its first anchor.
-    function bounds(): MockRect?
-        if self.name == "UIParent" then
-            return { left = 0, bottom = 0, width = 1024, height = 768 }
-        end
-        const p = self.points[1]
-        if not p then
-            return nil
-        end
-        local rel: any, relPoint: string, x: number, y: number
-        if type(p[2]) == "number" then
-            rel, relPoint, x, y = self.parent, p[1], p[2], p[3] ?? 0
-        else
-            rel, relPoint, x, y = p[2] ?? self.parent, p[3] ?? p[1], p[4] ?? 0, p[5] ?? 0
-        end
-        if type(rel) == "string" then
-            rel = _G[rel]
-        end
-        const r: MockRect = rel?.bounds and rel:bounds() or { left = 0, bottom = 0, width = 1024, height = 768 }
-        const s = self:GetEffectiveScale()
-        const ax = r.left + anchorX(relPoint) * r.width + x * s
-        const ay = r.bottom + anchorY(relPoint) * r.height + y * s
-        const w = self.width * s
-        const h = self.height * s
-        return { left = ax - anchorX(p[1]) * w, bottom = ay - anchorY(p[1]) * h, width = w, height = h }
-    end
-
-    function GetLeft(): number?
-        const b = self:bounds()
-        return b and b.left / self:GetEffectiveScale()
-    end
-
-    function GetRight(): number?
-        const b = self:bounds()
-        return b and (b.left + b.width) / self:GetEffectiveScale()
-    end
-
-    function GetBottom(): number?
-        const b = self:bounds()
-        return b and b.bottom / self:GetEffectiveScale()
-    end
-
-    function GetTop(): number?
-        const b = self:bounds()
-        return b and (b.bottom + b.height) / self:GetEffectiveScale()
-    end
-
-    function StartMoving()
-        self.moving = true
-    end
-
-    function StartSizing(_: string?)
-        self.sizing = true
-    end
-
-    function StopMovingOrSizing()
-        self.moving = false
-        self.sizing = false
-    end
-
-    function SetResizeBounds(minW: number, minH: number, maxW: number?, maxH: number?)
-        self.resizeBounds = { minW, minH, maxW ?? 100000, maxH ?? 100000 }
-    end
-
-    function IsProtected(): (boolean, boolean)
-        return self.protected, false
-    end
-
-    function SetAttribute(key: string, value: any)
-        self.attributes[key] = value
-        Mock.script(self, "OnAttributeChanged", key:lower(), value)
-    end
-
-    function GetAttribute(key: string): any
-        return self.attributes[key]
-    end
-
-    function CreateFontString(): MockFrame
-        return MockFrame.new("FontString", nil, self)
-    end
-
-    function CreateTexture(): MockFrame
-        return MockFrame.new("Texture", nil, self)
-    end
-
-    function SetText(text: string?)
-        self.text = text
-    end
-
-    function GetText(): string?
-        return self.text
-    end
-
-    function SetTexture(texture: any)
-        self.texture = texture
-    end
-
-    -- Calls whose effect no test reads.
-    function SetAllPoints(...: any) end
-    function SetFrameStrata(...: any) end
-    function SetFrameLevel(...: any) end
-    function SetMovable(...: any) end
-    function SetResizable(...: any) end
-    function SetVertexColor(r: number, g: number, b: number, a: number?)
-        self.vertex = { r, g, b, a ?? 1 }
-    end
-    function CreateMaskTexture(): MockFrame
-        return MockFrame.new("MaskTexture", nil, self)
-    end
-    function AddMaskTexture(...: any) end
-    function Click(button: string?)
-        Mock.script(self, "OnClick", button ?? "LeftButton")
-    end
-    function SetEnabled(enabled: boolean)
-        self.enabled = enabled
-    end
-    function IsEnabled(): boolean
-        return self.enabled
-    end
-    function SetToplevel(...: any) end
-    function SetAutoFocus(...: any) end
-    function SetMultiLine(...: any) end
-    function SetMaxLetters(...: any) end
-    function HighlightText(...: any) end
-    function SetFocus(...: any) end
-    function ClearFocus(...: any) end
-    function SetScrollChild(...: any) end
-    function SetFontString(...: any) end
-    function GetFont(): (string?, number?, string?)
-        return "Fonts\\FRIZQT__.TTF", 12, ""
-    end
-    function SetMinMaxValues(...: any) end
-    function SetValue(...: any) end
-    function SetBackdrop(...: any) end
-    function SetBackdropColor(...: any) end
-    function SetBackdropBorderColor(...: any) end
-    function SetClampedToScreen(...: any) end
-    function SetUserPlaced(...: any) end
-    function EnableMouseWheel(...: any) end
-    function SetNormalTexture(...: any) end
-    function SetPushedTexture(...: any) end
-    function EnableMouse(...: any) end
-    function RegisterForClicks(...: any) end
-    function RegisterForDrag(...: any) end
-    function SetHighlightTexture(...: any) end
-    function SetTexCoord(...: any) end
-    function SetColorTexture(...: any) end
-    function SetTextColor(...: any) end
-    function SetJustifyH(...: any) end
-    function SetJustifyV(...: any) end
-    function SetWordWrap(...: any) end
-    function SetFont(...: any): boolean return true end
-    function SetFontObject(...: any) end
-    function SetAlpha(...: any) end
-    function SetOwner(...: any) end
-    function AddLine(...: any) end
-    function AddDoubleLine(...: any) end
-    function ClearLines(...: any) end
-end
-
--- (The client's CreateFrame has an overload per frame type.)
---- Frame types with their own mock class (`kind` → constructor).
-Mock.frameTypes = {}
-
---- Templates with their own mock class (`template` → constructor).
-Mock.templates = {}
-
-CreateFrame = (function(kind: string, name: string?, parent: any, template: string?): MockFrame
-    const make = Mock.templates[template ?? ""] ?? Mock.frameTypes[kind]
-    local f: MockFrame
-    if make then
-        f = make(name, parent)
-    else
-        f = MockFrame.new(kind, name, parent)
-    end
-    Mock.frames[#Mock.frames + 1] = f :: any
-    if name then
-        _G[name] = f
-    end
-    return f
-end) :: any
-
+--- Runs a frame's script and its hooks, as the client does for a click or
+--- a key.
 function Mock.script(frame: any, name: string, ...: any)
-    local fn = frame.scripts[name]
-    if fn then
-        fn(frame, ...)
-    end
-    for _, h in ipairs(frame.hooks[name] ?? {}) do
-        h(frame, ...)
-    end
+    __engine.script(frame, name, ...)
 end
+
+--- Makes a frame protected (as a secure template would).
+function Mock.protect(frame: any)
+    __engine.protect(frame)
+end
+
+--- Copies a stand-in's methods and fields onto a frame (as Blizzard's
+--- `Mixin`).
+local function mixin(frame: any, methods: table): any
+    for k, v in pairs(methods) do
+        frame[k] = v
+    end
+    return frame
+end
+
+-- Stand-ins for Blizzard's templates and intrinsic frame types: what the
+-- tests use of them.
+
+--- BackdropTemplate: its backdrop and colors, stored for the tests.
+__engine.defineTemplate("BackdropTemplate", function(frame: any)
+    frame.SetBackdrop = function(self: any, backdrop: table?) self.backdrop = backdrop end
+    frame.GetBackdrop = function(self: any): table? return self.backdrop end
+    frame.SetBackdropColor = function(self: any, ...: number) self.backdropColor = { ... } end
+    frame.SetBackdropBorderColor = function(self: any, ...: number) self.backdropBorderColor = { ... } end
+end)
+
+--- The client's font objects (Fonts.xml): a few, in its default font.
+for _, name in ipairs({ "GameFontNormal", "GameFontHighlight", "GameFontDisable", "GameFontRed", "GameFontNormalLarge",
+    "GameFontHighlightSmall", "GameFontNormalSmall", "ChatFontNormal", "NumberFontNormal" }) do
+    CreateFont(name):SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+end
+
+--- EventFrame (an intrinsic frame type of Blizzard's UI code): a frame.
+__engine.defineFrameType("EventFrame", "Frame", function(_: any) end)
 
 -- The mouse and modifier keys -------------------------------------------------
 
@@ -492,43 +138,23 @@ function IsAltKeyDown(): boolean
     return Mock.modifiers.ALT == true
 end
 
---- Drags a frame by (dx, dy) screen units, if it starts moving.
+--- Drags a frame by (dx, dy) screen units, if it starts moving (an
+--- overlay, Edit Mode's selection, moves its parent).
 function Mock.drag(frame: any, dx: number, dy: number)
-    Mock.script(frame, "OnDragStart", "LeftButton")
-    -- An overlay (Edit Mode's selection) moves its parent.
-    local moved = frame
-    if not frame.moving and frame.parent?.moving then
-        moved = frame.parent
-    end
-    if moved.moving then
-        const b = moved:bounds()
-        const s = moved:GetEffectiveScale()
-        moved.points = { { "BOTTOMLEFT", UIParent, "BOTTOMLEFT", (b.left + dx) / s, (b.bottom + dy) / s } }
-    end
-    Mock.script(frame, "OnDragStop")
+    __engine.drag(frame, dx, dy)
 end
 
 --- Drags a resize grip by (dw, dh) screen units: the frame's top left stays.
 function Mock.sizeBy(grip: any, dw: number, dh: number)
-    Mock.script(grip, "OnMouseDown", "LeftButton")
-    const frame = grip.parent
-    if frame.sizing then
-        const b = frame:bounds()
-        const s = frame:GetEffectiveScale()
-        const limits = frame.resizeBounds ?? { 0, 0, 100000, 100000 }
-        frame.width = math.max(limits[1], math.min(limits[3], frame.width + dw / s))
-        frame.height = math.max(limits[2], math.min(limits[4], frame.height + dh / s))
-        frame.points = { { "TOPLEFT", UIParent, "BOTTOMLEFT", b.left / s, (b.bottom + b.height) / s } }
-    end
-    Mock.script(grip, "OnMouseUp", "LeftButton")
+    __engine.sizeBy(grip, dw, dh)
 end
 
 --- Turns the mouse wheel over a frame.
 function Mock.wheel(frame: any, delta: number)
-    Mock.script(frame, "OnMouseWheel", delta)
+    __engine.wheel(frame, delta)
 end
 
--- Fires a WoW event at every frame registered for it, in creation order.
+-- Fires a WoW event at every frame registered for it.
 function Mock.fire(event: string, ...: any)
     if event == "PLAYER_REGEN_DISABLED" then
         Mock.combat = true
@@ -537,13 +163,7 @@ function Mock.fire(event: string, ...: any)
     elseif event == "PLAYER_LOGIN" then
         Mock.loggedIn = true
     end
-    local unit = ...
-    for _, f in ipairs({ unpack(Mock.frames) }) do
-        local units = f.units[event]
-        if f.events[event] and (not units or units[unit]) then
-            Mock.script(f, "OnEvent", event, ...)
-        end
-    end
+    __engine.fireEvent(event, ...)
     Mock.updateStateDrivers()
 end
 
@@ -818,24 +438,11 @@ end
 UnitGroupRolesAssigned = (function(unit: string): string
     return mockUnit(unit)?.role ?? "NONE"
 end) :: any
-function GetFramesRegisteredForEvent(event: string): ...any
-    local out: any[] = {}
-    for _, f in ipairs(Mock.frames) do
-        if f.events[event] then
-            out[#out + 1] = f
-        end
-    end
-    return unpack(out)
-end
 -- Server answers arrive a moment later.
 function RequestTimePlayed()
     C_Timer.After(0.2, function()
         Mock.fire("TIME_PLAYED_MSG", 3600, 60)
     end)
-end
-C_EventUtils = {} :: any
-function C_EventUtils.IsEventValid(event: string): boolean
-    return Mock.events[event] == true
 end
 
 -- Hooks ---------------------------------------------------------------------
@@ -884,8 +491,6 @@ function Mock.slash(line: string)
 end
 
 -- A few of Blizzard's globals for hooks.
-UIParent = CreateFrame("Frame", "UIParent") :: any
-UIParent:SetSize(1024, 768)
 function ToggleGameMenu()
     print("menu")
 end
@@ -895,73 +500,67 @@ end
 --- What a mock tooltip shows, for its getters.
 type Shown = { kind: string, id?: number, guid?: string, unit?: string, link?: string, name?: string }
 
---- A tooltip: the lines added to it and what it shows.
-class MockTooltip extends MockFrame
-    lines: string[] = {}
-    showing?: Shown
-
-    constructor(name: string)
-        super("GameTooltip", name, nil)
-        Mock.frames[#Mock.frames + 1] = self :: any
-        _G[name] = self
-    end
-
-    override function AddLine(text: string)
+--- A tooltip's stand-in methods (GameTooltip's own are undocumented C
+--- methods): the lines added to it and what it shows.
+const TOOLTIP: { [string]: any } = {
+    AddLine = function(self: any, text: string)
         self.lines[#self.lines + 1] = text
         -- The client's font strings for each line.
-        _G[`{self.name}TextLeft{#self.lines}`] = { GetText = function() return text end }
-    end
-
-    function NumLines(): number
+        _G[`{self:GetName()}TextLeft{#self.lines}`] = { GetText = function() return text end }
+    end,
+    AddDoubleLine = function() end,
+    SetText = function(self: any, text: string)
+        self.lines = {}
+        self:AddLine(text)
+    end,
+    ClearLines = function() end,
+    SetOwner = function() end,
+    NumLines = function(self: any): number
         return #self.lines
-    end
-
-    function SetItemByID(id: number)
+    end,
+    SetItemByID = function(self: any, id: number)
         Mock.showTooltip("Item", { kind = "Item", id = id, name = `item {id}`, link = `|Hitem:{id}::|h[item {id}]|h` }, self)
-    end
-
-    function SetSpellByID(id: number)
+    end,
+    SetSpellByID = function(self: any, id: number)
         Mock.showTooltip("Spell", { kind = "Spell", id = id, name = `spell {id}` }, self)
-    end
-
-    function SetUnit(unit: string)
+    end,
+    SetUnit = function(self: any, unit: string)
         print(`SetUnit {unit}`)
         Mock.showTooltip("Unit", { kind = "Unit", unit = unit, name = unit, guid = `GUID-{unit}` }, self)
-    end
-
-    function IsForbidden(): boolean
-        return false
-    end
-
-    function GetItem(): (string?, string?)
+    end,
+    GetItem = function(self: any): (string?, string?)
         if self.showing?.kind == "Item" then
             return self.showing.name, self.showing.link
         end
         return nil, nil
-    end
-
-    function GetSpell(): (string?, number?)
+    end,
+    GetSpell = function(self: any): (string?, number?)
         if self.showing?.kind == "Spell" then
             return self.showing.name, self.showing.id
         end
         return nil, nil
-    end
-
-    function GetUnit(): (string?, string?)
+    end,
+    GetUnit = function(self: any): (string?, string?)
         if self.showing?.kind == "Unit" then
             return self.showing.name, self.showing.unit
         end
         return nil, nil
-    end
+    end,
+}
+
+local function newTooltip(name: string): any
+    const t = mixin(CreateFrame("GameTooltip", name), TOOLTIP)
+    t.lines = {}
+    return t
 end
 
 for _, name in ipairs({ "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2" }) do
-    MockTooltip.new(name)
+    newTooltip(name)
 end
 
 --- Another tooltip frame (an addon's own).
 function Mock.tooltip(name: string): any
-    return MockTooltip.new(name)
+    return newTooltip(name)
 end
 
 UnitGUID = (function(unit: string): any
@@ -991,7 +590,7 @@ const TOOLTIP_SCRIPTS: { [string]: string } = {
 --- Shows `data` as a tooltip of `kind` (GameTooltip by default): runs the
 --- post-hooks as the client would and returns the lines they added.
 function Mock.showTooltip(kind: string, data: Shown?, tip: any): string[]
-    const t = (tip ?? GameTooltip) :: MockTooltip
+    const t = (tip ?? GameTooltip) :: any
     const shown: Shown = data ?? { kind = kind }
     shown.kind = kind
     t.lines = {}
@@ -1008,7 +607,7 @@ function Mock.showTooltip(kind: string, data: Shown?, tip: any): string[]
     return t.lines
 end
 
-GameTooltip = MockTooltip.new("GameTooltip") :: any
+newTooltip("GameTooltip")
 CreateFrame("Frame", "PlayerFrame")
 
 -- Settings (Blizzard's Settings API: categories, rows, proxy settings) -------
@@ -1297,60 +896,43 @@ function C_UnitAuras.GetAuraDataByAuraInstanceID(unit: string, id: number): any
     return nil
 end
 
---- An engine aura button: what was registered with it.
-class MockAuraButton extends MockFrame
-    icon?: any
-    count?: any
-    durationText?: any
-    dispel: any[] = {}
-    cancel?: string
+--- An engine aura button's stand-in methods: what was registered with it.
+const AURA_BUTTON: { [string]: any } = {
+    SetIcon = function(self: any, texture: any) self.icon = texture end,
+    SetApplicationCount = function(self: any, fs: any, _: table?) self.count = fs end,
+    SetDurationText = function(self: any, fs: any, _: table?) self.durationText = fs end,
+    AddDispelTypeTexture = function(self: any, texture: any, _: table?) self.dispel[#self.dispel + 1] = texture end,
+    SetCancelAuraButtons = function(self: any, buttons: string?) self.cancel = buttons end,
+}
 
-    constructor(parent: any)
-        super("AuraButton", nil, parent)
+local function auraGroup(self: any, key: string): table
+    for _, g in ipairs(self.groups) do
+        if g.key == key then return g end
     end
-
-    function SetIcon(texture: any) self.icon = texture end
-    function SetApplicationCount(fs: any, _: table?) self.count = fs end
-    function SetDurationText(fs: any, _: table?) self.durationText = fs end
-    function AddDispelTypeTexture(texture: any, _: table?) self.dispel[#self.dispel + 1] = texture end
-    function SetCancelAuraButtons(buttons: string?) self.cancel = buttons end
+    error(`aura group '{key}' was not found with this key.`)
 end
 
---- The engine's container: groups filled from `Mock.auras` on UpdateAllAuras.
-class MockAuraContainer extends MockFrame
-    unit?: string
-    groups: table[] = {}
-    --- What each group shows: spell IDs, by group key.
-    showing: { [string]: number[] } = {}
-
-    constructor(name: string?, parent: any)
-        super("AuraContainer", name, parent)
-    end
-
-    function SetUnit(unit: string) self.unit = unit end
-    function SetFlowLayoutAnchorPoint(_: string) end
-    function SetFlowLayoutGrowthDirection(_: any, _: any) end
-    function SetFlowLayoutMaximumLineSize(_: number?) end
-
-    function AddAuraGroup(key: string, filter: string, options: table)
+--- The engine's container (a frame type this client's documentation
+--- lacks): groups filled from `Mock.auras` on UpdateAllAuras.
+const AURA_CONTAINER: { [string]: any } = {
+    SetUnit = function(self: any, unit: string) self.unit = unit end,
+    SetFlowLayoutAnchorPoint = function() end,
+    SetFlowLayoutGrowthDirection = function() end,
+    SetFlowLayoutMaximumLineSize = function() end,
+    AddAuraGroup = function(self: any, key: string, filter: string, options: table)
         if key == "" then
             error("groupKey must be a non-empty string.")
         end
         self.groups[#self.groups + 1] = { key = key, filter = filter, options = options, buttons = {} }
-    end
-
-    private function group(key: string): table
-        for _, g in ipairs(self.groups) do
-            if g.key == key then return g end
-        end
-        error(`aura group '{key}' was not found with this key.`)
-    end
-
-    function SetAuraGroupMaxFrameCount(key: string, max: number) self:group(key).options.maxFrameCount = max end
-    function SetAuraGroupCandidateFilters(key: string, filters: table) self:group(key).options.candidateFilters = filters end
-
+    end,
+    SetAuraGroupMaxFrameCount = function(self: any, key: string, max: number)
+        auraGroup(self, key).options.maxFrameCount = max
+    end,
+    SetAuraGroupCandidateFilters = function(self: any, key: string, filters: table)
+        auraGroup(self, key).options.candidateFilters = filters
+    end,
     -- The engine reads auras itself: restricted reads do not stop it.
-    function UpdateAllAuras()
+    UpdateAllAuras = function(self: any)
         for _, g in ipairs(self.groups) do
             const ids: number[] = {}
             const filters = g.options.candidateFilters ?? {}
@@ -1361,7 +943,8 @@ class MockAuraContainer extends MockFrame
                     and (not spells or spells[a.spellId]) and (not types or types[a.dispelName ?? ""]) then
                     ids[#ids + 1] = a.spellId
                     if not g.buttons[#ids] then
-                        const button = MockAuraButton.new(self)
+                        const button = mixin(CreateFrame("Frame", nil, self), AURA_BUTTON)
+                        button.dispel = {}
                         g.buttons[#ids] = button
                         g.options.initializeFrame?.(button)
                     end
@@ -1369,15 +952,17 @@ class MockAuraContainer extends MockFrame
             end
             self.showing[g.key] = ids
         end
-    end
-end
+    end,
+}
 
 Mock.auraContainers = {}
-Mock.frameTypes.AuraContainer = function(name: string?, parent: any): any
-    const c = MockAuraContainer.new(name, parent)
-    Mock.auraContainers[#Mock.auraContainers + 1] = c
-    return c
-end
+__engine.defineFrameType("AuraContainer", "Frame", function(frame: any)
+    mixin(frame, AURA_CONTAINER)
+    frame.groups = {}
+    --- What each group shows: spell IDs, by group key.
+    frame.showing = {}
+    Mock.auraContainers[#Mock.auraContainers + 1] = frame
+end)
 
 --- The unit's auras changed: the engine updates its containers for it.
 function Mock.auraChanged(unit: string)
@@ -1576,9 +1161,9 @@ UISpecialFrames = {} :: any
 
 --- The open wowlua:dialog (its `text`, `edit`, `accept`, `cancel`, `error`).
 function Mock.dialog(): any
-    for _, f in ipairs(Mock.frames) do
-        const d = (f :: any).dialog
-        if d and f.shown then
+    for _, f in ipairs(Mock.frames()) do
+        const d = f.dialog
+        if d and f:IsShown() then
             return d
         end
     end
@@ -1603,7 +1188,7 @@ end
 function Mock.escape()
     for _, name in ipairs(UISpecialFrames :: string[]) do
         const f = _G[name]
-        if f and f.shown then
+        if f and f:IsShown() then
             f:Hide()
         end
     end
@@ -1709,18 +1294,10 @@ class MockListView
     function SetElementResetter(fn: (holder: any) -> ()) self.resetter = fn end
 end
 
-class MockScrollBox extends MockFrame
-    view?: MockListView
-    items: any[] = {}
-    offset: number = 0
-    holders: any[] = {}
-
-    constructor(name: string?, parent: any)
-        super("Frame", name, parent)
-    end
-
+--- WowScrollBoxList's stand-in: the window of rows a view shows.
+const SCROLL_BOX: { [string]: any } = {
     -- Shows the window starting after `offset`, recycling the holders.
-    function layout()
+    layout = function(self: any)
         const view = self.view
         if not view then return end
         for k = 1, Mock.listRows do
@@ -1737,23 +1314,24 @@ class MockScrollBox extends MockFrame
                 view.initializer?.(holder, item)
             end
         end
-    end
-
-    function SetDataProvider(provider: any)
+    end,
+    SetDataProvider = function(self: any, provider: any)
         self.items = provider.items
         self.offset = 0
         self:layout()
-    end
-
-    function ScrollToElementDataIndex(index: number)
+    end,
+    ScrollToElementDataIndex = function(self: any, index: number)
         self.offset = math.max(0, math.min(index - Mock.listRows, #self.items - Mock.listRows))
         self:layout()
-    end
-end
+    end,
+}
 
-Mock.templates.WowScrollBoxList = function(name: string?, parent: any): any
-    return MockScrollBox.new(name, parent)
-end
+__engine.defineTemplate("WowScrollBoxList", function(frame: any)
+    mixin(frame, SCROLL_BOX)
+    frame.items = {}
+    frame.offset = 0
+    frame.holders = {}
+end)
 _G.CreateScrollBoxListLinearView = function(): any
     return MockListView.new()
 end
@@ -1767,11 +1345,10 @@ end
 
 --- Scrolls a wowlua:list view so that row `offset + 1` is the first shown.
 function Mock.scroll(list: any, offset: number)
-    for _, f in ipairs(Mock.frames) do
-        if f.parent == list.frame and (f :: any).layout then
-            const box = f :: any
-            box.offset = offset
-            box:layout()
+    for _, f in ipairs(Mock.frames()) do
+        if f:GetParent() == list.frame and f.layout then
+            f.offset = offset
+            f:layout()
         end
     end
 end
@@ -1872,8 +1449,7 @@ end) :: any
 
 --- Edit Mode: the manager, the selection overlay template, entering and
 --- leaving, and switching layouts.
-Mock.templates.EditModeSystemSelectionTemplate = function(name: string?, parent: any): any
-    const f = MockFrame.new("Frame", name, parent) :: any
+__engine.defineTemplate("EditModeSystemSelectionTemplate", function(f: any)
     f.ShowHighlighted = function(self: any)
         self.mode = "highlighted"
         self:Show()
@@ -1885,8 +1461,7 @@ Mock.templates.EditModeSystemSelectionTemplate = function(name: string?, parent:
     f.IsSelected = function(self: any): boolean
         return self.mode == "selected"
     end
-    return f
-end
+end)
 Mock.editModeLayout = "Modern"
 Mock.editModeCleared = 0
 EditModeManagerFrame = {
@@ -1907,8 +1482,8 @@ function Mock.editModeSwitch(layout: string)
 end
 --- The Edit Mode overlay of a frame.
 function Mock.selectionOf(frame: any): any
-    for _, f in ipairs(Mock.frames) do
-        if f.parent == frame and (f :: any).ShowSelected then
+    for _, f in ipairs(Mock.frames()) do
+        if f:GetParent() == frame and f.ShowSelected then
             return f
         end
     end
@@ -1960,15 +1535,7 @@ end
 --- `n` frames of `ms` milliseconds each (default 16): timers, then every
 --- shown frame's OnUpdate.
 function Mock.advanceFrames(n: number, ms: number?)
-    const step = (ms ?? 16) / 1000
-    for _ = 1, n do
-        Mock.advance(step)
-        for _, f in ipairs(Mock.frames) do
-            if f.shown and (f.scripts.OnUpdate or f.hooks.OnUpdate) then
-                Mock.script(f, "OnUpdate", step)
-            end
-        end
-    end
+    __engine.advanceFrames(n, ms ?? 16)
 end
 
 -- Addon messages: a server that checks, records and echoes ---------------------
@@ -1981,6 +1548,11 @@ Mock.echoAs = nil          -- deliver sent messages as from this player
 const PARTY_INSTANCE = 2
 _G.LE_PARTY_CATEGORY_HOME = 1
 _G.LE_PARTY_CATEGORY_INSTANCE = PARTY_INSTANCE
+
+--- An addon message arrives (CHAT_MSG_ADDON, the rest of its payload empty).
+function Mock.addonMessage(prefix: string, msg: string, chatType: string, sender: string)
+    Mock.fire("CHAT_MSG_ADDON", prefix, msg, chatType, sender, "", 0, 0, "", 0)
+end
 
 local function addonMessage(prefix: string, msg: string, chatType: string?, target: string?): any
     if #msg > 255 or msg:find("%z") then
@@ -1995,7 +1567,7 @@ local function addonMessage(prefix: string, msg: string, chatType: string?, targ
     if echoAs then
         local sender = `{echoAs}-MockRealm`
         C_Timer.After(0.05, function()
-            Mock.fire("CHAT_MSG_ADDON", prefix, msg, chatType, sender)
+            Mock.addonMessage(prefix, msg, chatType ?? "", sender)
         end)
     end
     return 0

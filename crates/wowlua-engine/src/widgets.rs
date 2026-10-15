@@ -3,12 +3,16 @@
 //! userdata) at `[0]`, whose metatable's `__index` is its class's method
 //! table: the documented methods of the class and its bases, as natives.
 //! A method runs its behaviour here, stores what a setter without one was
-//! given (its getter returns it), or fails as not mocked.
+//! given (its getter returns it), does nothing if it returns nothing, or
+//! fails as not mocked.
 //!
 //! Unverified until the probe battery runs (decided by the M8 mock and
 //! plausibility): events dispatch in frame creation order; `SetScript`
 //! clears the hooks; an unknown event, script or frame type fails with the
-//! messages below; templates without Blizzard's UI code only warn.
+//! messages below; templates without Blizzard's UI code only warn;
+//! `IsEventRegistered` returns a unit event's units; `SetFontObject` takes a
+//! font's name; `OnEnable` / `OnDisable` run on a change; vertex colors
+//! start white.
 
 use std::collections::HashMap;
 
@@ -57,6 +61,12 @@ pub struct Widget {
     pub text: Option<Value>,
     pub attributes: TableRef,
     pub protected: bool,
+    pub moving: bool,
+    pub sizing: bool,
+    pub enabled: bool,
+    pub resize_bounds: Option<(f64, f64, f64, f64)>,
+    /// Created by `CreateFrame` (not a region or another script object).
+    pub frame: bool,
 }
 
 /// The widgets, and each class's method table and metatable.
@@ -66,6 +76,11 @@ pub struct World {
     classes: HashMap<String, TableRef>,
     /// Each method's native, by method index.
     natives: HashMap<usize, Value>,
+    /// Templates and frame types tests (or stand-ins for Blizzard's UI
+    /// code) define: name → (base class, function applied to the frame),
+    /// the functions kept in the registry.
+    pub templates: HashMap<String, Value>,
+    pub frame_types: HashMap<String, (String, Value)>,
     /// Warnings for gaps that would make every test fail if they were errors
     /// (templates without Blizzard's UI code).
     pub warnings: Vec<String>,
@@ -207,6 +222,11 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         text: None,
         attributes,
         protected: false,
+        moving: false,
+        sizing: false,
+        enabled: true,
+        resize_bounds: None,
+        frame: false,
     };
     let world = &mut engine_mut(vm).world;
     world.widgets.push(w);
@@ -234,6 +254,15 @@ pub fn create_frame(vm: &mut Vm, c: NativeCall) -> Ret {
                 .is_some_and(|w| w.eq_ignore_ascii_case(&kind))
         })
         .map(|(name, _)| name.clone());
+    // A frame type defined for the run (`defineFrameType`): its base class
+    // and the function that makes it what it is.
+    let custom = engine(vm)
+        .world
+        .frame_types
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case(&kind))
+        .map(|(_, v)| v.clone());
+    let class = class.or_else(|| custom.as_ref().map(|(base, _)| base.clone()));
     let Some(class) = class else {
         return Err(vm.error(&format!("CreateFrame: Unknown frame type '{kind}'")));
     };
@@ -257,13 +286,24 @@ pub fn create_frame(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         None => None,
     };
-    if let Some(t) = vm.opt_str(&c, 4)? {
-        let t = String::from_utf8_lossy(vm.str_bytes(t)).into_owned();
-        engine_mut(vm).world.warnings.push(format!(
-            "CreateFrame: template \"{t}\" ignored (Blizzard's UI code is not loaded)"
-        ));
-    }
+    let templates: Vec<String> = match vm.opt_str(&c, 4)? {
+        Some(t) => String::from_utf8_lossy(vm.str_bytes(t))
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect(),
+        None => Vec::new(),
+    };
     let frame = create(vm, &class, name, parent);
+    if let Some(id) = widget_of(vm, frame) {
+        engine_mut(vm).world.widgets[id.0].frame = true;
+    }
+    if let Some((_, f)) = custom {
+        vm.call(f, &[frame])?;
+    }
+    for t in templates {
+        apply_template(vm, frame, &t)?;
+    }
     if c.has(5) && !c.arg(5).is_nil() {
         let id = vm.check_number(&c, 5)?;
         let key = vm.str("ID");
@@ -272,6 +312,26 @@ pub fn create_frame(vm: &mut Vm, c: NativeCall) -> Ret {
         let _ = vm.heap.table_mut(props).set(key, Value::Num(id));
     }
     Ok(vec![frame])
+}
+
+/// Applies template `name` to a frame: the function a test defined for it
+/// (`defineTemplate`), or a warning (Blizzard's UI code is not loaded).
+pub fn apply_template(vm: &mut Vm, frame: Value, name: &str) -> Result<(), LuaError> {
+    let defined = engine(vm)
+        .world
+        .templates
+        .iter()
+        .find(|(t, _)| t.eq_ignore_ascii_case(name))
+        .map(|(_, f)| *f);
+    match defined {
+        Some(f) => {
+            vm.call(f, &[frame])?;
+        }
+        None => engine_mut(vm).world.warnings.push(format!(
+            "CreateFrame: template \"{name}\" ignored (Blizzard's UI code is not loaded)"
+        )),
+    }
+    Ok(())
 }
 
 /// Every widget method: checks `self` and the arguments, then runs its
@@ -294,14 +354,46 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
         return b(vm, id, c);
     }
     crate::args::check_from(vm, api, f, &c, 2)?;
-    stored(vm, id, f.short, f.name, &c)
+    stored(vm, id, f, &c)
 }
 
-/// A method without behaviour: `SetX(...)` stores its arguments and `GetX()`
-/// returns them; anything else is not mocked.
-fn stored(vm: &mut Vm, id: WidgetId, short: &str, name: &str, c: &NativeCall) -> Ret {
+/// The stored arguments of setter `stem`, if it ran.
+fn stored_args(vm: &mut Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
+    let key = vm.str(stem);
+    let Value::Table(list) = vm.heap.table(props).get(key) else {
+        return None;
+    };
+    let n = vm.str("n");
+    let count = match vm.heap.table(list).get(n) {
+        Value::Num(n) => n as usize,
+        _ => 0,
+    };
+    Some(
+        (1..=count)
+            .map(|k| vm.heap.table(list).get(Value::Num(k as f64)))
+            .collect(),
+    )
+}
+
+/// A method without behaviour (decided for S3, unverified): `SetX(...)` and
+/// `EnableX(...)` store their arguments; `GetX()` returns what `SetX` stored,
+/// `IsX()` whether its first value is true (`IsXEnabled` reads `EnableX`);
+/// another method that returns nothing does nothing; anything else is not
+/// mocked.
+fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -> Ret {
+    let (short, name) = (f.short, f.name);
     let props = engine(vm).world.widgets[id.0].props;
-    if let Some(stem) = short.strip_prefix("Set") {
+    let returns = f
+        .doc
+        .get("Returns")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let setter = short
+        .strip_prefix("Set")
+        .map(str::to_string)
+        .or_else(|| short.strip_prefix("Enable").map(|s| format!("{s}Enabled")));
+    if let Some(stem) = setter {
         let list = vm.new_table();
         for (k, v) in c.args.iter().skip(1).enumerate() {
             let _ = vm.heap.table_mut(list).set(Value::Num(k as f64 + 1.0), *v);
@@ -311,22 +403,32 @@ fn stored(vm: &mut Vm, id: WidgetId, short: &str, name: &str, c: &NativeCall) ->
             .heap
             .table_mut(list)
             .set(n, Value::Num((c.len() - 1) as f64));
-        let key = vm.str(stem);
+        let key = vm.str(&stem);
         let _ = vm.heap.table_mut(props).set(key, Value::Table(list));
-        return Ok(vec![]);
+        // A setter's documented results (`success`): it worked.
+        return Ok(returns
+            .iter()
+            .map(
+                |r| match r.get("Type").and_then(serde_json::Value::as_str) {
+                    Some("bool") => Value::Bool(true),
+                    _ => Value::Nil,
+                },
+            )
+            .collect());
     }
-    if let Some(stem) = short.strip_prefix("Get") {
-        let key = vm.str(stem);
-        if let Value::Table(list) = vm.heap.table(props).get(key) {
-            let n = vm.str("n");
-            let count = match vm.heap.table(list).get(n) {
-                Value::Num(n) => n as usize,
-                _ => 0,
-            };
-            return Ok((1..=count)
-                .map(|k| vm.heap.table(list).get(Value::Num(k as f64)))
-                .collect());
-        }
+    if let Some(stem) = short.strip_prefix("Get")
+        && let Some(values) = stored_args(vm, props, stem)
+    {
+        return Ok(values);
+    }
+    if let Some(stem) = short.strip_prefix("Is")
+        && let Some(values) = stored_args(vm, props, stem)
+    {
+        let on = values.first().is_some_and(|v| v.truthy());
+        return Ok(vec![Value::Bool(on)]);
+    }
+    if returns.is_empty() {
+        return Ok(vec![]);
     }
     Err(vm.error(&format!("{name} is not mocked")))
 }
@@ -482,8 +584,17 @@ fn unregister_all_events(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 fn is_event_registered(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let e = vm.check_str(&c, 2)?;
     let e = String::from_utf8_lossy(vm.str_bytes(e)).into_owned();
-    let registered = engine(vm).world.widgets[id.0].events.contains_key(&e);
-    Ok(vec![Value::Bool(registered)])
+    // (isRegistered, units): the units a unit event was registered for
+    // (unverified).
+    let units = match engine(vm).world.widgets[id.0].events.get(&e) {
+        None => return Ok(vec![Value::Bool(false)]),
+        Some(units) => units.clone().unwrap_or_default(),
+    };
+    let mut out = vec![Value::Bool(true)];
+    for u in units {
+        out.push(vm.str(&u));
+    }
+    Ok(out)
 }
 
 /// Fires `event` at every widget registered for it, in creation order
@@ -1002,6 +1113,12 @@ fn is_protected(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(p), Value::Bool(false)])
 }
 
+/// Addon code's widgets are never forbidden (Blizzard's protected UI is
+/// not loaded).
+fn is_forbidden(_vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(false)])
+}
+
 fn click(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let button = match c.arg(2) {
         Value::Str(s) => Value::Str(s),
@@ -1011,6 +1128,205 @@ fn click(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     run_script(vm, id, "OnClick", &[button, Value::Bool(false)]);
     run_script(vm, id, "PostClick", &[button, Value::Bool(false)]);
     Ok(vec![])
+}
+
+// ---------------------------------------------------- moving and state
+
+fn start_moving(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    engine_mut(vm).world.widgets[id.0].moving = true;
+    Ok(vec![])
+}
+
+fn start_sizing(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    engine_mut(vm).world.widgets[id.0].sizing = true;
+    Ok(vec![])
+}
+
+fn stop_moving_or_sizing(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let w = &mut engine_mut(vm).world.widgets[id.0];
+    w.moving = false;
+    w.sizing = false;
+    Ok(vec![])
+}
+
+fn set_resize_bounds(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let min_w = number_arg(vm, &c, 2)?;
+    let min_h = number_arg(vm, &c, 3)?;
+    // Without a maximum, no limit (unverified).
+    let max_w = vm.opt_number(&c, 4, 0.0)?;
+    let max_h = vm.opt_number(&c, 5, 0.0)?;
+    engine_mut(vm).world.widgets[id.0].resize_bounds = Some((min_w, min_h, max_w, max_h));
+    Ok(vec![])
+}
+
+fn get_resize_bounds(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let (a, b, c, d) = engine(vm).world.widgets[id.0]
+        .resize_bounds
+        .unwrap_or_default();
+    Ok(vec![
+        Value::Num(a),
+        Value::Num(b),
+        Value::Num(c),
+        Value::Num(d),
+    ])
+}
+
+/// Enables or disables a button, edit box or slider; `OnEnable` /
+/// `OnDisable` run when it changes (unverified).
+fn set_enabled_to(vm: &mut Vm, id: WidgetId, on: bool) {
+    let w = &mut engine_mut(vm).world.widgets[id.0];
+    let was = std::mem::replace(&mut w.enabled, on);
+    let class = w.class.clone();
+    let script = if on { "OnEnable" } else { "OnDisable" };
+    if was != on && has_script(engine(vm), &class, script) {
+        run_script(vm, id, script, &[]);
+    }
+}
+
+fn set_enabled(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    set_enabled_to(vm, id, c.arg(2).truthy());
+    Ok(vec![])
+}
+
+fn enable(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    set_enabled_to(vm, id, true);
+    Ok(vec![])
+}
+
+fn disable(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    set_enabled_to(vm, id, false);
+    Ok(vec![])
+}
+
+fn is_enabled(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(engine(vm).world.widgets[id.0].enabled)])
+}
+
+/// `SetVertexColor(r, g, b [, a])`: alpha 1 when left out; white until set
+/// (unverified).
+fn set_vertex_color(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let mut rgba = [1.0; 4];
+    for (i, v) in rgba.iter_mut().enumerate().take(3) {
+        *v = number_arg(vm, &c, i + 2)?;
+    }
+    rgba[3] = vm.opt_number(&c, 5, 1.0)?;
+    let props = engine(vm).world.widgets[id.0].props;
+    let list = vm.new_table();
+    for (i, v) in rgba.iter().enumerate() {
+        let _ = vm
+            .heap
+            .table_mut(list)
+            .set(Value::Num(i as f64 + 1.0), Value::Num(*v));
+    }
+    let n = vm.str("n");
+    let _ = vm.heap.table_mut(list).set(n, Value::Num(4.0));
+    let key = vm.str("VertexColor");
+    let _ = vm.heap.table_mut(props).set(key, Value::Table(list));
+    Ok(vec![])
+}
+
+fn get_vertex_color(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let props = engine(vm).world.widgets[id.0].props;
+    Ok(stored_args(vm, props, "VertexColor").unwrap_or_else(|| vec![Value::Num(1.0); 4]))
+}
+
+/// The engine's controls for the mouse: a drag of a frame by (dx, dy)
+/// screen units, if it (or, for an overlay, its parent) starts moving.
+pub fn drag(vm: &mut Vm, id: WidgetId, dx: f64, dy: f64) {
+    let left = vm.str("LeftButton");
+    run_script(vm, id, "OnDragStart", &[left]);
+    let e = engine(vm);
+    let moved = if e.world.widgets[id.0].moving {
+        Some(id)
+    } else {
+        e.world.widgets[id.0]
+            .parent
+            .filter(|p| e.world.widgets[p.0].moving)
+    };
+    if let Some(m) = moved
+        && let Some(b) = bounds(vm, m, 0)
+    {
+        let s = effective_scale(engine(vm), m);
+        let screen = vm.get_global("UIParent");
+        let w = &mut engine_mut(vm).world.widgets[m.0];
+        w.points = vec![Point {
+            point: "BOTTOMLEFT".into(),
+            relative: Some(screen),
+            relative_point: "BOTTOMLEFT".into(),
+            x: (b.0 + dx) / s,
+            y: (b.1 + dy) / s,
+        }];
+    }
+    run_script(vm, id, "OnDragStop", &[]);
+}
+
+/// A drag of a resize grip by (dw, dh) screen units: its parent, if it
+/// starts sizing, keeps its top left.
+pub fn size_by(vm: &mut Vm, grip: WidgetId, dw: f64, dh: f64) {
+    let left = vm.str("LeftButton");
+    run_script(vm, grip, "OnMouseDown", &[left]);
+    if let Some(f) = engine(vm).world.widgets[grip.0].parent
+        && engine(vm).world.widgets[f.0].sizing
+        && let Some(b) = bounds(vm, f, 0)
+    {
+        let s = effective_scale(engine(vm), f);
+        let screen = vm.get_global("UIParent");
+        let w = &mut engine_mut(vm).world.widgets[f.0];
+        let (min_w, min_h, max_w, max_h) = w.resize_bounds.unwrap_or_default();
+        let limit = |v: f64, min: f64, max: f64| {
+            let v = v.max(min);
+            if max > 0.0 { v.min(max) } else { v }
+        };
+        w.width = limit(w.width + dw / s, min_w, max_w);
+        w.height = limit(w.height + dh / s, min_h, max_h);
+        w.points = vec![Point {
+            point: "TOPLEFT".into(),
+            relative: Some(screen),
+            relative_point: "BOTTOMLEFT".into(),
+            x: b.0 / s,
+            y: (b.1 + b.3) / s,
+        }];
+    }
+    run_script(vm, grip, "OnMouseUp", &[left]);
+}
+
+// ----------------------------------------------------------- functions
+
+/// `GetFramesRegisteredForEvent(event)`: the frames registered for it, in
+/// dispatch order.
+fn frames_registered_for_event(vm: &mut Vm, c: NativeCall) -> Ret {
+    let e = vm.check_str(&c, 1)?;
+    let e = String::from_utf8_lossy(vm.str_bytes(e)).into_owned();
+    Ok(engine(vm)
+        .world
+        .widgets
+        .iter()
+        .filter(|w| w.events.contains_key(&e))
+        .map(|w| Value::Table(w.table))
+        .collect())
+}
+
+/// `C_EventUtils.IsEventValid(event)`: whether the client knows the event.
+fn is_event_valid(vm: &mut Vm, c: NativeCall) -> Ret {
+    let e = vm.check_str(&c, 1)?;
+    let e = String::from_utf8_lossy(vm.str_bytes(e)).into_owned();
+    Ok(vec![Value::Bool(engine(vm).api.events.contains(&e))])
+}
+
+/// `CreateFont(name)`: a font object, global under its name.
+fn create_font(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = vm.check_str(&c, 1)?;
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    Ok(vec![create(vm, "Font", Some(name), None)])
+}
+
+/// The frame system's API functions with behaviour.
+pub fn functions() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
+    vec![
+        ("CreateFont", create_font),
+        ("GetFramesRegisteredForEvent", frames_registered_for_event),
+        ("C_EventUtils.IsEventValid", is_event_valid),
+    ]
 }
 
 /// A method's behaviour: the widget, the call (self first).
@@ -1085,5 +1401,17 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("GetAttribute", get_attribute),
         ("IsProtected", is_protected),
         ("Click", click),
+        ("IsForbidden", is_forbidden),
+        ("StartMoving", start_moving),
+        ("StartSizing", start_sizing),
+        ("StopMovingOrSizing", stop_moving_or_sizing),
+        ("SetResizeBounds", set_resize_bounds),
+        ("GetResizeBounds", get_resize_bounds),
+        ("SetEnabled", set_enabled),
+        ("Enable", enable),
+        ("Disable", disable),
+        ("IsEnabled", is_enabled),
+        ("SetVertexColor", set_vertex_color),
+        ("GetVertexColor", get_vertex_color),
     ]
 }
