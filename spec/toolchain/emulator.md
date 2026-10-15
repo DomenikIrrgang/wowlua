@@ -64,6 +64,23 @@ S37, S38):
   flavor follows the newest probed client and is listed in the emulation's
   coverage report (§17.8).
 
+### 17.3.1 Layers
+
+The client's in-game environment, sorted from the client itself
+(`/stdtest inventory`, recorded in `crates/wowlua-vm/tests/client/`) against
+Blizzard's UI code and API documentation for the build:
+
+| Layer | What | Where wowlua has it |
+|-------|------|---------------------|
+| Lua runtime | Lua 5.1's libraries and the client's C extensions: the string, table, math and bit additions, the aliases (`strfind`, `tinsert`, …), `date`/`time`, `debugstack`, the secure API, and the FrameScript functions (`issecretvalue`, `securecallmethod`, `Mixin`, …) | the VM (`Vm::wow`) |
+| Engine API | C functions: the documented API (`C_*` and globals) and older undocumented ones (`GetActionInfo`, …) | the engine (§17.6) |
+| Blizzard's Lua | FrameXML and SharedXML: `print`, `tostringall`, `assertf`, the degree-based `sin`/`cos`, mixins, and Lua wrappers even inside `C_` namespaces (`C_Traits.GetEntryInfo`) | Blizzard's own code, loaded by the engine (§17.7) |
+| GlueXML | the login and character screens' Lua | not in game; not emulated |
+
+On WoW Forever 1.60.1 (70374): 5,037 documented C functions, 2,059
+undocumented ones (151 of them the runtime's), 3,942 Lua functions, every one
+defined in the published UI code for the build.
+
 ## 17.4 Taint and secure execution
 
 The client's security model, in the VM:

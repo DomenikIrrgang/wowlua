@@ -12,9 +12,9 @@ use crate::stdlib::{Ret, register};
 use crate::value::Value;
 use crate::vm::{Rules, Vm};
 
-/// The client's aliases and wrappers, as elune defines them (`lcompatlib.c`):
-/// Lua code, so they behave as Lua functions do (the trigonometry works in
-/// degrees).
+/// The client's global aliases of library functions (C functions in the
+/// client: the same objects as the library's). The degree-based `sin`,
+/// `cos` and the like are Blizzard's FrameXML, not the runtime's.
 const COMPAT: &str = "local table = table
 foreach = table.foreach
 foreachi = table.foreachi
@@ -25,12 +25,7 @@ sort = table.sort
 wipe = table.wipe
 local math = math
 abs = math.abs
-acos = function (x) return math.deg(math.acos(x)) end
-asin = function (x) return math.deg(math.asin(x)) end
-atan = function (x) return math.deg(math.atan(x)) end
-atan2 = function (x,y) return math.deg(math.atan2(x,y)) end
 ceil = math.ceil
-cos = function (x) return math.cos(math.rad(x)) end
 deg = math.deg
 exp = math.exp
 floor = math.floor
@@ -44,9 +39,7 @@ mod = math.fmod
 PI = math.pi
 rad = math.rad
 random = math.random
-sin = function (x) return math.sin(math.rad(x)) end
 sqrt = math.sqrt
-tan = function (x) return math.tan(math.rad(x)) end
 local string = string
 strbyte = string.byte
 strchar = string.char
@@ -451,6 +444,10 @@ fn upper_code_points(s: &[u8]) -> Vec<u32> {
 /// The difference of the first unequal (uppercased) code points; not
 /// clamped (`strcmputf8i("a", "ab")` is -66).
 fn strcmputf8i(vm: &mut Vm, c: NativeCall) -> Ret {
+    let strlike = |v: Value| matches!(v, Value::Str(_) | Value::Num(_));
+    if !strlike(c.arg(1)) || !strlike(c.arg(2)) {
+        return Err(vm.error("Usage: strcmputf8i(string1, string2)"));
+    }
     let a = vm.check_bytes(&c, 1)?;
     let b = vm.check_bytes(&c, 2)?;
     let (a, b) = (upper_code_points(&a), upper_code_points(&b));
@@ -510,15 +507,25 @@ fn count(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(vm.heap.table(t).entries().count() as f64)])
 }
 
-/// Entries, then the sizes of the array and hash parts.
+/// Entries, how many keys are positive integers, and the largest one.
 fn getcountinfo(vm: &mut Vm, c: NativeCall) -> Ret {
-    let t = vm.check_table(&c, 1)?;
-    let table = vm.heap.table(t);
-    let (array, hash) = table.part_sizes();
+    const USAGE: &str = "Usage: local numEntries, numPositiveIntegerKeys, maxPositiveIntegerKey = table.getcountinfo(table)";
+    let t = usage_table(vm, &c, 1, USAGE)?;
+    let (mut entries, mut ints, mut max) = (0usize, 0usize, 0f64);
+    for (k, _) in vm.heap.table(t).entries() {
+        entries += 1;
+        if let Value::Num(n) = k
+            && n >= 1.0
+            && n.fract() == 0.0
+        {
+            ints += 1;
+            max = max.max(n);
+        }
+    }
     Ok(vec![
-        Value::Num(table.entries().count() as f64),
-        Value::Num(array as f64),
-        Value::Num(hash as f64),
+        Value::Num(entries as f64),
+        Value::Num(ints as f64),
+        Value::Num(max),
     ])
 }
 
@@ -566,7 +573,7 @@ fn indexof(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn isempty(vm: &mut Vm, c: NativeCall) -> Ret {
-    let t = vm.check_table(&c, 1)?;
+    let t = usage_table(vm, &c, 1, "Usage: local empty = table.isempty(table)")?;
     Ok(vec![Value::Bool(
         vm.heap.table(t).entries().next().is_none(),
     )])
@@ -583,20 +590,25 @@ fn list(vm: &mut Vm, items: Vec<Value>) -> Value {
 }
 
 fn keys(vm: &mut Vm, c: NativeCall) -> Ret {
-    let t = vm.check_table(&c, 1)?;
+    let t = usage_table(vm, &c, 1, "Usage: local keys = table.keys(table)")?;
     let items: Vec<Value> = vm.heap.table(t).entries().map(|(k, _)| k).collect();
     Ok(vec![list(vm, items)])
 }
 
 fn values(vm: &mut Vm, c: NativeCall) -> Ret {
-    let t = vm.check_table(&c, 1)?;
+    let t = usage_table(vm, &c, 1, "Usage: local values = table.values(table)")?;
     let items: Vec<Value> = vm.heap.table(t).entries().map(|(_, v)| v).collect();
     Ok(vec![list(vm, items)])
 }
 
 /// Removes every occurrence from the array part; returns how many.
 fn removevalue(vm: &mut Vm, c: NativeCall) -> Ret {
-    let t = vm.check_table(&c, 1)?;
+    let t = usage_table(
+        vm,
+        &c,
+        1,
+        "Usage: local removedCount = table.removevalue(table [, value])",
+    )?;
     let v = c.arg(2);
     let n = vm.heap.table(t).border();
     let kept: Vec<Value> = (1..=n)
@@ -613,7 +625,12 @@ fn removevalue(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// Removes `t[i]` by moving the last element there.
 fn removeunordered(vm: &mut Vm, c: NativeCall) -> Ret {
-    let t = vm.check_table(&c, 1)?;
+    let t = usage_table(
+        vm,
+        &c,
+        1,
+        "Usage: local value = table.removeunordered(table [, index])",
+    )?;
     let i = vm.check_int(&c, 2)?;
     let n = vm.heap.table(t).border() as i64;
     if i < 1 || i > n {
@@ -676,14 +693,24 @@ fn trim_set(vm: &mut Vm, c: &NativeCall) -> Result<Vec<u8>, LuaError> {
 }
 
 fn ltrim(vm: &mut Vm, c: NativeCall) -> Ret {
-    let s = vm.check_bytes(&c, 1)?;
+    let s = usage_bytes(
+        vm,
+        &c,
+        1,
+        "Usage: local trimmed = string.ltrim(str [, characters])",
+    )?;
     let set = trim_set(vm, &c)?;
     let start = s.iter().position(|b| !set.contains(b)).unwrap_or(s.len());
     Ok(vec![vm.bytes(&s[start..])])
 }
 
 fn rtrim(vm: &mut Vm, c: NativeCall) -> Ret {
-    let s = vm.check_bytes(&c, 1)?;
+    let s = usage_bytes(
+        vm,
+        &c,
+        1,
+        "Usage: local trimmed = string.rtrim(str [, characters])",
+    )?;
     let set = trim_set(vm, &c)?;
     let end = s
         .iter()
@@ -749,7 +776,7 @@ fn sign(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn wrap(vm: &mut Vm, c: NativeCall) -> Ret {
-    const USAGE: &str = "Usage: local wrappedValue = math.wrap(value, minimum, maximum)";
+    const USAGE: &str = "Usage: local wrapped = math.wrap(value, minimum, maximum)";
     let v = usage_num(vm, &c, 1, USAGE)?;
     let lo = usage_num(vm, &c, 2, USAGE)?;
     let hi = usage_num(vm, &c, 3, USAGE)?;
@@ -761,7 +788,7 @@ fn wrap(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn lerp(vm: &mut Vm, c: NativeCall) -> Ret {
-    const USAGE: &str = "Usage: local value = math.lerp(startValue, endValue, amount)";
+    const USAGE: &str = "Usage: local interpolatedValue = math.lerp(startValue, endValue, amount)";
     let a = usage_num(vm, &c, 1, USAGE)?;
     let b = usage_num(vm, &c, 2, USAGE)?;
     let t = usage_num(vm, &c, 3, USAGE)?;
@@ -782,7 +809,7 @@ fn normalize(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn remap(vm: &mut Vm, c: NativeCall) -> Ret {
-    const USAGE: &str = "Usage: local remappedValue = math.remap(value, fromMinimum, fromMaximum, toMinimum, toMaximum)";
+    const USAGE: &str = "Usage: local remappedValue = math.remap(value, sourceMinimum, sourceMaximum, destinationMinimum, destinationMaximum)";
     let v = usage_num(vm, &c, 1, USAGE)?;
     let a = usage_num(vm, &c, 2, USAGE)?;
     let b = usage_num(vm, &c, 3, USAGE)?;
@@ -809,7 +836,7 @@ fn isnan(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn isinf(vm: &mut Vm, c: NativeCall) -> Ret {
-    let v = usage_num(vm, &c, 1, "Usage: local inf = math.isinf(value)")?;
+    let v = usage_num(vm, &c, 1, "Usage: local infinite = math.isinf(value)")?;
     Ok(vec![Value::Bool(v.is_infinite())])
 }
 
@@ -1019,6 +1046,9 @@ fn seterrorhandler(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn fastrandom(vm: &mut Vm, c: NativeCall) -> Ret {
+    if c.len() > 2 {
+        return Err(vm.error("wrong number of arguments"));
+    }
     random_range(vm, c)
 }
 
@@ -1348,10 +1378,13 @@ fn debuglocals(vm: &mut Vm, c: NativeCall) -> Ret {
     if vm.in_finalizer {
         return Ok(vec![]);
     }
-    let level = (vm.opt_number(&c, 1, 1.0)? as i64).max(1);
+    let level = vm.opt_number(&c, 1, 1.0)? as i64;
     let levels = vm.levels();
     let mut out = Vec::new();
-    if let Some(info) = levels.get(level as usize) {
+    if level >= 0
+        && let Some(info) = levels.get(level as usize)
+        && info.what != "C"
+    {
         let (locals, upvalues) = vm.level_variables(info);
         for (name, v) in locals.into_iter().chain(upvalues) {
             dump_value(vm, &name, v, 1, &mut out);
@@ -1360,20 +1393,41 @@ fn debuglocals(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.bytes(&out)])
 }
 
-/// One variable of `debuglocals`, as the client prints it: `name=value`.
-fn dump_value(vm: &mut Vm, name: &str, v: Value, _recurse: u32, out: &mut Vec<u8>) {
+/// One variable of `debuglocals`, as the client prints it: `name=value`;
+/// a table's entries one level deep (` key=value`); functions and
+/// userdata are left out.
+fn dump_value(vm: &mut Vm, name: &str, v: Value, recurse: u32, out: &mut Vec<u8>) {
+    let indent: &[u8] = if recurse == 0 { b" " } else { b"" };
+    let text = match v {
+        Value::Nil => b"nil".to_vec(),
+        Value::Bool(b) => (if b { "true" } else { "false" }).as_bytes().to_vec(),
+        Value::Num(n) => crate::number::fmt_num(n).into_bytes(),
+        Value::Str(s) => [b"\"", vm.str_bytes(s), b"\""].concat(),
+        Value::Table(t) => {
+            let entries: Vec<(Value, Value)> = vm.heap.table(t).entries().collect();
+            let mut body = Vec::new();
+            if recurse > 0 {
+                for (k, x) in entries {
+                    let key = match k {
+                        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+                        Value::Num(n) => crate::number::fmt_num(n),
+                        _ => String::new(),
+                    };
+                    dump_value(vm, &key, x, recurse - 1, &mut body);
+                }
+            }
+            if body.is_empty() {
+                b"<table>".to_vec()
+            } else {
+                [&b"<table>{\n"[..], &body, b"}"].concat()
+            }
+        }
+        Value::Func(_) | Value::Userdata(_) => return,
+        other => format!("<{}>", other.type_name()).into_bytes(),
+    };
+    out.extend_from_slice(indent);
     out.extend_from_slice(name.as_bytes());
     out.push(b'=');
-    match v {
-        Value::Nil => out.extend_from_slice(b"nil"),
-        Value::Bool(b) => out.extend_from_slice(if b { b"true" } else { b"false" }),
-        Value::Num(n) => out.extend_from_slice(crate::number::fmt_num(n).as_bytes()),
-        Value::Str(s) => {
-            out.push(b'"');
-            out.extend_from_slice(vm.str_bytes(s));
-            out.push(b'"');
-        }
-        other => out.extend_from_slice(format!("<{}>", other.type_name()).as_bytes()),
-    }
+    out.extend_from_slice(&text);
     out.push(b'\n');
 }

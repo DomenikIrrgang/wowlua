@@ -78,6 +78,22 @@ fn fixture(name: &str) -> Option<(BTreeMap<String, String>, BTreeMap<String, Str
 /// Cases whose behaviour the VM does not have yet, with why: they are
 /// listed, not failed.
 const PENDING: &[(&str, &str)] = &[
+    (
+        "strsplit(',', string.rep('a,', 79",
+        "strsplit's limit: being probed",
+    ),
+    (
+        "string.upper('ß",
+        "the client's UTF-8 case table: being probed",
+    ),
+    (
+        "string.upper('\\255",
+        "the client's UTF-8 case table: being probed",
+    ),
+    (
+        "string.upper('ǆ",
+        "the client's UTF-8 case table: being probed",
+    ),
     ("secretwrap", "secret values (S2.3)"),
     ("canaccess", "secret values (S2.3)"),
     ("scrubsecretvalues", "secret values (S2.3)"),
