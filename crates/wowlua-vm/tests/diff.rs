@@ -284,3 +284,97 @@ fn base_library() {
     );
     same("print(_VERSION)");
 }
+
+#[test]
+fn string_library() {
+    same("print(string.len('abc'), ('abc'):len(), #'abc')");
+    same(
+        "print(('hello'):sub(2), ('hello'):sub(2, 3), ('hello'):sub(-3), ('hello'):sub(-3, -2), ('hello'):sub(0), ('hello'):sub(10), ('hello'):sub(3, 1))",
+    );
+    same(
+        "print(('Hello World'):upper(), ('Hello World'):lower(), ('abc'):rep(3), ('abc'):rep(0), ('abc'):reverse())",
+    );
+    same("print(('ABC'):byte(), ('ABC'):byte(2), ('ABC'):byte(1, -1), ('ABC'):byte(10))");
+    same("print(string.char(72, 105), string.char())");
+    same("print(pcall(string.char, 256)) print(pcall(string.rep)) print(pcall(('x').rep, 'x'))");
+    same("print(string.sub('hello', 2.7, 4.2))");
+}
+
+#[test]
+fn string_format() {
+    same(r#"print(string.format('%d %5d %-5d| %05d %+d % d %.3d', 42, 42, 42, 42, 42, 42, 7))"#);
+    same(
+        r#"print(string.format('%x %X %#x %o %#o %u %c%c', 255, 255, 255, 8, 8, 3000000000, 72, 105))"#,
+    );
+    same(
+        r#"print(string.format('%f %.2f %10.3f %-10.1f| %e %.2E %g %g %g %G', 3.14159, 2.5, 1/3, 2.25, 12345.678, 0.00012, 100000, 1e20, 0.0001, 1e-10))"#,
+    );
+    same(r#"print(string.format('%g %g %g %g %.3g %#g', 1, 1.5, 123456789, 0.1, 2/3, 1))"#);
+    same(r#"print(string.format('%s|%10s|%-10s|%.2s', 'abc', 'abc', 'abc', 'abc'))"#);
+    same(r#"print(string.format('%q', 'a "quoted"\n line\\ \r end'))"#);
+    same(
+        r#"print(string.format('%5.1f%%', 99.44), string.format('%d', -0), string.format('%d', 3.9), string.format('%d', -3.9))"#,
+    );
+    same(
+        r#"print(string.format('%s %s %s', 1, 1.5, 'x'), string.format('[%c]', 0), #string.format('%c', 0))"#,
+    );
+    same(
+        r#"print(pcall(string.format, '%d', 'x')) print(pcall(string.format, '%y', 1)) print(pcall(string.format, '%d')) print(pcall(string.format, '%123d', 1)) print(pcall(string.format, '%------d', 1))"#,
+    );
+    same(
+        r#"print(string.format('%5s|', 'ab'), string.format('%s', ('x'):rep(150)) == ('x'):rep(150))"#,
+    );
+    same(
+        r#"print(string.format('%.14g', 0.1), string.format('%.20f', 0.1), string.format('%e', 0), string.format('%g', -0.0))"#,
+    );
+    same(
+        r#"print(string.format('%x', -1), string.format('%5.2s|', 'abc'), string.format('%-+6d|', 5))"#,
+    );
+}
+
+#[test]
+fn string_patterns() {
+    same(
+        "print(('hello world'):find('o'), ('hello world'):find('o', 6), ('hello world'):find('xyz'), ('hello'):find(''), ('hello'):find('', 10))",
+    );
+    same("print(('a.b'):find('.', 1, true), ('a.b'):find('%.'), ('a+b'):find('+', 1, true))");
+    same(
+        "print(('hello'):find('l+'), ('hello'):match('(h)(e)'), ('hello'):match('()ll()'), ('key=value'):match('(%w+)=(%w+)'))",
+    );
+    same(
+        "print(('  trim  '):match('^%s*(.-)%s*$'), ('abc'):match('^b'), ('abc'):match('c$'), ('a$c'):match('$c'))",
+    );
+    same(
+        "print(('THE (quick) fox'):find('%((%a+)%)'), ('f(a(b)c)d'):match('%b()'), ('THE END'):find('%f[%a]%a+'))",
+    );
+    same(
+        "print(('hello'):gsub('l', 'L'), ('hello'):gsub('l', 'L', 1), ('abc'):gsub('', '-'), ('hello world'):gsub('(%w+)', '<%1>'))",
+    );
+    same(
+        "print(('hello'):gsub('.', {h = 'H', e = false}), ('x=1 y=2'):gsub('(%w+)=(%w+)', '%2=%1'), ('abc'):gsub('%w', '%0%0'))",
+    );
+    same(
+        "print(('hello world'):gsub('%w+', function(w) return w:upper() end), ('abc'):gsub('b', function() return nil end))",
+    );
+    same(
+        "local t = {} for w in ('one two  three'):gmatch('%a+') do t[#t + 1] = w end print(unpack(t))",
+    );
+    same("for k, v in ('a=1, b=2'):gmatch('(%w+)=(%w+)') do print(k, v) end");
+    same("for p in ('abc'):gmatch('()') do print(p) end");
+    same(
+        "print(('aaa'):match('a-'), ('aaa'):match('a-$'), ('aaab'):match('a*b'), ('b'):match('a?b'), ('[x]'):match('[%[]'), ('x-y'):match('[%w-]+'))",
+    );
+    same(
+        "print(('\\0a\\0'):find('%z'), ('abc123'):match('%d+'), ('ABCdef'):match('%u+'), ('a,b;c'):gsub('%p', ''))",
+    );
+    same(
+        "print(pcall(string.find, 'a', '(')) print(pcall(string.find, 'a', '%')) print(pcall(string.find, 'a', '[a')) print(pcall(string.find, 'a', '%1'))",
+    );
+    same(
+        "print(pcall(string.gsub, 'abc', '(a)', '%2')) print(pcall(string.gsub, 'abc', 'a', true)) print(pcall(string.gsub, 'abc', 'a', function() return {} end))",
+    );
+    same(
+        "print(('hello'):gsub('l', '%%'), ('hello'):gsub('', 'x', 2), ('abc'):gsub('^a', 'A'), ('aaa'):gsub('^a', 'A'))",
+    );
+    same("print(('x'):rep(3, ','), ('abc'):find('b', -1), ('abc'):find('b', -2))");
+}
