@@ -170,6 +170,20 @@ local function run()
         end
         results[name] = row
     end
+    -- Called from Lua, not through pcall: the error names the function and
+    -- the caller's line as the client writes them.
+    local direct = {}
+    local function directly(label, f)
+        local ok, e = pcall(f)
+        direct[label] = ok and "no error" or (isSecret(e) and "<secret>" or tostring(e))
+    end
+    directly("C_CVar.GetCVar()", function() return C_CVar.GetCVar() end)
+    directly("C_CVar.GetCVar({})", function() local r = C_CVar.GetCVar({}) return r end)
+    directly("C_ActionBar.GetActionAutocast('x')", function() local r = C_ActionBar.GetActionAutocast("x") return r end)
+    directly("C_UnitAuras.GetAuraDataBySlot(true)", function() local r = C_UnitAuras.GetAuraDataBySlot(true) return r end)
+    directly("C_CVar.GetCVar(secret)", function() local r = C_CVar.GetCVar(secretwrap("x")) return r end)
+    directly("local f = C_CVar.GetCVar; f()", function() local f = C_CVar.GetCVar local r = f() return r end)
+    results["(direct calls)"] = direct
     return results
 end
 
