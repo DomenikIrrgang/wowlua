@@ -2599,7 +2599,7 @@ impl Checker<'_> {
                 }
             }
             (Ty::Record(pr), Ty::Record(ar)) => {
-                for (n, f) in &pr.fields {
+                for (n, f) in pr.fields.iter() {
                     if let Some(af) = ar.fields.get(n) {
                         self.unify(f.ty, af.ty, s);
                     }
@@ -2689,8 +2689,10 @@ impl Checker<'_> {
         if let Some(i) = index
             && let Ty::Record(ir) = self.env.types.get(i).clone()
         {
-            for (k, f) in ir.fields {
-                r.fields.entry(k).or_insert(f);
+            for (k, f) in ir.fields.iter() {
+                if !r.fields.contains_key(k) {
+                    r.fields.insert(k.into(), *f);
+                }
             }
             if ir.open || r.indexer.is_none() {
                 r.indexer = Some((Types::STRING, Types::ANY));
