@@ -882,6 +882,8 @@ local cases = {
     "return pcall(type, secretwrap())",
     "return pcall(issecretvalue)",
     "return pcall(secretwrap)",
+    "return string.format('%d|%d|%x', secretwrap('1'), secretwrap('x'), 255), issecretvalue(string.format('%d', secretwrap('1')))",
+    "return pcall(string.format, '%s', secretwrap({}))",
 
 }
 
