@@ -1057,6 +1057,7 @@ declare class Frame extends Region
     function ExecuteAttribute(attributeName: string, ...: any): (boolean, string?)
     function GetAlpha(): SingleColorValue
     function GetAttribute(attributeName: string): any
+    function GetAttribute(prefix: string, name: string, suffix: string?): any
     function GetBoundsRect(): (uiUnit, uiUnit, uiUnit, uiUnit)
     function GetChildren(): SimpleFrame
     function GetClampRectInsets(): (uiUnit, uiUnit, uiUnit, uiUnit)

@@ -335,7 +335,7 @@ local function behaviours(): { [string]: string }
                 for _, k in ipairs(keys) do
                     g:SetAttribute(k, k)
                 end
-                out[#out + 1] = (g :: any):GetAttribute("alt-", "type", "1")
+                out[#out + 1] = g:GetAttribute("alt-", "type", "1")
                 for _, k in ipairs(keys) do
                     g:SetAttribute(k, nil)
                 end

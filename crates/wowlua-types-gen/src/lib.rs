@@ -40,6 +40,31 @@ pub struct FlavorDocs {
     pub lod_files: std::collections::HashMap<String, String>,
 }
 
+/// Where the annotations are short: `Frame:GetAttribute` also takes
+/// `(prefix, name, suffix)`, the modified lookup Blizzard's
+/// `SecureTemplates.lua` uses.
+fn widget_corrections(classes: &mut indexmap::IndexMap<String, model::Class>) {
+    if let Some(frame) = classes.get_mut("Frame")
+        && let Some(sigs) = frame.methods.get_mut("GetAttribute")
+        && sigs.iter().all(|s| s.params.len() == 1)
+    {
+        let param = |name: &str, optional| model::ParamDecl {
+            name: name.into(),
+            ty: "string".into(),
+            optional,
+        };
+        sigs.push(model::Sig {
+            params: vec![
+                param("prefix", false),
+                param("name", false),
+                param("suffix", true),
+            ],
+            returns: vec!["any".into()],
+            ..model::Sig::default()
+        });
+    }
+}
+
 /// Where Blizzard's documentation is wrong: `C_Timer.NewTimer` and
 /// `NewTicker` return a handle with `Cancel()` and `IsCancelled()` (the
 /// documentation says the callback), and their callbacks receive it.
@@ -155,6 +180,7 @@ pub fn generate(
     shared.enums.clear();
     shared.constants.clear();
     blizzard::mark_widgets(&mut shared.classes);
+    widget_corrections(&mut shared.classes);
     // `CreateFrame("Button", …)` returns a `Button`.
     let mut create = Vec::new();
     for t in blizzard::FRAME_TYPES {
