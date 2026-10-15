@@ -14,6 +14,7 @@ pub mod external;
 pub mod fix;
 pub mod format;
 mod fsutil;
+pub mod incremental;
 pub mod install;
 pub mod keywords;
 mod locale;
@@ -36,8 +37,9 @@ pub mod workspace;
 use wowlua_diagnostics::{Diagnostic, Diagnostics};
 use wowlua_span::SourceDb;
 
-pub use build::{BuildOutput, BuildRequest, Only, build};
+pub use build::{BuildOutput, BuildRequest, Only, build, build_with_cache};
 pub use compile::{Optimizations, Optimized, optimize_and_emit};
+pub use incremental::{BuildCache, CacheStats};
 pub use project::{
     ExternalAddon, LoadOptions, Project, Status, load_project, load_projects, standalone_project,
 };

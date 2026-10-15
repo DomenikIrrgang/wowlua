@@ -197,6 +197,34 @@ pub fn build(
     project: &Project,
     request: &BuildRequest,
 ) -> Option<BuildOutput> {
+    build_inner(session, project, request, None)
+}
+
+/// [`build`] for `wowlua dev`: files compiled by an earlier build with
+/// `cache` are taken from it where compiling them again would give the
+/// same, and this build's are kept for the next.
+pub fn build_with_cache(
+    session: &mut Session,
+    project: &Project,
+    request: &BuildRequest,
+    cache: &mut crate::BuildCache,
+) -> Option<BuildOutput> {
+    build_inner(session, project, request, Some(cache))
+}
+
+fn build_inner(
+    session: &mut Session,
+    project: &Project,
+    request: &BuildRequest,
+    mut cache: Option<&mut crate::BuildCache>,
+) -> Option<BuildOutput> {
+    if let Some(cache) = cache.as_deref_mut() {
+        cache.begin(crate::incremental::config_hash(
+            &session.db,
+            project,
+            request,
+        ));
+    }
     let manifest = &project.manifest;
     let root = manifest.root.clone();
     let addon_name = project.addon_name();
@@ -772,8 +800,14 @@ pub fn build(
                 availability,
             }
         });
-    let mut parsed =
-        crate::compile::parse_sources(&session.db, &mut diagnostics, &files, &declarations, &raw);
+    let mut parsed = crate::compile::parse_sources(
+        &session.db,
+        &mut diagnostics,
+        &files,
+        &declarations,
+        &raw,
+        cache.as_deref_mut(),
+    );
     crate::compile::add_libraries(
         &mut session.db,
         &mut diagnostics,
@@ -943,8 +977,12 @@ pub fn build(
         vec![None]
     };
     let mut builds: Vec<FlavorBuild> = Vec::new();
-    // Files a flavor compiles the same as an earlier one are taken from it.
-    let mut flavor_cache = crate::compile::FlavorCache::default();
+    // Files a flavor compiles the same as an earlier one (or, in `wowlua
+    // dev`, an earlier build) are taken from it.
+    let mut flavor_cache = cache
+        .as_deref_mut()
+        .map(crate::BuildCache::lend)
+        .unwrap_or_default();
     let mut api_shared: Option<crate::compile::ParsedDeclaration> = None;
     for (idx, flavor) in compile_flavors.iter().enumerate() {
         let meta = crate::meta::build_meta(
@@ -1060,10 +1098,13 @@ pub fn build(
     }
     // The parses and the flavor cache are not read after compiling; freeing
     // them here keeps them out of the memory that assembly and bundling add
-    // on top. The cache is never kept for the next build (`wowlua dev`).
+    // on top. `wowlua dev` keeps the cache for the next build.
     drop(parsed);
     drop(declarations);
-    drop(flavor_cache);
+    match cache {
+        Some(cache) => cache.keep(flavor_cache),
+        None => drop(flavor_cache),
+    }
     drop(api_shared);
     // Packager flavor blocks: each flavor's variant of the file.
     for rel in &flavor_blocks {

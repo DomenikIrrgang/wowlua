@@ -131,9 +131,13 @@ fn load_and_build(
     session: &mut Session,
     global: &GlobalArgs,
     request: &BuildRequest,
+    cache: Option<&mut wowlua_driver::BuildCache>,
 ) -> Option<(Project, BuildOutput)> {
     let project = wowlua_driver::load_project(session, &load_options(out, global))?;
-    let build = wowlua_driver::build(session, &project, request);
+    let build = match cache {
+        Some(cache) => wowlua_driver::build_with_cache(session, &project, request, cache),
+        None => wowlua_driver::build(session, &project, request),
+    };
     apply_lints(session, &project);
     build.map(|b| (project, b))
 }
@@ -454,7 +458,7 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
         bundle: None,
         only: None,
     };
-    let result = load_and_build(out, &mut session, global, &request);
+    let result = load_and_build(out, &mut session, global, &request, None);
     let ok = out.flush(&mut session);
     let Some((_, build)) = result.filter(|_| ok) else {
         return false;
@@ -1051,12 +1055,14 @@ pub fn dev(
         only: None,
     };
     let install = install_request(target, link);
+    // What one build compiled, for the next ones.
+    let mut cache = wowlua_driver::BuildCache::default();
 
     // The project's root and output folder, after a build that succeeded.
-    let cycle = |first: bool| -> Option<(PathBuf, PathBuf)> {
+    let mut cycle = |first: bool| -> Option<(PathBuf, PathBuf)> {
         let started = Instant::now();
         let mut session = Session::new();
-        let result = load_and_build(out, &mut session, global, &request);
+        let result = load_and_build(out, &mut session, global, &request, Some(&mut cache));
         let ok = out.flush(&mut session);
         let (project, build) = result.filter(|_| ok)?;
         out.status(
@@ -1287,7 +1293,7 @@ pub fn fix(out: &Output, global: &GlobalArgs, manifest: bool) -> bool {
         bundle: None,
         only: None,
     };
-    let _ = load_and_build(out, &mut session, global, &request);
+    let _ = load_and_build(out, &mut session, global, &request, None);
     out.flush(&mut session)
 }
 

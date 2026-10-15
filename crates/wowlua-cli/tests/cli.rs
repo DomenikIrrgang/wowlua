@@ -3852,3 +3852,96 @@ const DEV_UTIL: &str = r#"{"version":3,"file":"util.lua","sources":["src/util.wo
 "#;
 const RELEASE_BUNDLE: &str = r#"{"version":3,"file":"Maps.lua","sources":["src/a.lua","src/b.lua","src/libs/Tiny/Tiny.lua"],"names":["counter","step","twice","value"],"mappings":";;;;;;;;;AAAA,MAAMA,EAAU;AAChB,SAAS,SAAS;AACd,MAAMC,EAAO;AACbD,EAAUA,CAAQ,CAAEC;AACpB,OAAOD;AACX;;;ACLA,eAAeE,CAAK,CAACC;AACjB,OAAOA,CAAM,CAAE;AACnB;AACA,WAAaD;;;ACHb;AACA;AACA"}
 "#;
+/// `wowlua dev` keeps what it compiled between builds: after an edit, its
+/// `dist/` is what a fresh `wowlua build` of the same tree writes.
+#[test]
+fn dev_rebuilds_match_a_fresh_build() {
+    use std::io::{BufRead, BufReader};
+    let dir = tempfile::tempdir().unwrap();
+    let addon = dir.path().join("DevAddon");
+    write(
+        &addon,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "dev-addon", "version": "1.0.0" },
+  "flavors": { "standard": {}, "vanilla": {} } }
+"#,
+            ),
+            ("src/a.lua", "local _, ns = ...\nns.a = 1\n"),
+            ("src/b.lua", "local _, ns = ...\nprint(ns.a)\n"),
+            (
+                "src/util.wowlua",
+                "export function double(n: number): number return n * 2 end\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import double from \"./util\"\nprint(double(2))\n",
+            ),
+        ],
+    );
+    let wow = dir.path().join("World of Warcraft");
+    fs::create_dir_all(wow.join("_retail_")).unwrap();
+    let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin("wowlua"))
+        .current_dir(&addon)
+        .env("NO_COLOR", "1")
+        .env("WOWLUA_HOME", dir.path().join(".wowlua-home"))
+        .env_remove("WOWLUA_WOW_PATH")
+        .args(["dev", "--link", "--exit-after", "2", "--wow"])
+        .arg(&wow)
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    // A missed file event would leave `dev` waiting: fail instead of hanging.
+    let (done, finished) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        if finished
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .is_err()
+        {
+            eprintln!("wowlua dev did not finish its second build");
+            std::process::abort();
+        }
+    });
+    let mut log = String::new();
+    let mut ready = 0;
+    for line in BufReader::new(child.stderr.take().unwrap()).lines() {
+        let line = line.unwrap();
+        log.push_str(&line);
+        log.push('\n');
+        if line.contains("Ready") {
+            ready += 1;
+        }
+        if line.contains("Watching") {
+            fs::write(addon.join("src/a.lua"), "local _, ns = ...\nns.a = 2\n").unwrap();
+        }
+    }
+    assert!(child.wait().unwrap().success(), "{log}");
+    let _ = done.send(());
+    assert_eq!(ready, 2, "{log}");
+    let tree = |root: &Path| -> Vec<(String, Vec<u8>)> {
+        files_in(root)
+            .into_iter()
+            .map(|f| {
+                let bytes = fs::read(root.join(&f)).unwrap();
+                (f, bytes)
+            })
+            .collect()
+    };
+    let dev = tree(&addon.join("dist"));
+    assert!(
+        dev.iter().any(|(f, bytes)| f.ends_with("src/a.lua")
+            && String::from_utf8_lossy(bytes).contains("ns.a = 2")),
+        "the edit is built"
+    );
+    fs::remove_dir_all(addon.join("dist")).unwrap();
+    wowlua(&addon)
+        .env("WOWLUA_HOME", dir.path().join(".wowlua-home"))
+        .arg("build")
+        .assert()
+        .success();
+    assert!(
+        dev == tree(&addon.join("dist")),
+        "dev and a fresh build differ"
+    );
+}
