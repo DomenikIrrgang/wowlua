@@ -188,6 +188,9 @@ pub struct Vm {
     pub(crate) secret_used: bool,
     /// Where taint came from (`crate::origin`).
     pub(crate) origins: crate::origin::Origins,
+    /// The host's state (the engine's, spec emulator §17.6), for its
+    /// natives.
+    pub host: Option<Box<dyn std::any::Any>>,
     /// The running native may take secrets' values even while tainted
     /// (`tostring`, `string.format`, `strjoin`: their results are secret).
     pub(crate) secret_reveal: bool,
@@ -265,6 +268,7 @@ impl Vm {
             c_depth: 0,
             secret_used: false,
             origins: Default::default(),
+            host: None,
             secret_reveal: false,
             cstack: Vec::new(),
             errfunc: None,

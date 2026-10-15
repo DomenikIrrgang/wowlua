@@ -210,6 +210,21 @@ pub fn declared_names(text: &str) -> std::collections::HashSet<String> {
     out
 }
 
+/// A flavor's API documentation as the engine reads it: Blizzard's
+/// documentation tables as gzipped JSON, every key kept (decision T199).
+pub fn documentation(flavor: &str) -> Option<&'static [u8]> {
+    Some(match flavor {
+        "standard" => include_bytes!("../data/standard.api.json.gz"),
+        "camelot" => include_bytes!("../data/camelot.api.json.gz"),
+        "mists" => include_bytes!("../data/mists.api.json.gz"),
+        "cata" => include_bytes!("../data/cata.api.json.gz"),
+        "wrath" => include_bytes!("../data/wrath.api.json.gz"),
+        "tbc" => include_bytes!("../data/tbc.api.json.gz"),
+        "vanilla" => include_bytes!("../data/vanilla.api.json.gz"),
+        _ => return None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
 
