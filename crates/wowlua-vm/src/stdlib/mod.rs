@@ -5,6 +5,7 @@ pub mod base;
 pub mod coroutine;
 pub mod math;
 pub mod pattern;
+pub mod secure;
 pub mod string;
 pub mod table;
 pub mod wow;
@@ -37,6 +38,14 @@ impl NativeCall {
         crate::taint::Slot {
             v: self.arg(n),
             t: self.taints.get(n - 1).copied().unwrap_or_default(),
+        }
+    }
+
+    /// Upvalue `i` (0-based) with its taint.
+    pub fn upval_slot(&self, i: usize) -> crate::taint::Slot {
+        crate::taint::Slot {
+            v: self.upvals.get(i).copied().unwrap_or_default(),
+            t: self.upval_taints.get(i).copied().unwrap_or_default(),
         }
     }
 

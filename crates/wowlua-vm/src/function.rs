@@ -18,6 +18,7 @@ pub struct NativeCall {
     pub taints: Vec<crate::taint::Taint>,
     /// The native function's own upvalues (set when it was created).
     pub upvals: Rc<[Value]>,
+    pub upval_taints: Rc<[crate::taint::Taint]>,
 }
 
 pub struct LuaFunction {
@@ -32,6 +33,7 @@ pub struct NativeFunction {
     pub f: NativeFn,
     pub name: &'static str,
     pub upvals: Rc<[Value]>,
+    pub upval_taints: Rc<[crate::taint::Taint]>,
     pub env: TableRef,
     pub taint: crate::taint::Taint,
 }
@@ -42,6 +44,13 @@ pub enum Function {
 }
 
 impl Function {
+    pub fn set_taint(&mut self, t: crate::taint::Taint) {
+        match self {
+            Function::Lua(f) => f.taint = t,
+            Function::Native(f) => f.taint = t,
+        }
+    }
+
     /// The function object's taint.
     pub fn taint(&self) -> crate::taint::Taint {
         match self {

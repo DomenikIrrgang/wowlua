@@ -144,6 +144,10 @@ Off by default: mock-only tests start faster (decision T186).
     overflow. Shims serve the suite's plumbing only (timing, temporary files
     in memory, loading its helper files).
   - Differential tests compare snippets' output and errors.
+- **Taint.** elune's taint conformance cases (MIT, vendored in
+  `crates/wowlua-vm/tests/elune/`), which pass in the client when run
+  securely, all pass on the VM; the one for elune's own
+  `loadstring_untainted` is excluded.
 - **The client's behaviour.** Every WoW-specific rule (§17.3 to §17.5) has a
   probe in StdTest whose recorded in-game result is a test fixture; a rule
   changes only with a new probe.

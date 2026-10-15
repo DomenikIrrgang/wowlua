@@ -115,10 +115,13 @@ impl Vm {
             if tm.is_nil() {
                 continue;
             }
+            // Taint does not leave a `__gc` metamethod (patch 10.1).
+            let taint = self.taint().saved();
             let outer = std::mem::replace(&mut self.in_finalizer, true);
             let r = self.call(tm, &[Value::Userdata(u)]);
             self.in_finalizer = outer;
             r?;
+            self.taint_mut().restore(taint);
         }
         Ok(())
     }

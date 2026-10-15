@@ -83,6 +83,9 @@ pub fn open(vm: &mut Vm) {
         client_format: true,
         xpcall_args: true,
     };
+    // Reads taint the execution, writes take its taint.
+    vm.taint_mut().mode = crate::taint::READ | crate::taint::WRITE;
+    crate::stdlib::secure::open(vm);
     // What the client does not have.
     vm.set_global("load", Value::Nil);
     let math = global_table(vm, "math");
@@ -184,6 +187,9 @@ pub fn open(vm: &mut Vm) {
     );
     vm.print_handler = vm.native("print", crate::stdlib::base::print);
     vm.error_handler = vm.native("errorhandler", default_error_handler);
+    // The client's loadstring taints its caller.
+    let loadstring = vm.native("loadstring", loadstring_tainting);
+    vm.set_global("loadstring", loadstring);
     let strconcat = vm.get_global("strconcat");
     set(vm, string, "concat", strconcat);
     let compat = vm
@@ -202,6 +208,13 @@ fn global_table(vm: &mut Vm, name: &str) -> TableRef {
 fn set(vm: &mut Vm, t: TableRef, key: &str, v: Value) {
     let k = vm.heap.intern(key.as_bytes());
     vm.heap.table_mut(t).set_str(k, v);
+}
+
+/// `loadstring`, which taints the caller (`LUA_LOADSTRING_TAINT`).
+fn loadstring_tainting(vm: &mut Vm, c: NativeCall) -> Ret {
+    let strong = vm.taint_named("*** ForceTaint_Strong ***");
+    vm.taint_mut().stack = strong;
+    crate::stdlib::base::loadstring(vm, c)
 }
 
 fn gfind(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -812,22 +825,44 @@ fn ipairs_reverse(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `pcallwithenv(f, env, ...)`: `pcall` with `f`'s environment replaced
-/// for the call (elune's `luaB_pcallwithenv`).
+/// for the call; a caller's taint taints `f` (elune's `luaB_pcallwithenv`).
 fn pcallwithenv(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Value::Func(f), Value::Table(env)) = (c.arg(1), c.arg(2)) else {
         return Err(vm.error("Usage: local success, ... = pcallwithenv(f, env, [args...])"));
     };
     let old = vm.func_env(f);
+    if let Some(meta) = vm.heap.table(old).meta {
+        let k = vm.heap.intern(b"__environment");
+        if !vm.heap.table(meta).get_str(k).is_nil() {
+            return Err(
+                vm.error("cannot use pcallwithenv on a function with a protected environment")
+            );
+        }
+    }
+    let taint_object = |vm: &mut Vm| {
+        let w = vm.taint().write();
+        if !w.is_secure() {
+            vm.heap.func_mut(f).set_taint(w);
+        }
+    };
+    taint_object(vm);
     vm.set_func_env(f, env);
-    let r = vm.pcall(Value::Func(f), c.args.get(2..).unwrap_or(&[]));
+    let saved = vm.errfunc.take();
+    let r = vm.call_slots(c.slot(1), &c.slots(3));
+    vm.errfunc = saved;
     vm.set_func_env(f, old);
-    Ok(match r {
+    taint_object(vm);
+    let out = match r {
         Ok(mut results) => {
-            results.insert(0, Value::Bool(true));
+            results.insert(0, vm.taint().fresh(Value::Bool(true)));
             results
         }
-        Err(e) => vec![Value::Bool(false), e.value],
-    })
+        Err(e) => vec![
+            vm.taint().fresh(Value::Bool(false)),
+            vm.taint().fresh(e.value),
+        ],
+    };
+    Ok(vm.return_slots(out))
 }
 
 fn geterrorhandler(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1090,6 +1125,10 @@ fn default_error_handler(_vm: &mut Vm, c: NativeCall) -> Ret {
 /// `top` levels from `start`, then `...`, then the last `base` levels
 /// (elune's `db_stack`).
 fn debugstack(vm: &mut Vm, c: NativeCall) -> Ret {
+    // Nothing inside `__gc` metamethods (patch 10.1).
+    if vm.in_finalizer {
+        return Ok(vec![]);
+    }
     let mut args: &[Value] = &c.args;
     let thread = match args.first() {
         Some(Value::Thread(t)) => {
@@ -1171,6 +1210,9 @@ fn debugstack(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `debuglocals([level])`: the locals and upvalues of a level, dumped
 /// (elune's `db_locals`).
 fn debuglocals(vm: &mut Vm, c: NativeCall) -> Ret {
+    if vm.in_finalizer {
+        return Ok(vec![]);
+    }
     let level = (vm.opt_number(&c, 1, 1.0)? as i64).max(1);
     let levels = vm.levels();
     let mut out = Vec::new();

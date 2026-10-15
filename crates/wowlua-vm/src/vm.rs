@@ -154,6 +154,8 @@ pub struct Vm {
     /// Taints for a native's results, set by the native just before it
     /// returns (else its results take the write taint).
     pub result_taints: Vec<Taint>,
+    taint_names: Vec<Rc<str>>,
+    taint_ids: std::collections::HashMap<Rc<str>, Taint>,
     pub clock: Clock,
     /// `geterrorhandler`/`seterrorhandler` and the print handler (WoW).
     pub error_handler: Value,
@@ -226,6 +228,8 @@ impl Vm {
         let mut vm = Vm {
             rules: Rules::default(),
             result_taints: Vec::new(),
+            taint_names: Vec::new(),
+            taint_ids: std::collections::HashMap::new(),
             clock: Clock::default(),
             error_handler: Value::Nil,
             print_handler: Value::Nil,
@@ -297,15 +301,43 @@ impl Vm {
     }
 
     pub fn native_with(&mut self, name: &'static str, f: NativeFn, upvals: Vec<Value>) -> Value {
+        let slots = upvals.into_iter().map(Slot::secure).collect();
+        self.native_slots(name, f, slots)
+    }
+
+    /// A native with upvalues that keep their taints.
+    pub fn native_slots(&mut self, name: &'static str, f: NativeFn, upvals: Vec<Slot>) -> Value {
         let env = self.globals;
         let taint = self.cur.taint.alloc(true);
         Value::Func(self.heap.alloc_func(Function::Native(NativeFunction {
             f,
             name,
-            upvals: upvals.into(),
+            upvals: upvals.iter().map(|s| s.v).collect(),
+            upval_taints: upvals.iter().map(|s| s.t).collect(),
             env,
             taint,
         })))
+    }
+
+    /// The taint of an addon (or any name).
+    pub fn taint_named(&mut self, name: &str) -> Taint {
+        if let Some(&t) = self.taint_ids.get(name) {
+            return t;
+        }
+        self.taint_names.push(Rc::from(name));
+        let t = Taint(self.taint_names.len() as u32);
+        self.taint_ids.insert(Rc::from(name), t);
+        t
+    }
+
+    /// A taint's name; none for secure.
+    pub fn taint_name(&self, t: Taint) -> Option<String> {
+        if t.is_secure() {
+            return None;
+        }
+        self.taint_names
+            .get(t.0 as usize - 1)
+            .map(|n| n.to_string())
     }
 
     pub fn set_global(&mut self, name: &str, v: Value) {
@@ -328,6 +360,17 @@ impl Vm {
     pub fn load(&mut self, src: &[u8], chunkname: &str) -> Result<Value, String> {
         self.load_raw(src, chunkname.as_bytes())
             .map_err(|e| String::from_utf8_lossy(&e).into_owned())
+    }
+
+    /// Loads code as an addon's (`luaL_loadbufferas`): its functions and
+    /// constants carry the addon's taint, so running them taints execution.
+    pub fn load_as(&mut self, src: &[u8], chunkname: &str, addon: &str) -> Result<Value, String> {
+        let saved = self.cur.taint.saved();
+        let taint = self.taint_named(addon);
+        self.cur.taint.stack = taint;
+        let r = self.load(src, chunkname);
+        self.cur.taint.restore(saved);
+        r
     }
 
     /// [`load`](Self::load) on bytes, as Lua strings are: the error message
@@ -596,7 +639,8 @@ impl Vm {
                 Ok(true)
             }
             Function::Native(nf) => {
-                let (native, upvals) = (nf.f, nf.upvals.clone());
+                let (native, upvals, upval_taints) =
+                    (nf.f, nf.upvals.clone(), nf.upval_taints.clone());
                 let slots = &self.cur.stack[func + 1..func + 1 + nargs];
                 let args = slots.iter().map(|s| s.v).collect();
                 let taints = slots.iter().map(|s| s.t).collect();
@@ -615,6 +659,7 @@ impl Vm {
                         args,
                         taints,
                         upvals,
+                        upval_taints,
                     },
                 );
                 self.cstack.pop();

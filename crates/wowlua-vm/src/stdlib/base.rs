@@ -145,20 +145,26 @@ fn strtoul(s: &[u8], base: u32) -> Option<f64> {
     Some(n as f64)
 }
 
+// Natives below keep taints as the client's do: values read from tables
+// are copied (a tainted one taints the execution), values passed through
+// keep their own.
+
 fn rawget(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = vm.check_table(&c, 1)?;
     let k = vm.check_any(&c, 2)?;
-    Ok(vec![vm.heap.table(t).get(k)])
+    let s = vm.heap.table(t).get_slot(k);
+    let s = vm.taint_mut().copy(s);
+    Ok(vm.return_slots(vec![s]))
 }
 
 fn rawset(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = vm.check_table(&c, 1)?;
     let k = vm.check_any(&c, 2)?;
-    let v = vm.check_any(&c, 3)?;
-    if let Err(e) = vm.heap.table_mut(t).set(k, v) {
+    vm.check_any(&c, 3)?;
+    if let Err(e) = vm.heap.table_mut(t).set_slot(k, c.slot(3)) {
         return Err(vm.rt_error(e.message()));
     }
-    Ok(vec![Value::Table(t)])
+    Ok(vm.return_slots(vec![c.slot(1)]))
 }
 
 fn rawequal(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -200,7 +206,8 @@ fn getmetatable(vm: &mut Vm, c: NativeCall) -> Ret {
 fn assert(vm: &mut Vm, c: NativeCall) -> Ret {
     let v = vm.check_any(&c, 1)?;
     if v.truthy() {
-        return Ok(c.args);
+        let all = c.slots(1);
+        return Ok(vm.return_slots(all));
     }
     let msg = match vm.opt_str(&c, 2)? {
         Some(s) => String::from_utf8_lossy(vm.heap.str_bytes(s)).into_owned(),
@@ -221,36 +228,46 @@ fn error(vm: &mut Vm, c: NativeCall) -> Ret {
     Err(vm.raise(v))
 }
 
-fn pcall(vm: &mut Vm, c: NativeCall) -> Ret {
-    let f = vm.check_any(&c, 1)?;
-    match vm.pcall(f, &c.args[1..]) {
+/// `true` and the results, or `false` and the error; results keep the
+/// taints the callee left them.
+fn protected_results(
+    vm: &mut Vm,
+    r: Result<Vec<crate::taint::Slot>, crate::error::LuaError>,
+) -> Ret {
+    let out = match r {
         Ok(mut results) => {
-            results.insert(0, Value::Bool(true));
-            Ok(results)
+            results.insert(0, vm.taint().fresh(Value::Bool(true)));
+            results
         }
-        Err(e) => Ok(vec![Value::Bool(false), e.value]),
-    }
+        Err(e) => vec![
+            vm.taint().fresh(Value::Bool(false)),
+            vm.taint().fresh(e.value),
+        ],
+    };
+    Ok(vm.return_slots(out))
+}
+
+fn pcall(vm: &mut Vm, c: NativeCall) -> Ret {
+    vm.check_any(&c, 1)?;
+    // Without an enclosing handler (`lua_pcall` with none).
+    let saved = vm.errfunc.take();
+    let r = vm.call_slots(c.slot(1), &c.slots(2));
+    vm.errfunc = saved;
+    protected_results(vm, r)
 }
 
 fn xpcall(vm: &mut Vm, c: NativeCall) -> Ret {
     let handler = vm.check_any(&c, 2)?;
-    let f = c.arg(1);
     let saved = vm.errfunc.replace(handler);
     // Lua 5.1 calls `f` without arguments; the client passes the rest.
-    let args = if vm.rules.xpcall_args && c.len() > 2 {
-        c.args[2..].to_vec()
+    let args = if vm.rules.xpcall_args {
+        c.slots(3)
     } else {
         Vec::new()
     };
-    let r = vm.call(f, &args);
+    let r = vm.call_slots(c.slot(1), &args);
     vm.errfunc = saved;
-    match r {
-        Ok(mut results) => {
-            results.insert(0, Value::Bool(true));
-            Ok(results)
-        }
-        Err(e) => Ok(vec![Value::Bool(false), e.value]),
-    }
+    protected_results(vm, r)
 }
 
 fn select(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -269,7 +286,8 @@ fn select(vm: &mut Vm, c: NativeCall) -> Ret {
     if i < 1 {
         return Err(vm.arg_error(1, "index out of range"));
     }
-    Ok(c.args[i as usize..].to_vec())
+    let rest = c.slots(i as usize + 1);
+    Ok(vm.return_slots(rest))
 }
 
 fn unpack(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -287,14 +305,22 @@ fn unpack(vm: &mut Vm, c: NativeCall) -> Ret {
     if n <= 0 || n >= 8000 {
         return Err(vm.error("too many results to unpack"));
     }
-    let table = vm.heap.table(t);
-    Ok((i..=e).map(|k| table.get_num(k as f64)).collect())
+    let slots: Vec<_> = (i..=e)
+        .map(|k| vm.heap.table(t).get_slot(Value::Num(k as f64)))
+        .collect();
+    let slots = slots.into_iter().map(|s| vm.taint_mut().copy(s)).collect();
+    Ok(vm.return_slots(slots))
 }
 
 fn next(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = vm.check_table(&c, 1)?;
-    match vm.heap.table(t).next(c.arg(2)) {
-        Ok(Some((k, v))) => Ok(vec![k, v]),
+    match vm.heap.table(t).next_slot(c.arg(2)) {
+        Ok(Some((k, v))) => {
+            // Keys are stored secure; the value is copied.
+            let k = vm.taint().fresh(k);
+            let v = vm.taint_mut().copy(v);
+            Ok(vm.return_slots(vec![k, v]))
+        }
         Ok(None) => Ok(vec![Value::Nil]),
         Err(_) => Err(vm.rt_error("invalid key to 'next'")),
     }
@@ -313,11 +339,13 @@ fn ipairs(vm: &mut Vm, c: NativeCall) -> Ret {
 fn ipairs_aux(vm: &mut Vm, c: NativeCall) -> Ret {
     let i = vm.check_int(&c, 2)? + 1;
     let t = vm.check_table(&c, 1)?;
-    let v = vm.heap.table(t).get_num(i as f64);
-    if v.is_nil() {
+    let s = vm.heap.table(t).get_slot(Value::Num(i as f64));
+    if s.v.is_nil() {
         Ok(vec![Value::Nil])
     } else {
-        Ok(vec![Value::Num(i as f64), v])
+        let k = vm.taint().fresh(Value::Num(i as f64));
+        let s = vm.taint_mut().copy(s);
+        Ok(vm.return_slots(vec![k, s]))
     }
 }
 
@@ -331,7 +359,7 @@ fn load_result(vm: &mut Vm, r: Result<Value, Vec<u8>>) -> Ret {
     }
 }
 
-fn loadstring(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn loadstring(vm: &mut Vm, c: NativeCall) -> Ret {
     let s = vm.check_bytes(&c, 1)?;
     let name = match vm.opt_str(&c, 2)? {
         Some(n) => vm.heap.str_bytes(n).to_vec(),
@@ -420,29 +448,66 @@ fn fenv_target(
     }
 }
 
+/// The `__environment` field of `env`'s metatable, read as
+/// `luaL_getmetafield` reads it: a protected environment.
+fn env_metafield(vm: &mut Vm, env: crate::heap::TableRef) -> Option<crate::taint::Slot> {
+    let meta = vm.heap.table(env).meta?;
+    let k = vm.heap.intern(b"__environment");
+    let s = vm.heap.table(meta).get_str_slot(k);
+    (!s.v.is_nil()).then(|| vm.taint_mut().copy(s))
+}
+
 fn getfenv(vm: &mut Vm, c: NativeCall) -> Ret {
+    // Not inside `__gc` metamethods (patch 10.1).
+    if vm.in_finalizer {
+        return Ok(vec![]);
+    }
     let target = fenv_target(vm, &c, "getfenv")?;
-    let env = match target {
-        None => vm.globals,
+    let (env, f) = match target {
         Some(Value::Func(f)) => match vm.heap.func(f) {
-            Function::Native(_) => vm.globals,
-            Function::Lua(l) => l.env,
+            Function::Native(_) => (vm.globals, Some(f)),
+            Function::Lua(l) => (l.env, Some(f)),
         },
-        Some(_) => vm.globals,
+        _ => (vm.globals, None),
     };
+    // A protected environment answers for itself; otherwise the function's
+    // own taint taints the caller.
+    if let Some(protected) = env_metafield(vm, env) {
+        return Ok(vm.return_slots(vec![protected]));
+    }
+    if let Some(f) = f {
+        let t = vm.heap.func(f).taint();
+        vm.taint_mut().read(t);
+    }
     Ok(vec![Value::Table(env)])
 }
 
 fn setfenv(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = vm.check_table(&c, 2)?;
-    if let Value::Num(n) = c.arg(1)
-        && n == 0.0
-    {
-        vm.globals = t;
-        return Ok(vec![]);
+    let target = if matches!(c.arg(1), Value::Num(n) if n == 0.0) {
+        None
+    } else {
+        fenv_target(vm, &c, "setfenv")?
+    };
+    let current = match target {
+        Some(Value::Func(f)) => vm.heap.func(f).env(),
+        _ => vm.globals,
+    };
+    if env_metafield(vm, current).is_some() {
+        return Err(vm.error("cannot change a protected environment"));
     }
-    let target = fenv_target(vm, &c, "setfenv")?;
+    // Changing a function's environment taints the function.
+    if let Some(Value::Func(f)) = target {
+        let w = vm.taint().write();
+        if !w.is_secure() {
+            vm.heap.func_mut(f).set_taint(w);
+        }
+    }
     match target {
+        None => {
+            vm.globals = t;
+            Ok(vec![])
+        }
         Some(Value::Func(f)) if matches!(vm.heap.func(f), Function::Lua(_)) => {
             vm.heap.func_mut(f).set_env(t);
             Ok(vec![Value::Func(f)])
