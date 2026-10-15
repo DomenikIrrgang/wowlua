@@ -105,14 +105,14 @@ const EXPERIMENTS: CrashExperiment[] = {
     },
     {
         name = "xpcall(f, handler, r)",
-        prediction = "crash at r = 102 or 103 (WoW's xpcall passes arguments; stock Lua's would crash at 102)",
+        prediction = "crash at r = 102 (confirmed)",
         run = function()
             return scan("xpcall(f, handler, r)", function(r: number): number return select("#", xpcall(body, G.geterrorhandler(), r)) end, plus(1))
         end,
     },
     {
         name = "pcallwithenv(f, env, r)",
-        prediction = "crash at r = 103 if it works like pcall",
+        prediction = "no crash: stops at r = 2 with 2 results (it does not return like pcall)",
         run = function()
             return scan("pcallwithenv(f, env, r)", function(r: number): number return select("#", G.pcallwithenv(body, {}, r)) end, plus(1))
         end,
@@ -156,6 +156,13 @@ const EXPERIMENTS: CrashExperiment[] = {
             return scan("coroutine.wrap", function(r: number): number
                 return select("#", coroutine.wrap(function() return unpack(T, 1, r) end)())
             end, plus(0))
+        end,
+    },
+    {
+        name = "xpcall(f, handler, r, 0, 0): xpcall with 5 arguments",
+        prediction = "crash at r = 104 (#results + 1 >= #args + 100, as at 102 with 3 arguments)",
+        run = function()
+            return scan("xpcall(f, handler, r, 0, 0)", function(r: number): number return select("#", xpcall(body, G.geterrorhandler(), r, 0, 0)) end, plus(1))
         end,
     },
 }

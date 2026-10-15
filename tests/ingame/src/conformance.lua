@@ -516,6 +516,12 @@ local cases = {
     "setglobal('StdTestConformanceGlobal', 5) return StdTestConformanceGlobal, getglobal('StdTestConformanceGlobal')",
     "local r = {} for i, v in ipairs_reverse({ 'a', 'b', 'c' }) do r[#r + 1] = i .. v end return table.concat(r, ',')",
     "return pcallwithenv(function() return x end, { x = 5 })",
+    "return pcallwithenv(function() return 1, 2, 3 end, {})",
+    "local sel = select return pcallwithenv(function(...) return sel('#', ...), ... end, {}, 'a', 'b')",
+    "local u, t = unpack, { 1, 2, 3 } return pcallwithenv(function(n) return u(t, 1, n) end, {}, 2)",
+    "return pcallwithenv(function() end, {})",
+    "return select('#', pcallwithenv(function() end, {}))",
+    "local sel = select return pcallwithenv(function(...) return sel('#', ...) end, {}, nil, nil)",
     "return pcallwithenv(function() error('e') end, {})",
     "return includes, mapvalues, class, import, enumerate_regions, dumpobject",
 

@@ -185,7 +185,8 @@ fn print_ours() {
 }
 
 /// Where the client crashes (`/stdtest crashlimit`, WoW Forever 1.60.1):
-/// `pcall` returning `#args + 100` or more values. The VM raises an error
+/// `pcall` returning `#args + 100` or more values, `xpcall` one fewer (its
+/// handler takes a slot). The VM raises an error
 /// naming the call instead (decision T194).
 #[test]
 fn pcall_crash_limit() {
@@ -196,6 +197,8 @@ out[1] = select('#', pcall(unpack, t, 1, 103))
 out[2] = select(2, pcall(function() return pcall(unpack, t, 1, 104) end))
 out[3] = select('#', pcall(f, 101))
 out[4] = select(2, pcall(function() return pcall(f, 102) end))
+out[5] = select('#', xpcall(f, print, 101))
+out[6] = select(2, pcall(function() return xpcall(f, print, 102) end))
 return table.concat(out, '|')";
     let mut vm = Vm::wow();
     let f = vm.load(src.as_bytes(), "=crash").expect("compiles");
@@ -207,6 +210,8 @@ return table.concat(out, '|')";
         "results crash the game (its Lua assertion \"L->top < L->ci->top\", lapi.c:577)";
     assert_eq!(
         String::from_utf8_lossy(vm.str_bytes(s)),
-        format!("104|crash:5: pcall: 104 {assertion}|102|crash:7: pcall: 102 {assertion}")
+        format!(
+            "104|crash:5: pcall: 104 {assertion}|102|crash:7: pcall: 102 {assertion}|102|crash:9: xpcall: 102 {assertion}"
+        )
     );
 }

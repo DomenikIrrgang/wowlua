@@ -265,6 +265,13 @@ pub(crate) fn fits_cstack(args: usize, n: usize) -> bool {
     n <= MAXCSTACK && args + n <= MAXCSTACK
 }
 
+/// The error for a call that crashes the client (decision T194).
+fn crash(vm: &mut Vm, call: &str, results: usize) -> crate::error::LuaError {
+    vm.error(&format!(
+        "{call}: {results} results crash the game (its Lua assertion \"L->top < L->ci->top\", lapi.c:577)"
+    ))
+}
+
 fn pcall(vm: &mut Vm, c: NativeCall) -> Ret {
     vm.check_any(&c, 1)?;
     // Without an enclosing handler (`lua_pcall` with none).
@@ -277,11 +284,7 @@ fn pcall(vm: &mut Vm, c: NativeCall) -> Ret {
         && let Ok(results) = &r
         && results.len() >= c.len() + CLIENT_MINSTACK
     {
-        let msg = format!(
-            "pcall: {} results crash the game (its Lua assertion \"L->top < L->ci->top\", lapi.c:577)",
-            results.len()
-        );
-        return Err(vm.error(&msg));
+        return Err(crash(vm, "pcall", results.len()));
     }
     protected_results(vm, r)
 }
@@ -297,6 +300,13 @@ fn xpcall(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let r = vm.call_slots(c.slot(1), &args);
     vm.errfunc = saved;
+    // As pcall's, with the handler below the results in its frame.
+    if vm.rules.assertions
+        && let Ok(results) = &r
+        && results.len() + 1 >= c.len() + CLIENT_MINSTACK
+    {
+        return Err(crash(vm, "xpcall", results.len()));
+    }
     protected_results(vm, r)
 }
 

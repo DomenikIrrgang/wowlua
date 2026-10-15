@@ -66,9 +66,12 @@ S37, S38):
   (string slice too long)"); `strsplit` returns at most 4000 pieces
   ("strsplit(): Stack overflow"). The client runs its Lua with API
   assertions on and gives C functions 100 free slots: `pcall` returning
-  its argument count plus 100 or more values pushes its status past them,
-  the assertion `L->top < L->ci->top` fails and the game crashes. Such
-  calls fail with an error naming the call (decision T194).
+  its argument count plus 100 or more values (`xpcall` one fewer, its
+  handler takes a slot) pushes its status past them, the assertion
+  `L->top < L->ci->top` fails and the game crashes. Such calls fail with
+  an error naming the call (decision T194). `securecall`,
+  `securecallfunction`, `securecallmethod`, `pcallwithenv` and the
+  coroutine functions return up to the 8000 slots without crashing.
 - **Per flavor.** Where flavors differ (a library function, an arithmetic
   rule), the VM follows the flavor under test. Behaviour not yet probed on a
   flavor follows the newest probed client and is listed in the emulation's
