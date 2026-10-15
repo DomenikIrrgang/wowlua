@@ -33,6 +33,9 @@ pub struct Namespace {
 #[derive(Clone, Debug, Default)]
 pub struct Class {
     pub bases: Vec<String>,
+    /// Further parents (LuaLS `@class A : B, C, D`: C and D), whose
+    /// members the declarations copy in; the engine inherits from them.
+    pub also: Vec<String>,
     pub methods: IndexMap<String, Vec<Sig>>,
     pub statics: IndexMap<String, Vec<Sig>>,
     /// name → (type, optional)

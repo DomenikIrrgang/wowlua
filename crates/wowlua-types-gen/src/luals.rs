@@ -213,6 +213,9 @@ impl Converter {
             entry.fields.entry(f).or_insert((ty, optional));
         }
         if parents.len() > 1 {
+            if entry.also.is_empty() {
+                entry.also = parents[1..].to_vec();
+            }
             self.mixins.push((name.to_string(), parents[1..].to_vec()));
         }
     }

@@ -388,7 +388,10 @@ pub fn generate(
                 .map(|(name, c)| {
                     (
                         name.clone(),
-                        serde_json::json!({ "bases": c.bases, "widget": c.widget }),
+                        serde_json::json!({
+                            "bases": c.bases.iter().chain(c.also.iter()).collect::<Vec<_>>(),
+                            "widget": c.widget,
+                        }),
                     )
                 })
                 .collect();

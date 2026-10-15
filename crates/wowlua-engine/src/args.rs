@@ -31,6 +31,8 @@ enum Family {
     Table { mixin: bool },
     /// A widget (a table holding its object).
     Object,
+    /// A function.
+    Func,
     /// Anything: enums, booleans, some IDs, Lua values.
     Any,
 }
@@ -57,6 +59,10 @@ fn family(api: &Api, ty: &str, arg: &Json) -> Family {
         "bool" | "LuaValueReference" | "LuaValueVariant" => return Family::Any,
         "SimpleFrame" | "FrameScriptObject" => return Family::Object,
         "table" => return Family::Table { mixin: false },
+        "luaFunction" | "function" | "LuaFunctionReference" => return Family::Func,
+        "ScriptTypeName" => return Family::Str,
+        // The client's own structures the probe met.
+        "TooltipComparisonItem" | "PlayerLocation" => return Family::Table { mixin: true },
         "cstring" | "string" | "stringView" => return Family::Str,
         _ => {}
     }
@@ -69,15 +75,14 @@ fn family(api: &Api, ty: &str, arg: &Json) -> Family {
             mixin: arg.get("Mixin").is_some(),
         };
     }
-    // Unverified: an alias's family; a type neither documented nor an
-    // alias is one of the client's own structures (`TooltipComparisonItem`,
-    // `PlayerLocation`, `SimpleFont` behave so).
+    // Unverified: an alias's family (string literals are strings); a type
+    // neither documented nor an alias takes anything until probed.
     match api.aliases.get(ty).map(String::as_str) {
         Some("string") => Family::Str,
         Some("number") => int(I32, false),
         Some(a) if a.contains("string") && a.contains("number") => Family::Str,
-        Some(_) => Family::Any,
-        None => Family::Table { mixin: true },
+        Some(a) if a.starts_with('"') => Family::Str,
+        _ => Family::Any,
     }
 }
 
@@ -160,6 +165,19 @@ pub fn usage(f: &Function) -> String {
 
 /// Checks a call's arguments as the client does.
 pub fn check(vm: &mut Vm, api: &Api, f: &Function, c: &NativeCall) -> Result<(), LuaError> {
+    check_from(vm, api, f, c, 1)
+}
+
+/// [`check`] with the documented arguments from argument `first` on (2 for
+/// a method: `self` comes first). Errors number the documented arguments
+/// (unverified for methods).
+pub fn check_from(
+    vm: &mut Vm,
+    api: &Api,
+    f: &Function,
+    c: &NativeCall,
+    first: usize,
+) -> Result<(), LuaError> {
     let args = f
         .doc
         .get("Arguments")
@@ -168,6 +186,7 @@ pub fn check(vm: &mut Vm, api: &Api, f: &Function, c: &NativeCall) -> Result<(),
         .unwrap_or_default();
     for (i, arg) in args.iter().enumerate() {
         let n = i + 1;
+        let at = i + first;
         let ty = arg.get("Type").and_then(Json::as_str).unwrap_or("");
         let mut family = family(api, ty, arg);
         if let Family::Int { index, .. } = family
@@ -179,8 +198,8 @@ pub fn check(vm: &mut Vm, api: &Api, f: &Function, c: &NativeCall) -> Result<(),
                 index,
             };
         }
-        let v = c.arg(n);
-        let present = c.has(n) && !vm.hidden(v).is_nil();
+        let v = c.arg(at);
+        let present = c.has(at) && !vm.hidden(v).is_nil();
         if !present {
             let optional = arg.get("Nilable").and_then(Json::as_bool).unwrap_or(false)
                 || arg.get("Default").is_some();
@@ -241,6 +260,7 @@ fn refuses_type(vm: &Vm, family: Family, v: Value) -> Option<Refusal> {
             (!(min..=max).contains(&n)).then_some(Refusal::Range(min, max))
         }
         Family::Number => vm.tonumber(v).is_none().then_some(Refusal::Type),
+        Family::Func => (!matches!(v, Value::Func(_))).then_some(Refusal::Type),
         Family::Str => (!is_str).then_some(Refusal::Type),
         Family::StrictStr => (!is_str).then_some(Refusal::String),
         Family::Table { .. } => (!matches!(v, Value::Table(_))).then_some(Refusal::Type),

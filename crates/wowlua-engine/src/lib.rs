@@ -5,6 +5,7 @@
 
 pub mod api;
 pub mod args;
+pub mod widgets;
 
 use std::collections::HashMap;
 
@@ -17,6 +18,10 @@ pub struct Engine {
     pub api: &'static api::Api,
     /// Behaviour by function name (`C_Timer.After`).
     behaviours: HashMap<&'static str, NativeFn>,
+    /// Widget methods' behaviour by name (`Show`), or by class and name
+    /// (`Button:Click`) where a class differs.
+    methods: HashMap<&'static str, widgets::MethodFn>,
+    pub world: widgets::World,
 }
 
 impl Engine {
@@ -24,6 +29,26 @@ impl Engine {
     pub fn of(vm: &Vm) -> Option<&Engine> {
         vm.host.as_ref()?.downcast_ref()
     }
+
+    /// A widget method's behaviour, by its full name or its name.
+    pub fn method_behaviour(&self, full: &str, short: &str) -> Option<widgets::MethodFn> {
+        self.methods
+            .get(full)
+            .or_else(|| self.methods.get(short))
+            .copied()
+    }
+}
+
+/// The engine of a VM made with [`install`].
+pub fn engine(vm: &Vm) -> &Engine {
+    Engine::of(vm).expect("the engine is installed")
+}
+
+pub fn engine_mut(vm: &mut Vm) -> &mut Engine {
+    vm.host
+        .as_mut()
+        .and_then(|h| h.downcast_mut())
+        .expect("the engine is installed")
 }
 
 /// Installs a flavor's engine into a VM made with `Vm::wow`: every
@@ -80,7 +105,20 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         flavor: flavor.to_string(),
         api,
         behaviours: HashMap::new(),
+        methods: widgets::behaviours().into_iter().collect(),
+        world: widgets::World::default(),
     }));
+    // Undocumented C functions with behaviour.
+    let create_frame = vm.native("CreateFrame", widgets::create_frame);
+    vm.set_global("CreateFrame", create_frame);
+    // The frames the client starts with.
+    let ui = widgets::create(vm, "Frame", Some("UIParent".into()), None);
+    if let Some(id) = widgets::widget_of(vm, ui) {
+        let w = &mut engine_mut(vm).world.widgets[id.0];
+        w.width = widgets::SCREEN.0;
+        w.height = widgets::SCREEN.1;
+    }
+    widgets::create(vm, "Frame", Some("WorldFrame".into()), None);
     Ok(())
 }
 
