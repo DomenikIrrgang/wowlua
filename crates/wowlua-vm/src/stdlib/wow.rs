@@ -75,6 +75,7 @@ pub fn open(vm: &mut Vm) {
         xpcall_args: true,
         client_errors: true,
         utf8_case: true,
+        assertions: true,
     };
     // Reads taint the execution, writes take its taint.
     vm.taint_mut().mode = crate::taint::READ | crate::taint::WRITE;
@@ -307,8 +308,9 @@ fn split(vm: &mut Vm, c: &NativeCall) -> Result<Vec<Value>, LuaError> {
     if i <= end {
         out.push(vm.bytes(&s[i..end]));
     }
-    // Results go on the stack, which holds `LUAI_MAXCSTACK` (8000) slots.
-    if out.len() + 3 > 8000 {
+    // At most 4000 pieces, half of `LUAI_MAXCSTACK` (probed with two
+    // arguments, `/stdtest crashlimit 1`).
+    if out.len() > 4000 {
         return Err(vm.error("strsplit(): Stack overflow"));
     }
     Ok(out)

@@ -185,6 +185,10 @@ fn byte(vm: &mut Vm, c: NativeCall) -> Ret {
     if pose - posi >= i32::MAX as i64 {
         return Err(vm.error("string slice too long"));
     }
+    // `luaL_checkstack`.
+    if !crate::stdlib::base::fits_cstack(c.len(), (pose - posi + 1) as usize) {
+        return Err(vm.error("stack overflow (string slice too long)"));
+    }
     Ok(s[posi as usize - 1..pose as usize]
         .iter()
         .map(|&b| Value::Num(f64::from(b)))

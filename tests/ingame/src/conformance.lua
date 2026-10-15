@@ -582,9 +582,19 @@ local cases = {
     "local function u(c) return string.char(224 + math.floor(c / 4096), 128 + math.floor(c / 64) % 64, 128 + c % 64) end local out = {} for _, r in ipairs({ { 11264, 11391 }, { 42560, 42751 }, { 65280, 65375 } }) do for c = r[1], r[2] do local ch = u(c) local up, lo = string.upper(ch), string.lower(ch) if up ~= ch then out[#out + 1] = c .. '^' .. table.concat({ up:byte(1, -1) }, '.') end if lo ~= ch then out[#out + 1] = c .. '_' .. table.concat({ lo:byte(1, -1) }, '.') end end end return table.concat(out, ' ')",
     "return string.upper('a\\195b'), string.upper('\\195('), string.upper('\\237\\160\\128x'), string.upper('\\244\\144\\128\\128x'), string.upper('\\192\\128x')",
     "return #string.upper(string.rep('\\255', 10)), #string.lower('\\128\\129\\130'), string.upper('')",
-    -- No stack limit searches: strsplit and unpack with thousands of
-    -- results below their errors trip the client's Lua assertion
-    -- (L->top < L->ci->top, lapi.c:577) and crash it (2026-10-15).
+    -- Stack limits, called directly. Never through pcall, and no case may
+    -- return 100 or more values: pcall pushes its status without room once
+    -- the results fill its frame (#args + 100), and the client's Lua
+    -- assertion (L->top < L->ci->top, lapi.c:577) crashes the game
+    -- (/stdtest crashlimit, 2026-10-15).
+    "local t = {} for i = 1, 8000 do t[i] = i end return select('#', unpack(t, 1, 7997)), pcall(function() return unpack(t, 1, 7998) end)",
+    "local t = {} for i = 1, 8000 do t[i] = i end return pcall(function() return select('#', unpack(t)) end)",
+    "local t = {} for i = 1, 7999 do t[i] = i end return select('#', unpack(t))",
+    "local s = string.rep('a', 8000) return select('#', s:byte(1, 7997)), pcall(function() return s:byte(1, 7998) end)",
+    "local s = string.rep('a', 8000) return select('#', string.byte(s, 1, 7996, 0)), pcall(function() return string.byte(s, 1, 7997, 0) end)",
+    "local s = string.rep('a,', 3999) .. 'a' return select('#', strsplit(',', s)), pcall(function() return strsplit(',', s .. ',a') end)",
+    "local s = string.rep('a,', 3999) .. 'a' return select('#', strsplit(',', s, 5000)), pcall(function() return strsplit(',', s .. ',a', 5000) end)",
+    "local s = string.rep('a,', 3999) .. 'a' return select('#', strsplit(',', s, 5000, 0)), pcall(function() return strsplit(',', s .. ',a', 5000, 0) end)",
     -- What getmetatable('') gives addons.
     "local m = getmetatable('') local k = {} for key in pairs(m) do k[#k + 1] = tostring(key) end table.sort(k) return type(m), table.concat(k, ','), m == getmetatable('a'), rawequal(m, getmetatable('b'))",
     "local m = getmetatable('') return m.__index, m.__metatable, getmetatable(m), pcall(setmetatable, m, nil)",

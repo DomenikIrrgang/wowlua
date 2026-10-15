@@ -59,12 +59,16 @@ S37, S38):
 - **Arithmetic.** `x / 0` and `x % 0` raise "Division by zero"; `math.sqrt`
   and `math.log` raise on a negative argument; `string.format("%d", x)` raises
   for an infinite `x`.
-- **Limits.** The client's limits, at its thresholds: `strsplit`'s and
-  `unpack`'s errors for too many results, and the calls that crash it (a
-  few thousand results trip its Lua assertion, `L->top < L->ci->top`), which
-  fail with an error naming the call (decision T194). The thresholds come
-  from crash-search probes (`/stdtest crashlimit`), separate from
-  `/stdtest probe`.
+- **Limits.** The client's limits, at its thresholds, from crash-search
+  probes (`/stdtest crashlimit`, separate from `/stdtest probe`): a C
+  function's frame holds 8000 slots with its arguments (`unpack` and
+  `string.byte` fail beyond, "too many results to unpack", "stack overflow
+  (string slice too long)"); `strsplit` returns at most 4000 pieces
+  ("strsplit(): Stack overflow"). The client runs its Lua with API
+  assertions on and gives C functions 100 free slots: `pcall` returning
+  its argument count plus 100 or more values pushes its status past them,
+  the assertion `L->top < L->ci->top` fails and the game crashes. Such
+  calls fail with an error naming the call (decision T194).
 - **Per flavor.** Where flavors differ (a library function, an arithmetic
   rule), the VM follows the flavor under test. Behaviour not yet probed on a
   flavor follows the newest probed client and is listed in the emulation's

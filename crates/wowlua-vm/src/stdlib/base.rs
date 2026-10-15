@@ -250,12 +250,39 @@ fn protected_results(
     Ok(vm.return_slots(out))
 }
 
+/// `LUA_MINSTACK`: the slots a C function may fill without
+/// `lua_checkstack`, beyond its arguments (the client's 100, probed by
+/// `/stdtest crashlimit`; stock Lua's 20).
+const CLIENT_MINSTACK: usize = 100;
+
+/// `LUAI_MAXCSTACK`: a C function's frame holds its arguments and at most
+/// this many slots in all (`lua_checkstack` fails beyond).
+pub(crate) const MAXCSTACK: usize = 8000;
+
+/// Whether a C function with `args` arguments may push `n` values
+/// (`lua_checkstack`).
+pub(crate) fn fits_cstack(args: usize, n: usize) -> bool {
+    n <= MAXCSTACK && args + n <= MAXCSTACK
+}
+
 fn pcall(vm: &mut Vm, c: NativeCall) -> Ret {
     vm.check_any(&c, 1)?;
     // Without an enclosing handler (`lua_pcall` with none).
     let saved = vm.errfunc.take();
     let r = vm.call_slots(c.slot(1), &c.slots(2));
     vm.errfunc = saved;
+    // The client's pcall pushes its status after the results without
+    // room for it: once they fill its frame, its assertion fails.
+    if vm.rules.assertions
+        && let Ok(results) = &r
+        && results.len() >= c.len() + CLIENT_MINSTACK
+    {
+        let msg = format!(
+            "pcall: {} results crash the game (its Lua assertion \"L->top < L->ci->top\", lapi.c:577)",
+            results.len()
+        );
+        return Err(vm.error(&msg));
+    }
     protected_results(vm, r)
 }
 
@@ -305,7 +332,7 @@ fn unpack(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     let n = e - i + 1;
-    if n <= 0 || n >= 8000 {
+    if n <= 0 || !fits_cstack(c.len(), usize::try_from(n).unwrap_or(usize::MAX)) {
         return Err(vm.error("too many results to unpack"));
     }
     let slots: Vec<_> = (i..=e)

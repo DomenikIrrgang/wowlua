@@ -128,6 +128,12 @@ pub struct Rules {
     pub client_errors: bool,
     /// `string.upper`/`lower` map UTF-8 characters, not only ASCII.
     pub utf8_case: bool,
+    /// The client's Lua runs with its API assertions on, and a C function
+    /// gets `LUA_MINSTACK` = 100 free slots: where its results overflow
+    /// them (`pcall` returning `#args + 100` or more values), the
+    /// assertion `L->top < L->ci->top` crashes the game. The VM raises an
+    /// error naming the call instead (decision T194).
+    pub assertions: bool,
 }
 
 /// The VM's clock: virtual, so runs repeat exactly (spec emulator §17.2).

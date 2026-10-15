@@ -82,10 +82,6 @@ const PENDING: &[(&str, &str)] = &[
         "local m = getmetatable('')",
         "string.rtgsub is Blizzard's Lua (S3)",
     ),
-    (
-        "strsplit(',', string.rep('a,', 79",
-        "strsplit's limits: the crash-limit probes",
-    ),
     ("secretwrap", "secret values (S2.3)"),
     ("canaccess", "secret values (S2.3)"),
     ("scrubsecretvalues", "secret values (S2.3)"),
@@ -186,4 +182,31 @@ fn print_ours() {
         println!("{source}\n    {result}");
     }
     println!("{} cases, {} functions", results.len(), kinds.len());
+}
+
+/// Where the client crashes (`/stdtest crashlimit`, WoW Forever 1.60.1):
+/// `pcall` returning `#args + 100` or more values. The VM raises an error
+/// naming the call instead (decision T194).
+#[test]
+fn pcall_crash_limit() {
+    let src = "local t = {} for i = 1, 200 do t[i] = i end
+local function f(n) return unpack(t, 1, n) end
+local out = {}
+out[1] = select('#', pcall(unpack, t, 1, 103))
+out[2] = select(2, pcall(function() return pcall(unpack, t, 1, 104) end))
+out[3] = select('#', pcall(f, 101))
+out[4] = select(2, pcall(function() return pcall(f, 102) end))
+return table.concat(out, '|')";
+    let mut vm = Vm::wow();
+    let f = vm.load(src.as_bytes(), "=crash").expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Str(s) = r[0] else {
+        panic!("a string expected")
+    };
+    let assertion =
+        "results crash the game (its Lua assertion \"L->top < L->ci->top\", lapi.c:577)";
+    assert_eq!(
+        String::from_utf8_lossy(vm.str_bytes(s)),
+        format!("104|crash:5: pcall: 104 {assertion}|102|crash:7: pcall: 102 {assertion}")
+    );
 }

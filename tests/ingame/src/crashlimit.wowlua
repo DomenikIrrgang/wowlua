@@ -1,9 +1,10 @@
 -- `/stdtest crashlimit <n>`: where the client's Lua stops returning many
 -- results, and which calls crash it. Returning a few thousand values
 -- through `pcall` trips the client's Lua assertion (`L->top < L->ci->top`,
--- lapi.c:577) and the game crashes (2026-10-15): stock Lua 5.1's `pcall`
--- pushes its status without room once the results fill its frame, so the
--- crash should come at `#results >= #pcall arguments + 20`. Each experiment
+-- lapi.c:577) and the game crashes (2026-10-15): like stock Lua 5.1's,
+-- `pcall` pushes its status without room once the results fill its frame,
+-- and the client gives C functions 100 free slots, so it crashes at
+-- `#results >= #pcall arguments + 100` (experiments 2 and 3). Each experiment
 -- below raises the count `r` by one from 1, so a crash report's Lua stack
 -- (`_classic_beta_/Errors/`) shows the exact count; one that does not crash
 -- records where the count stops (StdTestState.crashLimits, after /reload).
@@ -78,7 +79,7 @@ local G = _G :: any
 const EXPERIMENTS: CrashExperiment[] = {
     {
         name = "direct calls: where unpack, strsplit, string.split and string.byte stop",
-        prediction = "no crash: clean errors near 8000 results (LUAI_MAXCSTACK)",
+        prediction = "no crash: clean errors (confirmed: unpack and string.byte 7997, strsplit 4000)",
         run = function()
             return {
                 unpack = limit(function(n: number): number return select("#", unpack(T, 1, n)) end),
@@ -90,28 +91,28 @@ const EXPERIMENTS: CrashExperiment[] = {
     },
     {
         name = "pcall(unpack, t, 1, r): a C function through pcall, 4 arguments",
-        prediction = "crash at r = 24",
+        prediction = "crash at r = 104 (confirmed)",
         run = function()
             return scan("pcall(unpack, t, 1, r)", function(r: number): number return select("#", pcall(unpack, T, 1, r)) end, plus(1))
         end,
     },
     {
         name = "pcall(f, r): a Lua function through pcall, 2 arguments",
-        prediction = "crash at r = 22",
+        prediction = "crash at r = 102 (confirmed)",
         run = function()
             return scan("pcall(f, r)", function(r: number): number return select("#", pcall(body, r)) end, plus(1))
         end,
     },
     {
         name = "xpcall(f, handler, r)",
-        prediction = "unknown (WoW's xpcall passes arguments); stock Lua's would crash at r = 22",
+        prediction = "crash at r = 102 or 103 (WoW's xpcall passes arguments; stock Lua's would crash at 102)",
         run = function()
             return scan("xpcall(f, handler, r)", function(r: number): number return select("#", xpcall(body, G.geterrorhandler(), r)) end, plus(1))
         end,
     },
     {
         name = "pcallwithenv(f, env, r)",
-        prediction = "unknown; like pcall it would crash at r = 23",
+        prediction = "crash at r = 103 if it works like pcall",
         run = function()
             return scan("pcallwithenv(f, env, r)", function(r: number): number return select("#", G.pcallwithenv(body, {}, r)) end, plus(1))
         end,
