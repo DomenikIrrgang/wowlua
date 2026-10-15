@@ -1,0 +1,397 @@
+-- `/stdtest engine`: what the client's engine does, for wowlua's engine
+-- (crates/wowlua-engine) to match. Saved in StdTestState.engineProbe (after
+-- /reload).
+--   /stdtest engine          the automatic battery: widgets of each common
+--                            type (methods, script types, getters' values),
+--                            identities, errors, show/hide and hook order,
+--                            timers, unit functions without a target
+--   /stdtest engine order    the order events reach frames (press Shift)
+--   /stdtest engine record <label> / stop
+--                            records every event (but the combat log) with
+--                            its payload, for a guided sequence of actions
+-- Only harmless calls: getters on fresh frames, and arguments the client's
+-- checks refuse before any game code runs.
+import state from "/state"
+import say from "/harness"
+
+local G = _G :: any
+
+--- One value as text: its type, and the value unless secret or a table.
+local function show(v: any): string
+    if issecretvalue(v) then
+        return `secret {type(v)}`
+    end
+    const t = type(v)
+    if t == "string" or t == "number" or t == "boolean" or t == "nil" then
+        return `{t} {tostring(v)}`
+    end
+    return t
+end
+
+--- A call's results or its error, as text.
+local function results(f: any, ...: any): string
+    const packed = { pcall(f, ...) }
+    if not packed[1] then
+        return `error: {issecretvalue(packed[2]) and "<secret>" or tostring(packed[2])}`
+    end
+    const out: string[] = {}
+    for i = 2, select("#", unpack(packed)) do
+        out[#out + 1] = show(packed[i])
+    end
+    return `{#out}: {table.concat(out, ", ")}`
+end
+
+const TYPES = {
+    "Frame", "Button", "CheckButton", "EditBox", "Slider", "StatusBar", "ScrollFrame",
+    "Cooldown", "GameTooltip", "MessageFrame", "SimpleHTML", "ColorSelect",
+}
+
+const CLASSES = {
+    "Object", "ScriptObject", "FrameScriptObject", "ScriptRegion", "Region", "Frame", "Button",
+    "CheckButton", "EditBox", "FontString", "Texture", "TextureBase", "Line", "MaskTexture",
+    "Slider", "StatusBar", "GameTooltip",
+}
+
+const SCRIPTS = {
+    "OnLoad", "OnUpdate", "OnShow", "OnHide", "OnEvent", "OnEnter", "OnLeave", "OnMouseDown",
+    "OnMouseUp", "OnMouseWheel", "OnDragStart", "OnDragStop", "OnReceiveDrag", "OnSizeChanged",
+    "OnAttributeChanged", "OnEnable", "OnDisable", "OnKeyDown", "OnKeyUp", "OnChar", "OnClick",
+    "OnDoubleClick", "PreClick", "PostClick", "OnValueChanged", "OnMinMaxChanged",
+    "OnTextChanged", "OnEnterPressed", "OnEscapePressed", "OnEditFocusGained",
+    "OnEditFocusLost", "OnTooltipCleared", "OnTooltipSetUnit", "OnCooldownDone",
+    "OnVerticalScroll", "OnScrollRangeChanged", "OnHyperlinkClick", "OnFinished",
+    "OnColorSelect", "OnNotAScript",
+}
+
+-- Getters that take nothing and touch no game state.
+const GETTERS = {
+    "GetName", "GetObjectType", "IsShown", "IsVisible", "GetAlpha", "GetEffectiveAlpha",
+    "GetScale", "GetEffectiveScale", "GetWidth", "GetHeight", "GetSize", "GetNumPoints",
+    "GetPoint", "GetFrameStrata", "GetFrameLevel", "IsMouseEnabled", "IsMouseClickEnabled",
+    "IsMouseMotionEnabled", "IsMouseWheelEnabled", "IsMovable", "IsResizable",
+    "IsClampedToScreen", "IsProtected", "GetID", "GetText", "GetNumChildren", "GetNumRegions",
+    "IsForbidden", "GetLeft", "GetTop", "GetRight", "GetBottom", "GetCenter", "GetRect",
+    "IsUserPlaced", "IsToplevel", "IsEnabled", "GetChecked", "GetValue", "GetMinMaxValues",
+    "GetDrawLayer", "GetTexture", "GetFont", "GetTextColor", "GetJustifyH", "GetJustifyV",
+    "IsKeyboardEnabled", "GetHitRectInsets", "GetClampRectInsets", "GetResizeBounds",
+    "IsIgnoringParentAlpha", "IsIgnoringParentScale", "GetDebugName", "CanChangeProtectedState",
+    "GetFlattensRenderLayers", "IsObjectLoaded", "HasFixedFrameStrata", "HasFixedFrameLevel",
+}
+
+--- A widget: its object, classes, methods, scripts and getters' values.
+local function widget(obj: any): { [string]: any }
+    const info: { [string]: any } = {
+        object = type(obj[0]),
+        objectType = results(obj.GetObjectType, obj),
+    }
+    const isA: string[] = {}
+    for _, c in ipairs(CLASSES) do
+        local ok, r = pcall(obj.IsObjectType, obj, c)
+        isA[#isA + 1] = `{c}={ok and tostring(r) or "error"}`
+    end
+    info.isObjectType = table.concat(isA, " ")
+    -- The methods its metatable's __index offers.
+    const meta = getmetatable(obj)
+    info.metatable = type(meta)
+    if type(meta) == "table" then
+        const index = rawget(meta, "__index")
+        info.index = type(index)
+        if type(index) == "table" then
+            const names: string[] = {}
+            for name in pairs(index) do
+                names[#names + 1] = tostring(name)
+            end
+            table.sort(names)
+            info.methods = table.concat(names, " ")
+        end
+    end
+    const scripts: string[] = {}
+    if obj.HasScript then
+        for _, s in ipairs(SCRIPTS) do
+            local ok, r = pcall(obj.HasScript, obj, s)
+            scripts[#scripts + 1] = `{s}={ok and tostring(r) or "error"}`
+        end
+    end
+    info.scripts = table.concat(scripts, " ")
+    const getters: { [string]: string } = {}
+    for _, name in ipairs(GETTERS) do
+        if type(obj[name]) == "function" then
+            getters[name] = results(obj[name], obj)
+        end
+    end
+    info.getters = getters
+    return info
+end
+
+local function widgets(): { [string]: any }
+    const out: { [string]: any } = {}
+    for _, t in ipairs(TYPES) do
+        local ok, f = pcall(CreateFrame, t, nil, UIParent)
+        out[t] = ok and widget(f) or { error = tostring(f) }
+    end
+    const parent = CreateFrame("Frame", nil, UIParent)
+    out.FontString = widget(parent:CreateFontString(nil, "OVERLAY"))
+    out.Texture = widget(parent:CreateTexture(nil, "ARTWORK"))
+    out.Line = widget(parent:CreateLine())
+    out.MaskTexture = widget(parent:CreateMaskTexture())
+    out.UIParent = widget(UIParent)
+    return out
+end
+
+local function identities(): { [string]: string }
+    const f = CreateFrame("Frame")
+    const b = CreateFrame("Button")
+    const fs = f:CreateFontString()
+    return {
+        ["f.Show == b.Show"] = tostring(f.Show == b.Show),
+        ["f.Show == fs.Show"] = tostring(f.Show == fs.Show),
+        ["b.SetText == fs.SetText"] = tostring(b.SetText == fs.SetText),
+        ["getmetatable(f) == getmetatable(CreateFrame('Frame'))"] = tostring(getmetatable(f) == getmetatable(CreateFrame("Frame"))),
+        ["getmetatable(f) == getmetatable(b)"] = tostring(getmetatable(f) == getmetatable(b)),
+        ["rawget(f, 0) == f[0]"] = tostring(rawget(f, 0) == f[0]),
+        ["CreateFrame('frame')"] = results(CreateFrame, "frame"),
+        ["CreateFrame('FRAME'):GetObjectType()"] = results(function() return CreateFrame("FRAME"):GetObjectType() end),
+        ["named global"] = (function()
+            CreateFrame("Frame", "StdTestEngineProbeFrame")
+            return type(G.StdTestEngineProbeFrame)
+        end)(),
+        ["$parent name"] = (function()
+            const p = CreateFrame("Frame", "StdTestEngineProbeParent")
+            const c = CreateFrame("Frame", "$parentChild", p)
+            return tostring(c:GetName())
+        end)(),
+    }
+end
+
+local function errors(): { [string]: string }
+    const f = CreateFrame("Frame")
+    return {
+        ["RegisterEvent('NO_SUCH_EVENT')"] = results(f.RegisterEvent, f, "NO_SUCH_EVENT"),
+        ["RegisterEvent('PLAYER_LOGIN')"] = results(f.RegisterEvent, f, "PLAYER_LOGIN"),
+        ["RegisterEvent twice"] = results(f.RegisterEvent, f, "PLAYER_LOGIN"),
+        ["RegisterUnitEvent('UNIT_HEALTH', 'player')"] = results(f.RegisterUnitEvent, f, "UNIT_HEALTH", "player"),
+        ["IsEventRegistered('UNIT_HEALTH')"] = results(f.IsEventRegistered, f, "UNIT_HEALTH"),
+        ["RegisterUnitEvent('PLAYER_LOGIN', 'player')"] = results(f.RegisterUnitEvent, f, "PLAYER_LOGIN", "player"),
+        ["SetScript('OnNotAScript', print)"] = results(f.SetScript, f, "OnNotAScript", print),
+        ["SetScript('OnClick', print) on a Frame"] = results(f.SetScript, f, "OnClick", print),
+        ["SetScript('OnShow', 'x')"] = results(f.SetScript, f, "OnShow", "x"),
+        ["SetScript('OnShow')"] = results(f.SetScript, f, "OnShow"),
+        ["GetScript('OnNotAScript')"] = results(f.GetScript, f, "OnNotAScript"),
+        ["CreateFrame('NoSuchType')"] = results(CreateFrame, "NoSuchType"),
+        ["CreateFrame('Frame', nil, {})"] = results(CreateFrame, "Frame", nil, {}),
+        ["CreateFrame('Frame', nil, nil, 'NoSuchTemplate')"] = results(CreateFrame, "Frame", nil, nil, "NoSuchTemplate"),
+        ["CreateFrame()"] = results(CreateFrame),
+        ["CreateFrame(5)"] = results(CreateFrame, 5),
+        ["SetPoint()"] = results(f.SetPoint, f),
+        ["SetPoint('NOWHERE')"] = results(f.SetPoint, f, "NOWHERE"),
+        ["SetSize('x', 1)"] = results(f.SetSize, f, "x", 1),
+        ["SetAlpha('x')"] = results(f.SetAlpha, f, "x"),
+        ["SetAlpha(2)"] = results(function() f:SetAlpha(2) return f:GetAlpha() end),
+        ["SetScale(0)"] = results(f.SetScale, f, 0),
+        ["Show(nil)"] = results(f.Show, nil),
+        ["Show({})"] = results(f.Show, {}),
+        ["GetName(5)"] = results(f.GetName, 5),
+        ["SetParent('NoSuchFrameName')"] = results(f.SetParent, f, "NoSuchFrameName"),
+        ["SetAttribute(nil, 1)"] = results(f.SetAttribute, f, nil, 1),
+    }
+end
+
+local function order(): { [string]: string }
+    const log: string[] = {}
+    local function watch(name: string, f: any)
+        f:SetScript("OnShow", function() log[#log + 1] = `{name}+` end)
+        f:SetScript("OnHide", function() log[#log + 1] = `{name}-` end)
+    end
+    const p = CreateFrame("Frame", nil, UIParent)
+    const c = CreateFrame("Frame", nil, p)
+    const g = CreateFrame("Frame", nil, c)
+    watch("p", p)
+    watch("c", c)
+    watch("g", g)
+    p:Hide()
+    c:Hide()
+    p:Show()
+    c:Show()
+    p:Show()
+    const visibility = table.concat(log, " ")
+    -- Hooks around SetScript.
+    const hooks: string[] = {}
+    const h = CreateFrame("Frame", nil, UIParent)
+    h:Hide()
+    h:HookScript("OnShow", function() hooks[#hooks + 1] = "hook1" end)
+    h:Show()
+    h:Hide()
+    h:SetScript("OnShow", function() hooks[#hooks + 1] = "script" end)
+    h:Show()
+    h:Hide()
+    h:HookScript("OnShow", function() hooks[#hooks + 1] = "hook2" end)
+    h:Show()
+    h:Hide()
+    h:SetScript("OnShow", nil)
+    h:Show()
+    -- OnSizeChanged and OnAttributeChanged.
+    const sized: string[] = {}
+    const s = CreateFrame("Frame", nil, UIParent)
+    s:SetScript("OnSizeChanged", function(_, w: number, hh: number) sized[#sized + 1] = `{w}x{hh}` end)
+    s:SetScript("OnAttributeChanged", function(_, name: string, v: any) sized[#sized + 1] = `attr {name}={tostring(v)}` end)
+    s:SetSize(10, 20)
+    s:SetSize(10, 20)
+    s:SetWidth(30)
+    s:SetAttribute("MyKey", 5)
+    return {
+        visibility = visibility,
+        hooks = table.concat(hooks, " "),
+        sizes = table.concat(sized, " | "),
+        ["IsVisible after p:Hide()"] = (function()
+            p:Hide()
+            return `{tostring(c:IsShown())} {tostring(c:IsVisible())}`
+        end)(),
+    }
+end
+
+local function units(): { [string]: string }
+    const out: { [string]: string } = {}
+    for _, call in ipairs({
+        { "UnitName", "player" }, { "UnitGUID", "player" }, { "UnitClass", "player" },
+        { "UnitLevel", "player" }, { "UnitRace", "player" }, { "UnitSex", "player" },
+        { "UnitPowerType", "player" }, { "UnitExists", "target" }, { "UnitExists", "targettarget" },
+        { "UnitExists", "nameplate1" }, { "UnitExists", "none" }, { "UnitName", "none" },
+        { "UnitIsUnit", "player", "player" }, { "UnitReaction", "player", "player" },
+        { "UnitCanAttack", "player", "player" }, { "UnitInParty", "player" },
+        { "UnitInRaid", "player" }, { "UnitIsPlayer", "player" }, { "UnitAffectingCombat", "player" },
+        { "GetNumGroupMembers" }, { "IsInGroup" }, { "IsInRaid" }, { "InCombatLockdown" },
+        { "UnitName", "PLAYER" }, { "UnitExists", "Player" }, { "UnitHealth", "player" },
+    }) do
+        const f = G[call[1]]
+        out[`{call[1]}({table.concat({ select(2, unpack(call)) }, ", ")})`] = f and results(f, select(2, unpack(call))) or "absent"
+    end
+    return out
+end
+
+local function timers(done: (r: { [string]: string }) -> ())
+    const out: { [string]: string } = {}
+    const t = C_Timer.NewTimer(100, function() end)
+    out["type(NewTimer)"] = type(t)
+    out["NewTimer[0]"] = type(type(t) == "table" and (t :: any)[0] or nil)
+    local methods: string[] = {}
+    const meta = getmetatable(t)
+    if type(meta) == "table" and type(rawget(meta, "__index")) == "table" then
+        for name in pairs(rawget(meta, "__index")) do
+            methods[#methods + 1] = tostring(name)
+        end
+    end
+    table.sort(methods)
+    out["NewTimer methods"] = table.concat(methods, " ")
+    out["IsCancelled before"] = results(t.IsCancelled, t)
+    t:Cancel()
+    out["IsCancelled after"] = results(t.IsCancelled, t)
+    out["After returns"] = results(C_Timer.After, 100, function() end)
+    -- Timers against OnUpdate within frames.
+    const log: string[] = {}
+    const f = CreateFrame("Frame")
+    local frames = 0
+    f:SetScript("OnUpdate", function()
+        frames += 1
+        log[#log + 1] = `update{frames}`
+        if frames == 1 then
+            C_Timer.After(0, function() log[#log + 1] = "after0 (set in update1)" end)
+        end
+        if frames >= 4 then
+            f:SetScript("OnUpdate", nil)
+            out.order = table.concat(log, " ")
+            done(out)
+        end
+    end)
+    C_Timer.After(0, function() log[#log + 1] = "after0" end)
+end
+
+export function engineProbe(arg: string?)
+    const st = state() :: any
+    const words: string[] = {}
+    for w in (arg ?? ""):gmatch("%S+") do
+        words[#words + 1] = w
+    end
+    if words[1] == "record" then
+        startRecording(words[2] ?? "unnamed")
+        return
+    elseif words[1] == "stop" then
+        stopRecording()
+        return
+    elseif words[1] == "order" then
+        dispatchOrder()
+        return
+    end
+    const probe: { [string]: any } = {
+        client = `{(GetBuildInfo())}`,
+        widgets = widgets(),
+        identities = identities(),
+        errors = errors(),
+        order = order(),
+        units = units(),
+        getTime = show(GetTime()),
+    }
+    st.engineProbe = probe
+    timers(function(r: { [string]: string })
+        probe.timers = r
+        say("engine: recorded; type /reload so the file is written")
+    end)
+    say("engine: probing (timers finish within a second)...")
+end
+
+-- Dispatch order: frames made A, B, C, D; registered C, A, D, B.
+function dispatchOrder()
+    const st = state() :: any
+    const seen: string[] = {}
+    const made: { [string]: any } = {}
+    for _, name in ipairs({ "A", "B", "C", "D" }) do
+        made[name] = CreateFrame("Frame")
+        made[name]:SetScript("OnEvent", function()
+            seen[#seen + 1] = name
+            if #seen == 4 then
+                st.engineOrder = { registered = "C A D B", made = "A B C D", reached = table.concat(seen, " ") }
+                for _, f in pairs(made) do
+                    f:UnregisterAllEvents()
+                end
+                say(`engine order: {table.concat(seen, " ")}; type /reload`)
+            end
+        end)
+    end
+    for _, name in ipairs({ "C", "A", "D", "B" }) do
+        made[name]:RegisterEvent("MODIFIER_STATE_CHANGED")
+    end
+    say("engine order: press and release Shift once")
+end
+
+local recorder: any = nil
+local recording: { [string]: any }? = nil
+
+function startRecording(label: string)
+    const st = state() :: any
+    st.engineRecords = st.engineRecords ?? {}
+    const log: string[] = {}
+    const start = GetTime()
+    recording = { label = label, log = log }
+    st.engineRecords[label] = log
+    recorder = recorder ?? CreateFrame("Frame")
+    recorder:SetScript("OnEvent", function(_, event: string, ...: any)
+        if #log >= 3000 or event == "COMBAT_LOG_EVENT_UNFILTERED" then
+            return
+        end
+        const parts: string[] = {}
+        for i = 1, select("#", ...) do
+            parts[#parts + 1] = show((select(i, ...)))
+        end
+        log[#log + 1] = `{string.format("%.3f", GetTime() - start)} {event}({table.concat(parts, "; ")})`
+    end)
+    recorder:RegisterAllEvents()
+    say(`engine record "{label}": recording every event; /stdtest engine stop when done`)
+end
+
+function stopRecording()
+    if recorder then
+        recorder:UnregisterAllEvents()
+    end
+    const n = recording and #recording.log or 0
+    say(`engine record: stopped ({n} events); type /reload so the file is written`)
+    recording = nil
+end
