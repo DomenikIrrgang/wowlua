@@ -7,7 +7,8 @@ use super::types::*;
 use super::types::{Field, Param};
 use crate::constant::Const;
 use indexmap::IndexMap;
-use std::collections::HashMap;
+use rustc_hash::FxBuildHasher;
+use rustc_hash::FxHashMap;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
 use wowlua_syntax::ast::*;
@@ -68,9 +69,9 @@ pub struct Def {
     pub kind: DefKind,
     pub params: Vec<ParamId>,
     /// Instance members (classes, interfaces) or namespace members.
-    pub members: IndexMap<Box<str>, Member>,
+    pub members: IndexMap<Box<str>, Member, FxBuildHasher>,
     /// Static members of a class (`new` included).
-    pub statics: IndexMap<Box<str>, Member>,
+    pub statics: IndexMap<Box<str>, Member, FxBuildHasher>,
     /// The superclass (classes) or extended interfaces.
     pub bases: Vec<TypeId>,
     pub alias: Option<TypeId>,
@@ -90,8 +91,8 @@ impl Def {
             name: name.to_string(),
             kind,
             params: Vec::new(),
-            members: IndexMap::new(),
-            statics: IndexMap::new(),
+            members: IndexMap::default(),
+            statics: IndexMap::default(),
             bases: Vec::new(),
             alias: None,
             enum_members: Vec::new(),
@@ -134,7 +135,7 @@ pub struct Source<'a> {
     /// `import * as M`: local name → module index.
     pub namespaces: Vec<(Box<str>, usize)>,
     /// Folded enum values of the module.
-    pub enums: HashMap<String, Vec<(String, Const)>>,
+    pub enums: FxHashMap<String, Vec<(String, Const)>>,
     /// A standard-library module's declaration file: the module it
     /// declares. Its functions and globals type that module's exports
     /// (as callers see them) instead of becoming globals.
@@ -147,33 +148,33 @@ pub struct Env {
     pub defs: Vec<Def>,
     pub params: Vec<ParamInfo>,
     /// Declared types (global type namespace).
-    pub global_types: HashMap<Box<str>, DefId>,
+    pub global_types: FxHashMap<Box<str>, DefId>,
     /// Types declared at the top level of each module.
-    pub module_types: HashMap<usize, HashMap<Box<str>, DefId>>,
+    pub module_types: FxHashMap<usize, FxHashMap<Box<str>, DefId>>,
     /// Imported type names per module.
-    pub module_imports: HashMap<usize, HashMap<Box<str>, DefId>>,
-    pub module_namespaces: HashMap<usize, HashMap<Box<str>, usize>>,
+    pub module_imports: FxHashMap<usize, FxHashMap<Box<str>, DefId>>,
+    pub module_namespaces: FxHashMap<usize, FxHashMap<Box<str>, usize>>,
     /// Declared globals (values).
-    pub globals: HashMap<Box<str>, TypeId>,
+    pub globals: FxHashMap<Box<str>, TypeId>,
     /// Export types from standard-library declaration files, by module.
-    pub declared_exports: HashMap<usize, HashMap<Box<str>, TypeId>>,
-    pub events: IndexMap<Box<str>, Pack>,
-    pub messages: IndexMap<Box<str>, Pack>,
+    pub declared_exports: FxHashMap<usize, FxHashMap<Box<str>, TypeId>>,
+    pub events: IndexMap<Box<str>, Pack, FxBuildHasher>,
+    pub messages: IndexMap<Box<str>, Pack, FxBuildHasher>,
     /// The handler signature of each event and message (its declared
     /// parameters, any results).
-    pub handlers: HashMap<Box<str>, Func>,
+    pub handlers: FxHashMap<Box<str>, Func>,
     /// `Registry` of `wowlua:callbacks`, whose `on`, `once` and `fire` the
     /// checker specializes by its event type.
     pub callbacks_registry: Option<DefId>,
     /// Globals only a load-on-demand Blizzard addon defines (`@onDemand`):
     /// name → addon.
-    pub on_demand: HashMap<Box<str>, String>,
+    pub on_demand: FxHashMap<Box<str>, String>,
     pub diagnostics: Vec<Diagnostic>,
     /// Aliases whose bodies are not resolved yet (while building), with the
     /// module of their scope.
-    lazy_aliases: HashMap<DefId, (TypeAlias, Option<usize>)>,
+    lazy_aliases: FxHashMap<DefId, (TypeAlias, Option<usize>)>,
     /// Types of `typeof(expr)` expressions, by span (set by the checker).
-    pub typeof_types: HashMap<(u32, u32), TypeId>,
+    pub typeof_types: FxHashMap<(u32, u32), TypeId>,
     /// Name spans of the definitions of renamable methods, with their class.
     pub renamable_defs: Vec<(wowlua_span::Span, DefId)>,
 }
@@ -244,7 +245,7 @@ impl Env {
             env.def_mut(ns_id).members.insert("__wowlua".into(), m);
         }
         for src in sources {
-            let mut imports = HashMap::new();
+            let mut imports = FxHashMap::default();
             for (local, module, export) in &src.imports {
                 if let Some(&d) = env.module_types.get(module).and_then(|t| t.get(export)) {
                     imports.insert(local.clone(), d);

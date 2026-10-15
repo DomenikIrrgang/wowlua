@@ -3,7 +3,8 @@
 //! enums, generic aliases) and their display in messages.
 
 use indexmap::IndexMap;
-use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher, RandomState};
+use rustc_hash::FxBuildHasher;
+use std::hash::BuildHasher;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TypeId(pub u32);
@@ -59,10 +60,10 @@ pub enum Ty {
     Module(u32),
 }
 
-/// A record's fields, in the order they were added. The hasher has fixed
-/// keys, so it takes no room in the record (a type-checked data addon has a
-/// million records); nothing depends on the hash values.
-pub type Fields = IndexMap<Box<str>, Field, BuildHasherDefault<DefaultHasher>>;
+/// A record's fields, in the order they were added. The hasher takes no
+/// room in the record (a type-checked data addon has a million records);
+/// nothing depends on the hash values.
+pub type Fields = IndexMap<Box<str>, Field, FxBuildHasher>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Record {
@@ -156,9 +157,9 @@ pub struct Types {
     data: Vec<Ty>,
     /// The ids of the hash-consed types, hashed and compared through `data`,
     /// so each type is stored once. Records are not in it: each one has its
-    /// own identity, so a lookup could never find one.
+    /// own identity, so a lookup could never find one. Hashed with
+    /// `FxBuildHasher`.
     index: hashbrown::HashTable<TypeId>,
-    hasher: RandomState,
     next_record: u32,
 }
 
@@ -188,7 +189,6 @@ impl Types {
         let mut t = Types {
             data: Vec::new(),
             index: hashbrown::HashTable::new(),
-            hasher: RandomState::new(),
             next_record: 0,
         };
         for ty in [
@@ -217,19 +217,14 @@ impl Types {
             !matches!(ty, Ty::Record(_)),
             "records go through Types::record"
         );
-        let hash = self.hasher.hash_one(&ty);
+        let hash = FxBuildHasher.hash_one(&ty);
         if let Some(&id) = self.index.find(hash, |&id| self.data[id.0 as usize] == ty) {
             return id;
         }
         let id = TypeId(self.data.len() as u32);
         self.data.push(ty);
-        let Types {
-            data,
-            index,
-            hasher,
-            ..
-        } = self;
-        index.insert_unique(hash, id, |&id| hasher.hash_one(&data[id.0 as usize]));
+        let Types { data, index, .. } = self;
+        index.insert_unique(hash, id, |&id| FxBuildHasher.hash_one(&data[id.0 as usize]));
         id
     }
 

@@ -6,6 +6,7 @@
 
 use crate::usage::{CallTarget, FileUsage, Key, Markers, Path, file_usage, xml_file_usage};
 use crate::{Analysis, FileInput, FileKind, Target};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
@@ -95,7 +96,7 @@ pub fn analyze(
 
     // Global and `ns` keys holding the same table (`ns.API = SuuUI`) share
     // their fields; each group is named by its smallest key.
-    let mut same_table: HashMap<Key, Key> = HashMap::new();
+    let mut same_table: FxHashMap<Key, Key> = FxHashMap::default();
     for (a, b) in usages.iter().flatten().flat_map(|u| &u.table_aliases) {
         let (a, b) = (table_root(&same_table, a), table_root(&same_table, b));
         if a != b {
@@ -118,7 +119,7 @@ pub fn analyze(
     };
 
     // Functions stored under global or `ns` paths, package-wide.
-    let mut function_index: HashMap<Path, Vec<(usize, usize)>> = HashMap::new();
+    let mut function_index: FxHashMap<Path, Vec<(usize, usize)>> = FxHashMap::default();
     for (file, u) in usages.iter().enumerate() {
         for (path, f) in u.iter().flat_map(|u| &u.function_defs) {
             function_index
@@ -129,7 +130,7 @@ pub fn analyze(
     }
 
     // Imported bindings: (file, binding) → (target file, export name).
-    let mut bindings: HashMap<(usize, String), (usize, Option<String>)> = HashMap::new();
+    let mut bindings: FxHashMap<(usize, String), (usize, Option<String>)> = FxHashMap::default();
     for (file, f) in files.iter().enumerate() {
         let (Some(parse), Some(info)) = (f.parse, &analysis.modules[file]) else {
             continue;
@@ -192,7 +193,7 @@ pub fn analyze(
 
     // Parameters each function calls, directly or by passing them on to a
     // callee that calls them (or to one the analysis cannot resolve).
-    let mut called_params: HashMap<(usize, usize), HashSet<usize>> = HashMap::new();
+    let mut called_params: FxHashMap<(usize, usize), HashSet<usize>> = FxHashMap::default();
     for (file, u) in usages.iter().enumerate() {
         for (f, function) in u.iter().flat_map(|u| u.functions.iter().enumerate()) {
             if !function.called_params.is_empty() {
@@ -203,7 +204,7 @@ pub fn analyze(
     // An unresolved callee may call what it is passed, unless it is a
     // known API function (`type`, `tinsert`, `C_Map.GetMapInfo`) that calls
     // none of its arguments.
-    let calls_arg = |called_params: &HashMap<(usize, usize), HashSet<usize>>,
+    let calls_arg = |called_params: &FxHashMap<(usize, usize), HashSet<usize>>,
                      target: &CallTarget,
                      targets: &[(usize, usize)],
                      pos: usize| {
@@ -252,8 +253,8 @@ pub fn analyze(
     // For every file R: the functions that run while R loads (its top-level
     // code and everything called from there, across files), with the call
     // that reaches each one.
-    type Parents = HashMap<(usize, usize), Option<(usize, usize, Span)>>;
-    let mut exec: Vec<Parents> = vec![HashMap::new(); files.len()];
+    type Parents = FxHashMap<(usize, usize), Option<(usize, usize, Span)>>;
+    let mut exec: Vec<Parents> = vec![FxHashMap::default(); files.len()];
     for (root, u) in usages.iter().enumerate() {
         if u.is_none() {
             continue;
@@ -346,14 +347,14 @@ pub fn analyze(
 
     // Tables defined in the package: only their fields order files
     // (`C_Timer.After` is the game's).
-    let defined_tables: HashSet<Key> = definers
+    let defined_tables: FxHashSet<Key> = definers
         .keys()
         .filter(|k| !matches!(k, Key::Field(..)))
         .map(|k| table_root(&same_table, k))
         .collect();
     // Fields written at load time through tables the analysis cannot trace,
     // by name: (the file loading, span).
-    let mut untracked: HashMap<&str, Vec<(usize, Span)>> = HashMap::new();
+    let mut untracked: FxHashMap<&str, Vec<(usize, Span)>> = FxHashMap::default();
     for (root, parents) in exec.iter().enumerate() {
         for &(file, f) in parents.keys() {
             for (name, _, span) in usages[file]
@@ -371,7 +372,7 @@ pub fn analyze(
 
     // Uses at load time order their definer before the file being loaded.
     for (root, parents) in exec.iter().enumerate() {
-        let mut seen: HashSet<Key> = HashSet::new();
+        let mut seen: FxHashSet<Key> = FxHashSet::default();
         let mut visited: Vec<&(usize, usize)> = parents.keys().collect();
         visited.sort();
         for &(file, f) in visited {
@@ -650,7 +651,7 @@ pub fn analyze(
         }
     }
     for members in lt_sccs.iter().filter(|m| m.len() > 1) {
-        let set: HashSet<usize> = members.iter().copied().collect();
+        let set: FxHashSet<usize> = members.iter().copied().collect();
         let names: Vec<&str> = members.iter().map(|&m| files[m].src_rel.as_str()).collect();
         let mut d = Diagnostic::error(
             "E1014",
@@ -709,7 +710,7 @@ pub fn analyze(
 }
 
 /// The key naming the group of keys that hold the same table as `key`.
-fn table_root(same_table: &HashMap<Key, Key>, key: &Key) -> Key {
+fn table_root(same_table: &FxHashMap<Key, Key>, key: &Key) -> Key {
     let mut key = key;
     while let Some(next) = same_table.get(key) {
         key = next;
