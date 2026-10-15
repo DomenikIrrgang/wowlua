@@ -5,6 +5,7 @@
 
 pub mod api;
 pub mod args;
+pub mod auras;
 pub mod clock;
 pub mod controls;
 pub mod curves;
@@ -138,6 +139,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(units::more_behaviours())
             .chain(curves::behaviours())
             .chain(widgets::functions())
+            .chain(auras::behaviours())
             .chain(framescript::functions())
             .collect(),
         methods: widgets::behaviours()

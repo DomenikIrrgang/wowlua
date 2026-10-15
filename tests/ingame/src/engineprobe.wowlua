@@ -702,6 +702,26 @@ function dispatchOrder()
     say("engine order: press and release Shift once")
 end
 
+--- A payload value for the recorder: a table as its keys (and a list's
+--- first element's), else as `show` gives it.
+local function describe(v: any, depth: number): string
+    if type(v) ~= "table" or issecretvalue(v) or depth > 2 then
+        return show(v)
+    end
+    const keys: string[] = {}
+    for k, inner in pairs(v :: table) do
+        if type(k) == "string" then
+            keys[#keys + 1] = `{k}={describe(inner, depth + 1)}`
+        end
+    end
+    table.sort(keys)
+    const n = #(v :: any[])
+    if n > 0 then
+        keys[#keys + 1] = `[{n}]={describe((v :: any[])[1], depth + 1)}`
+    end
+    return `\{{table.concat(keys, ",")}\}`
+end
+
 local recorder: any = nil
 local recording: { [string]: any }? = nil
 
@@ -719,7 +739,7 @@ function startRecording(label: string)
         end
         const parts: string[] = {}
         for i = 1, select("#", ...) do
-            parts[#parts + 1] = show((select(i, ...)))
+            parts[#parts + 1] = describe((select(i, ...)), 1)
         end
         log[#log + 1] = `{string.format("%.3f", GetTime() - start)} {event}({table.concat(parts, "; ")})`
     end)

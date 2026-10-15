@@ -80,6 +80,9 @@ pub struct Units {
     /// Each restriction type's state: 0 inactive, 1 activating, 2 active.
     pub restrictions: [u8; 6],
     pub lockdown: bool,
+    /// Auras on the units, in application order, and the last instance ID.
+    pub auras: Vec<crate::auras::Aura>,
+    pub next_aura: f64,
     /// The test's unit handles' metatable.
     handle_meta: Option<TableRef>,
     next_guid: u64,
@@ -625,6 +628,8 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("hideNameplate", control_hide_nameplate),
         ("despawn", control_despawn),
         ("token", control_tokens),
+        ("applyAura", crate::auras::control_apply),
+        ("removeAura", crate::auras::control_remove),
     ] {
         let native = vm.native(name, f);
         let key = vm.heap.intern(name.as_bytes());
@@ -658,7 +663,7 @@ pub fn handle(vm: &mut Vm, id: UnitId) -> Value {
     Value::Table(t)
 }
 
-fn handle_of(vm: &Vm, v: Value) -> Option<UnitId> {
+pub fn handle_of(vm: &Vm, v: Value) -> Option<UnitId> {
     let Value::Table(t) = v else { return None };
     let Value::Userdata(u) = vm.heap.table(t).get(Value::Num(0.0)) else {
         return None;
@@ -666,7 +671,7 @@ fn handle_of(vm: &Vm, v: Value) -> Option<UnitId> {
     vm.heap.userdata(u).data.downcast_ref::<UnitId>().copied()
 }
 
-fn this(vm: &mut Vm, c: &NativeCall) -> Result<UnitId, wowlua_vm::LuaError> {
+pub fn this(vm: &mut Vm, c: &NativeCall) -> Result<UnitId, wowlua_vm::LuaError> {
     handle_of(vm, c.arg(1))
         .ok_or_else(|| vm.error("a unit method called without its unit (use ':')"))
 }
@@ -916,6 +921,7 @@ fn control_despawn(vm: &mut Vm, c: NativeCall) -> Ret {
     {
         let u = &mut engine_mut(vm).units;
         u.list[me.0].alive_in_world = false;
+        u.auras.retain(|a| a.unit != me);
         if u.focus == Some(me) {
             u.focus = None;
         }
