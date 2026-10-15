@@ -26,6 +26,7 @@ for i = 1, MAX do
 end
 const PIECES = string.rep("a,", MAX)
 const BYTES = string.rep("a", MAX)
+const UNPACK = unpack
 
 --- Whether `f(r)` runs, and its error.
 @noprofile
@@ -67,6 +68,12 @@ end
 @noprofile
 local function body(n: number): ...number
     return unpack(T, 1, n)
+end
+
+--- `body` for a replaced environment: unpack as an upvalue.
+@noprofile
+local function bodyUpvalue(n: number): ...number
+    return UNPACK(T, 1, n)
 end
 
 @noprofile
@@ -112,7 +119,7 @@ const EXPERIMENTS: CrashExperiment[] = {
     },
     {
         name = "pcallwithenv(f, env, r)",
-        prediction = "no crash: stops at r = 2 with 2 results (it does not return like pcall)",
+        prediction = "flawed: body reads the global unpack, which the empty env lacks (use 12)",
         run = function()
             return scan("pcallwithenv(f, env, r)", function(r: number): number return select("#", G.pcallwithenv(body, {}, r)) end, plus(1))
         end,
@@ -160,9 +167,16 @@ const EXPERIMENTS: CrashExperiment[] = {
     },
     {
         name = "xpcall(f, handler, r, 0, 0): xpcall with 5 arguments",
-        prediction = "crash at r = 104 (#results + 1 >= #args + 100, as at 102 with 3 arguments)",
+        prediction = "crash at r = 104 (confirmed)",
         run = function()
             return scan("xpcall(f, handler, r, 0, 0)", function(r: number): number return select("#", xpcall(body, G.geterrorhandler(), r, 0, 0)) end, plus(1))
+        end,
+    },
+    {
+        name = "pcallwithenv(f, env, r), f reaching unpack through an upvalue",
+        prediction = "crash at r = 103 if it pushes its status as pcall does",
+        run = function()
+            return scan("pcallwithenv(f, env, r) with an upvalue", function(r: number): number return select("#", G.pcallwithenv(bodyUpvalue, {}, r)) end, plus(1))
         end,
     },
 }
