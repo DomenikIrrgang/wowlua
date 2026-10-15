@@ -663,16 +663,33 @@ local function describe(ok, ...)
     return "error: " .. table.concat(parts, ", ")
 end
 
--- Each case's result, by its source.
+-- Each case's result, by its source. Errors that reach the error handler
+-- (securecall, hooks) are recorded with the case instead of shown.
 local function run()
     local results = {}
-    for _, source in ipairs(cases) do
-        local f, err = loadstring(source, "=case")
-        if f then
-            results[source] = describe(pcall(f))
-        else
-            results[source] = "syntax: " .. err
+    local handled = {}
+    local original = geterrorhandler()
+    seterrorhandler(function(err)
+        handled[#handled + 1] = tostring(err)
+    end)
+    local ok, err = pcall(function()
+        for _, source in ipairs(cases) do
+            local f, syntax = loadstring(source, "=case")
+            if f then
+                handled = {}
+                local result = describe(pcall(f))
+                if #handled > 0 then
+                    result = result .. " | handler: " .. table.concat(handled, "; ")
+                end
+                results[source] = result
+            else
+                results[source] = "syntax: " .. syntax
+            end
         end
+    end)
+    seterrorhandler(original)
+    if not ok then
+        error(err, 0)
     end
     return results
 end
