@@ -268,6 +268,11 @@ The engine's loader (`wowlua_engine::ui::load`) takes the flavor's
   engine's lists lack. On camelot, 191 addons load in about 8 seconds with
   161 errors left, from enums, constants and namespaces the documentation
   does not have (`Enum.GameMode`, `C_Widget`).
+- **The client's cases.** With camelot's UI code loaded (and the addon's
+  saved variables loaded as the addon's), all 819 cases `/stdtest probe`
+  recorded on WoW Forever 1.60.1 give the client's results, the 22 the VM
+  alone cannot pass included (Blizzard's `string.rtgsub`, `getglobal`,
+  the string metatable `RestrictedExecution.lua` sets up).
 
 ## 17.8 Verification
 

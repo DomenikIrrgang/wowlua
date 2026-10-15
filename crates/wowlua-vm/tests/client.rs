@@ -83,8 +83,9 @@ fn fixture(name: &str) -> Option<(BTreeMap<String, String>, BTreeMap<String, Str
     Some((strings(&vm, results), strings(&vm, kinds)))
 }
 
-/// Cases whose behaviour the VM does not have yet, with why: they are
-/// listed, not failed.
+/// Cases whose behaviour the VM alone does not have, with why: they are
+/// listed, not failed (`wowlua-engine`'s `tests/client.rs` runs every case
+/// with the engine and Blizzard's UI code).
 const PENDING: &[(&str, &str)] = &[
     ("CreateFrame(", "frames are the engine's (S3)"),
     (

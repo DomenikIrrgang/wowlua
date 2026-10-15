@@ -207,6 +207,12 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         }
     }
     units::install(vm);
+    // CVars whose client defaults the probes show (`getglobal` exists in
+    // the game, so the deprecation fallbacks load).
+    engine_mut(vm)
+        .world
+        .cvars
+        .push(("loadDeprecationFallbacks".into(), "1".into()));
     // Undocumented C functions with behaviour.
     let create_frame = vm.native("CreateFrame", widgets::create_frame);
     vm.set_global("CreateFrame", create_frame);

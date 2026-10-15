@@ -467,6 +467,12 @@ pub fn load(vm: &mut Vm, interface: &Path, global_strings: Option<&Path>) -> Rep
         Ok(vec![])
     });
     vm.error_handler = recorder;
+    // The VM's stand-in for what RestrictedExecution.lua does to the string
+    // metatable (`__metatable = string`) gives way to the real code.
+    if let Some(meta) = vm.string_meta {
+        let k = vm.heap.intern(b"__metatable");
+        vm.heap.table_mut(meta).set_str(k, Value::Nil);
+    }
     if let Some(path) = global_strings {
         load_global_strings(vm, path);
     }
