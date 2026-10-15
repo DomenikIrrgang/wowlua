@@ -1083,6 +1083,7 @@ pub fn build(
                 std::sync::Arc::new(crate::compile::Compiled {
                     code: code.into_bytes(),
                     map: None,
+                    compiles: false,
                 }),
             );
         }
@@ -1494,6 +1495,9 @@ pub fn build(
     let mut out: BTreeMap<String, Content> = BTreeMap::new();
     let mut flavor_roots: BTreeSet<String> = BTreeSet::new();
     let mut maps: BTreeMap<String, Arc<EncodedMap>> = BTreeMap::new();
+    // Output paths of compiled code that Lua 5.1 compiled as it is: bundling
+    // need not compile it again while the output keeps exactly those bytes.
+    let mut known: HashMap<String, std::sync::Arc<crate::compile::Compiled>> = HashMap::new();
     for source in &emitted {
         if per_flavor.contains(&source.rel) {
             for b in &builds {
@@ -1520,6 +1524,9 @@ pub fn build(
                     flavor_roots.extend(shared_targets);
                     out.insert(path, Content::Bytes(content.into_bytes()));
                     continue;
+                }
+                if c.compiles {
+                    known.insert(path.clone(), std::sync::Arc::clone(c));
                 }
                 out.insert(path, Content::Bytes(c.code.clone()));
             }
@@ -1574,6 +1581,9 @@ pub fn build(
             }
             None => original.to_vec(),
         };
+        if let Some(c) = compiled.filter(|c| c.compiles) {
+            known.insert(source.output_path(), std::sync::Arc::clone(c));
+        }
         out.insert(source.output_path(), Content::Bytes(content));
     }
     let mut lib_licenses: Vec<(String, String)> = Vec::new();
@@ -2137,6 +2147,7 @@ pub fn build(
                 files: &files,
                 raw: &raw,
                 source_maps,
+                known: &known,
             },
             toc_items,
             flavor_orders,
@@ -4174,6 +4185,8 @@ struct BundleInput<'a> {
     files: &'a [(Source, wowlua_span::FileId)],
     raw: &'a HashMap<String, Arc<[u8]>>,
     source_maps: bool,
+    /// Compiled code known to compile, by output path.
+    known: &'a HashMap<String, std::sync::Arc<crate::compile::Compiled>>,
 }
 
 fn content_bytes(content: &Content) -> Vec<u8> {
@@ -4303,9 +4316,14 @@ fn bundle_output(
                 // "locale").
                 && !item.path.starts_with(LOCALES_PATH)
                 && bundled_lib(&item.path)
-                && out
-                    .get(&item.path)
-                    .is_some_and(|c| compiles(&content_bytes(c)));
+                && out.get(&item.path).is_some_and(|c| {
+                    // The bytes the compiler compiled, still unchanged.
+                    let known = input.known.get(&item.path).is_some_and(|k| {
+                        matches!(c, Content::Bytes(b) if b[..] == k.code[..])
+                    });
+                    debug_assert!(!known || compiles(&content_bytes(c)));
+                    known || compiles(&content_bytes(c))
+                });
             (ok, item.flavors.clone())
         })
         .collect();
