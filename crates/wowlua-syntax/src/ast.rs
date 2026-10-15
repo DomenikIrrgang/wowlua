@@ -347,9 +347,79 @@ pub enum ExprKind {
 #[derive(Clone, Debug, PartialEq)]
 pub struct NumberLit {
     /// The numeral as written.
-    pub raw: Box<str>,
+    pub raw: NumText,
     /// `None` if malformed (already reported).
     pub value: Option<f64>,
+}
+
+/// The text of a numeral. Short ones, nearly all, are kept inline: a data
+/// addon has millions of numerals, and a heap block for each one's few bytes
+/// adds up to a large part of its syntax tree. Reads as a `&str`.
+#[derive(Clone)]
+pub enum NumText {
+    Inline {
+        len: u8,
+        bytes: [u8; NumText::INLINE],
+    },
+    Heap(Box<str>),
+}
+
+impl NumText {
+    /// The longest text kept inline: `NumberLit` stays small enough that
+    /// `ExprKind` does not grow.
+    const INLINE: usize = 22;
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            NumText::Inline { len, bytes } => {
+                std::str::from_utf8(&bytes[..*len as usize]).expect("inline text is a whole str")
+            }
+            NumText::Heap(text) => text,
+        }
+    }
+}
+
+impl From<&str> for NumText {
+    fn from(text: &str) -> Self {
+        if text.len() <= NumText::INLINE {
+            let mut bytes = [0; NumText::INLINE];
+            bytes[..text.len()].copy_from_slice(text.as_bytes());
+            NumText::Inline {
+                len: text.len() as u8,
+                bytes,
+            }
+        } else {
+            NumText::Heap(text.into())
+        }
+    }
+}
+
+impl std::ops::Deref for NumText {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+// Compared and shown as the text alone, the way the `Box<str>` it replaces
+// was.
+impl PartialEq for NumText {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl std::fmt::Debug for NumText {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self.as_str(), f)
+    }
+}
+
+impl std::fmt::Display for NumText {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.as_str(), f)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -856,5 +926,32 @@ mod tests {
     fn expressions_and_table_fields_stay_small() {
         assert!(std::mem::size_of::<Expr>() <= 72);
         assert!(std::mem::size_of::<TableField>() <= 120);
+        // Numerals keep their text inline without growing `ExprKind`.
+        assert!(std::mem::size_of::<NumberLit>() <= 40);
+        assert!(std::mem::size_of::<ExprKind>() <= 56);
+    }
+
+    // `NumText` reads, compares and prints like the `Box<str>` it replaced,
+    // whether the text is inline or not.
+    #[test]
+    fn numeral_text_reads_like_a_string() {
+        for text in [
+            "",
+            "1",
+            "0x1F",
+            "1_000.25",
+            "1234567890123456789012",
+            "12345678901234567890123",
+        ] {
+            let num = NumText::from(text);
+            assert_eq!(
+                num.len() <= NumText::INLINE,
+                matches!(num, NumText::Inline { .. })
+            );
+            assert_eq!(&*num, text);
+            assert_eq!(num.to_string(), text);
+            assert_eq!(format!("{num:?}"), format!("{:?}", Box::<str>::from(text)));
+            assert_eq!(num, NumText::Heap(text.into()));
+        }
     }
 }

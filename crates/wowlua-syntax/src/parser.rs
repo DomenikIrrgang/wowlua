@@ -1189,7 +1189,7 @@ impl<'a> Parser<'a> {
     fn number_lit(&self, t: &Token) -> NumberLit {
         let raw = self.text_of(t);
         NumberLit {
-            raw: String::from_utf8_lossy(raw).into(),
+            raw: NumText::from(&*String::from_utf8_lossy(raw)),
             value: crate::lexer::number_value(raw).ok(),
         }
     }
