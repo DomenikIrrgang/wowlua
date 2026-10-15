@@ -227,6 +227,9 @@ enum Command {
         /// Link the AddOn folder to the build instead of copying
         #[arg(long)]
         link: bool,
+        /// Stop after this many builds (for measuring)
+        #[arg(long, hide = true, value_name = "N")]
+        exit_after: Option<usize>,
     },
     /// Build once and install into WoW
     Install {
@@ -510,7 +513,11 @@ fn main() -> ExitCode {
         }
         Command::Compile(args) => commands::compile(&out, &cli.global, &args),
         Command::Fmt { check, paths } => commands::fmt(&out, &cli.global, check, paths),
-        Command::Dev { target, link } => commands::dev(&out, &cli.global, &target, link),
+        Command::Dev {
+            target,
+            link,
+            exit_after,
+        } => commands::dev(&out, &cli.global, &target, link, exit_after),
         Command::Install { profile, target } => {
             commands::install(&out, &cli.global, &profile.name("dev"), &target)
         }

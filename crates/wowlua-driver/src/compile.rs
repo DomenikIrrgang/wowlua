@@ -298,6 +298,7 @@ pub fn parse_sources(
     files: &[(Source, FileId)],
     declarations: &[Declaration],
     raw: &HashMap<String, Arc<[u8]>>,
+    mut cache: Option<&mut crate::BuildCache>,
 ) -> Parsed {
     let mut parses = Vec::with_capacity(files.len());
     let mut ok = vec![true; files.len()];
@@ -326,7 +327,10 @@ pub fn parse_sources(
                     .with_help("rename the file to `.wowlua`"),
                 );
                 ok[i] = false;
-            } else if let Some(d) = luacheck::check(db, *file, bytes) {
+            } else if let Some(d) = match cache.as_deref_mut() {
+                Some(cache) => cache.lua_check(db, &source.rel, *file, bytes),
+                None => luacheck::check(db, *file, bytes),
+            } {
                 diagnostics.push(d);
             }
         }
@@ -673,22 +677,39 @@ pub struct LibraryUnit {
     pub meta: Arc<Meta>,
 }
 
-/// What compiling files gave in the earlier flavors of one build. Lowering
-/// reads nothing of the flavor but its context, and finishing nothing but
-/// the lowered chunk and the build's settings: a file whose context is the
-/// same apart from `wowlua:meta`, and whose lowering never read that,
-/// compiles to the same code with the same diagnostics.
+/// What compiling files gave in the earlier flavors of one build, and in
+/// `wowlua dev` in earlier builds. Lowering reads nothing of the flavor but
+/// the file's parse, bytes and context, and finishing nothing but the
+/// lowered chunk, the file's source and `FileId`, and the build's settings:
+/// a file with the same bytes and `FileId` whose context is the same apart
+/// from `wowlua:meta`, and whose lowering never read that, compiles to the
+/// same code with the same diagnostics. Across builds, the build's settings
+/// are the same while [`crate::incremental::BuildCache`] keeps the entries.
 #[derive(Default)]
 pub(crate) struct FlavorCache {
-    /// By file index; one entry per context the file was compiled with.
-    entries: Vec<Vec<CacheEntry>>,
+    /// By `Source::rel`; one entry per context the file was compiled with.
+    pub(crate) entries: HashMap<String, Vec<CacheEntry>>,
     /// The module IDs plain Lua requires by name, and `build.keep`: the
     /// same in every flavor, found the first time a flavor asks.
     required: std::cell::OnceCell<std::collections::HashSet<String>>,
+    /// The build's number when the entries are kept for later builds
+    /// (`wowlua dev`): every flavor stores, and the bytes of a file are
+    /// compared by hash.
+    pub(crate) generation: Option<u64>,
+    /// The hashes of the files' bytes, once per build.
+    hashes: HashMap<String, blake3::Hash>,
+    pub(crate) hits: usize,
+    pub(crate) misses: usize,
 }
 
-struct CacheEntry {
+pub(crate) struct CacheEntry {
+    /// The source it was compiled from (with `rel`, the map's key).
+    src_rel: String,
+    kind: SourceKind,
+    output: Option<String>,
     file: FileId,
+    /// The hash of its bytes, when kept for later builds.
+    hash: Option<blake3::Hash>,
     /// The lowering context without `meta`; `None` for plain Lua lowered
     /// as a script, which has no context.
     ctx: Option<Context>,
@@ -700,25 +721,67 @@ struct CacheEntry {
     finishing: Vec<Diagnostic>,
     /// `None` when finishing failed.
     compiled: Option<Arc<Compiled>>,
+    /// The last build that compiled or reused it.
+    pub(crate) generation: u64,
 }
 
 impl FlavorCache {
-    fn get(&self, i: usize, file: FileId, ctx: Option<&Context>) -> Option<&CacheEntry> {
-        self.entries.get(i)?.iter().find(|e| {
+    /// A cache for build `generation` that starts with `entries` and keeps
+    /// what it compiles for later builds.
+    pub(crate) fn kept(
+        entries: HashMap<String, Vec<CacheEntry>>,
+        hashes: HashMap<String, blake3::Hash>,
+        generation: u64,
+    ) -> Self {
+        FlavorCache {
+            entries,
+            hashes,
+            generation: Some(generation),
+            ..FlavorCache::default()
+        }
+    }
+
+    /// The hash of `source`'s bytes when entries are kept for later builds;
+    /// within one build the bytes are the same.
+    fn hash(&mut self, source: &Source, bytes: &[u8]) -> Option<blake3::Hash> {
+        self.generation?;
+        Some(
+            *self
+                .hashes
+                .entry(source.rel.clone())
+                .or_insert_with(|| blake3::hash(bytes)),
+        )
+    }
+
+    fn get(
+        &mut self,
+        source: &Source,
+        file: FileId,
+        hash: Option<blake3::Hash>,
+        ctx: Option<&Context>,
+    ) -> Option<&CacheEntry> {
+        let generation = self.generation.unwrap_or(0);
+        let found = self.entries.get_mut(&source.rel)?.iter_mut().find(|e| {
             e.file == file
+                && e.hash == hash
+                && e.src_rel == source.src_rel
+                && e.kind == source.kind
+                && e.output == source.output
                 && match (&e.ctx, ctx) {
                     (None, None) => true,
                     (Some(a), Some(b)) => a.same_except_meta(b),
                     _ => false,
                 }
-        })
+        })?;
+        found.generation = generation;
+        Some(found)
     }
 
-    fn insert(&mut self, i: usize, entry: CacheEntry) {
-        if self.entries.len() <= i {
-            self.entries.resize_with(i + 1, Vec::new);
-        }
-        self.entries[i].push(entry);
+    fn insert(&mut self, source: &Source, entry: CacheEntry) {
+        self.entries
+            .entry(source.rel.clone())
+            .or_default()
+            .push(entry);
     }
 }
 
@@ -1122,7 +1185,8 @@ pub fn compile_flavor(
         // A file an earlier flavor compiled the same: what it reported goes
         // where compiling it again would put it. Only streamed files are
         // reused, as nothing renames their chunks.
-        if stream && let Some(reused) = cache.get(i, *file, ctx.as_ref()) {
+        let hash = cache.hash(source, &raw[&source.rel]);
+        if stream && let Some(reused) = cache.get(source, *file, hash, ctx.as_ref()) {
             // Debug builds (and so the tests) compile it again and compare.
             #[cfg(debug_assertions)]
             {
@@ -1167,15 +1231,17 @@ pub fn compile_flavor(
                 out.compiled
                     .insert(source.rel.clone(), Arc::clone(compiled));
             }
+            cache.hits += 1;
             continue;
         }
+        cache.misses += 1;
         let mark = diagnostics.len();
         let Some(lowered) = lower_file(i, ctx.as_ref(), diagnostics) else {
             continue;
         };
-        // Kept only for a later flavor, and only when the flavor's
+        // Kept only for a later flavor or build, and only when the flavor's
         // `wowlua:meta` did not shape it.
-        let keep = stream && store && !lowered.reads_meta;
+        let keep = stream && (store || cache.generation.is_some()) && !lowered.reads_meta;
         out.needs_runtime |= lowered.uses_runtime;
         out.meta_used.extend(lowered.meta_used);
         out.slices.extend(lowered.slices.iter().copied());
@@ -1189,19 +1255,27 @@ pub fn compile_flavor(
             out.compiled
                 .insert(source.rel.clone(), Arc::clone(compiled));
         }
-        if keep {
-            cache.insert(
-                i,
-                CacheEntry {
-                    file: *file,
-                    ctx: ctx.map(|ctx| Context { meta: None, ..ctx }),
-                    lowering: diagnostics[mark..].to_vec(),
-                    uses_runtime: lowered.uses_runtime,
-                    slices: lowered.slices,
-                    finishing: finish_diagnostics[fmark..].to_vec(),
-                    compiled,
-                },
-            );
+        let lowering = &diagnostics[mark..];
+        let finishing = &finish_diagnostics[fmark..];
+        // A later build may change another file a diagnostic points into.
+        let own = |d: &Diagnostic| d.labels.iter().all(|l| l.span.file == *file);
+        let foreign = cache.generation.is_some() && !lowering.iter().chain(finishing).all(own);
+        if keep && !foreign {
+            let entry = CacheEntry {
+                src_rel: source.src_rel.clone(),
+                kind: source.kind,
+                output: source.output.clone(),
+                file: *file,
+                hash,
+                ctx: ctx.map(|ctx| Context { meta: None, ..ctx }),
+                lowering: lowering.to_vec(),
+                uses_runtime: lowered.uses_runtime,
+                slices: lowered.slices,
+                finishing: finishing.to_vec(),
+                compiled,
+                generation: cache.generation.unwrap_or(0),
+            };
+            cache.insert(source, entry);
         }
     }
     if minify.passes.rename_private {

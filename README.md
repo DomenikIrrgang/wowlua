@@ -218,7 +218,8 @@ Using a feature of a later milestone reports that milestone.
   (plain Lua syntax for now).
 - `wowlua dev [--link]` / `install` / `uninstall`: sync builds into every WoW
   client folder (`_retail_`, `_classic_era_`, …), never overwriting folders
-  that wowlua did not install.
+  that wowlua did not install. `wowlua dev` keeps compiled files between
+  builds and compiles again only what changed.
 - `wowlua toc`, `wowlua clean`, `wowlua explain <code>`.
 
 </details>

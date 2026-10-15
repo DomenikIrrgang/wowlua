@@ -131,9 +131,13 @@ fn load_and_build(
     session: &mut Session,
     global: &GlobalArgs,
     request: &BuildRequest,
+    cache: Option<&mut wowlua_driver::BuildCache>,
 ) -> Option<(Project, BuildOutput)> {
     let project = wowlua_driver::load_project(session, &load_options(out, global))?;
-    let build = wowlua_driver::build(session, &project, request);
+    let build = match cache {
+        Some(cache) => wowlua_driver::build_with_cache(session, &project, request, cache),
+        None => wowlua_driver::build(session, &project, request),
+    };
     apply_lints(session, &project);
     build.map(|b| (project, b))
 }
@@ -454,7 +458,7 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
         bundle: None,
         only: None,
     };
-    let result = load_and_build(out, &mut session, global, &request);
+    let result = load_and_build(out, &mut session, global, &request, None);
     let ok = out.flush(&mut session);
     let Some((_, build)) = result.filter(|_| ok) else {
         return false;
@@ -1033,7 +1037,13 @@ pub fn init(out: &Output, from_toc: Option<PathBuf>, from_pkgmeta: Option<String
     }
 }
 
-pub fn dev(out: &Output, global: &GlobalArgs, target: &InstallTarget, link: bool) -> bool {
+pub fn dev(
+    out: &Output,
+    global: &GlobalArgs,
+    target: &InstallTarget,
+    link: bool,
+    exit_after: Option<usize>,
+) -> bool {
     let request = BuildRequest {
         profile: "dev".into(),
         flavors: (!target.flavor.is_empty()).then(|| target.flavor.clone()),
@@ -1045,11 +1055,14 @@ pub fn dev(out: &Output, global: &GlobalArgs, target: &InstallTarget, link: bool
         only: None,
     };
     let install = install_request(target, link);
+    // What one build compiled, for the next ones.
+    let mut cache = wowlua_driver::BuildCache::default();
 
-    let cycle = |first: bool| -> Option<PathBuf> {
+    // The project's root and output folder, after a build that succeeded.
+    let mut cycle = |first: bool| -> Option<(PathBuf, PathBuf)> {
         let started = Instant::now();
         let mut session = Session::new();
-        let result = load_and_build(out, &mut session, global, &request);
+        let result = load_and_build(out, &mut session, global, &request, Some(&mut cache));
         let ok = out.flush(&mut session);
         let (project, build) = result.filter(|_| ok)?;
         out.status(
@@ -1067,15 +1080,22 @@ pub fn dev(out: &Output, global: &GlobalArgs, target: &InstallTarget, link: bool
             report_installed(out, &installed);
         }
         out.status("Ready", "type /reload in game to load the changes");
-        Some(project.root().to_path_buf())
+        Some((project.root().to_path_buf(), project.manifest.out_dir()))
     };
 
-    let root = cycle(true).or_else(|| {
+    let first = cycle(true);
+    let mut builds = 1;
+    let root = first.as_ref().map(|(root, _)| root.clone()).or_else(|| {
         wowlua_manifest::find_manifest(&cwd(), global.manifest.as_deref())
             .and_then(|m| m.parent().map(Path::to_path_buf))
     });
     let Some(root) = root else { return false };
-    let out_dir = root.join("dist");
+    if exit_after.is_some_and(|n| builds >= n) {
+        return first.is_some();
+    }
+    // The build writes here: its own writes are not changes. Until a build
+    // succeeds, the manifest is not known to be readable.
+    let mut out_dir = first.map_or_else(|| root.join("dist"), |(_, out_dir)| out_dir);
 
     let (tx, rx) = std::sync::mpsc::channel();
     let mut debouncer = match new_debouncer(Duration::from_millis(300), tx) {
@@ -1102,17 +1122,31 @@ pub fn dev(out: &Output, global: &GlobalArgs, target: &InstallTarget, link: bool
         "Watching",
         format!("{} for changes (Ctrl+C to stop)", relative(&root)),
     );
-    let relevant = |event: &DebouncedEvent| {
-        let path = &event.path;
-        !path.starts_with(&out_dir)
-            && !path.components().any(|c| c.as_os_str() == ".git")
-            && !path.to_string_lossy().contains(".wowlua-tmp")
+    let relevant = |out_dir: &Path, result: &Result<Vec<DebouncedEvent>, _>| {
+        result.as_ref().is_ok_and(|events| {
+            events.iter().any(|event| {
+                let path = &event.path;
+                !path.starts_with(out_dir)
+                    && !path.components().any(|c| c.as_os_str() == ".git")
+                    && !path.to_string_lossy().contains(".wowlua-tmp")
+            })
+        })
     };
     while let Ok(result) = rx.recv() {
-        if let Ok(events) = result
-            && events.iter().any(relevant)
-        {
-            cycle(false);
+        let mut changed = relevant(&out_dir, &result);
+        // Changes that arrived during the last build: one build for all.
+        while let Ok(result) = rx.try_recv() {
+            changed |= relevant(&out_dir, &result);
+        }
+        if !changed {
+            continue;
+        }
+        if let Some((_, dir)) = cycle(false) {
+            out_dir = dir;
+        }
+        builds += 1;
+        if exit_after.is_some_and(|n| builds >= n) {
+            break;
         }
     }
     true
@@ -1259,7 +1293,7 @@ pub fn fix(out: &Output, global: &GlobalArgs, manifest: bool) -> bool {
         bundle: None,
         only: None,
     };
-    let _ = load_and_build(out, &mut session, global, &request);
+    let _ = load_and_build(out, &mut session, global, &request, None);
     out.flush(&mut session)
 }
 

@@ -357,8 +357,22 @@ user error otherwise:
 
 ## 13.9 Caching and incremental builds
 
-- **Phase 1 (MVP).** Full rebuilds. Parsing is cached by file content hash in
-  memory during `--watch` and `wowlua dev`.
+- **Within one build.** A split multi-flavor build compiles a file once for
+  all flavors where its lowering context is the same apart from
+  `wowlua:meta` and its lowering does not read `wowlua:meta`.
+- **`wowlua dev`.** The session keeps, in memory, what it compiled between
+  builds:
+  - each compiled file (code, source map, diagnostics), by its source path,
+    file id, content hash and lowering context, as within one build;
+  - the Lua 5.1 check of each plain `.lua` source, by its path, file id and
+    content hash.
+
+  A rebuild takes from it what compiling again would give, so it writes the
+  same files and reports the same diagnostics as a fresh build. Files that
+  read `wowlua:meta` are compiled every time, since `build.id` changes on
+  every save. A change to the manifest, the lockfile, the dependencies or the
+  build request empties the cache. Entries a build did not use are dropped.
+  Sources are still parsed and analyzed on every build.
 - **Phase 2.** Persistent per-module cache in `dist/.cache/` keyed by the
   module's content hash, the compiler version, the effective configuration
   hash (profile, target overrides, feature set), the flavor, the flavor-table

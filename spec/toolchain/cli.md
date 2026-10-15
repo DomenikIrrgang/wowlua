@@ -133,6 +133,14 @@ stays in place. WoW only reloads Lua on `/reload`. `wowlua dev` prints a
 reminder after each sync, and in dev builds the dev console's `/wl reload` is
 available.
 
+**Rebuilds.** `wowlua dev` rebuilds once per batch of changes: changes saved
+while a build runs cause one more build, not one each. It ignores the
+manifest's output folder (`build.out`), which its own builds write. Between
+builds it keeps every compiled file in memory and compiles again only what
+changed ([Compiler §13.9](compiler.md#139-caching-and-incremental-builds)):
+each rebuild writes the same files and reports the same diagnostics as a fresh
+`wowlua build`.
+
 ## 12.6 Adopting an existing addon
 
 `wowlua init` in a folder containing an existing addon:
