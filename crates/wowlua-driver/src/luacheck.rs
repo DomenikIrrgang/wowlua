@@ -24,6 +24,33 @@ const LIMIT_MESSAGES: &[&str] = &[
 static LINE_PREFIX: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"^.*?:(\d+): (.*)$").expect("valid pattern"));
 
+thread_local! {
+    /// Compile checks share one state per thread: compiling runs no code,
+    /// and Lua 5.1's parser keeps no state between loads.
+    static LUA: Lua = Lua::new();
+}
+
+/// Compiles `code` in the thread's shared state, as `name` when given.
+/// Called from plain Rust only, never from inside Lua: Lua's nesting limits
+/// count from the C call depth at load time.
+fn compile(code: &[u8], name: Option<String>) -> mlua::Result<()> {
+    LUA.with(|lua| {
+        let mut chunk = lua.load(code);
+        if let Some(name) = name {
+            chunk = chunk.set_name(name);
+        }
+        let result = chunk.into_function().map(drop);
+        // Back to the baseline heap, as when the state was closed.
+        let _ = lua.gc_collect();
+        result
+    })
+}
+
+/// Whether Lua 5.1 compiles `code` as it is (no byte order mark skipped).
+pub(crate) fn compiles(code: &[u8]) -> bool {
+    compile(code, None).is_ok()
+}
+
 /// [`check`] for code Lua 5.1 already compiled as it is (`compiled`): then
 /// it compiles again, so it is skipped. Only the chunk name and a byte order
 /// mark differ between the two compiles. The name never decides whether
@@ -51,12 +78,7 @@ fn chunk_name(db: &SourceDb, file: FileId) -> String {
 /// otherwise a diagnostic pointing at the reported line.
 pub fn check(db: &SourceDb, file: FileId, code: &[u8]) -> Option<Diagnostic> {
     let code = code.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(code);
-    let lua = Lua::new();
-    let result = lua
-        .load(code)
-        .set_name(chunk_name(db, file))
-        .into_function();
-    let error = result.err()?;
+    let error = compile(code, Some(chunk_name(db, file))).err()?;
     let raw = match &error {
         mlua::Error::SyntaxError { message, .. } => message.clone(),
         other => other.to_string(),
@@ -114,6 +136,70 @@ mod tests {
     #[test]
     fn valid_lua_51_passes() {
         assert!(run("local a = 1\nprint(a .. 'x')\n").is_none());
+    }
+
+    /// One state for many compiles answers as a fresh state for each: at the
+    /// nesting and assignment limits, after errors, with byte order marks.
+    #[test]
+    fn the_shared_state_compiles_as_a_fresh_one() {
+        let nested = |n: usize| format!("x = {}1{}", "{".repeat(n), "}".repeat(n));
+        let mut inputs: Vec<Vec<u8>> = vec![
+            b"local a = 1\nprint(a)\n".to_vec(),
+            (0..210)
+                .map(|i| format!("local v{i} = {i}\n"))
+                .collect::<String>()
+                .into_bytes(),
+            b"x = = 1\n".to_vec(),
+        ];
+        inputs.extend((197..=201).map(|n| nested(n).into_bytes()));
+        // "variables in assignment" counts down from the C call depth.
+        for n in [190, 199, 200, 201, 260] {
+            let targets: Vec<String> = (0..n).map(|i| format!("t.v{i}")).collect();
+            inputs.push(format!("local t = {{}}\n{} = 1\n", targets.join(", ")).into_bytes());
+        }
+        inputs.push(b"\xEF\xBB\xBFlocal a = 1\n".to_vec());
+        inputs.push(b"\xEF\xBB\xBFx = = 1\n".to_vec());
+        inputs.push(b"local s = \"caf\xE9\"\n".to_vec());
+        inputs.push(b"local a = 1\n".to_vec());
+        let mut db = SourceDb::new();
+        let file = db.add("src/a.lua", "");
+        let fresh = |code: &[u8]| {
+            let code_without_bom = code.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(code);
+            let named = Lua::new()
+                .load(code_without_bom)
+                .set_name(chunk_name(&db, file))
+                .into_function()
+                .map(drop);
+            let unnamed = Lua::new().load(code).into_function().is_ok();
+            (format!("{named:?}"), unnamed)
+        };
+        for round in 0..2 {
+            for code in &inputs {
+                let shared = (
+                    format!(
+                        "{:?}",
+                        compile(
+                            code.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(code),
+                            Some(chunk_name(&db, file))
+                        )
+                    ),
+                    compiles(code),
+                );
+                assert_eq!(
+                    shared,
+                    fresh(code),
+                    "round {round}: {:?}",
+                    String::from_utf8_lossy(code)
+                );
+            }
+        }
+        // The inputs reach both sides of each limit.
+        assert!(compiles(nested(197).as_bytes()) && !compiles(nested(201).as_bytes()));
+        assert!(compiles(&inputs[8]) && !compiles(&inputs[12]));
+        assert_eq!(
+            format!("{:?}", check(&db, file, &nested(199).into_bytes())),
+            format!("{:?}", check(&db, file, &nested(199).into_bytes()))
+        );
     }
 
     #[test]

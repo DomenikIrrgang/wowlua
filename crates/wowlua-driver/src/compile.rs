@@ -206,7 +206,7 @@ pub fn optimize_and_emit(
         return run(chunk, false);
     }
     let full = run(chunk.clone(), false);
-    let compiles = |code: &[u8]| mlua::Lua::new().load(code).into_function().is_ok();
+    let compiles = luacheck::compiles;
     if compiles(&full.emitted.text) {
         return Optimized {
             compiles: true,
