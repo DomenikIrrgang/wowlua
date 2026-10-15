@@ -1,0 +1,117 @@
+-- `/stdtest restrictions`: what the client's addon restrictions change.
+-- Run it out of combat and again in combat (attack a training dummy, then
+-- type it): each run records, under its combat state, the restriction
+-- states, C_Secrets' answers, which common API results come back secret,
+-- and the conformance cases, so the VM's and the engine's rules can be
+-- checked in both (StdTestState.restrictions, after /reload).
+import state from "/state"
+import say from "/harness"
+import * as conformance from "/conformance"
+
+local G = _G :: any
+
+--- One value as text: its type, and the value unless it is secret.
+local function show(v: any): string
+    if issecretvalue(v) then
+        return `secret {type(v)}`
+    end
+    const t = type(v)
+    if t == "table" then
+        const keys: string[] = {}
+        for k, field in pairs(v :: table) do
+            keys[#keys + 1] = `{tostring(k)}:{issecretvalue(field) and "secret " or ""}{type(field)}`
+        end
+        table.sort(keys)
+        return `table{issecrettable(v) and " (secret table)" or ""} \{{table.concat(keys, ",")}\}`
+    elseif t == "string" or t == "number" or t == "boolean" or t == "nil" then
+        return `{t} {tostring(v)}`
+    end
+    return t
+end
+
+--- A call's results, or its error.
+local function results(f: (...any) -> ...any, ...: any): string
+    const packed = { pcall(f, ...) }
+    if not packed[1] then
+        return `error: {issecretvalue(packed[2]) and "<secret>" or tostring(packed[2])}`
+    end
+    const out: string[] = {}
+    for i = 2, select("#", unpack(packed)) do
+        out[#out + 1] = show(packed[i])
+    end
+    return table.concat(out, ", ")
+end
+
+--- `C_X.Name` or a global, if the client has it.
+local function api(path: string): any
+    local value = G
+    for part in path:gmatch("[^.]+") do
+        value = type(value) == "table" and value[part] or nil
+    end
+    return value
+end
+
+--- API calls whose results may be secret, by the call's text.
+const CALLS: any[][] = {
+    { "UnitHealth", "player" }, { "UnitHealth", "target" },
+    { "UnitHealthMax", "target" },
+    { "UnitPower", "target" }, { "UnitPowerMax", "target" },
+    { "UnitName", "target" }, { "UnitGUID", "target" }, { "UnitLevel", "target" },
+    { "UnitClass", "target" }, { "UnitExists", "target" },
+    { "UnitIsUnit", "target", "player" }, { "UnitCanAttack", "player", "target" },
+    { "UnitAffectingCombat", "target" }, { "UnitAffectingCombat", "player" },
+    { "UnitCastingInfo", "target" }, { "UnitChannelInfo", "target" },
+    { "UnitThreatSituation", "player", "target" },
+    { "UnitDetailedThreatSituation", "player", "target" },
+    { "GetActionCooldown", 1 }, { "GetActionInfo", 1 },
+    { "C_UnitAuras.GetAuraDataByIndex", "player", 1, "HELPFUL" },
+    { "C_UnitAuras.GetAuraDataByIndex", "target", 1, "HARMFUL" },
+    { "C_Spell.GetSpellCooldown", 61304 },
+    { "C_RestrictedActions.CheckAllowProtectedFunctions", "UIParent", true },
+    { "C_RestrictedActions.CheckAllowProtectedFunctions", "ActionButton1", true },
+}
+
+export function restrictions()
+    const label = InCombatLockdown() and "inCombat" or "outOfCombat"
+    local snapshot: { [string]: any } = {
+        client = `{(GetBuildInfo())}`,
+        inCombatLockdown = InCombatLockdown(),
+        affectingCombat = results(UnitAffectingCombat, "player"),
+        target = results(UnitExists, "target"),
+    }
+    -- Each restriction type's state.
+    const types: { [string]: string } = {}
+    for name, value in pairs((G.Enum?.AddOnRestrictionType ?? {}) :: { [string]: number }) do
+        types[name] = `{results(G.C_RestrictedActions.GetAddOnRestrictionState, value)}; active {results(G.C_RestrictedActions.IsAddOnRestrictionActive, value)}`
+    end
+    snapshot.restrictionTypes = types
+    -- C_Secrets' answers that need no arguments, and for the target.
+    const secrets: { [string]: string } = {}
+    for name, f in pairs((G.C_Secrets ?? {}) :: { [string]: any }) do
+        if type(f) == "function" then
+            secrets[name] = results(f)
+            secrets[`{name}(target)`] = results(f, "target")
+        end
+    end
+    snapshot.secrets = secrets
+    -- Common API results.
+    const calls: { [string]: string } = {}
+    for _, call in ipairs(CALLS) do
+        const args = { select(2, unpack(call)) }
+        for i, a in ipairs(args) do
+            if a == "UIParent" or a == "ActionButton1" then
+                args[i] = G[a]
+            end
+        end
+        const text = `{call[1]}({table.concat({ tostringall(select(2, unpack(call))) }, ", ")})`
+        const f = api(call[1])
+        calls[text] = f and results(f, unpack(args)) or "absent"
+    end
+    snapshot.calls = calls
+    -- The conformance cases in this state.
+    snapshot.conformance = conformance.run()
+    const st = state() :: any
+    st.restrictions = st.restrictions ?? {}
+    st.restrictions[label] = snapshot
+    say(`restrictions: recorded {label} (target an enemy first; run it once out of combat and once in combat, then /reload)`)
+end
