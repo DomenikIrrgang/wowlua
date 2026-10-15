@@ -26,6 +26,8 @@ pub struct Compiled {
     /// Source Map v3 (when the profile enables source maps and the build
     /// writes its output), encoded until it is written.
     pub map: Option<Arc<wowlua_luair::sourcemap::EncodedMap>>,
+    /// `code` has no byte order mark, and Lua 5.1 compiled exactly it.
+    pub compiles: bool,
 }
 
 #[derive(Default)]
@@ -992,9 +994,14 @@ pub fn compile_flavor(
             diagnostics.push(d);
             return None;
         }
-        if let Some(d) = luacheck::check_unless_compiled(db, file, &emitted.text, compiles) {
-            diagnostics.push(d);
-        }
+        // Without a byte order mark, no error means these bytes compiled.
+        let checked = match luacheck::check_unless_compiled(db, file, &emitted.text, compiles) {
+            Some(d) => {
+                diagnostics.push(d);
+                false
+            }
+            None => !emitted.text.starts_with(b"\xEF\xBB\xBF"),
+        };
         let output = source.output_path();
         let map = source_maps.then(|| {
             let name = output.rsplit('/').next().unwrap_or(&output);
@@ -1008,6 +1015,7 @@ pub fn compile_flavor(
         Some(Compiled {
             code: emitted.text,
             map,
+            compiles: checked,
         })
     };
     // Each file is finished right after it is lowered, so only one file's

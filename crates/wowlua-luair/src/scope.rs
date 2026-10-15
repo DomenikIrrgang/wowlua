@@ -277,7 +277,8 @@ pub struct Resolution {
     /// Every identifier occurrence that is a variable, in walk order.
     pub occurrences: Vec<Ref>,
     /// Pairs of locals that must keep different names: one is used where
-    /// the other is in scope.
+    /// the other is in scope. Only [`resolve_with_conflicts`] fills it;
+    /// [`resolve`] leaves it empty.
     pub conflicts: Vec<BTreeSet<usize>>,
     /// Names read or written as globals.
     pub globals: BTreeSet<String>,
@@ -293,6 +294,12 @@ struct Resolver {
     functions: Vec<usize>,
     /// Active locals per open function.
     active: Vec<usize>,
+    /// Conflicts are recorded.
+    conflicts: bool,
+    /// Per binding: the latest later local its conflicts were recorded
+    /// with. `stack` holds bindings in declaration order, so the later
+    /// locals of a use not above it were recorded at an earlier use.
+    recorded: Vec<usize>,
 }
 
 impl Resolver {
@@ -306,7 +313,11 @@ impl Resolver {
             uses: 0,
             writes: 0,
         });
-        self.res.conflicts.push(BTreeSet::new());
+        if self.conflicts {
+            self.res.conflicts.push(BTreeSet::new());
+            self.recorded.push(id);
+        }
+        debug_assert!(self.stack.last().is_none_or(|&top| top < id));
         self.stack.push(id);
         if let Some(a) = self.active.last_mut() {
             *a += 1;
@@ -329,7 +340,9 @@ impl Visitor for Resolver {
             .iter()
             .rposition(|&b| self.res.bindings[b].name == id.name);
         let Some(index) = found else {
-            self.res.globals.insert(id.name.clone());
+            if !self.res.globals.contains(&id.name) {
+                self.res.globals.insert(id.name.clone());
+            }
             self.res.occurrences.push(Ref::Global);
             return;
         };
@@ -348,9 +361,16 @@ impl Visitor for Resolver {
             self.res.functions[f].upvalues.insert(b);
         }
         // Locals declared after it and still in scope must not take its name.
-        for &later in &self.stack[index + 1..] {
-            self.res.conflicts[b].insert(later);
-            self.res.conflicts[later].insert(b);
+        if self.conflicts {
+            let later = &self.stack[index + 1..];
+            let from = later.partition_point(|&l| l <= self.recorded[b]);
+            for &l in &later[from..] {
+                self.res.conflicts[b].insert(l);
+                self.res.conflicts[l].insert(b);
+            }
+            if let Some(&top) = later.last() {
+                self.recorded[b] = self.recorded[b].max(top);
+            }
         }
         self.res.occurrences.push(Ref::Local(b));
     }
@@ -388,9 +408,19 @@ impl Visitor for Resolver {
     }
 }
 
-/// Resolves every variable of `chunk`.
+/// Resolves every variable of `chunk`, without the conflicts.
 pub fn resolve(chunk: &mut Chunk) -> Resolution {
     let mut r = Resolver::default();
+    walk(chunk, &mut r);
+    r.res
+}
+
+/// [`resolve`] with [`Resolution::conflicts`], for renaming locals.
+pub fn resolve_with_conflicts(chunk: &mut Chunk) -> Resolution {
+    let mut r = Resolver {
+        conflicts: true,
+        ..Resolver::default()
+    };
     walk(chunk, &mut r);
     r.res
 }
