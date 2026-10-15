@@ -239,6 +239,7 @@ pub fn install(vm: &mut Vm, name: &str) {
         ("defineTemplate", define_template),
         ("defineFrameType", define_frame_type),
         ("protect", protect),
+        ("refusals", crate::protection::refusals_control),
         ("spend", spend),
         ("spawnUnit", units::spawn),
         ("addToGroup", units::add_to_group),

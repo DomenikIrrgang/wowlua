@@ -120,11 +120,20 @@ The client's security model, in the VM:
   `securecallfunction`, `secureexecuterange`, `hooksecurefunc` (hooks run
   insecure without tainting the hooked call), `forceinsecure`, `scrub`, and the
   taint barriers the client has (error handlers, `__gc`).
-- **Protected actions.** Protected functions and frame methods (from
-  Blizzard's documentation and UI code, §17.5) are refused from tainted
-  execution: some always, some only in combat lockdown. A refusal raises
-  `ADDON_ACTION_BLOCKED` or `ADDON_ACTION_FORBIDDEN` as in the client **and**
-  fails the test.
+- **Protected actions.** Protected functions and frame methods are refused
+  from tainted execution: the call does nothing, the client's event fires
+  with the tainting addon's name and the action, **and** the test fails.
+  - Protected global functions, always: `ADDON_ACTION_FORBIDDEN`
+    (`"MyAddon", "UseAction()"`, as `/stdtest taint` recorded). The
+    documentation does not mark them; the engine lists the known ones
+    (targeting, casting, using actions and items, movement, macros), and
+    `/stdtest engine protected` probes the harmless ones.
+  - Protected methods (the documentation's `IsProtectedFunction`: `Show`,
+    `Hide`, `SetPoint`, `SetSize`, `SetParent`, …) of a protected frame, in
+    combat lockdown: `ADDON_ACTION_BLOCKED` (`"MyAddon",
+    "MySecureButton:Hide()"`). A frame is protected through a secure
+    template (`Secure…Template`) or `mock.protect`; `/stdtest engine
+    blocked` probes it in combat.
 - **Taint reports.** A refusal reports the taint chain: the protected call,
   the secure code that became tainted, the value it read, and the addon code
   (file and line) that wrote that value, through any number of hops through

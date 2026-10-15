@@ -296,7 +296,13 @@ pub fn create_frame(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let frame = create(vm, &class, name, parent);
     if let Some(id) = widget_of(vm, frame) {
-        engine_mut(vm).world.widgets[id.0].frame = true;
+        let w = &mut engine_mut(vm).world.widgets[id.0];
+        w.frame = true;
+        // Blizzard's secure templates are protected (unverified without
+        // their XML).
+        w.protected = templates
+            .iter()
+            .any(|t| t.starts_with("Secure") && t.ends_with("Template"));
     }
     if let Some((_, f)) = custom {
         vm.call(f, &[frame])?;
@@ -347,6 +353,9 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
             vm.error("Attempt to find 'this' in non-table object (used '.' instead of ':' ?)")
         );
     };
+    if crate::protection::refuses_method(vm, id, f) {
+        return Ok(vec![]);
+    }
     // A behaviour checks its own arguments (the client's methods take
     // overloads the documentation does not list: `SetPoint(point, x, y)`).
     let behaviour = engine(vm).method_behaviour(f.name, f.short);

@@ -8,6 +8,7 @@ pub mod args;
 pub mod clock;
 pub mod controls;
 pub mod curves;
+pub mod protection;
 pub mod units;
 pub mod widgets;
 
@@ -28,12 +29,19 @@ pub struct Engine {
     pub world: widgets::World,
     pub timers: clock::Timers,
     pub units: units::Units,
+    /// Protected actions refused so far.
+    pub refusals: Vec<protection::Refusal>,
 }
 
 impl Engine {
     /// The engine a VM runs, if it has one.
     pub fn of(vm: &Vm) -> Option<&Engine> {
         vm.host.as_ref()?.downcast_ref()
+    }
+
+    /// An API function's behaviour, by name (`C_Timer.After`).
+    pub fn behaviour(&self, name: &str) -> Option<NativeFn> {
+        self.behaviours.get(name).copied()
     }
 
     /// A widget method's behaviour, by its full name or its name.
@@ -124,7 +132,31 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         world: widgets::World::default(),
         timers: clock::Timers::default(),
         units: units::Units::default(),
+        refusals: Vec::new(),
     }));
+    // Protected functions the documentation lacks.
+    for &name in protection::PROTECTED {
+        let (ns, short) = match name.split_once('.') {
+            Some((ns, short)) => (Some(ns), short),
+            None => (None, name),
+        };
+        let upval = vm.str(name);
+        match ns {
+            None if vm.get_global(short).is_nil() => {
+                let native = vm.native_with(short, protection::protected_global, vec![upval]);
+                vm.set_global(short, native);
+            }
+            Some(ns) => {
+                let t = namespace(vm, ns);
+                let key = vm.heap.intern(short.as_bytes());
+                if vm.heap.table(t).get_str(key).is_nil() {
+                    let native = vm.native_with(short, protection::protected_global, vec![upval]);
+                    vm.heap.table_mut(t).set_str(key, native);
+                }
+            }
+            None => {}
+        }
+    }
     // Functions with behaviour the documentation lacks (`IsInGroup`): the
     // client has them (camelot's inventory; other flavors unverified).
     let names: Vec<(&'static str, NativeFn)> = engine(vm)
@@ -193,6 +225,11 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     let api = engine.api;
     let f = &api.functions[i as usize];
     let behaviour = engine.behaviours.get(f.name).copied();
+    // Refused before the arguments are checked (unverified).
+    if protection::is_protected(f.name, Some(&f.doc)) && protection::tainted(vm) {
+        protection::refuse(vm, "ADDON_ACTION_FORBIDDEN", format!("{}()", f.name));
+        return Ok(vec![]);
+    }
     args::check(vm, api, f, &c)?;
     let Some(behaviour) = behaviour else {
         return Err(vm.error(&format!("{} is not mocked", f.name)));

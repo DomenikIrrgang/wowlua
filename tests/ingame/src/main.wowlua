@@ -10,7 +10,8 @@
 --   /stdtest crashlimit  where results stop, and the calls that crash the client
 --   /stdtest restrictions  what combat and other restrictions change (run out of and in combat)
 --   /stdtest argcheck  how documented functions check their arguments (then /reload)
---   /stdtest engine    what the client's engine does (also: order, record <label>, stop)
+--   /stdtest engine    what the client's engine does (also: order, protected, blocked,
+--                      record <label>, stop)
 import slash, router from "wowlua:slash"
 import onLogin from "wowlua:lifecycle"
 import after from "wowlua:timer"
@@ -122,7 +123,7 @@ local commands = router({
     },
     engine = {
         args = { "rest" },
-        help = "Record what the client's engine does: /stdtest engine [order | record <label> | stop] (then /reload)",
+        help = "Record what the client's engine does: /stdtest engine [order | protected | blocked | record <label> | stop] (then /reload)",
         run = function(arg: string?) engineProbe(arg) end,
     },
     argcheck = {

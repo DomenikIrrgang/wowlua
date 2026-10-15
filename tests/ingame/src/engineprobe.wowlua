@@ -6,6 +6,12 @@
 --                            identities, errors, show/hide and hook order,
 --                            timers, unit functions without a target
 --   /stdtest engine order    the order events reach frames (press Shift)
+--   /stdtest engine protected
+--                            protected functions called from addon code
+--                            (harmless ones: targeting yourself, stopping);
+--                            click "Ignore" on the client's popup
+--   /stdtest engine blocked  arms a probe of protected frames: enter combat,
+--                            it runs half a second later
 --   /stdtest engine record <label> / stop
 --                            records every event (but the combat log) with
 --                            its payload, for a guided sequence of actions
@@ -392,6 +398,12 @@ export function engineProbe(arg: string?)
     elseif words[1] == "order" then
         dispatchOrder()
         return
+    elseif words[1] == "protected" then
+        protectedProbe()
+        return
+    elseif words[1] == "blocked" then
+        blockedProbe()
+        return
     end
     const probe: { [string]: any } = {
         client = `{(GetBuildInfo())}`,
@@ -467,4 +479,103 @@ function stopRecording()
     const n = recording and #recording.log or 0
     say(`engine record: stopped ({n} events); type /reload so the file is written`)
     recording = nil
+end
+
+--- The ADDON_ACTION_* events while `run` runs, and after it returned.
+local function watchActions(run: (note: (label: string) -> ()) -> ()): string[]
+    const log: string[] = {}
+    local current = "(after)"
+    const w = CreateFrame("Frame")
+    w:RegisterEvent("ADDON_ACTION_FORBIDDEN")
+    w:RegisterEvent("ADDON_ACTION_BLOCKED")
+    w:SetScript("OnEvent", function(_, event: string, ...: any)
+        const parts: string[] = {}
+        for i = 1, select("#", ...) do
+            parts[#parts + 1] = show((select(i, ...)))
+        end
+        log[#log + 1] = `{current}: {event}({table.concat(parts, "; ")})`
+    end)
+    run(function(label: string) current = label end)
+    current = "(after)"
+    C_Timer.After(0.5, function() w:UnregisterAllEvents() end)
+    return log
+end
+
+-- Protected functions from addon code, out of combat: only harmless ones
+-- (targeting yourself, stopping what is not running).
+function protectedProbe()
+    const st = state() :: any
+    const out: { [string]: string } = {}
+    const calls: any[] = {
+        { "TargetUnit", "player" }, { "TargetUnit", {} }, { "TargetUnit" }, { "ClearTarget" },
+        { "FocusUnit", "player" }, { "ClearFocus" }, { "TargetLastTarget" }, { "AssistUnit", "player" },
+        { "SpellStopCasting" }, { "SpellStopTargeting" }, { "CastSpellByName", "StdTestNoSuchSpell" },
+        { "MoveForwardStop" }, { "TurnLeftStop" }, { "StrafeLeftStop" }, { "StopAttack" }, { "PetFollow" },
+        { "UnitName", "player" },
+    }
+    const log = watchActions(function(note: (label: string) -> ())
+        for i, call in ipairs(calls) do
+            const name = call[1] :: string
+            const f = G[name]
+            const label = `{i} {name}`
+            note(label)
+            out[label] = f and results(f, select(2, unpack(call))) or "absent"
+        end
+        note("(targets)")
+        out["target after"] = `{tostring(UnitExists("target"))} {tostring(UnitIsUnit("target", "player"))}`
+        out["focus after"] = tostring(UnitExists("focus"))
+    end)
+    st.engineProtected = { calls = out, events = log }
+    C_Timer.After(0.6, function()
+        say(`engine protected: {#log} events; type /reload so the file is written`)
+    end)
+end
+
+-- Protected frames in combat: named and anonymous secure buttons, a plain
+-- one; called from addon code half a second after combat starts.
+function blockedProbe()
+    const st = state() :: any
+    const named = CreateFrame("Button", "StdTestSecureButton", UIParent, "SecureActionButtonTemplate")
+    const anon = CreateFrame("Button", nil, UIParent, "SecureActionButtonTemplate")
+    const plain = CreateFrame("Button", nil, UIParent)
+    const before = {
+        ["named IsProtected"] = results(named.IsProtected, named),
+        ["anon IsProtected"] = results(anon.IsProtected, anon),
+        ["plain IsProtected"] = results(plain.IsProtected, plain),
+    }
+    const arm = CreateFrame("Frame")
+    arm:RegisterEvent("PLAYER_REGEN_DISABLED")
+    arm:SetScript("OnEvent", function()
+        arm:UnregisterAllEvents()
+        const atEvent = tostring(InCombatLockdown())
+        C_Timer.After(0.5, function()
+            const out: { [string]: string } = { ["InCombatLockdown at the event"] = atEvent }
+            for k, v in pairs(before) do
+                out[k] = v
+            end
+            const log = watchActions(function(note: (label: string) -> ())
+                out.InCombatLockdown = tostring(InCombatLockdown())
+                note("named:Hide")
+                out["named:Hide()"] = results(named.Hide, named)
+                out["named shown after"] = tostring(named:IsShown())
+                note("anon:SetPoint")
+                out["anon:SetPoint('CENTER')"] = results(anon.SetPoint, anon, "CENTER")
+                out["anon points after"] = tostring(anon:GetNumPoints())
+                note("named:SetAlpha")
+                out["named:SetAlpha(0.5)"] = results(function() named:SetAlpha(0.5) return named:GetAlpha() end)
+                note("named:SetAttribute")
+                out["named:SetAttribute('type', 'macro')"] = results(named.SetAttribute, named, "type", "macro")
+                note("named:SetScale")
+                out["named:SetScale('x')"] = results(named.SetScale, named, "x")
+                note("plain:Hide")
+                out["plain:Hide()"] = results(plain.Hide, plain)
+                out["plain shown after"] = tostring(plain:IsShown())
+            end)
+            st.engineBlocked = { calls = out, events = log }
+            C_Timer.After(0.6, function()
+                say(`engine blocked: {#log} events; leave combat and type /reload`)
+            end)
+        end)
+    end)
+    say("engine blocked: armed; enter combat (attack a training dummy or a mob)")
 end
