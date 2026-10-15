@@ -30,9 +30,10 @@ export function clock(seconds: number, hours: boolean?): string
     return SecondsToClock(math.max(0, seconds), hours)
 end
 
---- A date in the locale's short form (`time`: a Unix time, default now).
-export function date(time: number?): string
-    const t = os.date("*t", time ?? os.time()) :: { day: number, month: number, year: number }
+--- A date in the locale's short form (`at`: a Unix time, default now).
+export function date(at: number?): string
+    -- The client's `date` and `time` (WoW: Forever has no `os` table).
+    const t = _G.date("*t", at ?? time()) :: { day: number, month: number, year: number }
     return FormatShortDate(t.day, t.month, t.year)
 end
 

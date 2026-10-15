@@ -219,7 +219,7 @@ supported client has.
 | `duration` | `(seconds: number, opts?: { noSeconds?, long?, units? }) -> string` | "1 Hr 5 Min" (`long`: unit words; `units` at most, default 2) |
 | `short` | `(seconds: number) -> string` | The largest unit, like aura and cooldown times |
 | `clock` | `(seconds: number, hours?: boolean) -> string` | "3:07", "1:03:07" |
-| `date` | `(time?: number) -> string` | The locale's short date (default today) |
+| `date` | `(at?: number) -> string` | The locale's short date (default today) |
 | `money` | `(copper: number, opts?: { text?, separate? }) -> string` | Coin icons, or with `text` the client's words |
 | `number` | `(n: number \| Secret<number>) -> string \| Secret<string>` | Thousands separators |
 | `abbreviate` | `(n: number \| Secret<number>) -> string \| Secret<string>` | "8.5K"; a secret gives a secret string |
