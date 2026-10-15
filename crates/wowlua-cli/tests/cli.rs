@@ -3774,3 +3774,81 @@ fn compile_in_a_project() {
         .failure()
         .stderr(predicate::str::contains("E2001").or(predicate::str::contains("E2012")));
 }
+
+/// Source maps keep their bytes: a dev build's maps of wowlua modules, and a
+/// release bundle's map with renamed names and a member without a map.
+#[test]
+fn source_maps_keep_their_bytes() {
+    let dir = tempfile::tempdir().unwrap();
+    let dev = dir.path().join("dev");
+    write(
+        &dev,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "maps", "version": "1.0.0" },
+  "flavors": { "standard": {} },
+  "profiles": { "dev": { "instrument": "none", "monitor": false } } }
+"#,
+            ),
+            (
+                "src/util.wowlua",
+                "export function greet(name: string): string\n    local message = \"hello, \" .. name\n    return message\nend\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import greet from \"./util\"\nlocal function shout(text: string): string\n    local loud = text:upper()\n    return loud\nend\nprint(shout(greet(\"map\")))\n",
+            ),
+        ],
+    );
+    wowlua(&dev).arg("build").assert().success();
+    let maps = dev.join("dist/dev/.maps/Maps/src");
+    assert_eq!(
+        fs::read_to_string(maps.join("main.lua.map")).unwrap(),
+        DEV_MAIN
+    );
+    assert_eq!(
+        fs::read_to_string(maps.join("util.lua.map")).unwrap(),
+        DEV_UTIL
+    );
+    let release = dir.path().join("release");
+    write(
+        &release,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "maps", "version": "1.0.0" },
+  "flavors": { "standard": {} },
+  "profiles": { "release": { "minify": "rename", "runtime-checks": "none" } } }
+"#,
+            ),
+            (
+                "src/a.lua",
+                "local counter = 0\nfunction PlainTick()\n    local step = 1\n    counter = counter + step\n    return counter\nend\n",
+            ),
+            (
+                "src/b.lua",
+                "local function twice(value)\n    return value * 2\nend\nPlainTwice = twice\n",
+            ),
+            (
+                "src/libs/Tiny/Tiny.lua",
+                "Tiny = Tiny or {}\nfunction Tiny.id(x) return x end\n",
+            ),
+        ],
+    );
+    wowlua(&release)
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    assert_eq!(
+        fs::read_to_string(release.join("dist/release/.maps/Maps/Maps.lua.map")).unwrap(),
+        RELEASE_BUNDLE
+    );
+}
+
+const DEV_MAIN: &str = r#"{"version":3,"file":"main.lua","sources":["src/main.wowlua"],"names":[],"mappings":"AAAA,MAAA,OAAA,OAAA,GAAA,cAAA,MAAO,QAAP,aAAA;AACA,eAAe,KAAK,CAAC;CACjB,MAAM,OAAO,KAAK,MAAM;CACxB,OAAO;AACX;AACA,MAAM,MAAM,MAAM,KAAK,CAAC,CAAC"}
+"#;
+const DEV_UTIL: &str = r#"{"version":3,"file":"util.lua","sources":["src/util.wowlua"],"names":[],"mappings":"AAAA,MAAA,OAAA,OAAA,GAAA,cAAA,MAAA,eAAA,YAAA,QAAA,MAAA,MAAgB,QAAT,QAAc,CAAC,MAAD,GAAA,IAAA,CAAA,KAAC,SAAD,eAAA,gBAAA,GAAA,QAAA,SAAA,qBAAA,UAAC;CAClB,MAAM,UAAU,UAAU,GAAG;CAC7B,OAAO;AACX,IAHA,qBAAgB"}
+"#;
+const RELEASE_BUNDLE: &str = r#"{"version":3,"file":"Maps.lua","sources":["src/a.lua","src/b.lua","src/libs/Tiny/Tiny.lua"],"names":["counter","step","twice","value"],"mappings":";;;;;;;;;AAAA,MAAMA,EAAU;AAChB,SAAS,SAAS;AACd,MAAMC,EAAO;AACbD,EAAUA,CAAQ,CAAEC;AACpB,OAAOD;AACX;;;ACLA,eAAeE,CAAK,CAACC;AACjB,OAAOA,CAAM,CAAE;AACnB;AACA,WAAaD;;;ACHb;AACA;AACA"}
+"#;

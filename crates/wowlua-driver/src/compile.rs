@@ -24,8 +24,8 @@ use wowlua_syntax::Parse;
 pub struct Compiled {
     pub code: Vec<u8>,
     /// Source Map v3 (when the profile enables source maps and the build
-    /// writes its output).
-    pub map: Option<String>,
+    /// writes its output), encoded until it is written.
+    pub map: Option<Arc<wowlua_luair::sourcemap::EncodedMap>>,
 }
 
 #[derive(Default)]
@@ -998,12 +998,12 @@ pub fn compile_flavor(
         let output = source.output_path();
         let map = source_maps.then(|| {
             let name = output.rsplit('/').next().unwrap_or(&output);
-            wowlua_luair::sourcemap::source_map_named(
+            Arc::new(wowlua_luair::sourcemap::encode_named(
                 &emitted.mappings,
                 name,
                 &source.rel,
                 &original,
-            )
+            ))
         });
         Some(Compiled {
             code: emitted.text,
