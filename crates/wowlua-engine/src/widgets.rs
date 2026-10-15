@@ -74,8 +74,8 @@ pub struct World {
 /// UIParent's size in screen units at scale 1.
 pub const SCREEN: (f64, f64) = (1024.0, 768.0);
 
-/// The registry table that keeps the engine's Lua values alive.
-fn keep(vm: &mut Vm, v: Value) {
+/// Keeps one of the engine's Lua values alive (in a registry table).
+pub fn keep(vm: &mut Vm, v: Value) {
     let registry = vm.registry;
     let key = vm.heap.intern(b"wowlua.engine");
     let list = match vm.heap.table(registry).get_str(key) {

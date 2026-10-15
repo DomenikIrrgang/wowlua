@@ -5,6 +5,8 @@
 
 pub mod api;
 pub mod args;
+pub mod clock;
+pub mod controls;
 pub mod widgets;
 
 use std::collections::HashMap;
@@ -22,6 +24,7 @@ pub struct Engine {
     /// (`Button:Click`) where a class differs.
     methods: HashMap<&'static str, widgets::MethodFn>,
     pub world: widgets::World,
+    pub timers: clock::Timers,
 }
 
 impl Engine {
@@ -104,9 +107,10 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     vm.host = Some(Box::new(Engine {
         flavor: flavor.to_string(),
         api,
-        behaviours: HashMap::new(),
+        behaviours: clock::behaviours().into_iter().collect(),
         methods: widgets::behaviours().into_iter().collect(),
         world: widgets::World::default(),
+        timers: clock::Timers::default(),
     }));
     // Undocumented C functions with behaviour.
     let create_frame = vm.native("CreateFrame", widgets::create_frame);

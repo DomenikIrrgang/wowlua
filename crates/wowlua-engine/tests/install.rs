@@ -22,13 +22,13 @@ fn documented_functions_exist_and_are_not_mocked() {
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
     let r = run(
         &mut vm,
-        "return type(C_Timer.After), select(2, pcall(C_Timer.After, 1, print)), type(GetTime), type(secretwrap)",
+        "return type(C_CVar.GetCVar), select(2, pcall(C_CVar.GetCVar, 'x')), type(GetTime), type(secretwrap)",
     );
     assert_eq!(
         r,
         [
             "function",
-            "C_Timer.After is not mocked",
+            "C_CVar.GetCVar is not mocked",
             "function",
             "function"
         ]

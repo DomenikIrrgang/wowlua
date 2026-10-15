@@ -37,8 +37,12 @@ pub struct Api {
     /// Widget methods (`name`: `Frame:Show`, `namespace`: the class).
     pub methods: Vec<Function>,
     pub classes: HashMap<String, Class>,
-    /// Every event the client knows.
+    /// Every event the client knows, and the documented ones' entries
+    /// (`Payload`).
     pub events: HashSet<String>,
+    pub event_docs: HashMap<String, Json>,
+    /// Callback types (`TimerCallback`): functions.
+    pub callbacks: HashSet<String>,
     /// `Enum.X` tables: name → (field, value).
     pub enums: Vec<(&'static str, Vec<(String, f64)>)>,
     /// `Constants.X` tables: name → (field, value).
@@ -107,6 +111,8 @@ fn parse(gz: &[u8]) -> Api {
                     .collect()
             })
             .unwrap_or_default(),
+        event_docs: HashMap::new(),
+        callbacks: HashSet::new(),
         enums: Vec::new(),
         constants: Vec::new(),
         enum_names: HashSet::new(),
@@ -189,11 +195,19 @@ fn parse(gz: &[u8]) -> Api {
                 });
             }
         }
+        for e in list(system, "Events") {
+            if let Some(literal) = str_of(&e, "LiteralName") {
+                api.event_docs.insert(literal, e);
+            }
+        }
         for t in list(system, "Tables") {
             let Some(tname) = str_of(&t, "Name") else {
                 continue;
             };
             match str_of(&t, "Type").as_deref() {
+                Some("CallbackType") => {
+                    api.callbacks.insert(tname);
+                }
                 Some("Structure") => {
                     api.structures.insert(tname);
                 }

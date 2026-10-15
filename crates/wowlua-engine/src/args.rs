@@ -69,6 +69,9 @@ fn family(api: &Api, ty: &str, arg: &Json) -> Family {
     if api.enum_names.contains(ty) {
         return Family::Any;
     }
+    if api.callbacks.contains(ty) {
+        return Family::Func;
+    }
     // Structures, and the client's mixin-backed ones (`ItemLocation`).
     if api.structures.contains(ty) || arg.get("Mixin").is_some() {
         return Family::Table {
