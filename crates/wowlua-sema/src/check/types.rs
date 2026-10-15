@@ -298,6 +298,69 @@ impl Pack {
     }
 }
 
+impl Ty {
+    /// The types this one is made of.
+    pub fn children(&self) -> Vec<TypeId> {
+        match self {
+            Ty::Any
+            | Ty::Unknown
+            | Ty::Never
+            | Ty::Error
+            | Ty::Nil
+            | Ty::Boolean
+            | Ty::Number
+            | Ty::String
+            | Ty::Table
+            | Ty::Function
+            | Ty::Thread
+            | Ty::Userdata
+            | Ty::Bool(_)
+            | Ty::Num(_)
+            | Ty::Str(_)
+            | Ty::ClassOf(_)
+            | Ty::EnumMember(..)
+            | Ty::Param(_)
+            | Ty::Module(_) => Vec::new(),
+            Ty::Union(m) | Ty::Intersection(m) => m.clone(),
+            Ty::Array(t) | Ty::Secret(t) => vec![*t],
+            Ty::Map(k, v) => vec![*k, *v],
+            Ty::Named(_, args) => args.clone(),
+            Ty::Record(Record {
+                fields,
+                indexer,
+                open: _,
+                id: _,
+            }) => fields
+                .values()
+                .map(|f| f.ty)
+                .chain(indexer.iter().flat_map(|&(k, v)| [k, v]))
+                .collect(),
+            Ty::Func(f) => {
+                let Func {
+                    type_params: _,
+                    params,
+                    rest,
+                    ret,
+                    predicate,
+                    unannotated: _,
+                } = f.as_ref();
+                let rest_ty = |r: &Option<Rest>| match r {
+                    Some(Rest::Variadic(t)) => Some(*t),
+                    _ => None,
+                };
+                params
+                    .iter()
+                    .map(|p| p.ty)
+                    .chain(rest_ty(rest))
+                    .chain(ret.types.iter().copied())
+                    .chain(rest_ty(&ret.rest))
+                    .chain(predicate.map(|(_, t)| t))
+                    .collect()
+            }
+        }
+    }
+}
+
 /// The type arena.
 #[derive(Clone, Debug)]
 pub struct Types {
@@ -314,7 +377,45 @@ pub struct Types {
     /// The maps in `maps`, in the order they were added: their hashes and
     /// addresses (for `rollback`).
     maps_added: Vec<(u64, usize)>,
+    /// While a check is watched (`watch_births`): which of the types made
+    /// since are born of it, and what a union's order depends on.
+    births: Option<Births>,
 }
+
+/// Types made since `from`: born of the check that made them, when they are
+/// one of its records or contain one. Their order among each other is the
+/// order the check made them in, wherever it runs; any other type's id
+/// depends on what was made before.
+#[derive(Clone, Debug)]
+struct Births {
+    from: usize,
+    born: Vec<bool>,
+    /// The members not born of the check of the unions it made (besides
+    /// the builtins), when they have a [`Shape`].
+    unborn: Vec<TypeId>,
+    /// A union has a member not born of the check without a shape: its
+    /// order can differ where other types were made before.
+    order_sensitive: bool,
+}
+
+/// A type told by its structure, to find it in another arena: a builtin, a
+/// literal, or an array, map, secret or union of those.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Shape {
+    Builtin(TypeId),
+    Num(u64),
+    Str(Box<str>),
+    Array(Box<Shape>),
+    Map(Box<Shape>, Box<Shape>),
+    Secret(Box<Shape>),
+    Union(Vec<Shape>),
+}
+
+/// The members not born of a watched check of the unions it made, in the
+/// order of their ids: their shapes, and whether they were made before it.
+/// Where the same members (by shape) were made before the check in the
+/// same order, and the others were not, its unions have the same order.
+pub type Unborn = Vec<(Shape, bool)>;
 
 /// A point in the arena's history to go back to (`Types::rollback`).
 #[derive(Clone, Copy, Debug)]
@@ -353,6 +454,7 @@ impl Types {
             next_record: 0,
             maps: hashbrown::HashTable::new(),
             maps_added: Vec::new(),
+            births: None,
         };
         for ty in [
             Ty::Any,
@@ -385,10 +487,114 @@ impl Types {
             return id;
         }
         let id = TypeId(self.data.len() as u32);
+        self.note_birth(&ty);
         self.data.push(ty);
         let Types { data, index, .. } = self;
         index.insert_unique(hash, id, |&id| FxBuildHasher.hash_one(&data[id.0 as usize]));
         id
+    }
+
+    /// Starts watching which types are born of the check that follows.
+    pub fn watch_births(&mut self) {
+        self.births = Some(Births {
+            from: self.data.len(),
+            born: Vec::new(),
+            unborn: Vec::new(),
+            order_sensitive: false,
+        });
+    }
+
+    /// Stops watching: what the order of the unions made since depends on,
+    /// or `None` when it can differ where the types made before differ in
+    /// ways shapes do not tell.
+    pub fn births(&mut self) -> Option<Unborn> {
+        let mut b = self.births.take()?;
+        if b.order_sensitive {
+            return None;
+        }
+        b.unborn.sort();
+        b.unborn.dedup();
+        b.unborn
+            .iter()
+            .map(|&m| Some((self.shape(m)?, (m.0 as usize) < b.from)))
+            .collect()
+    }
+
+    /// Whether `unborn` holds in this arena: the members made before are
+    /// here, in the same order, and the others are not.
+    pub fn unborn_holds(&self, unborn: &Unborn) -> bool {
+        let mut last = None;
+        unborn
+            .iter()
+            .all(|(shape, before)| match self.find_shape(shape) {
+                Some(id) if *before => {
+                    last < Some(id) && {
+                        last = Some(id);
+                        true
+                    }
+                }
+                found => found.is_none() && !*before,
+            })
+    }
+
+    /// `t`'s shape, if it has one.
+    fn shape(&self, t: TypeId) -> Option<Shape> {
+        if t <= Types::FALSE {
+            return Some(Shape::Builtin(t));
+        }
+        Some(match self.get(t) {
+            Ty::Num(bits) => Shape::Num(*bits),
+            Ty::Str(s) => Shape::Str(s.clone()),
+            Ty::Array(e) => Shape::Array(Box::new(self.shape(*e)?)),
+            Ty::Map(k, v) => Shape::Map(Box::new(self.shape(*k)?), Box::new(self.shape(*v)?)),
+            Ty::Secret(t) => Shape::Secret(Box::new(self.shape(*t)?)),
+            Ty::Union(m) => Shape::Union(m.iter().map(|&m| self.shape(m)).collect::<Option<_>>()?),
+            _ => return None,
+        })
+    }
+
+    /// The type of shape `s` in this arena, if it is here.
+    fn find_shape(&self, s: &Shape) -> Option<TypeId> {
+        let ty = match s {
+            Shape::Builtin(t) => return Some(*t),
+            Shape::Num(bits) => Ty::Num(*bits),
+            Shape::Str(s) => Ty::Str(s.clone()),
+            Shape::Array(e) => Ty::Array(self.find_shape(e)?),
+            Shape::Map(k, v) => Ty::Map(self.find_shape(k)?, self.find_shape(v)?),
+            Shape::Secret(t) => Ty::Secret(self.find_shape(t)?),
+            // Members are in the order of their ids.
+            Shape::Union(m) => {
+                let mut ids = m
+                    .iter()
+                    .map(|m| self.find_shape(m))
+                    .collect::<Option<Vec<_>>>()?;
+                ids.sort();
+                Ty::Union(ids)
+            }
+        };
+        let hash = FxBuildHasher.hash_one(&ty);
+        self.index
+            .find(hash, |&id| self.data[id.0 as usize] == ty)
+            .copied()
+    }
+
+    fn is_born(&self, id: TypeId) -> bool {
+        self.births.as_ref().is_some_and(|b| {
+            (id.0 as usize)
+                .checked_sub(b.from)
+                .is_some_and(|k| b.born[k])
+        })
+    }
+
+    /// Notes whether `ty`, about to be added, is born of the watched check.
+    fn note_birth(&mut self, ty: &Ty) {
+        if self.births.is_none() {
+            return;
+        }
+        let born = matches!(ty, Ty::Record(_)) || ty.children().iter().any(|&c| self.is_born(c));
+        if let Some(b) = &mut self.births {
+            b.born.push(born);
+        }
     }
 
     pub fn get(&self, id: TypeId) -> &Ty {
@@ -421,7 +627,9 @@ impl Types {
         self.next_record += 1;
         r.id = self.next_record;
         let id = TypeId(self.data.len() as u32);
-        self.data.push(Ty::Record(r));
+        let ty = Ty::Record(r);
+        self.note_birth(&ty);
+        self.data.push(ty);
         id
     }
 
@@ -476,6 +684,10 @@ impl Types {
         }
         self.data.truncate(cp.len);
         self.next_record = cp.next_record;
+        if let Some(b) = &mut self.births {
+            b.born.truncate(cp.len.saturating_sub(b.from));
+            b.unborn.retain(|m| (m.0 as usize) < cp.len);
+        }
         for (hash, map) in self.maps_added.drain(cp.maps..).rev() {
             if let Ok(entry) = self
                 .maps
@@ -531,6 +743,23 @@ impl Types {
             1 => flat[0],
             _ => {
                 flat.sort();
+                // The builtins have the same ids everywhere, and members
+                // born of a watched check keep their order wherever it runs.
+                // Other members keep it where the types made before give
+                // the same order (`Unborn`).
+                if self.births.is_some() {
+                    let ordered: Vec<TypeId> =
+                        flat.iter().copied().filter(|&m| m > Types::FALSE).collect();
+                    if ordered.len() >= 2 {
+                        let unborn: Vec<TypeId> =
+                            ordered.into_iter().filter(|&m| !self.is_born(m)).collect();
+                        let shaped = unborn.iter().all(|&m| self.shape(m).is_some());
+                        if let Some(b) = &mut self.births {
+                            b.order_sensitive |= !shaped;
+                            b.unborn.extend(unborn);
+                        }
+                    }
+                }
                 self.intern(Ty::Union(flat))
             }
         }
@@ -743,6 +972,95 @@ mod tests {
         assert_eq!(r.fields.keys().nth(1234), Some("f1234"));
         let stored = stored_fields(&types);
         assert!(stored < 2000 * 2000 / 32, "{stored} field entries");
+    }
+
+    /// A watched check tells what its unions' order depends on: members
+    /// born of it keep their order anywhere; others need the same shapes
+    /// made before it in the same order; a member without a shape makes
+    /// the order unknowable.
+    #[test]
+    fn unions_tell_what_their_order_depends_on() {
+        let rec = |types: &mut Types, name: &str| {
+            types.record(Record {
+                fields: [(name.into(), field(1))]
+                    .into_iter()
+                    .collect::<FieldMap>()
+                    .into(),
+                ..Record::default()
+            })
+        };
+        let str_shape = |s: &str| Shape::Str(s.into());
+        let mut types = Types::new();
+        let old = types.str("old");
+        let older = types.str("older");
+        types.watch_births();
+        let a = rec(&mut types, "a");
+        let b = rec(&mut types, "b");
+        let arr = types.array(a);
+        types.union(&[a, b, arr, Types::NIL, Types::FALSE]);
+        types.union(&[a, Types::NUMBER]);
+        assert_eq!(types.births(), Some(vec![]), "records, builtins");
+        types.watch_births();
+        let c = rec(&mut types, "c");
+        let new = types.str("new");
+        let strings = types.array(Types::STRING);
+        types.union(&[c, older, new, strings, old]);
+        let unborn = types.births().expect("every member has a shape");
+        assert_eq!(
+            unborn,
+            vec![
+                (str_shape("old"), true),
+                (str_shape("older"), true),
+                (str_shape("new"), false),
+                (Shape::Array(Box::new(Shape::Builtin(Types::STRING))), false),
+            ]
+        );
+        assert!(types.unborn_holds(&vec![(str_shape("old"), true)]));
+        // Elsewhere: in another order, missing, or made before.
+        let mut other = Types::new();
+        other.str("older");
+        other.str("old");
+        assert!(!other.unborn_holds(&unborn), "another order");
+        let mut other = Types::new();
+        other.str("old");
+        assert!(!other.unborn_holds(&unborn), "`older` is not there");
+        let mut other = Types::new();
+        other.str("old");
+        other.str("older");
+        assert!(other.unborn_holds(&unborn));
+        other.array(Types::STRING);
+        assert!(!other.unborn_holds(&unborn), "`string[]` made before");
+        // A union of shapes has one, whatever the order of its members.
+        let ns = types.union(&[Types::NUMBER, Types::STRING]);
+        let ns_arr = types.array(ns);
+        let mut other = Types::new();
+        let found = other.union(&[Types::STRING, Types::NUMBER]);
+        let found = other.array(found);
+        assert_eq!(
+            types
+                .shape(ns_arr)
+                .and_then(|shape| other.find_shape(&shape)),
+            Some(found)
+        );
+        types.watch_births();
+        let d = rec(&mut types, "d");
+        let named = types.intern(Ty::Named(DefId(0), Vec::new()));
+        types.union(&[d, named]);
+        assert_eq!(types.births(), None, "a member without a shape");
+        types.watch_births();
+        let cp = types.checkpoint();
+        let f = rec(&mut types, "f");
+        rec(&mut types, "f2");
+        types.rollback(cp);
+        let g = types.str("g");
+        assert_eq!(f, g, "the record's id is the string's now");
+        let h = rec(&mut types, "h");
+        types.union(&[g, h]);
+        assert_eq!(
+            types.births(),
+            Some(vec![(str_shape("g"), false)]),
+            "rolled back births are forgotten"
+        );
     }
 
     /// After a rollback the arena is as it was: the same types get the

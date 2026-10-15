@@ -46,20 +46,20 @@ fn summary(files: &[(&str, String, wowlua_api::Globals)]) -> String {
         .collect();
     let env = Env::build(&sources);
     let mut globals: Vec<String> = env
-        .globals
-        .iter()
-        .map(|(n, t)| format!("{n} {t:?} {}", env.display(*t)))
+        .declared
+        .unrecorded_globals()
+        .map(|(n, t)| format!("{n} {t:?} {}", env.display(t)))
         .collect();
     globals.sort();
     let mut on_demand: Vec<String> = env
-        .on_demand
-        .iter()
+        .declared
+        .unrecorded_on_demand()
         .map(|(n, a)| format!("{n} {a}"))
         .collect();
     on_demand.sort();
     let mut global_types: Vec<String> = env
-        .global_types
-        .iter()
+        .declared
+        .unrecorded_global_types()
         .map(|(n, d)| format!("{n} {d:?}"))
         .collect();
     global_types.sort();
@@ -68,7 +68,7 @@ fn summary(files: &[(&str, String, wowlua_api::Globals)]) -> String {
         globals.len(),
         on_demand.len(),
         global_types.len(),
-        env.defs.len(),
+        env.def_count(),
         globals.join("\n"),
         on_demand.join("\n"),
         global_types.join("\n"),

@@ -148,30 +148,22 @@ pub struct Source<'a> {
 #[derive(Default)]
 pub struct Env {
     pub types: Types,
-    pub defs: Vec<Def>,
+    /// Read through `def`, which records the read (`Declared::note_def`).
+    defs: Vec<Def>,
     pub params: Vec<ParamInfo>,
-    /// Declared types (global type namespace).
-    pub global_types: FxHashMap<Box<str>, DefId>,
     /// Types declared at the top level of each module.
     pub module_types: FxHashMap<usize, FxHashMap<Box<str>, DefId>>,
     /// Imported type names per module.
     pub module_imports: FxHashMap<usize, FxHashMap<Box<str>, DefId>>,
     pub module_namespaces: FxHashMap<usize, FxHashMap<Box<str>, usize>>,
-    /// Declared globals (values).
-    pub globals: FxHashMap<Box<str>, TypeId>,
+    /// The global names the declarations give (values, types, handlers,
+    /// on-demand globals, the callbacks registry), read through recording
+    /// accessors.
+    pub declared: super::declared::Declared,
     /// Export types from standard-library declaration files, by module.
     pub declared_exports: FxHashMap<usize, FxHashMap<Box<str>, TypeId>>,
     pub events: IndexMap<Box<str>, Pack, FxBuildHasher>,
     pub messages: IndexMap<Box<str>, Pack, FxBuildHasher>,
-    /// The handler signature of each event and message (its declared
-    /// parameters, any results).
-    pub handlers: FxHashMap<Box<str>, Func>,
-    /// `Registry` of `wowlua:callbacks`, whose `on`, `once` and `fire` the
-    /// checker specializes by its event type.
-    pub callbacks_registry: Option<DefId>,
-    /// Globals only a load-on-demand Blizzard addon defines (`@onDemand`):
-    /// name → addon.
-    pub on_demand: FxHashMap<Box<str>, String>,
     pub diagnostics: Vec<Diagnostic>,
     /// Aliases whose bodies are not resolved yet (while building), with the
     /// module of their scope.
@@ -186,6 +178,18 @@ pub const ADDON_NAMESPACE: &str = "AddonNamespace";
 
 impl Env {
     pub fn def(&self, id: DefId) -> &Def {
+        self.declared.note_def(id);
+        &self.defs[id.0 as usize]
+    }
+
+    /// The number of declarations.
+    pub fn def_count(&self) -> usize {
+        self.defs.len()
+    }
+
+    /// A declaration, without recording the read (fingerprints, and the
+    /// rename-private reachability after every file is checked).
+    pub(crate) fn def_unrecorded(&self, id: DefId) -> &Def {
         &self.defs[id.0 as usize]
     }
 
@@ -230,7 +234,7 @@ impl Env {
         ns.native = true;
         ns.indexer = Some((Types::STRING, Types::ANY));
         let ns_id = env.add_def(ns);
-        env.global_types.insert(ADDON_NAMESPACE.into(), ns_id);
+        env.declared.set_global_type(ADDON_NAMESPACE.into(), ns_id);
 
         // Pass 1: names, so declarations may refer to each other in any order.
         let mut pending: Vec<(DefId, Pending)> = Vec::new();
@@ -241,7 +245,7 @@ impl Env {
         }
         // `ns.__wowlua`: the runtime's table (its interface is declared in
         // the compiler's `runtime.d.wowlua`).
-        if let Some(&rt) = env.global_types.get("WowluaRuntime") {
+        if let Some(rt) = env.declared.global_type("WowluaRuntime") {
             let ty = env.types.intern(Ty::Named(rt, Vec::new()));
             let mut m = Member::field(ty);
             m.optional = true;
@@ -307,14 +311,14 @@ impl Env {
         // Ambient interfaces merge (spec §2.4.7).
         if def.kind == DefKind::Interface
             && map_global
-            && let Some(&existing) = self.global_types.get(name)
+            && let Some(existing) = self.declared.global_type(name)
             && self.def(existing).kind == DefKind::Interface
         {
             return existing;
         }
         let id = self.add_def(def);
         if map_global {
-            self.global_types.insert(name.into(), id);
+            self.declared.set_global_type(name.into(), id);
         } else {
             self.module_types
                 .entry(src.index)
@@ -407,8 +411,8 @@ impl Env {
         members: &'a [NsMember],
         pending: &mut Vec<(DefId, Pending<'a>)>,
     ) -> DefId {
-        let id = match self.global_types.get(path) {
-            Some(&id) if self.def(id).kind == DefKind::Namespace => id,
+        let id = match self.declared.global_type(path) {
+            Some(id) if self.def(id).kind == DefKind::Namespace => id,
             _ => {
                 let mut def = Def::new(path, DefKind::Namespace);
                 def.native = true;
@@ -633,7 +637,7 @@ impl Env {
                         }
                         NsMemberKind::Namespace { name, .. } => {
                             let full = format!("{}.{}", self.def(def).name, name.text);
-                            if let Some(&inner) = self.global_types.get(full.as_str()) {
+                            if let Some(inner) = self.declared.global_type(full.as_str()) {
                                 let t = self.types.intern(Ty::ClassOf(inner));
                                 let mut mem = Member::field(t);
                                 mem.readonly = true;
@@ -642,7 +646,7 @@ impl Env {
                         }
                         NsMemberKind::Enum(e) => {
                             let full = format!("{}.{}", self.def(def).name, e.name.text);
-                            if let Some(&inner) = self.global_types.get(full.as_str()) {
+                            if let Some(inner) = self.declared.global_type(full.as_str()) {
                                 let t = self.types.intern(Ty::ClassOf(inner));
                                 let mut mem = Member::field(t);
                                 mem.readonly = true;
@@ -897,7 +901,8 @@ impl Env {
         debug_assert!(src.globals.is_empty() || src.declares.is_none());
         for g in src.globals.iter() {
             if let Some(addon) = g.on_demand {
-                self.on_demand.insert(g.name.into(), addon.to_string());
+                self.declared
+                    .set_on_demand(g.name.into(), addon.to_string());
             }
             let t = match g.ty {
                 wowlua_api::Prim::Any => Types::ANY,
@@ -906,7 +911,7 @@ impl Env {
                 wowlua_api::Prim::String => Types::STRING,
                 wowlua_api::Prim::Table => Types::TABLE,
             };
-            self.globals.insert(g.name.into(), t);
+            self.declared.set_global(g.name.into(), t);
         }
     }
 
@@ -935,7 +940,7 @@ impl Env {
                 _ => None,
             };
             if let Some(name) = name {
-                self.on_demand.insert(name, addon);
+                self.declared.set_on_demand(name, addon);
             }
         }
         let scope = self.scope_of(src.index, &[]);
@@ -966,21 +971,21 @@ impl Env {
                 let t = self.types.func(f);
                 if name.path.len() == 1 && name.method.is_none() {
                     let key: Box<str> = name.path[0].text.clone();
-                    let ty = match self.globals.get(&key) {
-                        Some(&e) => overload_set(&mut self.types, e, t),
+                    let ty = match self.declared.global(&key) {
+                        Some(e) => overload_set(&mut self.types, e, t),
                         None => t,
                     };
-                    self.globals.insert(key, ty);
+                    self.declared.set_global(key, ty);
                 }
             }
             Declare::Global { name, ty } => {
                 let t = self.resolve(ty, &scope);
-                self.globals.insert(name.text.clone(), t);
+                self.declared.set_global(name.text.clone(), t);
             }
             Declare::Namespace { name, .. } => {
-                if let Some(&def) = self.global_types.get(name.text.as_ref()) {
+                if let Some(def) = self.declared.global_type(name.text.as_ref()) {
                     let t = self.types.intern(Ty::ClassOf(def));
-                    self.globals.insert(name.text.clone(), t);
+                    self.declared.set_global(name.text.clone(), t);
                 }
             }
             Declare::Event { name, params } | Declare::Message { name, params } => {
@@ -989,7 +994,7 @@ impl Env {
                     types: f.params.iter().map(|p| p.ty).collect(),
                     rest: f.rest.clone(),
                 };
-                self.handlers.insert(
+                self.declared.set_handler(
                     name.text.clone(),
                     Func {
                         ret: Pack::any(),
@@ -1156,7 +1161,7 @@ impl Env {
                 return Some(d);
             }
         }
-        self.global_types.get(name).copied()
+        self.declared.global_type(name)
     }
 
     /// Converts type syntax into a type; unknown names are E2002.
@@ -1327,6 +1332,7 @@ impl Env {
                     };
                 }
                 "EventName" => {
+                    self.declared.note_opaque();
                     let names: Vec<TypeId> = self
                         .events
                         .keys()
@@ -1342,6 +1348,7 @@ impl Env {
                     };
                 }
                 "MessageName" => {
+                    self.declared.note_opaque();
                     let names: Vec<TypeId> = self
                         .messages
                         .keys()
@@ -1379,7 +1386,7 @@ impl Env {
             if path.len() == 1 {
                 self.lookup_type(&joined, scope)
             } else {
-                self.global_types.get(joined.as_str()).copied()
+                self.declared.global_type(joined.as_str())
             }
         };
         let Some(def) = def else {

@@ -391,6 +391,32 @@ fn check_lua_warnings_are_the_same() {
     dev.rebuild();
 }
 
+/// With `check.lua`, a later flavor takes the type check of a plain Lua
+/// file from an earlier one when what the file reads of the declarations
+/// is the same there: not for a file that reads an API that differs.
+#[test]
+fn check_lua_flavors_share_what_checks_the_same() {
+    let mut dev = Dev::new(&[
+        (
+            "wowlua.json",
+            r#"{ "package": { "name": "dev-cache", "version": "1.0.0" },
+  "flavors": { "standard": {}, "vanilla": {} }, "check": { "lua": true } }
+"#,
+        ),
+        (
+            "src/a.lua",
+            "local t = { x = 1 }\nprint(t.y, math.floor(1.5))\n",
+        ),
+        ("src/b.lua", "local n = 1\nprint(n .. {})\n"),
+        ("src/c.lua", "print(C_Seasons.HasActiveSeason())\n"),
+    ]);
+    let cold = dev.rebuild();
+    assert_eq!(cold.type_checks, 2, "{cold:?}");
+    dev.write("src/b.lua", "local n = 2\nprint(n .. {})\n");
+    let edit = dev.rebuild();
+    assert_eq!(edit.type_checks, 2, "{edit:?}");
+}
+
 /// Replays edits on a real project (copied first): every Nth source gets
 /// a comment, one file a new global, then a file is added and removed.
 /// Run with `WOWLUA_DEV_REPLAY=<project folder> cargo test --release -p

@@ -700,6 +700,9 @@ pub(crate) struct FlavorCache {
     hashes: HashMap<String, blake3::Hash>,
     pub(crate) hits: usize,
     pub(crate) misses: usize,
+    /// The type checks of plain Lua files that later flavors of this build
+    /// can reuse; per build, where a path and `FileId` mean the same bytes.
+    pub(crate) checks: wowlua_sema::check::reuse::CheckCache,
 }
 
 pub(crate) struct CacheEntry {
@@ -932,6 +935,12 @@ pub fn compile_flavor(
             &settings,
             &check.globals,
             shared,
+            shared
+                .is_none()
+                .then_some(wowlua_sema::check::reuse::Reuse {
+                    cache: &mut cache.checks,
+                    store,
+                }),
         );
         diagnostics.extend(checked.diagnostics);
         out.type_names = checked.type_names;

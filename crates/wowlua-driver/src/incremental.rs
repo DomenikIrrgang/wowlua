@@ -42,6 +42,9 @@ pub struct CacheStats {
     pub misses: usize,
     /// Plain Lua sources whose Lua 5.1 check was reused.
     pub lua_checks: usize,
+    /// Plain Lua sources whose type check (`check.lua`) a later flavor
+    /// took from an earlier one of the same build.
+    pub type_checks: usize,
     /// The build-wide inputs changed, so the cache was emptied.
     pub cleared: bool,
 }
@@ -121,6 +124,7 @@ impl BuildCache {
     pub(crate) fn keep(&mut self, cache: FlavorCache) {
         self.stats.hits += cache.hits;
         self.stats.misses += cache.misses;
+        self.stats.type_checks += cache.checks.hits;
         let generation = self.generation;
         let mut files = cache.entries;
         files.retain(|_, entries| {

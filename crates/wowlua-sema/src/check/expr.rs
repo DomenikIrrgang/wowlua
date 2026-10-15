@@ -114,7 +114,7 @@ impl Checker<'_> {
             // region the test guards: `any`.
             ExprKind::Name(n)
                 if self.lookup_var(&n.text).is_none()
-                    && !self.env.globals.contains_key(n.text.as_ref())
+                    && !self.env.declared.has_global(n.text.as_ref())
                     && !self.dynamic_env
                     && n.text.as_ref() != "_G"
                     && !self.extra_globals.contains(n.text.as_ref())
@@ -286,7 +286,7 @@ impl Checker<'_> {
                     .or_else(|| match &obj.kind {
                         ExprKind::Name(n) => match self.lookup_var(&n.text) {
                             Some(r) => Some((r, name.text.to_string())),
-                            None => self.env.globals.contains_key(n.text.as_ref()).then(|| {
+                            None => self.env.declared.has_global(n.text.as_ref()).then(|| {
                                 (
                                     super::narrow::GLOBAL_ROOT,
                                     format!("{}.{}", n.text, name.text),
@@ -423,8 +423,8 @@ impl Checker<'_> {
         if n.text.as_ref() == "super" && !self.classes.is_empty() {
             return self.super_member("", n.span);
         }
-        match self.env.globals.get(n.text.as_ref()) {
-            Some(&t) => t,
+        match self.env.declared.global(n.text.as_ref()) {
+            Some(t) => t,
             None if n.text.as_ref() == "_G" => Types::TABLE,
             None if self.dynamic_env
                 || self.extra_globals.contains(n.text.as_ref())
@@ -451,7 +451,7 @@ impl Checker<'_> {
     /// Assigning a global (W1002 / E1002 unless declared).
     pub fn assign_global(&mut self, n: &Name, value: TypeId) {
         self.forget_fields(super::narrow::GLOBAL_ROOT, Some(&n.text));
-        match self.env.globals.get(n.text.as_ref()).copied() {
+        match self.env.declared.global(n.text.as_ref()) {
             Some(t) => self.check_assignable(n.span, value, t),
             None if self.dynamic_env || self.extra_globals.contains(n.text.as_ref()) => {}
             None => {
@@ -473,7 +473,7 @@ impl Checker<'_> {
         match &t.kind {
             ExprKind::Name(n) => match self.lookup_var(&n.text) {
                 Some(v) => self.vars[v.0 as usize].declared,
-                None => self.env.globals.get(n.text.as_ref()).copied(),
+                None => self.env.declared.global(n.text.as_ref()),
             },
             ExprKind::Field { obj, name } => {
                 let o = self.peek_or_infer(obj);
@@ -500,9 +500,8 @@ impl Checker<'_> {
                 Some(v) => self.var_type(v),
                 None => self
                     .env
-                    .globals
-                    .get(n.text.as_ref())
-                    .copied()
+                    .declared
+                    .global(n.text.as_ref())
                     .unwrap_or(Types::ANY),
             },
             _ => self.infer(e),
@@ -1236,7 +1235,7 @@ impl Checker<'_> {
 
     /// `s:upper()` is `string.upper(s)` (spec §2.4.5).
     fn string_member(&mut self, name: &str) -> Option<TypeId> {
-        let string_ns = self.env.globals.get("string").copied()?;
+        let string_ns = self.env.declared.global("string")?;
         match self.env.types.get(string_ns).clone() {
             Ty::ClassOf(d) => self
                 .env
@@ -2054,7 +2053,12 @@ impl Checker<'_> {
             ExprKind::Name(n) if self.lookup_var(&n.text).is_none() => (n.text.to_string(), false),
             _ => return,
         };
-        let Some(addon) = self.env.on_demand.get(root.as_str()).cloned() else {
+        let Some(addon) = self
+            .env
+            .declared
+            .on_demand(root.as_str())
+            .map(str::to_string)
+        else {
             return;
         };
         let has_method = matches!(args.get(1).map(|e| &e.kind), Some(ExprKind::String(_)));
@@ -2097,7 +2101,7 @@ impl Checker<'_> {
         };
         self.check_hook_on_demand(id, args, decorator);
         let known = |c: &Self, name: &str| {
-            c.env.globals.contains_key(name)
+            c.env.declared.has_global(name)
                 || c.extra_globals.contains(name)
                 || c.assigned_globals.contains(name)
                 || c.dynamic_env
@@ -2121,8 +2125,8 @@ impl Checker<'_> {
             return;
         };
         let target = match literal(first) {
-            Some(name) => match self.env.globals.get(name.as_str()) {
-                Some(&t) => t,
+            Some(name) => match self.env.declared.global(name.as_str()) {
+                Some(t) => t,
                 None => {
                     if !known(self, &name) {
                         let msg = format!(
@@ -2258,7 +2262,7 @@ impl Checker<'_> {
         let Ty::Named(d, targs) = self.env.types.get(o).clone() else {
             return m;
         };
-        if self.env.callbacks_registry != Some(d) {
+        if self.env.declared.callbacks_registry() != Some(d) {
             return m;
         }
         let Some(&events) = targs.first() else {
@@ -2341,7 +2345,7 @@ impl Checker<'_> {
         if matches!(id.as_str(), "events.on" | "events.once" | "events.onUnit") {
             self.check_event_available(&name, name_span);
         }
-        let Some(handler) = self.env.handlers.get(name.as_str()).cloned() else {
+        let Some(handler) = self.env.declared.handler(name.as_str()).cloned() else {
             return c;
         };
         match id.as_str() {

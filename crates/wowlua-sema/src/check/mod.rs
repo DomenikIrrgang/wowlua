@@ -3,11 +3,13 @@
 //! bodies with flow-sensitive narrowing.
 
 pub mod body;
+pub mod declared;
 pub mod env;
 pub mod expr;
 pub mod flavors;
 pub mod narrow;
 pub mod query;
+pub mod reuse;
 pub mod runtime;
 pub mod subst;
 pub mod types;
@@ -22,7 +24,7 @@ use wowlua_diagnostics::Diagnostic;
 use wowlua_syntax::ast::{ExprKind, ImportClause, StmtKind};
 
 /// How one file is checked (spec §2.1).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileSettings {
     pub mode: Mode,
     /// Pure Lua not opted into strict mode: name and type diagnostics are
@@ -40,7 +42,7 @@ pub fn check_package(
     extra_globals: &HashSet<String>,
     shared: Option<&flavors::SharedFlavors>,
 ) -> Vec<Diagnostic> {
-    check_package_full(files, analysis, settings, extra_globals, shared).diagnostics
+    check_package_full(files, analysis, settings, extra_globals, shared, None).diagnostics
 }
 
 /// What checking a package produces.
@@ -58,13 +60,16 @@ pub struct CheckOutput {
     pub private_methods: HashSet<wowlua_span::Span>,
 }
 
-/// Like [`check_package`], with the type information lowering uses.
+/// Like [`check_package`], with the type information lowering uses. With
+/// `reuse`, plain Lua files take their checks from earlier flavors of the
+/// build where they check the same, and store theirs for later ones (#6).
 pub fn check_package_full(
     files: &[FileInput],
     analysis: &Analysis,
     settings: &[Option<FileSettings>],
     extra_globals: &HashSet<String>,
     shared: Option<&flavors::SharedFlavors>,
+    mut reuse: Option<reuse::Reuse<'_>>,
 ) -> CheckOutput {
     let mut type_names = HashMap::new();
     let mut value_checks = HashMap::new();
@@ -155,12 +160,13 @@ pub fn check_package_full(
     }
     let mut env = env::Env::build(&sources);
     let mut diagnostics = std::mem::take(&mut env.diagnostics);
-    env.callbacks_registry = files
+    let registry = files
         .iter()
         .position(|f| f.src_rel == format!("{}callbacks.wowlua", crate::STDLIB_PREFIX))
         .and_then(|i| env.module_types.get(&i))
         .and_then(|t| t.get("Registry"))
         .copied();
+    env.declared.set_callbacks_registry(registry);
     // Shared mode: APIs only some flavors declare are known (as `any`), so
     // that their uses report E2030.
     if let Some(shared) = shared {
@@ -170,12 +176,10 @@ pub fn check_package_full(
             }
             match path.rsplit_once('.') {
                 None => {
-                    env.globals
-                        .entry(path.as_str().into())
-                        .or_insert(Types::ANY);
+                    env.declared.set_global_if_new(path, Types::ANY);
                 }
                 Some((ns, member)) => {
-                    if let Some(&d) = env.global_types.get(ns)
+                    if let Some(d) = env.declared.global_type(ns)
                         && env.def(d).kind == env::DefKind::Namespace
                         && !env.def(d).members.contains_key(member)
                     {
@@ -236,146 +240,133 @@ pub fn check_package_full(
         if !matches!(files[i].kind, FileKind::Wowlua | FileKind::Lua) {
             continue;
         }
+        let ctx = FileCtx {
+            files,
+            analysis,
+            extra_globals,
+            assigned_globals,
+            shared,
+            exports: &exports,
+        };
+        // A plain Lua file reads nothing of other files but the
+        // declarations: a later flavor whose declarations give the same
+        // answers to what it read gets the same results (#6).
+        let plain_lua = files[i].kind == FileKind::Lua;
+        let reusable = plain_lua && shared.is_none();
+        if reusable
+            && let Some(reuse) = reuse.as_mut()
+            && reuse.cache.package_matches(extra_globals, assigned_globals)
+            && let Some(reused) =
+                reuse
+                    .cache
+                    .lookup(&env, (&files[i].src_rel, parse.chunk.span.file), settings)
+        {
+            // Debug builds (and so the tests) check it again and compare.
+            #[cfg(debug_assertions)]
+            {
+                let cp = env.types.checkpoint();
+                let mut again = check_file_in(&mut env, &ctx, i, settings, parse);
+                env.types.rollback(cp);
+                let sorted = |mut v: Vec<(wowlua_span::Span, String)>| {
+                    v.sort_by_key(|(s, _)| (s.start, s.end));
+                    v
+                };
+                again.type_names = sorted(again.type_names);
+                assert_eq!(
+                    format!(
+                        "{:?}",
+                        (
+                            &again.diagnostics,
+                            &again.type_names,
+                            again.value_checks.len(),
+                            again.private_methods.len(),
+                            again.global_classes.len(),
+                            again.exports.len(),
+                        )
+                    ),
+                    format!(
+                        "{:?}",
+                        (
+                            &reused.diagnostics,
+                            sorted(reused.type_names.clone()),
+                            0,
+                            0,
+                            0,
+                            0
+                        )
+                    ),
+                    "{} is reused but checks differently",
+                    files[i].src_rel
+                );
+            }
+            reuse.cache.hits += 1;
+            type_names.extend(reused.type_names);
+            diagnostics.extend(reused.diagnostics);
+            exports.insert(i, FxHashMap::default());
+            continue;
+        }
         // A plain Lua file leaves no type behind (its outputs are text,
         // spans and declarations): the arena goes back to how it was
         // before, so every file is checked from the same state, whatever
         // was checked before it.
-        let plain_lua = files[i].kind == FileKind::Lua;
         let before = plain_lua.then(|| env.types.checkpoint());
         #[cfg(debug_assertions)]
         let sizes = (
-            env.defs.len(),
+            env.def_count(),
             env.params.len(),
             env.typeof_types.len(),
             env.renamable_defs.len(),
             value_checks.len(),
         );
-        let imports = import_types(&mut env, files, analysis, i, &exports);
-        let info = FileInfo {
-            intrinsics: crate::stdlib::Intrinsics::of(analysis, i, parse),
-            index: i,
-            mode: settings.mode,
-            pure_lua: settings.pure_lua,
-            extra_globals,
-            assigned_globals,
-            imports,
-            is_module: analysis.modules[i].as_ref().is_some_and(|m| m.is_module),
-            shared,
-            meta_flavor: analysis.modules[i]
-                .as_ref()
-                .map(|m| {
-                    m.meta_bindings
-                        .iter()
-                        .filter(|(_, k)| **k == crate::meta::MetaKind::Flavor)
-                        .map(|(n, _)| n.clone())
-                        .collect()
-                })
-                .unwrap_or_default(),
-        };
-        let mut checker = Checker::new(&mut env, &info, parse);
-        checker.check_file(parse);
-        // `typeName(x)` arguments (the callee's name decides; lowering only
-        // uses entries of `wowlua:debug` intrinsics).
-        wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
-            if let ExprKind::Call { callee, args } = &e.kind
-                && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "typeName")
-                    | matches!(&callee.kind, ExprKind::Field { name, .. } if name.text.as_ref() == "typeName")
-                && let Some(arg) = args.exprs().first()
-                && let Some(&t) = checker.expr_types.get(&(arg.span.start, arg.span.end))
+        let recording = reusable && reuse.as_ref().is_some_and(|r| r.store);
+        if recording {
+            env.declared.record();
+            env.types.watch_births();
+        }
+        let out = check_file_in(&mut env, &ctx, i, settings, parse);
+        if recording && let Some(reuse) = reuse.as_mut() {
+            reuse.cache.misses += 1;
+            let reads = env.declared.recorded().unwrap_or_default();
+            // Private methods and global classes (declarations of this
+            // flavor) are not stored, nor a check with a union whose order
+            // can depend on what came before in ways it cannot tell.
+            if let Some(unborn) = env.types.births()
+                && out.private_methods.is_empty()
+                && out.global_classes.is_empty()
             {
-                type_names.insert(arg.span, checker.env.display(t));
-            }
-        });
-        value_checks.extend(std::mem::take(&mut checker.value_checks));
-        private_methods.extend(std::mem::take(&mut checker.private_methods));
-        // `@global` declarations hand their classes to other addons: the
-        // class itself, the types of its values, the types its signature
-        // names.
-        for st in &parse.chunk.block.stmts {
-            if !st.decorators.iter().any(|d| d.is_named("global")) {
-                continue;
-            }
-            let inner = match &st.kind {
-                StmtKind::Export(i) => i.as_ref(),
-                _ => st,
-            };
-            let mut names: Vec<&str> = Vec::new();
-            match &inner.kind {
-                StmtKind::Class(c) => names.push(&c.name.text),
-                StmtKind::Local { names: ns, values } => {
-                    for v in values {
-                        if let Some(&t) = checker.expr_types.get(&(v.span.start, v.span.end)) {
-                            checker.note_global_classes(t);
-                        }
-                    }
-                    for n in ns {
-                        if let Some(t) = &n.ty {
-                            type_refs(t, &mut names);
-                        }
-                    }
-                }
-                StmtKind::LocalFunction { func, .. } | StmtKind::Function { func, .. } => {
-                    for p in &func.params {
-                        if let Some(t) = &p.ty {
-                            type_refs(t, &mut names);
-                        }
-                    }
-                    match &func.ret {
-                        Some(wowlua_syntax::ast::RetType::Single(t)) => type_refs(t, &mut names),
-                        Some(wowlua_syntax::ast::RetType::List { types, .. }) => {
-                            types.iter().for_each(|t| type_refs(t, &mut names))
-                        }
-                        _ => {}
-                    }
-                }
-                StmtKind::Const { ty: Some(t), .. } => type_refs(t, &mut names),
-                _ => {}
-            }
-            for name in names {
-                let found = checker
-                    .env
-                    .module_types
-                    .get(&i)
-                    .and_then(|m| m.get(name))
-                    .or_else(|| checker.env.module_imports.get(&i).and_then(|m| m.get(name)))
-                    .or_else(|| checker.env.global_types.get(name))
-                    .copied();
-                if let Some(d) = found {
-                    global_classes.insert(d);
-                }
+                reuse.cache.store(
+                    &env,
+                    (&files[i].src_rel, parse.chunk.span.file),
+                    settings,
+                    &reads,
+                    unborn,
+                    &out.diagnostics,
+                    &out.type_names,
+                    (extra_globals, assigned_globals),
+                );
             }
         }
-        global_classes.extend(std::mem::take(&mut checker.global_classes));
-        let mut file_exports = std::mem::take(&mut checker.exports);
-        diagnostics.append(&mut checker.diagnostics);
-        diagnostics.append(&mut env.diagnostics);
-        // A standard-library module's declarations give its exports as
-        // callers see them (the compiler fills in some arguments).
-        // (A declaration typed `any` only binds an intrinsic.)
-        if let Some(declared) = env.declared_exports.get(&i) {
-            file_exports.extend(
-                declared
-                    .iter()
-                    .filter(|(_, t)| **t != Types::ANY)
-                    .map(|(k, &t)| (k.clone(), t)),
-            );
-        }
+        type_names.extend(out.type_names);
+        value_checks.extend(out.value_checks);
+        private_methods.extend(out.private_methods);
+        global_classes.extend(out.global_classes);
+        diagnostics.extend(out.diagnostics);
         if let Some(cp) = before {
             #[cfg(debug_assertions)]
             {
                 let after = (
-                    env.defs.len(),
+                    env.def_count(),
                     env.params.len(),
                     env.typeof_types.len(),
                     env.renamable_defs.len(),
                     value_checks.len(),
                 );
                 assert_eq!(after, sizes, "a plain Lua file left types behind");
-                assert!(file_exports.is_empty(), "a plain Lua file exports");
+                assert!(out.exports.is_empty(), "a plain Lua file exports");
             }
             env.types.rollback(cp);
         }
-        exports.insert(i, file_exports);
+        exports.insert(i, out.exports);
     }
     private_methods.extend(env.renamable_defs.iter().copied());
     // Classes reachable from globals, and every class of their hierarchies,
@@ -383,8 +374,9 @@ pub fn check_package_full(
     let mut reachable = global_classes;
     loop {
         let before = reachable.len();
-        for (i, def) in env.defs.iter().enumerate() {
+        for i in 0..env.def_count() {
             let id = DefId(i as u32);
+            let def = env.def_unrecorded(id);
             for &b in &def.bases {
                 if let types::Ty::Named(base, _) = env.types.get(b).clone() {
                     if reachable.contains(&id) {
@@ -484,6 +476,160 @@ fn global_decorated(block: &wowlua_syntax::ast::Block, out: &mut FxHashSet<Strin
             _ => {}
         }
     }
+}
+
+/// What checking one file needs besides the environment.
+struct FileCtx<'a> {
+    files: &'a [FileInput<'a>],
+    analysis: &'a Analysis,
+    extra_globals: &'a FxHashSet<String>,
+    assigned_globals: &'a FxHashSet<String>,
+    shared: Option<&'a flavors::SharedFlavors>,
+    exports: &'a FxHashMap<usize, FxHashMap<Box<str>, TypeId>>,
+}
+
+/// What checking one file gives.
+struct FileOutcome {
+    diagnostics: Vec<Diagnostic>,
+    type_names: Vec<(wowlua_span::Span, String)>,
+    value_checks: Vec<(wowlua_span::Span, runtime::ValueCheck)>,
+    private_methods: Vec<(wowlua_span::Span, types::DefId)>,
+    global_classes: Vec<types::DefId>,
+    exports: FxHashMap<Box<str>, TypeId>,
+}
+
+/// Checks file `i` in `env`.
+fn check_file_in(
+    env: &mut env::Env,
+    ctx: &FileCtx<'_>,
+    i: usize,
+    settings: FileSettings,
+    parse: &wowlua_syntax::Parse,
+) -> FileOutcome {
+    let mut out = FileOutcome {
+        diagnostics: Vec::new(),
+        type_names: Vec::new(),
+        value_checks: Vec::new(),
+        private_methods: Vec::new(),
+        global_classes: Vec::new(),
+        exports: FxHashMap::default(),
+    };
+    let imports = import_types(env, ctx.files, ctx.analysis, i, ctx.exports);
+    let info = FileInfo {
+        intrinsics: crate::stdlib::Intrinsics::of(ctx.analysis, i, parse),
+        index: i,
+        mode: settings.mode,
+        pure_lua: settings.pure_lua,
+        extra_globals: ctx.extra_globals,
+        assigned_globals: ctx.assigned_globals,
+        imports,
+        is_module: ctx.analysis.modules[i]
+            .as_ref()
+            .is_some_and(|m| m.is_module),
+        shared: ctx.shared,
+        meta_flavor: ctx.analysis.modules[i]
+            .as_ref()
+            .map(|m| {
+                m.meta_bindings
+                    .iter()
+                    .filter(|(_, k)| **k == crate::meta::MetaKind::Flavor)
+                    .map(|(n, _)| n.clone())
+                    .collect()
+            })
+            .unwrap_or_default(),
+    };
+    let mut checker = Checker::new(env, &info, parse);
+    checker.check_file(parse);
+    // `typeName(x)` arguments (the callee's name decides; lowering only
+    // uses entries of `wowlua:debug` intrinsics).
+    wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
+        if let ExprKind::Call { callee, args } = &e.kind
+            && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "typeName")
+                | matches!(&callee.kind, ExprKind::Field { name, .. } if name.text.as_ref() == "typeName")
+            && let Some(arg) = args.exprs().first()
+            && let Some(&t) = checker.expr_types.get(&(arg.span.start, arg.span.end))
+        {
+            out.type_names.push((arg.span, checker.env.display(t)));
+        }
+    });
+    out.value_checks
+        .extend(std::mem::take(&mut checker.value_checks));
+    out.private_methods
+        .extend(std::mem::take(&mut checker.private_methods));
+    // `@global` declarations hand their classes to other addons: the
+    // class itself, the types of its values, the types its signature
+    // names.
+    for st in &parse.chunk.block.stmts {
+        if !st.decorators.iter().any(|d| d.is_named("global")) {
+            continue;
+        }
+        let inner = match &st.kind {
+            StmtKind::Export(i) => i.as_ref(),
+            _ => st,
+        };
+        let mut names: Vec<&str> = Vec::new();
+        match &inner.kind {
+            StmtKind::Class(c) => names.push(&c.name.text),
+            StmtKind::Local { names: ns, values } => {
+                for v in values {
+                    if let Some(&t) = checker.expr_types.get(&(v.span.start, v.span.end)) {
+                        checker.note_global_classes(t);
+                    }
+                }
+                for n in ns {
+                    if let Some(t) = &n.ty {
+                        type_refs(t, &mut names);
+                    }
+                }
+            }
+            StmtKind::LocalFunction { func, .. } | StmtKind::Function { func, .. } => {
+                for p in &func.params {
+                    if let Some(t) = &p.ty {
+                        type_refs(t, &mut names);
+                    }
+                }
+                match &func.ret {
+                    Some(wowlua_syntax::ast::RetType::Single(t)) => type_refs(t, &mut names),
+                    Some(wowlua_syntax::ast::RetType::List { types, .. }) => {
+                        types.iter().for_each(|t| type_refs(t, &mut names))
+                    }
+                    _ => {}
+                }
+            }
+            StmtKind::Const { ty: Some(t), .. } => type_refs(t, &mut names),
+            _ => {}
+        }
+        for name in names {
+            let found = checker
+                .env
+                .module_types
+                .get(&i)
+                .and_then(|m| m.get(name))
+                .or_else(|| checker.env.module_imports.get(&i).and_then(|m| m.get(name)))
+                .copied()
+                .or_else(|| checker.env.declared.global_type(name));
+            if let Some(d) = found {
+                out.global_classes.push(d);
+            }
+        }
+    }
+    out.global_classes
+        .extend(std::mem::take(&mut checker.global_classes));
+    out.exports = std::mem::take(&mut checker.exports);
+    out.diagnostics.append(&mut checker.diagnostics);
+    out.diagnostics.append(&mut env.diagnostics);
+    // A standard-library module's declarations give its exports as
+    // callers see them (the compiler fills in some arguments).
+    // (A declaration typed `any` only binds an intrinsic.)
+    if let Some(declared) = env.declared_exports.get(&i) {
+        out.exports.extend(
+            declared
+                .iter()
+                .filter(|(_, t)| **t != Types::ANY)
+                .map(|(k, &t)| (k.clone(), t)),
+        );
+    }
+    out
 }
 
 /// A topological order of the files over import edges, source order for

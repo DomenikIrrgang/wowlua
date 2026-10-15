@@ -89,7 +89,7 @@ impl Checker<'_> {
                 ExprKind::Name(n) => match self.lookup_var(&n.text) {
                     Some(v) => Some((v, name.text.to_string())),
                     // A declared global: its paths start with its name.
-                    None if self.env.globals.contains_key(n.text.as_ref()) => {
+                    None if self.env.declared.has_global(n.text.as_ref()) => {
                         Some((GLOBAL_ROOT, format!("{}.{}", n.text, name.text)))
                     }
                     None => None,
@@ -140,7 +140,7 @@ impl Checker<'_> {
             ExprKind::Paren(inner) => self.path_type(inner),
             ExprKind::Name(n) => match self.lookup_var(&n.text) {
                 Some(v) => Some(self.var_type(v)),
-                None => self.env.globals.get(n.text.as_ref()).copied(),
+                None => self.env.declared.global(n.text.as_ref()),
             },
             ExprKind::Field { obj, name } | ExprKind::OptField { obj, name } => {
                 if let Some(v) = self.field_var(e, false)
@@ -203,8 +203,8 @@ impl Checker<'_> {
             let root = match &e.kind {
                 ExprKind::Name(n) => c.lookup_var(&n.text).map(|v| (v, None)).or_else(|| {
                     c.env
-                        .globals
-                        .contains_key(n.text.as_ref())
+                        .declared
+                        .has_global(n.text.as_ref())
                         .then(|| (GLOBAL_ROOT, Some(n.text.to_string())))
                 }),
                 _ => c.field_path(e).map(|(r, p)| {
