@@ -396,12 +396,34 @@ tests, automatic and guided, all passing). Released as 0.9.0.
 
 ## M9: Test runner, language server, formatter
 
-- `wowlua test` with `wowlua:test` and `wowlua:mock`, plus coverage.
-- `wowlua lsp` and the VS Code extension.
-- Persistent incremental cache (phase 2), shared with the LSP.
-- `wowlua fmt` complete for all wowlua constructs, with an idempotence suite.
+The test framework runs on wowlua's own emulation of the WoW client
+([WoW client emulation](toolchain/emulator.md), decisions T183 to T189).
 
-**Exit:** the full edit, test, debug loop works without leaving the editor.
+- S1 **VM core**: a Lua 5.1 VM in Rust (`wowlua-vm`) running the compiler's
+  output, with the exact standard library; verified by the Lua 5.1 test suite
+  and differential runs against PUC Lua over the corpus.
+- S2 **WoW semantics**: WoW's Lua (no `os`/`io`/`debug`, its arithmetic, its
+  library additions), taint and secure execution with taint reports, secret
+  values as a VM value kind.
+- S3 **Engine**: the WoW API generated per flavor from Blizzard's
+  documentation (existence, protection, secrets), the widget system and the
+  behaviour tests need, "not mocked" errors for the rest; Blizzard's FrameXML
+  as secure code, opt-in.
+- S4 **Test framework**: `wowlua test`, `wowlua:test`, `wowlua:mock` (spies,
+  stubs, fakes, scenario controls, taint assertions), per flavor, in parallel.
+- S5 **Coverage and reports**: lines, statements, branches, functions and
+  conditions counted by the VM; terminal, JUnit, TAP, JSON, GitHub, lcov,
+  Cobertura and an HTML report in the wowlua design system; thresholds.
+- S6 `wowlua fmt` complete for all wowlua constructs, with an idempotence suite.
+- S7 Persistent incremental cache (phase 2), shared with the LSP.
+- S8 `wowlua lsp` and the VS Code extension, with a test explorer, coverage in
+  the editor and "run test" code lenses.
+
+**Exit:** the full edit, test, debug loop works without leaving the editor, and
+the in-game bugs found so far fail as tests the same way they failed in game
+(`os.date` in `wowlua:format`, `0 / 0` in `wowlua:serialize`, SuuUI's
+reparented status-bar containers breaking Edit Mode, taint in combat). StdTest
+stays the in-game check until then (decision T189).
 
 ## M10: Registry
 

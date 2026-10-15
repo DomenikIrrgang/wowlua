@@ -614,3 +614,14 @@ used.
 ```json
 "stdlib": { "log": { "history-size": 1000 } }
 ```
+
+## 9.18 `test`
+
+Planned (M9).
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `blizzard-ui` | bool | `false` | Load the flavor's FrameXML as secure code before the addon ([WoW client emulation §17.7](emulator.md#177-blizzards-ui-code)) |
+| `coverage.lines`, `.branches`, `.functions`, `.conditions` | number (percent) | none | Minimum coverage; a run below it fails ([Tooling §16.1.6](tooling.md#1616-coverage)) |
+| `coverage.exclude` | string[] | `[]` | Files excluded from coverage (glob patterns) |
+| `reporters` | string[] | `["pretty"]` | Default test and coverage reporters |

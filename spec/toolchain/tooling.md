@@ -2,10 +2,12 @@
 
 ## 16.1 Test runner (`wowlua test`)
 
-Tests run outside the game, in an **embedded Lua 5.1 VM** (`mlua` with the
-vendored `lua51` feature) inside the `wowlua` binary, with a **mocked WoW
-environment**. The VM is sandboxed: no `io`, `os`, `require` or file access,
-exactly like the game.
+Tests run outside the game, in wowlua's **emulation of the WoW client**
+([WoW client emulation](emulator.md)): a Lua 5.1 VM written in Rust with WoW's
+Lua differences, taint and secret values, and an engine with the flavor's WoW
+API, optionally with Blizzard's own UI code. Like the game it has no `io`,
+`os`, `require` or file access. The framework ships with wowlua; tests need no
+third-party library (decision T184).
 
 ### 16.1.1 Writing tests
 
@@ -122,18 +124,58 @@ flavor under test are absent, as in the game.
   subscriptions, timers, hooks) and keeps only the SavedVariables store. It then
   re-runs the load sequence and lifecycle, mirroring a real `/reload`.
 
+Mocking (decision T187):
+
+- **Spies, stubs and fakes** for any function: `mock.spy(fn?)`,
+  `mock.stub(table, key, fn)`, `mock.fake(name, impl)` for an engine function,
+  restored after each test.
+- **Scenario controls** set the game's state: combat, units, group, auras,
+  spells, items, time, screen, locale, CVars, other addons and libraries.
+- **Taint in tests.** A protected action refused because of taint fails the
+  test with its taint chain ([WoW client emulation §17.4](emulator.md#174-taint-and-secure-execution));
+  `expect(fn).toBeBlocked()` asserts that it is refused, and
+  `expect(value).toBeSecure()` that a variable is untainted.
+
 ### 16.1.5 Running
 
 ```
-wowlua test [filter] [--flavor <f>] [--watch] [--coverage] [--reporter pretty|tap|junit|json]
+wowlua test [filter] [--flavor <f>] [--watch] [--coverage] [--reporter <r>,…] [--output <dir>]
 ```
 
 - Each test file runs once **per manifest flavor** by default. `--flavor`
   restricts the run, and `@flavors` restricts individual tests.
 - Each file and flavor runs in a fresh VM. Files run in parallel.
-- `--coverage` instruments line coverage. It writes
-  `dist/test/coverage/lcov.info`, with locations mapped to the `.wowlua` sources.
-- Exit code 1 if any test fails.
+- Test reporters: `pretty` (the terminal default), `junit` (XML), `tap`,
+  `json`, `github` (annotations). Several may be given; files go to
+  `dist/test/` unless `--output` says otherwise.
+- Exit code 1 if any test fails, or if coverage is below a threshold
+  (§16.1.6).
+
+### 16.1.6 Coverage
+
+`--coverage` measures, mapped to the `.wowlua` and `.lua` sources
+(decision T188):
+
+| Kind | Counts |
+|------|--------|
+| Lines and statements | Each statement executed |
+| Branches | Each arm of `if`/`elseif`/`else` (the implicit "no else" too), loops entered or skipped, both outcomes of `and`, `or`, `??` and `?.` |
+| Functions | Each function, method and closure called |
+| Conditions | Each condition of a compound test (`a and b`, `a or b`) both true and false |
+
+The VM counts them; the compiled code is not changed. Code that `@if` removes
+for the flavor under test counts as not applicable, and coverage of all flavors
+is merged unless `--coverage-per-flavor` is given. `-- wowlua: coverage ignore`
+(next statement) and `-- wowlua: coverage ignore-file` exclude code, and
+`test.coverage.exclude` excludes files.
+
+Reports, any combination: a terminal summary, `lcov` (with branch and function
+data), `cobertura` (XML), `json`, and `html`: a self-contained report in the
+wowlua design system (its fonts and tokens, dark and light), with every file's
+source, hit counts, branch markers and totals per file and folder.
+
+Thresholds in `test.coverage` ([Manifest §9.18](manifest.md#918-test)) set
+minimum percentages per kind; a run below one fails.
 
 ## 16.2 Language server (`wowlua lsp`)
 

@@ -30,6 +30,7 @@ Warcraft AddOns. This directory is the normative specification. The compiler
 | 14 | [Code generation & output](toolchain/codegen.md) | Lowering, runtime library, output layout, TOC generation |
 | 15 | [Optimization](toolchain/optimization.md) | Bundling, minification levels, folding, tree-shaking |
 | 16 | [Developer tooling](toolchain/tooling.md) | Test runner, language server, formatter, trace decoder |
+| 17 | [WoW client emulation](toolchain/emulator.md) | The test VM and engine: WoW's Lua, taint, secret values, the generated API, FrameXML (planned, M9) |
 | **Appendices** | | |
 | A | [Grammar](appendix/grammar.md) | Complete grammar (EBNF) |
 | B | [Diagnostics](appendix/diagnostics.md) | Error and warning codes |
