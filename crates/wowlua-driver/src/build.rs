@@ -373,7 +373,7 @@ pub fn build(
                 declarations.push(crate::compile::Declaration {
                     source,
                     file,
-                    bytes,
+                    bytes: bytes.into(),
                 });
             }
             Err(error) => session.push(
@@ -398,7 +398,7 @@ pub fn build(
                         output: None,
                     },
                     file,
-                    bytes,
+                    bytes: bytes.into(),
                 });
             }
             Err(error) => session.push(Diagnostic::plain_error(format!(
@@ -430,13 +430,13 @@ pub fn build(
                     output: None,
                 },
                 file,
-                bytes: text.into_bytes(),
+                bytes: text.into_bytes().into(),
             });
         }
     }
     // The compiler's implicit declarations (Lua 5.1 and WoW's Lua).
     for builtin in wowlua_stdlib::declarations() {
-        let file = session.db.add(builtin.path, builtin.text.to_string());
+        let file = session.db.add_static(builtin.path, builtin.text);
         declarations.push(crate::compile::Declaration {
             source: sources::Source {
                 rel: builtin.path.to_string(),
@@ -446,7 +446,7 @@ pub fn build(
                 output: None,
             },
             file,
-            bytes: builtin.text.as_bytes().to_vec(),
+            bytes: builtin.text.as_bytes().into(),
         });
     }
     // Version and build id (`wowlua:meta` needs them while compiling).
@@ -964,7 +964,7 @@ pub fn build(
         // is freed with the flavor.
         let mut api = Vec::new();
         for f in wowlua_api::declarations(&api_flavor).into_iter().flatten() {
-            let file = session.db.add(f.path, f.text.to_string());
+            let file = session.db.add_static(f.path, f.text);
             api.push(crate::compile::ParsedDeclaration {
                 source: sources::Source {
                     rel: f.path.to_string(),
