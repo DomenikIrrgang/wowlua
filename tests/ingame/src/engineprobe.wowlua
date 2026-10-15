@@ -327,6 +327,99 @@ local function behaviours(): { [string]: string }
     }
 end
 
+--- The CVars camelot's UI code reads by name (grep of `GetCVar*("…")` in
+--- wow-ui-source 1.60.1), for their defaults: what the engine starts with.
+const CVARS = {
+    "ActionButtonUseKeydown", "ActionButtonUseKeyDown", "ActionButtonUseKeyHeldSpell",
+    "addFriendInfoShown", "advFlyPitchControl", "allowCompareWithToggle", "alwaysCompareItems",
+    "assistedCombatHighlight", "assistedCombatHighlightRPE", "assistedCombatIconUpdateRate",
+    "auctionHouseDurationDropdown", "autoAcceptQuickJoinRequests", "autojoinPartyVoice",
+    "autoQuestWatch", "autoSelfCast", "bankAutoDepositReagents", "bankConfirmTabCleanUp",
+    "blockChannelInvites", "CAAEnabled", "CAASayYourDebuffs", "CAAVoice", "cameraFov",
+    "CameraKeepCharacterCentered", "CameraReduceUnexpectedMovement", "cameraYawMoveSpeed",
+    "cameraYawSmoothSpeed", "chatBubbles", "chatBubblesParty", "chatClassColorOverride",
+    "chatMouseScroll", "chatStyle", "classicStyleWorldText", "colorblindMode", "combinedBags",
+    "commentatorLossOfControlIconUnitFrame", "commentatorLossOfControlTextNameplate",
+    "commentatorLossOfControlTextUnitFrame", "communitiesShowOffline", "contentTrackingFilter",
+    "coordsByTenths", "CursorCenteredYPos", "dangerousShipyardMissionWarningAlreadyShown",
+    "debugTargetInfo", "DisableAdvancedFlyingFullScreenEffects", "DisableAdvancedFlyingVelocityVFX",
+    "disableSuggestedLevelActivityFilter", "displayFreeBagSlots", "displayInternalOnlyStatus",
+    "displayQuestID", "displaySpellActivationOverlays", "doNotFlashLowHealthWarning",
+    "dragonRidingRacesFilterWQ", "empowerTapControls", "enableCollectionToasts",
+    "enableFloatingCombatText", "enableLearnedRecipeToasts", "enableLootToasts",
+    "enableMouseoverCast", "enablePVPNotifyAFK", "eventSchedulerLastUpdate", "expandBagBar",
+    "expandUpgradePanel", "expandWarbandCharacterList", "ffxAntiAliasingMode",
+    "findYourselfModeCircle", "findYourselfModeIcon", "findYourselfModeOutline",
+    "flashErrorMessageRepeats", "friendInvitesCollapsed", "fstack_enabled", "fstack_showanchors",
+    "fstack_showhidden", "fstack_showhighlight", "fstack_showregions", "GamepadCameraFollowOnStick",
+    "GamepadDisableTooltips", "GamepadFocusStateColor", "GamepadFocusStateOpacity",
+    "GamepadRaidTargetingHoverMode", "GamepadShowPersistentInputLegend", "GamepadUsePartyTargeting",
+    "gxapi", "heroTalentsCollapse", "hideHelptips", "hideRewardedEvents", "hideTalentTutorials",
+    "housingStoragePanelCollapsed", "housingTutorialsEnabled", "InputDeviceInterfaceStyle",
+    "instantQuestText", "interactKeyWarningTutorial", "KioskWarmupSeconds",
+    "last_matchmaking_party_size", "lastCharacterIndex", "lastGarrisonMissionTutorial",
+    "lastSelectedClubId", "lastTalkedToGM", "lastTransmogCustomSetIDNoSpec", "lfgDebug",
+    "lfgNewPlayerFriendly", "loadDeprecationFallbacks", "lootUnderMouse", "lossOfControl",
+    "mapFade", "miniDressUpFrame", "minimapShowPlayerCoords", "minimapTrackingShowAll",
+    "miniWorldMap", "motionSicknessFocalCircle", "motionSicknessLandscapeDarkening",
+    "mountJournalShowPlayer", "mouseInvertPitch", "movieSubtitle", "MSAAQuality",
+    "nameplateShowCastBars", "nameplateShowClassColor", "nameplateShowFriendlyClassColor",
+    "nameplateStyle", "newMythicPlusSeason", "newPvpSeason", "notifiedOfNewMail",
+    "onlyShowCollectedItemsInJournal", "orderHallMissionTutorial",
+    "otherRolesAzeriteEssencesHidden", "Outline", "overridePixelGridSnapping",
+    "overrideTexelSnappingBias", "partyBackgroundOpacity", "partyInvitesCollapsed_Glue",
+    "pendingInviteInfoShown", "perksActivitiesCurrentMonth", "perksActivitiesLastPoints",
+    "petJournalTab", "petStableShowExoticOnly", "petStableSort", "physicsLevel",
+    "pingCategoryTutorialShown", "pingMode", "playIntroMovie", "plunderStormRealm", "PraiseTheSun",
+    "previewTalentsOption", "primaryProfessionsFilter", "professionAccessorySlotsExampleShown",
+    "professionsOrderDurationDropdown", "professionsOrderRecipientDropdown",
+    "professionToolSlotsExampleShown", "questHelper", "questLogOpen", "questPOI",
+    "questPOILocalStory", "questPOIWQ", "raidFramesDisplayAggroHighlight",
+    "raidFramesDisplayIncomingHeals", "raidOptionIsShown", "RAIDsettingsEnabled",
+    "remoteTextToSpeech", "ReplaceMyPlayerPortrait", "ReplaceOtherPlayerPortraits",
+    "screenEdgeFlash", "scrollToLogQuest", "secondaryProfessionsFilter", "seenAlliedRaceUnlocks",
+    "seenPurchasableClassCapstone", "seenTimerunningFirstLoginPopup", "ShakeStrengthCamera",
+    "ShakeStrengthUI", "shipyardMissionTutorialAreaBuff", "shipyardMissionTutorialBlockade",
+    "shipyardMissionTutorialFirst", "ShowAllSpellRanks", "showArenaEnemyCastbar",
+    "showArenaEnemyFrames", "showBattlefieldMinimap", "showBuilderFeedback", "showCastableBuffs",
+    "showCreateCharacterRealmConfirmDialog", "showCustomSetDetails", "showDispelDebuffs",
+    "showHonorAsExperience", "showInGameNavigation", "showKeyring", "showNewbieTips",
+    "showNPETutorials", "showPhotosensitivityWarning", "showPingsOnRaidFrames",
+    "showQuestObjectivesInLog", "showRaidRange", "showReadyToRecord", "showScreenNarrationDialog",
+    "showSpenderFeedback", "showTamers", "showTamersWQ", "showTargetCastbar", "showToastWindow",
+    "showTokenFrame", "showTutorials", "softTargetEnemy", "SoftTargetForce", "SoftTargetIconEnemy",
+    "SoftTargetIconGameObject", "SoftTargetIconInteract", "softTargetInteract",
+    "softTargetInteractionTutorialTotalInteractions", "SoftTargetLowPriorityIcons",
+    "softTargettingInteractKeySound", "SoftTargetTooltipEnemy", "SoftTargetTooltipInteract",
+    "sortCharListByLastActive", "soulbindsLandingPageTutorial", "Sound_EnableAllSound",
+    "Sound_EnableAmbience", "Sound_EnableMusic", "Sound_EnablePetBattleMusic", "Sound_EnableSFX",
+    "Sound_MasterVolume", "speechToText", "spellActivationOverlayOpacity", "spellBookHideFlyouts",
+    "spellBookHidePassives", "spellBookMinimize", "spellDiminishPVPEnemiesEnabled",
+    "statusTextDisplay", "streamStatusMessage", "textLocale", "textToSpeech", "timeMgrAlarmEnabled",
+    "timeMgrUseLocalTime", "timeMgrUseMilitaryTime", "toastDuration", "transmogCurrentSpecOnly",
+    "transmogHideIgnoredSlots", "transmogPreviewedWeaponToggle", "TTSUseCharacterSettings",
+    "UberTooltips", "uiscale", "UnitNameFocused", "UnitNameFriendlySpecialNPCName",
+    "UnitNameHostleNPC", "UnitNameInteractiveNPC", "UnitNameNPC", "useClassicGuildUI",
+    "useHighResTextures", "useIPv6", "useNewConsole", "useUIScale", "VoiceChatMasterVolumeScale",
+    "VoiceInputVolume", "VoiceOutputVolume", "voiceProvider", "VoicePushToTalkKeybind",
+    "VoiceVADSensitivity", "whisperMode", "wholeChatWindowClickable", "worldMapShowCursorCoords",
+    "worldMapShowPlayerCoords", "worldQuestFilterAnima", "worldQuestFilterArtifactPower",
+    "worldQuestFilterEquipment", "worldQuestFilterGold", "worldQuestFilterProfessionMaterials",
+    "worldQuestFilterReputation", "worldQuestFilterResources", "xpBarText",
+}
+
+--- Each CVar's default (`C_CVar.GetCVarDefault`; not the player's value).
+local function cvarDefaults(): { [string]: string }
+    const out: { [string]: string } = {}
+    if not (C_CVar and C_CVar.GetCVarDefault) then
+        return { absent = "C_CVar.GetCVarDefault" }
+    end
+    for _, name in ipairs(CVARS) do
+        out[name] = results(C_CVar.GetCVarDefault, name)
+    end
+    return out
+end
+
 local function units(): { [string]: string }
     const out: { [string]: string } = {}
     for _, call in ipairs({
@@ -412,6 +505,7 @@ export function engineProbe(arg: string?)
         errors = errors(),
         order = order(),
         behaviours = behaviours(),
+        cvarDefaults = cvarDefaults(),
         units = units(),
         getTime = show(GetTime()),
     }
