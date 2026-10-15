@@ -40,6 +40,18 @@ impl Renderer {
 
     /// Writes all diagnostics to stderr.
     pub fn emit_stderr(&self, db: &SourceDb, diagnostics: &[Diagnostic]) -> io::Result<()> {
+        self.emit_stderr_with_summary(db, diagnostics, false)
+    }
+
+    /// [`Renderer::emit_stderr`], then with `summary`, in the human and
+    /// short formats, a line counting the errors and warnings (as rustc
+    /// ends its output).
+    pub fn emit_stderr_with_summary(
+        &self,
+        db: &SourceDb,
+        diagnostics: &[Diagnostic],
+        summary: bool,
+    ) -> io::Result<()> {
         let choice = match self.color {
             ColorChoice::Always => termcolor::ColorChoice::Always,
             ColorChoice::Never => termcolor::ColorChoice::Never,
@@ -54,6 +66,12 @@ impl Renderer {
         let mut out = termcolor::BufferedStandardStream::stderr(choice);
         for diagnostic in diagnostics {
             self.write(db, diagnostic, &mut out)?;
+        }
+        if summary
+            && matches!(self.format, MessageFormat::Human | MessageFormat::Short)
+            && let Some(line) = summary_line(diagnostics)
+        {
+            self.write(db, &line, &mut out)?;
         }
         out.flush()
     }
@@ -78,6 +96,33 @@ impl Renderer {
             MessageFormat::Json => writeln!(out, "{}", json_line(db, diagnostic)),
             MessageFormat::Github => writeln!(out, "{}", github_line(db, diagnostic)),
         }
+    }
+}
+
+/// The closing line of a run with errors or warnings, worded as rustc's:
+/// `warning: 2 warnings emitted`, or `error: aborting due to 3 previous
+/// errors; 2 warnings emitted`.
+pub fn summary_line(diagnostics: &[Diagnostic]) -> Option<Diagnostic> {
+    let count = |severity| {
+        diagnostics
+            .iter()
+            .filter(|d| d.severity == severity)
+            .count()
+    };
+    let (errors, warnings) = (count(Severity::Error), count(Severity::Warning));
+    let plural = |n: usize, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
+    let warnings_text = plural(warnings, "warning") + " emitted";
+    match (errors, warnings) {
+        (0, 0) => None,
+        (0, _) => Some(Diagnostic::plain_warning(warnings_text)),
+        (_, 0) => Some(Diagnostic::plain_error(format!(
+            "aborting due to {}",
+            plural(errors, "previous error")
+        ))),
+        _ => Some(Diagnostic::plain_error(format!(
+            "aborting due to {}; {warnings_text}",
+            plural(errors, "previous error")
+        ))),
     }
 }
 

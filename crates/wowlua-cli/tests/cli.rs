@@ -3945,3 +3945,47 @@ fn dev_rebuilds_match_a_fresh_build() {
         "dev and a fresh build differ"
     );
 }
+
+/// Runs end with a count of their errors and warnings, as rustc's do, in
+/// the human and short formats; `-q` and the machine formats leave it out.
+#[test]
+fn runs_end_with_a_summary_of_their_diagnostics() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "summary", "version": "1.0.0" },
+  "flavors": { "standard": {} }, "check": { "lua": true } }
+"#,
+            ),
+            ("src/a.lua", "local unused = 1\nlocal x = y\nprint(x)\n"),
+        ],
+    );
+    let stderr = |args: &[&str]| {
+        let out = wowlua(dir.path()).arg("check").args(args).output().unwrap();
+        String::from_utf8_lossy(&out.stderr).into_owned()
+    };
+    for args in [&[][..], &["--message-format", "short"]] {
+        let text = stderr(args);
+        assert!(
+            text.contains("\nwarning: 2 warnings emitted\n"),
+            "{args:?}: {text}"
+        );
+    }
+    for args in [
+        &["-q"][..],
+        &["--message-format", "json"],
+        &["--message-format", "github"],
+    ] {
+        let text = stderr(args);
+        assert!(!text.contains("emitted"), "{args:?}: {text}");
+    }
+    write(dir.path(), &[("src/b.lua", "x = = 1\n")]);
+    let text = stderr(&["--message-format", "short"]);
+    assert!(
+        text.ends_with("error: aborting due to 1 previous error; 2 warnings emitted\n"),
+        "{text}"
+    );
+}

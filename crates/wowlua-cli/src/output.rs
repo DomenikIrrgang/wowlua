@@ -91,7 +91,9 @@ impl Output {
             .into_iter()
             .filter(|d| !(self.quiet && d.severity == Severity::Note))
             .collect();
-        let _ = self.renderer.emit_stderr(&session.db, &items);
+        let _ = self
+            .renderer
+            .emit_stderr_with_summary(&session.db, &items, !self.quiet);
         !fail
     }
 }
