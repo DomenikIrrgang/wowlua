@@ -857,7 +857,7 @@ impl Env {
                             _ => None,
                         });
                 let mut f = match base_new.map(|t| self.types.get(t).clone()) {
-                    Some(Ty::Func(f)) => f,
+                    Some(Ty::Func(f)) => *f,
                     _ => Func {
                         // Root widget classes: (name?, parent?, template?, id?).
                         params: if self.def(def).widget.is_some() && self.def(def).bases.first().is_some_and(|&b| matches!(self.types.get(b), Ty::Named(bd, _) if self.def(*bd).native)) {

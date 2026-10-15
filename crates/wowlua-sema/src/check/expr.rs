@@ -385,11 +385,11 @@ impl Checker<'_> {
     fn contextual_func(&mut self, t: TypeId) -> Option<Func> {
         for m in self.env.types.members(t) {
             match self.env.types.get(m).clone() {
-                Ty::Func(f) => return Some(f),
+                Ty::Func(f) => return Some(*f),
                 Ty::Intersection(ms) => {
                     for x in ms {
                         if let Ty::Func(f) = self.env.types.get(x).clone() {
-                            return Some(f);
+                            return Some(*f);
                         }
                     }
                 }
@@ -1196,7 +1196,7 @@ impl Checker<'_> {
                 if let Some((i, p)) = f.predicate {
                     f.predicate = i.checked_sub(1).map(|i| (i, p));
                 }
-                self.env.types.func(f)
+                self.env.types.intern(Ty::Func(f))
             }
             Ty::Intersection(ms) => {
                 let ms: Vec<TypeId> = ms.iter().map(|&x| self.drop_first(x)).collect();
@@ -2271,7 +2271,7 @@ impl Checker<'_> {
         } else if let Some(p) = f.params.get_mut(1) {
             p.ty = handler;
         }
-        self.env.types.func(f)
+        self.env.types.intern(Ty::Func(f))
     }
 
     fn stdlib_call_type(&mut self, callee: &Expr, args: &Args, c: TypeId) -> TypeId {
@@ -2283,7 +2283,7 @@ impl Checker<'_> {
         };
         let exprs = args.exprs();
         if id == "pool.FramePool.new" {
-            return self.frame_pool_type(f, &exprs).unwrap_or(c);
+            return self.frame_pool_type(*f, &exprs).unwrap_or(c);
         }
         if id == "events.onBucket" {
             let names: Vec<&Expr> = match exprs.first().map(|e| &e.kind) {
@@ -2332,7 +2332,7 @@ impl Checker<'_> {
             }
             _ => return c,
         }
-        self.env.types.func(f)
+        self.env.types.intern(Ty::Func(f))
     }
 
     /// Checks a call of `f`: arity (E2006, W2055, E2007), argument types

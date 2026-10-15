@@ -3,7 +3,7 @@
 //! enums, generic aliases) and their display in messages.
 
 use indexmap::IndexMap;
-use std::hash::{BuildHasher, RandomState};
+use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher, RandomState};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TypeId(pub u32);
@@ -44,7 +44,9 @@ pub enum Ty {
     Array(TypeId),
     Map(TypeId, TypeId),
     Record(Record),
-    Func(Func),
+    // Boxed: the arena holds a slot of the largest variant for every type,
+    // and functions are few next to the records and literals of table data.
+    Func(Box<Func>),
     /// An instance of a class or interface, an enum, or a generic alias
     /// application that is expanded on demand.
     Named(DefId, Vec<TypeId>),
@@ -57,9 +59,14 @@ pub enum Ty {
     Module(u32),
 }
 
+/// A record's fields, in the order they were added. The hasher has fixed
+/// keys, so it takes no room in the record (a type-checked data addon has a
+/// million records); nothing depends on the hash values.
+pub type Fields = IndexMap<Box<str>, Field, BuildHasherDefault<DefaultHasher>>;
+
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Record {
-    pub fields: IndexMap<Box<str>, Field>,
+    pub fields: Fields,
     pub indexer: Option<(TypeId, TypeId)>,
     /// Still being built in the function that created it (spec §2.4.2).
     pub open: bool,
@@ -243,7 +250,7 @@ impl Types {
     }
 
     pub fn func(&mut self, f: Func) -> TypeId {
-        self.intern(Ty::Func(f))
+        self.intern(Ty::Func(Box::new(f)))
     }
 
     pub fn optional(&mut self, t: TypeId) -> TypeId {
@@ -354,4 +361,17 @@ impl Types {
 /// Formats numbers like Lua (`%.14g`) for literal types.
 pub fn number_text(bits: u64) -> String {
     crate::constant::format_g14(f64::from_bits(bits))
+}
+
+#[cfg(all(test, target_pointer_width = "64"))]
+mod tests {
+    use super::*;
+
+    // The arena holds one `Ty` per type, and a type-checked data addon has
+    // over a million of them, mostly records.
+    #[test]
+    fn types_stay_small() {
+        assert!(std::mem::size_of::<Ty>() <= 80);
+        assert!(std::mem::size_of::<Record>() <= 80);
+    }
 }
