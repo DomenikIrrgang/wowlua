@@ -262,13 +262,14 @@ pub enum TriviaKind {
     BlockComment,
 }
 
+// Tokens and trivia store no line numbers: a large data addon has tens of
+// millions of tokens, so every field counts. `Lexed::line_of` finds a
+// position's line.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Trivia {
     pub kind: TriviaKind,
     pub start: u32,
     pub end: u32,
-    /// Lua line number (1-based) where the trivia starts.
-    pub line: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -276,10 +277,19 @@ pub struct Token {
     pub kind: TokenKind,
     pub start: u32,
     pub end: u32,
-    /// Lua line numbers (1-based) of the first and last byte.
-    pub line: u32,
-    pub end_line: u32,
-    /// The token's leading trivia: `trivia[trivia_start..trivia_end]`.
-    pub trivia_start: u32,
+    /// End of the token's leading trivia in `Lexed::trivia`. It starts where
+    /// the previous token's ends ([`Lexed::trivia_of`](crate::Lexed::trivia_of)).
     pub trivia_end: u32,
+}
+
+#[cfg(all(test, target_pointer_width = "64"))]
+mod tests {
+    use super::*;
+
+    // One per token and per comment, line break or run of spaces.
+    #[test]
+    fn tokens_and_trivia_stay_small() {
+        assert!(std::mem::size_of::<Token>() <= 16);
+        assert!(std::mem::size_of::<Trivia>() <= 12);
+    }
 }

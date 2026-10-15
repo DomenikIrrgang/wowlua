@@ -47,8 +47,8 @@ impl<'a> Formatter<'a> {
     pub(crate) fn new(parse: &'a Parse, src: &'a [u8], quote: QuoteStyle) -> Self {
         let lexed = &parse.lexed;
         let mut comments = Vec::new();
-        for (ti, token) in lexed.tokens.iter().enumerate() {
-            let trivia = lexed.trivia_of(token);
+        for ti in 0..lexed.tokens.len() {
+            let trivia = lexed.trivia_of(ti);
             let mut seen_newline = ti == 0;
             for (i, t) in trivia.iter().enumerate() {
                 match t.kind {
@@ -207,8 +207,9 @@ impl<'a> Formatter<'a> {
         let first = tokens.partition_point(|t| t.start < prev_end);
         let last = tokens.partition_point(|t| t.start < offset);
         let mut newlines = 0;
-        for token in tokens.get(first..=last).unwrap_or_default() {
-            for t in self.parse.lexed.trivia_of(token) {
+        let count = tokens.get(first..=last).map_or(0, <[_]>::len);
+        for index in first..first + count {
+            for t in self.parse.lexed.trivia_of(index) {
                 match t.kind {
                     TriviaKind::Newline => newlines += 1,
                     TriviaKind::Whitespace => {}

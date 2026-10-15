@@ -24,6 +24,7 @@ use wowlua_sema::meta::{Lookup, Meta, MetaKind};
 use wowlua_span::Span;
 use wowlua_syntax::Parse;
 use wowlua_syntax::ast::*;
+use wowlua_syntax::search::partition_point_near;
 use wowlua_syntax::token::TriviaKind;
 
 pub use wowlua_sema::constant::{format_g14, format_number};
@@ -363,47 +364,6 @@ fn grow<R>(f: impl FnOnce() -> R) -> R {
 
 // ------------------------------------------------------------- helpers --
 
-/// `slice.partition_point(pred)`, searched outward from `hint` (any value;
-/// past the end counts as the end). `pred` must hold on a prefix of `slice`
-/// and nowhere after it, so the point is unique and the hint only decides how
-/// fast it is found: a few probes next to the hint instead of a binary search
-/// over a whole large file.
-fn partition_point_near<T>(slice: &[T], hint: usize, pred: impl Fn(&T) -> bool) -> usize {
-    let hint = hint.min(slice.len());
-    // The point lies in `lo..=hi`.
-    let (mut lo, mut hi) = (0, slice.len());
-    let mut step = 1;
-    if hint == 0 || pred(&slice[hint - 1]) {
-        // At `hint` or after it: probe `hint`, `hint + 1`, `hint + 3`, …
-        lo = hint;
-        loop {
-            let probe = hint + step - 1;
-            if probe >= hi {
-                break;
-            }
-            if !pred(&slice[probe]) {
-                hi = probe;
-                break;
-            }
-            lo = probe + 1;
-            step *= 2;
-        }
-    } else {
-        // Before `hint - 1`: probe `hint - 2`, `hint - 3`, `hint - 5`, …
-        hi = hint - 1;
-        while step < hint {
-            let probe = hint - 1 - step;
-            if pred(&slice[probe]) {
-                lo = probe + 1;
-                break;
-            }
-            hi = probe;
-            step *= 2;
-        }
-    }
-    lo + slice[lo..hi].partition_point(&pred)
-}
-
 fn ident(name: &str, pos: Pos) -> ir::Ident {
     ir::Ident::new(name, pos)
 }
@@ -676,11 +636,6 @@ impl<'a> Lowerer<'a> {
         Pos::new(line, offset - start)
     }
 
-    /// The column (0-based, in bytes) of byte `offset`.
-    fn column_of(&self, offset: u32) -> u32 {
-        self.pos(offset).col
-    }
-
     fn span_pos(&self, span: Span) -> Pos {
         self.pos(span.start)
     }
@@ -690,7 +645,7 @@ impl<'a> Lowerer<'a> {
         let i = partition_point_near(tokens, self.token_hint.get(), |t| t.start < offset);
         self.token_hint.set(i);
         match tokens.get(i) {
-            Some(t) => Pos::new(t.line, self.column_of(t.start)),
+            Some(t) => self.pos(t.start),
             None => Pos::NONE,
         }
     }
@@ -720,7 +675,7 @@ impl<'a> Lowerer<'a> {
             out.push((
                 i < first,
                 ir::Comment {
-                    pos: Pos::new(trivia.line, self.column_of(trivia.start)),
+                    pos: self.pos(trivia.start),
                     license: text.starts_with(b"--[[!"),
                     text,
                     block,
@@ -2946,41 +2901,4 @@ fn flatten_chain(e: &Expr) -> (&Expr, Vec<Link<'_>>) {
     }
     links.reverse();
     (current, links)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::partition_point_near;
-
-    #[test]
-    fn partition_point_near_finds_the_point_from_every_hint() {
-        let long: Vec<u32> = (0..200).map(|i| i / 3 * 2).collect();
-        let slices: [&[u32]; 6] = [
-            &[],
-            &[0],
-            &[4],
-            &[0, 1, 2],
-            &[0, 2, 2, 2, 5, 7, 7, 9, 12, 12, 12, 12, 20],
-            &long,
-        ];
-        for slice in slices {
-            let max = slice.last().copied().unwrap_or(0);
-            for key in 0..=max + 2 {
-                let below = slice.partition_point(|&s| s < key);
-                let at_or_below = slice.partition_point(|&s| s <= key);
-                for hint in (0..=slice.len() + 1).chain([usize::MAX]) {
-                    assert_eq!(
-                        partition_point_near(slice, hint, |&s| s < key),
-                        below,
-                        "{slice:?} < {key} from {hint}"
-                    );
-                    assert_eq!(
-                        partition_point_near(slice, hint, |&s| s <= key),
-                        at_or_below,
-                        "{slice:?} <= {key} from {hint}"
-                    );
-                }
-            }
-        }
-    }
 }

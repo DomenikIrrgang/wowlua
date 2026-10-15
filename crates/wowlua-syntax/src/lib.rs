@@ -11,6 +11,7 @@ pub mod features;
 pub mod lexer;
 pub mod literal;
 mod parser;
+pub mod search;
 pub mod token;
 pub mod visit;
 
