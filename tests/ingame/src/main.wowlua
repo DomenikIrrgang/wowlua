@@ -7,6 +7,7 @@
 --   /stdtest probe    record the client's Lua environment (then /reload)
 --   /stdtest taint    taint experiments on Blizzard secure code (then click, /reload)
 --   /stdtest inventory   record every global and what it is (then /reload)
+--   /stdtest crashlimit  where results stop, and the calls that crash the client
 import slash, router from "wowlua:slash"
 import onLogin from "wowlua:lifecycle"
 import after from "wowlua:timer"
@@ -16,6 +17,7 @@ import state from "/state"
 import probe from "/probe"
 import taintlab from "/taintlab"
 import inventory from "/inventory"
+import crashlimit from "/crashlimit"
 import _ from "/suites/errors"
 import _ from "/suites/events"
 import _ from "/suites/lifecycle"
@@ -111,6 +113,11 @@ local commands = router({
     inventory = {
         help = "Record every global and what it is (then /reload)",
         run = function() inventory() end,
+    },
+    crashlimit = {
+        args = { "rest" },
+        help = "Where many results stop, and which calls crash the client: /stdtest crashlimit <n>",
+        run = function(arg: string?) crashlimit(arg) end,
     },
     taint = {
         args = { "rest" },

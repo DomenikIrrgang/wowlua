@@ -1,0 +1,187 @@
+-- `/stdtest crashlimit <n>`: where the client's Lua stops returning many
+-- results, and which calls crash it. Returning a few thousand values
+-- through `pcall` trips the client's Lua assertion (`L->top < L->ci->top`,
+-- lapi.c:577) and the game crashes (2026-10-15): stock Lua 5.1's `pcall`
+-- pushes its status without room once the results fill its frame, so the
+-- crash should come at `#results >= #pcall arguments + 20`. Each experiment
+-- below raises the count `r` by one from 1, so a crash report's Lua stack
+-- (`_classic_beta_/Errors/`) shows the exact count; one that does not crash
+-- records where the count stops (StdTestState.crashLimits, after /reload).
+-- Separate from /stdtest probe, whose cases must never crash.
+import state from "/state"
+import say from "/harness"
+
+export type CrashExperiment = {
+    name: string,
+    --- What the run is expected to do.
+    prediction: string,
+    run: () -> { [string]: any },
+}
+
+const MAX = 9000
+local T: number[] = {}
+for i = 1, MAX do
+    T[i] = i
+end
+const PIECES = string.rep("a,", MAX)
+const BYTES = string.rep("a", MAX)
+
+--- Whether `f(r)` runs, and its error.
+@noprofile
+local function tries(f: (number) -> any, r: number): (boolean, any)
+    return pcall(f, r)
+end
+
+--- The largest `r` in [0, MAX] for which `f(r)` runs (the counts must work
+--- up to a limit and fail above it), and the error just above it.
+@noprofile
+local function limit(f: (number) -> any): { [string]: any }
+    local lo, hi = 0, MAX
+    while lo < hi do
+        const mid = math.floor((lo + hi + 1) / 2)
+        if tries(f, mid) then
+            lo = mid
+        else
+            hi = mid - 1
+        end
+    end
+    local _, err = tries(f, lo + 1)
+    return { works = lo, error = lo < MAX and tostring(err) or nil }
+end
+
+--- Counts from 1 up to unpack's own limit, calling `call(r)` that must give
+--- `expect(r)` results; a crash leaves `r` in the crash report.
+@noprofile
+local function scan(experiment: string, call: (number) -> number, expect: (number) -> number): { [string]: any }
+    const top = limit(function(n: number): number return select("#", unpack(T, 1, n)) end).works
+    for r = 1, top do
+        local ok, count = pcall(call, r)
+        if not ok or count ~= expect(r) then
+            return { experiment = experiment, crashed = false, differs = r, got = tostring(count) }
+        end
+    end
+    return { experiment = experiment, crashed = false, works = top }
+end
+
+@noprofile
+local function body(n: number): ...number
+    return unpack(T, 1, n)
+end
+
+@noprofile
+local function plus(k: number): (number) -> number
+    return function(r: number): number return r + k end
+end
+
+local G = _G :: any
+
+const EXPERIMENTS: CrashExperiment[] = {
+    {
+        name = "direct calls: where unpack, strsplit, string.split and string.byte stop",
+        prediction = "no crash: clean errors near 8000 results (LUAI_MAXCSTACK)",
+        run = function()
+            return {
+                unpack = limit(function(n: number): number return select("#", unpack(T, 1, n)) end),
+                strsplit = limit(function(n: number): number return select("#", strsplit(",", PIECES:sub(1, 2 * n - 1))) end),
+                ["string.split"] = limit(function(n: number): number return select("#", string.split(",", PIECES:sub(1, 2 * n - 1))) end),
+                ["string.byte"] = limit(function(n: number): number return select("#", string.byte(BYTES, 1, n)) end),
+            }
+        end,
+    },
+    {
+        name = "pcall(unpack, t, 1, r): a C function through pcall, 4 arguments",
+        prediction = "crash at r = 24",
+        run = function()
+            return scan("pcall(unpack, t, 1, r)", function(r: number): number return select("#", pcall(unpack, T, 1, r)) end, plus(1))
+        end,
+    },
+    {
+        name = "pcall(f, r): a Lua function through pcall, 2 arguments",
+        prediction = "crash at r = 22",
+        run = function()
+            return scan("pcall(f, r)", function(r: number): number return select("#", pcall(body, r)) end, plus(1))
+        end,
+    },
+    {
+        name = "xpcall(f, handler, r)",
+        prediction = "unknown (WoW's xpcall passes arguments); stock Lua's would crash at r = 22",
+        run = function()
+            return scan("xpcall(f, handler, r)", function(r: number): number return select("#", xpcall(body, G.geterrorhandler(), r)) end, plus(1))
+        end,
+    },
+    {
+        name = "pcallwithenv(f, env, r)",
+        prediction = "unknown; like pcall it would crash at r = 23",
+        run = function()
+            return scan("pcallwithenv(f, env, r)", function(r: number): number return select("#", G.pcallwithenv(body, {}, r)) end, plus(1))
+        end,
+    },
+    {
+        name = "securecall(unpack, t, 1, r)",
+        prediction = "no crash (it pushes nothing after the call)",
+        run = function()
+            return scan("securecall(unpack, t, 1, r)", function(r: number): number return select("#", G.securecall(unpack, T, 1, r)) end, plus(0))
+        end,
+    },
+    {
+        name = "securecallfunction(unpack, t, 1, r)",
+        prediction = "no crash",
+        run = function()
+            return scan("securecallfunction(unpack, t, 1, r)", function(r: number): number return select("#", G.securecallfunction(unpack, T, 1, r)) end, plus(0))
+        end,
+    },
+    {
+        name = "securecallmethod(object, 'm', r)",
+        prediction = "no crash",
+        run = function()
+            const object = { m = function(_: any, n: number): ...number return unpack(T, 1, n) end }
+            return scan("securecallmethod(object, 'm', r)", function(r: number): number return select("#", G.securecallmethod(object, "m", r)) end, plus(0))
+        end,
+    },
+    {
+        name = "coroutine.resume(co) of a coroutine yielding r values",
+        prediction = "no crash (stock Lua checks room for the status)",
+        run = function()
+            return scan("coroutine.resume", function(r: number): number
+                const co = coroutine.create(function() coroutine.yield(unpack(T, 1, r)) end)
+                return select("#", coroutine.resume(co))
+            end, plus(1))
+        end,
+    },
+    {
+        name = "coroutine.wrap(f)() returning r values",
+        prediction = "no crash",
+        run = function()
+            return scan("coroutine.wrap", function(r: number): number
+                return select("#", coroutine.wrap(function() return unpack(T, 1, r) end)())
+            end, plus(0))
+        end,
+    },
+}
+
+local function results(): { [number]: any }
+    const st = state() :: any
+    st.crashLimits = st.crashLimits ?? {}
+    return st.crashLimits
+end
+
+local function list()
+    say("crash-limit experiments (one at a time; a crash closes the game: restart, then tell Claude):")
+    for i, e in ipairs(EXPERIMENTS) do
+        const r = results()[i]
+        say(`  {i}. {e.name}: {r and "recorded" or "not run"} (expected: {e.prediction})`)
+    end
+end
+
+export function crashlimit(arg: string?)
+    const n = tonumber(arg ?? "")
+    if not n or not EXPERIMENTS[n] then
+        list()
+        return
+    end
+    const e = EXPERIMENTS[n]
+    say(`experiment {n}: {e.name} (expected: {e.prediction})`)
+    local ok, r = pcall(e.run)
+    results()[n] = { name = e.name, ok = ok, result = ok and r or tostring(r) }
+    say(`experiment {n} finished without a crash; type /reload so the result is written`)
+end
