@@ -2748,6 +2748,7 @@ dependencies = [
  "wowlua-syntax",
  "wowlua-toc",
  "wowlua-types-gen",
+ "wowlua-vm",
  "wowlua-xml",
 ]
 

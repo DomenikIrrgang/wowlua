@@ -8,6 +8,7 @@ pub mod error;
 pub mod function;
 pub mod gc;
 pub mod heap;
+pub mod luac;
 pub mod number;
 pub mod proto;
 pub mod stdlib;

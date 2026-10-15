@@ -100,7 +100,8 @@ struct BlockCnt {
 struct FuncState {
     proto: Proto,
     blocks: Vec<BlockCnt>,
-    lasttarget: usize,
+    /// The last jump target (-1: none yet, as in Lua's `open_func`).
+    lasttarget: isize,
     jpc: i32,
     freereg: usize,
     nactvar: usize,
@@ -121,11 +122,30 @@ enum VarKind {
     Global,
 }
 
+/// Compiler settings.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Options {
+    /// Lua 5.1's `LUA_COMPAT_VARARG`: a vararg function declares a local
+    /// `arg`. WoW's Lua has no `arg`; only the bytecode comparison with a
+    /// stock Lua 5.1 build turns this on.
+    pub compat_vararg: bool,
+}
+
 pub fn compile(
     heap: &mut Heap,
     chunk: &Chunk,
     src: &[u8],
     source: Rc<str>,
+) -> Result<Rc<Proto>, CompileError> {
+    compile_with(heap, chunk, src, source, Options::default())
+}
+
+pub fn compile_with(
+    heap: &mut Heap,
+    chunk: &Chunk,
+    src: &[u8],
+    source: Rc<str>,
+    options: Options,
 ) -> Result<Rc<Proto>, CompileError> {
     let mut line_starts = vec![0];
     for (i, b) in src.iter().enumerate() {
@@ -135,11 +155,13 @@ pub fn compile(
     }
     let mut c = Compiler {
         heap,
+        src,
         line_starts,
         source,
         fs: Vec::new(),
         lastline: 1,
         depth: 0,
+        options,
     };
     c.open_func(0);
     c.fs_mut().proto.is_vararg = true;
@@ -150,11 +172,13 @@ pub fn compile(
 
 struct Compiler<'a> {
     heap: &'a mut Heap,
+    src: &'a [u8],
     line_starts: Vec<usize>,
     source: Rc<str>,
     fs: Vec<FuncState>,
     lastline: u32,
     depth: usize,
+    options: Options,
 }
 
 type R<T> = Result<T, CompileError>;
@@ -175,6 +199,48 @@ impl Compiler<'_> {
         match self.line_starts.binary_search(&off) {
             Ok(i) => i as u32 + 1,
             Err(i) => i as u32,
+        }
+    }
+
+    /// The offset of the first byte that is not whitespace or a comment
+    /// at or after `offset` (the next token).
+    fn next_token(&self, offset: u32) -> u32 {
+        let src = &self.src;
+        let mut i = offset as usize;
+        loop {
+            while i < src.len() && src[i].is_ascii_whitespace() {
+                i += 1;
+            }
+            if src[i..].starts_with(b"--") {
+                // A long comment `--[[ … ]]` or `--[==[ … ]==]`, else a line.
+                let rest = &src[i + 2..];
+                let level = if rest.first() == Some(&b'[') {
+                    let eq = rest[1..].iter().take_while(|&&b| b == b'=').count();
+                    (rest.get(1 + eq) == Some(&b'[')).then_some(eq)
+                } else {
+                    None
+                };
+                match level {
+                    Some(eq) => {
+                        let close = format!("]{}]", "=".repeat(eq));
+                        let start = i + 2 + 2 + eq;
+                        match src[start..]
+                            .windows(close.len())
+                            .position(|w| w == close.as_bytes())
+                        {
+                            Some(p) => i = start + p + close.len(),
+                            None => return src.len() as u32,
+                        }
+                    }
+                    None => {
+                        while i < src.len() && src[i] != b'\n' {
+                            i += 1;
+                        }
+                    }
+                }
+                continue;
+            }
+            return i as u32;
         }
     }
 
@@ -234,6 +300,13 @@ impl Compiler<'_> {
 
     fn fixline(&mut self, line: u32) {
         let fs = self.fs_mut();
+        // In Lua a closure with upvalues is followed by pseudo-instructions,
+        // and those get the line: the closure keeps its own.
+        if let Some(Op::Closure { proto, .. }) = fs.proto.code.last()
+            && !fs.proto.protos[*proto as usize].upvals.is_empty()
+        {
+            return;
+        }
         if let Some(l) = fs.proto.lines.last_mut() {
             *l = line;
         }
@@ -269,7 +342,7 @@ impl Compiler<'_> {
 
     fn getlabel(&mut self) -> usize {
         let pc = self.fs().pc();
-        self.fs_mut().lasttarget = pc;
+        self.fs_mut().lasttarget = pc as isize;
         pc
     }
 
@@ -464,7 +537,7 @@ impl Compiler<'_> {
 
     fn nil(&mut self, from: usize, n: usize) {
         let fs = self.fs();
-        if fs.pc() > fs.lasttarget {
+        if fs.pc() as isize > fs.lasttarget {
             if fs.pc() == 0 {
                 if from >= fs.nactvar {
                     return;
@@ -675,23 +748,22 @@ impl Compiler<'_> {
 
     fn exp2rk(&mut self, e: &mut Exp) -> R<Rk> {
         self.exp2val(e)?;
+        // An operand holds constants 0..=255 (`MAXINDEXRK`); others go to a
+        // register, as in Lua 5.1.
+        const MAXINDEXRK: usize = 255;
         match e.k {
-            EK::KNum(n) => {
-                let k = self.number_k(n)?;
-                e.k = EK::K(k);
-                return Ok(Rk::K(k));
+            EK::KNum(_) | EK::True | EK::False | EK::Nil => {
+                if self.fs().proto.constants.len() <= MAXINDEXRK {
+                    let k = match e.k {
+                        EK::KNum(n) => self.number_k(n)?,
+                        EK::Nil => self.nil_k()?,
+                        other => self.bool_k(other == EK::True)?,
+                    };
+                    e.k = EK::K(k);
+                    return Ok(Rk::K(k));
+                }
             }
-            EK::True | EK::False => {
-                let k = self.bool_k(e.k == EK::True)?;
-                e.k = EK::K(k);
-                return Ok(Rk::K(k));
-            }
-            EK::Nil => {
-                let k = self.nil_k()?;
-                e.k = EK::K(k);
-                return Ok(Rk::K(k));
-            }
-            EK::K(k) => return Ok(Rk::K(k)),
+            EK::K(k) if k as usize <= MAXINDEXRK => return Ok(Rk::K(k)),
             _ => {}
         }
         Ok(Rk::R(self.exp2anyreg(e)?))
@@ -765,9 +837,9 @@ impl Compiler<'_> {
 
     fn goiftrue(&mut self, e: &mut Exp) -> R<()> {
         self.dischargevars(e);
+        // Lua 5.1 has no "always false" case here (5.2 added one).
         let pc = match e.k {
             EK::K(_) | EK::KNum(_) | EK::True => NO_JUMP,
-            EK::False => self.jump(),
             EK::Jmp(pc) => {
                 self.invertjump(e);
                 pc as i32
@@ -786,7 +858,6 @@ impl Compiler<'_> {
         self.dischargevars(e);
         let pc = match e.k {
             EK::Nil | EK::False => NO_JUMP,
-            EK::True => self.jump(),
             EK::Jmp(pc) => pc as i32,
             _ => self.jumponcond(e, true)?,
         };
@@ -1028,7 +1099,7 @@ impl Compiler<'_> {
         self.fs.push(FuncState {
             proto,
             blocks: Vec::new(),
-            lasttarget: 0,
+            lasttarget: -1,
             jpc: NO_JUMP,
             freereg: 0,
             nactvar: 0,
@@ -1181,6 +1252,8 @@ impl Compiler<'_> {
         self.enter_level()?;
         for stmt in &block.stmts {
             self.statement(stmt)?;
+            // The statement's last token is the last one read.
+            self.lastline = self.line_end(stmt.span);
             let fs = self.fs_mut();
             debug_assert!(fs.freereg >= fs.nactvar);
             fs.freereg = fs.nactvar;
@@ -1322,6 +1395,8 @@ impl Compiler<'_> {
 
     fn test_then_block(&mut self, cond: &Expr, block: &Block) -> R<i32> {
         let condexit = self.cond(cond)?;
+        // `then` is read: an empty block's jumps take its line.
+        self.lastline = self.line(self.next_token(cond.span.end));
         self.block(block)?;
         Ok(condexit)
     }
@@ -1366,8 +1441,11 @@ impl Compiler<'_> {
         nvars: usize,
         isnum: bool,
         body: &Block,
+        do_at: u32,
     ) -> R<()> {
         self.adjustlocalvars(3);
+        // The loop starts after `do` is read.
+        self.lastline = self.line(do_at);
         let prep = if isnum {
             self.code(Op::ForPrep {
                 a: base as u8,
@@ -1423,7 +1501,9 @@ impl Compiler<'_> {
             self.code(Op::LoadK { a: reg, k });
             self.reserveregs(1)?;
         }
-        self.forbody(base, line, 1, true, body)
+        let last = step.unwrap_or(limit);
+        let do_at = self.next_token(last.span.end);
+        self.forbody(base, line, 1, true, body, do_at)
     }
 
     fn forlist(&mut self, vars: &[TypedName], exprs: &[Expr], body: &Block, line: u32) -> R<()> {
@@ -1437,7 +1517,11 @@ impl Compiler<'_> {
         let (nexps, mut e) = self.explist(exprs)?;
         self.adjust_assign(3, nexps, &mut e)?;
         self.checkstack(3)?;
-        self.forbody(base, line, vars.len(), false, body)
+        let do_at = self.next_token(exprs[exprs.len() - 1].span.end);
+        // Lua takes this loop's line after reading `in`: the next token's.
+        let _ = line;
+        let line = self.line(exprs[0].span.start);
+        self.forbody(base, line, vars.len(), false, body, do_at)
     }
 
     fn breakstat(&mut self, line: u32) -> R<()> {
@@ -1483,9 +1567,14 @@ impl Compiler<'_> {
         for (i, n) in names.iter().enumerate() {
             self.new_localvar(&n.name.text, i)?;
         }
+        // The names, then any `=`, are read before the values.
+        let mut end = names[names.len() - 1].name.span.end;
+        self.lastline = self.line(end - 1);
         let (nexps, mut e) = if values.is_empty() {
             (0, Exp::new(EK::Void))
         } else {
+            end = self.next_token(end);
+            self.lastline = self.line(end);
             self.explist(values)?
         };
         self.adjust_assign(names.len(), nexps, &mut e)?;
@@ -1521,7 +1610,9 @@ impl Compiler<'_> {
     /// the count and the last, still open, expression.
     fn explist(&mut self, exprs: &[Expr]) -> R<(usize, Exp)> {
         let mut v = self.expr(&exprs[0])?;
-        for e in &exprs[1..] {
+        for (prev, e) in exprs.iter().zip(&exprs[1..]) {
+            // The previous value is stored after the `,` is read.
+            self.lastline = self.line(self.next_token(prev.span.end));
             self.exp2nextreg(&mut v)?;
             v = self.expr(e)?;
         }
@@ -1564,6 +1655,8 @@ impl Compiler<'_> {
             return Err(self.errorlimit(MAXCCALLS, "variables in assignment"));
         }
         let nvars = lhs.len();
+        // The values follow the `=`.
+        self.lastline = self.line(self.next_token(targets[nvars - 1].span.end));
         let (nexps, mut e) = self.explist(values)?;
         let mut rest = nvars;
         if nexps != nvars {
@@ -1593,6 +1686,8 @@ impl Compiler<'_> {
             ExprKind::Index { obj, key } => {
                 let mut v = self.expr(obj)?;
                 self.exp2anyreg(&mut v)?;
+                // The key follows the `[`.
+                self.lastline = self.line(self.next_token(obj.span.end));
                 let mut k = self.expr(key)?;
                 self.exp2val(&mut k)?;
                 self.indexed(&mut v, &mut k)?;
@@ -1656,9 +1751,15 @@ impl Compiler<'_> {
             n += 1;
         }
         self.fs_mut().proto.is_vararg = func.vararg.is_some();
+        let mut hasarg = 0;
+        if func.vararg.is_some() && self.options.compat_vararg {
+            self.new_localvar("arg", n)?;
+            n += 1;
+            hasarg = 1;
+        }
         self.adjustlocalvars(n);
         let nactvar = self.fs().nactvar;
-        self.fs_mut().proto.num_params = nactvar as u8;
+        self.fs_mut().proto.num_params = (nactvar - hasarg) as u8;
         self.reserveregs(nactvar)?;
         self.chunk(&func.body)?;
         self.lastline = self.line(func.end_span.start);
@@ -1675,15 +1776,19 @@ impl Compiler<'_> {
     fn funcargs(&mut self, f: &mut Exp, args: &Args) -> R<()> {
         let line = match args {
             Args::Parens { span, .. } => self.line(span.start),
-            Args::Table(e) | Args::String(e) => self.line(e.span.start),
+            Args::Table(e) => self.line(e.span.start),
+            // The string is the lookahead: the scanner is at its end.
+            Args::String(e) => self.line_end(e.span),
         };
         let mut a = match args {
-            Args::Parens { args, .. } => {
+            Args::Parens { args, span } => {
                 if args.is_empty() {
                     Exp::new(EK::Void)
                 } else {
                     let (_, mut e) = self.explist(args)?;
                     self.setmultret(&mut e)?;
+                    // The last argument is closed after the `)`.
+                    self.lastline = self.line_end(*span);
                     e
                 }
             }
@@ -1711,7 +1816,7 @@ impl Compiler<'_> {
     }
 
     fn constructor(&mut self, fields: &[TableField], span: Span) -> R<Exp> {
-        self.lastline = self.line(span.start);
+        // NEWTABLE is emitted before the `{` is read.
         let pc = self.code(Op::NewTable {
             a: 0,
             narr: 0,
@@ -1719,6 +1824,8 @@ impl Compiler<'_> {
         });
         let mut t = Exp::new(EK::Reloc(pc));
         self.exp2nextreg(&mut t)?;
+        // Then the `{` is read.
+        self.lastline = self.line(span.start);
         let EK::NonReloc(treg) = t.k else {
             unreachable!()
         };
@@ -1726,7 +1833,16 @@ impl Compiler<'_> {
         let mut nh = 0usize;
         let mut tostore = 0usize;
         let mut v = Exp::new(EK::Void);
+        let mut prev_end: Option<u32> = None;
         for field in fields {
+            // Each field starts after the separator is read.
+            if let Some(end) = prev_end {
+                self.lastline = self.line(self.next_token(end));
+            }
+            prev_end = Some(match field {
+                TableField::Positional(e) => e.span.end,
+                TableField::Named { span, .. } | TableField::Keyed { span, .. } => span.end,
+            });
             // closelistfield
             if v.k != EK::Void {
                 self.exp2nextreg(&mut v)?;
@@ -1747,6 +1863,8 @@ impl Compiler<'_> {
                     let k = self.string_k(name.text.as_bytes())?;
                     let mut key = Exp::new(EK::K(k));
                     nh += 1;
+                    // The key is prepared after the `=`.
+                    self.lastline = self.line(self.next_token(name.span.end));
                     let rkkey = self.exp2rk(&mut key)?;
                     let mut val = self.expr(value)?;
                     let rkval = self.exp2rk(&mut val)?;
@@ -1757,11 +1875,16 @@ impl Compiler<'_> {
                     });
                     self.fs_mut().freereg = reg;
                 }
-                TableField::Keyed { key, value, .. } => {
+                TableField::Keyed { key, value, span } => {
                     let reg = self.fs().freereg;
+                    // After the `[`.
+                    self.lastline = self.line(span.start);
                     let mut k = self.expr(key)?;
                     self.exp2val(&mut k)?;
                     nh += 1;
+                    // After the `]` and the `=`.
+                    let close = self.next_token(key.span.end);
+                    self.lastline = self.line(self.next_token(close + 1));
                     let rkkey = self.exp2rk(&mut k)?;
                     let mut val = self.expr(value)?;
                     let rkval = self.exp2rk(&mut val)?;
@@ -1774,7 +1897,8 @@ impl Compiler<'_> {
                 }
             }
         }
-        // lastlistfield
+        // lastlistfield, after the closing brace.
+        self.lastline = self.line_end(span);
         if tostore > 0 {
             if v.has_multret() {
                 self.setmultret(&mut v)?;
@@ -1822,7 +1946,7 @@ impl Compiler<'_> {
                         "cannot use '...' outside a vararg function near '...'",
                     );
                 }
-                self.lastline = self.line(e.span.start);
+                // Emitted before the `...` is read.
                 Exp::new(EK::Vararg(self.code(Op::Vararg { a: 0, b: 1 })))
             }
             ExprKind::Function(f) => self.body(f, false, self.line(e.span.start))?,
@@ -1831,6 +1955,8 @@ impl Compiler<'_> {
             ExprKind::Index { obj, key } => {
                 let mut v = self.expr(obj)?;
                 self.exp2anyreg(&mut v)?;
+                // The key follows the `[`.
+                self.lastline = self.line(self.next_token(obj.span.end));
                 let mut k = self.expr(key)?;
                 self.exp2val(&mut k)?;
                 self.indexed(&mut v, &mut k)?;
@@ -1852,6 +1978,7 @@ impl Compiler<'_> {
             }
             ExprKind::Method { obj, name, args } => {
                 let mut v = self.expr(obj)?;
+                self.lastline = self.line(name.span.start);
                 let kk = self.string_k(name.text.as_bytes())?;
                 let mut k = Exp::new(EK::K(kk));
                 self.self_(&mut v, &mut k)?;
@@ -1860,6 +1987,8 @@ impl Compiler<'_> {
             }
             ExprKind::Paren(inner) => {
                 let mut v = self.expr(inner)?;
+                // Discharged after the `)`.
+                self.lastline = self.line_end(e.span);
                 self.dischargevars(&mut v);
                 v
             }
@@ -1868,6 +1997,8 @@ impl Compiler<'_> {
                     return self.not_lua(e.span, &format!("the `{}` operator", op.as_str()));
                 }
                 let mut v1 = self.expr(lhs)?;
+                // `infix` runs after the operator is read.
+                self.lastline = self.line(self.next_token(lhs.span.end));
                 self.infix(*op, &mut v1)?;
                 let mut v2 = self.expr(rhs)?;
                 self.posfix(*op, &mut v1, &mut v2)?;

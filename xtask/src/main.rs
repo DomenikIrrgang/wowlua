@@ -65,7 +65,8 @@ fn main() -> Result<()> {
                 Some("fetch") => corpus::fetch(&root, &dir),
                 Some("run") => corpus::run(&dir),
                 Some("addons") => corpus::addons(&dir),
-                _ => bail!("usage: cargo xtask corpus <fetch|run|addons> [dir]"),
+                Some("vm") => corpus::vm(&dir),
+                _ => bail!("usage: cargo xtask corpus <fetch|run|addons|vm> [dir]"),
             }
         }
         "types" => {

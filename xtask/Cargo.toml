@@ -23,4 +23,5 @@ wowlua-types-gen.workspace = true
 wowlua-sema.workspace = true
 wowlua-toc.workspace = true
 wowlua-xml.workspace = true
+wowlua-vm.workspace = true
 walkdir.workspace = true

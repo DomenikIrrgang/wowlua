@@ -847,6 +847,114 @@ fn copy_dir(from: &Path, to: &Path) -> Result<()> {
     Ok(())
 }
 
+/// `cargo xtask corpus vm`: compiles every corpus file with wowlua's VM
+/// compiler and compares the bytecode with Lua 5.1's, instruction for
+/// instruction (spec chapter 17, §17.8).
+pub fn vm(dir: &Path) -> Result<()> {
+    let started = std::time::Instant::now();
+    let files = lua_files(dir);
+    let results = parallel(
+        &files,
+        |path| std::fs::metadata(path).map_or(0, |m| m.len()),
+        u64::MAX,
+        mlua::Lua::new,
+        |lua, path| vm_file(lua, dir, path),
+    );
+    let (mut checked, mut identical, mut both_reject, mut line_diffs) = (0, 0, 0, 0usize);
+    let mut failures = Vec::new();
+    let mut by_file: Vec<(usize, String)> = Vec::new();
+    for (r, path) in results.into_iter().zip(&files) {
+        let r = r?;
+        checked += r.0;
+        identical += r.1;
+        both_reject += r.2;
+        line_diffs += r.3;
+        if r.3 > 0 {
+            by_file.push((
+                r.3,
+                path.strip_prefix(dir).unwrap_or(path).display().to_string(),
+            ));
+        }
+        failures.extend(r.4);
+    }
+    by_file.sort_by(|a, b| b.cmp(a));
+    for (n, f) in by_file.iter().take(10) {
+        println!("{n:6} instructions with other lines: {f}");
+    }
+    for f in failures.iter().take(40) {
+        println!("{f}");
+    }
+    println!(
+        "{checked} files in {:.1?}: bytecode identical to Lua 5.1 for {identical}; {both_reject} rejected by both; {} instructions with other lines; {} failures",
+        started.elapsed(),
+        line_diffs,
+        failures.len()
+    );
+    if !failures.is_empty() {
+        bail!("{} files differ", failures.len());
+    }
+    Ok(())
+}
+
+type VmFile = (usize, usize, usize, usize, Vec<String>);
+
+fn vm_file(lua: &mut mlua::Lua, dir: &Path, path: &Path) -> Result<VmFile> {
+    let bytes = std::fs::read(path)?;
+    let src = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
+    if src.starts_with(b"#") {
+        return Ok((0, 0, 0, 0, Vec::new()));
+    }
+    let rel = path.strip_prefix(dir).unwrap_or(path).display().to_string();
+    let reference = dump(lua, src);
+    let mut db = SourceDb::new();
+    let file = db.add(&rel, String::from_utf8_lossy(src).into_owned());
+    let parsed = wowlua_syntax::parse(src, file);
+    let mut heap = wowlua_vm::heap::Heap::default();
+    let ours = if parsed.has_errors() {
+        Err("syntax error".to_string())
+    } else {
+        // The reference is a stock Lua 5.1 build, with LUA_COMPAT_VARARG.
+        let options = wowlua_vm::compiler::Options {
+            compat_vararg: true,
+        };
+        wowlua_vm::compiler::compile_with(
+            &mut heap,
+            &parsed.chunk,
+            src,
+            std::rc::Rc::from("=corpus"),
+            options,
+        )
+        .map_err(|e| format!("line {}: {}", e.line, e.message))
+    };
+    match (reference, ours) {
+        (Err(_), Err(_)) => Ok((1, 0, 1, 0, Vec::new())),
+        (Err(e), Ok(_)) => Ok((
+            1,
+            0,
+            0,
+            0,
+            vec![format!("{rel}: compiles, but Lua 5.1 rejects it: {e}")],
+        )),
+        (Ok(_), Err(e)) => Ok((
+            1,
+            0,
+            0,
+            0,
+            vec![format!("{rel}: Lua 5.1 compiles it, ours fails: {e}")],
+        )),
+        (Ok(dumped), Ok(proto)) => {
+            let Some(theirs) = wowlua_vm::luac::decode(&dumped) else {
+                bail!("{rel}: cannot decode Lua's bytecode");
+            };
+            let lines = wowlua_vm::luac::line_differences(&proto, &theirs);
+            match wowlua_vm::luac::compare(&heap, &proto, &theirs, "main") {
+                None => Ok((1, 1, 0, lines, Vec::new())),
+                Some(d) => Ok((1, 0, 0, lines, vec![format!("{rel}: {d}")])),
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
