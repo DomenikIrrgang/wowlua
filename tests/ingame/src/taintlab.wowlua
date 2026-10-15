@@ -1,0 +1,161 @@
+-- `/stdtest taint <n>`: taint experiments on the client's own secure code.
+-- Each one taints a single thing on the path a mouse click on action
+-- button 1 takes (ActionBarActionButtonMixin:OnClick reads globals and the
+-- button's fields, then SecureActionButton_OnClick calls the protected
+-- UseAction), then you click the button: if the secure code read the
+-- tainted value, UseAction is blocked and ADDON_ACTION_BLOCKED names the
+-- addon. Taint lasts until /reload, so one experiment per session. The
+-- results (StdTestState.taintLab) are a fixture for wowlua's VM.
+import state from "/state"
+import say from "/harness"
+
+export type Experiment = {
+    --- What is tainted, and the rule it tests.
+    name: string,
+    apply: () -> (),
+    --- What to read back with issecurevariable before the click.
+    check?: () -> (boolean, string?),
+}
+
+local G = _G :: any
+
+const EXPERIMENTS: Experiment[] = {
+    {
+        name = "baseline: nothing tainted (the click must work)",
+        apply = function() end,
+    },
+    {
+        name = "a Lua global on the path, reassigned to itself (reading a tainted global)",
+        apply = function() G.KeybindFrames_InQuickKeybindMode = G.KeybindFrames_InQuickKeybindMode end,
+        check = function() return issecurevariable("KeybindFrames_InQuickKeybindMode") end,
+    },
+    {
+        name = "a C function's global on the path, reassigned to itself",
+        apply = function() G.GetCursorInfo = G.GetCursorInfo end,
+        check = function() return issecurevariable("GetCursorInfo") end,
+    },
+    {
+        name = "the button's own field TriggerSecureClick, reassigned (a tainted table field)",
+        apply = function() G.ActionButton1.TriggerSecureClick = G.ActionButton1.TriggerSecureClick end,
+        check = function() return issecurevariable(G.ActionButton1, "TriggerSecureClick") end,
+    },
+    {
+        name = "Settings.GetValue, reassigned (a field of a Blizzard table)",
+        apply = function() G.Settings.GetValue = G.Settings.GetValue end,
+        check = function() return issecurevariable(G.Settings, "GetValue") end,
+    },
+    {
+        name = "hooksecurefunc on the Lua global (hooks must not taint)",
+        apply = function() hooksecurefunc("KeybindFrames_InQuickKeybindMode", function() end) end,
+        check = function() return issecurevariable("KeybindFrames_InQuickKeybindMode") end,
+    },
+    {
+        name = "hooksecurefunc on the button's field",
+        apply = function() hooksecurefunc(G.ActionButton1, "TriggerSecureClick", function() end) end,
+        check = function() return issecurevariable(G.ActionButton1, "TriggerSecureClick") end,
+    },
+    {
+        name = "setfenv on the Lua global's function, same environment (does it taint the function?)",
+        apply = function()
+            const f = G.KeybindFrames_InQuickKeybindMode
+            G.setfenv(f, G.getfenv(f))
+        end,
+        check = function() return issecurevariable("KeybindFrames_InQuickKeybindMode") end,
+    },
+}
+
+--- What a session's experiment recorded.
+export type LabResult = {
+    name: string,
+    applied: boolean,
+    applyError?: string,
+    secureBefore?: boolean,
+    taintBefore?: string,
+    clicked: boolean,
+    blocked: string[],
+}
+
+local current: number? = nil
+
+local function results(): { [number]: LabResult }
+    const st = state() :: any
+    st.taintLab = st.taintLab ?? {}
+    return st.taintLab
+end
+
+local function list()
+    say(`taint experiments (one per session, then /reload; click action button 1 with the mouse):`)
+    for i, e in ipairs(EXPERIMENTS) do
+        const r = results()[i]
+        local outcome = "not run"
+        if r and r.clicked then
+            outcome = #r.blocked > 0 and `blocked ({table.concat(r.blocked, "; ")})` or "not blocked"
+        elseif r then
+            outcome = "applied, no click recorded"
+        end
+        say(`  {i}. {e.name}: {outcome}`)
+    end
+end
+
+local function start(n: number)
+    const e = EXPERIMENTS[n]
+    if not e then
+        say(`no experiment {n}; /stdtest taint lists them`)
+        return
+    end
+    if current then
+        say(`experiment {current} already ran this session: /reload first (taint lasts until then)`)
+        return
+    end
+    if InCombatLockdown() then
+        say("not in combat: leave combat first")
+        return
+    end
+    const button = G.ActionButton1
+    if not button then
+        say("no ActionButton1 on this client")
+        return
+    end
+    current = n
+    local r: LabResult = { name = e.name, applied = false, clicked = false, blocked = {} }
+    results()[n] = r
+    -- Listen before tainting anything.
+    const frame = CreateFrame("Frame")
+    frame:RegisterEvent("ADDON_ACTION_BLOCKED")
+    frame:RegisterEvent("ADDON_ACTION_FORBIDDEN")
+    frame:SetScript("OnEvent", function(_, event: string, ...: any)
+        r.blocked[#r.blocked + 1] = `{event}: {strjoin(", ", tostringall(...))}`
+    end)
+    local ok, err = pcall(e.apply)
+    r.applied = ok
+    if not ok then
+        r.applyError = tostring(err)
+        say(`experiment {n} could not be applied: {tostring(err)}`)
+        return
+    end
+    if e.check then
+        local secure, taint = e.check()
+        r.secureBefore = secure
+        r.taintBefore = taint
+    end
+    button:HookScript("OnClick", function()
+        if current == n and not r.clicked then
+            r.clicked = true
+            -- The blocked event comes during the click; report a moment later.
+            C_Timer.After(0.2, function()
+                say(`experiment {n}: {#r.blocked > 0 and "blocked" or "not blocked"}; now type /reload`)
+            end)
+        end
+    end)
+    say(`experiment {n}: {e.name}`)
+    say("now click action button 1 with the mouse (an empty slot is fine), then /reload")
+end
+
+export function taintlab(arg: string?)
+    const n = tonumber(arg ?? "")
+    if n then
+        start(n)
+    else
+        list()
+    end
+end
