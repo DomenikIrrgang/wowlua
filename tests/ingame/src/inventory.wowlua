@@ -1,0 +1,64 @@
+-- `/stdtest inventory`: every global of the client's in-game environment,
+-- for sorting each into the Lua runtime, the engine's C API, and Blizzard's
+-- Lua (FrameXML, SharedXML), which wowlua emulates in different layers.
+-- Functions are recorded as native ("C") or Lua (`coroutine.create` takes
+-- only Lua functions), tables as widgets (their object type) or tables, and
+-- the members of the `C_` namespaces and the libraries the same way. Saved
+-- in StdTestState.inventory (after /reload).
+import state from "/state"
+import say from "/harness"
+
+const LIBRARIES = { "string", "table", "math", "coroutine", "bit", "Enum" }
+
+local function kind(value: any): string
+    const t = type(value)
+    if t == "function" then
+        return pcall(coroutine.create, value) and "Lua" or "C"
+    elseif t == "table" then
+        -- A widget keeps its userdata at [0]; forbidden tables refuse reads.
+        local ok, object = pcall(rawget, value, 0)
+        if not ok then
+            return "forbidden"
+        end
+        if type(object) == "userdata" then
+            local typed, objectType = pcall(function() return (value :: any):GetObjectType() end)
+            return `widget:{typed and tostring(objectType) or "?"}`
+        end
+        return "table"
+    end
+    return t
+end
+
+local function members(t: table): { [string]: string }
+    const out: { [string]: string } = {}
+    for k, v in pairs(t) do
+        out[tostring(k)] = kind(v)
+    end
+    return out
+end
+
+export function inventory()
+    const globals: { [string]: string } = {}
+    const namespaces: { [string]: { [string]: string } } = {}
+    local count, spaces = 0, 0
+    for name, value in pairs(_G) do
+        if type(name) == "string" then
+            globals[name] = kind(value)
+            count += 1
+            if type(value) == "table" and (name:match("^C_") or tContains(LIBRARIES, name)) then
+                local ok, m = pcall(members, value :: table)
+                namespaces[name] = ok and m or { ["?"] = tostring(m) }
+                spaces += 1
+            end
+        end
+    end
+    local version, build, _, interface = GetBuildInfo()
+    const st = state() :: any
+    st.inventory = {
+        client = `{version} ({build})`,
+        interface = interface,
+        globals = globals,
+        namespaces = namespaces,
+    }
+    say(`inventory: {count} globals, {spaces} namespaces recorded; type /reload so the file is written`)
+end

@@ -126,8 +126,6 @@ pub struct Rules {
     /// call a nil value", assigning through one "attempt to perform indexed
     /// assignment on".
     pub client_errors: bool,
-    /// `coroutine.create` takes native functions too.
-    pub native_coroutines: bool,
     /// `string.upper`/`lower` map UTF-8 characters, not only ASCII.
     pub utf8_case: bool,
 }

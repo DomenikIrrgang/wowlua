@@ -117,6 +117,10 @@ const PENDING: &[(&str, &str)] = &[
         "Blizzard's Lua (SharedXML), loaded with the engine (S3)",
     ),
     (
+        "coroutine.create(print)",
+        "the client's print is Blizzard's Lua (S3)",
+    ),
+    (
         "includes, mapvalues",
         "Blizzard's Lua and engine functions (S3)",
     ),

@@ -81,7 +81,6 @@ pub fn open(vm: &mut Vm) {
         client_format: true,
         xpcall_args: true,
         client_errors: true,
-        native_coroutines: true,
         utf8_case: true,
     };
     // Reads taint the execution, writes take its taint.

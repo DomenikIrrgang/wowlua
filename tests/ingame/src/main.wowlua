@@ -6,6 +6,7 @@
 --   /stdtest results  the last summary again
 --   /stdtest probe    record the client's Lua environment (then /reload)
 --   /stdtest taint    taint experiments on Blizzard secure code (then click, /reload)
+--   /stdtest inventory   record every global and what it is (then /reload)
 import slash, router from "wowlua:slash"
 import onLogin from "wowlua:lifecycle"
 import after from "wowlua:timer"
@@ -14,6 +15,7 @@ import type Suite, TestRecord from "/harness"
 import state from "/state"
 import probe from "/probe"
 import taintlab from "/taintlab"
+import inventory from "/inventory"
 import _ from "/suites/errors"
 import _ from "/suites/events"
 import _ from "/suites/lifecycle"
@@ -106,6 +108,10 @@ local commands = router({
     auto = { help = "Run the automatic tests only", run = function() automatic() end },
     skip = { help = "Skip the guided step waiting for you", run = function() skip() end },
     probe = { help = "Record the client's Lua environment (then /reload)", run = function() probe() end },
+    inventory = {
+        help = "Record every global and what it is (then /reload)",
+        run = function() inventory() end,
+    },
     taint = {
         args = { "rest" },
         help = "Taint experiments on Blizzard's secure code: /stdtest taint <n> (then click, /reload)",
