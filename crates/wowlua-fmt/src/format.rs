@@ -801,7 +801,8 @@ fn spaced(text: &[u8]) -> Vec<u8> {
 
 fn field_start(f: &TableField) -> u32 {
     match f {
-        TableField::Keyed { span, .. } | TableField::Named { span, .. } => span.start,
+        TableField::Keyed { span, .. } => span.start,
+        TableField::Named { name, .. } => name.span.start,
         TableField::Positional(e) => e.span.start,
     }
 }

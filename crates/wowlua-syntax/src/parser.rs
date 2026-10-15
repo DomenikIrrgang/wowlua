@@ -1404,11 +1404,13 @@ impl<'a> Parser<'a> {
                     let name = self.name()?;
                     self.advance();
                     let value = self.expr()?;
-                    TableField::Named {
-                        name,
-                        value,
-                        span: self.span_from(start),
-                    }
+                    let field = TableField::Named { name, value };
+                    // The field's span is not stored: it runs from the name
+                    // to the end of the value. That relies on `expr()`
+                    // returning a value whose span ends at the last token it
+                    // consumed, the same end `span_from` takes.
+                    debug_assert_eq!(field.span(), self.span_from(start));
+                    field
                 }
                 _ => TableField::Positional(self.expr()?),
             };

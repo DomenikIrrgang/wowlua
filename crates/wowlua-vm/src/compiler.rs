@@ -1874,10 +1874,7 @@ impl Compiler<'_> {
             if let Some(end) = prev_end {
                 self.lastline = self.line(self.next_token(end));
             }
-            prev_end = Some(match field {
-                TableField::Positional(e) => e.span.end,
-                TableField::Named { span, .. } | TableField::Keyed { span, .. } => span.end,
-            });
+            prev_end = Some(field.span().end);
             // closelistfield
             if v.k != EK::Void {
                 self.exp2nextreg(&mut v)?;

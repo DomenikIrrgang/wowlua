@@ -469,10 +469,25 @@ pub enum TableField {
         value: Expr,
         span: Span,
     },
-    /// `name = v`
-    Named { name: Name, value: Expr, span: Span },
+    /// `name = v`; its span runs from the name to the end of the value
+    /// ([`TableField::span`]).
+    Named { name: Name, value: Expr },
     /// `v`
     Positional(Expr),
+}
+
+impl TableField {
+    pub fn span(&self) -> Span {
+        match self {
+            TableField::Keyed { span, .. } => *span,
+            TableField::Named { name, value } => Span {
+                file: name.span.file,
+                start: name.span.start,
+                end: value.span.end,
+            },
+            TableField::Positional(value) => value.span,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -925,7 +940,7 @@ mod tests {
     #[test]
     fn expressions_and_table_fields_stay_small() {
         assert!(std::mem::size_of::<Expr>() <= 72);
-        assert!(std::mem::size_of::<TableField>() <= 120);
+        assert!(std::mem::size_of::<TableField>() <= 104);
         // Numerals keep their text inline without growing `ExprKind`.
         assert!(std::mem::size_of::<NumberLit>() <= 40);
         assert!(std::mem::size_of::<ExprKind>() <= 56);
