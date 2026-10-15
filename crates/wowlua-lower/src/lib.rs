@@ -2002,12 +2002,7 @@ impl<'a> Lowerer<'a> {
             ExprKind::True => K::True,
             ExprKind::False => K::False,
             ExprKind::Number(n) => {
-                let binary = n
-                    .raw
-                    .as_bytes()
-                    .get(..2)
-                    .is_some_and(|p| p.eq_ignore_ascii_case(b"0b"));
-                if n.raw.contains('_') || binary {
+                if wowlua_syntax::lexer::is_wowlua_numeral(&n.raw) {
                     K::Number(format_number(n.value.unwrap_or(0.0)))
                 } else {
                     K::Number(String::from(&*n.raw))
