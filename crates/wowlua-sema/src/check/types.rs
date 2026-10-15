@@ -3,7 +3,7 @@
 //! enums, generic aliases) and their display in messages.
 
 use indexmap::IndexMap;
-use std::collections::HashMap;
+use std::hash::{BuildHasher, RandomState};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TypeId(pub u32);
@@ -147,7 +147,11 @@ impl Pack {
 #[derive(Clone, Debug)]
 pub struct Types {
     data: Vec<Ty>,
-    index: HashMap<Ty, TypeId>,
+    /// The ids of the hash-consed types, hashed and compared through `data`,
+    /// so each type is stored once. Records are not in it: each one has its
+    /// own identity, so a lookup could never find one.
+    index: hashbrown::HashTable<TypeId>,
+    hasher: RandomState,
     next_record: u32,
 }
 
@@ -176,7 +180,8 @@ impl Types {
     pub fn new() -> Self {
         let mut t = Types {
             data: Vec::new(),
-            index: HashMap::new(),
+            index: hashbrown::HashTable::new(),
+            hasher: RandomState::new(),
             next_record: 0,
         };
         for ty in [
@@ -201,12 +206,23 @@ impl Types {
     }
 
     pub fn intern(&mut self, ty: Ty) -> TypeId {
-        if let Some(&id) = self.index.get(&ty) {
+        debug_assert!(
+            !matches!(ty, Ty::Record(_)),
+            "records go through Types::record"
+        );
+        let hash = self.hasher.hash_one(&ty);
+        if let Some(&id) = self.index.find(hash, |&id| self.data[id.0 as usize] == ty) {
             return id;
         }
         let id = TypeId(self.data.len() as u32);
-        self.data.push(ty.clone());
-        self.index.insert(ty, id);
+        self.data.push(ty);
+        let Types {
+            data,
+            index,
+            hasher,
+            ..
+        } = self;
+        index.insert_unique(hash, id, |&id| hasher.hash_one(&data[id.0 as usize]));
         id
     }
 
@@ -238,7 +254,9 @@ impl Types {
     pub fn record(&mut self, mut r: Record) -> TypeId {
         self.next_record += 1;
         r.id = self.next_record;
-        self.intern(Ty::Record(r))
+        let id = TypeId(self.data.len() as u32);
+        self.data.push(Ty::Record(r));
+        id
     }
 
     /// The union of `members`: flattened, deduplicated; `never` dropped,
