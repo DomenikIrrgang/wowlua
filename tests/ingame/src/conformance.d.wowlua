@@ -1,0 +1,7 @@
+declare module "/conformance"
+    --- Each case's result, by its source.
+    function run(): { [string]: string }
+    --- "C" or "Lua" for each function of the Lua environment.
+    function kinds(): { [string]: string }
+    const count: number
+end

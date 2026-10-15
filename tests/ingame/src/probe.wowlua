@@ -3,6 +3,7 @@
 -- `lua.d.wowlua` (after a /reload writes it to disk).
 import state from "/state"
 import say from "/harness"
+import * as conformance from "/conformance"
 
 -- Standard library tables a Lua 5.1 host (or a later one) may have.
 const LIBRARIES = {
@@ -181,6 +182,15 @@ export function probe()
     env.calls["additions"] = "see luaEnvAdditions"
     state().luaEnvAdditions = additions
     state().luaEnv = env
+    -- The conformance cases, a fixture for wowlua's VM.
+    local version, build, _, interface = GetBuildInfo()
+    state().conformance = {
+        client = `{version} ({build})`,
+        interface = interface,
+        results = conformance.run(),
+        kinds = conformance.kinds(),
+    }
+    say(`probe: {conformance.count} conformance cases recorded`)
     local present = 0
     for _, name in ipairs(LIBRARIES) do
         if env.libraries[name] then
