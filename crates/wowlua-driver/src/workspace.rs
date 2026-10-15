@@ -230,7 +230,7 @@ pub fn global_declarations(src_dir: &Path) -> String {
                 }
                 StmtKind::Const { name, ty, value } => {
                     if let Some(g) = global_name(decorators, &name.text) {
-                        out.push_str(&value_decl(&bytes, &g, ty.as_ref(), value.as_ref()));
+                        out.push_str(&value_decl(&bytes, &g, ty.as_deref(), value.as_deref()));
                     }
                 }
                 StmtKind::Class(c) => {

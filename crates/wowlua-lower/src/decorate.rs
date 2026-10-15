@@ -584,7 +584,7 @@ fn value_return(b: &Block) -> Option<Span> {
                 ..
             } => value_return(then_block)
                 .or_else(|| elseifs.iter().find_map(|(_, b)| value_return(b)))
-                .or_else(|| else_block.as_ref().and_then(value_return)),
+                .or_else(|| else_block.as_deref().and_then(value_return)),
             _ => None,
         };
         if found.is_some() {

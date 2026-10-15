@@ -293,7 +293,7 @@ pub fn parse_sources(
     diagnostics: &mut Vec<Diagnostic>,
     files: &[(Source, FileId)],
     declarations: &[Declaration],
-    raw: &HashMap<String, Vec<u8>>,
+    raw: &HashMap<String, Arc<[u8]>>,
 ) -> Parsed {
     let mut parses = Vec::with_capacity(files.len());
     let mut ok = vec![true; files.len()];
@@ -355,7 +355,7 @@ pub fn add_stdlib(
     diagnostics: &mut Vec<Diagnostic>,
     files: &mut Vec<(Source, FileId)>,
     declarations: &mut Vec<Declaration>,
-    raw: &mut HashMap<String, Vec<u8>>,
+    raw: &mut HashMap<String, Arc<[u8]>>,
     parsed: &mut Parsed,
     declaration_overrides: &HashMap<&str, String>,
 ) {
@@ -410,7 +410,7 @@ pub fn add_stdlib(
             if !ok {
                 diagnostics.extend(parse.diagnostics.clone());
             }
-            raw.insert(rel, module.source.into_bytes());
+            raw.insert(rel, module.source.into_bytes().into());
             files.push((source, file));
             parsed.parses.push(Some(parse));
             parsed.ok.push(ok);
@@ -451,7 +451,7 @@ pub fn add_libraries(
     diagnostics: &mut Vec<Diagnostic>,
     files: &mut Vec<(Source, FileId)>,
     declarations: &mut Vec<Declaration>,
-    raw: &mut HashMap<String, Vec<u8>>,
+    raw: &mut HashMap<String, Arc<[u8]>>,
     parsed: &mut Parsed,
     libs: &[crate::embed::WowluaLib],
 ) {
@@ -635,7 +635,7 @@ pub fn add_libraries(
                 parsed.parses.push(Some(parse));
                 parsed.ok.push(ok);
             }
-            raw.insert(src_rel, bytes);
+            raw.insert(src_rel, bytes.into());
             files.push((source, file));
         }
         if !added {
@@ -727,7 +727,7 @@ pub fn compile_flavor(
     diagnostics: &mut Vec<Diagnostic>,
     files: &[(Source, FileId)],
     declarations: &[Declaration],
-    raw: &HashMap<String, Vec<u8>>,
+    raw: &HashMap<String, Arc<[u8]>>,
     parsed: &Parsed,
     profile: &Profile,
     source_maps: bool,
@@ -1273,7 +1273,7 @@ fn rename_private_methods(
 /// The module IDs plain Lua requires by name (`require("id")`), and `keep`.
 fn required_by_name(
     files: &[(Source, FileId)],
-    raw: &HashMap<String, Vec<u8>>,
+    raw: &HashMap<String, Arc<[u8]>>,
     keep: &[String],
 ) -> std::collections::HashSet<String> {
     static REQUIRED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
@@ -1334,7 +1334,7 @@ fn dead_modules(
                 | ast::StmtKind::TypeAlias(_)
                 | ast::StmtKind::Declare(_)
                 | ast::StmtKind::Import(_) => true,
-                ast::StmtKind::Const { value, .. } => value.as_ref().is_none_or(pure),
+                ast::StmtKind::Const { value, .. } => value.as_deref().is_none_or(pure),
                 ast::StmtKind::Class(c) => c.members.iter().all(|m| {
                     m.decorators.is_empty()
                         && match &m.kind {

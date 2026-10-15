@@ -10,6 +10,7 @@ use crate::sources::{self, Source, SourceKind};
 use crate::{Session, fsutil, vcs};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_manifest::BuiltinProfile;
 use wowlua_manifest::model::TocLayout;
@@ -335,12 +336,26 @@ pub fn build(
     // may contain any bytes). The source database holds a lossy text copy for
     // diagnostics.
     let mut files: Vec<(Source, FileId)> = Vec::new();
-    let mut raw: HashMap<String, Vec<u8>> = HashMap::new();
+    let mut raw: HashMap<String, Arc<[u8]>> = HashMap::new();
     for source in sources {
         match std::fs::read(&source.abs) {
             Ok(bytes) => {
-                let text = String::from_utf8_lossy(&bytes).into_owned();
-                let file = session.db.add(&source.rel, text);
+                // Valid UTF-8 (nearly every file) is kept once, for the
+                // source database and as the bytes.
+                let (file, bytes) = match String::from_utf8(bytes) {
+                    Ok(text) => {
+                        let text: Arc<str> = text.into();
+                        (
+                            session.db.add_shared(&source.rel, text.clone()),
+                            text.into(),
+                        )
+                    }
+                    Err(error) => {
+                        let bytes = error.into_bytes();
+                        let text = String::from_utf8_lossy(&bytes).into_owned();
+                        (session.db.add(&source.rel, text), bytes.into())
+                    }
+                };
                 raw.insert(source.rel.clone(), bytes);
                 files.push((source, file));
             }
@@ -474,8 +489,8 @@ pub fn build(
             }
             // Line endings as `packager -u` writes them (decision T124).
             let normalized = crate::keywords::lf(&raw[&source.rel]);
-            if normalized != raw[&source.rel] {
-                raw.insert(source.rel.clone(), normalized);
+            if normalized[..] != raw[&source.rel][..] {
+                raw.insert(source.rel.clone(), normalized.into());
             }
             let Ok(text) = std::str::from_utf8(&raw[&source.rel]) else {
                 continue;
@@ -546,14 +561,14 @@ pub fn build(
                 }
             }
             if processed != text {
-                raw.insert(source.rel.clone(), processed.into_bytes());
+                raw.insert(source.rel.clone(), processed.into_bytes().into());
             }
         }
         // Later steps (XML references, diagnostics) read the processed text.
         for (source, file) in &mut files {
             let current = session.db.get(*file).text().as_bytes();
             if let Some(bytes) = raw.get(&source.rel)
-                && bytes.as_slice() != current
+                && bytes[..] != *current
             {
                 *file = session
                     .db
@@ -871,7 +886,7 @@ pub fn build(
         files
             .iter()
             .filter(|(s, _)| s.kind == SourceKind::Xml)
-            .filter_map(|(s, _)| raw.get(&s.rel).cloned())
+            .filter_map(|(s, _)| raw.get(&s.rel).map(|b| b.to_vec()))
             .chain(libs.iter().flat_map(|lib| {
                 lib.index
                     .values()
@@ -1057,7 +1072,7 @@ pub fn build(
                 .get(rel)
                 .map(|c| c.code.clone())
                 .or_else(|| xml.rewrites.get(rel).map(|t| t.clone().into_bytes()))
-                .unwrap_or_else(|| raw[rel].clone());
+                .unwrap_or_else(|| raw[rel].to_vec());
             let code = crate::keywords::apply_flavor(&String::from_utf8_lossy(&base), &f, is_xml);
             b.output.compiled.insert(
                 rel.clone(),
@@ -1512,7 +1527,7 @@ pub fn build(
         if let Some(map) = compiled.and_then(|c| c.map.clone()) {
             maps.insert(format!("{}.map", source.output_path()), map);
         }
-        let original = compiled.map(|c| &c.code).unwrap_or(&raw[&source.rel]);
+        let original: &[u8] = compiled.map_or(&raw[&source.rel], |c| &c.code);
         if xml_per_flavor.contains(&source.rel) {
             let text = match xml.rewrites.get(&source.rel) {
                 Some(rewritten) => rewritten.clone(),
@@ -1553,7 +1568,7 @@ pub fn build(
                 );
                 continue;
             }
-            None => original.clone(),
+            None => original.to_vec(),
         };
         out.insert(source.output_path(), Content::Bytes(content));
     }
@@ -4152,7 +4167,7 @@ struct BundleInput<'a> {
     flavors: &'a [String],
     libs: &'a [crate::embed::LuaLib],
     files: &'a [(Source, wowlua_span::FileId)],
-    raw: &'a HashMap<String, Vec<u8>>,
+    raw: &'a HashMap<String, Arc<[u8]>>,
     source_maps: bool,
 }
 

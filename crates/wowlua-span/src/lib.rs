@@ -3,9 +3,9 @@
 //! Every diagnostic and every syntax node points into a [`SourceDb`] through a
 //! [`Span`]: a file id plus a half-open byte range.
 
-use std::borrow::Cow;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::OnceLock;
 
 /// Identifies a file inside a [`SourceDb`].
@@ -56,19 +56,44 @@ pub struct LineCol {
     pub column: u32,
 }
 
+/// A file's text: owned, compiled into the binary (the WoW API), or shared
+/// with its bytes elsewhere.
+enum Text {
+    Owned(String),
+    Static(&'static str),
+    Shared(Arc<str>),
+}
+
+impl std::fmt::Debug for Text {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&**self, f)
+    }
+}
+
+impl std::ops::Deref for Text {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        match self {
+            Text::Owned(s) => s,
+            Text::Static(s) => s,
+            Text::Shared(s) => s,
+        }
+    }
+}
+
 /// A source file: its display path, its text and a line index.
 #[derive(Debug)]
 pub struct SourceFile {
     path: PathBuf,
-    /// Borrowed for text compiled into the binary (the WoW API).
-    text: Cow<'static, str>,
+    text: Text,
     /// Built the first time a position is asked for: most files never need
     /// one.
     line_starts: OnceLock<Vec<usize>>,
 }
 
 impl SourceFile {
-    fn new(path: PathBuf, text: Cow<'static, str>) -> Self {
+    fn new(path: PathBuf, text: Text) -> Self {
         SourceFile {
             path,
             text,
@@ -146,15 +171,21 @@ impl SourceDb {
     }
 
     pub fn add(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> FileId {
-        self.push(path.into(), Cow::Owned(text.into()))
+        self.push(path.into(), Text::Owned(text.into()))
     }
 
     /// Adds text compiled into the binary without copying it.
     pub fn add_static(&mut self, path: impl Into<PathBuf>, text: &'static str) -> FileId {
-        self.push(path.into(), Cow::Borrowed(text))
+        self.push(path.into(), Text::Static(text))
     }
 
-    fn push(&mut self, path: PathBuf, text: Cow<'static, str>) -> FileId {
+    /// Adds text that is also kept elsewhere (a source's bytes), without
+    /// copying it.
+    pub fn add_shared(&mut self, path: impl Into<PathBuf>, text: Arc<str>) -> FileId {
+        self.push(path.into(), Text::Shared(text))
+    }
+
+    fn push(&mut self, path: PathBuf, text: Text) -> FileId {
         let id = FileId(to_u32(self.files.len()));
         self.files.push(SourceFile::new(path, text));
         id
