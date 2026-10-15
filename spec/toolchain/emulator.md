@@ -144,10 +144,17 @@ Off by default: mock-only tests start faster (decision T186).
     overflow. Shims serve the suite's plumbing only (timing, temporary files
     in memory, loading its helper files).
   - Differential tests compare snippets' output and errors.
-- **Taint.** elune's taint conformance cases (MIT, vendored in
-  `crates/wowlua-vm/tests/elune/`), which pass in the client when run
-  securely, all pass on the VM; the one for elune's own
-  `loadstring_untainted` is excluded.
+- **Sources of truth.** In-game probes on the current client first, then
+  Blizzard's documentation and UI code for the build (the generated API
+  documentation's `SecretArguments`, `ProtectedFunction`, `HasRestrictions`,
+  `SecureHooksAllowed` and `SecretWhen…` flags, `FrameScriptDocumentation`).
+  elune (an open reimplementation of an older client) is only a hint: a rule
+  that rests on it alone is listed as unverified in the coverage report.
+- **Taint.** StdTest's taint experiments (`/stdtest taint`) taint one value on
+  a path the client's secure code takes to a protected function and record
+  whether the action is blocked; the VM must agree. elune's taint cases
+  (vendored in `crates/wowlua-vm/tests/elune/`) also pass on the VM, but count
+  only where the experiments confirm them.
 - **The client's behaviour.** Every WoW-specific rule (§17.3 to §17.5) has a
   probe in StdTest whose recorded in-game result is a test fixture; a rule
   changes only with a new probe.
