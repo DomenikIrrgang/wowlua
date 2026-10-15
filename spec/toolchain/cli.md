@@ -16,7 +16,7 @@ wowlua <command> [options]
 | `--offline` | Use only the cache; never access the network (E4105 if something is missing) |
 | `--frozen` | `--locked` plus `--offline` ([Package manager §10.6](package-manager.md#106-lockfile)) |
 | `--features <a,b>` / `--no-default-features` | Select features ([Manifest §9.6](manifest.md#96-features)) |
-| `--message-format human\|short\|json\|github` | Diagnostic output format. `json` emits one JSON object per line, for editors and tools. `github` emits GitHub Actions annotations. |
+| `--message-format human\|short\|json\|github` | Diagnostic output format. `human` shows each diagnostic with its source lines; a line longer than 160 characters is shown as 120 characters around the labels, with `...` where it is cut. `short` is one line per diagnostic. Both end with a summary, `warning: N warnings emitted` or `error: aborting due to N previous errors; M warnings emitted` (not with `-q`). `json` emits one JSON object per line, for editors and tools. `github` emits GitHub Actions annotations. |
 | `--color auto\|always\|never` | Terminal colors |
 | `-q, --quiet` / `-v, --verbose` | Output verbosity. Tokens are always redacted. |
 | `--deny-warnings` | Treat warnings as errors |
