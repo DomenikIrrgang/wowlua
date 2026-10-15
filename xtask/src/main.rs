@@ -16,6 +16,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 mod corpus;
+mod fixture;
 mod lua51;
 mod packager_diff;
 mod runtime;
@@ -26,6 +27,13 @@ fn main() -> Result<()> {
     let root = workspace_root();
     match task.as_str() {
         "codes" => write_if_changed(&codes_path(&root), &generate_codes(&root)?),
+        "fixture" => {
+            let (Some(saved), Some(name)) = (std::env::args().nth(2), std::env::args().nth(3))
+            else {
+                bail!("usage: cargo xtask fixture <SavedVariables/StdTest.lua> <name>");
+            };
+            fixture::run(&root, Path::new(&saved), &name)
+        }
         "schema" => write_if_changed(&schema_path(&root), &wowlua_manifest::schema_json()),
         "runtime" => {
             let slices = runtime::generate(&root)?;

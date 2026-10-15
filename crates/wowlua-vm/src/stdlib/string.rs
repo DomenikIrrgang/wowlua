@@ -292,6 +292,9 @@ fn addquoted(out: &mut Vec<u8>, s: &[u8]) {
 }
 
 fn format(vm: &mut Vm, c: NativeCall) -> Ret {
+    if vm.rules.client_format {
+        return format_client(vm, c);
+    }
     let fmt = vm.check_bytes(&c, 1)?;
     let top = c.len();
     let mut arg = 1;
@@ -395,6 +398,121 @@ fn format(vm: &mut Vm, c: NativeCall) -> Ret {
             }
         };
         // `strlen` of the formatted item.
+        let n = item.iter().position(|&b| b == 0).unwrap_or(item.len());
+        out.extend_from_slice(&item[..n]);
+    }
+    Ok(vec![vm.bytes(&out)])
+}
+
+/// The client's `string.format` (elune's `str_format`): positional
+/// arguments (`%2$s`), `%F`, `%d` through the overflow-checked `lua_tolong`
+/// (a value that is not a number counts as 0), no check for missing
+/// arguments beyond the argument checks themselves.
+fn format_client(vm: &mut Vm, c: NativeCall) -> Ret {
+    const MAX_MATCH_LEN: usize = 20 - 4;
+    let fmt = vm.check_bytes(&c, 1)?;
+    let mut arg = 1;
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < fmt.len() {
+        if fmt[i] != b'%' {
+            out.push(fmt[i]);
+            i += 1;
+            continue;
+        }
+        i += 1;
+        if fmt.get(i) == Some(&b'%') {
+            out.push(b'%');
+            i += 1;
+            continue;
+        }
+        arg += 1;
+        // scanarg: `%N$` (one or two digits) selects argument N.
+        let mut p = i;
+        let mut n: i64 = -1;
+        for _ in 0..2 {
+            if let Some(d) = fmt.get(p).filter(|d| d.is_ascii_digit()) {
+                n = if n < 0 { 0 } else { n * 10 } + i64::from(d - b'0');
+                p += 1;
+            }
+        }
+        if fmt.get(p) == Some(&b'$') && n >= 0 {
+            arg = n as usize + 1;
+            i = p + 1;
+        }
+        // scanformat: `[-+ #0]*(%d*)%.?(%d*)`.
+        let start = i;
+        let mut spec = Spec::default();
+        while i < fmt.len() && FLAGS.contains(&fmt[i]) {
+            match fmt[i] {
+                b'-' => spec.minus = true,
+                b'+' => spec.plus = true,
+                b' ' => spec.space = true,
+                b'#' => spec.alt = true,
+                _ => spec.zero = true,
+            }
+            i += 1;
+        }
+        let digits = |i: &mut usize| {
+            let from = *i;
+            let mut v = 0usize;
+            while *i < fmt.len() && fmt[*i].is_ascii_digit() {
+                v = v
+                    .saturating_mul(10)
+                    .saturating_add((fmt[*i] - b'0') as usize);
+                *i += 1;
+            }
+            (v, *i - from)
+        };
+        let (width, wlen) = digits(&mut i);
+        spec.width = width;
+        let mut plen = 0;
+        if fmt.get(i) == Some(&b'.') {
+            i += 1;
+            let (p, len) = digits(&mut i);
+            plen = len;
+            spec.precision = Some(p);
+        }
+        if wlen > 2 || plen > 2 || i - start > MAX_MATCH_LEN {
+            return Err(vm.error("invalid format (width or precision too long)"));
+        }
+        let conv = fmt.get(i).copied().unwrap_or(0);
+        i += 1;
+        let item = match conv {
+            b'c' => {
+                let n = vm.check_number(&c, arg)?;
+                pad(&spec, b"", &[(n as i64) as u8], false)
+            }
+            b'd' | b'i' => {
+                let n = vm.tonumber(c.arg(arg)).unwrap_or(0.0);
+                vm.check_overflow(n)?;
+                fmt_int(&spec, n as i64)
+            }
+            b'o' | b'u' | b'x' | b'X' => {
+                let n = vm.check_number(&c, arg)?;
+                // `(unsigned long)` of a negative double: ARM saturates.
+                fmt_unsigned(&spec, n as u64, conv)
+            }
+            b'e' | b'E' | b'f' | b'g' | b'G' | b'F' => {
+                let n = vm.check_number(&c, arg)?;
+                let conv = if conv == b'F' { b'f' } else { conv };
+                fmt_float(&spec, n, conv)
+            }
+            b'q' => {
+                let s = vm.check_bytes(&c, arg)?;
+                addquoted(&mut out, &s);
+                continue;
+            }
+            b's' => {
+                let s = vm.check_bytes(&c, arg)?;
+                if spec.precision.is_none() && s.len() >= 100 {
+                    out.extend_from_slice(&s);
+                    continue;
+                }
+                fmt_str(&spec, &s)
+            }
+            _ => return Err(vm.error("invalid option in `format'")),
+        };
         let n = item.iter().position(|&b| b == 0).unwrap_or(item.len());
         out.extend_from_slice(&item[..n]);
     }

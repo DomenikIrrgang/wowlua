@@ -7,6 +7,7 @@ pub mod math;
 pub mod pattern;
 pub mod string;
 pub mod table;
+pub mod wow;
 
 use crate::error::LuaError;
 use crate::function::{NativeCall, NativeFn};
@@ -90,7 +91,9 @@ impl Vm {
 
     /// `luaL_checkinteger`: a number, truncated toward zero.
     pub fn check_int(&mut self, c: &NativeCall, n: usize) -> Result<i64, LuaError> {
-        Ok(to_int(self.check_number(c, n)?))
+        let x = self.check_number(c, n)?;
+        self.check_overflow(x)?;
+        Ok(to_int(x))
     }
 
     pub fn opt_int(&mut self, c: &NativeCall, n: usize, default: i64) -> Result<i64, LuaError> {

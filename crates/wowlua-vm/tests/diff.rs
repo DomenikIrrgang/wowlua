@@ -275,6 +275,16 @@ fn error_handling() {
 }
 
 #[test]
+fn native_environments() {
+    same("local f = coroutine.wrap(function() end) print(setfenv(f, {}) == f, getfenv(f) == _G)");
+    same("print(getfenv(print) == _G, getfenv(coroutine.wrap(print)) == _G)");
+    same(
+        "local e = {} local f = coroutine.wrap(function() end) setfenv(f, e) print(getfenv(f) == e)",
+    );
+    same("print(pcall(setfenv, print, {}))");
+}
+
+#[test]
 fn syntax_errors() {
     same("print(loadstring('break x'))");
     same("print(loadstring('x = = 1'))");

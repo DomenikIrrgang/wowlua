@@ -68,9 +68,36 @@ names! {
 pub(crate) struct CEntry {
     /// Lua frames below it.
     pub at_frames: usize,
+    /// The stack slot of the called function (its arguments follow).
+    pub slot: usize,
     pub func: FuncRef,
     /// Called directly by a Lua instruction (`CALL`, `TFORLOOP`).
     pub from_lua: bool,
+}
+
+/// Named values: a level's locals or upvalues.
+pub type Variables = Vec<(String, Value)>;
+
+/// One level of the call stack, as `lua_getinfo` describes it.
+#[derive(Clone, Debug)]
+pub struct Level {
+    pub short_src: Vec<u8>,
+    pub source: Vec<u8>,
+    /// -1 when unknown (native functions, tail calls).
+    pub currentline: i64,
+    pub linedefined: i64,
+    /// "main", "Lua", "C" or "tail".
+    pub what: &'static str,
+    /// How the caller named it: ("global" | "local" | "method" | "field" |
+    /// "upvalue", name).
+    pub name: Option<(&'static str, String)>,
+    pub(crate) entry: Option<LevelEntry>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum LevelEntry {
+    Lua(usize),
+    Native(usize),
 }
 
 /// One entry of the combined Lua and native call stack.
@@ -79,7 +106,54 @@ pub(crate) enum StackEntry {
     Native(usize),
 }
 
+/// What the client changed in Lua 5.1's rules ([`Vm::wow`]); all off in
+/// stock Lua.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Rules {
+    /// Division and modulo check their number operands ("Division by
+    /// zero", elune's `LUA_EXCEPTFPESTRICT`).
+    pub fpe_strict: bool,
+    /// The same for numbers coerced from strings (`LUA_EXCEPTFPECOERCE`).
+    pub fpe_coerce: bool,
+    /// Integer arguments must fit 32 bits (`LUA_EXCEPTOVERFLOW`).
+    pub int_overflow: bool,
+    /// `string.format` as the client's (positional arguments, `%F`).
+    pub client_format: bool,
+    /// `xpcall(f, handler, ...)` passes the extra arguments to `f`.
+    pub xpcall_args: bool,
+}
+
+/// The VM's clock: virtual, so runs repeat exactly (spec emulator §17.2).
+#[derive(Clone, Copy, Debug)]
+pub struct Clock {
+    /// Seconds since the epoch (`time()`).
+    pub now: f64,
+    /// Local time minus UTC, in seconds (`date` without `!`).
+    pub utc_offset: i64,
+    /// Milliseconds since the session began (`debugprofilestop`).
+    pub elapsed_ms: f64,
+    pub(crate) profile_start: f64,
+}
+
+impl Default for Clock {
+    fn default() -> Clock {
+        Clock {
+            // 2026-01-01 00:00:00 UTC.
+            now: 1_767_225_600.0,
+            utc_offset: 0,
+            elapsed_ms: 0.0,
+            profile_start: 0.0,
+        }
+    }
+}
+
 pub struct Vm {
+    /// The client's changes to Lua's rules.
+    pub rules: Rules,
+    pub clock: Clock,
+    /// `geterrorhandler`/`seterrorhandler` and the print handler (WoW).
+    pub error_handler: Value,
+    pub print_handler: Value,
     pub heap: Heap,
     pub(crate) cur: ThreadState,
     pub(crate) current: ThreadRef,
@@ -146,6 +220,10 @@ impl Vm {
             globals,
         });
         let mut vm = Vm {
+            rules: Rules::default(),
+            clock: Clock::default(),
+            error_handler: Value::Nil,
+            print_handler: Value::Nil,
             heap,
             cur: ThreadState::default(),
             current: main,
@@ -463,6 +541,7 @@ impl Vm {
                 self.cur.top = func + 1 + nargs;
                 self.cstack.push(CEntry {
                     at_frames: self.cur.frames.len(),
+                    slot: func,
                     func: f,
                     from_lua,
                 });
@@ -679,6 +758,15 @@ impl Vm {
                     Op::Arith { op, a, b, c } => {
                         let x = self.rk(base, k, b);
                         let y = self.rk(base, k, c);
+                        if self.rules.fpe_strict && matches!(op, ArithOp::Div | ArithOp::Mod) {
+                            // Only the operands that are numbers count (the
+                            // client reads others' bits as garbage).
+                            let num = |v: Value| match v {
+                                Value::Num(n) => Some(n),
+                                _ => None,
+                            };
+                            self.check_fp(num(x), num(y))?;
+                        }
                         let v = match (x, y) {
                             (Value::Num(x), Value::Num(y)) => Value::Num(arith(op, x, y)),
                             _ => self.arith_slow(op, x, y, b, c)?,
@@ -1122,8 +1210,41 @@ impl Vm {
     }
 
     /// Arithmetic on numbers, where WoW's rules apply (S2 hooks them in).
+    /// Arithmetic on numbers coerced from strings (or from native code).
     pub(crate) fn arith_num(&mut self, op: ArithOp, a: f64, b: f64) -> Result<Value, LuaError> {
+        if self.rules.fpe_coerce && matches!(op, ArithOp::Div | ArithOp::Mod) {
+            self.check_fp(Some(a), Some(b))?;
+        }
         Ok(Value::Num(arith(op, a, b)))
+    }
+
+    /// The client's checks of a division's operands (elune's `checkfp`).
+    fn check_fp(&mut self, b: Option<f64>, c: Option<f64>) -> Result<(), LuaError> {
+        let msg = if c == Some(0.0) {
+            "Division by zero"
+        } else if b.is_some_and(f64::is_nan) {
+            "Numerator is not a number"
+        } else if c.is_some_and(f64::is_nan) {
+            "Denominator is not a number"
+        } else if b.is_some_and(f64::is_infinite) && c.is_some_and(f64::is_infinite) {
+            "Infinity divided by infinity"
+        } else {
+            return Ok(());
+        };
+        Err(self.rt_error(msg))
+    }
+
+    /// The client's 32-bit range check of integer arguments (`lua_tolong`,
+    /// `lua_tointeger`).
+    pub fn check_overflow(&mut self, x: f64) -> Result<(), LuaError> {
+        if self.rules.int_overflow && (x < f64::from(i32::MIN) || x > f64::from(i32::MAX)) {
+            let msg = format!(
+                "integer overflow attempting to store {}",
+                crate::number::fmt_num(x)
+            );
+            return Err(self.rt_error(&msg));
+        }
+        Ok(())
     }
 
     /// Arithmetic from native code (no operand names).
@@ -1458,6 +1579,186 @@ impl Vm {
             }
         }
         out
+    }
+
+    /// The call stack as `lua_getstack` and `lua_getinfo` see it, innermost
+    /// first (level 0 is the running function); a tail call adds a level.
+    pub fn levels(&self) -> Vec<Level> {
+        let entries = self.stack_entries();
+        let mut out = Vec::new();
+        for (i, e) in entries.iter().enumerate() {
+            let tail = matches!(e, StackEntry::Lua(fi) if self.cur.frames[*fi].tail);
+            // The name comes from the caller's call instruction, when the
+            // caller is Lua code (`getfuncname`).
+            let name = match entries.get(i + 1) {
+                Some(StackEntry::Lua(ci)) if !tail => {
+                    let f = &self.cur.frames[*ci];
+                    let pc = f.pc.saturating_sub(1);
+                    match f.proto.code.get(pc) {
+                        Some(
+                            Op::Call { a, .. } | Op::TailCall { a, .. } | Op::TForLoop { a, .. },
+                        ) => obj_name(&self.heap, &f.proto, pc, *a),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            };
+            match e {
+                StackEntry::Lua(fi) => {
+                    let f = &self.cur.frames[*fi];
+                    out.push(Level {
+                        short_src: chunkid(&f.proto.source),
+                        source: f.proto.source.to_vec(),
+                        currentline: f
+                            .proto
+                            .lines
+                            .get(f.pc.saturating_sub(1))
+                            .map_or(-1, |&l| i64::from(l)),
+                        linedefined: i64::from(f.proto.line_defined),
+                        what: if f.proto.line_defined == 0 {
+                            "main"
+                        } else {
+                            "Lua"
+                        },
+                        name,
+                        entry: Some(LevelEntry::Lua(*fi)),
+                    });
+                    if tail {
+                        out.push(Level {
+                            short_src: b"(tail call)".to_vec(),
+                            source: b"=(tail call)".to_vec(),
+                            currentline: -1,
+                            linedefined: -1,
+                            what: "tail",
+                            name: None,
+                            entry: None,
+                        });
+                    }
+                }
+                StackEntry::Native(ci) => out.push(Level {
+                    short_src: b"[C]".to_vec(),
+                    source: b"=[C]".to_vec(),
+                    currentline: -1,
+                    linedefined: -1,
+                    what: "C",
+                    name,
+                    entry: Some(LevelEntry::Native(*ci)),
+                }),
+            }
+        }
+        out
+    }
+
+    /// A function's environment.
+    pub fn func_env(&self, f: FuncRef) -> TableRef {
+        match self.heap.func(f) {
+            Function::Lua(l) => l.env,
+            Function::Native(n) => n.env,
+        }
+    }
+
+    pub fn set_func_env(&mut self, f: FuncRef, env: TableRef) {
+        match self.heap.func_mut(f) {
+            Function::Lua(l) => l.env = env,
+            Function::Native(n) => n.env = env,
+        }
+    }
+
+    /// The levels of another thread: its Lua frames (a suspended
+    /// coroutine keeps no native calls).
+    pub fn thread_levels(&mut self, t: ThreadRef) -> Vec<Level> {
+        let state = std::mem::take(&mut self.heap.thread_mut(t).state);
+        let own = std::mem::replace(&mut self.cur, state);
+        let cstack = std::mem::take(&mut self.cstack);
+        let levels = self.levels();
+        self.cstack = cstack;
+        let state = std::mem::replace(&mut self.cur, own);
+        self.heap.thread_mut(t).state = state;
+        // Its levels name no entries in the running thread.
+        levels
+            .into_iter()
+            .map(|l| Level { entry: None, ..l })
+            .collect()
+    }
+
+    /// The local variables of a level, as `lua_getlocal` names them
+    /// (`(*temporary)` for the other slots of its frame), then its function's
+    /// upvalues (`lua_getupvalue`).
+    pub fn level_variables(&self, level: &Level) -> (Variables, Variables) {
+        let mut locals = Vec::new();
+        let mut upvalues = Vec::new();
+        let Some(entry) = level.entry else {
+            return (locals, upvalues);
+        };
+        // Where the next (inner) call's function sits: the frame ends there.
+        let limit_after = |fi_or_slot: usize, is_native: bool| -> usize {
+            let next_native = self
+                .cstack
+                .iter()
+                .filter(|c| {
+                    if is_native {
+                        c.slot > fi_or_slot
+                    } else {
+                        c.at_frames > fi_or_slot
+                    }
+                })
+                .map(|c| c.slot)
+                .min();
+            let next_lua = if is_native {
+                self.cur
+                    .frames
+                    .iter()
+                    .map(|f| f.func)
+                    .filter(|&f| f > fi_or_slot)
+                    .min()
+            } else {
+                self.cur.frames.get(fi_or_slot + 1).map(|f| f.func)
+            };
+            match (next_native, next_lua) {
+                (Some(a), Some(b)) => a.min(b),
+                (Some(a), None) | (None, Some(a)) => a,
+                (None, None) => self.cur.top,
+            }
+        };
+        match entry {
+            LevelEntry::Lua(fi) => {
+                let f = &self.cur.frames[fi];
+                let pc = f.pc.saturating_sub(1);
+                let limit = limit_after(fi, false);
+                let active: Vec<&str> = f
+                    .proto
+                    .locvars
+                    .iter()
+                    .take_while(|v| v.start_pc <= pc)
+                    .filter(|v| pc < v.end_pc)
+                    .map(|v| &*v.name)
+                    .collect();
+                let mut n = 0;
+                while f.base + n < limit {
+                    let name = active.get(n).map_or("(*temporary)", |s| s);
+                    locals.push((name.to_string(), self.cur.stack[f.base + n]));
+                    n += 1;
+                }
+                if let Function::Lua(l) = self.heap.func(f.closure) {
+                    for (i, &u) in l.upvals.iter().enumerate() {
+                        let name = f.proto.upval_names.get(i).map_or("", |n| n);
+                        upvalues.push((name.to_string(), self.upval_get(u)));
+                    }
+                }
+            }
+            LevelEntry::Native(ci) => {
+                let c = &self.cstack[ci];
+                let base = c.slot + 1;
+                let limit = limit_after(c.slot, true);
+                for slot in base..limit {
+                    locals.push(("(*temporary)".to_string(), self.cur.stack[slot]));
+                }
+                if let Function::Native(n) = self.heap.func(c.func) {
+                    upvalues.extend(n.upvals.iter().map(|&v| (String::new(), v)));
+                }
+            }
+        }
+        (locals, upvalues)
     }
 
     /// `chunk:line: ` of the function at `level` (0: the running one), or

@@ -95,6 +95,11 @@ impl Table {
         self.arr.len()
     }
 
+    /// The allocated sizes of the array and hash parts.
+    pub fn part_sizes(&self) -> (usize, usize) {
+        (self.arr.len(), self.nodes.len())
+    }
+
     pub(crate) fn capacity_bytes(&self) -> usize {
         self.arr.len() * 16 + self.nodes.len() * 40
     }

@@ -50,7 +50,7 @@ pub fn open(vm: &mut Vm) {
     let _ = register;
 }
 
-fn print(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn print(vm: &mut Vm, c: NativeCall) -> Ret {
     let tostring_fn = vm.get_global("tostring");
     let mut out = Vec::new();
     for (i, &v) in c.args.iter().enumerate() {
@@ -236,8 +236,13 @@ fn xpcall(vm: &mut Vm, c: NativeCall) -> Ret {
     let handler = vm.check_any(&c, 2)?;
     let f = c.arg(1);
     let saved = vm.errfunc.replace(handler);
-    // Lua 5.1 calls `f` without arguments (WoW passes the rest).
-    let r = vm.call(f, &[]);
+    // Lua 5.1 calls `f` without arguments; the client passes the rest.
+    let args = if vm.rules.xpcall_args && c.len() > 2 {
+        c.args[2..].to_vec()
+    } else {
+        Vec::new()
+    };
+    let r = vm.call(f, &args);
     vm.errfunc = saved;
     match r {
         Ok(mut results) => {

@@ -169,7 +169,7 @@ impl Vm {
     }
 }
 
-fn random(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn random(vm: &mut Vm, c: NativeCall) -> Ret {
     let r = f64::from(vm.rand() % RAND_MAX) / f64::from(RAND_MAX);
     match c.len() {
         0 => Ok(vec![Value::Num(r)]),
