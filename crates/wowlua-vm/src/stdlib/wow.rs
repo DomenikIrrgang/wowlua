@@ -340,7 +340,8 @@ fn strsplittable(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn strjoin(vm: &mut Vm, c: NativeCall) -> Ret {
     let sep = c.arg(1);
-    if !matches!(sep, Value::Str(_) | Value::Num(_)) {
+    // A secret separator joins as concatenation does: into a secret.
+    if !matches!(vm.hidden(sep), Value::Str(_) | Value::Num(_)) {
         return Err(vm.type_arg_error(1, "string", c.args.first().copied()));
     }
     // The pieces with the separator between them, through `lua_concat`.

@@ -45,8 +45,11 @@ impl Value {
         )
     }
 
+    /// Nil, or a secret nil: the client tells values by their type tag, so
+    /// a secret nil in a table is an empty slot to `#` and `next`, though
+    /// reading it gives the secret.
     pub fn is_nil(self) -> bool {
-        matches!(self, Value::Nil)
+        matches!(self, Value::Nil | Value::Secret(SecretRef::NIL))
     }
 
     /// Primitive equality (`rawequal`): numbers by value, objects by

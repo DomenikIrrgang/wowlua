@@ -167,7 +167,10 @@ The engine returns secrets where the client does: from the documentation's
 `SecretReturns`, `SecretArguments` and `SecretWhen…` flags, under the
 addon restrictions in effect (combat, encounters, challenge modes, PvP
 matches, restricted maps and chat lockdown; `/stdtest restrictions`
-records the client's in and out of combat).
+records the client's by the restrictions active, in
+`tests/client/forever-camelot-restrictions.lua`). The rules above do not
+change with them: every conformance case gives the same result in combat on
+a restricted map as out of it.
 
 ## 17.6 The engine
 

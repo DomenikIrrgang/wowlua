@@ -64,9 +64,17 @@ impl Vm {
     }
 
     /// A library function's conversion of a secret refused: `kind` is
-    /// "string" or "numeric".
-    pub(crate) fn secret_conversion_error(&mut self, v: Value, kind: &str) -> LuaError {
-        self.secret_error(v, &format!("perform {kind} conversion on"), None)
+    /// "string" or "numeric", and the message names the type converted to.
+    pub(crate) fn secret_conversion_error(&mut self, kind: &str) -> LuaError {
+        let t = if kind == "numeric" {
+            "number"
+        } else {
+            "string"
+        };
+        let by = self.tainted_by();
+        self.rt_error(&format!(
+            "attempt to perform {kind} conversion on a secret {t} value ({by})"
+        ))
     }
 
     /// A secret table key refused (`assign`: a write).
@@ -145,7 +153,7 @@ impl Vm {
             self.secret_used = true;
             return Ok(h);
         }
-        Err(self.secret_conversion_error(v, kind))
+        Err(self.secret_conversion_error(kind))
     }
 
     /// Whether an operation on `x` and `y` involves a secret the running

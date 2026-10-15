@@ -1,9 +1,10 @@
 -- `/stdtest restrictions`: what the client's addon restrictions change.
--- Run it out of combat and again in combat (attack a training dummy, then
--- type it): each run records, under its combat state, the restriction
--- states, C_Secrets' answers, which common API results come back secret,
--- and the conformance cases, so the VM's and the engine's rules can be
--- checked in both (StdTestState.restrictions, after /reload).
+-- Run it with an enemy targeted, out of combat and in combat, in the open
+-- world and in a dungeon: each run records, under the restrictions active
+-- then ("none", "Map", "Combat+Map", …), their states, C_Secrets' answers,
+-- which common API results come back secret, and the conformance cases, so
+-- the VM's and the engine's rules can be checked in each
+-- (StdTestState.restrictions, after /reload).
 import state from "/state"
 import say from "/harness"
 import * as conformance from "/conformance"
@@ -72,7 +73,14 @@ const CALLS: any[][] = {
 }
 
 export function restrictions()
-    const label = InCombatLockdown() and "inCombat" or "outOfCombat"
+    const active: string[] = {}
+    for name, value in pairs((G.Enum?.AddOnRestrictionType ?? {}) :: { [string]: number }) do
+        if G.C_RestrictedActions.IsAddOnRestrictionActive(value) then
+            active[#active + 1] = name
+        end
+    end
+    table.sort(active)
+    const label = #active > 0 and table.concat(active, "+") or "none"
     local snapshot: { [string]: any } = {
         client = `{(GetBuildInfo())}`,
         inCombatLockdown = InCombatLockdown(),

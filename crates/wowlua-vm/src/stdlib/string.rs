@@ -1,7 +1,6 @@
 //! Lua 5.1's string library (`lstrlib.c`), without `string.dump` (WoW has
 //! none). Strings index this table through their metatable.
 
-use crate::error::LuaError;
 use crate::function::NativeCall;
 use crate::number::fmt_g;
 use crate::stdlib::pattern::{Capture, MatchState, SPECIALS};
@@ -372,22 +371,6 @@ fn addquoted(out: &mut Vec<u8>, s: &[u8]) {
     out.push(b'"');
 }
 
-/// A number `string.format` takes: a secret number's value (the result
-/// is secret); a secret of another type formats as 0, as the client's.
-fn format_number(vm: &mut Vm, c: &NativeCall, arg: usize) -> Result<f64, LuaError> {
-    if let v @ Value::Secret(_) = c.arg(arg) {
-        match vm.hidden(v) {
-            Value::Num(n) => {
-                vm.secret_used = true;
-                return Ok(n);
-            }
-            Value::Nil => {}
-            _ => return Ok(0.0),
-        }
-    }
-    vm.check_number(c, arg)
-}
-
 fn format(vm: &mut Vm, c: NativeCall) -> Ret {
     if vm.rules.client_format {
         return format_client(vm, c);
@@ -458,16 +441,16 @@ fn format(vm: &mut Vm, c: NativeCall) -> Ret {
         i += 1;
         let item = match conv {
             b'c' => {
-                let n = format_number(vm, &c, arg)?;
+                let n = vm.check_number(&c, arg)?;
                 let ch = (n as i64) as u8;
                 pad(&spec, b"", &[ch], false)
             }
             b'd' | b'i' => {
-                let n = format_number(vm, &c, arg)?;
+                let n = vm.check_number(&c, arg)?;
                 fmt_int(&spec, n as i64)
             }
             b'o' | b'u' | b'x' | b'X' => {
-                let n = format_number(vm, &c, arg)?;
+                let n = vm.check_number(&c, arg)?;
                 // C converts a negative double to unsigned differently per
                 // CPU (undefined behavior); this follows ARM (and Rust):
                 // saturation.
@@ -475,7 +458,7 @@ fn format(vm: &mut Vm, c: NativeCall) -> Ret {
                 fmt_unsigned(&spec, u, conv)
             }
             b'e' | b'E' | b'f' | b'g' | b'G' => {
-                let n = format_number(vm, &c, arg)?;
+                let n = vm.check_number(&c, arg)?;
                 fmt_float(&spec, n, conv)
             }
             b'q' => {
@@ -581,7 +564,7 @@ fn format_client(vm: &mut Vm, c: NativeCall) -> Ret {
         i += 1;
         let item = match conv {
             b'c' => {
-                let n = format_number(vm, &c, arg)?;
+                let n = vm.check_number(&c, arg)?;
                 pad(&spec, b"", &[(n as i64) as u8], false)
             }
             b'd' | b'i' => {
@@ -599,12 +582,12 @@ fn format_client(vm: &mut Vm, c: NativeCall) -> Ret {
                 fmt_int(&spec, n as i64)
             }
             b'o' | b'u' | b'x' | b'X' => {
-                let n = format_number(vm, &c, arg)?;
+                let n = vm.check_number(&c, arg)?;
                 // `(unsigned long)` of a negative double: ARM saturates.
                 fmt_unsigned(&spec, n as u64, conv)
             }
             b'e' | b'E' | b'f' | b'g' | b'G' | b'F' => {
-                let n = format_number(vm, &c, arg)?;
+                let n = vm.check_number(&c, arg)?;
                 let conv = if conv == b'F' { b'f' } else { conv };
                 fmt_float(&spec, n, conv)
             }

@@ -390,6 +390,13 @@ fn unpack(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn next(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = vm.check_table(&c, 1)?;
+    if let Value::Secret(_) = c.arg(2)
+        && !vm.can_access_secrets()
+    {
+        return Err(
+            vm.rt_error("attempted to iterate a table that cannot be indexed with secret keys")
+        );
+    }
     match vm.heap.table(t).next_slot(c.arg(2)) {
         Ok(Some((k, v))) => {
             // Keys are stored secure; the value is copied.
