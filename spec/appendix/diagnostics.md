@@ -4,7 +4,8 @@ Every diagnostic has a stable code. `E` codes are errors, which fail the build.
 `W` codes are warnings, which fail it only with `--deny-warnings`. `P` codes
 are performance hints found at run time by the dev window (§B.3); they never
 affect a build. The level of
-any warning can be changed in the manifest (`check.lints`). `wowlua explain
+any warning can be changed in the manifest (`check.lints`), including the
+warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 <code>` prints an explanation with examples.
 
 | Range | Area |

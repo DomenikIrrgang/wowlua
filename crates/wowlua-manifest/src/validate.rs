@@ -890,9 +890,21 @@ fn globs(manifest: &Manifest, ctx: &mut Ctx) {
     }
 }
 
+/// A warning code `check.lints` can set: a registered `W` code, or the
+/// warning form of a name, type, flavor or secret error (`E1xxx`, `E2xxx`),
+/// which pure Lua files report instead (appendix B.2: `E2001` → `W2001`).
+fn is_warning_code(code: &str) -> bool {
+    let Some(number) = code.strip_prefix('W') else {
+        return false;
+    };
+    wowlua_diagnostics::lookup(code).is_some()
+        || (number.starts_with(['1', '2'])
+            && wowlua_diagnostics::lookup(&format!("E{number}")).is_some())
+}
+
 fn lints(manifest: &Manifest, ctx: &mut Ctx) {
     for code in manifest.check.lints.keys() {
-        let known = code.starts_with('W') && wowlua_diagnostics::lookup(code).is_some();
+        let known = is_warning_code(code);
         if !known {
             ctx.error(
                 "E4002",
@@ -929,6 +941,23 @@ mod tests {
     }
 
     const PKG: &str = r#""package": { "name": "my-addon", "version": "1.0.0" }"#;
+
+    /// `check.lints` takes every warning code, including the warning forms
+    /// of name and type errors that pure Lua files report (appendix B.2).
+    #[test]
+    fn lints_take_downgraded_codes() {
+        let lints = |code: &str| {
+            codes(&format!(
+                r#"{{ {PKG}, "check": {{ "lints": {{ "{code}": "allow" }} }} }}"#
+            ))
+        };
+        for code in ["W1003", "W2001", "W1012"] {
+            assert!(lints(code).is_empty(), "{code}: {:?}", lints(code));
+        }
+        for code in ["W4002", "E2001", "W2999", "X2001"] {
+            assert_eq!(lints(code), ["E4002"], "{code}");
+        }
+    }
 
     #[test]
     fn full_spec_example_is_valid() {

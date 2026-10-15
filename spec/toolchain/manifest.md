@@ -425,7 +425,7 @@ keys express this (decision T58):
 | `strict` | glob[] | `[]` | Files checked in strict mode regardless of `mode` |
 | `lua` | bool | `false` | Also type-check `.lua` files (warnings only) |
 | `globals` | string[] | `[]` | Extra allowed globals (typed `any`) |
-| `lints` | `{code: "allow"\|"warn"\|"deny"}` | `{}` | Severity overrides, e.g. `{ "W1003": "allow" }` |
+| `lints` | `{code: "allow"\|"warn"\|"deny"}` | `{}` | Severity overrides of warning codes, e.g. `{ "W1003": "allow" }`; also the warning forms of name and type errors in pure Lua files (`"W2001"`, appendix B.2) |
 
 ## 9.9 `profiles`
 
