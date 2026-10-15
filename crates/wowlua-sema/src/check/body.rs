@@ -427,7 +427,7 @@ impl<'e> Checker<'e> {
                     if self.is_module && name.path.len() == 1 && name.method.is_none() =>
                 {
                     let sig = self.env.func_sig(func, &self.scope.clone(), false);
-                    let t = self.env.types.intern(Ty::Func(sig));
+                    let t = self.env.types.func(sig);
                     self.declare(&name.path[0].text, Some(t), t, false, None);
                 }
                 StmtKind::Class(c) => {
@@ -998,7 +998,7 @@ impl<'e> Checker<'e> {
 
     pub fn as_func(&self, t: TypeId) -> Option<Func> {
         match self.env.types.get(t) {
-            Ty::Func(f) => Some(f.clone()),
+            Ty::Func(f) => Some(Func::clone(f)),
             _ => None,
         }
     }

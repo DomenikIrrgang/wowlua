@@ -525,7 +525,7 @@ impl Env {
                 if let Some((i, t)) = f.predicate {
                     f.predicate = Some((i + 1, t));
                 }
-                self.types.func(f)
+                self.types.intern(Ty::Func(f))
             }
             Ty::Intersection(m) => {
                 let m: Vec<TypeId> = m.iter().map(|&x| self.with_self(x, receiver)).collect();

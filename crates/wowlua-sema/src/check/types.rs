@@ -3,7 +3,7 @@
 //! enums, generic aliases) and their display in messages.
 
 use indexmap::IndexMap;
-use std::collections::HashMap;
+use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher, RandomState};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TypeId(pub u32);
@@ -44,7 +44,9 @@ pub enum Ty {
     Array(TypeId),
     Map(TypeId, TypeId),
     Record(Record),
-    Func(Func),
+    // Boxed: the arena holds a slot of the largest variant for every type,
+    // and functions are few next to the records and literals of table data.
+    Func(Box<Func>),
     /// An instance of a class or interface, an enum, or a generic alias
     /// application that is expanded on demand.
     Named(DefId, Vec<TypeId>),
@@ -57,9 +59,14 @@ pub enum Ty {
     Module(u32),
 }
 
+/// A record's fields, in the order they were added. The hasher has fixed
+/// keys, so it takes no room in the record (a type-checked data addon has a
+/// million records); nothing depends on the hash values.
+pub type Fields = IndexMap<Box<str>, Field, BuildHasherDefault<DefaultHasher>>;
+
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Record {
-    pub fields: IndexMap<Box<str>, Field>,
+    pub fields: Fields,
     pub indexer: Option<(TypeId, TypeId)>,
     /// Still being built in the function that created it (spec §2.4.2).
     pub open: bool,
@@ -147,7 +154,11 @@ impl Pack {
 #[derive(Clone, Debug)]
 pub struct Types {
     data: Vec<Ty>,
-    index: HashMap<Ty, TypeId>,
+    /// The ids of the hash-consed types, hashed and compared through `data`,
+    /// so each type is stored once. Records are not in it: each one has its
+    /// own identity, so a lookup could never find one.
+    index: hashbrown::HashTable<TypeId>,
+    hasher: RandomState,
     next_record: u32,
 }
 
@@ -176,7 +187,8 @@ impl Types {
     pub fn new() -> Self {
         let mut t = Types {
             data: Vec::new(),
-            index: HashMap::new(),
+            index: hashbrown::HashTable::new(),
+            hasher: RandomState::new(),
             next_record: 0,
         };
         for ty in [
@@ -201,12 +213,23 @@ impl Types {
     }
 
     pub fn intern(&mut self, ty: Ty) -> TypeId {
-        if let Some(&id) = self.index.get(&ty) {
+        debug_assert!(
+            !matches!(ty, Ty::Record(_)),
+            "records go through Types::record"
+        );
+        let hash = self.hasher.hash_one(&ty);
+        if let Some(&id) = self.index.find(hash, |&id| self.data[id.0 as usize] == ty) {
             return id;
         }
         let id = TypeId(self.data.len() as u32);
-        self.data.push(ty.clone());
-        self.index.insert(ty, id);
+        self.data.push(ty);
+        let Types {
+            data,
+            index,
+            hasher,
+            ..
+        } = self;
+        index.insert_unique(hash, id, |&id| hasher.hash_one(&data[id.0 as usize]));
         id
     }
 
@@ -227,7 +250,7 @@ impl Types {
     }
 
     pub fn func(&mut self, f: Func) -> TypeId {
-        self.intern(Ty::Func(f))
+        self.intern(Ty::Func(Box::new(f)))
     }
 
     pub fn optional(&mut self, t: TypeId) -> TypeId {
@@ -238,7 +261,9 @@ impl Types {
     pub fn record(&mut self, mut r: Record) -> TypeId {
         self.next_record += 1;
         r.id = self.next_record;
-        self.intern(Ty::Record(r))
+        let id = TypeId(self.data.len() as u32);
+        self.data.push(Ty::Record(r));
+        id
     }
 
     /// The union of `members`: flattened, deduplicated; `never` dropped,
@@ -336,4 +361,17 @@ impl Types {
 /// Formats numbers like Lua (`%.14g`) for literal types.
 pub fn number_text(bits: u64) -> String {
     crate::constant::format_g14(f64::from_bits(bits))
+}
+
+#[cfg(all(test, target_pointer_width = "64"))]
+mod tests {
+    use super::*;
+
+    // The arena holds one `Ty` per type, and a type-checked data addon has
+    // over a million of them, mostly records.
+    #[test]
+    fn types_stay_small() {
+        assert!(std::mem::size_of::<Ty>() <= 80);
+        assert!(std::mem::size_of::<Record>() <= 80);
+    }
 }
