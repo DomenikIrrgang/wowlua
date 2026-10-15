@@ -226,6 +226,8 @@ pub struct Proto {
     /// The source line of each instruction.
     pub lines: Vec<u32>,
     pub constants: Vec<Value>,
+    /// The constants' taint: the taint code was loaded with.
+    pub const_taint: crate::taint::Taint,
     pub protos: Vec<Rc<Proto>>,
     pub upvals: Vec<UpvalDesc>,
     pub upval_names: Vec<Rc<str>>,

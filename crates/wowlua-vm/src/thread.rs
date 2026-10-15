@@ -6,7 +6,6 @@ use std::rc::Rc;
 
 use crate::heap::{FuncRef, TableRef, UpvalRef};
 use crate::proto::Proto;
-use crate::value::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
@@ -38,7 +37,8 @@ pub struct Frame {
 
 #[derive(Default)]
 pub struct ThreadState {
-    pub stack: Vec<Value>,
+    pub stack: Vec<crate::taint::Slot>,
+    pub taint: crate::taint::TaintState,
     pub top: usize,
     pub frames: Vec<Frame>,
     /// Open upvalues by stack slot, ascending.

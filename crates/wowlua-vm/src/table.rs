@@ -4,6 +4,7 @@
 //! pseudo-address.
 
 use crate::heap::{Heap, TableRef};
+use crate::taint::Slot;
 use crate::value::Value;
 
 const MAXBITS: usize = 26;
@@ -40,15 +41,16 @@ pub fn check_key(v: Value) -> Result<(), KeyError> {
 
 #[derive(Clone, Copy, Debug, Default)]
 struct Node {
-    /// Nil: a free node.
+    /// Nil: a free node. Keys carry no taint: the client stores new keys
+    /// secure.
     key: Value,
-    val: Value,
+    val: Slot,
     next: Option<u32>,
 }
 
 #[derive(Default)]
 pub struct Table {
-    arr: Vec<Value>,
+    arr: Vec<Slot>,
     /// Empty: Lua's shared dummy node.
     nodes: Vec<Node>,
     lastfree: usize,
@@ -84,7 +86,7 @@ fn raw_eq(a: Value, b: Value) -> bool {
 impl Table {
     pub fn new(narr: usize, nhash: usize) -> Self {
         let mut t = Table {
-            arr: vec![Value::Nil; narr],
+            arr: vec![Slot::NIL; narr],
             ..Table::default()
         };
         t.set_node_vector(nhash);
@@ -101,7 +103,7 @@ impl Table {
     }
 
     pub(crate) fn capacity_bytes(&self) -> usize {
-        self.arr.len() * 16 + self.nodes.len() * 40
+        self.arr.len() * 24 + self.nodes.len() * 48
     }
 
     fn sizenode(&self) -> usize {
@@ -158,79 +160,95 @@ impl Table {
     }
 
     pub fn get_num(&self, n: f64) -> Value {
+        self.get_num_slot(n).v
+    }
+
+    fn get_num_slot(&self, n: f64) -> Slot {
         let k = n as i32;
         if f64::from(k) == n {
             return self.get_int_i(k);
         }
         if n.is_nan() {
-            return Value::Nil;
+            return Slot::NIL;
         }
         self.find_node(Value::Num(n))
-            .map_or(Value::Nil, |i| self.nodes[i].val)
+            .map_or(Slot::NIL, |i| self.nodes[i].val)
     }
 
-    fn get_int_i(&self, key: i32) -> Value {
+    fn get_int_i(&self, key: i32) -> Slot {
         if (key as i64 - 1) >= 0 && ((key as i64 - 1) as usize) < self.arr.len() {
             return self.arr[(key - 1) as usize];
         }
         self.find_node(Value::Num(f64::from(key)))
-            .map_or(Value::Nil, |i| self.nodes[i].val)
+            .map_or(Slot::NIL, |i| self.nodes[i].val)
     }
 
     pub fn get_int(&self, i: usize) -> Value {
         if i >= 1 && i <= self.arr.len() {
-            return self.arr[i - 1];
+            return self.arr[i - 1].v;
         }
         self.get_num(i as f64)
     }
 
     pub fn get_str(&self, s: crate::heap::StrRef) -> Value {
+        self.get_str_slot(s).v
+    }
+
+    pub fn get_str_slot(&self, s: crate::heap::StrRef) -> Slot {
         self.find_node(Value::Str(s))
-            .map_or(Value::Nil, |i| self.nodes[i].val)
+            .map_or(Slot::NIL, |i| self.nodes[i].val)
     }
 
     pub fn get(&self, key: Value) -> Value {
+        self.get_slot(key).v
+    }
+
+    /// The value and taint stored for `key` (absent keys: a secure nil).
+    pub fn get_slot(&self, key: Value) -> Slot {
         match key {
-            Value::Nil => Value::Nil,
-            Value::Str(s) => self.get_str(s),
-            Value::Num(n) => self.get_num(n),
-            _ => self
-                .find_node(key)
-                .map_or(Value::Nil, |i| self.nodes[i].val),
+            Value::Nil => Slot::NIL,
+            Value::Str(s) => self.get_str_slot(s),
+            Value::Num(n) => self.get_num_slot(n),
+            _ => self.find_node(key).map_or(Slot::NIL, |i| self.nodes[i].val),
         }
     }
 
     /// The slot for `key`, creating it (`luaH_set`). `key` must be valid.
-    fn slot(&mut self, key: Value) -> Slot {
+    fn pos(&mut self, key: Value) -> Pos {
         if let Value::Num(n) = key {
             let k = n as i32;
             if f64::from(k) == n && k >= 1 && (k as usize) <= self.arr.len() {
-                return Slot::Arr(k as usize - 1);
+                return Pos::Arr(k as usize - 1);
             }
         }
         if let Some(i) = self.find_node(key) {
-            return Slot::Node(i);
+            return Pos::Node(i);
         }
         self.newkey(key)
     }
 
-    /// Sets `t[key] = value` (raw).
+    /// Sets `t[key] = value` (raw), secure.
     pub fn set(&mut self, key: Value, value: Value) -> Result<(), KeyError> {
+        self.set_slot(key, Slot::secure(value))
+    }
+
+    /// Sets `t[key]` to a value with its taint (raw).
+    pub fn set_slot(&mut self, key: Value, value: Slot) -> Result<(), KeyError> {
         // As in Lua, even a nil value creates the key's slot.
         check_key(key)?;
-        match self.slot(key) {
-            Slot::Arr(i) => self.arr[i] = value,
-            Slot::Node(i) => self.nodes[i].val = value,
+        match self.pos(key) {
+            Pos::Arr(i) => self.arr[i] = value,
+            Pos::Node(i) => self.nodes[i].val = value,
         }
         Ok(())
     }
 
-    pub fn set_int(&mut self, i: usize, value: Value) {
+    pub fn set_int(&mut self, i: usize, value: Slot) {
         if i >= 1 && i <= self.arr.len() {
             self.arr[i - 1] = value;
             return;
         }
-        let _ = self.set(Value::Num(i as f64), value);
+        let _ = self.set_slot(Value::Num(i as f64), value);
     }
 
     /// Grows the array part to `nasize` (`luaH_resizearray`).
@@ -258,16 +276,16 @@ impl Table {
     }
 
     /// Inserts a new key (`newkey`), rehashing when no node is free.
-    fn newkey(&mut self, key: Value) -> Slot {
+    fn newkey(&mut self, key: Value) -> Pos {
         if self.nodes.is_empty() {
             self.rehash(key);
-            return self.slot(key);
+            return self.pos(key);
         }
         let mut mp = self.mainposition(key);
-        if !self.nodes[mp].val.is_nil() {
+        if !self.nodes[mp].val.v.is_nil() {
             let Some(n) = self.getfreepos() else {
                 self.rehash(key);
-                return self.slot(key);
+                return self.pos(key);
             };
             let othern_start = self.mainposition(self.nodes[mp].key);
             if othern_start != mp {
@@ -279,7 +297,7 @@ impl Table {
                 self.nodes[othern].next = Some(n as u32);
                 self.nodes[n] = self.nodes[mp];
                 self.nodes[mp].next = None;
-                self.nodes[mp].val = Value::Nil;
+                self.nodes[mp].val = Slot::NIL;
             } else {
                 // The colliding node is in its own main position.
                 self.nodes[n].next = self.nodes[mp].next;
@@ -288,7 +306,7 @@ impl Table {
             }
         }
         self.nodes[mp].key = key;
-        Slot::Node(mp)
+        Pos::Node(mp)
     }
 
     fn countint(key: Value, nums: &mut [usize; MAXBITS + 1]) -> usize {
@@ -315,7 +333,7 @@ impl Table {
                 }
             }
             while i <= lim {
-                if !self.arr[i - 1].is_nil() {
+                if !self.arr[i - 1].v.is_nil() {
                     lc += 1;
                 }
                 i += 1;
@@ -358,7 +376,7 @@ impl Table {
         // numusehash
         let mut ause = 0;
         for n in self.nodes.iter().rev() {
-            if !n.val.is_nil() {
+            if !n.val.v.is_nil() {
                 ause += Self::countint(n.key, &mut nums);
                 totaluse += 1;
             }
@@ -374,29 +392,29 @@ impl Table {
         let oldasize = self.arr.len();
         let old_nodes = std::mem::take(&mut self.nodes);
         if nasize > oldasize {
-            self.arr.resize(nasize, Value::Nil);
+            self.arr.resize(nasize, Slot::NIL);
         }
         self.set_node_vector(nhsize);
         if nasize < oldasize {
-            let vanishing: Vec<(usize, Value)> = self.arr[nasize..]
+            let vanishing: Vec<(usize, Slot)> = self.arr[nasize..]
                 .iter()
                 .enumerate()
-                .filter(|(_, v)| !v.is_nil())
+                .filter(|(_, v)| !v.v.is_nil())
                 .map(|(i, v)| (nasize + i + 1, *v))
                 .collect();
             self.arr.truncate(nasize);
             for (k, v) in vanishing {
-                match self.slot(Value::Num(k as f64)) {
-                    Slot::Arr(i) => self.arr[i] = v,
-                    Slot::Node(i) => self.nodes[i].val = v,
+                match self.pos(Value::Num(k as f64)) {
+                    Pos::Arr(i) => self.arr[i] = v,
+                    Pos::Node(i) => self.nodes[i].val = v,
                 }
             }
         }
         for old in old_nodes.iter().rev() {
-            if !old.val.is_nil() {
-                match self.slot(old.key) {
-                    Slot::Arr(i) => self.arr[i] = old.val,
-                    Slot::Node(i) => self.nodes[i].val = old.val,
+            if !old.val.v.is_nil() {
+                match self.pos(old.key) {
+                    Pos::Arr(i) => self.arr[i] = old.val,
+                    Pos::Node(i) => self.nodes[i].val = old.val,
                 }
             }
         }
@@ -405,11 +423,11 @@ impl Table {
     /// The length operator on a table without `__len` (`luaH_getn`).
     pub fn border(&self) -> usize {
         let mut j = self.arr.len();
-        if j > 0 && self.arr[j - 1].is_nil() {
+        if j > 0 && self.arr[j - 1].v.is_nil() {
             let mut i = 0;
             while j - i > 1 {
                 let m = (i + j) / 2;
-                if self.arr[m - 1].is_nil() {
+                if self.arr[m - 1].v.is_nil() {
                     j = m;
                 } else {
                     i = m;
@@ -462,19 +480,24 @@ impl Table {
     /// The entry after `key` (`luaH_next`); `Err` for a key not in the
     /// table.
     pub fn next(&self, key: Value) -> Result<Option<(Value, Value)>, InvalidKey> {
+        Ok(self.next_slot(key)?.map(|(k, v)| (k, v.v)))
+    }
+
+    /// `next` with the value's taint.
+    pub fn next_slot(&self, key: Value) -> Result<Option<(Value, Slot)>, InvalidKey> {
         let start = match self.findindex(key)? {
             None => 0,
             Some(i) => i + 1,
         };
         for i in start..self.arr.len() {
-            if !self.arr[i].is_nil() {
+            if !self.arr[i].v.is_nil() {
                 return Ok(Some((Value::Num((i + 1) as f64), self.arr[i])));
             }
         }
         let hstart = start.saturating_sub(self.arr.len());
         for i in hstart..self.nodes.len() {
             let n = &self.nodes[i];
-            if !n.val.is_nil() {
+            if !n.val.v.is_nil() {
                 return Ok(Some((n.key, n.val)));
             }
         }
@@ -486,13 +509,13 @@ impl Table {
         self.arr
             .iter()
             .enumerate()
-            .filter(|(_, v)| !v.is_nil())
-            .map(|(i, v)| (Value::Num((i + 1) as f64), *v))
+            .filter(|(_, v)| !v.v.is_nil())
+            .map(|(i, v)| (Value::Num((i + 1) as f64), v.v))
             .chain(
                 self.nodes
                     .iter()
-                    .filter(|n| !n.val.is_nil())
-                    .map(|n| (n.key, n.val)),
+                    .filter(|n| !n.val.v.is_nil())
+                    .map(|n| (n.key, n.val.v)),
             )
     }
 
@@ -500,19 +523,20 @@ impl Table {
     /// becomes nil, the key stays as a dead key (as in Lua).
     pub(crate) fn retain(&mut self, mut keep: impl FnMut(Value, Value) -> bool) {
         for (i, v) in self.arr.iter_mut().enumerate() {
-            if !v.is_nil() && !keep(Value::Num((i + 1) as f64), *v) {
-                *v = Value::Nil;
+            if !v.v.is_nil() && !keep(Value::Num((i + 1) as f64), v.v) {
+                *v = Slot::NIL;
             }
         }
         for n in self.nodes.iter_mut() {
-            if !n.val.is_nil() && !keep(n.key, n.val) {
-                n.val = Value::Nil;
+            if !n.val.v.is_nil() && !keep(n.key, n.val.v) {
+                n.val = Slot::NIL;
             }
         }
     }
 }
 
-enum Slot {
+/// Where a key's value lives.
+enum Pos {
     Arr(usize),
     Node(usize),
 }

@@ -155,11 +155,11 @@ impl Vm {
             m.gray.push(Gray::Value(Value::Thread(*t)));
         }
         m.gray
-            .extend(self.yield_values.iter().map(|v| Gray::Value(*v)));
+            .extend(self.yield_values.iter().map(|v| Gray::Value(v.v)));
         // The running thread's state lives in the VM, not in its object.
         let top = self.live_top();
         for slot in &mut self.cur.stack[top..] {
-            *slot = Value::Nil;
+            *slot = crate::taint::Slot::NIL;
         }
         mark_state(&self.cur, top, m);
     }
@@ -194,7 +194,7 @@ impl Vm {
                         continue;
                     }
                     match *self.heap.upval(u) {
-                        Upval::Closed(v) => m.gray.push(Gray::Value(v)),
+                        Upval::Closed(v) => m.gray.push(Gray::Value(v.v)),
                         // An open upvalue keeps its thread's stack alive.
                         Upval::Open { thread, .. } => {
                             m.gray.push(Gray::Value(Value::Thread(thread)))
@@ -346,7 +346,7 @@ impl Vm {
 
 fn mark_state(state: &ThreadState, top: usize, m: &mut Marker) {
     for v in &state.stack[..top.min(state.stack.len())] {
-        m.gray.push(Gray::Value(*v));
+        m.gray.push(Gray::Value(v.v));
     }
     for f in &state.frames {
         m.gray.push(Gray::Value(Value::Func(f.closure)));

@@ -32,6 +32,19 @@ impl NativeCall {
         self.args.get(n - 1).copied().unwrap_or_default()
     }
 
+    /// Argument `n` (1-based) with its taint.
+    pub fn slot(&self, n: usize) -> crate::taint::Slot {
+        crate::taint::Slot {
+            v: self.arg(n),
+            t: self.taints.get(n - 1).copied().unwrap_or_default(),
+        }
+    }
+
+    /// The arguments from `n` (1-based) on, with their taints.
+    pub fn slots(&self, n: usize) -> Vec<crate::taint::Slot> {
+        (n..=self.args.len()).map(|i| self.slot(i)).collect()
+    }
+
     pub fn has(&self, n: usize) -> bool {
         n <= self.args.len()
     }

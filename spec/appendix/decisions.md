@@ -242,6 +242,7 @@ open for review.
 | T190 | The VM runs a register bytecode of its own, compiled from the compiler's output, each instruction carrying its source span **(user, M9)** | Lua 5.1's proven design for speed; coverage, taint and spans attach per instruction. A tree walker is slower; `luac` bytecode loses wowlua's spans. |
 | T191 | The VM's memory is managed by a tracing garbage collector over an arena, in safe Rust **(user, M9)** | Cycles, `__gc` and weak tables behave like the client's; reference counting or no collection would not. |
 | T192 | Coroutines are stackless: each is its own VM stack **(user, M9)** | No native stacks or overflow; yields still stop at `pcall`, metamethods and native calls, as in the client. |
+| T193 | Taint is exact: every stack slot, table field, upvalue and object carries the taint of the code that wrote it, as in the client **(user, M9)** | Taint spreads through locals and upvalues in real addons; tracking only tables would miss it. Costs memory per slot, always on. |
 
 ## Standard library
 

@@ -168,6 +168,9 @@ Off by default: mock-only tests start faster (decision T186).
     in a finalizer reaches the code that caused the collection.
   - `collectgarbage` reports memory, and `step` counts work, as Lua 5.1's
     incremental collector would.
+- **Taint** (decision T193). Exact, as the client tracks it: every stack
+  slot, table field, upvalue and object carries the taint (the addon) of the
+  code that wrote it, and each thread its execution's taint (§17.4).
 - **Coroutines** (decision T192). Stackless: each coroutine is its own VM
   stack, and a yield unwinds to its `resume` without the native stack. As in
   the client's Lua 5.1, a yield cannot cross `pcall`, a metamethod or another

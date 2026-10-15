@@ -5,6 +5,7 @@ use crate::function::NativeCall;
 use crate::number::fmt_g;
 use crate::stdlib::pattern::{Capture, MatchState, SPECIALS};
 use crate::stdlib::{Ret, register};
+use crate::taint::Slot;
 use crate::value::Value;
 use crate::vm::Vm;
 
@@ -629,9 +630,9 @@ fn gmatch(vm: &mut Vm, c: NativeCall) -> Ret {
     // The iterator's state: string, pattern and position, in a table.
     let state = vm.new_table();
     let t = vm.heap.table_mut(state);
-    t.set_int(1, Value::Str(s));
-    t.set_int(2, Value::Str(p));
-    t.set_int(3, Value::Num(0.0));
+    t.set_int(1, Slot::secure(Value::Str(s)));
+    t.set_int(2, Slot::secure(Value::Str(p)));
+    t.set_int(3, Slot::secure(Value::Num(0.0)));
     let iter = vm.native_with("gmatch_iterator", gmatch_step, vec![Value::Table(state)]);
     Ok(vec![iter])
 }
@@ -657,7 +658,7 @@ fn gmatch_step(vm: &mut Vm, c: NativeCall) -> Ret {
                 let newstart = if e == start { e + 1 } else { e };
                 vm.heap
                     .table_mut(state)
-                    .set_int(3, Value::Num(newstart as f64));
+                    .set_int(3, Slot::secure(Value::Num(newstart as f64)));
                 return push_captures(vm, &ms, start, e, true);
             }
             Ok(None) => start += 1,

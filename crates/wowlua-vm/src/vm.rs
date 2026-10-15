@@ -12,6 +12,7 @@ use crate::heap::{FuncRef, Heap, StrRef, TableRef, ThreadRef, UpvalRef};
 use crate::number::{fmt_num, str2num};
 use crate::proto::{ArithOp, Op, Proto, Rk};
 use crate::table::Table;
+use crate::taint::{Slot, Taint, TaintState};
 use crate::thread::{Frame, Status, Thread, ThreadState};
 use crate::value::Value;
 
@@ -150,6 +151,9 @@ impl Default for Clock {
 pub struct Vm {
     /// The client's changes to Lua's rules.
     pub rules: Rules,
+    /// Taints for a native's results, set by the native just before it
+    /// returns (else its results take the write taint).
+    pub result_taints: Vec<Taint>,
     pub clock: Clock,
     /// `geterrorhandler`/`seterrorhandler` and the print handler (WoW).
     pub error_handler: Value,
@@ -188,7 +192,7 @@ pub struct Vm {
     pub(crate) co_base: usize,
     /// The yield in progress: its call site and values.
     pub(crate) yield_site: Option<(usize, i32)>,
-    pub(crate) yield_values: Vec<Value>,
+    pub(crate) yield_values: Vec<Slot>,
     /// Threads that resumed the running one (kept alive).
     pub(crate) resume_chain: Vec<ThreadRef>,
     pub(crate) rand_state: u32,
@@ -221,6 +225,7 @@ impl Vm {
         });
         let mut vm = Vm {
             rules: Rules::default(),
+            result_taints: Vec::new(),
             clock: Clock::default(),
             error_handler: Value::Nil,
             print_handler: Value::Nil,
@@ -257,7 +262,7 @@ impl Vm {
             rand_state: 1,
             gc_cycles: 0,
         };
-        vm.cur.stack.resize(64, Value::Nil);
+        vm.cur.stack.resize(64, Slot::NIL);
         crate::stdlib::open(&mut vm);
         vm
     }
@@ -293,11 +298,13 @@ impl Vm {
 
     pub fn native_with(&mut self, name: &'static str, f: NativeFn, upvals: Vec<Value>) -> Value {
         let env = self.globals;
+        let taint = self.cur.taint.alloc(true);
         Value::Func(self.heap.alloc_func(Function::Native(NativeFunction {
             f,
             name,
             upvals: upvals.into(),
             env,
+            taint,
         })))
     }
 
@@ -349,16 +356,20 @@ impl Vm {
             }
             return Err(message);
         }
-        let proto = compiled.map_err(|e| {
+        let mut proto = compiled.map_err(|e| {
             message.extend_from_slice(format!(":{}: {}", e.line, e.message).as_bytes());
             message
         })?;
+        // The constants take the taint of the code loading them.
+        set_const_taint(&mut proto, self.cur.taint.write());
         let env = self.globals;
+        let taint = self.cur.taint.alloc(true);
         Ok(Value::Func(self.heap.alloc_func(Function::Lua(
             LuaFunction {
                 proto,
                 upvals: Box::new([]),
                 env,
+                taint,
             },
         ))))
     }
@@ -368,12 +379,56 @@ impl Vm {
     fn ensure_stack(&mut self, size: usize) {
         if self.cur.stack.len() < size {
             let new = (size + 64).max(self.cur.stack.len() * 2);
-            self.cur.stack.resize(new, Value::Nil);
+            self.cur.stack.resize(new, Slot::NIL);
         }
     }
 
-    /// Calls `f` with `args`; returns all results. Errors unwind the call.
+    /// A native's results as they are, taints included: sets
+    /// [`result_taints`](Self::result_taints) and returns the values.
+    pub fn return_slots(&mut self, slots: Vec<Slot>) -> Vec<Value> {
+        self.result_taints = slots.iter().map(|s| s.t).collect();
+        slots.into_iter().map(|s| s.v).collect()
+    }
+
+    /// The running thread's taint.
+    pub fn taint(&self) -> &TaintState {
+        &self.cur.taint
+    }
+
+    pub fn taint_mut(&mut self) -> &mut TaintState {
+        &mut self.cur.taint
+    }
+
+    /// A register's value.
+    fn reg(&self, i: usize) -> Value {
+        self.cur.stack[i].v
+    }
+
+    /// Writes a value made now (`setnvalue` and the like).
+    fn set_fresh(&mut self, i: usize, v: Value) {
+        self.cur.stack[i] = self.cur.taint.fresh(v);
+    }
+
+    /// Copies a stored value into a register (`setobj2s`).
+    fn set_copy(&mut self, i: usize, s: Slot) {
+        self.cur.stack[i] = self.cur.taint.copy(s);
+    }
+
+    /// Calls `f` with `args`, as a native pushes them (values made now);
+    /// returns all results. Errors unwind the call.
     pub fn call(&mut self, f: Value, args: &[Value]) -> Result<Vec<Value>, LuaError> {
+        let f = self.cur.taint.fresh(f);
+        let args: Vec<Slot> = args.iter().map(|&v| self.cur.taint.fresh(v)).collect();
+        Ok(self
+            .call_slots(f, &args)?
+            .into_iter()
+            .map(|s| s.v)
+            .collect())
+    }
+
+    /// Calls `f` with `args` as they are (taints included); returns the
+    /// result slots as the callee left them.
+    pub fn call_slots(&mut self, f: Slot, args: &[Slot]) -> Result<Vec<Slot>, LuaError> {
         let func = self.cur.top.max(self.frame_top());
         self.ensure_stack(func + args.len() + 1);
         self.cur.stack[func] = f;
@@ -466,23 +521,27 @@ impl Vm {
         from_lua: bool,
     ) -> Result<bool, LuaError> {
         let mut nargs = nargs;
-        let f = match self.cur.stack[func] {
+        let f = match self.reg(func) {
             Value::Func(f) => f,
             other => {
                 // `__call`
-                let tm = self.get_tm(other, self.names.call);
-                let Value::Func(f) = tm else {
+                let tm = self.get_tm_slot(other, self.names.call);
+                let Value::Func(f) = tm.v else {
                     return Err(self.call_error(func));
                 };
                 self.ensure_stack(func + nargs + 2);
                 for i in (func..=func + nargs).rev() {
-                    self.cur.stack[i + 1] = self.cur.stack[i];
+                    let s = self.cur.stack[i];
+                    self.set_copy(i + 1, s);
                 }
-                self.cur.stack[func] = tm;
+                self.set_copy(func, tm);
                 nargs += 1;
                 f
             }
         };
+        // Calls clear the fixed taint (`luaD_precall`); entering a Lua
+        // frame sets it again.
+        self.cur.taint.fixed = Taint::SECURE;
         match self.heap.func(f) {
             Function::Lua(lf) => {
                 let proto = lf.proto.clone();
@@ -497,14 +556,15 @@ impl Vm {
                     self.ensure_stack(top + np + proto.max_stack as usize + 1);
                     let mut actual = nargs;
                     while actual < np {
-                        self.cur.stack[func + 1 + actual] = Value::Nil;
+                        self.set_fresh(func + 1 + actual, Value::Nil);
                         actual += 1;
                     }
                     let fixed = func + 1;
                     let base = func + 1 + actual;
                     for i in 0..np {
-                        self.cur.stack[base + i] = self.cur.stack[fixed + i];
-                        self.cur.stack[fixed + i] = Value::Nil;
+                        let s = self.cur.stack[fixed + i];
+                        self.set_copy(base + i, s);
+                        self.set_fresh(fixed + i, Value::Nil);
                     }
                     (base, actual - np)
                 } else {
@@ -518,8 +578,9 @@ impl Vm {
                 } else {
                     base + nargs.min(np)
                 };
+                let nil = self.cur.taint.fresh(Value::Nil);
                 for slot in &mut self.cur.stack[first_nil..top] {
-                    *slot = Value::Nil;
+                    *slot = nil;
                 }
                 self.cur.frames.push(Frame {
                     closure: f,
@@ -536,7 +597,9 @@ impl Vm {
             }
             Function::Native(nf) => {
                 let (native, upvals) = (nf.f, nf.upvals.clone());
-                let args = self.cur.stack[func + 1..func + 1 + nargs].to_vec();
+                let slots = &self.cur.stack[func + 1..func + 1 + nargs];
+                let args = slots.iter().map(|s| s.v).collect();
+                let taints = slots.iter().map(|s| s.t).collect();
                 // Nested calls from the native go above its arguments.
                 self.cur.top = func + 1 + nargs;
                 self.cstack.push(CEntry {
@@ -545,11 +608,20 @@ impl Vm {
                     func: f,
                     from_lua,
                 });
-                let r = native(self, NativeCall { args, upvals });
+                self.result_taints.clear();
+                let r = native(
+                    self,
+                    NativeCall {
+                        args,
+                        taints,
+                        upvals,
+                    },
+                );
                 self.cstack.pop();
                 let results = match r {
                     Ok(results) => results,
                     Err(e) => {
+                        self.result_taints.clear();
                         if e.yielded {
                             // The results of this call come with the resume.
                             self.yield_site = Some((func, nresults));
@@ -557,13 +629,26 @@ impl Vm {
                         return Err(e);
                     }
                 };
+                // Values a native made take the write taint; it may give
+                // others' own (`Vm::result_taints`).
+                let taints = std::mem::take(&mut self.result_taints);
+                let write = self.cur.taint.write();
+                let results: Vec<Slot> = results
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, v)| Slot {
+                        v,
+                        t: taints.get(i).copied().unwrap_or(write),
+                    })
+                    .collect();
                 self.place_results(func, &results, nresults);
                 Ok(false)
             }
         }
     }
 
-    fn place_results(&mut self, func: usize, results: &[Value], nresults: i32) {
+    /// Moves results to the caller's registers (`luaD_poscall`).
+    fn place_results(&mut self, func: usize, results: &[Slot], nresults: i32) {
         let n = if nresults < 0 {
             results.len()
         } else {
@@ -571,7 +656,10 @@ impl Vm {
         };
         self.ensure_stack(func + n + 1);
         for i in 0..n {
-            self.cur.stack[func + i] = results.get(i).copied().unwrap_or_default();
+            match results.get(i) {
+                Some(&s) => self.set_copy(func + i, s),
+                None => self.set_fresh(func + i, Value::Nil),
+            }
         }
         if nresults < 0 {
             self.cur.top = func + n;
@@ -587,11 +675,12 @@ impl Vm {
         let count = if wanted < 0 { n } else { wanted as usize };
         self.ensure_stack(dest + count + 1);
         for i in 0..count {
-            self.cur.stack[dest + i] = if i < n {
-                self.cur.stack[from + i]
+            if i < n {
+                let s = self.cur.stack[from + i];
+                self.set_copy(dest + i, s);
             } else {
-                Value::Nil
-            };
+                self.set_fresh(dest + i, Value::Nil);
+            }
         }
         if wanted < 0 {
             self.cur.top = dest + n;
@@ -628,6 +717,10 @@ impl Vm {
     }
 
     pub(crate) fn upval_get(&self, u: UpvalRef) -> Value {
+        self.upval_slot(u).v
+    }
+
+    pub(crate) fn upval_slot(&self, u: UpvalRef) -> Slot {
         match *self.heap.upval(u) {
             Upval::Closed(v) => v,
             Upval::Open { thread, idx } => {
@@ -640,7 +733,8 @@ impl Vm {
         }
     }
 
-    fn upval_set(&mut self, u: UpvalRef, v: Value) {
+    /// Stores into an upvalue, taint and all (`setobj2uv`).
+    fn upval_set(&mut self, u: UpvalRef, v: Slot) {
         match *self.heap.upval(u) {
             Upval::Closed(_) => *self.heap.upval_mut(u) = Upval::Closed(v),
             Upval::Open { thread, idx } => {
@@ -657,8 +751,19 @@ impl Vm {
 
     fn rk(&self, base: usize, k: &[Value], rk: Rk) -> Value {
         match rk {
-            Rk::R(r) => self.cur.stack[base + r as usize],
+            Rk::R(r) => self.cur.stack[base + r as usize].v,
             Rk::K(i) => k[i as usize],
+        }
+    }
+
+    /// An RK operand with its taint (constants: the load taint).
+    fn rk_slot(&self, base: usize, proto: &Proto, rk: Rk) -> Slot {
+        match rk {
+            Rk::R(r) => self.cur.stack[base + r as usize],
+            Rk::K(i) => Slot {
+                v: proto.constants[i as usize],
+                t: proto.const_taint,
+            },
         }
     }
 
@@ -677,6 +782,12 @@ impl Vm {
                 let f = &self.cur.frames[fi];
                 (f.closure, f.proto.clone(), f.base)
             };
+            // (Re)entering a Lua frame: its closure's taint taints the
+            // execution and fixes it while the frame runs.
+            let closure_taint = self.heap.func(closure).taint();
+            self.cur.taint.fixed = Taint::SECURE;
+            self.cur.taint.read(closure_taint);
+            self.cur.taint.fixed = closure_taint;
             let k = &proto.constants[..];
             loop {
                 let pc = self.cur.frames[fi].pc;
@@ -684,51 +795,54 @@ impl Vm {
                 self.cur.frames[fi].pc = pc + 1;
                 match op {
                     Op::Move { a, b } => {
-                        self.cur.stack[base + a as usize] = self.cur.stack[base + b as usize];
+                        let s = self.cur.stack[base + b as usize];
+                        self.set_copy(base + a as usize, s);
                     }
                     Op::LoadK { a, k: i } => {
-                        self.cur.stack[base + a as usize] = k[i as usize];
+                        let s = self.rk_slot(base, &proto, Rk::K(i));
+                        self.set_copy(base + a as usize, s);
                     }
                     Op::LoadBool { a, value, skip } => {
-                        self.cur.stack[base + a as usize] = Value::Bool(value);
+                        self.set_fresh(base + a as usize, Value::Bool(value));
                         if skip {
                             self.cur.frames[fi].pc += 1;
                         }
                     }
                     Op::LoadNil { a, b } => {
                         for r in a..=b {
-                            self.cur.stack[base + r as usize] = Value::Nil;
+                            self.set_fresh(base + r as usize, Value::Nil);
                         }
                     }
                     Op::GetUpval { a, u } => {
                         let uv = self.closure_upval(closure, u);
-                        self.cur.stack[base + a as usize] = self.upval_get(uv);
+                        let s = self.upval_slot(uv);
+                        self.set_copy(base + a as usize, s);
                     }
                     Op::GetGlobal { a, k: i } => {
                         let env = Value::Table(self.heap.func(closure).env());
-                        let v = self.index(env, k[i as usize], None)?;
-                        self.cur.stack[base + a as usize] = v;
+                        let s = self.index_slot(env, k[i as usize], None)?;
+                        self.set_copy(base + a as usize, s);
                     }
                     Op::GetTable { a, b, c } => {
-                        let t = self.cur.stack[base + b as usize];
+                        let t = self.reg(base + b as usize);
                         let key = self.rk(base, k, c);
-                        let v = match t {
+                        let s = match t {
                             Value::Table(tr) => {
-                                let v = self.heap.table(tr).get(key);
-                                if v.is_nil() && self.heap.table(tr).meta.is_some() {
-                                    self.index(t, key, Some(b))?
+                                let s = self.heap.table(tr).get_slot(key);
+                                if s.v.is_nil() && self.heap.table(tr).meta.is_some() {
+                                    self.index_slot(t, key, Some(b))?
                                 } else {
-                                    v
+                                    s
                                 }
                             }
-                            _ => self.index(t, key, Some(b))?,
+                            _ => self.index_slot(t, key, Some(b))?,
                         };
-                        self.cur.stack[base + a as usize] = v;
+                        self.set_copy(base + a as usize, s);
                     }
                     Op::SetGlobal { a, k: i } => {
                         let env = Value::Table(self.heap.func(closure).env());
                         let v = self.cur.stack[base + a as usize];
-                        self.set_index(env, k[i as usize], v, None)?;
+                        self.set_index_slot(env, k[i as usize], v, None)?;
                     }
                     Op::SetUpval { a, u } => {
                         let uv = self.closure_upval(closure, u);
@@ -736,24 +850,24 @@ impl Vm {
                         self.upval_set(uv, v);
                     }
                     Op::SetTable { a, b, c } => {
-                        let t = self.cur.stack[base + a as usize];
+                        let t = self.reg(base + a as usize);
                         let key = self.rk(base, k, b);
-                        let v = self.rk(base, k, c);
-                        self.set_index(t, key, v, Some(a))?;
+                        let v = self.rk_slot(base, &proto, c);
+                        self.set_index_slot(t, key, v, Some(a))?;
                     }
                     Op::NewTable { a, narr, nhash } => {
                         let t = self
                             .heap
                             .alloc_table(Table::new(narr as usize, nhash as usize));
-                        self.cur.stack[base + a as usize] = Value::Table(t);
+                        self.set_fresh(base + a as usize, Value::Table(t));
                         self.gc_step()?;
                     }
                     Op::SelfOp { a, b, c } => {
                         let obj = self.cur.stack[base + b as usize];
                         let key = self.rk(base, k, c);
-                        self.cur.stack[base + a as usize + 1] = obj;
-                        let v = self.index(obj, key, Some(b))?;
-                        self.cur.stack[base + a as usize] = v;
+                        self.set_copy(base + a as usize + 1, obj);
+                        let s = self.index_slot(obj.v, key, Some(b))?;
+                        self.set_copy(base + a as usize, s);
                     }
                     Op::Arith { op, a, b, c } => {
                         let x = self.rk(base, k, b);
@@ -767,32 +881,40 @@ impl Vm {
                             };
                             self.check_fp(num(x), num(y))?;
                         }
-                        let v = match (x, y) {
-                            (Value::Num(x), Value::Num(y)) => Value::Num(arith(op, x, y)),
-                            _ => self.arith_slow(op, x, y, b, c)?,
-                        };
-                        self.cur.stack[base + a as usize] = v;
+                        match (x, y) {
+                            (Value::Num(x), Value::Num(y)) => {
+                                self.set_fresh(base + a as usize, Value::Num(arith(op, x, y)));
+                            }
+                            _ => {
+                                let xs = self.rk_slot(base, &proto, b);
+                                let ys = self.rk_slot(base, &proto, c);
+                                let s = self.arith_slow(op, xs, ys, b, c)?;
+                                self.set_copy(base + a as usize, s);
+                            }
+                        }
                     }
                     Op::Unm { a, b } => {
-                        let x = self.cur.stack[base + b as usize];
-                        let v = match x {
-                            Value::Num(n) => Value::Num(-n),
-                            _ => self.unm_slow(x, b)?,
-                        };
-                        self.cur.stack[base + a as usize] = v;
+                        let x = self.reg(base + b as usize);
+                        match x {
+                            Value::Num(n) => self.set_fresh(base + a as usize, Value::Num(-n)),
+                            _ => {
+                                let s = self.unm_slow(x, b)?;
+                                self.set_copy(base + a as usize, s);
+                            }
+                        }
                     }
                     Op::Not { a, b } => {
-                        let x = self.cur.stack[base + b as usize];
-                        self.cur.stack[base + a as usize] = Value::Bool(!x.truthy());
+                        let x = self.reg(base + b as usize);
+                        self.set_fresh(base + a as usize, Value::Bool(!x.truthy()));
                     }
                     Op::Len { a, b } => {
-                        let x = self.cur.stack[base + b as usize];
-                        let v = self.len(x, Some(b))?;
-                        self.cur.stack[base + a as usize] = v;
+                        let x = self.reg(base + b as usize);
+                        let s = self.len_slot(x, Some(b))?;
+                        self.set_copy(base + a as usize, s);
                     }
                     Op::Concat { a, b, c } => {
-                        let v = self.concat_range(base, b, c)?;
-                        self.cur.stack[base + a as usize] = v;
+                        let s = self.concat_range(base, b, c)?;
+                        self.set_copy(base + a as usize, s);
                         self.gc_step()?;
                     }
                     Op::Jmp { sbx } => {
@@ -817,13 +939,13 @@ impl Vm {
                         self.cond_jump(fi, &proto, r == a);
                     }
                     Op::Test { a, c } => {
-                        let t = self.cur.stack[base + a as usize].truthy();
+                        let t = self.reg(base + a as usize).truthy();
                         self.cond_jump(fi, &proto, t == c);
                     }
                     Op::TestSet { a, b, c } => {
-                        let v = self.cur.stack[base + b as usize];
-                        if v.truthy() == c {
-                            self.cur.stack[base + a as usize] = v;
+                        let s = self.cur.stack[base + b as usize];
+                        if s.v.truthy() == c {
+                            self.set_copy(base + a as usize, s);
                             self.cond_jump(fi, &proto, true);
                         } else {
                             self.cond_jump(fi, &proto, false);
@@ -856,7 +978,8 @@ impl Vm {
                             // Move the callee and arguments down over this
                             // frame and replace it.
                             for i in 0..=nargs {
-                                self.cur.stack[cur_func + i] = self.cur.stack[func + i];
+                                let s = self.cur.stack[func + i];
+                                self.set_copy(cur_func + i, s);
                             }
                             self.cur.frames.pop();
                             self.precall(cur_func, nargs, nresults, true)?;
@@ -886,11 +1009,9 @@ impl Vm {
                     }
                     Op::ForLoop { a, sbx } => {
                         let ra = base + a as usize;
-                        let (Value::Num(idx), Value::Num(limit), Value::Num(step)) = (
-                            self.cur.stack[ra],
-                            self.cur.stack[ra + 1],
-                            self.cur.stack[ra + 2],
-                        ) else {
+                        let (Value::Num(idx), Value::Num(limit), Value::Num(step)) =
+                            (self.reg(ra), self.reg(ra + 1), self.reg(ra + 2))
+                        else {
                             unreachable!("for loop prepared")
                         };
                         let idx = idx + step;
@@ -900,15 +1021,15 @@ impl Vm {
                             limit <= idx
                         } {
                             self.jump(fi, sbx);
-                            self.cur.stack[ra] = Value::Num(idx);
-                            self.cur.stack[ra + 3] = Value::Num(idx);
+                            self.set_fresh(ra, Value::Num(idx));
+                            self.set_fresh(ra + 3, Value::Num(idx));
                         }
                     }
                     Op::ForPrep { a, sbx } => {
                         let ra = base + a as usize;
-                        let init = self.tonumber(self.cur.stack[ra]);
-                        let limit = self.tonumber(self.cur.stack[ra + 1]);
-                        let step = self.tonumber(self.cur.stack[ra + 2]);
+                        let init = self.tonumber(self.reg(ra));
+                        let limit = self.tonumber(self.reg(ra + 1));
+                        let step = self.tonumber(self.reg(ra + 2));
                         let Some(init) = init else {
                             return Err(self.rt_error("'for' initial value must be a number"));
                         };
@@ -918,21 +1039,27 @@ impl Vm {
                         let Some(step) = step else {
                             return Err(self.rt_error("'for' step must be a number"));
                         };
-                        self.cur.stack[ra] = Value::Num(init - step);
-                        self.cur.stack[ra + 1] = Value::Num(limit);
-                        self.cur.stack[ra + 2] = Value::Num(step);
+                        // `tonumber` converts in place: a number stays as it
+                        // is, a converted string becomes a value made now.
+                        for (r, x) in [(ra + 1, limit), (ra + 2, step)] {
+                            if !matches!(self.reg(r), Value::Num(_)) {
+                                self.set_fresh(r, Value::Num(x));
+                            }
+                        }
+                        self.set_fresh(ra, Value::Num(init - step));
                         self.jump(fi, sbx);
                     }
                     Op::TForLoop { a, c } => {
                         let ra = base + a as usize;
                         let cb = ra + 3;
-                        self.cur.stack[cb + 2] = self.cur.stack[ra + 2];
-                        self.cur.stack[cb + 1] = self.cur.stack[ra + 1];
-                        self.cur.stack[cb] = self.cur.stack[ra];
+                        for i in (0..3).rev() {
+                            let s = self.cur.stack[ra + i];
+                            self.set_copy(cb + i, s);
+                        }
                         self.call_at(cb, 2, c as i32, true)?;
-                        let v = self.cur.stack[cb];
-                        if !v.is_nil() {
-                            self.cur.stack[cb - 1] = v;
+                        let s = self.cur.stack[cb];
+                        if !s.v.is_nil() {
+                            self.set_copy(cb - 1, s);
                         } else {
                             self.cur.frames[fi].pc += 1;
                         }
@@ -944,7 +1071,7 @@ impl Vm {
                         } else {
                             b as usize
                         };
-                        let Value::Table(t) = self.cur.stack[ra] else {
+                        let Value::Table(t) = self.reg(ra) else {
                             unreachable!("SETLIST on a table")
                         };
                         let first = (c as usize - 1) * LFIELDS_PER_FLUSH;
@@ -973,12 +1100,14 @@ impl Vm {
                             });
                         }
                         let env = self.heap.func(closure).env();
+                        let taint = self.cur.taint.alloc(true);
                         let f = self.heap.alloc_func(Function::Lua(LuaFunction {
                             proto: p,
                             upvals: upvals.into_boxed_slice(),
                             env,
+                            taint,
                         }));
-                        self.cur.stack[base + a as usize] = Value::Func(f);
+                        self.set_fresh(base + a as usize, Value::Func(f));
                         self.gc_step()?;
                     }
                     Op::Vararg { a, b } => {
@@ -992,11 +1121,12 @@ impl Vm {
                             b as usize - 1
                         };
                         for j in 0..wanted {
-                            self.cur.stack[ra + j] = if j < n {
-                                self.cur.stack[base - n + j]
+                            if j < n {
+                                let s = self.cur.stack[base - n + j];
+                                self.set_copy(ra + j, s);
                             } else {
-                                Value::Nil
-                            };
+                                self.set_fresh(ra + j, Value::Nil);
+                            }
                         }
                     }
                 }
@@ -1032,7 +1162,7 @@ impl Vm {
     /// Whether the value at `slot` is a Lua function (true), a native
     /// (false), or not a function (None).
     fn callee_kind(&self, slot: usize) -> Option<bool> {
-        match self.cur.stack[slot] {
+        match self.cur.stack[slot].v {
             Value::Func(f) => Some(matches!(self.heap.func(f), Function::Lua(_))),
             _ => None,
         }
@@ -1050,18 +1180,33 @@ impl Vm {
     }
 
     pub fn get_tm(&self, v: Value, event: StrRef) -> Value {
+        self.get_tm_slot(v, event).v
+    }
+
+    /// A metamethod with the taint of its metatable field.
+    pub fn get_tm_slot(&self, v: Value, event: StrRef) -> Slot {
         match self.get_metatable(v) {
-            Some(m) => self.heap.table(m).get_str(event),
-            None => Value::Nil,
+            Some(m) => self.heap.table(m).get_str_slot(event),
+            None => Slot::NIL,
         }
     }
 
     /// Calls a metamethod with arguments; returns its first result.
     pub(crate) fn call_tm(&mut self, tm: Value, args: &[Value]) -> Result<Value, LuaError> {
+        let tm = Slot::secure(tm);
+        let args: Vec<Slot> = args.iter().map(|&v| Slot::secure(v)).collect();
+        Ok(self.call_tm_slots(tm, &args)?.v)
+    }
+
+    /// `callTMres`: the metamethod and its arguments are copied to the stack
+    /// (tainted ones taint the execution); returns the first result.
+    pub(crate) fn call_tm_slots(&mut self, tm: Slot, args: &[Slot]) -> Result<Slot, LuaError> {
         let func = self.cur.top.max(self.frame_top());
         self.ensure_stack(func + args.len() + 2);
-        self.cur.stack[func] = tm;
-        self.cur.stack[func + 1..func + 1 + args.len()].copy_from_slice(args);
+        self.set_copy(func, tm);
+        for (i, &a) in args.iter().enumerate() {
+            self.set_copy(func + 1 + i, a);
+        }
         self.call_at(func, args.len(), 1, false)?;
         Ok(self.cur.stack[func])
     }
@@ -1069,34 +1214,39 @@ impl Vm {
     /// `t[key]` with `__index` (`luaV_gettable`). `reg` names the operand in
     /// errors (the register of `t` in the running Lua frame).
     pub fn index(&mut self, t: Value, key: Value, reg: Option<u8>) -> Result<Value, LuaError> {
-        let mut t = t;
+        Ok(self.index_slot(t, key, reg)?.v)
+    }
+
+    /// [`index`](Self::index) with the result's taint.
+    pub fn index_slot(&mut self, t: Value, key: Value, reg: Option<u8>) -> Result<Slot, LuaError> {
+        let mut t = Slot::secure(t);
         let mut reg = reg;
         for _ in 0..MAXTAGLOOP {
-            let tm = if let Value::Table(tr) = t {
+            let tm = if let Value::Table(tr) = t.v {
                 let table = self.heap.table(tr);
-                let v = table.get(key);
-                if !v.is_nil() {
+                let v = table.get_slot(key);
+                if !v.v.is_nil() {
                     return Ok(v);
                 }
                 match table.meta {
-                    None => return Ok(Value::Nil),
+                    None => return Ok(v),
                     Some(m) => {
-                        let tm = self.heap.table(m).get_str(self.names.index);
-                        if tm.is_nil() {
-                            return Ok(Value::Nil);
+                        let tm = self.heap.table(m).get_str_slot(self.names.index);
+                        if tm.v.is_nil() {
+                            return Ok(v);
                         }
                         tm
                     }
                 }
             } else {
-                let tm = self.get_tm(t, self.names.index);
-                if tm.is_nil() {
-                    return Err(self.type_error(t, "index", reg));
+                let tm = self.get_tm_slot(t.v, self.names.index);
+                if tm.v.is_nil() {
+                    return Err(self.type_error(t.v, "index", reg));
                 }
                 tm
             };
-            if matches!(tm, Value::Func(_)) {
-                return self.call_tm(tm, &[t, key]);
+            if matches!(tm.v, Value::Func(_)) {
+                return self.call_tm_slots(tm, &[t, Slot::secure(key)]);
             }
             t = tm;
             reg = None;
@@ -1104,7 +1254,8 @@ impl Vm {
         Err(self.rt_error("loop in gettable"))
     }
 
-    /// `t[key] = v` with `__newindex` (`luaV_settable`).
+    /// `t[key] = v` with `__newindex` (`luaV_settable`), `v` as a value
+    /// made now.
     pub fn set_index(
         &mut self,
         t: Value,
@@ -1112,10 +1263,22 @@ impl Vm {
         v: Value,
         reg: Option<u8>,
     ) -> Result<(), LuaError> {
-        let mut t = t;
+        let v = self.cur.taint.fresh(v);
+        self.set_index_slot(t, key, v, reg)
+    }
+
+    /// [`set_index`](Self::set_index) storing `v`'s taint as it is.
+    pub fn set_index_slot(
+        &mut self,
+        t: Value,
+        key: Value,
+        v: Slot,
+        reg: Option<u8>,
+    ) -> Result<(), LuaError> {
+        let mut t = Slot::secure(t);
         let mut reg = reg;
         for _ in 0..MAXTAGLOOP {
-            let tm = if let Value::Table(tr) = t {
+            let tm = if let Value::Table(tr) = t.v {
                 // The key is checked first, even with `__newindex`.
                 if let Err(e) = crate::table::check_key(key) {
                     return Err(self.rt_error(e.message()));
@@ -1123,31 +1286,35 @@ impl Vm {
                 let table = self.heap.table(tr);
                 let existing = table.get(key);
                 let tm = match table.meta {
-                    Some(m) if existing.is_nil() => self.heap.table(m).get_str(self.names.newindex),
-                    _ => Value::Nil,
+                    Some(m) if existing.is_nil() => {
+                        self.heap.table(m).get_str_slot(self.names.newindex)
+                    }
+                    _ => Slot::NIL,
                 };
-                if tm.is_nil() {
+                if tm.v.is_nil() {
                     return self
                         .heap
                         .table_mut(tr)
-                        .set(key, v)
+                        .set_slot(key, v)
                         .map_err(|e| self.rt_error(e.message()));
                 }
                 tm
             } else {
-                let tm = self.get_tm(t, self.names.newindex);
-                if tm.is_nil() {
-                    return Err(self.type_error(t, "index", reg));
+                let tm = self.get_tm_slot(t.v, self.names.newindex);
+                if tm.v.is_nil() {
+                    return Err(self.type_error(t.v, "index", reg));
                 }
                 tm
             };
-            if matches!(tm, Value::Func(_)) {
+            // The metamethod's taint taints the execution.
+            self.cur.taint.read(tm.t);
+            if matches!(tm.v, Value::Func(_)) {
                 let func = self.cur.top.max(self.frame_top());
                 self.ensure_stack(func + 4);
-                self.cur.stack[func] = tm;
-                self.cur.stack[func + 1] = t;
-                self.cur.stack[func + 2] = key;
-                self.cur.stack[func + 3] = v;
+                self.set_copy(func, tm);
+                self.set_copy(func + 1, t);
+                self.set_copy(func + 2, Slot::secure(key));
+                self.set_copy(func + 3, v);
                 return self.call_at(func, 3, 0, false);
             }
             t = tm;
@@ -1180,20 +1347,22 @@ impl Vm {
     fn arith_slow(
         &mut self,
         op: ArithOp,
-        x: Value,
-        y: Value,
+        xs: Slot,
+        ys: Slot,
         rb: Rk,
         rc: Rk,
-    ) -> Result<Value, LuaError> {
+    ) -> Result<Slot, LuaError> {
+        let (x, y) = (xs.v, ys.v);
         if let (Some(a), Some(b)) = (self.tonumber(x), self.tonumber(y)) {
-            return self.arith_num(op, a, b);
+            let v = self.arith_num(op, a, b)?;
+            return Ok(self.cur.taint.fresh(v));
         }
         let event = self.arith_tm(op);
-        let mut tm = self.get_tm(x, event);
-        if tm.is_nil() {
-            tm = self.get_tm(y, event);
+        let mut tm = self.get_tm_slot(x, event);
+        if tm.v.is_nil() {
+            tm = self.get_tm_slot(y, event);
         }
-        if tm.is_nil() {
+        if tm.v.is_nil() {
             // The first operand that is not a number is blamed.
             let (bad, reg) = if self.tonumber(x).is_none() {
                 (x, rb)
@@ -1206,7 +1375,7 @@ impl Vm {
             };
             return Err(self.type_error(bad, "perform arithmetic on", reg));
         }
-        self.call_tm(tm, &[x, y])
+        self.call_tm_slots(tm, &[xs, ys])
     }
 
     /// Arithmetic on numbers, where WoW's rules apply (S2 hooks them in).
@@ -1252,77 +1421,89 @@ impl Vm {
         if let (Value::Num(a), Value::Num(b)) = (x, y) {
             return self.arith_num(op, a, b);
         }
-        self.arith_slow(op, x, y, Rk::K(0), Rk::K(0))
+        let (x, y) = (self.cur.taint.fresh(x), self.cur.taint.fresh(y));
+        Ok(self.arith_slow(op, x, y, Rk::K(0), Rk::K(0))?.v)
     }
 
-    fn unm_slow(&mut self, x: Value, reg: u8) -> Result<Value, LuaError> {
+    fn unm_slow(&mut self, x: Value, reg: u8) -> Result<Slot, LuaError> {
         if let Some(n) = self.tonumber(x) {
-            return Ok(Value::Num(-n));
+            return Ok(self.cur.taint.fresh(Value::Num(-n)));
         }
-        let tm = self.get_tm(x, self.names.unm);
-        if tm.is_nil() {
+        let tm = self.get_tm_slot(x, self.names.unm);
+        if tm.v.is_nil() {
             return Err(self.type_error(x, "perform arithmetic on", Some(reg)));
         }
-        self.call_tm(tm, &[x, x])
+        let xs = self.cur.stack[self.cur.frames.last().map_or(0, |f| f.base) + reg as usize];
+        self.call_tm_slots(tm, &[xs, xs])
     }
 
     /// `#v` (Lua 5.1: `__len` only for userdata).
     pub fn len(&mut self, v: Value, reg: Option<u8>) -> Result<Value, LuaError> {
+        Ok(self.len_slot(v, reg)?.v)
+    }
+
+    fn len_slot(&mut self, v: Value, reg: Option<u8>) -> Result<Slot, LuaError> {
         match v {
-            Value::Table(t) => Ok(Value::Num(self.heap.table(t).border() as f64)),
-            Value::Str(s) => Ok(Value::Num(self.heap.str_bytes(s).len() as f64)),
+            Value::Table(t) => {
+                let n = self.heap.table(t).border() as f64;
+                Ok(self.cur.taint.fresh(Value::Num(n)))
+            }
+            Value::Str(s) => {
+                let n = self.heap.str_bytes(s).len() as f64;
+                Ok(self.cur.taint.fresh(Value::Num(n)))
+            }
             _ => {
-                let tm = self.get_tm(v, self.names.len);
-                if tm.is_nil() {
+                let tm = self.get_tm_slot(v, self.names.len);
+                if tm.v.is_nil() {
                     return Err(self.type_error(v, "get length of", reg));
                 }
-                self.call_tm(tm, &[v, Value::Nil])
+                let vs = self.cur.taint.fresh(v);
+                self.call_tm_slots(tm, &[vs, Slot::NIL])
             }
         }
     }
 
     /// `R(b) .. … .. R(c)`, right to left, with `__concat` (`luaV_concat`).
-    fn concat_range(&mut self, base: usize, b: u8, c: u8) -> Result<Value, LuaError> {
-        let first = base + b as usize;
+    fn concat_range(&mut self, base: usize, b: u8, c: u8) -> Result<Slot, LuaError> {
         let mut top = base + c as usize + 1;
         let mut total = c as usize - b as usize + 1;
         while total > 1 {
-            let x = self.cur.stack[top - 2];
-            let y = self.cur.stack[top - 1];
+            let xslot = self.cur.stack[top - 2];
+            let yslot = self.cur.stack[top - 1];
+            let (x, y) = (xslot.v, yslot.v);
             let xs = self.is_strlike(x);
             let ys = self.is_strlike(y);
             if !xs || !ys {
-                let mut tm = self.get_tm(x, self.names.concat);
-                if tm.is_nil() {
-                    tm = self.get_tm(y, self.names.concat);
+                let mut tm = self.get_tm_slot(x, self.names.concat);
+                if tm.v.is_nil() {
+                    tm = self.get_tm_slot(y, self.names.concat);
                 }
-                if tm.is_nil() {
+                if tm.v.is_nil() {
                     let (bad, slot) = if xs { (y, top - 1) } else { (x, top - 2) };
                     let reg = (slot - base) as u8;
                     return Err(self.type_error(bad, "concatenate", Some(reg)));
                 }
-                let r = self.call_tm(tm, &[x, y])?;
-                self.cur.stack[top - 2] = r;
+                let r = self.call_tm_slots(tm, &[xslot, yslot])?;
+                self.set_copy(top - 2, r);
                 top -= 1;
                 total -= 1;
                 continue;
             }
             // Collect as many string-like values as possible.
             let mut n = 1;
-            while n < total && self.is_strlike(self.cur.stack[top - n - 1]) {
+            while n < total && self.is_strlike(self.reg(top - n - 1)) {
                 n += 1;
             }
             let mut buf = Vec::new();
             for i in (top - n)..top {
-                let v = self.cur.stack[i];
+                let v = self.reg(i);
                 self.append_strlike(&mut buf, v);
             }
             let s = self.heap.intern(&buf);
-            self.cur.stack[top - n] = Value::Str(s);
+            self.set_fresh(top - n, Value::Str(s));
             top -= n - 1;
             total -= n - 1;
         }
-        let _ = first;
         Ok(self.cur.stack[top - 1])
     }
 
@@ -1536,7 +1717,7 @@ impl Vm {
     }
 
     fn call_error(&mut self, func: usize) -> LuaError {
-        let v = self.cur.stack[func];
+        let v = self.cur.stack[func].v;
         // The register of the callee in the running frame, if it is one.
         let reg = self.cur.frames.last().and_then(|f| {
             if func >= f.base && func < f.base + f.proto.max_stack as usize {
@@ -1736,7 +1917,7 @@ impl Vm {
                 let mut n = 0;
                 while f.base + n < limit {
                     let name = active.get(n).map_or("(*temporary)", |s| s);
-                    locals.push((name.to_string(), self.cur.stack[f.base + n]));
+                    locals.push((name.to_string(), self.cur.stack[f.base + n].v));
                     n += 1;
                 }
                 if let Function::Lua(l) = self.heap.func(f.closure) {
@@ -1751,7 +1932,7 @@ impl Vm {
                 let base = c.slot + 1;
                 let limit = limit_after(c.slot, true);
                 for slot in base..limit {
-                    locals.push(("(*temporary)".to_string(), self.cur.stack[slot]));
+                    locals.push(("(*temporary)".to_string(), self.cur.stack[slot].v));
                 }
                 if let Function::Native(n) = self.heap.func(c.func) {
                     upvalues.extend(n.upvals.iter().map(|&v| (String::new(), v)));
@@ -1865,6 +2046,16 @@ impl Vm {
 }
 
 /// Number arithmetic as Lua 5.1 defines it (`luai_num*`).
+/// Sets a freshly compiled proto's (and its children's) constant taint.
+fn set_const_taint(proto: &mut Rc<Proto>, taint: Taint) {
+    if let Some(p) = Rc::get_mut(proto) {
+        p.const_taint = taint;
+        for child in &mut p.protos {
+            set_const_taint(child, taint);
+        }
+    }
+}
+
 pub fn arith(op: ArithOp, a: f64, b: f64) -> f64 {
     match op {
         ArithOp::Add => a + b,

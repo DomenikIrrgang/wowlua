@@ -7,6 +7,7 @@ use crate::error::LuaError;
 use crate::function::{Function, NativeCall};
 use crate::heap::ThreadRef;
 use crate::stdlib::{Ret, register};
+use crate::taint::Slot;
 use crate::thread::{Status, Thread, ThreadState};
 use crate::value::Value;
 use crate::vm::Vm;
@@ -55,6 +56,16 @@ impl Vm {
     /// Resumes `co` with `args`: its yielded or returned values, or its
     /// error value.
     pub fn resume(&mut self, co: ThreadRef, args: Vec<Value>) -> Result<Vec<Value>, Value> {
+        let args = args.into_iter().map(|v| self.cur.taint.fresh(v)).collect();
+        self.resume_slots(co, args)
+            .map(|r| r.into_iter().map(|s| s.v).collect())
+            .map_err(|e| e.v)
+    }
+
+    /// [`resume`](Self::resume) with taints: the values cross as they are,
+    /// and the taint state passes to the coroutine and back
+    /// (`luaR_taintthread`).
+    pub fn resume_slots(&mut self, co: ThreadRef, args: Vec<Slot>) -> Result<Vec<Slot>, Slot> {
         let st = self.heap.thread(co).status;
         if co == self.current || st != Status::Suspended {
             let msg = if st == Status::Dead {
@@ -62,9 +73,11 @@ impl Vm {
             } else {
                 "cannot resume non-suspended coroutine"
             };
-            return Err(self.str(msg));
+            let v = self.str(msg);
+            return Err(self.cur.taint.fresh(v));
         }
-        // Switch to the coroutine.
+        // Switch to the coroutine, with the caller's taint.
+        let taint = self.cur.taint.saved();
         let caller = self.current;
         let caller_state = std::mem::take(&mut self.cur);
         self.heap.thread_mut(caller).state = caller_state;
@@ -72,6 +85,7 @@ impl Vm {
         self.heap.thread_mut(caller).globals = self.globals;
         self.globals = self.heap.thread(co).globals;
         self.cur = std::mem::take(&mut self.heap.thread_mut(co).state);
+        self.cur.taint = taint;
         self.heap.thread_mut(co).status = Status::Running;
         self.current = co;
         self.resume_chain.push(caller);
@@ -85,10 +99,12 @@ impl Vm {
                 // The first resume calls the body with the arguments.
                 let n = args.len();
                 if self.cur.stack.len() < n + 64 {
-                    self.cur.stack.resize(n + 64, Value::Nil);
+                    self.cur.stack.resize(n + 64, Slot::NIL);
                 }
-                self.cur.stack[0] = Value::Func(f);
-                self.cur.stack[1..=n].copy_from_slice(&args);
+                self.cur.stack[0] = self.cur.taint.fresh(Value::Func(f));
+                for (i, &a) in args.iter().enumerate() {
+                    self.cur.stack[1 + i] = self.cur.taint.copy(a);
+                }
                 self.cur.top = n + 1;
                 self.call_at(0, n, -1, false)
             }
@@ -105,10 +121,13 @@ impl Vm {
                     nresults as usize
                 };
                 if self.cur.stack.len() < func + n + 1 {
-                    self.cur.stack.resize(func + n + 64, Value::Nil);
+                    self.cur.stack.resize(func + n + 64, Slot::NIL);
                 }
                 for i in 0..n {
-                    self.cur.stack[func + i] = args.get(i).copied().unwrap_or_default();
+                    self.cur.stack[func + i] = match args.get(i) {
+                        Some(&a) => self.cur.taint.copy(a),
+                        None => self.cur.taint.fresh(Value::Nil),
+                    };
                 }
                 if nresults < 0 {
                     self.cur.top = func + n;
@@ -134,10 +153,11 @@ impl Vm {
             }
             Err(e) => {
                 self.heap.thread_mut(co).status = Status::Dead;
-                Err(e.value)
+                Err(self.cur.taint.fresh(e.value))
             }
         };
-        // Back to the caller.
+        // Back to the caller, with the coroutine's taint.
+        let taint = self.cur.taint.saved();
         self.cstack = saved_cstack;
         self.errfunc = saved_errfunc;
         self.co_base = saved_base;
@@ -147,6 +167,7 @@ impl Vm {
         self.heap.thread_mut(co).globals = self.globals;
         self.globals = self.heap.thread(caller).globals;
         self.cur = std::mem::take(&mut self.heap.thread_mut(caller).state);
+        self.cur.taint.restore(taint);
         self.heap.thread_mut(caller).status = Status::Running;
         self.current = caller;
         outcome
@@ -155,13 +176,14 @@ impl Vm {
 
 fn resume(vm: &mut Vm, c: NativeCall) -> Ret {
     let co = check_thread(vm, &c)?;
-    match vm.resume(co, c.args[1..].to_vec()) {
+    let r = match vm.resume_slots(co, c.slots(2)) {
         Ok(mut values) => {
-            values.insert(0, Value::Bool(true));
-            Ok(values)
+            values.insert(0, vm.cur.taint.fresh(Value::Bool(true)));
+            values
         }
-        Err(e) => Ok(vec![Value::Bool(false), e]),
-    }
+        Err(e) => vec![vm.cur.taint.fresh(Value::Bool(false)), e],
+    };
+    Ok(vm.return_slots(r))
 }
 
 fn yield_(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -175,7 +197,7 @@ fn yield_(vm: &mut Vm, c: NativeCall) -> Ret {
     if !direct {
         return Err(vm.rt_error("attempt to yield across metamethod/C-call boundary"));
     }
-    vm.yield_values = c.args;
+    vm.yield_values = c.slots(1);
     Err(LuaError::yield_())
 }
 
@@ -203,9 +225,10 @@ fn wrapped(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Thread(co) = c.upvals[0] else {
         unreachable!()
     };
-    match vm.resume(co, c.args) {
-        Ok(values) => Ok(values),
+    match vm.resume_slots(co, c.slots(1)) {
+        Ok(values) => Ok(vm.return_slots(values)),
         Err(e) => {
+            let e = e.v;
             // String errors get the caller's position.
             if matches!(e, Value::Str(_) | Value::Num(_)) {
                 let mut text = vm.where_(1);

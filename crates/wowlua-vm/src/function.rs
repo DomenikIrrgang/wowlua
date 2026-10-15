@@ -14,6 +14,8 @@ pub type NativeFn = fn(&mut Vm, NativeCall) -> Result<Vec<Value>, LuaError>;
 /// One call of a native function.
 pub struct NativeCall {
     pub args: Vec<Value>,
+    /// The arguments' taints (their stack slots').
+    pub taints: Vec<crate::taint::Taint>,
     /// The native function's own upvalues (set when it was created).
     pub upvals: Rc<[Value]>,
 }
@@ -22,6 +24,8 @@ pub struct LuaFunction {
     pub proto: Rc<Proto>,
     pub upvals: Box<[UpvalRef]>,
     pub env: TableRef,
+    /// The object's taint: calling a tainted closure taints the execution.
+    pub taint: crate::taint::Taint,
 }
 
 pub struct NativeFunction {
@@ -29,6 +33,7 @@ pub struct NativeFunction {
     pub name: &'static str,
     pub upvals: Rc<[Value]>,
     pub env: TableRef,
+    pub taint: crate::taint::Taint,
 }
 
 pub enum Function {
@@ -37,6 +42,14 @@ pub enum Function {
 }
 
 impl Function {
+    /// The function object's taint.
+    pub fn taint(&self) -> crate::taint::Taint {
+        match self {
+            Function::Lua(f) => f.taint,
+            Function::Native(f) => f.taint,
+        }
+    }
+
     pub fn env(&self) -> TableRef {
         match self {
             Function::Lua(f) => f.env,
@@ -56,5 +69,5 @@ impl Function {
 /// closed once that slot's scope ends.
 pub enum Upval {
     Open { thread: ThreadRef, idx: usize },
-    Closed(Value),
+    Closed(crate::taint::Slot),
 }
