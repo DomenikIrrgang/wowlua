@@ -1,6 +1,14 @@
 -- WoW Forever 1.60.1 (70374): /stdtest argcheck (tests/ingame/src/argcheck.lua),
 -- each documented function's outcome by the bad first argument passed.
 return {
+    ["(direct calls)"] = {
+        ["C_ActionBar.GetActionAutocast('x')"] = "Interface/AddOns/StdTest/src/argcheck.lua:182: bad argument #1 to 'GetActionAutocast' (outside of expected range 0 to 4294967295 - Usage: local autocastAllowed, autocastEnabled = C_ActionBar.GetActionAutocast(actionID))",
+        ["C_CVar.GetCVar()"] = "bad argument #1 to '?' (Usage: local value = C_CVar.GetCVar(name))",
+        ["C_CVar.GetCVar(secret)"] = "bad argument #1 to '?' (Usage: local value = C_CVar.GetCVar(name). Secret values are not allowed for this argument.)",
+        ["C_CVar.GetCVar({})"] = "bad argument #1 to '?' (Usage: local value = C_CVar.GetCVar(name))",
+        ["C_UnitAuras.GetAuraDataBySlot(true)"] = "bad argument #1 to '?' (Expected a string. - Usage: local aura = C_UnitAuras.GetAuraDataBySlot(unit, slot))",
+        ["local f = C_CVar.GetCVar; f()"] = "bad argument #1 to '?' (Usage: local value = C_CVar.GetCVar(name))",
+    },
     ["C_AccountInfo.GetIDFromBattleNetAccountGUID"] = {
         ["nil"] = "error: bad argument #1 to '?' (Usage: local battleNetAccountID = C_AccountInfo.GetIDFromBattleNetAccountGUID(battleNetAccountGUID))",
         ["no arguments"] = "error: bad argument #1 to '?' (Usage: local battleNetAccountID = C_AccountInfo.GetIDFromBattleNetAccountGUID(battleNetAccountGUID))",

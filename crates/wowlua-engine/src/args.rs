@@ -258,11 +258,17 @@ fn refuses_type(vm: &Vm, family: Family, v: Value) -> Option<Refusal> {
 
 fn fail(vm: &mut Vm, f: &Function, n: usize, why: Option<Refusal>) -> LuaError {
     let usage = usage(f);
+    // A range error is Lua's own (`luaL_argerror`: the caller's position and
+    // the function's name); the others are the bindings', with neither.
+    if let Some(Refusal::Range(min, max)) = why {
+        return vm.arg_error(
+            n,
+            &format!("outside of expected range {min} to {max} - {usage}"),
+        );
+    }
     let msg = match why {
         None | Some(Refusal::Type) => usage,
-        Some(Refusal::Range(min, max)) => {
-            format!("outside of expected range {min} to {max} - {usage}")
-        }
+        Some(Refusal::Range(..)) => unreachable!("raised above"),
         Some(Refusal::String) => format!("Expected a string. - {usage}"),
         Some(Refusal::This) => format!(
             "Attempt to find 'this' in non-table object (used '.' instead of ':' ?) - {usage}"
@@ -271,5 +277,5 @@ fn fail(vm: &mut Vm, f: &Function, n: usize, why: Option<Refusal>) -> LuaError {
             format!("{usage}. Secret values are {why} for this argument.")
         }
     };
-    vm.arg_error(n, &msg)
+    vm.api_arg_error(n, &msg)
 }

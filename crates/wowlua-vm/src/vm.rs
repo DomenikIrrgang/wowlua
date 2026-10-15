@@ -2267,6 +2267,14 @@ impl Vm {
         self.error(&format!("bad argument #{narg} to '{name}' ({msg})"))
     }
 
+    /// The client's documented API's own argument error: "bad argument #N
+    /// to '?' (…)", with neither the caller's position nor the function's
+    /// name, even for a direct call (`/stdtest argcheck`).
+    pub fn api_arg_error(&mut self, narg: usize, msg: &str) -> LuaError {
+        let v = self.str(&format!("bad argument #{narg} to '?' ({msg})"));
+        self.raise(v)
+    }
+
     pub fn type_arg_error(&mut self, narg: usize, expected: &str, got: Option<Value>) -> LuaError {
         let got = match got {
             None => "no value",
