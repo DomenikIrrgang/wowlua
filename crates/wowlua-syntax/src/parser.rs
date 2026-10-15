@@ -262,6 +262,12 @@ impl<'a> Parser<'a> {
             // Lua quotes it too: `near '<eof>'`.
             T::Eof => "'<eof>'".to_string(),
             T::InterpText | T::String | T::LongString | T::Number | T::Name | T::Error => {
+                // A control character, as Lua names it (`luaX_token2str`).
+                if let [b] = self.text_of(t)
+                    && (*b < 32 || *b == 127)
+                {
+                    return format!("'char({b})'");
+                }
                 let text = String::from_utf8_lossy(self.text_of(t));
                 let short: String = text.chars().take(40).collect();
                 format!("'{short}'")

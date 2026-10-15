@@ -122,6 +122,14 @@ pub struct Rules {
     pub client_format: bool,
     /// `xpcall(f, handler, ...)` passes the extra arguments to `f`.
     pub xpcall_args: bool,
+    /// The client's error messages: calling a non-function is "attempt to
+    /// call a nil value", assigning through one "attempt to perform indexed
+    /// assignment on".
+    pub client_errors: bool,
+    /// `coroutine.create` takes native functions too.
+    pub native_coroutines: bool,
+    /// `string.upper`/`lower` map UTF-8 characters, not only ASCII.
+    pub utf8_case: bool,
 }
 
 /// The VM's clock: virtual, so runs repeat exactly (spec emulator §17.2).
@@ -159,7 +167,6 @@ pub struct Vm {
     pub clock: Clock,
     /// `geterrorhandler`/`seterrorhandler` and the print handler (WoW).
     pub error_handler: Value,
-    pub print_handler: Value,
     pub heap: Heap,
     pub(crate) cur: ThreadState,
     pub(crate) current: ThreadRef,
@@ -232,7 +239,6 @@ impl Vm {
             taint_ids: std::collections::HashMap::new(),
             clock: Clock::default(),
             error_handler: Value::Nil,
-            print_handler: Value::Nil,
             heap,
             cur: ThreadState::default(),
             current: main,
@@ -917,14 +923,12 @@ impl Vm {
                     Op::Arith { op, a, b, c } => {
                         let x = self.rk(base, k, b);
                         let y = self.rk(base, k, c);
-                        if self.rules.fpe_strict && matches!(op, ArithOp::Div | ArithOp::Mod) {
-                            // Only the operands that are numbers count (the
-                            // client reads others' bits as garbage).
-                            let num = |v: Value| match v {
-                                Value::Num(n) => Some(n),
-                                _ => None,
-                            };
-                            self.check_fp(num(x), num(y))?;
+                        if self.rules.fpe_strict
+                            && matches!(op, ArithOp::Div | ArithOp::Mod)
+                            && let (Value::Num(x), Value::Num(y)) = (x, y)
+                        {
+                            // Numbers only: with a metamethod, `t / 0` calls it.
+                            self.check_fp(Some(x), Some(y))?;
                         }
                         match (x, y) {
                             (Value::Num(x), Value::Num(y)) => {
@@ -1347,7 +1351,12 @@ impl Vm {
             } else {
                 let tm = self.get_tm_slot(t.v, self.names.newindex);
                 if tm.v.is_nil() {
-                    return Err(self.type_error(t.v, "index", reg));
+                    let op = if self.rules.client_errors {
+                        "perform indexed assignment on"
+                    } else {
+                        "index"
+                    };
+                    return Err(self.type_error(t.v, op, reg));
                 }
                 tm
             };
@@ -1451,7 +1460,9 @@ impl Vm {
     /// The client's 32-bit range check of integer arguments (`lua_tolong`,
     /// `lua_tointeger`).
     pub fn check_overflow(&mut self, x: f64) -> Result<(), LuaError> {
-        if self.rules.int_overflow && (x < f64::from(i32::MIN) || x > f64::from(i32::MAX)) {
+        if self.rules.int_overflow
+            && (x.is_nan() || x < f64::from(i32::MIN) || x > f64::from(i32::MAX))
+        {
             let msg = format!(
                 "integer overflow attempting to store {}",
                 crate::number::fmt_num(x)
@@ -1772,6 +1783,11 @@ impl Vm {
             }
         });
         let reg = if self.running_native() { None } else { reg };
+        // The client reports the missing `__call` metamethod: always "a nil
+        // value", never a name.
+        if self.rules.client_errors {
+            return self.rt_error("attempt to call a nil value");
+        }
         self.type_error(v, "call", reg)
     }
 

@@ -186,6 +186,9 @@ fn setmetatable(vm: &mut Vm, c: NativeCall) -> Ret {
     {
         return Err(vm.error("cannot change a protected metatable"));
     }
+    if vm.heap.table(t).frozen {
+        return Err(vm.rt_error("attempted to replace metatable of a frozen table"));
+    }
     vm.heap.table_mut(t).meta = mt;
     Ok(vec![Value::Table(t)])
 }

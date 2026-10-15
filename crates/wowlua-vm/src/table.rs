@@ -15,6 +15,8 @@ const MAXASIZE: i64 = 1 << MAXBITS;
 pub enum KeyError {
     Nil,
     NaN,
+    /// `table.freeze` (WoW): the table takes no more writes.
+    Frozen,
 }
 
 impl KeyError {
@@ -22,6 +24,7 @@ impl KeyError {
         match self {
             KeyError::Nil => "table index is nil",
             KeyError::NaN => "table index is NaN",
+            KeyError::Frozen => "attempted to perform indexed assignment on a frozen table",
         }
     }
 }
@@ -55,6 +58,8 @@ pub struct Table {
     nodes: Vec<Node>,
     lastfree: usize,
     pub meta: Option<TableRef>,
+    /// Frozen by `table.freeze`: raw writes fail.
+    pub frozen: bool,
 }
 
 /// `lua_number2int` then the integer check (`arrayindex`).
@@ -236,6 +241,9 @@ impl Table {
     pub fn set_slot(&mut self, key: Value, value: Slot) -> Result<(), KeyError> {
         // As in Lua, even a nil value creates the key's slot.
         check_key(key)?;
+        if self.frozen {
+            return Err(KeyError::Frozen);
+        }
         match self.pos(key) {
             Pos::Arr(i) => self.arr[i] = value,
             Pos::Node(i) => self.nodes[i].val = value,

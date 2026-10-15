@@ -68,14 +68,41 @@ fn sub(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn upper(vm: &mut Vm, c: NativeCall) -> Ret {
     let s = vm.check_bytes(&c, 1)?;
-    let u: Vec<u8> = s.iter().map(u8::to_ascii_uppercase).collect();
+    let u = if vm.rules.utf8_case {
+        map_utf8(&s, |ch| ch.to_uppercase())
+    } else {
+        s.iter().map(u8::to_ascii_uppercase).collect()
+    };
     Ok(vec![vm.bytes(&u)])
 }
 
 fn lower(vm: &mut Vm, c: NativeCall) -> Ret {
     let s = vm.check_bytes(&c, 1)?;
-    let u: Vec<u8> = s.iter().map(u8::to_ascii_lowercase).collect();
+    let u = if vm.rules.utf8_case {
+        map_utf8(&s, |ch| ch.to_lowercase())
+    } else {
+        s.iter().map(u8::to_ascii_lowercase).collect()
+    };
     Ok(vec![vm.bytes(&u)])
+}
+
+/// Case mapping of UTF-8 text (the client's `upper`/`lower`): characters
+/// with a one-character mapping change, invalid bytes stay as they are.
+fn map_utf8<I: Iterator<Item = char>>(s: &[u8], f: impl Fn(char) -> I) -> Vec<u8> {
+    let mut out = Vec::with_capacity(s.len());
+    for chunk in s.utf8_chunks() {
+        for ch in chunk.valid().chars() {
+            let mut mapped = f(ch);
+            let c = match (mapped.next(), mapped.next()) {
+                (Some(m), None) => m,
+                _ => ch,
+            };
+            let mut buf = [0u8; 4];
+            out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+        }
+        out.extend_from_slice(chunk.invalid());
+    }
+    out
 }
 
 fn rep(vm: &mut Vm, c: NativeCall) -> Ret {

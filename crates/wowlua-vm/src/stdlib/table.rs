@@ -35,8 +35,12 @@ fn rawgeti(vm: &Vm, t: TableRef, i: i64) -> Value {
     vm.heap.table(t).get_num(i as f64)
 }
 
-fn rawseti(vm: &mut Vm, t: TableRef, i: i64, v: Value) {
-    let _ = vm.heap.table_mut(t).set(Value::Num(i as f64), v);
+fn rawseti(vm: &mut Vm, t: TableRef, i: i64, v: Value) -> Result<(), LuaError> {
+    match vm.heap.table_mut(t).set(Value::Num(i as f64), v) {
+        Ok(()) => Ok(()),
+        // A frozen table (WoW); keys here are never nil or NaN.
+        Err(e) => Err(vm.rt_error(e.message())),
+    }
 }
 
 fn foreachi(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -109,7 +113,7 @@ fn insert(vm: &mut Vm, c: NativeCall) -> Ret {
             let mut i = e;
             while i > pos {
                 let v = rawgeti(vm, t, i - 1);
-                rawseti(vm, t, i, v);
+                rawseti(vm, t, i, v)?;
                 i -= 1;
             }
             pos
@@ -117,7 +121,7 @@ fn insert(vm: &mut Vm, c: NativeCall) -> Ret {
         _ => return Err(vm.error("wrong number of arguments to 'insert'")),
     };
     let v = c.arg(c.len());
-    rawseti(vm, t, pos, v);
+    rawseti(vm, t, pos, v)?;
     Ok(vec![])
 }
 
@@ -131,10 +135,10 @@ fn remove(vm: &mut Vm, c: NativeCall) -> Ret {
     let result = rawgeti(vm, t, pos);
     while pos < e {
         let v = rawgeti(vm, t, pos + 1);
-        rawseti(vm, t, pos, v);
+        rawseti(vm, t, pos, v)?;
         pos += 1;
     }
-    rawseti(vm, t, e, Value::Nil);
+    rawseti(vm, t, e, Value::Nil)?;
     Ok(vec![result])
 }
 
@@ -201,8 +205,8 @@ fn auxsort(vm: &mut Vm, t: TableRef, f: Value, mut l: i64, mut u: i64) -> Result
         let al = rawgeti(vm, t, l);
         let au = rawgeti(vm, t, u);
         if sort_comp(vm, f, au, al)? {
-            rawseti(vm, t, l, au);
-            rawseti(vm, t, u, al);
+            rawseti(vm, t, l, au)?;
+            rawseti(vm, t, u, al)?;
         }
         if u - l == 1 {
             break;
@@ -211,13 +215,13 @@ fn auxsort(vm: &mut Vm, t: TableRef, f: Value, mut l: i64, mut u: i64) -> Result
         let ai = rawgeti(vm, t, i);
         let al = rawgeti(vm, t, l);
         if sort_comp(vm, f, ai, al)? {
-            rawseti(vm, t, i, al);
-            rawseti(vm, t, l, ai);
+            rawseti(vm, t, i, al)?;
+            rawseti(vm, t, l, ai)?;
         } else {
             let au = rawgeti(vm, t, u);
             if sort_comp(vm, f, au, ai)? {
-                rawseti(vm, t, i, au);
-                rawseti(vm, t, u, ai);
+                rawseti(vm, t, i, au)?;
+                rawseti(vm, t, u, ai)?;
             }
         }
         if u - l == 2 {
@@ -225,8 +229,8 @@ fn auxsort(vm: &mut Vm, t: TableRef, f: Value, mut l: i64, mut u: i64) -> Result
         }
         let p = rawgeti(vm, t, i);
         let au1 = rawgeti(vm, t, u - 1);
-        rawseti(vm, t, i, au1);
-        rawseti(vm, t, u - 1, p);
+        rawseti(vm, t, i, au1)?;
+        rawseti(vm, t, u - 1, p)?;
         // a[l] <= P == a[u-1] <= a[u]: sort from l+1 to u-2.
         i = l;
         let mut j = u - 1;
@@ -256,13 +260,13 @@ fn auxsort(vm: &mut Vm, t: TableRef, f: Value, mut l: i64, mut u: i64) -> Result
             if j < i {
                 break;
             }
-            rawseti(vm, t, i, aj);
-            rawseti(vm, t, j, ai);
+            rawseti(vm, t, i, aj)?;
+            rawseti(vm, t, j, ai)?;
         }
         let au1 = rawgeti(vm, t, u - 1);
         let ai = rawgeti(vm, t, i);
-        rawseti(vm, t, u - 1, ai);
-        rawseti(vm, t, i, au1);
+        rawseti(vm, t, u - 1, ai)?;
+        rawseti(vm, t, i, au1)?;
         // Recurse into the smaller half, loop on the larger.
         let (jj, ii);
         if i - l < u - i {

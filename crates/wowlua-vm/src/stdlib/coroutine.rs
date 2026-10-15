@@ -29,8 +29,13 @@ pub fn open(vm: &mut Vm) {
 
 fn create(vm: &mut Vm, c: NativeCall) -> Ret {
     let f = c.arg(1);
-    let is_lua = matches!(f, Value::Func(fr) if matches!(vm.heap.func(fr), Function::Lua(_)));
-    if !is_lua {
+    let ok = match f {
+        Value::Func(fr) => {
+            vm.rules.native_coroutines || matches!(vm.heap.func(fr), Function::Lua(_))
+        }
+        _ => false,
+    };
+    if !ok {
         return Err(vm.arg_error(1, "Lua function expected"));
     }
     let Value::Func(fr) = f else { unreachable!() };

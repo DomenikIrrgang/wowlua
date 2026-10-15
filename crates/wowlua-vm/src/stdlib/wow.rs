@@ -62,8 +62,6 @@ strrev = string.reverse
 strsub = string.sub
 strupper = string.upper
 string.trim = strtrim
-string.split = strsplit
-string.join = strjoin
 ";
 
 impl Vm {
@@ -82,6 +80,9 @@ pub fn open(vm: &mut Vm) {
         int_overflow: true,
         client_format: true,
         xpcall_args: true,
+        client_errors: true,
+        native_coroutines: true,
+        utf8_case: true,
     };
     // Reads taint the execution, writes take its taint.
     vm.taint_mut().mode = crate::taint::READ | crate::taint::WRITE;
@@ -108,18 +109,9 @@ pub fn open(vm: &mut Vm) {
         ("difftime", difftime),
         ("debugstack", debugstack),
         ("debuglocals", debuglocals),
-        ("tostringall", tostringall),
-        ("nop", nop),
-        ("assertf", assertf),
-        ("getglobal", getglobal),
-        ("setglobal", setglobal),
-        ("ipairs_reverse", ipairs_reverse),
         ("pcallwithenv", pcallwithenv),
         ("geterrorhandler", geterrorhandler),
         ("seterrorhandler", seterrorhandler),
-        ("getprinthandler", getprinthandler),
-        ("setprinthandler", setprinthandler),
-        ("print", print),
         ("debugprofilestart", debugprofilestart),
         ("debugprofilestop", debugprofilestop),
     ] {
@@ -140,6 +132,8 @@ pub fn open(vm: &mut Vm) {
         ("values", values),
         ("removevalue", removevalue),
         ("removeunordered", removeunordered),
+        ("freeze", freeze),
+        ("isfrozen", isfrozen),
     ] {
         let v = vm.native(name, f);
         set(vm, table, name, v);
@@ -150,7 +144,6 @@ pub fn open(vm: &mut Vm) {
         ("contains", str_contains),
         ("ltrim", ltrim),
         ("rtrim", rtrim),
-        ("rtgsub", rtgsub),
     ] {
         let v = vm.native(name, f);
         set(vm, string, name, v);
@@ -167,6 +160,12 @@ pub fn open(vm: &mut Vm) {
         ("isnan", isnan),
         ("isinf", isinf),
         ("isfinite", isfinite),
+        ("sqrt", sqrt),
+        ("log", log),
+        ("log10", log10),
+        ("acos", acos),
+        ("asin", asin),
+        ("random", securerandom),
     ] {
         let v = vm.native(name, f);
         set(vm, math, name, v);
@@ -185,13 +184,23 @@ pub fn open(vm: &mut Vm) {
             ("mod", bit_mod),
         ],
     );
-    vm.print_handler = vm.native("print", crate::stdlib::base::print);
     vm.error_handler = vm.native("errorhandler", default_error_handler);
     // The client's loadstring taints its caller.
     let loadstring = vm.native("loadstring", loadstring_tainting);
     vm.set_global("loadstring", loadstring);
-    let strconcat = vm.get_global("strconcat");
-    set(vm, string, "concat", strconcat);
+    // The client's string.split, string.join and string.concat are other
+    // function objects than strsplit, strjoin and strconcat (string.trim is
+    // strtrim).
+    for (name, f) in [
+        ("split", strsplit as crate::NativeFn),
+        ("join", strjoin),
+        ("concat", strconcat),
+    ] {
+        let v = vm.native(name, f);
+        set(vm, string, name, v);
+    }
+    let issecurevalue = vm.native("issecurevalue", issecurevalue);
+    vm.set_global("issecurevalue", issecurevalue);
     let compat = vm
         .load(COMPAT.as_bytes(), "=compat.lua")
         .expect("the compat script compiles");
@@ -215,6 +224,57 @@ fn loadstring_tainting(vm: &mut Vm, c: NativeCall) -> Ret {
     let strong = vm.taint_named("*** ForceTaint_Strong ***");
     vm.taint_mut().stack = strong;
     crate::stdlib::base::loadstring(vm, c)
+}
+
+/// Argument `n` as a string (numbers convert), or the client's usage error.
+fn usage_bytes(
+    vm: &mut Vm,
+    c: &NativeCall,
+    n: usize,
+    usage: &str,
+) -> Result<std::rc::Rc<[u8]>, LuaError> {
+    if !matches!(c.arg(n), Value::Str(_) | Value::Num(_)) {
+        return Err(vm.arg_error(n, usage));
+    }
+    vm.check_bytes(c, n)
+}
+
+fn usage_table(vm: &mut Vm, c: &NativeCall, n: usize, usage: &str) -> Result<TableRef, LuaError> {
+    match c.arg(n) {
+        Value::Table(t) => Ok(t),
+        _ => Err(vm.arg_error(n, usage)),
+    }
+}
+
+/// `issecurevalue(v)`: whether the argument's slot is secure, and its taint.
+fn issecurevalue(vm: &mut Vm, c: NativeCall) -> Ret {
+    let t = c.slot(1).t;
+    Ok(match vm.taint_name(t) {
+        None => vec![Value::Bool(true), Value::Nil],
+        Some(name) => {
+            let name = vm.str(&name);
+            vec![Value::Bool(false), name]
+        }
+    })
+}
+
+/// A raw write from a native; a frozen table refuses it.
+fn raw_set(vm: &mut Vm, t: TableRef, k: f64, v: Value) -> Result<(), LuaError> {
+    match vm.heap.table_mut(t).set(Value::Num(k), v) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(vm.rt_error(e.message())),
+    }
+}
+
+fn freeze(vm: &mut Vm, c: NativeCall) -> Ret {
+    let t = usage_table(vm, &c, 1, "Usage: local frozen = table.freeze(table)")?;
+    vm.heap.table_mut(t).frozen = true;
+    Ok(vec![Value::Table(t)])
+}
+
+fn isfrozen(vm: &mut Vm, c: NativeCall) -> Ret {
+    let t = usage_table(vm, &c, 1, "Usage: local frozen = table.isfrozen(table)")?;
+    Ok(vec![Value::Bool(vm.heap.table(t).frozen)])
 }
 
 fn gfind(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -250,6 +310,10 @@ fn split(vm: &mut Vm, c: &NativeCall) -> Result<Vec<Value>, LuaError> {
     if i <= end {
         out.push(vm.bytes(&s[i..end]));
     }
+    // Results go on the stack, which holds `LUAI_MAXCSTACK` (8000) slots.
+    if out.len() + 3 > 8000 {
+        return Err(vm.error("strsplit(): Stack overflow"));
+    }
     Ok(out)
 }
 
@@ -269,22 +333,19 @@ fn strsplittable(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn strjoin(vm: &mut Vm, c: NativeCall) -> Ret {
-    let sep = vm.check_bytes(&c, 1)?;
-    let pieces = c.len().saturating_sub(1);
-    if pieces <= 1 || sep.is_empty() {
-        // `lua_concat`: strings and numbers, else the concat metamethods.
-        return concat_values(vm, &c.args[1.min(c.len())..]);
+    let sep = c.arg(1);
+    if !matches!(sep, Value::Str(_) | Value::Num(_)) {
+        return Err(vm.type_arg_error(1, "string", c.args.first().copied()));
     }
-    let mut out = Vec::new();
-    for i in 1..=pieces {
-        let s = vm.check_bytes(&c, i + 1)?;
-        // `luaL_addstring` stops at a NUL.
-        out.extend_from_slice(&s[..s.iter().position(|&b| b == 0).unwrap_or(s.len())]);
-        if i < pieces {
-            out.extend_from_slice(&sep);
+    // The pieces with the separator between them, through `lua_concat`.
+    let mut parts = Vec::new();
+    for (i, &v) in c.args.iter().skip(1).enumerate() {
+        if i > 0 {
+            parts.push(sep);
         }
+        parts.push(v);
     }
-    Ok(vec![vm.bytes(&out)])
+    concat_values(vm, &parts)
 }
 
 /// `lua_concat` of `values`: the empty string for none.
@@ -308,7 +369,12 @@ fn strconcat(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn strtrim(vm: &mut Vm, c: NativeCall) -> Ret {
-    let s = vm.check_bytes(&c, 1)?;
+    let s = usage_bytes(
+        vm,
+        &c,
+        1,
+        "Usage: local trimmed = string.trim(str [, characters])",
+    )?;
     let delim: Vec<u8> = match vm.opt_str(&c, 2)? {
         Some(d) => vm.heap.str_bytes(d).to_vec(),
         None => b" \r\n\t".to_vec(),
@@ -361,23 +427,34 @@ fn utf8_len(s: &[u8]) -> usize {
 }
 
 fn strlenutf8(vm: &mut Vm, c: NativeCall) -> Ret {
+    if !matches!(c.arg(1), Value::Str(_) | Value::Num(_)) {
+        return Err(vm.error("Usage: strlenutf8(string)"));
+    }
     let s = vm.check_bytes(&c, 1)?;
     Ok(vec![Value::Num(utf8_len(&s) as f64)])
 }
 
-/// The code points of `s` (up to a NUL), lowercased.
-fn lower_code_points(s: &[u8]) -> Vec<u32> {
+/// The code points of `s` (up to a NUL), uppercased.
+fn upper_code_points(s: &[u8]) -> Vec<u32> {
     let s = &s[..s.iter().position(|&b| b == 0).unwrap_or(s.len())];
     String::from_utf8_lossy(s)
         .chars()
-        .map(|ch| ch.to_lowercase().next().map_or(ch as u32, |l| l as u32))
+        .map(|ch| {
+            let mut up = ch.to_uppercase();
+            match (up.next(), up.next()) {
+                (Some(u), None) => u as u32,
+                _ => ch as u32,
+            }
+        })
         .collect()
 }
 
+/// The difference of the first unequal (uppercased) code points; not
+/// clamped (`strcmputf8i("a", "ab")` is -66).
 fn strcmputf8i(vm: &mut Vm, c: NativeCall) -> Ret {
     let a = vm.check_bytes(&c, 1)?;
     let b = vm.check_bytes(&c, 2)?;
-    let (a, b) = (lower_code_points(&a), lower_code_points(&b));
+    let (a, b) = (upper_code_points(&a), upper_code_points(&b));
     let mut i = 0;
     let r = loop {
         let x = a.get(i).copied().unwrap_or(0);
@@ -387,7 +464,7 @@ fn strcmputf8i(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         i += 1;
     };
-    Ok(vec![Value::Num(r.clamp(-1, 1) as f64)])
+    Ok(vec![Value::Num(r as f64)])
 }
 
 // -------------------------------------------------------------- tables
@@ -424,13 +501,13 @@ fn removemulti(vm: &mut Vm, c: NativeCall) -> Ret {
         } else {
             Value::Nil
         };
-        let _ = vm.heap.table_mut(t).set(Value::Num(dst as f64), v);
+        raw_set(vm, t, dst as f64, v)?;
     }
     Ok(removed)
 }
 
 fn count(vm: &mut Vm, c: NativeCall) -> Ret {
-    let t = vm.check_table(&c, 1)?;
+    let t = usage_table(vm, &c, 1, "Usage: local count = table.count(table)")?;
     Ok(vec![Value::Num(vm.heap.table(t).entries().count() as f64)])
 }
 
@@ -447,28 +524,45 @@ fn getcountinfo(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn create(vm: &mut Vm, c: NativeCall) -> Ret {
-    let narr = vm.check_int(&c, 1)?.max(0) as usize;
-    let nhash = vm.opt_int(&c, 2, 0)?.max(0) as usize;
+    const USAGE: &str = "Usage: local table = table.create(arraySizeHint [, nodeSizeHint])";
+    let narr = usage_num(vm, &c, 1, USAGE)?.max(0.0) as usize;
+    let nhash = if c.arg(2).is_nil() {
+        0
+    } else {
+        usage_num(vm, &c, 2, USAGE)?.max(0.0) as usize
+    };
     let t = vm.heap.alloc_table(crate::table::Table::new(narr, nhash));
     Ok(vec![Value::Table(t)])
 }
 
-/// The array part's index of `value` from `start`.
-fn find_index(vm: &mut Vm, c: &NativeCall) -> Result<Option<usize>, LuaError> {
-    let t = vm.check_table(c, 1)?;
-    let v = c.arg(2);
-    let start = vm.opt_int(c, 3, 1)?.max(1) as usize;
+/// The first array index (1..#t) holding `value`.
+fn find_index(vm: &mut Vm, t: TableRef, v: Value) -> Option<usize> {
     let n = vm.heap.table(t).border();
-    Ok((start..=n).find(|&i| vm.heap.table(t).get_num(i as f64).raw_eq(v)))
+    (1..=n).find(|&i| vm.heap.table(t).get_num(i as f64).raw_eq(v))
 }
 
+/// Whether any value of the table (any key) is `value`.
 fn contains(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(find_index(vm, &c)?.is_some())])
+    let t = usage_table(
+        vm,
+        &c,
+        1,
+        "Usage: local contains = table.contains(table, value)",
+    )?;
+    let v = c.arg(2);
+    let found = vm.heap.table(t).entries().any(|(_, x)| x.raw_eq(v));
+    Ok(vec![Value::Bool(found)])
 }
 
 fn indexof(vm: &mut Vm, c: NativeCall) -> Ret {
+    let t = usage_table(
+        vm,
+        &c,
+        1,
+        "Usage: local index = table.indexof(table [, value])",
+    )?;
     Ok(vec![
-        find_index(vm, &c)?.map_or(Value::Nil, |i| Value::Num(i as f64)),
+        find_index(vm, t, c.arg(2)).map_or(Value::Nil, |i| Value::Num(i as f64)),
     ])
 }
 
@@ -513,7 +607,7 @@ fn removevalue(vm: &mut Vm, c: NativeCall) -> Ret {
     let removed = n - kept.len();
     for i in 1..=n {
         let x = kept.get(i - 1).copied().unwrap_or(Value::Nil);
-        let _ = vm.heap.table_mut(t).set(Value::Num(i as f64), x);
+        raw_set(vm, t, i as f64, x)?;
     }
     Ok(vec![Value::Num(removed as f64)])
 }
@@ -528,28 +622,49 @@ fn removeunordered(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     let removed = vm.heap.table(t).get_num(i as f64);
     let last = vm.heap.table(t).get_num(n as f64);
-    let _ = vm.heap.table_mut(t).set(Value::Num(i as f64), last);
-    let _ = vm.heap.table_mut(t).set(Value::Num(n as f64), Value::Nil);
+    raw_set(vm, t, i as f64, last)?;
+    raw_set(vm, t, n as f64, Value::Nil)?;
     Ok(vec![removed])
 }
 
 // ----------------------------------------------------- string additions
 
 fn startswith(vm: &mut Vm, c: NativeCall) -> Ret {
-    let s = vm.check_bytes(&c, 1)?;
-    let p = vm.check_bytes(&c, 2)?;
+    let s = usage_bytes(
+        vm,
+        &c,
+        1,
+        "Usage: local startsWith = string.startswith(str, prefix)",
+    )?;
+    let p = usage_bytes(
+        vm,
+        &c,
+        2,
+        "Usage: local startsWith = string.startswith(str, prefix)",
+    )?;
     Ok(vec![Value::Bool(s.starts_with(&p))])
 }
 
 fn endswith(vm: &mut Vm, c: NativeCall) -> Ret {
-    let s = vm.check_bytes(&c, 1)?;
-    let p = vm.check_bytes(&c, 2)?;
+    let s = usage_bytes(
+        vm,
+        &c,
+        1,
+        "Usage: local endsWith = string.endswith(str, suffix)",
+    )?;
+    let p = usage_bytes(
+        vm,
+        &c,
+        2,
+        "Usage: local endsWith = string.endswith(str, suffix)",
+    )?;
     Ok(vec![Value::Bool(s.ends_with(&p))])
 }
 
 fn str_contains(vm: &mut Vm, c: NativeCall) -> Ret {
-    let s = vm.check_bytes(&c, 1)?;
-    let p = vm.check_bytes(&c, 2)?;
+    const USAGE: &str = "Usage: local contains = string.contains(str, substring)";
+    let s = usage_bytes(vm, &c, 1, USAGE)?;
+    let p = usage_bytes(vm, &c, 2, USAGE)?;
     let found = p.is_empty() || s.windows(p.len()).any(|w| w == &p[..]);
     Ok(vec![Value::Bool(found)])
 }
@@ -578,126 +693,226 @@ fn rtrim(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.bytes(&s[..end])])
 }
 
-/// `gsub` that replaces the last `n` matches.
-fn rtgsub(vm: &mut Vm, c: NativeCall) -> Ret {
-    let gsub = match vm.get_global("string") {
-        Value::Table(t) => {
-            let k = vm.str("gsub");
-            vm.heap.table(t).get(k)
-        }
-        _ => Value::Nil,
-    };
-    if c.arg(4).is_nil() {
-        return vm.call(gsub, &c.args[..c.len().min(3)]);
-    }
-    // Count the matches, then skip all but the last `n`.
-    let n = vm.check_int(&c, 4)?;
-    let all = vm.call(gsub, &[c.arg(1), c.arg(2), c.arg(2)])?;
-    let total = vm
-        .tonumber(all.get(1).copied().unwrap_or_default())
-        .unwrap_or(0.0) as i64;
-    let skip = (total - n).max(0);
-    let script = vm
-        .load(
-            b"local s, p, r, skip = ... local i = 0 return string.gsub(s, p, function(...) i = i + 1 if i <= skip then return nil end if type(r) == 'function' then return r(...) elseif type(r) == 'table' then return r[...] end return (string.gsub(..., '.*', r)) end)",
-            "=rtgsub",
-        )
-        .expect("compiles");
-    vm.call(
-        script,
-        &[c.arg(1), c.arg(2), c.arg(3), Value::Num(skip as f64)],
-    )
-}
-
 // ------------------------------------------------------- math additions
 
-fn nums<const N: usize>(vm: &mut Vm, c: &NativeCall) -> Result<[f64; N], LuaError> {
-    let mut out = [0.0; N];
-    for (i, x) in out.iter_mut().enumerate() {
-        *x = vm.check_number(c, i + 1)?;
+/// Argument `n` as a number, or the client's usage error for the function.
+fn usage_num(vm: &mut Vm, c: &NativeCall, n: usize, usage: &str) -> Result<f64, LuaError> {
+    match vm.tonumber(c.arg(n)) {
+        Some(x) => Ok(x),
+        None => Err(vm.arg_error(n, usage)),
     }
-    Ok(out)
 }
 
 fn num(x: f64) -> Ret {
     Ok(vec![Value::Num(x)])
 }
 
-fn clamp(vm: &mut Vm, c: NativeCall) -> Ret {
-    let [v, lo, hi] = nums(vm, &c)?;
-    num(if v < lo {
-        lo
-    } else if v > hi {
-        hi
+/// C's `round`: halves away from zero.
+fn round_half_away(x: f64) -> f64 {
+    if x >= 0.0 {
+        (x + 0.5).floor()
     } else {
-        v
-    })
+        -(-x + 0.5).floor()
+    }
+}
+
+fn clamp(vm: &mut Vm, c: NativeCall) -> Ret {
+    const USAGE: &str = "Usage: local clampedValue = math.clamp(value, minimum, maximum)";
+    let v = usage_num(vm, &c, 1, USAGE)?;
+    let lo = usage_num(vm, &c, 2, USAGE)?;
+    let hi = usage_num(vm, &c, 3, USAGE)?;
+    // `fmin(fmax(value, minimum), maximum)`: NaN gives the minimum.
+    num(v.max(lo).min(hi))
 }
 
 fn round(vm: &mut Vm, c: NativeCall) -> Ret {
-    let v = vm.check_number(&c, 1)?;
-    let d = vm.opt_number(&c, 2, 0.0)?;
+    const USAGE: &str = "Usage: local roundedValue = math.round(value [, decimalPlaces])";
+    let v = usage_num(vm, &c, 1, USAGE)?;
+    let d = if c.arg(2).is_nil() {
+        0.0
+    } else {
+        usage_num(vm, &c, 2, USAGE)?
+    };
     let m = 10f64.powf(d);
-    num((v * m + 0.5).floor() / m)
+    num(round_half_away(v * m) / m)
 }
 
 fn sign(vm: &mut Vm, c: NativeCall) -> Ret {
-    let [v] = nums(vm, &c)?;
+    let v = usage_num(vm, &c, 1, "Usage: local sign = math.sign(value)")?;
+    // NaN counts as negative.
     num(if v > 0.0 {
         1.0
-    } else if v < 0.0 {
-        -1.0
-    } else {
+    } else if v == 0.0 {
         0.0
+    } else {
+        -1.0
     })
 }
 
 fn wrap(vm: &mut Vm, c: NativeCall) -> Ret {
-    let [v, lo, hi] = nums(vm, &c)?;
-    let range = hi - lo;
-    num(lo + (v - lo).rem_euclid(range))
+    const USAGE: &str = "Usage: local wrappedValue = math.wrap(value, minimum, maximum)";
+    let v = usage_num(vm, &c, 1, USAGE)?;
+    let lo = usage_num(vm, &c, 2, USAGE)?;
+    let hi = usage_num(vm, &c, 3, USAGE)?;
+    // An empty or reversed range gives the minimum.
+    if hi <= lo {
+        return num(lo);
+    }
+    num(lo + (v - lo).rem_euclid(hi - lo))
 }
 
 fn lerp(vm: &mut Vm, c: NativeCall) -> Ret {
-    let [a, b, t] = nums(vm, &c)?;
+    const USAGE: &str = "Usage: local value = math.lerp(startValue, endValue, amount)";
+    let a = usage_num(vm, &c, 1, USAGE)?;
+    let b = usage_num(vm, &c, 2, USAGE)?;
+    let t = usage_num(vm, &c, 3, USAGE)?;
     num(a + (b - a) * t)
 }
 
+/// `(value - min) / (max - min)`; an empty range gives 0.
+fn normalized(v: f64, lo: f64, hi: f64) -> f64 {
+    if hi == lo { 0.0 } else { (v - lo) / (hi - lo) }
+}
+
 fn normalize(vm: &mut Vm, c: NativeCall) -> Ret {
-    let [v, lo, hi] = nums(vm, &c)?;
-    num((v - lo) / (hi - lo))
+    const USAGE: &str = "Usage: local normalizedValue = math.normalize(value, minimum, maximum)";
+    let v = usage_num(vm, &c, 1, USAGE)?;
+    let lo = usage_num(vm, &c, 2, USAGE)?;
+    let hi = usage_num(vm, &c, 3, USAGE)?;
+    num(normalized(v, lo, hi))
 }
 
 fn remap(vm: &mut Vm, c: NativeCall) -> Ret {
-    let [v, a, b, x, y] = nums(vm, &c)?;
-    num(x + (v - a) / (b - a) * (y - x))
+    const USAGE: &str = "Usage: local remappedValue = math.remap(value, fromMinimum, fromMaximum, toMinimum, toMaximum)";
+    let v = usage_num(vm, &c, 1, USAGE)?;
+    let a = usage_num(vm, &c, 2, USAGE)?;
+    let b = usage_num(vm, &c, 3, USAGE)?;
+    let x = usage_num(vm, &c, 4, USAGE)?;
+    let y = usage_num(vm, &c, 5, USAGE)?;
+    num(x + (y - x) * normalized(v, a, b))
 }
 
 fn saturate(vm: &mut Vm, c: NativeCall) -> Ret {
-    let [v] = nums(vm, &c)?;
-    num(v.clamp(0.0, 1.0))
+    let v = usage_num(
+        vm,
+        &c,
+        1,
+        "Usage: local saturatedValue = math.saturate(value)",
+    )?;
+    // fmax/fmin, as C: NaN gives 0 (Rust's clamp would keep NaN).
+    #[allow(clippy::manual_clamp)]
+    num(v.max(0.0).min(1.0))
 }
 
 fn isnan(vm: &mut Vm, c: NativeCall) -> Ret {
-    let [v] = nums(vm, &c)?;
+    let v = usage_num(vm, &c, 1, "Usage: local nan = math.isnan(value)")?;
     Ok(vec![Value::Bool(v.is_nan())])
 }
 
 fn isinf(vm: &mut Vm, c: NativeCall) -> Ret {
-    let [v] = nums(vm, &c)?;
+    let v = usage_num(vm, &c, 1, "Usage: local inf = math.isinf(value)")?;
     Ok(vec![Value::Bool(v.is_infinite())])
 }
 
 fn isfinite(vm: &mut Vm, c: NativeCall) -> Ret {
-    let [v] = nums(vm, &c)?;
+    let v = usage_num(vm, &c, 1, "Usage: local finite = math.isfinite(value)")?;
     Ok(vec![Value::Bool(v.is_finite())])
+}
+
+/// A number from `[lo, hi]`'s checks: domain errors as the client words them.
+fn domain(vm: &mut Vm, c: &NativeCall, ok: fn(f64) -> bool, what: &str) -> Result<f64, LuaError> {
+    let x = vm.check_number(c, 1)?;
+    if !ok(x) {
+        let got = crate::number::fmt_num(x);
+        return Err(vm.arg_error(1, &format!("expected {what}, got {got}")));
+    }
+    Ok(x)
+}
+
+fn sqrt(vm: &mut Vm, c: NativeCall) -> Ret {
+    let x = domain(vm, &c, |x| x >= 0.0 || x.is_nan(), "non-negative argument")?;
+    num(x.sqrt())
+}
+
+fn log(vm: &mut Vm, c: NativeCall) -> Ret {
+    let x = domain(vm, &c, |x| x >= 0.0 || x.is_nan(), "non-negative argument")?;
+    num(x.ln())
+}
+
+fn log10(vm: &mut Vm, c: NativeCall) -> Ret {
+    let x = domain(vm, &c, |x| x >= 0.0 || x.is_nan(), "non-negative argument")?;
+    num(x.log10())
+}
+
+fn acos(vm: &mut Vm, c: NativeCall) -> Ret {
+    let x = domain(
+        vm,
+        &c,
+        |x| (-1.0..=1.0).contains(&x),
+        "argument between (-1, 1)",
+    )?;
+    num(x.acos())
+}
+
+fn asin(vm: &mut Vm, c: NativeCall) -> Ret {
+    let x = domain(
+        vm,
+        &c,
+        |x| (-1.0..=1.0).contains(&x),
+        "argument between (-1, 1)",
+    )?;
+    num(x.asin())
+}
+
+/// `math.random` is the client's `securerandom`.
+fn securerandom(vm: &mut Vm, c: NativeCall) -> Ret {
+    if c.len() > 2 {
+        return Err(
+            vm.error("Usage: securerandom(); securerandom(highint); securerandom(lowint, highint)")
+        );
+    }
+    random_range(vm, c)
+}
+
+/// `[0, 1)`, `[1, high]` or `[low, high]`; an empty interval is argument 1's
+/// fault.
+fn random_range(vm: &mut Vm, c: NativeCall) -> Ret {
+    let r = f64::from(vm.rand() % 0x7fff_ffff) / f64::from(0x7fff_ffffu32);
+    match c.len() {
+        0 => num(r),
+        1 => {
+            let u = vm.check_int(&c, 1)?;
+            if u < 1 {
+                return Err(vm.arg_error(1, "interval is empty"));
+            }
+            num((r * u as f64).floor() + 1.0)
+        }
+        _ => {
+            let l = vm.check_int(&c, 1)?;
+            let u = vm.check_int(&c, 2)?;
+            if l > u {
+                return Err(vm.arg_error(1, "interval is empty"));
+            }
+            num((r * (u - l + 1) as f64).floor() + l as f64)
+        }
+    }
 }
 
 // ----------------------------------------------------------------- bit
 
-/// `luaL_checkinteger` as 32 bits (unsigned).
+/// A number as 32 bits: truncated, then wrapped (the client raises no
+/// overflow here: `bit.band(2 ^ 32 + 1, 1)` is 1).
 fn unsigned(vm: &mut Vm, c: &NativeCall, n: usize) -> Result<u32, LuaError> {
-    Ok(vm.check_int(c, n)? as u32)
+    let x = vm.check_number(c, n)?;
+    Ok(if x.is_finite() {
+        (x.trunc() % 4_294_967_296.0) as i64 as u32
+    } else {
+        0
+    })
+}
+
+fn signed(vm: &mut Vm, c: &NativeCall, n: usize) -> Result<i32, LuaError> {
+    Ok(unsigned(vm, c, n)? as i32)
 }
 
 fn fold(vm: &mut Vm, c: NativeCall, f: fn(u32, u32) -> u32) -> Ret {
@@ -725,104 +940,33 @@ fn bnot(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(f64::from(!x))])
 }
 
-// Shifts by 32 or more are undefined in C; ARM's give 0 (the probed
-// client), and so do these.
+// Shift counts are taken modulo 32 (`bit.lshift(1, 32)` is 1).
 fn lshift(vm: &mut Vm, c: NativeCall) -> Ret {
     let x = unsigned(vm, &c, 1)?;
     let n = unsigned(vm, &c, 2)?;
-    Ok(vec![Value::Num(f64::from(x.checked_shl(n).unwrap_or(0)))])
+    Ok(vec![Value::Num(f64::from(x << (n & 31)))])
 }
 
 fn rshift(vm: &mut Vm, c: NativeCall) -> Ret {
     let x = unsigned(vm, &c, 1)?;
     let n = unsigned(vm, &c, 2)?;
-    Ok(vec![Value::Num(f64::from(x.checked_shr(n).unwrap_or(0)))])
+    Ok(vec![Value::Num(f64::from(x >> (n & 31)))])
 }
 
 fn arshift(vm: &mut Vm, c: NativeCall) -> Ret {
-    let x = vm.check_int(&c, 1)? as i32;
-    let n = vm.check_int(&c, 2)? as i32;
-    let r = if (0..32).contains(&n) {
-        x >> n
-    } else if x < 0 {
-        -1
-    } else {
-        0
-    };
-    Ok(vec![Value::Num(f64::from(r))])
+    let x = signed(vm, &c, 1)?;
+    let n = unsigned(vm, &c, 2)?;
+    Ok(vec![Value::Num(f64::from(x >> (n & 31)))])
 }
 
 fn bit_mod(vm: &mut Vm, c: NativeCall) -> Ret {
-    let x = vm.check_int(&c, 1)? as i32;
-    let y = vm.check_int(&c, 2)? as i32;
+    let x = signed(vm, &c, 1)?;
+    let y = signed(vm, &c, 2)?;
     // Division by zero traps on x86 and gives 0 on ARM.
     Ok(vec![Value::Num(f64::from(x.checked_rem(y).unwrap_or(0)))])
 }
 
 // ---------------------------------------------------------------- misc
-
-fn tostringall(vm: &mut Vm, c: NativeCall) -> Ret {
-    let mut out = Vec::with_capacity(c.len());
-    for &v in &c.args {
-        out.push(vm.tostring(v)?);
-    }
-    Ok(out)
-}
-
-fn nop(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![])
-}
-
-/// `assertf(value, format, ...)`: `assert` with a formatted message.
-fn assertf(vm: &mut Vm, c: NativeCall) -> Ret {
-    if c.arg(1).truthy() {
-        return Ok(c.args);
-    }
-    if c.len() < 2 {
-        return Err(vm.error("assertion failed!"));
-    }
-    let format = vm.get_global("string");
-    let format = match format {
-        Value::Table(t) => {
-            let k = vm.str("format");
-            vm.heap.table(t).get(k)
-        }
-        _ => Value::Nil,
-    };
-    let msg = vm.call(format, &c.args[1..])?;
-    let msg = msg.first().copied().unwrap_or_default();
-    Err(vm.raise(msg))
-}
-
-fn getglobal(vm: &mut Vm, c: NativeCall) -> Ret {
-    let k = vm.check_str(&c, 1)?;
-    let g = vm.globals;
-    Ok(vec![vm.heap.table(g).get_str(k)])
-}
-
-fn setglobal(vm: &mut Vm, c: NativeCall) -> Ret {
-    let k = vm.check_str(&c, 1)?;
-    let g = vm.globals;
-    vm.set_index(Value::Table(g), Value::Str(k), c.arg(2), None)?;
-    Ok(vec![])
-}
-
-fn ipairs_reverse_step(vm: &mut Vm, c: NativeCall) -> Ret {
-    let i = vm.check_int(&c, 2)? - 1;
-    if i < 1 {
-        return Ok(vec![Value::Nil]);
-    }
-    let v = vm.index(c.arg(1), Value::Num(i as f64), None)?;
-    Ok(vec![Value::Num(i as f64), v])
-}
-
-/// `ipairs_reverse(t)`: `#t` down to 1.
-fn ipairs_reverse(vm: &mut Vm, c: NativeCall) -> Ret {
-    let t = vm.check_table(&c, 1)?;
-    let n = vm.heap.table(t).border();
-    let step = vm.native("ipairs_reverse_step", ipairs_reverse_step);
-    Ok(vec![step, Value::Table(t), Value::Num((n + 1) as f64)])
-}
 
 /// `pcallwithenv(f, env, ...)`: `pcall` with `f`'s environment replaced
 /// for the call; a caller's taint taints `f` (elune's `luaB_pcallwithenv`).
@@ -875,25 +1019,8 @@ fn seterrorhandler(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-fn getprinthandler(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![vm.print_handler])
-}
-
-fn setprinthandler(vm: &mut Vm, c: NativeCall) -> Ret {
-    let f = vm.check_func(&c, 1)?;
-    vm.print_handler = f;
-    Ok(vec![])
-}
-
-/// `print` hands its arguments to the print handler.
-fn print(vm: &mut Vm, c: NativeCall) -> Ret {
-    let handler = vm.print_handler;
-    vm.call(handler, &c.args)?;
-    Ok(vec![])
-}
-
 fn fastrandom(vm: &mut Vm, c: NativeCall) -> Ret {
-    crate::stdlib::math::random(vm, c)
+    random_range(vm, c)
 }
 
 // ---------------------------------------------------------------- time
@@ -1156,7 +1283,7 @@ fn debugstack(vm: &mut Vm, c: NativeCall) -> Ret {
             vm.append_strlike(&mut b, v);
             b
         }
-        Some(&v) => return Ok(vec![v]),
+        Some(_) => return Ok(vec![Value::Nil]),
     };
     let levels = match thread {
         Some(t) if t != vm.current => vm.thread_levels(t),
@@ -1174,7 +1301,7 @@ fn debugstack(vm: &mut Vm, c: NativeCall) -> Ret {
             if !exists(level + nbase) {
                 level -= 1;
             } else {
-                out.extend_from_slice(b"...\n");
+                out.extend_from_slice(b"...");
                 while exists(level + nbase) {
                     level += 1;
                 }
@@ -1183,14 +1310,23 @@ fn debugstack(vm: &mut Vm, c: NativeCall) -> Ret {
             continue;
         }
         let info = &levels[cur as usize];
-        out.extend_from_slice(&info.short_src);
-        out.push(b':');
+        // The client's format: `[source]:line: in function 'name'`, the
+        // source without its `@`; `<short source:line>` for unnamed ones.
+        match info.what {
+            "C" => out.extend_from_slice(b"[C]:"),
+            "tail" => out.extend_from_slice(b"[tail call]:"),
+            _ => {
+                out.push(b'[');
+                out.extend_from_slice(info.source.strip_prefix(b"@").unwrap_or(&info.source));
+                out.extend_from_slice(b"]:");
+            }
+        }
         if info.currentline > 0 {
             out.extend_from_slice(format!("{}:", info.currentline).as_bytes());
         }
         match &info.name {
             Some((kind, name)) if matches!(*kind, "global" | "local" | "field" | "method") => {
-                out.extend_from_slice(format!(" in function `{name}'").as_bytes());
+                out.extend_from_slice(format!(" in function '{name}'").as_bytes());
             }
             _ => match info.what {
                 "main" => out.extend_from_slice(b" in main chunk"),
@@ -1225,54 +1361,20 @@ fn debuglocals(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.bytes(&out)])
 }
 
-/// One variable of `debuglocals` (elune's `aux_dumpvalue`).
-fn dump_value(vm: &mut Vm, name: &str, v: Value, recurse: u32, out: &mut Vec<u8>) {
-    let indent = if recurse == 0 { " " } else { "" };
-    out.extend_from_slice(indent.as_bytes());
+/// One variable of `debuglocals`, as the client prints it: `name=value`.
+fn dump_value(vm: &mut Vm, name: &str, v: Value, _recurse: u32, out: &mut Vec<u8>) {
     out.extend_from_slice(name.as_bytes());
-    out.extend_from_slice(b" = ");
+    out.push(b'=');
     match v {
-        Value::Nil => out.extend_from_slice(b"nil\n"),
-        Value::Bool(b) => out.extend_from_slice(if b { b"true\n" } else { b"false\n" }),
-        Value::Num(n) => {
-            out.extend_from_slice(crate::number::fmt_num(n).as_bytes());
-            out.push(b'\n');
-        }
+        Value::Nil => out.extend_from_slice(b"nil"),
+        Value::Bool(b) => out.extend_from_slice(if b { b"true" } else { b"false" }),
+        Value::Num(n) => out.extend_from_slice(crate::number::fmt_num(n).as_bytes()),
         Value::Str(s) => {
-            let b = vm.str_bytes(s);
-            let b = &b[..b.iter().position(|&x| x == 0).unwrap_or(b.len())];
             out.push(b'"');
-            out.extend_from_slice(b);
-            out.extend_from_slice(b"\"\n");
+            out.extend_from_slice(vm.str_bytes(s));
+            out.push(b'"');
         }
-        Value::Table(t) => {
-            out.extend_from_slice(b"<table> {\n");
-            if recurse > 0 {
-                let entries: Vec<(Value, Value)> = vm.heap.table(t).entries().collect();
-                for (k, x) in entries {
-                    let key = match k {
-                        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
-                        Value::Num(n) => crate::number::fmt_num(n),
-                        _ => String::new(),
-                    };
-                    dump_value(vm, &key, x, recurse - 1, out);
-                }
-            }
-            out.extend_from_slice(indent.as_bytes());
-            out.extend_from_slice(b"}\n");
-        }
-        Value::Func(f) => {
-            let (source, line) = match vm.heap.func(f) {
-                crate::function::Function::Lua(l) => {
-                    (l.proto.source.to_vec(), i64::from(l.proto.line_defined))
-                }
-                crate::function::Function::Native(_) => (b"=[C]".to_vec(), -1),
-            };
-            out.extend_from_slice(b"<function> defined ");
-            out.extend_from_slice(&source);
-            out.extend_from_slice(format!(":{line}\n").as_bytes());
-        }
-        Value::Userdata(_) => out.extend_from_slice(b"<userdata>\n"),
-        other => out.extend_from_slice(format!("<{}>\n", other.type_name()).as_bytes()),
+        other => out.extend_from_slice(format!("<{}>", other.type_name()).as_bytes()),
     }
+    out.push(b'\n');
 }
