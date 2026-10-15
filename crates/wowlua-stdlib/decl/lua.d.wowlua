@@ -1,6 +1,8 @@
 -- Lua 5.1 as WoW provides it (spec §2.8): the base library, string, table,
--- math, coroutine, the parts of os that WoW keeps, bit, and WoW's global
--- aliases and helpers of its Lua environment.
+-- math, coroutine, bit, and WoW's global aliases and helpers of its Lua
+-- environment, with the client's additions to string, table and math.
+-- WoW has no `os` (only the globals `date`, `time` and `difftime`), `io`,
+-- `debug` or `package` (probed in game, decision S37).
 
 declare function assert<T>(value: T, message: any?, ...: any): T
 declare function collectgarbage(option: string?, arg: number?): any
@@ -48,6 +50,14 @@ declare namespace string
     function sub(s: string, i: number, j: number?): string
     function trim(s: string, chars: string?): string
     function upper(s: string): string
+    -- The client's additions.
+    function concat(...: string | number): string
+    function contains(s: string, substring: string): boolean
+    function endswith(s: string, suffix: string): boolean
+    function ltrim(s: string, chars: string?): string
+    function rtgsub(s: string, pattern: string, replacement: string | table | ((...string) -> any), n: number?): (string, number)
+    function rtrim(s: string, chars: string?): string
+    function startswith(s: string, prefix: string): boolean
 end
 
 declare namespace table
@@ -62,6 +72,19 @@ declare namespace table
     function removemulti(t: any[], position: number, count: number?): ...any
     function sort<V>(t: V[], comparator: ((a: V, b: V) -> boolean)?)
     function wipe<T>(t: T): T
+    -- The client's additions.
+    function contains<V>(t: V[], value: V): boolean
+    function count(t: table): number
+    function create(arraySizeHint: number, nodeSizeHint: number?): table
+    function freeze(t: table)
+    function getcountinfo(t: table): ...number
+    function indexof<V>(t: V[], value: V): number?
+    function isempty(t: table): boolean
+    function isfrozen(t: table): boolean
+    function keys<K, V>(t: { [K]: V }): K[]
+    function removeunordered<V>(t: V[], index: number)
+    function removevalue<V>(t: V[], value: V)
+    function values<K, V>(t: { [K]: V }): V[]
 end
 
 declare namespace math
@@ -89,29 +112,32 @@ declare namespace math
     function pow(x: number, y: number): number
     function rad(x: number): number
     function random(m: number?, n: number?): number
-    function randomseed(seed: number)
     function sin(x: number): number
     function sinh(x: number): number
     function sqrt(x: number): number
     function tan(x: number): number
     function tanh(x: number): number
+    -- The client's additions.
+    function clamp(value: number, min: number, max: number): number
+    function isfinite(x: number): boolean
+    function isinf(x: number): boolean
+    function isnan(x: number): boolean
+    function lerp(from: number, to: number, amount: number): number
+    function normalize(value: number, min: number, max: number): number
+    function remap(value: number, fromMin: number, fromMax: number, toMin: number, toMax: number): number
+    function round(value: number, decimals: number?): number
+    function saturate(x: number): number
+    function sign(x: number): number
+    function wrap(value: number, min: number, max: number): number
 end
 
 declare namespace coroutine
     function create(f: (...any) -> ...any): thread
-    function isyieldable(): boolean
     function resume(co: thread, ...: any): (boolean, ...any)
     function running(): thread?
     function status(co: thread): "running" | "suspended" | "normal" | "dead"
     function wrap(f: (...any) -> ...any): (...any) -> ...any
     function yield(...: any): ...any
-end
-
-declare namespace os
-    function clock(): number
-    function date(format: string?, time: number?): any
-    function difftime(t2: number, t1: number): number
-    function time(t: table?): number
 end
 
 declare namespace bit
@@ -123,8 +149,6 @@ declare namespace bit
     function lshift(x: number, n: number): number
     function mod(x: number, y: number): number
     function rshift(x: number, n: number): number
-    function tobit(x: number): number
-    function tohex(x: number, n: number?): string
 end
 
 -- WoW's global aliases of library functions.

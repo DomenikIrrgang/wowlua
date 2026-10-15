@@ -6,9 +6,7 @@ scripts = {},
 timers = {},
 memory = {}
 }
-local clock = debugprofilestop or function()
-	return os.clock() * 1000
-end
+local clock = debugprofilestop
 --- A frame, animation or other script object (what compiled code passes).
 
 

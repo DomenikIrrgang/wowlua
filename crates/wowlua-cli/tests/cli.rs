@@ -616,7 +616,9 @@ fn run_toc(dir: &Path, toc_file: &str, name: &str, flavor: Option<(&str, &str)>)
           local parts = {}
           for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
           __out[#__out + 1] = table.concat(parts, " ")
-        end"##,
+        end
+        -- WoW's millisecond clock (tests may replace it).
+        debugprofilestop = function() return os.clock() * 1000 end"##,
     )
     .exec()
     .unwrap();
@@ -3645,7 +3647,7 @@ fn load_order_diagnostics() {
 /// with `("Compiled", ns)` like the client does; returns what they printed.
 fn run_compiled(files: &[std::path::PathBuf]) -> String {
     let lua = mlua::Lua::new();
-    lua.load("OUT = {} print = function(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((select(i, ...))) end OUT[#OUT + 1] = table.concat(t, ' ') end")
+    lua.load("OUT = {} print = function(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((select(i, ...))) end OUT[#OUT + 1] = table.concat(t, ' ') end debugprofilestop = function() return os.clock() * 1000 end")
         .exec()
         .unwrap();
     let ns = lua.create_table().unwrap();

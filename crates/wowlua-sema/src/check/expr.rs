@@ -433,13 +433,14 @@ impl Checker<'_> {
                 Types::ANY
             }
             None => {
-                let (code, msg) = match self.mode {
-                    super::query::Mode::Strict => {
-                        ("E1001", format!("`{}` is not a declared global", n.text))
-                    }
-                    super::query::Mode::Basic => {
-                        ("W1001", format!("`{}` is not a declared global", n.text))
-                    }
+                let mut msg = format!("`{}` is not a declared global", n.text);
+                if n.text.as_ref() == "os" {
+                    // Code written for plain Lua (decision S37).
+                    msg.push_str(": WoW has no `os` library; use the globals `time()`, `date(…)` and `difftime(…)`, and `debugprofilestop()` (milliseconds) for `os.clock()`");
+                }
+                let code = match self.mode {
+                    super::query::Mode::Strict => "E1001",
+                    super::query::Mode::Basic => "W1001",
                 };
                 self.report(code, n.span, msg);
                 Types::ANY

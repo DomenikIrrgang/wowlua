@@ -5,9 +5,7 @@ stats = {},
 timers = {},
 errors = wl.profErrors
 }
-local clock = debugprofilestop or function()
-	return os.clock() * 1000
-end
+local clock = debugprofilestop
 prof.clock = clock
 -- Time spent in instrumented callees, per active call (innermost last;
 -- finished calls are cleared to nil).

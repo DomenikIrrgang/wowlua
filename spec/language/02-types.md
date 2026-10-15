@@ -571,7 +571,14 @@ The global environment (`_G`) is modelled as a set of **declared globals**:
 - the globals of Blizzard's UI code (FrameXML functions, tables, mixins and
   named frames) and its global strings (decision T84),
 - the Lua 5.1 standard library as available in WoW, and `LibStub`
-  (decision T86),
+  (decision T86). WoW has no `os`, `io`, `debug` or `package` library; it
+  keeps `date`, `time` and `difftime` as globals. Its additions to `string`
+  (`startswith`, `endswith`, `contains`, `ltrim`, `rtrim`, `concat`, …),
+  `table` (`contains`, `indexof`, `keys`, `values`, `count`, `isempty`,
+  `removevalue`, `freeze`, …) and `math` (`clamp`, `lerp`, `round`, `wrap`,
+  `saturate`, …) are declared for every flavor (decision S37). Reading `os`
+  reports W1001/E1001 with the replacements (`time()`, `date(…)`,
+  `difftime(…)`, `debugprofilestop()`),
 - `declare global` declarations in the project and its dependencies,
 - SavedVariables listed in the manifest (typed `any` unless declared),
 - names listed in the manifest under `check.globals`.

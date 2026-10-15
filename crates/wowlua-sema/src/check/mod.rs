@@ -835,6 +835,24 @@ mod tests {
         assert!(d.iter().all(|x| !x.is_error()), "{src}\n{:#?}", codes(&d));
     }
 
+    /// WoW's Lua: no `os` (the error names the replacements), and the
+    /// client's additions to `string`, `table` and `math` (decision S37).
+    #[test]
+    fn wow_lua_environment() {
+        let d = check_source("print(os.time())\n", Mode::Strict);
+        assert!(
+            d.iter().any(|x| x.code == Some("E1001")
+                && x.message.contains("WoW has no `os` library")
+                && x.message.contains("time()")),
+            "{:#?}",
+            codes(&d)
+        );
+        strict_err("print(math.randomseed(1))\n", "E2003");
+        strict_ok(
+            "local s = \"wowlua\"\nlocal a: boolean = s:startswith(\"wow\") and s:endswith(\"lua\") and s:contains(\"wl\")\nlocal b: string = s:ltrim():rtrim(\"a\")\nlocal n: number = math.clamp(math.round(2.5), 0, 10) + math.lerp(0, 1, 0.5) + math.wrap(370, 0, 360)\nlocal list: string[] = { \"a\" }\nlocal i: number? = table.indexof(list, \"a\")\nlocal keys: string[] = table.keys({ x = 1 })\nlocal c: boolean = table.contains(list, \"a\") and table.isempty({})\ntable.removevalue(list, \"a\")\nlocal t: number = date(\"*t\").year + time() + difftime(2, 1)\nprint(a, b, n, i, keys, c, t)\n",
+        );
+    }
+
     /// A literal binds as its base type at the top level only: inside a
     /// table type the declared element type binds as it is (tables are
     /// invariant).

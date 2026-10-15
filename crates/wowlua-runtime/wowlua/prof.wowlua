@@ -5,9 +5,7 @@ local prof = {
 	timers = {} :: { [string]: number },
 	errors = wl.profErrors,
 }
-local clock: () -> number = debugprofilestop or function(): number
-	return os.clock() * 1000
-end
+local clock: () -> number = debugprofilestop
 prof.clock = clock
 -- Time spent in instrumented callees, per active call (innermost last;
 -- finished calls are cleared to nil).

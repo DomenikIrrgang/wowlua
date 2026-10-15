@@ -5,7 +5,7 @@ import type TestRecord from "/harness"
 --- The saved suite's data for the test after the /reload.
 export type ReloadCheck = { pending: boolean, profileBefore: string, migrationsBefore: number }
 
-export type RunState = { results: TestRecord[]?, time: string?, reload: ReloadCheck?, luaEnv: any? }
+export type RunState = { results: TestRecord[]?, time: string?, reload: ReloadCheck?, luaEnv: any?, luaEnvAdditions: { [string]: string }? }
 
 export function state(): RunState
     if type(StdTestState) ~= "table" then

@@ -2191,9 +2191,20 @@ Mock.slash("/stdtest auto")
 for _ = 1, 1200 do
     Mock.advanceFrames(3, 50 / 3)
 end
+-- The Lua environment probe records without failing (the mock lacks the
+-- client's additions: those calls record errors).
+Mock.slash("/stdtest probe")
+local env, additions = StdTestState.luaEnv, StdTestState.luaEnvAdditions
+print("probe recorded", env.version, env.libraries.os, env.calls["time()"], additions["math.clamp(5, 1, 3)"]:sub(1, 6))
 "#,
     );
     let text = printed.join("\n");
+    assert!(
+        printed
+            .iter()
+            .any(|l| l == "probe recorded Lua 5.1 false ok: number error:"),
+        "{text}"
+    );
     let summary = printed
         .iter()
         .find(|l| l.contains(" passed, "))

@@ -6,9 +6,7 @@ local mon = {
 	timers = {} :: { [string]: WowluaMonitorStat },
 	memory = {} :: number[],
 }
-local clock: () -> number = debugprofilestop or function(): number
-	return os.clock() * 1000
-end
+local clock: () -> number = debugprofilestop
 --- A frame, animation or other script object (what compiled code passes).
 interface Scriptable
 	function SetScript(script: string, fn: any)
