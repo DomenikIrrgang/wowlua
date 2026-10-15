@@ -140,6 +140,9 @@ pub struct Source<'a> {
     /// declares. Its functions and globals type that module's exports
     /// (as callers see them) instead of becoming globals.
     pub declares: Option<usize>,
+    /// Globals of a primitive type that the parsed text leaves out (the
+    /// WoW API): declared at the start of the file's turn.
+    pub globals: wowlua_api::Globals,
 }
 
 #[derive(Default)]
@@ -291,6 +294,7 @@ impl Env {
         }
         // Pass 3: global values, events and messages.
         for src in sources {
+            env.collect_table_globals(src);
             for s in &src.parse.chunk.block.stmts {
                 env.collect_values(src, s);
             }
@@ -884,6 +888,26 @@ impl Env {
         let mut m = Member::field(new);
         m.readonly = true;
         self.def_mut(def).statics.insert("new".into(), m);
+    }
+
+    /// The globals of `src`'s table, as `collect_values` declares the
+    /// statements they stand for. No other declaration of the file writes
+    /// the same names, so declaring them first gives the same result.
+    fn collect_table_globals(&mut self, src: &Source) {
+        debug_assert!(src.globals.is_empty() || src.declares.is_none());
+        for g in src.globals.iter() {
+            if let Some(addon) = g.on_demand {
+                self.on_demand.insert(g.name.into(), addon.to_string());
+            }
+            let t = match g.ty {
+                wowlua_api::Prim::Any => Types::ANY,
+                wowlua_api::Prim::Boolean => Types::BOOLEAN,
+                wowlua_api::Prim::Number => Types::NUMBER,
+                wowlua_api::Prim::String => Types::STRING,
+                wowlua_api::Prim::Table => Types::TABLE,
+            };
+            self.globals.insert(g.name.into(), t);
+        }
     }
 
     fn collect_values(&mut self, src: &Source, s: &Stmt) {

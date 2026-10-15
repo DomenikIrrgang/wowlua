@@ -42,7 +42,7 @@ fn words(text: &[u8], mut f: impl FnMut(&[u8])) {
 
 /// Plans the renames. `recorded`: the checker's definition and access spans;
 /// `foreign`: other text the names must not occur in (XML, libraries).
-pub fn plan(recorded: &HashSet<Span>, parsed: &[Parsed], foreign: &[Vec<u8>]) -> Plan {
+pub fn plan(recorded: &HashSet<Span>, parsed: &[Parsed], foreign: &[&[u8]]) -> Plan {
     let by_file: HashMap<FileId, &Parsed> = parsed.iter().map(|p| (p.file, p)).collect();
     let text_of = |span: &Span| -> Option<String> {
         let p = by_file.get(&span.file)?;

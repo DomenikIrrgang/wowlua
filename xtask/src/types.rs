@@ -625,6 +625,8 @@ fn validate(files: &[(&str, &String)]) -> Vec<String> {
             xml: None,
             meta: None,
             main_of: None,
+            // The texts here are complete: nothing is taken out.
+            globals: Default::default(),
         })
         .collect();
     let analysis = wowlua_sema::analyze(&inputs, None);

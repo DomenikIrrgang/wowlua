@@ -2656,6 +2656,7 @@ dependencies = [
  "indexmap",
  "rustc-hash",
  "stacker",
+ "wowlua-api",
  "wowlua-diagnostics",
  "wowlua-flavors",
  "wowlua-luair",
