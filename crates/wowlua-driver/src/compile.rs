@@ -703,7 +703,7 @@ pub fn compile_flavor(
     source_maps: bool,
     meta: Arc<Meta>,
     layout: wowlua_sema::loadorder::Layout,
-    api: &[ParsedDeclaration],
+    api: &[&ParsedDeclaration],
     check: &CheckConfig,
     shared: Option<&wowlua_sema::check::flavors::SharedFlavors>,
     lower_lua: &std::collections::HashSet<String>,
@@ -1189,6 +1189,8 @@ pub fn compile_flavor(
             });
         }
         for d in api {
+            // The build keeps the API's tokens only for rename-private.
+            debug_assert!(!d.parse.lexed.tokens.is_empty(), "API tokens freed");
             parsed_files.push(crate::private_names::Parsed {
                 file: d.file,
                 parse: &d.parse,

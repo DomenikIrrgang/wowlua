@@ -16,7 +16,17 @@ const SHARED: File = File {
 
 /// The declarations of a flavor: the shared file and the flavor's own.
 pub fn declarations(flavor: &str) -> Option<[File; 2]> {
-    let own = match flavor {
+    own(flavor).map(|own| [SHARED, own])
+}
+
+/// The declarations every flavor shares.
+pub fn shared() -> File {
+    SHARED
+}
+
+/// A flavor's own declarations, next to [`shared`].
+pub fn own(flavor: &str) -> Option<File> {
+    Some(match flavor {
         "standard" => File {
             path: "<wow-api>/standard.d.wowlua",
             text: include_str!("../data/standard.d.wowlua"),
@@ -46,8 +56,7 @@ pub fn declarations(flavor: &str) -> Option<[File; 2]> {
             text: include_str!("../data/vanilla.d.wowlua"),
         },
         _ => return None,
-    };
-    Some([SHARED, own])
+    })
 }
 
 /// What a flavor's tooltips offer (spec stdlib "tooltip"): the
