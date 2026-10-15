@@ -12,7 +12,7 @@ use crate::heap::{FuncRef, Heap, StrRef, TableRef, ThreadRef, UpvalRef};
 use crate::number::{fmt_num, str2num};
 use crate::proto::{ArithOp, Op, Proto, Rk};
 use crate::table::Table;
-use crate::taint::{Slot, Taint, TaintState};
+use crate::taint::{Origin, Slot, Taint, TaintState};
 use crate::thread::{Frame, Status, Thread, ThreadState};
 use crate::value::Value;
 
@@ -186,6 +186,8 @@ pub struct Vm {
     pub(crate) c_depth: usize,
     /// The running native took a secret's value: its results are secret.
     pub(crate) secret_used: bool,
+    /// Where taint came from (`crate::origin`).
+    pub(crate) origins: crate::origin::Origins,
     /// The running native may take secrets' values even while tainted
     /// (`tostring`, `string.format`, `strjoin`: their results are secret).
     pub(crate) secret_reveal: bool,
@@ -262,6 +264,7 @@ impl Vm {
             names,
             c_depth: 0,
             secret_used: false,
+            origins: Default::default(),
             secret_reveal: false,
             cstack: Vec::new(),
             errfunc: None,
@@ -486,6 +489,9 @@ impl Vm {
     /// Copies a stored value into a register (`setobj2s`).
     fn set_copy(&mut self, i: usize, s: Slot) {
         self.cur.stack[i] = self.cur.taint.copy(s);
+        if self.cur.taint.tainted_by.is_some() {
+            self.settle_origin();
+        }
     }
 
     /// Calls `f` with `args`, as a native pushes them (values made now);
@@ -709,6 +715,7 @@ impl Vm {
                 let slots = &self.cur.stack[func + 1..func + 1 + nargs];
                 let args = slots.iter().map(|s| s.v).collect();
                 let taints = slots.iter().map(|s| s.t).collect();
+                let origins = slots.iter().map(|s| s.o).collect();
                 // Nested calls from the native go above its arguments.
                 self.cur.top = func + 1 + nargs;
                 self.cstack.push(CEntry {
@@ -726,12 +733,16 @@ impl Vm {
                     NativeCall {
                         args,
                         taints,
+                        origins,
                         upvals,
                         upval_taints,
                     },
                 );
                 self.cur.natives -= 1;
                 self.cstack.pop();
+                if self.cur.taint.tainted_by.is_some() {
+                    self.settle_origin();
+                }
                 let used = std::mem::replace(&mut self.secret_used, outer_used);
                 self.secret_reveal = outer_reveal;
                 let results = match r {
@@ -753,12 +764,18 @@ impl Vm {
                 // others' own (`Vm::result_taints`).
                 let taints = std::mem::take(&mut self.result_taints);
                 let write = self.cur.taint.write();
+                let origin = if write.is_secure() {
+                    Origin::NONE
+                } else {
+                    self.cur.taint.origin
+                };
                 let results: Vec<Slot> = results
                     .into_iter()
                     .enumerate()
                     .map(|(i, v)| Slot {
                         v,
                         t: taints.get(i).copied().unwrap_or(write),
+                        o: origin,
                     })
                     .collect();
                 self.place_results(func, &results, nresults);
@@ -883,6 +900,7 @@ impl Vm {
             Rk::K(i) => Slot {
                 v: proto.constants[i as usize],
                 t: proto.const_taint,
+                o: Origin::NONE,
             },
         }
     }
@@ -907,6 +925,7 @@ impl Vm {
             let closure_taint = self.heap.func(closure).taint();
             self.cur.taint.fixed = Taint::SECURE;
             self.cur.taint.read(closure_taint);
+            self.settle_origin();
             self.cur.taint.fixed = closure_taint;
             let k = &proto.constants[..];
             loop {
@@ -966,7 +985,10 @@ impl Vm {
                     }
                     Op::SetUpval { a, u } => {
                         let uv = self.closure_upval(closure, u);
-                        let v = self.cur.stack[base + a as usize];
+                        let mut v = self.cur.stack[base + a as usize];
+                        if !v.t.is_secure() {
+                            v.o = self.record_write(v.t, v.o);
+                        }
                         self.upval_set(uv, v);
                     }
                     Op::SetTable { a, b, c } => {
@@ -1435,6 +1457,10 @@ impl Vm {
                     _ => Slot::NIL,
                 };
                 if tm.v.is_nil() {
+                    let mut v = v;
+                    if !v.t.is_secure() {
+                        v.o = self.record_write(v.t, v.o);
+                    }
                     return self
                         .heap
                         .table_mut(tr)
@@ -1456,6 +1482,7 @@ impl Vm {
             };
             // The metamethod's taint taints the execution.
             self.cur.taint.read(tm.t);
+            self.settle_origin();
             if matches!(tm.v, Value::Func(_)) {
                 let func = self.cur.top.max(self.frame_top());
                 self.ensure_stack(func + 4);

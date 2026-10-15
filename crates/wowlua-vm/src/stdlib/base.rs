@@ -182,7 +182,11 @@ fn rawset(vm: &mut Vm, c: NativeCall) -> Ret {
     let k = vm.check_any(&c, 2)?;
     let k = vm.secret_key(k, true)?;
     vm.check_any(&c, 3)?;
-    if let Err(e) = vm.heap.table_mut(t).set_slot(k, c.slot(3)) {
+    let mut v = c.slot(3);
+    if !v.t.is_secure() {
+        v.o = vm.record_write(v.t, v.o);
+    }
+    if let Err(e) = vm.heap.table_mut(t).set_slot(k, v) {
         return Err(vm.rt_error(e.message()));
     }
     Ok(vm.return_slots(vec![c.slot(1)]))

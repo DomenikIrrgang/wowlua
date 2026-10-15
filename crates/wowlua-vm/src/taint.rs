@@ -23,23 +23,37 @@ impl Taint {
     }
 }
 
+/// Why a value or an execution is tainted (decision T196): a record of the
+/// VM's (`Vm::origin_record`), or none known: the code that made it is
+/// itself tainted.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Origin(pub(crate) u32);
+
+impl Origin {
+    pub const NONE: Origin = Origin(0);
+}
+
 /// A stored value: a stack slot, a table field or a closed upvalue.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Slot {
     pub v: Value,
     pub t: Taint,
+    /// Where its taint came from (in the slot's padding: no extra size).
+    pub o: Origin,
 }
 
 impl Slot {
     pub const NIL: Slot = Slot {
         v: Value::Nil,
         t: Taint::SECURE,
+        o: Origin::NONE,
     };
 
     pub fn secure(v: Value) -> Slot {
         Slot {
             v,
             t: Taint::SECURE,
+            o: Origin::NONE,
         }
     }
 }
@@ -62,6 +76,11 @@ pub struct TaintState {
     /// Taint for new objects (`newgctaint`) and new closures (`newcltaint`).
     pub new_object: Taint,
     pub new_closure: Taint,
+    /// Why the execution is tainted: the read that tainted it.
+    pub origin: Origin,
+    /// A read just tainted the execution: the value's origin, waiting for
+    /// the VM to record where (`Vm::settle_origin`).
+    pub tainted_by: Option<Origin>,
 }
 
 impl TaintState {
@@ -76,8 +95,25 @@ impl TaintState {
 
     /// Reading a value with `t` (`luaR_taintstack`).
     pub fn read(&mut self, t: Taint) {
+        self.read_from(t, Origin::NONE);
+    }
+
+    /// Reading a value with `t` whose taint came from `o`.
+    pub fn read_from(&mut self, t: Taint, o: Origin) {
         if !t.is_secure() && self.fixed.is_secure() && self.mode & READ != 0 {
+            if self.stack != t {
+                self.tainted_by = Some(o);
+            }
             self.stack = t;
+        }
+    }
+
+    /// The origin values made now take: the execution's, while tainted.
+    fn fresh_origin(&self) -> Origin {
+        if self.write().is_secure() {
+            Origin::NONE
+        } else {
+            self.origin
         }
     }
 
@@ -88,16 +124,21 @@ impl TaintState {
             Slot {
                 v: s.v,
                 t: self.write(),
+                o: self.fresh_origin(),
             }
         } else {
-            self.read(s.t);
+            self.read_from(s.t, s.o);
             s
         }
     }
 
     /// A value made now (`setnvalue` and the like).
     pub fn fresh(&self, v: Value) -> Slot {
-        Slot { v, t: self.write() }
+        Slot {
+            v,
+            t: self.write(),
+            o: self.fresh_origin(),
+        }
     }
 
     /// What `lua_savetaint` keeps (the fixed taint is not part of it).

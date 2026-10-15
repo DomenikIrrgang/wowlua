@@ -88,8 +88,13 @@ fn call_restoring(vm: &mut Vm, saved: TaintState, f: Slot, args: &[Slot]) -> Vec
     vm.errfunc = outer;
     vm.taint_mut().restore(saved);
     let t = vm.taint().stack;
-    r.map(|results| results.into_iter().map(|s| Slot { v: s.v, t }).collect())
-        .unwrap_or_default()
+    r.map(|results| {
+        results
+            .into_iter()
+            .map(|s| Slot { v: s.v, t, o: s.o })
+            .collect()
+    })
+    .unwrap_or_default()
 }
 
 fn securecall(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -177,10 +182,12 @@ fn hooksecurefunc(vm: &mut Vm, c: NativeCall) -> Ret {
     let original = Slot {
         v: original.v,
         t: lookup,
+        o: original.o,
     };
     let hook = Slot {
         v: hook.v,
         t: entry.stack,
+        o: hook.o,
     };
     let wrapper = vm.native_slots("securehook", securehook, vec![original, hook]);
     let Value::Table(tr) = t else { unreachable!() };

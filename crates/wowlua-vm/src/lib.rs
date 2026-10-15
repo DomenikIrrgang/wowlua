@@ -10,6 +10,7 @@ pub mod gc;
 pub mod heap;
 pub mod luac;
 pub mod number;
+pub mod origin;
 pub mod proto;
 pub mod secret;
 pub mod stdlib;

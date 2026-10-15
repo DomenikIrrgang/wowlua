@@ -39,6 +39,7 @@ impl NativeCall {
         crate::taint::Slot {
             v: self.arg(n),
             t: self.taints.get(n - 1).copied().unwrap_or_default(),
+            o: self.origins.get(n - 1).copied().unwrap_or_default(),
         }
     }
 
@@ -47,6 +48,7 @@ impl NativeCall {
         crate::taint::Slot {
             v: self.upvals.get(i).copied().unwrap_or_default(),
             t: self.upval_taints.get(i).copied().unwrap_or_default(),
+            o: crate::taint::Origin::NONE,
         }
     }
 

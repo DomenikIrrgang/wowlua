@@ -16,6 +16,8 @@ pub struct NativeCall {
     pub args: Vec<Value>,
     /// The arguments' taints (their stack slots').
     pub taints: Vec<crate::taint::Taint>,
+    /// The arguments' taints' origins.
+    pub origins: Vec<crate::taint::Origin>,
     /// The native function's own upvalues (set when it was created).
     pub upvals: Rc<[Value]>,
     pub upval_taints: Rc<[crate::taint::Taint]>,

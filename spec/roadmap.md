@@ -408,6 +408,10 @@ The test framework runs on wowlua's own emulation of the WoW client
 - S2 **WoW semantics**: WoW's Lua (no `os`/`io`/`debug`, its arithmetic, its
   library additions), taint and secure execution with taint reports, secret
   values as a VM value kind.
+  Done 2026-10-16: the client's probe cases (819, WoW Forever 1.60.1) give the
+  client's results but those waiting for the engine and Blizzard's Lua; its
+  limits, crashes and call depths; elune's taint cases; taint reports with the
+  full chain (the protected actions that raise them come with S3).
 - S3 **Engine**: the WoW API generated per flavor from Blizzard's
   documentation (existence, protection, secrets), the widget system and the
   behaviour tests need, "not mocked" errors for the rest; Blizzard's FrameXML

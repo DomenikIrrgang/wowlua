@@ -127,7 +127,25 @@ The client's security model, in the VM:
   fails the test.
 - **Taint reports.** A refusal reports the taint chain: the protected call,
   the secure code that became tainted, the value it read, and the addon code
-  (file and line) that wrote that value. This is what `taint.log` cannot show.
+  (file and line) that wrote that value, through any number of hops through
+  secure code (decision T196). This is what `taint.log` cannot show:
+
+  ```text
+  UseAction() blocked (ADDON_ACTION_BLOCKED)
+    ActionButton_OnClick  FrameXML/ActionButton.lua:211
+      read field 'action'
+    written by ActionBarButton_Update
+      FrameXML/ActionButton.lua:98
+      while tainted by MyAddon, after reading
+    global 'ACTIONBAR_PAGE'
+      written by MyAddon  src/bars.wowlua:42
+  ```
+
+  Every tainted value knows the event behind its taint: the store that put
+  it there, and what tainted the code that stored it; every tainted
+  execution, the read that tainted it. Tests can also assert that a value or
+  a handler stays secure, and get the same chain when it does not (decision
+  T197).
 
 ## 17.5 Secret values
 
