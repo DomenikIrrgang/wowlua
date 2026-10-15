@@ -522,6 +522,8 @@ local cases = {
     -- Security.
     "return issecure()",
     "return issecurevariable('print')",
+    "return issecurevariable('StdTestState')",
+    "return issecurevariable('UIParent'), issecurevariable('ToggleGameMenu')",
     "return issecurevariable('StdTestConformanceGlobal')",
     "return issecurevariable('nonexistentglobalxyz')",
     "return issecurevariable(_G, 'print')",
