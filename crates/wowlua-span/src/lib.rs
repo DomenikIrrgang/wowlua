@@ -3,8 +3,10 @@
 //! Every diagnostic and every syntax node points into a [`SourceDb`] through a
 //! [`Span`]: a file id plus a half-open byte range.
 
+use std::borrow::Cow;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 /// Identifies a file inside a [`SourceDb`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -58,19 +60,19 @@ pub struct LineCol {
 #[derive(Debug)]
 pub struct SourceFile {
     path: PathBuf,
-    text: String,
-    line_starts: Vec<usize>,
+    /// Borrowed for text compiled into the binary (the WoW API).
+    text: Cow<'static, str>,
+    /// Built the first time a position is asked for: most files never need
+    /// one.
+    line_starts: OnceLock<Vec<usize>>,
 }
 
 impl SourceFile {
-    fn new(path: PathBuf, text: String) -> Self {
-        let line_starts = std::iter::once(0)
-            .chain(text.match_indices('\n').map(|(i, _)| i + 1))
-            .collect();
+    fn new(path: PathBuf, text: Cow<'static, str>) -> Self {
         SourceFile {
             path,
             text,
-            line_starts,
+            line_starts: OnceLock::new(),
         }
     }
 
@@ -84,12 +86,16 @@ impl SourceFile {
 
     /// Byte offsets at which each line starts.
     pub fn line_starts(&self) -> &[usize] {
-        &self.line_starts
+        self.line_starts.get_or_init(|| {
+            std::iter::once(0)
+                .chain(self.text.match_indices('\n').map(|(i, _)| i + 1))
+                .collect()
+        })
     }
 
     /// Zero-based index of the line containing `offset`.
     pub fn line_index(&self, offset: usize) -> usize {
-        match self.line_starts.binary_search(&offset) {
+        match self.line_starts().binary_search(&offset) {
             Ok(line) => line,
             Err(next) => next - 1,
         }
@@ -99,14 +105,14 @@ impl SourceFile {
         let line = self.line_index(offset);
         LineCol {
             line: to_u32(line + 1),
-            column: to_u32(offset - self.line_starts[line] + 1),
+            column: to_u32(offset - self.line_starts()[line] + 1),
         }
     }
 
     /// Byte offset of a one-based line and column, clamped to the file.
     pub fn offset(&self, line: usize, column: usize) -> usize {
         let line_start = self
-            .line_starts
+            .line_starts()
             .get(line.saturating_sub(1))
             .copied()
             .unwrap_or(self.text.len());
@@ -140,8 +146,17 @@ impl SourceDb {
     }
 
     pub fn add(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> FileId {
+        self.push(path.into(), Cow::Owned(text.into()))
+    }
+
+    /// Adds text compiled into the binary without copying it.
+    pub fn add_static(&mut self, path: impl Into<PathBuf>, text: &'static str) -> FileId {
+        self.push(path.into(), Cow::Borrowed(text))
+    }
+
+    fn push(&mut self, path: PathBuf, text: Cow<'static, str>) -> FileId {
         let id = FileId(to_u32(self.files.len()));
-        self.files.push(SourceFile::new(path.into(), text.into()));
+        self.files.push(SourceFile::new(path, text));
         id
     }
 
@@ -180,6 +195,18 @@ mod tests {
         assert_eq!(file.offset(2, 3), 15);
         assert_eq!(&file.text()[file.line_range(1)], "local a = 1");
         assert_eq!(&file.text()[file.line_range(2)], "print(a)");
+    }
+
+    #[test]
+    fn static_text_reads_like_added_text() {
+        let mut db = SourceDb::new();
+        let owned = db.add("a.lua", "a\nbc\r\nd");
+        let borrowed = db.add_static("b.lua", "a\nbc\r\nd");
+        let (owned, borrowed) = (db.get(owned), db.get(borrowed));
+        assert_eq!(owned.text(), borrowed.text());
+        assert_eq!(owned.line_starts(), borrowed.line_starts());
+        assert_eq!(borrowed.line_starts(), [0, 2, 6]);
+        assert_eq!(borrowed.line_col(3), LineCol { line: 2, column: 2 });
     }
 
     #[test]

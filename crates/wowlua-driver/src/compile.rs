@@ -59,7 +59,8 @@ pub struct CompileOutput {
 pub struct Declaration {
     pub source: Source,
     pub file: FileId,
-    pub bytes: Vec<u8>,
+    /// Borrowed for the compiler's own declarations, compiled into it.
+    pub bytes: std::borrow::Cow<'static, [u8]>,
 }
 
 /// The `check` settings of the manifest (spec §9.8).
@@ -416,7 +417,7 @@ pub fn add_stdlib(
                         output: None,
                     },
                     file,
-                    bytes: text.into_bytes(),
+                    bytes: text.into_bytes().into(),
                 });
                 parsed.declarations.push(parse);
             }
@@ -586,7 +587,7 @@ pub fn add_libraries(
                         output: None,
                     },
                     file,
-                    bytes,
+                    bytes: bytes.into(),
                 });
                 parsed.declarations.push(parse);
                 continue;
@@ -715,7 +716,7 @@ pub fn compile_flavor(
     source_maps: bool,
     meta: Arc<Meta>,
     layout: wowlua_sema::loadorder::Layout,
-    api: &[ParsedDeclaration],
+    api: &[&ParsedDeclaration],
     check: &CheckConfig,
     shared: Option<&wowlua_sema::check::flavors::SharedFlavors>,
     lower_lua: &std::collections::HashSet<String>,
@@ -1202,6 +1203,8 @@ pub fn compile_flavor(
             });
         }
         for d in api {
+            // The build keeps the API's tokens only for rename-private.
+            debug_assert!(!d.parse.lexed.tokens.is_empty(), "API tokens freed");
             parsed_files.push(crate::private_names::Parsed {
                 file: d.file,
                 parse: &d.parse,

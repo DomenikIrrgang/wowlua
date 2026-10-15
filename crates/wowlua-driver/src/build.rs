@@ -373,7 +373,7 @@ pub fn build(
                 declarations.push(crate::compile::Declaration {
                     source,
                     file,
-                    bytes,
+                    bytes: bytes.into(),
                 });
             }
             Err(error) => session.push(
@@ -398,7 +398,7 @@ pub fn build(
                         output: None,
                     },
                     file,
-                    bytes,
+                    bytes: bytes.into(),
                 });
             }
             Err(error) => session.push(Diagnostic::plain_error(format!(
@@ -430,13 +430,13 @@ pub fn build(
                     output: None,
                 },
                 file,
-                bytes: text.into_bytes(),
+                bytes: text.into_bytes().into(),
             });
         }
     }
     // The compiler's implicit declarations (Lua 5.1 and WoW's Lua).
     for builtin in wowlua_stdlib::declarations() {
-        let file = session.db.add(builtin.path, builtin.text.to_string());
+        let file = session.db.add_static(builtin.path, builtin.text);
         declarations.push(crate::compile::Declaration {
             source: sources::Source {
                 rel: builtin.path.to_string(),
@@ -446,7 +446,7 @@ pub fn build(
                 output: None,
             },
             file,
-            bytes: builtin.text.as_bytes().to_vec(),
+            bytes: builtin.text.as_bytes().into(),
         });
     }
     // Version and build id (`wowlua:meta` needs them while compiling).
@@ -926,6 +926,7 @@ pub fn build(
     let mut builds: Vec<FlavorBuild> = Vec::new();
     // Files a flavor compiles the same as an earlier one are taken from it.
     let mut flavor_cache = crate::compile::FlavorCache::default();
+    let mut api_shared: Option<crate::compile::ParsedDeclaration> = None;
     for (idx, flavor) in compile_flavors.iter().enumerate() {
         let meta = crate::meta::build_meta(
             project,
@@ -959,24 +960,28 @@ pub fn build(
             .clone()
             .or_else(|| flavors.first().cloned())
             .unwrap_or_default();
-        // No other flavor of the build types against this API (split
-        // flavors are distinct, and shared mode compiles once), so its parse
-        // is freed with the flavor.
-        let mut api = Vec::new();
-        for f in wowlua_api::declarations(&api_flavor).into_iter().flatten() {
-            let file = session.db.add(f.path, f.text.to_string());
-            api.push(crate::compile::ParsedDeclaration {
-                source: sources::Source {
-                    rel: f.path.to_string(),
-                    src_rel: f.path.to_string(),
-                    abs: PathBuf::new(),
-                    kind: SourceKind::Wowlua,
-                    output: None,
-                },
-                file,
-                parse: wowlua_syntax::parse(f.text.as_bytes(), file),
-            });
-        }
+        // The declarations every flavor shares are parsed once, the first
+        // time a flavor needs them, right before its own: a one-flavor build
+        // adds the files in the same order as always. No other flavor of the
+        // build types against a flavor's own API (split flavors are
+        // distinct, and shared mode compiles once), so that parse is freed
+        // with the flavor.
+        let api_own;
+        let api: Vec<&crate::compile::ParsedDeclaration> = match wowlua_api::own(&api_flavor) {
+            Some(own) => {
+                let keep_tokens = minify.passes.rename_private;
+                if api_shared.is_none() {
+                    api_shared = Some(parse_api(
+                        &mut session.db,
+                        wowlua_api::shared(),
+                        keep_tokens,
+                    ));
+                }
+                api_own = parse_api(&mut session.db, own, keep_tokens);
+                vec![api_shared.as_ref().expect("parsed above"), &api_own]
+            }
+            None => Vec::new(),
+        };
         let units: HashMap<String, crate::compile::LibraryUnit> = wlibs
             .iter()
             .map(|l| {
@@ -1040,6 +1045,7 @@ pub fn build(
     drop(parsed);
     drop(declarations);
     drop(flavor_cache);
+    drop(api_shared);
     // Packager flavor blocks: each flavor's variant of the file.
     for rel in &flavor_blocks {
         let is_xml = rel.to_ascii_lowercase().ends_with(".xml");
@@ -2701,6 +2707,34 @@ fn order_by_dependencies(
 /// entries in order (a glob's matches by path, TOC variables expanded for
 /// `flavors`), each followed by the sources its XML loads, depth first.
 /// Unlisted sources have none.
+/// Adds and parses an embedded WoW API file. Without `keep_tokens` its tokens,
+/// trivia and line starts are freed at once: only rename-private
+/// (`private_names::plan`) reads them, for the API's method names.
+fn parse_api(
+    db: &mut wowlua_span::SourceDb,
+    f: wowlua_api::File,
+    keep_tokens: bool,
+) -> crate::compile::ParsedDeclaration {
+    let file = db.add_static(f.path, f.text);
+    let mut parse = wowlua_syntax::parse(f.text.as_bytes(), file);
+    if !keep_tokens {
+        parse.lexed.tokens = Vec::new();
+        parse.lexed.trivia = Vec::new();
+        parse.lexed.line_starts = Vec::new();
+    }
+    crate::compile::ParsedDeclaration {
+        source: sources::Source {
+            rel: f.path.to_string(),
+            src_rel: f.path.to_string(),
+            abs: PathBuf::new(),
+            kind: SourceKind::Wowlua,
+            output: None,
+        },
+        file,
+        parse,
+    }
+}
+
 fn listed_positions(
     files: &[(Source, FileId)],
     load_order: &[String],
