@@ -161,6 +161,9 @@ pub struct Optimized {
     /// The passes that add locals, upvalues or expression size were left
     /// out, as they broke a Lua 5.1 limit.
     pub reduced: bool,
+    /// Lua 5.1 compiled `emitted.text` as it is, in a fresh state, while
+    /// choosing between the full and the reduced variant.
+    pub compiles: bool,
 }
 
 /// Optimizes, minifies and emits `chunk`. When that breaks a Lua 5.1 limit
@@ -194,6 +197,7 @@ pub fn optimize_and_emit(
             original,
             not_inlined,
             reduced,
+            compiles: false,
         }
     };
     let grows = optimizations.inline || optimizations.cache_globals || passes.dedupe_strings;
@@ -203,11 +207,17 @@ pub fn optimize_and_emit(
     let full = run(chunk.clone(), false);
     let compiles = |code: &[u8]| mlua::Lua::new().load(code).into_function().is_ok();
     if compiles(&full.emitted.text) {
-        return full;
+        return Optimized {
+            compiles: true,
+            ..full
+        };
     }
     let reduced = run(chunk, true);
     if compiles(&reduced.emitted.text) {
-        reduced
+        Optimized {
+            compiles: true,
+            ..reduced
+        }
     } else {
         full
     }
@@ -950,6 +960,7 @@ pub fn compile_flavor(
                 .with_path(&source.rel),
             );
         }
+        let compiles = optimized.compiles;
         let (emitted, original) = (optimized.emitted, optimized.original);
         // The output must parse (spec compiler §13.8, item 2).
         let reparsed = wowlua_syntax::parse(&emitted.text, file);
@@ -965,7 +976,7 @@ pub fn compile_flavor(
         }
         // Freed before luacheck's Lua state and the source map are built.
         drop(reparsed);
-        if let Some(d) = luacheck::check(db, file, &emitted.text) {
+        if let Some(d) = luacheck::check_unless_compiled(db, file, &emitted.text, compiles) {
             diagnostics.push(d);
         }
         let output = source.output_path();

@@ -24,15 +24,38 @@ const LIMIT_MESSAGES: &[&str] = &[
 static LINE_PREFIX: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"^.*?:(\d+): (.*)$").expect("valid pattern"));
 
+/// [`check`] for code Lua 5.1 already compiled as it is (`compiled`): then
+/// it compiles again, so it is skipped. Only the chunk name and a byte order
+/// mark differ between the two compiles. The name never decides whether
+/// code compiles, unless it cannot be a C string; a leading byte order mark
+/// is checked as before.
+pub fn check_unless_compiled(
+    db: &SourceDb,
+    file: FileId,
+    code: &[u8],
+    compiled: bool,
+) -> Option<Diagnostic> {
+    if compiled && !code.starts_with(b"\xEF\xBB\xBF") && !chunk_name(db, file).contains('\0') {
+        debug_assert!(check(db, file, code).is_none(), "compiled once, not twice");
+        return None;
+    }
+    check(db, file, code)
+}
+
+fn chunk_name(db: &SourceDb, file: FileId) -> String {
+    format!("={}", db.get(file).path().to_string_lossy())
+}
+
 /// Compiles `code` (the raw bytes of `file`) as Lua 5.1. A leading UTF-8 byte
 /// order mark is skipped, as WoW does. Returns `None` if it compiles,
 /// otherwise a diagnostic pointing at the reported line.
 pub fn check(db: &SourceDb, file: FileId, code: &[u8]) -> Option<Diagnostic> {
-    let source = db.get(file);
     let code = code.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(code);
     let lua = Lua::new();
-    let chunk_name = format!("={}", source.path().to_string_lossy());
-    let result = lua.load(code).set_name(chunk_name).into_function();
+    let result = lua
+        .load(code)
+        .set_name(chunk_name(db, file))
+        .into_function();
     let error = result.err()?;
     let raw = match &error {
         mlua::Error::SyntaxError { message, .. } => message.clone(),
@@ -66,6 +89,18 @@ mod tests {
         let mut db = SourceDb::new();
         let file = db.add("src/a.lua", text);
         check(&db, file, text.as_bytes())
+    }
+
+    #[test]
+    fn code_that_did_not_compile_is_checked() {
+        let mut db = SourceDb::new();
+        let file = db.add("src/a.lua", "");
+        let locals: String = (0..201).map(|i| format!("local v{i} = {i}\n")).collect();
+        let error = check_unless_compiled(&db, file, locals.as_bytes(), false).expect("E5001");
+        assert_eq!(error.code, Some("E5001"));
+        assert!(check_unless_compiled(&db, file, b"local a = 1\n", true).is_none());
+        // A byte order mark is compiled again, as `check` skips it.
+        assert!(check_unless_compiled(&db, file, b"\xEF\xBB\xBFlocal a = 1\n", true).is_none());
     }
 
     #[test]
