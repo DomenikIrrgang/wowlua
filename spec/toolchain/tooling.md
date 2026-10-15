@@ -89,40 +89,56 @@ A test file opts out of step 5 with `config({ lifecycle = "manual" })` from
 
 ### 16.1.4 `wowlua:mock`
 
-`wowlua:mock` is a **standard-library module**, versioned with the compiler. It is
-a Lua implementation of the parts of the WoW API that addons and the standard
-library touch. It follows the flavor's API: functions that don't exist in the
-flavor under test are absent, as in the game.
+`wowlua:mock` drives the emulated client ([WoW client emulation](emulator.md)):
+every API function of the flavor exists, generated from Blizzard's
+documentation with the client's argument checks, and reads a **simulated
+game world** that tests set up and change. A change to the world fires the
+events the client fires for it, in the client's order (decision T201).
+Functions the flavor lacks are absent, as in the game; a function without
+behaviour raises `"<name> is not mocked"` unless a test fakes it.
 
-| Area | Mocked |
-|------|--------|
-| Frames | `CreateFrame` with scripts, events (`RegisterEvent`, `RegisterUnitEvent` with unit filters), show/hide, points, sizes, text, parent/child hierarchy, `Mixin`, `CreateFromMixins`, protected frames, common templates as no-ops |
-| Events | `mock.fireEvent(name, ...)`, `mock.fireUnitEvent(name, unit, ...)`. Lifecycle via `mock.login()` (`ADDON_LOADED`, `PLAYER_LOGIN`, `PLAYER_ENTERING_WORLD`). `IsLoggedIn`. |
-| Addons | `C_AddOns.IsAddOnLoaded`, `mock.loadAddon(name)` fires `ADDON_LOADED` for another addon (deferred hooks, `onAddonLoaded`) |
-| Time | `GetTime`, `GetTimePreciseSec`, `debugprofilestop`, native-style `C_Timer` handles driven by a virtual clock (`mock.advanceTime(sec)`), `OnUpdate` dispatch per simulated frame (`mock.nextFrame()`, `mock.advanceFrames(n, msPerFrame?)` with a controllable `debugprofilestop` for `wowlua:jobs`) |
-| Combat | `InCombatLockdown` with `mock.setInCombat(bool)`, including the regen events and blocked protected-frame calls |
-| Units, auras, spells, items | `UnitName`, `UnitClass`, `UnitHealth`, aura and spell queries from `mock.setUnit(token, data)`, `mock.setAuras(token, list)`, `mock.setSpell(id, data)`, `mock.setSpellCooldown(id, info)`, `mock.fireUnitAura(unit, changes?)`, `mock.setGroup(members)`. `mock.setItem(id, data, { cached = bool, delay = n })` simulates asynchronous item data (`GET_ITEM_INFO_RECEIVED`). |
-| Secret values | `mock.secret(v)` creates a value for which `issecretvalue` / `canaccessvalue` behave like secrets, and forbidden operations on it raise errors. `mock.setRestricted(bool)` makes secret-capable APIs return secrets. |
-| Saved variables | Read from and written to an in-memory store. `mock.reloadUI()` simulates persistence across a reload. |
-| Slash commands | `mock.slash("/mya reset")` runs the registered handler |
-| Keybindings | Generated bindings are registered. `mock.pressBinding(name)` runs one. |
-| Chat / addon comms | `C_ChatInfo.RegisterAddonMessagePrefix`, `SendAddonMessage` loopback through `CHAT_MSG_ADDON` with size limits, `mock.setMessagingLockdown(bool)`, captured `print` and chat frame output |
-| Settings and launcher | `Settings.*` registration (inspectable categories and settings), `AddonCompartmentFrame`, `Minimap`, `GameTooltip`, `TooltipDataProcessor` |
-| Tooltips | `mock.showTooltip(kind, data)` runs tooltip post-hooks on a stub tooltip whose added lines are readable with `tip:lines()` |
-| Frames and layout | `mock.drag(frame, dx, dy)`, `mock.setScreen(w, h)` for movable frames; `mock.scroll(view, offset)` for lists |
-| Menus and dialogs | `mock.lastMenu()`, `mock.clickMenu(path)`, `mock.dialog()`, `mock.dialogAccept(value?)`, `mock.dialogCancel()` |
-| Colors | `CreateColor` and the class color tables |
-| Libraries | `LibStub` present or absent. `mock.provideLibrary(name, impl)` simulates LibDBIcon, LibDataBroker, LibSharedMedia or ChatThrottleLib being loaded by another addon. |
-| Locale | `GetLocale` with `mock.setLocale(code)` (set before loading, via the file's `config`) |
-| Errors | `geterrorhandler` / `seterrorhandler`, `securecallfunction`. `mock.errors()` returns the errors reported so far. |
-| Lua environment | WoW's Lua additions: `strsplit`, `strsplittable`, `strjoin`, `strtrim`, `strconcat`, the `str*` aliases, `format`, `wipe`, `tinsert`, `tremove`, `tContains`, `CopyTable`, `bit`, `date`, `time`, `debugstack` |
-| Spies | `mock.spy(fn?)`, `mock.stub(table, key, fn)`, `mock.resetSpies()` |
+```wowlua
+@test("shows the target's name")
+local function targetName()
+    local hogger = mock.spawnUnit({ name = "Hogger", level = 11, reaction = "hostile", health = 666 })
+    mock.player:target(hogger)        -- PLAYER_TARGET_CHANGED
+    expect(MyFrame.title:GetText()).toBe("Hogger")
+    hogger:damage(100)                -- UNIT_HEALTH ("target")
+    mock.player:enterCombat()         -- PLAYER_REGEN_DISABLED; combat restrictions apply
+    expect(issecretvalue(UnitHealth("target"))).toBe(true)
+end
+```
 
-- Unmocked API functions raise `"<name> is not mocked"`, which makes gaps visible.
-- Projects add or override mocks in `tests/mocks/`.
-- **Reloads.** `mock.reloadUI()` discards all addon state (modules, frames,
-  subscriptions, timers, hooks) and keeps only the SavedVariables store. It then
-  re-runs the load sequence and lifecycle, mirroring a real `/reload`.
+**The world.**
+
+| Part | Controls |
+|------|----------|
+| Units | `mock.player`, `mock.spawnUnit(data)` returning a unit: name, GUID (generated unless given), level, class, race, sex, reaction (`"hostile"`, `"neutral"`, `"friendly"`), player or NPC, health and power, dead or alive. Unit methods act and fire events: `unit:damage(n)`, `unit:heal(n)`, `unit:kill()`, `unit:setPower(type, n)`, `unit:applyAura(data)`, `unit:removeAura(id)`, `unit:castSpell(id, opts?)`, `unit:interruptCast()`, `unit:despawn()`. |
+| Unit tokens | Follow from relationships, as in the client: `mock.player:target(unit)`, `:focus(unit)`, `:mouseover(unit)`, `unit:showNameplate()` (`nameplateN`), `mock.group:add(unit)` (`partyN`, `raidN`), bosses (`bossN`); compound tokens (`targettarget`) resolve through them. |
+| Combat and restrictions | `mock.player:enterCombat()`, `:leaveCombat()`; `mock.enterInstance(kind)` (a restricted map), encounters, challenge modes, PvP matches, chat lockdown. The client's addon restrictions follow ([WoW client emulation §17.5](emulator.md#175-secret-values)): `ADDON_RESTRICTION_STATE_CHANGED`, secret API results, protected functions refused. |
+| Time | `GetTime` and `C_Timer` on a virtual clock: `mock.advanceTime(sec)`; `OnUpdate` per simulated frame: `mock.nextFrame()`, `mock.advanceFrames(n, ms?)` |
+| Lifecycle | `mock.login()` (`ADDON_LOADED`, `PLAYER_LOGIN`, `PLAYER_ENTERING_WORLD`), `mock.loadAddon(name)`, `mock.reloadUI()` (keeps only the SavedVariables) |
+| Input | `mock.slash(line)`, `mock.pressBinding(name)`, `mock.click(frame, button?)`, `mock.drag(frame, dx, dy)`, `mock.setModifiers(...)` |
+| UI | tooltips (`mock.showTooltip(kind, data)`), menus and dialogs, Settings, the screen size, locale, CVars, other addons and libraries (`mock.provideLibrary`) |
+| Output | `mock.printed()`, `mock.errors()` |
+
+**Raw events.** `mock.fireEvent(name, ...)` and `mock.fireUnitEvent(name,
+unit, ...)` fire any event the flavor documents, the payload checked against
+its documentation (count, types, and secrets where the documentation says);
+an event the flavor does not document is an error (decision T202).
+
+**Game data.** Spells, items and other game data come from the tests
+(decision T203): `mock.defineSpell(id, data)`, `mock.defineItem(id, data, {
+cached?, delay? })` (asynchronous loading fires `GET_ITEM_INFO_RECEIVED`), in
+the test or in `tests/mocks/`. An ID the test did not define behaves as data
+the client does not have. Optionally, tests can run with the real client's
+data: `wowlua data pull --wow <path to the WoW installation>` reads the
+flavor's game data from the user's own client into a local cache (nothing is
+distributed with wowlua), and `wowlua test --game-data` loads it. Off by
+default, so tests in CI run with test data only.
+
+**Secret values.** `mock.secret(v)` makes a secret; the restrictions above
+make the API return secrets where the client does.
 
 Mocking (decision T187):
 
@@ -139,7 +155,7 @@ Mocking (decision T187):
 ### 16.1.5 Running
 
 ```
-wowlua test [filter] [--flavor <f>] [--watch] [--coverage] [--reporter <r>,…] [--output <dir>]
+wowlua test [filter] [--flavor <f>] [--watch] [--coverage] [--reporter <r>,…] [--output <dir>] [--game-data]
 ```
 
 - Each test file runs once **per manifest flavor** by default. `--flavor`
