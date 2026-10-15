@@ -354,6 +354,55 @@ fn decode_mappings(mappings: &str, mut f: impl FnMut(Segment)) -> Option<()> {
     Some(())
 }
 
+/// Encodes segments as they come, for callers whose segments are in output
+/// order: the same text as [`SourceMap::encode`] of them. A segment before
+/// the previous one stops it ([`SegmentEncoder::push`] returns `false`), and
+/// the caller encodes them sorted instead.
+pub struct SegmentEncoder {
+    encoder: Encoder,
+    last: (u32, u32),
+    in_order: bool,
+}
+
+impl Default for SegmentEncoder {
+    fn default() -> Self {
+        SegmentEncoder {
+            encoder: Encoder::new(),
+            last: (0, 0),
+            in_order: true,
+        }
+    }
+}
+
+impl SegmentEncoder {
+    /// Adds the next segment; `false` once one came before its predecessor.
+    pub fn push(&mut self, segment: &Segment) -> bool {
+        let key = (segment.out_line, segment.out_col);
+        if self.in_order && key >= self.last {
+            self.last = key;
+            self.encoder.push(segment);
+        } else {
+            self.in_order = false;
+        }
+        self.in_order
+    }
+
+    /// The map, or `None` when a segment came out of order.
+    pub fn finish(
+        self,
+        file: String,
+        sources: Vec<String>,
+        names: Vec<String>,
+    ) -> Option<EncodedMap> {
+        self.in_order.then(|| EncodedMap {
+            file,
+            sources,
+            names,
+            mappings: self.encoder.finish(),
+        })
+    }
+}
+
 /// The map of one output file with one source, encoded; `names` gives the
 /// original names of renamed identifiers by source position. Name indices
 /// follow the order of `mappings`.

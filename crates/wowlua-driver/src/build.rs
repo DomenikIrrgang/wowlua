@@ -4326,7 +4326,8 @@ fn bundle_output(
                         .remove(&item.path)
                         .map(|c| content_bytes(&c))
                         .unwrap_or_default();
-                    let own_map = maps.remove(&map_key(&item.path)).and_then(|m| m.decode());
+                    // A map that does not decode is as none: its lines map to the file.
+                    let own_map = maps.remove(&map_key(&item.path)).filter(|m| m.parses());
                     if let Some(source) = sources.get(item.rel.as_str())
                         && lib_of(&item.path).is_none()
                         && !wowlua_sema::is_compiler_known(&source.src_rel)
@@ -4360,7 +4361,8 @@ fn bundle_output(
                         source: item.rel.clone(),
                     });
                 }
-                let (text, map) = crate::bundle::assemble(&path, input.build_id, parts);
+                let (text, map) =
+                    crate::bundle::assemble(&path, input.build_id, parts, input.source_maps);
                 // The chunk name appears in the error below. mlua's default is
                 // the Rust file and line of this call, so the name is pinned
                 // to the one it has always had: edits above leave the message
@@ -4375,8 +4377,8 @@ fn bundle_output(
                     )));
                     return None;
                 }
-                if input.source_maps {
-                    maps.insert(format!("{path}.map"), Arc::new(map.encode()));
+                if let Some(map) = map {
+                    maps.insert(format!("{path}.map"), Arc::new(map));
                 }
                 out.insert(path.clone(), Content::Bytes(text));
                 result.push(TocItem {
