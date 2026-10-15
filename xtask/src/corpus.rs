@@ -6,6 +6,11 @@
 //!   wowlua accepts what Lua 5.1 accepts, and that `emit(lower(parse))`
 //!   compiles to the same bytecode as the file in every line mode.
 //! - `cargo xtask corpus addons [dir]`: adopts and builds every addon.
+//! - `cargo xtask corpus vm [dir]`: wowlua's VM compiles every file to the
+//!   same bytecode and line info as Lua 5.1, and runs its main chunk with
+//!   the same output and error as PUC Lua.
+//! - `cargo xtask corpus lua51 [dir]`: the official Lua 5.1 test suite on
+//!   wowlua's VM (`lua51.rs`).
 //!
 //! Both run in parallel: `WOWLUA_CORPUS_JOBS` sets the threads (one per
 //! core by default) and `WOWLUA_CORPUS_MEMORY` the GiB that addon builds in
@@ -860,7 +865,8 @@ pub fn vm(dir: &Path) -> Result<()> {
         mlua::Lua::new,
         |lua, path| vm_file(lua, dir, path),
     );
-    let (mut checked, mut identical, mut both_reject, mut line_diffs) = (0, 0, 0, 0usize);
+    let (mut checked, mut identical, mut both_reject, mut line_diffs, mut ran_same) =
+        (0, 0, 0, 0usize, 0);
     let mut failures = Vec::new();
     let mut by_file: Vec<(usize, String)> = Vec::new();
     for (r, path) in results.into_iter().zip(&files) {
@@ -869,13 +875,14 @@ pub fn vm(dir: &Path) -> Result<()> {
         identical += r.1;
         both_reject += r.2;
         line_diffs += r.3;
+        ran_same += r.4;
         if r.3 > 0 {
             by_file.push((
                 r.3,
                 path.strip_prefix(dir).unwrap_or(path).display().to_string(),
             ));
         }
-        failures.extend(r.4);
+        failures.extend(r.5);
     }
     by_file.sort_by(|a, b| b.cmp(a));
     for (n, f) in by_file.iter().take(10) {
@@ -885,7 +892,7 @@ pub fn vm(dir: &Path) -> Result<()> {
         println!("{f}");
     }
     println!(
-        "{checked} files in {:.1?}: bytecode identical to Lua 5.1 for {identical}; {both_reject} rejected by both; {} instructions with other lines; {} failures",
+        "{checked} files in {:.1?}: bytecode identical to Lua 5.1 for {identical}; {both_reject} rejected by both; {} instructions with other lines; {ran_same} run the same; {} failures",
         started.elapsed(),
         line_diffs,
         failures.len()
@@ -896,13 +903,15 @@ pub fn vm(dir: &Path) -> Result<()> {
     Ok(())
 }
 
-type VmFile = (usize, usize, usize, usize, Vec<String>);
+/// Checked, bytecode identical, rejected by both, instructions with other
+/// lines, ran the same, failures.
+type VmFile = (usize, usize, usize, usize, usize, Vec<String>);
 
 fn vm_file(lua: &mut mlua::Lua, dir: &Path, path: &Path) -> Result<VmFile> {
     let bytes = std::fs::read(path)?;
     let src = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
     if src.starts_with(b"#") {
-        return Ok((0, 0, 0, 0, Vec::new()));
+        return Ok((0, 0, 0, 0, 0, Vec::new()));
     }
     let rel = path.strip_prefix(dir).unwrap_or(path).display().to_string();
     let reference = dump(lua, src);
@@ -921,15 +930,16 @@ fn vm_file(lua: &mut mlua::Lua, dir: &Path, path: &Path) -> Result<VmFile> {
             &mut heap,
             &parsed.chunk,
             src,
-            std::rc::Rc::from("=corpus"),
+            std::rc::Rc::from(&b"=corpus"[..]),
             options,
         )
         .map_err(|e| format!("line {}: {}", e.line, e.message))
     };
     match (reference, ours) {
-        (Err(_), Err(_)) => Ok((1, 0, 1, 0, Vec::new())),
+        (Err(_), Err(_)) => Ok((1, 0, 1, 0, 0, Vec::new())),
         (Err(e), Ok(_)) => Ok((
             1,
+            0,
             0,
             0,
             0,
@@ -940,6 +950,7 @@ fn vm_file(lua: &mut mlua::Lua, dir: &Path, path: &Path) -> Result<VmFile> {
             0,
             0,
             0,
+            0,
             vec![format!("{rel}: Lua 5.1 compiles it, ours fails: {e}")],
         )),
         (Ok(dumped), Ok(proto)) => {
@@ -947,12 +958,124 @@ fn vm_file(lua: &mut mlua::Lua, dir: &Path, path: &Path) -> Result<VmFile> {
                 bail!("{rel}: cannot decode Lua's bytecode");
             };
             let lines = wowlua_vm::luac::line_differences(&proto, &theirs);
-            match wowlua_vm::luac::compare(&heap, &proto, &theirs, "main") {
-                None => Ok((1, 1, 0, lines, Vec::new())),
-                Some(d) => Ok((1, 0, 0, lines, vec![format!("{rel}: {d}")])),
+            let mut failures = Vec::new();
+            let difference = wowlua_vm::luac::compare(&heap, &proto, &theirs, "main");
+            let identical = usize::from(difference.is_none());
+            failures.extend(difference.map(|d| format!("{rel}: {d}")));
+            // The Lua test suite needs stock 5.1's compatibility features
+            // the client lacks; `corpus lua51` runs it with its exclusions.
+            if rel.starts_with("lua51-tests") {
+                return Ok((1, identical, 0, lines, 0, failures));
             }
+            let run = run_both(src, &rel)?;
+            let ran_same = usize::from(run.is_none());
+            failures.extend(run.map(|d| format!("{rel}: runs differently: {d}")));
+            Ok((1, identical, 0, lines, ran_same, failures))
         }
     }
+}
+
+/// Captures `print` the same way in both VMs.
+const RUN_PRELUDE: &str = "local out, tostring, select, concat = {}, tostring, select, table.concat \
+    print = function (...) local t = {} for i = 1, select('#', ...) do \
+    t[i] = tostring((select(i, ...))) end out[#out + 1] = concat(t, '\\t') end \
+    __corpus_out = out";
+const RUN_OUTPUT: &str = "return table.concat(__corpus_out, '\\n')";
+
+/// Runs the file's main chunk in wowlua's VM and in PUC Lua 5.1 with the
+/// libraries the client has, until it ends or fails (usually at the first
+/// WoW API call): the same output and the same error, or the difference.
+fn run_both(src: &[u8], rel: &str) -> Result<Option<String>> {
+    let name = format!("@{rel}");
+    // Ours.
+    let mut vm = wowlua_vm::Vm::new();
+    let prelude = vm
+        .load(RUN_PRELUDE.as_bytes(), "=prelude")
+        .map_err(anyhow::Error::msg)?;
+    vm.call(prelude, &[])
+        .map_err(|_| anyhow::anyhow!("prelude failed"))?;
+    let ours_err = match vm.load_raw(src, name.as_bytes()) {
+        Err(e) => Some(String::from_utf8_lossy(&e).into_owned()),
+        Ok(f) => vm.call(f, &[]).err().map(|e| vm_message(&vm, e.value)),
+    };
+    let output = vm
+        .load(RUN_OUTPUT.as_bytes(), "=output")
+        .map_err(anyhow::Error::msg)?;
+    let ours_out = match vm.call(output, &[]) {
+        Ok(r) => r.first().map(|v| vm_message(&vm, *v)).unwrap_or_default(),
+        Err(_) => "<output lost>".to_string(),
+    };
+    // PUC Lua (its base library includes `coroutine`).
+    use mlua::StdLib;
+    let lua_err = |e: mlua::Error| anyhow::anyhow!("{e}");
+    let lua = mlua::Lua::new_with(
+        StdLib::STRING | StdLib::TABLE | StdLib::MATH,
+        mlua::LuaOptions::default(),
+    )
+    .map_err(lua_err)?;
+    lua.load("dofile, loadfile, string.dump = nil")
+        .exec()
+        .map_err(lua_err)?;
+    lua.load(RUN_PRELUDE).exec().map_err(lua_err)?;
+    let theirs_err = lua
+        .load(src)
+        .set_name(&name)
+        .exec()
+        .err()
+        .map(|e| mlua_message(&e));
+    let theirs_out: String = lua
+        .load(RUN_OUTPUT)
+        .eval()
+        .unwrap_or_else(|_| "<output lost>".into());
+    let (ours_out, theirs_out) = (without_addresses(&ours_out), without_addresses(&theirs_out));
+    let ours_err = ours_err.map(|e| without_addresses(&e));
+    let theirs_err = theirs_err.map(|e| without_addresses(&e));
+    if ours_err != theirs_err {
+        return Ok(Some(format!("error {ours_err:?}, Lua's {theirs_err:?}")));
+    }
+    if ours_out != theirs_out {
+        return Ok(Some(format!("output {ours_out:?}, Lua's {theirs_out:?}")));
+    }
+    Ok(None)
+}
+
+fn vm_message(vm: &wowlua_vm::Vm, v: wowlua_vm::Value) -> String {
+    match v {
+        wowlua_vm::Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        other => format!("({})", other.type_name()),
+    }
+}
+
+fn mlua_message(e: &mlua::Error) -> String {
+    let msg = match e {
+        mlua::Error::RuntimeError(m) | mlua::Error::SyntaxError { message: m, .. } => m.clone(),
+        mlua::Error::CallbackError { cause, .. } => cause.to_string(),
+        other => other.to_string(),
+    };
+    // mlua appends a traceback to runtime errors.
+    msg.split("\nstack traceback:")
+        .next()
+        .unwrap_or("")
+        .to_string()
+}
+
+/// `0x…` addresses replaced, so object identities compare equal.
+fn without_addresses(s: &str) -> String {
+    let mut out = String::new();
+    let mut rest = s;
+    while let Some(i) = rest.find("0x") {
+        out.push_str(&rest[..i]);
+        let tail = &rest[i + 2..];
+        let n = tail.chars().take_while(|c| c.is_ascii_hexdigit()).count();
+        if n >= 6 {
+            out.push_str("ADDR");
+        } else {
+            out.push_str(&rest[i..i + 2 + n]);
+        }
+        rest = &tail[n..];
+    }
+    out.push_str(rest);
+    out
 }
 
 #[cfg(test)]

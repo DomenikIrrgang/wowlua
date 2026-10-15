@@ -38,6 +38,8 @@ fn create(vm: &mut Vm, c: NativeCall) -> Ret {
         state: ThreadState::default(),
         start: Some(fr),
         yield_site: None,
+        // A new thread shares its creator's global table, as in Lua.
+        globals: vm.globals,
     });
     Ok(vec![Value::Thread(t)])
 }
@@ -67,6 +69,8 @@ impl Vm {
         let caller_state = std::mem::take(&mut self.cur);
         self.heap.thread_mut(caller).state = caller_state;
         self.heap.thread_mut(caller).status = Status::Normal;
+        self.heap.thread_mut(caller).globals = self.globals;
+        self.globals = self.heap.thread(co).globals;
         self.cur = std::mem::take(&mut self.heap.thread_mut(co).state);
         self.heap.thread_mut(co).status = Status::Running;
         self.current = co;
@@ -140,6 +144,8 @@ impl Vm {
         self.resume_chain.pop();
         let co_state = std::mem::take(&mut self.cur);
         self.heap.thread_mut(co).state = co_state;
+        self.heap.thread_mut(co).globals = self.globals;
+        self.globals = self.heap.thread(caller).globals;
         self.cur = std::mem::take(&mut self.heap.thread_mut(caller).state);
         self.heap.thread_mut(caller).status = Status::Running;
         self.current = caller;
@@ -202,7 +208,7 @@ fn wrapped(vm: &mut Vm, c: NativeCall) -> Ret {
         Err(e) => {
             // String errors get the caller's position.
             if matches!(e, Value::Str(_) | Value::Num(_)) {
-                let mut text = vm.where_(1).into_bytes();
+                let mut text = vm.where_(1);
                 vm.append_strlike(&mut text, e);
                 let msg = vm.bytes(&text);
                 return Err(vm.raise(msg));

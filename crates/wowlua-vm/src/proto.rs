@@ -234,7 +234,7 @@ pub struct Proto {
     pub is_vararg: bool,
     pub max_stack: u8,
     /// The chunk name (`@file`, `=name` or the source).
-    pub source: Rc<str>,
+    pub source: Rc<[u8]>,
     pub line_defined: u32,
     pub last_line_defined: u32,
 }

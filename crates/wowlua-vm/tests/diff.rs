@@ -83,28 +83,34 @@ fn normalize(lines: Vec<String>) -> Vec<String> {
     regex_lite(&lines)
 }
 
-/// Replaces `0x…` addresses so object identities compare equal.
+/// Replaces the addresses after `table: ` and the like so object
+/// identities compare equal (`0x…` on Unix, bare hex digits on Windows).
 fn regex_lite(lines: &[String]) -> Vec<String> {
-    lines
-        .iter()
-        .map(|l| {
-            let mut out = String::new();
-            let mut rest = l.as_str();
-            while let Some(i) = rest.find("0x") {
-                out.push_str(&rest[..i]);
-                let tail = &rest[i + 2..];
-                let n = tail.chars().take_while(|c| c.is_ascii_hexdigit()).count();
-                if n >= 6 {
-                    out.push_str("ADDR");
-                } else {
-                    out.push_str(&rest[i..i + 2 + n]);
-                }
-                rest = &tail[n..];
-            }
-            out.push_str(rest);
-            out
-        })
-        .collect()
+    lines.iter().map(|l| without_addresses(l)).collect()
+}
+
+fn without_addresses(l: &str) -> String {
+    let mut out = String::new();
+    let mut rest = l;
+    loop {
+        let next = ["table: ", "function: ", "thread: ", "userdata: "]
+            .iter()
+            .filter_map(|p| rest.find(p).map(|i| (i, p.len())))
+            .min();
+        let Some((i, len)) = next else { break };
+        out.push_str(&rest[..i + len]);
+        let after = &rest[i + len..];
+        let digits = after.strip_prefix("0x").unwrap_or(after);
+        let n = digits.chars().take_while(|c| c.is_ascii_hexdigit()).count();
+        rest = if n >= 6 {
+            out.push_str("ADDR");
+            &digits[n..]
+        } else {
+            after
+        };
+    }
+    out.push_str(rest);
+    out
 }
 
 #[track_caller]
@@ -245,6 +251,8 @@ fn errors_name_their_operands() {
     same("local up = nil local function f() return up.x end f()");
     same("for i = 'a', 2 do end");
     same("local t = {} t[nil] = 1");
+    same("aaa = {} x = (aaa or aaa) + (aaa and aaa)");
+    same("aaa = {} (aaa or aaa)()");
 }
 
 #[test]
@@ -263,6 +271,34 @@ fn error_handling() {
     same("error('no position', 0)");
     same(
         "local ok, e = pcall(function() local t = setmetatable({}, {__index = function() error('in index') end}) return t.x end) print(ok, e)",
+    );
+}
+
+#[test]
+fn syntax_errors() {
+    same("print(loadstring('break x'))");
+    same("print(loadstring('x = = 1'))");
+    same("print(loadstring('x = \\200'))");
+    same("print(loadstring('x = 1\\ry = = 2'))");
+    same("print(loadstring('f(', 'name'))");
+    same("print(loadstring('local t = {1,\\n2'))");
+    same("print(loadstring(string.rep('a', 100) .. ' = = 1'))");
+    same("print(loadstring('x = 1', '@' .. string.rep('d/', 40)))");
+    same("print(loadstring('x = = 1', '=' .. string.rep('n', 80)))");
+    // Limits met before the missing `end`s at the end of the file.
+    same(
+        "local s = 'function foo ()\\n  local ' for j = 1, 70 do s = s .. 'a' .. j .. ', ' end s = s .. 'b\\n' for j = 1, 70 do s = s .. 'function foo' .. j .. ' ()\\n a' .. j .. '=3\\n' end print(loadstring(s))",
+    );
+    same(
+        "local s = '\\nfunction foo ()\\n  local ' for j = 1, 300 do s = s .. 'a' .. j .. ', ' end s = s .. 'b\\n' print(loadstring(s))",
+    );
+    // load stops calling the reader at a syntax error.
+    same(
+        "local i = 0 local s = '*a = 123' print(load(function () i = i + 1 return s:sub(i, i) end), i)",
+    );
+    // The first line: mlua's handler appends a traceback.
+    same(
+        "local f, e = load(function () error('in reader') end) print(f, (string.match(e, '^[^\\n]*')))",
     );
 }
 
@@ -327,8 +363,10 @@ fn string_format() {
     same(
         r#"print(string.format('%.14g', 0.1), string.format('%.20f', 0.1), string.format('%e', 0), string.format('%g', -0.0))"#,
     );
+    // `%x` of a negative number is undefined in C: ARM saturates to 0,
+    // x86-64 wraps (and Windows' `long` has 32 bits).
     same(
-        r#"print(string.format('%x', -1), string.format('%5.2s|', 'abc'), string.format('%-+6d|', 5))"#,
+        r#"print(string.format('%x', 255), string.format('%5.2s|', 'abc'), string.format('%-+6d|', 5))"#,
     );
 }
 

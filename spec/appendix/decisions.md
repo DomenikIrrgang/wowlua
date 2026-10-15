@@ -241,7 +241,7 @@ open for review.
 | T189 | M9 stays one milestone; StdTest's in-game suites stay until the emulation reproduces the in-game bugs found so far **(user, M9)** | The emulation earns trust by catching what the client caught. |
 | T190 | The VM runs a register bytecode of its own, compiled from the compiler's output, each instruction carrying its source span **(user, M9)** | Lua 5.1's proven design for speed; coverage, taint and spans attach per instruction. A tree walker is slower; `luac` bytecode loses wowlua's spans. |
 | T191 | The VM's memory is managed by a tracing garbage collector over an arena, in safe Rust **(user, M9)** | Cycles, `__gc` and weak tables behave like the client's; reference counting or no collection would not. |
-| T192 | Coroutines are stackless: each is its own VM stack **(user, M9)** | Yields work across `pcall`, metamethods and iterators without native stacks or overflow. |
+| T192 | Coroutines are stackless: each is its own VM stack **(user, M9)** | No native stacks or overflow; yields still stop at `pcall`, metamethods and native calls, as in the client. |
 
 ## Standard library
 

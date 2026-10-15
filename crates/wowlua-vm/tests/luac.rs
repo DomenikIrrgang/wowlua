@@ -27,7 +27,7 @@ fn same(src: &str) {
         &mut heap,
         &parsed.chunk,
         src.as_bytes(),
-        "=t".into(),
+        b"=t"[..].into(),
         Options {
             compat_vararg: true,
         },
@@ -71,7 +71,7 @@ fn same_lines(src: &str) {
         &mut heap,
         &parsed.chunk,
         src.as_bytes(),
-        "=t".into(),
+        b"=t"[..].into(),
         Options {
             compat_vararg: true,
         },
@@ -149,7 +149,7 @@ fn file_lines() {
         &mut heap,
         &parsed.chunk,
         src.as_bytes(),
-        "=t".into(),
+        b"=t"[..].into(),
         Options {
             compat_vararg: true,
         },

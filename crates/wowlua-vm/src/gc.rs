@@ -8,6 +8,7 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
+use crate::error::LuaError;
 use crate::function::{Function, Upval};
 use crate::heap::UdRef;
 use crate::proto::Proto;
@@ -31,15 +32,40 @@ struct Marker {
 
 impl Vm {
     /// A safe point after an allocating instruction.
-    pub(crate) fn gc_step(&mut self) {
-        if !self.gc_stopped && self.heap.debt > self.gc_threshold {
-            self.collect();
+    pub(crate) fn gc_step(&mut self) -> Result<(), LuaError> {
+        // No steps while a finalizer runs, as in Lua.
+        if !self.gc_stopped && !self.in_finalizer && self.heap.debt > self.gc_threshold {
+            self.collect()?;
+        }
+        Ok(())
+    }
+
+    /// `collectgarbage("step", size)`, emulating Lua 5.1's incremental
+    /// collector: about one basic step per KiB of `size`, plus one, each
+    /// worth `10 * stepmul` bytes of work. A cycle costs the heap's size; it
+    /// collects, and the step returns true, once that work is done.
+    pub fn step_collect(&mut self, size_kb: i64) -> Result<bool, LuaError> {
+        let left = self
+            .gc_cycle_work
+            .unwrap_or_else(|| self.heap.estimate_bytes());
+        let steps = size_kb.max(0) as usize + 1;
+        let work = steps.saturating_mul(10 * self.gc_stepmul);
+        // A step multiplier of 0 means no limit, as in Lua.
+        if self.gc_stepmul == 0 || work >= left {
+            self.collect()?;
+            Ok(true)
+        } else {
+            self.gc_cycle_work = Some(left - work);
+            Ok(false)
         }
     }
 
-    /// A full collection (`collectgarbage("collect")`).
-    pub fn collect(&mut self) {
+    /// A full collection (`collectgarbage("collect")`). Finalizers run at
+    /// its end, unprotected as in Lua: an error in one propagates to the code
+    /// that caused the collection, and the rest wait for the next one.
+    pub fn collect(&mut self) -> Result<(), LuaError> {
         self.gc_cycles += 1;
+        self.gc_cycle_work = None;
         let mut m = Marker {
             gray: Vec::new(),
             weak: Vec::new(),
@@ -47,9 +73,10 @@ impl Vm {
         };
         self.mark_roots(&mut m);
         self.propagate(&mut m);
-        // Userdata with `__gc` that became unreachable: keep them (and what
-        // they reach) for this cycle and finalize them afterwards.
-        let mut finalize: Vec<UdRef> = Vec::new();
+        // Userdata with `__gc` that became unreachable, newest first as in
+        // Lua's list: kept (with what they reach) for this cycle, marked
+        // finalized now, finalized after the sweep.
+        let mut found: Vec<(u64, UdRef)> = Vec::new();
         let gc_name = self.names.gc;
         for (idx, generation, u) in self.heap.userdata.iter() {
             if self.heap.userdata.is_marked(idx, generation) {
@@ -63,27 +90,37 @@ impl Vm {
                 .meta
                 .is_some_and(|mt| !self.heap.table(mt).get_str(gc_name).is_nil());
             if has_gc {
-                finalize.push(r);
+                found.push((u.serial, r));
             }
         }
-        for &u in &finalize {
+        found.sort_by_key(|a| std::cmp::Reverse(a.0));
+        for &(_, u) in &found {
+            self.finalized.insert(u);
             m.gray.push(Gray::Value(Value::Userdata(u)));
         }
+        self.to_finalize.extend(found.into_iter().map(|(_, u)| u));
         self.propagate(&mut m);
         self.clear_weak(&m);
         self.sweep();
         self.heap.debt = 0;
         let live = self.heap.estimate_bytes();
         self.gc_threshold = (live * self.gc_pause / 100).max(1 << 20);
-        // Finalizers run after the sweep, as in Lua; errors in them are
-        // ignored like the client's.
-        for u in finalize {
-            self.finalized.insert(u);
+        self.run_finalizers()
+    }
+
+    fn run_finalizers(&mut self) -> Result<(), LuaError> {
+        let gc_name = self.names.gc;
+        while let Some(u) = self.to_finalize.pop_front() {
             let tm = self.get_tm(Value::Userdata(u), gc_name);
-            if !tm.is_nil() {
-                let _ = self.pcall(tm, &[Value::Userdata(u)]);
+            if tm.is_nil() {
+                continue;
             }
+            let outer = std::mem::replace(&mut self.in_finalizer, true);
+            let r = self.call(tm, &[Value::Userdata(u)]);
+            self.in_finalizer = outer;
+            r?;
         }
+        Ok(())
     }
 
     fn mark_roots(&mut self, m: &mut Marker) {
@@ -104,6 +141,11 @@ impl Vm {
         if let Some(e) = self.errfunc {
             m.gray.push(Gray::Value(e));
         }
+        m.gray.extend(
+            self.to_finalize
+                .iter()
+                .map(|&u| Gray::Value(Value::Userdata(u))),
+        );
         for c in &self.cstack {
             m.gray.push(Gray::Value(Value::Func(c.func)));
         }
@@ -122,6 +164,15 @@ impl Vm {
 
     /// The highest stack slot in use by the running thread.
     pub(crate) fn live_top(&self) -> usize {
+        // Inside a native called by the innermost Lua frame, Lua's `L->top`
+        // is the native's: the caller's registers above the call are dead.
+        if self
+            .cstack
+            .last()
+            .is_some_and(|c| c.at_frames == self.cur.frames.len())
+        {
+            return self.cur.top.min(self.cur.stack.len());
+        }
         let frames_top = self
             .cur
             .frames
@@ -213,6 +264,7 @@ impl Vm {
                 }
                 if t != self.current {
                     let th = self.heap.thread(t);
+                    m.gray.push(Gray::Value(Value::Table(th.globals)));
                     if let Some(f) = th.start {
                         m.gray.push(Gray::Value(Value::Func(f)));
                     }
@@ -236,6 +288,12 @@ impl Vm {
         }
     }
 
+    /// A userdata marked for finalization: Lua clears it from weak
+    /// values, though not from weak keys.
+    fn is_finalized(&self, v: Value) -> bool {
+        matches!(v, Value::Userdata(u) if self.finalized.contains(&u))
+    }
+
     fn is_dead(&self, v: Value) -> bool {
         match v {
             Value::Table(t) => !self.heap.tables.is_marked(t.idx, t.generation),
@@ -252,7 +310,10 @@ impl Vm {
                 .heap
                 .table(t)
                 .entries()
-                .filter(|(k, v)| (weak_k && self.is_dead(*k)) || (weak_v && self.is_dead(*v)))
+                .filter(|(k, v)| {
+                    (weak_k && self.is_dead(*k))
+                        || (weak_v && (self.is_dead(*v) || self.is_finalized(*v)))
+                })
                 .collect();
             if dead.is_empty() {
                 continue;

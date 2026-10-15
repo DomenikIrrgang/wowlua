@@ -132,9 +132,18 @@ Off by default: mock-only tests start faster (decision T186).
 
 ## 17.8 Verification
 
-- **Lua 5.1 conformance.** The official Lua 5.1 test suite, and differential
-  runs against PUC Lua 5.1 (embedded only in wowlua's own tests) over every
-  file of the conformance corpus: the same results, output and errors.
+- **Lua 5.1 conformance.** Against PUC Lua 5.1 (embedded only in wowlua's own
+  tests):
+  - `cargo xtask corpus vm` compiles every file of the conformance corpus to
+    the same bytecode and line info as `luac`, and runs its main chunk with
+    the same output and error.
+  - `cargo xtask corpus lua51` runs the official Lua 5.1 test suite. It
+    excludes only what the client does not have, each with its reason: the
+    `io`, `os`, `debug` and `package` libraries, `string.dump`, the implicit
+    `arg` of vararg functions, `string.gfind`, and a 32-bit `size_t`
+    overflow. Shims serve the suite's plumbing only (timing, temporary files
+    in memory, loading its helper files).
+  - Differential tests compare snippets' output and errors.
 - **The client's behaviour.** Every WoW-specific rule (§17.3 to §17.5) has a
   probe in StdTest whose recorded in-game result is a test fixture; a rule
   changes only with a new probe.
@@ -153,8 +162,14 @@ Off by default: mock-only tests start faster (decision T186).
   carries its source span (from the source maps), and coverage, taint and
   profiling attach per instruction.
 - **Memory** (decision T191). A tracing garbage collector over an arena, in
-  safe Rust: cycles are collected, `__gc` runs, weak tables clear, and
-  `collectgarbage` reports memory as a collector would.
+  safe Rust, stopping the world at the interpreter's allocation points:
+  - Cycles are collected and weak tables clear.
+  - `__gc` runs as in the client: newest first and unprotected, so an error
+    in a finalizer reaches the code that caused the collection.
+  - `collectgarbage` reports memory, and `step` counts work, as Lua 5.1's
+    incremental collector would.
 - **Coroutines** (decision T192). Stackless: each coroutine is its own VM
-  stack, so yields work across `pcall`, metamethods and iterators and never
-  use the native stack.
+  stack, and a yield unwinds to its `resume` without the native stack. As in
+  the client's Lua 5.1, a yield cannot cross `pcall`, a metamethod or another
+  native call ("attempt to yield across metamethod/C-call boundary"); each
+  thread has its own global table (`setfenv(0, t)`).

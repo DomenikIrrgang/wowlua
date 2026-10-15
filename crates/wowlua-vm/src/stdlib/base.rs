@@ -213,7 +213,7 @@ fn error(vm: &mut Vm, c: NativeCall) -> Ret {
     let level = vm.opt_int(&c, 2, 1)?;
     let v = c.arg(1);
     if matches!(v, Value::Str(_) | Value::Num(_)) && level > 0 {
-        let mut text = vm.where_(level as usize).into_bytes();
+        let mut text = vm.where_(level as usize);
         vm.append_strlike(&mut text, v);
         let msg = vm.bytes(&text);
         return Err(vm.raise(msg));
@@ -316,11 +316,11 @@ fn ipairs_aux(vm: &mut Vm, c: NativeCall) -> Ret {
     }
 }
 
-fn load_result(vm: &mut Vm, r: Result<Value, String>) -> Ret {
+fn load_result(vm: &mut Vm, r: Result<Value, Vec<u8>>) -> Ret {
     match r {
         Ok(f) => Ok(vec![f]),
         Err(msg) => {
-            let m = vm.str(&msg);
+            let m = vm.bytes(&msg);
             Ok(vec![Value::Nil, m])
         }
     }
@@ -329,22 +329,26 @@ fn load_result(vm: &mut Vm, r: Result<Value, String>) -> Ret {
 fn loadstring(vm: &mut Vm, c: NativeCall) -> Ret {
     let s = vm.check_bytes(&c, 1)?;
     let name = match vm.opt_str(&c, 2)? {
-        Some(n) => String::from_utf8_lossy(vm.heap.str_bytes(n)).into_owned(),
-        None => String::from_utf8_lossy(&s).into_owned(),
+        Some(n) => vm.heap.str_bytes(n).to_vec(),
+        None => s.to_vec(),
     };
-    let r = vm.load(&s, &name);
+    let r = vm.load_raw(&s, &name);
     load_result(vm, r)
 }
 
 fn load(vm: &mut Vm, c: NativeCall) -> Ret {
     let f = vm.check_func(&c, 1)?;
     let name = match vm.opt_str(&c, 2)? {
-        Some(n) => String::from_utf8_lossy(vm.heap.str_bytes(n)).into_owned(),
-        None => "=(load)".to_string(),
+        Some(n) => vm.heap.str_bytes(n).to_vec(),
+        None => b"=(load)".to_vec(),
     };
     let mut src = Vec::new();
     loop {
-        let r = vm.call(f, &[])?;
+        // Errors in the reader are load's result, as in Lua.
+        let r = match vm.pcall(f, &[]) {
+            Ok(r) => r,
+            Err(e) => return Ok(vec![Value::Nil, e.value]),
+        };
         match r.first().copied().unwrap_or_default() {
             Value::Nil => break,
             Value::Str(s) => {
@@ -359,9 +363,29 @@ fn load(vm: &mut Vm, c: NativeCall) -> Ret {
                 return Ok(vec![Value::Nil, m]);
             }
         }
+        if src.len() <= INCREMENTAL_LOAD_LIMIT && syntax_error_read(&src) {
+            break;
+        }
     }
-    let r = vm.load(&src, &name);
+    let r = vm.load_raw(&src, &name);
     load_result(vm, r)
+}
+
+/// Up to this size, `load` stops calling the reader at a syntax error.
+const INCREMENTAL_LOAD_LIMIT: usize = 64 << 10;
+
+/// Whether Lua's parser, reading `src` so far, has already met a syntax
+/// error: one whose token ends inside it, so the lexer's lookahead
+/// character was read. Lua calls the reader no further then.
+fn syntax_error_read(src: &[u8]) -> bool {
+    let file = wowlua_span::SourceDb::new().add("", "");
+    let parse = wowlua_syntax::parse(src, file);
+    parse
+        .diagnostics
+        .iter()
+        .find(|d| d.is_error())
+        .and_then(|d| d.labels.first())
+        .is_some_and(|l| (l.span.end as usize) < src.len())
 }
 
 /// The function `getfenv`/`setfenv` refer to: a function, or a level.
@@ -433,6 +457,7 @@ fn newproxy(vm: &mut Vm, c: NativeCall) -> Ret {
         _ => return Err(vm.arg_error(1, "boolean or proxy expected")),
     };
     let u = vm.heap.alloc_userdata(Userdata {
+        serial: 0,
         meta,
         env: None,
         data: Box::new(()),
@@ -468,20 +493,21 @@ fn collectgarbage(vm: &mut Vm, c: NativeCall) -> Ret {
             Value::Num(0.0)
         }
         "collect" => {
-            vm.collect();
+            vm.collect()?;
             Value::Num(0.0)
         }
         "count" => Value::Num(vm.heap.estimate_bytes() as f64 / 1024.0),
-        "step" => {
-            vm.collect();
-            Value::Bool(true)
-        }
+        "step" => Value::Bool(vm.step_collect(ex)?),
         "setpause" => {
             let old = vm.gc_pause;
             vm.gc_pause = ex.max(0) as usize;
             Value::Num(old as f64)
         }
-        _ => Value::Num(200.0),
+        _ => {
+            let old = vm.gc_stepmul;
+            vm.gc_stepmul = ex.max(0) as usize;
+            Value::Num(old as f64)
+        }
     }])
 }
 

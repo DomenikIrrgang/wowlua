@@ -131,11 +131,29 @@ pub struct Options {
     pub compat_vararg: bool,
 }
 
+/// Where each line starts, by Lua's rule: `\n`, `\r`, `\r\n` and `\n\r`
+/// each end one line.
+pub fn line_starts(src: &[u8]) -> Vec<usize> {
+    let mut starts = vec![0];
+    let mut i = 0;
+    while i < src.len() {
+        let c = src[i];
+        i += 1;
+        if c == b'\n' || c == b'\r' {
+            if i < src.len() && (src[i] == b'\n' || src[i] == b'\r') && src[i] != c {
+                i += 1;
+            }
+            starts.push(i);
+        }
+    }
+    starts
+}
+
 pub fn compile(
     heap: &mut Heap,
     chunk: &Chunk,
     src: &[u8],
-    source: Rc<str>,
+    source: Rc<[u8]>,
 ) -> Result<Rc<Proto>, CompileError> {
     compile_with(heap, chunk, src, source, Options::default())
 }
@@ -144,15 +162,10 @@ pub fn compile_with(
     heap: &mut Heap,
     chunk: &Chunk,
     src: &[u8],
-    source: Rc<str>,
+    source: Rc<[u8]>,
     options: Options,
 ) -> Result<Rc<Proto>, CompileError> {
-    let mut line_starts = vec![0];
-    for (i, b) in src.iter().enumerate() {
-        if *b == b'\n' {
-            line_starts.push(i + 1);
-        }
-    }
+    let line_starts = line_starts(src);
     let mut c = Compiler {
         heap,
         src,
@@ -174,7 +187,7 @@ struct Compiler<'a> {
     heap: &'a mut Heap,
     src: &'a [u8],
     line_starts: Vec<usize>,
-    source: Rc<str>,
+    source: Rc<[u8]>,
     fs: Vec<FuncState>,
     lastline: u32,
     depth: usize,
@@ -272,6 +285,27 @@ impl Compiler<'_> {
 
     fn leave_level(&mut self) {
         self.depth -= 1;
+    }
+
+    /// A syntax error raised with the token at `at` as the lookahead: at
+    /// that token's (last) line, `near` its text as Lua writes it.
+    fn syntax_error<T>(&self, at: u32, message: &str) -> R<T> {
+        use wowlua_syntax::token::TokenKind as T;
+        let at = self.next_token(at);
+        let rest = &self.src[at as usize..];
+        let file = wowlua_span::SourceDb::new().add("", "");
+        let lexed = wowlua_syntax::lexer::lex(rest, file);
+        let tok = lexed.tokens[0];
+        let near = match tok.kind {
+            T::Eof => "'<eof>'".to_string(),
+            T::String | T::LongString | T::Number | T::Name => {
+                let text = &rest[tok.start as usize..tok.end as usize];
+                format!("'{}'", String::from_utf8_lossy(text))
+            }
+            k => k.describe().to_string(),
+        };
+        let line = self.line(at + tok.end.max(tok.start + 1) - 1);
+        self.err(line, format!("{message} near {near}"))
     }
 
     fn errorlimit(&self, limit: usize, what: &str) -> CompileError {
@@ -1335,7 +1369,7 @@ impl Compiler<'_> {
             }
             StmtKind::Local { names, values } => self.localstat(names, values),
             StmtKind::Return(values) => self.retstat(values),
-            StmtKind::Break => self.breakstat(line),
+            StmtKind::Break => self.breakstat(stmt.span.end),
             StmtKind::Compound { .. } => self.not_lua(stmt.span, "a compound assignment"),
             StmtKind::Continue => self.not_lua(stmt.span, "`continue`"),
             StmtKind::LocalDestructure { .. } => self.not_lua(stmt.span, "destructuring"),
@@ -1383,7 +1417,8 @@ impl Compiler<'_> {
             self.leaveblock();
             self.patchlist(condexit, repeat_init);
         } else {
-            self.breakstat(self.lastline)?;
+            // Inside the loop: never an error.
+            self.breakstat(0)?;
             self.patchtohere(condexit);
             self.leaveblock();
             let j = self.jump();
@@ -1524,7 +1559,7 @@ impl Compiler<'_> {
         self.forbody(base, line, vars.len(), false, body, do_at)
     }
 
-    fn breakstat(&mut self, line: u32) -> R<()> {
+    fn breakstat(&mut self, end: u32) -> R<()> {
         let fs = self.fs();
         let mut upval = false;
         let mut found = None;
@@ -1536,7 +1571,7 @@ impl Compiler<'_> {
             upval |= bl.upval;
         }
         let Some(i) = found else {
-            return self.err(line, "no loop to break");
+            return self.syntax_error(end, "no loop to break");
         };
         if upval {
             let a = self.fs().blocks[i].nactvar as u8;

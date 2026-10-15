@@ -402,6 +402,9 @@ The test framework runs on wowlua's own emulation of the WoW client
 - S1 **VM core**: a Lua 5.1 VM in Rust (`wowlua-vm`) running the compiler's
   output, with the exact standard library; verified by the Lua 5.1 test suite
   and differential runs against PUC Lua over the corpus.
+  Done 2026-10-15: the corpus compiles to `luac`'s bytecode and lines and runs
+  the same, and the test suite passes with the client's exclusions (emulator
+  §17.8). Locations from source maps come with S4.
 - S2 **WoW semantics**: WoW's Lua (no `os`/`io`/`debug`, its arithmetic, its
   library additions), taint and secure execution with taint reports, secret
   values as a VM value kind.

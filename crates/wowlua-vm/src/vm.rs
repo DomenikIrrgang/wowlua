@@ -99,8 +99,15 @@ pub struct Vm {
     pub(crate) gc_stopped: bool,
     /// `collectgarbage("setpause")`, percent.
     pub(crate) gc_pause: usize,
-    /// Userdata whose `__gc` already ran.
+    /// `collectgarbage("setstepmul")`, percent.
+    pub(crate) gc_stepmul: usize,
+    /// Work left in the cycle `collectgarbage("step")` emulates.
+    pub(crate) gc_cycle_work: Option<usize>,
+    /// Userdata marked for finalization (their `__gc` ran or is pending).
     pub(crate) finalized: std::collections::HashSet<crate::heap::UdRef>,
+    /// Userdata whose `__gc` is pending, in order.
+    pub(crate) to_finalize: std::collections::VecDeque<crate::heap::UdRef>,
+    pub(crate) in_finalizer: bool,
     /// Nested `execute` runs (for the yield boundary).
     pub(crate) run_depth: usize,
     /// The run a resumed coroutine's frames execute in.
@@ -136,6 +143,7 @@ impl Vm {
             state: ThreadState::default(),
             start: None,
             yield_site: None,
+            globals,
         });
         let mut vm = Vm {
             heap,
@@ -158,7 +166,11 @@ impl Vm {
             gc_threshold: 4 << 20,
             gc_stopped: false,
             gc_pause: 200,
+            gc_stepmul: 200,
+            gc_cycle_work: None,
             finalized: std::collections::HashSet::new(),
+            to_finalize: std::collections::VecDeque::new(),
+            in_finalizer: false,
             run_depth: 0,
             co_base: 0,
             yield_site: None,
@@ -229,22 +241,40 @@ impl Vm {
     /// Compiles a chunk. `chunkname` follows Lua: `@file`, `=name`, or the
     /// source itself.
     pub fn load(&mut self, src: &[u8], chunkname: &str) -> Result<Value, String> {
-        let chunkid = chunkid(chunkname);
+        self.load_raw(src, chunkname.as_bytes())
+            .map_err(|e| String::from_utf8_lossy(&e).into_owned())
+    }
+
+    /// [`load`](Self::load) on bytes, as Lua strings are: the error message
+    /// keeps the chunk name's and the source's bytes.
+    pub fn load_raw(&mut self, src: &[u8], chunkname: &[u8]) -> Result<Value, Vec<u8>> {
+        let mut message = chunkid_sized(chunkname, 80);
         // Lua 5.1 skips a first line starting with `#` in files only;
         // `loadstring` does not, so neither do we.
-        let mut db = wowlua_span::SourceDb::new();
-        let file = db.add(chunkname, String::from_utf8_lossy(src).into_owned());
+        let file = wowlua_span::SourceDb::new().add("", "");
         let parse = wowlua_syntax::parse(src, file);
+        let compiled = compiler::compile(&mut self.heap, &parse.chunk, src, Rc::from(chunkname));
         if let Some(d) = parse.diagnostics.iter().find(|d| d.is_error()) {
-            let line = d
-                .labels
-                .first()
-                .map(|l| line_of(src, l.span.start as usize))
-                .unwrap_or(1);
-            return Err(format!("{chunkid}:{line}: {}", d.message));
+            let span = d.labels.first().map(|l| l.span);
+            let line = span.map_or(1, |s| line_of(src, s.start as usize));
+            // Lua compiles while it parses: a limit met before the syntax
+            // error is the error.
+            let earlier = compiled.as_ref().err().filter(|e| (e.line as usize) < line);
+            match earlier {
+                Some(e) => {
+                    message.extend_from_slice(format!(":{}: {}", e.line, e.message).as_bytes())
+                }
+                None => {
+                    message.extend_from_slice(format!(":{line}: ").as_bytes());
+                    message.extend_from_slice(&raw_near(&d.message, span, src));
+                }
+            }
+            return Err(message);
         }
-        let proto = compiler::compile(&mut self.heap, &parse.chunk, src, Rc::from(chunkname))
-            .map_err(|e| format!("{chunkid}:{}: {}", e.line, e.message))?;
+        let proto = compiled.map_err(|e| {
+            message.extend_from_slice(format!(":{}: {}", e.line, e.message).as_bytes());
+            message
+        })?;
         let env = self.globals;
         Ok(Value::Func(self.heap.alloc_func(Function::Lua(
             LuaFunction {
@@ -637,7 +667,7 @@ impl Vm {
                             .heap
                             .alloc_table(Table::new(narr as usize, nhash as usize));
                         self.cur.stack[base + a as usize] = Value::Table(t);
-                        self.gc_step();
+                        self.gc_step()?;
                     }
                     Op::SelfOp { a, b, c } => {
                         let obj = self.cur.stack[base + b as usize];
@@ -675,7 +705,7 @@ impl Vm {
                     Op::Concat { a, b, c } => {
                         let v = self.concat_range(base, b, c)?;
                         self.cur.stack[base + a as usize] = v;
-                        self.gc_step();
+                        self.gc_step()?;
                     }
                     Op::Jmp { sbx } => {
                         self.jump(fi, sbx);
@@ -861,7 +891,7 @@ impl Vm {
                             env,
                         }));
                         self.cur.stack[base + a as usize] = Value::Func(f);
-                        self.gc_step();
+                        self.gc_step()?;
                     }
                     Op::Vararg { a, b } => {
                         let n = self.cur.frames[fi].nvarargs;
@@ -1358,7 +1388,7 @@ impl Vm {
 
     /// A runtime error with the position of the running Lua function.
     pub fn rt_error(&mut self, msg: &str) -> LuaError {
-        let mut text = self.where_(0).into_bytes();
+        let mut text = self.where_(0);
         text.extend_from_slice(msg.as_bytes());
         let v = self.bytes(&text);
         self.raise(v)
@@ -1367,7 +1397,7 @@ impl Vm {
     /// An error from native code with the position of its caller
     /// (`luaL_error`).
     pub fn error(&mut self, msg: &str) -> LuaError {
-        let mut text = self.where_(1).into_bytes();
+        let mut text = self.where_(1);
         text.extend_from_slice(msg.as_bytes());
         let v = self.bytes(&text);
         self.raise(v)
@@ -1432,7 +1462,7 @@ impl Vm {
 
     /// `chunk:line: ` of the function at `level` (0: the running one), or
     /// nothing for a native function (`luaL_where`).
-    pub fn where_(&self, level: usize) -> String {
+    pub fn where_(&self, level: usize) -> Vec<u8> {
         match self.stack_entries().get(level) {
             Some(StackEntry::Lua(fi)) => {
                 let f = &self.cur.frames[*fi];
@@ -1442,9 +1472,11 @@ impl Vm {
                     .get(f.pc.saturating_sub(1))
                     .copied()
                     .unwrap_or(0);
-                format!("{}:{line}: ", chunkid(&f.proto.source))
+                let mut w = chunkid(&f.proto.source);
+                w.extend_from_slice(format!(":{line}: ").as_bytes());
+                w
             }
-            _ => String::new(),
+            _ => Vec::new(),
         }
     }
 
@@ -1507,16 +1539,13 @@ impl Vm {
                         .get(f.pc.saturating_sub(1))
                         .copied()
                         .unwrap_or(0);
+                    let source = String::from_utf8_lossy(&chunkid(&f.proto.source)).into_owned();
                     let what = if f.proto.line_defined == 0 {
                         "in main chunk".to_string()
                     } else {
-                        format!(
-                            "in function <{}:{}>",
-                            chunkid(&f.proto.source),
-                            f.proto.line_defined
-                        )
+                        format!("in function <{source}:{}>", f.proto.line_defined)
                     };
-                    out.push_str(&format!("\n\t{}:{line}: {what}", chunkid(&f.proto.source)));
+                    out.push_str(&format!("\n\t{source}:{line}: {what}"));
                     if f.tail {
                         out.push_str("\n\t(tail call): ?");
                     }
@@ -1548,43 +1577,54 @@ pub fn arith(op: ArithOp, a: f64, b: f64) -> f64 {
 
 /// The line of a byte offset (1-based).
 fn line_of(src: &[u8], offset: usize) -> usize {
-    src[..offset.min(src.len())]
-        .iter()
-        .filter(|&&b| b == b'\n')
-        .count()
-        + 1
+    let starts = compiler::line_starts(src);
+    starts.partition_point(|&s| s <= offset.min(src.len()))
 }
 
-/// Lua 5.1's `luaO_chunkid` (`LUA_IDSIZE` 60).
-pub fn chunkid(source: &str) -> String {
-    const IDSIZE: usize = 60;
-    if let Some(rest) = source.strip_prefix('=') {
-        return rest.chars().take(IDSIZE - 1).collect();
+/// Lua 5.1's `luaO_chunkid` for runtime positions (`LUA_IDSIZE` 60), on
+/// bytes.
+pub fn chunkid(source: &[u8]) -> Vec<u8> {
+    chunkid_sized(source, 60)
+}
+
+/// `luaO_chunkid` with a buffer of `IDSIZE` bytes: syntax errors use the
+/// lexer's `MAXSRC` (80).
+#[allow(non_snake_case)]
+pub fn chunkid_sized(source: &[u8], IDSIZE: usize) -> Vec<u8> {
+    if let Some(rest) = source.strip_prefix(b"=") {
+        return rest[..rest.len().min(IDSIZE - 1)].to_vec();
     }
-    if let Some(rest) = source.strip_prefix('@') {
+    if let Some(rest) = source.strip_prefix(b"@") {
         let max = IDSIZE - " '...' ".len() - 1;
         if rest.len() > max {
-            let cut = rest.len() - max;
-            let mut i = cut;
-            while !rest.is_char_boundary(i) {
-                i += 1;
-            }
-            return format!("...{}", &rest[i..]);
+            return [b"...", &rest[rest.len() - max..]].concat();
         }
-        return rest.to_string();
+        return rest.to_vec();
     }
-    let first_line_len = source.find(['\n', '\r']).unwrap_or(source.len());
+    let first_line_len = source
+        .iter()
+        .position(|&b| b == b'\n' || b == b'\r')
+        .unwrap_or(source.len());
     let max = IDSIZE - " [string \"...\"] ".len() - 1;
     let len = first_line_len.min(max);
-    let mut end = len;
-    while !source.is_char_boundary(end) {
-        end -= 1;
-    }
     if len < source.len() {
-        format!("[string \"{}...\"]", &source[..end])
+        [b"[string \"", &source[..len], b"...\"]"].concat()
     } else {
-        format!("[string \"{source}\"]")
+        [b"[string \"", source, b"\"]"].concat()
     }
+}
+
+/// A parser message whose `near '…'` token text was decoded lossily: the
+/// token's own bytes, as Lua quotes them.
+fn raw_near(message: &str, span: Option<wowlua_span::Span>, src: &[u8]) -> Vec<u8> {
+    let raw = span.and_then(|s| src.get(s.start as usize..s.end as usize));
+    if let (Some((head, quoted)), Some(raw)) = (message.rsplit_once(" near '"), raw) {
+        let text = quoted.strip_suffix('\'').unwrap_or(quoted);
+        if !raw.is_empty() && String::from_utf8_lossy(raw).starts_with(text) {
+            return [head.as_bytes(), b" near '", raw, b"'"].concat();
+        }
+    }
+    message.as_bytes().to_vec()
 }
 
 /// The name of register `reg` at instruction `pc` (`getobjname`).
@@ -1671,6 +1711,8 @@ fn symbexec(p: &Proto, lastpc: usize, reg: u8) -> Option<Op> {
             | Op::Not { a, .. }
             | Op::Len { a, .. }
             | Op::Concat { a, .. }
+            // TEST counts too: its A mode is set in Lua 5.1's opmodes.
+            | Op::Test { a, .. }
             | Op::TestSet { a, .. }
             | Op::Closure { a, .. }
             | Op::Vararg { a, .. }

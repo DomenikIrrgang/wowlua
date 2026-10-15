@@ -16,6 +16,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 mod corpus;
+mod lua51;
 mod packager_diff;
 mod runtime;
 mod types;
@@ -66,7 +67,8 @@ fn main() -> Result<()> {
                 Some("run") => corpus::run(&dir),
                 Some("addons") => corpus::addons(&dir),
                 Some("vm") => corpus::vm(&dir),
-                _ => bail!("usage: cargo xtask corpus <fetch|run|addons|vm> [dir]"),
+                Some("lua51") => lua51::run(&dir),
+                _ => bail!("usage: cargo xtask corpus <fetch|run|addons|vm|lua51> [dir]"),
             }
         }
         "types" => {

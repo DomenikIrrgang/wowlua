@@ -4,7 +4,7 @@
 
 use std::rc::Rc;
 
-use crate::heap::{FuncRef, UpvalRef};
+use crate::heap::{FuncRef, TableRef, UpvalRef};
 use crate::proto::Proto;
 use crate::value::Value;
 
@@ -54,4 +54,7 @@ pub struct Thread {
     /// Where the call to `coroutine.yield` was: its slot and the results
     /// it wants (the values of the next resume go there).
     pub yield_site: Option<(usize, i32)>,
+    /// Its global table (`setfenv(0, t)`) while it is not running; the
+    /// running thread's is the VM's.
+    pub globals: TableRef,
 }

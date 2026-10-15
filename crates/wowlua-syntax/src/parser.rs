@@ -273,13 +273,20 @@ impl<'a> Parser<'a> {
             return Ok(self.advance());
         }
         let what = close.describe();
-        if line == self.tok(0).line {
-            Err(self.syntax_error(format!("{what} expected")))
+        let failed = if line == self.tok(0).line {
+            self.syntax_error(format!("{what} expected"))
         } else {
-            Err(self.syntax_error(format!(
+            self.syntax_error(format!(
                 "{what} expected (to close '{open}' at line {line})"
-            )))
+            ))
+        };
+        // At the end of the file nothing can follow: the construct closes
+        // there and keeps what it has, for the compiler's limits and the
+        // editor.
+        if self.check(T::Eof) {
+            return Ok(*self.tok(0));
         }
+        Err(failed)
     }
 
     fn name(&mut self) -> PResult<Name> {
@@ -559,7 +566,8 @@ impl<'a> Parser<'a> {
                 let t = self.advance();
                 if self.func().loops.is_empty() {
                     let span = self.token_span(&t);
-                    self.error_at("E0106", span, "no loop to break");
+                    let message = format!("no loop to break near {}", self.near());
+                    self.error_at("E0106", span, message);
                 }
                 StmtKind::Break
             }

@@ -198,6 +198,8 @@ pub struct LuaStr {
 /// A full userdata: an optional metatable and environment, and a payload the
 /// host defines.
 pub struct Userdata {
+    /// Creation order (set by the heap): finalizers run newest first.
+    pub serial: u64,
     pub meta: Option<TableRef>,
     pub env: Option<TableRef>,
     pub data: Box<dyn std::any::Any>,
@@ -215,6 +217,8 @@ pub struct Heap {
     pub(crate) userdata: Arena<Userdata>,
     /// Approximate bytes allocated since the last collection.
     pub(crate) debt: usize,
+    /// The last userdata's creation serial.
+    ud_serial: u64,
 }
 
 impl Heap {
@@ -300,8 +304,10 @@ impl Heap {
         self.threads.get_mut(t.idx, t.generation)
     }
 
-    pub fn alloc_userdata(&mut self, u: Userdata) -> UdRef {
+    pub fn alloc_userdata(&mut self, mut u: Userdata) -> UdRef {
         self.debt += 64;
+        self.ud_serial += 1;
+        u.serial = self.ud_serial;
         let (idx, generation) = self.userdata.alloc(u);
         UdRef { idx, generation }
     }

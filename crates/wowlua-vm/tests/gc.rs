@@ -18,7 +18,7 @@ fn garbage_is_collected_and_live_values_stay() {
         "keep = {} for i = 1, 100 do keep[i] = {i} end for i = 1, 5000 do local t = {i, tostring(i) .. 'x'} end",
     );
     let before = vm.heap.live_objects();
-    vm.collect();
+    vm.collect().expect("no finalizer errors");
     let after = vm.heap.live_objects();
     assert!(after < before, "{before} -> {after}");
     let out = Rc::new(RefCell::new(String::new()));
@@ -43,7 +43,7 @@ fn weak_tables_lose_unreachable_entries() {
          weak[strong] = 1 weak[{}] = 2 weak['str'] = 3 \
          vweak = setmetatable({}, {__mode = 'v'}) vweak[1] = {} vweak[2] = strong vweak[3] = 'kept'",
     );
-    vm.collect();
+    vm.collect().expect("no finalizer errors");
     run(
         &mut vm,
         "local n = 0 for k in pairs(weak) do n = n + 1 end print(n, weak[strong], weak.str) \
@@ -65,7 +65,7 @@ fn closures_keep_their_upvalues() {
     );
     for _ in 0..3 {
         run(&mut vm, "for i = 1, 2000 do local g = {i} end");
-        vm.collect();
+        vm.collect().expect("no finalizer errors");
     }
     run(&mut vm, "print(getter())");
     assert_eq!(out.borrow().trim(), "42");
@@ -81,8 +81,8 @@ fn finalizers_run_once() {
         &mut vm,
         "finalized = 0 do local p = newproxy(true) getmetatable(p).__gc = function() finalized = finalized + 1 end end",
     );
-    vm.collect();
-    vm.collect();
+    vm.collect().expect("no finalizer errors");
+    vm.collect().expect("no finalizer errors");
     run(&mut vm, "print(finalized)");
     assert_eq!(out.borrow().trim(), "1");
 }
