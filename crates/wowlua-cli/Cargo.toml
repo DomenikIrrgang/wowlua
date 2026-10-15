@@ -27,6 +27,7 @@ termcolor = "1.4"
 zip.workspace = true
 mlua.workspace = true
 wowlua-vm.workspace = true
+wowlua-engine.workspace = true
 assert_cmd.workspace = true
 predicates.workspace = true
 tempfile.workspace = true

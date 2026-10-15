@@ -83,15 +83,9 @@ end
 function IsLoggedIn(): boolean
     return Mock.loggedIn
 end
--- Values marked secret (the modern client hides them from addons).
-Mock.secrets = setmetatable({}, { __mode = "k" })
-issecretvalue = (function(v: any): boolean
-    return type(v) == "table" and Mock.secrets[v] == true
-end) :: any
+-- A secret value: wowlua's VM has them as the client does.
 function Mock.secret(): table
-    local v = {}
-    Mock.secrets[v] = true
-    return v
+    return secretwrap({}) :: any
 end
 
 -- An assertion inside a test script.
@@ -704,6 +698,14 @@ function GetBuildInfo(): (string, string, string, number)
 end
 
 -- Units -------------------------------------------------------------------------
+
+-- The engine's unit functions read its own world; these tests still describe
+-- units by token (`Mock.units`), so the unit functions here stand in, and the
+-- engine's percent functions are hidden until the tests move to wowlua:mock's
+-- units (S4).
+UnitHealthPercent = nil
+UnitHealthMissing = nil
+UnitPowerPercent = nil
 
 --- What the client knows about a unit; any value may be a `Mock.secret()`.
 type MockUnit = {

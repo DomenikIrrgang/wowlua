@@ -7,6 +7,7 @@ pub mod api;
 pub mod args;
 pub mod clock;
 pub mod controls;
+pub mod curves;
 pub mod units;
 pub mod widgets;
 
@@ -112,8 +113,13 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         behaviours: clock::behaviours()
             .into_iter()
             .chain(units::behaviours())
+            .chain(units::more_behaviours())
+            .chain(curves::behaviours())
             .collect(),
-        methods: widgets::behaviours().into_iter().collect(),
+        methods: widgets::behaviours()
+            .into_iter()
+            .chain(curves::methods())
+            .collect(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),
         units: units::Units::default(),

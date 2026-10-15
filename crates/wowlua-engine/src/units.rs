@@ -974,3 +974,48 @@ pub fn set_restriction_control(vm: &mut Vm, c: NativeCall) -> Ret {
     set_restriction(vm, t, c.arg(2).truthy());
     Ok(vec![])
 }
+
+// ------------------------------------------------- percents and curves
+
+/// `UnitHealthPercent(unit [, usePredicted, curve])`: the health as a
+/// fraction, or a curve's value for it (unverified: the fraction's scale
+/// is 0 to 1 without a curve, as the documentation's "floating point
+/// percentage value" and Blizzard's ScaleTo100 curve suggest).
+fn unit_health_percent(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(id) = unit_arg(vm, &c, 1) else {
+        return Ok(vec![]);
+    };
+    let u = &engine(vm).units.list[id.0];
+    let pct = if u.health_max > 0.0 {
+        u.health / u.health_max
+    } else {
+        0.0
+    };
+    Ok(vec![crate::curves::apply(vm, c.arg(3), pct)?])
+}
+
+fn unit_health_missing(vm: &mut Vm, c: NativeCall) -> Ret {
+    with_unit(vm, &c, |_, u| vec![Value::Num(u.health_max - u.health)])
+}
+
+fn unit_power_percent(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(id) = unit_arg(vm, &c, 1) else {
+        return Ok(vec![]);
+    };
+    let u = &engine(vm).units.list[id.0];
+    let pct = if u.power_max > 0.0 {
+        u.power / u.power_max
+    } else {
+        0.0
+    };
+    Ok(vec![crate::curves::apply(vm, c.arg(4), pct)?])
+}
+
+/// More of this module's behaviours.
+pub fn more_behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
+    vec![
+        ("UnitHealthPercent", unit_health_percent),
+        ("UnitHealthMissing", unit_health_missing),
+        ("UnitPowerPercent", unit_power_percent),
+    ]
+}
