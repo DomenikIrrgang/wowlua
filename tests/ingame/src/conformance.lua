@@ -622,13 +622,23 @@ local cases = {
     "local s = secretwrap(1) return pcall(scrubsecretvalues, s, 'x', s)",
     "local s = secretwrap(1) return dropsecretaccess",
     "return securecall(function() local s = secretwrap(1) return s + 1 end)",
+    "local s = secretwrap('x') return pcall(table.concat, { s })",
+    "local s = secretwrap('x') return issecretvalue(string.format('%q', s))",
 
 }
+
+-- Secret values cannot be formatted, concatenated into results or joined:
+-- they are written as `<secret type>`.
+local isSecret = issecretvalue or function()
+    return false
+end
 
 -- A value as text; nested tables only by their type.
 local function show(v, depth)
     local t = type(v)
-    if t == "string" then
+    if isSecret(v) then
+        return "<secret " .. t .. ">"
+    elseif t == "string" then
         return string.format("%q", v)
     elseif t == "number" or t == "boolean" or t == "nil" then
         return tostring(v)
@@ -670,7 +680,7 @@ local function run()
     local handled = {}
     local original = geterrorhandler()
     seterrorhandler(function(err)
-        handled[#handled + 1] = tostring(err)
+        handled[#handled + 1] = isSecret(err) and "<secret>" or tostring(err)
     end)
     local ok, err = pcall(function()
         for _, source in ipairs(cases) do
