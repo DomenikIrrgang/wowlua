@@ -727,7 +727,10 @@ pub fn build(
             let mut per_flavor: Vec<(String, std::collections::HashSet<String>)> = Vec::new();
             for f in &flavors {
                 if let Some([_, own]) = wowlua_api::declarations(f) {
-                    per_flavor.push((f.clone(), wowlua_api::declared_names(own.text)));
+                    // The text leaves out its globals of a primitive type.
+                    let mut names = wowlua_api::declared_names(own.text);
+                    names.extend(own.globals.iter().map(|g| g.name.to_string()));
+                    per_flavor.push((f.clone(), names));
                 }
             }
             let mut availability: HashMap<String, BTreeSet<String>> = HashMap::new();
@@ -2747,6 +2750,7 @@ fn parse_api(
         },
         file,
         parse,
+        globals: f.globals,
     }
 }
 

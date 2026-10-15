@@ -44,6 +44,9 @@ pub struct FileInput<'a> {
     pub meta: Option<&'a Meta>,
     /// The dependency whose main module this file is (`import x from "pkg"`).
     pub main_of: Option<String>,
+    /// A WoW API file's globals of a primitive type, which its parsed text
+    /// leaves out (`wowlua_api::File::globals`); empty for other files.
+    pub globals: wowlua_api::Globals,
 }
 
 #[derive(Clone, Debug, PartialEq)]

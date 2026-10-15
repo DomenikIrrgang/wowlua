@@ -95,6 +95,7 @@ pub fn check_package_full(
                 namespaces: Vec::new(),
                 enums: FxHashMap::default(),
                 declares,
+                globals: f.globals,
             });
         }
     }
@@ -149,6 +150,7 @@ pub fn check_package_full(
             namespaces,
             enums,
             declares: None,
+            globals: Default::default(),
         });
     }
     let mut env = env::Env::build(&sources);
@@ -594,6 +596,7 @@ mod tests {
                 xml: None,
                 meta: None,
                 main_of: None,
+                globals: Default::default(),
             })
             .collect();
         inputs.push(FileInput {
@@ -603,6 +606,7 @@ mod tests {
             xml: None,
             meta: None,
             main_of: None,
+            globals: Default::default(),
         });
         let analysis = crate::analyze(&inputs, None);
         let mut settings: Vec<Option<FileSettings>> = vec![None; inputs.len()];

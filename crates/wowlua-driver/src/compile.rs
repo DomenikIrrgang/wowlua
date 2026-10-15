@@ -79,6 +79,8 @@ pub struct ParsedDeclaration {
     pub source: Source,
     pub file: FileId,
     pub parse: Parse,
+    /// The WoW API's globals of a primitive type, which `parse` leaves out.
+    pub globals: wowlua_api::Globals,
 }
 
 /// How a source is checked (spec §2.1), or `None`.
@@ -766,6 +768,7 @@ pub fn compile_flavor(
                 })
                 .flatten(),
             meta: unit_of(&source.src_rel).map(|u| u.meta.as_ref()),
+            globals: Default::default(),
             main_of: unit_of(&source.src_rel)
                 .filter(|u| u.main.as_deref() == Some(source.src_rel.as_str()))
                 .and(wowlua_sema::package_of(&source.src_rel).map(str::to_string)),
@@ -779,6 +782,7 @@ pub fn compile_flavor(
             xml: None,
             meta: None,
             main_of: None,
+            globals: Default::default(),
         });
     }
     for d in api {
@@ -789,6 +793,7 @@ pub fn compile_flavor(
             xml: None,
             meta: None,
             main_of: None,
+            globals: d.globals,
         });
     }
     let analysis = wowlua_sema::analyze(&inputs, Some(&meta));
@@ -1209,6 +1214,9 @@ pub fn compile_flavor(
                 bytes: &d.bytes,
             });
         }
+        // The words of the API's globals its parsed text leaves out, as
+        // their tokens would give them.
+        let mut api_words = Vec::new();
         for d in api {
             // The build keeps the API's tokens only for rename-private.
             debug_assert!(!d.parse.lexed.tokens.is_empty(), "API tokens freed");
@@ -1217,6 +1225,18 @@ pub fn compile_flavor(
                 parse: &d.parse,
                 bytes: db.get(d.file).text().as_bytes(),
             });
+            for g in d.globals.iter() {
+                let ty = format!("{:?}", g.ty).to_ascii_lowercase();
+                let addon = g.on_demand.map(|a| format!(" onDemand {a}"));
+                api_words.extend(
+                    format!(
+                        "declare global {} {ty}{}\n",
+                        g.name,
+                        addon.unwrap_or_default()
+                    )
+                    .into_bytes(),
+                );
+            }
         }
         rename_private_methods(
             &mut lowered_files,
@@ -1224,6 +1244,7 @@ pub fn compile_flavor(
             &parsed_files,
             &private_methods,
             minify,
+            &api_words,
         );
     }
     for (i, chunk) in lowered_files {
@@ -1243,11 +1264,18 @@ fn rename_private_methods(
     parsed: &[crate::private_names::Parsed],
     recorded: &std::collections::HashSet<wowlua_span::Span>,
     minify: &Minify,
+    api_words: &[u8],
 ) {
     if recorded.is_empty() {
         return;
     }
-    let mut plan = crate::private_names::plan(recorded, parsed, &minify.foreign);
+    let foreign: Vec<&[u8]> = minify
+        .foreign
+        .iter()
+        .map(Vec::as_slice)
+        .chain([api_words])
+        .collect();
+    let mut plan = crate::private_names::plan(recorded, parsed, &foreign);
     if plan.at.is_empty() {
         return;
     }
