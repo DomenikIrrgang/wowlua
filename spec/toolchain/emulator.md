@@ -199,6 +199,14 @@ The WoW API the VM's code calls, per flavor.
   `wow-api` declarations, decision T83): its signature, its existence in the
   flavor, whether it is protected or restricted, and which of its arguments and
   results are secret. A function the flavor lacks is absent, as in the client.
+  The documentation comes as data (decision T199): `wowlua-types-gen` writes
+  each flavor's as JSON, every key kept, to
+  `crates/wowlua-api/data/<flavor>.api.json.gz`. Functions the client has
+  but does not document (`UseAction`, about 2,000 on WoW Forever, from
+  `/stdtest inventory`) exist too, with their behaviour or "not mocked".
+- **Natives.** The API functions are natives of the VM, as the client's are C
+  functions (decision T198): `[C]` in stack traces, the client's argument
+  errors, no taint of their own.
 - **Behaviour.** Functions have hand-written behaviour where tests need it:
   the widget system (frames, regions, textures, font strings, scripts, events
   and unit events, points and sizes, show and hide, parenting, templates,

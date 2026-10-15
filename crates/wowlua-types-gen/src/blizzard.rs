@@ -7,6 +7,67 @@ use mlua::{Lua, LuaOptions, StdLib, Table, Value};
 
 /// Reads documentation files (name, Lua source) into declarations.
 pub fn read(files: &[(String, String)]) -> Result<Decls, String> {
+    let (_lua, docs) = load(files)?;
+    let mut out = Decls::default();
+    for doc in docs.sequence_values::<Table>() {
+        let doc = doc.map_err(|e| e.to_string())?;
+        read_doc(&doc, &mut out);
+    }
+    Ok(out)
+}
+
+/// The documentation tables as they are, every key kept (for the engine,
+/// spec emulator §17.6): a list of systems, each with its `Functions`,
+/// `Events` and `Tables`. Object keys are sorted; references to enum values
+/// the sandbox does not know become null.
+pub fn read_json(files: &[(String, String)]) -> Result<serde_json::Value, String> {
+    let (_lua, docs) = load(files)?;
+    to_json(&Value::Table(docs))
+}
+
+fn to_json(v: &Value) -> Result<serde_json::Value, String> {
+    use serde_json::Value as J;
+    Ok(match v {
+        Value::Nil => J::Null,
+        Value::Boolean(b) => J::Bool(*b),
+        Value::Integer(i) => J::from(*i),
+        Value::Number(n) => serde_json::Number::from_f64(*n).map_or(J::Null, J::Number),
+        Value::String(s) => J::String(s.to_string_lossy()),
+        // An enum value the sandbox stands in for.
+        Value::Table(t) if t.metatable().is_some() => J::Null,
+        Value::Table(t) => {
+            let len = t.raw_len();
+            let mut entries: Vec<(String, J)> = Vec::new();
+            let mut count = 0;
+            for pair in t.clone().pairs::<Value, Value>() {
+                let (k, v) = pair.map_err(|e| e.to_string())?;
+                count += 1;
+                let key = match &k {
+                    Value::String(s) => s.to_string_lossy(),
+                    Value::Integer(i) => i.to_string(),
+                    Value::Number(n) => n.to_string(),
+                    _ => continue,
+                };
+                entries.push((key, to_json(&v)?));
+            }
+            if len > 0 && count == len {
+                let mut items = Vec::with_capacity(len);
+                for i in 1..=len {
+                    items.push(to_json(&t.raw_get::<Value>(i).map_err(|e| e.to_string())?)?);
+                }
+                J::Array(items)
+            } else {
+                entries.sort_by(|a, b| a.0.cmp(&b.0));
+                J::Object(entries.into_iter().collect())
+            }
+        }
+        _ => J::Null,
+    })
+}
+
+/// Runs the documentation files in a sandbox: the Lua state and the list
+/// of documentation tables they added.
+fn load(files: &[(String, String)]) -> Result<(Lua, Table), String> {
     let lua = Lua::new_with(
         StdLib::TABLE | StdLib::STRING | StdLib::MATH,
         LuaOptions::default(),
@@ -46,12 +107,7 @@ pub fn read(files: &[(String, String)]) -> Result<Decls, String> {
             .map_err(|e| format!("{name}: {e}"))?;
     }
     let docs: Table = lua.globals().get("__docs").map_err(|e| e.to_string())?;
-    let mut out = Decls::default();
-    for doc in docs.sequence_values::<Table>() {
-        let doc = doc.map_err(|e| e.to_string())?;
-        read_doc(&doc, &mut out);
-    }
-    Ok(out)
+    Ok((lua, docs))
 }
 
 fn s(t: &Table, key: &str) -> Option<String> {

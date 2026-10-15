@@ -2697,6 +2697,7 @@ dependencies = [
  "indexmap",
  "mlua",
  "quick-xml",
+ "serde_json",
  "wowlua-span",
  "wowlua-syntax",
 ]
@@ -2734,6 +2735,7 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "flate2",
  "mlua",
  "serde_json",
  "sha2 0.10.9",

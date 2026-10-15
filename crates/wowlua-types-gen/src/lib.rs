@@ -15,6 +15,9 @@ use std::collections::{BTreeSet, HashSet};
 pub struct Output {
     pub shared: String,
     pub flavors: Vec<(String, String)>,
+    /// Each flavor's documentation as JSON, every key kept (the engine's
+    /// data, spec emulator §17.6).
+    pub api: Vec<(String, serde_json::Value)>,
 }
 
 /// One flavor's input: its ID, a description of the sources (for the
@@ -66,7 +69,9 @@ pub fn generate(
     compiler_types: &HashSet<String>,
 ) -> Result<Output, String> {
     let mut per_flavor: Vec<(String, String, Decls)> = Vec::new();
+    let mut api = Vec::new();
     for f in flavors {
+        api.push((f.id.clone(), blizzard::read_json(&f.files)?));
         let mut d = blizzard::read(&f.files)?;
         corrections(&mut d);
         d.functions.retain(|n, _| !skip.contains(n));
@@ -379,6 +384,7 @@ pub fn generate(
     Ok(Output {
         shared: shared.emit(&header),
         flavors: out_flavors,
+        api,
     })
 }
 

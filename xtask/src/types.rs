@@ -553,6 +553,21 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
             "The declarations in this directory include information converted from\nKetho's vscode-wow-api (https://github.com/Ketho/vscode-wow-api), commit\n{KETHO_COMMIT}, under this license:\n\n{license}"
         ),
     )?;
+    // The documentation as the engine reads it: compact JSON, gzipped
+    // without a timestamp, so unchanged documentation writes the same bytes.
+    for (flavor, json) in &output.api {
+        let text = serde_json::to_vec(json)?;
+        let mut gz = flate2::GzBuilder::new()
+            .mtime(0)
+            .write(Vec::new(), flate2::Compression::best());
+        std::io::Write::write_all(&mut gz, &text)?;
+        let bytes = gz.finish()?;
+        let path = data.join(format!("{flavor}.api.json.gz"));
+        if fs::read(&path).ok().as_deref() != Some(bytes.as_slice()) {
+            fs::write(&path, &bytes).with_context(|| format!("writing {}", path.display()))?;
+            println!("updated {}", path.display());
+        }
+    }
     let mut written = vec![("shared".to_string(), output.shared)];
     written.extend(output.flavors);
     for (name, text) in &written {
