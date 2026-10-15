@@ -55,6 +55,15 @@ pub(crate) struct Parser<'a> {
     /// Where the last line lookup ended in `lexed.line_starts`: the parser
     /// moves forward, so the next lookup starts its search there.
     line_hint: Cell<usize>,
+    /// The tree is kept. Without it (`validating`) the parser only finds
+    /// the diagnostics: it parses everything as usual, but keeps no block
+    /// statements, expression lists or table fields, and decodes no
+    /// literals. Every check that reads back one of those must set
+    /// `unsure` when the tree is not kept, as `repeat_stat` does.
+    keep_tree: bool,
+    /// A check was skipped because the tree is not kept: the diagnostics
+    /// may be incomplete.
+    pub(crate) unsure: bool,
 }
 
 fn is_block_follow(kind: TokenKind) -> bool {
@@ -148,6 +157,16 @@ impl<'a> Parser<'a> {
             field_stack: Vec::new(),
             expr_stack: Vec::new(),
             line_hint: Cell::new(0),
+            keep_tree: true,
+            unsure: false,
+        }
+    }
+
+    /// A parser that keeps no tree (see `keep_tree`).
+    pub(crate) fn validating(src: &'a [u8], file: FileId, lexed: Lexed) -> Self {
+        Parser {
+            keep_tree: false,
+            ..Parser::new(src, file, lexed)
         }
     }
 
@@ -464,7 +483,9 @@ impl<'a> Parser<'a> {
             match self.statement() {
                 Ok(stmt) => {
                     let is_continue = matches!(stmt.kind, StmtKind::Continue);
-                    stmts.push(stmt);
+                    if self.keep_tree {
+                        stmts.push(stmt);
+                    }
                     self.eat(T::Semi);
                     if last {
                         if !is_block_follow(self.kind()) {
@@ -486,12 +507,14 @@ impl<'a> Parser<'a> {
                 }
                 Err(Failed) => {
                     self.recover(before);
-                    stmts.push(Stmt {
-                        id: self.id(),
-                        span: self.span_from(self.lexed.tokens[before].start),
-                        decorators: Vec::new(),
-                        kind: StmtKind::Error,
-                    });
+                    if self.keep_tree {
+                        stmts.push(Stmt {
+                            id: self.id(),
+                            span: self.span_from(self.lexed.tokens[before].start),
+                            decorators: Vec::new(),
+                            kind: StmtKind::Error,
+                        });
+                    }
                 }
             }
         }
@@ -797,7 +820,10 @@ impl<'a> Parser<'a> {
         let (body, has_continue) = self.loop_body();
         self.expect_match(T::Until, "repeat", opened)?;
         let cond = self.expr()?;
-        if has_continue {
+        if has_continue && !self.keep_tree {
+            // Reads the body's statements and all of `cond`.
+            self.unsure = true;
+        } else if has_continue {
             let locals = top_level_locals(&body);
             if let Some(name) = first_name_use(&cond, &locals) {
                 self.error_at(
@@ -1045,10 +1071,14 @@ impl<'a> Parser<'a> {
 
     fn expr_items(&mut self) -> PResult<()> {
         let first = self.expr()?;
-        self.expr_stack.push(first);
+        if self.keep_tree {
+            self.expr_stack.push(first);
+        }
         while self.eat(T::Comma) {
             let e = self.expr()?;
-            self.expr_stack.push(e);
+            if self.keep_tree {
+                self.expr_stack.push(e);
+            }
         }
         Ok(())
     }
@@ -1193,6 +1223,12 @@ impl<'a> Parser<'a> {
     }
 
     fn number_lit(&self, t: &Token) -> NumberLit {
+        if !self.keep_tree {
+            return NumberLit {
+                raw: NumText::from(""),
+                value: None,
+            };
+        }
         let raw = self.text_of(t);
         NumberLit {
             raw: NumText::from(&*String::from_utf8_lossy(raw)),
@@ -1201,8 +1237,15 @@ impl<'a> Parser<'a> {
     }
 
     fn string_lit(&self, t: &Token) -> StringLit {
-        let raw = self.text_of(t);
         let long = t.kind == T::LongString;
+        if !self.keep_tree {
+            return StringLit {
+                raw: Box::default(),
+                value: Box::default(),
+                long,
+            };
+        }
+        let raw = self.text_of(t);
         let value = if long {
             literal::long_string_value(raw)
         } else {
@@ -1400,11 +1443,18 @@ impl<'a> Parser<'a> {
                     self.expect(T::RBracket, "]")?;
                     self.expect(T::Eq, "=")?;
                     let value = self.expr()?;
-                    TableField::Keyed {
+                    self.keep_tree.then(|| TableField::Keyed {
                         key: Box::new(key),
                         value,
                         span: self.span_from(start),
-                    }
+                    })
+                }
+                T::Name if self.kind_at(1) == T::Eq && !self.keep_tree => {
+                    // The name and `=`, with nothing to check.
+                    self.advance();
+                    self.advance();
+                    self.expr()?;
+                    None
                 }
                 T::Name if self.kind_at(1) == T::Eq => {
                     let name = self.name()?;
@@ -1416,11 +1466,16 @@ impl<'a> Parser<'a> {
                     // returning a value whose span ends at the last token it
                     // consumed, the same end `span_from` takes.
                     debug_assert_eq!(field.span(), self.span_from(start));
-                    field
+                    Some(field)
                 }
-                _ => TableField::Positional(self.expr()?),
+                _ => {
+                    let value = self.expr()?;
+                    self.keep_tree.then_some(TableField::Positional(value))
+                }
             };
-            self.field_stack.push(field);
+            if let Some(field) = field {
+                self.field_stack.push(field);
+            }
             if !(self.eat(T::Comma) || self.eat(T::Semi)) {
                 break;
             }
