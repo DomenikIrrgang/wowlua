@@ -546,7 +546,7 @@ impl Env {
             Ty::Record(_) | Ty::Named(..) => {}
             _ => return false,
         }
-        for (name, f) in &target.fields {
+        for (name, f) in target.fields.iter() {
             match self.field_of(s, name) {
                 Some((ty, _)) => {
                     if !self.assignable_in(ty, f.ty, mode, assuming) {
@@ -561,7 +561,7 @@ impl Env {
             }
         }
         if let (Some((k, v)), Ty::Record(sr)) = (target.indexer, self.types.get(s).clone()) {
-            for (name, f) in &sr.fields {
+            for (name, f) in sr.fields.iter() {
                 let key = self.types.str(name);
                 if self.assignable_in(key, k, mode, assuming)
                     && !self.assignable_in(f.ty, v, mode, assuming)

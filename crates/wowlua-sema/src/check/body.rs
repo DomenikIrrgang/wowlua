@@ -1397,7 +1397,7 @@ impl<'e> Checker<'e> {
         } else {
             (self.env.types.widen(value), false)
         };
-        r.fields.insert(
+        r.fields = r.fields.with_appended(
             name.into(),
             Field {
                 ty: value,

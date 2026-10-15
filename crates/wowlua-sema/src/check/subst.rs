@@ -64,11 +64,16 @@ pub fn apply(types: &mut Types, t: TypeId, s: &Subst) -> TypeId {
             types.intern(Ty::Named(d, args))
         }
         Ty::Record(mut r) => {
-            let mut changed = false;
-            for f in r.fields.values_mut() {
-                let n = apply(types, f.ty, s);
-                changed |= n != f.ty;
-                f.ty = n;
+            let tys: Vec<TypeId> = r.fields.values().map(|f| f.ty).collect();
+            let applied: Vec<TypeId> = tys.iter().map(|&t| apply(types, t, s)).collect();
+            let mut changed = applied != tys;
+            if changed {
+                let mut fields = FieldMap::default();
+                fields.reserve(applied.len());
+                for ((name, f), ty) in r.fields.iter().zip(applied) {
+                    fields.insert(name.into(), Field { ty, ..*f });
+                }
+                r.fields = fields.into();
             }
             if let Some((k, v)) = r.indexer {
                 let (nk, nv) = (apply(types, k, s), apply(types, v, s));
