@@ -79,20 +79,12 @@ fn fixture(name: &str) -> Option<(BTreeMap<String, String>, BTreeMap<String, Str
 /// listed, not failed.
 const PENDING: &[(&str, &str)] = &[
     (
+        "local m = getmetatable('')",
+        "string.rtgsub is Blizzard's Lua (S3)",
+    ),
+    (
         "strsplit(',', string.rep('a,', 79",
-        "strsplit's limit: being probed",
-    ),
-    (
-        "string.upper('ß",
-        "the client's UTF-8 case table: being probed",
-    ),
-    (
-        "string.upper('\\255",
-        "the client's UTF-8 case table: being probed",
-    ),
-    (
-        "string.upper('ǆ",
-        "the client's UTF-8 case table: being probed",
+        "strsplit's limits: the crash-limit probes",
     ),
     ("secretwrap", "secret values (S2.3)"),
     ("canaccess", "secret values (S2.3)"),
@@ -148,11 +140,6 @@ const PENDING: &[(&str, &str)] = &[
         "issecurevariable('StdTestState')",
         "saved variables load as the addon's (S3)",
     ),
-    (
-        "getmetatable('').__index",
-        "the string metatable's __index: being probed",
-    ),
-    ("table.getcountinfo", "the third result: being probed"),
 ];
 
 #[test]

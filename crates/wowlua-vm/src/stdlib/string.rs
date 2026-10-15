@@ -69,7 +69,7 @@ fn sub(vm: &mut Vm, c: NativeCall) -> Ret {
 fn upper(vm: &mut Vm, c: NativeCall) -> Ret {
     let s = vm.check_bytes(&c, 1)?;
     let u = if vm.rules.utf8_case {
-        map_utf8(&s, |ch| ch.to_uppercase())
+        map_utf8(&s, true)
     } else {
         s.iter().map(u8::to_ascii_uppercase).collect()
     };
@@ -79,30 +79,78 @@ fn upper(vm: &mut Vm, c: NativeCall) -> Ret {
 fn lower(vm: &mut Vm, c: NativeCall) -> Ret {
     let s = vm.check_bytes(&c, 1)?;
     let u = if vm.rules.utf8_case {
-        map_utf8(&s, |ch| ch.to_lowercase())
+        map_utf8(&s, false)
     } else {
         s.iter().map(u8::to_ascii_lowercase).collect()
     };
     Ok(vec![vm.bytes(&u)])
 }
 
-/// Case mapping of UTF-8 text (the client's `upper`/`lower`): characters
-/// with a one-character mapping change, invalid bytes stay as they are.
-fn map_utf8<I: Iterator<Item = char>>(s: &[u8], f: impl Fn(char) -> I) -> Vec<u8> {
+/// The client's case table: ASCII, Latin-1's U+00C0–U+00DE and U+00E0–U+00FE
+/// (× and ÷ too, as one pair) and the basic Cyrillic letters with Ё
+/// (U+0410–U+042F, U+0430–U+044F, U+0401, U+0451); nothing else.
+fn client_case(cp: u32, upper: bool) -> u32 {
+    let (lo, up) = match cp {
+        0x61..=0x7a | 0xe0..=0xfe => (cp, cp - 0x20),
+        0x41..=0x5a | 0xc0..=0xde => (cp + 0x20, cp),
+        0x430..=0x44f => (cp, cp - 0x20),
+        0x410..=0x42f => (cp + 0x20, cp),
+        0x451 => (cp, 0x401),
+        0x401 => (0x451, cp),
+        _ => (cp, cp),
+    };
+    if upper { up } else { lo }
+}
+
+/// Case mapping of UTF-8 text as the client does it: sequences are decoded
+/// by their structure alone (no overlong, surrogate or range checks), a byte
+/// that starts no complete sequence is dropped, and each code point is
+/// encoded again after the client's case table.
+fn map_utf8(s: &[u8], upper: bool) -> Vec<u8> {
     let mut out = Vec::with_capacity(s.len());
-    for chunk in s.utf8_chunks() {
-        for ch in chunk.valid().chars() {
-            let mut mapped = f(ch);
-            let c = match (mapped.next(), mapped.next()) {
-                (Some(m), None) => m,
-                _ => ch,
-            };
-            let mut buf = [0u8; 4];
-            out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+    let mut i = 0;
+    while i < s.len() {
+        let b = s[i];
+        let (len, init) = match b {
+            0x00..=0x7f => (1, u32::from(b)),
+            0xc0..=0xdf => (2, u32::from(b & 0x1f)),
+            0xe0..=0xef => (3, u32::from(b & 0x0f)),
+            0xf0..=0xf7 => (4, u32::from(b & 0x07)),
+            _ => {
+                i += 1;
+                continue;
+            }
+        };
+        let cont = &s[i + 1..(i + len).min(s.len())];
+        if cont.len() + 1 < len || cont.iter().any(|&c| c & 0xc0 != 0x80) {
+            i += 1;
+            continue;
         }
-        out.extend_from_slice(chunk.invalid());
+        let cp = cont
+            .iter()
+            .fold(init, |acc, &c| (acc << 6) | u32::from(c & 0x3f));
+        encode_utf8(client_case(cp, upper), &mut out);
+        i += len;
     }
     out
+}
+
+fn encode_utf8(cp: u32, out: &mut Vec<u8>) {
+    match cp {
+        0..=0x7f => out.push(cp as u8),
+        0x80..=0x7ff => out.extend_from_slice(&[0xc0 | (cp >> 6) as u8, 0x80 | (cp & 0x3f) as u8]),
+        0x800..=0xffff => out.extend_from_slice(&[
+            0xe0 | (cp >> 12) as u8,
+            0x80 | ((cp >> 6) & 0x3f) as u8,
+            0x80 | (cp & 0x3f) as u8,
+        ]),
+        _ => out.extend_from_slice(&[
+            0xf0 | (cp >> 18) as u8,
+            0x80 | ((cp >> 12) & 0x3f) as u8,
+            0x80 | ((cp >> 6) & 0x3f) as u8,
+            0x80 | (cp & 0x3f) as u8,
+        ]),
+    }
 }
 
 fn rep(vm: &mut Vm, c: NativeCall) -> Ret {

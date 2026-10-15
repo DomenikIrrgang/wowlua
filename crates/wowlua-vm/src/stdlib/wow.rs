@@ -86,6 +86,11 @@ pub fn open(vm: &mut Vm) {
     let string = global_table(vm, "string");
     let gfind = vm.native("gfind", gfind);
     set(vm, string, "gfind", gfind);
+    // getmetatable("") gives addons the string library, not the metatable.
+    if let Some(meta) = vm.string_meta {
+        let k = vm.names.metatable;
+        vm.heap.table_mut(meta).set_str(k, Value::Table(string));
+    }
 
     for (name, f) in [
         ("strsplit", strsplit as crate::NativeFn),
