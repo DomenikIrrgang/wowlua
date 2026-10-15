@@ -5,7 +5,7 @@
 //! function, so keeping it keeps the code's meaning on any build.
 
 use crate::ir::{Chunk, Pos};
-use crate::scope::{rename, resolve};
+use crate::scope::{rename, resolve_with_conflicts};
 use std::collections::{HashMap, HashSet};
 
 pub(super) const KEYWORDS: &[&str] = &[
@@ -35,7 +35,7 @@ pub fn short_name(mut i: usize) -> String {
 
 /// Returns the original names of the renamed identifiers by position.
 pub fn apply(chunk: &mut Chunk) -> HashMap<Pos, String> {
-    let res = resolve(chunk);
+    let res = resolve_with_conflicts(chunk);
     let mut order: Vec<usize> = (0..res.bindings.len()).collect();
     order.sort_by_key(|&b| std::cmp::Reverse(res.bindings[b].uses));
     let mut names: HashMap<usize, String> = HashMap::new();
