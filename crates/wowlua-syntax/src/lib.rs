@@ -49,3 +49,35 @@ pub fn parse(src: &[u8], file: FileId) -> Parse {
         diagnostics,
     }
 }
+
+/// Whether `src` (the raw bytes of `file`) parses without errors: always
+/// `!parse(src, file).has_errors()`, found without keeping a syntax tree or
+/// trivia. For callers that need only the answer (the build's check of its
+/// own output).
+pub fn parses(src: &[u8], file: FileId) -> bool {
+    let answer = validate(src, file);
+    #[cfg(debug_assertions)]
+    {
+        let full = parse(src, file);
+        assert_eq!(
+            answer,
+            !full.has_errors(),
+            "`parses` disagrees with `parse` on {file:?}: {:?}",
+            full.diagnostics.first().map(|d| &d.message)
+        );
+    }
+    answer
+}
+
+fn validate(src: &[u8], file: FileId) -> bool {
+    let lexed = lexer::lex_with(src, file, lexer::LexOptions { trivia: false });
+    if lexed.diagnostics.iter().any(Diagnostic::is_error) {
+        return false;
+    }
+    let mut parser = parser::Parser::validating(src, file, lexed);
+    parser.chunk();
+    if parser.unsure {
+        return !parse(src, file).has_errors();
+    }
+    !parser.diagnostics.iter().any(Diagnostic::is_error)
+}

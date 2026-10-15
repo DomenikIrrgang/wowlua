@@ -69,10 +69,27 @@ struct Lexer<'a> {
     pos: usize,
     out: Lexed,
     modes: Vec<Mode>,
+    /// Trivia is recorded (`LexOptions::trivia`).
+    keep_trivia: bool,
+}
+
+/// What [`lex_with`] records.
+#[derive(Clone, Copy, Debug)]
+pub struct LexOptions {
+    /// Records whitespace, line breaks and comments in `Lexed::trivia`.
+    /// Without it they are still scanned and checked, with the same
+    /// diagnostics, but `trivia` stays empty and every token's
+    /// `trivia_end` is 0.
+    pub trivia: bool,
 }
 
 /// Lexes `src`, the raw bytes of `file`.
 pub fn lex(src: &[u8], file: FileId) -> Lexed {
+    lex_with(src, file, LexOptions { trivia: true })
+}
+
+/// [`lex`] with `options`.
+pub fn lex_with(src: &[u8], file: FileId, options: LexOptions) -> Lexed {
     let mut lexer = Lexer {
         src,
         file,
@@ -82,6 +99,7 @@ pub fn lex(src: &[u8], file: FileId) -> Lexed {
             ..Lexed::default()
         },
         modes: Vec::new(),
+        keep_trivia: options.trivia,
     };
     lexer.run();
     lexer.out
@@ -182,6 +200,9 @@ impl<'a> Lexer<'a> {
     }
 
     fn push_trivia(&mut self, kind: TriviaKind, start: usize) {
+        if !self.keep_trivia {
+            return;
+        }
         self.out.trivia.push(Trivia {
             kind,
             start: start as u32,

@@ -7,7 +7,13 @@ use wowlua_syntax::parse;
 fn parse_str(src: &str) -> wowlua_syntax::Parse {
     let mut db = SourceDb::new();
     let file = db.add("t.wowlua", src.to_string());
-    parse(src.as_bytes(), file)
+    let parsed = parse(src.as_bytes(), file);
+    assert_eq!(
+        wowlua_syntax::parses(src.as_bytes(), file),
+        !parsed.has_errors(),
+        "`parses` and `parse` disagree: {src:?}"
+    );
+    parsed
 }
 
 fn codes(src: &str) -> Vec<String> {

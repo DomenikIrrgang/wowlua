@@ -224,6 +224,23 @@ pub fn optimize_and_emit(
     }
 }
 
+/// The output must parse (spec compiler §13.8, item 2): the internal error
+/// when `text`, emitted for `file` (at `rel`), does not.
+fn emitted_parse_error(text: &[u8], file: FileId, rel: &str) -> Option<Diagnostic> {
+    if wowlua_syntax::parses(text, file) {
+        return None;
+    }
+    // Only to word the error: the full parse has its first message.
+    let reparsed = wowlua_syntax::parse(text, file);
+    Some(
+        Diagnostic::plain_error(format!(
+            "internal compiler error: the code emitted for this file does not parse: {}",
+            reparsed.diagnostics[0].message
+        ))
+        .with_path(rel),
+    )
+}
+
 /// Minifies Lua the compiler did not compile (the runtime, library files);
 /// `None` when there is nothing to do or it does not parse as Lua 5.1, and
 /// it then ships as it is.
@@ -248,7 +265,7 @@ pub fn minify_lua(
     let mut options = passes.emit_options(line_mode);
     options.mappings = false;
     let emitted = wowlua_luair::emit(&chunk, &options);
-    let ok = !wowlua_syntax::parse(&emitted.text, file).has_errors()
+    let ok = wowlua_syntax::parses(&emitted.text, file)
         && luacheck::check(db, file, &emitted.text).is_none();
     ok.then_some(emitted.text)
 }
@@ -966,20 +983,10 @@ pub fn compile_flavor(
         }
         let compiles = optimized.compiles;
         let (emitted, original) = (optimized.emitted, optimized.original);
-        // The output must parse (spec compiler §13.8, item 2).
-        let reparsed = wowlua_syntax::parse(&emitted.text, file);
-        if reparsed.has_errors() {
-            diagnostics.push(
-                Diagnostic::plain_error(format!(
-                    "internal compiler error: the code emitted for this file does not parse: {}",
-                    reparsed.diagnostics[0].message
-                ))
-                .with_path(&source.rel),
-            );
+        if let Some(d) = emitted_parse_error(&emitted.text, file, &source.rel) {
+            diagnostics.push(d);
             return None;
         }
-        // Freed before luacheck's Lua state and the source map are built.
-        drop(reparsed);
         if let Some(d) = luacheck::check_unless_compiled(db, file, &emitted.text, compiles) {
             diagnostics.push(d);
         }
@@ -1455,6 +1462,22 @@ fn context(
 #[cfg(test)]
 mod limit_tests {
     use super::*;
+
+    /// Emitted code that does not parse is an internal error, worded with
+    /// the parser's first message.
+    #[test]
+    fn emitted_code_that_does_not_parse_is_an_internal_error() {
+        let mut db = SourceDb::new();
+        let file = db.add("src/a.lua", "");
+        assert!(emitted_parse_error(b"local a = {1, {2}}\n", file, "src/a.lua").is_none());
+        let d = emitted_parse_error(b"x = = 1\ny = (\n", file, "src/a.lua").expect("an error");
+        assert_eq!(
+            d.message,
+            "internal compiler error: the code emitted for this file does not parse: unexpected symbol near '='"
+        );
+        assert!(d.is_error() && d.code.is_none());
+        assert_eq!(d.path.as_deref(), Some(std::path::Path::new("src/a.lua")));
+    }
 
     /// A table so large and nested that hoisting its strings into locals
     /// would run out of registers: the passes that add locals are left out.

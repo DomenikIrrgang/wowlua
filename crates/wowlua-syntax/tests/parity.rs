@@ -3,7 +3,7 @@
 //! must be rejected, unless the chunk uses wowlua syntax.
 
 use wowlua_span::SourceDb;
-use wowlua_syntax::{features::features, parse};
+use wowlua_syntax::{features::features, parse, parses};
 
 fn lua_accepts(src: &[u8]) -> Result<(), String> {
     let lua = mlua::Lua::new();
@@ -19,6 +19,11 @@ fn agree(src: &[u8]) -> Result<(), String> {
     let file = db.add("t.lua", String::from_utf8_lossy(src).into_owned());
     let parsed = parse(src, file);
     let ours = !parsed.has_errors();
+    assert_eq!(
+        parses(src, file),
+        ours,
+        "`parses` and `parse` disagree: {src:?}"
+    );
     let lua = lua_accepts(src);
     match (ours, &lua) {
         (true, Ok(())) | (false, Err(_)) => Ok(()),
