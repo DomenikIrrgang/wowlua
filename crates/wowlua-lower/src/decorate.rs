@@ -350,21 +350,12 @@ impl<'a> Lowerer<'a> {
     /// Remembers a `@deprecated` binding of the current scope (W3030 at its
     /// uses).
     pub(crate) fn mark_deprecated(&mut self, name: &str, message: Option<String>) {
-        self.scopes
-            .last_mut()
-            .expect("a scope")
-            .deprecated
-            .insert(name.into(), message);
+        self.scopes.mark_deprecated(name, message);
     }
 
     /// The `@deprecated` message of the binding `name` refers to, if any.
     pub(crate) fn deprecated_of(&self, name: &str) -> Option<Option<String>> {
-        for scope in self.scopes.iter().rev() {
-            if scope.names.contains_key(name) || scope.deprecated.contains_key(name) {
-                return scope.deprecated.get(name).cloned();
-            }
-        }
-        None
+        self.scopes.deprecated_of(name)
     }
 
     /// A `@debugOnly` function must return nothing (E3032).

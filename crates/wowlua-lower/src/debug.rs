@@ -18,6 +18,9 @@ impl Lowerer<'_> {
     /// The `@intrinsic` id of a call's callee: an imported intrinsic
     /// (`assert(x)`) or a member of a namespace import (`debug.assert(x)`).
     pub(crate) fn call_intrinsic(&self, e: &Expr) -> Option<String> {
+        if !self.scopes.seen().intrinsics {
+            return None;
+        }
         let ExprKind::Call { callee, .. } = &e.kind else {
             return None;
         };

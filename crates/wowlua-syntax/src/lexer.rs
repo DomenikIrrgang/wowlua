@@ -671,6 +671,16 @@ impl<'a> Lexer<'a> {
     }
 }
 
+/// A numeral in wowlua's own form: digit separators or a binary literal
+/// (spec §1.2.2), in either case of `0b`.
+pub fn is_wowlua_numeral(raw: &str) -> bool {
+    raw.contains('_')
+        || raw
+            .as_bytes()
+            .get(..2)
+            .is_some_and(|p| p.eq_ignore_ascii_case(b"0b"))
+}
+
 /// The value of a numeral, or why it is malformed. Lua 5.1 numerals follow
 /// `luaO_str2d` (C `strtod`, hexadecimal through `strtoul`); wowlua adds digit
 /// separators and binary literals (spec §1.2.2).
@@ -682,8 +692,7 @@ pub fn number_value(raw: &[u8]) -> Result<f64, &'static str> {
     } else {
         Cow::Borrowed(text)
     };
-    let wowlua_form = text.contains('_') || lower.starts_with("0b");
-    if !wowlua_form {
+    if !is_wowlua_numeral(text) {
         return lua_number(&lower).ok_or("malformed number");
     }
     // Digit separators: each `_` sits between two digits of the same run.
@@ -789,4 +798,27 @@ fn lua_number(text: &str) -> Option<f64> {
         return None;
     }
     text.parse().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_wowlua_numeral;
+
+    // The same answer as lowercasing the numeral and testing for `_` and a
+    // leading `0b`, which is what callers did before.
+    #[test]
+    fn wowlua_numerals_without_lowercasing() {
+        let parts = [
+            "", "0", "1", "b", "B", "x", "X", "_", "0b", "0B", "0x", "e", "E", ".",
+        ];
+        for a in parts {
+            for b in parts {
+                for c in parts {
+                    let raw = format!("{a}{b}{c}");
+                    let old = raw.contains('_') || raw.to_ascii_lowercase().starts_with("0b");
+                    assert_eq!(is_wowlua_numeral(&raw), old, "{raw:?}");
+                }
+            }
+        }
+    }
 }

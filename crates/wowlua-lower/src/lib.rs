@@ -10,6 +10,7 @@ mod debug;
 mod decorate;
 mod instrument;
 mod reflect;
+mod scope;
 
 pub(crate) use instrument::FnMarks;
 
@@ -229,7 +230,7 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         parse,
         src,
         ctx,
-        scopes: vec![Scope::default()],
+        scopes: scope::Scopes::new(),
         prelude: Vec::new(),
         temps: 0,
         aliases: BTreeMap::new(),
@@ -541,13 +542,6 @@ enum Binding {
     IntrinsicNamespace(Arc<HashMap<String, String>>),
 }
 
-#[derive(Default)]
-struct Scope {
-    names: HashMap<Box<str>, Binding>,
-    /// `@deprecated` bindings of this scope: their messages.
-    deprecated: HashMap<Box<str>, Option<String>>,
-}
-
 /// How the body of the loop being lowered handles `continue` (spec §1.3.6).
 #[derive(Clone)]
 struct LoopInfo {
@@ -575,7 +569,7 @@ struct Lowerer<'a> {
     widget_ctor: Option<u32>,
     has_exports: bool,
     meta_used: BTreeSet<(MetaKind, Vec<String>)>,
-    scopes: Vec<Scope>,
+    scopes: scope::Scopes,
     /// Statements that must run before the statement being lowered.
     prelude: Vec<ir::Stmt>,
     temps: u32,
@@ -693,7 +687,7 @@ impl<'a> Lowerer<'a> {
     // ------------------------------------------------------------- scopes --
 
     fn push_scope(&mut self) {
-        self.scopes.push(Scope::default());
+        self.scopes.push();
     }
 
     fn pop_scope(&mut self) {
@@ -701,19 +695,15 @@ impl<'a> Lowerer<'a> {
     }
 
     fn declare(&mut self, name: &str, binding: Binding) {
-        self.scopes
-            .last_mut()
-            .expect("a scope")
-            .names
-            .insert(name.into(), binding);
+        self.scopes.declare(name, binding);
     }
 
     fn lookup(&self, name: &str) -> Option<&Binding> {
-        self.scopes.iter().rev().find_map(|s| s.names.get(name))
+        self.scopes.lookup(name)
     }
 
-    /// The binding a name expression refers to; uses of `@deprecated`
-    /// bindings are reported (W3030).
+    /// The binding a name expression refers to, `None` for a plain local;
+    /// uses of `@deprecated` bindings are reported (W3030).
     fn name_binding(&mut self, n: &Name) -> Option<Binding> {
         if let Some(message) = self.deprecated_of(&n.text) {
             let detail = message.map(|m| format!(": {m}")).unwrap_or_default();
@@ -722,7 +712,14 @@ impl<'a> Lowerer<'a> {
                     .with_label(n.span, "used here"),
             );
         }
-        self.lookup(&n.text).cloned()
+        if !self.scopes.seen().non_local {
+            debug_assert!(matches!(self.lookup(&n.text), None | Some(Binding::Local)));
+            return None;
+        }
+        match self.lookup(&n.text) {
+            None | Some(Binding::Local) => None,
+            Some(b) => Some(b.clone()),
+        }
     }
 
     fn is_local(&self, name: &str) -> bool {
@@ -1183,6 +1180,13 @@ impl<'a> Lowerer<'a> {
     /// Assignment to a constant (E2010) or to an imported or exported
     /// binding (E1010) is an error.
     fn check_assignable(&mut self, name: &Name) {
+        if !self.scopes.seen().non_local {
+            debug_assert!(matches!(
+                self.lookup(&name.text),
+                None | Some(Binding::Local)
+            ));
+            return;
+        }
         match self.lookup(&name.text) {
             Some(Binding::Const(_) | Binding::ConstLocal) => self.error(
                 "E2010",
@@ -1473,6 +1477,9 @@ impl<'a> Lowerer<'a> {
 
     /// A call statement of a removed `@debugOnly` function (spec §4.3).
     fn is_removed_call(&self, e: &Expr) -> bool {
+        if !self.scopes.seen().non_local {
+            return false;
+        }
         matches!(&e.kind, ExprKind::Call { callee, .. } if matches!(&callee.kind, ExprKind::Name(n) if matches!(self.lookup(&n.text), Some(Binding::DebugOnlyRemoved))))
     }
 
@@ -1723,6 +1730,9 @@ impl<'a> Lowerer<'a> {
 
     /// Assignment to an enum member (E2010).
     fn check_enum_target(&mut self, t: &Expr) {
+        if !self.scopes.seen().enums {
+            return;
+        }
         let obj = match &t.kind {
             ExprKind::Field { obj, .. } | ExprKind::Index { obj, .. } => obj,
             _ => return,
@@ -1957,12 +1967,7 @@ impl<'a> Lowerer<'a> {
             ExprKind::True => K::True,
             ExprKind::False => K::False,
             ExprKind::Number(n) => {
-                let binary = n
-                    .raw
-                    .as_bytes()
-                    .get(..2)
-                    .is_some_and(|p| p.eq_ignore_ascii_case(b"0b"));
-                if n.raw.contains('_') || binary {
+                if wowlua_syntax::lexer::is_wowlua_numeral(&n.raw) {
                     K::Number(format_number(n.value.unwrap_or(0.0)))
                 } else {
                     K::Number(String::from(&*n.raw))
@@ -2545,6 +2550,7 @@ impl<'a> Lowerer<'a> {
             return None;
         }
         match &leaf.kind {
+            ExprKind::Name(_) if !self.scopes.seen().consts => None,
             ExprKind::Name(n) => match self.lookup(&n.text) {
                 Some(Binding::Const(c)) => Some(c.clone()),
                 _ => None,
@@ -2555,6 +2561,10 @@ impl<'a> Lowerer<'a> {
 
     /// A constant access path into `wowlua:meta` (spec §6.2).
     fn meta_path(&self, e: &Expr) -> Option<(MetaKind, Vec<String>)> {
+        if !self.scopes.seen().meta {
+            // No name can resolve to a `wowlua:meta` binding.
+            return None;
+        }
         let mut namespace = false;
         let found = wowlua_sema::meta::access_path(e, &|name| match self.lookup(name) {
             Some(Binding::Meta(k)) => Some(*k),

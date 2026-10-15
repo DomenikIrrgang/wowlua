@@ -233,7 +233,7 @@ fn args(a: &Args, out: &mut Out) {
 fn expr(e: &Expr, out: &mut Out) {
     match &e.kind {
         ExprKind::Number(n) => {
-            if n.raw.contains('_') || n.raw.to_ascii_lowercase().starts_with("0b") {
+            if crate::lexer::is_wowlua_numeral(&n.raw) {
                 out.push((Feature::NumericLiteral, e.span));
             }
         }

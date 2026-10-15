@@ -1070,11 +1070,17 @@ impl<'a> Lowerer<'a> {
 
     /// `obj` names an enum.
     pub(crate) fn is_enum_object(&self, obj: &Expr) -> bool {
+        if !self.scopes.seen().enums {
+            return false;
+        }
         matches!(&obj.kind, ExprKind::Name(n) if matches!(self.lookup(&n.text), Some(Binding::Enum { .. } | Binding::ImportedEnum(_))))
     }
 
     /// The value of an enum member, if `obj` names an enum that has it.
     pub(crate) fn enum_value(&self, obj: &Expr, key: &str) -> Option<Const> {
+        if !self.scopes.seen().enums {
+            return None;
+        }
         let ExprKind::Name(n) = &obj.kind else {
             return None;
         };
@@ -1092,6 +1098,9 @@ impl<'a> Lowerer<'a> {
         key_span: Span,
         pos: Pos,
     ) -> Option<ir::Expr> {
+        if !self.scopes.seen().enums {
+            return None;
+        }
         let ExprKind::Name(n) = &obj.kind else {
             return None;
         };
@@ -1114,6 +1123,9 @@ impl<'a> Lowerer<'a> {
 
     /// Instantiating an abstract class (E3002).
     pub(crate) fn check_instantiation(&mut self, callee: &Expr) {
+        if !self.scopes.seen().classes {
+            return;
+        }
         let target = match &callee.kind {
             ExprKind::Name(n) => Some(n),
             ExprKind::Field { obj, name } if name.text.as_ref() == "new" => match &obj.kind {
