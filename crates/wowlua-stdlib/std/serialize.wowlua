@@ -220,7 +220,8 @@ export function decode(s: string): (boolean, any)
         elseif tag == T_NEGINF then
             return -math.huge
         elseif tag == T_NAN then
-            return 0 / 0
+            -- Not `0 / 0`: WoW raises "Division by zero" (decision S38).
+            return math.huge - math.huge
         elseif tag == T_STRING then
             local n = varint()
             if pos + n - 1 > len then

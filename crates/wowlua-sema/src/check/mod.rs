@@ -853,6 +853,34 @@ mod tests {
         );
     }
 
+    /// A literal zero divisor is W2060 in every mode: WoW raises "Division
+    /// by zero" (decision S38). A run-time zero cannot be seen.
+    #[test]
+    fn division_by_literal_zero() {
+        for src in [
+            "local x = 1\nprint(x / 0)\n",
+            "local x = 1\nprint(x % 0.0)\n",
+            "const ZERO = 0\nlocal x = 1\nprint(x / ZERO)\n",
+            "local x = 1\nx /= 0\nprint(x)\n",
+        ] {
+            for mode in [Mode::Strict, Mode::Basic] {
+                let d = check_source(src, mode);
+                assert!(
+                    d.iter().any(|x| x.code == Some("W2060")),
+                    "{src}\n{:#?}",
+                    codes(&d)
+                );
+            }
+        }
+        let src = "local x, y = 1, 0\nprint(x / y, x / 2, x % 3, math.huge)\n";
+        let d = check_source(src, Mode::Strict);
+        assert!(
+            !d.iter().any(|x| x.code == Some("W2060")),
+            "{src}\n{:#?}",
+            codes(&d)
+        );
+    }
+
     /// A literal binds as its base type at the top level only: inside a
     /// table type the declared element type binds as it is (tables are
     /// invariant).

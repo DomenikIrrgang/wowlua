@@ -106,8 +106,9 @@ export function probe()
         ["math.normalize(5, 0, 10)"] = results(function() return M.normalize(5, 0, 10) end),
         ["math.remap(5, 0, 10, 0, 100)"] = results(function() return M.remap(5, 0, 10, 0, 100) end),
         ["math.saturate(1.5)"] = results(function() return M.saturate(1.5) end),
-        ["math.isnan(0/0)"] = results(function() return M.isnan(0 / 0) end),
-        ["math.isinf(1/0)"] = results(function() return M.isinf(1 / 0) end),
+        -- Not `0 / 0` and `1 / 0`: WoW raises "Division by zero".
+        ["math.isnan(huge - huge)"] = results(function() return M.isnan(math.huge - math.huge) end),
+        ["math.isinf(huge)"] = results(function() return M.isinf(math.huge) end),
         ["math.isfinite(1)"] = results(function() return M.isfinite(1) end),
         ['string.startswith("wowlua", "wow")'] = results(function() return S.startswith("wowlua", "wow") end),
         ['string.endswith("wowlua", "lua")'] = results(function() return S.endswith("wowlua", "lua") end),
@@ -145,6 +146,38 @@ export function probe()
         end),
         ["table.setn({}, 1)"] = results(function() return T.setn({}, 1) end),
     }
+    -- Arithmetic edge cases: what raises, and how to make inf and NaN.
+    local function value(x: number): number
+        return x
+    end
+    local zero, one = value(0), value(1)
+    const inf = math.huge
+    const arithmetic: { [string]: string } = {
+        ["1 / zero"] = results(function() return one / zero end),
+        ["0 / zero"] = results(function() return zero / zero end),
+        ["-1 / zero"] = results(function() return -one / zero end),
+        ["5 % zero"] = results(function() return 5 % zero end),
+        ["math.fmod(5, 0)"] = results(function() return math.fmod(5, zero) end),
+        ["math.huge"] = results(function() return inf end),
+        ["math.huge - math.huge"] = results(function() return inf - inf end),
+        ["math.huge * 0"] = results(function() return inf * zero end),
+        ["math.sqrt(-1)"] = results(function() return math.sqrt(-one) end),
+        ["math.log(-1)"] = results(function() return math.log(-one) end),
+        ["math.log(0)"] = results(function() return math.log(zero) end),
+        ["0 ^ -1"] = results(function() return zero ^ -one end),
+        ["math.pow(0, -1)"] = results(function() return math.pow(zero, -one) end),
+        ["1e308 * 10"] = results(function() return 1e308 * value(10) end),
+        ["nan ~= nan (huge - huge)"] = results(function()
+            const nan = inf - inf
+            return nan ~= nan
+        end),
+        ['tonumber("nan"), tonumber("inf")'] = results(function() return tonumber("nan"), tonumber("inf") end),
+        ['tostring(huge - huge), tostring(-huge)'] = results(function() return tostring(inf - inf), tostring(-inf) end),
+        ['string.format("%d", huge)'] = results(function() return string.format("%d", inf) end),
+        ["math.floor(huge - huge)"] = results(function() return math.floor(inf - inf) end),
+        ["1 % huge, -1 % huge"] = results(function() return one % inf, -one % inf end),
+    }
+    state().luaEnvArithmetic = arithmetic
     env.calls["additions"] = "see luaEnvAdditions"
     state().luaEnvAdditions = additions
     state().luaEnv = env

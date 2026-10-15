@@ -77,6 +77,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "W2057", summary: "`coroutine.yield` inside a function passed to `pcall`/`xpcall`/a C callback (cannot yield across that boundary in Lua 5.1)" },
     CodeInfo { code: "E2058", summary: "Name declared both as `declare event` and `declare message`" },
     CodeInfo { code: "E2059", summary: "Default value in a `declare event` / `declare message` parameter" },
+    CodeInfo { code: "W2060", summary: "Division or modulo by a literal zero: WoW raises \"Division by zero\" (any mode)" },
     CodeInfo { code: "E3001", summary: "`super(...)` missing, repeated, or after use of `self`" },
     CodeInfo { code: "E3002", summary: "Cannot instantiate an abstract class" },
     CodeInfo { code: "E3003", summary: "Abstract method not implemented" },

@@ -583,6 +583,15 @@ The global environment (`_G`) is modelled as a set of **declared globals**:
 - SavedVariables listed in the manifest (typed `any` unless declared),
 - names listed in the manifest under `check.globals`.
 
+**WoW's arithmetic** differs from Lua 5.1 elsewhere (probed on WoW: Forever,
+decision S38): `x / 0` and `x % 0` raise "Division by zero" at run time
+instead of giving inf or nan, `math.sqrt` and `math.log` raise on a negative
+argument, and `string.format("%d", x)` raises for an infinite `x`. Infinity is
+`math.huge`; NaN is `math.huge - math.huge` (or `math.fmod(x, 0)`). Division
+or modulo by a literal zero (or a `const` of it) is warning W2060 in every
+mode; a divisor that is zero only at run time cannot be seen and needs a
+guard (`if max > 0 then … end`).
+
 Reading an undeclared global is warning W1001 in basic mode and error E1001
 in strict mode. **Assigning** an undeclared global, including through
 `function foo()` in a module, is warning W1002 in basic mode and error E1002 in

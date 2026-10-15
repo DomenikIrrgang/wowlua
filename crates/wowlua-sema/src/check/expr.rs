@@ -720,6 +720,9 @@ impl Checker<'_> {
             _ => {
                 self.arith_operand(current, span);
                 self.arith_operand(value, span);
+                if matches!(op, CompoundOp::Div | CompoundOp::IDiv | CompoundOp::Mod) {
+                    self.zero_divisor(value, span);
+                }
                 Types::NUMBER
             }
         }
@@ -1370,8 +1373,26 @@ impl Checker<'_> {
                 self.check_secret(r, rhs.span);
                 self.arith_operand(l, lhs.span);
                 self.arith_operand(r, rhs.span);
+                if matches!(op, BinOp::Div | BinOp::IDiv | BinOp::Mod) {
+                    self.zero_divisor(r, rhs.span);
+                }
                 Types::NUMBER
             }
+        }
+    }
+
+    /// A divisor that is the literal `0` (or a `const` of it): WoW raises
+    /// "Division by zero" where Lua elsewhere gives inf or nan (W2060,
+    /// decision S38).
+    pub fn zero_divisor(&mut self, divisor: TypeId, span: Span) {
+        if let Ty::Num(bits) = self.env.types.get(divisor)
+            && f64::from_bits(*bits) == 0.0
+        {
+            self.report(
+                "W2060",
+                span,
+                "division by zero: WoW raises an error here, where Lua elsewhere gives inf or nan (use `math.huge` for infinity)",
+            );
         }
     }
 
