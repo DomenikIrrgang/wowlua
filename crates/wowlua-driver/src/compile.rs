@@ -161,6 +161,9 @@ pub struct Optimized {
     /// The passes that add locals, upvalues or expression size were left
     /// out, as they broke a Lua 5.1 limit.
     pub reduced: bool,
+    /// Lua 5.1 compiled `emitted.text` as it is, in a fresh state, while
+    /// choosing between the full and the reduced variant.
+    pub compiles: bool,
 }
 
 /// Optimizes, minifies and emits `chunk`. When that breaks a Lua 5.1 limit
@@ -194,6 +197,7 @@ pub fn optimize_and_emit(
             original,
             not_inlined,
             reduced,
+            compiles: false,
         }
     };
     let grows = optimizations.inline || optimizations.cache_globals || passes.dedupe_strings;
@@ -203,11 +207,17 @@ pub fn optimize_and_emit(
     let full = run(chunk.clone(), false);
     let compiles = |code: &[u8]| mlua::Lua::new().load(code).into_function().is_ok();
     if compiles(&full.emitted.text) {
-        return full;
+        return Optimized {
+            compiles: true,
+            ..full
+        };
     }
     let reduced = run(chunk, true);
     if compiles(&reduced.emitted.text) {
-        reduced
+        Optimized {
+            compiles: true,
+            ..reduced
+        }
     } else {
         full
     }
@@ -650,6 +660,9 @@ pub struct LibraryUnit {
 pub(crate) struct FlavorCache {
     /// By file index; one entry per context the file was compiled with.
     entries: Vec<Vec<CacheEntry>>,
+    /// The module IDs plain Lua requires by name, and `build.keep`: the
+    /// same in every flavor, found the first time a flavor asks.
+    required: std::cell::OnceCell<std::collections::HashSet<String>>,
 }
 
 struct CacheEntry {
@@ -773,9 +786,9 @@ pub fn compile_flavor(
             files,
             parsed,
             &analysis,
-            raw,
             layout.loaded_by,
-            &minify.keep,
+            &cache.required,
+            || required_by_name(files, raw, &minify.keep),
         )
     } else {
         std::collections::HashSet::new()
@@ -950,6 +963,7 @@ pub fn compile_flavor(
                 .with_path(&source.rel),
             );
         }
+        let compiles = optimized.compiles;
         let (emitted, original) = (optimized.emitted, optimized.original);
         // The output must parse (spec compiler §13.8, item 2).
         let reparsed = wowlua_syntax::parse(&emitted.text, file);
@@ -965,7 +979,7 @@ pub fn compile_flavor(
         }
         // Freed before luacheck's Lua state and the source map are built.
         drop(reparsed);
-        if let Some(d) = luacheck::check(db, file, &emitted.text) {
+        if let Some(d) = luacheck::check_unless_compiled(db, file, &emitted.text, compiles) {
             diagnostics.push(d);
         }
         let output = source.output_path();
@@ -1246,13 +1260,36 @@ fn rename_private_methods(
 /// whose top level only declares things, that no kept file imports, that
 /// no XML file loads, not in `build.keep` and not required by name from
 /// plain Lua (`__wowlua.require("id")`). Plain Lua files are never removed.
+/// The module IDs plain Lua requires by name (`require("id")`), and `keep`.
+fn required_by_name(
+    files: &[(Source, FileId)],
+    raw: &HashMap<String, Vec<u8>>,
+    keep: &[String],
+) -> std::collections::HashSet<String> {
+    static REQUIRED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r#"require\s*\(?\s*["']([^"']+)["']"#).expect("a valid pattern")
+    });
+    let mut by_name: std::collections::HashSet<String> = keep.iter().cloned().collect();
+    for (source, _) in files {
+        if source.kind == SourceKind::Lua
+            && let Some(text) = raw.get(&source.rel)
+        {
+            let text = String::from_utf8_lossy(text);
+            by_name.extend(REQUIRED.captures_iter(&text).map(|c| c[1].to_string()));
+        }
+    }
+    by_name
+}
+
+/// `required` holds [`required_by_name`] once a flavor needed it; it is
+/// found only when a module could be left out.
 fn dead_modules(
     files: &[(Source, FileId)],
     parsed: &Parsed,
     analysis: &wowlua_sema::Analysis,
-    raw: &HashMap<String, Vec<u8>>,
     loaded_by: &[Option<usize>],
-    keep: &[String],
+    required: &std::cell::OnceCell<std::collections::HashSet<String>>,
+    find_required: impl Fn() -> std::collections::HashSet<String>,
 ) -> std::collections::HashSet<usize> {
     use wowlua_syntax::ast;
     fn pure(e: &ast::Expr) -> bool {
@@ -1306,18 +1343,6 @@ fn dead_modules(
                 _ => false,
             }
     }
-    // Module IDs plain Lua requires by name.
-    let required =
-        regex::Regex::new(r#"require\s*\(?\s*["']([^"']+)["']"#).expect("a valid pattern");
-    let mut by_name: std::collections::HashSet<String> = keep.iter().cloned().collect();
-    for (source, _) in files {
-        if source.kind == SourceKind::Lua
-            && let Some(text) = raw.get(&source.rel)
-        {
-            let text = String::from_utf8_lossy(text);
-            by_name.extend(required.captures_iter(&text).map(|c| c[1].to_string()));
-        }
-    }
     let candidate = |i: usize| -> bool {
         let Some(info) = analysis.modules.get(i).and_then(Option::as_ref) else {
             return false;
@@ -1325,7 +1350,7 @@ fn dead_modules(
         files[i].0.kind == SourceKind::Wowlua
             && info.is_module
             && loaded_by.get(i).copied().flatten().is_none()
-            && !by_name.contains(&info.id)
+            && !required.get_or_init(&find_required).contains(&info.id)
             && parsed.parses[i]
                 .as_ref()
                 .is_some_and(|p| p.chunk.block.stmts.iter().all(declaration))
