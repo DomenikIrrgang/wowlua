@@ -22,9 +22,23 @@ pub struct Function {
     pub doc: Json,
 }
 
+/// A widget class: its bases (from the annotations), its `CreateFrame`
+/// type, and its own methods (indexes into [`Api::methods`]).
+#[derive(Default)]
+pub struct Class {
+    pub bases: Vec<String>,
+    pub widget: Option<String>,
+    pub methods: Vec<usize>,
+}
+
 pub struct Api {
     /// Global and namespaced functions; widget methods are not here.
     pub functions: Vec<Function>,
+    /// Widget methods (`name`: `Frame:Show`, `namespace`: the class).
+    pub methods: Vec<Function>,
+    pub classes: HashMap<String, Class>,
+    /// Every event the client knows.
+    pub events: HashSet<String>,
     /// `Enum.X` tables: name → (field, value).
     pub enums: Vec<(&'static str, Vec<(String, f64)>)>,
     /// `Constants.X` tables: name → (field, value).
@@ -73,10 +87,26 @@ fn parse(gz: &[u8]) -> Api {
     flate2::read::GzDecoder::new(gz)
         .read_to_end(&mut text)
         .expect("the embedded documentation decompresses");
-    let systems: Vec<Json> =
-        serde_json::from_slice(&text).expect("the embedded documentation parses");
+    let data: Json = serde_json::from_slice(&text).expect("the embedded documentation parses");
+    let systems: Vec<Json> = data
+        .get("systems")
+        .and_then(Json::as_array)
+        .cloned()
+        .unwrap_or_default();
     let mut api = Api {
         functions: Vec::new(),
+        methods: Vec::new(),
+        classes: HashMap::new(),
+        events: data
+            .get("events")
+            .and_then(Json::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(Json::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
         enums: Vec::new(),
         constants: Vec::new(),
         enum_names: HashSet::new(),
@@ -90,11 +120,48 @@ fn parse(gz: &[u8]) -> Api {
             .cloned()
             .unwrap_or_default()
     };
+    if let Some(classes) = data.get("classes").and_then(Json::as_object) {
+        for (name, c) in classes {
+            let class = api.classes.entry(name.clone()).or_default();
+            class.bases = c
+                .get("bases")
+                .and_then(Json::as_array)
+                .map(|b| {
+                    b.iter()
+                        .filter_map(Json::as_str)
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default();
+            class.widget = c.get("widget").and_then(Json::as_str).map(str::to_string);
+        }
+    }
     for system in &systems {
         let kind = str_of(system, "Type").unwrap_or_default();
         let sname = leak(&str_of(system, "Name").unwrap_or_default());
         let system_namespace = str_of(system, "Namespace").filter(|n| !n.is_empty());
         let system_env = str_of(system, "Environment");
+        if kind == "ScriptObject" {
+            let class = str_of(system, "Class").unwrap_or_else(|| sname.to_string());
+            for f in list(system, "Functions") {
+                let Some(short) = str_of(&f, "Name") else {
+                    continue;
+                };
+                api.methods.push(Function {
+                    name: leak(&format!("{class}:{short}")),
+                    short: leak(&short),
+                    namespace: Some(leak(&class)),
+                    system: sname,
+                    doc: f,
+                });
+                let index = api.methods.len() - 1;
+                api.classes
+                    .entry(class.clone())
+                    .or_default()
+                    .methods
+                    .push(index);
+            }
+        }
         if kind != "ScriptObject" {
             for f in list(system, "Functions") {
                 let Some(short) = str_of(&f, "Name") else {

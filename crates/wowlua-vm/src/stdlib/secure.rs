@@ -227,6 +227,25 @@ fn scrub(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 impl Vm {
+    /// Calls `f` as the client's C code calls a script or a callback: from a
+    /// secure execution, errors going to the error handler
+    /// (`geterrorhandler()`), the taint state restored afterwards. The
+    /// results, or `None` after an error.
+    pub fn call_from_engine(&mut self, f: Value, args: &[Value]) -> Option<Vec<Value>> {
+        let saved = self.taint().saved();
+        self.taint_mut().stack = Taint::SECURE;
+        let handler = self.error_handler_proxy();
+        let outer = self.errfunc.replace(handler);
+        let args: Vec<Slot> = args.iter().map(|&v| Slot::secure(v)).collect();
+        let r = self.call_slots(Slot::secure(f), &args);
+        self.errfunc = outer;
+        self.taint_mut().restore(saved);
+        r.ok()
+            .map(|results| results.into_iter().map(|s| s.v).collect())
+    }
+}
+
+impl Vm {
     /// The function errors reach the error handler through (elune's
     /// `f_errorhandler`): non-string errors become "UNKNOWN ERROR", and a
     /// `*:` source names the frame of the function that failed.

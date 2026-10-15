@@ -22,7 +22,21 @@ pub fn read(files: &[(String, String)]) -> Result<Decls, String> {
 /// the sandbox does not know become null.
 pub fn read_json(files: &[(String, String)]) -> Result<serde_json::Value, String> {
     let (_lua, docs) = load(files)?;
-    to_json(&Value::Table(docs))
+    let mut json = to_json(&Value::Table(docs))?;
+    // Each widget system names the class its functions are methods of.
+    if let Some(systems) = json.as_array_mut() {
+        for s in systems {
+            let is_widget = s.get("Type").and_then(|t| t.as_str()) == Some("ScriptObject");
+            let name = s
+                .get("Name")
+                .and_then(|n| n.as_str())
+                .map(script_object_class);
+            if let (true, Some(class), Some(obj)) = (is_widget, name, s.as_object_mut()) {
+                obj.insert("Class".into(), serde_json::Value::String(class));
+            }
+        }
+    }
+    Ok(json)
 }
 
 fn to_json(v: &Value) -> Result<serde_json::Value, String> {
