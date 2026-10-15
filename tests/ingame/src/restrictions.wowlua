@@ -81,7 +81,7 @@ export function restrictions()
     end
     table.sort(active)
     const label = #active > 0 and table.concat(active, "+") or "none"
-    local snapshot: { [string]: any } = {
+    const snapshot: { [string]: any } = {
         client = `{(GetBuildInfo())}`,
         inCombatLockdown = InCombatLockdown(),
         affectingCombat = results(UnitAffectingCombat, "player"),

@@ -746,6 +746,14 @@ mod tests {
             "local function f(b: boolean): number\n    local x: number\n    if b then x = 1 end\n    return x\nend\nprint(f(true))\n",
             "E2001",
         );
+        // An annotated `const` table takes the fields its type declares
+        // or its indexer allows, as with `local`.
+        strict_ok(
+            "local function f(): any\n    const t: { [string]: any } = { x = 1 }\n    t.y = 2\n    return t\nend\nprint(f())\n",
+        );
+        strict_ok(
+            "type R = { a: number, b?: string }\nlocal function f(): R\n    const r: R = { a = 1 }\n    print(r)\n    r.b = \"x\"\n    return r\nend\nprint(f())\n",
+        );
         // Forward declarations with a type are usable in closures.
         strict_ok(
             "local update: () -> ()\nlocal function tick() update() end\nupdate = function() end\ntick()\n",

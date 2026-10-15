@@ -579,7 +579,8 @@ impl Checker<'_> {
             },
             ExprKind::Field { obj, name } => {
                 let o = self.infer(obj);
-                self.assign_field(o, &name.text, name.span, value);
+                let declared = self.declared_of(obj);
+                self.assign_field(o, &name.text, name.span, value, declared);
                 // The field holds the assigned value now: its declared type,
                 // narrowed by whether the value can be `nil`.
                 if let Some((root, path)) = self.field_path(t) {
@@ -600,7 +601,8 @@ impl Checker<'_> {
                 let k = self.infer(key);
                 if let ExprKind::String(s) = &key.kind {
                     let name = String::from_utf8_lossy(&s.value).into_owned();
-                    self.assign_field(o, &name, key.span, value);
+                    let declared = self.declared_of(obj);
+                    self.assign_field(o, &name, key.span, value, declared);
                     return;
                 }
                 match self.env.types.get(o).clone() {
@@ -622,7 +624,33 @@ impl Checker<'_> {
         }
     }
 
-    fn assign_field(&mut self, o: TypeId, name: &str, span: Span, value: TypeId) {
+    /// The annotated type of the variable `e` names, if it is one.
+    fn declared_of(&self, e: &Expr) -> Option<TypeId> {
+        match &e.kind {
+            ExprKind::Name(n) => self
+                .lookup_var(&n.text)
+                .and_then(|v| self.vars[v.0 as usize].declared),
+            _ => None,
+        }
+    }
+
+    /// `o.name = value`; `declared` is the annotated type of the variable
+    /// `o` is read from, which the assignment checks against: an annotated
+    /// `const` table takes the fields its type declares or its indexer
+    /// allows, though its value is a sealed literal.
+    fn assign_field(
+        &mut self,
+        o: TypeId,
+        name: &str,
+        span: Span,
+        value: TypeId,
+        declared: Option<TypeId>,
+    ) {
+        if let Some(d) = declared
+            && d != o
+        {
+            return self.assign_field(d, name, span, value, None);
+        }
         let members = self.env.types.members(o);
         for m in members {
             match self.env.types.get(m).clone() {

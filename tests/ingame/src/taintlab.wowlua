@@ -117,7 +117,7 @@ local function start(n: number)
         return
     end
     current = n
-    local r: LabResult = { name = e.name, applied = false, clicked = false, blocked = {} }
+    const r: LabResult = { name = e.name, applied = false, clicked = false, blocked = {} }
     results()[n] = r
     -- Listen before tainting anything.
     const frame = CreateFrame("Frame")
