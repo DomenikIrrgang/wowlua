@@ -416,12 +416,15 @@ The test framework runs on wowlua's own emulation of the WoW client
   documentation (existence, protection, secrets), the widget system and the
   behaviour tests need, "not mocked" errors for the rest; Blizzard's FrameXML
   as secure code, opt-in.
-  In progress (2026-10-16): the engine crate with the documentation's API
-  and argument checks (556 of 563 recorded checks), frames, events, timers,
-  units and restrictions, protected actions; the M8 mock's stdlib tests run
-  on it; Blizzard's UI code loads (191 addons on camelot), with which all
-  819 recorded client cases pass. The probe battery (`/stdtest engine`)
-  waits for an in-game run.
+  Built 2026-10-16, waiting for review and the in-game probe run: the engine
+  crate with the documentation's API and argument checks (556 of 563
+  recorded checks), camelot's undocumented C functions, frames, events,
+  timers, units, auras, restrictions, protected actions, spells and items
+  from the tests; the M8 mock's stdlib tests run on its frames, events and
+  timers; Blizzard's UI code loads (191 addons on camelot), with which all
+  819 recorded client cases and all eight recorded taint experiments give
+  the client's results. The probe battery (`/stdtest engine`) waits for an
+  in-game run.
 - S4 **Test framework**: `wowlua test`, `wowlua:test`, `wowlua:mock` (spies,
   stubs, fakes, scenario controls, taint assertions), per flavor, in parallel.
 - S5 **Coverage and reports**: lines, statements, branches, functions and
