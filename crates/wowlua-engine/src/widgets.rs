@@ -339,19 +339,17 @@ pub fn has_script(e: &Engine, class: &str, script: &str) -> bool {
     if script == "OnLoad" || script == "OnUpdate" {
         return true;
     }
-    for c in lineage(e, class) {
-        if let Some(list) = e.api.aliases.get(&format!("Script{c}")) {
-            if list
-                .split('|')
-                .any(|part| part.trim().trim_matches('"') == script)
-            {
-                return true;
-            }
-            // `ScriptButton = ScriptFrame | …`: the named bases are in the
-            // lineage too.
-        }
-    }
-    false
+    // `ScriptButton = ScriptFrame | …`: the named bases are in the lineage
+    // too.
+    lineage(e, class).iter().any(|c| {
+        e.api
+            .aliases
+            .get(&format!("Script{c}"))
+            .is_some_and(|list| {
+                list.split('|')
+                    .any(|part| part.trim().trim_matches('"') == script)
+            })
+    })
 }
 
 /// Runs a widget's script and its hooks, as the client does: each from a
