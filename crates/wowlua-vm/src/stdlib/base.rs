@@ -33,6 +33,8 @@ pub fn open(vm: &mut Vm) {
         ("getfenv", getfenv),
         ("setfenv", setfenv),
         ("newproxy", newproxy),
+        ("collectgarbage", collectgarbage),
+        ("gcinfo", gcinfo),
     ];
     for (name, f) in funcs {
         let v = vm.native(name, *f);
@@ -436,4 +438,53 @@ fn newproxy(vm: &mut Vm, c: NativeCall) -> Ret {
         data: Box::new(()),
     });
     Ok(vec![Value::Userdata(u)])
+}
+
+fn collectgarbage(vm: &mut Vm, c: NativeCall) -> Ret {
+    const OPTS: [&str; 7] = [
+        "stop",
+        "restart",
+        "collect",
+        "count",
+        "step",
+        "setpause",
+        "setstepmul",
+    ];
+    let opt = match vm.opt_str(&c, 1)? {
+        Some(s) => String::from_utf8_lossy(vm.heap.str_bytes(s)).into_owned(),
+        None => "collect".to_string(),
+    };
+    let Some(o) = OPTS.iter().position(|&x| x == opt) else {
+        return Err(vm.arg_error(1, &format!("invalid option '{opt}'")));
+    };
+    let ex = vm.opt_int(&c, 2, 0)?;
+    Ok(vec![match OPTS[o] {
+        "stop" => {
+            vm.gc_stopped = true;
+            Value::Num(0.0)
+        }
+        "restart" => {
+            vm.gc_stopped = false;
+            Value::Num(0.0)
+        }
+        "collect" => {
+            vm.collect();
+            Value::Num(0.0)
+        }
+        "count" => Value::Num(vm.heap.estimate_bytes() as f64 / 1024.0),
+        "step" => {
+            vm.collect();
+            Value::Bool(true)
+        }
+        "setpause" => {
+            let old = vm.gc_pause;
+            vm.gc_pause = ex.max(0) as usize;
+            Value::Num(old as f64)
+        }
+        _ => Value::Num(200.0),
+    }])
+}
+
+fn gcinfo(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num((vm.heap.estimate_bytes() / 1024) as f64)])
 }

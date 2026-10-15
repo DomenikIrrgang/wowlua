@@ -2,8 +2,11 @@
 //! (Lua's `luaL_check*`, with the same messages).
 
 pub mod base;
+pub mod coroutine;
+pub mod math;
 pub mod pattern;
 pub mod string;
+pub mod table;
 
 use crate::error::LuaError;
 use crate::function::{NativeCall, NativeFn};
@@ -17,6 +20,9 @@ pub type Ret = Result<Vec<Value>, LuaError>;
 pub fn open(vm: &mut Vm) {
     base::open(vm);
     string::open(vm);
+    table::open(vm);
+    math::open(vm);
+    coroutine::open(vm);
 }
 
 impl NativeCall {

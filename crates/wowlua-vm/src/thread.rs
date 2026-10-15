@@ -51,7 +51,7 @@ pub struct Thread {
     pub state: ThreadState,
     /// The coroutine's function (before the first resume).
     pub start: Option<FuncRef>,
-    /// Native-call depth when it yielded (always 0: yields cannot cross
-    /// native calls).
-    pub resumed_from: Option<crate::heap::ThreadRef>,
+    /// Where the call to `coroutine.yield` was: its slot and the results
+    /// it wants (the values of the next resume go there).
+    pub yield_site: Option<(usize, i32)>,
 }

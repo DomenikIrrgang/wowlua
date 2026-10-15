@@ -39,6 +39,7 @@ impl Vm {
 
     /// A full collection (`collectgarbage("collect")`).
     pub fn collect(&mut self) {
+        self.gc_cycles += 1;
         let mut m = Marker {
             gray: Vec::new(),
             weak: Vec::new(),
@@ -106,6 +107,11 @@ impl Vm {
         for c in &self.cstack {
             m.gray.push(Gray::Value(Value::Func(c.func)));
         }
+        for t in &self.resume_chain {
+            m.gray.push(Gray::Value(Value::Thread(*t)));
+        }
+        m.gray
+            .extend(self.yield_values.iter().map(|v| Gray::Value(*v)));
         // The running thread's state lives in the VM, not in its object.
         let top = self.live_top();
         for slot in &mut self.cur.stack[top..] {

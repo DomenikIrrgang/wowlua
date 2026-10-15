@@ -101,6 +101,18 @@ pub struct Vm {
     pub(crate) gc_pause: usize,
     /// Userdata whose `__gc` already ran.
     pub(crate) finalized: std::collections::HashSet<crate::heap::UdRef>,
+    /// Nested `execute` runs (for the yield boundary).
+    pub(crate) run_depth: usize,
+    /// The run a resumed coroutine's frames execute in.
+    pub(crate) co_base: usize,
+    /// The yield in progress: its call site and values.
+    pub(crate) yield_site: Option<(usize, i32)>,
+    pub(crate) yield_values: Vec<Value>,
+    /// Threads that resumed the running one (kept alive).
+    pub(crate) resume_chain: Vec<ThreadRef>,
+    pub(crate) rand_state: u32,
+    /// Collections run so far.
+    pub gc_cycles: usize,
 }
 
 /// Where `print` writes.
@@ -123,7 +135,7 @@ impl Vm {
             status: Status::Running,
             state: ThreadState::default(),
             start: None,
-            resumed_from: None,
+            yield_site: None,
         });
         let mut vm = Vm {
             heap,
@@ -147,6 +159,13 @@ impl Vm {
             gc_stopped: false,
             gc_pause: 200,
             finalized: std::collections::HashSet::new(),
+            run_depth: 0,
+            co_base: 0,
+            yield_site: None,
+            yield_values: Vec::new(),
+            resume_chain: Vec::new(),
+            rand_state: 1,
+            gc_cycles: 0,
         };
         vm.cur.stack.resize(64, Value::Nil);
         crate::stdlib::open(&mut vm);
@@ -419,7 +438,16 @@ impl Vm {
                 });
                 let r = native(self, NativeCall { args, upvals });
                 self.cstack.pop();
-                let results = r?;
+                let results = match r {
+                    Ok(results) => results,
+                    Err(e) => {
+                        if e.yielded {
+                            // The results of this call come with the resume.
+                            self.yield_site = Some((func, nresults));
+                        }
+                        return Err(e);
+                    }
+                };
                 self.place_results(func, &results, nresults);
                 Ok(false)
             }
@@ -527,6 +555,13 @@ impl Vm {
 
     /// Runs frames until the entry frame returns.
     pub(crate) fn execute(&mut self) -> Result<(), LuaError> {
+        self.run_depth += 1;
+        let r = self.run();
+        self.run_depth -= 1;
+        r
+    }
+
+    fn run(&mut self) -> Result<(), LuaError> {
         'frame: loop {
             let fi = self.cur.frames.len() - 1;
             let (closure, proto, base) = {
@@ -699,11 +734,12 @@ impl Vm {
                         let cur_func = self.cur.frames[fi].func;
                         let nresults = self.cur.frames[fi].nresults;
                         let entry = self.cur.frames[fi].entry;
-                        // Move the callee and arguments down to this frame.
-                        for i in 0..=nargs {
-                            self.cur.stack[cur_func + i] = self.cur.stack[func + i];
-                        }
-                        if matches!(self.callee_kind(cur_func), Some(true)) {
+                        if matches!(self.callee_kind(func), Some(true)) {
+                            // Move the callee and arguments down over this
+                            // frame and replace it.
+                            for i in 0..=nargs {
+                                self.cur.stack[cur_func + i] = self.cur.stack[func + i];
+                            }
                             self.cur.frames.pop();
                             self.precall(cur_func, nargs, nresults, true)?;
                             let f = self.cur.frames.last_mut().expect("frame");

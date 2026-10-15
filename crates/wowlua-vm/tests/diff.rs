@@ -378,3 +378,116 @@ fn string_patterns() {
     );
     same("print(('x'):rep(3, ','), ('abc'):find('b', -1), ('abc'):find('b', -2))");
 }
+
+#[test]
+fn table_library() {
+    same(
+        "local t = {1, 2, 3} table.insert(t, 4) table.insert(t, 1, 0) print(table.concat(t, ','))",
+    );
+    same(
+        "local t = {1, 2, 3} print(table.remove(t), table.remove(t, 1), table.concat(t, ',')) print(table.remove({}))",
+    );
+    same(
+        "print(table.concat({1, 2, 'x', 4.5}, '-'), table.concat({}, 'x'), table.concat({1, 2, 3}, ', ', 2, 3))",
+    );
+    same(
+        "print(pcall(table.concat, {1, {}, 3})) print(pcall(table.insert, {}, 1, 2, 3)) print(pcall(table.insert))",
+    );
+    same("print(table.getn({1, 2, 3}), table.maxn({1, 2, [10] = 3, [2.5] = 4}))");
+    same(
+        "table.foreachi({'a', 'b'}, print) print(table.foreach({x = 1}, function(k, v) return k .. v end))",
+    );
+    same("local t = {5, 2, 8, 1, 9, 3, 7, 4, 6, 0} table.sort(t) print(table.concat(t, ' '))");
+    same(
+        "local t = {5, 2, 8, 1, 9, 3, 7, 4, 6, 0} table.sort(t, function(a, b) return a > b end) print(table.concat(t, ' '))",
+    );
+    same(
+        "local t = {'pear', 'apple', 'fig', 'banana', 'kiwi'} table.sort(t) print(table.concat(t, ' '))",
+    );
+    same(
+        "local calls = 0 local t = {} for i = 1, 50 do t[i] = (i * 37) % 23 end table.sort(t, function(a, b) calls = calls + 1 return a < b end) print(calls, table.concat(t, ','))",
+    );
+    same(
+        "local t = {{k = 2, n = 'a'}, {k = 1, n = 'b'}, {k = 2, n = 'c'}, {k = 1, n = 'd'}, {k = 2, n = 'e'}} table.sort(t, function(a, b) return a.k < b.k end) local o = {} for i, v in ipairs(t) do o[i] = v.n end print(table.concat(o))",
+    );
+    same("print(pcall(table.sort, {3, 1, 2}, function(a, b) return true end))");
+    same("print(pcall(table.sort, {1, 'x', 2}))");
+    same("print(pcall(table.setn, {}, 1))");
+}
+
+#[test]
+fn math_library() {
+    same(
+        "print(math.floor(3.7), math.ceil(3.2), math.floor(-3.5), math.abs(-2), math.max(1, 5, 3), math.min(4, -1, 2))",
+    );
+    same(
+        "print(math.sqrt(16), math.pi, math.huge, -math.huge, math.fmod(7, 3), math.fmod(-7, 3), math.modf(3.7), math.modf(-3.7))",
+    );
+    same(
+        "print(math.deg(math.pi), math.rad(180), math.exp(0), math.log(1), math.log10(1000), math.pow(2, 10))",
+    );
+    same(
+        "print(math.frexp(8), math.frexp(0.75), math.frexp(-3), math.ldexp(0.5, 4), math.frexp(0))",
+    );
+    same(
+        "print(math.sin(0), math.cos(0), math.atan2(1, 1), math.floor(math.tan(math.pi / 4) * 1e10 + 0.5))",
+    );
+    same("print(pcall(math.floor, 'x')) print(pcall(math.max)) print(math.floor('3.9'))");
+    same(
+        "print(pcall(math.random, 0)) print(pcall(math.random, 3, 1)) print(pcall(math.random, 1, 2, 3))",
+    );
+    same(
+        "for i = 1, 20 do local r = math.random(5) assert(r >= 1 and r <= 5 and r == math.floor(r)) end local f = math.random() assert(f >= 0 and f < 1) print('ok')",
+    );
+}
+
+#[test]
+fn coroutines() {
+    same(
+        "local co = coroutine.create(function(a, b) print('start', a, b) local c = coroutine.yield(a + b) print('got', c) local d, e = coroutine.yield(c * 2) return d + e end) print(coroutine.resume(co, 1, 2)) print(coroutine.resume(co, 10)) print(coroutine.resume(co, 3, 4)) print(coroutine.resume(co)) print(coroutine.status(co))",
+    );
+    same(
+        "local gen = coroutine.wrap(function() for i = 1, 3 do coroutine.yield(i) end end) print(gen(), gen(), gen())",
+    );
+    same(
+        "local co = coroutine.create(function() error('inside') end) print(coroutine.resume(co)) print(coroutine.status(co))",
+    );
+    same(
+        "local co = coroutine.create(function() error({}) end) local ok, e = coroutine.resume(co) print(ok, type(e))",
+    );
+    same(
+        "local co co = coroutine.create(function() print(coroutine.status(co), coroutine.running() == co) end) print(coroutine.status(co)) coroutine.resume(co) print(coroutine.status(co), coroutine.running())",
+    );
+    same("print(pcall(coroutine.yield, 1))");
+    same(
+        "local co = coroutine.create(function() pcall(coroutine.yield, 1) end) print(coroutine.resume(co))",
+    );
+    same(
+        "local co = coroutine.create(function() local t = setmetatable({}, {__index = function() return coroutine.yield('mm') end}) return t.x end) print(coroutine.resume(co))",
+    );
+    same(
+        "local co = coroutine.create(function() for k in function() return coroutine.yield('it') end do end end) print(coroutine.resume(co))",
+    );
+    same("print(pcall(coroutine.create, print)) print(pcall(coroutine.resume, 1))");
+    same("local f = coroutine.wrap(function() error('wrapped') end) print(pcall(f))");
+    same("local f = coroutine.wrap(function() return 1 end) f() print(pcall(f))");
+    same(
+        "local co = coroutine.create(function(...) return select('#', ...), ... end) print(coroutine.resume(co, nil, nil))",
+    );
+    same(
+        "local function tail() return coroutine.yield('t') end local co = coroutine.create(function() local v = tail() return 'after ' .. v end) print(coroutine.resume(co)) print(coroutine.resume(co, 'x'))",
+    );
+    same(
+        "local inner = coroutine.create(function() coroutine.yield('in1') return 'in-done' end) local outer = coroutine.create(function() print(coroutine.resume(inner)) coroutine.yield('out1') print(coroutine.resume(inner)) print(coroutine.status(inner)) end) print(coroutine.resume(outer)) print(coroutine.resume(outer))",
+    );
+    same(
+        "local co = coroutine.create(function() local x = 0 local function inc() x = x + 1 return x end coroutine.yield(inc) return x end) local _, inc = coroutine.resume(co) inc() inc() print(coroutine.resume(co))",
+    );
+}
+
+#[test]
+fn garbage_collection_api() {
+    same(
+        "print(type(collectgarbage('count')), collectgarbage(), type(gcinfo())) print(pcall(collectgarbage, 'bogus'))",
+    );
+}

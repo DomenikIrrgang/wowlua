@@ -70,3 +70,44 @@ fn closures_keep_their_upvalues() {
     run(&mut vm, "print(getter())");
     assert_eq!(out.borrow().trim(), "42");
 }
+
+#[test]
+fn finalizers_run_once() {
+    let mut vm = Vm::new();
+    let out = Rc::new(RefCell::new(String::new()));
+    let sink = out.clone();
+    vm.set_output(move |b| sink.borrow_mut().push_str(&String::from_utf8_lossy(b)));
+    run(
+        &mut vm,
+        "finalized = 0 do local p = newproxy(true) getmetatable(p).__gc = function() finalized = finalized + 1 end end",
+    );
+    vm.collect();
+    vm.collect();
+    run(&mut vm, "print(finalized)");
+    assert_eq!(out.borrow().trim(), "1");
+}
+
+#[test]
+fn automatic_collection_keeps_running_state() {
+    let mut vm = Vm::new();
+    let out = Rc::new(RefCell::new(String::new()));
+    let sink = out.clone();
+    vm.set_output(move |b| sink.borrow_mut().push_str(&String::from_utf8_lossy(b)));
+    // Enough garbage to trigger several collections at safe points, while
+    // a coroutine is suspended with locals and closures depend on upvalues.
+    run(
+        &mut vm,
+        "local co = coroutine.create(function(n) local acc = {} for i = 1, n do acc[i] = {i} local got = coroutine.yield(#acc) end return acc end) \
+         local counter = 0 local function bump() counter = counter + 1 return counter end \
+         coroutine.resume(co, 50) \
+         for round = 1, 49 do \
+           for j = 1, 2000 do local garbage = {j, tostring(j) .. 'g', function() return j end} end \
+           coroutine.resume(co, round) bump() \
+         end \
+         local ok, acc = coroutine.resume(co) \
+         local sum = 0 for _, v in ipairs(acc) do sum = sum + v[1] end \
+         print(ok, #acc, sum, counter, collectgarbage('count') > 0)",
+    );
+    assert_eq!(out.borrow().trim(), "true\t50\t1275\t49\ttrue");
+    assert!(vm.gc_cycles >= 2, "collections: {}", vm.gc_cycles);
+}

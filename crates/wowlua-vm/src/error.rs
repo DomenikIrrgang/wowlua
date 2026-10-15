@@ -7,6 +7,9 @@ use crate::value::Value;
 pub struct LuaError {
     pub value: Value,
     pub traceback: String,
+    /// Not an error: `coroutine.yield` unwinding to its `resume` (the
+    /// values wait in the VM).
+    pub yielded: bool,
 }
 
 impl LuaError {
@@ -14,6 +17,15 @@ impl LuaError {
         LuaError {
             value,
             traceback: String::new(),
+            yielded: false,
+        }
+    }
+
+    pub(crate) fn yield_() -> Self {
+        LuaError {
+            value: Value::Nil,
+            traceback: String::new(),
+            yielded: true,
         }
     }
 }
