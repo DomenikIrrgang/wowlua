@@ -304,7 +304,11 @@ The engine's loader (`wowlua_engine::ui::load`) takes the flavor's
   global (Lua or C function) or table field is tainted, and the protected
   call raises `ADDON_ACTION_FORBIDDEN` naming the addon; `hooksecurefunc`
   leaves the hooked variable secure and the click allowed; `setfenv` taints
-  the function itself (its variable stays secure, the click is forbidden). elune's taint cases
+  the function itself (its variable stays secure, the click is forbidden).
+  With camelot's UI code loaded, the engine reproduces all eight: the
+  action button's click reaches `UseAction` through Blizzard's own
+  `SecureTemplates.lua` and is forbidden exactly where the client forbade it
+  (`wowlua-engine`'s `tests/taint.rs`). elune's taint cases
   (vendored in `crates/wowlua-vm/tests/elune/`) also pass on the VM, but count
   only where the experiments confirm them.
 - **The client's behaviour.** Every WoW-specific rule (§17.3 to §17.5) has a

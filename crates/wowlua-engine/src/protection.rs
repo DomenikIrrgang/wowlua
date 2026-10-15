@@ -86,6 +86,12 @@ pub fn tainted(vm: &Vm) -> bool {
     !vm.taint().stack.is_secure()
 }
 
+/// Whether the function calling the engine is Blizzard's (secure) code,
+/// tainted execution or not: its gaps get empty values, not errors.
+pub fn blizzard_caller(vm: &Vm) -> bool {
+    vm.caller_is_secure(1)
+}
+
 /// Whether a global function is protected.
 pub fn is_protected(name: &str, doc: Option<&serde_json::Value>) -> bool {
     PROTECTED.contains(&name)
@@ -143,7 +149,8 @@ pub fn protected_global(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     match engine(vm).behaviour(&name) {
         Some(b) => b(vm, c),
-        None => Err(vm.error(&format!("{name} is not mocked"))),
+        // Secure code's protected call without behaviour does nothing.
+        None => Ok(vec![]),
     }
 }
 

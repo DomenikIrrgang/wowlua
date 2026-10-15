@@ -324,6 +324,8 @@ pub fn functions() -> Vec<(&'static str, NativeFn)> {
         ("GetFontStringMetatable", font_string_metatable),
         ("GetEditBoxMetatable", edit_box_metatable),
         ("IsGMClient", falsy),
+        // No modifier is held (the test controls none yet).
+        ("IsModifiedClick", falsy),
         ("import", import),
         ("addframetext", nothing),
         ("Mixin", mixin),

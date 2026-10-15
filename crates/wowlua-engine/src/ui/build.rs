@@ -534,7 +534,7 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
                     Some("nil") => Value::Nil,
                     _ => vm.str(raw),
                 };
-                let k = vm.heap.intern(name.as_bytes());
+                let k = vm.heap.intern(name.to_lowercase().as_bytes());
                 vm.heap.table_mut(attributes).set_str(k, v);
             }
         }

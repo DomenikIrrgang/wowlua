@@ -317,6 +317,31 @@ local function behaviours(): { [string]: string }
             local p, rel, rp, x, y = g:GetPoint(1)
             return p, rel == UIParent, rp, x, y
         end),
+        ["GetAttribute case"] = results(function()
+            const g = CreateFrame("Frame")
+            g:SetAttribute("MyKey", 1)
+            return g:GetAttribute("mykey"), g:GetAttribute("MYKEY"), g:GetAttribute("MyKey")
+        end),
+        ["GetAttribute(prefix, name, suffix) order"] = results(function()
+            const g = CreateFrame("Frame")
+            const out: any[] = {}
+            for _, keys in ipairs({
+                { "alt-type1", "*type1", "alt-type*", "*type*", "type" },
+                { "*type1", "alt-type*", "*type*", "type" },
+                { "alt-type*", "*type*", "type" },
+                { "*type*", "type" },
+                { "type" },
+            }) do
+                for _, k in ipairs(keys) do
+                    g:SetAttribute(k, k)
+                end
+                out[#out + 1] = (g :: any):GetAttribute("alt-", "type", "1")
+                for _, k in ipairs(keys) do
+                    g:SetAttribute(k, nil)
+                end
+            end
+            return unpack(out)
+        end),
         ["Show while shown runs OnShow"] = (function()
             local n = 0
             const g = CreateFrame("Frame", nil, UIParent)

@@ -80,3 +80,11 @@ result_large_err = "allow"
 lto = "thin"
 codegen-units = 1
 strip = true
+
+# The VM and the engine run Blizzard's UI code in tests: optimized even in
+# debug builds, so those tests take seconds, not minutes.
+[profile.dev.package.wowlua-vm]
+opt-level = 2
+
+[profile.dev.package.wowlua-engine]
+opt-level = 2

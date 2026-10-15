@@ -475,7 +475,7 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
         return Ok(vec![]);
     }
     // Blizzard's code gets empty values; the addon's code an error.
-    if !crate::protection::tainted(vm) {
+    if crate::protection::blizzard_caller(vm) {
         engine_mut(vm).defaulted.insert(name);
         let api = engine(vm).api;
         return Ok(crate::defaults(vm, api, &f.doc));
@@ -532,7 +532,7 @@ fn script_name(vm: &mut Vm, id: WidgetId, c: &NativeCall, op: &str) -> Result<St
     let s = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
     let class = engine(vm).world.widgets[id.0].class.clone();
     // Blizzard's code knows the client's scripts better than the lists.
-    if !has_script(engine(vm), &class, &s) && crate::protection::tainted(vm) {
+    if !has_script(engine(vm), &class, &s) && !crate::protection::blizzard_caller(vm) {
         return Err(vm.error(&format!(
             "{class}:{op}(): {class} doesn't have a \"{s}\" script"
         )));
@@ -590,7 +590,7 @@ fn event_name(vm: &mut Vm, c: &NativeCall, op: &str) -> Result<String, LuaError>
     let e = vm.check_str(c, 2)?;
     let e = String::from_utf8_lossy(vm.str_bytes(e)).into_owned();
     // Blizzard's code knows the client's events better than the lists.
-    if !engine(vm).api.events.contains(&e) && crate::protection::tainted(vm) {
+    if !engine(vm).api.events.contains(&e) && !crate::protection::blizzard_caller(vm) {
         let class = widget_of(vm, c.arg(1))
             .map(|id| engine(vm).world.widgets[id.0].class.clone())
             .unwrap_or_default();
@@ -1147,21 +1147,53 @@ fn set_formatted_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 
 // --------------------------------------------------------- attributes
 
+/// Attribute names are case-insensitive (unverified): kept lower-case.
 fn set_attribute(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let key = vm.check_str(&c, 2)?;
-    let attributes = engine(vm).world.widgets[id.0].attributes;
-    let v = c.arg(3);
-    vm.heap.table_mut(attributes).set_str(key, v);
     let lower = String::from_utf8_lossy(vm.str_bytes(key)).to_lowercase();
     let name = vm.str(&lower);
+    let attributes = engine(vm).world.widgets[id.0].attributes;
+    let v = c.arg(3);
+    let _ = vm.heap.table_mut(attributes).set(name, v);
     run_script(vm, id, "OnAttributeChanged", &[name, v]);
     Ok(vec![])
 }
 
-fn get_attribute(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
-    let key = vm.check_str(&c, 2)?;
+fn attribute(vm: &mut Vm, id: WidgetId, name: &str) -> Value {
     let attributes = engine(vm).world.widgets[id.0].attributes;
-    Ok(vec![vm.heap.table(attributes).get_str(key)])
+    let key = vm.str(&name.to_lowercase());
+    vm.heap.table(attributes).get(key)
+}
+
+/// `GetAttribute(name)`, or `GetAttribute(prefix, name, suffix)`: the first
+/// set of `prefix..name..suffix`, `*..name..suffix`, `prefix..name..*`,
+/// `*..name..*` and `name` (unverified order).
+fn get_attribute(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let first = vm.check_str(&c, 2)?;
+    let first = String::from_utf8_lossy(vm.str_bytes(first)).into_owned();
+    if c.len() < 4 {
+        return Ok(vec![attribute(vm, id, &first)]);
+    }
+    let name = vm.check_str(&c, 3)?;
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    let suffix = vm.opt_str(&c, 4)?;
+    let suffix = suffix
+        .map(|s| String::from_utf8_lossy(vm.str_bytes(s)).into_owned())
+        .unwrap_or_default();
+    let prefix = first;
+    for key in [
+        format!("{prefix}{name}{suffix}"),
+        format!("*{name}{suffix}"),
+        format!("{prefix}{name}*"),
+        format!("*{name}*"),
+        name.clone(),
+    ] {
+        let v = attribute(vm, id, &key);
+        if !v.is_nil() {
+            return Ok(vec![v]);
+        }
+    }
+    Ok(vec![Value::Nil])
 }
 
 fn is_protected(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {

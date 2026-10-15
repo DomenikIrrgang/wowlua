@@ -519,6 +519,20 @@ impl Vm {
         }
     }
 
+    /// Whether the Lua function `level` calls up from a native (1: the
+    /// native's caller) is secure code (loaded untainted); false for a
+    /// native caller or none.
+    pub fn caller_is_secure(&self, level: usize) -> bool {
+        match self.stack_entries().get(level) {
+            Some(StackEntry::Lua(fi)) => self
+                .heap
+                .func(self.cur.frames[*fi].closure)
+                .taint()
+                .is_secure(),
+            _ => false,
+        }
+    }
+
     /// How many calls deep the running coroutine is.
     pub fn call_depth(&self) -> usize {
         self.cur.frames.len()

@@ -206,6 +206,36 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             }
         }
     }
+    // The client's undocumented C functions (camelot's inventory): they
+    // exist, without behaviour.
+    if flavor == "camelot" {
+        for line in include_str!("../data/camelot-functions.txt").lines() {
+            if line.starts_with('#') || line.is_empty() {
+                continue;
+            }
+            let (ns, short) = match line.split_once('.') {
+                Some((ns, short)) => (Some(ns), short),
+                None => (None, line),
+            };
+            let name = vm.str(line);
+            match ns {
+                None => {
+                    if vm.get_global(short).is_nil() {
+                        let native = vm.native_with(short, undocumented, vec![name]);
+                        vm.set_global(short, native);
+                    }
+                }
+                Some(ns) => {
+                    let t = namespace(vm, ns);
+                    let key = vm.heap.intern(short.as_bytes());
+                    if vm.heap.table(t).get_str(key).is_nil() {
+                        let native = vm.native_with(short, undocumented, vec![name]);
+                        vm.heap.table_mut(t).set_str(key, native);
+                    }
+                }
+            }
+        }
+    }
     units::install(vm);
     // CVars whose client defaults the probes show (`getglobal` exists in
     // the game, so the deprecation fallbacks load).
@@ -291,6 +321,19 @@ pub fn defaults(vm: &mut Vm, api: &api::Api, doc: &serde_json::Value) -> Vec<Val
         .collect()
 }
 
+/// An undocumented C function without behaviour: nothing for Blizzard's
+/// code, "not mocked" for the addon's.
+fn undocumented(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = match c.upvals.first().copied() {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => "?".into(),
+    };
+    if protection::blizzard_caller(vm) {
+        return Ok(vec![]);
+    }
+    Err(vm.error(&format!("{name} is not mocked")))
+}
+
 /// Every API function: its behaviour, or the "not mocked" error.
 fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(Value::Num(i)) = c.upvals.first().copied() else {
@@ -310,7 +353,7 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     args::check(vm, api, f, &c)?;
     let Some(behaviour) = behaviour else {
         // Blizzard's code gets empty values; the addon's code an error.
-        if !protection::tainted(vm) {
+        if protection::blizzard_caller(vm) {
             engine_mut(vm).defaulted.insert(f.name);
             return Ok(defaults(vm, api, &f.doc));
         }
