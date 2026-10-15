@@ -42,9 +42,8 @@ pub struct Stmt {
     pub kind: StmtKind,
 }
 
-// Statements are built once per parse and walked in place; boxing the larger
-// variants would only add indirection.
-#[allow(clippy::large_enum_variant)]
+// Every file's tree stays alive through the build: the large fields are
+// boxed so that a statement takes 128 bytes (`GenericFor` sets the size).
 #[derive(Clone, Debug, PartialEq)]
 pub enum StmtKind {
     /// `a, b.c = x, y`
@@ -54,32 +53,32 @@ pub enum StmtKind {
     },
     /// `a += e` (single target, spec §1.3.4)
     Compound {
-        target: Expr,
+        target: Box<Expr>,
         op: CompoundOp,
-        value: Expr,
+        value: Box<Expr>,
     },
     /// A function call used as a statement.
     Call(Expr),
     Do(Block),
     While {
-        cond: Expr,
+        cond: Box<Expr>,
         body: Block,
     },
     Repeat {
         body: Block,
-        cond: Expr,
+        cond: Box<Expr>,
     },
     If {
-        cond: Expr,
+        cond: Box<Expr>,
         then_block: Block,
         elseifs: Vec<(Expr, Block)>,
-        else_block: Option<Block>,
+        else_block: Option<Box<Block>>,
     },
     NumericFor {
-        var: TypedName,
-        start: Expr,
-        limit: Expr,
-        step: Option<Expr>,
+        var: Box<TypedName>,
+        start: Box<Expr>,
+        limit: Box<Expr>,
+        step: Option<Box<Expr>>,
         body: Block,
     },
     GenericFor {
@@ -104,14 +103,14 @@ pub enum StmtKind {
     /// `local { x, y = 1 }: T = e` (spec §1.3.3)
     LocalDestructure {
         fields: Vec<DestructField>,
-        ty: Option<Type>,
-        value: Option<Expr>,
+        ty: Option<Box<Type>>,
+        value: Option<Box<Expr>>,
     },
     /// `const NAME: T = e`
     Const {
         name: Name,
-        ty: Option<Type>,
-        value: Option<Expr>,
+        ty: Option<Box<Type>>,
+        value: Option<Box<Expr>>,
     },
     Return(Vec<Expr>),
     Break,
@@ -185,7 +184,7 @@ pub struct Param {
     pub decorators: Vec<Decorator>,
     pub name: Name,
     pub ty: Option<Type>,
-    pub default: Option<Expr>,
+    pub default: Option<Box<Expr>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -944,6 +943,9 @@ mod tests {
         // Numerals keep their text inline without growing `ExprKind`.
         assert!(std::mem::size_of::<NumberLit>() <= 40);
         assert!(std::mem::size_of::<ExprKind>() <= 48);
+        // Statements and parameters box their large fields.
+        assert!(std::mem::size_of::<Stmt>() <= 128);
+        assert!(std::mem::size_of::<Param>() <= 128);
     }
 
     // `NumText` reads, compares and prints like the `Box<str>` it replaced,

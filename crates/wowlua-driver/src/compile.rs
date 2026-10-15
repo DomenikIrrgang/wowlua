@@ -1327,7 +1327,7 @@ fn dead_modules(
                 | ast::StmtKind::TypeAlias(_)
                 | ast::StmtKind::Declare(_)
                 | ast::StmtKind::Import(_) => true,
-                ast::StmtKind::Const { value, .. } => value.as_ref().is_none_or(pure),
+                ast::StmtKind::Const { value, .. } => value.as_deref().is_none_or(pure),
                 ast::StmtKind::Class(c) => c.members.iter().all(|m| {
                     m.decorators.is_empty()
                         && match &m.kind {

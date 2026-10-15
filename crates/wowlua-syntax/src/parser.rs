@@ -497,6 +497,12 @@ impl<'a> Parser<'a> {
         }
         self.block_depth -= 1;
         self.leave_level();
+        // Kept for the whole build: without the room the list grew.
+        if stmts.len() < stmts.capacity() {
+            let mut exact = Vec::with_capacity(stmts.len());
+            exact.append(&mut stmts);
+            stmts = exact;
+        }
         Block {
             stmts,
             span: self.span_from(start),
@@ -767,10 +773,10 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(StmtKind::If {
-            cond,
+            cond: Box::new(cond),
             then_block,
             elseifs,
-            else_block,
+            else_block: else_block.map(Box::new),
         })
     }
 
@@ -789,7 +795,10 @@ impl<'a> Parser<'a> {
         self.expect(T::Do, "do")?;
         let (body, _) = self.loop_body();
         self.expect_match(T::End, "while", opened)?;
-        Ok(StmtKind::While { cond, body })
+        Ok(StmtKind::While {
+            cond: Box::new(cond),
+            body,
+        })
     }
 
     fn repeat_stat(&mut self) -> PResult<StmtKind> {
@@ -810,7 +819,10 @@ impl<'a> Parser<'a> {
                 );
             }
         }
-        Ok(StmtKind::Repeat { body, cond })
+        Ok(StmtKind::Repeat {
+            body,
+            cond: Box::new(cond),
+        })
     }
 
     fn typed_name(&mut self) -> PResult<TypedName> {
@@ -841,10 +853,10 @@ impl<'a> Parser<'a> {
                 let (body, _) = self.loop_body();
                 self.expect_match(T::End, "for", opened)?;
                 Ok(StmtKind::NumericFor {
-                    var: first,
-                    start,
-                    limit,
-                    step,
+                    var: Box::new(first),
+                    start: Box::new(start),
+                    limit: Box::new(limit),
+                    step: step.map(Box::new),
                     body,
                 })
             }
@@ -946,7 +958,11 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(StmtKind::LocalDestructure { fields, ty, value })
+        Ok(StmtKind::LocalDestructure {
+            fields,
+            ty: ty.map(Box::new),
+            value: value.map(Box::new),
+        })
     }
 
     fn const_decl(&mut self, start: u32) -> PResult<StmtKind> {
@@ -971,7 +987,11 @@ impl<'a> Parser<'a> {
             self.error_at("E0112", span, "`const` needs an initializer");
             None
         };
-        Ok(StmtKind::Const { name, ty, value })
+        Ok(StmtKind::Const {
+            name,
+            ty: ty.map(Box::new),
+            value: value.map(Box::new),
+        })
     }
 
     fn return_stat(&mut self) -> PResult<StmtKind> {
@@ -1006,9 +1026,9 @@ impl<'a> Parser<'a> {
             self.advance();
             let value = self.expr()?;
             return Ok(StmtKind::Compound {
-                target: first,
+                target: Box::new(first),
                 op,
-                value,
+                value: Box::new(value),
             });
         }
         if is_call(&first.kind) {
@@ -1580,7 +1600,7 @@ impl<'a> Parser<'a> {
                 decorators,
                 name,
                 ty,
-                default,
+                default: default.map(Box::new),
             });
             if !self.eat(T::Comma) {
                 return Ok((params, None));

@@ -1013,7 +1013,7 @@ impl<'a> Lowerer<'a> {
             } => {
                 let mut clauses: Vec<(&Expr, &Block)> = vec![(cond, then_block)];
                 clauses.extend(elseifs.iter().map(|(c, b)| (c, b)));
-                self.if_chain(&clauses, else_block.as_ref(), pos)
+                self.if_chain(&clauses, else_block.as_deref(), pos)
             }
             StmtKind::NumericFor {
                 var,
@@ -1022,8 +1022,8 @@ impl<'a> Lowerer<'a> {
                 step,
                 body,
             } => self.wrapped(pos, |l| {
-                let mut items = vec![start, limit];
-                if let Some(s) = step {
+                let mut items: Vec<&Expr> = vec![start, limit];
+                if let Some(s) = step.as_deref() {
                     items.push(s);
                 }
                 let mut header = l.seq(&items);
@@ -1132,7 +1132,7 @@ impl<'a> Lowerer<'a> {
             // `continue` leaves the `repeat … until true` wrapper.
             StmtKind::Continue => vec![stmt(K::Break, pos)],
             StmtKind::LocalDestructure { fields, value, .. } => {
-                self.destructure(fields, value.as_ref(), s.span, pos)
+                self.destructure(fields, value.as_deref(), s.span, pos)
             }
             StmtKind::Const { name, value, .. } => {
                 let Some(value) = value else {

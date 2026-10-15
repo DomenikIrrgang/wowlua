@@ -1334,7 +1334,7 @@ impl Compiler<'_> {
                 then_block,
                 elseifs,
                 else_block,
-            } => self.ifstat(cond, then_block, elseifs, else_block.as_ref()),
+            } => self.ifstat(cond, then_block, elseifs, else_block.as_deref()),
             StmtKind::NumericFor {
                 var,
                 start,
@@ -1343,7 +1343,7 @@ impl Compiler<'_> {
                 body,
             } => {
                 self.enterblock(true);
-                self.fornum(var, start, limit, step.as_ref(), body, line)?;
+                self.fornum(var, start, limit, step.as_deref(), body, line)?;
                 self.leaveblock();
                 Ok(())
             }

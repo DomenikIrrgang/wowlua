@@ -420,7 +420,10 @@ impl Linter<'_> {
                 if let Some(t) = ty {
                     self.ty(t);
                 }
-                let removal = value.as_ref().is_none_or(pure).then(|| self.delete(s.span));
+                let removal = value
+                    .as_deref()
+                    .is_none_or(pure)
+                    .then(|| self.delete(s.span));
                 let group = self.group(removal, 1);
                 self.declare(name, Self::local_kind(s, Kind::Unused), Some(group), true);
             }

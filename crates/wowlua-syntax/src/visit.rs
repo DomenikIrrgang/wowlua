@@ -103,8 +103,8 @@ fn walk_one_stmt<'a>(s: &'a Stmt, f: &mut impl FnMut(&'a Stmt)) {
             body,
             ..
         } => {
-            exprs.extend([start, limit]);
-            exprs.extend(step.iter());
+            exprs.extend([&**start, &**limit]);
+            exprs.extend(step.as_deref());
             blocks.push(body);
         }
         StmtKind::GenericFor { exprs: e, body, .. } => {
@@ -123,20 +123,20 @@ fn walk_one_stmt<'a>(s: &'a Stmt, f: &mut impl FnMut(&'a Stmt)) {
                 exprs.push(c);
                 blocks.push(b);
             }
-            blocks.extend(else_block.iter());
+            blocks.extend(else_block.as_deref());
         }
         StmtKind::Function { func, .. } | StmtKind::LocalFunction { func, .. } => {
             blocks.push(&func.body)
         }
         StmtKind::Assign { targets, values } => exprs.extend(targets.iter().chain(values)),
-        StmtKind::Compound { target, value, .. } => exprs.extend([target, value]),
+        StmtKind::Compound { target, value, .. } => exprs.extend([&**target, &**value]),
         StmtKind::Call(e) => exprs.push(e),
         StmtKind::Local { values, .. } | StmtKind::Return(values) => exprs.extend(values.iter()),
         StmtKind::LocalDestructure { fields, value, .. } => {
             exprs.extend(fields.iter().filter_map(|x| x.default.as_ref()));
-            exprs.extend(value.iter());
+            exprs.extend(value.as_deref());
         }
-        StmtKind::Const { value, .. } => exprs.extend(value.iter()),
+        StmtKind::Const { value, .. } => exprs.extend(value.as_deref()),
         StmtKind::Export(inner) => walk_one_stmt(inner, f),
         _ => {}
     }
