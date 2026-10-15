@@ -248,9 +248,11 @@ Notes on the delivered state:
 **Exit:** a sample addon uses no third-party libraries for its events, saved
 variables, settings, minimap button, keybindings and comms.
 
-**Status: in progress.** The stages follow the bullets above: S1 the core set,
-S2 `locale` to movable frames, S3 the helpers, registries, jobs, dialogs,
-menus and lists, then the widget themes.
+**Status: done (2026-10-15).** The stages follow the bullets above: S1 the
+core set, S2 `locale` to movable frames, S3 the helpers, registries, jobs,
+dialogs, menus and lists, then the widget themes, and S4 the patterns found
+across the corpus. Every module ran in game on WoW: Forever (StdTest: 109
+tests, automatic and guided, all passing). Released as 0.9.0.
 
 - S1 done 2026-10-14: `errors`, `events`, `lifecycle`, `timer`, `combat`,
   `hooks`, `slash`, `saved` and `callbacks` (with `log`, `debug` and `reflect`

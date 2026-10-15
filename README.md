@@ -158,7 +158,7 @@ The specification lives in [`spec/`](spec/README.md); implementation follows the
 | M5 | Debugging | done · 2026-10-12 |
 | M6 | Package manager | done · 2026-10-12 |
 | M7 | Optimization and publishing | done · 2026-10-13 |
-| **M8** | **Standard library** | **in progress** (core set done) |
+| M8 | Standard library | done · 2026-10-15 |
 | M9 | Test runner, language server, formatter | planned |
 | M10 | Registry | planned |
 | M11 | Performance optimization | planned |
@@ -171,12 +171,11 @@ What works today:
 | **Type checker** | Basic and strict mode, generics, narrowing and flavor guards for shared multi-flavor builds, against the WoW API of every flavor, generated from Blizzard's documentation. |
 | **Builds** | Per-flavor builds with generated TOC files; load order from imports and usage analysis of Lua, `.wowlua` and XML files; line numbers preserved in dev builds; bundling, minification levels, inlining, global caching and dead-code removal for release builds, within Lua's limits. |
 | **Debugging** | The profiler, monitor, error capture, runtime type checks and the `/wl` dev window, with `wowlua:debug`, `wowlua:log` and `wowlua:reflect`. |
-| **Standard library** | The core set, written in wowlua: `events` (WoW events, unit events, messages), `lifecycle`, `timer` (with `@throttle`, `@debounce`, `@nextFrame`), `combat` (`@outOfCombat`), `hooks`, `slash` (with a typed subcommand router), `saved` (defaults, migrations, profiles), `callbacks` and the `errors` policy, with compile-time checks of event names, slash commands and SavedVariables; `locale` (JSON translations compiled to Lua, a typed `L`, client-language loading) `pool` (typed frame and table pools) `settings` (options pages on Blizzard's Settings API, bound to `saved` stores and checked against their types) `launcher` (minimap button, Addon Compartment entry, LDB launcher) `serialize` (binary encoding, DEFLATE, export strings) and `comm` (addon messages of any length, throttled). |
+| **Standard library** | Written in wowlua, checked at compile time where it can be, and tested in game. The core: `events` (WoW events, unit events, messages, buckets), `lifecycle`, `timer` (`@throttle`, `@debounce`, `@nextFrame`), `combat` (`@outOfCombat`), `hooks`, `slash` (a typed subcommand router), `saved` (defaults, migrations, profiles), `callbacks`, `errors`, `jobs`, `table`, `format`. Interface: `locale` (JSON translations, a typed `L`), `pool`, `settings` (Blizzard's Settings API), `launcher` (minimap button, Addon Compartment, LDB launcher and data sources), `frames` (movable, resizable, Edit Mode), `bindings` (keybindings declared in code), `menu`, `list`, `dialog`, `color`, `media`, `alert`, `links`, widget themes. Game data, secret-value aware: `secret`, `unit` (with a roster), `aura` (with aura containers), `spell`, `item`, `tooltip`. Plus `secure` (state drivers with checked macro conditionals), `serialize`, `comm` and `version`. |
 | **Packages** | git, SVN, path and archive dependencies in a global cache, locked in `wowlua.lock`; Lua libraries embedded (only the files the game loads), wowlua libraries compiled in; workspaces for addon suites. |
 | **Publishing** | `package` and `publish` to CurseForge, Wago, WoWInterface and GitHub Releases, with API tokens kept in the OS credential store. |
 
-The other standard-library modules arrive with later milestones; using a
-feature of a later milestone reports that milestone.
+Using a feature of a later milestone reports that milestone.
 [`examples/typed-demo`](examples/typed-demo),
 [`examples/widget-demo`](examples/widget-demo) and
 [`examples/core-demo`](examples/core-demo) are sample addons.

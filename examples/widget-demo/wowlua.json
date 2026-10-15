@@ -6,7 +6,7 @@
     "description": "wowlua sample addon: a window built from widget classes",
     "authors": ["wowlua contributors"],
     "license": "MIT",
-    "wowlua": "^0.8"
+    "wowlua": "^0.9"
   },
   "addon": {
     "title": "Widget Demo",

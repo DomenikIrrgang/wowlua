@@ -6,7 +6,7 @@
     "description": "wowlua sample addon: the standard library without third-party libraries (events, saved variables, settings, minimap button, keybindings, comms)",
     "authors": ["wowlua contributors"],
     "license": "MIT",
-    "wowlua": "^0.8"
+    "wowlua": "^0.9"
   },
   "addon": {
     "title": "Core Demo",
