@@ -1269,7 +1269,7 @@ impl<'a> Parser<'a> {
                     let args = self.call_args()?;
                     ExprKind::Method {
                         obj: Box::new(e),
-                        name,
+                        name: Box::new(name),
                         args: Box::new(args),
                     }
                 }
@@ -1314,7 +1314,7 @@ impl<'a> Parser<'a> {
                     let args = self.call_args()?;
                     ExprKind::OptMethod {
                         obj: Box::new(e),
-                        name,
+                        name: Box::new(name),
                         args: Box::new(args),
                     }
                 }
@@ -1337,7 +1337,8 @@ impl<'a> Parser<'a> {
         };
         self.expect_match(T::RParen, "(", open.start)?;
         Ok(Args::Parens {
-            args,
+            // Exact already: `expr_list` sizes its list.
+            args: args.into_boxed_slice(),
             span: self.span_from(open.start),
         })
     }

@@ -278,8 +278,8 @@ pub struct Expr {
 }
 
 // Every file's tree stays alive through the build, and expressions are its
-// most common node. Method arguments and cast types are boxed so that the
-// other expressions stay small.
+// most common node. Method names and arguments and cast types are boxed so
+// that the other expressions stay small (64 bytes).
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExprKind {
     Nil,
@@ -306,7 +306,7 @@ pub enum ExprKind {
     },
     Method {
         obj: Box<Expr>,
-        name: Name,
+        name: Box<Name>,
         args: Box<Args>,
     },
     OptField {
@@ -319,7 +319,7 @@ pub enum ExprKind {
     },
     OptMethod {
         obj: Box<Expr>,
-        name: Name,
+        name: Box<Name>,
         args: Box<Args>,
     },
     OptCall {
@@ -444,7 +444,7 @@ pub enum InterpPart {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Args {
     /// `f(a, b)`; the span covers the parentheses.
-    Parens { args: Vec<Expr>, span: Span },
+    Parens { args: Box<[Expr]>, span: Span },
     /// `f{…}`
     Table(Box<Expr>),
     /// `f"…"`
@@ -939,11 +939,11 @@ mod tests {
     // variant that grows them raises the build's peak memory.
     #[test]
     fn expressions_and_table_fields_stay_small() {
-        assert!(std::mem::size_of::<Expr>() <= 72);
-        assert!(std::mem::size_of::<TableField>() <= 104);
+        assert!(std::mem::size_of::<Expr>() <= 64);
+        assert!(std::mem::size_of::<TableField>() <= 96);
         // Numerals keep their text inline without growing `ExprKind`.
         assert!(std::mem::size_of::<NumberLit>() <= 40);
-        assert!(std::mem::size_of::<ExprKind>() <= 56);
+        assert!(std::mem::size_of::<ExprKind>() <= 48);
     }
 
     // `NumText` reads, compares and prints like the `Box<str>` it replaced,
