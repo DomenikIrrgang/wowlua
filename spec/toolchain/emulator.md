@@ -59,6 +59,12 @@ S37, S38):
 - **Arithmetic.** `x / 0` and `x % 0` raise "Division by zero"; `math.sqrt`
   and `math.log` raise on a negative argument; `string.format("%d", x)` raises
   for an infinite `x`.
+- **Limits.** The client's limits, at its thresholds: `strsplit`'s and
+  `unpack`'s errors for too many results, and the calls that crash it (a
+  few thousand results trip its Lua assertion, `L->top < L->ci->top`), which
+  fail with an error naming the call (decision T194). The thresholds come
+  from crash-search probes (`/stdtest crashlimit`), separate from
+  `/stdtest probe`.
 - **Per flavor.** Where flavors differ (a library function, an arithmetic
   rule), the VM follows the flavor under test. Behaviour not yet probed on a
   flavor follows the newest probed client and is listed in the emulation's

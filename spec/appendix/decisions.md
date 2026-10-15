@@ -243,6 +243,7 @@ open for review.
 | T191 | The VM's memory is managed by a tracing garbage collector over an arena, in safe Rust **(user, M9)** | Cycles, `__gc` and weak tables behave like the client's; reference counting or no collection would not. |
 | T192 | Coroutines are stackless: each is its own VM stack **(user, M9)** | No native stacks or overflow; yields still stop at `pcall`, metamethods and native calls, as in the client. |
 | T193 | Taint is exact: every stack slot, table field, upvalue and object carries the taint of the code that wrote it, as in the client **(user, M9)** | Taint spreads through locals and upvalues in real addons; tracking only tables would miss it. Costs memory per slot, always on. |
+| T194 | A call that crashes the client (such as `strsplit` or `unpack` with thousands of results tripping its Lua assertion) fails in the emulation with an error naming the call and the client's assertion; the run continues **(user, M9)** | The test shows the line that would take the game down; stopping the run or only warning would hide it or the other results. Limits come from crash-search probes, run separately from `/stdtest probe`. |
 
 ## Standard library
 
