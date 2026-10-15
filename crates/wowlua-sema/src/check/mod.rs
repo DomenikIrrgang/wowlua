@@ -236,6 +236,20 @@ pub fn check_package_full(
         if !matches!(files[i].kind, FileKind::Wowlua | FileKind::Lua) {
             continue;
         }
+        // A plain Lua file leaves no type behind (its outputs are text,
+        // spans and declarations): the arena goes back to how it was
+        // before, so every file is checked from the same state, whatever
+        // was checked before it.
+        let plain_lua = files[i].kind == FileKind::Lua;
+        let before = plain_lua.then(|| env.types.checkpoint());
+        #[cfg(debug_assertions)]
+        let sizes = (
+            env.defs.len(),
+            env.params.len(),
+            env.typeof_types.len(),
+            env.renamable_defs.len(),
+            value_checks.len(),
+        );
         let imports = import_types(&mut env, files, analysis, i, &exports);
         let info = FileInfo {
             intrinsics: crate::stdlib::Intrinsics::of(analysis, i, parse),
@@ -345,6 +359,21 @@ pub fn check_package_full(
                     .filter(|(_, t)| **t != Types::ANY)
                     .map(|(k, &t)| (k.clone(), t)),
             );
+        }
+        if let Some(cp) = before {
+            #[cfg(debug_assertions)]
+            {
+                let after = (
+                    env.defs.len(),
+                    env.params.len(),
+                    env.typeof_types.len(),
+                    env.renamable_defs.len(),
+                    value_checks.len(),
+                );
+                assert_eq!(after, sizes, "a plain Lua file left types behind");
+                assert!(file_exports.is_empty(), "a plain Lua file exports");
+            }
+            env.types.rollback(cp);
         }
         exports.insert(i, file_exports);
     }

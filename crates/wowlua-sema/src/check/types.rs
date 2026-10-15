@@ -311,6 +311,17 @@ pub struct Types {
     /// The distinct field maps of records, compared in order (see
     /// `share_fields`).
     maps: hashbrown::HashTable<Arc<FieldMap>>,
+    /// The maps in `maps`, in the order they were added: their hashes and
+    /// addresses (for `rollback`).
+    maps_added: Vec<(u64, usize)>,
+}
+
+/// A point in the arena's history to go back to (`Types::rollback`).
+#[derive(Clone, Copy, Debug)]
+pub struct Checkpoint {
+    len: usize,
+    next_record: u32,
+    maps: usize,
 }
 
 impl Default for Types {
@@ -341,6 +352,7 @@ impl Types {
             index: hashbrown::HashTable::new(),
             next_record: 0,
             maps: hashbrown::HashTable::new(),
+            maps_added: Vec::new(),
         };
         for ty in [
             Ty::Any,
@@ -432,8 +444,45 @@ impl Types {
             if let Some(map) = Arc::get_mut(base) {
                 map.shrink_to_fit();
             }
+            self.maps_added.push((hash, Arc::as_ptr(base) as usize));
             self.maps
                 .insert_unique(hash, base.clone(), |m| ordered_hash(m));
+        }
+    }
+
+    /// Where the arena is now.
+    pub fn checkpoint(&self) -> Checkpoint {
+        Checkpoint {
+            len: self.data.len(),
+            next_record: self.next_record,
+            maps: self.maps_added.len(),
+        }
+    }
+
+    /// Forgets every type made since `cp`, as if they were never made:
+    /// later types get the ids they would have had then. Nothing may hold
+    /// one of those ids any more.
+    pub fn rollback(&mut self, cp: Checkpoint) {
+        for k in (cp.len..self.data.len()).rev() {
+            if matches!(self.data[k], Ty::Record(_)) {
+                continue;
+            }
+            let hash = FxBuildHasher.hash_one(&self.data[k]);
+            if let Ok(entry) = self.index.find_entry(hash, |&id| id.0 as usize == k) {
+                entry.remove();
+            } else {
+                unreachable!("every type but a record is in the index");
+            }
+        }
+        self.data.truncate(cp.len);
+        self.next_record = cp.next_record;
+        for (hash, map) in self.maps_added.drain(cp.maps..).rev() {
+            if let Ok(entry) = self
+                .maps
+                .find_entry(hash, |m| Arc::as_ptr(m) as usize == map)
+            {
+                entry.remove();
+            }
         }
     }
 
@@ -694,6 +743,63 @@ mod tests {
         assert_eq!(r.fields.keys().nth(1234), Some("f1234"));
         let stored = stored_fields(&types);
         assert!(stored < 2000 * 2000 / 32, "{stored} field entries");
+    }
+
+    /// After a rollback the arena is as it was: the same types get the
+    /// same ids again, and nothing made since is found any more.
+    #[test]
+    fn rollback_forgets_what_came_after() {
+        let mut types = Types::new();
+        let n = types.num(1.0);
+        let r0 = types.record(Record {
+            fields: [("a".into(), field(1))]
+                .into_iter()
+                .collect::<FieldMap>()
+                .into(),
+            ..Record::default()
+        });
+        let cp = types.checkpoint();
+        let before = types.data.len();
+        let s = types.str("x");
+        let u = types.union(&[n, s]);
+        let arr = types.array(u);
+        let r1 = types.record(Record {
+            fields: [("b".into(), field(2))]
+                .into_iter()
+                .collect::<FieldMap>()
+                .into(),
+            ..Record::default()
+        });
+        let Ty::Record(rec1) = types.get(r1).clone() else {
+            unreachable!()
+        };
+        types.rollback(cp);
+        assert_eq!(types.data.len(), before);
+        assert_eq!(
+            types.index.len(),
+            before - 1,
+            "every type but the one record"
+        );
+        assert_eq!(types.maps.len(), 1);
+        // Made again in the same order: the same ids.
+        assert_eq!(types.str("x"), s);
+        assert_eq!(types.union(&[n, s]), u);
+        assert_eq!(types.array(u), arr);
+        let again = types.record(Record {
+            fields: [("b".into(), field(2))]
+                .into_iter()
+                .collect::<FieldMap>()
+                .into(),
+            ..Record::default()
+        });
+        assert_eq!(again, r1);
+        let Ty::Record(rec2) = types.get(again) else {
+            unreachable!()
+        };
+        assert_eq!(rec2.id, rec1.id);
+        // What existed before the checkpoint is still there.
+        assert_eq!(types.num(1.0), n);
+        assert!(matches!(types.get(r0), Ty::Record(_)));
     }
 
     // The arena holds one `Ty` per type, and a type-checked data addon has
