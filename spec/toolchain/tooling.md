@@ -133,9 +133,12 @@ its documentation (count, types, and secrets where the documentation says);
 an event the flavor does not document is an error (decision T202).
 
 **Game data.** Spells, items and other game data come from the tests
-(decision T203): `mock.defineSpell(id, data)`, `mock.defineItem(id, data, {
-cached?, delay? })` (asynchronous loading fires `GET_ITEM_INFO_RECEIVED`), in
-the test or in `tests/mocks/`. An ID the test did not define behaves as data
+(decision T203): `mock.defineSpell(id, data)` (`name`, `iconID`,
+`description`, `known`, `petKnown`, `cooldown`, `charges`, ranges, `cached`),
+`mock.defineItem(id, data, { cached?, delay?, missing? })` (`GetItemInfo`'s
+fields by name; `RequestLoadItemDataByID` fires `ITEM_DATA_LOAD_RESULT`
+after `delay`, 0.2 s by default), in the test or in `tests/mocks/`. The data
+stays the test's table, so its values may be secrets. An ID the test did not define behaves as data
 the client does not have. Optionally, tests can run with the real client's
 data: `wowlua data pull --wow <path to the WoW installation>` reads the
 flavor's game data from the user's own client into a local cache (nothing is

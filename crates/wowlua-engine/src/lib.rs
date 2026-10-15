@@ -10,6 +10,7 @@ pub mod clock;
 pub mod controls;
 pub mod curves;
 pub mod framescript;
+pub mod gamedata;
 pub mod protection;
 pub mod ui;
 pub mod units;
@@ -140,6 +141,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(curves::behaviours())
             .chain(widgets::functions())
             .chain(auras::behaviours())
+            .chain(gamedata::behaviours())
             .chain(framescript::functions())
             .collect(),
         methods: widgets::behaviours()

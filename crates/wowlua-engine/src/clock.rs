@@ -95,6 +95,12 @@ fn invoke(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// Runs `callback` once after `seconds` (the engine's own timers: data
+/// arriving from the server).
+pub fn after_engine(vm: &mut Vm, seconds: f64, callback: Value) {
+    schedule(vm, seconds, callback, 1.0, false);
+}
+
 /// Schedules `callback` after `seconds`, `runs` times; returns its handle
 /// when `handle`.
 fn schedule(vm: &mut Vm, seconds: f64, callback: Value, runs: f64, handle: bool) -> Value {

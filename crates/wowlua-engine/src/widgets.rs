@@ -92,6 +92,8 @@ pub struct World {
     pub cvars: Vec<(String, String)>,
     /// Whether `PLAYER_LOGIN` fired.
     pub logged_in: bool,
+    /// Spells and items the test defined.
+    pub data: crate::gamedata::GameData,
 }
 
 /// UIParent's size in screen units at scale 1.

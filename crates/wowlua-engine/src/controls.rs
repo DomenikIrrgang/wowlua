@@ -240,6 +240,8 @@ pub fn install(vm: &mut Vm, name: &str) {
         ("defineFrameType", define_frame_type),
         ("protect", protect),
         ("refusals", crate::protection::refusals_control),
+        ("defineSpell", crate::gamedata::define_spell),
+        ("defineItem", crate::gamedata::define_item),
         ("spend", spend),
         ("spawnUnit", units::spawn),
         ("addToGroup", units::add_to_group),
