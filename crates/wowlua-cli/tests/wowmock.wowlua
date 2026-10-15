@@ -70,9 +70,6 @@ function debugstack(): string
 end
 -- The client has `date`, `time` and `difftime`, and no `os` table (as on
 -- WoW: Forever); wowlua's VM has them already.
-function GetTime(): number
-    return Mock.now
-end
 -- The client's language (`Mock.locale`).
 function GetLocale(): string
     return Mock.locale ?? "enUS"
@@ -858,70 +855,9 @@ end) :: any
 
 -- Timers --------------------------------------------------------------------
 
---- A scheduled callback: `left` more runs, every `every` seconds.
-class MockTimer
-    due: number
-    readonly every: number
-    readonly fn: Handler
-    left: number
-    cancelled: boolean = false
-
-    constructor(sec: number, fn: Handler, iterations: number)
-        self.due = Mock.now + sec
-        self.every = sec
-        self.fn = fn
-        self.left = iterations
-    end
-
-    function Cancel()
-        self.cancelled = true
-    end
-
-    function IsCancelled(): boolean
-        return self.cancelled
-    end
-end
-
-local function schedule(sec: number, fn: Handler, iterations: number): MockTimer
-    local t = MockTimer.new(sec, fn, iterations)
-    Mock.timers[#Mock.timers + 1] = t :: any
-    return t
-end
-
-C_Timer = {} :: any
-function C_Timer.After(seconds: number, callback: () -> ())
-    schedule(seconds, callback, 1)
-end
-function C_Timer.NewTimer(seconds: number, callback: (handle: TimerHandle) -> ()): TimerHandle
-    return schedule(seconds, callback, 1) :: any
-end
-function C_Timer.NewTicker(seconds: number, callback: (handle: TickerHandle) -> (), iterations: number?): TickerHandle
-    return schedule(seconds, callback, iterations ?? math.huge) :: any
-end
-
--- Advances the clock, running due timers in order (a frame is 0 seconds).
+-- The engine's C_Timer and clock; advancing runs due timers in order.
 function Mock.advance(sec: number?)
-    local target = Mock.now + (sec ?? 0)
-    while true do
-        local next: MockTimer? = nil
-        for _, entry in ipairs(Mock.timers) do
-            local t = entry :: MockTimer
-            if t.cancelled or t.left <= 0 or t.due > target then
-                continue
-            end
-            if not next or t.due < next.due then
-                next = t
-            end
-        end
-        if not next then
-            break
-        end
-        Mock.now = math.max(Mock.now, next.due)
-        next.left -= 1
-        next.due += next.every
-        next.fn(next)
-    end
-    Mock.now = target
+    __engine.advanceTime(sec ?? 0)
 end
 
 -- Slash commands ------------------------------------------------------------
@@ -2014,13 +1950,11 @@ function AddonCompartmentFrame:RegisterAddon(data: any)
 end
 -- Milliseconds of simulated work (`Mock.spend`), on top of the clock.
 Mock.worked = 0
-function debugprofilestop(): number
-    return Mock.now * 1000 + Mock.worked
-end
 
 --- Simulates `ms` milliseconds of work (job budgets measure it).
 function Mock.spend(ms: number)
     Mock.worked += ms
+    __engine.spend(ms)
 end
 
 --- `n` frames of `ms` milliseconds each (default 16): timers, then every

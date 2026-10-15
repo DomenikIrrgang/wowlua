@@ -217,6 +217,7 @@ fn client(out: &Path, name: &str, toc: &str, label: &str, setup: &str) -> Vm {
     // The engine (every documented function), with the mock's Lua on top
     // where it still stands in.
     wowlua_engine::install(&mut vm, "standard").expect("the engine installs");
+    wowlua_engine::controls::install(&mut vm, "__engine");
     exec_snippet(&mut vm, MOCK, "@wowmock.wowlua").unwrap();
     exec_snippet(&mut vm, setup, "@setup").unwrap_or_else(|e| panic!("{label}setup: {e}"));
     let ns = Value::Table(vm.new_table());

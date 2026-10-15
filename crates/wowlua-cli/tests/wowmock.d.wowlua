@@ -121,3 +121,12 @@ interface MockClient
 end
 
 declare global Mock: MockClient
+
+--- The engine's controls (wowlua-engine), which the mock delegates to.
+declare global __engine: {
+    advanceTime: (sec: number) -> (),
+    spend: (ms: number) -> (),
+    nextFrame: (ms: number?) -> (),
+    advanceFrames: (n: number, ms: number?) -> (),
+    fireEvent: (name: string, ...any) -> (),
+}

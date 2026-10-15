@@ -108,6 +108,14 @@ fn advance_frames(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `spend(ms)`: work that takes `ms` milliseconds (`debugprofilestop`
+/// moves; no timers run).
+fn spend(vm: &mut Vm, c: NativeCall) -> Ret {
+    let ms = vm.check_number(&c, 1)?;
+    vm.clock.elapsed_ms += ms.max(0.0);
+    Ok(vec![])
+}
+
 fn warnings(vm: &mut Vm, _c: NativeCall) -> Ret {
     let list = engine(vm).world.warnings.clone();
     let t = vm.new_table();
@@ -129,6 +137,7 @@ pub fn install(vm: &mut Vm, name: &str) {
         ("nextFrame", next_frame),
         ("advanceFrames", advance_frames),
         ("warnings", warnings),
+        ("spend", spend),
         ("spawnUnit", units::spawn),
         ("addToGroup", units::add_to_group),
         ("enterInstance", units::enter_instance),
