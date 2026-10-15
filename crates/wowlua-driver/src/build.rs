@@ -10,7 +10,9 @@ use crate::sources::{self, Source, SourceKind};
 use crate::{Session, fsutil, vcs};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use wowlua_diagnostics::Diagnostic;
+use wowlua_luair::sourcemap::EncodedMap;
 use wowlua_manifest::BuiltinProfile;
 use wowlua_manifest::model::TocLayout;
 use wowlua_span::{FileId, Span};
@@ -1474,7 +1476,7 @@ pub fn build(
     // Assemble the output tree.
     let mut out: BTreeMap<String, Content> = BTreeMap::new();
     let mut flavor_roots: BTreeSet<String> = BTreeSet::new();
-    let mut maps: BTreeMap<String, String> = BTreeMap::new();
+    let mut maps: BTreeMap<String, Arc<EncodedMap>> = BTreeMap::new();
     for source in &emitted {
         if per_flavor.contains(&source.rel) {
             for b in &builds {
@@ -4198,7 +4200,7 @@ fn bundle_output(
     items: Vec<TocItem>,
     orders: Option<HashMap<String, Vec<usize>>>,
     out: &mut BTreeMap<String, Content>,
-    maps: &mut BTreeMap<String, String>,
+    maps: &mut BTreeMap<String, Arc<EncodedMap>>,
 ) -> Option<(Vec<TocItem>, Option<HashMap<String, Vec<usize>>>)> {
     let lib_of = |path: &str| {
         input
@@ -4324,9 +4326,7 @@ fn bundle_output(
                         .remove(&item.path)
                         .map(|c| content_bytes(&c))
                         .unwrap_or_default();
-                    let own_map = maps
-                        .remove(&map_key(&item.path))
-                        .and_then(|m| wowlua_luair::sourcemap::SourceMap::parse(&m));
+                    let own_map = maps.remove(&map_key(&item.path)).and_then(|m| m.decode());
                     if let Some(source) = sources.get(item.rel.as_str())
                         && lib_of(&item.path).is_none()
                         && !wowlua_sema::is_compiler_known(&source.src_rel)
@@ -4376,7 +4376,7 @@ fn bundle_output(
                     return None;
                 }
                 if input.source_maps {
-                    maps.insert(format!("{path}.map"), map.to_json());
+                    maps.insert(format!("{path}.map"), Arc::new(map.encode()));
                 }
                 out.insert(path.clone(), Content::Bytes(text));
                 result.push(TocItem {
@@ -4466,7 +4466,11 @@ fn flatten_xml(
 /// Writes source maps outside the AddOn folder (spec codegen §14.6):
 /// `<parent>/.maps/<Addon>/<output path>.map`. Maps of per-flavor files
 /// (milestone M2) add a `<flavor>/` level.
-fn write_maps(dir: &Path, addon: &str, maps: &BTreeMap<String, String>) -> std::io::Result<()> {
+fn write_maps(
+    dir: &Path,
+    addon: &str,
+    maps: &BTreeMap<String, Arc<EncodedMap>>,
+) -> std::io::Result<()> {
     let Some(parent) = dir.parent() else {
         return Ok(());
     };
@@ -4479,7 +4483,7 @@ fn write_maps(dir: &Path, addon: &str, maps: &BTreeMap<String, String>) -> std::
         if let Some(p) = path.parent() {
             std::fs::create_dir_all(p)?;
         }
-        std::fs::write(path, map)?;
+        std::fs::write(path, map.to_json())?;
     }
     Ok(())
 }
