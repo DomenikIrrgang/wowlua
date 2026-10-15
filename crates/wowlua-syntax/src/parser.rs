@@ -6,7 +6,9 @@
 use crate::ast::*;
 use crate::lexer::Lexed;
 use crate::literal;
+use crate::search::partition_point_near;
 use crate::token::{Token, TokenKind};
+use std::cell::Cell;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::{FileId, Span};
 
@@ -50,6 +52,9 @@ pub(crate) struct Parser<'a> {
     field_stack: Vec<TableField>,
     /// The same for the expression lists being parsed.
     expr_stack: Vec<Expr>,
+    /// Where the last line lookup ended in `lexed.line_starts`: the parser
+    /// moves forward, so the next lookup starts its search there.
+    line_hint: Cell<usize>,
 }
 
 fn is_block_follow(kind: TokenKind) -> bool {
@@ -142,6 +147,7 @@ impl<'a> Parser<'a> {
             last_error_at: None,
             field_stack: Vec::new(),
             expr_stack: Vec::new(),
+            line_hint: Cell::new(0),
         }
     }
 
@@ -197,6 +203,28 @@ impl<'a> Parser<'a> {
             start,
             end: end.max(start),
         }
+    }
+
+    /// Lines are not stored with the tokens; they come from the line starts,
+    /// the same way [`Lexed::line_of`] finds them: the number of line starts
+    /// at or before the offset.
+    fn line_count_to(&self, offset: u32) -> usize {
+        let starts = &self.lexed.line_starts;
+        let n = partition_point_near(starts, self.line_hint.get(), |&s| s <= offset);
+        self.line_hint.set(n);
+        n
+    }
+
+    /// The Lua line (1-based) containing byte `offset`.
+    fn line_of(&self, offset: u32) -> u32 {
+        self.line_count_to(offset) as u32
+    }
+
+    /// Bytes `from` and `to` (`from <= to`) lie on one Lua line: no line
+    /// starts after `from` and at or before `to`.
+    fn same_line(&self, from: u32, to: u32) -> bool {
+        let n = self.line_count_to(from);
+        self.lexed.line_starts.get(n).is_none_or(|&next| next > to)
     }
 
     fn token_span(&self, t: &Token) -> Span {
@@ -267,15 +295,17 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Lua's `check_match`: `close` closing `open` from `line`.
-    fn expect_match(&mut self, close: TokenKind, open: &str, line: u32) -> PResult<Token> {
+    /// Lua's `check_match`: `close` closing `open`, the token that starts
+    /// at byte `opened`.
+    fn expect_match(&mut self, close: TokenKind, open: &str, opened: u32) -> PResult<Token> {
         if self.check(close) {
             return Ok(self.advance());
         }
         let what = close.describe();
-        let failed = if line == self.tok(0).line {
+        let failed = if self.same_line(opened, self.tok(0).start) {
             self.syntax_error(format!("{what} expected"))
         } else {
+            let line = self.line_of(opened);
             self.syntax_error(format!(
                 "{what} expected (to close '{open}' at line {line})"
             ))
@@ -377,9 +407,9 @@ impl<'a> Parser<'a> {
 
     /// `--!name` comments before the first token (spec §1.1.1).
     fn directives(&self) -> Vec<Directive> {
-        let first = self.tok(0);
         let mut out = Vec::new();
-        for trivia in self.lexed.trivia_of(first) {
+        // The lexer always ends with an `Eof` token, so there is a token 0.
+        for trivia in self.lexed.trivia_of(0) {
             if trivia.kind != crate::token::TriviaKind::LineComment {
                 continue;
             }
@@ -469,13 +499,15 @@ impl<'a> Parser<'a> {
 
     /// Skips to the next statement boundary after an error.
     fn recover(&mut self, before: usize) {
-        let error_line = self.tok(0).line;
+        let error_line = self.line_of(self.tok(0).start);
         if self.pos == before {
             self.advance();
         }
         loop {
             // A name or `(` starting a later line likely starts a statement.
-            if self.tok(0).line > error_line && matches!(self.kind(), T::Name | T::LParen | T::At) {
+            if self.line_of(self.tok(0).start) > error_line
+                && matches!(self.kind(), T::Name | T::LParen | T::At)
+            {
                 return;
             }
             match self.kind() {
@@ -536,7 +568,7 @@ impl<'a> Parser<'a> {
                 | T::QuestionColon
                 | T::ColonColon
         ) || compound_op(next.kind).is_some()
-            || (next.kind == T::LParen && next.line == self.tok(0).end_line);
+            || (next.kind == T::LParen && self.same_line(self.tok(0).end, next.start));
         !follows
     }
 
@@ -552,9 +584,9 @@ impl<'a> Parser<'a> {
             T::If => self.if_stat()?,
             T::While => self.while_stat()?,
             T::Do => {
-                let line = self.advance().line;
+                let opened = self.advance().start;
                 let block = self.block();
-                self.expect_match(T::End, "do", line)?;
+                self.expect_match(T::End, "do", opened)?;
                 StmtKind::Do(block)
             }
             T::For => self.for_stat()?,
@@ -682,7 +714,7 @@ impl<'a> Parser<'a> {
                 path.push(self.decorator_name()?);
             }
             // Arguments must start on the decorator's line.
-            let same_line = self.tok(0).line == self.prev().end_line;
+            let same_line = self.same_line(self.prev().end, self.tok(0).start);
             let args = if same_line
                 && matches!(
                     self.kind(),
@@ -702,7 +734,7 @@ impl<'a> Parser<'a> {
     }
 
     fn if_stat(&mut self) -> PResult<StmtKind> {
-        let line = self.advance().line;
+        let opened = self.advance().start;
         let cond = self.expr()?;
         self.expect(T::Then, "then")?;
         let then_block = self.block();
@@ -719,11 +751,11 @@ impl<'a> Parser<'a> {
                 T::Else => {
                     self.advance();
                     else_block = Some(self.block());
-                    self.expect_match(T::End, "if", line)?;
+                    self.expect_match(T::End, "if", opened)?;
                     break;
                 }
                 _ => {
-                    self.expect_match(T::End, "if", line)?;
+                    self.expect_match(T::End, "if", opened)?;
                     break;
                 }
             }
@@ -746,18 +778,18 @@ impl<'a> Parser<'a> {
     }
 
     fn while_stat(&mut self) -> PResult<StmtKind> {
-        let line = self.advance().line;
+        let opened = self.advance().start;
         let cond = self.expr()?;
         self.expect(T::Do, "do")?;
         let (body, _) = self.loop_body();
-        self.expect_match(T::End, "while", line)?;
+        self.expect_match(T::End, "while", opened)?;
         Ok(StmtKind::While { cond, body })
     }
 
     fn repeat_stat(&mut self) -> PResult<StmtKind> {
-        let line = self.advance().line;
+        let opened = self.advance().start;
         let (body, has_continue) = self.loop_body();
-        self.expect_match(T::Until, "repeat", line)?;
+        self.expect_match(T::Until, "repeat", opened)?;
         let cond = self.expr()?;
         if has_continue {
             let locals = top_level_locals(&body);
@@ -786,7 +818,7 @@ impl<'a> Parser<'a> {
     }
 
     fn for_stat(&mut self) -> PResult<StmtKind> {
-        let line = self.advance().line;
+        let opened = self.advance().start;
         let first = self.typed_name()?;
         match self.kind() {
             T::Eq => {
@@ -801,7 +833,7 @@ impl<'a> Parser<'a> {
                 };
                 self.expect(T::Do, "do")?;
                 let (body, _) = self.loop_body();
-                self.expect_match(T::End, "for", line)?;
+                self.expect_match(T::End, "for", opened)?;
                 Ok(StmtKind::NumericFor {
                     var: first,
                     start,
@@ -819,7 +851,7 @@ impl<'a> Parser<'a> {
                 let exprs = self.expr_list()?;
                 self.expect(T::Do, "do")?;
                 let (body, _) = self.loop_body();
-                self.expect_match(T::End, "for", line)?;
+                self.expect_match(T::End, "for", opened)?;
                 Ok(StmtKind::GenericFor { vars, exprs, body })
             }
             _ => Err(self.syntax_error("'=' or 'in' expected")),
@@ -846,9 +878,9 @@ impl<'a> Parser<'a> {
     }
 
     fn function_stat(&mut self) -> PResult<StmtKind> {
-        let line = self.advance().line;
+        let opened = self.advance().start;
         let name = self.func_name()?;
-        let func = self.func_body(line)?;
+        let func = self.func_body(opened)?;
         Ok(StmtKind::Function {
             name,
             func: Box::new(func),
@@ -858,9 +890,9 @@ impl<'a> Parser<'a> {
     fn local_stat(&mut self) -> PResult<StmtKind> {
         self.advance();
         if self.check(T::Function) {
-            let line = self.advance().line;
+            let opened = self.advance().start;
             let name = self.name()?;
-            let func = self.func_body(line)?;
+            let func = self.func_body(opened)?;
             return Ok(StmtKind::LocalFunction {
                 name,
                 func: Box::new(func),
@@ -897,7 +929,7 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        self.expect_match(T::RBrace, "{", open.line)?;
+        self.expect_match(T::RBrace, "{", open.start)?;
         let ty = if self.eat(T::Colon) {
             Some(self.ty()?)
         } else {
@@ -1120,8 +1152,8 @@ impl<'a> Parser<'a> {
             }
             T::LBrace => self.table()?,
             T::Function => {
-                let line = self.advance().line;
-                ExprKind::Function(Box::new(self.func_body(line)?))
+                let opened = self.advance().start;
+                ExprKind::Function(Box::new(self.func_body(opened)?))
             }
             T::InterpStart => self.interp()?,
             _ => {
@@ -1157,7 +1189,7 @@ impl<'a> Parser<'a> {
     fn number_lit(&self, t: &Token) -> NumberLit {
         let raw = self.text_of(t);
         NumberLit {
-            raw: String::from_utf8_lossy(raw).into(),
+            raw: NumText::from(&*String::from_utf8_lossy(raw)),
             value: crate::lexer::number_value(raw).ok(),
         }
     }
@@ -1190,9 +1222,9 @@ impl<'a> Parser<'a> {
                 })
             }
             T::LParen => {
-                let line = self.advance().line;
+                let opened = self.advance().start;
                 let inner = self.expr()?;
-                self.expect_match(T::RParen, "(", line)?;
+                self.expect_match(T::RParen, "(", opened)?;
                 Ok(Expr {
                     id: self.id(),
                     span: self.span_from(start),
@@ -1297,7 +1329,7 @@ impl<'a> Parser<'a> {
         } else {
             self.expr_list()?
         };
-        self.expect_match(T::RParen, "(", open.line)?;
+        self.expect_match(T::RParen, "(", open.start)?;
         Ok(Args::Parens {
             args,
             span: self.span_from(open.start),
@@ -1308,7 +1340,7 @@ impl<'a> Parser<'a> {
         match self.kind() {
             T::LParen => {
                 let t = *self.tok(0);
-                if t.line != self.prev().end_line {
+                if !self.same_line(self.prev().end, t.start) {
                     let span = self.token_span(&t);
                     self.error_at(
                         "E0104",
@@ -1344,12 +1376,12 @@ impl<'a> Parser<'a> {
         let open = self.advance();
         // As in `expr_list`, the fields come off the stack on every path.
         let mark = self.field_stack.len();
-        let result = self.table_fields(open.line);
+        let result = self.table_fields(open.start);
         let fields = self.field_stack.drain(mark..).collect();
         result.map(|()| ExprKind::Table(fields))
     }
 
-    fn table_fields(&mut self, line: u32) -> PResult<()> {
+    fn table_fields(&mut self, opened: u32) -> PResult<()> {
         loop {
             if self.check(T::RBrace) {
                 break;
@@ -1372,11 +1404,13 @@ impl<'a> Parser<'a> {
                     let name = self.name()?;
                     self.advance();
                     let value = self.expr()?;
-                    TableField::Named {
-                        name,
-                        value,
-                        span: self.span_from(start),
-                    }
+                    let field = TableField::Named { name, value };
+                    // The field's span is not stored: it runs from the name
+                    // to the end of the value. That relies on `expr()`
+                    // returning a value whose span ends at the last token it
+                    // consumed, the same end `span_from` takes.
+                    debug_assert_eq!(field.span(), self.span_from(start));
+                    field
                 }
                 _ => TableField::Positional(self.expr()?),
             };
@@ -1385,7 +1419,7 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        self.expect_match(T::RBrace, "{", line)?;
+        self.expect_match(T::RBrace, "{", opened)?;
         Ok(())
     }
 
@@ -1405,9 +1439,9 @@ impl<'a> Parser<'a> {
                     });
                 }
                 T::InterpOpen => {
-                    let line = self.advance().line;
+                    let opened = self.advance().start;
                     parts.push(InterpPart::Expr(self.expr()?));
-                    self.expect_match(T::InterpClose, "{", line)?;
+                    self.expect_match(T::InterpClose, "{", opened)?;
                 }
                 T::InterpEnd => {
                     self.advance();
@@ -1416,7 +1450,7 @@ impl<'a> Parser<'a> {
                 _ => {
                     return Err(self.syntax_error(format!(
                         "'`' expected (to close '`' at line {})",
-                        open.line
+                        self.line_of(open.start)
                     )));
                 }
             }
@@ -1427,13 +1461,13 @@ impl<'a> Parser<'a> {
     // --------------------------------------------------------- functions --
 
     /// `[<T>] ( params ) [: ret] block end`
-    fn func_body(&mut self, line: u32) -> PResult<FuncBody> {
+    fn func_body(&mut self, opened: u32) -> PResult<FuncBody> {
         let start = self.tok(0).start;
         let type_params = self.type_params_opt()?;
         let params_start = self.tok(0).start;
         let open = self.expect(T::LParen, "(")?;
         let (params, vararg) = self.param_list(false)?;
-        self.expect_match(T::RParen, "(", open.line)?;
+        self.expect_match(T::RParen, "(", open.start)?;
         let params_span = self.span_from(params_start);
         let ret = if self.eat(T::Colon) {
             Some(self.ret_type()?)
@@ -1446,7 +1480,7 @@ impl<'a> Parser<'a> {
         });
         let body = self.block();
         self.funcs.pop();
-        let end = self.expect_match(T::End, "function", line)?;
+        let end = self.expect_match(T::End, "function", opened)?;
         Ok(FuncBody {
             type_params,
             params,
@@ -1466,7 +1500,7 @@ impl<'a> Parser<'a> {
         let params_start = self.tok(0).start;
         let open = self.expect(T::LParen, "(")?;
         let (params, vararg) = self.param_list(declaration)?;
-        self.expect_match(T::RParen, "(", open.line)?;
+        self.expect_match(T::RParen, "(", open.start)?;
         let params_span = self.span_from(params_start);
         let ret = if self.eat(T::Colon) {
             Some(self.ret_type()?)
@@ -1556,11 +1590,9 @@ impl<'a> Parser<'a> {
         let mut head = t;
         head.kind = first;
         head.end = t.start + 1;
-        head.end_line = t.line;
         let mut tail = t;
         tail.kind = rest;
         tail.start = t.start + 1;
-        tail.trivia_start = t.trivia_end;
         self.lexed.tokens[self.pos] = head;
         self.lexed.tokens.insert(self.pos + 1, tail);
     }
@@ -1731,7 +1763,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 let open = self.advance();
                 let e = self.expr()?;
-                self.expect_match(T::RParen, "(", open.line)?;
+                self.expect_match(T::RParen, "(", open.start)?;
                 TypeKind::Typeof(Box::new(e))
             }
             T::Name => {
@@ -1867,7 +1899,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        self.expect_match(T::RParen, "(", open.line)?;
+        self.expect_match(T::RParen, "(", open.start)?;
         Ok((params, vararg, self.span_from(open.start)))
     }
 
@@ -1922,7 +1954,7 @@ impl<'a> Parser<'a> {
         }
         if self.check(T::Name)
             && self.is_word_at(1, "is")
-            && self.tok(1).line == self.tok(0).end_line
+            && self.same_line(self.tok(0).end, self.tok(1).start)
         {
             let name = self.name()?;
             self.advance();
@@ -2023,7 +2055,7 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        self.expect_match(T::RBrace, "{", open.line)?;
+        self.expect_match(T::RBrace, "{", open.start)?;
         Ok(TypeKind::Table(fields))
     }
 
@@ -2059,7 +2091,7 @@ impl<'a> Parser<'a> {
         if is_abstract {
             self.advance();
         }
-        let line = self.advance().line; // class
+        let opened = self.advance().start; // class
         let name = self.name()?;
         let type_params = self.type_params_opt()?;
         let extends = if self.is_word("extends") {
@@ -2086,7 +2118,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        let end = self.expect_match(T::End, "class", line)?;
+        let end = self.expect_match(T::End, "class", opened)?;
         Ok(ClassDecl {
             is_abstract,
             name,
@@ -2143,7 +2175,7 @@ impl<'a> Parser<'a> {
             .iter()
             .any(|m| matches!(m, Modifier::Abstract | Modifier::Overload));
         let kind = if self.check(T::Function) {
-            let line = self.advance().line;
+            let opened = self.advance().start;
             let name = self.name()?;
             if signature_only {
                 ClassMemberKind::Method {
@@ -2154,12 +2186,12 @@ impl<'a> Parser<'a> {
             } else {
                 ClassMemberKind::Method {
                     name,
-                    func: Box::new(self.method_body(line)?),
+                    func: Box::new(self.method_body(opened)?),
                     has_body: true,
                 }
             }
         } else if self.is_word("constructor") && self.kind_at(1) == T::LParen {
-            let line = self.advance().line;
+            let opened = self.advance().start;
             if signature_only {
                 ClassMemberKind::Constructor {
                     func: Box::new(self.signature(false)?),
@@ -2167,31 +2199,31 @@ impl<'a> Parser<'a> {
                 }
             } else {
                 ClassMemberKind::Constructor {
-                    func: Box::new(self.method_body(line)?),
+                    func: Box::new(self.method_body(opened)?),
                     has_body: true,
                 }
             }
         } else if self.is_word("get") && self.kind_at(1) == T::Name {
-            let line = self.advance().line;
+            let opened = self.advance().start;
             let name = self.name()?;
             let open = self.expect(T::LParen, "(")?;
-            self.expect_match(T::RParen, "(", open.line)?;
+            self.expect_match(T::RParen, "(", open.start)?;
             let ty = if self.eat(T::Colon) {
                 Some(self.ty()?)
             } else {
                 None
             };
             let body = self.method_block();
-            self.expect_match(T::End, "get", line)?;
+            self.expect_match(T::End, "get", opened)?;
             ClassMemberKind::Getter { name, ty, body }
         } else if self.is_word("set") && self.kind_at(1) == T::Name {
-            let line = self.advance().line;
+            let opened = self.advance().start;
             let name = self.name()?;
             let open = self.expect(T::LParen, "(")?;
             let param = self.typed_name()?;
-            self.expect_match(T::RParen, "(", open.line)?;
+            self.expect_match(T::RParen, "(", open.start)?;
             let body = self.method_block();
-            self.expect_match(T::End, "set", line)?;
+            self.expect_match(T::End, "set", opened)?;
             ClassMemberKind::Setter { name, param, body }
         } else if self.check(T::Name) {
             let name = self.name()?;
@@ -2229,8 +2261,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Methods are vararg only when they declare `...`.
-    fn method_body(&mut self, line: u32) -> PResult<FuncBody> {
-        self.func_body(line)
+    fn method_body(&mut self, opened: u32) -> PResult<FuncBody> {
+        self.func_body(opened)
     }
 
     fn method_block(&mut self) -> Block {
@@ -2241,7 +2273,7 @@ impl<'a> Parser<'a> {
     }
 
     fn interface_decl(&mut self) -> PResult<InterfaceDecl> {
-        let line = self.advance().line; // interface
+        let opened = self.advance().start; // interface
         let name = self.name()?;
         let type_params = self.type_params_opt()?;
         let extends = self.type_list_after("extends")?;
@@ -2249,7 +2281,7 @@ impl<'a> Parser<'a> {
         while !self.check(T::End) && !self.check(T::Eof) {
             members.push(self.interface_member()?);
         }
-        self.expect_match(T::End, "interface", line)?;
+        self.expect_match(T::End, "interface", opened)?;
         Ok(InterfaceDecl {
             name,
             type_params,
@@ -2308,12 +2340,12 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        self.expect_match(T::RBrace, "{", open.line)?;
+        self.expect_match(T::RBrace, "{", open.start)?;
         Ok(EnumDecl { name, items })
     }
 
     fn declare(&mut self) -> PResult<Declare> {
-        let line = self.advance().line; // declare
+        let opened = self.advance().start; // declare
         if self.eat(T::Function) {
             let name = self.func_name()?;
             let sig = self.signature(true)?;
@@ -2334,7 +2366,7 @@ impl<'a> Parser<'a> {
             "namespace" => {
                 let name = self.name()?;
                 let members = self.ns_members()?;
-                self.expect_match(T::End, "namespace", line)?;
+                self.expect_match(T::End, "namespace", opened)?;
                 Ok(Declare::Namespace { name, members })
             }
             "class" => {
@@ -2348,7 +2380,7 @@ impl<'a> Parser<'a> {
                 };
                 let implements = self.type_list_after("implements")?;
                 let members = self.decl_members()?;
-                self.expect_match(T::End, "class", line)?;
+                self.expect_match(T::End, "class", opened)?;
                 Ok(Declare::Class {
                     name,
                     type_params,
@@ -2375,7 +2407,7 @@ impl<'a> Parser<'a> {
                 let t = self.expect_string()?;
                 let path = self.string_lit(&t);
                 let members = self.ns_members()?;
-                self.expect_match(T::End, "module", line)?;
+                self.expect_match(T::End, "module", opened)?;
                 Ok(Declare::Module { path, members })
             }
         }
@@ -2405,13 +2437,13 @@ impl<'a> Parser<'a> {
                     sig: Box::new(self.signature(true)?),
                 }
             } else if self.is_word("namespace") && self.kind_at(1) == T::Name {
-                let line = self.advance().line;
+                let opened = self.advance().start;
                 let name = self.name()?;
                 let members = self.ns_members()?;
-                self.expect_match(T::End, "namespace", line)?;
+                self.expect_match(T::End, "namespace", opened)?;
                 NsMemberKind::Namespace { name, members }
             } else if self.is_word("class") && self.kind_at(1) == T::Name {
-                let line = self.advance().line;
+                let opened = self.advance().start;
                 let name = self.name()?;
                 let type_params = self.type_params_opt()?;
                 let extends = if self.is_word("extends") {
@@ -2421,7 +2453,7 @@ impl<'a> Parser<'a> {
                     None
                 };
                 let members = self.decl_members()?;
-                self.expect_match(T::End, "class", line)?;
+                self.expect_match(T::End, "class", opened)?;
                 NsMemberKind::Class {
                     name,
                     type_params,
@@ -2581,12 +2613,12 @@ impl<'a> Parser<'a> {
                 StmtKind::Local { names, values }
             }
             T::Function => {
-                let line = self.advance().line;
+                let opened = self.advance().start;
                 let name = self.func_name()?;
                 if name.path.len() > 1 || name.method.is_some() {
                     self.error_at("E0118", name.span, "`export function` takes a plain name");
                 }
-                let func = self.func_body(line)?;
+                let func = self.func_body(opened)?;
                 StmtKind::Function {
                     name,
                     func: Box::new(func),

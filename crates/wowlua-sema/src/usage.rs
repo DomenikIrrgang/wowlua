@@ -1056,11 +1056,11 @@ impl<'a> Walker<'a> {
             return;
         };
         for field in fields {
-            if let TableField::Named { name, value, span } = field {
+            if let TableField::Named { name, value } = field {
                 let mut inner = path.1.clone();
                 inner.push(name.text.to_string());
                 let inner = (path.0.clone(), inner);
-                self.def_key(Key::of_path(inner.0.clone(), inner.1.clone()), *span);
+                self.def_key(Key::of_path(inner.0.clone(), inner.1.clone()), field.span());
                 self.constructor_fields(&inner, value);
             }
         }

@@ -44,9 +44,14 @@ impl Lexed {
         offset - self.line_starts[line as usize - 1]
     }
 
-    /// The leading trivia of `token`.
-    pub fn trivia_of(&self, token: &Token) -> &[Trivia] {
-        &self.trivia[token.trivia_start as usize..token.trivia_end as usize]
+    /// The leading trivia of `tokens[index]`: it starts where the previous
+    /// token's ends.
+    pub fn trivia_of(&self, index: usize) -> &[Trivia] {
+        let start = match index {
+            0 => 0,
+            i => self.tokens[i - 1].trivia_end,
+        };
+        &self.trivia[start as usize..self.tokens[index].trivia_end as usize]
     }
 }
 
@@ -62,7 +67,6 @@ struct Lexer<'a> {
     src: &'a [u8],
     file: FileId,
     pos: usize,
-    line: u32,
     out: Lexed,
     modes: Vec<Mode>,
 }
@@ -73,7 +77,6 @@ pub fn lex(src: &[u8], file: FileId) -> Lexed {
         src,
         file,
         pos: 0,
-        line: 1,
         out: Lexed {
             line_starts: vec![0],
             ..Lexed::default()
@@ -135,7 +138,6 @@ impl<'a> Lexer<'a> {
     fn consume_newline(&mut self) {
         let len = self.newline_len();
         self.pos += len;
-        self.line += 1;
         self.out.line_starts.push(self.pos as u32);
     }
 
@@ -156,11 +158,9 @@ impl<'a> Lexer<'a> {
                 self.interp_text();
                 continue;
             }
-            let trivia_start = self.out.trivia.len() as u32;
             self.trivia();
             let trivia_end = self.out.trivia.len() as u32;
             let start = self.pos;
-            let line = self.line;
             let kind = if self.at_end() {
                 TokenKind::Eof
             } else {
@@ -170,9 +170,6 @@ impl<'a> Lexer<'a> {
                 kind,
                 start: start as u32,
                 end: self.pos as u32,
-                line,
-                end_line: self.line,
-                trivia_start,
                 trivia_end,
             });
             if kind == TokenKind::Eof {
@@ -184,19 +181,17 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn push_trivia(&mut self, kind: TriviaKind, start: usize, line: u32) {
+    fn push_trivia(&mut self, kind: TriviaKind, start: usize) {
         self.out.trivia.push(Trivia {
             kind,
             start: start as u32,
             end: self.pos as u32,
-            line,
         });
     }
 
     fn trivia(&mut self) {
         loop {
             let start = self.pos;
-            let line = self.line;
             let c = self.peek(0);
             if self.at_end() {
                 return;
@@ -205,17 +200,17 @@ impl<'a> Lexer<'a> {
                 while !self.at_end() && is_space(self.peek(0)) {
                     self.pos += 1;
                 }
-                self.push_trivia(TriviaKind::Whitespace, start, line);
+                self.push_trivia(TriviaKind::Whitespace, start);
             } else if self.newline_len() > 0 {
                 self.consume_newline();
-                self.push_trivia(TriviaKind::Newline, start, line);
+                self.push_trivia(TriviaKind::Newline, start);
             } else if c == b'-' && self.peek(1) == b'-' {
                 self.pos += 2;
                 if self.peek(0) == b'[' {
                     let save = self.pos;
                     if let Some(level) = self.long_bracket_level() {
                         self.long_bracket_body(level, start, true);
-                        self.push_trivia(TriviaKind::BlockComment, start, line);
+                        self.push_trivia(TriviaKind::BlockComment, start);
                         continue;
                     }
                     self.pos = save;
@@ -223,7 +218,7 @@ impl<'a> Lexer<'a> {
                 while !self.at_end() && self.newline_len() == 0 {
                     self.pos += 1;
                 }
-                self.push_trivia(TriviaKind::LineComment, start, line);
+                self.push_trivia(TriviaKind::LineComment, start);
             } else {
                 return;
             }
@@ -545,7 +540,6 @@ impl<'a> Lexer<'a> {
     /// Inside a backtick string: reads text up to `{`, `` ` `` or the end.
     fn interp_text(&mut self) {
         let start = self.pos;
-        let line = self.line;
         let mut kind = None;
         while kind.is_none() {
             if self.at_end() {
@@ -568,20 +562,19 @@ impl<'a> Lexer<'a> {
             }
         }
         if self.pos > start {
-            self.push_token(TokenKind::InterpText, start, line);
+            self.push_token(TokenKind::InterpText, start);
         }
         let start = self.pos;
-        let line = self.line;
         match kind {
             Some(b'`') => {
                 self.pos += 1;
                 self.modes.pop();
-                self.push_token(TokenKind::InterpEnd, start, line);
+                self.push_token(TokenKind::InterpEnd, start);
             }
             Some(_) => {
                 self.pos += 1;
                 self.modes.push(Mode::Expr { depth: 0 });
-                self.push_token(TokenKind::InterpOpen, start, line);
+                self.push_token(TokenKind::InterpOpen, start);
             }
             None => {
                 // End of file inside the string: the parser reports the
@@ -592,16 +585,15 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn push_token(&mut self, kind: TokenKind, start: usize, line: u32) {
-        let at = self.out.trivia.len() as u32;
+    fn push_token(&mut self, kind: TokenKind, start: usize) {
+        // No trivia of its own: the range from the previous token's end is
+        // empty.
+        let trivia_end = self.out.trivia.len() as u32;
         self.out.tokens.push(Token {
             kind,
             start: start as u32,
             end: self.pos as u32,
-            line,
-            end_line: self.line,
-            trivia_start: at,
-            trivia_end: at,
+            trivia_end,
         });
     }
 
