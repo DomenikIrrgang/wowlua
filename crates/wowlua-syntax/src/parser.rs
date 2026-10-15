@@ -231,7 +231,8 @@ impl<'a> Parser<'a> {
     fn near(&self) -> String {
         let t = self.tok(0);
         match t.kind {
-            T::Eof => "<eof>".to_string(),
+            // Lua quotes it too: `near '<eof>'`.
+            T::Eof => "'<eof>'".to_string(),
             T::InterpText | T::String | T::LongString | T::Number | T::Name | T::Error => {
                 let text = String::from_utf8_lossy(self.text_of(t));
                 let short: String = text.chars().take(40).collect();

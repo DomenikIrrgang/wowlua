@@ -1,0 +1,60 @@
+//! Functions (Lua closures and native functions) and upvalue cells.
+
+use std::rc::Rc;
+
+use crate::error::LuaError;
+use crate::heap::{TableRef, ThreadRef, UpvalRef};
+use crate::proto::Proto;
+use crate::value::Value;
+use crate::vm::Vm;
+
+/// A native function: receives its arguments, returns its results.
+pub type NativeFn = fn(&mut Vm, NativeCall) -> Result<Vec<Value>, LuaError>;
+
+/// One call of a native function.
+pub struct NativeCall {
+    pub args: Vec<Value>,
+    /// The native function's own upvalues (set when it was created).
+    pub upvals: Rc<[Value]>,
+}
+
+pub struct LuaFunction {
+    pub proto: Rc<Proto>,
+    pub upvals: Box<[UpvalRef]>,
+    pub env: TableRef,
+}
+
+pub struct NativeFunction {
+    pub f: NativeFn,
+    pub name: &'static str,
+    pub upvals: Rc<[Value]>,
+    pub env: TableRef,
+}
+
+pub enum Function {
+    Lua(LuaFunction),
+    Native(NativeFunction),
+}
+
+impl Function {
+    pub fn env(&self) -> TableRef {
+        match self {
+            Function::Lua(f) => f.env,
+            Function::Native(f) => f.env,
+        }
+    }
+
+    pub fn set_env(&mut self, env: TableRef) {
+        match self {
+            Function::Lua(f) => f.env = env,
+            Function::Native(f) => f.env = env,
+        }
+    }
+}
+
+/// An upvalue: open while it refers to a live stack slot of a thread,
+/// closed once that slot's scope ends.
+pub enum Upval {
+    Open { thread: ThreadRef, idx: usize },
+    Closed(Value),
+}

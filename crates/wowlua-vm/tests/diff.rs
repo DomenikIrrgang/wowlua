@@ -1,0 +1,286 @@
+//! Differential tests: every snippet runs in wowlua's VM and in PUC Lua 5.1
+//! (through mlua); printed output and the final error must be identical.
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use wowlua_vm::{Value, Vm};
+
+/// Output lines, then `error: <message>` if the chunk failed.
+fn ours(src: &str) -> Vec<String> {
+    let out = Rc::new(RefCell::new(Vec::<u8>::new()));
+    let mut vm = Vm::new();
+    let sink = out.clone();
+    vm.set_output(move |b| sink.borrow_mut().extend_from_slice(b));
+    let result = match vm.load(src.as_bytes(), "=test") {
+        Ok(f) => vm.call(f, &[]).map(|_| ()).map_err(|e| match e.value {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            other => format!("({})", other.type_name()),
+        }),
+        Err(msg) => Err(msg),
+    };
+    let mut lines: Vec<String> = String::from_utf8_lossy(&out.borrow())
+        .lines()
+        .map(str::to_string)
+        .collect();
+    if let Err(e) = result {
+        lines.push(format!("error: {e}"));
+    }
+    normalize(lines)
+}
+
+fn puc(src: &str) -> Vec<String> {
+    let lua = mlua::Lua::new();
+    let out = Rc::new(RefCell::new(Vec::<String>::new()));
+    let sink = out.clone();
+    // print as Lua 5.1's: tostring of each argument, tab-separated.
+    let print = lua
+        .create_function(move |lua, args: mlua::MultiValue| {
+            let tostring: mlua::Function = lua.globals().get("tostring")?;
+            let mut parts = Vec::new();
+            for a in args {
+                let s: mlua::Value = tostring.call(a)?;
+                match s {
+                    mlua::Value::String(s) => {
+                        parts.push(String::from_utf8_lossy(&s.as_bytes()).into_owned())
+                    }
+                    mlua::Value::Number(n) => parts.push(wowlua_vm::number::fmt_num(n)),
+                    mlua::Value::Integer(n) => parts.push(n.to_string()),
+                    _ => {
+                        return Err(mlua::Error::runtime(
+                            "'tostring' must return a string to 'print'",
+                        ));
+                    }
+                }
+            }
+            for line in parts.join("\t").split('\n') {
+                sink.borrow_mut().push(line.to_string());
+            }
+            Ok(())
+        })
+        .unwrap();
+    lua.globals().set("print", print).unwrap();
+    let result = lua.load(src).set_name("=test").exec();
+    let mut lines = out.borrow().clone();
+    if let Err(e) = result {
+        let msg = match e {
+            mlua::Error::RuntimeError(m) | mlua::Error::SyntaxError { message: m, .. } => m,
+            mlua::Error::CallbackError { cause, .. } => cause.to_string(),
+            other => other.to_string(),
+        };
+        // mlua appends a traceback to runtime errors.
+        let msg = msg
+            .split("\nstack traceback:")
+            .next()
+            .unwrap_or("")
+            .to_string();
+        lines.push(format!("error: {msg}"));
+    }
+    normalize(lines)
+}
+
+fn normalize(lines: Vec<String>) -> Vec<String> {
+    regex_lite(&lines)
+}
+
+/// Replaces `0x…` addresses so object identities compare equal.
+fn regex_lite(lines: &[String]) -> Vec<String> {
+    lines
+        .iter()
+        .map(|l| {
+            let mut out = String::new();
+            let mut rest = l.as_str();
+            while let Some(i) = rest.find("0x") {
+                out.push_str(&rest[..i]);
+                let tail = &rest[i + 2..];
+                let n = tail.chars().take_while(|c| c.is_ascii_hexdigit()).count();
+                if n >= 6 {
+                    out.push_str("ADDR");
+                } else {
+                    out.push_str(&rest[i..i + 2 + n]);
+                }
+                rest = &tail[n..];
+            }
+            out.push_str(rest);
+            out
+        })
+        .collect()
+}
+
+#[track_caller]
+fn same(src: &str) {
+    let a = ours(src);
+    let b = puc(src);
+    assert_eq!(
+        a,
+        b,
+        "\n--- source ---\n{src}\n--- ours ---\n{}\n--- PUC ---\n{}\n",
+        a.join("\n"),
+        b.join("\n")
+    );
+}
+
+#[test]
+fn arithmetic_and_numbers() {
+    same("print(1 + 2, 7 - 10, 3 * 4, 7 / 2, 7 % 3, -7 % 3, 7 % -3, 2 ^ 10, -2 ^ 2)");
+    same("print(1/3, 100, 1e15, 1e14, 123456789012345, 0.1 + 0.2, -0)");
+    same("local a = 0 print(-a, 1/0, -1/0)");
+    same("print('10' + 5, '3' * '4', '0x10' + 0, ' 2 ' * 2)");
+    same("print(10 == '10', 2 < 3, 'a' < 'b', 'abc' < 'abd', 'Z' < 'a')");
+}
+
+#[test]
+fn strings_and_concat() {
+    same("print('a' .. 'b' .. 1 .. 2.5)");
+    same("local s = 'x' for i = 1, 3 do s = s .. i end print(s)");
+    same("print(#'hello', #'')");
+    same("print(1 .. '')");
+}
+
+#[test]
+fn locals_and_assignment() {
+    same("local a, b, c = 1, 2 print(a, b, c)");
+    same("local a, b = 1, 2, 3 print(a, b)");
+    same("local a, b = 1, 2 a, b = b, a print(a, b)");
+    same("local t = {} local i = 1 i, t[i] = i + 1, 20 print(i, t[1], t[2])");
+    same("x, y = 1 print(x, y)");
+    same("local t = {1, 2, 3} local i = 1 t[i], i = 10, 2 print(t[1], t[2], i)");
+}
+
+#[test]
+fn control_flow() {
+    same(
+        "for i = 1, 3 do print(i) end for i = 3, 1, -1 do print(i) end for i = 1, 0 do print('no') end",
+    );
+    same("for i = 1, 2, 0.5 do print(i) end");
+    same("local i = 0 while i < 3 do i = i + 1 if i == 2 then break end end print(i)");
+    same("local i = 0 repeat local j = i i = i + 1 until j >= 2 print(i)");
+    same("local x = 5 if x > 10 then print('a') elseif x > 3 then print('b') else print('c') end");
+    same("for _, v in ipairs({10, 20, nil, 40}) do print(v) end");
+    same("print(1 and 2, nil and 1, false or 'x', nil or false, 1 or error('no'))");
+    same("local a = nil print(not a, not not a, a == nil, a ~= nil)");
+    same(
+        "local t = {} for i = 1, 3 do t[#t + 1] = function() return i end end print(t[1](), t[2](), t[3]())",
+    );
+    same("for k, v in next, {5} do print(k, v) end");
+}
+
+#[test]
+fn functions_and_varargs() {
+    same("local function f(...) return select('#', ...), ... end print(f(1, nil, 3))");
+    same(
+        "local function f(a, b, ...) local t = {...} return a, b, #t end print(f(1)) print(f(1, 2, 3, 4))",
+    );
+    same(
+        "local function f() return 1, 2, 3 end print(f()) print((f())) print(f(), 10) local t = {f(), f()} print(#t)",
+    );
+    same("print(select(2, 'a', 'b', 'c')) print(select(-1, 'a', 'b', 'c'))");
+    same("print(unpack({1, 2, 3})) print(unpack({1, 2, 3}, 2)) print(unpack({1, 2, 3}, 2, 5))");
+    same(
+        "local function fact(n) if n <= 1 then return 1 end return n * fact(n - 1) end print(fact(10))",
+    );
+    same(
+        "local function count(n) if n == 0 then return 'done' end return count(n - 1) end print(count(50000))",
+    );
+    same(
+        "local function mk() local c = 0 return function() c = c + 1 return c end end local f, g = mk(), mk() print(f(), f(), g())",
+    );
+    same(
+        "local t = {} function t.f(x) return x * 2 end function t:g(x) return self.k + x end t.k = 1 print(t.f(3), t:g(2))",
+    );
+}
+
+#[test]
+fn tables() {
+    same("local t = {1, 2, 3, x = 1, [10] = 5} print(#t, t.x, t[10])");
+    same("local t = {} t[1] = 1 t[2] = 2 t[4] = 4 print(#t)");
+    same(
+        "local t = {1, 2, nil, 4} print(#t) local u = {nil, nil, 3} print(#u) local v = {} v[5] = 1 print(#v)",
+    );
+    same("local t = {} for i = 1, 10 do t[i] = i end for i = 1, 10, 2 do t[i] = nil end print(#t)");
+    same(
+        "local t = {} for _, k in ipairs({'b', 'a', 'zz', 'name', 'x1', 'x2', 'text', 'value'}) do t[k] = true end local o = {} for k in pairs(t) do o[#o + 1] = k end print(unpack(o))",
+    );
+    same(
+        "local t = {10, 20, 30, a = 1, b = 2, [1.5] = 3, [true] = 4} local o = {} for k, v in pairs(t) do o[#o + 1] = tostring(k) .. '=' .. tostring(v) end print(unpack(o))",
+    );
+    same("local t = {n = 0} t.n = t.n + 1 print(t.n, t['n'])");
+    same("local t = {[1.0] = 'one', [2] = 'two'} print(t[1], t[2.0])");
+    same("local t = {} for i = 1, 100 do t[i] = i end print(#t, t[50])");
+    same(
+        "local t = setmetatable({}, {__index = function(t, k) return k .. '!' end}) print(t.hi, rawget(t, 'hi'))",
+    );
+    same(
+        "local log = {} local t = setmetatable({}, {__newindex = function(t, k, v) rawset(t, k, v * 2) end}) t.a = 2 print(t.a)",
+    );
+    same(
+        "local mt = {__add = function(a, b) return 'added' end, __concat = function(a, b) return 'cat' end, __unm = function() return 'neg' end, __call = function(self, x) return 'called', x end} local t = setmetatable({}, mt) print(t + 1, 1 + t, t .. 'x', 'x' .. t, -t, t(5))",
+    );
+    same(
+        "local mt = {__eq = function() return true end, __lt = function() return true end, __le = function() return false end} local a, b = setmetatable({}, mt), setmetatable({}, mt) print(a == b, a < b, a <= b, a ~= b)",
+    );
+    same(
+        "local t = setmetatable({}, {__tostring = function() return 'T!' end}) print(t, tostring(t))",
+    );
+    same("print(getmetatable(setmetatable({}, {__metatable = 'locked'})))");
+    same("print(pcall(setmetatable, setmetatable({}, {__metatable = 1}), {}))");
+}
+
+#[test]
+fn errors_name_their_operands() {
+    same("local x print(x.y)");
+    same("print(undefined_global.field)");
+    same("local t = {} print(t.a.b)");
+    same("local t = {} t.x.y = 1");
+    same("local s = 'x' .. {}");
+    same("local n = 1 + {}");
+    same("local a = {} local b = a + 1");
+    same("undefined_function()");
+    same("local t = {} t.method()");
+    same("local t = {} t:method()");
+    same("local f = 1 f()");
+    same("print(1 < 'x')");
+    same("print({} < {})");
+    same("print(#nil)");
+    same("local up = nil local function f() return up.x end f()");
+    same("for i = 'a', 2 do end");
+    same("local t = {} t[nil] = 1");
+}
+
+#[test]
+fn error_handling() {
+    same("print(pcall(error, 'msg'))");
+    same("print(pcall(error, 'msg', 0))");
+    same("print(pcall(function() error('deep') end))");
+    same("print(pcall(function() error('lvl2', 2) end))");
+    same("print(pcall(function() error({}) end))");
+    same("print(pcall(function() error() end))");
+    same("print(pcall(function() local x = nil; return x.y end))");
+    same("print(xpcall(function() error('boom') end, function(m) return 'handled: ' .. m end))");
+    same("print(pcall(assert, false)) print(pcall(assert, nil, 'why')) print(assert(1, 2, 3))");
+    same("print(select('#', pcall(error)))");
+    same("error('top level')");
+    same("error('no position', 0)");
+    same(
+        "local ok, e = pcall(function() local t = setmetatable({}, {__index = function() error('in index') end}) return t.x end) print(ok, e)",
+    );
+}
+
+#[test]
+fn base_library() {
+    same("print(type(nil), type(1), type('s'), type({}), type(print), type(true))");
+    same(
+        "print(tonumber('10'), tonumber('0x1F'), tonumber('1e2'), tonumber('z'), tonumber('10', 2), tonumber('ff', 16), tonumber('zz', 36), tonumber(' 12 '))",
+    );
+    same("print(tostring(nil), tostring(true), tostring(12), tostring(1.5))");
+    same("print(rawequal({}, {}), rawequal(1, 1), rawequal('a', 'a'))");
+    same("local t = {} rawset(t, 'a', 1) print(rawget(t, 'a'))");
+    same("print(next({}), type(next), select('#', next({})))");
+    same("local f = loadstring('return 1 + ...') print(f(41)) print(loadstring('x ='))");
+    same("print(pcall(tostring))");
+    same("print(pcall(tonumber, 'x', 99))");
+    same(
+        "print(getfenv(1) == _G, getfenv(0) == _G) local env = {print = print} local function f() x = 1 end setfenv(f, env) f() print(env.x, x)",
+    );
+    same("print(_VERSION)");
+}

@@ -28,6 +28,7 @@ wowlua-api = { path = "crates/wowlua-api" }
 wowlua-sema = { path = "crates/wowlua-sema" }
 wowlua-driver = { path = "crates/wowlua-driver" }
 wowlua-pkg = { path = "crates/wowlua-pkg" }
+wowlua-vm = { path = "crates/wowlua-vm" }
 
 anyhow = "1.0"
 assert_cmd = "2.2"
