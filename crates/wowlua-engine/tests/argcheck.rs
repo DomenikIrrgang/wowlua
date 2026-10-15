@@ -68,7 +68,11 @@ fn forever_camelot() {
     let theirs = table(&vm, theirs);
     // As the client runs it: addon code, its execution tainted.
     let chunk = vm
-        .load_as(&probe, "@argcheck.lua", "StdTest")
+        .load_as(
+            &probe,
+            "@Interface/AddOns/StdTest/src/argcheck.lua",
+            "StdTest",
+        )
         .expect("compiles");
     let driver = vm
         .load(b"local chunk = ... local m local ns = { __wowlua = { define = function(_, x) m = x end } } chunk('StdTest', ns) return m.run()", "=driver")
