@@ -186,11 +186,12 @@ fn print_ours() {
 
 /// Where the client crashes (`/stdtest crashlimit`, WoW Forever 1.60.1):
 /// `pcall` returning `#args + 100` or more values, `xpcall` one fewer (its
-/// handler takes a slot). The VM raises an error
+/// handler takes a slot), `pcallwithenv` three fewer (its status, the
+/// function and its environment). The VM raises an error
 /// naming the call instead (decision T194).
 #[test]
 fn pcall_crash_limit() {
-    let src = "local t = {} for i = 1, 200 do t[i] = i end
+    let src = "local t, u = {}, unpack for i = 1, 200 do t[i] = i end
 local function f(n) return unpack(t, 1, n) end
 local out = {}
 out[1] = select('#', pcall(unpack, t, 1, 103))
@@ -199,6 +200,11 @@ out[3] = select('#', pcall(f, 101))
 out[4] = select(2, pcall(function() return pcall(f, 102) end))
 out[5] = select('#', xpcall(f, print, 101))
 out[6] = select(2, pcall(function() return xpcall(f, print, 102) end))
+local function g(n) return u(t, 1, n) end
+out[7] = select('#', pcallwithenv(g, {}, 99))
+out[8] = select(2, pcall(function() return pcallwithenv(g, {}, 100) end))
+out[9] = select('#', pcallwithenv(g, {}, 101, 0, 0))
+out[10] = select(2, pcall(function() return pcallwithenv(g, {}, 102, 0, 0) end))
 return table.concat(out, '|')";
     let mut vm = Vm::wow();
     let f = vm.load(src.as_bytes(), "=crash").expect("compiles");
@@ -211,7 +217,7 @@ return table.concat(out, '|')";
     assert_eq!(
         String::from_utf8_lossy(vm.str_bytes(s)),
         format!(
-            "104|crash:5: pcall: 104 {assertion}|102|crash:7: pcall: 102 {assertion}|102|crash:9: xpcall: 102 {assertion}"
+            "104|crash:5: pcall: 104 {assertion}|102|crash:7: pcall: 102 {assertion}|102|crash:9: xpcall: 102 {assertion}|100|crash:12: pcallwithenv: 100 {assertion}|102|crash:14: pcallwithenv: 102 {assertion}"
         )
     );
 }

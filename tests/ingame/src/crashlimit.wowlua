@@ -174,9 +174,16 @@ const EXPERIMENTS: CrashExperiment[] = {
     },
     {
         name = "pcallwithenv(f, env, r), f reaching unpack through an upvalue",
-        prediction = "crash at r = 103 if it pushes its status as pcall does",
+        prediction = "crash at r = 100 (confirmed; 3 values below the room: status, f, env)",
         run = function()
             return scan("pcallwithenv(f, env, r) with an upvalue", function(r: number): number return select("#", G.pcallwithenv(bodyUpvalue, {}, r)) end, plus(1))
+        end,
+    },
+    {
+        name = "pcallwithenv(f, env, r, 0, 0): 5 arguments",
+        prediction = "crash at r = 102 (confirmed: #results + 3 >= #args + 100)",
+        run = function()
+            return scan("pcallwithenv(f, env, r, 0, 0)", function(r: number): number return select("#", G.pcallwithenv(bodyUpvalue, {}, r, 0, 0)) end, plus(1))
         end,
     },
 }

@@ -1029,6 +1029,19 @@ fn pcallwithenv(vm: &mut Vm, c: NativeCall) -> Ret {
     vm.errfunc = saved;
     vm.set_func_env(f, old);
     taint_object(vm);
+    // Its status, then the function and its environment (to restore it)
+    // go after the results: three slots of its room (`/stdtest crashlimit`
+    // 12 and 13 crashed at `#results + 3 >= #args + 100`).
+    if vm.rules.assertions
+        && let Ok(results) = &r
+        && results.len() + 3 >= c.len() + crate::stdlib::base::CLIENT_MINSTACK
+    {
+        return Err(crate::stdlib::base::crash(
+            vm,
+            "pcallwithenv",
+            results.len(),
+        ));
+    }
     let out = match r {
         Ok(mut results) => {
             results.insert(0, vm.taint().fresh(Value::Bool(true)));

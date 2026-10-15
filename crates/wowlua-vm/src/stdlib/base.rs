@@ -253,7 +253,7 @@ fn protected_results(
 /// `LUA_MINSTACK`: the slots a C function may fill without
 /// `lua_checkstack`, beyond its arguments (the client's 100, probed by
 /// `/stdtest crashlimit`; stock Lua's 20).
-const CLIENT_MINSTACK: usize = 100;
+pub(crate) const CLIENT_MINSTACK: usize = 100;
 
 /// `LUAI_MAXCSTACK`: a C function's frame holds its arguments and at most
 /// this many slots in all (`lua_checkstack` fails beyond).
@@ -266,7 +266,7 @@ pub(crate) fn fits_cstack(args: usize, n: usize) -> bool {
 }
 
 /// The error for a call that crashes the client (decision T194).
-fn crash(vm: &mut Vm, call: &str, results: usize) -> crate::error::LuaError {
+pub(crate) fn crash(vm: &mut Vm, call: &str, results: usize) -> crate::error::LuaError {
     vm.error(&format!(
         "{call}: {results} results crash the game (its Lua assertion \"L->top < L->ci->top\", lapi.c:577)"
     ))
