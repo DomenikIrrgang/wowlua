@@ -175,7 +175,12 @@ Off by default: mock-only tests start faster (decision T186).
   that rests on it alone is listed as unverified in the coverage report.
 - **Taint.** StdTest's taint experiments (`/stdtest taint`) taint one value on
   a path the client's secure code takes to a protected function and record
-  whether the action is blocked; the VM must agree. elune's taint cases
+  whether the action is blocked; the VM must agree. On WoW Forever 1.60.1
+  (`tests/client/forever-camelot-taint.lua`): secure code reading a tainted
+  global (Lua or C function) or table field is tainted, and the protected
+  call raises `ADDON_ACTION_FORBIDDEN` naming the addon; `hooksecurefunc`
+  leaves the hooked variable secure and the click allowed; `setfenv` taints
+  the function itself (its variable stays secure, the click is forbidden). elune's taint cases
   (vendored in `crates/wowlua-vm/tests/elune/`) also pass on the VM, but count
   only where the experiments confirm them.
 - **The client's behaviour.** Every WoW-specific rule (§17.3 to §17.5) has a
