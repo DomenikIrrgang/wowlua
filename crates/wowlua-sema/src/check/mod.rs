@@ -849,7 +849,7 @@ mod tests {
         );
         strict_err("print(math.randomseed(1))\n", "E2003");
         strict_ok(
-            "local s = \"wowlua\"\nlocal a: boolean = s:startswith(\"wow\") and s:endswith(\"lua\") and s:contains(\"wl\")\nlocal b: string = s:ltrim():rtrim(\"a\")\nlocal n: number = math.clamp(math.round(2.5), 0, 10) + math.lerp(0, 1, 0.5) + math.wrap(370, 0, 360)\nlocal list: string[] = { \"a\" }\nlocal i: number? = table.indexof(list, \"a\")\nlocal keys: string[] = table.keys({ x = 1 })\nlocal c: boolean = table.contains(list, \"a\") and table.isempty({})\ntable.removevalue(list, \"a\")\nlocal t: number = date(\"*t\").year + time() + difftime(2, 1)\nprint(a, b, n, i, keys, c, t)\n",
+            "local s = \"wowlua\"\nlocal a: boolean = s:startswith(\"wow\") and s:endswith(\"lua\") and s:contains(\"wl\")\nlocal b: string = s:ltrim():rtrim(\"a\")\nlocal n: number = math.clamp(math.round(2.5), 0, 10) + math.lerp(0, 1, 0.5) + math.wrap(370, 0, 360)\nlocal list: string[] = { \"a\" }\nlocal i: number? = table.indexof(list, \"a\")\nlocal keys: string[] = table.keys({ x = 1 })\nlocal c: boolean = table.contains(list, \"a\") and table.isempty({})\nlocal removed: number = table.removevalue(list, \"a\")\nlocal last: string? = table.removeunordered(list, 1)\nlocal frozen: { x: number } = table.freeze({ x = 1 })\nprint(removed, last, frozen.x)\nlocal t: number = date(\"*t\").year + time() + difftime(2, 1)\nprint(a, b, n, i, keys, c, t)\n",
         );
     }
 

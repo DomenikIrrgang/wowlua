@@ -76,14 +76,14 @@ declare namespace table
     function contains<V>(t: V[], value: V): boolean
     function count(t: table): number
     function create(arraySizeHint: number, nodeSizeHint: number?): table
-    function freeze(t: table)
-    function getcountinfo(t: table): ...number
+    function freeze<T extends table>(t: T): T
+    function getcountinfo(t: table): (number, number, number)
     function indexof<V>(t: V[], value: V): number?
     function isempty(t: table): boolean
     function isfrozen(t: table): boolean
     function keys<K, V>(t: { [K]: V }): K[]
-    function removeunordered<V>(t: V[], index: number)
-    function removevalue<V>(t: V[], value: V)
+    function removeunordered<V>(t: V[], index: number): V?
+    function removevalue<V>(t: V[], value: V): number
     function values<K, V>(t: { [K]: V }): V[]
 end
 
