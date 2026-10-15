@@ -70,7 +70,17 @@ S37, S38):
   handler takes a slot; `pcallwithenv` three fewer, it pushes the function
   and its environment after them) pushes its status past them, the assertion
   `L->top < L->ci->top` fails and the game crashes. Such calls fail with
-  an error naming the call (decision T194). `securecall`,
+  an error naming the call (decision T194). The call depth is Lua
+  5.1's: a thread's call-info array (a slot per Lua or C call) doubles
+  from 8, so the first "stack overflow" comes at 16384 calls; after one,
+  the array is cut back to 20000 slots and each collection may halve it
+  again (the next overflow comes at 20000, then 19968, 19456 or 18432),
+  and while handling one it may grow to 32768 ("error in error
+  handling"). Nested C calls (`pcall`, metamethods, `loadstring`'s
+  parser, which counts its syntax levels on from them) stop at 200 with
+  "C stack overflow"; unlike stock Lua 5.1's, the client's coroutines
+  continue their resumer's count, so nesting `coroutine.resume` stops
+  there too instead of overflowing the C stack. `securecall`,
   `securecallfunction`, `securecallmethod` and the
   coroutine functions return up to the 8000 slots without crashing.
 - **Per flavor.** Where flavors differ (a library function, an arithmetic

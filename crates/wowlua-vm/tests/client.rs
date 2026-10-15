@@ -15,11 +15,19 @@ fn repo() -> PathBuf {
 
 /// Loads the cases file as the client does, with a stand-in for wowlua's
 /// module runtime, and runs it: each case's result and each function's kind.
+/// `/stdtest probe` runs inside two `xpcall`s (the slash command's and the
+/// command's error handling), whose nested C calls count toward the limits
+/// the cases measure; so does this.
 const DRIVER: &str = "local chunk = ...
 local module
 local ns = { __wowlua = { define = function(_, m) module = m end } }
 chunk('StdTest', ns)
-return module.run(), module.kinds()";
+local results, kinds
+local function keep(e) return e end
+xpcall(function()
+    xpcall(function() results, kinds = module.run(), module.kinds() end, keep)
+end, keep)
+return results, kinds";
 
 fn strings(vm: &Vm, t: Value) -> BTreeMap<String, String> {
     let Value::Table(t) = t else {
@@ -219,5 +227,62 @@ return table.concat(out, '|')";
         format!(
             "104|crash:5: pcall: 104 {assertion}|102|crash:7: pcall: 102 {assertion}|102|crash:9: xpcall: 102 {assertion}|100|crash:12: pcallwithenv: 100 {assertion}|102|crash:14: pcallwithenv: 102 {assertion}"
         )
+    );
+}
+
+/// The client's nested C call limit (`/stdtest crashlimit` 14 to 16, WoW
+/// Forever 1.60.1), from the command's context: the slash command's two
+/// `xpcall`s and the experiment's `pcall`, then a coroutine per try, which
+/// continues the caller's count.
+#[test]
+fn c_call_limit() {
+    let src = "local function ascend(nest)
+    local last, d = 0, 1
+    while d <= 300 do
+        local ok, result = coroutine.wrap(function() return pcall(nest, d) end)()
+        if not ok or result ~= 'ok' then return last .. ' ' .. tostring(result) end
+        last, d = d, d + 1
+    end
+    return last
+end
+local function viaPcall(d)
+    if d == 0 then return 'ok' end
+    local ok, r = pcall(viaPcall, d - 1)
+    return ok and r or tostring(r)
+end
+local proxy = setmetatable({}, { __index = function(t, k) if k == 0 then return 'ok' end return t[k - 1] end })
+local function viaResume(d)
+    if d == 0 then return 'ok' end
+    local ok, r = coroutine.resume(coroutine.create(viaResume), d - 1)
+    return ok and r or tostring(r)
+end
+local out
+local function keep(e) return e end
+xpcall(function() xpcall(function()
+    local _, r = pcall(function()
+        return ascend(viaPcall) .. '|' .. ascend(function(d) return proxy[d] end) .. '|' .. ascend(viaResume)
+    end)
+    out = r
+end, keep) end, keep)
+return out";
+    // Each nested C call recurses in Rust: 200 of them need more than a
+    // test thread's stack (as in `xtask corpus lua51`).
+    let out = std::thread::Builder::new()
+        .stack_size(256 << 20)
+        .spawn(move || {
+            let mut vm = Vm::wow();
+            let f = vm.load(src.as_bytes(), "=depth").expect("compiles");
+            let r = vm.call(f, &[]).expect("runs");
+            let Value::Str(s) = r[0] else {
+                panic!("a string expected")
+            };
+            String::from_utf8_lossy(vm.str_bytes(s)).into_owned()
+        })
+        .expect("a thread")
+        .join()
+        .expect("no panic");
+    assert_eq!(
+        out,
+        "193 C stack overflow|192 depth:15: C stack overflow|194 C stack overflow"
     );
 }

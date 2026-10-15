@@ -165,6 +165,12 @@ local cases = {
     "return coroutine.wrap(function() local n = 0 local function g(...) n = n + 1 g(...) end local t = {} for i = 1, 100 do t[i] = i end local ok, e = pcall(g, unpack(t)) return n, e end)()",
     "return coroutine.wrap(function() local n = 0 local function g() n = n + 1 return (g()) end local ok, e = pcall(g) return n, e end)()",
     "local function g(k) if k == 0 then return 'done' end return g(k - 1) end return g(100000)",
+    -- After an overflow the call-info array is cut back to 20000 slots, and
+    -- each collection may halve it; in an error handler it may grow to
+    -- 32768 (stock Lua 5.1: 19997, 18429, 16383).
+    "return coroutine.wrap(function() local n = 0 local function g() n = n + 1 g() end pcall(g) local first = n n = 0 local _, e = pcall(g) return first, n, e end)()",
+    "return coroutine.wrap(function() local n = 0 local function g() n = n + 1 g() end pcall(g) for i = 1, 6 do collectgarbage() end n = 0 local _, e = pcall(g) return n, e end)()",
+    "return coroutine.wrap(function() local n, m = 0, 0 local function g() n = n + 1 g() end local ok, e = xpcall(g, function(m0) local function h() m = m + 1 h() end h() return m0 end) return n, m, e end)()",
     -- The parser's nesting limit, searched (each try is a clean syntax error).
     "local function ok(n) return loadstring('return ' .. string.rep('{', n) .. string.rep('}', n)) ~= nil end local lo, hi = 1, 300 while lo < hi do local mid = math.floor((lo + hi + 1) / 2) if ok(mid) then lo = mid else hi = mid - 1 end end return lo, select(2, loadstring('return ' .. string.rep('{', lo + 1) .. string.rep('}', lo + 1)))",
     "local function ok(n) return loadstring('return ' .. string.rep('(', n) .. '1' .. string.rep(')', n)) ~= nil end local lo, hi = 1, 300 while lo < hi do local mid = math.floor((lo + hi + 1) / 2) if ok(mid) then lo = mid else hi = mid - 1 end end return lo, select(2, loadstring('return ' .. string.rep('(', lo + 1) .. '1' .. string.rep(')', lo + 1)))",

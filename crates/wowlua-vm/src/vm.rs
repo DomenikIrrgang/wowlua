@@ -16,10 +16,14 @@ use crate::taint::{Slot, Taint, TaintState};
 use crate::thread::{Frame, Status, Thread, ThreadState};
 use crate::value::Value;
 
-/// Lua-to-Lua call depth (`LUAI_MAXCALLS`).
-const MAXCALLS: usize = 20000;
+/// `LUAI_MAXCALLS`: a thread's call-info array (one slot per Lua or native
+/// call, and a base one) grows by doubling from `BASIC_CI_SIZE`; growing
+/// past this size raises "stack overflow", so the first overflow comes at
+/// 16384 calls. After it, the array is cut back to this size, and the
+/// collector may halve it (`ThreadState::shrink_ci`).
+pub(crate) const MAXCALLS: usize = 20000;
 /// Nested native-to-Lua calls (`LUAI_MAXCCALLS`).
-const MAXCCALLS: usize = 200;
+pub(crate) const MAXCCALLS: usize = 200;
 /// `__index`/`__newindex` chains (`MAXTAGLOOP`).
 const MAXTAGLOOP: usize = 100;
 const LFIELDS_PER_FLUSH: usize = 50;
@@ -391,7 +395,17 @@ impl Vm {
         // `loadstring` does not, so neither do we.
         let file = wowlua_span::SourceDb::new().add("", "");
         let parse = wowlua_syntax::parse(src, file);
-        let compiled = compiler::compile(&mut self.heap, &parse.chunk, src, Rc::from(chunkname));
+        let options = compiler::Options {
+            c_depth: self.c_depth,
+            ..Default::default()
+        };
+        let compiled = compiler::compile_with(
+            &mut self.heap,
+            &parse.chunk,
+            src,
+            Rc::from(chunkname),
+            options,
+        );
         if let Some(d) = parse.diagnostics.iter().find(|d| d.is_error()) {
             let span = d.labels.first().map(|l| l.span);
             let line = span.map_or(1, |s| line_of(src, s.start as usize));
@@ -520,6 +534,11 @@ impl Vm {
     pub(crate) fn unwind(&mut self, frames: usize, cstack: usize, level: usize) {
         self.cur.frames.truncate(frames);
         self.cstack.truncate(cstack);
+        // After an overflow, the array goes back to `LUAI_MAXCALLS` slots
+        // (`restore_stack_limit`).
+        if self.cur.ci_size > MAXCALLS && self.cur.ci_used() + 1 < MAXCALLS {
+            self.cur.ci_size = MAXCALLS;
+        }
         self.close_upvals(level);
     }
 
@@ -553,16 +572,46 @@ impl Vm {
                 return Err(LuaError::new(v));
             }
         }
-        let r = match self.precall(func, nargs, nresults, from_lua) {
+        let r = self.run_call(func, nargs, nresults, from_lua);
+        self.c_depth -= 1;
+        r
+    }
+
+    /// Runs a call to its end in a nested `execute`, without counting it.
+    pub(crate) fn run_call(
+        &mut self,
+        func: usize,
+        nargs: usize,
+        nresults: i32,
+        from_lua: bool,
+    ) -> Result<(), LuaError> {
+        match self.precall(func, nargs, nresults, from_lua) {
             Ok(true) => {
                 self.cur.frames.last_mut().expect("frame").entry = true;
                 self.execute()
             }
             Ok(false) => Ok(()),
             Err(e) => Err(e),
-        };
-        self.c_depth -= 1;
-        r
+        }
+    }
+
+    /// Takes a call-info slot for a call (`inc_ci`): a full array doubles,
+    /// and past `LUAI_MAXCALLS` the call fails, once more while handling
+    /// that with "error in error handling" (`growCI`).
+    fn enter_ci(&mut self) -> Result<(), LuaError> {
+        let size = self.cur.ci_size();
+        if 1 + self.cur.ci_used() < size {
+            return Ok(());
+        }
+        if size > MAXCALLS {
+            let v = self.str("error in error handling");
+            return Err(LuaError::new(v));
+        }
+        self.cur.ci_size = size * 2;
+        if self.cur.ci_size > MAXCALLS {
+            return Err(self.rt_error("stack overflow"));
+        }
+        Ok(())
     }
 
     /// Prepares a call. Lua functions get a frame (true); natives run now.
@@ -592,15 +641,13 @@ impl Vm {
                 f
             }
         };
+        self.enter_ci()?;
         // Calls clear the fixed taint (`luaD_precall`); entering a Lua
         // frame sets it again.
         self.cur.taint.fixed = Taint::SECURE;
         match self.heap.func(f) {
             Function::Lua(lf) => {
                 let proto = lf.proto.clone();
-                if self.cur.frames.len() >= MAXCALLS {
-                    return Err(self.rt_error("stack overflow"));
-                }
                 let np = proto.num_params as usize;
                 let (base, nvarargs) = if proto.is_vararg {
                     // Fixed parameters move above the actual arguments; the
@@ -663,6 +710,7 @@ impl Vm {
                     from_lua,
                 });
                 self.result_taints.clear();
+                self.cur.natives += 1;
                 let r = native(
                     self,
                     NativeCall {
@@ -672,6 +720,7 @@ impl Vm {
                         upval_taints,
                     },
                 );
+                self.cur.natives -= 1;
                 self.cstack.pop();
                 let results = match r {
                     Ok(results) => results,
@@ -1034,6 +1083,9 @@ impl Vm {
                                 let s = self.cur.stack[func + i];
                                 self.set_copy(cur_func + i, s);
                             }
+                            // Lua takes the callee's slot before it drops
+                            // the caller's.
+                            self.enter_ci()?;
                             self.cur.frames.pop();
                             self.precall(cur_func, nargs, nresults, true)?;
                             let f = self.cur.frames.last_mut().expect("frame");

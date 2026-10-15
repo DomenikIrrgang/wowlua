@@ -925,6 +925,7 @@ fn vm_file(lua: &mut mlua::Lua, dir: &Path, path: &Path) -> Result<VmFile> {
         // The reference is a stock Lua 5.1 build, with LUA_COMPAT_VARARG.
         let options = wowlua_vm::compiler::Options {
             compat_vararg: true,
+            ..Default::default()
         };
         wowlua_vm::compiler::compile_with(
             &mut heap,

@@ -43,6 +43,44 @@ pub struct ThreadState {
     pub frames: Vec<Frame>,
     /// Open upvalues by stack slot, ascending.
     pub open_upvals: Vec<(usize, UpvalRef)>,
+    /// Native calls running in this thread: each takes a call-info slot.
+    pub natives: usize,
+    /// The size of Lua's call-info array for this thread (`size_ci`; 0
+    /// before the first call, meaning `BASIC_CI_SIZE`).
+    pub ci_size: usize,
+}
+
+/// A new thread's call-info array (`BASIC_CI_SIZE`).
+pub const BASIC_CI_SIZE: usize = 8;
+
+impl ThreadState {
+    pub fn ci_size(&self) -> usize {
+        if self.ci_size == 0 {
+            BASIC_CI_SIZE
+        } else {
+            self.ci_size
+        }
+    }
+
+    /// Call-info slots in use above the base one (`L->ci - L->base_ci`).
+    pub fn ci_used(&self) -> usize {
+        self.frames.len() + self.natives
+    }
+
+    /// The collector shrinks an underused array (`checkstacksizes`, run as
+    /// Lua 5.1 traverses a thread: twice a cycle), but not after an
+    /// overflow.
+    pub fn shrink_ci(&mut self) {
+        for _ in 0..2 {
+            let size = self.ci_size();
+            if size > crate::vm::MAXCALLS {
+                return;
+            }
+            if 4 * self.ci_used() < size && 2 * BASIC_CI_SIZE < size {
+                self.ci_size = size / 2;
+            }
+        }
+    }
 }
 
 pub struct Thread {

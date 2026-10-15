@@ -76,6 +76,12 @@ impl Vm {
             let v = self.str(msg);
             return Err(self.cur.taint.fresh(v));
         }
+        // The coroutine continues the caller's count of nested C calls (the
+        // client's; stock Lua 5.1 starts each at zero).
+        if self.c_depth >= crate::vm::MAXCCALLS {
+            let v = self.str("C stack overflow");
+            return Err(self.cur.taint.fresh(v));
+        }
         // Switch to the coroutine, with the caller's taint.
         let taint = self.cur.taint.saved();
         let caller = self.current;
@@ -106,7 +112,11 @@ impl Vm {
                     self.cur.stack[1 + i] = self.cur.taint.copy(a);
                 }
                 self.cur.top = n + 1;
-                self.call_at(0, n, -1, false)
+                // Counted, but not checked again (`lua_resume`).
+                self.c_depth += 1;
+                let r = self.run_call(0, n, -1, false);
+                self.c_depth -= 1;
+                r
             }
             None => {
                 // The values become the results of the pending yield call.

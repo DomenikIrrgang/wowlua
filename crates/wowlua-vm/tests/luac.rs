@@ -30,6 +30,7 @@ fn same(src: &str) {
         b"=t"[..].into(),
         Options {
             compat_vararg: true,
+            ..Default::default()
         },
     )
     .expect("compiles");
@@ -74,6 +75,7 @@ fn same_lines(src: &str) {
         b"=t"[..].into(),
         Options {
             compat_vararg: true,
+            ..Default::default()
         },
     )
     .expect("compiles");
@@ -152,6 +154,7 @@ fn file_lines() {
         b"=t"[..].into(),
         Options {
             compat_vararg: true,
+            ..Default::default()
         },
     )
     .expect("compiles");

@@ -102,6 +102,10 @@ impl Vm {
         self.propagate(&mut m);
         self.clear_weak(&m);
         self.sweep();
+        self.cur.shrink_ci();
+        for t in self.heap.threads.values_mut() {
+            t.state.shrink_ci();
+        }
         self.heap.debt = 0;
         let live = self.heap.estimate_bytes();
         self.gc_threshold = (live * self.gc_pause / 100).max(1 << 20);

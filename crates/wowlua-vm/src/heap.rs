@@ -181,6 +181,13 @@ impl<T> Arena<T> {
         self.live
     }
 
+    /// Every live object, mutably.
+    pub(crate) fn values_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.slots
+            .iter_mut()
+            .filter_map(|s| s.as_mut().map(|e| &mut e.value))
+    }
+
     /// Every live object, with its index and generation.
     pub(crate) fn iter(&self) -> impl Iterator<Item = (u32, u32, &T)> {
         self.slots.iter().enumerate().filter_map(|(i, s)| {

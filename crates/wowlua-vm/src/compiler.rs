@@ -129,6 +129,9 @@ pub struct Options {
     /// `arg`. WoW's Lua has no `arg`; only the bytecode comparison with a
     /// stock Lua 5.1 build turns this on.
     pub compat_vararg: bool,
+    /// The nested C calls when the parser runs: its syntax levels count on
+    /// from there (`L->nCcalls`).
+    pub c_depth: usize,
 }
 
 /// Where each line starts, by Lua's rule: `\n`, `\r`, `\r\n` and `\n\r`
@@ -173,7 +176,7 @@ pub fn compile_with(
         source,
         fs: Vec::new(),
         lastline: 1,
-        depth: 0,
+        depth: options.c_depth,
         options,
     };
     c.open_func(0);
