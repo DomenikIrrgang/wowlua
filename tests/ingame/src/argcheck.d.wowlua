@@ -1,0 +1,6 @@
+declare module "/argcheck"
+    --- Each call's outcome by variant (a bad first argument), by function.
+    function run(): { [string]: { [string]: string } }
+    --- The calls: function, its first argument's type, whether it may be nil.
+    const calls: { [number]: { [number]: any } }
+end
