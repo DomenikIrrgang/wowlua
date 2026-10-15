@@ -1,12 +1,14 @@
 //! The standard library (spec chapter 8) at run time: addons that import
 //! `wowlua:*` modules are built and run against a model of the WoW client
-//! (`wowmock.wowlua`), driven by a test script. Every runtime test runs the
-//! addon in three builds (dev, release, and release fully minified with the
+//! (`wowmock.wowlua`), driven by a test script, in wowlua's own VM
+//! (`wowlua-vm`, the client's Lua). Every runtime test runs the addon in
+//! three builds (dev, release, and release fully minified with the
 //! libraries minified too), which must behave alike.
 
 use assert_cmd::Command;
 use std::fs;
 use std::path::Path;
+use wowlua_vm::{Value, Vm};
 
 /// The model of the client, compiled like a test snippet.
 const MOCK: &str = include_str!("wowmock.wowlua");
@@ -94,19 +96,50 @@ fn wowlua_snippet(source: &str) -> Snippet {
     snippet
 }
 
-/// Runs a snippet in `lua` (its runtime first, if any), with an addon
-/// table of its own, as the client runs an addon's files.
-fn exec_snippet(lua: &mlua::Lua, source: &str, name: &str) -> mlua::Result<()> {
-    let snippet = wowlua_snippet(source);
-    let ns = lua.create_table()?;
-    if let Some(runtime) = &snippet.runtime {
-        lua.load(runtime.as_str())
-            .set_name(format!("{name} (runtime)"))
-            .call::<()>(("Snippet", ns.clone()))?;
+/// A VM error's message.
+fn message(vm: &Vm, e: &wowlua_vm::LuaError) -> String {
+    match e.value {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        other => format!("{other:?}"),
     }
-    lua.load(snippet.lua.as_str())
-        .set_name(name)
-        .call::<()>(("Snippet", ns))
+}
+
+/// Runs a chunk of `code` named `name` with `args`, as the client runs an
+/// addon's file.
+fn exec(vm: &mut Vm, code: &[u8], name: &str, args: &[Value]) -> Result<(), String> {
+    let f = vm.load(code, name)?;
+    vm.call(f, args).map(|_| ()).map_err(|e| message(vm, &e))
+}
+
+/// Runs a snippet in `vm` (its runtime first, if any), with an addon table
+/// of its own, as the client runs an addon's files.
+fn exec_snippet(vm: &mut Vm, source: &str, name: &str) -> Result<(), String> {
+    let snippet = wowlua_snippet(source);
+    let ns = Value::Table(vm.new_table());
+    let label = vm.str("Snippet");
+    if let Some(runtime) = &snippet.runtime {
+        exec(
+            vm,
+            runtime.as_bytes(),
+            &format!("{name} (runtime)"),
+            &[label, ns],
+        )?;
+    }
+    exec(vm, snippet.lua.as_bytes(), name, &[label, ns])
+}
+
+/// A global string (`Mock.saved`) read back, by an expression.
+fn eval_string(vm: &mut Vm, expr: &str) -> String {
+    let f = vm
+        .load(format!("return {expr}").as_bytes(), "=eval")
+        .expect("compiles");
+    match vm.call(f, &[]) {
+        Ok(r) => match r.first() {
+            Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(*s)).into_owned(),
+            other => panic!("{expr}: {other:?}"),
+        },
+        Err(e) => panic!("{expr}: {}", message(vm, &e)),
+    }
 }
 
 /// The builds every runtime test runs in.
@@ -172,18 +205,19 @@ fn run(dir: &Path, profile: &str, setup: &str, script: &str) -> Vec<String> {
 /// Loads the files `toc` (in AddOn folder `out`) lists into the mock
 /// client as addon `name`, between `setup` and `script`.
 fn load(out: &Path, name: &str, toc: &str, label: &str, setup: &str, script: &str) -> Vec<String> {
-    let lua = client(out, name, toc, label, setup);
-    exec_snippet(&lua, script, "@test").unwrap_or_else(|e| panic!("{label}{e}"));
-    printed(&lua)
+    let mut vm = client(out, name, toc, label, setup);
+    exec_snippet(&mut vm, script, "@test").unwrap_or_else(|e| panic!("{label}{e}"));
+    printed(&mut vm)
 }
 
 /// A mock client with `setup` run and the addon's files loaded.
-fn client(out: &Path, name: &str, toc: &str, label: &str, setup: &str) -> mlua::Lua {
+fn client(out: &Path, name: &str, toc: &str, label: &str, setup: &str) -> Vm {
     let toc = fs::read_to_string(out.join(toc)).unwrap();
-    let lua = mlua::Lua::new();
-    exec_snippet(&lua, MOCK, "@wowmock.wowlua").unwrap();
-    exec_snippet(&lua, setup, "@setup").unwrap_or_else(|e| panic!("{label}setup: {e}"));
-    let ns = lua.create_table().unwrap();
+    let mut vm = Vm::wow();
+    exec_snippet(&mut vm, MOCK, "@wowmock.wowlua").unwrap();
+    exec_snippet(&mut vm, setup, "@setup").unwrap_or_else(|e| panic!("{label}setup: {e}"));
+    let ns = Value::Table(vm.new_table());
+    let addon = vm.str(name);
     for line in toc
         .lines()
         .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
@@ -193,9 +227,7 @@ fn client(out: &Path, name: &str, toc: &str, label: &str, setup: &str) -> mlua::
             continue;
         }
         let code = fs::read(out.join(&path)).unwrap();
-        lua.load(code)
-            .set_name(format!("@{path}"))
-            .call::<()>((name, ns.clone()))
+        exec(&mut vm, &code, &format!("@{path}"), &[addon, ns])
             .unwrap_or_else(|e| panic!("{label}{path}: {e}"));
     }
     // The client reads Bindings.xml from the AddOn root: each body runs
@@ -206,23 +238,31 @@ fn client(out: &Path, name: &str, toc: &str, label: &str, setup: &str) -> mlua::
             let body = rest.split("</Binding>").next().unwrap_or("");
             let binding = attrs.split('"').nth(1).expect("a binding name");
             let on_up = attrs.contains("runOnUp=\"true\"");
-            lua.load(format!(
+            let code = format!(
                 "Mock.addBinding({binding:?}, function(keystate) if keystate == 'up' and not {on_up} then return end {body} end)"
-            ))
-            .set_name("@Bindings.xml")
-            .exec()
-            .unwrap_or_else(|e| panic!("{label}Bindings.xml: {e}"));
+            );
+            exec(&mut vm, code.as_bytes(), "@Bindings.xml", &[])
+                .unwrap_or_else(|e| panic!("{label}Bindings.xml: {e}"));
         }
     }
-    lua
+    vm
 }
 
 /// What the mock client printed, one line each.
-fn printed(lua: &mlua::Lua) -> Vec<String> {
-    let printed: mlua::Table = lua.load("return Mock.out").eval().unwrap();
-    printed
-        .sequence_values::<String>()
-        .map(Result::unwrap)
+fn printed(vm: &mut Vm) -> Vec<String> {
+    let f = vm.load(b"return Mock.out", "=printed").expect("compiles");
+    let r = vm
+        .call(f, &[])
+        .unwrap_or_else(|e| panic!("{}", message(vm, &e)));
+    let Some(Value::Table(t)) = r.first().copied() else {
+        panic!("Mock.out is not a table")
+    };
+    let n = vm.heap.table(t).border();
+    (1..=n)
+        .map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            other => format!("{other:?}"),
+        })
         .collect()
 }
 
@@ -2191,8 +2231,8 @@ Mock.slash("/stdtest auto")
 for _ = 1, 1200 do
     Mock.advanceFrames(3, 50 / 3)
 end
--- The Lua environment probe records without failing (the mock lacks the
--- client's additions: those calls record errors).
+-- The Lua environment probe records without failing (wowlua's VM has the
+-- client's additions: math.clamp returns its value).
 Mock.slash("/stdtest probe")
 local env, additions = StdTestState.luaEnv, StdTestState.luaEnvAdditions
 print("probe recorded", env.version, env.libraries.os, env.calls["time()"], additions["math.clamp(5, 1, 3)"]:sub(1, 6))
@@ -2202,7 +2242,7 @@ print("probe recorded", env.version, env.libraries.os, env.calls["time()"], addi
     assert!(
         printed
             .iter()
-            .any(|l| l == "probe recorded Lua 5.1 false ok: number error:"),
+            .any(|l| l == "probe recorded Lua 5.1 false ok: number 1 valu"),
         "{text}"
     );
     let summary = printed
@@ -2292,9 +2332,9 @@ end
         field("Interface"),
         field("Version")
     );
-    let lua = client(&out, "StdTest", toc, "", &setup);
+    let mut vm = client(&out, "StdTest", toc, "", &setup);
     exec_snippet(
-        &lua,
+        &mut vm,
         r#"Mock.loadAddon("StdTest")
 Mock.fire("PLAYER_LOGIN")
 Mock.fire("PLAYER_ENTERING_WORLD", true, false)
@@ -2365,9 +2405,9 @@ Mock.saved = table.concat(saved, "\n")
         "@test",
     )
     .unwrap();
-    let before = printed(&lua).join("\n");
-    let saved: String = lua.load("return Mock.saved").eval().unwrap();
-    drop(lua);
+    let before = printed(&mut vm).join("\n");
+    let saved = eval_string(&mut vm, "Mock.saved");
+    drop(vm);
     // After the reload: the run continues by itself.
     let after = load(
         &out,
@@ -4907,17 +4947,31 @@ fn serialize_deflate_interoperates_with_zlib() {
     for mode in ["dev", "max"] {
         build(dir.path(), mode);
         let out = dir.path().join("dist").join(mode).join("Std");
-        let lua = client(&out, "Std", "Std.toc", "", "");
-        let ser: mlua::Table = lua.globals().get("Ser").unwrap();
-        let compress: mlua::Function = ser.get("compress").unwrap();
-        let decompress: mlua::Function = ser.get("decompress").unwrap();
+        let mut vm = client(&out, "Std", "Std.toc", "", "");
+        let ser = vm.get_global("Ser");
+        let field = |vm: &mut Vm, name: &str| {
+            let Value::Table(t) = ser else { panic!("Ser") };
+            let k = vm.str(name);
+            vm.heap.table(t).get(k)
+        };
+        let compress = field(&mut vm, "compress");
+        let decompress = field(&mut vm, "decompress");
+        // One call's first result: its bytes, or None for nil.
+        let call = |vm: &mut Vm, f: Value, args: &[Value]| -> Option<Vec<u8>> {
+            let r = vm
+                .call(f, args)
+                .unwrap_or_else(|e| panic!("{}", message(vm, &e)));
+            match r.first() {
+                Some(Value::Str(s)) => Some(vm.str_bytes(*s).to_vec()),
+                _ => None,
+            }
+        };
         for (n, input) in compression_inputs().iter().enumerate() {
             for level in [0, 1, 6, 9] {
                 // Ours, inflated by zlib.
-                let packed: mlua::LuaString = compress
-                    .call((lua.create_string(input).unwrap(), level))
-                    .unwrap_or_else(|e| panic!("{mode} input {n} level {level}: {e}"));
-                let packed = packed.as_bytes().to_vec();
+                let arg = vm.bytes(input);
+                let packed = call(&mut vm, compress, &[arg, Value::Num(f64::from(level))])
+                    .unwrap_or_else(|| panic!("{mode} input {n} level {level}: no result"));
                 let mut back = Vec::new();
                 DeflateDecoder::new(&packed[..])
                     .read_to_end(&mut back)
@@ -4935,11 +4989,10 @@ fn serialize_deflate_interoperates_with_zlib() {
                     );
                 }
                 // Ours, inflated by us.
-                let ours: Option<mlua::LuaString> = decompress
-                    .call(lua.create_string(&packed).unwrap())
-                    .unwrap();
+                let arg = vm.bytes(&packed);
+                let ours = call(&mut vm, decompress, &[arg]);
                 assert!(
-                    ours.is_some_and(|s| *s.as_bytes() == **input),
+                    ours.is_some_and(|s| s == *input),
                     "{mode} input {n} level {level}: round trip"
                 );
             }
@@ -4949,19 +5002,18 @@ fn serialize_deflate_interoperates_with_zlib() {
                 DeflateEncoder::new(&input[..], Compression::new(level))
                     .read_to_end(&mut packed)
                     .unwrap();
-                let back: Option<mlua::LuaString> = decompress
-                    .call(lua.create_string(&packed).unwrap())
-                    .unwrap();
+                let arg = vm.bytes(&packed);
+                let back = call(&mut vm, decompress, &[arg]);
                 assert!(
-                    back.is_some_and(|s| *s.as_bytes() == **input),
+                    back.is_some_and(|s| s == *input),
                     "{mode} input {n}: zlib level {level} not inflated"
                 );
             }
         }
         // Corrupt data: nil, never an error.
         for bad in [&b"\xff\xff\xff"[..], b"\x07", b"", b"\x05\x00\x00\x00"] {
-            let r: Option<mlua::LuaString> =
-                decompress.call(lua.create_string(bad).unwrap()).unwrap();
+            let arg = vm.bytes(bad);
+            let r = call(&mut vm, decompress, &[arg]);
             assert!(r.is_none(), "{mode}: {bad:?}");
         }
     }
@@ -5002,7 +5054,8 @@ for i, v in ipairs(values) do
     local ok, back = serialize.decode(serialize.encode(v))
     C(ok and same(v, back), "round trip " .. i)
 end
-local ok, nan = serialize.decode(serialize.encode(0 / 0))
+-- Not `0 / 0`: the client raises "Division by zero" (decision S38).
+local ok, nan = serialize.decode(serialize.encode(math.huge - math.huge))
 C(ok and nan ~= nan, "NaN")
 local nilOk, nothing = serialize.decode(serialize.encode(nil))
 C(nilOk and nothing == nil, "nil")

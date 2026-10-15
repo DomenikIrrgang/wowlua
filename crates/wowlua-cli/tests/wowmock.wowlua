@@ -69,11 +69,7 @@ function debugstack(): string
     return ""
 end
 -- The client has `date`, `time` and `difftime`, and no `os` table (as on
--- WoW: Forever).
-date = os.date
-time = os.time
-difftime = os.difftime
-os = nil :: any
+-- WoW: Forever); wowlua's VM has them already.
 function GetTime(): number
     return Mock.now
 end
