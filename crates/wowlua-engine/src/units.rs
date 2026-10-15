@@ -1012,8 +1012,82 @@ fn unit_power_percent(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// More of this module's behaviours.
+/// The faction of a race (`UnitFactionGroup`); a race neither lists is
+/// neutral (unverified for races the list lacks).
+fn faction(race: &str) -> Option<&'static str> {
+    const ALLIANCE: &[&str] = &[
+        "Human",
+        "Dwarf",
+        "NightElf",
+        "Gnome",
+        "Draenei",
+        "Worgen",
+        "VoidElf",
+        "LightforgedDraenei",
+        "DarkIronDwarf",
+        "KulTiran",
+        "Mechagnome",
+    ];
+    const HORDE: &[&str] = &[
+        "Orc",
+        "Scourge",
+        "Tauren",
+        "Troll",
+        "BloodElf",
+        "Goblin",
+        "Nightborne",
+        "HighmountainTauren",
+        "MagharOrc",
+        "ZandalariTroll",
+        "Vulpera",
+    ];
+    if ALLIANCE.contains(&race) {
+        Some("Alliance")
+    } else if HORDE.contains(&race) {
+        Some("Horde")
+    } else {
+        None
+    }
+}
+
+fn unit_faction_group(vm: &mut Vm, c: NativeCall) -> Ret {
+    with_unit(vm, &c, |vm, u| match faction(&u.race) {
+        Some(f) => vec![vm.str(f), vm.str(f)],
+        None => vec![],
+    })
+}
+
+fn unit_pvp_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    with_unit(vm, &c, |vm, u| vec![vm.str(&u.name)])
+}
+
+fn unit_is_ghost(vm: &mut Vm, c: NativeCall) -> Ret {
+    with_unit(vm, &c, |_, _| vec![Value::Bool(false)])
+}
+
+/// Not casting or channeling: no values.
+fn not_casting(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![])
+}
+
+/// The roles a unit can take (tank, healer, damage): damage (unverified
+/// per class).
+fn available_roles(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::Bool(true),
+    ])
+}
+
 pub fn more_behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
+        ("UnitFactionGroup", unit_faction_group),
+        ("UnitPVPName", unit_pvp_name),
+        ("UnitIsGhost", unit_is_ghost),
+        ("UnitCastingInfo", not_casting),
+        ("UnitChannelInfo", not_casting),
+        ("UnitGetAvailableRoles", available_roles),
         ("UnitHealthPercent", unit_health_percent),
         ("UnitHealthMissing", unit_health_missing),
         ("UnitPowerPercent", unit_power_percent),

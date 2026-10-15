@@ -510,6 +510,20 @@ impl Vm {
             .collect())
     }
 
+    /// The environment of the function `level` calls up from a native (1:
+    /// the native's caller), or the globals.
+    pub fn caller_env(&self, level: usize) -> TableRef {
+        match self.stack_entries().get(level) {
+            Some(StackEntry::Lua(fi)) => self.heap.func(self.cur.frames[*fi].closure).env(),
+            _ => self.globals,
+        }
+    }
+
+    /// How many calls deep the running coroutine is.
+    pub fn call_depth(&self) -> usize {
+        self.cur.frames.len()
+    }
+
     /// Calls `f` with `args` as they are (taints included); returns the
     /// result slots as the callee left them.
     pub fn call_slots(&mut self, f: Slot, args: &[Slot]) -> Result<Vec<Slot>, LuaError> {

@@ -84,6 +84,14 @@ pub struct World {
     /// Warnings for gaps that would make every test fail if they were errors
     /// (templates without Blizzard's UI code).
     pub warnings: Vec<String>,
+    /// Blizzard's UI code, when loaded: its templates and frame types.
+    pub ui: crate::ui::Registry,
+    /// Event callbacks (`RegisterEventCallback`), in registration order.
+    pub callbacks: Vec<crate::framescript::Callback>,
+    /// CVars: name and value, as strings.
+    pub cvars: Vec<(String, String)>,
+    /// Whether `PLAYER_LOGIN` fired.
+    pub logged_in: bool,
 }
 
 /// UIParent's size in screen units at scale 1.
@@ -139,7 +147,7 @@ pub fn is_a(e: &Engine, name: &str, base: &str) -> bool {
 
 /// The metatable of class `name`, made on first use: `__index` holds the
 /// methods of the class and its bases (the nearest class's wins).
-fn class_meta(vm: &mut Vm, name: &str) -> TableRef {
+pub fn class_meta(vm: &mut Vm, name: &str) -> TableRef {
     if let Some(&t) = engine(vm).world.classes.get(name) {
         return t;
     }
@@ -262,7 +270,15 @@ pub fn create_frame(vm: &mut Vm, c: NativeCall) -> Ret {
         .iter()
         .find(|(name, _)| name.eq_ignore_ascii_case(&kind))
         .map(|(_, v)| v.clone());
-    let class = class.or_else(|| custom.as_ref().map(|(base, _)| base.clone()));
+    let intrinsic = engine(vm)
+        .world
+        .ui
+        .intrinsics
+        .get(&kind.to_ascii_lowercase())
+        .cloned();
+    let class = class
+        .or_else(|| custom.as_ref().map(|(base, _)| base.clone()))
+        .or_else(|| intrinsic.as_ref().map(|(base, _)| base.clone()));
     let Some(class) = class else {
         return Err(vm.error(&format!("CreateFrame: Unknown frame type '{kind}'")));
     };
@@ -307,8 +323,23 @@ pub fn create_frame(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some((_, f)) = custom {
         vm.call(f, &[frame])?;
     }
+    let from_xml = intrinsic.is_some()
+        || templates.iter().any(|t| {
+            engine(vm)
+                .world
+                .ui
+                .templates
+                .contains_key(&t.to_ascii_lowercase())
+        });
+    if let Some((_, el)) = intrinsic {
+        crate::ui::build::apply_intrinsic(vm, frame, &el);
+    }
     for t in templates {
         apply_template(vm, frame, &t)?;
+    }
+    // Templates of the UI code run their OnLoad once applied.
+    if from_xml && let Some(id) = widget_of(vm, frame) {
+        run_script(vm, id, "OnLoad", &[]);
     }
     if c.has(5) && !c.arg(5).is_nil() {
         let id = vm.check_number(&c, 5)?;
@@ -333,9 +364,13 @@ pub fn apply_template(vm: &mut Vm, frame: Value, name: &str) -> Result<(), LuaEr
         Some(f) => {
             vm.call(f, &[frame])?;
         }
-        None => engine_mut(vm).world.warnings.push(format!(
-            "CreateFrame: template \"{name}\" ignored (Blizzard's UI code is not loaded)"
-        )),
+        None => {
+            if !crate::ui::build::apply_template(vm, frame, name) {
+                engine_mut(vm).world.warnings.push(format!(
+                    "CreateFrame: template \"{name}\" ignored (Blizzard's UI code is not loaded)"
+                ));
+            }
+        }
     }
     Ok(())
 }
@@ -439,6 +474,12 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
     if returns.is_empty() {
         return Ok(vec![]);
     }
+    // Blizzard's code gets empty values; the addon's code an error.
+    if !crate::protection::tainted(vm) {
+        engine_mut(vm).defaulted.insert(name);
+        let api = engine(vm).api;
+        return Ok(crate::defaults(vm, api, &f.doc));
+    }
     Err(vm.error(&format!("{name} is not mocked")))
 }
 
@@ -490,7 +531,8 @@ fn script_name(vm: &mut Vm, id: WidgetId, c: &NativeCall, op: &str) -> Result<St
     let s = vm.check_str(c, 2)?;
     let s = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
     let class = engine(vm).world.widgets[id.0].class.clone();
-    if !has_script(engine(vm), &class, &s) {
+    // Blizzard's code knows the client's scripts better than the lists.
+    if !has_script(engine(vm), &class, &s) && crate::protection::tainted(vm) {
         return Err(vm.error(&format!(
             "{class}:{op}(): {class} doesn't have a \"{s}\" script"
         )));
@@ -547,7 +589,8 @@ fn has_script_method(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 fn event_name(vm: &mut Vm, c: &NativeCall, op: &str) -> Result<String, LuaError> {
     let e = vm.check_str(c, 2)?;
     let e = String::from_utf8_lossy(vm.str_bytes(e)).into_owned();
-    if !engine(vm).api.events.contains(&e) {
+    // Blizzard's code knows the client's events better than the lists.
+    if !engine(vm).api.events.contains(&e) && crate::protection::tainted(vm) {
         let class = widget_of(vm, c.arg(1))
             .map(|id| engine(vm).world.widgets[id.0].class.clone())
             .unwrap_or_default();
@@ -626,6 +669,9 @@ pub fn fire_event(vm: &mut Vm, event: &str, args: &[Value]) {
         })
         .map(|(i, _)| WidgetId(i))
         .collect();
+    if event == "PLAYER_LOGIN" {
+        engine_mut(vm).world.logged_in = true;
+    }
     let name = vm.str(event);
     let mut call = vec![name];
     call.extend_from_slice(args);
@@ -635,6 +681,7 @@ pub fn fire_event(vm: &mut Vm, event: &str, args: &[Value]) {
             run_script(vm, id, "OnEvent", &call);
         }
     }
+    crate::framescript::run_callbacks(vm, event, args);
 }
 
 // --------------------------------------------------------- visibility
@@ -1122,6 +1169,96 @@ fn is_protected(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(p), Value::Bool(false)])
 }
 
+// --------------------------------------------------------------- levels
+
+/// `GetFrameLevel()`: what `SetFrameLevel` set, else one above the parent
+/// (unverified).
+fn get_frame_level(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let mut level = 0.0;
+    let mut cur = Some(id);
+    let mut depth = 0.0;
+    while let Some(w) = cur {
+        let props = engine(vm).world.widgets[w.0].props;
+        if let Some(v) = stored_args(vm, props, "FrameLevel")
+            && let Some(Value::Num(n)) = v.first()
+        {
+            level = *n;
+            break;
+        }
+        cur = engine(vm).world.widgets[w.0].parent;
+        if cur.is_some() {
+            depth += 1.0;
+        }
+    }
+    Ok(vec![Value::Num(level + depth)])
+}
+
+fn get_id(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let props = engine(vm).world.widgets[id.0].props;
+    let v = stored_args(vm, props, "ID")
+        .and_then(|v| v.first().copied())
+        .unwrap_or(Value::Num(0.0));
+    Ok(vec![v])
+}
+
+/// `GetStringWidth()`: six units a character at the font's height 12
+/// (a stand-in: the client measures glyphs).
+fn get_string_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let len = match engine(vm).world.widgets[id.0].text {
+        Some(Value::Str(s)) => vm.str_bytes(s).len(),
+        _ => 0,
+    };
+    Ok(vec![Value::Num(len as f64 * 6.0)])
+}
+
+// --------------------------------------------------------------- fonts
+
+/// `SetFontObject(font)`: a font object or its name; the widget's font is
+/// then the object's until `SetFont` sets its own.
+fn set_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let font = match c.arg(2) {
+        Value::Str(s) => {
+            let name = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+            vm.get_global(&name)
+        }
+        v => v,
+    };
+    if widget_of(vm, font).is_none() {
+        let class = engine(vm).world.widgets[id.0].class.clone();
+        return Err(vm.api_arg_error(1, &format!("Usage: {class}:SetFontObject(font)")));
+    }
+    let props = engine(vm).world.widgets[id.0].props;
+    let list = vm.new_table();
+    let _ = vm.heap.table_mut(list).set(Value::Num(1.0), font);
+    let n = vm.str("n");
+    let _ = vm.heap.table_mut(list).set(n, Value::Num(1.0));
+    let key = vm.str("FontObject");
+    let _ = vm.heap.table_mut(props).set(key, Value::Table(list));
+    // Its own font gives way to the object's.
+    let own = vm.str("Font");
+    let _ = vm.heap.table_mut(props).set(own, Value::Nil);
+    Ok(vec![])
+}
+
+/// `GetFont()`: the widget's own font, else its font object's.
+fn get_font(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let mut cur = id;
+    for _ in 0..32 {
+        let props = engine(vm).world.widgets[cur.0].props;
+        if let Some(v) = stored_args(vm, props, "Font") {
+            return Ok(v);
+        }
+        let next = stored_args(vm, props, "FontObject")
+            .and_then(|v| v.first().copied())
+            .and_then(|f| widget_of(vm, f));
+        match next {
+            Some(n) => cur = n,
+            None => break,
+        }
+    }
+    Ok(vec![])
+}
+
 /// Addon code's widgets are never forbidden (Blizzard's protected UI is
 /// not loaded).
 fn is_forbidden(_vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
@@ -1411,6 +1548,13 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("IsProtected", is_protected),
         ("Click", click),
         ("IsForbidden", is_forbidden),
+        ("SetFontObject", set_font_object),
+        ("GetFrameLevel", get_frame_level),
+        ("GetID", get_id),
+        ("GetStringWidth", get_string_width),
+        ("GetTextWidth", get_string_width),
+        ("GetUnboundedStringWidth", get_string_width),
+        ("GetFont", get_font),
         ("StartMoving", start_moving),
         ("StartSizing", start_sizing),
         ("StopMovingOrSizing", stop_moving_or_sizing),

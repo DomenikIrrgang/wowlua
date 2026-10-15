@@ -45,6 +45,8 @@ pub struct Api {
     pub callbacks: HashSet<String>,
     /// `Enum.X` tables: name → (field, value).
     pub enums: Vec<(&'static str, Vec<(String, f64)>)>,
+    /// `Enum.XMeta` tables: name → (NumValues, MinValue, MaxValue).
+    pub enum_meta: Vec<(&'static str, [f64; 3])>,
     /// `Constants.X` tables: name → (field, value).
     pub constants: Vec<(&'static str, Vec<(String, Json)>)>,
     /// The documentation's enumerations and structures, by name.
@@ -114,6 +116,7 @@ fn parse(gz: &[u8]) -> Api {
         event_docs: HashMap::new(),
         callbacks: HashSet::new(),
         enums: Vec::new(),
+        enum_meta: Vec::new(),
         constants: Vec::new(),
         enum_names: HashSet::new(),
         structures: HashSet::new(),
@@ -218,6 +221,13 @@ fn parse(gz: &[u8]) -> Api {
                         .filter_map(|f| Some((str_of(f, "Name")?, f.get("EnumValue")?.as_f64()?)))
                         .collect();
                     api.enums.push((leak(&tname), fields));
+                    let num = |k: &str| t.get(k).and_then(Json::as_f64);
+                    if let (Some(n), Some(min), Some(max)) =
+                        (num("NumValues"), num("MinValue"), num("MaxValue"))
+                    {
+                        api.enum_meta
+                            .push((leak(&format!("{tname}Meta")), [n, min, max]));
+                    }
                 }
                 Some("Constants") => {
                     let values = list(&t, "Values")

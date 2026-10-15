@@ -138,7 +138,7 @@ f:SetPoint('BOTTOMLEFT', 10, 20)
 f:SetFrameStrata('HIGH')
 local fs = f:CreateFontString(nil, 'OVERLAY')
 fs:SetText('hi')
-return f:GetLeft(), f:GetTop(), f:GetFrameStrata(), fs:GetText(), fs:GetObjectType(), select(2, pcall(f.GetFrameLevel, f))",
+return f:GetLeft(), f:GetTop(), f:GetFrameStrata(), fs:GetText(), fs:GetObjectType(), select(2, pcall(f.GetHitRectInsets, f)), f:GetFrameLevel()",
     );
     assert_eq!(
         r,
@@ -148,7 +148,8 @@ return f:GetLeft(), f:GetTop(), f:GetFrameStrata(), fs:GetText(), fs:GetObjectTy
             "HIGH",
             "hi",
             "FontString",
-            "Frame:GetFrameLevel is not mocked"
+            "Frame:GetHitRectInsets is not mocked",
+            "1"
         ]
     );
 }

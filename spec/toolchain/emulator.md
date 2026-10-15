@@ -240,6 +240,35 @@ frames and the rest, so taint the addon spreads into Blizzard's code, and
 Blizzard code that fails because of what an addon did, show up as in game.
 Off by default: mock-only tests start faster (decision T186).
 
+The engine's loader (`wowlua_engine::ui::load`) takes the flavor's
+`Interface` folder and its global strings:
+
+- **Load order** (inferred from the TOCs, unverified): every Blizzard addon
+  the game loads at startup (not `LoadOnDemand`; `AllowLoad` game or both;
+  the flavor's game types, its id and family, for `AllowLoadGameType` and
+  `ExcludeLoadGameType`), `LoadFirst` ones first, each after its `Dep`,
+  `Dependencies`, `RequiredDep` and `OptionalDep` addons, otherwise by name.
+  File lines follow their inline directives; `[Family]`, `[Game]` and
+  `[TextLocale]` name the flavor's folders (`Mainline`, `Camelot`, `enUS`).
+  `ADDON_LOADED` fires after each addon.
+- **Global strings** come first, from the client's `GlobalStrings` dump.
+- **Lua files** run as secure code with the addon's name and table.
+- **XML** builds widgets as the client does: virtual elements are templates
+  (for `inherits` and `CreateFrame`), intrinsic ones frame types; an
+  element's templates apply first, then its attributes, mixins, `parentKey`
+  and `parentArray`, key values, sizes, anchors, layers, child frames and
+  scripts (`function`, `method` or a body; `inherit="prepend"` / `"append"`);
+  `OnLoad` runs once the widget and its children are built. Fonts and font
+  families become font objects.
+- **Gaps.** Without game data or a recording, Blizzard's code gets empty
+  values from functions that have no behaviour: secure code calling such a
+  function gets its documented results' empty values (nil where nilable,
+  false, 0, "", a table) and the engine lists the function; addon code still
+  gets "not mocked". Secure code may register events and set scripts the
+  engine's lists lack. On camelot, 191 addons load in about 8 seconds with
+  161 errors left, from enums, constants and namespaces the documentation
+  does not have (`Enum.GameMode`, `C_Widget`).
+
 ## 17.8 Verification
 
 - **Lua 5.1 conformance.** Against PUC Lua 5.1 (embedded only in wowlua's own

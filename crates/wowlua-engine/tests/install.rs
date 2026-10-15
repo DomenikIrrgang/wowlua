@@ -20,19 +20,37 @@ fn run(vm: &mut Vm, src: &str) -> Vec<String> {
 fn documented_functions_exist_and_are_not_mocked() {
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
-    let r = run(
-        &mut vm,
-        "return type(C_CVar.GetCVar), select(2, pcall(C_CVar.GetCVar, 'x')), type(GetTime), type(secretwrap)",
-    );
+    // Addon code: a function without behaviour fails.
+    let f = vm
+        .load_as(
+            b"return type(C_Calendar.GetNumPendingInvites), select(2, pcall(C_Calendar.GetNumPendingInvites)), type(GetTime), type(secretwrap)",
+            "@MyAddon/main.lua",
+            "MyAddon",
+        )
+        .expect("compiles");
+    let r: Vec<String> = vm
+        .call(f, &[])
+        .expect("runs")
+        .into_iter()
+        .map(|v| match v {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            other => format!("{other:?}"),
+        })
+        .collect();
     assert_eq!(
         r,
         [
             "function",
-            "C_CVar.GetCVar is not mocked",
+            "C_Calendar.GetNumPendingInvites is not mocked",
             "function",
             "function"
         ]
     );
+    // Secure code (a fresh execution): its documented results' empty values.
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let r = run(&mut vm, "return C_Calendar.GetNumPendingInvites()");
+    assert_eq!(r, ["Num(0.0)"]);
 }
 
 #[test]

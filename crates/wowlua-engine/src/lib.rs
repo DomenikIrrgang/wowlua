@@ -8,7 +8,9 @@ pub mod args;
 pub mod clock;
 pub mod controls;
 pub mod curves;
+pub mod framescript;
 pub mod protection;
+pub mod ui;
 pub mod units;
 pub mod widgets;
 
@@ -31,6 +33,9 @@ pub struct Engine {
     pub units: units::Units,
     /// Protected actions refused so far.
     pub refusals: Vec<protection::Refusal>,
+    /// Functions without behaviour that secure code called (they returned
+    /// their documented types' empty values), by name.
+    pub defaulted: std::collections::BTreeSet<&'static str>,
 }
 
 impl Engine {
@@ -99,6 +104,15 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         let k = vm.heap.intern(name.as_bytes());
         vm.heap.table_mut(enums).set_str(k, Value::Table(t));
     }
+    for (name, [n, min, max]) in &api.enum_meta {
+        let t = vm.new_table();
+        for (field, value) in [("NumValues", n), ("MinValue", min), ("MaxValue", max)] {
+            let k = vm.heap.intern(field.as_bytes());
+            vm.heap.table_mut(t).set_str(k, Value::Num(*value));
+        }
+        let k = vm.heap.intern(name.as_bytes());
+        vm.heap.table_mut(enums).set_str(k, Value::Table(t));
+    }
     let constants = namespace(vm, "Constants");
     for (name, values) in &api.constants {
         let t = vm.new_table();
@@ -124,15 +138,18 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(units::more_behaviours())
             .chain(curves::behaviours())
             .chain(widgets::functions())
+            .chain(framescript::functions())
             .collect(),
         methods: widgets::behaviours()
             .into_iter()
             .chain(curves::methods())
+            .chain(framescript::methods())
             .collect(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),
         units: units::Units::default(),
         refusals: Vec::new(),
+        defaulted: Default::default(),
     }));
     // Protected functions the documentation lacks.
     for &name in protection::PROTECTED {
@@ -214,6 +231,60 @@ fn namespace(vm: &mut Vm, name: &str) -> wowlua_vm::TableRef {
     t
 }
 
+/// A function's documented results as empty values: nil where nilable,
+/// false, 0, "", an empty table (unverified stand-ins).
+pub fn defaults(vm: &mut Vm, api: &api::Api, doc: &serde_json::Value) -> Vec<Value> {
+    let returns = doc
+        .get("Returns")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if doc
+        .get("MayReturnNothing")
+        .and_then(serde_json::Value::as_bool)
+        == Some(true)
+    {
+        return vec![];
+    }
+    returns
+        .iter()
+        .map(|r| {
+            let nilable = r.get("Nilable").and_then(serde_json::Value::as_bool) == Some(true);
+            let ty = r
+                .get("Type")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("");
+            if nilable {
+                return Value::Nil;
+            }
+            let ty = api.aliases.get(ty).map(String::as_str).unwrap_or(ty);
+            match ty {
+                "bool" | "boolean" => Value::Bool(false),
+                "string" | "cstring" => vm.str(""),
+                "table" => Value::Table(vm.new_table()),
+                _ if api.structures.contains(ty) => Value::Table(vm.new_table()),
+                _ if api.enum_names.contains(ty) => api
+                    .enums
+                    .iter()
+                    .find(|(n, _)| *n == ty)
+                    .and_then(|(_, f)| f.first().map(|(_, v)| Value::Num(*v)))
+                    .unwrap_or(Value::Num(0.0)),
+                _ if ty.contains("string") => vm.str(""),
+                // Numbers by their alias; other types are objects.
+                "number" | "luaIndex" | "uiUnit" | "fileID" | "time_t" | "BigInteger"
+                | "BigUInteger" | "WOWMONEY" | "SingleColorValue" | "uiFontHeight" => {
+                    Value::Num(0.0)
+                }
+                _ if r.get("Mixin").is_some() => Value::Table(vm.new_table()),
+                _ if ty.ends_with("ID") || ty.ends_with("Id") || ty.ends_with("Index") => {
+                    Value::Num(0.0)
+                }
+                _ => Value::Table(vm.new_table()),
+            }
+        })
+        .collect()
+}
+
 /// Every API function: its behaviour, or the "not mocked" error.
 fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(Value::Num(i)) = c.upvals.first().copied() else {
@@ -232,6 +303,11 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     args::check(vm, api, f, &c)?;
     let Some(behaviour) = behaviour else {
+        // Blizzard's code gets empty values; the addon's code an error.
+        if !protection::tainted(vm) {
+            engine_mut(vm).defaulted.insert(f.name);
+            return Ok(defaults(vm, api, &f.doc));
+        }
         return Err(vm.error(&format!("{} is not mocked", f.name)));
     };
     // The client's secrecy: results secret as the function's documentation
