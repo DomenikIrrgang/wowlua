@@ -576,12 +576,13 @@ local cases = {
     "return string.split(',', 'a,b'), string.join(',', 'a', 'b'), string.concat('a', 'b')",
     "local n = 0 secureexecuterange({ 1, 2 }, function() n = n + 1 error('x') end) return n",
 
+    -- Malformed UTF-8 (broken sequences, surrogates, code points above
+    -- U+10FFFF) is not passed to the client's case mapping: it froze and
+    -- crashed the client (2026-10-15).
     -- The client's UTF-8 case table: every code point whose upper or lower
     -- case differs, as "cp^bytes" (upper) and "cp_bytes" (lower).
     "local function u(c) if c < 128 then return string.char(c) elseif c < 2048 then return string.char(192 + math.floor(c / 64), 128 + c % 64) else return string.char(224 + math.floor(c / 4096), 128 + math.floor(c / 64) % 64, 128 + c % 64) end end local out = {} for c = 128, 9471 do local ch = u(c) local up, lo = string.upper(ch), string.lower(ch) if up ~= ch then out[#out + 1] = c .. '^' .. table.concat({ up:byte(1, -1) }, '.') end if lo ~= ch then out[#out + 1] = c .. '_' .. table.concat({ lo:byte(1, -1) }, '.') end end return table.concat(out, ' ')",
     "local function u(c) return string.char(224 + math.floor(c / 4096), 128 + math.floor(c / 64) % 64, 128 + c % 64) end local out = {} for _, r in ipairs({ { 11264, 11391 }, { 42560, 42751 }, { 65280, 65375 } }) do for c = r[1], r[2] do local ch = u(c) local up, lo = string.upper(ch), string.lower(ch) if up ~= ch then out[#out + 1] = c .. '^' .. table.concat({ up:byte(1, -1) }, '.') end if lo ~= ch then out[#out + 1] = c .. '_' .. table.concat({ lo:byte(1, -1) }, '.') end end end return table.concat(out, ' ')",
-    "return string.upper('a\195b'), string.upper('\195('), string.upper('\237\160\128x'), string.upper('\244\144\128\128x'), string.upper('\192\128x')",
-    "return #string.upper(string.rep('\255', 10)), #string.lower('\128\129\130'), string.upper('')",
     -- Stack limits: the most results strsplit and unpack give.
     "local lo, hi = 1, 9000 while lo < hi do local mid = math.floor((lo + hi + 1) / 2) if pcall(strsplit, ',', string.rep('a,', mid - 1) .. 'a') then lo = mid else hi = mid - 1 end end return lo",
     "return coroutine.wrap(function() local lo, hi = 1, 9000 while lo < hi do local mid = math.floor((lo + hi + 1) / 2) if pcall(strsplit, ',', string.rep('a,', mid - 1) .. 'a') then lo = mid else hi = mid - 1 end end return lo end)()",
