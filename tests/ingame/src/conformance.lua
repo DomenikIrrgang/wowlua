@@ -159,6 +159,16 @@ local cases = {
     "return string.gfind('a', 'a')",
     "return string.format('%s', string.find('a+b', '+', 1, true))",
     "local n = 0 local function g() n = n + 1 g() end local ok, e = pcall(g) return ok, e, n > 100",
+    -- The call depth, counted in a fresh coroutine (its own call stack):
+    -- Lua frames, with few and many slots each, and tail calls.
+    "return coroutine.wrap(function() local n = 0 local function g() n = n + 1 g() end local ok, e = pcall(g) return n, e end)()",
+    "return coroutine.wrap(function() local n = 0 local function g(...) n = n + 1 g(...) end local t = {} for i = 1, 100 do t[i] = i end local ok, e = pcall(g, unpack(t)) return n, e end)()",
+    "return coroutine.wrap(function() local n = 0 local function g() n = n + 1 return (g()) end local ok, e = pcall(g) return n, e end)()",
+    "local function g(k) if k == 0 then return 'done' end return g(k - 1) end return g(100000)",
+    -- The parser's nesting limit, searched (each try is a clean syntax error).
+    "local function ok(n) return loadstring('return ' .. string.rep('{', n) .. string.rep('}', n)) ~= nil end local lo, hi = 1, 300 while lo < hi do local mid = math.floor((lo + hi + 1) / 2) if ok(mid) then lo = mid else hi = mid - 1 end end return lo, select(2, loadstring('return ' .. string.rep('{', lo + 1) .. string.rep('}', lo + 1)))",
+    "local function ok(n) return loadstring('return ' .. string.rep('(', n) .. '1' .. string.rep(')', n)) ~= nil end local lo, hi = 1, 300 while lo < hi do local mid = math.floor((lo + hi + 1) / 2) if ok(mid) then lo = mid else hi = mid - 1 end end return lo, select(2, loadstring('return ' .. string.rep('(', lo + 1) .. '1' .. string.rep(')', lo + 1)))",
+    "local function ok(n) return loadstring(string.rep('do ', n) .. string.rep('end ', n)) ~= nil end local lo, hi = 1, 300 while lo < hi do local mid = math.floor((lo + hi + 1) / 2) if ok(mid) then lo = mid else hi = mid - 1 end end return lo",
 
     -- WoW's string additions and aliases.
     "return strsplit == string.split, strjoin == string.join, strtrim == string.trim",

@@ -66,6 +66,25 @@ local function scan(experiment: string, call: (number) -> number, expect: (numbe
 end
 
 @noprofile
+--- Nests `nest(d)` deeper, by one up to 300 and by 100 beyond, each try in
+--- a fresh coroutine (its C call count starts at 1 there, so the depth is
+--- absolute): it returns "ok" while the client allows the depth; a crash
+--- leaves `d` in the crash report.
+local function ascend(experiment: string, nest: (number) -> any, most: number): { [string]: any }
+    local last = 0
+    local d = 1
+    while d <= most do
+        local ok, result = coroutine.wrap(function() return pcall(nest, d) end)()
+        if not ok or result ~= "ok" then
+            return { experiment = experiment, works = last, fails = d, error = tostring(result) }
+        end
+        last = d
+        d += d < 300 and 1 or 100
+    end
+    return { experiment = experiment, works = last }
+end
+
+@noprofile
 local function body(n: number): ...number
     return unpack(T, 1, n)
 end
@@ -184,6 +203,49 @@ const EXPERIMENTS: CrashExperiment[] = {
         prediction = "crash at r = 102 (confirmed: #results + 3 >= #args + 100)",
         run = function()
             return scan("pcallwithenv(f, env, r, 0, 0)", function(r: number): number return select("#", G.pcallwithenv(bodyUpvalue, {}, r, 0, 0)) end, plus(1))
+        end,
+    },
+    {
+        name = "nested pcall: the C call depth (Lua -> pcall -> Lua ...)",
+        prediction = "clean \"C stack overflow\" near 200 levels (stock Lua's LUAI_MAXCCALLS); a crash if the client has no limit",
+        run = function()
+            local function nest(d: number): any
+                if d == 0 then
+                    return "ok"
+                end
+                local ok, r = pcall(nest, d - 1)
+                return ok and r or tostring(r)
+            end
+            return ascend("nested pcall", nest, 5000)
+        end,
+    },
+    {
+        name = "nested __index functions: the C call depth through metamethods",
+        prediction = "clean \"C stack overflow\" near 200 levels, as 14",
+        run = function()
+            const proxy = setmetatable({}, {
+                __index = function(t: any, k: number): any
+                    if k == 0 then
+                        return "ok"
+                    end
+                    return t[k - 1]
+                end,
+            })
+            return ascend("nested __index", function(d: number): any return (proxy :: any)[d] end, 5000)
+        end,
+    },
+    {
+        name = "nested coroutine.resume: the C call depth through coroutines",
+        prediction = "a clean error near 200 if Blizzard counts nested coroutines; stock Lua 5.1 does not, and the C stack overflows: a real crash",
+        run = function()
+            local function nest(d: number): any
+                if d == 0 then
+                    return "ok"
+                end
+                local ok, r = coroutine.resume(coroutine.create(nest), d - 1)
+                return ok and r or tostring(r)
+            end
+            return ascend("nested coroutine.resume", nest, 20000)
         end,
     },
 }
