@@ -5,7 +5,7 @@
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, Value, Vm};
 
-use crate::{clock, engine, widgets};
+use crate::{clock, engine, units, widgets};
 
 /// `fireEvent(name, ...)`: fires an event the flavor knows, the payload
 /// checked against its documentation (decision T202).
@@ -129,10 +129,18 @@ pub fn install(vm: &mut Vm, name: &str) {
         ("nextFrame", next_frame),
         ("advanceFrames", advance_frames),
         ("warnings", warnings),
+        ("spawnUnit", units::spawn),
+        ("addToGroup", units::add_to_group),
+        ("enterInstance", units::enter_instance),
+        ("leaveInstance", units::leave_instance),
+        ("setRestriction", units::set_restriction_control),
     ] {
         let native = vm.native(key, f);
         let k = vm.heap.intern(key.as_bytes());
         vm.heap.table_mut(t).set_str(k, native);
     }
+    let player = units::handle(vm, units::PLAYER);
+    let k = vm.heap.intern(b"player");
+    vm.heap.table_mut(t).set_str(k, player);
     vm.set_global(name, Value::Table(t));
 }

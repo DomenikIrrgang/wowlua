@@ -7,6 +7,7 @@ pub mod api;
 pub mod args;
 pub mod clock;
 pub mod controls;
+pub mod units;
 pub mod widgets;
 
 use std::collections::HashMap;
@@ -25,6 +26,7 @@ pub struct Engine {
     methods: HashMap<&'static str, widgets::MethodFn>,
     pub world: widgets::World,
     pub timers: clock::Timers,
+    pub units: units::Units,
 }
 
 impl Engine {
@@ -107,11 +109,48 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     vm.host = Some(Box::new(Engine {
         flavor: flavor.to_string(),
         api,
-        behaviours: clock::behaviours().into_iter().collect(),
+        behaviours: clock::behaviours()
+            .into_iter()
+            .chain(units::behaviours())
+            .collect(),
         methods: widgets::behaviours().into_iter().collect(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),
+        units: units::Units::default(),
     }));
+    // Functions with behaviour the documentation lacks (`IsInGroup`): the
+    // client has them (camelot's inventory; other flavors unverified).
+    let names: Vec<(&'static str, NativeFn)> = engine(vm)
+        .behaviours
+        .iter()
+        .map(|(&n, &f)| (n, f))
+        .collect();
+    for (name, f) in names {
+        let (ns, short) = match name.split_once('.') {
+            Some((ns, short)) => (Some(ns), short),
+            None => (None, name),
+        };
+        let exists = match ns {
+            None => !vm.get_global(short).is_nil(),
+            Some(ns) => {
+                let t = namespace(vm, ns);
+                let key = vm.heap.intern(short.as_bytes());
+                !vm.heap.table(t).get_str(key).is_nil()
+            }
+        };
+        if !exists {
+            let native = vm.native(short, f);
+            match ns {
+                None => vm.set_global(short, native),
+                Some(ns) => {
+                    let t = namespace(vm, ns);
+                    let key = vm.heap.intern(short.as_bytes());
+                    vm.heap.table_mut(t).set_str(key, native);
+                }
+            }
+        }
+    }
+    units::install(vm);
     // Undocumented C functions with behaviour.
     let create_frame = vm.native("CreateFrame", widgets::create_frame);
     vm.set_global("CreateFrame", create_frame);
@@ -148,8 +187,36 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     let f = &api.functions[i as usize];
     let behaviour = engine.behaviours.get(f.name).copied();
     args::check(vm, api, f, &c)?;
-    match behaviour {
-        Some(behaviour) => behaviour(vm, c),
-        None => Err(vm.error(&format!("{} is not mocked", f.name))),
+    let Some(behaviour) = behaviour else {
+        return Err(vm.error(&format!("{} is not mocked", f.name)));
+    };
+    // The client's secrecy: results secret as the function's documentation
+    // and the restrictions active say; a return marked never secret stays.
+    let secret = units::secret_results(vm, &f.doc, &c);
+    let results = behaviour(vm, c)?;
+    if !secret {
+        return Ok(results);
     }
+    let returns = f
+        .doc
+        .get("Returns")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    Ok(results
+        .into_iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let never = returns
+                .get(i)
+                .and_then(|r| r.get("NeverSecret"))
+                .and_then(serde_json::Value::as_bool)
+                == Some(true);
+            if never || v.is_nil() {
+                v
+            } else {
+                vm.secret_wrap(v)
+            }
+        })
+        .collect())
 }
