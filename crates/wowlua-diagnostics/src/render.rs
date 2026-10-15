@@ -288,10 +288,248 @@ fn write_human(
         rendered = rendered.with_code(code);
     }
     let config = term::Config::default();
-    term::emit_to_write_style(out, &config, &DbFiles(db), &rendered).map_err(|e| match e {
+    let result = match Windowed::new(db, diagnostic) {
+        // A line too long to show: a window of it around the labels.
+        Some(windowed) => {
+            rendered.labels = windowed.labels(&rendered.labels);
+            term::emit_to_write_style(out, &config, &windowed, &rendered)
+        }
+        None => term::emit_to_write_style(out, &config, &DbFiles(db), &rendered),
+    };
+    result.map_err(|e| match e {
         FilesError::Io(io) => io,
         other => io::Error::other(other.to_string()),
     })
+}
+
+/// Source lines longer than this many characters are shown as a window
+/// around their labels, as rustc and Clang do: data files can have lines of
+/// hundreds of KB, and each diagnostic would print the whole line.
+const LONG_LINE: usize = 160;
+/// How many characters of a long line are shown.
+const WINDOW: usize = 120;
+/// How many characters before the first label the window starts.
+const BEFORE: usize = 40;
+/// How many characters after the last label the window goes on, at least.
+const AFTER: usize = 10;
+
+/// The byte offset `n` characters before `at` in `line` (or 0).
+fn chars_back(line: &str, at: usize, n: usize) -> usize {
+    line[..at]
+        .char_indices()
+        .rev()
+        .nth(n.saturating_sub(1))
+        .map_or(0, |(i, _)| i)
+}
+
+/// The byte offset `n` characters after `at` in `line` (or its end).
+fn chars_forward(line: &str, at: usize, n: usize) -> usize {
+    line[at..]
+        .char_indices()
+        .nth(n)
+        .map_or(line.len(), |(i, _)| at + i)
+}
+
+/// One line of a [`Windowed`] file.
+struct WindowLine {
+    /// The original line index.
+    index: usize,
+    /// Its byte offset in the original text.
+    start: usize,
+    /// The bytes of its content (without the line break) that are shown.
+    shown: Range<usize>,
+    /// Bytes of `...` before the shown part.
+    prefix: usize,
+    /// Where the line starts and ends in the window text.
+    text: Range<usize>,
+}
+
+/// A diagnostic's files as codespan sees them when a line it shows is too
+/// long: only the lines it shows (and the lines next to them), long ones cut
+/// to a window around the labels. Line and column numbers are the original
+/// ones.
+struct Windowed<'a> {
+    db: &'a SourceDb,
+    files: Vec<(FileId, String, Vec<WindowLine>)>,
+}
+
+impl<'a> Windowed<'a> {
+    /// `None` when every line the diagnostic shows is short enough.
+    fn new(db: &'a SourceDb, diagnostic: &Diagnostic) -> Option<Windowed<'a>> {
+        // Per file and line: the label boundaries on it.
+        let mut lines: std::collections::BTreeMap<(FileId, usize), Vec<usize>> = Default::default();
+        for label in &diagnostic.labels {
+            let file = db.get(label.span.file);
+            let (start, end) = (label.span.start as usize, label.span.end as usize);
+            let (first, last) = (file.line_index(start), file.line_index(end));
+            let max = file.line_starts().len() - 1;
+            // Codespan also shows a line between two shown ones.
+            for line in first.saturating_sub(1)..=(last + 1).min(max) {
+                lines.entry((label.span.file, line)).or_default();
+            }
+            lines
+                .entry((label.span.file, first))
+                .or_default()
+                .push(start);
+            lines.entry((label.span.file, last)).or_default().push(end);
+        }
+        let content = |file: FileId, line: usize| {
+            let f = db.get(file);
+            let starts = f.line_starts();
+            let start = starts[line];
+            let end = starts.get(line + 1).copied().unwrap_or(f.text().len());
+            let text = &f.text()[start..end];
+            let body = text.trim_end_matches(['\n', '\r']);
+            (start, body, &text[body.len()..])
+        };
+        let long = |body: &str| body.len() > LONG_LINE && body.chars().count() > LONG_LINE;
+        if !lines
+            .keys()
+            .any(|&(file, line)| long(content(file, line).1))
+        {
+            return None;
+        }
+        let mut files: Vec<(FileId, String, Vec<WindowLine>)> = Vec::new();
+        for ((file, index), points) in lines {
+            if files.last().is_none_or(|(f, ..)| *f != file) {
+                files.push((file, String::new(), Vec::new()));
+            }
+            let (_, text, rows) = files.last_mut().expect("pushed");
+            let (start, body, ending) = content(file, index);
+            let shown = if !long(body) {
+                0..body.len()
+            } else {
+                let offsets: Vec<usize> =
+                    points.iter().map(|p| (p - start).min(body.len())).collect();
+                let lo = offsets.iter().copied().min().unwrap_or(0);
+                let hi = offsets.iter().copied().max().unwrap_or(0);
+                let from = if offsets.is_empty() {
+                    0
+                } else {
+                    chars_back(body, lo, BEFORE)
+                };
+                let to = chars_forward(body, from, WINDOW).max(chars_forward(body, hi, AFTER));
+                from..to
+            };
+            let begin = text.len();
+            let prefix = if shown.start > 0 { "..." } else { "" };
+            text.push_str(prefix);
+            text.push_str(&body[shown.clone()]);
+            if shown.end < body.len() {
+                text.push_str("...");
+            }
+            text.push_str(ending);
+            rows.push(WindowLine {
+                index,
+                start,
+                shown,
+                prefix: prefix.len(),
+                text: begin..text.len(),
+            });
+        }
+        Some(Windowed { db, files })
+    }
+
+    fn file(&self, id: FileId) -> Result<&(FileId, String, Vec<WindowLine>), FilesError> {
+        self.files
+            .iter()
+            .find(|(f, ..)| *f == id)
+            .ok_or(FilesError::FileMissing)
+    }
+
+    /// The window text's offset of original byte `offset` of `id`. Label
+    /// boundaries are inside their line's window; a position in the line
+    /// break stays in the line break.
+    fn map(&self, id: FileId, offset: usize) -> usize {
+        let line = self.db.get(id).line_index(offset);
+        let Ok(row) = self.row(id, line) else {
+            return 0;
+        };
+        let at = offset - row.start;
+        let shown_end = row.text.start + row.prefix + row.shown.len();
+        if at <= row.shown.start {
+            row.text.start + row.prefix
+        } else if at <= row.shown.end {
+            row.text.start + row.prefix + (at - row.shown.start)
+        } else if row.shown.end == self.body_len(id, row) {
+            (shown_end + at - row.shown.end).min(row.text.end)
+        } else {
+            shown_end
+        }
+    }
+
+    fn body_len(&self, id: FileId, row: &WindowLine) -> usize {
+        let f = self.db.get(id);
+        let starts = f.line_starts();
+        let end = starts.get(row.index + 1).copied().unwrap_or(f.text().len());
+        f.text()[row.start..end]
+            .trim_end_matches(['\n', '\r'])
+            .len()
+    }
+
+    /// The labels with their ranges in the window texts.
+    fn labels(&self, labels: &[cs::Label<FileId>]) -> Vec<cs::Label<FileId>> {
+        labels
+            .iter()
+            .map(|l| {
+                let mut l = l.clone();
+                l.range = self.map(l.file_id, l.range.start)..self.map(l.file_id, l.range.end);
+                l
+            })
+            .collect()
+    }
+
+    fn row(&self, id: FileId, line_index: usize) -> Result<&WindowLine, FilesError> {
+        let (_, _, rows) = self.file(id)?;
+        rows.iter()
+            .find(|r| r.index == line_index)
+            .ok_or(FilesError::LineTooLarge {
+                given: line_index,
+                max: rows.last().map_or(0, |r| r.index),
+            })
+    }
+}
+
+impl<'a> Files<'a> for Windowed<'a> {
+    type FileId = FileId;
+    type Name = String;
+    type Source = &'a str;
+
+    fn name(&'a self, id: FileId) -> Result<String, FilesError> {
+        Ok(display_path(self.db.get(id).path()))
+    }
+
+    fn source(&'a self, id: FileId) -> Result<&'a str, FilesError> {
+        Ok(&self.file(id)?.1)
+    }
+
+    fn line_index(&'a self, id: FileId, byte_index: usize) -> Result<usize, FilesError> {
+        let (_, _, rows) = self.file(id)?;
+        let at = rows.partition_point(|r| r.text.start <= byte_index);
+        Ok(rows[at.saturating_sub(1)].index)
+    }
+
+    fn line_range(&'a self, id: FileId, line_index: usize) -> Result<Range<usize>, FilesError> {
+        Ok(self.row(id, line_index)?.text.clone())
+    }
+
+    /// The column in the original line, as codespan computes it there.
+    fn column_number(
+        &'a self,
+        id: FileId,
+        line_index: usize,
+        byte_index: usize,
+    ) -> Result<usize, FilesError> {
+        let row = self.row(id, line_index)?;
+        let in_text = byte_index.saturating_sub(row.text.start);
+        let at = row.shown.start + in_text.saturating_sub(row.prefix).min(row.shown.len());
+        let original = DbFiles(self.db);
+        let range = original.line_range(id, line_index)?;
+        Ok(
+            codespan_reporting::files::column_index(self.db.get(id).text(), range, row.start + at)
+                + 1,
+        )
+    }
 }
 
 /// Adapter that lets codespan-reporting read files from a [`SourceDb`].
@@ -380,6 +618,123 @@ mod tests {
         assert!(out.contains("error[E4002]: unknown key"));
         assert!(out.contains("wowlua.json:2:15"));
         assert!(out.contains("help: did you mean"));
+    }
+
+    /// The human format without windowing, as it rendered every line before.
+    fn unwindowed(db: &SourceDb, d: &Diagnostic) -> String {
+        let labels = d
+            .labels
+            .iter()
+            .map(|l| cs::Label::primary(l.span.file, l.span.range()).with_message(&l.message))
+            .collect();
+        let rendered = cs::Diagnostic::warning()
+            .with_message(&d.message)
+            .with_code(d.code.unwrap_or_default())
+            .with_labels(labels);
+        let mut buffer = termcolor::Buffer::no_color();
+        term::emit_to_write_style(
+            &mut buffer,
+            &term::Config::default(),
+            &DbFiles(db),
+            &rendered,
+        )
+        .unwrap();
+        String::from_utf8(buffer.into_inner()).unwrap()
+    }
+
+    fn long_file(db: &mut SourceDb) -> (FileId, String) {
+        let long: String = (0..2000).map(|i| format!("{i},")).collect();
+        let text = format!("local t = {{{long}}}\nprint(t)\nlocal u = {{{long}}}\n");
+        (db.add("src/data.lua", text.clone()), text)
+    }
+
+    /// The caret line's first `^` is under `word` in the line above.
+    #[track_caller]
+    fn caret_under(out: &str, word: &str) {
+        let lines: Vec<&str> = out.lines().collect();
+        let i = lines.iter().position(|l| l.contains('^')).unwrap();
+        let col = |s: &str, at: usize| s[..at].chars().count();
+        let caret = col(lines[i], lines[i].find('^').unwrap());
+        let above = lines[i - 1];
+        assert_eq!(caret, col(above, above.find(word).unwrap()), "{out}");
+    }
+
+    #[test]
+    fn long_lines_show_a_window_around_the_label() {
+        let mut db = SourceDb::new();
+        let (file, text) = long_file(&mut db);
+        let r = Renderer::new(MessageFormat::Human, ColorChoice::Never);
+        let at = text.find("1000,").unwrap();
+        let d =
+            Diagnostic::warning("W1003", "middle").with_label(Span::new(file, at..at + 4), "here");
+        let out = r.render_to_string(&db, &d);
+        assert!(out.lines().all(|l| l.chars().count() < 200), "{out}");
+        assert!(
+            out.contains("│ ...990,991,") && out.contains("1015,...\n"),
+            "{out}"
+        );
+        caret_under(&out, "1000");
+        // The location is the original one.
+        let header = |s: &str| s.lines().take(2).map(str::to_string).collect::<Vec<_>>();
+        assert_eq!(header(&out), header(&unwindowed(&db, &d)));
+        // At the start and at the end of a line, nothing is cut there.
+        let d = Diagnostic::warning("W1003", "start").with_label(Span::new(file, 0..5), "here");
+        let out = r.render_to_string(&db, &d);
+        assert!(out.contains("│ local t = {0,1,2,"), "{out}");
+        let end = text.find("\nprint").unwrap();
+        let d =
+            Diagnostic::warning("W1003", "end").with_label(Span::new(file, end - 1..end), "here");
+        let out = r.render_to_string(&db, &d);
+        assert!(out.contains(",1999,}\n"), "{out}");
+        assert_eq!(header(&out), header(&unwindowed(&db, &d)));
+    }
+
+    #[test]
+    fn several_lines_and_multi_line_labels_are_windowed() {
+        let mut db = SourceDb::new();
+        let (file, text) = long_file(&mut db);
+        let r = Renderer::new(MessageFormat::Human, ColorChoice::Never);
+        let (a, u) = (text.find("1000,").unwrap(), text.rfind("local u").unwrap());
+        for d in [
+            Diagnostic::warning("W1003", "apart")
+                .with_label(Span::new(file, a..a + 4), "first")
+                .with_label(Span::new(file, u..u + 7), "second"),
+            Diagnostic::warning("W1003", "multi").with_label(Span::new(file, a..u + 7), "spans"),
+        ] {
+            let out = r.render_to_string(&db, &d);
+            assert!(out.lines().all(|l| l.chars().count() < 200), "{out}");
+            assert!(
+                out.contains("2 │ │ print(t)") || out.contains("2 │ print(t)"),
+                "{out}"
+            );
+        }
+    }
+
+    #[test]
+    fn windows_cut_between_characters() {
+        let mut db = SourceDb::new();
+        let text = format!("x = \"{}\" .. y\n", "é".repeat(300));
+        let file = db.add("src/u.lua", text.clone());
+        let y = text.find(" y").unwrap() + 1;
+        let d = Diagnostic::warning("W1001", "y").with_label(Span::new(file, y..y + 1), "here");
+        let out = Renderer::new(MessageFormat::Human, ColorChoice::Never).render_to_string(&db, &d);
+        assert!(out.contains("│ ...éé"), "{out}");
+        caret_under(&out, "y\n".trim_end());
+        let header = |s: &str| s.lines().take(2).map(str::to_string).collect::<Vec<_>>();
+        assert_eq!(header(&out), header(&unwindowed(&db, &d)));
+    }
+
+    /// Lines up to the limit render as they always did.
+    #[test]
+    fn short_lines_are_not_windowed() {
+        let mut db = SourceDb::new();
+        let line = format!("local t = {{{}}}", "1,".repeat(74));
+        assert_eq!(line.len(), LONG_LINE);
+        let file = db.add("src/a.lua", format!("{line}\n"));
+        let d = Diagnostic::warning("W1003", "fits").with_label(Span::new(file, 6..7), "here");
+        assert!(Windowed::new(&db, &d).is_none());
+        let out = Renderer::new(MessageFormat::Human, ColorChoice::Never).render_to_string(&db, &d);
+        assert_eq!(out, unwindowed(&db, &d));
     }
 
     #[test]
