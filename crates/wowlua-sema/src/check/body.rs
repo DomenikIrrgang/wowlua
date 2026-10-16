@@ -136,7 +136,7 @@ pub struct Checker<'e> {
     /// Classes whose instances or class tables this file stores in globals.
     pub global_classes: FxHashSet<DefId>,
     reassigned: FxHashSet<u32>,
-    assigned_in_closures: FxHashSet<u32>,
+    pub(crate) assigned_in_closures: FxHashSet<u32>,
     /// Locals assigned after their declaration (anywhere).
     assigned_later: FxHashSet<u32>,
     pure_lua: bool,
@@ -712,15 +712,14 @@ impl<'e> Checker<'e> {
             StmtKind::While { cond, body } => {
                 self.mark_probes(cond);
                 self.infer(cond);
-                let before = self.flow.clone();
                 self.forget_assigned(body);
                 let (t_flow, f_flow) = self.narrow(cond, &self.flow.clone());
                 self.flow = t_flow;
                 self.block(body);
-                let after_body = self.flow.clone();
+                // `join` reads no flow but its arguments.
+                let after_body = std::mem::take(&mut self.flow);
                 let joined = self.join(&f_flow, &after_body, true, self.live);
                 self.flow = joined;
-                let _ = before;
                 self.live = true;
             }
             StmtKind::Repeat { body, cond } => {

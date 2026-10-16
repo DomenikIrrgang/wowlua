@@ -191,14 +191,17 @@ impl Checker<'_> {
     /// change them).
     pub fn forget_passed(&mut self, receiver: Option<&Expr>, args: &Args) {
         // A local narrowed to `nil` that closures assign may hold a value
-        // after the call (a callback set it).
-        let vars = &self.vars;
-        self.flow.retain(|v, t| {
-            !(*t == Types::NIL
-                && vars
-                    .get(v.0 as usize)
-                    .is_some_and(|var| var.assigned_in_closure))
-        });
+        // after the call (a callback set it). No local is when the file
+        // assigns none in a closure.
+        if !self.assigned_in_closures.is_empty() {
+            let vars = &self.vars;
+            self.flow.retain(|v, t| {
+                !(*t == Types::NIL
+                    && vars
+                        .get(v.0 as usize)
+                        .is_some_and(|var| var.assigned_in_closure))
+            });
+        }
         if self.field_vars.is_empty() {
             return;
         }
@@ -251,8 +254,6 @@ impl Checker<'_> {
     }
 
     fn narrow_cond(&mut self, cond: &Expr, flow: &Flow) -> (Flow, Flow) {
-        let mut t_flow = flow.clone();
-        let mut f_flow = flow.clone();
         match &cond.kind {
             ExprKind::Paren(inner) => return self.narrow(inner, flow),
             ExprKind::Unary {
@@ -295,11 +296,13 @@ impl Checker<'_> {
                 };
             }
             ExprKind::Call { callee, args } => {
+                let (mut t_flow, mut f_flow) = (flow.clone(), flow.clone());
                 self.narrow_predicate(callee, args, flow, &mut t_flow, &mut f_flow);
                 return (t_flow, f_flow);
             }
             _ => {}
         }
+        let (mut t_flow, mut f_flow) = (flow.clone(), flow.clone());
         if let Some(v) = self.narrowable(cond) {
             let current = self.var_type_in(v, flow);
             let t = self.truthy(current);
