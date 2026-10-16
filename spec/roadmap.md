@@ -441,15 +441,23 @@ The test framework runs on wowlua's own emulation of the WoW client
   (T222) are specified here and built in M11 and S8. The groundwork for M12
   to M14: the VM's debug hooks (shared with S5's coverage) and the engine's
   file access behind an interface (T212).
-  In progress 2026-10-17: `wowlua test` runs a package's test files per
-  flavor in the engine (the addon loaded from its TOC as the client loads
-  it), with `wowlua:test` (tests, hooks, `@skip`, `@only`, `@flavors`,
-  `@cases`, `describe`, `config`, the core matchers) and `wowlua:mock` (the
-  engine's controls, spies, stubs, fakes, waiting, printed output and
-  errors).
+  Built 2026-10-17, waiting for review and an in-game run (`/stdtest
+  snapshot`, event-order recordings): `wowlua test` runs a package's test
+  files per flavor in the engine (the addon loaded from its TOC as the
+  client loads it; `test.blizzard-ui` loads Blizzard's UI first, fetched on
+  first use), with `wowlua:test` (tests, hooks, `@skip`, `@only`,
+  `@flavors`, `@cases`, `describe`, `config`, typed matchers, widget
+  matchers, snapshots, custom matchers, `@expectError`) and `wowlua:mock`
+  (the engine's controls, spies, stubs, fakes, waiting, printed output and
+  errors, `mock.module`, user input); world profiles with the character's
+  money, gear, bags and place; `import internal`.
 - S5 **Coverage and reports**: lines, statements, branches, functions and
   conditions counted by the VM; terminal, JUnit, TAP, JSON, GitHub, lcov,
   Cobertura and an HTML report in the wowlua design system; thresholds.
+  Built 2026-10-17: the VM counts instructions and conditional jumps of the
+  addon's files (runtime checks and generated functions left out), every
+  report above, `test.coverage` minimums and exclusions, `--coverage-per-flavor`;
+  the HTML report names the design system's fonts (shipped with M11).
 - S6 `wowlua fmt` complete for all wowlua constructs, with an idempotence suite.
 - S7 Persistent incremental cache (phase 2), shared with the LSP.
 - S8 `wowlua lsp` and the VS Code extension, with a test explorer, coverage in

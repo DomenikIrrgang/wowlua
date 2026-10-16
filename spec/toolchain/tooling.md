@@ -324,9 +324,11 @@ wowlua test [filter] [--flavor <f>] [-u] [--watch] [--coverage] [--reporter <r>,
   (the AddOn folder as the client would load it, with the test side next to
   it); error locations in reports are the sources' (the `test` profile keeps
   lines).
-- Test reporters: `pretty` (the terminal default), `junit` (XML), `tap`,
-  `json`, `github` (annotations). Several may be given; files go to
-  `dist/test/` unless `--output` says otherwise.
+- Test reporters: `pretty` (the terminal default), `junit` (XML,
+  `junit.xml`), `tap` (`results.tap`), `json` (`results.json`), `github`
+  (annotations, on standard output). Several may be given (or
+  `test.reporters` names them); files go to `<build.out>/test/` unless
+  `--output` says otherwise.
 - Exit code 1 if any test fails, or if coverage is below a threshold
   (§16.1.6).
 
@@ -342,16 +344,24 @@ wowlua test [filter] [--flavor <f>] [-u] [--watch] [--coverage] [--reporter <r>,
 | Functions | Each function, method and closure called |
 | Conditions | Each condition of a compound test (`a and b`, `a or b`) both true and false |
 
-The VM counts them; the compiled code is not changed. Code that `@if` removes
-for the flavor under test counts as not applicable, and coverage of all flavors
-is merged unless `--coverage-per-flavor` is given. `-- wowlua: coverage ignore`
-(next statement) and `-- wowlua: coverage ignore-file` exclude code, and
-`test.coverage.exclude` excludes files.
+The VM counts them; the compiled code is not changed. It counts the
+instructions that run and the outcomes of conditional jumps, mapped to the
+sources (the `test` profile keeps lines): a line is covered when code on it
+ran, statements count as lines, a branch is one outcome of a conditional
+jump, a condition one on a line with several (a compound test), and the
+compiler's runtime checks and generated functions are left out. Code that
+`@if` removes for the flavor under test counts as not applicable, and
+coverage of all flavors is merged unless `--coverage-per-flavor` is given
+(reports then in `<flavor>/`). `-- wowlua: coverage ignore` (the next line
+with code, or the line it ends) and `-- wowlua: coverage ignore-file`
+exclude code, and `test.coverage.exclude` excludes files.
 
-Reports, any combination: a terminal summary, `lcov` (with branch and function
-data), `cobertura` (XML), `json`, and `html`: a self-contained report in the
-wowlua design system (its fonts and tokens, dark and light), with every file's
-source, hit counts, branch markers and totals per file and folder.
+Reports, any combination: a terminal summary (always, with each file's lines
+that never ran), `lcov` (`lcov.info`, with branch and function data),
+`cobertura` (`cobertura.xml`), `coverage-json` (`coverage.json`), and `html`
+(`coverage.html`): a self-contained report in the wowlua design system (its
+fonts and tokens, dark and light), with every file's source, hit counts,
+branch markers and totals per file and folder.
 
 Thresholds in `test.coverage` ([Manifest §9.18](manifest.md#918-test)) set
 minimum percentages per kind; a run below one fails.

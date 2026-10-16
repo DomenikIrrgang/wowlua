@@ -518,23 +518,19 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
 }
 
 /// `wowlua test` (spec Tooling §16.1): each addon's test files, once per
-/// flavor, in the emulated client.
-pub fn test(
-    out: &Output,
-    global: &GlobalArgs,
-    filter: Option<&str>,
-    flavors: Vec<String>,
-    update_snapshots: bool,
-) -> bool {
+/// flavor, in the emulated client; reports and coverage (§16.1.5, §16.1.6).
+pub fn test(out: &Output, global: &GlobalArgs, args: &crate::TestArgs) -> bool {
     use termcolor::Color;
     let started = Instant::now();
+    let filter = args.filter.as_deref();
     let mut session = Session::new();
     let Some(projects) = wowlua_driver::load_projects(&mut session, &load_options(out, global))
     else {
         out.flush(&mut session);
         return false;
     };
-    let wanted: Vec<String> = flavors
+    let wanted: Vec<String> = args
+        .flavor
         .iter()
         .filter_map(|f| wowlua_flavors::table().resolve(f).map(|f| f.id.clone()))
         .collect();
@@ -542,10 +538,32 @@ pub fn test(
     let mut ok = true;
     let (mut passed, mut failed, mut skipped, mut files) = (0, 0, 0, 0);
     let mut snaps = wowlua_test::SnapshotSummary::default();
+    let mut all: Vec<wowlua_test::FileResult> = Vec::new();
+    // Coverage by flavor ("" merged), the manifest's thresholds and
+    // exclusions, the report folder and the root.
+    let mut coverage: std::collections::BTreeMap<String, wowlua_test::coverage::Report> =
+        std::collections::BTreeMap::new();
+    let mut settings: Option<wowlua_manifest::model::CoverageSettings> = None;
+    let mut reporters: Vec<String> = args.reporter.clone();
+    let mut output: Option<PathBuf> = args.output.as_ref().map(|o| cwd().join(o));
+    let mut root = cwd();
+    let mut title = String::from("wowlua");
     for project in projects {
         if project.kind() != PackageKind::Addon {
             continue;
         }
+        let test_settings = project.manifest.manifest.test.clone();
+        if reporters.is_empty() {
+            reporters = test_settings.reporters.clone();
+        }
+        if settings.is_none() {
+            settings = test_settings.coverage.clone();
+        }
+        if output.is_none() {
+            output = Some(project.manifest.out_dir().join("test"));
+        }
+        root = project.root().to_path_buf();
+        title = project.addon_name();
         let addon = project.addon_name();
         for flavor in project.manifest.flavors.clone() {
             if !wanted.is_empty() && !wanted.contains(&flavor) {
@@ -577,7 +595,7 @@ pub fn test(
                 ok = false;
                 continue;
             };
-            let blizzard_ui = if project.manifest.manifest.test.blizzard_ui {
+            let blizzard_ui = if test_settings.blizzard_ui {
                 match wowlua_test::ui_source(&flavor, &|what| out.status("Fetching", what)) {
                     Ok(ui) => Some(ui),
                     Err(e) => {
@@ -598,8 +616,9 @@ pub fn test(
                 root: project.root().to_path_buf(),
                 src: project.manifest.manifest.build.src.clone(),
                 blizzard_ui,
-                profile: project.manifest.manifest.test.profile.clone(),
-                update_snapshots,
+                profile: test_settings.profile.clone(),
+                update_snapshots: args.update_snapshots,
+                coverage: args.coverage,
             };
             let results = wowlua_test::run(&suite, filter, threads);
             if let Some(errors) = results
@@ -620,70 +639,140 @@ pub fn test(
                     ),
                 ]);
             }
+            for result in &results {
+                if let Some(c) = &result.coverage {
+                    let key = if args.coverage_per_flavor {
+                        flavor.clone()
+                    } else {
+                        String::new()
+                    };
+                    coverage.entry(key).or_default().merge(c);
+                }
+            }
             for result in results {
                 files += 1;
                 snaps.written += result.snapshots.written;
                 snaps.updated += result.snapshots.updated;
                 snaps.removed += result.snapshots.removed;
                 let bad = result.failed();
-                let (word, color) = if bad {
-                    ("FAIL", Color::Red)
-                } else {
-                    ("PASS", Color::Green)
-                };
-                out.colored(&[
-                    (Some(color), true, &format!(" {word} ")),
-                    (None, true, &result.file),
-                    (
-                        None,
-                        false,
-                        &format!(" ({}, {:.2}s)\n", result.flavor, result.seconds),
-                    ),
-                ]);
-                if let Some(error) = &result.error {
-                    out.colored(&[(Some(Color::Red), false, &indent(error, "     "))]);
+                if bad {
+                    ok = false;
                 }
                 for t in &result.tests {
                     match &t.outcome {
-                        wowlua_test::Outcome::Pass => {
-                            passed += 1;
-                            out.colored(&[
-                                (Some(Color::Green), false, "   ✓ "),
-                                (None, false, &format!("{}\n", t.name)),
-                            ]);
-                        }
-                        wowlua_test::Outcome::Skip(reason) => {
-                            skipped += 1;
-                            let why = if reason.is_empty() {
-                                String::new()
-                            } else {
-                                format!(" ({reason})")
-                            };
-                            out.colored(&[
-                                (Some(Color::Yellow), false, "   - "),
-                                (None, false, &format!("{}{why}\n", t.name)),
-                            ]);
-                        }
-                        wowlua_test::Outcome::Fail { message, stack } => {
-                            failed += 1;
-                            let (message, at) = wowlua_test::split_failure(message, stack);
-                            out.colored(&[
-                                (Some(Color::Red), true, "   ✗ "),
-                                (None, true, &format!("{}\n", t.name)),
-                                (Some(Color::Red), false, &indent(&message, "       ")),
-                            ]);
-                            if let Some(at) = at {
-                                out.colored(&[(None, false, &format!("       at {at}\n"))]);
-                            }
-                        }
+                        wowlua_test::Outcome::Pass => passed += 1,
+                        wowlua_test::Outcome::Skip(_) => skipped += 1,
+                        wowlua_test::Outcome::Fail { .. } => failed += 1,
                     }
                 }
-                if bad {
-                    ok = false;
-                    if !result.printed.is_empty() {
+                if reporters.is_empty() || reporters.iter().any(|r| r == "pretty") {
+                    print_result(out, &result);
+                }
+                all.push(result);
+            }
+        }
+    }
+    let output = output.unwrap_or_else(|| cwd().join("dist").join("test"));
+    // Report files.
+    let write = |name: &str, text: &str| -> bool {
+        let path = output.join(name);
+        let written = path
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(&path, text));
+        match written {
+            Ok(()) => {
+                out.status("Wrote", path.display().to_string());
+                true
+            }
+            Err(e) => {
+                out.colored(&[
+                    (Some(Color::Red), true, "error"),
+                    (None, false, &format!(": writing {}: {e}\n", path.display())),
+                ]);
+                false
+            }
+        }
+    };
+    for r in &reporters {
+        let done = match r.as_str() {
+            "pretty" | "lcov" | "cobertura" | "coverage-json" | "html" => true,
+            "junit" => write("junit.xml", &wowlua_test::reports::junit(&all)),
+            "tap" => write("results.tap", &wowlua_test::reports::tap(&all)),
+            "json" => write("results.json", &wowlua_test::reports::tests_json(&all)),
+            "github" => {
+                print!("{}", wowlua_test::reports::github(&all));
+                true
+            }
+            other => {
+                out.colored(&[
+                    (Some(Color::Red), true, "error"),
+                    (None, false, &format!(": unknown reporter `{other}`\n")),
+                ]);
+                false
+            }
+        };
+        ok &= done;
+    }
+    // Coverage: its exclusions, reports and thresholds.
+    if args.coverage {
+        let exclude = wowlua_driver::glob_set(
+            &settings
+                .as_ref()
+                .map(|s| s.exclude.clone())
+                .unwrap_or_default(),
+        );
+        for (flavor, report) in &mut coverage {
+            report.files.retain(|path, _| !exclude.is_match(path));
+            let prefix = if flavor.is_empty() {
+                String::new()
+            } else {
+                format!("{flavor}/")
+            };
+            out.colored(&[(None, false, &wowlua_test::reports::summary(report))]);
+            for r in &reporters {
+                let done = match r.as_str() {
+                    "lcov" => write(
+                        &format!("{prefix}lcov.info"),
+                        &wowlua_test::reports::lcov(report),
+                    ),
+                    "cobertura" => write(
+                        &format!("{prefix}cobertura.xml"),
+                        &wowlua_test::reports::cobertura(report),
+                    ),
+                    "coverage-json" => write(
+                        &format!("{prefix}coverage.json"),
+                        &wowlua_test::reports::coverage_json(report),
+                    ),
+                    "html" => write(
+                        &format!("{prefix}coverage.html"),
+                        &wowlua_test::reports::html(report, &root, &title),
+                    ),
+                    _ => true,
+                };
+                ok &= done;
+            }
+            if let Some(s) = &settings {
+                let t = report.totals();
+                for (kind, min, got) in [
+                    ("lines", s.lines, t.lines),
+                    ("statements", s.statements, t.lines),
+                    ("branches", s.branches, t.branches),
+                    ("functions", s.functions, t.functions),
+                    ("conditions", s.conditions, t.conditions),
+                ] {
+                    let p = wowlua_test::coverage::percent(got);
+                    if let Some(min) = min
+                        && p < min
+                    {
+                        ok = false;
                         out.colored(&[
-                            (None, false, "     printed:\n"),
-                            (None, false, &indent(result.printed.trim_end(), "       ")),
+                            (Some(Color::Red), true, "error"),
+                            (
+                                None,
+                                false,
+                                &format!(": {kind} coverage {p:.1}% is below the minimum {min}%\n"),
+                            ),
                         ]);
                     }
                 }
@@ -716,6 +805,67 @@ pub fn test(
         ]);
     }
     ok
+}
+
+/// One test file's results, as the `pretty` reporter shows them.
+fn print_result(out: &Output, result: &wowlua_test::FileResult) {
+    use termcolor::Color;
+    let bad = result.failed();
+    let (word, color) = if bad {
+        ("FAIL", Color::Red)
+    } else {
+        ("PASS", Color::Green)
+    };
+    out.colored(&[
+        (Some(color), true, &format!(" {word} ")),
+        (None, true, &result.file),
+        (
+            None,
+            false,
+            &format!(" ({}, {:.2}s)\n", result.flavor, result.seconds),
+        ),
+    ]);
+    if let Some(error) = &result.error {
+        out.colored(&[(Some(Color::Red), false, &indent(error, "     "))]);
+    }
+    for t in &result.tests {
+        match &t.outcome {
+            wowlua_test::Outcome::Pass => {
+                out.colored(&[
+                    (Some(Color::Green), false, "   ✓ "),
+                    (None, false, &format!("{}\n", t.name)),
+                ]);
+            }
+            wowlua_test::Outcome::Skip(reason) => {
+                let why = if reason.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({reason})")
+                };
+                out.colored(&[
+                    (Some(Color::Yellow), false, "   - "),
+                    (None, false, &format!("{}{why}\n", t.name)),
+                ]);
+            }
+            wowlua_test::Outcome::Fail { message, stack } => {
+                let (message, at) = wowlua_test::split_failure(message, stack);
+                out.colored(&[
+                    (Some(Color::Red), true, "   ✗ "),
+                    (None, true, &format!("{}\n", t.name)),
+                    (Some(Color::Red), false, &indent(&message, "       ")),
+                ]);
+                if let Some(at) = at {
+                    out.colored(&[(None, false, &format!("       at {at}\n"))]);
+                }
+            }
+        }
+    }
+    if bad && !result.printed.is_empty() {
+        out.colored(&[
+            (None, false, "     printed:\n"),
+            (None, false, &indent(result.printed.trim_end(), "       ")),
+        ]);
+    }
 }
 
 /// Every line of `text` indented, newline-terminated.

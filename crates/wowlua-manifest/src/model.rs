@@ -929,6 +929,32 @@ pub struct TestSettings {
     /// name none (decision T213).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
+    /// Minimum coverage and files left out of it (spec Tooling §16.1.6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coverage: Option<CoverageSettings>,
+    /// Default reporters of `wowlua test` (`pretty`, `junit`, `tap`,
+    /// `json`, `github`, `lcov`, `cobertura`, `coverage-json`, `html`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reporters: Vec<String>,
+}
+
+/// `test.coverage`: minimum percentages per kind (a run below one fails),
+/// and glob patterns of files left out.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct CoverageSettings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lines: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub statements: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branches: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub functions: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conditions: Option<f64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

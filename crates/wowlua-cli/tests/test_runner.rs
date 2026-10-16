@@ -964,3 +964,131 @@ end
     assert!(ok, "{out}");
     assert!(out.contains("2 passed, 0 failed"), "{out}");
 }
+
+/// Coverage (decision T188): counted by the VM in the addon's own files,
+/// with reports and thresholds.
+#[test]
+fn coverage_reports_and_thresholds() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            (
+                "src/math.wowlua",
+                r#"export function sign(n: number): number
+    if n > 0 then
+        return 1
+    elseif n < 0 then
+        return -1
+    end
+    return 0
+end
+
+export function unused(): number
+    return 42
+end
+
+-- wowlua: coverage ignore
+local function debugOnly() print("never") end
+"#,
+            ),
+            (
+                "tests/math.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import sign from "/math"
+
+@test
+local function positive()
+    expect(sign(5)).toBe(1)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(
+        dir.path(),
+        &[
+            "--coverage",
+            "--reporter",
+            "pretty,lcov,cobertura,coverage-json,html,junit,tap,json",
+        ],
+    );
+    assert!(ok, "{out}");
+    assert!(out.contains("coverage: lines"), "{out}");
+    assert!(out.contains("src/math.wowlua: lines"), "{out}");
+    let report = dir.path().join("dist/test");
+    let lcov = fs::read_to_string(report.join("lcov.info")).unwrap();
+    for line in [
+        "SF:src/math.wowlua",
+        "FN:1,sign#0",
+        "FNDA:1,sign#0",
+        "FNDA:0,unused#0",
+        "DA:11,0",
+        "BRDA:2,0,",
+    ] {
+        assert!(lcov.contains(line), "missing {line:?} in:\n{lcov}");
+    }
+    // The ignored function is not counted.
+    assert!(!lcov.contains("debugOnly"), "{lcov}");
+    assert!(!lcov.contains("SF:tests/"), "{lcov}");
+    let html = fs::read_to_string(report.join("coverage.html")).unwrap();
+    assert!(html.contains("<title>Demo coverage</title>") && html.contains("prefers-color-scheme"));
+    assert!(
+        fs::read_to_string(report.join("cobertura.xml"))
+            .unwrap()
+            .contains("filename=\"src/math.wowlua\"")
+    );
+    assert!(
+        fs::read_to_string(report.join("coverage.json"))
+            .unwrap()
+            .contains("\"functions\"")
+    );
+    assert!(
+        fs::read_to_string(report.join("junit.xml"))
+            .unwrap()
+            .contains("<testcase name=\"positive\"")
+    );
+    assert!(
+        fs::read_to_string(report.join("results.tap"))
+            .unwrap()
+            .contains("ok 1 - tests/math.test.wowlua (standard) › positive")
+    );
+    assert!(
+        fs::read_to_string(report.join("results.json"))
+            .unwrap()
+            .contains("\"status\": \"passed\"")
+    );
+    // A minimum the run does not reach fails it.
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "coverage": { "functions": 90 } },"#, 1),
+    )
+    .unwrap();
+    let (ok, out) = test(dir.path(), &["--coverage"]);
+    assert!(!ok, "{out}");
+    assert!(
+        out.contains("functions coverage 50.0% is below the minimum 90%"),
+        "{out}"
+    );
+}
+
+/// GitHub annotations for failures.
+#[test]
+fn github_reporter() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[(
+            "tests/a.test.wowlua",
+            "import test, expect from \"wowlua:test\"\n@test(\"bad\")\nlocal function bad()\n    expect(1).toBe(2)\nend\n",
+        )],
+    );
+    let (ok, out) = test(dir.path(), &["--reporter", "github"]);
+    assert!(!ok, "{out}");
+    assert!(
+        out.contains(
+            "::error file=tests/a.test.wowlua,line=4,title=bad (standard)::expected 1 to be 2"
+        ),
+        "{out}"
+    );
+}

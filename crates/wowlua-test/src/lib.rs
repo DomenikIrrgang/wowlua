@@ -6,8 +6,10 @@
 //! game's frames while a test waits.
 
 mod blizzard;
+pub mod coverage;
 mod natives;
 mod profile;
+pub mod reports;
 mod snapshots;
 
 pub use snapshots::Summary as SnapshotSummary;
@@ -34,6 +36,8 @@ pub struct Suite<'a> {
     pub profile: Option<String>,
     /// `-u`: rewrite the snapshots that differ.
     pub update_snapshots: bool,
+    /// `--coverage`: count what the addon's files run.
+    pub coverage: bool,
 }
 
 fn widgets_keep(vm: &mut Vm, v: Value) {
@@ -56,6 +60,8 @@ pub struct FileResult {
     /// Errors Blizzard's UI code raised while loading (the engine's gaps).
     pub blizzard_errors: Vec<String>,
     pub snapshots: SnapshotSummary,
+    /// With `--coverage`: what the file's tests ran of the addon.
+    pub coverage: Option<coverage::Report>,
 }
 
 impl FileResult {
@@ -119,6 +125,12 @@ pub fn run(suite: &Suite, filter: Option<&str>, jobs: usize) -> Vec<FileResult> 
         .map(|(_, r)| r)
         .filter(|r| r.error.is_some() || !r.tests.is_empty() || filter.is_none())
         .collect()
+}
+
+/// Whether coverage counts a chunk: the addon's own files (`src/…`), not
+/// test files.
+fn counted(chunk: &str) -> bool {
+    chunk.starts_with("src/") && !chunk.ends_with(".test.lua")
 }
 
 /// The source path of an output file (`src/x.lua` → `src/x.wowlua`).
@@ -238,11 +250,18 @@ fn run_file(suite: &Suite, file: &TestFile, filter: Option<&str>) -> FileResult 
         seconds: 0.0,
         blizzard_errors: Vec::new(),
         snapshots: SnapshotSummary::default(),
+        coverage: None,
     };
     snapshots::begin(&suite.root.join(&file.rel), suite.update_snapshots);
     match load(suite, file, &mut result.blizzard_errors) {
         Ok(mut state) => {
             run_tests(suite, &mut state, filter, &mut result);
+            if let Some(cov) = &state.vm.coverage {
+                let map = |chunk: &str| -> Option<String> {
+                    counted(chunk).then(|| source_of(suite, chunk))
+                };
+                result.coverage = Some(coverage::collect(&state.vm, cov, &suite.root, &map));
+            }
             let all_ran = filter.is_none() && result.error.is_none();
             match snapshots::finish(all_ran) {
                 Ok(s) => result.snapshots = s,
@@ -269,6 +288,13 @@ fn load(suite: &Suite, file: &TestFile, blizzard: &mut Vec<String>) -> Result<Lo
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, &suite.flavor)?;
     natives::reset();
+    if suite.coverage {
+        vm.enable_coverage(Box::new(|chunk: &[u8]| {
+            counted(&String::from_utf8_lossy(
+                chunk.strip_prefix(b"@").unwrap_or(chunk),
+            ))
+        }));
+    }
     if let Some(ui) = &suite.blizzard_ui {
         let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
         *blizzard = report.errors;

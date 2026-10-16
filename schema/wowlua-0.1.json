@@ -1693,6 +1693,72 @@
             "string",
             "null"
           ]
+        },
+        "coverage": {
+          "description": "Minimum coverage and files left out of it (spec Tooling §16.1.6).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reporters": {
+          "description": "Default reporters of `wowlua test` (`pretty`, `junit`, `tap`,\n`json`, `github`, `lcov`, `cobertura`, `coverage-json`, `html`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoverageSettings": {
+      "description": "`test.coverage`: minimum percentages per kind (a run below one fails),\nand glob patterns of files left out.",
+      "type": "object",
+      "properties": {
+        "lines": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "statements": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "branches": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "functions": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "conditions": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false
