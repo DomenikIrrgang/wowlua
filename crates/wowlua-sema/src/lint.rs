@@ -12,6 +12,7 @@ use wowlua_syntax::ast::*;
 pub fn lint(parse: &Parse, text: &[u8]) -> Vec<Diagnostic> {
     let mut l = Linter {
         text,
+        words: std::cell::OnceCell::new(),
         bindings: Vec::new(),
         groups: Vec::new(),
         scopes: vec![Vec::new()],
@@ -90,6 +91,9 @@ struct Group {
 
 struct Linter<'a> {
     text: &'a [u8],
+    /// The identifiers that occur in `text` (maximal runs of word bytes),
+    /// found the first time a rename asks.
+    words: std::cell::OnceCell<rustc_hash::FxHashSet<&'a [u8]>>,
     bindings: Vec<Binding>,
     groups: Vec<Group>,
     scopes: Vec<Vec<usize>>,
@@ -216,6 +220,17 @@ impl Linter<'_> {
     fn name_free(&self, name: &str) -> bool {
         let word = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
         let n = name.as_bytes();
+        // An occurrence bounded by non-word bytes is a maximal run of word
+        // bytes when the name is made of word bytes only.
+        if !n.is_empty() && n.iter().all(|&c| word(c)) {
+            let words = self.words.get_or_init(|| {
+                self.text
+                    .split(|&c| !word(c))
+                    .filter(|w| !w.is_empty())
+                    .collect()
+            });
+            return !words.contains(n);
+        }
         !self.text.windows(n.len()).enumerate().any(|(at, w)| {
             w == n
                 && (at == 0 || !word(self.text[at - 1]))
@@ -935,6 +950,19 @@ mod tests {
         let d = run("local _b = 1\nlocal b = f()\nprint(_b)\n");
         assert_eq!(d.len(), 1);
         assert_eq!(d[0].2, None);
+        // Only whole words count, anywhere in the text (comments too).
+        let d = run("local b = f()\nprint(x_b, _bc)\n");
+        assert_eq!(d[0].2.as_deref(), Some("local _b = f()\nprint(x_b, _bc)\n"));
+        let d = run("local b = f()\nprint(1) -- _b\n");
+        assert_eq!(d[0].2, None);
+        // Several renames in one file.
+        let d = run("local b = f()\nlocal c = f()\nprint(_c)\n");
+        assert_eq!(d.len(), 2, "{d:#?}");
+        assert_eq!(
+            d[0].2.as_deref(),
+            Some("local _b = f()\nlocal c = f()\nprint(_c)\n")
+        );
+        assert_eq!(d[1].2, None);
     }
 
     #[test]
