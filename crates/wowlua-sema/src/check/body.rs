@@ -83,8 +83,8 @@ pub struct Checker<'e> {
     fns: Vec<FnCtx>,
     pub depth: u32,
     pub diagnostics: Vec<Diagnostic>,
-    pub extra_globals: FxHashSet<String>,
-    pub assigned_globals: FxHashSet<String>,
+    pub extra_globals: &'e FxHashSet<String>,
+    pub assigned_globals: &'e FxHashSet<String>,
     /// Types of expressions already checked, by span.
     pub(crate) expr_types: FxHashMap<(u32, u32), TypeId>,
     /// Links of optional chains: their type before the short-circuit's
@@ -133,7 +133,7 @@ pub struct Checker<'e> {
 }
 
 impl<'e> Checker<'e> {
-    pub fn new(env: &'e mut Env, info: &FileInfo, parse: &wowlua_syntax::Parse) -> Checker<'e> {
+    pub fn new(env: &'e mut Env, info: &FileInfo<'e>, parse: &wowlua_syntax::Parse) -> Checker<'e> {
         let mut c = Checker {
             env,
             mode: info.mode,
@@ -149,8 +149,8 @@ impl<'e> Checker<'e> {
             fns: Vec::new(),
             depth: 0,
             diagnostics: Vec::new(),
-            extra_globals: info.extra_globals.clone(),
-            assigned_globals: info.assigned_globals.clone(),
+            extra_globals: info.extra_globals,
+            assigned_globals: info.assigned_globals,
             expr_types: FxHashMap::default(),
             chain_inner: FxHashMap::default(),
             classes: Vec::new(),
