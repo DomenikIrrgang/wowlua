@@ -10,6 +10,8 @@
 --                            protected functions called from addon code
 --                            (harmless ones: targeting yourself, stopping);
 --                            click "Ignore" on the client's popup
+--   /stdtest engine comm     addon message rules: prefixes, send results, and
+--                            whispers to yourself (nothing reaches others)
 --   /stdtest engine blocked  arms a probe of protected frames: enter combat,
 --                            it runs half a second later
 --   /stdtest engine record <label> / stop
@@ -771,6 +773,9 @@ export function engineProbe(arg: string?)
     elseif words[1] == "blocked" then
         blockedProbe()
         return
+    elseif words[1] == "comm" then
+        commProbe()
+        return
     end
     const probe: { [string]: any } = {
         client = `{(GetBuildInfo())}`,
@@ -971,4 +976,67 @@ function blockedProbe()
         end)
     end)
     say("engine blocked: armed; enter combat (attack a training dummy or a mob)")
+end
+
+-- Addon messages: prefixes, send results, and when a whisper to yourself
+-- arrives (only to yourself; the guild only when not in one).
+function commProbe()
+    const st = state() :: any
+    const out: { [string]: string } = {}
+    const arrivals: string[] = {}
+    const sentAt: { [string]: number } = {}
+    const listener = CreateFrame("Frame")
+    listener:RegisterEvent("CHAT_MSG_ADDON")
+    listener:SetScript("OnEvent", function(_, _, prefix: string, msg: string, channel: string, sender: string, target: string, ...: any)
+        const extra: string[] = {}
+        for i = 1, select("#", ...) do
+            extra[#extra + 1] = show((select(i, ...)))
+        end
+        const at = sentAt[msg]
+        const delay = at and string.format("%.3f", GetTime() - at) or "?"
+        const own = UnitName("player") :: any
+        const who = (sender == own and "name") or (sender:find("-") and "name-realm") or sender
+        arrivals[#arrivals + 1] = `{prefix} {msg} {channel} sender={who} target={target == own and "name" or target} after={delay}s rest={table.concat(extra, ";")}`
+    end)
+    const reg = C_ChatInfo.RegisterAddonMessagePrefix
+    out["register StdTestA"] = results(reg, "StdTestA")
+    out["register StdTestA again"] = results(reg, "StdTestA")
+    out["register 16 chars"] = results(reg, "StdTest123456789")
+    out["register 17 chars"] = results(reg, "StdTest1234567890")
+    out["register empty"] = results(reg, "")
+    out["registered StdTestA"] = results(C_ChatInfo.IsAddonMessagePrefixRegistered, "StdTestA")
+    out["registered never"] = results(C_ChatInfo.IsAddonMessagePrefixRegistered, "StdTestNever")
+    const me = UnitName("player") :: any
+    const send = C_ChatInfo.SendAddonMessage
+    local n = 0
+    local function sendTimed(label: string, ...: any)
+        n += 1
+        sentAt[`m{n}`] = GetTime()
+        out[label] = results(send, ...)
+    end
+    sendTimed("WHISPER self", "StdTestA", "m1", "WHISPER", me)
+    sendTimed("WHISPER self, unregistered prefix", "StdTestNever", "m2", "WHISPER", me)
+    out["WHISPER no target"] = results(send, "StdTestA", "x", "WHISPER")
+    out["message 255 bytes"] = results(send, "StdTestA", string.rep("x", 255), "WHISPER", me)
+    out["message 256 bytes"] = results(send, "StdTestA", string.rep("x", 256), "WHISPER", me)
+    out["message with \\0"] = results(send, "StdTestA", "a\0b", "WHISPER", me)
+    out["prefix 17 chars"] = results(send, "StdTest1234567890", "x", "WHISPER", me)
+    out["chat type NOPE"] = results(send, "StdTestA", "x", "NOPE")
+    out["chat type SAY"] = results(send, "StdTestA", "x", "SAY")
+    if not IsInGroup() then
+        out["PARTY not in a group"] = results(send, "StdTestA", "x", "PARTY")
+        out["RAID not in a group"] = results(send, "StdTestA", "x", "RAID")
+        out["no chat type, not in a group"] = results(send, "StdTestA", "x")
+    end
+    if not IsInGuild() then
+        out["GUILD not in a guild"] = results(send, "StdTestA", "x", "GUILD")
+    end
+    out["lockdown"] = results(C_ChatInfo.InChatMessagingLockdown)
+    out["prefixes"] = tostring(#(C_ChatInfo.GetRegisteredAddonMessagePrefixes() or {}))
+    C_Timer.After(2, function()
+        listener:UnregisterAllEvents()
+        st.engineComm = { calls = out, arrivals = arrivals }
+        say(`engine comm: {#arrivals} messages arrived; type /reload so the file is written`)
+    end)
+    say("engine comm: probing (two seconds)...")
 end

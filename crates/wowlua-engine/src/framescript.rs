@@ -322,7 +322,9 @@ fn load_addon(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
         _ => String::new(),
     };
-    match crate::ui::load_addon(vm, &name) {
+    let loaded =
+        crate::bindings::load_defined(vm, &name).or_else(|| crate::ui::load_addon(vm, &name));
+    match loaded {
         Some(true) => Ok(vec![Value::Bool(true), Value::Nil]),
         _ => Ok(vec![Value::Bool(false), vm.str("MISSING")]),
     }

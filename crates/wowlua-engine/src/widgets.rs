@@ -108,6 +108,10 @@ pub struct World {
     pub loaded_addons: std::collections::HashSet<String>,
     /// Spells and items the test defined.
     pub data: crate::gamedata::GameData,
+    /// Addon messages and the guild.
+    pub chat: crate::chat::Chat,
+    /// Keybindings and the addons a test defined.
+    pub bindings: crate::bindings::Bindings,
 }
 
 /// UIParent's size in screen units at scale 1.
