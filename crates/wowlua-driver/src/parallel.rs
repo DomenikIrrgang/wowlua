@@ -304,6 +304,13 @@ impl Jobs {
     }
 }
 
+/// The load order's per-file work on the workers (#49).
+impl wowlua_sema::loadorder::Spread for Jobs {
+    fn each(&self, n: usize, weight: &(dyn Fn(usize) -> u64 + Sync), f: &(dyn Fn(usize) + Sync)) {
+        self.region((0..n).collect(), |&i| weight(i), 1, f, |()| {});
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1117,7 +1117,7 @@ pub fn compile_flavor(
     for (i, usage) in &usages {
         inputs[*i].usage = Some(usage.clone());
     }
-    let order = wowlua_sema::loadorder::analyze(&inputs, &analysis, layout, &markers);
+    let order = wowlua_sema::loadorder::analyze_with(&inputs, &analysis, layout, &markers, jobs);
     for (i, _) in usages {
         inputs[i].usage = None;
     }

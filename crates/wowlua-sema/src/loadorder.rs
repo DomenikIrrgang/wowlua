@@ -47,6 +47,48 @@ struct Edge {
     reason: Reason,
 }
 
+/// A call, resolved: the package functions it calls, whether an unresolved
+/// callee is an API function that calls none of its arguments, and what
+/// each function argument resolves to (in the order of `Call::args`).
+#[derive(Default)]
+struct Resolved {
+    targets: Callees,
+    calls_no_args: bool,
+    args: Vec<Callees>,
+}
+
+/// Package functions, as (file, function).
+type Callees = Vec<(usize, usize)>;
+
+impl Resolved {
+    fn of(
+        call: &crate::usage::Call,
+        file: usize,
+        resolve: &dyn Fn(usize, &CallTarget) -> Callees,
+        markers: &Markers,
+    ) -> Resolved {
+        let targets = resolve(file, &call.target);
+        let calls_no_args = targets.is_empty()
+            && match &call.target {
+                CallTarget::Path((Key::Global(g), fields)) => {
+                    let mut path = g.clone();
+                    for f in fields {
+                        path.push('.');
+                        path.push_str(f);
+                    }
+                    markers.calls_no_args(&path)
+                }
+                _ => false,
+            };
+        let args = call.args.iter().map(|(_, a)| resolve(file, a)).collect();
+        Resolved {
+            targets,
+            calls_no_args,
+            args,
+        }
+    }
+}
+
 /// Where files load, as far as the package layout fixes it.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Layout<'a> {
@@ -65,12 +107,39 @@ pub struct Layout<'a> {
     pub saved_variables: &'a [String],
 }
 
+/// Runs work for every index below `n` (each `weight` heavy), in any order
+/// and possibly at once: the driver spreads it over its workers.
+pub trait Spread: Sync {
+    fn each(&self, n: usize, weight: &(dyn Fn(usize) -> u64 + Sync), f: &(dyn Fn(usize) + Sync));
+}
+
+/// Every index in turn, on the calling thread.
+pub struct InOrder;
+
+impl Spread for InOrder {
+    fn each(&self, n: usize, _: &(dyn Fn(usize) -> u64 + Sync), f: &(dyn Fn(usize) + Sync)) {
+        (0..n).for_each(f);
+    }
+}
+
 /// Analyzes the load order.
 pub fn analyze(
     files: &[FileInput],
     analysis: &Analysis,
     layout: Layout,
     markers: &Markers,
+) -> LoadOrder {
+    analyze_with(files, analysis, layout, markers, &InOrder)
+}
+
+/// [`analyze`], with the per-file work spread as `spread` does it; the
+/// result is the same.
+pub fn analyze_with(
+    files: &[FileInput],
+    analysis: &Analysis,
+    layout: Layout,
+    markers: &Markers,
+    spread: &dyn Spread,
 ) -> LoadOrder {
     let Layout {
         listed,
@@ -255,40 +324,65 @@ pub fn analyze(
             }
         }
     }
+    // Every call's callees and function arguments, resolved once (#49):
+    // the fixpoint below and every root's walk read them many times.
+    let resolved_slots: Vec<std::sync::OnceLock<Vec<Vec<Resolved>>>> = (0..files.len())
+        .map(|_| std::sync::OnceLock::new())
+        .collect();
+    let calls_of = |file: usize| {
+        usages[file].as_ref().map_or(0, |u| {
+            u.functions
+                .iter()
+                .map(|f| f.calls.len() as u64)
+                .sum::<u64>()
+        })
+    };
+    spread.each(files.len(), &|file| 64 * calls_of(file), &|file| {
+        let resolved = usages[file].as_ref().map_or_else(Vec::new, |u| {
+            u.functions
+                .iter()
+                .map(|function| {
+                    function
+                        .calls
+                        .iter()
+                        .map(|call| Resolved::of(call, file, &resolve, markers))
+                        .collect()
+                })
+                .collect()
+        });
+        let _ = resolved_slots[file].set(resolved);
+    });
+    let resolved: Vec<Vec<Vec<Resolved>>> = resolved_slots
+        .into_iter()
+        .map(|r| r.into_inner().unwrap_or_default())
+        .collect();
     // An unresolved callee may call what it is passed, unless it is a
     // known API function (`type`, `tinsert`, `C_Map.GetMapInfo`) that calls
     // none of its arguments.
-    let calls_arg = |called_params: &FxHashMap<(usize, usize), HashSet<usize>>,
-                     target: &CallTarget,
-                     targets: &[(usize, usize)],
-                     pos: usize| {
-        if targets.is_empty() {
-            return match target {
-                CallTarget::Path((Key::Global(g), fields)) => {
-                    let mut path = g.clone();
-                    for f in fields {
-                        path.push('.');
-                        path.push_str(f);
-                    }
-                    !markers.calls_no_args(&path)
-                }
-                _ => true,
-            };
-        }
-        targets
-            .iter()
-            .any(|t| called_params.get(t).is_some_and(|s| s.contains(&pos)))
-    };
+    let calls_arg =
+        |called_params: &FxHashMap<(usize, usize), HashSet<usize>>, r: &Resolved, pos: usize| {
+            if r.targets.is_empty() {
+                return !r.calls_no_args;
+            }
+            r.targets
+                .iter()
+                .any(|t| called_params.get(t).is_some_and(|s| s.contains(&pos)))
+        };
     loop {
         let mut added = Vec::new();
         for (file, u) in usages.iter().enumerate() {
             for (f, function) in u.iter().flat_map(|u| u.functions.iter().enumerate()) {
-                for call in function.calls.iter().filter(|c| !c.deferred) {
-                    let targets = resolve(file, &call.target);
+                for (c, call) in function
+                    .calls
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, c)| !c.deferred)
+                {
+                    let r = &resolved[file][f][c];
                     for (pos, arg) in &call.args {
                         if let CallTarget::Param(p) = arg
                             && !called_params.get(&(file, f)).is_some_and(|s| s.contains(p))
-                            && calls_arg(&called_params, &call.target, &targets, *pos)
+                            && calls_arg(&called_params, r, *pos)
                         {
                             added.push(((file, f), *p));
                         }
@@ -305,10 +399,10 @@ pub fn analyze(
     }
 
     // Whether an argument is a function: a function value, or a package
-    // path or import that names one.
-    let is_function = |file: usize, arg: &CallTarget| match arg {
+    // path or import that names one (`targets`: what it resolves to).
+    let is_function = |arg: &CallTarget, targets: &[(usize, usize)]| match arg {
         CallTarget::Local(_) => true,
-        CallTarget::Path(_) | CallTarget::Import { .. } => !resolve(file, arg).is_empty(),
+        CallTarget::Path(_) | CallTarget::Import { .. } => !targets.is_empty(),
         CallTarget::Param(_) | CallTarget::Unknown => false,
     };
 
@@ -319,20 +413,20 @@ pub fn analyze(
     // function cannot run then).
     type Parents = FxHashMap<(usize, usize), Option<(usize, usize, Span)>>;
     type Functions = FxHashMap<(usize, usize), HashSet<usize>>;
-    let mut exec: Vec<Parents> = vec![FxHashMap::default(); files.len()];
-    let mut passed_functions: Vec<Functions> = vec![FxHashMap::default(); files.len()];
     let reassigned = |file: usize, f: usize, p: usize| {
         usages[file]
             .as_ref()
             .and_then(|u| u.functions.get(f))
             .is_none_or(|function| function.reassigned_params.contains(&p))
     };
-    for (root, u) in usages.iter().enumerate() {
-        if u.is_none() {
-            continue;
+    // Each root's walk reads only what is shared and fills only its own
+    // maps, so the roots can be walked at once (#49).
+    let walk = |root: usize| -> (Parents, Functions) {
+        let mut walked = (Parents::default(), Functions::default());
+        if usages[root].is_none() {
+            return walked;
         }
-        let parents = &mut exec[root];
-        let functions = &mut passed_functions[root];
+        let (parents, functions) = (&mut walked.0, &mut walked.1);
         parents.insert((root, 0), None);
         functions.insert((root, 0), HashSet::new());
         let mut work = vec![(root, 0)];
@@ -346,27 +440,26 @@ pub fn analyze(
                         && functions.get(&(file, f)).is_some_and(|s| s.contains(&p))
                 })
             };
-            for call in &function.calls {
+            for (c, call) in function.calls.iter().enumerate() {
                 if skipped(call.unless_function, functions) {
                     continue;
                 }
-                let targets = resolve(file, &call.target);
+                let r = &resolved[file][f][c];
                 // A direct callee gets what the call passes; a function
                 // passed on and called gets arguments nobody knows.
                 let given: HashSet<usize> = call
                     .args
                     .iter()
-                    .filter(|(_, arg)| is_function(file, arg))
-                    .map(|(pos, _)| *pos)
+                    .zip(&r.args)
+                    .filter(|((_, arg), targets)| is_function(arg, targets))
+                    .map(|((pos, _), _)| *pos)
                     .collect();
                 let mut called: Vec<((usize, usize), HashSet<usize>)> =
-                    targets.iter().map(|t| (*t, given.clone())).collect();
+                    r.targets.iter().map(|t| (*t, given.clone())).collect();
                 if !call.deferred {
-                    for (pos, arg) in &call.args {
-                        if calls_arg(&called_params, &call.target, &targets, *pos) {
-                            called.extend(
-                                resolve(file, arg).into_iter().map(|t| (t, HashSet::new())),
-                            );
+                    for ((pos, _), targets) in call.args.iter().zip(&r.args) {
+                        if calls_arg(&called_params, r, *pos) {
+                            called.extend(targets.iter().map(|t| (*t, HashSet::new())));
                         }
                     }
                 }
@@ -391,7 +484,26 @@ pub fn analyze(
                 }
             }
         }
-    }
+        walked
+    };
+    let walked: Vec<std::sync::OnceLock<(Parents, Functions)>> = (0..files.len())
+        .map(|_| std::sync::OnceLock::new())
+        .collect();
+    let calls = |root: usize| {
+        usages[root].as_ref().map_or(0, |u| {
+            u.functions
+                .iter()
+                .map(|f| f.calls.len() as u64)
+                .sum::<u64>()
+        })
+    };
+    spread.each(files.len(), &|root| 64 * calls(root), &|root| {
+        let _ = walked[root].set(walk(root));
+    });
+    let (exec, passed_functions): (Vec<Parents>, Vec<Functions>) = walked
+        .into_iter()
+        .map(|w| w.into_inner().unwrap_or_default())
+        .unzip();
     let runs_at_load = |root: usize, file: usize, f: usize| exec[root].contains_key(&(file, f));
     // Code that runs only when a parameter is no function, in a function
     // every call reaching it (while `root` loads) passes a function for it.
