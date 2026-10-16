@@ -2,10 +2,13 @@
 //! Blizzard addons loaded as secure code before the addon under test, in
 //! the client's load order, their XML built into widgets.
 //!
-//! The load order is inferred from the TOCs (unverified): every Blizzard
-//! addon the game loads at startup (not load-on-demand, allowed in the game
-//! and for the flavor's game type), `LoadFirst` ones first, each after the
-//! addons it depends on, otherwise by name.
+//! The startup set is the client's (`/stdtest engine`: the 201 addons WoW
+//! Forever had loaded when StdTest loaded): every Blizzard addon allowed in
+//! the game and for the flavor's game type, read from the client's
+//! suffixed TOC first, not load-on-demand unless a startup addon depends on
+//! it, beta- and PTR-only ones on such clients. Their order is inferred
+//! (unverified): `LoadFirst` ones first, each after the addons it depends
+//! on, otherwise by name.
 
 pub mod build;
 pub mod xml;
@@ -45,6 +48,12 @@ struct Target {
     game_types: Vec<String>,
     family: String,
     game: String,
+    /// The client's TOC suffixes, in lookup order (`_Camelot`, `_Forever`,
+    /// `_Mainline`).
+    suffixes: Vec<String>,
+    /// A beta or PTR client (`## OnlyBetaAndPTR` addons load): WoW Forever
+    /// runs from `_classic_beta_`.
+    beta: bool,
 }
 
 impl Target {
@@ -60,10 +69,17 @@ impl Target {
                 .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
                 .unwrap_or_default()
         };
+        let client = table.clients.iter().find(|c| c.flavor == flavor);
         Target {
             game_types: vec![flavor.to_string(), family.clone()],
             game: cap(flavor),
             family: cap(&family),
+            suffixes: client.map(|c| c.suffixes.clone()).unwrap_or_default(),
+            beta: client.is_some_and(|c| {
+                c.folders
+                    .iter()
+                    .any(|f| f.contains("_beta_") || f.contains("ptr_"))
+            }),
         }
     }
 
@@ -104,6 +120,9 @@ struct Addon {
     toc: wowlua_toc::ParsedToc,
     deps: Vec<String>,
     load_first: bool,
+    /// Load-on-demand: loaded at startup only as a startup addon's
+    /// dependency.
+    on_demand: bool,
 }
 
 fn directive<'a>(toc: &'a wowlua_toc::ParsedToc, t: &Target, key: &str) -> Vec<&'a str> {
@@ -125,14 +144,19 @@ fn startup_addons(interface: &Path, t: &Target) -> Vec<Addon> {
         let Some(name) = dir.file_name().and_then(|n| n.to_str()).map(str::to_string) else {
             continue;
         };
-        let Ok(text) = std::fs::read_to_string(dir.join(format!("{name}.toc"))) else {
+        // The client's suffixed TOC first (`Blizzard_WorldMap_Mainline.toc`).
+        let text = t
+            .suffixes
+            .iter()
+            .map(|s| format!("{name}{s}.toc"))
+            .chain(std::iter::once(format!("{name}.toc")))
+            .find_map(|f| std::fs::read_to_string(dir.join(f)).ok());
+        let Some(text) = text else {
             continue;
         };
         let toc = wowlua_toc::parse(&text);
         let on = |v: &str| v.trim() == "1" || v.trim().eq_ignore_ascii_case("true");
-        if directive(&toc, t, "LoadOnDemand").iter().any(|v| on(v)) {
-            continue;
-        }
+        let on_demand = directive(&toc, t, "LoadOnDemand").iter().any(|v| on(v));
         // `AllowLoad` names where the addon loads (default: both).
         let allow: Vec<String> = toc
             .directives
@@ -170,7 +194,7 @@ fn startup_addons(interface: &Path, t: &Target) -> Vec<Addon> {
                         .any(|g| g.eq_ignore_ascii_case(v.trim()))
                 })
             });
-        if !allowed_type || excluded_type || gated("OnlyBetaAndPTR") {
+        if !allowed_type || excluded_type || (gated("OnlyBetaAndPTR") && !t.beta) {
             continue;
         }
         let mut deps = Vec::new();
@@ -199,6 +223,7 @@ fn startup_addons(interface: &Path, t: &Target) -> Vec<Addon> {
                 toc,
                 deps,
                 load_first,
+                on_demand,
             },
         );
     }
@@ -224,7 +249,7 @@ fn startup_addons(interface: &Path, t: &Target) -> Vec<Addon> {
     }
     for first in [true, false] {
         for n in &names {
-            if all[n].load_first == first {
+            if all[n].load_first == first && !all[n].on_demand {
                 visit(n, &all, &mut seen, &mut order);
             }
         }

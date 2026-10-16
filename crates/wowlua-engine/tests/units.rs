@@ -79,7 +79,7 @@ return table.concat(seen, ' '), before, issecretvalue(UnitPower('target')), InCo
     assert_eq!(
         r,
         [
-            "ADDON_RESTRICTION_STATE_CHANGED(0,1):false PLAYER_REGEN_DISABLED:false",
+            "PLAYER_REGEN_DISABLED:false ADDON_RESTRICTION_STATE_CHANGED(0,1):false",
             "false",
             "true",
             "true",

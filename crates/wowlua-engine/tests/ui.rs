@@ -190,6 +190,25 @@ fn the_flavor_ui_code_loads() {
     for e in report.errors.iter().take(limit) {
         eprintln!("  {e}");
     }
+    // The startup set WoW Forever had (`/stdtest engine`).
+    let fixture = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/client/forever-camelot-engine.lua"),
+    )
+    .expect("the fixture");
+    let line = fixture
+        .lines()
+        .find(|l| l.contains("[\"probe.blizzardAtStart\"]"))
+        .expect("the startup set");
+    let list = line
+        .split(" = \"")
+        .nth(1)
+        .expect("a value")
+        .trim_end_matches("\",");
+    let mut client: Vec<&str> = list.split(' ').collect();
+    client.sort_unstable();
+    let mut ours: Vec<&str> = report.addons.iter().map(String::as_str).collect();
+    ours.sort_unstable();
+    assert_eq!(ours, client, "the startup set");
     if let Ok(path) = std::env::var("WOWLUA_UI_ADDONS") {
         std::fs::write(path, report.addons.join("\n")).expect("writes");
     }

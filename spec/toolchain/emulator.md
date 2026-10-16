@@ -123,17 +123,23 @@ The client's security model, in the VM:
 - **Protected actions.** Protected functions and frame methods are refused
   from tainted execution: the call does nothing, the client's event fires
   with the tainting addon's name and the action, **and** the test fails.
-  - Protected global functions, always: `ADDON_ACTION_FORBIDDEN`
-    (`"MyAddon", "UseAction()"`, as `/stdtest taint` recorded). The
-    documentation does not mark them; the engine lists the known ones
-    (targeting, casting, using actions and items, movement, macros), and
-    `/stdtest engine protected` probes the harmless ones.
+  - Protected global functions, always: `ADDON_ACTION_FORBIDDEN` with the
+    addon and the action as Lua's debug information names the call
+    (`"MyAddon", "UseAction()"` from `UseAction(…)`, as `/stdtest taint`
+    recorded; `UNKNOWN()` through `pcall`, `/stdtest engine protected`);
+    the call returns its documented results' empty values (`false` from
+    `ClearTarget`). The documentation does not mark them; the engine lists
+    the known ones (targeting, casting, using actions and items, movement,
+    macros), the harmless ones checked in game: TargetUnit, ClearTarget,
+    FocusUnit, AssistUnit, SpellStopCasting and SpellStopTargeting, the
+    movement stops and PetFollow are protected; ClearFocus,
+    TargetLastTarget and StopAttack are not.
   - Protected methods (the documentation's `IsProtectedFunction`: `Show`,
-    `Hide`, `SetPoint`, `SetSize`, `SetParent`, …) of a protected frame, in
-    combat lockdown: `ADDON_ACTION_BLOCKED` (`"MyAddon",
-    "MySecureButton:Hide()"`). A frame is protected through a secure
-    template (`Secure…Template`) or `mock.protect`; `/stdtest engine
-    blocked` probes it in combat.
+    `Hide`, `SetPoint`, `SetSize`, `SetParent`, …) and `SetAttribute` of a
+    protected frame, in combat lockdown: `ADDON_ACTION_BLOCKED`, after the
+    method's own argument checks (`/stdtest engine blocked`). A frame is
+    protected through a secure template (`Secure…Template`; `IsProtected`
+    then gives `true, true`) or `mock.protect`.
 - **Taint reports.** A refusal reports the taint chain: the protected call,
   the secure code that became tainted, the value it read, and the addon code
   (file and line) that wrote that value, through any number of hops through
@@ -246,11 +252,16 @@ use into a user cache keyed by version (decision T204; about 5 seconds and
 7 MB per flavor, once). The engine's loader (`wowlua_engine::ui::load`)
 takes the flavor's `Interface` folder and its global strings:
 
-- **Load order** (inferred from the TOCs, unverified): every Blizzard addon
-  the game loads at startup (not `LoadOnDemand`; `AllowLoad` game or both;
-  the flavor's game types, its id and family, for `AllowLoadGameType` and
-  `ExcludeLoadGameType`), `LoadFirst` ones first, each after its `Dep`,
-  `Dependencies`, `RequiredDep` and `OptionalDep` addons, otherwise by name.
+- **Startup set** (as `/stdtest engine` recorded: the 201 Blizzard addons
+  WoW Forever had loaded when StdTest loaded): every Blizzard addon allowed
+  in the game (`AllowLoad` game or both) and for the flavor's game types
+  (its id and family, for `AllowLoadGameType` and `ExcludeLoadGameType`),
+  read from the client's suffixed TOC first (`_Mainline.toc`); a
+  `LoadOnDemand` one only as a startup addon's dependency; `OnlyBetaAndPTR`
+  ones on beta and PTR clients (WoW Forever runs from `_classic_beta_`).
+- **Load order** (inferred, unverified): `LoadFirst` ones first, each after
+  its `Dep`, `Dependencies`, `RequiredDep` and `OptionalDep` addons,
+  otherwise by name.
   File lines follow their inline directives; `[Family]`, `[Game]` and
   `[TextLocale]` name the flavor's folders (`Mainline`, `Camelot`, `enUS`).
   `ADDON_LOADED` fires after each addon.
@@ -268,12 +279,11 @@ takes the flavor's `Interface` folder and its global strings:
   function gets its documented results' empty values (nil where nilable,
   false, 0, "", a table) and the engine lists the function; addon code still
   gets "not mocked". Secure code may register events and set scripts the
-  engine's lists lack. On camelot, 191 addons load in 0.7 seconds (a
-  release build) with 133 errors left, from enums, constants and namespaces
-  the documentation does not have (`Enum.GameMode`, `C_Widget`).
-  `/stdtest engine` records the client's startup set of Blizzard addons and
-  the defaults of the CVars the UI code reads, to check the load order's
-  inference and seed the engine's CVars.
+  engine's lists lack. On camelot, the 201 addons load in under a second (a
+  release build) with 136 errors left, from enums, constants and namespaces
+  the documentation does not have (`Enum.GameMode`, `C_Widget`). The
+  CVars start at the client's defaults (the 248 the UI code reads that
+  have one, recorded by `/stdtest engine`).
 - **The client's cases.** With camelot's UI code loaded (and the addon's
   saved variables loaded as the addon's), all 819 cases `/stdtest probe`
   recorded on WoW Forever 1.60.1 give the client's results, the 22 the VM

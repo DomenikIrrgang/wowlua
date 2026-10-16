@@ -185,23 +185,28 @@ fn base_token<'a>(u: &Units, t: &'a str) -> Option<(Option<UnitId>, &'a str)> {
 /// The tokens that name a unit by themselves (not compounds), in the order
 /// unit events fire for them (unverified).
 pub fn tokens_of(u: &Units, id: UnitId) -> Vec<String> {
+    // Recorded orders: nameplate3 before target, player before
+    // targettarget (`/stdtest engine record combat`); the rest unverified.
     let mut out = Vec::new();
     if id == PLAYER {
         out.push("player".to_string());
     }
+    for (i, n) in u.nameplates.iter().enumerate() {
+        if *n == Some(id) {
+            out.push(format!("nameplate{}", i + 1));
+        }
+    }
     if u.target == Some(id) {
         out.push("target".into());
+    }
+    if u.target.is_some_and(|t| u.list[t.0].target == Some(id)) {
+        out.push("targettarget".into());
     }
     if u.focus == Some(id) {
         out.push("focus".into());
     }
     if u.mouseover == Some(id) {
         out.push("mouseover".into());
-    }
-    for (i, n) in u.nameplates.iter().enumerate() {
-        if *n == Some(id) {
-            out.push(format!("nameplate{}", i + 1));
-        }
     }
     for (i, g) in u.group.iter().enumerate() {
         if *g == id {
@@ -858,8 +863,13 @@ fn control_enter_combat(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     engine_mut(vm).units.list[me.0].in_combat = true;
     if me == PLAYER {
-        set_restriction(vm, COMBAT, true);
+        // As recorded (`/stdtest engine record combat`): REGEN_DISABLED,
+        // the restriction activating, PLAYER_IN_COMBAT_CHANGED, the
+        // player's flags; the lockdown after.
         fire(vm, "PLAYER_REGEN_DISABLED", &[]);
+        set_restriction(vm, COMBAT, true);
+        fire(vm, "PLAYER_IN_COMBAT_CHANGED", &[Value::Bool(true)]);
+        fire_unit(vm, "UNIT_FLAGS", PLAYER, &[]);
         engine_mut(vm).units.lockdown = true;
     }
     Ok(vec![])
@@ -869,9 +879,13 @@ fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     engine_mut(vm).units.list[me.0].in_combat = false;
     if me == PLAYER {
+        // The reverse: PLAYER_IN_COMBAT_CHANGED, the restriction ending,
+        // REGEN_ENABLED, the player's flags.
         engine_mut(vm).units.lockdown = false;
-        fire(vm, "PLAYER_REGEN_ENABLED", &[]);
+        fire(vm, "PLAYER_IN_COMBAT_CHANGED", &[Value::Bool(false)]);
         set_restriction(vm, COMBAT, false);
+        fire(vm, "PLAYER_REGEN_ENABLED", &[]);
+        fire_unit(vm, "UNIT_FLAGS", PLAYER, &[]);
     }
     Ok(vec![])
 }

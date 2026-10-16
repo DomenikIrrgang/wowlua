@@ -241,12 +241,19 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         }
     }
     units::install(vm);
-    // CVars whose client defaults the probes show (`getglobal` exists in
-    // the game, so the deprecation fallbacks load).
-    engine_mut(vm)
-        .world
-        .cvars
-        .push(("loadDeprecationFallbacks".into(), "1".into()));
+    // The CVars' defaults (camelot's, recorded by `/stdtest engine`; other
+    // flavors: the deprecation fallbacks, which the client has).
+    let cvars: Vec<(String, String)> = if flavor == "camelot" {
+        include_str!("../data/camelot-cvars.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| l.split_once('\t'))
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    } else {
+        vec![("loadDeprecationFallbacks".into(), "1".into())]
+    };
+    engine_mut(vm).world.cvars.extend(cvars);
     // Undocumented C functions with behaviour.
     let create_frame = vm.native("CreateFrame", widgets::create_frame);
     vm.set_global("CreateFrame", create_frame);
