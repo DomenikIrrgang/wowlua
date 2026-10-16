@@ -111,7 +111,11 @@ impl Checker<'_> {
             return None;
         }
         let (root, path) = self.field_path(e)?;
-        if let Some(&v) = self.field_vars.get(&(root, path.as_str().into())) {
+        if let Some(&v) = self
+            .field_vars
+            .get(&root)
+            .and_then(|paths| paths.get(path.as_str()))
+        {
             return Some(v);
         }
         if !create {
@@ -133,7 +137,10 @@ impl Checker<'_> {
             assigned_in_closure: false,
             never_reassigned: false,
         });
-        self.field_vars.insert((root, path.into()), v);
+        self.field_vars
+            .entry(root)
+            .or_default()
+            .insert(path.into(), v);
         Some(v)
     }
 
@@ -163,20 +170,18 @@ impl Checker<'_> {
     /// Drops the narrowing of `root`'s fields: all of them, or `prefix`
     /// and the fields below it.
     pub fn forget_fields(&mut self, root: VarId, prefix: Option<&str>) {
-        if self.field_vars.is_empty() {
+        let Some(paths) = self.field_vars.get(&root) else {
             return;
-        }
-        let gone: Vec<VarId> = self
-            .field_vars
+        };
+        let gone: Vec<VarId> = paths
             .iter()
-            .filter(|((r, path), _)| {
-                *r == root
-                    && prefix.is_none_or(|p| {
-                        path.as_ref() == p
-                            || path
-                                .strip_prefix(p)
-                                .is_some_and(|rest| rest.starts_with('.'))
-                    })
+            .filter(|(path, _)| {
+                prefix.is_none_or(|p| {
+                    path.as_ref() == p
+                        || path
+                            .strip_prefix(p)
+                            .is_some_and(|rest| rest.starts_with('.'))
+                })
             })
             .map(|(_, &v)| v)
             .collect();

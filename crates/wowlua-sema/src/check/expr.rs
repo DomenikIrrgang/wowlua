@@ -324,11 +324,7 @@ impl Checker<'_> {
                         },
                         _ => None,
                     })
-                    .and_then(|key| {
-                        self.field_vars
-                            .get(&(key.0, key.1.as_str().into()))
-                            .copied()
-                    })
+                    .and_then(|key| self.field_vars.get(&key.0)?.get(key.1.as_str()).copied())
                     .and_then(|v| self.flow.get(&v).copied());
                 let m = match narrowed {
                     Some(t) => self.drop_first(t),

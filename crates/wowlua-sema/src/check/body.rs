@@ -112,8 +112,8 @@ pub struct Checker<'e> {
     pub(crate) flow: Flow,
     /// Fields of locals that conditions narrowed (`a.b`, `a.b.c`, spec
     /// §2.5): each path is a synthetic variable, so flows narrow and join
-    /// it like a local. Keyed by the root local and the dotted path.
-    pub(crate) field_vars: FxHashMap<(VarId, Box<str>), VarId>,
+    /// it like a local. By the root local, then the dotted path.
+    pub(crate) field_vars: FxHashMap<VarId, FxHashMap<Box<str>, VarId>>,
     /// The current path can still run.
     pub(crate) live: bool,
     fns: Vec<FnCtx>,
