@@ -21,7 +21,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::{HashMap, HashSet};
 use types::{Field, Record, Ty, TypeId, Types};
 use wowlua_diagnostics::Diagnostic;
-use wowlua_syntax::ast::{ExprKind, ImportClause, StmtKind};
+use wowlua_syntax::ast::{ImportClause, StmtKind};
 
 /// How one file is checked (spec §2.1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -228,11 +228,12 @@ pub fn check_package_full(
             checked,
             &markers,
             global_defs.get(i).and_then(Option::as_deref),
+            f.prepared.as_deref(),
         );
         #[cfg(debug_assertions)]
         {
             let mut again = FileGlobals::default();
-            again.fill(parse, wowlua, checked, &markers, None);
+            again.fill(parse, wowlua, checked, &markers, None, None);
             assert_eq!(
                 (
                     wowlua.then_some(&again.decorated),
@@ -472,6 +473,7 @@ impl FileGlobals {
         checked: bool,
         markers: &crate::usage::Markers,
         global_defs: Option<&[String]>,
+        prepared: Option<&body::Prepared>,
     ) {
         if wowlua && self.decorated.is_none() {
             let mut names = Vec::new();
@@ -493,14 +495,10 @@ impl FileGlobals {
                     .collect(),
             };
             // `CreateFrame(type, "Name", …)` creates the global `Name`.
-            wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
-                if let ExprKind::Call { callee, args } = &e.kind
-                    && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "CreateFrame")
-                    && let Some(ExprKind::String(lit)) = args.exprs().get(1).map(|a| &a.kind)
-                {
-                    names.push(String::from_utf8_lossy(&lit.value).into_owned());
-                }
-            });
+            match prepared {
+                Some(prepared) => names.extend(prepared.created_frames.iter().cloned()),
+                None => names.extend(body::prepare(parse).created_frames),
+            }
             self.assigned = Some(names);
         }
     }
@@ -617,20 +615,22 @@ fn check_file_in(
             })
             .unwrap_or_default(),
     };
-    let mut checker = Checker::new(env, &info, parse);
-    checker.check_file(parse);
-    // `typeName(x)` arguments (the callee's name decides; lowering only
-    // uses entries of `wowlua:debug` intrinsics).
-    wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
-        if let ExprKind::Call { callee, args } = &e.kind
-            && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "typeName")
-                | matches!(&callee.kind, ExprKind::Field { name, .. } if name.text.as_ref() == "typeName")
-            && let Some(arg) = args.exprs().first()
-            && let Some(&t) = checker.expr_types.get(&(arg.span.start, arg.span.end))
-        {
-            out.type_names.push((arg.span, checker.env.display(t)));
+    // What the driver prepared for the file, or prepared here.
+    let fresh;
+    let prepared = match ctx.files[i].prepared.as_deref() {
+        Some(prepared) => prepared,
+        None => {
+            fresh = body::prepare(parse);
+            &fresh
         }
-    });
+    };
+    let mut checker = Checker::new(env, &info, prepared);
+    checker.check_file(parse);
+    for arg in &prepared.type_name_args {
+        if let Some(&t) = checker.expr_types.get(&(arg.start, arg.end)) {
+            out.type_names.push((*arg, checker.env.display(t)));
+        }
+    }
     out.value_checks
         .extend(std::mem::take(&mut checker.value_checks));
     out.private_methods
@@ -852,6 +852,7 @@ mod tests {
                 main_of: None,
                 globals: Default::default(),
                 usage: None,
+                prepared: None,
             })
             .collect();
         inputs.push(FileInput {
@@ -863,6 +864,7 @@ mod tests {
             main_of: None,
             globals: Default::default(),
             usage: None,
+            prepared: None,
         });
         let analysis = crate::analyze(&inputs, None);
         let mut settings: Vec<Option<FileSettings>> = vec![None; inputs.len()];
@@ -915,6 +917,7 @@ mod tests {
                     main_of: None,
                     globals: Default::default(),
                     usage: None,
+                    prepared: None,
                 })
                 .collect();
             inputs.push(FileInput {
@@ -926,6 +929,7 @@ mod tests {
                 main_of: None,
                 globals: Default::default(),
                 usage: None,
+                prepared: None,
             });
             let analysis = crate::analyze(&inputs, None);
             let mut settings: Vec<Option<FileSettings>> = vec![None; inputs.len()];

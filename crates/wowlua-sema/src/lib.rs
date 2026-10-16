@@ -52,6 +52,9 @@ pub struct FileInput<'a> {
     /// is then `None`: nothing else of sema reads a plain Lua file that is
     /// neither type-checked nor an import's module).
     pub usage: Option<std::sync::Arc<usage::FileUsage>>,
+    /// What checking the file reads of its syntax, when the caller has it
+    /// (`check::prepare`; the driver prepares checked files once per build).
+    pub prepared: Option<std::sync::Arc<check::body::Prepared>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

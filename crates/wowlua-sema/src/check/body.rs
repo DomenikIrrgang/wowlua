@@ -168,10 +168,70 @@ pub struct Checker<'e> {
     next_handler: Option<(Func, String)>,
 }
 
+/// What checking a file reads of its syntax before and after walking it:
+/// the same in every flavor, so a build prepares it once per file (on
+/// worker threads, `FileInput::prepared`).
+#[derive(Debug, Default)]
+pub struct Prepared {
+    reassigned: FxHashSet<u32>,
+    assigned_in_closures: FxHashSet<u32>,
+    assigned_later: FxHashSet<u32>,
+    dynamic_env: bool,
+    /// The `typeName(x)` arguments, in walk order (the callee's name
+    /// decides; lowering only uses entries of `wowlua:debug` intrinsics).
+    pub(crate) type_name_args: Vec<wowlua_span::Span>,
+    /// The globals `CreateFrame(type, "Name", …)` creates, in walk order.
+    pub(crate) created_frames: Vec<String>,
+}
+
+/// [`Prepared`] for a file.
+pub fn prepare(parse: &wowlua_syntax::Parse) -> Prepared {
+    let (reassigned, assigned_in_closures, assigned_later) =
+        reassigned_in_closures(&parse.chunk.block);
+    let mut type_name_args = Vec::new();
+    let mut created_frames = Vec::new();
+    wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
+        let ExprKind::Call { callee, args } = &e.kind else {
+            return;
+        };
+        if (matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "typeName")
+            | matches!(&callee.kind, ExprKind::Field { name, .. } if name.text.as_ref() == "typeName"))
+            && let Some(arg) = args.exprs().first()
+        {
+            type_name_args.push(arg.span);
+        }
+        if matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "CreateFrame")
+            && let Some(ExprKind::String(lit)) = args.exprs().get(1).map(|a| &a.kind)
+        {
+            created_frames.push(String::from_utf8_lossy(&lit.value).into_owned());
+        }
+    });
+    Prepared {
+        reassigned,
+        assigned_in_closures,
+        assigned_later,
+        dynamic_env: calls_setfenv(&parse.chunk.block),
+        type_name_args,
+        created_frames,
+    }
+}
+
 impl<'e> Checker<'e> {
-    pub fn new(env: &'e mut Env, info: &FileInfo<'e>, parse: &wowlua_syntax::Parse) -> Checker<'e> {
-        let (reassigned, assigned_in_closures, assigned_later) =
-            reassigned_in_closures(&parse.chunk.block);
+    pub fn new(env: &'e mut Env, info: &FileInfo<'e>, prepared: &Prepared) -> Checker<'e> {
+        let Prepared {
+            reassigned,
+            assigned_in_closures,
+            assigned_later,
+            dynamic_env,
+            type_name_args: _,
+            created_frames: _,
+        } = prepared;
+        let (reassigned, assigned_in_closures, assigned_later, dynamic_env) = (
+            reassigned.clone(),
+            assigned_in_closures.clone(),
+            assigned_later.clone(),
+            *dynamic_env,
+        );
         let mut c = Checker {
             env,
             mode: info.mode,
@@ -200,7 +260,7 @@ impl<'e> Checker<'e> {
             assigned_later,
             pure_lua: info.pure_lua,
             top_vararg: None,
-            dynamic_env: calls_setfenv(&parse.chunk.block),
+            dynamic_env,
             shared: info.shared.cloned(),
             guard: super::flavors::Guard::default(),
             meta_flavor: info.meta_flavor.clone(),
