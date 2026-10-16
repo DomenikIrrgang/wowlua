@@ -13,6 +13,9 @@ struct State {
     /// How many of `errors` a test has read (`mock.errors()`) or the runner
     /// reported.
     read: usize,
+    /// How many of the engine's refusals of protected actions a test has
+    /// read (`mock.refusals()`, `toBeBlocked`) or the runner reported.
+    refusals_read: usize,
     addon: String,
 }
 
@@ -111,6 +114,28 @@ end";
     }
 }
 
+/// `mock.refusals()`: every refused protected action so far, all marked
+/// read.
+fn refusals(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = wowlua_engine::engine(vm).refusals.len();
+    STATE.with(|s| s.borrow_mut().refusals_read = n);
+    wowlua_engine::protection::refusals_control(vm, c)
+}
+
+/// The refusals since the last read, marked read: (action, taint chain).
+pub fn unread_refusals(vm: &Vm) -> Vec<(String, String)> {
+    let all = &wowlua_engine::engine(vm).refusals;
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        let from = s.refusals_read.min(all.len());
+        s.refusals_read = all.len();
+        all[from..]
+            .iter()
+            .map(|r| (r.action.clone(), r.report.clone()))
+            .collect()
+    })
+}
+
 /// `mock.printed()`: the lines printed so far.
 fn printed(vm: &mut Vm, _c: NativeCall) -> Ret {
     let text = STATE.with(|s| String::from_utf8_lossy(&s.borrow().printed).into_owned());
@@ -156,6 +181,7 @@ pub fn extend(vm: &mut Vm, controls: TableRef, addon: &str) {
         ("secret", secret),
         ("login", login_control),
         ("snapshot", crate::snapshots::snapshot_native),
+        ("refusals", refusals),
     ] {
         let native = vm.native(key, f);
         let k = vm.heap.intern(key.as_bytes());

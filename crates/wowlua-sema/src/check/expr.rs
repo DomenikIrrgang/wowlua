@@ -1918,7 +1918,11 @@ impl Checker<'_> {
                 "a string or a table",
             ),
             "toBeCloseTo" => (|ty| matches!(ty, Ty::Number | Ty::Num(_)), "a number"),
-            "toThrow" | "toHaveBeenCalled" | "toHaveBeenCalledTimes" | "toHaveBeenCalledWith" => (
+            "toThrow"
+            | "toBeBlocked"
+            | "toHaveBeenCalled"
+            | "toHaveBeenCalledTimes"
+            | "toHaveBeenCalledWith" => (
                 |ty| matches!(ty, Ty::Function | Ty::Func(_) | Ty::Intersection(_)),
                 "a function",
             ),

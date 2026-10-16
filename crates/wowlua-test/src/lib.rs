@@ -602,7 +602,8 @@ fn run_tests(suite: &Suite, state: &mut Loaded, filter: Option<&str>, result: &m
             });
         }
     };
-    // Errors so far (loading, logging in) belong to no test.
+    // Errors and refusals so far (loading, logging in) belong to no test.
+    let _ = natives::unread_refusals(vm);
     let pending = natives::unread_errors();
     if !pending.is_empty() {
         result.error = Some(to_sources(
@@ -647,11 +648,20 @@ fn run_tests(suite: &Suite, state: &mut Loaded, filter: Option<&str>, result: &m
                 stack: String::new(),
             },
         };
-        // An error no test read (`mock.errors()`) fails the test.
+        // An error no test read (`mock.errors()`) fails the test, and so
+        // does a protected action refused because of taint (with its taint
+        // chain) that no test expected (`toBeBlocked`, `mock.refusals()`).
         let unread = natives::unread_errors();
+        let refused = natives::unread_refusals(vm);
         if outcome == Outcome::Pass && !unread.is_empty() {
             outcome = Outcome::Fail {
                 message: format!("an error reached the error handler: {}", unread.join("\n")),
+                stack: String::new(),
+            };
+        } else if outcome == Outcome::Pass && !refused.is_empty() {
+            let (action, chain) = &refused[0];
+            outcome = Outcome::Fail {
+                message: format!("the client refused {action} because of taint:\n{chain}"),
                 stack: String::new(),
             };
         }

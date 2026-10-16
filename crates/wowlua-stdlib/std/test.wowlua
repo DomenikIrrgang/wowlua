@@ -337,6 +337,13 @@ export type Expect<T> = {
     toBeAnchoredTo: (other: any, point: string?, relativePoint: string?) -> (),
     --- A tooltip's lines: each the left text, or `{ left, right }`.
     toHaveLines: (lines: any[]) -> (),
+    --- A function whose protected action the client refuses because of
+    --- taint (spec Tooling §16.1.4).
+    toBeBlocked: () -> (),
+    --- An untainted variable: a global by name (`expect("MyGlobal")`), or a
+    --- table's field (`expect(t).toBeSecure("key")`), as
+    --- `issecurevariable` tells.
+    toBeSecure: (key: any?) -> (),
     --- The value's text matches the stored snapshot (decision T218);
     --- `name` tells several of a test apart (else they are numbered).
     toMatchSnapshot: (name: string?) -> (),
@@ -620,6 +627,31 @@ local function matchers(value: any, negated: boolean): any
         end
         local text = #shown > 0 and table.concat(shown, "; ") or "none"
         check(pass, `expected the lines {show(lines)}; got {text}`, "expected other lines")
+    end
+    function m.toBeBlocked()
+        local engine = wl.mockEngine
+        if engine == nil then
+            fail("toBeBlocked needs `wowlua test`", 1)
+        end
+        local before = #engine.refusals()
+        pcall(value)
+        local after = engine.refusals()
+        local actions: string[] = {}
+        for i = before + 1, #after do
+            actions[#actions + 1] = after[i].action
+        end
+        local got = #actions > 0 and table.concat(actions, ", ") or "nothing"
+        check(#after > before, `expected a protected action to be refused; refused: {got}`, `expected no protected action to be refused; refused: {got}`)
+    end
+    function m.toBeSecure(key: any?)
+        local secure, taint = false, nil
+        if key == nil then
+            secure, taint = issecurevariable(value)
+        else
+            secure, taint = issecurevariable(value, key)
+        end
+        local what = key == nil and show(value) or `the field {show(key)}`
+        check(secure, `expected {what} to be secure; {taint ?? "an addon"} tainted it`, `expected {what} to be tainted`)
     end
     function m.toMatchSnapshot(name: string?)
         if negated then

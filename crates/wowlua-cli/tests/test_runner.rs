@@ -1092,3 +1092,51 @@ fn github_reporter() {
         "{out}"
     );
 }
+
+/// Taint in tests (spec Tooling §16.1.4): a protected action refused
+/// because of taint fails the test with its taint chain unless the test
+/// expects it (`toBeBlocked`); `toBeSecure` tells untainted variables.
+#[test]
+fn taint_in_tests() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[(
+            "tests/taint.test.wowlua",
+            r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local function protectedFrame(name: string): Frame
+    local f = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
+    mock.player:enterCombat()
+    return f
+end
+
+@test("expected")
+local function expected()
+    local f = protectedFrame("ProtA")
+    expect(function() f:Hide() end).toBeBlocked()
+    mock.player:leaveCombat()
+end
+
+@test("unexpected")
+local function unexpected()
+    TargetUnit("player")
+end
+
+@test("variables")
+local function variables()
+    expect("UIParent").toBeSecure()
+    _G.MyAddonGlobal = 1
+    expect("MyAddonGlobal").never.toBeSecure()
+end
+"#,
+        )],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("✓ expected"), "{out}");
+    assert!(out.contains("✓ variables"), "{out}");
+    assert!(out.contains("✗ unexpected"), "{out}");
+    assert!(out.contains("because of taint"), "{out}");
+    assert!(out.contains("2 passed, 1 failed"), "{out}");
+}

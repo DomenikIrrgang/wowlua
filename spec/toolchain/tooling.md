@@ -306,9 +306,12 @@ Mocking (decision T187):
 - **Scenario controls** set the game's state: combat, units, group, auras,
   spells, items, time, screen, locale, CVars, other addons and libraries.
 - **Taint in tests.** A protected action refused because of taint fails the
-  test with its taint chain ([WoW client emulation §17.4](emulator.md#174-taint-and-secure-execution));
-  `expect(fn).toBeBlocked()` asserts that it is refused, and
-  `expect(value).toBeSecure()` that a variable is untainted.
+  test with its taint chain ([WoW client emulation §17.4](emulator.md#174-taint-and-secure-execution)),
+  unless the test expected it: `expect(fn).toBeBlocked()` asserts that
+  calling `fn` is refused, and reading `mock.refusals()` marks the refusals
+  so far as expected. `expect("Name").toBeSecure()` asserts that a global
+  is untainted, `expect(t).toBeSecure(key)` a table's field
+  (`issecurevariable`).
 
 ### 16.1.5 Running
 
