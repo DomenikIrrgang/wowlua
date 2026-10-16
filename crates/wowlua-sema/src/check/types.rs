@@ -48,7 +48,7 @@ pub enum Ty {
     Record(Record),
     // Boxed: the arena holds a slot of the largest variant for every type,
     // and functions are few next to the records and literals of table data.
-    Func(Box<Func>),
+    Func(Arc<Func>),
     /// An instance of a class or interface, an enum, or a generic alias
     /// application that is expanded on demand.
     Named(DefId, Vec<TypeId>),
@@ -409,6 +409,19 @@ pub enum Shape {
     Map(Box<Shape>, Box<Shape>),
     Secret(Box<Shape>),
     Union(Vec<Shape>),
+    /// A function without type parameters over shapes.
+    Func(Box<FuncShape>),
+}
+
+/// The shape of a function type (see [`Func`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FuncShape {
+    params: Vec<(Option<Box<str>>, Shape, bool)>,
+    rest: Option<Shape>,
+    ret: Vec<Shape>,
+    ret_rest: Option<Shape>,
+    predicate: Option<(usize, Shape)>,
+    unannotated: bool,
 }
 
 /// The members not born of a watched check of the unions it made, in the
@@ -537,6 +550,33 @@ impl Types {
             })
     }
 
+    /// Whether `t` has a shape (as `shape(t).is_some()`, without making it).
+    fn has_shape(&self, t: TypeId) -> bool {
+        if t <= Types::FALSE {
+            return true;
+        }
+        let variadic = |r: &Option<Rest>| match r {
+            None => true,
+            Some(Rest::Variadic(t)) => self.has_shape(*t),
+            Some(Rest::Pack(_)) => false,
+        };
+        match self.get(t) {
+            Ty::Num(_) | Ty::Str(_) => true,
+            Ty::Array(e) | Ty::Secret(e) => self.has_shape(*e),
+            Ty::Map(k, v) => self.has_shape(*k) && self.has_shape(*v),
+            Ty::Union(m) => m.iter().all(|&m| self.has_shape(m)),
+            Ty::Func(f) => {
+                f.type_params.is_empty()
+                    && f.params.iter().all(|p| self.has_shape(p.ty))
+                    && variadic(&f.rest)
+                    && f.ret.types.iter().all(|&t| self.has_shape(t))
+                    && variadic(&f.ret.rest)
+                    && f.predicate.is_none_or(|(_, t)| self.has_shape(t))
+            }
+            _ => false,
+        }
+    }
+
     /// `t`'s shape, if it has one.
     fn shape(&self, t: TypeId) -> Option<Shape> {
         if t <= Types::FALSE {
@@ -549,6 +589,44 @@ impl Types {
             Ty::Map(k, v) => Shape::Map(Box::new(self.shape(*k)?), Box::new(self.shape(*v)?)),
             Ty::Secret(t) => Shape::Secret(Box::new(self.shape(*t)?)),
             Ty::Union(m) => Shape::Union(m.iter().map(|&m| self.shape(m)).collect::<Option<_>>()?),
+            Ty::Func(f) => {
+                let Func {
+                    type_params,
+                    params,
+                    rest,
+                    ret,
+                    predicate,
+                    unannotated,
+                } = f.as_ref();
+                if !type_params.is_empty() {
+                    return None;
+                }
+                let variadic = |r: &Option<Rest>| -> Option<Option<Shape>> {
+                    match r {
+                        None => Some(None),
+                        Some(Rest::Variadic(t)) => Some(Some(self.shape(*t)?)),
+                        Some(Rest::Pack(_)) => None,
+                    }
+                };
+                Shape::Func(Box::new(FuncShape {
+                    params: params
+                        .iter()
+                        .map(|p| Some((p.name.clone(), self.shape(p.ty)?, p.optional)))
+                        .collect::<Option<_>>()?,
+                    rest: variadic(rest)?,
+                    ret: ret
+                        .types
+                        .iter()
+                        .map(|&t| self.shape(t))
+                        .collect::<Option<_>>()?,
+                    ret_rest: variadic(&ret.rest)?,
+                    predicate: match predicate {
+                        Some((i, t)) => Some((*i, self.shape(*t)?)),
+                        None => None,
+                    },
+                    unannotated: *unannotated,
+                }))
+            }
             _ => return None,
         })
     }
@@ -562,6 +640,48 @@ impl Types {
             Shape::Array(e) => Ty::Array(self.find_shape(e)?),
             Shape::Map(k, v) => Ty::Map(self.find_shape(k)?, self.find_shape(v)?),
             Shape::Secret(t) => Ty::Secret(self.find_shape(t)?),
+            Shape::Func(f) => {
+                let FuncShape {
+                    params,
+                    rest,
+                    ret,
+                    ret_rest,
+                    predicate,
+                    unannotated,
+                } = f.as_ref();
+                let variadic = |r: &Option<Shape>| -> Option<Option<Rest>> {
+                    match r {
+                        None => Some(None),
+                        Some(s) => Some(Some(Rest::Variadic(self.find_shape(s)?))),
+                    }
+                };
+                Ty::Func(Arc::new(Func {
+                    type_params: Vec::new(),
+                    params: params
+                        .iter()
+                        .map(|(name, s, optional)| {
+                            Some(Param {
+                                name: name.clone(),
+                                ty: self.find_shape(s)?,
+                                optional: *optional,
+                            })
+                        })
+                        .collect::<Option<_>>()?,
+                    rest: variadic(rest)?,
+                    ret: Pack {
+                        types: ret
+                            .iter()
+                            .map(|s| self.find_shape(s))
+                            .collect::<Option<_>>()?,
+                        rest: variadic(ret_rest)?,
+                    },
+                    predicate: match predicate {
+                        Some((i, s)) => Some((*i, self.find_shape(s)?)),
+                        None => None,
+                    },
+                    unannotated: *unannotated,
+                }))
+            }
             // Members are in the order of their ids.
             Shape::Union(m) => {
                 let mut ids = m
@@ -614,7 +734,7 @@ impl Types {
     }
 
     pub fn func(&mut self, f: Func) -> TypeId {
-        self.intern(Ty::Func(Box::new(f)))
+        self.intern(Ty::Func(Arc::new(f)))
     }
 
     pub fn optional(&mut self, t: TypeId) -> TypeId {
@@ -758,7 +878,7 @@ impl Types {
                     if ordered.len() >= 2 {
                         let unborn: Vec<TypeId> =
                             ordered.into_iter().filter(|&m| !self.is_born(m)).collect();
-                        let shaped = unborn.iter().all(|&m| self.shape(m).is_some());
+                        let shaped = unborn.iter().all(|&m| self.has_shape(m));
                         if let Some(b) = &mut self.births {
                             b.order_sensitive |= !shaped;
                             b.unborn.extend(unborn);
@@ -1047,6 +1167,33 @@ mod tests {
                 .and_then(|shape| other.find_shape(&shape)),
             Some(found)
         );
+        // A function over shapes has one, found again elsewhere.
+        types.watch_births();
+        let r = rec(&mut types, "r");
+        let f = types.func(Func {
+            type_params: Vec::new(),
+            params: vec![Param {
+                name: Some("x".into()),
+                ty: Types::NUMBER,
+                optional: false,
+            }],
+            rest: None,
+            ret: Pack {
+                types: vec![Types::STRING],
+                rest: Some(Rest::Variadic(Types::BOOLEAN)),
+            },
+            predicate: None,
+            unannotated: false,
+        });
+        types.union(&[r, f]);
+        let unborn = types.births().expect("the function has a shape");
+        assert_eq!(unborn.len(), 1);
+        let mut other = Types::new();
+        let g = other.func(match types.get(f) {
+            Ty::Func(func) => (**func).clone(),
+            _ => unreachable!(),
+        });
+        assert_eq!(other.find_shape(&unborn[0].0), Some(g));
         types.watch_births();
         let d = rec(&mut types, "d");
         let named = types.intern(Ty::Named(DefId(0), Vec::new()));
@@ -1066,6 +1213,45 @@ mod tests {
             Some(vec![(str_shape("g"), false)]),
             "rolled back births are forgotten"
         );
+    }
+
+    /// `has_shape` is `shape(..).is_some()`.
+    #[test]
+    fn has_shape_agrees_with_shape() {
+        let mut types = Types::new();
+        let s = types.str("s");
+        let arr = types.array(s);
+        let named = types.intern(Ty::Named(DefId(0), Vec::new()));
+        let bad = types.array(named);
+        let f = types.func(Func {
+            type_params: Vec::new(),
+            params: vec![Param {
+                name: None,
+                ty: arr,
+                optional: true,
+            }],
+            rest: Some(Rest::Variadic(Types::NUMBER)),
+            ret: Pack::single(s),
+            predicate: None,
+            unannotated: false,
+        });
+        let g = types.func(Func {
+            type_params: Vec::new(),
+            params: Vec::new(),
+            rest: None,
+            ret: Pack::single(bad),
+            predicate: None,
+            unannotated: false,
+        });
+        let u = types.union(&[s, arr, Types::NIL]);
+        for t in [Types::ANY, s, arr, named, bad, f, g, u] {
+            assert_eq!(
+                types.has_shape(t),
+                types.shape(t).is_some(),
+                "{:?}",
+                types.get(t)
+            );
+        }
     }
 
     /// After a rollback the arena is as it was: the same types get the

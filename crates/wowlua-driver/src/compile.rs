@@ -888,6 +888,9 @@ pub(crate) struct FlavorCache {
     /// The type checks of plain Lua files that later flavors of this build
     /// can reuse; per build, where a path and `FileId` mean the same bytes.
     pub(crate) checks: wowlua_sema::check::reuse::CheckCache,
+    /// What checking each file reads of its syntax, by path and `FileId`
+    /// (the same in every flavor of the build).
+    prepared: HashMap<(String, FileId), Arc<wowlua_sema::check::body::Prepared>>,
 }
 
 pub(crate) struct CacheEntry {
@@ -1026,6 +1029,7 @@ pub fn compile_flavor(
             meta: unit_of(&source.src_rel).map(|u| u.meta.as_ref()),
             globals: Default::default(),
             usage: parsed.usage(i),
+            prepared: None,
             main_of: unit_of(&source.src_rel)
                 .filter(|u| u.main.as_deref() == Some(source.src_rel.as_str()))
                 .and(wowlua_sema::package_of(&source.src_rel).map(str::to_string)),
@@ -1041,6 +1045,7 @@ pub fn compile_flavor(
             main_of: None,
             globals: Default::default(),
             usage: None,
+            prepared: None,
         });
     }
     for d in api {
@@ -1053,6 +1058,7 @@ pub fn compile_flavor(
             main_of: None,
             globals: d.globals,
             usage: None,
+            prepared: None,
         });
     }
     let analysis = wowlua_sema::analyze(&inputs, Some(&meta));
@@ -1080,7 +1086,34 @@ pub fn compile_flavor(
     // Load order (spec §5.4): files listed in `build.load-order` keep their
     // listed order; files outside this flavor do not take part.
     let markers = wowlua_sema::usage::Markers::from_table().with_api(&inputs);
+    // The active sources' usages, on worker threads (#8): the load order
+    // takes them from `FileInput::usage`, and they go after it.
+    let wanted: Vec<usize> = (0..files.len())
+        .filter(|&i| {
+            matches!(inputs[i].kind, FileKind::Wowlua | FileKind::Lua)
+                && inputs[i].parse.is_some()
+                && inputs[i].usage.is_none()
+                && layout.active.get(i).copied().unwrap_or(true)
+        })
+        .collect();
+    let mut usages = Vec::with_capacity(wanted.len());
+    jobs.region(
+        wanted,
+        |&i| raw[&files[i].0.rel].len() as u64,
+        20,
+        |i| {
+            let parse = inputs[i].parse.expect("parsed");
+            (i, Arc::new(wowlua_sema::usage::file_usage(parse, &markers)))
+        },
+        |usage| usages.push(usage),
+    );
+    for (i, usage) in &usages {
+        inputs[*i].usage = Some(usage.clone());
+    }
     let order = wowlua_sema::loadorder::analyze(&inputs, &analysis, layout, &markers);
+    for (i, _) in usages {
+        inputs[i].usage = None;
+    }
     diagnostics.extend(order.diagnostics.iter().cloned());
     for &(a, b) in &order.constraints {
         if a < files.len() && b < files.len() {
@@ -1124,6 +1157,40 @@ pub fn compile_flavor(
         .filter(|(_, s)| s.is_some())
         .map(|(i, _)| i)
         .collect();
+    // What checking each file reads of its syntax: prepared once per
+    // build, on worker threads (#8).
+    let unprepared: Vec<usize> = (0..files.len())
+        .filter(|&i| settings.get(i).copied().flatten().is_some() && inputs[i].parse.is_some())
+        .filter(|&i| {
+            !cache
+                .prepared
+                .contains_key(&(files[i].0.rel.clone(), files[i].1))
+        })
+        .collect();
+    let mut prepared = Vec::with_capacity(unprepared.len());
+    jobs.region(
+        unprepared,
+        |&i| raw[&files[i].0.rel].len() as u64,
+        20,
+        |i| {
+            let parse = inputs[i].parse.expect("parsed");
+            (i, Arc::new(wowlua_sema::check::body::prepare(parse)))
+        },
+        |p| prepared.push(p),
+    );
+    for (i, p) in prepared {
+        cache
+            .prepared
+            .insert((files[i].0.rel.clone(), files[i].1), p);
+    }
+    for (i, input) in inputs.iter_mut().enumerate().take(files.len()) {
+        if settings.get(i).copied().flatten().is_some() {
+            input.prepared = cache
+                .prepared
+                .get(&(files[i].0.rel.clone(), files[i].1))
+                .cloned();
+        }
+    }
     let mut private_methods = std::collections::HashSet::new();
     if settings.iter().any(Option::is_some) {
         let checked = wowlua_sema::check::check_package_full(
