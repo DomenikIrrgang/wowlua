@@ -253,6 +253,7 @@ open for review.
 | T201 | `wowlua:mock` sets up a simulated world of entities: tests spawn units and act on them (`mock.spawnUnit`, `mock.player:target(u)`, `u:damage(n)`), unit tokens follow from relationships, and every change fires the events the client fires, in its order **(user, M9)** | Tests describe the situation, not the client's internals; the events and API results follow as in game, so an addon's reaction to them is what is tested. |
 | T202 | `mock.fireEvent` fires only events the flavor documents, with the payload checked against the documentation **(user, M9)** | A misspelled event or a wrong payload fails the test instead of testing nothing. |
 | T203 | Game data comes from the tests by default (`mock.defineSpell`, `mock.defineItem`); optionally `wowlua data pull --wow <path>` reads it from the user's own client into a local cache, and `wowlua test --game-data` uses it; off by default, so CI tests with test data only **(user, M9)** | wowlua distributes no game data; CI has no WoW installation. |
+| T204 | With `test.blizzard-ui`, `wowlua test` downloads the flavor's Blizzard UI code (a wow-ui-source tarball at the flavor's client version) and its global strings on first use into a user cache keyed by version **(user, M9)** | About 5 seconds once per flavor (7 MB), then cached; works in CI and without WoW installed. |
 
 ## Standard library
 

@@ -240,8 +240,11 @@ frames and the rest, so taint the addon spreads into Blizzard's code, and
 Blizzard code that fails because of what an addon did, show up as in game.
 Off by default: mock-only tests start faster (decision T186).
 
-The engine's loader (`wowlua_engine::ui::load`) takes the flavor's
-`Interface` folder and its global strings:
+The code comes from wow-ui-source at the flavor's client version and the
+global strings from the same dump the declarations use, downloaded on first
+use into a user cache keyed by version (decision T204; about 5 seconds and
+7 MB per flavor, once). The engine's loader (`wowlua_engine::ui::load`)
+takes the flavor's `Interface` folder and its global strings:
 
 - **Load order** (inferred from the TOCs, unverified): every Blizzard addon
   the game loads at startup (not `LoadOnDemand`; `AllowLoad` game or both;
