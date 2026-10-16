@@ -433,16 +433,21 @@ The test framework runs on wowlua's own emulation of the WoW client
   before the addon; recorded from the client with `/stdtest snapshot`; every
   part drivable during a test, each change firing the client's events in its
   order. GUI tests act as the user (click, hover, drag, type, key bindings)
-  and assert what is shown. The groundwork for M12 to M14: the VM's debug
-  hooks (shared with S5's coverage) and the engine's file access behind an
-  interface (T212).
+  and assert what is shown. Writing tests (Tooling §16.1.3): typed matchers,
+  `@cases`, waiting in straight-line code, widget matchers, snapshots,
+  compile-time tests, custom matchers, `import internal` and `mock.module`
+  (T214 to T220, T223, T224); `@bench` (T221) and doc-comment examples
+  (T222) are specified here and built in M11 and S8. The groundwork for M12
+  to M14: the VM's debug hooks (shared with S5's coverage) and the engine's
+  file access behind an interface (T212).
 - S5 **Coverage and reports**: lines, statements, branches, functions and
   conditions counted by the VM; terminal, JUnit, TAP, JSON, GitHub, lcov,
   Cobertura and an HTML report in the wowlua design system; thresholds.
 - S6 `wowlua fmt` complete for all wowlua constructs, with an idempotence suite.
 - S7 Persistent incremental cache (phase 2), shared with the LSP.
 - S8 `wowlua lsp` and the VS Code extension, with a test explorer, coverage in
-  the editor and "run test" code lenses.
+  the editor and "run test" code lenses; code examples in doc comments run as
+  tests (T222).
 
 **Exit:** the full edit, test, debug loop works without leaving the editor, and
 the in-game bugs found so far fail as tests the same way they failed in game
@@ -467,7 +472,8 @@ as they are, and secure-code paths keep their call structure (taint).
 
 - `wowlua bench`: benchmarks run on the embedded Lua 5.1 (WoW runs plain Lua
   5.1, not LuaJIT), comparing the optimized and the unoptimized build; every
-  optimization is measured before it is kept.
+  optimization is measured before it is kept. Benchmarks are `@bench`
+  functions in test files (T221).
 - Loop-invariant field reads hoisted out of loops (`self.frame.texture` read
   once).
 - Repeated field reads in one stretch of code read once into a local.

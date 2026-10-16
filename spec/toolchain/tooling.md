@@ -85,7 +85,100 @@ A test file opts out of step 5 with `config({ lifecycle = "manual" })` from
 | `@flavors("standard", …)` | Run only for these flavors |
 | `config({ lifecycle: "auto" \| "manual" })` | Per-file runner settings |
 | `describe(name, fn)` | Grouping for runtime-generated tests |
-| `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`. Negation with `expect(v).never.toBe(x)`. |
+| `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`, `toMatchSnapshot`; for widgets `toBeShown`, `toBeVisible`, `toHaveText`, `toHaveSize`, `toBeAnchoredTo`. Negation with `expect(v).never.toBe(x)`. Type-checked (below). |
+| `@cases(list)` | Runs a test once per case, the case's values as its arguments (below) |
+| `@expectError(code, …)` | A compile-time test: the function must not compile, with these diagnostics (below) |
+| `matcher(name, fn)` | Defines a typed matcher (below) |
+| `@bench(name?)` | A benchmark, run by `wowlua bench` (M11), not by `wowlua test` |
+
+**Typed matchers** (decision T214). `expect` is generic: `expect(x)` has the
+type `Expect<T>` for the type `T` of `x`, and its matchers take `T`:
+`expect(count).toBe("3")` is a type error, as is `toHaveLength` on a value
+that has no length. A spy keeps the type of the function it spies on, so
+`toHaveBeenCalledWith(...)` checks its arguments against that function's
+parameters.
+
+**Parametrized tests** (decision T215). `@cases` gives a test its cases;
+each runs and is reported on its own, named after the test and the case's
+values (`doubles [2, 4]`), and each is checked against the test function's
+parameters (E8120 when a case does not fit):
+
+```wowlua
+@test("doubles")
+@cases({ { 1, 2 }, { 2, 4 }, { -3, -6 } })
+local function doubles(n: number, expected: number)
+    expect(double(n)).toBe(expected)
+end
+```
+
+**Waiting** (decision T216). A test may wait for the world, written as
+straight-line code: `mock.waitFor(event, predicate?)` (the event's arguments
+are returned), `mock.waitFrames(n)`, `mock.waitSeconds(s)` and
+`mock.waitUntil(fn)`. A test runs as a coroutine; waiting advances the virtual
+clock and the frames, so a test stays deterministic and runs instantly. A
+wait longer than `timeout` virtual seconds (default 10, `config({ timeout })`
+or `@test(name, { timeout })`) fails the test, naming what it waited for.
+
+```wowlua
+@test("loads the item first")
+local function itemLoads()
+    tooltip:showItem(19019)
+    local itemID = mock.waitFor("ITEM_DATA_LOAD_RESULT")
+    expect(itemID).toBe(19019)
+    expect(tooltip.frame).toHaveText("Thunderfury, Blessed Blade of the Windseeker")
+end
+```
+
+**Widget matchers** (decision T217): `toBeShown()` (`IsShown`),
+`toBeVisible()` (shown with every parent), `toHaveText(text)` (a font string,
+an edit box, a button's text, or a frame with one font string), `toHaveSize(w,
+h)`, `toBeAnchoredTo(other, point?, relativePoint?)`, and
+`expect(GameTooltip).toHaveLines({ … })` for a tooltip's left and right texts,
+line by line.
+
+**Snapshots** (decision T218). `expect(v).toMatchSnapshot(name?)` compares a
+value (serialized deterministically: keys sorted, frames as their widget tree
+with layout and text) with the snapshot stored in `__snapshots__/<test
+file>.snap` next to the test; a missing snapshot is written, a different one
+fails the test with a diff, and `wowlua test -u` rewrites them. Snapshots are
+reviewed in version control.
+
+**Compile-time tests** (decision T219). `@expectError` marks a function that
+must not compile: the test passes when the checker reports exactly these
+diagnostics in it (by code, optionally `{ code, message }`), and the function
+is never run. Libraries pin down what their types reject, the stdlib its own
+diagnostics:
+
+```wowlua
+@expectError("E2001")
+local function wrongArgument()
+    tracker:record("two")    -- record takes a number
+end
+```
+
+**Custom matchers** (decision T220). `matcher(name, fn)` adds a matcher to
+`expect`, typed by `fn`'s signature: `fn(actual: T, ...): (boolean, string)`
+returns whether it passed and the message; a library exports its matchers and
+a test file that imports it gets them, checked like the built-in ones.
+
+**Benchmarks and examples.** `@bench` functions in test files are run by
+`wowlua bench` (M11, decision T221); code examples in `---` doc comments run
+as tests with the language server's documentation work (M9 S8, decision
+T222).
+
+### 16.1.3.1 Module internals and mocked imports
+
+A test file may import what a module does not export (decision T223):
+`import internal parse, Cache from "/tracker"` binds the module's
+file-level locals and types by name, as if exported; only `*.test.wowlua`
+files may (E8119 elsewhere). An addon build is unchanged: the compiler keeps
+those locals reachable only in the `test` profile.
+
+`mock.module(spec, replacement)` replaces a module's exports for one test file
+(decision T224): before the addon loads, `replacement` is checked against the
+module's export types (a missing or mistyped export is a type error), and
+every importer receives it; `mock.module(spec, { name = fake })` replaces only
+those exports and keeps the rest.
 
 ### 16.1.4 `wowlua:mock`
 
@@ -121,7 +214,7 @@ end
 | Units | `mock.player`, `mock.spawnUnit(data)` returning a unit: name, GUID (generated unless given), level, class, race, sex, reaction (`"hostile"`, `"neutral"`, `"friendly"`), player or NPC, health and power, dead or alive. Unit methods act and fire events: `unit:damage(n)`, `unit:heal(n)`, `unit:kill()`, `unit:setPower(type, n)`, `unit:applyAura(data)`, `unit:removeAura(id)`, `unit:castSpell(id, opts?)`, `unit:interruptCast()`, `unit:despawn()`. |
 | Unit tokens | Follow from relationships, as in the client: `mock.player:target(unit)`, `:focus(unit)`, `:mouseover(unit)`, `unit:showNameplate()` (`nameplateN`), `mock.group:add(unit)` (`partyN`, `raidN`), bosses (`bossN`); compound tokens (`targettarget`) resolve through them. |
 | Combat and restrictions | `mock.player:enterCombat()`, `:leaveCombat()`; `mock.enterInstance(kind)` (a restricted map), encounters, challenge modes, PvP matches, chat lockdown. The client's addon restrictions follow ([WoW client emulation §17.5](emulator.md#175-secret-values)): `ADDON_RESTRICTION_STATE_CHANGED`, secret API results, protected functions refused. |
-| Time | `GetTime` and `C_Timer` on a virtual clock: `mock.advanceTime(sec)`; `OnUpdate` per simulated frame: `mock.nextFrame()`, `mock.advanceFrames(n, ms?)` |
+| Time | `GetTime` and `C_Timer` on a virtual clock: `mock.advanceTime(sec)`; `OnUpdate` per simulated frame: `mock.nextFrame()`, `mock.advanceFrames(n, ms?)`; waiting in a test: `mock.waitFor`, `mock.waitFrames`, `mock.waitSeconds`, `mock.waitUntil` (§16.1.3) |
 | Lifecycle | `mock.login()` (`ADDON_LOADED`, `PLAYER_LOGIN`, `PLAYER_ENTERING_WORLD`), `mock.loadAddon(name)`, `mock.reloadUI()` (keeps only the SavedVariables) |
 | Communication | `mock.receiveAddonMessage(prefix, message, chatType, sender)` (another player's), `mock.sentAddonMessages()`, `mock.joinGuild()`; the player hears their own group and guild messages and whispers to themselves on the next frame, for registered prefixes; WoW Forever's characters are addressed by first and last name (`unit:setName(name, lastName)`), as `/stdtest engine comm` recorded |
 | Addons | `mock.defineAddon(name, { metadata, loadOnDemand, load })`: an addon the client knows (`C_AddOns.GetAddOnMetadata`, `GetAddOnInfo`, `LoadAddOn`) |
