@@ -701,48 +701,53 @@ impl Types {
     /// The union of `members`: flattened, deduplicated; `never` dropped,
     /// `any` absorbs everything, literals absorbed by their primitive.
     pub fn union(&mut self, members: &[TypeId]) -> TypeId {
-        let mut flat: Vec<TypeId> = Vec::new();
+        // `a | a` is `a`: only this function makes unions, so a union's
+        // members are normalized already. A watched check notes the members
+        // of every union it makes, so there a union takes the long way.
+        if let [a, rest @ ..] = members
+            && rest.iter().all(|r| r == a)
+            && (self.births.is_none() || !matches!(self.get(*a), Ty::Union(_)))
+        {
+            return *a;
+        }
+        let mut flat: Vec<TypeId> = Vec::with_capacity(members.len());
         for &m in members {
             match self.get(m) {
-                Ty::Union(inner) => {
-                    for &i in inner.clone().iter() {
-                        if !flat.contains(&i) {
-                            flat.push(i);
-                        }
-                    }
-                }
+                Ty::Union(inner) => flat.extend_from_slice(inner),
                 Ty::Never => {}
-                _ => {
-                    if !flat.contains(&m) {
-                        flat.push(m);
-                    }
-                }
+                _ => flat.push(m),
             }
         }
-        if flat.contains(&Types::ANY) {
+        // The members end up sorted by id, so sorting first changes nothing.
+        flat.sort_unstable();
+        flat.dedup();
+        if flat.binary_search(&Types::ANY).is_ok() {
             return Types::ANY;
         }
-        if flat.contains(&Types::ERROR) {
+        if flat.binary_search(&Types::ERROR).is_ok() {
             return Types::ERROR;
         }
         // Literals absorbed by their primitive; true | false is boolean.
-        let has = |flat: &[TypeId], t: TypeId| flat.contains(&t);
-        let prims: Vec<TypeId> = flat.clone();
-        flat.retain(|&m| match self.get(m) {
-            Ty::Bool(_) => !has(&prims, Types::BOOLEAN),
-            Ty::Num(_) => !has(&prims, Types::NUMBER),
-            Ty::Str(_) => !has(&prims, Types::STRING),
-            _ => true,
-        });
-        if flat.contains(&Types::TRUE) && flat.contains(&Types::FALSE) {
+        let has = |t: TypeId| flat.binary_search(&t).is_ok();
+        let (boolean, number, string) =
+            (has(Types::BOOLEAN), has(Types::NUMBER), has(Types::STRING));
+        if boolean || number || string {
+            flat.retain(|&m| match self.get(m) {
+                Ty::Bool(_) => !boolean,
+                Ty::Num(_) => !number,
+                Ty::Str(_) => !string,
+                _ => true,
+            });
+        }
+        if flat.binary_search(&Types::TRUE).is_ok() && flat.binary_search(&Types::FALSE).is_ok() {
             flat.retain(|&m| m != Types::TRUE && m != Types::FALSE);
             flat.push(Types::BOOLEAN);
+            flat.sort_unstable();
         }
         match flat.len() {
             0 => Types::NEVER,
             1 => flat[0],
             _ => {
-                flat.sort();
                 // The builtins have the same ids everywhere, and members
                 // born of a watched check keep their order wherever it runs.
                 // Other members keep it where the types made before give
