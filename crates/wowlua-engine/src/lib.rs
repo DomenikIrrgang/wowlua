@@ -180,6 +180,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(character::behaviours())
             .chain(input::behaviours())
             .chain(casting::behaviours())
+            .chain(tooltip::behaviours())
             .chain(chat::behaviours())
             .chain(bindings::behaviours())
             .chain(facts::behaviours())

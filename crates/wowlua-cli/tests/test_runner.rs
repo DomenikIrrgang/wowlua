@@ -1241,3 +1241,68 @@ fn example(name: &str, summary: &str) {
     assert!(out.status.success(), "{name}: {text}");
     assert!(text.contains(summary), "{name}: {text}");
 }
+
+/// Tooltips with Blizzard's UI: the engine's tooltip data from the tests'
+/// game data, Blizzard's tooltip code, and an addon's post-call.
+#[test]
+fn tooltips_with_blizzard_ui() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                r#"TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tip: any, data: any)
+    tip:AddLine("Demo: item " .. data.id)
+end)
+"#,
+            ),
+            (
+                "tests/tip.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("an item tooltip with the addon's line")
+local function item()
+    mock.defineItem(1, { name = "Not loaded" })
+    expect(mock.showTooltip("item", { id = 1 })[1]).toContain("Retrieving item information")
+    mock.defineItem(19019, { name = "Thunderfury, Blessed Blade of the Windseeker", quality = 5, itemLevel = 80 }, { cached = true })
+    local lines = mock.showTooltip("item", { id = 19019 })
+    expect(lines).toEqual({ "Thunderfury, Blessed Blade of the Windseeker", "Item Level 80", "Demo: item 19019" })
+    expect(GameTooltip).toBeShown()
+end
+
+@test("a unit tooltip")
+local function unit()
+    local hogger = mock.spawnUnit({ name = "Hogger", level = 11, reaction = "hostile" })
+    mock.player:target(hogger)
+    expect(mock.showTooltip("unit", { unit = "target" })).toEqual({ "Hogger", "Level 11" })
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("2 passed, 0 failed"), "{text}");
+}

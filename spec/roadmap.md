@@ -452,8 +452,8 @@ The test framework runs on wowlua's own emulation of the WoW client
   errors, `mock.module`, user input, casting, modifier keys, taint
   assertions); world profiles with the character's money, gear, bags and
   place; `import internal`; `--watch`; the three examples have tests. Not
-  yet: `mock.reloadUI` (a test cannot go on in a fresh VM),
-  `mock.showTooltip` (the tooltip data system), `--game-data` (M13); the
+  yet: `mock.reloadUI` (a test cannot go on in a fresh VM), `--game-data`
+  (M13); the
   standard and classic flavors' Blizzard UI code still errors in the
   engine (camelot's runs without an error).
 - S5 **Coverage and reports**: lines, statements, branches, functions and
