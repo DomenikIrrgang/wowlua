@@ -286,6 +286,13 @@ pub struct Parsed {
     declarations: Vec<Parse>,
 }
 
+impl Parsed {
+    /// The package's syntax trees, by file; the rest is dropped.
+    pub(crate) fn into_parses(self) -> Vec<Option<Parse>> {
+        self.parses
+    }
+}
+
 /// A plain Lua source in `wowlua dev` (#7 stage 3; see `BuildCache::front`).
 #[derive(Clone)]
 pub(crate) enum Front {

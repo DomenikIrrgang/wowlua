@@ -1161,7 +1161,15 @@ fn build_inner(
             }
         }
     }
-    drop(parsed);
+    // The package's syntax trees, freed on the workers (#49).
+    let weights: Vec<u64> = files
+        .iter()
+        .map(|(s, _)| raw.get(&s.rel).map_or(0, |b| b.len() as u64))
+        .collect();
+    request.jobs.drop_all(
+        parsed.into_parses().into_iter().enumerate().collect(),
+        |(i, _)| weights.get(*i).copied().unwrap_or(0),
+    );
     drop(declarations);
     match cache.as_deref_mut() {
         Some(cache) => cache.keep(flavor_cache),
