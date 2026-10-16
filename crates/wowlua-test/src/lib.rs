@@ -7,6 +7,7 @@
 
 mod blizzard;
 mod natives;
+mod profile;
 
 pub use blizzard::{UiSource, ui_source};
 
@@ -26,6 +27,12 @@ pub struct Suite<'a> {
     pub src: String,
     /// `test.blizzard-ui`: Blizzard's UI code, loaded before the addon.
     pub blizzard_ui: Option<UiSource>,
+    /// `test.profile`: the world profile of files that name none.
+    pub profile: Option<String>,
+}
+
+fn widgets_keep(vm: &mut Vm, v: Value) {
+    wowlua_engine::widgets::keep(vm, v);
 }
 
 /// One test file's run for one flavor.
@@ -265,6 +272,16 @@ fn load(suite: &Suite, file: &TestFile, blizzard: &mut Vec<String>) -> Result<Lo
     set(&mut vm, wl, "mockEngine", Value::Table(controls));
     wowlua_engine::widgets::keep(&mut vm, Value::Table(ns));
     let table = Value::Table(ns);
+    // The world profile, before the addon (decision T213).
+    let source = std::fs::read(suite.root.join(&file.rel)).unwrap_or_default();
+    if let Some(name) = profile::named_in(&source).or_else(|| suite.profile.clone()) {
+        let path = suite
+            .root
+            .join("tests")
+            .join("profiles")
+            .join(format!("{name}.json"));
+        profile::apply(&mut vm, controls, &path)?;
+    }
 
     let toc = toc_path(build, &suite.flavor).ok_or("the build has no TOC file")?;
     let toc_text = std::fs::read_to_string(dir.join(&toc)).map_err(|e| e.to_string())?;

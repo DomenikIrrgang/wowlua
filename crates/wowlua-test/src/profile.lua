@@ -1,0 +1,67 @@
+-- A world profile (spec Tooling §16.1.4, decision T213), applied before the
+-- addon loads: the character, game data, money, gear, bags, place, auras,
+-- the units around, CVars, bindings and saved variables.
+local mock, profile = ...
+local function each(t, fn)
+    if type(t) == "table" then
+        for k, v in pairs(t) do
+            fn(k, v)
+        end
+    end
+end
+local player = mock.player
+if type(profile.character) == "table" then
+    mock.setPlayer(profile.character)
+end
+each(profile.items, function(id, data)
+    local opts = { cached = data.cached ~= false, delay = data.delay, missing = data.missing }
+    mock.defineItem(tonumber(id), data, opts)
+end)
+each(profile.spells, function(id, data)
+    mock.defineSpell(tonumber(id), data)
+end)
+if profile.money then
+    player:setMoney(profile.money)
+end
+each(profile.equipment, function(slot, item)
+    if type(slot) == "string" and not tonumber(slot) then
+        slot = GetInventorySlotInfo(slot)
+    end
+    player:equip(tonumber(slot), item)
+end)
+each(profile.bags, function(bag, contents)
+    mock.setBag(tonumber(bag), contents)
+end)
+if type(profile.position) == "table" then
+    mock.moveTo(profile.position)
+end
+each(profile.auras, function(_, aura)
+    player:applyAura(aura)
+end)
+each(profile.units, function(_, data)
+    local unit = mock.spawnUnit(data)
+    if data.target then
+        player:target(unit)
+    end
+    if data.focus then
+        player:focus(unit)
+    end
+    if data.group then
+        mock.addToGroup(unit, data.group == "raid")
+    end
+    if data.nameplate then
+        unit:showNameplate()
+    end
+    each(data.auras, function(_, aura)
+        unit:applyAura(aura)
+    end)
+end)
+each(profile.cvars, function(name, value)
+    C_CVar.SetCVar(name, tostring(value))
+end)
+each(profile.bindings, function(key, action)
+    SetBinding(key, action)
+end)
+each(profile.savedVariables, function(name, value)
+    _G[name] = value
+end)

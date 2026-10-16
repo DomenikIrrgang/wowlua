@@ -591,6 +591,7 @@ pub fn test(out: &Output, global: &GlobalArgs, filter: Option<&str>, flavors: Ve
                 root: project.root().to_path_buf(),
                 src: project.manifest.manifest.build.src.clone(),
                 blizzard_ui,
+                profile: project.manifest.manifest.test.profile.clone(),
             };
             let results = wowlua_test::run(&suite, filter, threads);
             if let Some(errors) = results

@@ -119,6 +119,8 @@ pub struct World {
     pub chat: crate::chat::Chat,
     /// Keybindings and the addons a test defined.
     pub bindings: crate::bindings::Bindings,
+    /// The player's money, equipment, bags and place.
+    pub character: crate::character::Character,
 }
 
 /// UIParent's size in screen units at scale 1: 1920 x 1080, as WoW Forever

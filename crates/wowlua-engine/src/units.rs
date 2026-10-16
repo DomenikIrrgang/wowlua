@@ -59,6 +59,8 @@ pub struct Unit {
     /// Whom the unit targets (`unittarget`).
     pub target: Option<UnitId>,
     pub alive_in_world: bool,
+    /// How far from the player, in yards (`None`: unknown).
+    pub distance: Option<f64>,
 }
 
 /// The addon restriction types (`Enum.AddOnRestrictionType`).
@@ -171,6 +173,7 @@ pub fn install(vm: &mut Vm) {
         in_combat: false,
         target: None,
         alive_in_world: true,
+        distance: Some(0.0),
     };
     engine_mut(vm).units.list.push(player);
 }
@@ -287,7 +290,7 @@ pub fn tokens_of(u: &Units, id: UnitId) -> Vec<String> {
 }
 
 /// Fires a unit event once for each token the unit has.
-fn fire_unit(vm: &mut Vm, event: &str, id: UnitId, extra: &[Value]) {
+pub(crate) fn fire_unit(vm: &mut Vm, event: &str, id: UnitId, extra: &[Value]) {
     for token in tokens_of(&engine(vm).units, id) {
         let t = vm.str(&token);
         let mut args = vec![t];
@@ -371,7 +374,7 @@ pub fn secret_results(vm: &Vm, doc: &serde_json::Value, c: &NativeCall) -> bool 
 
 // --------------------------------------------------- the unit functions
 
-fn unit_arg(vm: &Vm, c: &NativeCall, n: usize) -> Option<UnitId> {
+pub(crate) fn unit_arg(vm: &Vm, c: &NativeCall, n: usize) -> Option<UnitId> {
     match vm.hidden(c.arg(n)) {
         Value::Str(s) => resolve(&engine(vm).units, &String::from_utf8_lossy(vm.str_bytes(s))),
         _ => None,
@@ -794,6 +797,9 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("setName", control_set_name),
         ("applyAura", crate::auras::control_apply),
         ("removeAura", crate::auras::control_remove),
+        ("setDistance", crate::character::control_set_distance),
+        ("setMoney", crate::character::control_set_money),
+        ("equip", crate::character::control_equip),
     ] {
         let native = vm.native(name, f);
         let key = vm.heap.intern(name.as_bytes());
@@ -841,13 +847,41 @@ pub fn this(vm: &mut Vm, c: &NativeCall) -> Result<UnitId, wowlua_vm::LuaError> 
 }
 
 /// `mock.spawnUnit({ name, level, class, race, sex, reaction, player,
-/// health, maxHealth, power, maxPower, powerType, guid, npcID })`.
+/// health, maxHealth, power, maxPower, powerType, guid, npcID, distance
+/// })`.
 pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
     let data = match c.arg(1) {
         Value::Table(t) => Some(t),
         Value::Nil => None,
         _ => return Err(vm.error("mock.spawnUnit: a table of the unit's data expected")),
     };
+    let unit = unit_from(vm, data, None);
+    let units = &mut engine_mut(vm).units;
+    units.list.push(unit);
+    let id = UnitId(units.list.len() - 1);
+    Ok(vec![handle(vm, id)])
+}
+
+/// `mock.setPlayer({ name, realm, lastName, level, class, race, sex,
+/// health, maxHealth, power, maxPower, powerType, guid })`: the player's
+/// data (a world profile's character), firing no events.
+pub fn set_player(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Table(t) = c.arg(1) else {
+        return Err(vm.error("mock.setPlayer: a table of the player's data expected"));
+    };
+    let player = std::mem::take(&mut engine_mut(vm).units.list[PLAYER.0].guid);
+    let mut unit = unit_from(vm, Some(t), Some(player));
+    let old = &engine(vm).units.list[PLAYER.0];
+    unit.target = old.target;
+    unit.in_combat = old.in_combat;
+    unit.distance = Some(0.0);
+    engine_mut(vm).units.list[PLAYER.0] = unit;
+    Ok(vec![])
+}
+
+/// A unit from a test's data; `player_guid`: the player's (it keeps its
+/// GUID unless the data has one).
+fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -> Unit {
     let get = |vm: &mut Vm, k: &str| -> Value {
         match data {
             Some(t) => {
@@ -867,8 +901,15 @@ pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(n) => n,
         _ => default,
     };
-    let player = get(vm, "player").truthy();
-    let reaction = match text(vm, "reaction", "hostile").as_str() {
+    let is_player = player_guid.is_some();
+    let player = is_player || get(vm, "player").truthy();
+    let reaction = match text(
+        vm,
+        "reaction",
+        if is_player { "friendly" } else { "hostile" },
+    )
+    .as_str()
+    {
         "friendly" => Reaction::Friendly,
         "neutral" => Reaction::Neutral,
         _ => Reaction::Hostile,
@@ -879,7 +920,9 @@ pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
         u.next_guid
     };
     let npc = num(vm, "npcID", 1000.0 + n as f64);
-    let default_guid = if player {
+    let default_guid = if let Some(g) = player_guid {
+        g
+    } else if player {
         format!("Player-4621-{n:08X}")
     } else {
         format!("Creature-0-4621-0-1-{npc}-{n:010X}")
@@ -894,7 +937,7 @@ pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let health = num(vm, "health", 100.0);
     let health_max = num(vm, "maxHealth", health);
-    let unit = Unit {
+    Unit {
         guid: text(vm, "guid", &default_guid),
         name: text(vm, "name", "Unit"),
         realm: match get(vm, "realm") {
@@ -922,11 +965,11 @@ pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
         in_combat: false,
         target: None,
         alive_in_world: true,
-    };
-    let units = &mut engine_mut(vm).units;
-    units.list.push(unit);
-    let id = UnitId(units.list.len() - 1);
-    Ok(vec![handle(vm, id)])
+        distance: match get(vm, "distance") {
+            Value::Num(d) => Some(d),
+            _ => None,
+        },
+    }
 }
 
 fn target_arg(vm: &Vm, c: &NativeCall) -> Option<UnitId> {

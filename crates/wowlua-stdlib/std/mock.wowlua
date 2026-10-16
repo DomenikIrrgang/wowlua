@@ -27,7 +27,17 @@ export interface MockUnit
     function setName(name: string, lastName: string?)
     function applyAura(data: table): number
     function removeAura(auraInstanceID: number)
+    --- How far from the player, in yards (`nil`: unknown).
+    function setDistance(yards: number?)
+    --- The player's money, in copper (`PLAYER_MONEY`).
+    function setMoney(copper: number)
+    --- The player's item in an inventory slot (`nil`: none):
+    --- `PLAYER_EQUIPMENT_CHANGED`, `UNIT_INVENTORY_CHANGED`.
+    function equip(slot: number, item: number | HeldItem | nil)
 end
+
+--- An item as the player holds it.
+export type HeldItem = { id: number, count?: number, link?: string, bound?: boolean, locked?: boolean }
 
 --- What `spawnUnit` takes.
 export type UnitData = {
@@ -45,6 +55,12 @@ export type UnitData = {
     powerMax?: number,
     powerType?: number,
     dead?: boolean,
+    --- How far from the player, in yards.
+    distance?: number,
+    realm?: string,
+    lastName?: string,
+    classID?: number,
+    npcID?: number,
 }
 
 local function engine(): any
@@ -80,6 +96,29 @@ export const player: MockUnit = (wl.mockEngine and wl.mockEngine.player) :: Mock
 --- A unit near the player.
 export function spawnUnit(data: UnitData): MockUnit
     return engine().spawnUnit(data)
+end
+
+--- The player's data (a world profile's character), firing no events.
+export function setPlayer(data: UnitData)
+    engine().setPlayer(data)
+end
+
+--- A bag's contents (`nil`: no bag): `BAG_UPDATE`, `BAG_UPDATE_DELAYED`.
+export function setBag(bag: number, contents: { slots?: number, items?: { [number]: number | HeldItem } }?)
+    engine().setBag(bag, contents)
+end
+
+--- Where the player is: `ZONE_CHANGED_NEW_AREA` for a new zone,
+--- `ZONE_CHANGED` for a new subzone.
+export function moveTo(place: {
+    mapID?: number,
+    zone?: string,
+    subZone?: string,
+    x?: number,
+    y?: number,
+    world?: { y: number, x: number, z?: number, instanceID?: number },
+})
+    engine().moveTo(place)
 end
 
 --- The player's group: `mock.group:add(unit)` (`partyN`, `raidN`).

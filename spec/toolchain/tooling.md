@@ -222,7 +222,8 @@ end
 
 | Part | Controls |
 |------|----------|
-| Units | `mock.player`, `mock.spawnUnit(data)` returning a unit: name, GUID (generated unless given), level, class, race, sex, reaction (`"hostile"`, `"neutral"`, `"friendly"`), player or NPC, health and power, dead or alive. Unit methods act and fire events: `unit:damage(n)`, `unit:heal(n)`, `unit:kill()`, `unit:setPower(type, n)`, `unit:applyAura(data)`, `unit:removeAura(id)`, `unit:castSpell(id, opts?)`, `unit:interruptCast()`, `unit:despawn()`. |
+| Units | `mock.player`, `mock.spawnUnit(data)` returning a unit: name, GUID (generated unless given), level, class, race, sex, reaction (`"hostile"`, `"neutral"`, `"friendly"`), player or NPC, health and power, dead or alive, distance from the player (yards). Unit methods act and fire events: `unit:damage(n)`, `unit:heal(n)`, `unit:kill()`, `unit:setPower(type, n)`, `unit:applyAura(data)`, `unit:removeAura(id)`, `unit:castSpell(id, opts?)`, `unit:interruptCast()`, `unit:setDistance(yards)` (`CheckInteractDistance`, `UnitInRange`, `UnitDistanceSquared`), `unit:despawn()`. `mock.setPlayer(data)` sets the player's data without events. |
+| The character | `mock.player:setMoney(copper)` (`PLAYER_MONEY`), `mock.player:equip(slot, item)` (`PLAYER_EQUIPMENT_CHANGED`, `UNIT_INVENTORY_CHANGED`; `GetInventoryItem…`), `mock.setBag(bag, { slots, items })` (`BAG_UPDATE`, `BAG_UPDATE_DELAYED`; `C_Container`, `C_Item.GetItemCount`), `mock.moveTo({ mapID, zone, subZone, x, y, world })` (`ZONE_CHANGED_NEW_AREA`, `ZONE_CHANGED`; `GetZoneText` and the other zone texts, `C_Map.GetBestMapForUnit`, `C_Map.GetPlayerMapPosition`, `UnitPosition`). An item is its ID or `{ id, count, link, bound, locked }`; links are the test's, the item data's, or made like the client's. The events' order and the generated links are unverified. |
 | Unit tokens | Follow from relationships, as in the client: `mock.player:target(unit)`, `:focus(unit)`, `:mouseover(unit)`, `unit:showNameplate()` (`nameplateN`), `mock.group:add(unit)` (`partyN`, `raidN`), bosses (`bossN`); compound tokens (`targettarget`) resolve through them. |
 | Combat and restrictions | `mock.player:enterCombat()`, `:leaveCombat()`; `mock.enterInstance(kind)` (a restricted map), encounters, challenge modes, PvP matches, chat lockdown. The client's addon restrictions follow ([WoW client emulation §17.5](emulator.md#175-secret-values)): `ADDON_RESTRICTION_STATE_CHANGED`, secret API results, protected functions refused. |
 | Time | `GetTime` and `C_Timer` on a virtual clock: `mock.advanceTime(sec)`; `OnUpdate` per simulated frame: `mock.nextFrame()`, `mock.advanceFrames(n, ms?)`; waiting in a test: `mock.waitFor`, `mock.waitFrames`, `mock.waitSeconds`, `mock.waitUntil` (§16.1.3) |
@@ -232,6 +233,37 @@ end
 | Input | `mock.slash(line)`, `mock.defineBinding(name, action, { header, runOnUp })` (from `Bindings.xml`), `mock.pressBinding(name)`, `mock.pressKey(key)` (the key's binding, as `SetBinding` bound it), `mock.click(frame, button?)`, `mock.drag(frame, dx, dy)` (the frame, or an overlay's parent, moves if it starts moving), `mock.sizeBy(grip, dw, dh)` (a resize grip's frame), `mock.wheel(frame, delta)`, `mock.script(frame, name, ...)` (any other user action), `mock.setModifiers(...)` |
 | UI | tooltips (`mock.showTooltip(kind, data)`), menus and dialogs, Settings, the screen size, locale, CVars, other addons and libraries (`mock.provideLibrary`); `mock.frames()` (every frame, in creation order); stand-ins for Blizzard's UI code: `mock.defineTemplate(name, fn)` (`CreateFrame` with the template calls `fn(frame)`; an undefined template only warns) and `mock.defineFrameType(name, base, fn)` (an intrinsic frame type such as `EventFrame`) |
 | Output | `mock.printed()`, `mock.errors()` |
+
+**World profiles** (decision T213). A test file starts in the situation a
+profile describes: `config({ profile = "stormwind" })` (a literal, read
+before anything loads) or `test.profile` of the manifest names
+`tests/profiles/<name>.json`, applied through the controls above before the
+addon loads:
+
+```json
+{
+  "character": { "name": "Thrall", "realm": "Realm", "class": "SHAMAN", "race": "Orc", "level": 60 },
+  "money": 123456,
+  "items": { "19019": { "name": "Thunderfury, Blessed Blade of the Windseeker", "quality": 5 } },
+  "spells": { "403": { "name": "Lightning Bolt", "known": true } },
+  "equipment": { "MainHandSlot": 19019 },
+  "bags": { "0": { "slots": 16, "items": { "1": { "id": 159, "count": 5 } } } },
+  "position": { "mapID": 1453, "zone": "Stormwind City", "subZone": "Trade District", "x": 0.5, "y": 0.6 },
+  "auras": [ { "spellId": 546, "name": "Water Walking", "duration": 600 } ],
+  "units": [ { "name": "Hogger", "level": 11, "reaction": "hostile", "distance": 12, "target": true } ],
+  "cvars": { "nameplateShowEnemies": "1" },
+  "bindings": { "SHIFT-1": "ACTIONBUTTON1" },
+  "savedVariables": { "MyAddonDB": { "logins": 41 } }
+}
+```
+
+`character` is `mock.setPlayer`'s data; `items` and `spells` are
+`defineItem` and `defineSpell` data (items cached unless `cached` is
+`false`); equipment slots are IDs or the client's slot names
+(`GetInventorySlotInfo`); a unit's `target`, `focus`, `group` (`"party"`,
+`"raid"`) and `nameplate` relate it to the player, its `auras` are
+applied; object keys that are whole numbers become number keys. Every part
+stays drivable during the test.
 
 **Raw events.** `mock.fireEvent(name, ...)` and `mock.fireUnitEvent(name,
 unit, ...)` fire any event the flavor documents, the payload checked against

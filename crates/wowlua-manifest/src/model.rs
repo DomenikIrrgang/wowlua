@@ -925,6 +925,10 @@ pub struct TestSettings {
     /// (spec emulator §17.7).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub blizzard_ui: bool,
+    /// The world profile (`tests/profiles/<name>.json`) of test files that
+    /// name none (decision T213).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

@@ -484,3 +484,81 @@ end
         assert!(out.contains(wanted), "missing {wanted:?} in:\n{out}");
     }
 }
+
+/// World profiles (decision T213): the character, gear, bags, money,
+/// place, the units around, CVars, bindings and saved variables, loaded
+/// before the addon; changes fire the client's events.
+#[test]
+fn world_profiles() {
+    let profile = r#"{
+  "character": { "name": "Thrall", "realm": "Realm", "class": "SHAMAN", "race": "Orc", "level": 60, "health": 3000, "maxHealth": 3000 },
+  "money": 123456,
+  "items": { "19019": { "name": "Thunderfury, Blessed Blade of the Windseeker", "quality": 5, "icon": 135349 }, "159": { "name": "Refreshing Spring Water", "quality": 1 } },
+  "equipment": { "MainHandSlot": 19019 },
+  "bags": { "0": { "slots": 16, "items": { "1": { "id": 159, "count": 5 } } } },
+  "position": { "mapID": 1453, "zone": "Stormwind City", "subZone": "Trade District", "x": 0.5, "y": 0.6 },
+  "units": [ { "name": "Hogger", "level": 11, "reaction": "hostile", "distance": 12, "target": true } ],
+  "cvars": { "nameplateShowEnemies": "1" },
+  "savedVariables": { "DemoDB": { "logins": 41 } }
+}"#;
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                r#"local f = CreateFrame("Frame")
+f:RegisterEvent("PLAYER_LOGIN")
+f:SetScript("OnEvent", function()
+    DemoDB.logins = DemoDB.logins + 1
+    print(UnitName("player"), GetMoney(), GetZoneText(), (UnitName("target")))
+end)
+"#,
+            ),
+            ("tests/profiles/stormwind.json", profile),
+            (
+                "tests/world.test.wowlua",
+                r#"import test, expect, config from "wowlua:test"
+import * as mock from "wowlua:mock"
+config({ profile = "stormwind" })
+
+@test("the profile is the world")
+local function world()
+    expect(DemoDB.logins).toBe(42)
+    expect(mock.printed()).toContain("Thrall 123456 Stormwind City Hogger")
+    expect(UnitClass("player")).toBe("Shaman")
+    expect(GetInventoryItemID("player", 16)).toBe(19019)
+    expect(GetInventoryItemLink("player", 16)).toContain("[Thunderfury, Blessed Blade of the Windseeker]")
+    expect(C_Container.GetContainerItemInfo(0, 1).stackCount).toBe(5)
+    expect(C_Container.GetContainerNumFreeSlots(0)).toBe(15)
+    expect(GetSubZoneText()).toBe("Trade District")
+    expect(C_Map.GetBestMapForUnit("player")).toBe(1453)
+    expect(CheckInteractDistance("target", 2)).toBe(false)
+    expect(CheckInteractDistance("target", 1)).toBe(true)
+    expect(C_CVar.GetCVar("nameplateShowEnemies")).toBe("1")
+end
+
+@test("changes fire events")
+local function changes()
+    local seen: string[] = {}
+    local f = CreateFrame("Frame")
+    for _, e in ipairs({ "PLAYER_MONEY", "PLAYER_EQUIPMENT_CHANGED", "BAG_UPDATE", "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA" }) do
+        f:RegisterEvent(e)
+    end
+    f:SetScript("OnEvent", function(_: Frame, e: string) seen[#seen + 1] = e end)
+    mock.player:setMoney(10)
+    mock.player:equip(16, nil)
+    mock.setBag(0, { slots = 16, items = {} })
+    mock.moveTo({ subZone = "Old Town" })
+    mock.moveTo({ zone = "Elwynn Forest", mapID = 1429 })
+    expect(seen).toEqual({ "PLAYER_MONEY", "PLAYER_EQUIPMENT_CHANGED", "BAG_UPDATE", "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA" })
+    expect(GetMoney()).toBe(10)
+    expect(GetInventoryItemID("player", 16)).toBeNil()
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+}

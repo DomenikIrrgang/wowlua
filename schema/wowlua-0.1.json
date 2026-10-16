@@ -1686,6 +1686,13 @@
         "blizzard-ui": {
           "description": "Load the flavor's Blizzard UI code as secure code before the addon\n(spec emulator §17.7).",
           "type": "boolean"
+        },
+        "profile": {
+          "description": "The world profile (`tests/profiles/<name>.json`) of test files that\nname none (decision T213).",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
