@@ -57,6 +57,9 @@ pub struct Api {
     /// The templates and intrinsic frame types Blizzard's UI code defines,
     /// lower-case.
     pub templates: HashSet<String>,
+    /// Classes the declarations describe: their base and method names
+    /// (for widget types the client's own list was not recorded for).
+    pub declared: HashMap<String, (Option<String>, Vec<String>)>,
 }
 
 /// Names live as long as the process: natives' names are `&'static str`.
@@ -76,6 +79,38 @@ pub fn api(flavor: &str) -> Option<&'static Api> {
     let mut parsed = parse(bytes);
     if let Some(files) = wowlua_api::declarations(flavor) {
         for file in files {
+            // Widget classes' declared methods (Ketho's annotations):
+            // `declare class X extends Y` … `function Name(…)` … `end`.
+            let mut class: Option<String> = None;
+            for line in file.text.lines() {
+                if let Some(rest) = line.strip_prefix("declare class ") {
+                    let mut words = rest.split_whitespace();
+                    let name = words.next().unwrap_or("").to_string();
+                    let base = match (words.next(), words.next()) {
+                        (Some("extends"), Some(b)) => Some(b.to_string()),
+                        _ => None,
+                    };
+                    let entry = parsed.declared.entry(name.clone()).or_default();
+                    if entry.0.is_none() {
+                        entry.0 = base;
+                    }
+                    class = Some(name);
+                    continue;
+                }
+                if line == "end" {
+                    class = None;
+                    continue;
+                }
+                if let Some(c) = &class
+                    && let Some(f) = line.trim().strip_prefix("function ")
+                    && let Some(name) = f.split('(').next()
+                {
+                    let entry = parsed.declared.entry(c.clone()).or_default();
+                    if !entry.1.iter().any(|m| m == name) {
+                        entry.1.push(name.to_string());
+                    }
+                }
+            }
             for line in file.text.lines() {
                 if let Some((name, ty)) = line
                     .strip_prefix("type ")
@@ -134,6 +169,7 @@ fn parse(gz: &[u8]) -> Api {
                     .collect()
             })
             .unwrap_or_default(),
+        declared: HashMap::new(),
     };
     let str_of = |v: &Json, k: &str| v.get(k).and_then(Json::as_str).map(str::to_string);
     let list = |v: &Json, k: &str| {

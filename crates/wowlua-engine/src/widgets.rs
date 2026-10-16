@@ -65,6 +65,8 @@ pub struct Widget {
     /// Made by Blizzard's secure code (`UseSecureEnvironment`): addon code
     /// may not use it (WoW Forever's `StoreFrame`).
     pub forbidden: bool,
+    /// Has an intrinsic type's handlers (`intrinsic_key`).
+    pub intrinsic_scripts: bool,
     pub points: Vec<Point>,
     pub width: f64,
     pub height: f64,
@@ -261,6 +263,32 @@ pub fn class_meta(vm: &mut Vm, name: &str) -> TableRef {
             vm.heap.table_mut(methods).set_str(key, native);
         }
     }
+    // What the declarations add (`ModelScene:SetAllowOverlappedModels`),
+    // the class's and its declared bases', as undocumented methods.
+    let mut declared = Vec::new();
+    let mut cur = Some(name.to_string());
+    let mut depth = 0;
+    while let Some(c) = cur.take() {
+        depth += 1;
+        if depth > 16 {
+            break;
+        }
+        if let Some((base, names)) = engine(vm).api.declared.get(&c) {
+            declared.extend(names.iter().cloned());
+            cur = base.clone();
+        }
+    }
+    for short in declared {
+        let key = vm.heap.intern(short.as_bytes());
+        if !vm.heap.table(methods).get_str(key).is_nil() {
+            continue;
+        }
+        let full = vm.str(&format!("{name}:{short}"));
+        let leaked: &'static str = Box::leak(short.into_boxed_str());
+        let native = vm.native_with(leaked, undocumented_method, vec![full]);
+        keep(vm, native);
+        vm.heap.table_mut(methods).set_str(key, native);
+    }
     let meta = vm.new_table();
     let index = vm.heap.intern(b"__index");
     vm.heap
@@ -316,6 +344,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         event_order: HashMap::new(),
         explicitly_protected: false,
         forbidden: false,
+        intrinsic_scripts: false,
         moving: false,
         sizing: false,
         enabled: true,
@@ -798,14 +827,17 @@ pub fn intrinsic_key(order: &str, script: &str) -> String {
 }
 
 pub fn run_script(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value]) {
-    let (table, scripts, hooks, props) = {
+    let (table, scripts, hooks, props, has_intrinsic) = {
         let w = &engine(vm).world.widgets[id.0];
-        (w.table, w.scripts, w.hooks, w.props)
+        (w.table, w.scripts, w.hooks, w.props, w.intrinsic_scripts)
     };
     let key = vm.heap.intern(script.as_bytes());
     let mut call = vec![Value::Table(table)];
     call.extend_from_slice(args);
     let intrinsic = |vm: &mut Vm, order: &str| {
+        if !has_intrinsic {
+            return Value::Nil;
+        }
         let k = vm.str(&intrinsic_key(order, script));
         vm.heap.table(props).get(k)
     };
@@ -1070,6 +1102,19 @@ pub fn fire_event(vm: &mut Vm, event: &str, args: &[Value]) {
 }
 
 // --------------------------------------------------------- visibility
+
+/// Whether the widget has a handler for `script` (its own, an intrinsic
+/// type's or a hook), without running it.
+pub fn has_handler(vm: &mut Vm, id: WidgetId, script: &str) -> bool {
+    let (scripts, hooks, intrinsic) = {
+        let w = &engine(vm).world.widgets[id.0];
+        (w.scripts, w.hooks, w.intrinsic_scripts)
+    };
+    let key = vm.heap.intern(script.as_bytes());
+    intrinsic
+        || !vm.heap.table(scripts).get_str(key).is_nil()
+        || !vm.heap.table(hooks).get_str(key).is_nil()
+}
 
 /// Whether a widget is visible: shown, and its parents too.
 pub fn visible(e: &Engine, id: WidgetId) -> bool {
@@ -1648,6 +1693,24 @@ fn button_font_to_text(vm: &mut Vm, id: WidgetId) {
     }
 }
 
+/// `SetParentKey(key)`: the widget becomes its parent's `key` (and
+/// `GetParentKey` says so).
+fn set_parent_key(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let key = c.arg(2);
+    store(vm, id, "ParentKey", &[key]);
+    let (table, parent) = {
+        let w = &engine(vm).world.widgets[id.0];
+        (w.table, w.parent)
+    };
+    if let Some(p) = parent
+        && !key.is_nil()
+    {
+        let pt = engine(vm).world.widgets[p.0].table;
+        let _ = vm.heap.table_mut(pt).set(key, Value::Table(table));
+    }
+    Ok(vec![])
+}
+
 fn set_normal_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
     store(vm, id, "NormalFontObject", &args);
@@ -1662,10 +1725,76 @@ fn set_font_string(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `GetTextScale()`: what `SetTextScale` stored, else 1.
+fn get_text_scale(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let props = engine(vm).world.widgets[id.0].props;
+    let scale = stored_args(vm, props, "TextScale").and_then(|v| v.first().copied());
+    Ok(vec![scale.unwrap_or(Value::Num(1.0))])
+}
+
+/// A status bar's bar texture: the one set, else its own (the client's
+/// is always there: Blizzard's unit frames desaturate it unasked).
+fn status_bar_texture(vm: &mut Vm, id: WidgetId) -> Value {
+    let props = engine(vm).world.widgets[id.0].props;
+    if let Some(t) =
+        stored_args(vm, props, "StatusBarTextureObject").and_then(|v| v.first().copied())
+    {
+        return t;
+    }
+    let t = create(vm, "Texture", None, Some(id));
+    if let Some(tid) = widget_of(vm, t) {
+        let layer = vm.str("ARTWORK");
+        store(vm, tid, "DrawLayer", &[layer, Value::Num(0.0)]);
+    }
+    store(vm, id, "StatusBarTextureObject", &[t]);
+    t
+}
+
+fn get_status_bar_texture(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![status_bar_texture(vm, id)])
+}
+
+/// `SetStatusBarTexture(asset)`: a texture widget becomes the bar's, a
+/// file or atlas its texture's.
+fn set_status_bar_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let asset = c.arg(2);
+    if widget_of(vm, asset).is_some() {
+        store(vm, id, "StatusBarTextureObject", &[asset]);
+    } else {
+        let t = status_bar_texture(vm, id);
+        if let Some(tid) = widget_of(vm, t) {
+            store(vm, tid, "Texture", &[asset]);
+        }
+    }
+    store(vm, id, "StatusBarTexture", &[asset]);
+    Ok(vec![Value::Bool(true)])
+}
+
 fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     // A font string needs a font first (`/stdtest engine`).
     if engine(vm).world.widgets[id.0].class == "FontString" && !has_font(vm, id) {
         return Err(c_error(vm, "FontString:SetText(): Font not set", true));
+    }
+    // A button's text goes to its font string, made if it has none
+    // (unverified: the client makes one so).
+    let class = engine(vm).world.widgets[id.0].class.clone();
+    if is_a(engine(vm), &class, "Button") {
+        let props = engine(vm).world.widgets[id.0].props;
+        let fs = match stored_args(vm, props, "FontString").and_then(|v| v.first().copied()) {
+            Some(fs) if widget_of(vm, fs).is_some() => fs,
+            _ => {
+                let fs = create(vm, "FontString", None, Some(id));
+                store(vm, id, "FontString", &[fs]);
+                button_font_to_text(vm, id);
+                fs
+            }
+        };
+        if let Some(fid) = widget_of(vm, fs) {
+            engine_mut(vm).world.widgets[fid.0].text = match c.arg(2) {
+                Value::Nil => None,
+                v => Some(v),
+            };
+        }
     }
     let t = match c.arg(2) {
         Value::Nil => None,
@@ -2270,6 +2399,10 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("GetRect", get_rect),
         ("SetText", set_text),
         ("SetNormalFontObject", set_normal_font_object),
+        ("SetParentKey", set_parent_key),
+        ("GetTextScale", get_text_scale),
+        ("GetStatusBarTexture", get_status_bar_texture),
+        ("SetStatusBarTexture", set_status_bar_texture),
         ("SetFontString", set_font_string),
         ("GetText", get_text),
         ("SetFormattedText", set_formatted_text),

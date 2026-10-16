@@ -242,6 +242,11 @@ pub fn build(
 /// Applies a template by name to a widget (`CreateFrame`'s template, or
 /// `inherits`); false if there is no such template.
 pub fn apply_template(vm: &mut Vm, frame: Value, name: &str) -> bool {
+    apply_template_in(vm, frame, name, Phase::Own)
+        && apply_template_in(vm, frame, name, Phase::Children)
+}
+
+fn apply_template_in(vm: &mut Vm, frame: Value, name: &str, phase: Phase) -> bool {
     let Some(t) = engine(vm)
         .world
         .ui
@@ -273,7 +278,7 @@ pub fn apply_template(vm: &mut Vm, frame: Value, name: &str) -> bool {
     if let Some(env) = env {
         vm.globals = env;
     }
-    apply(vm, &cx, frame, id, &t);
+    apply_in(vm, &cx, frame, id, &t, phase);
     vm.globals = globals;
     true
 }
@@ -317,9 +322,24 @@ fn table_of(v: Value) -> Option<TableRef> {
     }
 }
 
+/// Which part of an element `apply_in` applies: its attributes, mixins and
+/// key values (the whole template chain's, first), or its children and
+/// scripts (a child's `OnLoad` sees the parent's key values: Blizzard's
+/// `ButtonControllerMixin` reads `atlasName` of a derived template).
+#[derive(Clone, Copy, PartialEq)]
+enum Phase {
+    Own,
+    Children,
+}
+
 /// An element's attributes, mixins, children and scripts onto a widget,
 /// after the templates it inherits.
 fn apply(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Element>) {
+    apply_in(vm, cx, frame, id, el, Phase::Own);
+    apply_in(vm, cx, frame, id, el, Phase::Children);
+}
+
+fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Element>, phase: Phase) {
     let is_font_string = engine(vm).world.widgets[id.0].class == "FontString";
     for t in el.attr("inherits").unwrap_or("").split(',') {
         let t = t.trim();
@@ -331,15 +351,39 @@ fn apply(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Element>
         let is_font = widgets::widget_of(vm, g)
             .is_some_and(|w| engine(vm).world.widgets[w.0].class == "Font");
         if is_font && (is_font_string || el.tag.eq_ignore_ascii_case("EditBox")) {
-            call_method(vm, cx, el.line, frame, "SetFontObject", &[g]);
+            if phase == Phase::Own {
+                call_method(vm, cx, el.line, frame, "SetFontObject", &[g]);
+            }
             continue;
         }
-        if !apply_template(vm, frame, t) {
+        if !apply_template_in(vm, frame, t, phase) && phase == Phase::Own {
             engine_mut(vm)
                 .world
                 .warnings
                 .push(format!("{}:{}: no template \"{t}\"", cx.file, el.line));
         }
+    }
+    if phase == Phase::Children {
+        for child in el
+            .children
+            .iter()
+            .filter(|c| !c.tag.eq_ignore_ascii_case("KeyValues"))
+        {
+            apply_child(vm, cx, frame, id, child);
+        }
+        // A button's text, once its font string is there.
+        if let Some(text) = el.attr("text")
+            && engine(vm).world.widgets[id.0].class != "FontString"
+        {
+            let g = vm.get_global(text);
+            let v = if matches!(g, Value::Str(_)) {
+                g
+            } else {
+                vm.str(text)
+            };
+            call_method(vm, cx, el.line, frame, "SetText", &[v]);
+        }
+        return;
     }
     let table = table_of(frame).expect("a widget is a table");
     for attr in ["mixin", "secureMixin"] {
@@ -419,7 +463,41 @@ fn apply(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Element>
             call_method(vm, cx, el.line, frame, method, &[v]);
         }
     }
-    if let Some(text) = el.attr("text") {
+    // `font`: a font object's name (`GameFontHighlightRight`), else a file.
+    if let Some(font) = el.attr("font")
+        && !el.tag.eq_ignore_ascii_case("Font")
+    {
+        let g = vm.get_global(font);
+        if widgets::widget_of(vm, g).is_some_and(|w| engine(vm).world.widgets[w.0].class == "Font")
+        {
+            call_method(vm, cx, el.line, frame, "SetFontObject", &[g]);
+        } else {
+            let height = el
+                .child("FontHeight")
+                .and_then(|h| h.child("AbsValue"))
+                .and_then(|v| v.number("val"))
+                .unwrap_or(12.0);
+            let (file, flags) = (
+                vm.str(font),
+                vm.str(el.attr("outline").map_or("", |o| match o {
+                    "THICK" => "THICKOUTLINE",
+                    "NORMAL" => "OUTLINE",
+                    _ => "",
+                })),
+            );
+            call_method(
+                vm,
+                cx,
+                el.line,
+                frame,
+                "SetFont",
+                &[file, Value::Num(height), flags],
+            );
+        }
+    }
+    if let Some(text) = el.attr("text")
+        && engine(vm).world.widgets[id.0].class == "FontString"
+    {
         // A global string's name or the text itself. A font string's is
         // set as XML sets it, before its font may come (a button's
         // `NormalFont` follows its `ButtonText`).
@@ -429,13 +507,13 @@ fn apply(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Element>
         } else {
             vm.str(text)
         };
-        if engine(vm).world.widgets[id.0].class == "FontString" {
-            engine_mut(vm).world.widgets[id.0].text = Some(v);
-        } else {
-            call_method(vm, cx, el.line, frame, "SetText", &[v]);
-        }
+        engine_mut(vm).world.widgets[id.0].text = Some(v);
     }
-    for child in &el.children {
+    for child in el
+        .children
+        .iter()
+        .filter(|c| c.tag.eq_ignore_ascii_case("KeyValues"))
+    {
         apply_child(vm, cx, frame, id, child);
     }
 }
@@ -566,7 +644,7 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
                 let v = match kv.attr("type").map(str::to_ascii_lowercase).as_deref() {
                     Some("number") => raw.trim().parse().map(Value::Num).unwrap_or(Value::Nil),
                     Some("boolean") => Value::Bool(raw.eq_ignore_ascii_case("true")),
-                    Some("global") => vm.get_global(raw),
+                    Some("global") => global_path(vm, raw.trim()),
                     Some("nil") => Value::Nil,
                     _ => vm.str(raw),
                 };
@@ -668,8 +746,8 @@ fn compile(vm: &mut Vm, cx: &Context, line: usize, src: &str) -> Option<Value> {
 }
 
 /// One `<Scripts>` child: a handler from `function`, `method` or the body,
-/// replacing the script or, with `inherit` (or an intrinsic's
-/// `intrinsicOrder`), running before or after it.
+/// replacing the script or, with `inherit`, running with it (an
+/// intrinsic's `intrinsicOrder` handlers are kept apart).
 fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
     let name = s.tag.as_str();
     let handler = if let Some(f) = s.attr("function") {
@@ -711,15 +789,19 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
         let props = engine(vm).world.widgets[id.0].props;
         let key = vm.str(&widgets::intrinsic_key(&order.to_ascii_lowercase(), name));
         let _ = vm.heap.table_mut(props).set(key, handler);
+        engine_mut(vm).world.widgets[id.0].intrinsic_scripts = true;
         return;
     }
     let order = s.attr("inherit").map(str::to_ascii_lowercase);
     let scripts = engine(vm).world.widgets[id.0].scripts;
     let key = vm.heap.intern(name.as_bytes());
     let existing = vm.heap.table(scripts).get_str(key);
+    // `inherit="prepend"`: the inherited handler first, then this one;
+    // `"append"`: this one, then the inherited (Blizzard's chat edit box
+    // sets `chatFrame` in an appended OnLoad its inherited OnLoad reads).
     let f = match (order.as_deref(), existing) {
-        (Some("prepend" | "precall"), Value::Func(_)) => chain(vm, handler, existing),
-        (Some("append" | "postcall"), Value::Func(_)) => chain(vm, existing, handler),
+        (Some("prepend"), Value::Func(_)) => chain(vm, existing, handler),
+        (Some("append"), Value::Func(_)) => chain(vm, handler, existing),
         _ => handler,
     };
     vm.heap.table_mut(scripts).set_str(key, f);
@@ -765,8 +847,139 @@ pub fn run_lua(vm: &mut Vm, path: &Path, chunk: &str, addon: &str, addon_table: 
         }
     };
     let name = vm.str(addon);
-    if let Err(e) = vm.call(f, &[name, addon_table]) {
-        let msg = message(vm, e.value);
-        engine_mut(vm).world.ui.errors.push(msg);
+    match vm.call(f, &[name, addon_table]) {
+        // A file's result is its module (`import(".Name")`).
+        Ok(results) => {
+            if let Some(&v) = results.first()
+                && !v.is_nil()
+            {
+                crate::widgets::keep(vm, v);
+                let key = module_key(chunk.strip_suffix(".lua").unwrap_or(chunk));
+                engine_mut(vm).world.ui.modules.insert(key, v);
+            }
+        }
+        Err(e) => {
+            let msg = message(vm, e.value);
+            engine_mut(vm).world.ui.errors.push(msg);
+        }
     }
+}
+
+/// A module's key: its path without the extension, `/`-separated,
+/// lower-case.
+pub fn module_key(path: &str) -> String {
+    path.replace('\\', "/").to_ascii_lowercase()
+}
+
+/// `import(".Name")`, `import(".Dir.Name")`: the result of the file
+/// `Name.lua` (in `Dir`) next to the calling file, which loaded before.
+/// Unverified: absolute names, and the error for a module not there.
+pub fn import(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    let name = vm.check_str(&c, 1)?;
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    let source = vm
+        .caller_source(1)
+        .map(|s| String::from_utf8_lossy(&s).into_owned())
+        .unwrap_or_default();
+    let file = source
+        .strip_prefix('@')
+        .unwrap_or(&source)
+        .replace('\\', "/");
+    let dir = file.rsplit_once('/').map_or("", |(d, _)| d);
+    let rel = name.strip_prefix('.').unwrap_or(&name).replace('.', "/");
+    let key = module_key(&format!("{dir}/{rel}"));
+    match engine(vm).world.ui.modules.get(&key).copied() {
+        Some(v) => Ok(vec![v]),
+        None => Err(vm.error(&format!("import: no module '{name}'"))),
+    }
+}
+
+/// `C_XMLUtil.GetTemplateInfo(name)`: a template's widget type, size (its
+/// own or inherited `<Size>`), key values, what it inherits and where it is
+/// defined; nothing for a name that is no template.
+pub fn template_info(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    let name = vm.check_str(&c, 1)?;
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).to_ascii_lowercase();
+    let Some(el) = engine(vm).world.ui.templates.get(&name).cloned() else {
+        return Ok(vec![Value::Nil]);
+    };
+    // The size: this template's, else the first inherited one's.
+    fn size_of(vm: &Vm, el: &Element, depth: usize) -> Option<(f64, f64)> {
+        if let Some(s) = el.child("Size") {
+            let (x, y) = dims(s);
+            return Some((x.unwrap_or(0.0), y.unwrap_or(0.0)));
+        }
+        if depth > 16 {
+            return None;
+        }
+        el.attr("inherits")?.split(',').find_map(|t| {
+            let t = engine(vm)
+                .world
+                .ui
+                .templates
+                .get(&t.trim().to_ascii_lowercase())?;
+            size_of(vm, t, depth + 1)
+        })
+    }
+    let (w, h) = size_of(vm, &el, 0).unwrap_or((0.0, 0.0));
+    let class = class_of(vm, &el.tag).unwrap_or_else(|| el.tag.clone());
+    let file = engine(vm)
+        .world
+        .ui
+        .template_files
+        .get(&name)
+        .cloned()
+        .unwrap_or_default();
+    let t = vm.new_table();
+    let kvs = vm.new_table();
+    if let Some(list) = el.child("KeyValues") {
+        for (i, kv) in list.children.iter().enumerate() {
+            let entry = vm.new_table();
+            for (field, v) in [
+                ("key", kv.attr("key").unwrap_or("")),
+                ("keyType", kv.attr("keyType").unwrap_or("string")),
+                ("type", kv.attr("type").unwrap_or("string")),
+                ("value", kv.attr("value").unwrap_or("")),
+            ] {
+                let k = vm.str(field);
+                let v = vm.str(v);
+                let _ = vm.heap.table_mut(entry).set(k, v);
+            }
+            let _ = vm
+                .heap
+                .table_mut(kvs)
+                .set(Value::Num((i + 1) as f64), Value::Table(entry));
+        }
+    }
+    let fields = [
+        ("type", vm.str(&class)),
+        ("width", Value::Num(w)),
+        ("height", Value::Num(h)),
+        ("keyValues", Value::Table(kvs)),
+        ("sourceLocation", vm.str(&file)),
+    ];
+    for (k, v) in fields {
+        let k = vm.str(k);
+        let _ = vm.heap.table_mut(t).set(k, v);
+    }
+    if let Some(inherits) = el.attr("inherits") {
+        let k = vm.str("inherits");
+        let v = vm.str(inherits);
+        let _ = vm.heap.table_mut(t).set(k, v);
+    }
+    Ok(vec![Value::Table(t)])
+}
+
+/// A global by its dotted path (`MoneyDenominationDisplayType.Copper`).
+fn global_path(vm: &mut Vm, path: &str) -> Value {
+    let mut parts = path.split('.');
+    let mut v = vm.get_global(parts.next().unwrap_or(""));
+    for part in parts {
+        let Value::Table(t) = v else {
+            return Value::Nil;
+        };
+        let k = vm.str(part);
+        v = vm.heap.table(t).get(k);
+    }
+    v
 }

@@ -207,6 +207,52 @@ fn empty_list(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(vm.new_table())])
 }
 
+fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0)])
+}
+
+/// No role chosen for the group finder.
+fn saved_roles(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let t = vm.new_table();
+    for role in ["tank", "healer", "dps"] {
+        let k = vm.str(role);
+        let _ = vm.heap.table_mut(t).set(k, Value::Bool(false));
+    }
+    Ok(vec![Value::Table(t)])
+}
+
+fn four_zeros(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0); 4])
+}
+
+/// No traffic, no latency.
+fn net_stats(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0); 4])
+}
+
+/// `GetMirrorTimerInfo(index)`: no timer runs (`"UNKNOWN"`, which
+/// Blizzard's MirrorTimer.lua skips; the other values unverified).
+fn mirror_timer_info(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let unknown = vm.str("UNKNOWN");
+    let empty = vm.str("");
+    Ok(vec![
+        unknown,
+        Value::Num(0.0),
+        Value::Num(0.0),
+        Value::Num(0.0),
+        Value::Bool(false),
+        empty,
+    ])
+}
+
+fn multi_cast_bar_index(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(12.0)])
+}
+
+fn no_role(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![vm.str("NONE")])
+}
+
 fn zeros(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0), Value::Num(0.0)])
 }
@@ -353,6 +399,11 @@ const INVENTORY_SLOTS: &[(&str, f64)] = &[
     ("SECONDARYHANDSLOT", 17.0),
     ("RANGEDSLOT", 18.0),
     ("TABARDSLOT", 19.0),
+    // The bag slots (20-23 in the classic clients; pending `slotInfo`).
+    ("BAG0SLOT", 20.0),
+    ("BAG1SLOT", 21.0),
+    ("BAG2SLOT", 22.0),
+    ("BAG3SLOT", 23.0),
 ];
 
 /// `GetInventorySlotInfo(slotName)`: the slot's ID, its empty texture
@@ -444,9 +495,28 @@ fn linked_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![build(vm, &info)])
 }
 
+/// `C_Log.LogErrorMessage(message)`: the client's log of Lua errors
+/// (Blizzard's error handler writes every error there): the engine's list
+/// of Blizzard's errors, first line.
+fn log_error_message(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Value::Str(s) = vm.hidden(c.arg(1)) {
+        let text = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+        let first = text
+            .lines()
+            .next()
+            .unwrap_or("")
+            .trim_start_matches("Lua Error: ");
+        let ui = &mut crate::engine_mut(vm).world.ui;
+        ui.errors.push(first.to_string());
+        ui.error_stacks.push(text);
+    }
+    Ok(vec![])
+}
+
 /// The functions with behaviour here.
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
+        ("C_Log.LogErrorMessage", log_error_message),
         (
             "C_TransmogOutfitInfo.GetTransmogOutfitSlotFromInventorySlot",
             outfit_slot_from_inventory_slot,
@@ -475,6 +545,25 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetRestState", rest_state),
         ("GetScreenHeight", screen_height),
         ("GetActiveLootRollIDs", empty_list),
+        ("C_LFGList.GetApplications", empty_list),
+        ("C_LFGListRoles.GetSavedRoles", saved_roles),
+        ("GetNetStats", net_stats),
+        ("GetMirrorTimerInfo", mirror_timer_info),
+        // No group, no role.
+        ("UnitGroupRolesAssigned", no_role),
+        // Pending the next `/stdtest engine` (`loadCalls`): 0 until then.
+        ("GetMaxBattlefieldID", zero),
+        // The totem bar's page (its actions 133-144 in the classic clients).
+        ("C_ActionBar.GetMultiCastBarIndex", multi_cast_bar_index),
+        ("GetNumLanguages", zero),
+        // No forms (a warrior's stances aside: unverified).
+        ("GetNumShapeshiftForms", zero),
+        ("GetNumSpecializations", zero),
+        ("GuildControlGetNumRanks", zero),
+        ("BNGetNumFriends", four_zeros),
+        ("C_LFGList.GetAvailableCategories", empty_list),
+        ("C_MountJournal.GetNumMountsNeedingFanfare", zero),
+        ("C_PetJournal.GetNumPetsNeedingFanfare", zero),
         ("GetSpellConfirmationPromptsInfo", empty_list),
         ("GetXPExhaustion", nothing),
         ("IsGuildLeader", no),

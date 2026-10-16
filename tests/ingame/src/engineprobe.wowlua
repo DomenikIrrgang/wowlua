@@ -52,6 +52,10 @@ end
 const TYPES = {
     "Frame", "Button", "CheckButton", "EditBox", "Slider", "StatusBar", "ScrollFrame",
     "Cooldown", "GameTooltip", "MessageFrame", "SimpleHTML", "ColorSelect",
+    "ModelScene", "PlayerModel", "DressUpModel", "CinematicModel", "TabardModel", "Model",
+    "Browser", "MovieFrame", "OffScreenFrame", "Checkout", "FogOfWarFrame", "UnitPositionFrame",
+    "QuestPOIFrame", "ScenarioPOIFrame", "ArchaeologyDigSiteFrame", "EventFrame",
+    "ScrollingMessageFrame", "DropdownButton", "ContainedAlertFrame",
 }
 
 const CLASSES = {
@@ -492,6 +496,10 @@ const LOADED_AT_START = blizzardLoaded()
 --- engine had no behaviour for them; read-only ones: the client calls them at
 --- every login, so calling them again is no riskier).
 const LOAD_CALLS = {
+    "C_ActionBar.GetMultiCastBarIndex", "C_ActionBar.GetBonusBarOffset", "GetNumShapeshiftForms",
+    "C_LFGList.GetApplications", "C_LFGListRoles.GetSavedRoles", "GetNetStats", "GetNumSubgroupMembers",
+    "GetMaxBattlefieldID", "GetNumLanguages", "C_MountJournal.GetNumMountsNeedingFanfare",
+    "C_PetJournal.GetNumPetsNeedingFanfare",
     "C_ActionBar.GetActionBarPage", "C_ActionBar.GetExtraBarIndex",
     "C_ActionBar.IsPossessBarVisible", "C_ActionBar.ShouldShowKeyring", "C_AddOns.GetNumAddOns",
     "C_AddOns.IsAddonVersionCheckEnabled", "C_ArtifactUI.GetEquippedArtifactInfo",

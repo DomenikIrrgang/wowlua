@@ -94,7 +94,9 @@ pub fn tainted(vm: &Vm) -> bool {
 /// Whether the function calling the engine is Blizzard's (secure) code,
 /// tainted execution or not: its gaps get empty values, not errors.
 pub fn blizzard_caller(vm: &Vm) -> bool {
-    vm.caller_is_secure(1)
+    // Called by a C function (`securecallfunction(DropCursorMoney)`): by
+    // whoever runs, untainted execution being Blizzard's.
+    vm.caller_is_secure(1) || (vm.caller_source(1).is_none() && !tainted(vm))
 }
 
 /// Whether a global function is protected.

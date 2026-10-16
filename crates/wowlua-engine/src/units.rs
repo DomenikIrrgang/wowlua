@@ -116,6 +116,37 @@ fn class_id(class: &str) -> f64 {
         .map_or(0.0, |i| i as f64 + 1.0)
 }
 
+/// Each class's ID, file and name (enUS; the client's for Paladin,
+/// `UnitClass`; the others unverified).
+const CLASS_INFO: &[(f64, &str, &str)] = &[
+    (1.0, "WARRIOR", "Warrior"),
+    (2.0, "PALADIN", "Paladin"),
+    (3.0, "HUNTER", "Hunter"),
+    (4.0, "ROGUE", "Rogue"),
+    (5.0, "PRIEST", "Priest"),
+    (6.0, "DEATHKNIGHT", "Death Knight"),
+    (7.0, "SHAMAN", "Shaman"),
+    (8.0, "MAGE", "Mage"),
+    (9.0, "WARLOCK", "Warlock"),
+    (10.0, "MONK", "Monk"),
+    (11.0, "DRUID", "Druid"),
+    (12.0, "DEMONHUNTER", "Demon Hunter"),
+    (13.0, "EVOKER", "Evoker"),
+];
+
+/// `GetClassInfo(classID)`: the class's name, file and ID.
+fn get_class_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => n,
+        _ => return Ok(vec![]),
+    };
+    Ok(CLASS_INFO
+        .iter()
+        .find(|(i, _, _)| *i == id)
+        .map(|(i, file, name)| vec![vm.str(name), vm.str(file), Value::Num(*i)])
+        .unwrap_or_default())
+}
+
 /// The player the world starts with.
 pub fn install(vm: &mut Vm) {
     let player = Unit {
@@ -450,8 +481,39 @@ fn unit_power_max(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// A power type's token (`UnitPowerType`'s second result: `/stdtest
+/// engine` recorded `0, "MANA"`; the others by `Enum.PowerType`).
+fn power_token(power_type: f64) -> Option<&'static str> {
+    const TOKENS: &[&str] = &[
+        "MANA",
+        "RAGE",
+        "FOCUS",
+        "ENERGY",
+        "COMBO_POINTS",
+        "RUNES",
+        "RUNIC_POWER",
+        "SOUL_SHARDS",
+        "LUNAR_POWER",
+        "HOLY_POWER",
+        "ALTERNATE",
+        "MAELSTROM",
+        "CHI",
+        "INSANITY",
+    ];
+    usize::try_from(power_type as i64)
+        .ok()
+        .and_then(|i| TOKENS.get(i).copied())
+}
+
 fn unit_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, u| vec![Value::Num(u.power_type)])
+    let t = with_unit(vm, &c, |_, u| vec![Value::Num(u.power_type)])?;
+    let Some(Value::Num(n)) = t.first().copied() else {
+        return Ok(t);
+    };
+    Ok(match power_token(n) {
+        Some(token) => vec![Value::Num(n), vm.str(token)],
+        None => t,
+    })
 }
 
 fn unit_is_dead(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -559,6 +621,12 @@ fn is_in_raid(vm: &mut Vm, _c: NativeCall) -> Ret {
 fn get_num_group_members(vm: &mut Vm, _c: NativeCall) -> Ret {
     let n = engine(vm).units.group.len();
     Ok(vec![Value::Num(if n == 0 { 0.0 } else { n as f64 + 1.0 })])
+}
+
+/// `GetNumSubgroupMembers()`: the others in the player's party (raid
+/// subgroups unverified).
+fn get_num_subgroup_members(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(engine(vm).units.group.len() as f64)])
 }
 
 fn in_combat_lockdown(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -670,6 +738,7 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("IsInGroup", is_in_group),
         ("IsInRaid", is_in_raid),
         ("GetNumGroupMembers", get_num_group_members),
+        ("GetNumSubgroupMembers", get_num_subgroup_members),
         ("InCombatLockdown", in_combat_lockdown),
         (
             "C_RestrictedActions.GetAddOnRestrictionState",
@@ -1231,6 +1300,7 @@ fn unit_full_name(vm: &mut Vm, c: NativeCall) -> Ret {
 
 pub fn more_behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
+        ("GetClassInfo", get_class_info),
         ("UnitFullName", unit_full_name),
         ("ClearFocus", clear_focus),
         ("TargetLastTarget", nothing),

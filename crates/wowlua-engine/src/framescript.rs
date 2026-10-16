@@ -79,12 +79,6 @@ metatable_fns!(
     edit_box_metatable => "EditBox"
 );
 
-/// `import(path)`: Blizzard's module loader; a stand-in giving an empty
-/// module (its semantics are not known).
-fn import(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Table(vm.new_table())])
-}
-
 /// Returns its first argument (a stand-in that keeps the function).
 fn same(_vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![c.arg(1)])
@@ -432,11 +426,9 @@ pub fn functions() -> Vec<(&'static str, NativeFn)> {
         ("IsGMClient", falsy),
         // No modifier is held (the test controls none yet).
         ("IsModifiedClick", falsy),
-        ("import", import),
         ("addframetext", nothing),
         ("Mixin", mixin),
         ("CreateFromMixins", create_from_mixins),
-        ("CreateSecureDelegate", same),
         ("C_FunctionContainers.CreateCallback", same),
         ("AddSourceLocationExclude", nothing),
         ("GetCallstackHeight", callstack_height),

@@ -127,7 +127,7 @@ return table.concat(LoadLog, ','), tostring(FamilyLoaded), tostring(LazyLoaded),
     assert_eq!(
         r,
         [
-            "Blizzard_Base,later,button MyFrameButton,mixin MyFrame,own,mixin Made,intrinsic",
+            "Blizzard_Base,later,button MyFrameButton,own,mixin MyFrame,mixin Made,intrinsic",
             "true",
             "nil",
             "nil",

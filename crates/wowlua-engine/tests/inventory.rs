@@ -89,9 +89,9 @@ fn shown(vm: &mut Vm, name: &str) -> String {
 /// down.
 const MAX_SCALARS_DIFFERENT: usize = 1;
 
-/// How many distinct errors Blizzard's code raises once logged in (the
-/// client: none known). It may only go down.
-const MAX_RUNTIME_ERRORS: usize = 23;
+/// How many distinct errors Blizzard's code raises, loading and once
+/// logged in (the client: none). It may only go down, to 0.
+const MAX_RUNTIME_ERRORS: usize = 19;
 
 #[test]
 fn every_function_of_the_client_exists_with_its_kind() {
@@ -143,21 +143,34 @@ fn every_function_of_the_client_exists_with_its_kind() {
         )
         .expect("writes");
     }
-    // Blizzard's errors once logged in, distinct.
+    // Blizzard's errors, distinct: while loading (its handler logs them,
+    // `C_Log.LogErrorMessage`) and once logged in.
     let f = vm
-        .load(
-            b"local seen, n = {}, 0 for _, e in ipairs(InventoryErrors) do if not seen[e] then seen[e] = true n = n + 1 end end return n",
-            "=distinct",
-        )
+        .load(b"return table.concat(InventoryErrors, '\\0')", "=errors")
         .expect("compiles");
-    let runtime = match vm.call(f, &[]).ok().and_then(|r| r.first().copied()) {
-        Some(Value::Num(n)) => n as usize,
-        _ => 0,
+    let after = match vm.call(f, &[]).ok().and_then(|r| r.first().copied()) {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => String::new(),
     };
-    eprintln!("{runtime} distinct errors after loading");
+    let distinct: std::collections::BTreeSet<String> = wowlua_engine::engine(&vm)
+        .world
+        .ui
+        .errors
+        .iter()
+        .cloned()
+        .chain(
+            after
+                .split('\0')
+                .filter(|e| !e.is_empty())
+                .map(str::to_string),
+        )
+        .collect();
+    eprintln!("{} distinct errors", distinct.len());
     assert!(
-        runtime <= MAX_RUNTIME_ERRORS,
-        "{runtime} distinct errors after loading (at most {MAX_RUNTIME_ERRORS})"
+        distinct.len() <= MAX_RUNTIME_ERRORS,
+        "{} distinct errors (at most {MAX_RUNTIME_ERRORS}):\n{}",
+        distinct.len(),
+        distinct.iter().cloned().collect::<Vec<_>>().join("\n")
     );
     // The number and boolean globals.
     let engine_fixture = std::fs::read_to_string(

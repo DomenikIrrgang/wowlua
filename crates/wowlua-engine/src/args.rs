@@ -115,6 +115,40 @@ fn overridden_arguments(name: &str) -> Option<Json> {
     }
 }
 
+/// Arguments the client takes more loosely than its documentation says,
+/// as Blizzard's code passes them at every login without an error:
+/// `UnitGUID(nil)` (arena pet frames), `SetAtlas(nil)` (the minimap
+/// outside a house), `SetTexture(file, true, true)` (backdrops), and
+/// below (unverified beyond Blizzard's code needing it).
+fn relax(f: &Function, args: &mut [Json]) {
+    let short = f.name.rsplit(':').next().unwrap_or(f.name);
+    let method = f.name.contains(':');
+    let mut set = |i: usize, key: &str, value: Json| {
+        if let Some(Json::Object(a)) = args.get_mut(i) {
+            a.insert(key.to_string(), value);
+        }
+    };
+    match (method, short) {
+        (false, "UnitGUID") => set(0, "Nilable", Json::Bool(true)),
+        (true, "SetAtlas") => set(0, "Nilable", Json::Bool(true)),
+        (true, "SetTexture") => {
+            set(1, "Type", Json::from("LuaValueVariant"));
+            set(2, "Type", Json::from("LuaValueVariant"));
+        }
+        // `SetFont(GetFont())` with no font yet (the developer console).
+        (true, "SetFont") => set(0, "Nilable", Json::Bool(true)),
+        // A texture alone (gamepad action bars).
+        (true, "SetSwipeTexture") => {
+            for i in 1..5 {
+                set(i, "Nilable", Json::Bool(true));
+            }
+        }
+        // Clearing an attribute (UIParentPanelManager).
+        (true, "SetAttributeNoHandler") => set(1, "Nilable", Json::Bool(true)),
+        _ => {}
+    }
+}
+
 /// Integer arguments whose C type the documentation does not tell (both are
 /// `number`): unsigned where the probe found them so.
 const UNSIGNED: &[(&str, usize)] = &[("C_ChatInfo.IsValidChatLine", 1)];
@@ -217,7 +251,7 @@ pub fn check_from(
     c: &NativeCall,
     first: usize,
 ) -> Result<(), LuaError> {
-    let args = match overridden_arguments(f.name) {
+    let mut args = match overridden_arguments(f.name) {
         Some(Json::Array(a)) => a,
         _ => f
             .doc
@@ -226,6 +260,7 @@ pub fn check_from(
             .cloned()
             .unwrap_or_default(),
     };
+    relax(f, &mut args);
     // A method's arguments count `self` as the first (`/stdtest engine`).
     let method = first == 2;
     for (i, arg) in args.iter().enumerate() {

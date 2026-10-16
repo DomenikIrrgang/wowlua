@@ -50,6 +50,9 @@ pub struct Engine {
     /// The addons' globals (`GetGlobalEnvironment`), whatever environment
     /// Blizzard's secure code runs in.
     pub main_globals: wowlua_vm::TableRef,
+    /// Documented namespaces only Blizzard's secure code has (none of their
+    /// functions in the client's addon environment: `C_PingSecure`).
+    pub secure_namespaces: Vec<(wowlua_vm::StrRef, Value)>,
 }
 
 impl Engine {
@@ -173,6 +176,13 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(chat::behaviours())
             .chain(bindings::behaviours())
             .chain(facts::behaviours())
+            .chain([
+                ("import", ui::build::import as NativeFn),
+                (
+                    "C_XMLUtil.GetTemplateInfo",
+                    ui::build::template_info as NativeFn,
+                ),
+            ])
             .chain(framescript::functions())
             .collect(),
         methods: widgets::behaviours()
@@ -189,6 +199,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         defaulted: Default::default(),
         secure_tables,
         main_globals: vm.globals,
+        secure_namespaces: Vec::new(),
     }));
     // Protected functions the documentation lacks.
     for &name in protection::PROTECTED {
@@ -267,6 +278,30 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         let upval = vm.str(name);
         let native = vm.native_with(short, facts::recorded_call, vec![upval]);
         vm.heap.table_mut(table).set_str(key, native);
+    }
+    // Documented namespaces none of whose functions the client's addons
+    // have: Blizzard's secure code's alone.
+    if flavor == "camelot" {
+        let client: std::collections::HashSet<&str> = include_str!("../data/camelot-functions.txt")
+            .lines()
+            .filter_map(|l| l.split_once('.').map(|(ns, _)| ns))
+            .collect();
+        let documented: std::collections::BTreeSet<&str> =
+            api.functions.iter().filter_map(|f| f.namespace).collect();
+        for ns in documented {
+            if client.contains(ns) || !ns.starts_with("C_") {
+                continue;
+            }
+            let k = vm.heap.intern(ns.as_bytes());
+            let v = vm.heap.table(vm.globals).get_str(k);
+            if v.is_nil() {
+                continue;
+            }
+            widgets::keep(vm, v);
+            widgets::keep(vm, Value::Str(k));
+            engine_mut(vm).secure_namespaces.push((k, v));
+            vm.heap.table_mut(vm.globals).set_str(k, Value::Nil);
+        }
     }
     // The client's undocumented C functions (camelot's inventory): they
     // exist, without behaviour.

@@ -537,6 +537,18 @@ impl Vm {
         }
     }
 
+    /// The chunk name (`@Interface/AddOns/…/file.lua`) of the Lua function
+    /// `level` calls up from a native (1: the native's caller).
+    pub fn caller_source(&self, level: usize) -> Option<Vec<u8>> {
+        match self.stack_entries().get(level) {
+            Some(StackEntry::Lua(fi)) => match self.heap.func(self.cur.frames[*fi].closure) {
+                Function::Lua(f) => Some(f.proto.source.to_vec()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// Sets the environment of the Lua function `level` calls up from a
     /// native (1: the native's caller); false if that is no Lua function.
     pub fn set_caller_env(&mut self, level: usize, env: TableRef) -> bool {

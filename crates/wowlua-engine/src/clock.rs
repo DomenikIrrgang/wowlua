@@ -31,6 +31,9 @@ pub struct Timer {
 #[derive(Default)]
 pub struct Timers {
     pub list: Vec<Timer>,
+    /// The timers still to fire, by index (finished ones leave it: the
+    /// list keeps every timer for its handle).
+    pub active: Vec<usize>,
     handle_meta: Option<TableRef>,
 }
 
@@ -125,6 +128,8 @@ fn schedule(vm: &mut Vm, seconds: f64, callback: Value, runs: f64, handle: bool)
         out = Value::Userdata(ud);
     }
     let due = now(vm) + seconds.max(0.0);
+    let index = engine(vm).timers.list.len();
+    engine_mut(vm).timers.active.push(index);
     engine_mut(vm).timers.list.push(Timer {
         due,
         every: seconds.max(0.0),
@@ -179,22 +184,32 @@ fn tick(vm: &mut Vm, ms: f64) {
 pub fn advance(vm: &mut Vm, seconds: f64) {
     let target = now(vm) + seconds.max(0.0);
     loop {
-        let next = engine(vm)
-            .timers
-            .list
+        let timers = &mut engine_mut(vm).timers;
+        let list = &timers.list;
+        timers
+            .active
+            .retain(|&i| !list[i].cancelled && list[i].left > 0.0);
+        let next = timers
+            .active
             .iter()
-            .enumerate()
-            .filter(|(_, t)| !t.cancelled && t.left > 0.0 && t.due <= target)
-            .min_by(|a, b| a.1.due.total_cmp(&b.1.due))
+            .map(|&i| (i, &timers.list[i]))
+            .filter(|(_, t)| t.due <= target)
+            .min_by(|a, b| a.1.due.total_cmp(&b.1.due).then(a.0.cmp(&b.0)))
             .map(|(i, t)| (TimerId(i), t.due));
         let Some((id, due)) = next else { break };
         if due > now(vm) {
             tick(vm, (due - now(vm)) * 1000.0);
         }
         {
+            // A ticker without an interval fires once a frame (once this
+            // advance), not again and again at the same moment.
             let t = &mut engine_mut(vm).timers.list[id.0];
             t.left -= 1.0;
-            t.due += t.every.max(1e-9);
+            t.due = if t.every > 0.0 {
+                t.due + t.every
+            } else {
+                target + 1e-9
+            };
         }
         fire(vm, id);
     }
@@ -216,7 +231,7 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
         let elapsed = Value::Num(ms / 1000.0);
         for i in 0..count {
             let id = WidgetId(i);
-            if widgets::visible(engine(vm), id) {
+            if widgets::has_handler(vm, id, "OnUpdate") && widgets::visible(engine(vm), id) {
                 widgets::run_script(vm, id, "OnUpdate", &[elapsed]);
             }
         }

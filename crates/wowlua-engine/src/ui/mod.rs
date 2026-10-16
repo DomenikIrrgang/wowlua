@@ -52,6 +52,11 @@ pub struct Registry {
     pub secure_env: Option<wowlua_vm::TableRef>,
     /// An intrinsic type's element is being applied (its scripts stay).
     pub applying_intrinsic: bool,
+    /// The files' results, by path (`import`): see `build::module_key`.
+    pub modules: HashMap<String, Value>,
+    /// Blizzard's errors as its handler logged them, stacks included
+    /// (`C_Log.LogErrorMessage`).
+    pub error_stacks: Vec<String>,
     /// Every Blizzard addon of the UI code, by lower-case name: what
     /// `C_AddOns.LoadAddOn` can load later.
     available: HashMap<String, Addon>,
@@ -350,21 +355,27 @@ fn secure_env(vm: &mut Vm) -> wowlua_vm::TableRef {
     fn empty_list(vm: &mut Vm, _c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
         Ok(vec![Value::Table(vm.new_table())])
     }
-    let ns = vm.new_table();
-    for f in SECURE_PRIVATE_AURAS {
-        let name = vm.str(&format!("C_UnitAurasPrivate.{f}"));
-        let behaviour: wowlua_vm::NativeFn =
-            if f.starts_with("GetAll") || *f == "GetPrivateAuraAnchors" {
-                empty_list
-            } else {
-                crate::undocumented_function
-            };
-        let native = vm.native_with(f, behaviour, vec![name]);
-        let k = vm.heap.intern(f.as_bytes());
-        vm.heap.table_mut(ns).set_str(k, native);
+    for (ns_name, functions) in SECURE_NAMESPACES {
+        let ns = vm.new_table();
+        for f in *functions {
+            let name = vm.str(&format!("{ns_name}.{f}"));
+            let behaviour: wowlua_vm::NativeFn =
+                if f.starts_with("GetAll") || *f == "GetPrivateAuraAnchors" {
+                    empty_list
+                } else {
+                    crate::undocumented_function
+                };
+            let native = vm.native_with(f, behaviour, vec![name]);
+            let k = vm.heap.intern(f.as_bytes());
+            vm.heap.table_mut(ns).set_str(k, native);
+        }
+        let k = vm.heap.intern(ns_name.as_bytes());
+        vm.heap.table_mut(env).set_str(k, Value::Table(ns));
     }
-    let k = vm.heap.intern(b"C_UnitAurasPrivate");
-    vm.heap.table_mut(env).set_str(k, Value::Table(ns));
+    // The documented namespaces the addons' globals lack (`C_PingSecure`).
+    for (k, v) in engine(vm).secure_namespaces.clone() {
+        vm.heap.table_mut(env).set_str(k, v);
+    }
     crate::widgets::keep(vm, Value::Table(env));
     engine_mut(vm).world.ui.secure_env = Some(env);
     env
@@ -439,21 +450,106 @@ fn lua_files_in(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// What Blizzard's secure code calls of `C_UnitAurasPrivate` (undocumented).
-const SECURE_PRIVATE_AURAS: &[&str] = &[
-    "AddPrivateAuraUpdateCallback",
-    "AnchorPrivateAura",
-    "GetAllPrivateAuraInstanceIDs",
-    "GetAllPrivateAuras",
-    "GetAuraDataByAuraInstanceIDPrivate",
-    "GetPrivateAuraAnchors",
-    "GetPrivateAuraCasterGUID",
-    "IsPrivateAuraFilteredOutByInstanceID",
-    "RemovePrivateAuraUpdateCallback",
-    "SetPrivateAuraAnchorAddedCallback",
-    "SetPrivateAuraAnchorRemovedCallback",
-    "SetPrivateRaidBossMessageCallback",
-    "SetPrivateWarningTextFrame",
+/// The secure code's undocumented namespaces: the functions Blizzard's
+/// code calls of them (a scan of wow-ui-source 1.60.1 (70425)).
+const SECURE_NAMESPACES: &[(&str, &[&str])] = &[
+    (
+        "C_AuthChallenge",
+        &[
+            "Cancel",
+            "DidChallengeSucceed",
+            "OnTabPressed",
+            "SetFrame",
+            "Submit",
+        ],
+    ),
+    (
+        "C_StoreSecure",
+        &[
+            "AckFailure",
+            "ClearPreGeneratedExternalTransactionID",
+            "GetBnetTransferInfo",
+            "GetCharacterInfoByGUID",
+            "GetCharactersForRealm",
+            "GetConfirmationInfo",
+            "GetCurrencyID",
+            "GetCurrencyInfo",
+            "GetEligibleRacesForVASService",
+            "GetEntryInfo",
+            "GetFailureInfo",
+            "GetLastProductListResponseError",
+            "GetProductGroupInfo",
+            "GetProductGroups",
+            "GetProductInfo",
+            "GetProductList",
+            "GetProducts",
+            "GetPurchaseList",
+            "GetRealmList",
+            "GetUnrevokedBoostInfo",
+            "GetVASCompletionInfo",
+            "GetVASErrors",
+            "GetVASGuildMasterInfoForCharacterByGUID",
+            "GetVASRealmList",
+            "GetVasServiceType",
+            "GetWoWAccountGUIDFromName",
+            "HasDistributionList",
+            "HasDynamicPriceData",
+            "HasProductList",
+            "HasPurchaseInProgress",
+            "HasPurchaseList",
+            "IsAvailable",
+            "IsDynamicBundle",
+            "IsRegionLocked",
+            "OpenNydusLink",
+            "PurchaseProduct",
+            "PurchaseProductConfirm",
+            "PurchaseVASProduct",
+            "RequestAllDynamicPriceInfo",
+            "RequestCharacterGuildFollowInfo",
+            "RequestRealmGuildMasterInfo",
+            "SetDisconnectOnLogout",
+            "SetVASProductReady",
+            "ValidateBnetTransfer",
+        ],
+    ),
+    (
+        "C_UnitAurasPrivate",
+        &[
+            "AddPrivateAuraUpdateCallback",
+            "AnchorPrivateAura",
+            "GetAllPrivateAuraInstanceIDs",
+            "GetAllPrivateAuras",
+            "GetAuraDataByAuraInstanceIDPrivate",
+            "GetPrivateAuraAnchors",
+            "GetPrivateAuraCasterGUID",
+            "IsPrivateAuraFilteredOutByInstanceID",
+            "RemovePrivateAuraUpdateCallback",
+            "SetPrivateAuraAnchorAddedCallback",
+            "SetPrivateAuraAnchorRemovedCallback",
+            "SetPrivateRaidBossMessageCallback",
+            "SetPrivateWarningTextFrame",
+        ],
+    ),
+    (
+        "C_WowTokenSecure",
+        &[
+            "CanRedeemForBalance",
+            "CancelRedeem",
+            "ConfirmBuyToken",
+            "ConfirmSellToken",
+            "GetBalanceRedeemAmount",
+            "GetBalanceRedemptionInfo",
+            "GetGameTimeRedemptionInfo",
+            "GetPriceLockDuration",
+            "GetRemainingGameTime",
+            "GetTokenCount",
+            "IsRedemptionStillValid",
+            "RedeemToken",
+            "RedeemTokenConfirm",
+            "SetBalanceAmountString",
+            "WillKickFromWorld",
+        ],
+    ),
 ];
 
 fn load_addon_files_in(vm: &mut Vm, root: &Path, t: &Target, addon: &Addon, only_bootstrap: bool) {
