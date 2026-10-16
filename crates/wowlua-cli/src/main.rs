@@ -488,6 +488,19 @@ pub struct InstallTarget {
 }
 
 fn main() -> ExitCode {
+    // The platform's main thread may have too little stack for chains just
+    // below `deep::DEEP` (1 MiB on Windows): run on one of the workers' size.
+    match std::thread::Builder::new()
+        .name("main".into())
+        .stack_size(wowlua_driver::parallel::STACK)
+        .spawn(run)
+    {
+        Ok(work) => work.join().unwrap_or(ExitCode::from(101)),
+        Err(_) => run(),
+    }
+}
+
+fn run() -> ExitCode {
     std::panic::set_hook(Box::new(|info| {
         // A job's panic is caught: its region runs again in order, which
         // reports it here as a sequential build would.

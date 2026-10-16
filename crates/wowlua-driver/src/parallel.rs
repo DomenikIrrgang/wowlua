@@ -7,10 +7,12 @@
 use std::cell::{Cell, RefCell};
 use std::sync::{Condvar, Mutex};
 
-/// The stack of a worker thread: the main thread's on macOS and Linux, and
-/// then some (it only reserves address space). Deep inputs get more through
-/// `wowlua_syntax::deep`.
-const STACK: usize = 16 << 20;
+/// The stack of a worker thread, and of the CLI's main work: the main
+/// thread's on macOS and Linux, and then some (it only reserves address
+/// space); Windows gives its main thread 1 MiB. Below
+/// `wowlua_syntax::deep::DEEP` links a pass takes up to 4 KiB a link from
+/// it; deep inputs get more through `wowlua_syntax::deep`.
+pub const STACK: usize = 16 << 20;
 
 thread_local! {
     static IN_JOB: Cell<bool> = const { Cell::new(false) };

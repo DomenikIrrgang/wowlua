@@ -986,24 +986,27 @@ fn parallel_builds_equal_sequential_builds() {
 /// chains lower in linear time.
 #[test]
 fn deep_operator_chains_compile() {
-    let dir = tempfile::tempdir().unwrap();
-    let terms = 50_000;
-    let sum = vec!["1"; terms].join(" + ");
-    let test = vec!["true"; terms].join(" and ") + " or " + &vec!["false"; terms].join(" or ");
-    write(
-        dir.path(),
-        &[
-            (
-                "wowlua.json",
-                r#"{ "package": { "name": "deep", "version": "1.0.0" } }
+    // 999 links, just below `deep::DEEP`, where no pass grows its stack (it
+    // overflowed Windows' 1 MiB main thread); and far past it.
+    for terms in [500, 50_000] {
+        let dir = tempfile::tempdir().unwrap();
+        let sum = vec!["1"; terms].join(" + ");
+        let test = vec!["true"; terms].join(" and ") + " or " + &vec!["false"; terms].join(" or ");
+        write(
+            dir.path(),
+            &[
+                (
+                    "wowlua.json",
+                    r#"{ "package": { "name": "deep", "version": "1.0.0" } }
 "#,
-            ),
-            ("src/sum.lua", &format!("local x = {sum}\nprint(x)\n")),
-            ("src/test.lua", &format!("local b = {test}\nprint(b)\n")),
-        ],
-    );
-    for args in [&["check"][..], &["build"], &["build", "--release"]] {
-        wowlua(dir.path()).args(args).assert().success();
+                ),
+                ("src/sum.lua", &format!("local x = {sum}\nprint(x)\n")),
+                ("src/test.lua", &format!("local b = {test}\nprint(b)\n")),
+            ],
+        );
+        for args in [&["check"][..], &["build"], &["build", "--release"]] {
+            wowlua(dir.path()).args(args).assert().success();
+        }
     }
 }
 
