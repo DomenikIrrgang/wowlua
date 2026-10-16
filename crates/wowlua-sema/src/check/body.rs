@@ -67,12 +67,48 @@ pub struct FileInfo<'a> {
     pub intrinsics: crate::stdlib::Intrinsics,
 }
 
+/// The locals in scope: every name's variables, innermost last, and the
+/// names declared since each scope began (the file's top level is not
+/// popped).
+#[derive(Default)]
+struct Scopes {
+    /// Name → symbol.
+    ids: FxHashMap<Box<str>, u32>,
+    /// By symbol: its variables in scope, innermost (latest) last.
+    stacks: Vec<Vec<VarId>>,
+    /// The symbols declared, in order.
+    log: Vec<u32>,
+    /// `log.len()` where each open scope began.
+    marks: Vec<usize>,
+}
+
+impl Scopes {
+    fn declare(&mut self, name: &str, id: VarId) {
+        let sym = match self.ids.get(name) {
+            Some(&sym) => sym,
+            None => {
+                let sym = self.stacks.len() as u32;
+                self.ids.insert(name.into(), sym);
+                self.stacks.push(Vec::new());
+                sym
+            }
+        };
+        self.stacks[sym as usize].push(id);
+        self.log.push(sym);
+    }
+
+    fn lookup(&self, name: &str) -> Option<VarId> {
+        let &sym = self.ids.get(name)?;
+        self.stacks[sym as usize].last().copied()
+    }
+}
+
 pub struct Checker<'e> {
     pub env: &'e mut Env,
     pub mode: Mode,
     pub scope: Scope,
     pub(crate) vars: Vec<Var>,
-    scopes: Vec<FxHashMap<Box<str>, VarId>>,
+    scopes: Scopes,
     pub(crate) flow: Flow,
     /// Fields of locals that conditions narrowed (`a.b`, `a.b.c`, spec
     /// §2.5): each path is a synthetic variable, so flows narrow and join
@@ -100,7 +136,7 @@ pub struct Checker<'e> {
     /// Classes whose instances or class tables this file stores in globals.
     pub global_classes: FxHashSet<DefId>,
     reassigned: FxHashSet<u32>,
-    assigned_in_closures: FxHashSet<u32>,
+    pub(crate) assigned_in_closures: FxHashSet<u32>,
     /// Locals assigned after their declaration (anywhere).
     assigned_later: FxHashSet<u32>,
     pure_lua: bool,
@@ -134,6 +170,8 @@ pub struct Checker<'e> {
 
 impl<'e> Checker<'e> {
     pub fn new(env: &'e mut Env, info: &FileInfo<'e>, parse: &wowlua_syntax::Parse) -> Checker<'e> {
+        let (reassigned, assigned_in_closures, assigned_later) =
+            reassigned_in_closures(&parse.chunk.block);
         let mut c = Checker {
             env,
             mode: info.mode,
@@ -142,7 +180,7 @@ impl<'e> Checker<'e> {
                 ..Scope::default()
             },
             vars: Vec::new(),
-            scopes: vec![FxHashMap::default()],
+            scopes: Scopes::default(),
             flow: Flow::default(),
             field_vars: FxHashMap::default(),
             live: true,
@@ -157,9 +195,9 @@ impl<'e> Checker<'e> {
             exports: FxHashMap::default(),
             private_methods: FxHashMap::default(),
             global_classes: FxHashSet::default(),
-            reassigned: reassigned_in_closures(&parse.chunk.block).0,
-            assigned_in_closures: reassigned_in_closures(&parse.chunk.block).1,
-            assigned_later: reassigned_in_closures(&parse.chunk.block).2,
+            reassigned,
+            assigned_in_closures,
+            assigned_later,
             pure_lua: info.pure_lua,
             top_vararg: None,
             dynamic_env: calls_setfenv(&parse.chunk.block),
@@ -220,13 +258,21 @@ impl<'e> Checker<'e> {
     // ------------------------------------------------------------ scopes --
 
     pub fn push_scope(&mut self) {
-        self.scopes.push(FxHashMap::default());
+        self.scopes.marks.push(self.scopes.log.len());
     }
 
     pub fn pop_scope(&mut self) {
-        if let Some(scope) = self.scopes.pop() {
-            for v in scope.values() {
-                self.flow.remove(v);
+        let Some(mark) = self.scopes.marks.pop() else {
+            return;
+        };
+        // The flow forgets the last variable of each name declared in the
+        // scope (the one its name found).
+        let mut forgotten: FxHashSet<u32> = FxHashSet::default();
+        while self.scopes.log.len() > mark {
+            let sym = self.scopes.log.pop().expect("logged");
+            let v = self.scopes.stacks[sym as usize].pop().expect("declared");
+            if forgotten.insert(sym) {
+                self.flow.remove(&v);
             }
         }
     }
@@ -270,10 +316,7 @@ impl<'e> Checker<'e> {
             assigned_in_closure: span.is_some_and(|s| self.assigned_in_closures.contains(&s.start)),
             never_reassigned: span.is_some_and(|s| !self.assigned_later.contains(&s.start)),
         });
-        self.scopes
-            .last_mut()
-            .expect("scope")
-            .insert(name.into(), id);
+        self.scopes.declare(name, id);
         if declared.is_none() {
             // Unannotated locals hold widened literals (spec §2.4).
             let t = if is_const || !widen {
@@ -287,7 +330,7 @@ impl<'e> Checker<'e> {
     }
 
     pub fn lookup_var(&self, name: &str) -> Option<VarId> {
-        self.scopes.iter().rev().find_map(|s| s.get(name).copied())
+        self.scopes.lookup(name)
     }
 
     /// An annotation's type; `typeof(expr)` parts are inferred first
@@ -669,15 +712,14 @@ impl<'e> Checker<'e> {
             StmtKind::While { cond, body } => {
                 self.mark_probes(cond);
                 self.infer(cond);
-                let before = self.flow.clone();
                 self.forget_assigned(body);
                 let (t_flow, f_flow) = self.narrow(cond, &self.flow.clone());
                 self.flow = t_flow;
                 self.block(body);
-                let after_body = self.flow.clone();
+                // `join` reads no flow but its arguments.
+                let after_body = std::mem::take(&mut self.flow);
                 let joined = self.join(&f_flow, &after_body, true, self.live);
                 self.flow = joined;
-                let _ = before;
                 self.live = true;
             }
             StmtKind::Repeat { body, cond } => {
