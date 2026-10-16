@@ -1555,17 +1555,35 @@ pub fn run_size_changes(vm: &mut Vm) {
     }
 }
 
+/// A region's size: as laid out when its points give it one (two opposite
+/// points, `SetAllPoints`), else as set (unverified: recorded for fresh,
+/// unanchored widgets only).
+fn laid_out_size(vm: &mut Vm, id: WidgetId) -> (f64, f64) {
+    let (w, h, anchored) = {
+        let r = &engine(vm).world.widgets[id.0];
+        (r.width, r.height, !r.points.is_empty())
+    };
+    if !anchored {
+        return (w, h);
+    }
+    let s = effective_scale(engine(vm), id);
+    match bounds(vm, id, 0) {
+        Some(b) => (b.2 / s, b.3 / s),
+        None => (w, h),
+    }
+}
+
 fn get_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(engine(vm).world.widgets[id.0].width)])
+    Ok(vec![Value::Num(laid_out_size(vm, id).0)])
 }
 
 fn get_height(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(engine(vm).world.widgets[id.0].height)])
+    Ok(vec![Value::Num(laid_out_size(vm, id).1)])
 }
 
 fn get_size(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    let w = &engine(vm).world.widgets[id.0];
-    Ok(vec![Value::Num(w.width), Value::Num(w.height)])
+    let (w, h) = laid_out_size(vm, id);
+    Ok(vec![Value::Num(w), Value::Num(h)])
 }
 
 fn set_scale(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
@@ -1634,29 +1652,69 @@ fn anchor(point: &str) -> (f64, f64) {
     (x, y)
 }
 
-/// The widget's rectangle in screen units (left, bottom, width, height),
-/// from its first anchor; UIParent is the screen.
+/// The widget's rectangle in screen units (left, bottom, width, height);
+/// UIParent is the screen. Each edge comes from the points that set it (a
+/// `LEFT` and a `RIGHT` point give the width, a `TOP` and a `BOTTOM` the
+/// height); otherwise the size set, placed by the axis's first point.
 pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64)> {
     let e = engine(vm);
     let w = &e.world.widgets[id.0];
     if w.name.as_deref() == Some("UIParent") || depth > 64 {
         return Some((0.0, 0.0, SCREEN.0, SCREEN.1));
     }
-    let p = w.points.first()?;
-    let rel = match p.relative {
-        Some(v) => widget_of(vm, v),
-        None => w.parent,
-    };
-    let r = rel
-        .and_then(|r| bounds(vm, r, depth + 1))
-        .unwrap_or((0.0, 0.0, SCREEN.0, SCREEN.1));
+    w.points.first()?;
     let s = effective_scale(e, id);
-    let (rx, ry) = anchor(&p.relative_point);
-    let (px, py) = anchor(&p.point);
-    let ax = r.0 + rx * r.2 + p.x * s;
-    let ay = r.1 + ry * r.3 + p.y * s;
+    // Each point's place on the screen, and which edges it sets.
+    let mut left = None;
+    let mut right = None;
+    let mut center_x = None;
+    let mut bottom = None;
+    let mut top = None;
+    let mut center_y = None;
+    for p in &w.points {
+        let rel = match p.relative {
+            Some(v) => widget_of(vm, v),
+            None => w.parent,
+        };
+        let r = rel
+            .and_then(|r| bounds(vm, r, depth + 1))
+            .unwrap_or((0.0, 0.0, SCREEN.0, SCREEN.1));
+        let (rx, ry) = anchor(&p.relative_point);
+        let ax = r.0 + rx * r.2 + p.x * s;
+        let ay = r.1 + ry * r.3 + p.y * s;
+        let slot = if p.point.contains("LEFT") {
+            &mut left
+        } else if p.point.contains("RIGHT") {
+            &mut right
+        } else {
+            &mut center_x
+        };
+        slot.get_or_insert(ax);
+        let slot = if p.point.contains("BOTTOM") {
+            &mut bottom
+        } else if p.point.contains("TOP") {
+            &mut top
+        } else {
+            &mut center_y
+        };
+        slot.get_or_insert(ay);
+    }
     let (width, height) = (w.width * s, w.height * s);
-    Some((ax - px * width, ay - py * height, width, height))
+    let (x, width) = match (left, right, center_x) {
+        (Some(l), Some(r), _) => (l, r - l),
+        (Some(l), None, _) => (l, width),
+        (None, Some(r), _) => (r - width, width),
+        (None, None, Some(c)) => (c - width / 2.0, width),
+        (None, None, None) => (0.0, width),
+    };
+    let (y, height) = match (bottom, top, center_y) {
+        (Some(b), Some(t), _) => (b, t - b),
+        (Some(b), None, _) => (b, height),
+        (None, Some(t), _) => (t - height, height),
+        (None, None, Some(c)) => (c - height / 2.0, height),
+        (None, None, None) => (0.0, height),
+    };
+    Some((x, y, width, height))
 }
 
 fn edge(vm: &mut Vm, id: WidgetId, f: fn((f64, f64, f64, f64)) -> f64) -> Ret {

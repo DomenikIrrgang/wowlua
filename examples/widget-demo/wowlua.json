@@ -4,7 +4,9 @@
     "name": "widget-demo",
     "version": "0.1.0",
     "description": "wowlua sample addon: a window built from widget classes",
-    "authors": ["wowlua contributors"],
+    "authors": [
+      "wowlua contributors"
+    ],
     "license": "MIT",
     "wowlua": "^0.9"
   },
@@ -19,5 +21,8 @@
     "standard": {},
     "camelot": {},
     "vanilla": {}
+  },
+  "test": {
+    "blizzard-ui": true
   }
 }

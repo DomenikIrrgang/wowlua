@@ -230,6 +230,13 @@ The WoW API the VM's code calls, per flavor.
   data), saved variables across reloads, slash commands, keybindings, addon
   messages, settings, tooltips, menus and dialogs. The M8 test mock is the
   starting point.
+- **Layout.** A region's rectangle comes from its points as the client
+  lays it out: each edge from the points that set it (a `LEFT` and a
+  `RIGHT` point give the width, a `TOP` and a `BOTTOM` the height),
+  otherwise its set size placed by the axis's first point; `GetSize`,
+  `GetWidth` and `GetHeight` give the laid-out size of an anchored region
+  (unverified beyond fresh widgets; `/stdtest engine` records
+  `layoutSizes`).
 - **Not mocked.** A generated function without behaviour raises
   "`<name>` is not mocked" when called, unless the project provides a mock
   (Tooling §16.1.4), so gaps are visible instead of silently returning nil.

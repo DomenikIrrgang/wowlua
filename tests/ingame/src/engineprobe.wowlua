@@ -1233,6 +1233,30 @@ local function commProbe()
     say("engine comm: probing (two seconds)...")
 end
 
+--- Sizes the layout gives: regions sized only by their points
+--- (`SetAllPoints`, two corners), and points overriding a set size.
+local function layoutSizes(): { [string]: string }
+    const parent = CreateFrame("Frame", nil, UIParent)
+    parent:SetSize(300, 200)
+    parent:SetPoint("CENTER")
+    const all = parent:CreateTexture()
+    all:SetAllPoints()
+    const corners = CreateFrame("Frame", nil, parent)
+    corners:SetPoint("TOPLEFT", 10, -10)
+    corners:SetPoint("BOTTOMRIGHT", -20, 30)
+    const both = CreateFrame("Frame", nil, parent)
+    both:SetSize(50, 50)
+    both:SetPoint("TOPLEFT")
+    both:SetPoint("BOTTOMRIGHT")
+    const out: { [string]: string } = {}
+    for name, r in pairs({ all = all, corners = corners, both = both } :: { [string]: any }) do
+        local w, h = r:GetSize()
+        out[name] = `{w} {h} {r:GetWidth()} {r:GetHeight()}`
+    end
+    parent:Hide()
+    return out
+end
+
 export function engineProbe(arg: string?)
     const st = state() :: any
     const words: string[] = {}
@@ -1282,6 +1306,7 @@ export function engineProbe(arg: string?)
         blizzardAtStart = table.concat(LOADED_AT_START, " "),
         blizzardNow = table.concat(blizzardLoaded(), " "),
         units = units(),
+        layoutSizes = layoutSizes(),
         getTime = show(GetTime()),
     }
     st.engineProbe = probe
