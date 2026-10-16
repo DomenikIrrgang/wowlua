@@ -673,6 +673,16 @@ fn build_inner(
         }
         parent
     };
+    // A load-on-demand addon loads after its required addons have run
+    // (spec §5.4.3): the load order sees which tables are theirs.
+    let addon = manifest.manifest.addon.as_ref();
+    let after_dependencies = addon.is_some_and(|a| a.load_on_demand)
+        && manifest
+            .manifest
+            .addon_dependencies
+            .as_ref()
+            .is_some_and(|d| !d.required.is_empty());
+    let saved_variables = addon.map(|a| a.all_saved_variables()).unwrap_or_default();
 
     // Compile: once per flavor in split mode, once in shared mode (spec
     // §6.3). Sources are parsed once.
@@ -1105,6 +1115,8 @@ fn build_inner(
                 ),
                 active: &active,
                 loaded_by: &loaded_by,
+                after_dependencies,
+                saved_variables: &saved_variables,
             },
             &api,
             &check_cfg,

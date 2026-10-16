@@ -232,7 +232,13 @@ Each edge is classified by **when** the use happens:
   `<Script>` code runs while the file loads; other handlers run later.
 
 Definitions are classified the same way. If a name is **read at load time** but
-only **defined at run time**, that is warning W1034.
+only **defined at run time**, that is warning W1034. A **load-on-demand** addon
+(`addon.load-on-demand` with required `addon-dependencies`) loads after its
+required addons have loaded and run, so a field of a table one of them owns (a
+global the addon never defines and that is not one of its SavedVariables, such
+as `DBM.Options` in an addon that only writes `DBM.Options` at run time) may be
+set by its owner: such a read is not W1034 (decision T206). Its own
+SavedVariables are set after its files load, so reading them still is.
 
 ### 5.4.4 Ordering and cycles
 

@@ -3831,6 +3831,46 @@ fn load_order_files_one_xml_loads_are_ordered() {
     assert!(!stderr.contains("W1033"), "{stderr}");
 }
 
+/// A load-on-demand addon loads after its required addons have run, so a
+/// field it reads at load time of a table one of them owns (a global the
+/// addon never defines) may be set by that addon, even if the addon itself
+/// only writes it at run time: no W1034. Its own SavedVariables are set
+/// only after its files load, so reading them still warns, as does the
+/// same read in an addon that loads with the others.
+#[test]
+fn load_order_load_on_demand_reads_its_dependencies_tables() {
+    let manifest = |lod: bool| {
+        format!(
+            "{{ \"package\": {{ \"name\": \"gui\", \"version\": \"1.0.0\" }},\n  \"addon\": {{ \"name\": \"Gui\", \"load-on-demand\": {lod}, \"saved-variables\": [\"GuiDB\"] }},\n  \"addon-dependencies\": {{ \"required\": [\"Core\"] }} }}\n"
+        )
+    };
+    let files = [
+        ("src/a.lua", "print(Core.Options.x, GuiDB.size)\n"),
+        (
+            "src/b.lua",
+            "function import_profile(t) Core.Options = t GuiDB.size = 1 end\n",
+        ),
+    ];
+    for lod in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = manifest(lod);
+        let mut all = vec![("wowlua.json", manifest.as_str())];
+        all.extend(files);
+        write(dir.path(), &all);
+        let assert = wowlua(dir.path()).arg("build").assert().success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains("`GuiDB.size` is read while the file loads"),
+            "{lod}: {stderr}"
+        );
+        assert_eq!(
+            stderr.contains("`Core.Options` is read while the file loads"),
+            !lod,
+            "{lod}: {stderr}"
+        );
+    }
+}
+
 /// Runs compiled files in order in one Lua state, each as a chunk called
 /// with `("Compiled", ns)` like the client does; returns what they printed.
 fn run_compiled(files: &[std::path::PathBuf]) -> String {

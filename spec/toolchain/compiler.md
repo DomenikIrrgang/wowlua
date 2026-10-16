@@ -274,6 +274,10 @@ This implements the load-order rules of
    the layout already fixes their order: both have a place in
    `build.load-order` (directly or through the XML file that loads them), or
    one XML file loads both (decision T205).
+6. **Late definitions.** A load-time read of a name that is only defined at
+   run time is W1034. In a load-on-demand addon with required addon
+   dependencies, fields of tables the addon does not define (other than its
+   SavedVariables) are exempt: their owner has run before (decision T206).
 
 ### 13.6.2 Lints
 

@@ -57,6 +57,12 @@ pub struct Layout<'a> {
     pub active: &'a [bool],
     /// The XML file that loads a file (`<Script>`/`<Include>`).
     pub loaded_by: &'a [Option<usize>],
+    /// The addon loads on demand after its required addons (`LoadOnDemand`
+    /// with `## Dependencies`): they have loaded and run before it loads,
+    /// so the tables they own may hold what it writes into them later.
+    pub after_dependencies: bool,
+    /// The addon's SavedVariables: they are set after its files load.
+    pub saved_variables: &'a [String],
 }
 
 /// Analyzes the load order.
@@ -70,6 +76,8 @@ pub fn analyze(
         listed,
         active,
         loaded_by,
+        after_dependencies,
+        saved_variables,
     } = layout;
     // An XML file and the files it loads interleave in document order.
     let encloses = |outer: usize, mut inner: usize| {
@@ -512,6 +520,15 @@ pub fn analyze(
                         reason,
                     }),
                     [_] => {}
+                    // A field of a table another addon owns (the package
+                    // defines no such global, and it is not one of its
+                    // SavedVariables), read by an addon that loads after
+                    // that addon has run: the owner may have set it.
+                    [] if after_dependencies
+                        && let Key::Field(table, _) = &*key
+                        && let Key::Global(g) = table.as_ref()
+                        && !defined_tables.contains(table.as_ref())
+                        && !saved_variables.contains(g) => {}
                     [] => {
                         if warned.insert(format!("late {} {root}", access.key.display())) {
                             out.diagnostics.push(
