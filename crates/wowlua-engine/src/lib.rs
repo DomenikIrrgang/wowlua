@@ -379,6 +379,10 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     // Undocumented C functions with behaviour.
     let create_frame = vm.native("CreateFrame", widgets::create_frame);
     vm.set_global("CreateFrame", create_frame);
+    // Blizzard's slash command registry (its chat code makes it; addons
+    // and the engine's slash control use it without the UI code too).
+    let slash = vm.new_table();
+    vm.set_global("SlashCmdList", Value::Table(slash));
     // The frames the client starts with.
     let ui = widgets::create(vm, "Frame", Some("UIParent".into()), None);
     if let Some(id) = widgets::widget_of(vm, ui) {

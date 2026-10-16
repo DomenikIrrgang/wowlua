@@ -1202,3 +1202,27 @@ end
     assert!(ok, "{out}");
     assert!(out.contains("3 passed, 0 failed"), "{out}");
 }
+
+/// The core-demo example's tests: the addon with Blizzard's UI (skipped
+/// without the UI code of `cargo xtask types fetch`).
+#[test]
+fn core_demo_example() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let source = root.join("target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let out = wowlua(&root.join("examples/core-demo"))
+        .args(["test", "--flavor", "camelot"])
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("8 passed, 0 failed"), "{text}");
+}

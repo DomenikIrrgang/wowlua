@@ -4,20 +4,31 @@
     "name": "core-demo",
     "version": "0.1.0",
     "description": "wowlua sample addon: the standard library without third-party libraries (events, saved variables, settings, minimap button, keybindings, comms)",
-    "authors": ["wowlua contributors"],
+    "authors": [
+      "wowlua contributors"
+    ],
     "license": "MIT",
     "wowlua": "^0.9"
   },
   "addon": {
     "title": "Core Demo",
     "notes": "wowlua sample addon for the core standard library. Type /coredemo.",
-    "saved-variables": ["CoreDemoDB"],
-    "saved-variables-per-character": ["CoreDemoDBPerChar"]
+    "saved-variables": [
+      "CoreDemoDB"
+    ],
+    "saved-variables-per-character": [
+      "CoreDemoDBPerChar"
+    ]
   },
   "flavors": {
     "standard": {},
     "camelot": {},
     "vanilla": {}
   },
-  "check": { "mode": "strict" }
+  "check": {
+    "mode": "strict"
+  },
+  "test": {
+    "blizzard-ui": true
+  }
 }

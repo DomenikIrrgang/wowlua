@@ -98,14 +98,14 @@ fn record_print(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// The client's `print`: through Blizzard's print handler when its UI code
-/// is loaded (recorded, then shown in the chat frame), else recorded only.
+/// What the chat frame shows (`mock.printed()`): with Blizzard's UI code,
+/// every line `DEFAULT_CHAT_FRAME:AddMessage` gets (`print` too, through
+/// its print handler); without it, `print`'s lines.
 pub fn install_print(vm: &mut Vm) {
     let record = vm.native("print", record_print);
     let src = b"local record = ...
-if setprinthandler and getprinthandler then
-    local shown = getprinthandler()
-    setprinthandler(function(...) record(...) return shown(...) end)
+if DEFAULT_CHAT_FRAME and hooksecurefunc then
+    hooksecurefunc(DEFAULT_CHAT_FRAME, 'AddMessage', function(_, text) record(text) end)
 else
     print = function(...) record(...) end
 end";

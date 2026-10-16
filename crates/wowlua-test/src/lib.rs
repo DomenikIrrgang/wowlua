@@ -322,6 +322,11 @@ fn load(suite: &Suite, file: &TestFile, blizzard: &mut Vec<String>) -> Result<Lo
         profile::apply(&mut vm, controls, &path)?;
     }
 
+    // The addon's key bindings, which the client reads at startup.
+    let bindings = dir.join("Bindings.xml");
+    if bindings.exists() {
+        wowlua_engine::bindings::load_bindings_xml(&mut vm, &bindings, &name)?;
+    }
     let toc = toc_path(build, &suite.flavor).ok_or("the build has no TOC file")?;
     let toc_text = std::fs::read_to_string(dir.join(&toc)).map_err(|e| e.to_string())?;
     let listed: Vec<String> = wowlua_toc::parse(&toc_text)
@@ -471,7 +476,14 @@ fn drive(vm: &mut Vm, tests: TableRef, job: Value) -> Outcome {
                         stack: String::new(),
                     };
                 }
+                let target = wowlua_engine::clock::now(vm) + amount;
                 wowlua_engine::clock::advance_frames(vm, frames.max(0.0) as usize, FRAME_MS);
+                // Frames of 1000/60 ms add up to a hair less than the
+                // seconds asked for: the clock reaches them.
+                let now = wowlua_engine::clock::now(vm);
+                if kind == "seconds" && now < target {
+                    wowlua_engine::clock::advance(vm, target - now);
+                }
             }
             _ => {
                 let message = r.get(1).map(|&v| text(vm, v)).unwrap_or_default();
@@ -603,8 +615,13 @@ fn run_tests(suite: &Suite, state: &mut Loaded, filter: Option<&str>, result: &m
         }
     };
     // Errors and refusals so far (loading, logging in) belong to no test.
+    // Blizzard's own code's are the emulation's gaps (warned about); the
+    // addon's fail the file.
     let _ = natives::unread_refusals(vm);
-    let pending = natives::unread_errors();
+    let addons = |e: &String| ["src/", "tests/", "wowlua/"].iter().any(|p| e.contains(p));
+    let (pending, blizzard): (Vec<String>, Vec<String>) =
+        natives::unread_errors().into_iter().partition(addons);
+    result.blizzard_errors.extend(blizzard);
     if !pending.is_empty() {
         result.error = Some(to_sources(
             suite,

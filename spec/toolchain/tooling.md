@@ -78,9 +78,12 @@ For each test file and flavor, the runner:
 A test file opts out of step 5 with `config({ lifecycle = "manual" })` from
 `wowlua:test` at its top level, and then drives the lifecycle itself with
 `mock.login()`. Tests within one file share the VM. Each file starts fresh.
-An error while loading (a step above) fails the file. An error that reaches
+An error while loading (a step above) fails the file; with
+`test.blizzard-ui`, errors of Blizzard's own code while loading and logging
+in are the emulation's gaps and only warned about. An error that reaches
 the error handler during a test (an event handler's, a timer's) fails that
-test, unless the test read it with `mock.errors()`.
+test, unless the test read it with `mock.errors()`. The addon's
+`Bindings.xml` is read before its files load, as the client does.
 
 ### 16.1.3 `wowlua:test`
 
@@ -240,7 +243,7 @@ end
 | Addons | `mock.defineAddon(name, { metadata, loadOnDemand, load })`: an addon the client knows (`C_AddOns.GetAddOnMetadata`, `GetAddOnInfo`, `LoadAddOn`) |
 | Input | `mock.slash(line)`, `mock.defineBinding(name, action, { header, runOnUp })` (from `Bindings.xml`), `mock.pressBinding(name)`, `mock.pressKey(key)` (the key's binding, as `SetBinding` bound it; `ENTER`, `ESCAPE`, `TAB` and `SPACE` go to the focused edit box first), `mock.click(frame, button?)` (a visible frame: `OnMouseDown`, `OnMouseUp`, then an enabled button's `PreClick`, `OnClick`, `PostClick`; the order unverified), `mock.hover(frame?)` (`OnLeave`, `OnEnter`; `GetMouseFoci`, `IsMouseOver`), `mock.typeText(editBox, text)` (keyboard focus, then `OnChar` and `OnTextChanged(true)` per character; `HasFocus`, `GetCurrentKeyBoardFocus`), `mock.drag(frame, dx, dy)` (the frame, or an overlay's parent, moves if it starts moving), `mock.sizeBy(grip, dw, dh)` (a resize grip's frame), `mock.wheel(frame, delta)`, `mock.script(frame, name, ...)` (any other user action), `mock.setModifiers(...)` |
 | UI | tooltips (`mock.showTooltip(kind, data)`), menus and dialogs, Settings, the screen size, locale, CVars, other addons and libraries (`mock.provideLibrary`); `mock.frames()` (every frame, in creation order); stand-ins for Blizzard's UI code: `mock.defineTemplate(name, fn)` (`CreateFrame` with the template calls `fn(frame)`; an undefined template only warns) and `mock.defineFrameType(name, base, fn)` (an intrinsic frame type such as `EventFrame`) |
-| Output | `mock.printed()`, `mock.errors()` |
+| Output | `mock.printed()` (what the chat frame shows: `print`'s lines, and with Blizzard's UI everything `DEFAULT_CHAT_FRAME:AddMessage` gets), `mock.errors()` |
 
 **World profiles** (decision T213). A test file starts in the situation a
 profile describes: `config({ profile = "stormwind" })` (a literal, read

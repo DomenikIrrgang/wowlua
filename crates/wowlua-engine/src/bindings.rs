@@ -76,6 +76,53 @@ pub fn define_binding(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// An addon's `Bindings.xml`, as the client reads it at startup: each
+/// `<Binding name header runOnUp>` with its body compiled as the addon's
+/// code, a function of `keystate`.
+pub fn load_bindings_xml(vm: &mut Vm, path: &std::path::Path, addon: &str) -> Result<(), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let root = crate::ui::xml::parse(&text).map_err(|e| format!("Bindings.xml: {e}"))?;
+    let mut list = Vec::new();
+    fn collect(el: &crate::ui::xml::Element, out: &mut Vec<std::rc::Rc<crate::ui::xml::Element>>) {
+        for c in &el.children {
+            if c.tag.eq_ignore_ascii_case("Binding") {
+                out.push(c.clone());
+            } else {
+                collect(c, out);
+            }
+        }
+    }
+    collect(&root, &mut list);
+    for b in list {
+        let Some(name) = b.attr("name") else {
+            continue;
+        };
+        let src = format!(
+            "{}return function(keystate) {} end",
+            "\n".repeat(b.line.saturating_sub(1)),
+            b.text
+        );
+        let f = vm.load_as(src.as_bytes(), "@Bindings.xml", addon)?;
+        let action = match vm.call(f, &[]) {
+            Ok(r) => r.first().copied().unwrap_or(Value::Nil),
+            Err(e) => {
+                let msg = string(vm, e.value).unwrap_or_default();
+                return Err(format!("Bindings.xml: {msg}"));
+            }
+        };
+        widgets::keep(vm, action);
+        engine_mut(vm).world.bindings.bindings.push(Binding {
+            name: name.to_string(),
+            header: b.attr("header").map(str::to_string),
+            action,
+            run_on_up: b
+                .attr("runOnUp")
+                .is_some_and(|v| v.eq_ignore_ascii_case("true")),
+        });
+    }
+    Ok(())
+}
+
 fn run_binding(vm: &mut Vm, name: &str, keystate: &str) {
     let found = engine(vm)
         .world

@@ -1,0 +1,5 @@
+-- Stand-ins for Blizzard's UI code the emulation does not run yet on every
+-- flavor (they load after Blizzard's UI code, before the addon).
+if _G.ToggleGameMenu == nil then
+    _G.ToggleGameMenu = function() end
+end
