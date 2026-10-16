@@ -20,6 +20,58 @@ pub struct Input {
     pub mouse_focus: Option<WidgetId>,
     /// The edit box with the keyboard focus.
     pub keyboard_focus: Option<WidgetId>,
+    /// Shift, Ctrl and Alt held (the left keys).
+    pub modifiers: [bool; 3],
+}
+
+const MODIFIERS: [(&str, &str); 3] = [("shift", "LSHIFT"), ("ctrl", "LCTRL"), ("alt", "LALT")];
+
+/// `setModifiers({ shift?, ctrl?, alt? })`: the keys held (the left ones);
+/// `MODIFIER_STATE_CHANGED(key, 1 | 0)` for each that changes.
+pub fn control_set_modifiers(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Table(t) = c.arg(1) else {
+        return Err(vm.error("mock.setModifiers: a table of the keys held expected"));
+    };
+    for (i, (field, key)) in MODIFIERS.iter().enumerate() {
+        let k = vm.str(field);
+        let held = vm.heap.table(t).get(k).truthy();
+        if engine(vm).world.input.modifiers[i] != held {
+            engine_mut(vm).world.input.modifiers[i] = held;
+            let key = vm.str(key);
+            crate::widgets::fire_event(
+                vm,
+                "MODIFIER_STATE_CHANGED",
+                &[key, Value::Num(if held { 1.0 } else { 0.0 })],
+            );
+        }
+    }
+    Ok(vec![])
+}
+
+fn held(vm: &Vm, i: usize) -> Ret {
+    Ok(vec![Value::Bool(engine(vm).world.input.modifiers[i])])
+}
+
+fn is_shift_key_down(vm: &mut Vm, _c: NativeCall) -> Ret {
+    held(vm, 0)
+}
+
+fn is_control_key_down(vm: &mut Vm, _c: NativeCall) -> Ret {
+    held(vm, 1)
+}
+
+fn is_alt_key_down(vm: &mut Vm, _c: NativeCall) -> Ret {
+    held(vm, 2)
+}
+
+fn is_modifier_key_down(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(
+        engine(vm).world.input.modifiers.iter().any(|m| *m),
+    )])
+}
+
+fn right_key_down(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(false)])
 }
 
 fn widget_arg(
@@ -213,6 +265,16 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetMouseFoci", get_mouse_foci),
         ("GetMouseFocus", get_mouse_focus),
         ("GetCurrentKeyBoardFocus", get_current_keyboard_focus),
+        ("IsShiftKeyDown", is_shift_key_down),
+        ("IsLeftShiftKeyDown", is_shift_key_down),
+        ("IsRightShiftKeyDown", right_key_down),
+        ("IsControlKeyDown", is_control_key_down),
+        ("IsLeftControlKeyDown", is_control_key_down),
+        ("IsRightControlKeyDown", right_key_down),
+        ("IsAltKeyDown", is_alt_key_down),
+        ("IsLeftAltKeyDown", is_alt_key_down),
+        ("IsRightAltKeyDown", right_key_down),
+        ("IsModifierKeyDown", is_modifier_key_down),
     ]
 }
 

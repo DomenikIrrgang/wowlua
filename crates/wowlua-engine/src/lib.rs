@@ -8,6 +8,7 @@ pub mod api;
 pub mod args;
 pub mod auras;
 pub mod bindings;
+pub mod casting;
 pub mod character;
 pub mod chat;
 pub mod clock;
@@ -178,6 +179,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(gamedata::behaviours())
             .chain(character::behaviours())
             .chain(input::behaviours())
+            .chain(casting::behaviours())
             .chain(chat::behaviours())
             .chain(bindings::behaviours())
             .chain(facts::behaviours())

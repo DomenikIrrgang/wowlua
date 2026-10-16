@@ -21,7 +21,7 @@ use wowlua_vm::{NativeCall, TableRef, Value, Vm};
 use crate::widgets;
 use crate::{engine, engine_mut};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct UnitId(pub usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,6 +91,8 @@ pub struct Units {
     /// The test's unit handles' metatable.
     handle_meta: Option<TableRef>,
     next_guid: u64,
+    /// Spells units are casting.
+    pub casting: crate::casting::Casting,
 }
 
 pub const PLAYER: UnitId = UnitId(0);
@@ -797,6 +799,8 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("setName", control_set_name),
         ("applyAura", crate::auras::control_apply),
         ("removeAura", crate::auras::control_remove),
+        ("castSpell", crate::casting::control_cast),
+        ("interruptCast", crate::casting::control_interrupt),
         ("setDistance", crate::character::control_set_distance),
         ("setMoney", crate::character::control_set_money),
         ("equip", crate::character::control_equip),
@@ -1307,10 +1311,6 @@ fn unit_is_ghost(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// Not casting or channeling: no values.
-fn not_casting(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![])
-}
-
 /// The roles a unit can take (tank, healer, damage): damage (unverified
 /// per class).
 fn available_roles(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1351,8 +1351,6 @@ pub fn more_behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("UnitFactionGroup", unit_faction_group),
         ("UnitPVPName", unit_pvp_name),
         ("UnitIsGhost", unit_is_ghost),
-        ("UnitCastingInfo", not_casting),
-        ("UnitChannelInfo", not_casting),
         ("UnitGetAvailableRoles", available_roles),
         ("UnitHealthPercent", unit_health_percent),
         ("UnitHealthMissing", unit_health_missing),

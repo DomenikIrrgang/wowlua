@@ -1140,3 +1140,65 @@ end
     assert!(out.contains("because of taint"), "{out}");
     assert!(out.contains("2 passed, 1 failed"), "{out}");
 }
+
+/// Casting, modifier keys, load-on-demand addons and libraries.
+#[test]
+fn casting_modifiers_addons_libraries() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[(
+            "tests/world.test.wowlua",
+            r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("a cast runs and ends")
+local function cast()
+    mock.defineSpell(116, { name = "Frostbolt", iconID = 135846, castTime = 2000 })
+    local seen: string[] = {}
+    local f = CreateFrame("Frame")
+    for _, e in ipairs({ "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_INTERRUPTED" }) do
+        f:RegisterUnitEvent(e, "player")
+    end
+    f:SetScript("OnEvent", function(_: Frame, e: string) seen[#seen + 1] = e end)
+    mock.player:castSpell(116)
+    local name, _, icon, startMS, endMS = UnitCastingInfo("player")
+    expect(name).toBe("Frostbolt")
+    expect(icon).toBe(135846)
+    expect(endMS - startMS).toBe(2000)
+    mock.advanceTime(2)
+    expect(UnitCastingInfo("player")).toBeNil()
+    mock.player:castSpell(116)
+    mock.player:interruptCast()
+    expect(seen).toEqual({
+        "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_STOP",
+        "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_INTERRUPTED", "UNIT_SPELLCAST_STOP",
+    })
+end
+
+@test("modifiers")
+local function modifiers()
+    expect(IsShiftKeyDown()).toBe(false)
+    mock.setModifiers({ shift = true })
+    expect(IsShiftKeyDown()).toBe(true)
+    expect(IsModifierKeyDown()).toBe(true)
+    mock.setModifiers({})
+    expect(IsModifierKeyDown()).toBe(false)
+end
+
+@test("addons and libraries")
+local function addonsAndLibraries()
+    local loaded = false
+    mock.defineAddon("Extra", { loadOnDemand = true, load = function() loaded = true end })
+    mock.loadAddon("Extra")
+    expect(loaded).toBe(true)
+    mock.provideLibrary("LibThing-1.0", { answer = 42 })
+    local lib: any = LibStub("LibThing-1.0")
+    expect(lib.answer).toBe(42)
+end
+"#,
+        )],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("3 passed, 0 failed"), "{out}");
+}

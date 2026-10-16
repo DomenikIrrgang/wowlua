@@ -27,6 +27,11 @@ export interface MockUnit
     function setName(name: string, lastName: string?)
     function applyAura(data: table): number
     function removeAura(auraInstanceID: number)
+    --- Starts casting (`UNIT_SPELLCAST_START`, or `CHANNEL_START`); it ends
+    --- `castTime` seconds later (the spell data's, else 1.5).
+    function castSpell(spellID: number, opts: { castTime?: number, channel?: boolean, notInterruptible?: boolean }?)
+    --- Interrupts the cast (`UNIT_SPELLCAST_INTERRUPTED`).
+    function interruptCast()
     --- How far from the player, in yards (`nil`: unknown).
     function setDistance(yards: number?)
     --- The player's money, in copper (`PLAYER_MONEY`).
@@ -298,6 +303,12 @@ export function wheel(frame: any, delta: number)
     engine().wheel(frame, delta)
 end
 
+--- The modifier keys held (the left ones): `MODIFIER_STATE_CHANGED`;
+--- `IsShiftKeyDown` and the others follow.
+export function setModifiers(keys: { shift?: boolean, ctrl?: boolean, alt?: boolean })
+    engine().setModifiers(keys)
+end
+
 --- A key binding the client knows (from `Bindings.xml`).
 export function defineBinding(name: string, action: (keystate: string) -> (), opts: { header?: string, runOnUp?: boolean }?)
     engine().defineBinding(name, action, opts)
@@ -333,6 +344,44 @@ end
 --- An addon the client knows (`C_AddOns`).
 export function defineAddon(name: string, opts: table?)
     engine().defineAddon(name, opts)
+end
+
+--- Loads an addon the client knows (`mock.defineAddon`), as
+--- `C_AddOns.LoadAddOn` does.
+export function loadAddon(name: string): (boolean?, string?)
+    return C_AddOns.LoadAddOn(name)
+end
+
+--- A library for `LibStub(major)` (a stand-in LibStub when there is none).
+export function provideLibrary(major: string, impl: table, minor: number?)
+    local stub: any = _G.LibStub
+    if stub == nil then
+        local libs: { [string]: table } = {}
+        local minors: { [string]: number } = {}
+        stub = setmetatable({ libs = libs, minors = minors }, {
+            __call = function(self: any, name: string, silent: boolean?): (table?, number?)
+                local lib = self.libs[name]
+                if lib == nil and not silent then
+                    error(`Cannot find a library instance of "{name}".`, 2)
+                end
+                return lib, self.minors[name]
+            end,
+        })
+        function stub:NewLibrary(name: string, version: number): table?
+            if self.minors[name] and self.minors[name] >= version then
+                return nil
+            end
+            self.minors[name] = version
+            self.libs[name] = self.libs[name] or {}
+            return self.libs[name]
+        end
+        function stub:GetLibrary(name: string, silent: boolean?): (table?, number?)
+            return self(name, silent)
+        end
+        _G.LibStub = stub
+    end
+    stub.libs[major] = impl
+    stub.minors[major] = minor ?? 1
 end
 
 --- A spell's data (decision T203).
