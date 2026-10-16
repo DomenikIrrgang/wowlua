@@ -7,6 +7,7 @@
 use crate::usage::{CallTarget, FileUsage, Key, Markers, Path, file_usage, xml_file_usage};
 use crate::{Analysis, FileInput, FileKind, Target};
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
@@ -101,39 +102,30 @@ pub fn analyze(
     // their fields; each group is named by its smallest key.
     let mut same_table: FxHashMap<Key, Key> = FxHashMap::default();
     for (a, b) in usages.iter().flatten().flat_map(|u| &u.table_aliases) {
-        let (a, b) = (table_root(&same_table, a), table_root(&same_table, b));
+        let (a, b) = (
+            table_root(&same_table, a).clone(),
+            table_root(&same_table, b).clone(),
+        );
         if a != b {
             let (low, high) = if a < b { (a, b) } else { (b, a) };
             same_table.insert(high, low);
         }
     }
-    let canon = |key: &Key| match key {
-        Key::Field(root, fields) => {
-            Key::Field(Box::new(table_root(&same_table, root)), fields.clone())
-        }
-        key => key.clone(),
-    };
-    let canon_path = |path: &Path| -> Path {
-        if path.1.is_empty() {
-            path.clone()
-        } else {
-            (table_root(&same_table, &path.0), path.1.clone())
-        }
-    };
 
     // Functions stored under global or `ns` paths, package-wide.
     let mut function_index: FxHashMap<Path, Vec<(usize, usize)>> = FxHashMap::default();
     for (file, u) in usages.iter().enumerate() {
         for (path, f) in u.iter().flat_map(|u| &u.function_defs) {
             function_index
-                .entry(canon_path(path))
+                .entry(canon_path(&same_table, path).into_owned())
                 .or_default()
                 .push((file, *f));
         }
     }
 
-    // Imported bindings: (file, binding) → (target file, export name).
-    let mut bindings: FxHashMap<(usize, String), (usize, Option<String>)> = FxHashMap::default();
+    // Imported bindings: file → binding → (target file, export name).
+    let mut bindings: FxHashMap<usize, FxHashMap<String, (usize, Option<String>)>> =
+        FxHashMap::default();
     for (file, f) in files.iter().enumerate() {
         let (Some(parse), Some(info)) = (f.parse, &analysis.modules[file]) else {
             continue;
@@ -154,14 +146,17 @@ pub fn analyze(
                 ImportClause::Names(specs) => {
                     for spec in specs {
                         let local = spec.alias.as_ref().unwrap_or(&spec.name);
-                        bindings.insert(
-                            (file, local.text.to_string()),
+                        bindings.entry(file).or_default().insert(
+                            local.text.to_string(),
                             (target, Some(spec.name.text.to_string())),
                         );
                     }
                 }
                 ImportClause::Namespace(n) => {
-                    bindings.insert((file, n.text.to_string()), (target, None));
+                    bindings
+                        .entry(file)
+                        .or_default()
+                        .insert(n.text.to_string(), (target, None));
                 }
                 ImportClause::SideEffect => {}
             }
@@ -172,11 +167,13 @@ pub fn analyze(
         match target {
             CallTarget::Local(f) => vec![(file, *f)],
             CallTarget::Path(p) => function_index
-                .get(&canon_path(p))
+                .get(&*canon_path(&same_table, p))
                 .cloned()
                 .unwrap_or_default(),
             CallTarget::Import { binding, fields } => {
-                let Some((target_file, export)) = bindings.get(&(file, binding.clone())) else {
+                let Some((target_file, export)) =
+                    bindings.get(&file).and_then(|b| b.get(binding.as_str()))
+                else {
                     return Vec::new();
                 };
                 let name = match (export, fields.first()) {
@@ -294,7 +291,11 @@ pub fn analyze(
     // runs while it loads (also inside functions of other files it calls).
     let mut definers: BTreeMap<Key, Vec<(usize, bool, Span)>> = BTreeMap::new();
     let mut add_def = |key: &Key, file: usize, lt: bool, span: Span| {
-        let list = definers.entry(canon(key)).or_default();
+        let key = canon(&same_table, key);
+        if !definers.contains_key(&*key) {
+            definers.insert(key.clone().into_owned(), Vec::new());
+        }
+        let list = definers.get_mut(&*key).expect("inserted");
         match list.iter_mut().find(|(f, _, _)| *f == file) {
             Some(entry) => entry.1 |= lt,
             None => list.push((file, lt, span)),
@@ -371,7 +372,7 @@ pub fn analyze(
     let defined_tables: FxHashSet<Key> = definers
         .keys()
         .filter(|k| !matches!(k, Key::Field(..)))
-        .map(|k| table_root(&same_table, k))
+        .map(|k| table_root(&same_table, k).clone())
         .collect();
     // Fields written at load time through tables the analysis cannot trace,
     // by name: (the file loading, span).
@@ -393,7 +394,7 @@ pub fn analyze(
 
     // Uses at load time order their definer before the file being loaded.
     for (root, parents) in exec.iter().enumerate() {
-        let mut seen: FxHashSet<Key> = FxHashSet::default();
+        let mut seen: FxHashSet<Cow<Key>> = FxHashSet::default();
         let mut visited: Vec<&(usize, usize)> = parents.keys().collect();
         visited.sort();
         for &(file, f) in visited {
@@ -402,7 +403,7 @@ pub fn analyze(
                 .flat_map(|u| &u.uses)
                 .filter(|a| a.function == f && !a.guarded)
             {
-                let key = canon(&access.key);
+                let key = canon(&same_table, &access.key);
                 if !seen.insert(key.clone()) {
                     continue;
                 }
@@ -410,7 +411,7 @@ pub fn analyze(
                     // A field of a package table nobody defines traceably:
                     // warn when a file writes it through a table the
                     // analysis cannot follow.
-                    if let Key::Field(table, fields) = &key
+                    if let Key::Field(table, fields) = &*key
                         && defined_tables.contains(table.as_ref())
                         && let Some(writes) = fields.last().and_then(|f| untracked.get(f.as_str()))
                     {
@@ -731,12 +732,41 @@ pub fn analyze(
 }
 
 /// The key naming the group of keys that hold the same table as `key`.
-fn table_root(same_table: &FxHashMap<Key, Key>, key: &Key) -> Key {
+fn table_root<'a>(same_table: &'a FxHashMap<Key, Key>, key: &'a Key) -> &'a Key {
     let mut key = key;
     while let Some(next) = same_table.get(key) {
         key = next;
     }
-    key.clone()
+    key
+}
+
+/// `key` with its table named by the group's smallest key; borrowed when
+/// it is that already (the common case).
+fn canon<'a>(same_table: &'a FxHashMap<Key, Key>, key: &'a Key) -> Cow<'a, Key> {
+    match key {
+        Key::Field(root, fields) => {
+            let r = table_root(same_table, root);
+            if std::ptr::eq(r, &**root) {
+                Cow::Borrowed(key)
+            } else {
+                Cow::Owned(Key::Field(Box::new(r.clone()), fields.clone()))
+            }
+        }
+        key => Cow::Borrowed(key),
+    }
+}
+
+/// `path` with its table named by the group's smallest key (see `canon`).
+fn canon_path<'a>(same_table: &'a FxHashMap<Key, Key>, path: &'a Path) -> Cow<'a, Path> {
+    if path.1.is_empty() {
+        return Cow::Borrowed(path);
+    }
+    let r = table_root(same_table, &path.0);
+    if std::ptr::eq(r, &path.0) {
+        Cow::Borrowed(path)
+    } else {
+        Cow::Owned((r.clone(), path.1.clone()))
+    }
 }
 
 /// The strongly connected components of the file graph.
