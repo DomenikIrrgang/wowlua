@@ -130,7 +130,11 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         Some(include_str!("../std/media.d.wowlua")),
     ),
     ("menu", include_str!("../std/menu.wowlua"), None),
-    ("mock", include_str!("../std/mock.wowlua"), None),
+    (
+        "mock",
+        include_str!("../std/mock.wowlua"),
+        Some(include_str!("../std/mock.d.wowlua")),
+    ),
     (
         "pool",
         include_str!("../std/pool.wowlua"),

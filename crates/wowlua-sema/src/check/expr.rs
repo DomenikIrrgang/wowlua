@@ -2011,6 +2011,9 @@ impl Checker<'_> {
         if id.starts_with("hooks.") {
             self.check_hook_target(&id, &args.exprs(), false);
         }
+        if id == "mock.module" {
+            self.check_mock_module(&args.exprs());
+        }
         if id == "settings.register"
             && let Some(def) = args.exprs().first()
         {
@@ -2041,6 +2044,39 @@ impl Checker<'_> {
                         "the defaults of `saved.bind` contain a `Secret<…>` type{at}: secret values cannot be compared or saved"
                     );
                     self.report("E8104", value.span, msg);
+                }
+            }
+        }
+    }
+
+    /// `mock.module(namespace, { name = value, … })` (decision T224): each
+    /// replacement is an export of the module (E8123) of its type.
+    fn check_mock_module(&mut self, args: &[&Expr]) {
+        let (Some(ns), Some(repl)) = (args.first(), args.get(1)) else {
+            return;
+        };
+        let Some(&ns_type) = self.expr_types.get(&(ns.span.start, ns.span.end)) else {
+            return;
+        };
+        let Ty::Record(record) = self.env.types.get(ns_type).clone() else {
+            return;
+        };
+        let ExprKind::Table(fields) = &repl.kind else {
+            return;
+        };
+        for f in fields {
+            let TableField::Named { name, value, .. } = f else {
+                continue;
+            };
+            match record.fields.get(name.text.as_ref()) {
+                None => {
+                    let msg = format!("the module has no export `{}`", name.text);
+                    self.report("E8123", name.span, msg);
+                }
+                Some(field) => {
+                    if let Some(&t) = self.expr_types.get(&(value.span.start, value.span.end)) {
+                        self.check_assignable(value.span, t, field.ty);
+                    }
                 }
             }
         }

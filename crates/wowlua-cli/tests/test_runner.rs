@@ -857,3 +857,56 @@ end
     let built = fs::read_to_string(dir.path().join("dist/dev/Demo/src/tracker.lua")).unwrap();
     assert!(!built.contains("#internal"), "{built}");
 }
+
+/// `mock.module` (decision T224): the module's exports replaced for every
+/// importer, the rest kept; replacements checked against the exports.
+#[test]
+fn mock_module() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            (
+                "src/clock.wowlua",
+                "export function now(): number\n    return 1\nend\nexport function zone(): string\n    return \"here\"\nend\n",
+            ),
+            (
+                "src/report.wowlua",
+                "import now, zone from \"./clock\"\nexport function line(): string\n    return zone() .. \" at \" .. now()\nend\n",
+            ),
+            (
+                "tests/report.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import * as clock from "/clock"
+import line from "/report"
+
+@test("the real one")
+local function real()
+    expect(line()).toBe("here at 1")
+end
+
+@test("replaced")
+local function replaced()
+    mock.module(clock, { now = function(): number return 42 end })
+    expect(line()).toBe("here at 42")
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+    fs::write(
+        dir.path().join("tests/report.test.wowlua"),
+        r#"import * as mock from "wowlua:mock"
+import * as clock from "/clock"
+mock.module(clock, { now = function(): string return "x" end, later = 1 })
+"#,
+    )
+    .unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("the module has no export `later`"), "{out}");
+    assert!(out.contains("is not assignable to `() -> number`"), "{out}");
+}

@@ -408,6 +408,19 @@ export function stub(t: table, key: string, fn: Fn?): Fn
     return s
 end
 
+--- Replaces exports of a module for the rest of the test file (decision
+--- T224): `target` is the module's namespace (`import * as tracker from
+--- "/tracker"`), `replacement` the exports to replace, checked against the
+--- module's (a missing or mistyped one is an error). The addon's files
+--- read imports at each use in tests, so every importer sees the
+--- replacement.
+export function module<M>(target: M, replacement: table)
+    local exports = target :: any
+    for name, value in pairs(replacement) do
+        exports[name] = value
+    end
+end
+
 --- Replaces an engine function (`"UnitName"`, `"C_Spell.GetSpellInfo"`)
 --- with `impl` until the test ends; returns its spy.
 export function fake(name: string, impl: Fn): Fn

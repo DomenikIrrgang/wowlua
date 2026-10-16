@@ -273,7 +273,7 @@ open for review.
 | T221 | `@bench` functions live in test files and are run by `wowlua bench` (M11), not by `wowlua test`; specified in M9, built in M11 **(proposal, M9)** | Benchmarks share the tests' setup and world; their runner belongs with the optimizations they measure. |
 | T222 | Code examples in `---` doc comments run as tests; specified in M9, built with the language server's documentation work (S8) **(proposal, M9)** | Library documentation cannot go stale. |
 | T223 | `import internal a, B from "/module"` binds a module's file-level locals and types in test files only (E8119 elsewhere); addon builds are unchanged **(user, M9)** | Private helpers are tested directly without exporting them. |
-| T224 | `mock.module(spec, replacement)` replaces a module's exports (all, or the named ones) for a test file, checked against the module's export types **(user, M9)** | Collaborators are faked with type safety, without dependency injection in addon code. |
+| T224 | `mock.module(namespace, replacement)` replaces the named exports of a module (its namespace import) for the rest of a test file, checked against the module's export types; test builds read imports at each use so every importer sees it **(user, M9)** | Collaborators are faked with type safety, without dependency injection in addon code. |
 
 ## Standard library
 

@@ -185,15 +185,19 @@ T222).
 
 A test file may import what a module does not export (decision T223):
 `import internal parse, Cache from "/tracker"` binds the module's
-file-level locals and types by name, as if exported; only `*.test.wowlua`
-files may (E8119 elsewhere). An addon build is unchanged: the compiler keeps
-those locals reachable only in the `test` profile.
+file-level locals and types by name, as if exported, typed as the module has
+them; only test files may (E8119 elsewhere). The module registers the
+locals test files read at its end (their values then), in test builds only:
+an addon build is unchanged.
 
-`mock.module(spec, replacement)` replaces a module's exports for one test file
-(decision T224): before the addon loads, `replacement` is checked against the
-module's export types (a missing or mistyped export is a type error), and
-every importer receives it; `mock.module(spec, { name = fake })` replaces only
-those exports and keeps the rest.
+`mock.module(namespace, replacement)` replaces a module's exports for the
+rest of the test file (decision T224): `namespace` is the module's namespace
+import (`import * as clock from "/clock"`), `replacement` the exports to
+replace, checked against the module's export types (E8123 for one it does
+not have, a type error for a mistyped one); the others stay. In a test
+build the addon's files read their imports at each use, so every importer
+sees the replacement (a value an importer stored before keeps the old
+one).
 
 ### 16.1.4 `wowlua:mock`
 

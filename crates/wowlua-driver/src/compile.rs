@@ -1010,6 +1010,10 @@ pub fn compile_flavor(
 ) -> CompileOutput {
     let mut options = minify.passes.emit_options(line_mode(profile));
     options.mappings = source_maps;
+    // `wowlua test`'s build: it has the test side.
+    let test_build = files
+        .iter()
+        .any(|(s, _)| crate::sources::TestRole::of(&s.rel).is_some());
     let mut out = CompileOutput::default();
     wowlua_luair::deep::note(wowlua_syntax::deep::links());
 
@@ -1499,7 +1503,7 @@ pub fn compile_flavor(
         } else {
             let unit = unit_of(&source.src_rel);
             let file_meta = unit.map_or_else(|| meta.clone(), |u| u.meta.clone());
-            let mut ctx = context(&analysis, i, &inputs, file_meta, &order.lazy);
+            let mut ctx = context(&analysis, i, &inputs, file_meta, &order.lazy, test_build);
             ctx.file = source.rel.clone();
             ctx.debug = profile.debug;
             ctx.tools = wowlua_lower::Tools {
@@ -1924,6 +1928,7 @@ fn context(
     inputs: &[FileInput],
     meta: Arc<Meta>,
     lazy: &std::collections::HashSet<(usize, u32)>,
+    test_build: bool,
 ) -> Context {
     let mut ctx = Context {
         meta: Some(meta),
@@ -1958,7 +1963,10 @@ fn context(
                     .unwrap_or_default();
                 ImportContext::Module {
                     id: wowlua_sema::module_id(&inputs[*m].src_rel),
-                    lazy: lazy.contains(&(i, import.start)),
+                    // A test build reads imports at each use, so that
+                    // `mock.module` replaces them (spec Tooling §16.1.3.1).
+                    lazy: lazy.contains(&(i, import.start))
+                        || (test_build && !wowlua_sema::is_compiler_known(&inputs[*m].src_rel)),
                     exports,
                     attrs: module.map(|t| t.export_attrs.clone()).unwrap_or_default(),
                     intrinsics: module.map(|t| t.intrinsics.clone()).unwrap_or_default(),
