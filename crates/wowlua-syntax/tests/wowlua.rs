@@ -1,8 +1,8 @@
 //! The wowlua grammar (spec appendix A) and its syntax errors (E01xx).
 
 use wowlua_span::SourceDb;
-use wowlua_syntax::ast::*;
 use wowlua_syntax::parse;
+use wowlua_syntax::view::*;
 
 fn parse_str(src: &str) -> wowlua_syntax::Parse {
     let mut db = SourceDb::new();
@@ -25,14 +25,14 @@ fn codes(src: &str) -> Vec<String> {
 }
 
 #[track_caller]
-fn ok(src: &str) -> Chunk {
+fn ok(src: &str) -> wowlua_syntax::Parse {
     let p = parse_str(src);
     assert!(
         !p.has_errors(),
         "{src:?}: {:?}",
         p.diagnostics.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
-    p.chunk.clone()
+    p
 }
 
 #[test]
@@ -186,11 +186,11 @@ fn recovers_and_reports_several_errors() {
     assert!(errors >= 3, "{:?}", p.diagnostics);
     // The valid statements in between are still in the tree.
     let calls = p
-        .chunk
-        .block
-        .stmts
+        .view()
+        .block()
+        .stmts()
         .iter()
-        .filter(|s| matches!(s.kind, StmtKind::Call(_)))
+        .filter(|s| matches!(s.kind(), StmtKind::Call(_)))
         .count();
     assert_eq!(calls, 1);
 }
@@ -203,76 +203,78 @@ fn lists_that_fail_leave_nothing_in_the_lists_around_them() {
         "local t = {\n  a = 1,\n  b = function()\n    local x = { c = 2, d = = 3 }\n    print(4, 5 +)\n    return 6\n  end,\n  e = 7,\n}\nf(8, function()\n  g(9, { 10, 11 + })\nend, 12)\n",
     );
     assert!(p.has_errors());
-    let stmts = &p.chunk.block.stmts;
+    let stmts = p.view().block().stmts();
     assert_eq!(stmts.len(), 2, "{stmts:?}");
-    let errors = |e: &Expr| -> Vec<bool> {
-        let ExprKind::Function(f) = &e.kind else {
-            panic!("{:?}", e.kind)
+    let errors = |e: Expr<'_>| -> Vec<bool> {
+        let ExprKind::Function(f) = e.kind() else {
+            panic!("{:?}", e.kind())
         };
-        let stmts = &f.body.stmts;
-        stmts.iter().map(|s| s.kind == StmtKind::Error).collect()
+        f.body()
+            .stmts()
+            .iter()
+            .map(|s| matches!(s.kind(), StmtKind::Error))
+            .collect()
     };
 
-    let StmtKind::Local { values, .. } = &stmts[0].kind else {
-        panic!("{:?}", stmts[0].kind)
+    let StmtKind::Local { values, .. } = stmts.at(0).kind() else {
+        panic!("{:?}", stmts.at(0).kind())
     };
-    let ExprKind::Table(fields) = &values[0].kind else {
-        panic!("{:?}", values[0].kind)
+    let ExprKind::Table(fields) = values.at(0).kind() else {
+        panic!("{:?}", values.at(0).kind())
     };
     let names: Vec<&str> = fields
         .iter()
         .map(|f| match f {
-            TableField::Named { name, .. } => &*name.text,
+            TableField::Named { name, .. } => name.text(),
             _ => panic!("{f:?}"),
         })
         .collect();
     assert_eq!(names, ["a", "b", "e"]);
-    let TableField::Named { value, .. } = &fields[1] else {
+    let TableField::Named { value, .. } = fields.at(1) else {
         panic!()
     };
     assert_eq!(errors(value), [true, true, false]);
 
-    let StmtKind::Call(call) = &stmts[1].kind else {
-        panic!("{:?}", stmts[1].kind)
+    let StmtKind::Call(call) = stmts.at(1).kind() else {
+        panic!("{:?}", stmts.at(1).kind())
     };
-    let ExprKind::Call {
-        args: Args::Parens { args, .. },
-        ..
-    } = &call.kind
-    else {
-        panic!("{:?}", call.kind)
+    let ExprKind::Call { args, .. } = call.kind() else {
+        panic!("{:?}", call.kind())
+    };
+    let ArgsKind::Parens { args, .. } = args.kind() else {
+        panic!("{args:?}")
     };
     assert_eq!(args.len(), 3, "{args:?}");
-    for (arg, raw) in [(&args[0], "8"), (&args[2], "12")] {
-        assert!(matches!(&arg.kind, ExprKind::Number(n) if &*n.raw == raw));
+    for (arg, raw) in [(args.at(0), "8"), (args.at(2), "12")] {
+        assert!(matches!(arg.kind(), ExprKind::Number(n) if n.raw() == raw));
     }
-    assert_eq!(errors(&args[1]), [true]);
+    assert_eq!(errors(args.at(1)), [true]);
 }
 
 #[test]
 fn precedence_follows_the_spec() {
-    let chunk = ok("x = -a :: number ^ 2 .. b .. c or d");
-    let StmtKind::Assign { values, .. } = &chunk.block.stmts[0].kind else {
+    let p = ok("x = -a :: number ^ 2 .. b .. c or d");
+    let StmtKind::Assign { values, .. } = p.view().block().stmts().at(0).kind() else {
         panic!()
     };
     // `or` is the root; `..` is right-associative; the cast binds to `a`.
     let ExprKind::Binary {
         op: BinOp::Or, lhs, ..
-    } = &values[0].kind
+    } = values.at(0).kind()
     else {
-        panic!("{:?}", values[0].kind)
+        panic!("{:?}", values.at(0).kind())
     };
     let ExprKind::Binary {
         op: BinOp::Concat,
         lhs: first,
         rhs,
         ..
-    } = &lhs.kind
+    } = lhs.kind()
     else {
         panic!()
     };
     assert!(matches!(
-        rhs.kind,
+        rhs.kind(),
         ExprKind::Binary {
             op: BinOp::Concat,
             ..
@@ -281,20 +283,25 @@ fn precedence_follows_the_spec() {
     let ExprKind::Unary {
         op: UnOp::Neg,
         operand,
-    } = &first.kind
+    } = first.kind()
     else {
-        panic!("{:?}", first.kind)
+        panic!("{:?}", first.kind())
     };
     assert!(matches!(
-        operand.kind,
+        operand.kind(),
         ExprKind::Binary { op: BinOp::Pow, .. }
     ));
 }
 
 #[test]
 fn directives_before_the_first_token() {
-    let chunk = ok("-- License: MIT\n--!strict\n--!nolint\nlocal x = 1\n--!basic\n");
-    let names: Vec<&str> = chunk.directives.iter().map(|d| d.name.as_ref()).collect();
+    let p = ok("-- License: MIT\n--!strict\n--!nolint\nlocal x = 1\n--!basic\n");
+    let names: Vec<&str> = p
+        .view()
+        .directives()
+        .iter()
+        .map(|d| d.name.as_ref())
+        .collect();
     assert_eq!(names, ["strict", "nolint"]);
 }
 
@@ -309,9 +316,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
 
 #[test]
 fn decorator_names_may_be_keywords() {
-    let chunk = ok("@if(flavor == 'standard')\nlocal x = 1\n");
-    assert_eq!(
-        chunk.block.stmts[0].decorators[0].path[0].text.as_ref(),
-        "if"
-    );
+    let p = ok("@if(flavor == 'standard')\nlocal x = 1\n");
+    let stmt = p.view().block().stmts().at(0);
+    assert_eq!(stmt.decorators().at(0).path().at(0).text(), "if");
 }

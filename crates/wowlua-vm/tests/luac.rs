@@ -25,7 +25,7 @@ fn same(src: &str) {
     let parsed = wowlua_syntax::parse(src.as_bytes(), file);
     let ours = compile_with(
         &mut heap,
-        &parsed.chunk,
+        parsed.view(),
         src.as_bytes(),
         b"=t"[..].into(),
         Options {
@@ -70,7 +70,7 @@ fn same_lines(src: &str) {
     let parsed = wowlua_syntax::parse(src.as_bytes(), file);
     let ours = compile_with(
         &mut heap,
-        &parsed.chunk,
+        parsed.view(),
         src.as_bytes(),
         b"=t"[..].into(),
         Options {
@@ -149,7 +149,7 @@ fn file_lines() {
     let parsed = wowlua_syntax::parse(src.as_bytes(), file);
     let ours = compile_with(
         &mut heap,
-        &parsed.chunk,
+        parsed.view(),
         src.as_bytes(),
         b"=t"[..].into(),
         Options {

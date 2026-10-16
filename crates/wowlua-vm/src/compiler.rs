@@ -7,9 +7,9 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use wowlua_span::Span;
-use wowlua_syntax::ast::{
-    Args, BinOp, Block, Chunk, Expr, ExprKind, FuncBody, FuncName, Stmt, StmtKind, TableField,
-    TypedName, UnOp,
+use wowlua_syntax::view::{
+    Args, ArgsKind, BinOp, Block, Chunk, ElseIfs, Expr, ExprKind, Exprs, Func, FuncName, Stmt,
+    StmtKind, TableField, TableFields, TypedName, TypedNames, UnOp,
 };
 
 use crate::heap::Heap;
@@ -154,7 +154,7 @@ pub fn line_starts(src: &[u8]) -> Vec<usize> {
 
 pub fn compile(
     heap: &mut Heap,
-    chunk: &Chunk,
+    chunk: Chunk<'_>,
     src: &[u8],
     source: Rc<[u8]>,
 ) -> Result<Rc<Proto>, CompileError> {
@@ -163,7 +163,7 @@ pub fn compile(
 
 pub fn compile_with(
     heap: &mut Heap,
-    chunk: &Chunk,
+    chunk: Chunk<'_>,
     src: &[u8],
     source: Rc<[u8]>,
     options: Options,
@@ -181,7 +181,7 @@ pub fn compile_with(
     };
     c.open_func(0);
     c.fs_mut().proto.is_vararg = true;
-    c.chunk(&chunk.block)?;
+    c.chunk(chunk.block())?;
     let proto = c.close_func();
     Ok(Rc::new(proto))
 }
@@ -1285,12 +1285,12 @@ impl Compiler<'_> {
         self.patchtohere(bl.breaklist);
     }
 
-    fn chunk(&mut self, block: &Block) -> R<()> {
+    fn chunk(&mut self, block: Block<'_>) -> R<()> {
         self.enter_level()?;
-        for stmt in &block.stmts {
+        for stmt in &block.stmts() {
             self.statement(stmt)?;
             // The statement's last token is the last one read.
-            self.lastline = self.line_end(stmt.span);
+            self.lastline = self.line_end(stmt.span());
             let fs = self.fs_mut();
             debug_assert!(fs.freereg >= fs.nactvar);
             fs.freereg = fs.nactvar;
@@ -1299,20 +1299,20 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    fn block(&mut self, block: &Block) -> R<()> {
+    fn block(&mut self, block: Block<'_>) -> R<()> {
         self.enterblock(false);
         self.chunk(block)?;
         self.leaveblock();
         Ok(())
     }
 
-    fn statement(&mut self, stmt: &Stmt) -> R<()> {
-        let line = self.line(stmt.span.start);
+    fn statement(&mut self, stmt: Stmt<'_>) -> R<()> {
+        let line = self.line(stmt.span().start);
         self.lastline = line;
-        if !stmt.decorators.is_empty() {
-            return self.not_lua(stmt.span, "a decorator");
+        if !stmt.decorators().is_empty() {
+            return self.not_lua(stmt.span(), "a decorator");
         }
-        match &stmt.kind {
+        match stmt.kind() {
             StmtKind::Assign { targets, values } => self.assignment(targets, values),
             StmtKind::Call(e) => {
                 let v = self.expr(e)?;
@@ -1337,7 +1337,7 @@ impl Compiler<'_> {
                 then_block,
                 elseifs,
                 else_block,
-            } => self.ifstat(cond, then_block, elseifs, else_block.as_deref()),
+            } => self.ifstat(cond, then_block, elseifs, else_block),
             StmtKind::NumericFor {
                 var,
                 start,
@@ -1346,7 +1346,7 @@ impl Compiler<'_> {
                 body,
             } => {
                 self.enterblock(true);
-                self.fornum(var, start, limit, step.as_deref(), body, line)?;
+                self.fornum(var, start, limit, step, body, line)?;
                 self.leaveblock();
                 Ok(())
             }
@@ -1358,7 +1358,7 @@ impl Compiler<'_> {
             }
             StmtKind::Function { name, func } => self.funcstat(name, func, line),
             StmtKind::LocalFunction { name, func } => {
-                self.new_localvar(&name.text, 0)?;
+                self.new_localvar(name.text(), 0)?;
                 let reg = self.fs().freereg as u8;
                 let v = Exp::new(EK::Local(reg));
                 self.reserveregs(1)?;
@@ -1372,23 +1372,23 @@ impl Compiler<'_> {
             }
             StmtKind::Local { names, values } => self.localstat(names, values),
             StmtKind::Return(values) => self.retstat(values),
-            StmtKind::Break => self.breakstat(stmt.span.end),
-            StmtKind::Compound { .. } => self.not_lua(stmt.span, "a compound assignment"),
-            StmtKind::Continue => self.not_lua(stmt.span, "`continue`"),
-            StmtKind::LocalDestructure { .. } => self.not_lua(stmt.span, "destructuring"),
-            StmtKind::Const { .. } => self.not_lua(stmt.span, "`const`"),
-            StmtKind::Class(_) => self.not_lua(stmt.span, "a class"),
-            StmtKind::Interface(_) => self.not_lua(stmt.span, "an interface"),
-            StmtKind::Enum(_) => self.not_lua(stmt.span, "an enum"),
-            StmtKind::TypeAlias(_) => self.not_lua(stmt.span, "a type alias"),
-            StmtKind::Declare(_) => self.not_lua(stmt.span, "a declaration"),
-            StmtKind::Import(_) => self.not_lua(stmt.span, "an import"),
-            StmtKind::Export(_) => self.not_lua(stmt.span, "an export"),
+            StmtKind::Break => self.breakstat(stmt.span().end),
+            StmtKind::Compound { .. } => self.not_lua(stmt.span(), "a compound assignment"),
+            StmtKind::Continue => self.not_lua(stmt.span(), "`continue`"),
+            StmtKind::LocalDestructure { .. } => self.not_lua(stmt.span(), "destructuring"),
+            StmtKind::Const { .. } => self.not_lua(stmt.span(), "`const`"),
+            StmtKind::Class(_) => self.not_lua(stmt.span(), "a class"),
+            StmtKind::Interface(_) => self.not_lua(stmt.span(), "an interface"),
+            StmtKind::Enum(_) => self.not_lua(stmt.span(), "an enum"),
+            StmtKind::TypeAlias(_) => self.not_lua(stmt.span(), "a type alias"),
+            StmtKind::Declare(_) => self.not_lua(stmt.span(), "a declaration"),
+            StmtKind::Import(_) => self.not_lua(stmt.span(), "an import"),
+            StmtKind::Export(_) => self.not_lua(stmt.span(), "an export"),
             StmtKind::Error => self.err(line, "syntax error"),
         }
     }
 
-    fn cond(&mut self, e: &Expr) -> R<i32> {
+    fn cond(&mut self, e: Expr<'_>) -> R<i32> {
         let mut v = self.expr(e)?;
         if v.k == EK::Nil {
             v.k = EK::False;
@@ -1397,7 +1397,7 @@ impl Compiler<'_> {
         Ok(v.f)
     }
 
-    fn whilestat(&mut self, cond: &Expr, body: &Block) -> R<()> {
+    fn whilestat(&mut self, cond: Expr<'_>, body: Block<'_>) -> R<()> {
         let whileinit = self.getlabel();
         let condexit = self.cond(cond)?;
         self.enterblock(true);
@@ -1409,7 +1409,7 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    fn repeatstat(&mut self, body: &Block, cond: &Expr) -> R<()> {
+    fn repeatstat(&mut self, body: Block<'_>, cond: Expr<'_>) -> R<()> {
         let repeat_init = self.getlabel();
         self.enterblock(true);
         self.enterblock(false);
@@ -1431,20 +1431,20 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    fn test_then_block(&mut self, cond: &Expr, block: &Block) -> R<i32> {
+    fn test_then_block(&mut self, cond: Expr<'_>, block: Block<'_>) -> R<i32> {
         let condexit = self.cond(cond)?;
         // `then` is read: an empty block's jumps take its line.
-        self.lastline = self.line(self.next_token(cond.span.end));
+        self.lastline = self.line(self.next_token(cond.span().end));
         self.block(block)?;
         Ok(condexit)
     }
 
     fn ifstat(
         &mut self,
-        cond: &Expr,
-        then_block: &Block,
-        elseifs: &[(Expr, Block)],
-        else_block: Option<&Block>,
+        cond: Expr<'_>,
+        then_block: Block<'_>,
+        elseifs: ElseIfs<'_>,
+        else_block: Option<Block<'_>>,
     ) -> R<()> {
         let mut escapelist = NO_JUMP;
         let mut flist = self.test_then_block(cond, then_block)?;
@@ -1452,7 +1452,7 @@ impl Compiler<'_> {
             let j = self.jump();
             self.concat(&mut escapelist, j);
             self.patchtohere(flist);
-            self.lastline = self.line(c.span.start);
+            self.lastline = self.line(c.span().start);
             flist = self.test_then_block(c, b)?;
         }
         if let Some(b) = else_block {
@@ -1467,7 +1467,7 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    fn exp1(&mut self, e: &Expr) -> R<()> {
+    fn exp1(&mut self, e: Expr<'_>) -> R<()> {
         let mut v = self.expr(e)?;
         self.exp2nextreg(&mut v)
     }
@@ -1478,7 +1478,7 @@ impl Compiler<'_> {
         line: u32,
         nvars: usize,
         isnum: bool,
-        body: &Block,
+        body: Block<'_>,
         do_at: u32,
     ) -> R<()> {
         self.adjustlocalvars(3);
@@ -1517,18 +1517,18 @@ impl Compiler<'_> {
 
     fn fornum(
         &mut self,
-        var: &TypedName,
-        start: &Expr,
-        limit: &Expr,
-        step: Option<&Expr>,
-        body: &Block,
+        var: TypedName<'_>,
+        start: Expr<'_>,
+        limit: Expr<'_>,
+        step: Option<Expr<'_>>,
+        body: Block<'_>,
         line: u32,
     ) -> R<()> {
         let base = self.fs().freereg;
         self.new_localvar("(for index)", 0)?;
         self.new_localvar("(for limit)", 1)?;
         self.new_localvar("(for step)", 2)?;
-        self.new_localvar(&var.name.text, 3)?;
+        self.new_localvar(var.name.text(), 3)?;
         self.exp1(start)?;
         self.exp1(limit)?;
         if let Some(s) = step {
@@ -1540,25 +1540,31 @@ impl Compiler<'_> {
             self.reserveregs(1)?;
         }
         let last = step.unwrap_or(limit);
-        let do_at = self.next_token(last.span.end);
+        let do_at = self.next_token(last.span().end);
         self.forbody(base, line, 1, true, body, do_at)
     }
 
-    fn forlist(&mut self, vars: &[TypedName], exprs: &[Expr], body: &Block, line: u32) -> R<()> {
+    fn forlist(
+        &mut self,
+        vars: TypedNames<'_>,
+        exprs: Exprs<'_>,
+        body: Block<'_>,
+        line: u32,
+    ) -> R<()> {
         let base = self.fs().freereg;
         self.new_localvar("(for generator)", 0)?;
         self.new_localvar("(for state)", 1)?;
         self.new_localvar("(for control)", 2)?;
         for (i, v) in vars.iter().enumerate() {
-            self.new_localvar(&v.name.text, 3 + i)?;
+            self.new_localvar(v.name.text(), 3 + i)?;
         }
         let (nexps, mut e) = self.explist(exprs)?;
         self.adjust_assign(3, nexps, &mut e)?;
         self.checkstack(3)?;
-        let do_at = self.next_token(exprs[exprs.len() - 1].span.end);
+        let do_at = self.next_token(exprs.at(exprs.len() - 1).span().end);
         // Lua takes this loop's line after reading `in`: the next token's.
         let _ = line;
-        let line = self.line(exprs[0].span.start);
+        let line = self.line(exprs.at(0).span().start);
         self.forbody(base, line, vars.len(), false, body, do_at)
     }
 
@@ -1587,26 +1593,26 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    fn funcstat(&mut self, name: &FuncName, func: &FuncBody, line: u32) -> R<()> {
-        let mut v = self.singlevar(&name.path[0].text)?;
-        for field in name.path.iter().skip(1).chain(name.method.iter()) {
+    fn funcstat(&mut self, name: FuncName<'_>, func: Func<'_>, line: u32) -> R<()> {
+        let mut v = self.singlevar(name.path().at(0).text())?;
+        for field in name.path().iter().skip(1).chain(name.method()) {
             self.exp2anyreg(&mut v)?;
-            let k = self.string_k(field.text.as_bytes())?;
+            let k = self.string_k(field.text().as_bytes())?;
             let mut key = Exp::new(EK::K(k));
             self.indexed(&mut v, &mut key)?;
         }
-        let mut b = self.body(func, name.method.is_some(), line)?;
+        let mut b = self.body(func, name.method().is_some(), line)?;
         self.storevar(&v, &mut b)?;
         self.fixline(line);
         Ok(())
     }
 
-    fn localstat(&mut self, names: &[TypedName], values: &[Expr]) -> R<()> {
+    fn localstat(&mut self, names: TypedNames<'_>, values: Exprs<'_>) -> R<()> {
         for (i, n) in names.iter().enumerate() {
-            self.new_localvar(&n.name.text, i)?;
+            self.new_localvar(n.name.text(), i)?;
         }
         // The names, then any `=`, are read before the values.
-        let mut end = names[names.len() - 1].name.span.end;
+        let mut end = names.at(names.len() - 1).name.span().end;
         self.lastline = self.line(end - 1);
         let (nexps, mut e) = if values.is_empty() {
             (0, Exp::new(EK::Void))
@@ -1646,11 +1652,11 @@ impl Compiler<'_> {
 
     /// Compiles `exprs`, all but the last into consecutive registers; returns
     /// the count and the last, still open, expression.
-    fn explist(&mut self, exprs: &[Expr]) -> R<(usize, Exp)> {
-        let mut v = self.expr(&exprs[0])?;
-        for (prev, e) in exprs.iter().zip(&exprs[1..]) {
+    fn explist(&mut self, exprs: Exprs<'_>) -> R<(usize, Exp)> {
+        let mut v = self.expr(exprs.at(0))?;
+        for (prev, e) in exprs.iter().zip(exprs.iter().skip(1)) {
             // The previous value is stored after the `,` is read.
-            self.lastline = self.line(self.next_token(prev.span.end));
+            self.lastline = self.line(self.next_token(prev.span().end));
             self.exp2nextreg(&mut v)?;
             v = self.expr(e)?;
         }
@@ -1680,7 +1686,7 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    fn assignment(&mut self, targets: &[Expr], values: &[Expr]) -> R<()> {
+    fn assignment(&mut self, targets: Exprs<'_>, values: Exprs<'_>) -> R<()> {
         let mut lhs: Vec<Exp> = Vec::with_capacity(targets.len());
         for t in targets {
             let v = self.primary_target(t)?;
@@ -1694,7 +1700,7 @@ impl Compiler<'_> {
         }
         let nvars = lhs.len();
         // The values follow the `=`.
-        self.lastline = self.line(self.next_token(targets[nvars - 1].span.end));
+        self.lastline = self.line(self.next_token(targets.at(nvars - 1).span().end));
         let (nexps, mut e) = self.explist(values)?;
         let mut rest = nvars;
         if nexps != nvars {
@@ -1718,14 +1724,14 @@ impl Compiler<'_> {
     }
 
     /// An assignment target: a variable or an indexed expression.
-    fn primary_target(&mut self, e: &Expr) -> R<Exp> {
-        match &e.kind {
-            ExprKind::Name(n) => self.singlevar(&n.text),
+    fn primary_target(&mut self, e: Expr<'_>) -> R<Exp> {
+        match e.kind() {
+            ExprKind::Name(n) => self.singlevar(n.text()),
             ExprKind::Index { obj, key } => {
                 let mut v = self.expr(obj)?;
                 self.exp2anyreg(&mut v)?;
                 // The key follows the `[`.
-                self.lastline = self.line(self.next_token(obj.span.end));
+                self.lastline = self.line(self.next_token(obj.span().end));
                 let mut k = self.expr(key)?;
                 self.exp2val(&mut k)?;
                 self.indexed(&mut v, &mut k)?;
@@ -1734,16 +1740,16 @@ impl Compiler<'_> {
             ExprKind::Field { obj, name } => {
                 let mut v = self.expr(obj)?;
                 self.exp2anyreg(&mut v)?;
-                let kk = self.string_k(name.text.as_bytes())?;
+                let kk = self.string_k(name.text().as_bytes())?;
                 let mut k = Exp::new(EK::K(kk));
                 self.indexed(&mut v, &mut k)?;
                 Ok(v)
             }
-            _ => self.err(self.line(e.span.start), "syntax error"),
+            _ => self.err(self.line(e.span().start), "syntax error"),
         }
     }
 
-    fn retstat(&mut self, values: &[Expr]) -> R<()> {
+    fn retstat(&mut self, values: Exprs<'_>) -> R<()> {
         let (first, nret) = if values.is_empty() {
             (0, 0)
         } else {
@@ -1770,10 +1776,10 @@ impl Compiler<'_> {
 
     // --------------------------------------------------------- expressions
 
-    fn body(&mut self, func: &FuncBody, needself: bool, line: u32) -> R<Exp> {
-        if !func.type_params.is_empty() {
+    fn body(&mut self, func: Func<'_>, needself: bool, line: u32) -> R<Exp> {
+        if !func.type_params().is_empty() {
             // Type parameters are erased; harmless, but not Lua 5.1 syntax.
-            return self.not_lua(func.span, "a generic function");
+            return self.not_lua(func.span(), "a generic function");
         }
         self.open_func(line);
         let mut n = 0;
@@ -1781,16 +1787,16 @@ impl Compiler<'_> {
             self.new_localvar("self", n)?;
             n += 1;
         }
-        for p in &func.params {
-            if p.default.is_some() {
-                return self.not_lua(func.span, "a default parameter");
+        for p in &func.params() {
+            if p.default().is_some() {
+                return self.not_lua(func.span(), "a default parameter");
             }
-            self.new_localvar(&p.name.text, n)?;
+            self.new_localvar(p.name().text(), n)?;
             n += 1;
         }
-        self.fs_mut().proto.is_vararg = func.vararg.is_some();
+        self.fs_mut().proto.is_vararg = func.vararg().is_some();
         let mut hasarg = 0;
-        if func.vararg.is_some() && self.options.compat_vararg {
+        if func.vararg().is_some() && self.options.compat_vararg {
             self.new_localvar("arg", n)?;
             n += 1;
             hasarg = 1;
@@ -1799,8 +1805,8 @@ impl Compiler<'_> {
         let nactvar = self.fs().nactvar;
         self.fs_mut().proto.num_params = (nactvar - hasarg) as u8;
         self.reserveregs(nactvar)?;
-        self.chunk(&func.body)?;
-        self.lastline = self.line(func.end_span.start);
+        self.chunk(func.body())?;
+        self.lastline = self.line(func.end_span().start);
         self.fs_mut().proto.last_line_defined = self.lastline;
         let proto = self.close_func();
         let fs = self.fs_mut();
@@ -1811,26 +1817,26 @@ impl Compiler<'_> {
         )))
     }
 
-    fn funcargs(&mut self, f: &mut Exp, args: &Args) -> R<()> {
-        let line = match args {
-            Args::Parens { span, .. } => self.line(span.start),
-            Args::Table(e) => self.line(e.span.start),
+    fn funcargs(&mut self, f: &mut Exp, args: Args<'_>) -> R<()> {
+        let line = match args.kind() {
+            ArgsKind::Parens { span, .. } => self.line(span.start),
+            ArgsKind::Table(e) => self.line(e.span().start),
             // The string is the lookahead: the scanner is at its end.
-            Args::String(e) => self.line_end(e.span),
+            ArgsKind::String(e) => self.line_end(e.span()),
         };
-        let mut a = match args {
-            Args::Parens { args, span } => {
+        let mut a = match args.kind() {
+            ArgsKind::Parens { args, span } => {
                 if args.is_empty() {
                     Exp::new(EK::Void)
                 } else {
                     let (_, mut e) = self.explist(args)?;
                     self.setmultret(&mut e)?;
                     // The last argument is closed after the `)`.
-                    self.lastline = self.line_end(*span);
+                    self.lastline = self.line_end(span);
                     e
                 }
             }
-            Args::Table(e) | Args::String(e) => self.expr(e)?,
+            ArgsKind::Table(e) | ArgsKind::String(e) => self.expr(e)?,
         };
         let EK::NonReloc(base) = f.k else {
             unreachable!("function in a register")
@@ -1853,7 +1859,7 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    fn constructor(&mut self, fields: &[TableField], span: Span) -> R<Exp> {
+    fn constructor(&mut self, fields: TableFields<'_>, span: Span) -> R<Exp> {
         // NEWTABLE is emitted before the `{` is read.
         let pc = self.code(Op::NewTable {
             a: 0,
@@ -1895,11 +1901,11 @@ impl Compiler<'_> {
                 }
                 TableField::Named { name, value, .. } => {
                     let reg = self.fs().freereg;
-                    let k = self.string_k(name.text.as_bytes())?;
+                    let k = self.string_k(name.text().as_bytes())?;
                     let mut key = Exp::new(EK::K(k));
                     nh += 1;
                     // The key is prepared after the `=`.
-                    self.lastline = self.line(self.next_token(name.span.end));
+                    self.lastline = self.line(self.next_token(name.span().end));
                     let rkkey = self.exp2rk(&mut key)?;
                     let mut val = self.expr(value)?;
                     let rkval = self.exp2rk(&mut val)?;
@@ -1918,7 +1924,7 @@ impl Compiler<'_> {
                     self.exp2val(&mut k)?;
                     nh += 1;
                     // After the `]` and the `=`.
-                    let close = self.next_token(key.span.end);
+                    let close = self.next_token(key.span().end);
                     self.lastline = self.line(self.next_token(close + 1));
                     let rkkey = self.exp2rk(&mut k)?;
                     let mut val = self.expr(value)?;
@@ -1955,43 +1961,43 @@ impl Compiler<'_> {
         Ok(t)
     }
 
-    fn expr(&mut self, e: &Expr) -> R<Exp> {
+    fn expr(&mut self, e: Expr<'_>) -> R<Exp> {
         self.enter_level()?;
         let r = self.expr_inner(e);
         self.leave_level();
         let v = r?;
-        self.lastline = self.line_end(e.span);
+        self.lastline = self.line_end(e.span());
         Ok(v)
     }
 
-    fn expr_inner(&mut self, e: &Expr) -> R<Exp> {
-        Ok(match &e.kind {
+    fn expr_inner(&mut self, e: Expr<'_>) -> R<Exp> {
+        Ok(match e.kind() {
             ExprKind::Nil => Exp::new(EK::Nil),
             ExprKind::True => Exp::new(EK::True),
             ExprKind::False => Exp::new(EK::False),
-            ExprKind::Number(n) => match n.value {
+            ExprKind::Number(n) => match n.value() {
                 Some(v) => Exp::new(EK::KNum(v)),
-                None => return self.err(self.line(e.span.start), "malformed number"),
+                None => return self.err(self.line(e.span().start), "malformed number"),
             },
-            ExprKind::String(s) => Exp::new(EK::K(self.string_k(&s.value)?)),
+            ExprKind::String(s) => Exp::new(EK::K(self.string_k(&s.value())?)),
             ExprKind::Vararg => {
                 if !self.fs().proto.is_vararg {
                     return self.err(
-                        self.line(e.span.start),
+                        self.line(e.span().start),
                         "cannot use '...' outside a vararg function near '...'",
                     );
                 }
                 // Emitted before the `...` is read.
                 Exp::new(EK::Vararg(self.code(Op::Vararg { a: 0, b: 1 })))
             }
-            ExprKind::Function(f) => self.body(f, false, self.line(e.span.start))?,
-            ExprKind::Table(fields) => self.constructor(fields, e.span)?,
-            ExprKind::Name(n) => self.singlevar(&n.text)?,
+            ExprKind::Function(f) => self.body(f, false, self.line(e.span().start))?,
+            ExprKind::Table(fields) => self.constructor(fields, e.span())?,
+            ExprKind::Name(n) => self.singlevar(n.text())?,
             ExprKind::Index { obj, key } => {
                 let mut v = self.expr(obj)?;
                 self.exp2anyreg(&mut v)?;
                 // The key follows the `[`.
-                self.lastline = self.line(self.next_token(obj.span.end));
+                self.lastline = self.line(self.next_token(obj.span().end));
                 let mut k = self.expr(key)?;
                 self.exp2val(&mut k)?;
                 self.indexed(&mut v, &mut k)?;
@@ -2000,7 +2006,7 @@ impl Compiler<'_> {
             ExprKind::Field { obj, name } => {
                 let mut v = self.expr(obj)?;
                 self.exp2anyreg(&mut v)?;
-                let kk = self.string_k(name.text.as_bytes())?;
+                let kk = self.string_k(name.text().as_bytes())?;
                 let mut k = Exp::new(EK::K(kk));
                 self.indexed(&mut v, &mut k)?;
                 v
@@ -2013,8 +2019,8 @@ impl Compiler<'_> {
             }
             ExprKind::Method { obj, name, args } => {
                 let mut v = self.expr(obj)?;
-                self.lastline = self.line(name.span.start);
-                let kk = self.string_k(name.text.as_bytes())?;
+                self.lastline = self.line(name.span().start);
+                let kk = self.string_k(name.text().as_bytes())?;
                 let mut k = Exp::new(EK::K(kk));
                 self.self_(&mut v, &mut k)?;
                 self.funcargs(&mut v, args)?;
@@ -2023,20 +2029,20 @@ impl Compiler<'_> {
             ExprKind::Paren(inner) => {
                 let mut v = self.expr(inner)?;
                 // Discharged after the `)`.
-                self.lastline = self.line_end(e.span);
+                self.lastline = self.line_end(e.span());
                 self.dischargevars(&mut v);
                 v
             }
             ExprKind::Binary { op, lhs, rhs } => {
                 if !op.is_lua() {
-                    return self.not_lua(e.span, &format!("the `{}` operator", op.as_str()));
+                    return self.not_lua(e.span(), &format!("the `{}` operator", op.as_str()));
                 }
                 let mut v1 = self.expr(lhs)?;
                 // `infix` runs after the operator is read.
-                self.lastline = self.line(self.next_token(lhs.span.end));
-                self.infix(*op, &mut v1)?;
+                self.lastline = self.line(self.next_token(lhs.span().end));
+                self.infix(op, &mut v1)?;
                 let mut v2 = self.expr(rhs)?;
-                self.posfix(*op, &mut v1, &mut v2)?;
+                self.posfix(op, &mut v1, &mut v2)?;
                 v1
             }
             ExprKind::Unary { op, operand } => {
@@ -2055,17 +2061,17 @@ impl Compiler<'_> {
                         let mut zero = Exp::new(EK::KNum(0.0));
                         self.codearith(None, true, &mut v, &mut zero)?;
                     }
-                    UnOp::BNot => return self.not_lua(e.span, "the `~` operator"),
+                    UnOp::BNot => return self.not_lua(e.span(), "the `~` operator"),
                 }
                 v
             }
-            ExprKind::Interp(_) => return self.not_lua(e.span, "string interpolation"),
+            ExprKind::Interp(_) => return self.not_lua(e.span(), "string interpolation"),
             ExprKind::OptField { .. }
             | ExprKind::OptIndex { .. }
             | ExprKind::OptMethod { .. }
-            | ExprKind::OptCall { .. } => return self.not_lua(e.span, "optional chaining"),
-            ExprKind::Cast { .. } => return self.not_lua(e.span, "a type assertion"),
-            ExprKind::Error => return self.err(self.line(e.span.start), "syntax error"),
+            | ExprKind::OptCall { .. } => return self.not_lua(e.span(), "optional chaining"),
+            ExprKind::Cast { .. } => return self.not_lua(e.span(), "a type assertion"),
+            ExprKind::Error => return self.err(self.line(e.span().start), "syntax error"),
         })
     }
 }

@@ -138,15 +138,17 @@ macro_rules! handle {
                 $name(node)
             }
 
-            /// The handle of a boxed node. Only while consumers move to
-            /// the views (#19, phase 3); removed with the boxed tree.
-            pub fn of(node: &'t $ast) -> Self {
+            /// The handle of a boxed node (for the parser; removed with
+            /// the boxed tree, #19).
+            #[allow(dead_code)]
+            pub(crate) fn of(node: &'t $ast) -> Self {
                 $name(node)
             }
 
-            /// The boxed node. Only while consumers move to the views
-            /// (#19, phase 3); removed with the boxed tree.
-            pub fn ast(self) -> &'t $ast {
+            /// The boxed node (for the parser; removed with the boxed
+            /// tree, #19).
+            #[allow(dead_code)]
+            pub(crate) fn ast(self) -> &'t $ast {
                 self.0
             }
         }

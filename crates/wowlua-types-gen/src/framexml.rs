@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 use std::collections::HashSet;
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 
 /// The aura filter words of `AuraUtil.AuraFilters` in the UI code (`!`
 /// when the flavor negates words), sorted.
@@ -111,8 +111,8 @@ fn add(out: &mut IndexMap<String, String>, name: &str, ty: &str) {
     }
 }
 
-fn value_type(e: &Expr) -> &'static str {
-    match &e.kind {
+fn value_type(e: Expr<'_>) -> &'static str {
+    match e.kind() {
         ExprKind::Function(_) => "(...any) -> ...any",
         ExprKind::Table(_) => "table",
         ExprKind::String(_) | ExprKind::Interp(_) => "string",
@@ -130,27 +130,27 @@ fn lua_globals(text: &str, out: &mut IndexMap<String, String>) {
         return;
     }
     let mut locals = HashSet::new();
-    block(&parse.chunk.block, &mut locals, out);
+    block(parse.view().block(), &mut locals, out);
 }
 
 /// Top-level statements (and those in top-level `do`/`if` blocks).
-fn block(b: &Block, locals: &mut HashSet<String>, out: &mut IndexMap<String, String>) {
-    for s in &b.stmts {
-        match &s.kind {
+fn block(b: Block<'_>, locals: &mut HashSet<String>, out: &mut IndexMap<String, String>) {
+    for s in &b.stmts() {
+        match s.kind() {
             StmtKind::Local { names, .. } => {
                 for n in names {
-                    locals.insert(n.name.text.to_string());
+                    locals.insert(n.name.text().to_string());
                 }
             }
             StmtKind::LocalFunction { name, .. } => {
-                locals.insert(name.text.to_string());
+                locals.insert(name.text().to_string());
             }
             StmtKind::Function { name, .. } => {
-                let root = name.path[0].text.to_string();
+                let root = name.path().at(0).text().to_string();
                 if locals.contains(&root) {
                     continue;
                 }
-                if name.path.len() == 1 && name.method.is_none() {
+                if name.path().len() == 1 && name.method().is_none() {
                     add(out, &root, "(...any) -> ...any");
                 } else {
                     add(out, &root, "table");
@@ -159,17 +159,15 @@ fn block(b: &Block, locals: &mut HashSet<String>, out: &mut IndexMap<String, Str
             StmtKind::Assign { targets, values } => {
                 for (i, t) in targets.iter().enumerate() {
                     let ty = values.get(i).map(value_type).unwrap_or("any");
-                    match &t.kind {
-                        ExprKind::Name(n) if !locals.contains(n.text.as_ref()) => {
-                            add(out, &n.text, ty)
-                        }
+                    match t.kind() {
+                        ExprKind::Name(n) if !locals.contains(n.text()) => add(out, n.text(), ty),
                         // `_G.X = …` / `_G["X"] = …`
-                        ExprKind::Field { obj, name } if matches!(&obj.kind, ExprKind::Name(g) if g.text.as_ref() == "_G") => {
-                            add(out, &name.text, ty)
+                        ExprKind::Field { obj, name } if matches!(obj.kind(), ExprKind::Name(g) if g.text() == "_G") => {
+                            add(out, name.text(), ty)
                         }
-                        ExprKind::Index { obj, key } if matches!(&obj.kind, ExprKind::Name(g) if g.text.as_ref() == "_G") => {
-                            if let ExprKind::String(k) = &key.kind {
-                                add(out, &String::from_utf8_lossy(&k.value), ty);
+                        ExprKind::Index { obj, key } if matches!(obj.kind(), ExprKind::Name(g) if g.text() == "_G") => {
+                            if let ExprKind::String(k) = key.kind() {
+                                add(out, &String::from_utf8_lossy(&k.value()), ty);
                             }
                         }
                         _ => {}

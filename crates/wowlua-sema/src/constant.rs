@@ -227,7 +227,7 @@ fn concat_part(c: &Const) -> Option<Vec<u8>> {
 /// Folds a binary operation on constants. `None` means "not foldable" (the
 /// expression stays as it is): string ordering depends on the locale, and
 /// operations that would raise errors at run time are left to run time.
-pub fn fold_binary(op: wowlua_syntax::ast::BinOp, a: &Const, b: &Const) -> Option<Const> {
+pub fn fold_binary(op: wowlua_syntax::view::BinOp, a: &Const, b: &Const) -> Option<Const> {
     use wowlua_syntax::view::BinOp as B;
     let num = |c: &Const| match c {
         Const::Number(n) => Some(*n),

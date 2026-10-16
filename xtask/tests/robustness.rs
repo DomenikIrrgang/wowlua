@@ -25,7 +25,7 @@ fn exercise(src: &[u8]) {
     let mut db = SourceDb::new();
     let file = db.add("t.wowlua", String::from_utf8_lossy(src).into_owned());
     let parsed = wowlua_syntax::parse(src, file);
-    let _ = wowlua_syntax::features::features(&parsed.chunk);
+    let _ = wowlua_syntax::features::features(parsed.view());
     if parsed.has_errors() {
         return;
     }

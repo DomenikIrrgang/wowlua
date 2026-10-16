@@ -4,24 +4,24 @@
 //! `f("x")`) do not matter; parentheses and literal values do.
 
 use std::fmt::Write;
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 
-pub fn fingerprint(chunk: &Chunk) -> String {
+pub fn fingerprint(chunk: Chunk<'_>) -> String {
     let mut out = String::new();
-    block(&chunk.block, &mut out);
+    block(chunk.block(), &mut out);
     out
 }
 
-fn block(b: &Block, out: &mut String) {
+fn block(b: Block<'_>, out: &mut String) {
     out.push('{');
-    for s in &b.stmts {
+    for s in &b.stmts() {
         stmt(s, out);
         out.push(';');
     }
     out.push('}');
 }
 
-fn list(es: &[Expr], out: &mut String) {
+fn list(es: Exprs<'_>, out: &mut String) {
     out.push('[');
     for e in es {
         expr(e, out);
@@ -30,24 +30,24 @@ fn list(es: &[Expr], out: &mut String) {
     out.push(']');
 }
 
-fn func(f: &FuncBody, out: &mut String) {
+fn func(f: Func<'_>, out: &mut String) {
     out.push_str("fn(");
-    for p in &f.params {
-        let _ = write!(out, "{},", p.name.text);
+    for p in &f.params() {
+        let _ = write!(out, "{},", p.name().text());
     }
-    if f.vararg.is_some() {
+    if f.vararg().is_some() {
         out.push_str("...");
     }
     out.push(')');
-    block(&f.body, out);
+    block(f.body(), out);
 }
 
-fn stmt(s: &Stmt, out: &mut String) {
+fn stmt(s: Stmt<'_>, out: &mut String) {
     stacker::maybe_grow(64 * 1024, 1024 * 1024, || stmt_inner(s, out))
 }
 
-fn stmt_inner(s: &Stmt, out: &mut String) {
-    match &s.kind {
+fn stmt_inner(s: Stmt<'_>, out: &mut String) {
+    match s.kind() {
         StmtKind::Assign { targets, values } => {
             out.push_str("set");
             list(targets, out);
@@ -97,7 +97,7 @@ fn stmt_inner(s: &Stmt, out: &mut String) {
             step,
             body,
         } => {
-            let _ = write!(out, "for {}=", var.name.text);
+            let _ = write!(out, "for {}=", var.name.text());
             expr(start, out);
             expr(limit, out);
             if let Some(s) = step {
@@ -108,29 +108,29 @@ fn stmt_inner(s: &Stmt, out: &mut String) {
         StmtKind::GenericFor { vars, exprs, body } => {
             out.push_str("forin ");
             for v in vars {
-                let _ = write!(out, "{},", v.name.text);
+                let _ = write!(out, "{},", v.name.text());
             }
             list(exprs, out);
             block(body, out);
         }
         StmtKind::Function { name, func: f } => {
             out.push_str("function ");
-            for n in &name.path {
-                let _ = write!(out, "{}.", n.text);
+            for n in &name.path() {
+                let _ = write!(out, "{}.", n.text());
             }
-            if let Some(m) = &name.method {
-                let _ = write!(out, ":{}", m.text);
+            if let Some(m) = &name.method() {
+                let _ = write!(out, ":{}", m.text());
             }
             func(f, out);
         }
         StmtKind::LocalFunction { name, func: f } => {
-            let _ = write!(out, "localfn {}", name.text);
+            let _ = write!(out, "localfn {}", name.text());
             func(f, out);
         }
         StmtKind::Local { names, values } => {
             out.push_str("local ");
             for n in names {
-                let _ = write!(out, "{},", n.name.text);
+                let _ = write!(out, "{},", n.name.text());
             }
             list(values, out);
         }
@@ -145,7 +145,7 @@ fn stmt_inner(s: &Stmt, out: &mut String) {
     }
 }
 
-fn args(a: &Args, out: &mut String) {
+fn args(a: Args<'_>, out: &mut String) {
     out.push('(');
     for e in a.exprs() {
         expr(e, out);
@@ -154,20 +154,20 @@ fn args(a: &Args, out: &mut String) {
     out.push(')');
 }
 
-fn expr(e: &Expr, out: &mut String) {
+fn expr(e: Expr<'_>, out: &mut String) {
     stacker::maybe_grow(64 * 1024, 1024 * 1024, || expr_inner(e, out))
 }
 
-fn expr_inner(e: &Expr, out: &mut String) {
-    match &e.kind {
+fn expr_inner(e: Expr<'_>, out: &mut String) {
+    match e.kind() {
         ExprKind::Nil => out.push_str("nil"),
         ExprKind::True => out.push_str("true"),
         ExprKind::False => out.push_str("false"),
         ExprKind::Number(n) => {
-            let _ = write!(out, "#{}", n.raw);
+            let _ = write!(out, "#{}", n.raw());
         }
         ExprKind::String(s) => {
-            let _ = write!(out, "{:?}", s.value);
+            let _ = write!(out, "{:?}", s.value());
         }
         ExprKind::Vararg => out.push_str("..."),
         ExprKind::Function(f) => func(f, out),
@@ -182,7 +182,7 @@ fn expr_inner(e: &Expr, out: &mut String) {
                         expr(value, out);
                     }
                     TableField::Named { name, value, .. } => {
-                        let _ = write!(out, "{}=", name.text);
+                        let _ = write!(out, "{}=", name.text());
                         expr(value, out);
                     }
                     TableField::Positional(v) => expr(v, out),
@@ -191,7 +191,7 @@ fn expr_inner(e: &Expr, out: &mut String) {
             }
             out.push('}');
         }
-        ExprKind::Name(n) => out.push_str(&n.text),
+        ExprKind::Name(n) => out.push_str(n.text()),
         ExprKind::Index { obj, key } => {
             expr(obj, out);
             out.push('[');
@@ -200,7 +200,7 @@ fn expr_inner(e: &Expr, out: &mut String) {
         }
         ExprKind::Field { obj, name } => {
             expr(obj, out);
-            let _ = write!(out, ".{}", name.text);
+            let _ = write!(out, ".{}", name.text());
         }
         ExprKind::Call { callee, args: a } => {
             expr(callee, out);
@@ -208,7 +208,7 @@ fn expr_inner(e: &Expr, out: &mut String) {
         }
         ExprKind::Method { obj, name, args: a } => {
             expr(obj, out);
-            let _ = write!(out, ":{}", name.text);
+            let _ = write!(out, ":{}", name.text());
             args(a, out);
         }
         ExprKind::Paren(inner) => {

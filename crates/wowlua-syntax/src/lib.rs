@@ -6,7 +6,13 @@
 //! checks while generating code (locals, upvalues, registers), which the
 //! build checks on its output.
 
+/// The boxed tree behind the [views](view): read the tree through those.
+/// `internals` makes it public, for `cargo xtask parse-stats` only (it
+/// measures the tree's heap); it goes with the boxed tree (#19).
+#[cfg(feature = "internals")]
 pub mod ast;
+#[cfg(not(feature = "internals"))]
+mod ast;
 pub mod deep;
 pub mod features;
 pub mod lexer;
@@ -26,7 +32,10 @@ pub use lexer::Lexed;
 /// nodes where parsing failed), the tokens with their trivia, and diagnostics.
 #[derive(Debug)]
 pub struct Parse {
+    #[cfg(feature = "internals")]
     pub chunk: ast::Chunk,
+    #[cfg(not(feature = "internals"))]
+    chunk: ast::Chunk,
     pub lexed: Lexed,
     pub diagnostics: Vec<Diagnostic>,
 }

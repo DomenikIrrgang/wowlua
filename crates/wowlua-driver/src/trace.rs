@@ -11,7 +11,7 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use wowlua_luair::sourcemap::SourceMap;
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 
 /// The decoded text: every input line, each location followed by
 /// `  → src/x.wowlua:12 in name`.
@@ -236,78 +236,79 @@ fn function_ranges(path: &std::path::Path) -> Vec<(u32, u32, String)> {
     let parse = wowlua_syntax::parse(&bytes, file);
     let lexed = &parse.lexed;
     let mut out = Vec::new();
-    let mut add = |f: &FuncBody, name: String| {
-        out.push((lexed.line_of(f.span.start), lexed.line_of(f.span.end), name));
+    let mut add = |f: Func<'_>, name: String| {
+        out.push((
+            lexed.line_of(f.span().start),
+            lexed.line_of(f.span().end),
+            name,
+        ));
     };
-    fn path_name(e: &Expr) -> Option<String> {
-        match &e.kind {
-            ExprKind::Name(n) => Some(n.text.to_string()),
-            ExprKind::Field { obj, name } => Some(format!("{}.{}", path_name(obj)?, name.text)),
+    fn path_name(e: Expr<'_>) -> Option<String> {
+        match e.kind() {
+            ExprKind::Name(n) => Some(n.text().to_string()),
+            ExprKind::Field { obj, name } => Some(format!("{}.{}", path_name(obj)?, name.text())),
             _ => None,
         }
     }
-    wowlua_syntax::visit::walk_stmts(
-        wowlua_syntax::view::Block::of(&parse.chunk.block),
-        &mut |s| match &s.ast().kind {
-            StmtKind::Export(inner) => {
-                if let StmtKind::Function { name, func } = &inner.kind {
-                    add(
-                        func,
-                        name.path
-                            .iter()
-                            .map(|p| p.text.as_ref())
-                            .collect::<Vec<_>>()
-                            .join("."),
-                    );
+    wowlua_syntax::visit::walk_stmts(parse.view().block(), &mut |s| match s.kind() {
+        StmtKind::Export(inner) => {
+            if let StmtKind::Function { name, func } = inner.kind() {
+                add(
+                    func,
+                    name.path()
+                        .iter()
+                        .map(|p| p.text())
+                        .collect::<Vec<_>>()
+                        .join("."),
+                );
+            }
+        }
+        StmtKind::Function { name, func } => {
+            let mut n = name
+                .path()
+                .iter()
+                .map(|p| p.text())
+                .collect::<Vec<_>>()
+                .join(".");
+            if let Some(m) = &name.method() {
+                n = format!("{n}:{}", m.text());
+            }
+            add(func, n);
+        }
+        StmtKind::LocalFunction { name, func } => add(func, name.text().to_string()),
+        StmtKind::Local { names, values } => {
+            for (n, v) in names.iter().zip(values) {
+                if let ExprKind::Function(f) = v.kind() {
+                    add(f, n.name.text().to_string());
                 }
             }
-            StmtKind::Function { name, func } => {
-                let mut n = name
-                    .path
-                    .iter()
-                    .map(|p| p.text.as_ref())
-                    .collect::<Vec<_>>()
-                    .join(".");
-                if let Some(m) = &name.method {
-                    n = format!("{n}:{}", m.text);
+        }
+        StmtKind::Assign { targets, values } => {
+            for (t, v) in targets.iter().zip(values) {
+                if let (ExprKind::Function(f), Some(n)) = (&v.kind(), path_name(t)) {
+                    add(*f, n);
                 }
-                add(func, n);
             }
-            StmtKind::LocalFunction { name, func } => add(func, name.text.to_string()),
-            StmtKind::Local { names, values } => {
-                for (n, v) in names.iter().zip(values) {
-                    if let ExprKind::Function(f) = &v.kind {
-                        add(f, n.name.text.to_string());
+        }
+        StmtKind::Class(c) => {
+            for m in &c.members() {
+                match m.kind() {
+                    ClassMemberKind::Method { name, func, .. } => {
+                        let sep = if m.modifiers().contains(&Modifier::Static) {
+                            "."
+                        } else {
+                            ":"
+                        };
+                        add(func, format!("{}{sep}{}", c.name().text(), name.text()));
                     }
-                }
-            }
-            StmtKind::Assign { targets, values } => {
-                for (t, v) in targets.iter().zip(values) {
-                    if let (ExprKind::Function(f), Some(n)) = (&v.kind, path_name(t)) {
-                        add(f, n);
+                    ClassMemberKind::Constructor { func, .. } => {
+                        add(func, format!("{}.new", c.name().text()))
                     }
+                    _ => {}
                 }
             }
-            StmtKind::Class(c) => {
-                for m in &c.members {
-                    match &m.kind {
-                        ClassMemberKind::Method { name, func, .. } => {
-                            let sep = if m.modifiers.contains(&Modifier::Static) {
-                                "."
-                            } else {
-                                ":"
-                            };
-                            add(func, format!("{}{sep}{}", c.name.text, name.text));
-                        }
-                        ClassMemberKind::Constructor { func, .. } => {
-                            add(func, format!("{}.new", c.name.text))
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            _ => {}
-        },
-    );
+        }
+        _ => {}
+    });
     out
 }

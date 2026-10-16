@@ -1,6 +1,6 @@
 //! Which wowlua-only syntax a file uses. Pure Lua 5.1 uses none.
 
-use crate::ast::*;
+use crate::view::*;
 use wowlua_span::Span;
 
 /// A wowlua language feature found in a file.
@@ -66,64 +66,64 @@ impl Feature {
 }
 
 /// Every use of wowlua-only syntax in `chunk`, in source order.
-pub fn features(chunk: &Chunk) -> Vec<(Feature, Span)> {
+pub fn features(chunk: Chunk<'_>) -> Vec<(Feature, Span)> {
     let mut out = Vec::new();
-    crate::deep::run(|| block(&chunk.block, &mut out));
+    crate::deep::run(|| block(chunk.block(), &mut out));
     out.sort_by_key(|(_, span)| span.start);
     out
 }
 
 type Out = Vec<(Feature, Span)>;
 
-fn block(b: &Block, out: &mut Out) {
-    for s in &b.stmts {
+fn block(b: Block<'_>, out: &mut Out) {
+    for s in &b.stmts() {
         stmt(s, out);
     }
 }
 
-fn typed(n: &TypedName, out: &mut Out) {
+fn typed(n: TypedName<'_>, out: &mut Out) {
     if let Some(t) = &n.ty {
-        out.push((Feature::TypeAnnotation, t.span));
+        out.push((Feature::TypeAnnotation, t.span()));
     }
 }
 
-fn func(f: &FuncBody, out: &mut Out) {
-    if let Some(p) = f.type_params.first() {
-        out.push((Feature::TypeAnnotation, p.name.span));
+fn func(f: Func<'_>, out: &mut Out) {
+    if let Some(p) = f.type_params().first() {
+        out.push((Feature::TypeAnnotation, p.name.span()));
     }
-    for p in &f.params {
-        if let Some(t) = &p.ty {
-            out.push((Feature::TypeAnnotation, t.span));
+    for p in &f.params() {
+        if let Some(t) = &p.ty() {
+            out.push((Feature::TypeAnnotation, t.span()));
         }
-        if let Some(d) = &p.default {
-            out.push((Feature::DefaultParameter, d.span));
-            expr(d, out);
+        if let Some(d) = &p.default() {
+            out.push((Feature::DefaultParameter, d.span()));
+            expr(*d, out);
         }
     }
-    if let Some(Vararg { ty: Some(_), span }) = &f.vararg {
+    if let Some(Vararg { ty: Some(_), span }) = &f.vararg() {
         out.push((Feature::TypeAnnotation, *span));
     }
-    if f.ret.is_some() {
-        out.push((Feature::TypeAnnotation, f.params_span));
+    if f.ret().is_some() {
+        out.push((Feature::TypeAnnotation, f.params_span()));
     }
-    block(&f.body, out);
+    block(f.body(), out);
 }
 
-fn stmt(s: &Stmt, out: &mut Out) {
+fn stmt(s: Stmt<'_>, out: &mut Out) {
     // `@if` is conditional compilation (milestone M2); other decorators M3.
     if let Some(d) = s
-        .decorators
+        .decorators()
         .iter()
-        .find(|d| !(d.path.len() == 1 && d.path[0].text.as_ref() == "if"))
+        .find(|d| !(d.path().len() == 1 && d.path().at(0).text() == "if"))
     {
-        out.push((Feature::Decorator, d.span));
+        out.push((Feature::Decorator, d.span()));
     }
-    match &s.kind {
+    match s.kind() {
         StmtKind::Assign { targets, values } => {
             targets.iter().chain(values).for_each(|e| expr(e, out));
         }
         StmtKind::Compound { target, value, .. } => {
-            out.push((Feature::CompoundAssignment, s.span));
+            out.push((Feature::CompoundAssignment, s.span()));
             expr(target, out);
             expr(value, out);
         }
@@ -181,10 +181,10 @@ fn stmt(s: &Stmt, out: &mut Out) {
             values.iter().for_each(|e| expr(e, out));
         }
         StmtKind::LocalDestructure { fields, value, .. } => {
-            out.push((Feature::Destructuring, s.span));
+            out.push((Feature::Destructuring, s.span()));
             for f in fields {
                 if let Some(d) = &f.default {
-                    expr(d, out);
+                    expr(*d, out);
                 }
             }
             if let Some(v) = value {
@@ -192,49 +192,49 @@ fn stmt(s: &Stmt, out: &mut Out) {
             }
         }
         StmtKind::Const { value, .. } => {
-            out.push((Feature::Const, s.span));
+            out.push((Feature::Const, s.span()));
             if let Some(v) = value {
                 expr(v, out);
             }
         }
         StmtKind::Return(values) => values.iter().for_each(|e| expr(e, out)),
         StmtKind::Break | StmtKind::Error => {}
-        StmtKind::Continue => out.push((Feature::Continue, s.span)),
-        StmtKind::Class(_) => out.push((Feature::Class, s.span)),
-        StmtKind::Enum(_) => out.push((Feature::Enum, s.span)),
+        StmtKind::Continue => out.push((Feature::Continue, s.span())),
+        StmtKind::Class(_) => out.push((Feature::Class, s.span())),
+        StmtKind::Enum(_) => out.push((Feature::Enum, s.span())),
         StmtKind::Interface(_) | StmtKind::TypeAlias(_) | StmtKind::Declare(_) => {
-            out.push((Feature::TypeDeclaration, s.span))
+            out.push((Feature::TypeDeclaration, s.span()))
         }
         StmtKind::Import(import) => {
-            if import.type_only {
-                out.push((Feature::TypeDeclaration, s.span));
+            if import.type_only() {
+                out.push((Feature::TypeDeclaration, s.span()));
             } else {
-                out.push((Feature::Module, s.span));
+                out.push((Feature::Module, s.span()));
             }
         }
-        StmtKind::Export(inner) => match inner.kind {
+        StmtKind::Export(inner) => match inner.kind() {
             StmtKind::Interface(_) | StmtKind::TypeAlias(_) => {
-                out.push((Feature::TypeDeclaration, s.span))
+                out.push((Feature::TypeDeclaration, s.span()))
             }
             _ => {
-                out.push((Feature::Module, s.span));
+                out.push((Feature::Module, s.span()));
                 stmt(inner, out);
             }
         },
     }
 }
 
-fn args(a: &Args, out: &mut Out) {
+fn args(a: Args<'_>, out: &mut Out) {
     for e in a.exprs() {
         expr(e, out);
     }
 }
 
-fn expr(e: &Expr, out: &mut Out) {
-    match &e.kind {
+fn expr(e: Expr<'_>, out: &mut Out) {
+    match e.kind() {
         ExprKind::Number(n) => {
-            if crate::lexer::is_wowlua_numeral(&n.raw) {
-                out.push((Feature::NumericLiteral, e.span));
+            if crate::lexer::is_wowlua_numeral(n.raw()) {
+                out.push((Feature::NumericLiteral, e.span()));
             }
         }
         ExprKind::Nil
@@ -259,7 +259,7 @@ fn expr(e: &Expr, out: &mut Out) {
             }
         }
         ExprKind::Interp(parts) => {
-            out.push((Feature::InterpolatedString, e.span));
+            out.push((Feature::InterpolatedString, e.span()));
             for p in parts {
                 if let InterpPart::Expr(x) = p {
                     expr(x, out);
@@ -280,31 +280,31 @@ fn expr(e: &Expr, out: &mut Out) {
             args(a, out);
         }
         ExprKind::OptField { obj, .. } => {
-            out.push((Feature::OptionalChaining, e.span));
+            out.push((Feature::OptionalChaining, e.span()));
             expr(obj, out);
         }
         ExprKind::OptIndex { obj, key } => {
-            out.push((Feature::OptionalChaining, e.span));
+            out.push((Feature::OptionalChaining, e.span()));
             expr(obj, out);
             expr(key, out);
         }
         ExprKind::OptMethod { obj, args: a, .. } => {
-            out.push((Feature::OptionalChaining, e.span));
+            out.push((Feature::OptionalChaining, e.span()));
             expr(obj, out);
             args(a, out);
         }
         ExprKind::OptCall { callee, args: a } => {
-            out.push((Feature::OptionalChaining, e.span));
+            out.push((Feature::OptionalChaining, e.span()));
             expr(callee, out);
             args(a, out);
         }
         ExprKind::Paren(x) => expr(x, out),
         ExprKind::Binary { op, lhs, rhs } => {
             match op {
-                BinOp::Coalesce => out.push((Feature::NilCoalescing, e.span)),
-                BinOp::IDiv => out.push((Feature::IntegerDivision, e.span)),
+                BinOp::Coalesce => out.push((Feature::NilCoalescing, e.span())),
+                BinOp::IDiv => out.push((Feature::IntegerDivision, e.span())),
                 BinOp::BAnd | BinOp::BOr | BinOp::BXor | BinOp::Shl | BinOp::Shr => {
-                    out.push((Feature::BitwiseOperator, e.span))
+                    out.push((Feature::BitwiseOperator, e.span()))
                 }
                 _ => {}
             }
@@ -312,13 +312,13 @@ fn expr(e: &Expr, out: &mut Out) {
             expr(rhs, out);
         }
         ExprKind::Unary { op, operand } => {
-            if *op == UnOp::BNot {
-                out.push((Feature::BitwiseOperator, e.span));
+            if op == UnOp::BNot {
+                out.push((Feature::BitwiseOperator, e.span()));
             }
             expr(operand, out);
         }
         ExprKind::Cast { expr: x, ty } => {
-            out.push((Feature::TypeAnnotation, ty.span));
+            out.push((Feature::TypeAnnotation, ty.span()));
             expr(x, out);
         }
     }

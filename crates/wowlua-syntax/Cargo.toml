@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[features]
+# The boxed tree in public (`ast`, `Parse::chunk`), for `cargo xtask
+# parse-stats` only.
+internals = []
+
 [dependencies]
 wowlua-diagnostics.workspace = true
 wowlua-span.workspace = true

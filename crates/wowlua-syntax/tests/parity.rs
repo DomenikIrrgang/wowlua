@@ -28,7 +28,7 @@ fn agree(src: &[u8]) -> Result<(), String> {
     match (ours, &lua) {
         (true, Ok(())) | (false, Err(_)) => Ok(()),
         (true, Err(e)) => {
-            if features(&parsed.chunk).is_empty() {
+            if features(parsed.view()).is_empty() {
                 Err(format!("accepted, but Lua 5.1 rejects: {e}"))
             } else {
                 Ok(()) // a wowlua extension

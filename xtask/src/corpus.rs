@@ -932,7 +932,7 @@ fn vm_file(lua: &mut mlua::Lua, dir: &Path, path: &Path) -> Result<VmFile> {
         };
         wowlua_vm::compiler::compile_with(
             &mut heap,
-            &parsed.chunk,
+            parsed.view(),
             src,
             std::rc::Rc::from(&b"=corpus"[..]),
             options,

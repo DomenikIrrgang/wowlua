@@ -6,7 +6,7 @@
 
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 
 /// A member addon of the workspace, for generated declaration files.
 #[derive(Clone, Debug)]
@@ -101,16 +101,13 @@ fn is_ident(name: &str) -> bool {
 }
 
 /// The global name of a `@global` / `@global("Name")` decorator list.
-fn global_name(decorators: &[Decorator], declared: &str) -> Option<String> {
-    let d = decorators
-        .iter()
-        .find(|d| d.path.len() == 1 && d.path[0].text.as_ref() == "global")?;
+fn global_name(decorators: Decorators<'_>, declared: &str) -> Option<String> {
+    let d = decorators.iter().find(|d| d.is_named("global"))?;
     let name = d
-        .args
-        .as_ref()
-        .and_then(|a| a.exprs().into_iter().next().cloned())
-        .and_then(|e| match &e.kind {
-            ExprKind::String(s) => Some(String::from_utf8_lossy(&s.value).into_owned()),
+        .args()
+        .and_then(|a| a.exprs().first())
+        .and_then(|e| match e.kind() {
+            ExprKind::String(s) => Some(String::from_utf8_lossy(&s.value()).into_owned()),
             _ => None,
         })
         .unwrap_or_else(|| declared.to_string());
@@ -118,46 +115,46 @@ fn global_name(decorators: &[Decorator], declared: &str) -> Option<String> {
 }
 
 /// `declare function name(params): ret` for a function body.
-fn function_decl(src: &[u8], name: &str, f: &FuncBody) -> String {
+fn function_decl(src: &[u8], name: &str, f: Func<'_>) -> String {
     let mut params: Vec<String> = f
-        .params
+        .params()
         .iter()
-        .map(|p| match &p.ty {
+        .map(|p| match &p.ty() {
             Some(t) => {
-                let mut t = text_of(src, t.span);
-                if p.default.is_some() && !t.ends_with('?') {
+                let mut t = text_of(src, t.span());
+                if p.default().is_some() && !t.ends_with('?') {
                     t = if t.contains(['|', '&', ' ']) {
                         format!("({t})?")
                     } else {
                         format!("{t}?")
                     };
                 }
-                format!("{}: {t}", p.name.text)
+                format!("{}: {t}", p.name().text())
             }
-            None => p.name.text.to_string(),
+            None => p.name().text().to_string(),
         })
         .collect();
-    if let Some(v) = &f.vararg {
+    if let Some(v) = &f.vararg() {
         params.push(match &v.ty {
-            Some(VarargType::Type(t)) => format!("...: {}", text_of(src, t.span)),
+            Some(VarargType::Type(t)) => format!("...: {}", text_of(src, t.span())),
             _ => "...".into(),
         });
     }
-    let ret = match &f.ret {
+    let ret = match &f.ret() {
         None => String::new(),
-        Some(RetType::Single(t)) => format!(": {}", text_of(src, t.span)),
+        Some(RetType::Single(t)) => format!(": {}", text_of(src, t.span())),
         Some(RetType::List { span, .. }) => format!(": {}", text_of(src, *span)),
-        Some(RetType::Pack(n)) => format!(": {}...", n.text),
-        Some(RetType::Predicate { ty, .. }) => format!(": {}", text_of(src, ty.span)),
+        Some(RetType::Pack(n)) => format!(": {}...", n.text()),
+        Some(RetType::Predicate { ty, .. }) => format!(": {}", text_of(src, ty.span())),
     };
     format!("declare function {name}({}){ret}\n", params.join(", "))
 }
 
 /// The declaration of one value: its annotated type, a literal's type, or
 /// `any`.
-fn value_decl(src: &[u8], name: &str, ty: Option<&Type>, value: Option<&Expr>) -> String {
-    let t = match (ty, value.map(|v| &v.kind)) {
-        (Some(t), _) => text_of(src, t.span),
+fn value_decl(src: &[u8], name: &str, ty: Option<Type<'_>>, value: Option<Expr<'_>>) -> String {
+    let t = match (ty, value.map(|v| v.kind())) {
+        (Some(t), _) => text_of(src, t.span()),
         (None, Some(ExprKind::Number(_))) => "number".into(),
         (None, Some(ExprKind::String(_))) => "string".into(),
         (None, Some(ExprKind::True | ExprKind::False)) => "boolean".into(),
@@ -194,52 +191,52 @@ pub fn global_declarations(src_dir: &Path) -> String {
         if parse.has_errors() {
             continue;
         }
-        for s in &parse.chunk.block.stmts {
-            let inner = match &s.kind {
-                StmtKind::Export(inner) => inner.as_ref(),
+        for s in parse.view().block().stmts() {
+            let inner = match s.kind() {
+                StmtKind::Export(inner) => inner,
                 _ => s,
             };
-            let decorators = &s.decorators;
-            match &inner.kind {
+            let decorators = &s.decorators();
+            match inner.kind() {
                 StmtKind::Function { name, func }
-                    if name.path.len() == 1 && name.method.is_none() =>
+                    if name.path().len() == 1 && name.method().is_none() =>
                 {
-                    if let Some(g) = global_name(decorators, &name.path[0].text) {
+                    if let Some(g) = global_name(*decorators, name.path().at(0).text()) {
                         out.push_str(&function_decl(&bytes, &g, func));
                     }
                 }
                 StmtKind::LocalFunction { name, func } => {
-                    if let Some(g) = global_name(decorators, &name.text) {
+                    if let Some(g) = global_name(*decorators, name.text()) {
                         out.push_str(&function_decl(&bytes, &g, func));
                     }
                 }
                 StmtKind::Local { names, values } if names.len() == 1 => {
-                    if let Some(g) = global_name(decorators, &names[0].name.text) {
-                        match values.first().map(|v| &v.kind) {
-                            Some(ExprKind::Function(f)) if names[0].ty.is_none() => {
+                    if let Some(g) = global_name(*decorators, names.at(0).name.text()) {
+                        match values.first().map(|v| v.kind()) {
+                            Some(ExprKind::Function(f)) if names.at(0).ty.is_none() => {
                                 out.push_str(&function_decl(&bytes, &g, f));
                             }
                             _ => out.push_str(&value_decl(
                                 &bytes,
                                 &g,
-                                names[0].ty.as_ref(),
+                                names.at(0).ty,
                                 values.first(),
                             )),
                         }
                     }
                 }
                 StmtKind::Const { name, ty, value } => {
-                    if let Some(g) = global_name(decorators, &name.text) {
-                        out.push_str(&value_decl(&bytes, &g, ty.as_deref(), value.as_deref()));
+                    if let Some(g) = global_name(*decorators, name.text()) {
+                        out.push_str(&value_decl(&bytes, &g, ty, value));
                     }
                 }
                 StmtKind::Class(c) => {
-                    if let Some(g) = global_name(decorators, &c.name.text) {
+                    if let Some(g) = global_name(*decorators, c.name().text()) {
                         out.push_str(&format!("declare global {g}: any\n"));
                     }
                 }
                 StmtKind::Enum(e) => {
-                    if let Some(g) = global_name(decorators, &e.name.text) {
+                    if let Some(g) = global_name(*decorators, e.name().text()) {
                         out.push_str(&format!("declare global {g}: any\n"));
                     }
                 }

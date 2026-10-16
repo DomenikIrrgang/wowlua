@@ -903,8 +903,8 @@ fn build_inner(
             continue;
         }
         if parse
-            .chunk
-            .directives
+            .view()
+            .directives()
             .iter()
             .any(|d| d.name.as_ref() == "nolint")
         {

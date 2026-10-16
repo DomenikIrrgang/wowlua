@@ -48,7 +48,7 @@ pub fn format(src: &[u8], file: FileId, config: &Config) -> Result<Vec<u8>, Erro
     if parsed.has_errors() {
         return Err(Error::Syntax(std::mem::take(&mut parsed.diagnostics)));
     }
-    if let Some((feature, span)) = wowlua_syntax::features::features(&parsed.chunk).first() {
+    if let Some((feature, span)) = wowlua_syntax::features::features(parsed.view()).first() {
         return Err(Error::Unsupported(
             Diagnostic::note(format!(
                 "not formatted: this formatter version handles plain Lua; {} are formatted from a later milestone",
@@ -58,7 +58,7 @@ pub fn format(src: &[u8], file: FileId, config: &Config) -> Result<Vec<u8>, Erro
         ));
     }
     let mut formatter = format::Formatter::new(&parsed, src, config.quote);
-    let doc = formatter.chunk(&parsed.chunk);
+    let doc = formatter.chunk(parsed.view());
     let printed = doc::print(&doc, config.line_width, &config.indent, config.indent_width);
     let mut out = Vec::with_capacity(printed.len() + 8);
     if parsed.lexed.bom {
@@ -81,7 +81,7 @@ pub fn format(src: &[u8], file: FileId, config: &Config) -> Result<Vec<u8>, Erro
             reparsed.diagnostics[0].message
         )));
     }
-    if canon::fingerprint(&reparsed.chunk) != canon::fingerprint(&parsed.chunk) {
+    if canon::fingerprint(reparsed.view()) != canon::fingerprint(parsed.view()) {
         return Err(Error::Unstable(
             "the formatted file means something else".into(),
         ));
@@ -95,12 +95,12 @@ pub fn format(src: &[u8], file: FileId, config: &Config) -> Result<Vec<u8>, Erro
 pub fn debug_fingerprints(src: &[u8], file: FileId, config: &Config) -> (String, String, String) {
     let parsed = wowlua_syntax::parse(src, file);
     let mut formatter = format::Formatter::new(&parsed, src, config.quote);
-    let doc = formatter.chunk(&parsed.chunk);
+    let doc = formatter.chunk(parsed.view());
     let printed = doc::print(&doc, config.line_width, &config.indent, config.indent_width);
     let reparsed = wowlua_syntax::parse(&printed, file);
     (
-        canon::fingerprint(&parsed.chunk),
-        canon::fingerprint(&reparsed.chunk),
+        canon::fingerprint(parsed.view()),
+        canon::fingerprint(reparsed.view()),
         String::from_utf8_lossy(&printed).into_owned(),
     )
 }
