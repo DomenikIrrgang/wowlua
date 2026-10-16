@@ -961,13 +961,55 @@ mod tests {
             !reused(src, foo, "declare function Other(): number\n"),
             "a global it reads is only in one flavor"
         );
+        let ns = |a: &str, b: &str| {
+            format!("declare namespace C_X\n    function A(): {a}\n    function B(): {b}\nend\n")
+        };
+        let reads_a = "print(C_X.A() + 1)\n";
+        assert!(
+            reused(reads_a, &ns("number", "number"), &ns("number", "string")),
+            "a member it does not read changes"
+        );
+        assert!(
+            !reused(reads_a, &ns("number", "number"), &ns("string", "number")),
+            "a member it reads changes"
+        );
         assert!(
             !reused(
-                "print(C_X.A() + 1)\n",
-                "declare namespace C_X\n    function A(): number\n    function B(): number\nend\n",
-                "declare namespace C_X\n    function A(): number\n    function B(): string\nend\n",
+                reads_a,
+                &ns("number", "number"),
+                "declare namespace C_X\n    function B(): number\nend\n",
             ),
-            "a member of a declaration it reads changes"
+            "a member it reads is missing"
+        );
+        // The API's `Enum`: namespaces of constants.
+        let api_enum = |quality: &str, other: &str| {
+            format!(
+                "declare namespace Enum\n    namespace Quality\n{quality}    end\n    namespace Other\n{other}    end\nend\n"
+            )
+        };
+        let reads_poor = "print(Enum.Quality.Poor + 1)\n";
+        let poor_good = "        const Poor: 0\n        const Good: 1\n";
+        assert!(
+            reused(
+                reads_poor,
+                &api_enum(poor_good, "        const A: 0\n"),
+                &api_enum(
+                    "        const Poor: 0\n        const Good: 1\n        const Epic: 2\n",
+                    "        const B: 0\n",
+                ),
+            ),
+            "an enum it reads gains a member, another enum differs"
+        );
+        assert!(
+            !reused(
+                reads_poor,
+                &api_enum(poor_good, "        const A: 0\n"),
+                &api_enum(
+                    "        const Poor: 1\n        const Good: 2\n",
+                    "        const A: 0\n"
+                ),
+            ),
+            "the member it reads has another value"
         );
         assert!(
             !reused(

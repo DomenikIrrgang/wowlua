@@ -176,10 +176,98 @@ pub struct Env {
 
 pub const ADDON_NAMESPACE: &str = "AddonNamespace";
 
+/// A declaration read by parts (`Env::view`).
+#[derive(Clone, Copy)]
+pub struct DefView<'a> {
+    id: DefId,
+    def: &'a Def,
+    declared: &'a super::declared::Declared,
+}
+
+impl<'a> DefView<'a> {
+    fn header(&self) -> &'a Def {
+        self.declared
+            .note_part(self.id, super::declared::Part::Header);
+        self.def
+    }
+
+    /// Its name and kind (every fingerprint has them: no record).
+    pub fn name(&self) -> &'a str {
+        &self.def.name
+    }
+
+    pub fn kind(&self) -> DefKind {
+        self.def.kind
+    }
+
+    pub fn params(&self) -> &'a [ParamId] {
+        &self.header().params
+    }
+
+    pub fn bases(&self) -> &'a [TypeId] {
+        &self.header().bases
+    }
+
+    pub fn is_abstract(&self) -> bool {
+        self.header().is_abstract
+    }
+
+    pub fn widget(&self) -> Option<&'a str> {
+        self.header().widget.as_deref()
+    }
+
+    pub fn native(&self) -> bool {
+        self.header().native
+    }
+
+    pub fn indexer(&self) -> Option<(TypeId, TypeId)> {
+        self.header().indexer
+    }
+
+    pub fn member(&self, name: &str) -> Option<&'a Member> {
+        self.declared
+            .note_part(self.id, super::declared::Part::Member(name));
+        self.def.members.get(name)
+    }
+
+    pub fn static_member(&self, name: &str) -> Option<&'a Member> {
+        self.declared
+            .note_part(self.id, super::declared::Part::Static(name));
+        self.def.statics.get(name)
+    }
+
+    /// The position of the enum member `name`.
+    pub fn enum_position(&self, name: &str) -> Option<usize> {
+        self.declared
+            .note_part(self.id, super::declared::Part::EnumNamed(name));
+        self.def
+            .enum_members
+            .iter()
+            .position(|(n, _)| n.as_ref() == name)
+    }
+
+    /// The enum member at position `i`.
+    pub fn enum_member_at(&self, i: u32) -> Option<&'a (Box<str>, TypeId)> {
+        self.declared
+            .note_part(self.id, super::declared::Part::EnumAt(i));
+        self.def.enum_members.get(i as usize)
+    }
+}
+
 impl Env {
     pub fn def(&self, id: DefId) -> &Def {
         self.declared.note_def(id);
         &self.defs[id.0 as usize]
+    }
+
+    /// A view of a declaration whose reads record only the parts they read
+    /// (`Declared::note_part`), where `def` records all of it.
+    pub fn view(&self, id: DefId) -> DefView<'_> {
+        DefView {
+            id,
+            def: &self.defs[id.0 as usize],
+            declared: &self.declared,
+        }
     }
 
     /// The number of declarations.
