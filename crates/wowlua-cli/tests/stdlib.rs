@@ -3236,18 +3236,19 @@ fn frames_move_resize_scale_and_save() {
     assert_eq!(
         plain(&out),
         [
-            "dragged TOPRIGHT TOPRIGHT -62 -34 300 200 1",
-            // The top left stays: the frame now reaches past the screen.
-            "resized TOPRIGHT TOPRIGHT 138 -34 500 250 1",
-            "no ctrl TOPRIGHT TOPRIGHT 138 -34 500 250 1",
-            "scaled TOPRIGHT TOPRIGHT 138 -34 500 250 1.1",
+            // The screen's middle third (1920 x 1080): anchored at its top.
+            "dragged TOP TOP 300 -190 300 200 1",
+            // Grown into the right third: anchored there.
+            "resized TOPRIGHT TOPRIGHT -310 -190 500 250 1",
+            "no ctrl TOPRIGHT TOPRIGHT -310 -190 500 250 1",
+            "scaled TOPRIGHT TOPRIGHT -310 -190 500 250 1.1",
             "locked true false",
-            "still TOPRIGHT TOPRIGHT 138 -34 500 250 1.1",
+            "still TOPRIGHT TOPRIGHT -310 -190 500 250 1.1",
             "reset nil",
             "anchor CENTER 300 200 1",
             "changes 4",
             "no shift nil",
-            "shift BOTTOM BOTTOM -2 10 - - 1",
+            "shift BOTTOMLEFT BOTTOMLEFT 460 10 - - 1",
             "in combat BOTTOMLEFT UIParent BOTTOMLEFT 460 10",
             "after combat TOPLEFT UIParent TOPLEFT 20 -20",
         ],
@@ -3317,11 +3318,11 @@ print("locked again", at(box))
             "locked outside nil",
             "lock = false true",
             "in edit mode true highlighted",
-            "Modern BOTTOMLEFT 562 334 100 100",
+            "Modern BOTTOMLEFT 1010 490 100 100",
             "selected selected 1",
             // A layout without its own position takes the last one saved.
             "Raid (no own position) CENTER 100 0",
-            "Raid moved BOTTOMLEFT 562 234 -100",
+            "Raid moved BOTTOMLEFT 1010 390 -100",
             "Modern again CENTER 100 0",
             "left false",
             "locked again CENTER 100 0",

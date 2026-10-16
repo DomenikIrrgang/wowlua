@@ -114,8 +114,9 @@ pub struct World {
     pub bindings: crate::bindings::Bindings,
 }
 
-/// UIParent's size in screen units at scale 1.
-pub const SCREEN: (f64, f64) = (1024.0, 768.0);
+/// UIParent's size in screen units at scale 1: 1920 x 1080, as WoW Forever
+/// had it (`/stdtest engine`).
+pub const SCREEN: (f64, f64) = (1920.0, 1080.0);
 
 /// Keeps one of the engine's Lua values alive (in a registry table).
 pub fn keep(vm: &mut Vm, v: Value) {

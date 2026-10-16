@@ -264,9 +264,9 @@ E.sizeBy(grip, 50, 5)
 local p = f:GetPoint(1)
 return left, bottom, f:GetWidth(), f:GetHeight(), p, f:GetTop(), #E.frames()",
     );
-    // Centered 100 x 50 on 1024 x 768: left 462, bottom 359; moved by (10, 20).
-    // The top stays at 429 + 0 as the frame grows to its maximum width.
-    assert_eq!(r, ["472", "379", "120", "55", "TOPLEFT", "429", "4"]);
+    // Centered 100 x 50 on 1920 x 1080: left 910, bottom 515; moved by (10, 20).
+    // The top stays at 585 as the frame grows to its maximum width.
+    assert_eq!(r, ["920", "535", "120", "55", "TOPLEFT", "585", "4"]);
 }
 
 #[test]

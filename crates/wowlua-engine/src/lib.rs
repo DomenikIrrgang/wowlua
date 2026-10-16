@@ -12,6 +12,7 @@ pub mod chat;
 pub mod clock;
 pub mod controls;
 pub mod curves;
+pub mod facts;
 pub mod framescript;
 pub mod gamedata;
 pub mod protection;
@@ -137,6 +138,9 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         let k = vm.heap.intern(name.as_bytes());
         vm.heap.table_mut(constants).set_str(k, Value::Table(t));
     }
+    if flavor == "camelot" {
+        recorded_tables(vm, include_str!("../data/camelot-enums.txt"));
+    }
     vm.host = Some(Box::new(Engine {
         flavor: flavor.to_string(),
         api,
@@ -150,6 +154,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(gamedata::behaviours())
             .chain(chat::behaviours())
             .chain(bindings::behaviours())
+            .chain(facts::behaviours())
             .chain(framescript::functions())
             .collect(),
         methods: widgets::behaviours()
@@ -219,6 +224,29 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
                 }
             }
         }
+    }
+    // The client's recorded answers about itself: documented functions get
+    // them as behaviour, the others as natives of their own.
+    for name in facts::recorded_names(flavor) {
+        let (ns, short) = match name.split_once('.') {
+            Some((ns, short)) => (Some(ns), short),
+            None => (None, name),
+        };
+        let table = match ns {
+            None => vm.globals,
+            Some(ns) => namespace(vm, ns),
+        };
+        let key = vm.heap.intern(short.as_bytes());
+        if !vm.heap.table(table).get_str(key).is_nil() {
+            engine_mut(vm)
+                .behaviours
+                .entry(name)
+                .or_insert(facts::recorded_call);
+            continue;
+        }
+        let upval = vm.str(name);
+        let native = vm.native_with(short, facts::recorded_call, vec![upval]);
+        vm.heap.table_mut(table).set_str(key, native);
     }
     // The client's undocumented C functions (camelot's inventory): they
     // exist, without behaviour.
@@ -292,6 +320,47 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
 }
 
 /// The global table `name`, made if missing.
+/// `Enum` and `Constants` as the client has them where its documentation
+/// differs (`data/<flavor>-enums.txt`, from `/stdtest engine`): a line
+/// `Enum.X.Field<TAB>number 5` sets a field, `…<TAB>-` removes a field or a
+/// whole table.
+fn recorded_tables(vm: &mut Vm, data: &str) {
+    for line in data.lines().filter(|l| !l.starts_with('#')) {
+        let Some((name, value)) = line.split_once('\t') else {
+            continue;
+        };
+        let mut parts = name.splitn(3, '.');
+        let (Some(root), Some(table)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let root = namespace(vm, root);
+        let tkey = vm.heap.intern(table.as_bytes());
+        let Some(field) = parts.next() else {
+            if value == "-" {
+                vm.heap.table_mut(root).set_str(tkey, Value::Nil);
+            }
+            continue;
+        };
+        let t = match vm.heap.table(root).get_str(tkey) {
+            Value::Table(t) => t,
+            _ if value == "-" => continue,
+            _ => {
+                let t = vm.new_table();
+                vm.heap.table_mut(root).set_str(tkey, Value::Table(t));
+                t
+            }
+        };
+        let v = match value.split_once(' ') {
+            Some(("number", n)) => n.parse().map_or(Value::Nil, Value::Num),
+            Some(("string", s)) => vm.str(s),
+            Some(("boolean", b)) => Value::Bool(b == "true"),
+            _ => Value::Nil,
+        };
+        let fkey = vm.heap.intern(field.as_bytes());
+        vm.heap.table_mut(t).set_str(fkey, v);
+    }
+}
+
 fn namespace(vm: &mut Vm, name: &str) -> wowlua_vm::TableRef {
     if let Value::Table(t) = vm.get_global(name) {
         return t;

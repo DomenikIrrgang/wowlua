@@ -76,7 +76,7 @@ fn kind(vm: &mut Vm, name: &str) -> String {
 /// How many of the client's functions the engine still lacks: Blizzard Lua
 /// from files that fail partway (missing enums, constants, game data,
 /// animations). It may only go down.
-const MAX_MISSING: usize = 248;
+const MAX_MISSING: usize = 95;
 
 #[test]
 fn every_function_of_the_client_exists_with_its_kind() {

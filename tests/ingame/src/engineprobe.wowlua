@@ -788,6 +788,15 @@ export function engineProbe(arg: string?)
         enums = tables(G.Enum),
         loadCalls = loadCalls(),
         constants = tables(G.Constants),
+        -- Tables the documentation has and `pairs` did not find: absent, or
+        -- made on first use?
+        lookups = {
+            UnitTokenType = type(G.Enum.UnitTokenType),
+            VasTransactionPurchaseResult = type(G.Enum.VasTransactionPurchaseResult),
+            PetConsts_Camelot = type(G.Constants.PetConsts_Camelot),
+            enumMetatable = type(getmetatable(G.Enum)),
+            constantsMetatable = type(getmetatable(G.Constants)),
+        },
         blizzardAtStart = table.concat(LOADED_AT_START, " "),
         blizzardNow = table.concat(blizzardLoaded(), " "),
         units = units(),

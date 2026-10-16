@@ -190,6 +190,24 @@ fn compared(key: &str) -> bool {
         "probe.behaviours.GetFont fresh FontString",
         "protected.calls.17 UnitName",
         "probe.errors.GetScript",
+        // The probed character, place and session; the engine's world is
+        // neutral (and its fonts are Blizzard's).
+        "probe.loadCalls.C_AddOns.GetNumAddOns",
+        "probe.loadCalls.C_Container.CalculateTotalNumberOfFreeBagSlots",
+        "probe.loadCalls.C_PvP.GetZonePVPInfo",
+        "probe.loadCalls.C_QuestLog.GetNumQuestLogEntries",
+        "probe.loadCalls.C_VoiceChat.GetTtsVoices",
+        "probe.loadCalls.GetCursorPosition",
+        "probe.loadCalls.GetFonts",
+        "probe.loadCalls.GetGameTime",
+        "probe.loadCalls.GetInstanceInfo",
+        "probe.loadCalls.GetMinimapZoneText",
+        "probe.loadCalls.GetPhysicalScreenSize",
+        "probe.loadCalls.GetRealmName",
+        "probe.loadCalls.GetRestState",
+        "probe.loadCalls.GetScreenHeight",
+        "probe.loadCalls.GetXPExhaustion",
+        "probe.loadCalls.IsGuildLeader",
     ];
     !SKIP.iter().any(|s| key.starts_with(s))
         && !key.ends_with(".GetDebugName")
@@ -205,6 +223,14 @@ fn the_engine_answers_the_probe_battery_as_the_client_did() {
     addon(
         &mut vm,
         "CreateFont('GameFontNormal'):SetFont('Fonts\\\\FRIZQT__.TTF', 12, '')",
+    );
+    // Blizzard's `ColorMixin` (colors are made with it), its methods.
+    addon(
+        &mut vm,
+        "ColorMixin = {} for _, m in ipairs({ 'GenerateHexColor', 'GenerateHexColorMarkup', \
+         'GenerateHexColorNoAlpha', 'GetHSL', 'GetRGB', 'GetRGBA', 'GetRGBAAsBytes', 'GetRGBAsBytes', \
+         'IsEqualTo', 'IsRGBEqualTo', 'OnLoad', 'SetRGB', 'SetRGBA', 'WrapTextInColorCode' }) do \
+         ColorMixin[m] = function() end end",
     );
     addon(&mut vm, "StdTestEngineProbe('')");
     wowlua_engine::clock::advance_frames(&mut vm, 60, 1000.0 / 60.0);
@@ -227,6 +253,16 @@ fn the_engine_answers_the_probe_battery_as_the_client_did() {
                 mine.map_or("<missing>", String::as_str)
             )),
         }
+    }
+    // `Enum` and `Constants` were recorded whole: nothing more either.
+    for key in ours.keys().filter(|k| {
+        (k.starts_with("probe.enums.") || k.starts_with("probe.constants."))
+            && !theirs.contains_key(*k)
+    }) {
+        differences.push(format!(
+            "{key}\n    client: <missing>\n    ours:   {}",
+            ours[key]
+        ));
     }
     assert!(
         differences.is_empty(),
