@@ -6,13 +6,9 @@
 //! checks while generating code (locals, upvalues, registers), which the
 //! build checks on its output.
 
-/// The boxed tree behind the [views](view): read the tree through those.
-/// `internals` makes it public, for `cargo xtask parse-stats` only (it
-/// measures the tree's heap); it goes with the boxed tree (#19).
-#[cfg(feature = "internals")]
-pub mod ast;
-#[cfg(not(feature = "internals"))]
+/// The boxed tree the parser builds; [`tree`] flattens it.
 mod ast;
+mod ast_visit;
 pub mod deep;
 pub mod features;
 pub mod lexer;
@@ -20,6 +16,7 @@ pub mod literal;
 mod parser;
 pub mod search;
 pub mod token;
+mod tree;
 pub mod view;
 pub mod visit;
 
@@ -32,27 +29,20 @@ pub use lexer::Lexed;
 /// nodes where parsing failed), the tokens with their trivia, and diagnostics.
 #[derive(Debug)]
 pub struct Parse {
-    #[cfg(feature = "internals")]
-    pub chunk: ast::Chunk,
-    #[cfg(not(feature = "internals"))]
-    chunk: ast::Chunk,
+    tree: tree::Tree,
     pub lexed: Lexed,
     pub diagnostics: Vec<Diagnostic>,
-}
-
-/// A deep chain (`deep`) drops with enough stack.
-impl Drop for Parse {
-    fn drop(&mut self) {
-        if deep::links() >= deep::DEEP {
-            let stmts = std::mem::take(&mut self.chunk.block.stmts);
-            deep::run(move || drop(stmts));
-        }
-    }
 }
 
 impl Parse {
     pub fn has_errors(&self) -> bool {
         self.diagnostics.iter().any(Diagnostic::is_error)
+    }
+
+    /// The heap the tree holds, by array: name, bytes, items (for `cargo
+    /// xtask parse-stats`).
+    pub fn tree_heap(&self) -> Vec<(&'static str, usize, usize)> {
+        self.tree.heap()
     }
 }
 
@@ -62,10 +52,17 @@ pub fn parse(src: &[u8], file: FileId) -> Parse {
     let mut diagnostics = std::mem::take(&mut lexed.diagnostics);
     let mut parser = parser::Parser::new(src, file, lexed);
     let chunk = parser.chunk();
+    let tree = tree::from_ast(&chunk, src, file);
+    // A deep chain (`deep`) drops with enough stack.
+    if deep::links() >= deep::DEEP {
+        deep::run(move || drop(chunk));
+    } else {
+        drop(chunk);
+    }
     diagnostics.append(&mut parser.diagnostics);
     diagnostics.sort_by_key(|d| d.labels.first().map(|l| l.span.start).unwrap_or(0));
     Parse {
-        chunk,
+        tree,
         lexed: parser.lexed,
         diagnostics,
     }

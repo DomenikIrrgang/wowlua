@@ -2829,9 +2829,9 @@ fn top_level_locals(block: &Block) -> Vec<Box<str>> {
 /// inside nested functions).
 fn first_name_use<'e>(e: &'e Expr, names: &[Box<str>]) -> Option<&'e Name> {
     let mut found = None;
-    crate::visit::walk_expr(crate::view::Expr::of(e), &mut |x| {
+    crate::ast_visit::walk_expr(e, &mut |x| {
         if found.is_none()
-            && let ExprKind::Name(n) = &x.ast().kind
+            && let ExprKind::Name(n) = &x.kind
             && names.contains(&n.text)
         {
             found = Some(n);

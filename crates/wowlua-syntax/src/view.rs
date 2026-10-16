@@ -3,166 +3,225 @@
 //! Every consumer outside the parser reads the tree through these handles:
 //! `Copy` values (`Expr<'t>`, `Stmt<'t>`, `Name<'t>`, …) whose `kind()`
 //! returns an enum shaped like the tree's, with handles for children and
-//! [`List`]s for sequences. The handles say nothing about how the tree is
-//! stored, so its storage can change underneath them (a flat, index-based
-//! layout) without touching a consumer. Today they wrap the boxed nodes of
-//! [`crate::ast`].
+//! [`List`]s for sequences. A handle is the [`Tree`] and an index into one
+//! of its arrays; the handles say nothing about that layout, so it can
+//! change without touching a consumer.
 //!
 //! Operator and modifier enums ([`BinOp`], [`UnOp`], [`CompoundOp`],
-//! [`Modifier`]) and [`Directive`]s are plain data and shared with `ast`.
+//! [`Modifier`]) and [`Directive`]s are plain data.
 
-use crate::ast;
+use crate::tree::{self, NONE, Range, Sp, Tree};
 use std::borrow::Cow;
 use wowlua_span::Span;
 
 pub use crate::ast::{BinOp, CompoundOp, Directive, Modifier, UnOp};
 
+fn span(t: &Tree, s: Sp) -> Span {
+    Span {
+        file: t.file,
+        start: s.start,
+        end: s.end,
+    }
+}
+
+fn opt<V>(i: u32, f: impl FnOnce(u32) -> V) -> Option<V> {
+    (i != NONE).then(|| f(i))
+}
+
 // ------------------------------------------------------------------ lists --
 
 /// A sequence of child handles: `len`, `get`, `first`, `last` and `iter`.
-pub struct List<'t, A, V> {
-    items: &'t [A],
-    view: fn(&'t A) -> V,
+pub struct List<'t, V> {
+    t: Option<&'t Tree>,
+    start: u32,
+    len: u32,
+    view: fn(&'t Tree, u32) -> V,
 }
 
-impl<A, V> Clone for List<'_, A, V> {
+impl<V> Clone for List<'_, V> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<A, V> Copy for List<'_, A, V> {}
+impl<V> Copy for List<'_, V> {}
 
-impl<'t, A, V> List<'t, A, V> {
-    fn new(items: &'t [A], view: fn(&'t A) -> V) -> Self {
-        List { items, view }
+impl<'t, V> List<'t, V> {
+    fn new(t: &'t Tree, r: Range, view: fn(&'t Tree, u32) -> V) -> Self {
+        List {
+            t: Some(t),
+            start: r.start,
+            len: r.len,
+            view,
+        }
     }
 
     pub fn len(&self) -> usize {
-        self.items.len()
+        self.len as usize
     }
 
     pub fn is_empty(&self) -> bool {
-        self.items.is_empty()
+        self.len == 0
     }
 
     pub fn get(&self, index: usize) -> Option<V> {
-        self.items.get(index).map(self.view)
+        (index < self.len()).then(|| self.at(index))
     }
 
     /// Item `index`; panics past the end, like indexing a slice.
     pub fn at(&self, index: usize) -> V {
-        (self.view)(&self.items[index])
+        assert!(
+            index < self.len(),
+            "index {index} out of a list of {}",
+            self.len
+        );
+        (self.view)(
+            self.t.expect("a list with items"),
+            self.start + index as u32,
+        )
     }
 
     pub fn first(&self) -> Option<V> {
-        self.items.first().map(self.view)
+        self.get(0)
     }
 
     pub fn last(&self) -> Option<V> {
-        self.items.last().map(self.view)
+        self.len().checked_sub(1).map(|i| self.at(i))
     }
 
     /// The items, when there are exactly `N` (for matching like a slice
     /// pattern: `if let Some([a, b]) = list.exactly()`).
     pub fn exactly<const N: usize>(&self) -> Option<[V; N]> {
-        (self.items.len() == N).then(|| std::array::from_fn(|i| self.at(i)))
+        (self.len() == N).then(|| std::array::from_fn(|i| self.at(i)))
     }
 
-    pub fn iter(&self) -> std::iter::Map<std::slice::Iter<'t, A>, fn(&'t A) -> V> {
-        self.items.iter().map(self.view)
+    pub fn iter(&self) -> Iter<'t, V> {
+        Iter {
+            t: self.t,
+            next: self.start,
+            end: self.start + self.len,
+            view: self.view,
+        }
     }
 }
 
-impl<'t, A, V> IntoIterator for List<'t, A, V> {
+/// The items of a [`List`], in order.
+pub struct Iter<'t, V> {
+    t: Option<&'t Tree>,
+    next: u32,
+    end: u32,
+    view: fn(&'t Tree, u32) -> V,
+}
+
+impl<V> Iterator for Iter<'_, V> {
     type Item = V;
-    type IntoIter = std::iter::Map<std::slice::Iter<'t, A>, fn(&'t A) -> V>;
+
+    fn next(&mut self) -> Option<V> {
+        if self.next == self.end {
+            return None;
+        }
+        self.next += 1;
+        Some((self.view)(
+            self.t.expect("a list with items"),
+            self.next - 1,
+        ))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = (self.end - self.next) as usize;
+        (n, Some(n))
+    }
+}
+
+impl<V> DoubleEndedIterator for Iter<'_, V> {
+    fn next_back(&mut self) -> Option<V> {
+        if self.next == self.end {
+            return None;
+        }
+        self.end -= 1;
+        Some((self.view)(self.t.expect("a list with items"), self.end))
+    }
+}
+
+impl<V> ExactSizeIterator for Iter<'_, V> {}
+
+impl<'t, V> IntoIterator for List<'t, V> {
+    type Item = V;
+    type IntoIter = Iter<'t, V>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
-impl<'t, A, V> IntoIterator for &List<'t, A, V> {
+impl<'t, V> IntoIterator for &List<'t, V> {
     type Item = V;
-    type IntoIter = std::iter::Map<std::slice::Iter<'t, A>, fn(&'t A) -> V>;
+    type IntoIter = Iter<'t, V>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
-impl<A, V: std::fmt::Debug> std::fmt::Debug for List<'_, A, V> {
+impl<V: std::fmt::Debug> std::fmt::Debug for List<'_, V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
     }
 }
 
-impl<A, V> Default for List<'_, A, V> {
+impl<V> Default for List<'_, V> {
     /// No items.
     fn default() -> Self {
-        List::new(&[], |_| unreachable!("an empty list has no items"))
+        List {
+            t: None,
+            start: 0,
+            len: 0,
+            view: |_, _| unreachable!("an empty list has no items"),
+        }
     }
 }
 
-pub type Stmts<'t> = List<'t, ast::Stmt, Stmt<'t>>;
-pub type Exprs<'t> = List<'t, ast::Expr, Expr<'t>>;
-pub type Names<'t> = List<'t, ast::Name, Name<'t>>;
-pub type TypedNames<'t> = List<'t, ast::TypedName, TypedName<'t>>;
-pub type DestructFields<'t> = List<'t, ast::DestructField, DestructField<'t>>;
-pub type ElseIfs<'t> = List<'t, (ast::Expr, ast::Block), (Expr<'t>, Block<'t>)>;
-pub type Decorators<'t> = List<'t, ast::Decorator, Decorator<'t>>;
-pub type Params<'t> = List<'t, ast::Param, Param<'t>>;
-pub type TableFields<'t> = List<'t, ast::TableField, TableField<'t>>;
-pub type InterpParts<'t> = List<'t, ast::InterpPart, InterpPart<'t>>;
-pub type Types<'t> = List<'t, ast::Type, Type<'t>>;
-pub type TypeArgs<'t> = List<'t, ast::TypeArg, TypeArg<'t>>;
-pub type TypeParams<'t> = List<'t, ast::TypeParam, TypeParam<'t>>;
-pub type TableTypeFields<'t> = List<'t, ast::TableTypeField, TableTypeField<'t>>;
-pub type ParamTypes<'t> = List<'t, ast::ParamType, ParamType<'t>>;
-pub type ClassMembers<'t> = List<'t, ast::ClassMember, ClassMember<'t>>;
-pub type InterfaceMembers<'t> = List<'t, ast::InterfaceMember, InterfaceMember<'t>>;
-pub type EnumItems<'t> = List<'t, ast::EnumItem, EnumItem<'t>>;
-pub type NsMembers<'t> = List<'t, ast::NsMember, NsMember<'t>>;
-pub type DeclMembers<'t> = List<'t, ast::DeclMember, DeclMember<'t>>;
-pub type ImportSpecs<'t> = List<'t, ast::ImportSpec, ImportSpec<'t>>;
+pub type Stmts<'t> = List<'t, Stmt<'t>>;
+pub type Exprs<'t> = List<'t, Expr<'t>>;
+pub type Names<'t> = List<'t, Name<'t>>;
+pub type TypedNames<'t> = List<'t, TypedName<'t>>;
+pub type DestructFields<'t> = List<'t, DestructField<'t>>;
+pub type ElseIfs<'t> = List<'t, (Expr<'t>, Block<'t>)>;
+pub type Decorators<'t> = List<'t, Decorator<'t>>;
+pub type Params<'t> = List<'t, Param<'t>>;
+pub type TableFields<'t> = List<'t, TableField<'t>>;
+pub type InterpParts<'t> = List<'t, InterpPart<'t>>;
+pub type Types<'t> = List<'t, Type<'t>>;
+pub type TypeArgs<'t> = List<'t, TypeArg<'t>>;
+pub type TypeParams<'t> = List<'t, TypeParam<'t>>;
+pub type TableTypeFields<'t> = List<'t, TableTypeField<'t>>;
+pub type ParamTypes<'t> = List<'t, ParamType<'t>>;
+pub type ClassMembers<'t> = List<'t, ClassMember<'t>>;
+pub type InterfaceMembers<'t> = List<'t, InterfaceMember<'t>>;
+pub type EnumItems<'t> = List<'t, EnumItem<'t>>;
+pub type NsMembers<'t> = List<'t, NsMember<'t>>;
+pub type DeclMembers<'t> = List<'t, DeclMember<'t>>;
+pub type ImportSpecs<'t> = List<'t, ImportSpec<'t>>;
 
 macro_rules! handle {
-    ($(#[$doc:meta])* $name:ident, $ast:ty) => {
+    ($(#[$doc:meta])* $name:ident) => {
         $(#[$doc])*
         #[derive(Clone, Copy)]
-        pub struct $name<'t>(&'t $ast);
-
-        impl<'t> $name<'t> {
-            fn new(node: &'t $ast) -> Self {
-                $name(node)
-            }
-
-            /// The handle of a boxed node (for the parser; removed with
-            /// the boxed tree, #19).
-            #[allow(dead_code)]
-            pub(crate) fn of(node: &'t $ast) -> Self {
-                $name(node)
-            }
-
-            /// The boxed node (for the parser; removed with the boxed
-            /// tree, #19).
-            #[allow(dead_code)]
-            pub(crate) fn ast(self) -> &'t $ast {
-                self.0
-            }
+        pub struct $name<'t> {
+            t: &'t Tree,
+            i: u32,
         }
 
-        impl std::fmt::Debug for $name<'_> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                std::fmt::Debug::fmt(self.0, f)
+        impl<'t> $name<'t> {
+            fn new(t: &'t Tree, i: u32) -> Self {
+                $name { t, i }
             }
         }
 
         impl PartialEq for $name<'_> {
             /// The same node (not equal content).
             fn eq(&self, other: &Self) -> bool {
-                std::ptr::eq(self.0, other.0)
+                std::ptr::eq(self.t, other.t) && self.i == other.i
             }
         }
 
@@ -171,7 +230,32 @@ macro_rules! handle {
         impl std::hash::Hash for $name<'_> {
             /// By identity, like `==`.
             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                std::ptr::hash(self.0, state)
+                std::ptr::hash(self.t, state);
+                self.i.hash(state);
+            }
+        }
+    };
+}
+
+/// A `Debug` that shows the node's kind.
+macro_rules! debug_kind {
+    ($name:ident) => {
+        impl std::fmt::Debug for $name<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_tuple(stringify!($name))
+                    .field(&self.kind())
+                    .finish()
+            }
+        }
+    };
+}
+
+/// A `Debug` that shows the node's index.
+macro_rules! debug_index {
+    ($name:ident) => {
+        impl std::fmt::Debug for $name<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}#{}", stringify!($name), self.i)
             }
         }
     };
@@ -181,77 +265,91 @@ macro_rules! handle {
 
 handle!(
     /// A file's tree.
-    Chunk,
-    ast::Chunk
+    Chunk
 );
+debug_index!(Chunk);
 
 impl<'t> Chunk<'t> {
     pub fn directives(self) -> &'t [Directive] {
-        &self.0.directives
+        &self.t.directives
     }
 
     pub fn block(self) -> Block<'t> {
-        Block::new(&self.0.block)
+        Block::new(self.t, self.t.root)
     }
 
     pub fn span(self) -> Span {
-        self.0.span
+        span(self.t, self.t.span)
     }
 }
 
 impl crate::Parse {
     /// The tree, as handles.
     pub fn view(&self) -> Chunk<'_> {
-        Chunk::new(&self.chunk)
+        Chunk::new(&self.tree, 0)
     }
 }
 
-handle!(Block, ast::Block);
+handle!(Block);
+debug_index!(Block);
 
 impl<'t> Block<'t> {
+    fn node(self) -> &'t tree::BlockNode {
+        &self.t.blocks[self.i as usize]
+    }
+
     pub fn stmts(self) -> Stmts<'t> {
-        List::new(&self.0.stmts, Stmt::new)
+        List::new(self.t, self.node().stmts, Stmt::new)
     }
 
     pub fn span(self) -> Span {
-        self.0.span
+        span(self.t, self.node().span)
     }
 }
 
 // ------------------------------------------------------------- statements --
 
-handle!(Stmt, ast::Stmt);
+handle!(Stmt);
+debug_kind!(Stmt);
 
 impl<'t> Stmt<'t> {
+    fn node(self) -> &'t tree::StmtNode {
+        &self.t.stmts[self.i as usize]
+    }
+
     pub fn span(self) -> Span {
-        self.0.span
+        span(self.t, self.node().span)
     }
 
     pub fn decorators(self) -> Decorators<'t> {
-        List::new(&self.0.decorators, Decorator::new)
+        List::new(self.t, self.node().decorators, Decorator::new)
     }
 
     pub fn kind(self) -> StmtKind<'t> {
-        use ast::StmtKind as K;
-        match &self.0.kind {
+        use tree::StmtData as K;
+        let t = self.t;
+        let exprs = |r| List::new(t, r, Expr::new);
+        let expr = |i| Expr::new(t, i);
+        let block = |i| Block::new(t, i);
+        match self.node().data {
             K::Assign { targets, values } => StmtKind::Assign {
-                targets: List::new(targets, Expr::new),
-                values: List::new(values, Expr::new),
+                targets: exprs(targets),
+                values: exprs(values),
             },
             K::Compound { target, op, value } => StmtKind::Compound {
-                target: Expr::new(target),
-                op: *op,
-                value: Expr::new(value),
+                target: expr(target),
+                op,
+                value: expr(value),
             },
-            K::Call(e) => StmtKind::Call(Expr::new(e)),
-            K::Do(b) => StmtKind::Do(Block::new(b)),
+            K::Call(e) => StmtKind::Call(expr(e)),
+            K::Do(b) => StmtKind::Do(block(b)),
             K::While { cond, body } => StmtKind::While {
-                cond: Expr::new(cond),
-                body: Block::new(body),
+                cond: expr(cond),
+                body: block(body),
             },
             K::Repeat { body, cond } => StmtKind::Repeat {
-                body: Block::new(body),
-                cond: Expr::new(cond),
+                body: block(body),
+                cond: expr(cond),
             },
             K::If {
                 cond,
@@ -259,10 +357,13 @@ impl<'t> Stmt<'t> {
                 elseifs,
                 else_block,
             } => StmtKind::If {
-                cond: Expr::new(cond),
-                then_block: Block::new(then_block),
-                elseifs: List::new(elseifs, |(c, b)| (Expr::new(c), Block::new(b))),
-                else_block: else_block.as_deref().map(Block::new),
+                cond: expr(cond),
+                then_block: block(then_block),
+                elseifs: List::new(t, elseifs, |t, i| {
+                    let (c, b) = t.elseifs[i as usize];
+                    (Expr::new(t, c), Block::new(t, b))
+                }),
+                else_block: opt(else_block, block),
             },
             K::NumericFor {
                 var,
@@ -271,49 +372,53 @@ impl<'t> Stmt<'t> {
                 step,
                 body,
             } => StmtKind::NumericFor {
-                var: TypedName::new(var),
-                start: Expr::new(start),
-                limit: Expr::new(limit),
-                step: step.as_deref().map(Expr::new),
-                body: Block::new(body),
+                var: TypedName::at(t, var),
+                start: expr(start),
+                limit: expr(limit),
+                step: opt(step, expr),
+                body: block(body),
             },
-            K::GenericFor { vars, exprs, body } => StmtKind::GenericFor {
-                vars: List::new(vars, TypedName::new),
-                exprs: List::new(exprs, Expr::new),
-                body: Block::new(body),
+            K::GenericFor {
+                vars,
+                exprs: es,
+                body,
+            } => StmtKind::GenericFor {
+                vars: List::new(t, vars, TypedName::at),
+                exprs: exprs(es),
+                body: block(body),
             },
             K::Function { name, func } => StmtKind::Function {
-                name: FuncName::new(name),
-                func: Func::new(func),
+                name: FuncName::new(t, name),
+                func: Func::new(t, func),
             },
             K::LocalFunction { name, func } => StmtKind::LocalFunction {
-                name: Name::new(name),
-                func: Func::new(func),
+                name: Name::new(t, name),
+                func: Func::new(t, func),
             },
             K::Local { names, values } => StmtKind::Local {
-                names: List::new(names, TypedName::new),
-                values: List::new(values, Expr::new),
+                names: List::new(t, names, TypedName::at),
+                values: exprs(values),
             },
             K::LocalDestructure { fields, ty, value } => StmtKind::LocalDestructure {
-                fields: List::new(fields, DestructField::new),
-                ty: ty.as_deref().map(Type::new),
-                value: value.as_deref().map(Expr::new),
+                fields: List::new(t, fields, DestructField::at),
+                ty: opt(ty, |i| Type::new(t, i)),
+                value: opt(value, expr),
             },
             K::Const { name, ty, value } => StmtKind::Const {
-                name: Name::new(name),
-                ty: ty.as_deref().map(Type::new),
-                value: value.as_deref().map(Expr::new),
+                name: Name::new(t, name),
+                ty: opt(ty, |i| Type::new(t, i)),
+                value: opt(value, expr),
             },
-            K::Return(values) => StmtKind::Return(List::new(values, Expr::new)),
+            K::Return(values) => StmtKind::Return(exprs(values)),
             K::Break => StmtKind::Break,
             K::Continue => StmtKind::Continue,
-            K::Class(c) => StmtKind::Class(ClassDecl::new(c)),
-            K::Interface(i) => StmtKind::Interface(InterfaceDecl::new(i)),
-            K::Enum(e) => StmtKind::Enum(EnumDecl::new(e)),
-            K::TypeAlias(t) => StmtKind::TypeAlias(TypeAlias::new(t)),
-            K::Declare(d) => StmtKind::Declare(Declare::new(d)),
-            K::Import(i) => StmtKind::Import(Import::new(i)),
-            K::Export(s) => StmtKind::Export(Stmt::new(s)),
+            K::Class(c) => StmtKind::Class(ClassDecl::new(t, c)),
+            K::Interface(i) => StmtKind::Interface(InterfaceDecl::new(t, i)),
+            K::Enum(e) => StmtKind::Enum(EnumDecl::new(t, e)),
+            K::TypeAlias(a) => StmtKind::TypeAlias(TypeAlias::new(t, a)),
+            K::Declare(d) => StmtKind::Declare(Declare::new(t, d)),
+            K::Import(i) => StmtKind::Import(Import::new(t, i)),
+            K::Export(s) => StmtKind::Export(Stmt::new(t, s)),
             K::Error => StmtKind::Error,
         }
     }
@@ -403,10 +508,11 @@ pub struct TypedName<'t> {
 }
 
 impl<'t> TypedName<'t> {
-    fn new(t: &'t ast::TypedName) -> Self {
+    fn at(t: &'t Tree, i: u32) -> Self {
+        let n = t.typed_names[i as usize];
         TypedName {
-            name: Name::new(&t.name),
-            ty: t.ty.as_ref().map(Type::new),
+            name: Name::new(t, n.name),
+            ty: opt(n.ty, |i| Type::new(t, i)),
         }
     }
 }
@@ -419,94 +525,112 @@ pub struct DestructField<'t> {
 }
 
 impl<'t> DestructField<'t> {
-    fn new(f: &'t ast::DestructField) -> Self {
+    fn at(t: &'t Tree, i: u32) -> Self {
+        let f = t.destructs[i as usize];
         DestructField {
-            name: Name::new(&f.name),
-            default: f.default.as_ref().map(Expr::new),
+            name: Name::new(t, f.name),
+            default: opt(f.default, |i| Expr::new(t, i)),
         }
     }
 }
 
 handle!(
     /// `a.b.c:m`
-    FuncName,
-    ast::FuncName
+    FuncName
 );
+debug_index!(FuncName);
 
 impl<'t> FuncName<'t> {
+    fn node(self) -> &'t tree::FuncNameNode {
+        &self.t.func_names[self.i as usize]
+    }
+
     pub fn path(self) -> Names<'t> {
-        List::new(&self.0.path, Name::new)
+        List::new(self.t, self.node().path, Name::listed)
     }
 
     pub fn method(self) -> Option<Name<'t>> {
-        self.0.method.as_ref().map(Name::new)
+        self.node().method.map(|m| Name::new(self.t, m))
     }
 
     pub fn span(self) -> Span {
-        self.0.span
+        span(self.t, self.node().span)
     }
 }
 
 handle!(
     /// A function: parameters, results and body (also a declaration's
     /// signature, whose body is empty).
-    Func,
-    ast::FuncBody
+    Func
 );
+debug_index!(Func);
 
 impl<'t> Func<'t> {
+    fn node(self) -> &'t tree::FuncNode {
+        &self.t.funcs[self.i as usize]
+    }
+
     pub fn type_params(self) -> TypeParams<'t> {
-        List::new(&self.0.type_params, TypeParam::new)
+        List::new(self.t, self.node().type_params, TypeParam::at)
     }
 
     pub fn params(self) -> Params<'t> {
-        List::new(&self.0.params, Param::new)
+        List::new(self.t, self.node().params, Param::new)
     }
 
     pub fn vararg(self) -> Option<Vararg<'t>> {
-        self.0.vararg.as_ref().map(Vararg::new)
+        let t = self.t;
+        self.node().vararg.map(|(s, ty)| Vararg {
+            span: span(t, s),
+            ty: opt(ty, |i| VarargType::at(t, i)),
+        })
     }
 
     pub fn ret(self) -> Option<RetType<'t>> {
-        self.0.ret.as_ref().map(RetType::new)
+        opt(self.node().ret, |i| RetType::at(self.t, i))
     }
 
     pub fn body(self) -> Block<'t> {
-        Block::new(&self.0.body)
+        Block::new(self.t, self.node().body)
     }
 
     /// The parameter list, `(` to `)`.
     pub fn params_span(self) -> Span {
-        self.0.params_span
+        span(self.t, self.node().params_span)
     }
 
     /// The closing `end`.
     pub fn end_span(self) -> Span {
-        self.0.end_span
+        span(self.t, self.node().end_span)
     }
 
     pub fn span(self) -> Span {
-        self.0.span
+        span(self.t, self.node().span)
     }
 }
 
-handle!(Param, ast::Param);
+handle!(Param);
+debug_index!(Param);
 
 impl<'t> Param<'t> {
+    fn node(self) -> &'t tree::ParamNode {
+        &self.t.params[self.i as usize]
+    }
+
     pub fn decorators(self) -> Decorators<'t> {
-        List::new(&self.0.decorators, Decorator::new)
+        List::new(self.t, self.node().decorators, Decorator::new)
     }
 
     pub fn name(self) -> Name<'t> {
-        Name::new(&self.0.name)
+        Name::new(self.t, self.node().name)
     }
 
     pub fn ty(self) -> Option<Type<'t>> {
-        self.0.ty.as_ref().map(Type::new)
+        opt(self.node().ty, |i| Type::new(self.t, i))
     }
 
     pub fn default(self) -> Option<Expr<'t>> {
-        self.0.default.as_deref().map(Expr::new)
+        opt(self.node().default, |i| Expr::new(self.t, i))
     }
 }
 
@@ -517,126 +641,140 @@ pub struct Vararg<'t> {
     pub ty: Option<VarargType<'t>>,
 }
 
-impl<'t> Vararg<'t> {
-    fn new(v: &'t ast::Vararg) -> Self {
-        Vararg {
-            span: v.span,
-            ty: v.ty.as_ref().map(VarargType::new),
-        }
-    }
-}
-
 handle!(
     /// `@a.b(x)`
-    Decorator,
-    ast::Decorator
+    Decorator
 );
+debug_index!(Decorator);
 
 impl<'t> Decorator<'t> {
+    fn node(self) -> &'t tree::DecoratorNode {
+        &self.t.decorators[self.i as usize]
+    }
+
     pub fn path(self) -> Names<'t> {
-        List::new(&self.0.path, Name::new)
+        List::new(self.t, self.node().path, Name::listed)
     }
 
     pub fn args(self) -> Option<Args<'t>> {
-        self.0.args.as_ref().map(Args::new)
+        opt(self.node().args, |i| Args::new(self.t, i))
     }
 
     pub fn span(self) -> Span {
-        self.0.span
+        span(self.t, self.node().span)
     }
 
     /// The decorator as an expression: its path, called with its arguments
     /// (`@a.b(x)` is `a.b(x)`, spec §4.5).
     pub fn expr(self) -> Expr<'t> {
-        Expr::new(&self.0.call)
+        Expr::new(self.t, self.node().call)
     }
 
-    /// A core decorator (a single name from [`ast::CORE_DECORATORS`]).
+    /// A core decorator (a single name from [`crate::ast::CORE_DECORATORS`]).
     pub fn is_core(self) -> bool {
-        self.0.is_core()
+        let path = self.path();
+        path.len() == 1 && crate::ast::CORE_DECORATORS.contains(&path.at(0).text())
     }
 
     /// The single name `name`.
     pub fn is_named(self, name: &str) -> bool {
-        self.0.is_named(name)
+        let path = self.path();
+        path.len() == 1 && path.at(0).text() == name
     }
 }
 
 // ------------------------------------------------------------ expressions --
 
-handle!(Expr, ast::Expr);
+handle!(Expr);
+debug_kind!(Expr);
 
 impl<'t> Expr<'t> {
-    pub fn span(self) -> Span {
-        self.0.span
+    fn node(self) -> &'t tree::ExprNode {
+        &self.t.exprs[self.i as usize]
     }
 
-    /// The node's number in its file, unique per parse; 0 for nodes the
-    /// compiler made (a decorator's call).
+    pub fn span(self) -> Span {
+        span(self.t, self.node().span)
+    }
+
+    /// The node's number in its file, unique per parse (never 0).
     pub fn id(self) -> u32 {
-        self.0.id.0
+        self.i + 1
     }
 
     pub fn kind(self) -> ExprKind<'t> {
-        use ast::ExprKind as K;
-        match &self.0.kind {
+        use tree::ExprData as K;
+        let t = self.t;
+        let expr = |i| Expr::new(t, i);
+        let name = |s| Name::new(t, s);
+        let method = |i: u32| {
+            let m = t.methods[i as usize];
+            (Name::new(t, m.name), Args::new(t, m.args))
+        };
+        match self.node().data {
             K::Nil => ExprKind::Nil,
             K::True => ExprKind::True,
             K::False => ExprKind::False,
-            K::Number(n) => ExprKind::Number(Number::new(n)),
-            K::String(s) => ExprKind::String(Str::new(s)),
+            K::Number(s) => ExprKind::Number(Number { t, sp: s }),
+            K::String(s) => ExprKind::String(Str::new(t, s)),
             K::Vararg => ExprKind::Vararg,
-            K::Function(f) => ExprKind::Function(Func::new(f)),
-            K::Table(fields) => ExprKind::Table(List::new(fields, TableField::new)),
-            K::Interp(parts) => ExprKind::Interp(List::new(parts, InterpPart::new)),
-            K::Name(n) => ExprKind::Name(Name::new(n)),
+            K::Function(f) => ExprKind::Function(Func::new(t, f)),
+            K::Table(fields) => ExprKind::Table(List::new(t, fields, TableField::at)),
+            K::Interp(parts) => ExprKind::Interp(List::new(t, parts, InterpPart::at)),
+            K::Name(s) => ExprKind::Name(name(s)),
             K::Index { obj, key } => ExprKind::Index {
-                obj: Expr::new(obj),
-                key: Expr::new(key),
+                obj: expr(obj),
+                key: expr(key),
             },
-            K::Field { obj, name } => ExprKind::Field {
-                obj: Expr::new(obj),
-                name: Name::new(name),
+            K::Field { obj, name: n } => ExprKind::Field {
+                obj: expr(obj),
+                name: name(n),
             },
             K::Call { callee, args } => ExprKind::Call {
-                callee: Expr::new(callee),
-                args: Args::new(args),
+                callee: expr(callee),
+                args: Args::new(t, args),
             },
-            K::Method { obj, name, args } => ExprKind::Method {
-                obj: Expr::new(obj),
-                name: Name::new(name),
-                args: Args::new(args),
-            },
-            K::OptField { obj, name } => ExprKind::OptField {
-                obj: Expr::new(obj),
-                name: Name::new(name),
+            K::Method { obj, method: m } => {
+                let (name, args) = method(m);
+                ExprKind::Method {
+                    obj: expr(obj),
+                    name,
+                    args,
+                }
+            }
+            K::OptField { obj, name: n } => ExprKind::OptField {
+                obj: expr(obj),
+                name: name(n),
             },
             K::OptIndex { obj, key } => ExprKind::OptIndex {
-                obj: Expr::new(obj),
-                key: Expr::new(key),
+                obj: expr(obj),
+                key: expr(key),
             },
-            K::OptMethod { obj, name, args } => ExprKind::OptMethod {
-                obj: Expr::new(obj),
-                name: Name::new(name),
-                args: Args::new(args),
-            },
+            K::OptMethod { obj, method: m } => {
+                let (name, args) = method(m);
+                ExprKind::OptMethod {
+                    obj: expr(obj),
+                    name,
+                    args,
+                }
+            }
             K::OptCall { callee, args } => ExprKind::OptCall {
-                callee: Expr::new(callee),
-                args: Args::new(args),
+                callee: expr(callee),
+                args: Args::new(t, args),
             },
-            K::Paren(e) => ExprKind::Paren(Expr::new(e)),
+            K::Paren(e) => ExprKind::Paren(expr(e)),
             K::Binary { op, lhs, rhs } => ExprKind::Binary {
-                op: *op,
-                lhs: Expr::new(lhs),
-                rhs: Expr::new(rhs),
+                op,
+                lhs: expr(lhs),
+                rhs: expr(rhs),
             },
             K::Unary { op, operand } => ExprKind::Unary {
-                op: *op,
-                operand: Expr::new(operand),
+                op,
+                operand: expr(operand),
             },
-            K::Cast { expr, ty } => ExprKind::Cast {
-                expr: Expr::new(expr),
-                ty: Type::new(ty),
+            K::Cast { expr: e, ty } => ExprKind::Cast {
+                expr: expr(e),
+                ty: Type::new(t, ty),
             },
             K::Error => ExprKind::Error,
         }
@@ -707,56 +845,118 @@ pub enum ExprKind<'t> {
     Error,
 }
 
-handle!(Name, ast::Name);
+/// A name: its text is its source.
+#[derive(Clone, Copy)]
+pub struct Name<'t> {
+    t: &'t Tree,
+    sp: Sp,
+}
 
 impl<'t> Name<'t> {
+    fn new(t: &'t Tree, sp: Sp) -> Self {
+        Name { t, sp }
+    }
+
+    /// Item `i` of the tree's name lists.
+    fn listed(t: &'t Tree, i: u32) -> Self {
+        Name::new(t, t.names[i as usize])
+    }
+
     pub fn text(self) -> &'t str {
-        &self.0.text
+        self.t.src.str(self.sp)
     }
 
     pub fn span(self) -> Span {
-        self.0.span
+        span(self.t, self.sp)
     }
 }
 
-handle!(
-    /// A numeral.
-    Number,
-    ast::NumberLit
-);
+impl PartialEq for Name<'_> {
+    /// The same name (the same place in the same tree).
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.t, other.t) && self.sp == other.sp
+    }
+}
+
+impl Eq for Name<'_> {}
+
+impl std::hash::Hash for Name<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::ptr::hash(self.t, state);
+        self.sp.hash(state);
+    }
+}
+
+impl std::fmt::Debug for Name<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Name").field(&self.text()).finish()
+    }
+}
+
+/// A numeral.
+#[derive(Clone, Copy)]
+pub struct Number<'t> {
+    t: &'t Tree,
+    sp: Sp,
+}
 
 impl<'t> Number<'t> {
     /// The numeral as written.
     pub fn raw(self) -> &'t str {
-        &self.0.raw
+        self.t.src.str(self.sp)
     }
 
     /// `None` if malformed (already reported).
     pub fn value(self) -> Option<f64> {
-        self.0.value
+        crate::lexer::number_value(self.raw().as_bytes()).ok()
+    }
+}
+
+impl PartialEq for Number<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.t, other.t) && self.sp == other.sp
+    }
+}
+
+impl std::fmt::Debug for Number<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Number").field(&self.raw()).finish()
     }
 }
 
 handle!(
     /// A string literal.
-    Str,
-    ast::StringLit
+    Str
 );
 
 impl<'t> Str<'t> {
+    fn node(self) -> &'t tree::StrNode {
+        &self.t.strs[self.i as usize]
+    }
+
     /// The literal as written, quotes or long brackets included.
     pub fn raw(self) -> &'t [u8] {
-        &self.0.raw
+        let r = self.node().raw;
+        &self.t.src.bytes()[r.start as usize..r.end as usize]
     }
 
     /// The decoded bytes.
     pub fn value(self) -> Cow<'t, [u8]> {
-        Cow::Borrowed(&self.0.value)
+        let n = self.node();
+        Cow::Borrowed(self.t.str_value(n.value, n.in_buf))
     }
 
     /// A long string (`[[…]]`).
     pub fn long(self) -> bool {
-        self.0.long
+        self.node().long
+    }
+}
+
+impl std::fmt::Debug for Str<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Str")
+            .field(&String::from_utf8_lossy(self.raw()))
+            .finish()
     }
 }
 
@@ -773,50 +973,60 @@ pub enum InterpPart<'t> {
 }
 
 impl<'t> InterpPart<'t> {
-    fn new(p: &'t ast::InterpPart) -> Self {
-        match p {
-            ast::InterpPart::Text { raw, value, span } => InterpPart::Text {
+    fn at(t: &'t Tree, i: u32) -> Self {
+        match t.interps[i as usize] {
+            tree::InterpData::Text {
                 raw,
-                value: Cow::Borrowed(value),
-                span: *span,
+                value,
+                in_buf,
+                span: s,
+            } => InterpPart::Text {
+                raw: &t.src.bytes()[raw.start as usize..raw.end as usize],
+                value: Cow::Borrowed(t.str_value(value, in_buf)),
+                span: span(t, s),
             },
-            ast::InterpPart::Expr(e) => InterpPart::Expr(Expr::new(e)),
+            tree::InterpData::Expr(e) => InterpPart::Expr(Expr::new(t, e)),
         }
     }
 }
 
 handle!(
     /// The arguments of a call.
-    Args,
-    ast::Args
+    Args
 );
+debug_kind!(Args);
 
 impl<'t> Args<'t> {
+    fn data(self) -> tree::ArgsData {
+        self.t.args[self.i as usize]
+    }
+
     pub fn kind(self) -> ArgsKind<'t> {
-        match self.0 {
-            ast::Args::Parens { args, span } => ArgsKind::Parens {
-                args: List::new(args, Expr::new),
-                span: *span,
+        let t = self.t;
+        match self.data() {
+            tree::ArgsData::Parens { args, span: s } => ArgsKind::Parens {
+                args: List::new(t, args, Expr::new),
+                span: span(t, s),
             },
-            ast::Args::Table(e) => ArgsKind::Table(Expr::new(e)),
-            ast::Args::String(e) => ArgsKind::String(Expr::new(e)),
+            tree::ArgsData::Table(e) => ArgsKind::Table(Expr::new(t, e)),
+            tree::ArgsData::String(e) => ArgsKind::String(Expr::new(t, e)),
         }
     }
 
     /// The argument expressions, in order.
     pub fn exprs(self) -> Exprs<'t> {
-        let items: &'t [ast::Expr] = match self.0 {
-            ast::Args::Parens { args, .. } => args,
-            ast::Args::Table(e) | ast::Args::String(e) => std::slice::from_ref(&**e),
+        let r = match self.data() {
+            tree::ArgsData::Parens { args, .. } => args,
+            tree::ArgsData::Table(e) | tree::ArgsData::String(e) => Range { start: e, len: 1 },
         };
-        List::new(items, Expr::new)
+        List::new(self.t, r, Expr::new)
     }
 
     /// How many arguments there are.
     pub fn len(self) -> usize {
-        match self.0 {
-            ast::Args::Parens { args, .. } => args.len(),
-            ast::Args::Table(_) | ast::Args::String(_) => 1,
+        match self.data() {
+            tree::ArgsData::Parens { args, .. } => args.len as usize,
+            tree::ArgsData::Table(_) | tree::ArgsData::String(_) => 1,
         }
     }
 
@@ -851,18 +1061,22 @@ pub enum TableField<'t> {
 }
 
 impl<'t> TableField<'t> {
-    fn new(f: &'t ast::TableField) -> Self {
-        match f {
-            ast::TableField::Keyed { key, value, span } => TableField::Keyed {
-                key: Expr::new(key),
-                value: Expr::new(value),
-                span: *span,
+    fn at(t: &'t Tree, i: u32) -> Self {
+        match t.fields[i as usize] {
+            tree::FieldData::Keyed {
+                key,
+                value,
+                span: s,
+            } => TableField::Keyed {
+                key: Expr::new(t, key),
+                value: Expr::new(t, value),
+                span: span(t, t.spans[s as usize]),
             },
-            ast::TableField::Named { name, value } => TableField::Named {
-                name: Name::new(name),
-                value: Expr::new(value),
+            tree::FieldData::Named { name, value } => TableField::Named {
+                name: Name::new(t, name),
+                value: Expr::new(t, value),
             },
-            ast::TableField::Positional(v) => TableField::Positional(Expr::new(v)),
+            tree::FieldData::Positional(v) => TableField::Positional(Expr::new(t, v)),
         }
     }
 
@@ -882,34 +1096,41 @@ impl<'t> TableField<'t> {
 
 // ------------------------------------------------------------------ types --
 
-handle!(Type, ast::Type);
+handle!(Type);
+debug_kind!(Type);
 
 impl<'t> Type<'t> {
+    fn node(self) -> &'t tree::TypeNode {
+        &self.t.types[self.i as usize]
+    }
+
     pub fn span(self) -> Span {
-        self.0.span
+        span(self.t, self.node().span)
     }
 
     pub fn kind(self) -> TypeKind<'t> {
-        use ast::TypeKind as K;
-        match &self.0.kind {
+        use tree::TypeData as K;
+        let t = self.t;
+        let ty = |i| Type::new(t, i);
+        match self.node().data {
             K::Nil => TypeKind::Nil,
             K::True => TypeKind::True,
             K::False => TypeKind::False,
             K::AnyFunction => TypeKind::AnyFunction,
-            K::String(s) => TypeKind::String(Str::new(s)),
-            K::Number(n) => TypeKind::Number(Number::new(n)),
+            K::String(s) => TypeKind::String(Str::new(t, s)),
+            K::Number(s) => TypeKind::Number(Number { t, sp: s }),
             K::Ref { path, args } => TypeKind::Ref {
-                path: List::new(path, Name::new),
-                args: List::new(args, TypeArg::new),
+                path: List::new(t, path, Name::listed),
+                args: List::new(t, args, TypeArg::at),
             },
-            K::Typeof(e) => TypeKind::Typeof(Expr::new(e)),
-            K::Table(fields) => TypeKind::Table(List::new(fields, TableTypeField::new)),
-            K::Function(f) => TypeKind::Function(FunctionType::new(f)),
-            K::Paren(t) => TypeKind::Paren(Type::new(t)),
-            K::Optional(t) => TypeKind::Optional(Type::new(t)),
-            K::Array(t) => TypeKind::Array(Type::new(t)),
-            K::Union(ts) => TypeKind::Union(List::new(ts, Type::new)),
-            K::Intersection(ts) => TypeKind::Intersection(List::new(ts, Type::new)),
+            K::Typeof(e) => TypeKind::Typeof(Expr::new(t, e)),
+            K::Table(fields) => TypeKind::Table(List::new(t, fields, TableTypeField::at)),
+            K::Function(f) => TypeKind::Function(FunctionType::new(t, f)),
+            K::Paren(i) => TypeKind::Paren(ty(i)),
+            K::Optional(i) => TypeKind::Optional(ty(i)),
+            K::Array(i) => TypeKind::Array(ty(i)),
+            K::Union(ts) => TypeKind::Union(List::new(t, ts, Type::new)),
+            K::Intersection(ts) => TypeKind::Intersection(List::new(t, ts, Type::new)),
             K::Error => TypeKind::Error,
         }
     }
@@ -947,10 +1168,10 @@ pub enum TypeArg<'t> {
 }
 
 impl<'t> TypeArg<'t> {
-    fn new(a: &'t ast::TypeArg) -> Self {
-        match a {
-            ast::TypeArg::Type(t) => TypeArg::Type(Type::new(t)),
-            ast::TypeArg::Pack(p) => TypeArg::Pack(TypePack::new(p)),
+    fn at(t: &'t Tree, i: u32) -> Self {
+        match t.type_args[i as usize] {
+            tree::TypeArgData::Type(ty) => TypeArg::Type(Type::new(t, ty)),
+            tree::TypeArgData::Pack(p) => TypeArg::Pack(TypePack::at(t, p)),
         }
     }
 }
@@ -968,17 +1189,17 @@ pub enum TypePack<'t> {
 }
 
 impl<'t> TypePack<'t> {
-    fn new(p: &'t ast::TypePack) -> Self {
-        match p {
-            ast::TypePack::Named(n) => TypePack::Named(Name::new(n)),
-            ast::TypePack::List {
+    fn at(t: &'t Tree, i: u32) -> Self {
+        match t.type_packs[i as usize] {
+            tree::TypePackData::Named(n) => TypePack::Named(Name::new(t, n)),
+            tree::TypePackData::List {
                 types,
                 vararg,
-                span,
+                span: s,
             } => TypePack::List {
-                types: List::new(types, Type::new),
-                vararg: vararg.as_deref().map(VarargType::new),
-                span: *span,
+                types: List::new(t, types, Type::new),
+                vararg: opt(vararg, |i| VarargType::at(t, i)),
+                span: span(t, s),
             },
         }
     }
@@ -1005,54 +1226,60 @@ pub enum TableTypeField<'t> {
 }
 
 impl<'t> TableTypeField<'t> {
-    fn new(f: &'t ast::TableTypeField) -> Self {
-        match f {
-            ast::TableTypeField::Named {
+    fn at(t: &'t Tree, i: u32) -> Self {
+        match t.table_type_fields[i as usize] {
+            tree::TableTypeFieldData::Named {
                 name,
                 optional,
                 readonly,
                 ty,
             } => TableTypeField::Named {
-                name: Name::new(name),
-                optional: *optional,
-                readonly: *readonly,
-                ty: Type::new(ty),
+                name: Name::new(t, name),
+                optional,
+                readonly,
+                ty: Type::new(t, ty),
             },
-            ast::TableTypeField::NamedString { key, ty, span } => TableTypeField::NamedString {
-                key: Str::new(key),
-                ty: Type::new(ty),
-                span: *span,
+            tree::TableTypeFieldData::NamedString { key, ty, span: s } => {
+                TableTypeField::NamedString {
+                    key: Str::new(t, key),
+                    ty: Type::new(t, ty),
+                    span: span(t, s),
+                }
+            }
+            tree::TableTypeFieldData::Indexer { key, value } => TableTypeField::Indexer {
+                key: Type::new(t, key),
+                value: Type::new(t, value),
             },
-            ast::TableTypeField::Indexer { key, value } => TableTypeField::Indexer {
-                key: Type::new(key),
-                value: Type::new(value),
-            },
-            ast::TableTypeField::Array(t) => TableTypeField::Array(Type::new(t)),
+            tree::TableTypeFieldData::Array(ty) => TableTypeField::Array(Type::new(t, ty)),
         }
     }
 }
 
 handle!(
     /// `function(A, B): R`
-    FunctionType,
-    ast::FunctionType
+    FunctionType
 );
+debug_index!(FunctionType);
 
 impl<'t> FunctionType<'t> {
+    fn node(self) -> &'t tree::FnTypeNode {
+        &self.t.fn_types[self.i as usize]
+    }
+
     pub fn type_params(self) -> TypeParams<'t> {
-        List::new(&self.0.type_params, TypeParam::new)
+        List::new(self.t, self.node().type_params, TypeParam::at)
     }
 
     pub fn params(self) -> ParamTypes<'t> {
-        List::new(&self.0.params, ParamType::new)
+        List::new(self.t, self.node().params, ParamType::at)
     }
 
     pub fn vararg(self) -> Option<VarargType<'t>> {
-        self.0.vararg.as_ref().map(VarargType::new)
+        opt(self.node().vararg, |i| VarargType::at(self.t, i))
     }
 
     pub fn ret(self) -> RetType<'t> {
-        RetType::new(&self.0.ret)
+        RetType::at(self.t, self.node().ret)
     }
 }
 
@@ -1064,10 +1291,11 @@ pub struct ParamType<'t> {
 }
 
 impl<'t> ParamType<'t> {
-    fn new(p: &'t ast::ParamType) -> Self {
+    fn at(t: &'t Tree, i: u32) -> Self {
+        let p = t.param_types[i as usize];
         ParamType {
-            name: p.name.as_ref().map(Name::new),
-            ty: Type::new(&p.ty),
+            name: p.name.map(|n| Name::new(t, n)),
+            ty: Type::new(t, p.ty),
         }
     }
 }
@@ -1081,11 +1309,11 @@ pub enum VarargType<'t> {
 }
 
 impl<'t> VarargType<'t> {
-    fn new(v: &'t ast::VarargType) -> Self {
-        match v {
-            ast::VarargType::Type(t) => VarargType::Type(Type::new(t)),
-            ast::VarargType::Pack(n) => VarargType::Pack(Name::new(n)),
-            ast::VarargType::Expand(t) => VarargType::Expand(Type::new(t)),
+    fn at(t: &'t Tree, i: u32) -> Self {
+        match t.vararg_types[i as usize] {
+            tree::VarargTypeData::Type(ty) => VarargType::Type(Type::new(t, ty)),
+            tree::VarargTypeData::Pack(n) => VarargType::Pack(Name::new(t, n)),
+            tree::VarargTypeData::Expand(ty) => VarargType::Expand(Type::new(t, ty)),
         }
     }
 }
@@ -1109,22 +1337,22 @@ pub enum RetType<'t> {
 }
 
 impl<'t> RetType<'t> {
-    fn new(r: &'t ast::RetType) -> Self {
-        match r {
-            ast::RetType::Single(t) => RetType::Single(Type::new(t)),
-            ast::RetType::List {
+    fn at(t: &'t Tree, i: u32) -> Self {
+        match t.rets[i as usize] {
+            tree::RetData::Single(ty) => RetType::Single(Type::new(t, ty)),
+            tree::RetData::List {
                 types,
                 vararg,
-                span,
+                span: s,
             } => RetType::List {
-                types: List::new(types, Type::new),
-                vararg: vararg.as_deref().map(VarargType::new),
-                span: *span,
+                types: List::new(t, types, Type::new),
+                vararg: opt(vararg, |i| VarargType::at(t, i)),
+                span: span(t, s),
             },
-            ast::RetType::Pack(n) => RetType::Pack(Name::new(n)),
-            ast::RetType::Predicate { name, ty } => RetType::Predicate {
-                name: Name::new(name),
-                ty: Type::new(ty),
+            tree::RetData::Pack(n) => RetType::Pack(Name::new(t, n)),
+            tree::RetData::Predicate { name, ty } => RetType::Predicate {
+                name: Name::new(t, name),
+                ty: Type::new(t, ty),
             },
         }
     }
@@ -1139,10 +1367,11 @@ pub struct TypeParam<'t> {
 }
 
 impl<'t> TypeParam<'t> {
-    fn new(p: &'t ast::TypeParam) -> Self {
+    fn at(t: &'t Tree, i: u32) -> Self {
+        let p = t.type_params[i as usize];
         TypeParam {
-            name: Name::new(&p.name),
-            constraint: p.constraint.as_ref().map(Type::new),
+            name: Name::new(t, p.name),
+            constraint: opt(p.constraint, |i| Type::new(t, i)),
             pack: p.pack,
         }
     }
@@ -1150,89 +1379,101 @@ impl<'t> TypeParam<'t> {
 
 // ----------------------------------------------------------- declarations --
 
-handle!(ClassDecl, ast::ClassDecl);
+handle!(ClassDecl);
+debug_index!(ClassDecl);
 
 impl<'t> ClassDecl<'t> {
+    fn node(self) -> &'t tree::ClassNode {
+        &self.t.classes[self.i as usize]
+    }
+
     pub fn is_abstract(self) -> bool {
-        self.0.is_abstract
+        self.node().is_abstract
     }
 
     pub fn name(self) -> Name<'t> {
-        Name::new(&self.0.name)
+        Name::new(self.t, self.node().name)
     }
 
     pub fn type_params(self) -> TypeParams<'t> {
-        List::new(&self.0.type_params, TypeParam::new)
+        List::new(self.t, self.node().type_params, TypeParam::at)
     }
 
     pub fn extends(self) -> Option<Type<'t>> {
-        self.0.extends.as_ref().map(Type::new)
+        opt(self.node().extends, |i| Type::new(self.t, i))
     }
 
     pub fn implements(self) -> Types<'t> {
-        List::new(&self.0.implements, Type::new)
+        List::new(self.t, self.node().implements, Type::new)
     }
 
     pub fn members(self) -> ClassMembers<'t> {
-        List::new(&self.0.members, ClassMember::new)
+        List::new(self.t, self.node().members, ClassMember::new)
     }
 
     pub fn end_span(self) -> Span {
-        self.0.end_span
+        span(self.t, self.node().end_span)
     }
 }
 
-handle!(ClassMember, ast::ClassMember);
+handle!(ClassMember);
+debug_kind!(ClassMember);
 
 impl<'t> ClassMember<'t> {
+    fn node(self) -> &'t tree::ClassMemberNode {
+        &self.t.class_members[self.i as usize]
+    }
+
     pub fn decorators(self) -> Decorators<'t> {
-        List::new(&self.0.decorators, Decorator::new)
+        List::new(self.t, self.node().decorators, Decorator::new)
     }
 
     pub fn modifiers(self) -> &'t [Modifier] {
-        &self.0.modifiers
+        let r = self.node().modifiers;
+        &self.t.modifiers[r.start as usize..(r.start + r.len) as usize]
     }
 
     pub fn span(self) -> Span {
-        self.0.span
+        span(self.t, self.node().span)
     }
 
     pub fn kind(self) -> ClassMemberKind<'t> {
-        use ast::ClassMemberKind as K;
-        match &self.0.kind {
+        use tree::ClassMemberData as K;
+        let t = self.t;
+        match self.node().data {
             K::Field {
                 name,
                 optional,
                 ty,
                 value,
             } => ClassMemberKind::Field {
-                name: Name::new(name),
-                optional: *optional,
-                ty: Type::new(ty),
-                value: value.as_ref().map(Expr::new),
+                name: Name::new(t, name),
+                optional,
+                ty: Type::new(t, ty),
+                value: opt(value, |i| Expr::new(t, i)),
             },
             K::Method {
                 name,
                 func,
                 has_body,
             } => ClassMemberKind::Method {
-                name: Name::new(name),
-                func: Func::new(func),
-                has_body: *has_body,
+                name: Name::new(t, name),
+                func: Func::new(t, func),
+                has_body,
             },
             K::Getter { name, ty, body } => ClassMemberKind::Getter {
-                name: Name::new(name),
-                ty: ty.as_ref().map(Type::new),
-                body: Block::new(body),
+                name: Name::new(t, name),
+                ty: opt(ty, |i| Type::new(t, i)),
+                body: Block::new(t, body),
             },
             K::Setter { name, param, body } => ClassMemberKind::Setter {
-                name: Name::new(name),
-                param: TypedName::new(param),
-                body: Block::new(body),
+                name: Name::new(t, name),
+                param: TypedName::at(t, param),
+                body: Block::new(t, body),
             },
             K::Constructor { func, has_body } => ClassMemberKind::Constructor {
-                func: Func::new(func),
-                has_body: *has_body,
+                func: Func::new(t, func),
+                has_body,
             },
         }
     }
@@ -1269,23 +1510,28 @@ pub enum ClassMemberKind<'t> {
     },
 }
 
-handle!(InterfaceDecl, ast::InterfaceDecl);
+handle!(InterfaceDecl);
+debug_index!(InterfaceDecl);
 
 impl<'t> InterfaceDecl<'t> {
+    fn node(self) -> &'t tree::InterfaceNode {
+        &self.t.interfaces[self.i as usize]
+    }
+
     pub fn name(self) -> Name<'t> {
-        Name::new(&self.0.name)
+        Name::new(self.t, self.node().name)
     }
 
     pub fn type_params(self) -> TypeParams<'t> {
-        List::new(&self.0.type_params, TypeParam::new)
+        List::new(self.t, self.node().type_params, TypeParam::at)
     }
 
     pub fn extends(self) -> Types<'t> {
-        List::new(&self.0.extends, Type::new)
+        List::new(self.t, self.node().extends, Type::new)
     }
 
     pub fn members(self) -> InterfaceMembers<'t> {
-        List::new(&self.0.members, InterfaceMember::new)
+        List::new(self.t, self.node().members, InterfaceMember::at)
     }
 }
 
@@ -1304,36 +1550,41 @@ pub enum InterfaceMember<'t> {
 }
 
 impl<'t> InterfaceMember<'t> {
-    fn new(m: &'t ast::InterfaceMember) -> Self {
-        match m {
-            ast::InterfaceMember::Field {
+    fn at(t: &'t Tree, i: u32) -> Self {
+        match t.interface_members[i as usize] {
+            tree::InterfaceMemberData::Field {
                 readonly,
                 name,
                 optional,
                 ty,
             } => InterfaceMember::Field {
-                readonly: *readonly,
-                name: Name::new(name),
-                optional: *optional,
-                ty: Type::new(ty),
+                readonly,
+                name: Name::new(t, name),
+                optional,
+                ty: Type::new(t, ty),
             },
-            ast::InterfaceMember::Method { name, sig } => InterfaceMember::Method {
-                name: Name::new(name),
-                sig: Func::new(sig),
+            tree::InterfaceMemberData::Method { name, sig } => InterfaceMember::Method {
+                name: Name::new(t, name),
+                sig: Func::new(t, sig),
             },
         }
     }
 }
 
-handle!(EnumDecl, ast::EnumDecl);
+handle!(EnumDecl);
+debug_index!(EnumDecl);
 
 impl<'t> EnumDecl<'t> {
+    fn node(self) -> &'t tree::EnumNode {
+        &self.t.enums[self.i as usize]
+    }
+
     pub fn name(self) -> Name<'t> {
-        Name::new(&self.0.name)
+        Name::new(self.t, self.node().name)
     }
 
     pub fn items(self) -> EnumItems<'t> {
-        List::new(&self.0.items, EnumItem::new)
+        List::new(self.t, self.node().items, EnumItem::at)
     }
 }
 
@@ -1344,51 +1595,58 @@ pub struct EnumItem<'t> {
 }
 
 impl<'t> EnumItem<'t> {
-    fn new(i: &'t ast::EnumItem) -> Self {
+    fn at(t: &'t Tree, i: u32) -> Self {
+        let item = t.enum_items[i as usize];
         EnumItem {
-            name: Name::new(&i.name),
-            value: i.value.as_ref().map(Expr::new),
+            name: Name::new(t, item.name),
+            value: opt(item.value, |i| Expr::new(t, i)),
         }
     }
 }
 
-handle!(TypeAlias, ast::TypeAlias);
+handle!(TypeAlias);
+debug_index!(TypeAlias);
 
 impl<'t> TypeAlias<'t> {
+    fn node(self) -> &'t tree::AliasNode {
+        &self.t.aliases[self.i as usize]
+    }
+
     pub fn name(self) -> Name<'t> {
-        Name::new(&self.0.name)
+        Name::new(self.t, self.node().name)
     }
 
     pub fn type_params(self) -> TypeParams<'t> {
-        List::new(&self.0.type_params, TypeParam::new)
+        List::new(self.t, self.node().type_params, TypeParam::at)
     }
 
     pub fn ty(self) -> Type<'t> {
-        Type::new(&self.0.ty)
+        Type::new(self.t, self.node().ty)
     }
 }
 
 handle!(
     /// A `declare …` statement.
-    Declare,
-    ast::Declare
+    Declare
 );
+debug_kind!(Declare);
 
 impl<'t> Declare<'t> {
     pub fn kind(self) -> DeclareKind<'t> {
-        use ast::Declare as K;
-        match self.0 {
+        use tree::DeclareData as K;
+        let t = self.t;
+        match t.declares[self.i as usize] {
             K::Function { name, sig } => DeclareKind::Function {
-                name: FuncName::new(name),
-                sig: Func::new(sig),
+                name: FuncName::new(t, name),
+                sig: Func::new(t, sig),
             },
             K::Global { name, ty } => DeclareKind::Global {
-                name: Name::new(name),
-                ty: Type::new(ty),
+                name: Name::new(t, name),
+                ty: Type::new(t, ty),
             },
             K::Namespace { name, members } => DeclareKind::Namespace {
-                name: Name::new(name),
-                members: List::new(members, NsMember::new),
+                name: Name::new(t, name),
+                members: List::new(t, members, NsMember::new),
             },
             K::Class {
                 name,
@@ -1397,24 +1655,24 @@ impl<'t> Declare<'t> {
                 implements,
                 members,
             } => DeclareKind::Class {
-                name: Name::new(name),
-                type_params: List::new(type_params, TypeParam::new),
-                extends: extends.as_ref().map(Type::new),
-                implements: List::new(implements, Type::new),
-                members: List::new(members, DeclMember::new),
+                name: Name::new(t, name),
+                type_params: List::new(t, type_params, TypeParam::at),
+                extends: opt(extends, |i| Type::new(t, i)),
+                implements: List::new(t, implements, Type::new),
+                members: List::new(t, members, DeclMember::new),
             },
-            K::Interface(i) => DeclareKind::Interface(InterfaceDecl::new(i)),
+            K::Interface(i) => DeclareKind::Interface(InterfaceDecl::new(t, i)),
             K::Event { name, params } => DeclareKind::Event {
-                name: Name::new(name),
-                params: Func::new(params),
+                name: Name::new(t, name),
+                params: Func::new(t, params),
             },
             K::Message { name, params } => DeclareKind::Message {
-                name: Name::new(name),
-                params: Func::new(params),
+                name: Name::new(t, name),
+                params: Func::new(t, params),
             },
             K::Module { path, members } => DeclareKind::Module {
-                path: Str::new(path),
-                members: List::new(members, NsMember::new),
+                path: Str::new(t, path),
+                members: List::new(t, members, NsMember::new),
             },
         }
     }
@@ -1456,32 +1714,38 @@ pub enum DeclareKind<'t> {
     },
 }
 
-handle!(NsMember, ast::NsMember);
+handle!(NsMember);
+debug_kind!(NsMember);
 
 impl<'t> NsMember<'t> {
+    fn node(self) -> &'t tree::NsMemberNode {
+        &self.t.ns_members[self.i as usize]
+    }
+
     pub fn decorators(self) -> Decorators<'t> {
-        List::new(&self.0.decorators, Decorator::new)
+        List::new(self.t, self.node().decorators, Decorator::new)
     }
 
     pub fn span(self) -> Span {
-        self.0.span
+        span(self.t, self.node().span)
     }
 
     pub fn kind(self) -> NsMemberKind<'t> {
-        use ast::NsMemberKind as K;
-        match &self.0.kind {
+        use tree::NsMemberData as K;
+        let t = self.t;
+        match self.node().data {
             K::Function { name, sig } => NsMemberKind::Function {
-                name: Name::new(name),
-                sig: Func::new(sig),
+                name: Name::new(t, name),
+                sig: Func::new(t, sig),
             },
             K::Value { is_const, name, ty } => NsMemberKind::Value {
-                is_const: *is_const,
-                name: Name::new(name),
-                ty: Type::new(ty),
+                is_const,
+                name: Name::new(t, name),
+                ty: Type::new(t, ty),
             },
             K::Namespace { name, members } => NsMemberKind::Namespace {
-                name: Name::new(name),
-                members: List::new(members, NsMember::new),
+                name: Name::new(t, name),
+                members: List::new(t, members, NsMember::new),
             },
             K::Class {
                 name,
@@ -1489,14 +1753,14 @@ impl<'t> NsMember<'t> {
                 extends,
                 members,
             } => NsMemberKind::Class {
-                name: Name::new(name),
-                type_params: List::new(type_params, TypeParam::new),
-                extends: extends.as_ref().map(Type::new),
-                members: List::new(members, DeclMember::new),
+                name: Name::new(t, name),
+                type_params: List::new(t, type_params, TypeParam::at),
+                extends: opt(extends, |i| Type::new(t, i)),
+                members: List::new(t, members, DeclMember::new),
             },
-            K::Interface(i) => NsMemberKind::Interface(InterfaceDecl::new(i)),
-            K::TypeAlias(t) => NsMemberKind::TypeAlias(TypeAlias::new(t)),
-            K::Enum(e) => NsMemberKind::Enum(EnumDecl::new(e)),
+            K::Interface(i) => NsMemberKind::Interface(InterfaceDecl::new(t, i)),
+            K::TypeAlias(a) => NsMemberKind::TypeAlias(TypeAlias::new(t, a)),
+            K::Enum(e) => NsMemberKind::Enum(EnumDecl::new(t, e)),
         }
     }
 }
@@ -1527,37 +1791,43 @@ pub enum NsMemberKind<'t> {
     Enum(EnumDecl<'t>),
 }
 
-handle!(DeclMember, ast::DeclMember);
+handle!(DeclMember);
+debug_kind!(DeclMember);
 
 impl<'t> DeclMember<'t> {
+    fn node(self) -> &'t tree::DeclMemberNode {
+        &self.t.decl_members[self.i as usize]
+    }
+
     pub fn decorators(self) -> Decorators<'t> {
-        List::new(&self.0.decorators, Decorator::new)
+        List::new(self.t, self.node().decorators, Decorator::new)
     }
 
     pub fn is_static(self) -> bool {
-        self.0.is_static
+        self.node().is_static
     }
 
     pub fn span(self) -> Span {
-        self.0.span
+        span(self.t, self.node().span)
     }
 
     pub fn kind(self) -> DeclMemberKind<'t> {
-        match &self.0.kind {
-            ast::DeclMemberKind::Function { name, sig } => DeclMemberKind::Function {
-                name: Name::new(name),
-                sig: Func::new(sig),
+        let t = self.t;
+        match self.node().data {
+            tree::DeclMemberData::Function { name, sig } => DeclMemberKind::Function {
+                name: Name::new(t, name),
+                sig: Func::new(t, sig),
             },
-            ast::DeclMemberKind::Field {
+            tree::DeclMemberData::Field {
                 readonly,
                 name,
                 optional,
                 ty,
             } => DeclMemberKind::Field {
-                readonly: *readonly,
-                name: Name::new(name),
-                optional: *optional,
-                ty: Type::new(ty),
+                readonly,
+                name: Name::new(t, name),
+                optional,
+                ty: Type::new(t, ty),
             },
         }
     }
@@ -1577,25 +1847,31 @@ pub enum DeclMemberKind<'t> {
     },
 }
 
-handle!(Import, ast::Import);
+handle!(Import);
+debug_index!(Import);
 
 impl<'t> Import<'t> {
+    fn node(self) -> &'t tree::ImportNode {
+        &self.t.imports[self.i as usize]
+    }
+
     pub fn clause(self) -> ImportClause<'t> {
-        match &self.0.clause {
-            ast::ImportClause::Namespace(n) => ImportClause::Namespace(Name::new(n)),
-            ast::ImportClause::SideEffect => ImportClause::SideEffect,
-            ast::ImportClause::Names(specs) => {
-                ImportClause::Names(List::new(specs, ImportSpec::new))
+        let t = self.t;
+        match self.node().clause {
+            tree::ImportClauseData::Namespace(n) => ImportClause::Namespace(Name::new(t, n)),
+            tree::ImportClauseData::SideEffect => ImportClause::SideEffect,
+            tree::ImportClauseData::Names(specs) => {
+                ImportClause::Names(List::new(t, specs, ImportSpec::at))
             }
         }
     }
 
     pub fn type_only(self) -> bool {
-        self.0.type_only
+        self.node().type_only
     }
 
     pub fn from(self) -> Str<'t> {
-        Str::new(&self.0.from)
+        Str::new(self.t, self.node().from)
     }
 }
 
@@ -1615,10 +1891,11 @@ pub struct ImportSpec<'t> {
 }
 
 impl<'t> ImportSpec<'t> {
-    fn new(s: &'t ast::ImportSpec) -> Self {
+    fn at(t: &'t Tree, i: u32) -> Self {
+        let s = t.import_specs[i as usize];
         ImportSpec {
-            name: Name::new(&s.name),
-            alias: s.alias.as_ref().map(Name::new),
+            name: Name::new(t, s.name),
+            alias: s.alias.map(|a| Name::new(t, a)),
         }
     }
 }

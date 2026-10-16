@@ -1,7 +1,11 @@
-//! The syntax tree (spec compiler §13.4). Every node has a [`NodeId`] and a
-//! [`Span`]. The tree keeps everything needed to reproduce the source's
-//! meaning exactly: parentheses (they truncate multiple values in Lua),
-//! the form of call arguments, and literal text.
+//! The boxed syntax tree the parser builds (spec compiler §13.4), which
+//! [`crate::tree`] flattens. The tree keeps everything needed to reproduce
+//! the source's meaning exactly: parentheses (they truncate multiple values
+//! in Lua), the form of call arguments, and literal text.
+
+// `Error` expressions and types are part of the shape the views show; the
+// parser builds none today.
+#![allow(dead_code)]
 
 use wowlua_span::Span;
 
@@ -227,21 +231,6 @@ pub const CORE_DECORATORS: &[&str] = &[
 ];
 
 impl Decorator {
-    /// A core decorator (a single name from [`CORE_DECORATORS`]).
-    pub fn is_core(&self) -> bool {
-        self.path.len() == 1 && CORE_DECORATORS.contains(&self.path[0].text.as_ref())
-    }
-
-    /// A core decorator name (`@if`, `@global`, …) used without a path.
-    pub fn is_named(&self, name: &str) -> bool {
-        self.path.len() == 1 && self.path[0].text.as_ref() == name
-    }
-
-    /// The decorator as an expression (`@a.b(x)` is `a.b(x)`).
-    pub fn expr(&self) -> &Expr {
-        &self.call
-    }
-
     /// The expression of a decorator with `path`, `args` and `span`: the
     /// path's names (each field access from the first name to its own),
     /// called with the arguments over the decorator's span. Its nodes have
@@ -459,15 +448,6 @@ pub enum Args {
     Table(Box<Expr>),
     /// `f"…"`
     String(Box<Expr>),
-}
-
-impl Args {
-    pub fn exprs(&self) -> Vec<&Expr> {
-        match self {
-            Args::Parens { args, .. } => args.iter().collect(),
-            Args::Table(e) | Args::String(e) => vec![e],
-        }
-    }
 }
 
 // The key is boxed for the same reason: most fields are named or positional.
