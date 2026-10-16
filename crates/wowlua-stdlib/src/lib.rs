@@ -130,6 +130,7 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         Some(include_str!("../std/media.d.wowlua")),
     ),
     ("menu", include_str!("../std/menu.wowlua"), None),
+    ("mock", include_str!("../std/mock.wowlua"), None),
     (
         "pool",
         include_str!("../std/pool.wowlua"),
@@ -164,6 +165,11 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         Some(include_str!("../std/slash.d.wowlua")),
     ),
     ("table", include_str!("../std/table.wowlua"), None),
+    (
+        "test",
+        include_str!("../std/test.wowlua"),
+        Some(include_str!("../std/test.d.wowlua")),
+    ),
     (
         "timer",
         include_str!("../std/timer.wowlua"),

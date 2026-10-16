@@ -222,9 +222,14 @@ fn warnings(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
-/// Installs the controls as global `name` (the test runner's; `wowlua:mock`
-/// wraps them).
+/// Installs the controls as global `name` (tests of the engine itself).
 pub fn install(vm: &mut Vm, name: &str) {
+    let t = table(vm);
+    vm.set_global(name, Value::Table(t));
+}
+
+/// The controls as a table (the test runner gives it to `wowlua:mock`).
+pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
     let t = vm.new_table();
     for (key, f) in [
         ("fireEvent", fire_event as wowlua_vm::NativeFn),
@@ -266,5 +271,5 @@ pub fn install(vm: &mut Vm, name: &str) {
     let player = units::handle(vm, units::PLAYER);
     let k = vm.heap.intern(b"player");
     vm.heap.table_mut(t).set_str(k, player);
-    vm.set_global(name, Value::Table(t));
+    t
 }

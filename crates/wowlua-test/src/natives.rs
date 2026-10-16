@@ -1,0 +1,126 @@
+//! The runner's part of `wowlua:mock`'s engine: what `print` printed, the
+//! errors that reached the error handler, logging in and secrets. Each test
+//! file runs on its own thread, so the state is the thread's.
+
+use std::cell::RefCell;
+use wowlua_vm::stdlib::Ret;
+use wowlua_vm::{NativeCall, TableRef, Value, Vm};
+
+#[derive(Default)]
+struct State {
+    printed: Vec<u8>,
+    errors: Vec<String>,
+    /// How many of `errors` a test has read (`mock.errors()`) or the runner
+    /// reported.
+    read: usize,
+    addon: String,
+}
+
+thread_local! {
+    static STATE: RefCell<State> = RefCell::default();
+}
+
+pub fn reset() {
+    STATE.with(|s| *s.borrow_mut() = State::default());
+}
+
+pub fn print_sink(bytes: &[u8]) {
+    STATE.with(|s| s.borrow_mut().printed.extend_from_slice(bytes));
+}
+
+pub fn take_printed() -> String {
+    STATE.with(|s| {
+        String::from_utf8_lossy(&std::mem::take(&mut s.borrow_mut().printed)).into_owned()
+    })
+}
+
+/// The errors since the last read, marked read.
+pub fn unread_errors() -> Vec<String> {
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        let unread = s.errors[s.read..].to_vec();
+        s.read = s.errors.len();
+        unread
+    })
+}
+
+/// The error handler: records the error (with the stack of where it was
+/// raised) and returns it, as the default handler does.
+pub fn error_handler(vm: &mut Vm, c: NativeCall) -> Ret {
+    let v = c.arg(1);
+    let message = match v {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        other => match vm.tostring(other) {
+            Ok(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => "?".into(),
+        },
+    };
+    STATE.with(|s| s.borrow_mut().errors.push(message));
+    Ok(vec![v])
+}
+
+/// `mock.errors()`: every error so far, all marked read.
+fn errors(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let list = STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        s.read = s.errors.len();
+        s.errors.clone()
+    });
+    let t = vm.new_table();
+    for (i, e) in list.iter().enumerate() {
+        let v = vm.str(e);
+        let _ = vm.heap.table_mut(t).set(Value::Num(i as f64 + 1.0), v);
+    }
+    Ok(vec![Value::Table(t)])
+}
+
+/// `mock.printed()`: the lines printed so far.
+fn printed(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let text = STATE.with(|s| String::from_utf8_lossy(&s.borrow().printed).into_owned());
+    let t = vm.new_table();
+    for (i, line) in text.lines().enumerate() {
+        let v = vm.str(line);
+        let _ = vm.heap.table_mut(t).set(Value::Num(i as f64 + 1.0), v);
+    }
+    Ok(vec![Value::Table(t)])
+}
+
+/// `mock.secret(v)`.
+fn secret(vm: &mut Vm, c: NativeCall) -> Ret {
+    let v = c.arg(1);
+    Ok(vec![vm.secret_wrap(v)])
+}
+
+/// The client's login: `ADDON_LOADED` for the addon, `PLAYER_LOGIN`,
+/// `PLAYER_ENTERING_WORLD` (an initial login).
+pub fn login(vm: &mut Vm, addon: &str) {
+    let name = vm.str(addon);
+    wowlua_engine::widgets::fire_event(vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
+    wowlua_engine::widgets::fire_event(vm, "PLAYER_LOGIN", &[]);
+    wowlua_engine::widgets::fire_event(
+        vm,
+        "PLAYER_ENTERING_WORLD",
+        &[Value::Bool(true), Value::Bool(false)],
+    );
+}
+
+fn login_control(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let addon = STATE.with(|s| s.borrow().addon.clone());
+    login(vm, &addon);
+    Ok(vec![])
+}
+
+/// Adds the runner's controls to the engine's.
+pub fn extend(vm: &mut Vm, controls: TableRef, addon: &str) {
+    STATE.with(|s| s.borrow_mut().addon = addon.to_string());
+    for (key, f) in [
+        ("errors", errors as wowlua_vm::NativeFn),
+        ("printed", printed),
+        ("secret", secret),
+        ("login", login_control),
+    ] {
+        let native = vm.native(key, f);
+        let k = vm.heap.intern(key.as_bytes());
+        vm.heap.table_mut(controls).set_str(k, native);
+    }
+}

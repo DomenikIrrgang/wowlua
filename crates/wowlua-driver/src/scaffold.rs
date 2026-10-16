@@ -153,7 +153,10 @@ pub fn new_package(request: &NewRequest) -> Result<Vec<PathBuf>, Diagnostic> {
                 manifest.insert("flavors".into(), Value::Object(flavors.clone()));
             }
             files.push(("src/main.wowlua".into(), main_template()));
-            files.push(("tests/main.test.wowlua".into(), test_template()));
+            files.push((
+                "tests/main.test.wowlua".into(),
+                addon_test_template(&display_name),
+            ));
             files.push(("locales/enUS.json".into(), "{}\n".into()));
             files.push((
                 "CHANGELOG.md".into(),
@@ -226,6 +229,20 @@ fn main_template() -> String {
      \x20   print(addonName .. \" loaded.\")\n\
      end)\n"
         .to_string()
+}
+
+fn addon_test_template(addon: &str) -> String {
+    format!(
+        "-- Tests run in the emulated client with `wowlua test`. Test files are never\n\
+         -- part of a build.\n\
+         import test, expect from \"wowlua:test\"\n\
+         import * as mock from \"wowlua:mock\"\n\
+         \n\
+         @test(\"greets at login\")\n\
+         local function greets()\n\
+         \x20   expect(mock.printed()).toContain(\"{addon} loaded.\")\n\
+         end\n"
+    )
 }
 
 fn test_template() -> String {

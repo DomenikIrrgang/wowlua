@@ -416,15 +416,16 @@ The test framework runs on wowlua's own emulation of the WoW client
   documentation (existence, protection, secrets), the widget system and the
   behaviour tests need, "not mocked" errors for the rest; Blizzard's FrameXML
   as secure code, opt-in.
-  Built 2026-10-16, waiting for review and the in-game probe run: the engine
+  Built 2026-10-16; done 2026-10-17: Blizzard's UI on camelot (70425) loads,
+  logs in and runs without an error, as the client's does, and all 15,933
+  values of the `/stdtest engine` battery match. Built 2026-10-16: the engine
   crate with the documentation's API and argument checks (556 of 563
   recorded checks), camelot's undocumented C functions, frames, events,
   timers, units, auras, restrictions, protected actions, spells and items
   from the tests; the M8 mock's stdlib tests run on its frames, events and
   timers; Blizzard's UI code loads (191 addons on camelot), with which all
   819 recorded client cases and all eight recorded taint experiments give
-  the client's results. The probe battery (`/stdtest engine`) waits for an
-  in-game run.
+  the client's results.
 - S4 **Test framework**: `wowlua test`, `wowlua:test`, `wowlua:mock` (spies,
   stubs, fakes, scenario controls, taint assertions), per flavor, in parallel.
   World profiles (decision T213): the character (name, class, race, level,
@@ -440,6 +441,12 @@ The test framework runs on wowlua's own emulation of the WoW client
   (T222) are specified here and built in M11 and S8. The groundwork for M12
   to M14: the VM's debug hooks (shared with S5's coverage) and the engine's
   file access behind an interface (T212).
+  In progress 2026-10-17: `wowlua test` runs a package's test files per
+  flavor in the engine (the addon loaded from its TOC as the client loads
+  it), with `wowlua:test` (tests, hooks, `@skip`, `@only`, `@flavors`,
+  `@cases`, `describe`, `config`, the core matchers) and `wowlua:mock` (the
+  engine's controls, spies, stubs, fakes, waiting, printed output and
+  errors).
 - S5 **Coverage and reports**: lines, statements, branches, functions and
   conditions counted by the VM; terminal, JUnit, TAP, JSON, GitHub, lcov,
   Cobertura and an HTML report in the wowlua design system; thresholds.

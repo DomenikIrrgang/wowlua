@@ -19,7 +19,8 @@ third-party library (decision T184).
 
 Test-only files are compiled with the `test` profile and never included in
 addon builds. Importing `wowlua:test` or `wowlua:mock` from a non-test file is
-error E8108.
+error E8108. In test files, `/x` names `build.src`'s `x` (the addon's
+modules), and `./x` a file next to the test file (helpers under `tests/`).
 
 ```wowlua
 -- tests/tracker.test.wowlua
@@ -62,10 +63,13 @@ end
 For each test file and flavor, the runner:
 
 1. creates a fresh VM and installs `wowlua:mock` for that flavor,
-2. loads the project mocks (`tests/mocks/`),
-3. loads the **whole addon** in its computed load order, compiled with the
-   `test` profile (exactly as the generated TOC would load it),
-4. loads the test file (its top-level code runs),
+2. loads the TOC's files up to the runtime (locale files, the runtime), then
+   the project mocks (`tests/mocks/`, with what they import),
+3. loads the rest of the **whole addon** in its computed load order,
+   compiled with the `test` profile (exactly as the generated TOC would load
+   it, XML included, as the addon's code),
+4. loads the test file after the helpers it imports (its top-level code
+   runs),
 5. unless the file opted out, fires the lifecycle: `ADDON_LOADED` for the addon,
    `PLAYER_LOGIN`, and `PLAYER_ENTERING_WORLD` (`isInitialLogin = true`),
 6. runs `@beforeAll`, then each test with its `@beforeEach` / `@afterEach`
@@ -74,17 +78,20 @@ For each test file and flavor, the runner:
 A test file opts out of step 5 with `config({ lifecycle = "manual" })` from
 `wowlua:test` at its top level, and then drives the lifecycle itself with
 `mock.login()`. Tests within one file share the VM. Each file starts fresh.
+An error while loading (a step above) fails the file. An error that reaches
+the error handler during a test (an event handler's, a timer's) fails that
+test, unless the test read it with `mock.errors()`.
 
 ### 16.1.3 `wowlua:test`
 
 | Export | Purpose |
 |--------|---------|
-| `@test(name?)` | Marks a test function (top level) |
+| `@test(name?, opts?)` | Marks a test function (top level); the name defaults to the function's; `opts.timeout` (virtual seconds) for its waits |
 | `@beforeEach`, `@afterEach`, `@beforeAll`, `@afterAll` | Hooks, per file |
 | `@skip(reason?)`, `@only` | Test selection |
 | `@flavors("standard", …)` | Run only for these flavors |
-| `config({ lifecycle: "auto" \| "manual" })` | Per-file runner settings |
-| `describe(name, fn)` | Grouping for runtime-generated tests |
+| `config({ lifecycle: "auto" \| "manual", timeout? })` | Per-file runner settings |
+| `describe(name, fn)` | Grouping for runtime-generated tests (`test(name)(fn)` inside `fn`) |
 | `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`, `toMatchSnapshot`; for widgets `toBeShown`, `toBeVisible`, `toHaveText`, `toHaveSize`, `toBeAnchoredTo`. Negation with `expect(v).never.toBe(x)`. Type-checked (below). |
 | `@cases(list)` | Runs a test once per case, the case's values as its arguments (below) |
 | `@expectError(code, …)` | A compile-time test: the function must not compile, with these diagnostics (below) |
@@ -115,7 +122,8 @@ end
 straight-line code: `mock.waitFor(event, predicate?)` (the event's arguments
 are returned), `mock.waitFrames(n)`, `mock.waitSeconds(s)` and
 `mock.waitUntil(fn)`. A test runs as a coroutine; waiting advances the virtual
-clock and the frames, so a test stays deterministic and runs instantly. A
+clock and the frames (60 a second, each running `OnUpdate` and the due
+timers), so a test stays deterministic and runs instantly. A
 wait longer than `timeout` virtual seconds (default 10, `config({ timeout })`
 or `@test(name, { timeout })`) fails the test, naming what it waited for.
 
@@ -264,6 +272,11 @@ wowlua test [filter] [--flavor <f>] [--watch] [--coverage] [--reporter <r>,…] 
 - Each test file runs once **per manifest flavor** by default. `--flavor`
   restricts the run, and `@flavors` restricts individual tests.
 - Each file and flavor runs in a fresh VM. Files run in parallel.
+- `filter` keeps the test files and tests whose path or name contains it.
+- The test build of each flavor goes to `<build.out>/.test/<flavor>/<Name>`
+  (the AddOn folder as the client would load it, with the test side next to
+  it); error locations in reports are the sources' (the `test` profile keeps
+  lines).
 - Test reporters: `pretty` (the terminal default), `junit` (XML), `tap`,
   `json`, `github` (annotations). Several may be given; files go to
   `dist/test/` unless `--output` says otherwise.

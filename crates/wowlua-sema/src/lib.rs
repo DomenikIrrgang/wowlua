@@ -168,6 +168,15 @@ pub fn is_compiler_known(src_rel: &str) -> bool {
     src_rel.starts_with(STDLIB_PREFIX) || src_rel.starts_with("<wowlua>/")
 }
 
+/// Sources of the test side (`tests/`, spec Tooling §16.1.1) live under
+/// this prefix (`@tests/helpers.wowlua`); `/x` still names `build.src`'s.
+pub const TESTS_PREFIX: &str = "@tests/";
+
+/// A test file, mock or test helper: never part of the addon.
+pub fn is_test_file(src_rel: &str) -> bool {
+    src_rel.starts_with(TESTS_PREFIX) || src_rel.ends_with(".test.wowlua")
+}
+
 /// The dependency a source belongs to (`None`: the package's own file).
 pub fn package_of(src_rel: &str) -> Option<&str> {
     src_rel
@@ -239,6 +248,26 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
                         continue;
                     }
                     let resolved = resolve(&import.from, &f.src_rel, &exact, &folded, files);
+                    // The test framework is for test files (spec Tooling
+                    // §16.1.1).
+                    if matches!(&import.from.value[..], b"wowlua:test" | b"wowlua:mock")
+                        && !is_test_file(&f.src_rel)
+                        && !is_compiler_known(&f.src_rel)
+                    {
+                        analysis.diagnostics.push(
+                            Diagnostic::error(
+                                "E8108",
+                                format!(
+                                    "`{}` is only for test files",
+                                    String::from_utf8_lossy(&import.from.value)
+                                ),
+                            )
+                            .with_label(string_span(&import.from, s), "imported here")
+                            .with_help(
+                                "test files are `*.test.wowlua` files and the files under `tests/`",
+                            ),
+                        );
+                    }
                     match resolved {
                         Ok(target) => {
                             check_names(import, &target, files, &mut analysis.diagnostics);
@@ -825,7 +854,9 @@ fn resolve(
             ),
         ));
     }
-    if relative && root.is_empty() && path.starts_with('@') {
+    // The test side (`@tests/`) imports its own files relatively.
+    let within_tests = path.starts_with(TESTS_PREFIX) && importer.starts_with(TESTS_PREFIX);
+    if relative && root.is_empty() && path.starts_with('@') && !within_tests {
         return Err(Diagnostic::error(
             "E1015",
             format!("module `{text}` not found"),

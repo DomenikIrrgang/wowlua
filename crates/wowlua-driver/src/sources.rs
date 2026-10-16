@@ -169,10 +169,90 @@ pub(crate) fn tracked_files(dir: &Path) -> HashSet<PathBuf> {
         .collect()
 }
 
-/// Directories never scanned: the output root and the lockfile's neighbours
-/// such as `.git` are handled by the hidden-file rule.
+/// Directories never scanned: the output root and the test side
+/// (`tests/`, never part of a build); the lockfile's neighbours such as
+/// `.git` are handled by the hidden-file rule.
 fn skip_dirs(root: &Path, out: &str) -> Vec<PathBuf> {
-    vec![root.join(out)]
+    vec![root.join(out), root.join(TESTS_DIR)]
+}
+
+/// The test side's folder (spec Tooling §16.1.1).
+pub const TESTS_DIR: &str = "tests";
+
+/// What a file of the test side is (spec Tooling §16.1.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TestRole {
+    /// `*.test.wowlua`: a test file.
+    Test,
+    /// `tests/mocks/**`: loaded before the addon.
+    Mock,
+    /// Other files under `tests/`: importable from test files.
+    Helper,
+    /// A standard-library module only the test side imports.
+    Std,
+}
+
+impl TestRole {
+    /// The role of a source by its package-relative path (`None`: the
+    /// addon's own).
+    pub fn of(rel: &str) -> Option<TestRole> {
+        if rel.ends_with(".test.wowlua") {
+            Some(TestRole::Test)
+        } else if rel.starts_with(&format!("{TESTS_DIR}/mocks/")) {
+            Some(TestRole::Mock)
+        } else if rel.starts_with(&format!("{TESTS_DIR}/")) {
+            Some(TestRole::Helper)
+        } else {
+            None
+        }
+    }
+}
+
+/// The test side's sources: `*.test.wowlua` files under `src` and every
+/// `.wowlua` file under `tests/` (as `@tests/<path>`, output
+/// `tests/<path>.lua`), sorted by path.
+pub fn discover_tests(root: &Path, src: &str, out: &str, exclude: &GlobSet) -> Vec<Source> {
+    let src_dir = root.join(src);
+    let mut found: Vec<Source> = walk(root, &src_dir, &skip_dirs(root, out))
+        .into_iter()
+        .filter(|(rel, _)| !exclude.is_match(rel) && rel.ends_with(".test.wowlua"))
+        .filter_map(|(rel, abs)| {
+            let src_rel = crate::fsutil::relative_slash(&abs, &src_dir)?;
+            Some(Source {
+                rel,
+                src_rel,
+                abs,
+                kind: SourceKind::Wowlua,
+                output: None,
+            })
+        })
+        .collect();
+    let tests_dir = root.join(TESTS_DIR);
+    if tests_dir.is_dir() {
+        found.extend(
+            walk(root, &tests_dir, &[root.join(out)])
+                .into_iter()
+                .filter(|(rel, _)| {
+                    let lower = rel.to_ascii_lowercase();
+                    !exclude.is_match(rel)
+                        && lower.ends_with(".wowlua")
+                        && !lower.ends_with(".d.wowlua")
+                })
+                .filter_map(|(rel, abs)| {
+                    let inner = crate::fsutil::relative_slash(&abs, &tests_dir)?;
+                    let stem = inner.strip_suffix(".wowlua").unwrap_or(&inner).to_string();
+                    Some(Source {
+                        rel,
+                        src_rel: format!("{}{inner}", wowlua_sema::TESTS_PREFIX),
+                        abs,
+                        kind: SourceKind::Wowlua,
+                        output: Some(format!("{TESTS_DIR}/{stem}.lua")),
+                    })
+                }),
+        );
+    }
+    found.sort_by(|a, b| a.rel.cmp(&b.rel));
+    found
 }
 
 /// Source files under `src`, sorted by path.

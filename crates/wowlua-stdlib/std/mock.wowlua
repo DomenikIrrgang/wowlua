@@ -1,0 +1,387 @@
+-- wowlua:mock (spec Tooling §16.1.4): drives the emulated client in tests.
+-- The test runner (`wowlua test`) gives the runtime the engine's controls
+-- (`ns.__wowlua.mockEngine`); this module types them and adds spies, stubs,
+-- fakes and waiting.
+local addonName, ns = ...
+local wl = ns.__wowlua
+
+type Fn = (...any) -> ...any
+
+--- A unit of the simulated world (`mock.player`, `mock.spawnUnit`).
+export interface MockUnit
+    --- Targets, focuses or mouses over `unit` (`PLAYER_TARGET_CHANGED`, …).
+    function target(unit: MockUnit?)
+    function focus(unit: MockUnit?)
+    function mouseover(unit: MockUnit?)
+    function damage(amount: number)
+    function heal(amount: number)
+    function kill()
+    function setPower(powerType: number, amount: number)
+    function enterCombat()
+    function leaveCombat()
+    function showNameplate()
+    function hideNameplate()
+    function despawn()
+    --- The unit's tokens (`"target"`, `"nameplate1"`, …).
+    function token(): string[]
+    function setName(name: string, lastName: string?)
+    function applyAura(data: table): number
+    function removeAura(auraInstanceID: number)
+end
+
+--- What `spawnUnit` takes.
+export type UnitData = {
+    name?: string,
+    guid?: string,
+    level?: number,
+    class?: string,
+    race?: string,
+    sex?: number,
+    reaction?: "hostile" | "neutral" | "friendly",
+    player?: boolean,
+    health?: number,
+    healthMax?: number,
+    power?: number,
+    powerMax?: number,
+    powerType?: number,
+    dead?: boolean,
+}
+
+local function engine(): any
+    local e = wl.mockEngine
+    if e == nil then
+        error("wowlua:mock runs in `wowlua test` only", 3)
+    end
+    return e
+end
+
+-- Spies' calls, by spy (wowlua:test's matchers read them).
+local spies: { [any]: any[] } = setmetatable({}, { __mode = "k" })
+wl.spies = spies
+-- What stubs and fakes replaced: restored after every test.
+local restores: (() -> ())[] = {}
+wl.afterTest = {
+    function()
+        for i = #restores, 1, -1 do
+            restores[i]()
+        end
+        restores = {}
+    end,
+}
+-- What waits yield, so wowlua:test's jobs tell them from other yields.
+const waitToken = {}
+wl.waitToken = waitToken
+
+-- ------------------------------------------------------------- the world
+
+--- The player.
+export const player: MockUnit = (wl.mockEngine and wl.mockEngine.player) :: MockUnit
+
+--- A unit near the player.
+export function spawnUnit(data: UnitData): MockUnit
+    return engine().spawnUnit(data)
+end
+
+--- The player's group: `mock.group:add(unit)` (`partyN`, `raidN`).
+export const group = {
+    add = function(_: any, unit: MockUnit)
+        engine().addToGroup(unit)
+    end,
+}
+
+--- Enters a restricted instance of `kind` (`"raid"`, `"party"`, `"pvp"`, …).
+export function enterInstance(kind: string)
+    engine().enterInstance(kind)
+end
+
+export function leaveInstance()
+    engine().leaveInstance()
+end
+
+--- Turns one of the client's addon restrictions on or off.
+export function setRestriction(kind: any, active: boolean)
+    engine().setRestriction(kind, active)
+end
+
+--- A secret value with `v` inside (spec emulator §17.5).
+export function secret<T>(v: T): Secret<T>
+    return engine().secret(v)
+end
+
+-- ----------------------------------------------------------------- events
+
+--- Fires an event of the flavor, its payload checked against the
+--- documentation.
+export function fireEvent(name: string, ...: any)
+    engine().fireEvent(name, ...)
+end
+
+--- Fires a unit event for `unit`.
+export function fireUnitEvent(name: string, unit: string, ...: any)
+    engine().fireUnitEvent(name, unit, ...)
+end
+
+--- `ADDON_LOADED` (the addon), `PLAYER_LOGIN` and `PLAYER_ENTERING_WORLD`
+--- (for `config({ lifecycle = "manual" })`).
+export function login()
+    engine().login()
+end
+
+-- ------------------------------------------------------------------ time
+
+--- Moves the virtual clock by `sec`, running the timers that come due.
+export function advanceTime(sec: number)
+    engine().advanceTime(sec)
+end
+
+--- One frame (`OnUpdate` with `ms` milliseconds, 1000/60 by default).
+export function nextFrame(ms: number?)
+    engine().advanceFrames(1, ms)
+end
+
+--- `n` frames of `ms` milliseconds.
+export function advanceFrames(n: number, ms: number?)
+    engine().advanceFrames(n, ms)
+end
+
+--- Simulated work of `ms` milliseconds (`debugprofilestop` moves).
+export function spend(ms: number)
+    engine().spend(ms)
+end
+
+-- ------------------------------------------------------------ waiting
+
+local function wait(kind: string, amount: number)
+    if coroutine.running() == nil then
+        error("mock.wait… runs inside a test", 3)
+    end
+    coroutine.yield(waitToken, kind, amount)
+end
+
+--- Lets `n` frames pass (decision T216).
+export function waitFrames(n: number)
+    wait("frames", n)
+end
+
+--- Lets `sec` virtual seconds of frames pass.
+export function waitSeconds(sec: number)
+    wait("seconds", sec)
+end
+
+local function timeout(): number
+    local tests = wl.tests
+    return tests and tests.timeout() or 10
+end
+
+--- Lets frames pass until `fn` returns a truthy value, and returns it; the
+--- test fails after its timeout.
+export function waitUntil<T>(fn: () -> T?, what: string?): T
+    local deadline = GetTime() + timeout()
+    local v = fn()
+    while not v do
+        if GetTime() >= deadline then
+            error(`timed out after {timeout()} s waiting for {what ?? "the condition"}`, 2)
+        end
+        wait("frames", 1)
+        v = fn()
+    end
+    return v :: T
+end
+
+--- Lets frames pass until `event` fires (with a payload `predicate`
+--- accepts), and returns its payload; the test fails after its timeout.
+export function waitFor(event: string, predicate: ((...any) -> boolean)?): ...any
+    local got: any = nil
+    local listener = CreateFrame("Frame")
+    listener:RegisterEvent(event)
+    listener:SetScript("OnEvent", function(_: Frame, _: string, ...: any)
+        if got == nil and (predicate == nil or predicate(...)) then
+            got = { n = select("#", ...), ... }
+        end
+    end)
+    -- Waits yield, so no pcall (Lua 5.1 cannot yield across it).
+    local deadline = GetTime() + timeout()
+    while got == nil and GetTime() < deadline do
+        wait("frames", 1)
+    end
+    listener:UnregisterAllEvents()
+    listener:SetScript("OnEvent", nil)
+    if got == nil then
+        error(`timed out after {timeout()} s waiting for {event}`, 2)
+    end
+    return unpack(got, 1, got.n)
+end
+
+-- -------------------------------------------------------------- the user
+
+--- Runs a slash command line as the player typed it.
+export function slash(line: string)
+    engine().slash(line)
+end
+
+--- Runs a frame's script handler as a user action would (`OnClick`, …).
+export function script(frame: any, name: string, ...: any)
+    engine().script(frame, name, ...)
+end
+
+--- Clicks a button (`"LeftButton"` by default).
+export function click(frame: any, button: string?)
+    engine().script(frame, "OnClick", button ?? "LeftButton", false)
+end
+
+--- Drags a frame (or an overlay's moving parent) by `dx`, `dy`.
+export function drag(frame: any, dx: number, dy: number)
+    engine().drag(frame, dx, dy)
+end
+
+--- Drags a resize grip by `dw`, `dh`.
+export function sizeBy(grip: any, dw: number, dh: number)
+    engine().sizeBy(grip, dw, dh)
+end
+
+--- Turns the mouse wheel over a frame.
+export function wheel(frame: any, delta: number)
+    engine().wheel(frame, delta)
+end
+
+--- A key binding the client knows (from `Bindings.xml`).
+export function defineBinding(name: string, action: (keystate: string) -> (), opts: { header?: string, runOnUp?: boolean }?)
+    engine().defineBinding(name, action, opts)
+end
+
+export function pressBinding(name: string, keystate: string?)
+    engine().pressBinding(name, keystate)
+end
+
+--- Presses a key: its binding (`SetBinding`) runs.
+export function pressKey(key: string)
+    engine().pressKey(key)
+end
+
+-- -------------------------------------------------------- communication
+
+--- Another player's addon message.
+export function receiveAddonMessage(prefix: string, message: string, chatType: string, sender: string)
+    engine().receiveAddonMessage(prefix, message, chatType, sender)
+end
+
+--- The addon messages sent so far.
+export function sentAddonMessages(): table[]
+    return engine().sentAddonMessages()
+end
+
+export function joinGuild()
+    engine().joinGuild()
+end
+
+-- ------------------------------------------------------------- the client
+
+--- An addon the client knows (`C_AddOns`).
+export function defineAddon(name: string, opts: table?)
+    engine().defineAddon(name, opts)
+end
+
+--- A spell's data (decision T203).
+export function defineSpell(id: number, data: table)
+    engine().defineSpell(id, data)
+end
+
+--- An item's data; `opts.cached = false` makes it load (`delay`).
+export function defineItem(id: number, data: table, opts: table?)
+    engine().defineItem(id, data, opts)
+end
+
+--- A stand-in for a Blizzard template: `CreateFrame` with it calls `fn`.
+export function defineTemplate(name: string, fn: (frame: any) -> ())
+    engine().defineTemplate(name, fn)
+end
+
+--- An intrinsic frame type built on `base`.
+export function defineFrameType(name: string, base: string, fn: (frame: any) -> ())
+    engine().defineFrameType(name, base, fn)
+end
+
+--- Makes a frame protected (or not).
+export function protect(frame: any, on: boolean?)
+    engine().protect(frame, on)
+end
+
+--- Every frame, in creation order.
+export function frames(): any[]
+    return engine().frames()
+end
+
+--- Protected actions the client refused, with their taint.
+export function refusals(): table[]
+    return engine().refusals()
+end
+
+-- ---------------------------------------------------------------- output
+
+--- The lines `print` printed.
+export function printed(): string[]
+    return engine().printed()
+end
+
+--- The errors that reached the error handler. Reading them marks them as
+--- expected: errors no test reads fail the test.
+export function errors(): string[]
+    return engine().errors()
+end
+
+--- What the engine warned about (undefined templates, …).
+export function warnings(): string[]
+    return engine().warnings()
+end
+
+-- --------------------------------------------------- spies, stubs, fakes
+
+--- A function that records its calls (`toHaveBeenCalled…`) and runs `fn`.
+export function spy<A..., R...>(fn: ((A...) -> R...)?): (A...) -> R...
+    local calls: any[] = {}
+    local function s(...: any): ...any
+        calls[#calls + 1] = { n = select("#", ...), ... }
+        if fn then
+            return fn(...)
+        end
+    end
+    spies[s] = calls
+    return s :: any
+end
+
+--- Forgets the calls every spy recorded.
+export function resetSpies()
+    for _, calls in pairs(spies) do
+        for i = #calls, 1, -1 do
+            calls[i] = nil
+        end
+    end
+end
+
+--- Replaces `t[key]` with `fn` (a spy) until the test ends; returns the spy.
+export function stub(t: table, key: string, fn: Fn?): Fn
+    local original = rawget(t, key)
+    local s = spy(fn)
+    t[key] = s
+    restores[#restores + 1] = function()
+        t[key] = original
+    end
+    return s
+end
+
+--- Replaces an engine function (`"UnitName"`, `"C_Spell.GetSpellInfo"`)
+--- with `impl` until the test ends; returns its spy.
+export function fake(name: string, impl: Fn): Fn
+    local t: table = _G
+    local key = name
+    local dot = name:find(".", 1, true)
+    if dot then
+        local ns2 = _G[name:sub(1, dot - 1)]
+        if type(ns2) ~= "table" then
+            error(`mock.fake: there is no {name:sub(1, dot - 1)}`, 2)
+        end
+        t = ns2
+        key = name:sub(dot + 1)
+    end
+    return stub(t, key, impl)
+end

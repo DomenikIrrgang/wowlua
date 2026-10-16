@@ -220,6 +220,14 @@ enum Command {
         #[arg(long, value_delimiter = ',')]
         flavor: Vec<String>,
     },
+    /// Run the tests in the emulated client
+    Test {
+        /// Only test files and tests whose path or name contains this
+        filter: Option<String>,
+        /// Restrict to these flavors
+        #[arg(long, value_delimiter = ',')]
+        flavor: Vec<String>,
+    },
     /// Compile files to Lua without making an AddOn folder
     Compile(CompileArgs),
     /// Format .wowlua files (and .lua files with `fmt.lua`)
@@ -549,6 +557,9 @@ fn run() -> ExitCode {
         Command::Logout { site } => commands::logout(&out, site),
         Command::Check { profile, flavor } => {
             commands::check(&out, &cli.global, &profile.name("dev"), flavor)
+        }
+        Command::Test { filter, flavor } => {
+            commands::test(&out, &cli.global, filter.as_deref(), flavor)
         }
         Command::Compile(args) => commands::compile(&out, &cli.global, &args),
         Command::Fmt { check, paths } => commands::fmt(&out, &cli.global, check, paths),

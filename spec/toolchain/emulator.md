@@ -279,10 +279,12 @@ takes the flavor's `Interface` folder and its global strings:
   function gets its documented results' empty values (nil where nilable,
   false, 0, "", a table) and the engine lists the function; addon code still
   gets "not mocked". Secure code may register events and set scripts the
-  engine's lists lack. On camelot, the 201 addons load in under a second (a
-  release build) with 136 errors left, from enums, constants and namespaces
-  the documentation does not have (`Enum.GameMode`, `C_Widget`). The
-  CVars start at the client's defaults (the 248 the UI code reads that
+  engine's lists lack. On camelot (70425) the UI loads, logs in and runs
+  frames without a Lua error, as the client's does (its probe logged none):
+  enums, constants and namespaces the documentation lacks come from the
+  client's recording (`/stdtest engine`), secure addons run in the client's
+  secure environment, and Blizzard's errors are caught where ScriptErrors
+  reports them (`C_Log.LogErrorMessage`). The CVars start at the client's defaults (the 248 the UI code reads that
   have one, recorded by `/stdtest engine`).
 - **The client's cases.** With camelot's UI code loaded (and the addon's
   saved variables loaded as the addon's), all 819 cases `/stdtest probe`

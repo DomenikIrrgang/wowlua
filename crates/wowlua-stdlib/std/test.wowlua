@@ -1,0 +1,583 @@
+-- wowlua:test (spec Tooling §16.1.3): tests, hooks and matchers. A test
+-- file registers its tests while it loads; the test runner (`wowlua test`)
+-- runs them through `ns.__wowlua.tests`, each in a coroutine so that a test
+-- can wait for the game (wowlua:mock's `wait…`).
+local addonName, ns = ...
+local wl = ns.__wowlua
+
+type Fn = (...any) -> ...any
+
+type Entry = {
+    name: string,
+    fn: Fn,
+    file: string,
+    line: number,
+    test: boolean,
+    skip?: string,
+    only: boolean,
+    flavors?: string[],
+    cases?: any[],
+    timeout?: number,
+}
+
+type Job = {
+    phases: Fn[],
+    teardown: boolean[],
+    i: number,
+    co?: thread,
+    failure?: { message: string, stack: string },
+}
+
+-- A failed expectation: thrown as a table, so it is told apart from errors.
+type Failure = { __wowluaFailure: boolean, message: string, stack: string }
+
+local tests: Entry[] = {}
+local byFn: { [Fn]: Entry } = {}
+local hooks = {
+    beforeEach = {} :: Fn[],
+    afterEach = {} :: Fn[],
+    beforeAll = {} :: Fn[],
+    afterAll = {} :: Fn[],
+}
+local groups: string[] = {}
+local settings = { lifecycle = "auto", timeout = 10 }
+local current: Entry? = nil
+
+-- A value as messages show it: strings quoted, tables one level deep.
+local function show(v: any, depth: number?): string
+    if issecretvalue and issecretvalue(v) then
+        return "<secret>"
+    end
+    local t = type(v)
+    if t == "string" then
+        return string.format("%q", v)
+    elseif t ~= "table" then
+        return tostring(v)
+    end
+    if (depth ?? 0) >= 2 then
+        return "{…}"
+    end
+    local parts: string[] = {}
+    local n = #v
+    for i = 1, n do
+        parts[#parts + 1] = show(v[i], (depth ?? 0) + 1)
+    end
+    local keys: string[] = {}
+    local named: { [string]: any } = {}
+    for k, value in pairs(v) do
+        if not (type(k) == "number" and k >= 1 and k <= n and k % 1 == 0) then
+            local key = type(k) == "string" and k or `[{show(k, 2)}]`
+            keys[#keys + 1] = key
+            named[key] = value
+        end
+    end
+    table.sort(keys)
+    for _, key in ipairs(keys) do
+        parts[#parts + 1] = `{key} = {show(named[key], (depth ?? 0) + 1)}`
+    end
+    if #parts == 0 then
+        return "{}"
+    end
+    return "{ " .. table.concat(parts, ", ") .. " }"
+end
+
+local function entry(fn: Fn, ctx: DecoratorContext?): Entry
+    local e = byFn[fn]
+    if e == nil then
+        local prefix = #groups > 0 and table.concat(groups, " › ") .. " › " or ""
+        e = {
+            name = prefix .. (ctx and ctx.name or "test"),
+            fn = fn,
+            file = ctx and ctx.file or "?",
+            line = ctx and ctx.line or 0,
+            test = false,
+            only = false,
+        }
+        byFn[fn] = e
+        tests[#tests + 1] = e
+    end
+    return e
+end
+
+-- A decorator that is used bare (`@skip`) or called (`@skip("why")`).
+local function decorator(apply: (e: Entry, arg: any) -> ()): any
+    return function(a: any, ctx: any): any
+        if type(a) == "function" then
+            apply(entry(a, ctx), nil)
+            return nil
+        end
+        return function(fn: Fn, c: DecoratorContext?)
+            apply(entry(fn, c), a)
+        end
+    end
+end
+
+--- `@test(name?, opts?)`: marks a test function; the name defaults to the
+--- function's. `opts.timeout`: how long its waits may take (virtual
+--- seconds).
+export function test(name: any?, opts: any?): any
+    local function mark(fn: Fn, ctx: DecoratorContext?)
+        local e = entry(fn, ctx)
+        e.test = true
+        if type(name) == "string" then
+            local prefix = #groups > 0 and table.concat(groups, " › ") .. " › " or ""
+            e.name = prefix .. name
+        end
+        if type(opts) == "table" and type(opts.timeout) == "number" then
+            e.timeout = opts.timeout
+        end
+    end
+    if type(name) == "function" then
+        mark(name, opts)
+        return nil
+    end
+    return mark
+end
+
+--- `@skip(reason?)`: the test is reported as skipped.
+export const skip: any = decorator(function(e: Entry, reason: any)
+    e.skip = type(reason) == "string" and reason or ""
+end)
+
+--- `@only`: in a file with `@only` tests, only they run.
+export const only: any = decorator(function(e: Entry, _: any)
+    e.only = true
+end)
+
+--- `@flavors("standard", …)`: the test runs only for these flavors.
+export function flavors(...: string): any
+    local list = { ... }
+    return function(fn: Fn, ctx: DecoratorContext?)
+        entry(fn, ctx).flavors = list
+    end
+end
+
+--- `@cases(list)`: the test runs once per case, the case's values as its
+--- arguments (decision T215).
+export function cases(list: any[]): any
+    return function(fn: Fn, ctx: DecoratorContext?)
+        entry(fn, ctx).cases = list
+    end
+end
+
+local function hook(kind: string): any
+    return function(fn: Fn, _: DecoratorContext?)
+        local list = (hooks :: any)[kind] :: Fn[]
+        list[#list + 1] = fn
+    end
+end
+
+--- `@beforeEach`, `@afterEach`: run around every test of the file.
+export const beforeEach: any = hook("beforeEach")
+export const afterEach: any = hook("afterEach")
+--- `@beforeAll`, `@afterAll`: run once, before the first and after the
+--- last test of the file.
+export const beforeAll: any = hook("beforeAll")
+export const afterAll: any = hook("afterAll")
+
+--- Per-file runner settings: `lifecycle = "manual"` leaves logging in to
+--- the file (`mock.login()`); `timeout`: how long waits may take (virtual
+--- seconds, 10 by default).
+export function config(opts: { lifecycle?: "auto" | "manual", timeout?: number })
+    if opts.lifecycle then
+        settings.lifecycle = opts.lifecycle
+    end
+    if opts.timeout then
+        settings.timeout = opts.timeout
+    end
+end
+
+--- Groups the tests `fn` defines at run time (`test(name)(fn)` inside it).
+export function describe(name: string, fn: () -> ())
+    groups[#groups + 1] = name
+    local ok, err = pcall(fn)
+    table.remove(groups)
+    if not ok then
+        error(err, 0)
+    end
+end
+
+-- -------------------------------------------------------------- matchers
+
+local function fail(message: string, level: number?)
+    local failure: Failure = {
+        __wowluaFailure = true,
+        message = message,
+        stack = debugstack and debugstack((level ?? 1) + 2, 1, 0) or "",
+    }
+    error(failure, 0)
+end
+
+local function deepEqual(a: any, b: any, seen: { [any]: any }): boolean
+    if a == b then
+        return true
+    end
+    if type(a) ~= "table" or type(b) ~= "table" then
+        -- NaN equals NaN in expectations.
+        return type(a) == "number" and type(b) == "number" and a ~= a and b ~= b
+    end
+    if seen[a] == b then
+        return true
+    end
+    seen[a] = b
+    for k, v in pairs(a) do
+        if not deepEqual(v, rawget(b, k), seen) then
+            return false
+        end
+    end
+    for k, _ in pairs(b) do
+        if rawget(a, k) == nil then
+            return false
+        end
+    end
+    return true
+end
+
+local function lengthOf(v: any): number?
+    if type(v) == "string" or type(v) == "table" then
+        return #v
+    end
+    return nil
+end
+
+local function isInstance(v: any, cls: any): boolean
+    if wl.isInstance then
+        return wl.isInstance(v, cls)
+    end
+    local mt = type(v) == "table" and getmetatable(v)
+    while mt do
+        if mt == cls or rawget(mt, "__index") == cls then
+            return true
+        end
+        mt = getmetatable(mt)
+    end
+    return false
+end
+
+-- A spy's calls (wowlua:mock's spies keep them here, by spy).
+local function callsOf(v: any): any[]?
+    local spies = wl.spies
+    return spies and spies[v]
+end
+
+local function sameArgs(call: any, args: any): boolean
+    if call.n ~= args.n then
+        return false
+    end
+    for i = 1, args.n do
+        if not deepEqual(call[i], args[i], {}) then
+            return false
+        end
+    end
+    return true
+end
+
+local function showArgs(args: any): string
+    local parts: string[] = {}
+    for i = 1, args.n do
+        parts[i] = show(args[i])
+    end
+    return "(" .. table.concat(parts, ", ") .. ")"
+end
+
+--- What `expect(value)` checks (decision T214): matchers are called with a
+--- dot (`expect(x).toBe(y)`); `never` holds the negated ones.
+export type Expect<T> = {
+    --- The same value (`==`).
+    toBe: (expected: T) -> (),
+    --- An equal value: tables compared key by key, deeply.
+    toEqual: (expected: T) -> (),
+    toBeNil: () -> (),
+    toBeTruthy: () -> (),
+    toBeFalsy: () -> (),
+    --- An instance of a class (or one of its subclasses).
+    toBeInstanceOf: (cls: any) -> (),
+    --- A string containing `item` (plainly), or a table with `item` as a
+    --- value.
+    toContain: (item: any) -> (),
+    --- `#value` (a string or a table).
+    toHaveLength: (n: number) -> (),
+    --- A number within `10^-digits / 2` of `n` (`digits`: 2).
+    toBeCloseTo: (n: number, digits: number?) -> (),
+    --- A function that raises an error (containing `text`, when given).
+    toThrow: (text: string?) -> (),
+    --- A spy (wowlua:mock) that was called.
+    toHaveBeenCalled: () -> (),
+    --- A spy called `n` times.
+    toHaveBeenCalledTimes: (n: number) -> (),
+    --- A spy called with these arguments (compared deeply) at least once.
+    toHaveBeenCalledWith: (...any) -> (),
+    --- The negated matchers: `expect(x).never.toBe(y)`.
+    never: Expect<T>,
+}
+
+-- The matchers on a value: `negated` flips each check.
+local function matchers(value: any, negated: boolean): any
+    local function check(pass: boolean, message: string, opposite: string)
+        if pass == negated then
+            fail(negated and opposite or message, 2)
+        end
+    end
+    local function calls(): any[]
+        local list = callsOf(value)
+        if list == nil then
+            fail(`expected a spy (mock.spy), got {show(value)}`, 3)
+        end
+        return list :: any[]
+    end
+    local m: any = {}
+    function m.toBe(expected: any)
+        check(value == expected, `expected {show(value)} to be {show(expected)}`, `expected {show(value)} not to be {show(expected)}`)
+    end
+    function m.toEqual(expected: any)
+        check(deepEqual(value, expected, {}), `expected {show(value)} to equal {show(expected)}`, `expected {show(value)} not to equal {show(expected)}`)
+    end
+    function m.toBeNil()
+        check(value == nil, `expected {show(value)} to be nil`, "expected a value, got nil")
+    end
+    function m.toBeTruthy()
+        check(not not value, `expected {show(value)} to be truthy`, `expected {show(value)} to be falsy`)
+    end
+    function m.toBeFalsy()
+        check(not value, `expected {show(value)} to be falsy`, `expected {show(value)} to be truthy`)
+    end
+    function m.toBeInstanceOf(cls: any)
+        check(isInstance(value, cls), `expected {show(value)} to be an instance of the class`, `expected {show(value)} not to be an instance of the class`)
+    end
+    function m.toContain(item: any)
+        local found = false
+        if type(value) == "string" then
+            found = type(item) == "string" and value:find(item, 1, true) ~= nil
+        elseif type(value) == "table" then
+            for _, x in pairs(value) do
+                if deepEqual(x, item, {}) then
+                    found = true
+                    break
+                end
+            end
+        else
+            fail(`toContain needs a string or a table, got {show(value)}`, 1)
+        end
+        check(found, `expected {show(value)} to contain {show(item)}`, `expected {show(value)} not to contain {show(item)}`)
+    end
+    function m.toHaveLength(n: number)
+        local len = lengthOf(value)
+        if len == nil then
+            fail(`toHaveLength needs a string or a table, got {show(value)}`, 1)
+        end
+        check(len == n, `expected length {n}, got {show(len)}`, `expected a length other than {n}`)
+    end
+    function m.toBeCloseTo(n: number, digits: number?)
+        local tolerance = 10 ^ -(digits ?? 2) / 2
+        local pass = type(value) == "number" and math.abs(value - n) < tolerance
+        check(pass, `expected {show(value)} to be close to {n}`, `expected {show(value)} not to be close to {n}`)
+    end
+    function m.toThrow(text: string?)
+        if type(value) ~= "function" then
+            fail(`toThrow needs a function, got {show(value)}`, 1)
+        end
+        local ok, err = pcall(value)
+        local message = type(err) == "table" and err.__wowluaFailure and err.message or tostring(err)
+        local pass = not ok and (text == nil or message:find(text, 1, true) ~= nil)
+        local wanted = text and ` containing {show(text)}` or ""
+        local got = ok and "it did not" or `it raised {show(message)}`
+        check(pass, `expected an error{wanted}; {got}`, `expected no error{wanted}; {got}`)
+    end
+    function m.toHaveBeenCalled()
+        local list = calls()
+        check(#list > 0, "expected the spy to have been called", `expected the spy not to have been called; it was called {#list} times`)
+    end
+    function m.toHaveBeenCalledTimes(n: number)
+        local list = calls()
+        check(#list == n, `expected {n} calls, got {#list}`, `expected a number of calls other than {n}`)
+    end
+    function m.toHaveBeenCalledWith(...: any)
+        local list = calls()
+        local args = { n = select("#", ...), ... }
+        local found = false
+        for _, call in ipairs(list) do
+            if sameArgs(call, args) then
+                found = true
+                break
+            end
+        end
+        local seen: string[] = {}
+        for i, call in ipairs(list) do
+            seen[i] = showArgs(call)
+        end
+        local got = #seen > 0 and "its calls: " .. table.concat(seen, ", ") or "it was not called"
+        check(found, `expected a call with {showArgs(args)}; {got}`, `expected no call with {showArgs(args)}`)
+    end
+    return m
+end
+
+--- Expectations on `value`.
+export function expect<T>(value: T): Expect<T>
+    local m = matchers(value, false)
+    m.never = matchers(value, true)
+    return m :: Expect<T>
+end
+
+-- ---------------------------------------------------------------- runner
+
+local function selected(e: Entry, flavor: string): boolean
+    if not e.flavors then
+        return true
+    end
+    for _, f in ipairs(e.flavors :: string[]) do
+        if f == flavor then
+            return true
+        end
+    end
+    return false
+end
+
+local function failureOf(err: any, co: thread): { message: string, stack: string }
+    if type(err) == "table" and err.__wowluaFailure then
+        return { message = err.message, stack = err.stack }
+    end
+    local stack = debugstack and debugstack(co, 0, 12, 0) or ""
+    return { message = tostring(err), stack = stack }
+end
+
+local function hookPhases(kind: string): Fn[]
+    local out: Fn[] = {}
+    for _, h in ipairs((hooks :: any)[kind] :: Fn[]) do
+        out[#out + 1] = h
+    end
+    return out
+end
+
+-- The runner's side (`ns.__wowlua.tests`): the registered tests, and jobs
+-- (a test with its hooks, or a file's hook) stepped until they finish or
+-- wait for the game.
+wl.tests = {
+    settings = settings,
+    show = show,
+    count = function(): number
+        local n = 0
+        for _, e in ipairs(tests) do
+            if e.test then
+                n = n + 1
+            end
+        end
+        return n
+    end,
+    -- The i-th test: name, file, line, skip reason, only, whether the
+    -- flavor runs it, and its number of cases.
+    info = function(i: number, flavor: string): (string, string, number, string?, boolean, boolean, number)
+        local n = 0
+        for _, e in ipairs(tests) do
+            if e.test then
+                n = n + 1
+                if n == i then
+                    return e.name, e.file, e.line, e.skip, e.only, selected(e, flavor), e.cases and #(e.cases :: any[]) or 0
+                end
+            end
+        end
+        error("no test " .. i)
+    end,
+    caseName = function(i: number, c: number): string
+        local n = 0
+        for _, e in ipairs(tests) do
+            if e.test then
+                n = n + 1
+                if n == i then
+                    local case: any = (e.cases :: any[])[c]
+                    return e.name .. " " .. (type(case) == "table" and show(case):gsub("^{ ", "["):gsub(" }$", "]") or show(case))
+                end
+            end
+        end
+        return "?"
+    end,
+    -- A job: "test" (with its hooks; case `c` of a parametrized one), or a
+    -- file hook ("beforeAll", "afterAll").
+    start = function(kind: string, i: number?, c: number?): Job
+        local job: Job = { phases = {}, teardown = {}, i = 1 }
+        local function add(fn: Fn, teardown: boolean)
+            job.phases[#job.phases + 1] = fn
+            job.teardown[#job.teardown + 1] = teardown
+        end
+        if kind ~= "test" then
+            for _, h in ipairs(hookPhases(kind)) do
+                add(h, kind == "afterAll")
+            end
+            return job
+        end
+        local n = 0
+        local target: Entry? = nil
+        for _, e in ipairs(tests) do
+            if e.test then
+                n = n + 1
+                if n == i then
+                    target = e
+                end
+            end
+        end
+        local e = target :: Entry
+        for _, h in ipairs(hookPhases("beforeEach")) do
+            add(h, false)
+        end
+        add(function()
+            current = e
+            local case: any = c and (e.cases :: any[])[c]
+            if type(case) == "table" then
+                local list = case :: any[]
+                e.fn(unpack(list, 1, (case :: any).n or #list))
+            elseif c then
+                e.fn(case)
+            else
+                e.fn()
+            end
+        end, false)
+        for _, h in ipairs(hookPhases("afterEach")) do
+            add(h, true)
+        end
+        for _, h in ipairs(wl.afterTest ?? {}) do
+            add(h, true)
+        end
+        add(function()
+            current = nil
+        end, true)
+        return job
+    end,
+    -- Runs a job until it finishes ("pass", or "fail" with the message and
+    -- stack) or waits ("wait", "seconds" | "frames", amount).
+    step = function(job: Job): (string, any, any)
+        while job.i <= #job.phases do
+            if job.co == nil then
+                if job.failure and not job.teardown[job.i] then
+                    job.i = job.i + 1
+                    continue
+                end
+                job.co = coroutine.create(job.phases[job.i])
+            end
+            local co = job.co :: thread
+            local ok, a, b, c = coroutine.resume(co)
+            if not ok then
+                job.failure = job.failure ?? failureOf(a, co)
+                job.co = nil
+                job.i = job.i + 1
+            elseif coroutine.status(co) == "dead" then
+                job.co = nil
+                job.i = job.i + 1
+            elseif a ~= nil and a == wl.waitToken then
+                return "wait", b, c
+            else
+                job.failure = job.failure ?? { message = "the test yielded outside mock.wait…", stack = "" }
+                job.co = nil
+                job.i = job.i + 1
+            end
+        end
+        if job.failure then
+            local f = job.failure :: { message: string, stack: string }
+            return "fail", f.message, f.stack
+        end
+        return "pass", nil, nil
+    end,
+    -- How long the running test's waits may take (virtual seconds).
+    timeout = function(): number
+        return current and current.timeout or settings.timeout
+    end,
+}
+

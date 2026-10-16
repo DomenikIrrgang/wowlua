@@ -183,5 +183,6 @@ pub fn build_external(
         build_id: "external".into(),
         tocs,
         files,
+        tests: Vec::new(),
     })
 }
