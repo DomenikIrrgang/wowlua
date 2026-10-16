@@ -94,3 +94,26 @@ return table.concat(Ran, ', '), tostring(took), tostring(unknown), GetBindingAct
         ]
     );
 }
+
+#[test]
+fn forever_characters_are_whispered_by_first_and_last_name() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "Got = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('CHAT_MSG_ADDON')
+f:SetScript('OnEvent', function(_, _, _, msg, _, sender) Got[#Got + 1] = msg .. ' from ' .. sender end)
+C_ChatInfo.RegisterAddonMessagePrefix('P')
+mock.player:setName('Suther', 'Stargazer')
+C_ChatInfo.SendAddonMessage('P', 'first', 'WHISPER', 'Suther')
+C_ChatInfo.SendAddonMessage('P', 'full', 'WHISPER', 'Suther Stargazer')
+local first, last = UnitName('player')
+local full, second = UnitFullName('player')
+return first, last, full, second",
+    );
+    assert_eq!(r, ["Suther", "Stargazer", "Suther", "Stargazer"]);
+    wowlua_engine::clock::advance_frames(&mut vm, 2, 1000.0 / 60.0);
+    let got = run(&mut vm, "return table.concat(Got, ' | ')");
+    assert_eq!(got, ["full from Suther Stargazer"]);
+}

@@ -8,9 +8,11 @@
 //! (`receiveAddonMessage`). As `/stdtest engine comm` recorded: prefixes
 //! of 1 to 16 characters (else InvalidPrefix), a duplicate refused; SAY and
 //! unknown chat types InvalidChatType, a whisper without a target
-//! TargetRequired; a 256-byte message and one with a zero byte go out.
-//! Unverified: the message limit, the prefix count, the echo, its delay
-//! and the whisper target that reaches the player.
+//! TargetRequired; messages up to 8192 bytes (and zero bytes) go out; a
+//! whisper to the player's "First Last" arrives from "First Last" (half a
+//! second later there: the server's round trip; here on the next frame).
+//! Unverified: the message limit and delivery of long messages, the prefix
+//! count, the echo to groups.
 //!
 //! Slash commands: the `slash(line)` control runs `/cmd args` as the chat
 //! box does, through `SlashCmdList` and the `SLASH_<KEY><n>` globals.
@@ -40,15 +42,11 @@ pub struct Chat {
 
 const MAX_PREFIX: usize = 16;
 const MAX_PREFIXES: usize = 128;
-/// Not 255 (`/stdtest engine comm`: 256 bytes go out); the real limit is
-/// being probed.
-const MAX_MESSAGE: usize = 4000;
 
 /// `SendAddonMessageResult`'s values.
 mod result {
     pub const SUCCESS: f64 = 0.0;
     pub const INVALID_PREFIX: f64 = 1.0;
-    pub const INVALID_MESSAGE: f64 = 2.0;
     pub const INVALID_CHAT_TYPE: f64 = 4.0;
     pub const NOT_IN_GROUP: f64 = 5.0;
     pub const TARGET_REQUIRED: f64 = 6.0;
@@ -102,14 +100,20 @@ fn messaging_lockdown(vm: &mut Vm, _c: NativeCall) -> Ret {
     ))])
 }
 
-/// The player's name with their realm (`Name-Realm`).
+/// The name others address the player by: on WoW Forever the first and
+/// last name (`/stdtest engine comm`: a whisper to "First Last" arrives,
+/// from "First Last"; the first name alone or Name-Realm reach nobody),
+/// elsewhere Name-Realm.
 fn player_full_name(vm: &Vm) -> String {
     let p = &engine(vm).units.list[units::PLAYER.0];
-    format!(
-        "{}-{}",
-        p.name,
-        p.realm.clone().unwrap_or_else(|| "Realm".into())
-    )
+    match &p.last_name {
+        Some(last) => format!("{} {last}", p.name),
+        None => format!(
+            "{}-{}",
+            p.name,
+            p.realm.clone().unwrap_or_else(|| "Realm".into())
+        ),
+    }
 }
 
 /// Fires `CHAT_MSG_ADDON` for a registered prefix (the rest of the payload
@@ -165,8 +169,6 @@ fn send(vm: &mut Vm, c: NativeCall) -> Ret {
     let in_group = !u.group.is_empty();
     let r = if prefix.is_empty() || prefix.len() > MAX_PREFIX {
         result::INVALID_PREFIX
-    } else if message.len() > MAX_MESSAGE {
-        result::INVALID_MESSAGE
     } else if units::active(u, &[units::CHAT]) {
         result::LOCKDOWN
     } else {
@@ -192,11 +194,15 @@ fn send(vm: &mut Vm, c: NativeCall) -> Ret {
     // The player hears their own messages to groups and guilds, and a
     // whisper to themselves.
     let me = player_full_name(vm);
-    let own_name = engine(vm).units.list[units::PLAYER.0].name.clone();
+    // A whisper reaches the player when addressed by that name (with a last
+    // name, the first name alone does not).
+    let player = &engine(vm).units.list[units::PLAYER.0];
+    let first_name_reaches = player.last_name.is_none();
+    let own_name = player.name.clone();
     let to_self = chat_type == "WHISPER"
-        && target
-            .as_deref()
-            .is_some_and(|t| t.eq_ignore_ascii_case(&own_name) || t.eq_ignore_ascii_case(&me));
+        && target.as_deref().is_some_and(|t| {
+            t.eq_ignore_ascii_case(&me) || (first_name_reaches && t.eq_ignore_ascii_case(&own_name))
+        });
     if chat_type != "WHISPER" || to_self {
         let upvals = vec![
             vm.str(&prefix),

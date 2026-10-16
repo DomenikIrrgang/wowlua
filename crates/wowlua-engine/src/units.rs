@@ -722,6 +722,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("hideNameplate", control_hide_nameplate),
         ("despawn", control_despawn),
         ("token", control_tokens),
+        ("setName", control_set_name),
         ("applyAura", crate::auras::control_apply),
         ("removeAura", crate::auras::control_remove),
     ] {
@@ -898,6 +899,21 @@ fn change_health(vm: &mut Vm, id: UnitId, delta: f64) {
         u.dead = u.health <= 0.0;
     }
     fire_unit(vm, "UNIT_HEALTH", id, &[]);
+}
+
+/// `unit:setName(name [, lastName])`: a WoW Forever character's first and
+/// last name.
+fn control_set_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = this(vm, &c)?;
+    let name = vm.check_str(&c, 2)?;
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    let last = vm
+        .opt_str(&c, 3)?
+        .map(|s| String::from_utf8_lossy(vm.str_bytes(s)).into_owned());
+    let u = &mut engine_mut(vm).units.list[me.0];
+    u.name = name;
+    u.last_name = last;
+    Ok(vec![])
 }
 
 fn control_damage(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -1207,8 +1223,15 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `UnitFullName(unit)`: the name and, on WoW Forever, the last name
+/// (`/stdtest engine comm`), else the realm.
+fn unit_full_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    unit_name(vm, c)
+}
+
 pub fn more_behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
+        ("UnitFullName", unit_full_name),
         ("ClearFocus", clear_focus),
         ("TargetLastTarget", nothing),
         ("StopAttack", nothing),
