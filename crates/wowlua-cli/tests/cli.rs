@@ -3800,6 +3800,140 @@ fn load_order_diagnostics() {
     }
 }
 
+/// Files whose order the layout fixes are not ambiguous: an XML file loads
+/// its scripts in document order, so two of them defining the same name at
+/// load time (a locale file overriding the default) get no W1033. Two files
+/// whose order nothing fixes still do (`load_order_diagnostics`).
+#[test]
+fn load_order_files_one_xml_loads_are_ordered() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"xmlpair\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/locales.xml",
+                "<Ui>\n  <Script file=\"loc/enUS.lua\"/>\n  <Script file=\"loc/deDE.lua\"/>\n</Ui>\n",
+            ),
+            ("src/loc/enUS.lua", "Greeting = \"Hello\"\n"),
+            (
+                "src/loc/deDE.lua",
+                "if GetLocale() ~= \"deDE\" then return end\nGreeting = \"Hallo\"\n",
+            ),
+            ("src/main.lua", "print(Greeting)\n"),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(!stderr.contains("W1033"), "{stderr}");
+}
+
+/// A load-on-demand addon loads after its required addons have run, so a
+/// field it reads at load time of a table one of them owns (a global the
+/// addon never defines) may be set by that addon, even if the addon itself
+/// only writes it at run time: no W1034. Its own SavedVariables are set
+/// only after its files load, so reading them still warns, as does the
+/// same read in an addon that loads with the others.
+#[test]
+fn load_order_load_on_demand_reads_its_dependencies_tables() {
+    let manifest = |lod: bool| {
+        format!(
+            "{{ \"package\": {{ \"name\": \"gui\", \"version\": \"1.0.0\" }},\n  \"addon\": {{ \"name\": \"Gui\", \"load-on-demand\": {lod}, \"saved-variables\": [\"GuiDB\"] }},\n  \"addon-dependencies\": {{ \"required\": [\"Core\"] }} }}\n"
+        )
+    };
+    let files = [
+        ("src/a.lua", "print(Core.Options.x, GuiDB.size)\n"),
+        (
+            "src/b.lua",
+            "function import_profile(t) Core.Options = t GuiDB.size = 1 end\n",
+        ),
+    ];
+    for lod in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = manifest(lod);
+        let mut all = vec![("wowlua.json", manifest.as_str())];
+        all.extend(files);
+        write(dir.path(), &all);
+        let assert = wowlua(dir.path()).arg("build").assert().success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            stderr.contains("`GuiDB.size` is read while the file loads"),
+            "{lod}: {stderr}"
+        );
+        assert_eq!(
+            stderr.contains("`Core.Options` is read while the file loads"),
+            !lod,
+            "{lod}: {stderr}"
+        );
+    }
+}
+
+/// Code in a branch that runs only when a parameter is not a function
+/// (`if type(p) ~= "function"`, `if not p`, the `else` of
+/// `if type(p) == "function"`) cannot run while every call reaching the
+/// function passes a function for it: the late `Late` it reads is no W1034.
+/// A table or an untraceable value may be anything, and a parameter the
+/// function reassigns says nothing about the caller: those still warn.
+#[test]
+fn load_order_branches_for_non_function_arguments() {
+    let check = "if type(handler) ~= \"function\" then print(Late) return end";
+    let cases: &[(String, &str, bool)] = &[
+        (check.to_string(), "Register(\"x\", function() end)", false),
+        (
+            check.to_string(),
+            "local function on() end\nRegister(\"x\", on)",
+            false,
+        ),
+        (check.to_string(), "Register(\"x\", Handlers.OnLoad)", false),
+        (check.to_string(), "Register(\"x\", {})", true),
+        (check.to_string(), "Register(\"x\", Unknown())", true),
+        (
+            format!("handler = handler or nil\n{check}"),
+            "Register(\"x\", function() end)",
+            true,
+        ),
+        (
+            "if not handler then print(Late) end".to_string(),
+            "Register(\"x\", function() end)",
+            false,
+        ),
+        (
+            "if type(handler) == \"function\" then handler() else print(Late) end".to_string(),
+            "Register(\"x\", function() end)",
+            false,
+        ),
+    ];
+    for (body, call, warns) in cases {
+        let dir = tempfile::tempdir().unwrap();
+        let api = format!("function Register(name, handler)\n{body}\nend\n");
+        write(
+            dir.path(),
+            &[
+                (
+                    "wowlua.json",
+                    "{ \"package\": { \"name\": \"branches\", \"version\": \"1.0.0\" } }\n",
+                ),
+                ("src/a_api.lua", api.as_str()),
+                (
+                    "src/b_late.lua",
+                    "Handlers = {}\nfunction Handlers.OnLoad() end\nfunction init() Late = 1 end\n",
+                ),
+                ("src/c_use.lua", call),
+            ],
+        );
+        let assert = wowlua(dir.path()).arg("build").assert().success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert_eq!(
+            stderr.contains("`Late` is read while the file loads"),
+            *warns,
+            "{body} / {call}: {stderr}"
+        );
+    }
+}
+
 /// Runs compiled files in order in one Lua state, each as a chunk called
 /// with `("Compiled", ns)` like the client does; returns what they printed.
 fn run_compiled(files: &[std::path::PathBuf]) -> String {

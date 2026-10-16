@@ -223,6 +223,17 @@ Each edge is classified by **when** the use happens:
   optional link (`X?.f`, `X?.[k]`, `X?:m()`, `X?.()`) are existence tests too,
   and an optional link guards the rest of its chain. If `X` is not defined yet, the guarded code is
   skipped, so the file still loads.
+- **Branches for non-functions** (decision T207). Code that runs only when a
+  parameter is not a function (the branch of `if type(p) ~= "function"`,
+  `if not p` or `if p == nil`, and the other branches of
+  `if type(p) == "function"`, `if p` or `if p ~= nil`) does not run while a
+  file loads if every call reaching the function at that time passes a
+  function for `p`: a function value, or a package path or import naming
+  one. A parameter the function assigns, an argument the analysis cannot
+  follow, and a function invoked as a callback count as possibly anything.
+  A registration helper that checks its handler
+  (`if type(handler) ~= "function" then print(…) return end`) therefore adds
+  no load-time reads for the handlers it is given.
 - **XML**: creating an element reads its `mixin`, `secureMixin`, `parent` and
   `relativeTo` globals and its handlers' `function` attributes, runs its
   `<OnLoad>` code and instantiates the templates it `inherits`. That happens
@@ -232,7 +243,13 @@ Each edge is classified by **when** the use happens:
   `<Script>` code runs while the file loads; other handlers run later.
 
 Definitions are classified the same way. If a name is **read at load time** but
-only **defined at run time**, that is warning W1034.
+only **defined at run time**, that is warning W1034. A **load-on-demand** addon
+(`addon.load-on-demand` with required `addon-dependencies`) loads after its
+required addons have loaded and run, so a field of a table one of them owns (a
+global the addon never defines and that is not one of its SavedVariables, such
+as `DBM.Options` in an addon that only writes `DBM.Options` at run time) may be
+set by its owner: such a read is not W1034 (decision T206). Its own
+SavedVariables are set after its files load, so reading them still is.
 
 ### 5.4.4 Ordering and cycles
 
@@ -264,9 +281,14 @@ Type-only imports never create edges.
   If a listed order contradicts an **import**, that is error E1035. If it
   contradicts an edge found by **usage analysis**, the listed order wins with
   warning W1035 (decision T70): without types the analysis over-approximates,
-  and `wowlua init` writes the order of a TOC that works. Files listed there
-  get no W1033. Edges between an XML file and the files it loads are ignored;
-  they load interleaved in document order.
+  and `wowlua init` writes the order of a TOC that works. Edges between an XML
+  file and the files it loads are ignored; they load interleaved in document
+  order.
+- **Fixed order** (decision T205). Files whose relative order the layout fixes
+  get no W1033: two files listed in `build.load-order` (directly, or loaded by
+  an XML file that is), two files one XML file loads (in document order, like
+  a default locale and the locale files that override it), and an XML file
+  and a file it loads.
 
 ### 5.4.6 Several flavors
 

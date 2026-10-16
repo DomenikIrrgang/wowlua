@@ -57,6 +57,12 @@ pub struct Layout<'a> {
     pub active: &'a [bool],
     /// The XML file that loads a file (`<Script>`/`<Include>`).
     pub loaded_by: &'a [Option<usize>],
+    /// The addon loads on demand after its required addons (`LoadOnDemand`
+    /// with `## Dependencies`): they have loaded and run before it loads,
+    /// so the tables they own may hold what it writes into them later.
+    pub after_dependencies: bool,
+    /// The addon's SavedVariables: they are set after its files load.
+    pub saved_variables: &'a [String],
 }
 
 /// Analyzes the load order.
@@ -70,6 +76,8 @@ pub fn analyze(
         listed,
         active,
         loaded_by,
+        after_dependencies,
+        saved_variables,
     } = layout;
     // An XML file and the files it loads interleave in document order.
     let encloses = |outer: usize, mut inner: usize| {
@@ -83,7 +91,41 @@ pub fn analyze(
         false
     };
     let is_active = |i: usize| active.get(i).copied().unwrap_or(true);
-    let ordered = |i: usize| listed.get(i).copied().flatten().is_some();
+    // Where a file loads is fixed when `build.load-order` lists it, or when
+    // an XML file whose place is fixed loads it (in document order).
+    let ordered = |mut i: usize| {
+        for _ in 0..64 {
+            if listed.get(i).copied().flatten().is_some() {
+                return true;
+            }
+            match loaded_by.get(i).copied().flatten() {
+                Some(p) => i = p,
+                None => return false,
+            }
+        }
+        false
+    };
+    // The XML files that load a file, innermost first.
+    let loaders = |mut i: usize| {
+        let mut out = Vec::new();
+        while let Some(p) = loaded_by.get(i).copied().flatten() {
+            if out.len() == 64 {
+                break;
+            }
+            out.push(p);
+            i = p;
+        }
+        out
+    };
+    // Two files load in a fixed order when both have a fixed place, or when
+    // one XML file loads both, or one of them loads the other (in document
+    // order).
+    let fixed_pair = |a: usize, b: usize| {
+        (ordered(a) && ordered(b)) || {
+            let (la, lb) = (loaders(a), loaders(b));
+            la.contains(&b) || lb.contains(&a) || lb.iter().any(|x| la.contains(x))
+        }
+    };
     let usages: Vec<Option<std::sync::Arc<FileUsage>>> = files
         .iter()
         .enumerate()
@@ -262,35 +304,88 @@ pub fn analyze(
         }
     }
 
+    // Whether an argument is a function: a function value, or a package
+    // path or import that names one.
+    let is_function = |file: usize, arg: &CallTarget| match arg {
+        CallTarget::Local(_) => true,
+        CallTarget::Path(_) | CallTarget::Import { .. } => !resolve(file, arg).is_empty(),
+        CallTarget::Param(_) | CallTarget::Unknown => false,
+    };
+
     // For every file R: the functions that run while R loads (its top-level
     // code and everything called from there, across files), with the call
-    // that reaches each one.
+    // that reaches each one, and the parameters every call reaching it
+    // passed a function for (code that runs only when one of them is no
+    // function cannot run then).
     type Parents = FxHashMap<(usize, usize), Option<(usize, usize, Span)>>;
+    type Functions = FxHashMap<(usize, usize), HashSet<usize>>;
     let mut exec: Vec<Parents> = vec![FxHashMap::default(); files.len()];
+    let mut passed_functions: Vec<Functions> = vec![FxHashMap::default(); files.len()];
+    let reassigned = |file: usize, f: usize, p: usize| {
+        usages[file]
+            .as_ref()
+            .and_then(|u| u.functions.get(f))
+            .is_none_or(|function| function.reassigned_params.contains(&p))
+    };
     for (root, u) in usages.iter().enumerate() {
         if u.is_none() {
             continue;
         }
         let parents = &mut exec[root];
+        let functions = &mut passed_functions[root];
         parents.insert((root, 0), None);
+        functions.insert((root, 0), HashSet::new());
         let mut work = vec![(root, 0)];
         while let Some((file, f)) = work.pop() {
             let Some(function) = usages[file].as_ref().and_then(|u| u.functions.get(f)) else {
                 continue;
             };
+            let skipped = |p: Option<usize>, functions: &Functions| {
+                p.is_some_and(|p| {
+                    !reassigned(file, f, p)
+                        && functions.get(&(file, f)).is_some_and(|s| s.contains(&p))
+                })
+            };
             for call in &function.calls {
+                if skipped(call.unless_function, functions) {
+                    continue;
+                }
                 let targets = resolve(file, &call.target);
-                let mut called = targets.clone();
+                // A direct callee gets what the call passes; a function
+                // passed on and called gets arguments nobody knows.
+                let given: HashSet<usize> = call
+                    .args
+                    .iter()
+                    .filter(|(_, arg)| is_function(file, arg))
+                    .map(|(pos, _)| *pos)
+                    .collect();
+                let mut called: Vec<((usize, usize), HashSet<usize>)> =
+                    targets.iter().map(|t| (*t, given.clone())).collect();
                 if !call.deferred {
                     for (pos, arg) in &call.args {
                         if calls_arg(&called_params, &call.target, &targets, *pos) {
-                            called.extend(resolve(file, arg));
+                            called.extend(
+                                resolve(file, arg).into_iter().map(|t| (t, HashSet::new())),
+                            );
                         }
                     }
                 }
-                for target in called {
+                for (target, given) in called {
+                    let changed = match functions.get_mut(&target) {
+                        None => {
+                            functions.insert(target, given);
+                            true
+                        }
+                        Some(known) => {
+                            let before = known.len();
+                            known.retain(|p| given.contains(p));
+                            known.len() != before
+                        }
+                    };
                     if let std::collections::hash_map::Entry::Vacant(slot) = parents.entry(target) {
                         slot.insert(Some((file, f, call.span)));
+                    }
+                    if changed {
                         work.push(target);
                     }
                 }
@@ -298,6 +393,16 @@ pub fn analyze(
         }
     }
     let runs_at_load = |root: usize, file: usize, f: usize| exec[root].contains_key(&(file, f));
+    // Code that runs only when a parameter is no function, in a function
+    // every call reaching it (while `root` loads) passes a function for it.
+    let cannot_run = |root: usize, file: usize, f: usize, unless: Option<usize>| {
+        unless.is_some_and(|p| {
+            !reassigned(file, f, p)
+                && passed_functions[root]
+                    .get(&(file, f))
+                    .is_some_and(|s| s.contains(&p))
+        })
+    };
 
     // Definitions: a file defines a key at load time when the definition
     // runs while it loads (also inside functions of other files it calls).
@@ -323,7 +428,9 @@ pub fn analyze(
     };
     for (file, u) in usages.iter().enumerate() {
         for d in u.iter().flat_map(|u| &u.defs) {
-            add_def(&d.key, file, runs_at_load(file, file, d.function), d.span);
+            let lt = runs_at_load(file, file, d.function)
+                && !cannot_run(file, file, d.function, d.unless_function);
+            add_def(&d.key, file, lt, d.span);
         }
     }
     for (root, parents) in exec.iter().enumerate() {
@@ -334,7 +441,7 @@ pub fn analyze(
             for d in usages[file]
                 .iter()
                 .flat_map(|u| &u.defs)
-                .filter(|d| d.function == f)
+                .filter(|d| d.function == f && !cannot_run(root, file, f, d.unless_function))
             {
                 add_def(&d.key, root, true, d.span);
             }
@@ -418,11 +525,9 @@ pub fn analyze(
         let mut visited: Vec<&(usize, usize)> = parents.keys().collect();
         visited.sort();
         for &(file, f) in visited {
-            for access in usages[file]
-                .iter()
-                .flat_map(|u| &u.uses)
-                .filter(|a| a.function == f && !a.guarded)
-            {
+            for access in usages[file].iter().flat_map(|u| &u.uses).filter(|a| {
+                a.function == f && !a.guarded && !cannot_run(root, file, f, a.unless_function)
+            }) {
                 let key = canon(&same_table, &access.key);
                 if !seen.insert(key.clone()) {
                     continue;
@@ -478,6 +583,15 @@ pub fn analyze(
                         reason,
                     }),
                     [_] => {}
+                    // A field of a table another addon owns (the package
+                    // defines no such global, and it is not one of its
+                    // SavedVariables), read by an addon that loads after
+                    // that addon has run: the owner may have set it.
+                    [] if after_dependencies
+                        && let Key::Field(table, _) = &*key
+                        && let Key::Global(g) = table.as_ref()
+                        && !defined_tables.contains(table.as_ref())
+                        && !saved_variables.contains(g) => {}
                     [] => {
                         if warned.insert(format!("late {} {root}", access.key.display())) {
                             out.diagnostics.push(
@@ -498,7 +612,10 @@ pub fn analyze(
                     several => {
                         // Several files define the name at load time: their
                         // order is ambiguous unless `build.load-order` fixes it.
-                        let unordered = several.iter().any(|d| !ordered(d.0));
+                        let unordered = several
+                            .iter()
+                            .enumerate()
+                            .any(|(i, a)| several[i + 1..].iter().any(|b| !fixed_pair(a.0, b.0)));
                         if unordered && warned.insert(format!("ambiguous {}", access.key.display()))
                         {
                             let mut d = Diagnostic::warning(

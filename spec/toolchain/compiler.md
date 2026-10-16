@@ -256,7 +256,11 @@ This implements the load-order rules of
    (or forwards) that parameter; passed to an **unknown** callee it is treated
    as load-time. The deferred/immediate markers come from the flavor table and
    the declarations. Guarded uses (existence tests and the code they guard)
-   do not create edges (decision T70).
+   do not create edges (decision T70). Summaries tag code that runs only
+   when a parameter is not a function; the call-graph walk keeps, for each
+   function reached, the parameters every reaching call passed a function
+   for, revisits a function when that set shrinks, and skips the tagged code
+   for those parameters (decision T207).
 3. **Order.** A deterministic topological sort over load-time edges. Among
    ready files, the order of `build.load-order` (into which `wowlua init` writes
    the old TOC order), then byte-wise path order, breaks ties.
@@ -270,7 +274,14 @@ This implements the load-order rules of
    with W1035 before cycles are searched.
 5. **Ambiguity.** Dynamic names (`_G["x" .. i]`), several writers of the same
    global or field, or `setfenv` make an edge undecidable. The files involved
-   keep their relative source order and warning W1033 names the cause.
+   keep their relative source order and warning W1033 names the cause, unless
+   the layout already fixes their order: both have a place in
+   `build.load-order` (directly or through the XML file that loads them), or
+   one XML file loads both (decision T205).
+6. **Late definitions.** A load-time read of a name that is only defined at
+   run time is W1034. In a load-on-demand addon with required addon
+   dependencies, fields of tables the addon does not define (other than its
+   SavedVariables) are exempt: their owner has run before (decision T206).
 
 ### 13.6.2 Lints
 
