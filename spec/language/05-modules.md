@@ -223,6 +223,17 @@ Each edge is classified by **when** the use happens:
   optional link (`X?.f`, `X?.[k]`, `X?:m()`, `X?.()`) are existence tests too,
   and an optional link guards the rest of its chain. If `X` is not defined yet, the guarded code is
   skipped, so the file still loads.
+- **Branches for non-functions** (decision T207). Code that runs only when a
+  parameter is not a function (the branch of `if type(p) ~= "function"`,
+  `if not p` or `if p == nil`, and the other branches of
+  `if type(p) == "function"`, `if p` or `if p ~= nil`) does not run while a
+  file loads if every call reaching the function at that time passes a
+  function for `p`: a function value, or a package path or import naming
+  one. A parameter the function assigns, an argument the analysis cannot
+  follow, and a function invoked as a callback count as possibly anything.
+  A registration helper that checks its handler
+  (`if type(handler) ~= "function" then print(…) return end`) therefore adds
+  no load-time reads for the handlers it is given.
 - **XML**: creating an element reads its `mixin`, `secureMixin`, `parent` and
   `relativeTo` globals and its handlers' `function` attributes, runs its
   `<OnLoad>` code and instantiates the templates it `inherits`. That happens

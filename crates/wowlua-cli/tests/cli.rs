@@ -3871,6 +3871,69 @@ fn load_order_load_on_demand_reads_its_dependencies_tables() {
     }
 }
 
+/// Code in a branch that runs only when a parameter is not a function
+/// (`if type(p) ~= "function"`, `if not p`, the `else` of
+/// `if type(p) == "function"`) cannot run while every call reaching the
+/// function passes a function for it: the late `Late` it reads is no W1034.
+/// A table or an untraceable value may be anything, and a parameter the
+/// function reassigns says nothing about the caller: those still warn.
+#[test]
+fn load_order_branches_for_non_function_arguments() {
+    let check = "if type(handler) ~= \"function\" then print(Late) return end";
+    let cases: &[(String, &str, bool)] = &[
+        (check.to_string(), "Register(\"x\", function() end)", false),
+        (
+            check.to_string(),
+            "local function on() end\nRegister(\"x\", on)",
+            false,
+        ),
+        (check.to_string(), "Register(\"x\", Handlers.OnLoad)", false),
+        (check.to_string(), "Register(\"x\", {})", true),
+        (check.to_string(), "Register(\"x\", Unknown())", true),
+        (
+            format!("handler = handler or nil\n{check}"),
+            "Register(\"x\", function() end)",
+            true,
+        ),
+        (
+            "if not handler then print(Late) end".to_string(),
+            "Register(\"x\", function() end)",
+            false,
+        ),
+        (
+            "if type(handler) == \"function\" then handler() else print(Late) end".to_string(),
+            "Register(\"x\", function() end)",
+            false,
+        ),
+    ];
+    for (body, call, warns) in cases {
+        let dir = tempfile::tempdir().unwrap();
+        let api = format!("function Register(name, handler)\n{body}\nend\n");
+        write(
+            dir.path(),
+            &[
+                (
+                    "wowlua.json",
+                    "{ \"package\": { \"name\": \"branches\", \"version\": \"1.0.0\" } }\n",
+                ),
+                ("src/a_api.lua", api.as_str()),
+                (
+                    "src/b_late.lua",
+                    "Handlers = {}\nfunction Handlers.OnLoad() end\nfunction init() Late = 1 end\n",
+                ),
+                ("src/c_use.lua", call),
+            ],
+        );
+        let assert = wowlua(dir.path()).arg("build").assert().success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert_eq!(
+            stderr.contains("`Late` is read while the file loads"),
+            *warns,
+            "{body} / {call}: {stderr}"
+        );
+    }
+}
+
 /// Runs compiled files in order in one Lua state, each as a chunk called
 /// with `("Compiled", ns)` like the client does; returns what they printed.
 fn run_compiled(files: &[std::path::PathBuf]) -> String {

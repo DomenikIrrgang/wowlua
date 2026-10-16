@@ -13,7 +13,9 @@
 //! A name tested for truthiness (`if X`, `X and …`, `not X`, `X ~= nil`,
 //! `type(X)`) and the uses guarded by that test (the `then` branch, the
 //! right operand of `and`) are *guarded*: they do not order files (decision
-//! T70).
+//! T70). Code that runs only when a parameter is not a function
+//! (`if type(p) ~= "function"`) is tagged with it: it does not run for
+//! calls that pass a function (decision T207).
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::{HashMap, HashSet};
@@ -72,6 +74,9 @@ pub struct Access {
     pub function: usize,
     /// An existence test or a use guarded by one.
     pub guarded: bool,
+    /// Runs only when this parameter of its function is not a function
+    /// (`if type(p) ~= "function" then …`, `if not p then …`).
+    pub unless_function: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -96,6 +101,8 @@ pub struct Call {
     pub args: Vec<(usize, CallTarget)>,
     /// The callee runs passed functions later.
     pub deferred: bool,
+    /// Runs only when this parameter of the caller is not a function.
+    pub unless_function: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -104,6 +111,9 @@ pub struct Function {
     pub calls: Vec<Call>,
     /// Parameters the function calls (positions; `self` is 0 in methods).
     pub called_params: HashSet<usize>,
+    /// Parameters the function assigns: a test of one says nothing about
+    /// what the caller passed.
+    pub reassigned_params: HashSet<usize>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -242,6 +252,12 @@ struct Walker<'a> {
     link: bool,
     /// Local names imported from the standard library (`wowlua:*`).
     stdlib_imports: FxHashSet<String>,
+    /// The functions being walked, innermost last: the scope their
+    /// parameters are in, and their id.
+    frames: Vec<(usize, usize)>,
+    /// The code being walked runs only when this parameter of the current
+    /// function is not a function.
+    unless_function: Option<usize>,
 }
 
 /// The usage summary of one file.
@@ -288,6 +304,7 @@ pub fn xml_file_usage(text: &str, file: FileId, markers: &Markers) -> FileUsage 
             name: format!("template {}", t.name.name),
             calls: Vec::new(),
             called_params: HashSet::new(),
+            reassigned_params: HashSet::new(),
         });
         w.current = id;
         w.xml_uses(&t.uses, text, file);
@@ -312,6 +329,7 @@ impl<'a> Walker<'a> {
                     name: "top-level code".into(),
                     calls: Vec::new(),
                     called_params: HashSet::new(),
+                    reassigned_params: HashSet::new(),
                 }],
                 ..FileUsage::default()
             },
@@ -321,6 +339,8 @@ impl<'a> Walker<'a> {
             guards: Vec::new(),
             link: false,
             stdlib_imports: FxHashSet::default(),
+            frames: vec![(0, 0)],
+            unless_function: None,
         }
     }
 
@@ -391,6 +411,83 @@ impl<'a> Walker<'a> {
         self.scopes.iter().rev().find_map(|s| s.get(name))
     }
 
+    /// The function a parameter named `name` belongs to and its position,
+    /// if the name is a parameter.
+    fn param_owner(&self, name: &str) -> Option<(usize, usize)> {
+        let (scope, local) = self
+            .scopes
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(i, s)| s.get(name).map(|l| (i, l)))?;
+        let Local::Param(p) = local else {
+            return None;
+        };
+        let owner = self.frames.iter().rev().find(|f| f.0 <= scope)?.1;
+        Some((owner, *p))
+    }
+
+    /// The position of a parameter of the current function that `e` names.
+    fn own_param(&self, e: &Expr) -> Option<usize> {
+        let ExprKind::Name(n) = &e.kind else {
+            return None;
+        };
+        self.param_owner(&n.text)
+            .filter(|(owner, _)| *owner == self.current)
+            .map(|(_, p)| p)
+    }
+
+    /// The parameter that is no function when `cond` holds (`not p`,
+    /// `p == nil`, `type(p) ~= "function"`), or, with `holds` false, when
+    /// it does not hold (`p`, `p ~= nil`, `type(p) == "function"`).
+    fn not_function_param(&self, cond: &Expr, holds: bool) -> Option<usize> {
+        match &cond.kind {
+            ExprKind::Paren(inner) => self.not_function_param(inner, holds),
+            ExprKind::Unary {
+                op: UnOp::Not,
+                operand,
+            } => self.not_function_param(operand, !holds),
+            ExprKind::Name(_) if !holds => self.own_param(cond),
+            ExprKind::Binary {
+                op: op @ (BinOp::Eq | BinOp::Ne),
+                lhs,
+                rhs,
+            } => {
+                let equal = (*op == BinOp::Eq) == holds;
+                if matches!(rhs.kind, ExprKind::Nil) {
+                    return equal.then(|| self.own_param(lhs)).flatten();
+                }
+                if matches!(lhs.kind, ExprKind::Nil) {
+                    return equal.then(|| self.own_param(rhs)).flatten();
+                }
+                let (operand, _) = type_test(lhs, rhs)?;
+                let tested = if matches!(lhs.kind, ExprKind::String(_)) {
+                    lhs
+                } else {
+                    rhs
+                };
+                let ExprKind::String(t) = &tested.kind else {
+                    return None;
+                };
+                (*t.value == *b"function" && !equal)
+                    .then(|| self.own_param(operand))
+                    .flatten()
+            }
+            _ => None,
+        }
+    }
+
+    /// Walks a block that runs only when parameter `param` (if any) is not
+    /// a function; a condition already in force stays.
+    fn unless_block(&mut self, param: Option<usize>, keys: Vec<Key>, b: &Block) {
+        let saved = self.unless_function;
+        if saved.is_none() {
+            self.unless_function = param;
+        }
+        self.guarded_block(keys, b);
+        self.unless_function = saved;
+    }
+
     fn declare(&mut self, name: &str, local: Local) {
         self.scopes
             .last_mut()
@@ -417,6 +514,7 @@ impl<'a> Walker<'a> {
             span,
             function: self.current,
             guarded,
+            unless_function: self.unless_function,
         });
     }
 
@@ -426,6 +524,7 @@ impl<'a> Walker<'a> {
             span,
             function: self.current,
             guarded: false,
+            unless_function: self.unless_function,
         });
     }
 
@@ -674,10 +773,13 @@ impl<'a> Walker<'a> {
             name: name.to_string(),
             calls: Vec::new(),
             called_params: HashSet::new(),
+            reassigned_params: HashSet::new(),
         });
         let saved = self.current;
         let saved_guards = std::mem::take(&mut self.guards);
+        let saved_unless = self.unless_function.take();
         self.current = id;
+        self.frames.push((self.scopes.len(), id));
         self.scopes.push(FxHashMap::default());
         if method {
             self.declare("self", Local::Param(0));
@@ -687,8 +789,10 @@ impl<'a> Walker<'a> {
         }
         f(self);
         self.scopes.pop();
+        self.frames.pop();
         self.current = saved;
         self.guards = saved_guards;
+        self.unless_function = saved_unless;
         id
     }
 
@@ -770,13 +874,19 @@ impl<'a> Walker<'a> {
                 else_block,
             } => {
                 let keys = self.test(cond);
-                self.guarded_block(keys, then_block);
+                let then_unless = self.not_function_param(cond, true);
+                // The other branches run only when `cond` does not hold.
+                let else_unless = self.not_function_param(cond, false);
+                self.unless_block(then_unless, keys, then_block);
                 for (c, b) in elseifs {
+                    let saved = self.unless_function;
+                    self.unless_function = saved.or(else_unless);
                     let keys = self.test(c);
-                    self.guarded_block(keys, b);
+                    self.unless_function = saved;
+                    self.unless_block(else_unless, keys, b);
                 }
                 if let Some(b) = else_block {
-                    self.block(b);
+                    self.unless_block(else_unless, Vec::new(), b);
                 }
             }
             StmtKind::NumericFor {
@@ -989,6 +1099,9 @@ impl<'a> Walker<'a> {
         let (key, fields) = match &t.kind {
             ExprKind::Name(n) => match self.lookup(&n.text) {
                 Some(_) => {
+                    if let Some((owner, p)) = self.param_owner(&n.text) {
+                        self.out.functions[owner].reassigned_params.insert(p);
+                    }
                     if let Some(f) = function {
                         self.declare_existing(&n.text, Local::Function(f));
                     }
@@ -1078,10 +1191,13 @@ impl<'a> Walker<'a> {
             name: name.to_string(),
             calls: Vec::new(),
             called_params: HashSet::new(),
+            reassigned_params: HashSet::new(),
         });
         let saved = self.current;
         let saved_guards = std::mem::take(&mut self.guards);
+        let saved_unless = self.unless_function.take();
         self.current = id;
+        self.frames.push((self.scopes.len(), id));
         self.scopes.push(FxHashMap::default());
         if method {
             self.declare("self", Local::Param(0));
@@ -1096,8 +1212,10 @@ impl<'a> Walker<'a> {
             self.stmt(s);
         }
         self.scopes.pop();
+        self.frames.pop();
         self.current = saved;
         self.guards = saved_guards;
+        self.unless_function = saved_unless;
         id
     }
 
@@ -1145,6 +1263,7 @@ impl<'a> Walker<'a> {
             span,
             args,
             deferred,
+            unless_function: self.unless_function,
         });
     }
 

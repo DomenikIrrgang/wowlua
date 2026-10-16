@@ -256,7 +256,11 @@ This implements the load-order rules of
    (or forwards) that parameter; passed to an **unknown** callee it is treated
    as load-time. The deferred/immediate markers come from the flavor table and
    the declarations. Guarded uses (existence tests and the code they guard)
-   do not create edges (decision T70).
+   do not create edges (decision T70). Summaries tag code that runs only
+   when a parameter is not a function; the call-graph walk keeps, for each
+   function reached, the parameters every reaching call passed a function
+   for, revisits a function when that set shrinks, and skips the tagged code
+   for those parameters (decision T207).
 3. **Order.** A deterministic topological sort over load-time edges. Among
    ready files, the order of `build.load-order` (into which `wowlua init` writes
    the old TOC order), then byte-wise path order, breaks ties.
