@@ -10,6 +10,28 @@ use super::types::*;
 use wowlua_span::Span;
 use wowlua_syntax::ast::*;
 
+/// What an expression gives: one value (without a heap allocation), or a
+/// pack (calls, `...`).
+pub(crate) enum Values {
+    One(TypeId),
+    Many(Pack),
+}
+
+impl Values {
+    pub(crate) fn into_pack(self) -> Pack {
+        match self {
+            Values::One(t) => Pack::single(t),
+            Values::Many(p) => p,
+        }
+    }
+}
+
+impl From<Pack> for Values {
+    fn from(p: Pack) -> Values {
+        Values::Many(p)
+    }
+}
+
 impl Checker<'_> {
     /// The type of an expression.
     pub fn infer(&mut self, e: &Expr) -> TypeId {
@@ -19,22 +41,26 @@ impl Checker<'_> {
     /// The type of an expression where `expected` is wanted (contextual
     /// typing, spec §2.4.3). Mismatches are reported by the caller.
     pub fn check(&mut self, e: &Expr, expected: Option<TypeId>) -> TypeId {
-        let pack = stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.expr_inner(e, expected));
-        let t = pack
-            .types
-            .first()
-            .copied()
-            .unwrap_or_else(|| match &pack.rest {
-                Some(Rest::Variadic(t)) => self.env.types.optional(*t),
-                _ => Types::NIL,
-            });
+        let values = stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.expr_inner(e, expected));
+        let t = match values {
+            Values::One(t) => t,
+            Values::Many(pack) => pack
+                .types
+                .first()
+                .copied()
+                .unwrap_or_else(|| match &pack.rest {
+                    Some(Rest::Variadic(t)) => self.env.types.optional(*t),
+                    _ => Types::NIL,
+                }),
+        };
         self.expr_types.insert((e.span.start, e.span.end), t);
         t
     }
 
     /// All values of a multi-value expression (calls, `...`).
     pub fn infer_multi(&mut self, e: &Expr) -> Pack {
-        let pack = stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.expr_inner(e, None));
+        let pack =
+            stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.expr_inner(e, None)).into_pack();
         let first = pack.types.first().copied().unwrap_or(Types::NIL);
         self.expr_types.insert((e.span.start, e.span.end), first);
         pack
@@ -67,7 +93,7 @@ impl Checker<'_> {
         for (i, e) in es.iter().enumerate() {
             let want = expected.get(i).copied().flatten();
             if i + 1 == es.len() && is_multi(e) {
-                let mut p = self.expr_inner(e, want);
+                let mut p = self.expr_inner(e, want).into_pack();
                 if let (Some(w), Some(&first)) = (want, p.types.first()) {
                     let _ = (w, first);
                 }
@@ -82,8 +108,8 @@ impl Checker<'_> {
         Pack { types, rest }
     }
 
-    fn expr_inner(&mut self, e: &Expr, expected: Option<TypeId>) -> Pack {
-        let single = |t: TypeId| Pack::single(t);
+    fn expr_inner(&mut self, e: &Expr, expected: Option<TypeId>) -> Values {
+        let single = Values::One;
         match &e.kind {
             ExprKind::Nil => single(Types::NIL),
             ExprKind::True => single(Types::TRUE),
@@ -101,7 +127,7 @@ impl Checker<'_> {
                 }
                 single(Types::STRING)
             }
-            ExprKind::Vararg => self.vararg_pack(),
+            ExprKind::Vararg => self.vararg_pack().into(),
             ExprKind::Function(f) => {
                 let exp = expected.and_then(|t| self.contextual_func(t));
                 // A function passed as an argument or with an expected type
@@ -216,7 +242,7 @@ impl Checker<'_> {
                     && !self.classes.is_empty()
                 {
                     self.args_types(args, &[]);
-                    return Pack::empty();
+                    return Values::Many(Pack::empty());
                 }
                 let (c, chained) = self.chain_obj(callee);
                 let opt = matches!(e.kind, ExprKind::OptCall { .. });
@@ -231,7 +257,7 @@ impl Checker<'_> {
                         e.span,
                         format!("`{}` is a method; call it with `:`", name.text),
                     );
-                    return Pack::any();
+                    return Values::Many(Pack::any());
                 }
                 self.check_yield_boundary(callee, args);
                 let c = self.stdlib_call_type(callee, args, c);
@@ -247,11 +273,11 @@ impl Checker<'_> {
                     *first = self.truthy(*first);
                 }
                 if let Some(t) = self.saved_bind_type(callee, args) {
-                    return Pack::single(t);
+                    return Values::One(t);
                 }
                 if self.secret_locale_call(callee, args) {
                     let secret = self.env.types.intern(Ty::Secret(Types::STRING));
-                    return Pack::single(self.env.types.union(&[Types::STRING, secret]));
+                    return Values::One(self.env.types.union(&[Types::STRING, secret]));
                 }
                 // `setmetatable(t, mt)`: `t` with `mt.__index` as fallback.
                 if let ExprKind::Name(n) = &callee.kind
@@ -259,7 +285,7 @@ impl Checker<'_> {
                     && self.lookup_var("setmetatable").is_none()
                     && let [t, mt] = args.exprs().as_slice()
                 {
-                    return Pack::single(self.with_metatable(t, mt));
+                    return Values::One(self.with_metatable(t, mt));
                 }
                 // The end of an optional chain: one value, `nil` when it
                 // short-circuits.
@@ -267,14 +293,14 @@ impl Checker<'_> {
                     let first = results.types.first().copied().unwrap_or(Types::NIL);
                     return single(self.chain_end(e, first));
                 }
-                results
+                results.into()
             }
             ExprKind::Method { obj, name, args } | ExprKind::OptMethod { obj, name, args } => {
                 self.mark_callbacks(args);
                 if self.is_super(obj) {
                     let m = self.super_member(&name.text, name.span);
                     let instance = self.scope.self_ty.unwrap_or(Types::ANY);
-                    return self.call(m, Some(instance), args, e.span, expected);
+                    return self.call(m, Some(instance), args, e.span, expected).into();
                 }
                 let (o, chained) = self.chain_obj(obj);
                 let opt = matches!(e.kind, ExprKind::OptMethod { .. });
@@ -312,7 +338,7 @@ impl Checker<'_> {
                     let first = results.types.first().copied().unwrap_or(Types::NIL);
                     return single(self.chain_end(e, first));
                 }
-                results
+                results.into()
             }
             ExprKind::Binary { op, lhs, rhs } => {
                 single(self.binary(*op, lhs, rhs, e.span, expected))
@@ -871,7 +897,7 @@ impl Checker<'_> {
                         _ => None,
                     };
                     if i + 1 == fields.len() && is_multi(value) {
-                        let p = self.expr_inner(value, want);
+                        let p = self.expr_inner(value, want).into_pack();
                         for t in p.types {
                             array.push(t);
                         }
@@ -2471,7 +2497,7 @@ impl Checker<'_> {
                 Some(t) if !matches!(e.kind, ExprKind::Function(_)) => t,
                 _ => {
                     if multi {
-                        let pack = self.expr_inner(e, p);
+                        let pack = self.expr_inner(e, p).into_pack();
                         // `...T` alone: its first value is a `T` (or none).
                         let first = match (pack.types.first(), &pack.rest) {
                             (Some(&t), _) => t,
