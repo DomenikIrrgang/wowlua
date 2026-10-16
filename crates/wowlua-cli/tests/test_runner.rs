@@ -779,3 +779,81 @@ end
         "{out}"
     );
 }
+
+/// `import internal` (decision T223): a module's file-level locals and
+/// types in test files only (E8119 elsewhere); the addon build is
+/// unchanged.
+#[test]
+fn import_internal() {
+    let tracker = r#"
+type Entry = { kills: number }
+
+local function parse(text: string): number
+    return tonumber(text) or 0
+end
+
+const LIMIT = 10
+
+local cache: { [string]: Entry } = {}
+
+export function record(name: string, text: string)
+    cache[name] = { kills = math.min(parse(text), LIMIT) }
+end
+"#;
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            ("src/tracker.wowlua", tracker),
+            (
+                "tests/tracker.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import record from "/tracker"
+import internal parse, LIMIT, cache, Entry from "/tracker"
+
+@test
+local function internals()
+    expect(parse("12")).toBe(12)
+    expect(LIMIT).toBe(10)
+    record("hogger", "99")
+    local e: Entry = cache["hogger"]
+    expect(e.kills).toBe(10)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("1 passed, 0 failed"), "{out}");
+    // Typed: the local's type.
+    fs::write(
+        dir.path().join("tests/tracker.test.wowlua"),
+        "import internal parse from \"/tracker\"\nlocal s: string = parse(\"1\")\nprint(s)\n",
+    )
+    .unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(
+        out.contains("`number` is not assignable to `string`"),
+        "{out}"
+    );
+    // Not in the addon's own files.
+    fs::write(
+        dir.path().join("tests/tracker.test.wowlua"),
+        "import test from \"wowlua:test\"\n@test\nlocal function t() end\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("src/main.wowlua"),
+        "import internal parse from \"./tracker\"\nprint(parse(\"1\"))\n",
+    )
+    .unwrap();
+    let out = wowlua(dir.path()).arg("check").output().unwrap();
+    let text = String::from_utf8_lossy(&out.stderr);
+    assert!(text.contains("E8119"), "{text}");
+    // The addon build has no internals.
+    fs::remove_file(dir.path().join("src/main.wowlua")).unwrap();
+    wowlua(dir.path()).arg("build").assert().success();
+    let built = fs::read_to_string(dir.path().join("dist/dev/Demo/src/tracker.lua")).unwrap();
+    assert!(!built.contains("#internal"), "{built}");
+}

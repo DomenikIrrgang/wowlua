@@ -912,6 +912,9 @@ pub enum DeclMemberKind {
 pub struct Import {
     pub clause: ImportClause,
     pub type_only: bool,
+    /// `import internal a from "…"`: a module's file-level locals (test
+    /// files only, spec Tooling §16.1.3.1).
+    pub internal: bool,
     pub from: StringLit,
 }
 

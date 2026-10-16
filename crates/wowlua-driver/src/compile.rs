@@ -1933,6 +1933,7 @@ fn context(
         return ctx;
     };
     ctx.module = info.is_module.then(|| info.id.clone());
+    ctx.exposed = info.exposed.clone();
     ctx.classes = info
         .classes
         .iter()

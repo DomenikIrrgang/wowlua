@@ -835,8 +835,17 @@ fn import_types(
             Target::Module(m) => Some(m),
             _ => None,
         };
+        let internal = import.internal;
         let export_type = |env: &mut env::Env, name: &str| -> TypeId {
             let Some(m) = module else { return Types::ANY };
+            if internal {
+                let key = format!("{}{name}", body::INTERNAL);
+                return exports
+                    .get(&m)
+                    .and_then(|e| e.get(key.as_str()))
+                    .copied()
+                    .unwrap_or(Types::ANY);
+            }
             if let Some(&t) = exports.get(&m).and_then(|e| e.get(name)) {
                 return t;
             }

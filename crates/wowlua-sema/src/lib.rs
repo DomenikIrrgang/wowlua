@@ -125,6 +125,8 @@ pub struct Import {
     pub start: u32,
     pub target: Target,
     pub type_only: bool,
+    /// `import internal`: the module's file-level locals.
+    pub internal: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -145,6 +147,10 @@ pub struct ModuleInfo {
     /// Top-level classes and enums of the file (exported or not).
     pub classes: IndexMap<String, Arc<classes::ClassInfo>>,
     pub enums: IndexMap<String, Arc<classes::EnumInfo>>,
+    /// File-level locals test files read with `import internal` (spec
+    /// Tooling §16.1.3.1): the module registers them as module
+    /// `<id>#internal`.
+    pub exposed: std::collections::BTreeSet<String>,
 }
 
 #[derive(Debug, Default)]
@@ -221,6 +227,7 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
         .collect();
 
     // Exports and imports of every module.
+    let mut internal_requests: Vec<(usize, Vec<String>)> = Vec::new();
     for (i, f) in files.iter().enumerate() {
         if f.kind != FileKind::Wowlua {
             continue;
@@ -248,6 +255,15 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
                         continue;
                     }
                     let resolved = resolve(&import.from, &f.src_rel, &exact, &folded, files);
+                    // Module internals are for test files (spec Tooling
+                    // §16.1.3.1).
+                    if import.internal && !is_test_file(&f.src_rel) {
+                        analysis.diagnostics.push(
+                            Diagnostic::error("E8119", "`import internal` is only for test files")
+                                .with_label(s.span, "here")
+                                .with_help("export what other files use"),
+                        );
+                    }
                     // The test framework is for test files (spec Tooling
                     // §16.1.1).
                     if matches!(&import.from.value[..], b"wowlua:test" | b"wowlua:mock")
@@ -279,10 +295,20 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
                             {
                                 analysis.edges.push((dep, i));
                             }
+                            if import.internal
+                                && let (Target::Module(m), ImportClause::Names(specs)) =
+                                    (&target, &import.clause)
+                            {
+                                internal_requests.push((
+                                    *m,
+                                    specs.iter().map(|sp| sp.name.text.to_string()).collect(),
+                                ));
+                            }
                             info.imports.push(Import {
                                 start: s.span.start,
                                 target,
                                 type_only: import.type_only,
+                                internal: import.internal,
                             });
                         }
                         Err(d) => analysis
@@ -342,6 +368,12 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
             }
         }
         analysis.modules[i] = Some(info);
+    }
+    // What `import internal` reads of each module.
+    for (m, names) in internal_requests {
+        if let Some(info) = analysis.modules[m].as_mut() {
+            info.exposed.extend(names);
+        }
     }
 
     // Exported constants, across modules (repeated until nothing changes).
@@ -939,6 +971,7 @@ fn check_names(
         return;
     };
     let available: Option<Vec<String>> = match target {
+        Target::Module(i) if import.internal => files[*i].parse.map(file_locals),
         Target::Module(i) => files[*i].parse.map(exported_names),
         Target::Lua {
             declared: true,
@@ -971,6 +1004,9 @@ fn check_names(
                 | Target::Lua {
                     declared: false, ..
                 } => "this file has no exports; load it with `import _ from …`".to_string(),
+                _ if import.internal => {
+                    format!("module has no file-level local named `{}`", spec.name.text)
+                }
                 _ => format!("module has no export named `{}`", spec.name.text),
             };
             out.push(
@@ -978,6 +1014,30 @@ fn check_names(
             );
         }
     }
+}
+
+/// A module's file-level names (`import internal`): locals, functions,
+/// constants, classes, enums and types, exported or not.
+fn file_locals(parse: &Parse) -> Vec<String> {
+    let mut out = exported_names(parse);
+    for s in &parse.chunk.block.stmts {
+        match &s.kind {
+            StmtKind::Local { names, .. } => {
+                out.extend(names.iter().map(|n| n.name.text.to_string()))
+            }
+            StmtKind::LocalFunction { name, .. } => out.push(name.text.to_string()),
+            StmtKind::Function { name, .. } if name.path.len() == 1 && name.method.is_none() => {
+                out.push(name.path[0].text.to_string())
+            }
+            StmtKind::Const { name, .. } => out.push(name.text.to_string()),
+            StmtKind::TypeAlias(t) => out.push(t.name.text.to_string()),
+            StmtKind::Interface(t) => out.push(t.name.text.to_string()),
+            StmtKind::Class(c) => out.push(c.name.text.to_string()),
+            StmtKind::Enum(e) => out.push(e.name.text.to_string()),
+            _ => {}
+        }
+    }
+    out
 }
 
 /// The names an `export` statement declares.

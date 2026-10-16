@@ -11,6 +11,10 @@ use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
 use wowlua_syntax::ast::*;
 
+/// The prefix of a file-level local's type among a module's exports
+/// (`import internal`, spec Tooling §16.1.3.1).
+pub const INTERNAL: &str = "\u{1}internal:";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct VarId(pub u32);
 
@@ -510,6 +514,35 @@ impl<'e> Checker<'e> {
         self.top_vararg = Some((Types::STRING, ns_ty));
         self.hoist(&parse.chunk.block);
         self.block_stmts(&parse.chunk.block);
+        // A module's file-level locals, for `import internal` (kept with
+        // the exports, under `INTERNAL` + name).
+        let stmts = if self.is_module {
+            &parse.chunk.block.stmts[..]
+        } else {
+            &[]
+        };
+        for s in stmts {
+            let names: Vec<&str> = match &s.kind {
+                StmtKind::Local { names, .. } => {
+                    names.iter().map(|n| n.name.text.as_ref()).collect()
+                }
+                StmtKind::LocalFunction { name, .. } => vec![name.text.as_ref()],
+                StmtKind::Function { name, .. }
+                    if name.path.len() == 1 && name.method.is_none() =>
+                {
+                    vec![name.path[0].text.as_ref()]
+                }
+                StmtKind::Const { name, .. } => vec![name.text.as_ref()],
+                StmtKind::Class(c) => vec![c.name.text.as_ref()],
+                _ => Vec::new(),
+            };
+            for name in names {
+                if let Some(v) = self.lookup_var(name) {
+                    let t = self.var_type(v);
+                    self.exports.insert(format!("{INTERNAL}{name}").into(), t);
+                }
+            }
+        }
         self.fns.pop();
     }
 
