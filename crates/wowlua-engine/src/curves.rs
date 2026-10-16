@@ -12,6 +12,12 @@ fn create_curve(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![widgets::create(vm, "CurveObject", None, None)])
 }
 
+/// `C_StringUtil.CreateSecondsFormatter()`: a `SecondsFormatter`, its
+/// setters storing and getters reading back (`Format` is not mocked).
+fn create_seconds_formatter(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![widgets::create(vm, "SecondsFormatter", None, None)])
+}
+
 /// A curve's points, kept in its stored values (`points`: x1, y1, x2, …).
 fn points_table(vm: &mut Vm, id: WidgetId) -> TableRef {
     let props = engine(vm).world.widgets[id.0].props;
@@ -117,6 +123,10 @@ fn addon_memory(vm: &mut Vm, _c: NativeCall) -> Ret {
 pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
         ("C_CurveUtil.CreateCurve", create_curve),
+        (
+            "C_StringUtil.CreateSecondsFormatter",
+            create_seconds_formatter,
+        ),
         ("UpdateAddOnMemoryUsage", update_memory),
         ("GetAddOnMemoryUsage", addon_memory),
     ]

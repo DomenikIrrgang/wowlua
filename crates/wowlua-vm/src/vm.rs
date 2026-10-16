@@ -374,9 +374,27 @@ impl Vm {
         self.heap.table_mut(g).set_str(k, v);
     }
 
+    /// A global, raw, but through the globals' table-valued `__index`
+    /// (an environment reading through to another, as WoW's secure one).
     pub fn get_global(&mut self, name: &str) -> Value {
         let k = self.heap.intern(name.as_bytes());
-        self.heap.table(self.globals).get_str(k)
+        let mut t = self.globals;
+        for _ in 0..8 {
+            let v = self.heap.table(t).get_str(k);
+            if !v.is_nil() {
+                return v;
+            }
+            let next = self
+                .heap
+                .table(t)
+                .meta
+                .map(|m| self.heap.table(m).get_str(self.names.index));
+            match next {
+                Some(Value::Table(n)) => t = n,
+                _ => return Value::Nil,
+            }
+        }
+        Value::Nil
     }
 
     pub fn new_table(&mut self) -> TableRef {
@@ -516,6 +534,19 @@ impl Vm {
         match self.stack_entries().get(level) {
             Some(StackEntry::Lua(fi)) => self.heap.func(self.cur.frames[*fi].closure).env(),
             _ => self.globals,
+        }
+    }
+
+    /// Sets the environment of the Lua function `level` calls up from a
+    /// native (1: the native's caller); false if that is no Lua function.
+    pub fn set_caller_env(&mut self, level: usize, env: TableRef) -> bool {
+        match self.stack_entries().get(level) {
+            Some(StackEntry::Lua(fi)) => {
+                let f = self.cur.frames[*fi].closure;
+                self.heap.func_mut(f).set_env(env);
+                true
+            }
+            _ => false,
         }
     }
 

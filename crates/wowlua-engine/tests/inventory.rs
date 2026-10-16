@@ -87,12 +87,11 @@ fn shown(vm: &mut Vm, name: &str) -> String {
 /// How many of the client's number and boolean globals (`/stdtest engine`,
 /// `scalars`) the engine with Blizzard's code has otherwise. It may only go
 /// down.
-const MAX_SCALARS_DIFFERENT: usize = 4;
+const MAX_SCALARS_DIFFERENT: usize = 1;
 
-/// How many of the client's functions the engine still lacks: Blizzard Lua
-/// from files that fail partway (missing enums, constants, game data,
-/// animations). It may only go down.
-const MAX_MISSING: usize = 11;
+/// How many distinct errors Blizzard's code raises once logged in (the
+/// client: none known). It may only go down.
+const MAX_RUNTIME_ERRORS: usize = 23;
 
 #[test]
 fn every_function_of_the_client_exists_with_its_kind() {
@@ -144,6 +143,22 @@ fn every_function_of_the_client_exists_with_its_kind() {
         )
         .expect("writes");
     }
+    // Blizzard's errors once logged in, distinct.
+    let f = vm
+        .load(
+            b"local seen, n = {}, 0 for _, e in ipairs(InventoryErrors) do if not seen[e] then seen[e] = true n = n + 1 end end return n",
+            "=distinct",
+        )
+        .expect("compiles");
+    let runtime = match vm.call(f, &[]).ok().and_then(|r| r.first().copied()) {
+        Some(Value::Num(n)) => n as usize,
+        _ => 0,
+    };
+    eprintln!("{runtime} distinct errors after loading");
+    assert!(
+        runtime <= MAX_RUNTIME_ERRORS,
+        "{runtime} distinct errors after loading (at most {MAX_RUNTIME_ERRORS})"
+    );
     // The number and boolean globals.
     let engine_fixture = std::fs::read_to_string(
         repo().join("crates/wowlua-engine/tests/client/forever-camelot-engine.lua"),
@@ -182,8 +197,8 @@ fn every_function_of_the_client_exists_with_its_kind() {
         scalars.join("\n")
     );
     assert!(
-        missing.len() <= MAX_MISSING && wrong.is_empty(),
-        "of {total}: {} missing (at most {MAX_MISSING}), {} of another kind\nmissing: {}\nwrong kind: {}",
+        missing.is_empty() && wrong.is_empty(),
+        "of {total}: {} missing, {} of another kind\nmissing: {}\nwrong kind: {}",
         missing.len(),
         wrong.len(),
         missing

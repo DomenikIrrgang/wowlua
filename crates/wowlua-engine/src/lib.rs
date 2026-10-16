@@ -47,6 +47,9 @@ pub struct Engine {
     pub defaulted: std::collections::BTreeSet<&'static str>,
     /// Tables Blizzard's code alone sees while it loads.
     pub secure_tables: Vec<SecureTable>,
+    /// The addons' globals (`GetGlobalEnvironment`), whatever environment
+    /// Blizzard's secure code runs in.
+    pub main_globals: wowlua_vm::TableRef,
 }
 
 impl Engine {
@@ -185,6 +188,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         animations: Default::default(),
         defaulted: Default::default(),
         secure_tables,
+        main_globals: vm.globals,
     }));
     // Protected functions the documentation lacks.
     for &name in protection::PROTECTED {
@@ -279,7 +283,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             match ns {
                 None => {
                     if vm.get_global(short).is_nil() {
-                        let native = vm.native_with(short, undocumented, vec![name]);
+                        let native = vm.native_with(short, undocumented_function, vec![name]);
                         vm.set_global(short, native);
                     }
                 }
@@ -287,7 +291,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
                     let t = namespace(vm, ns);
                     let key = vm.heap.intern(short.as_bytes());
                     if vm.heap.table(t).get_str(key).is_nil() {
-                        let native = vm.native_with(short, undocumented, vec![name]);
+                        let native = vm.native_with(short, undocumented_function, vec![name]);
                         vm.heap.table_mut(t).set_str(key, native);
                     }
                 }
@@ -498,7 +502,7 @@ pub fn defaults(vm: &mut Vm, api: &api::Api, doc: &serde_json::Value) -> Vec<Val
 
 /// An undocumented C function without behaviour: nothing for Blizzard's
 /// code, "not mocked" for the addon's.
-fn undocumented(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn undocumented_function(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = match c.upvals.first().copied() {
         Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
         _ => "?".into(),

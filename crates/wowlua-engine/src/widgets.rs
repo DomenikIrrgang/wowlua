@@ -62,6 +62,9 @@ pub struct Widget {
     pub event_order: HashMap<String, u64>,
     /// `IsProtected`'s second result: protected by a secure template.
     pub explicitly_protected: bool,
+    /// Made by Blizzard's secure code (`UseSecureEnvironment`): addon code
+    /// may not use it (WoW Forever's `StoreFrame`).
+    pub forbidden: bool,
     pub points: Vec<Point>,
     pub width: f64,
     pub height: f64,
@@ -312,6 +315,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         protected: false,
         event_order: HashMap::new(),
         explicitly_protected: false,
+        forbidden: false,
         moving: false,
         sizing: false,
         enabled: true,
@@ -324,15 +328,32 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         w.width = 1.0;
         w.height = 1.0;
     }
+    // Secure code's widgets are forbidden; their names are the addons'
+    // globals all the same (`StoreFrame`).
+    let main = engine(vm).main_globals;
+    let forbidden = vm.globals != main;
     let world = &mut engine_mut(vm).world;
+    w.forbidden = forbidden;
     world.widgets.push(w);
     if let Some(p) = parent {
         world.widgets[p.0].children.push(id);
     }
     if let Some(n) = name {
-        vm.set_global(&n, Value::Table(table));
+        let k = vm.heap.intern(n.as_bytes());
+        vm.heap.table_mut(main).set_str(k, Value::Table(table));
     }
     Value::Table(table)
+}
+
+/// Addon code may not use a forbidden widget (unverified wording).
+fn refuse_forbidden(vm: &mut Vm, id: WidgetId, short: &str) -> Result<(), LuaError> {
+    if engine(vm).world.widgets[id.0].forbidden
+        && short != "IsForbidden"
+        && crate::protection::tainted(vm)
+    {
+        return Err(vm.error("Attempt to access forbidden object from code tainted by an AddOn"));
+    }
+    Ok(())
 }
 
 /// `CreateFrame(frameType [, name, parent, template, id])`.
@@ -536,6 +557,7 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
             return Err(vm.api_arg_error(1, &msg));
         }
     };
+    refuse_forbidden(vm, id, f.short)?;
     // The documented arguments first (`/stdtest engine blocked`: a bad
     // argument errors on a blocked frame), but where the client's method takes more
     // than the documentation lists (`SetPoint(point, x, y)`): its
@@ -584,6 +606,7 @@ fn undocumented_method(vm: &mut Vm, c: NativeCall) -> Ret {
         let msg = format!("Wrong object type for function - Usage: self:{short}()");
         return Err(vm.api_arg_error(1, &msg));
     };
+    refuse_forbidden(vm, id, &short)?;
     let behaviour = engine(vm).method_behaviour(&full, &short);
     if let Some(b) = behaviour {
         return b(vm, id, c);
@@ -768,17 +791,35 @@ pub fn has_script(e: &Engine, class: &str, script: &str) -> bool {
 
 /// Runs a widget's script and its hooks, as the client does: each from a
 /// secure execution, an error going to the error handler.
+/// Where an intrinsic type's handler for `script` is kept (`precall` or
+/// `postcall`), among the widget's properties.
+pub fn intrinsic_key(order: &str, script: &str) -> String {
+    format!("intrinsic {order} {script}")
+}
+
 pub fn run_script(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value]) {
-    let (table, scripts, hooks) = {
+    let (table, scripts, hooks, props) = {
         let w = &engine(vm).world.widgets[id.0];
-        (w.table, w.scripts, w.hooks)
+        (w.table, w.scripts, w.hooks, w.props)
     };
     let key = vm.heap.intern(script.as_bytes());
     let mut call = vec![Value::Table(table)];
     call.extend_from_slice(args);
+    let intrinsic = |vm: &mut Vm, order: &str| {
+        let k = vm.str(&intrinsic_key(order, script));
+        vm.heap.table(props).get(k)
+    };
+    let pre = intrinsic(vm, "precall");
+    if !pre.is_nil() {
+        vm.call_from_engine(pre, &call);
+    }
     let f = vm.heap.table(scripts).get_str(key);
     if !f.is_nil() {
         vm.call_from_engine(f, &call);
+    }
+    let post = intrinsic(vm, "postcall");
+    if !post.is_nil() {
+        vm.call_from_engine(post, &call);
     }
     if let Value::Table(list) = vm.heap.table(hooks).get_str(key) {
         let n = vm.heap.table(list).border();
@@ -1593,6 +1634,34 @@ fn has_font(vm: &mut Vm, id: WidgetId) -> bool {
     stored_args(vm, props, "Font").is_some() || stored_args(vm, props, "FontObject").is_some()
 }
 
+/// A button's text font string gets its font from the button's normal
+/// font object, when it has none of its own.
+fn button_font_to_text(vm: &mut Vm, id: WidgetId) {
+    let props = engine(vm).world.widgets[id.0].props;
+    let font = stored_args(vm, props, "NormalFontObject").and_then(|v| v.first().copied());
+    let text = stored_args(vm, props, "FontString").and_then(|v| v.first().copied());
+    if let (Some(font), Some(text)) = (font, text)
+        && let Some(fs) = widget_of(vm, text)
+        && !has_font(vm, fs)
+    {
+        store(vm, fs, "FontObject", &[font]);
+    }
+}
+
+fn set_normal_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+    store(vm, id, "NormalFontObject", &args);
+    button_font_to_text(vm, id);
+    Ok(vec![])
+}
+
+fn set_font_string(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+    store(vm, id, "FontString", &args);
+    button_font_to_text(vm, id);
+    Ok(vec![])
+}
+
 fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     // A font string needs a font first (`/stdtest engine`).
     if engine(vm).world.widgets[id.0].class == "FontString" && !has_font(vm, id) {
@@ -1798,10 +1867,9 @@ fn get_font(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Nil, Value::Num(0.0), flags])
 }
 
-/// Addon code's widgets are never forbidden (Blizzard's protected UI is
-/// not loaded).
-fn is_forbidden(_vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(false)])
+/// Whether Blizzard's secure code made the widget.
+fn is_forbidden(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(engine(vm).world.widgets[id.0].forbidden)])
 }
 
 fn click(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
@@ -2201,6 +2269,8 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("GetCenter", get_center),
         ("GetRect", get_rect),
         ("SetText", set_text),
+        ("SetNormalFontObject", set_normal_font_object),
+        ("SetFontString", set_font_string),
         ("GetText", get_text),
         ("SetFormattedText", set_formatted_text),
         ("SetAttribute", set_attribute),

@@ -7,8 +7,16 @@
 //! the game and for the flavor's game type, read from the client's
 //! suffixed TOC first, not load-on-demand unless a startup addon depends on
 //! it, beta- and PTR-only ones on such clients. Their order is inferred
-//! (unverified): `LoadFirst` ones first, each after the addons it depends
-//! on, otherwise by name.
+//! from what Blizzard's code needs at load (unverified beyond that):
+//! Blizzard_SharedXMLBase and Blizzard_SharedXML, then the `LoadFirst`
+//! ones, then the rest, by name, each after the addons it depends on.
+//!
+//! `UseSecureEnvironment` addons run with globals of their own, reading
+//! through to the addons' (theirs stay out of them: WoW Forever's addons
+//! see none of Blizzard_CommunitiesSecure's); `[LoadIntoEnvironment
+//! global]` files and `SwapToGlobalEnvironment()` write to the addons'.
+//! What Blizzard_EnvironmentCleanup removes from the addons' globals stays
+//! in the secure ones.
 
 pub mod build;
 pub mod xml;
@@ -29,12 +37,21 @@ pub struct Registry {
     pub templates: HashMap<String, Rc<Element>>,
     /// The file each template came from (for errors).
     pub template_files: HashMap<String, String>,
+    /// The globals each template was defined with: its mixins and scripts
+    /// resolve there (a secure addon's template on an addon's frame).
+    pub template_envs: HashMap<String, wowlua_vm::TableRef>,
     /// Intrinsic frame types by lower-case tag: the base class and element.
     pub intrinsics: HashMap<String, (String, Rc<Element>)>,
     /// Errors while loading: files that did not parse, Lua errors.
     pub errors: Vec<String>,
     /// The addons loaded, in order.
     pub loaded: Vec<String>,
+    /// The addons whose bootstrap files ran, lower-case.
+    pub bootstrapped: HashSet<String>,
+    /// The secure addons' globals (`UseSecureEnvironment`), once made.
+    pub secure_env: Option<wowlua_vm::TableRef>,
+    /// An intrinsic type's element is being applied (its scripts stay).
+    pub applying_intrinsic: bool,
     /// Every Blizzard addon of the UI code, by lower-case name: what
     /// `C_AddOns.LoadAddOn` can load later.
     available: HashMap<String, Addon>,
@@ -129,6 +146,9 @@ struct Addon {
     /// Load-on-demand: loaded at startup only as a startup addon's
     /// dependency.
     on_demand: bool,
+    /// `UseSecureEnvironment`: its globals are not the addons' (WoW
+    /// Forever's main environment has none of Blizzard_CommunitiesSecure's).
+    secure: bool,
 }
 
 fn directive<'a>(toc: &'a wowlua_toc::ParsedToc, t: &Target, key: &str) -> Vec<&'a str> {
@@ -222,6 +242,9 @@ fn startup_addons(interface: &Path, t: &Target) -> (Vec<Addon>, HashMap<String, 
             }
         }
         let load_first = directive(&toc, t, "LoadFirst").iter().any(|v| on(v));
+        let secure = directive(&toc, t, "UseSecureEnvironment")
+            .iter()
+            .any(|v| on(v));
         all.insert(
             name.to_ascii_lowercase(),
             Addon {
@@ -231,6 +254,7 @@ fn startup_addons(interface: &Path, t: &Target) -> (Vec<Addon>, HashMap<String, 
                 deps,
                 load_first,
                 on_demand,
+                secure,
             },
         );
     }
@@ -252,6 +276,14 @@ fn startup_addons(interface: &Path, t: &Target) -> (Vec<Addon>, HashMap<String, 
                 visit(&d.to_ascii_lowercase(), all, seen, order);
             }
             order.push(n.to_string());
+        }
+    }
+    // The shared base first: LoadFirst addons need it without naming it
+    // (Blizzard_CatalogShopSharedTemplates calls CreateAtlasMarkup and reads
+    // SecondsFormatterConstants at load, Blizzard_Game EventUtil).
+    for base in ["blizzard_sharedxmlbase", "blizzard_sharedxml"] {
+        if all.contains_key(base) {
+            visit(base, &all, &mut seen, &mut order);
         }
     }
     for first in [true, false] {
@@ -279,10 +311,155 @@ fn bootstrap(path: &str) -> (String, bool) {
     }
 }
 
-/// Loads an addon's files (all but its bootstrap ones, or only those),
-/// then fires `ADDON_LOADED` unless only bootstrapping.
+/// Loads an addon's files (all, but its bootstrap ones only if they have
+/// not run; or only those), then fires `ADDON_LOADED` unless only
+/// bootstrapping. A startup addon's bootstrap files run with the rest
+/// (Blizzard_GuildControlUI's `GuildControlUI_LoadUI`).
 fn load_addon_files(vm: &mut Vm, root: &Path, t: &Target, addon: &Addon, only_bootstrap: bool) {
+    if addon
+        .name
+        .eq_ignore_ascii_case("Blizzard_EnvironmentCleanup")
+    {
+        keep_for_secure_code(vm, &addon.dir);
+    }
+    // A secure addon's code runs with the secure environment as its globals.
+    let main_globals = vm.globals;
+    if addon.secure {
+        vm.globals = secure_env(vm);
+    }
+    load_addon_files_in(vm, root, t, addon, only_bootstrap);
+    vm.globals = main_globals;
+}
+
+/// The globals of Blizzard's secure addons: their own table, reading
+/// through to the main environment (unverified: the client may give them
+/// separate copies of shared code), with the secure-only namespaces their
+/// code calls (`C_UnitAurasPrivate`; functions without behaviour).
+fn secure_env(vm: &mut Vm) -> wowlua_vm::TableRef {
+    if let Some(env) = engine(vm).world.ui.secure_env {
+        return env;
+    }
+    let main = vm.globals;
+    let (env, meta) = (vm.new_table(), vm.new_table());
+    let index = vm.names.index;
+    vm.heap.table_mut(meta).set_str(index, Value::Table(main));
+    vm.heap.table_mut(env).meta = Some(meta);
+    let g = vm.heap.intern(b"_G");
+    vm.heap.table_mut(env).set_str(g, Value::Table(env));
+    // No private auras or anchors: the lists empty.
+    fn empty_list(vm: &mut Vm, _c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+        Ok(vec![Value::Table(vm.new_table())])
+    }
+    let ns = vm.new_table();
+    for f in SECURE_PRIVATE_AURAS {
+        let name = vm.str(&format!("C_UnitAurasPrivate.{f}"));
+        let behaviour: wowlua_vm::NativeFn =
+            if f.starts_with("GetAll") || *f == "GetPrivateAuraAnchors" {
+                empty_list
+            } else {
+                crate::undocumented_function
+            };
+        let native = vm.native_with(f, behaviour, vec![name]);
+        let k = vm.heap.intern(f.as_bytes());
+        vm.heap.table_mut(ns).set_str(k, native);
+    }
+    let k = vm.heap.intern(b"C_UnitAurasPrivate");
+    vm.heap.table_mut(env).set_str(k, Value::Table(ns));
+    crate::widgets::keep(vm, Value::Table(env));
+    engine_mut(vm).world.ui.secure_env = Some(env);
+    env
+}
+
+/// What Blizzard_EnvironmentCleanup removes from the addons' globals
+/// (`X = nil;`, `Enum.X = nil;` in its files) the secure environment keeps:
+/// secure code goes on using `CreateSecureDelegate`, `Enum.StoreError`.
+fn keep_for_secure_code(vm: &mut Vm, dir: &Path) {
+    let env = secure_env(vm);
+    let main = engine(vm).main_globals;
+    let mut files = Vec::new();
+    lua_files_in(dir, &mut files);
+    for file in files {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        for line in text.lines() {
+            let Some(name) = line.trim().strip_suffix("= nil;").map(str::trim) else {
+                continue;
+            };
+            match name.split_once('.') {
+                None => {
+                    let k = vm.heap.intern(name.as_bytes());
+                    let v = vm.heap.table(main).get_str(k);
+                    if !v.is_nil() {
+                        vm.heap.table_mut(env).set_str(k, v);
+                    }
+                }
+                Some(("Enum", field)) => {
+                    let enum_key = vm.heap.intern(b"Enum");
+                    let Value::Table(main_enum) = vm.heap.table(main).get_str(enum_key) else {
+                        continue;
+                    };
+                    // The secure code's own Enum, reading through.
+                    let secure_enum = match vm.heap.table(env).get_str(enum_key) {
+                        Value::Table(t) => t,
+                        _ => {
+                            let (t, meta) = (vm.new_table(), vm.new_table());
+                            let index = vm.names.index;
+                            vm.heap
+                                .table_mut(meta)
+                                .set_str(index, Value::Table(main_enum));
+                            vm.heap.table_mut(t).meta = Some(meta);
+                            vm.heap.table_mut(env).set_str(enum_key, Value::Table(t));
+                            t
+                        }
+                    };
+                    let k = vm.heap.intern(field.as_bytes());
+                    let v = vm.heap.table(main_enum).get_str(k);
+                    if !v.is_nil() {
+                        vm.heap.table_mut(secure_enum).set_str(k, v);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn lua_files_in(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            lua_files_in(&p, out);
+        } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("lua")) {
+            out.push(p);
+        }
+    }
+}
+
+/// What Blizzard's secure code calls of `C_UnitAurasPrivate` (undocumented).
+const SECURE_PRIVATE_AURAS: &[&str] = &[
+    "AddPrivateAuraUpdateCallback",
+    "AnchorPrivateAura",
+    "GetAllPrivateAuraInstanceIDs",
+    "GetAllPrivateAuras",
+    "GetAuraDataByAuraInstanceIDPrivate",
+    "GetPrivateAuraAnchors",
+    "GetPrivateAuraCasterGUID",
+    "IsPrivateAuraFilteredOutByInstanceID",
+    "RemovePrivateAuraUpdateCallback",
+    "SetPrivateAuraAnchorAddedCallback",
+    "SetPrivateAuraAnchorRemovedCallback",
+    "SetPrivateRaidBossMessageCallback",
+    "SetPrivateWarningTextFrame",
+];
+
+fn load_addon_files_in(vm: &mut Vm, root: &Path, t: &Target, addon: &Addon, only_bootstrap: bool) {
     let table = Value::Table(vm.new_table());
+    let key = addon.name.to_ascii_lowercase();
+    let bootstrapped = !engine_mut(vm).world.ui.bootstrapped.insert(key);
     for file in &addon.toc.files {
         if !t.allows(&file.conditions) {
             continue;
@@ -293,11 +470,22 @@ fn load_addon_files(vm: &mut Vm, root: &Path, t: &Target, addon: &Addon, only_bo
                 .conditions
                 .iter()
                 .any(|c| c.name.eq_ignore_ascii_case("Bootstrap"));
-        if is_bootstrap != only_bootstrap {
+        if (only_bootstrap && !is_bootstrap) || (is_bootstrap && bootstrapped) {
             continue;
         }
         let path = resolve(&addon.dir, &t.path(&rel));
+        // `[LoadIntoEnvironment global]`: a secure addon's file for the
+        // addons' globals (Blizzard_AuraContainerInbound.lua).
+        let into_global = file.conditions.iter().any(|c| {
+            c.name.eq_ignore_ascii_case("LoadIntoEnvironment")
+                && c.values.iter().any(|v| v.eq_ignore_ascii_case("global"))
+        });
+        let globals = vm.globals;
+        if into_global {
+            vm.globals = engine(vm).main_globals;
+        }
         load_file(vm, root, &path, &addon.name, table);
+        vm.globals = globals;
     }
     if only_bootstrap {
         return;
@@ -460,11 +648,11 @@ fn process_ui(
                 if (el.flag("virtual") || el.flag("intrinsic"))
                     && let Some(name) = el.attr("name")
                 {
-                    engine_mut(vm)
-                        .world
-                        .ui
-                        .template_files
+                    let globals = vm.globals;
+                    let ui = &mut engine_mut(vm).world.ui;
+                    ui.template_files
                         .insert(name.to_ascii_lowercase(), cx.file.to_string());
+                    ui.template_envs.insert(name.to_ascii_lowercase(), globals);
                 }
                 build::top_level(vm, cx, el);
             }

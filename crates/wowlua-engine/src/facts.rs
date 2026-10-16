@@ -317,9 +317,145 @@ fn color_for_quality(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![build(vm, &Rec::Table(fields))])
 }
 
+/// `GetGlobalEnvironment()`: the addons' globals, from secure code too.
+fn global_environment(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Table(engine(vm).main_globals)])
+}
+
+/// `SwapToGlobalEnvironment()`: the calling code (a secure file) goes on
+/// with the addons' globals (Blizzard_StoreUI's toggle, Blizzard_PingUI).
+fn swap_to_global_environment(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let main = engine(vm).main_globals;
+    vm.set_caller_env(1, main);
+    Ok(vec![])
+}
+
+/// Inventory slot names and their IDs (the client's `INVSLOT_*`,
+/// `/stdtest engine`).
+const INVENTORY_SLOTS: &[(&str, f64)] = &[
+    ("AMMOSLOT", 0.0),
+    ("HEADSLOT", 1.0),
+    ("NECKSLOT", 2.0),
+    ("SHOULDERSLOT", 3.0),
+    ("SHIRTSLOT", 4.0),
+    ("CHESTSLOT", 5.0),
+    ("WAISTSLOT", 6.0),
+    ("LEGSSLOT", 7.0),
+    ("FEETSLOT", 8.0),
+    ("WRISTSLOT", 9.0),
+    ("HANDSSLOT", 10.0),
+    ("FINGER0SLOT", 11.0),
+    ("FINGER1SLOT", 12.0),
+    ("TRINKET0SLOT", 13.0),
+    ("TRINKET1SLOT", 14.0),
+    ("BACKSLOT", 15.0),
+    ("MAINHANDSLOT", 16.0),
+    ("SECONDARYHANDSLOT", 17.0),
+    ("RANGEDSLOT", 18.0),
+    ("TABARDSLOT", 19.0),
+];
+
+/// `GetInventorySlotInfo(slotName)`: the slot's ID, its empty texture
+/// (unknown: 0), whether it checks relics (false); nothing for another
+/// name (unverified).
+fn inventory_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = match c.arg(1) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).to_uppercase(),
+        _ => return Ok(vec![]),
+    };
+    Ok(INVENTORY_SLOTS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, id)| vec![Value::Num(*id), Value::Num(0.0), Value::Bool(false)])
+        .unwrap_or_default())
+}
+
+/// The client's transmog slot locations (`C_TransmogOutfitInfo.
+/// GetAllSlotLocationInfo`, recorded): each `{slot, slotName, isSecondary,
+/// …}`.
+fn slot_locations() -> Vec<&'static Vec<(String, Rec)>> {
+    match recorded()
+        .get("C_TransmogOutfitInfo.GetAllSlotLocationInfo")
+        .and_then(|r| r.first())
+    {
+        Some(Rec::Table(list)) => list
+            .iter()
+            .filter_map(|(_, v)| match v {
+                Rec::Table(fields) => Some(fields),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn rec_field<'a>(fields: &'a [(String, Rec)], key: &str) -> Option<&'a Rec> {
+    fields.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+}
+
+/// `C_TransmogOutfitInfo.GetTransmogOutfitSlotFromInventorySlot(slot)`
+/// (0-based inventory slot): the primary transmog slot of that inventory
+/// slot's name, else nothing. The client checks no argument (`/stdtest
+/// argcheck`: a number for `'x'`, `{}`): a non-number counts as 0.
+fn outfit_slot_from_inventory_slot(vm: &mut Vm, c: NativeCall) -> Ret {
+    let inv = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => n.trunc(),
+        _ => 0.0,
+    } + 1.0;
+    let Some((name, _)) = INVENTORY_SLOTS.iter().find(|(_, id)| *id == inv) else {
+        return Ok(vec![]);
+    };
+    for loc in slot_locations() {
+        let named = matches!(rec_field(loc, "slotName"), Some(Rec::Str(s)) if s == name);
+        let primary = matches!(rec_field(loc, "isSecondary"), Some(Rec::Bool(false)));
+        if named
+            && primary
+            && let Some(Rec::Num(slot)) = rec_field(loc, "slot")
+        {
+            return Ok(vec![Value::Num(*slot)]);
+        }
+    }
+    Ok(vec![])
+}
+
+/// `C_TransmogOutfitInfo.GetLinkedSlotInfo(slot)`: a slot with a secondary
+/// of the same name (shoulders): `{primarySlotInfo, secondarySlotInfo}`,
+/// else nothing.
+fn linked_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let slot = vm.check_int(&c, 1)? as f64;
+    let locs = slot_locations();
+    let Some(primary) = locs
+        .iter()
+        .find(|l| matches!(rec_field(l, "slot"), Some(Rec::Num(n)) if *n == slot))
+    else {
+        return Ok(vec![]);
+    };
+    let name = rec_field(primary, "slotName").cloned();
+    let Some(secondary) = locs.iter().find(|l| {
+        rec_field(l, "slotName").cloned() == name
+            && matches!(rec_field(l, "isSecondary"), Some(Rec::Bool(true)))
+    }) else {
+        return Ok(vec![]);
+    };
+    let info = Rec::Table(vec![
+        ("primarySlotInfo".into(), Rec::Table((*primary).clone())),
+        ("secondarySlotInfo".into(), Rec::Table((*secondary).clone())),
+    ]);
+    Ok(vec![build(vm, &info)])
+}
+
 /// The functions with behaviour here.
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
+        (
+            "C_TransmogOutfitInfo.GetTransmogOutfitSlotFromInventorySlot",
+            outfit_slot_from_inventory_slot,
+        ),
+        ("C_TransmogOutfitInfo.GetLinkedSlotInfo", linked_slot_info),
+        ("C_PaperDollInfo.GetInventorySlotInfo", inventory_slot_info),
+        ("GetInventorySlotInfo", inventory_slot_info),
+        ("GetGlobalEnvironment", global_environment),
+        ("SwapToGlobalEnvironment", swap_to_global_environment),
         ("C_ColorOverrides.GetColorForQuality", color_for_quality),
         (
             "C_Container.CalculateTotalNumberOfFreeBagSlots",

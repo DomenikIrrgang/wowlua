@@ -245,8 +245,11 @@ pub fn check_from(
         let v = c.arg(at);
         let present = c.has(at) && !vm.hidden(v).is_nil();
         if !present {
+            // A repeated (stride) argument may come no times: Blizzard's
+            // `ChannelFrameMixin = CreateFromMixins()` works in the client.
             let optional = arg.get("Nilable").and_then(Json::as_bool).unwrap_or(false)
-                || arg.get("Default").is_some();
+                || arg.get("Default").is_some()
+                || arg.get("StrideIndex").is_some();
             if optional {
                 continue;
             }

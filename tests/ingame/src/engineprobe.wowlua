@@ -751,6 +751,35 @@ local function qualityColors(): { [string]: string }
     return out
 end
 
+--- `GetInventorySlotInfo` for each slot name (Blizzard's TransmogShared
+--- calls it at load).
+local function slotInfo(): { [string]: string }
+    const out: { [string]: string } = {}
+    for _, name in ipairs({
+        "AMMOSLOT", "HEADSLOT", "NECKSLOT", "SHOULDERSLOT", "SHIRTSLOT", "CHESTSLOT", "WAISTSLOT",
+        "LEGSSLOT", "FEETSLOT", "WRISTSLOT", "HANDSSLOT", "FINGER0SLOT", "FINGER1SLOT",
+        "TRINKET0SLOT", "TRINKET1SLOT", "BACKSLOT", "MAINHANDSLOT", "SECONDARYHANDSLOT",
+        "RANGEDSLOT", "TABARDSLOT", "BAG0SLOT", "NOSUCHSLOT",
+    }) do
+        out[name] = results(G.GetInventorySlotInfo, name)
+    end
+    return out
+end
+
+--- A frame Blizzard's secure code made (`StoreFrame`), from addon code:
+--- whether it is forbidden, and the error a method gives.
+local function forbidden(): { [string]: string }
+    const f: any = G.StoreFrame
+    if type(f) ~= "table" then
+        return { absent = "StoreFrame" }
+    end
+    return {
+        IsForbidden = results(function() return f:IsForbidden() end),
+        GetObjectType = results(function() return f:GetObjectType() end),
+        IsShown = results(function() return f:IsShown() end),
+    }
+end
+
 --- Every global number and boolean (`LE_*`: the client's own; others
 --- Blizzard's code set).
 local function scalars(): { [string]: string }
@@ -1153,6 +1182,8 @@ export function engineProbe(arg: string?)
         hidden = hidden(),
         allCVars = allCVars(),
         qualityColors = qualityColors(),
+        slotInfo = slotInfo(),
+        forbidden = forbidden(),
         blizzardAtStart = table.concat(LOADED_AT_START, " "),
         blizzardNow = table.concat(blizzardLoaded(), " "),
         units = units(),

@@ -58,11 +58,6 @@ fn current_environment(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(vm.caller_env(1))])
 }
 
-/// `GetGlobalEnvironment()`: the global table.
-fn global_environment(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Table(vm.globals)])
-}
-
 /// `Get<Class>Metatable()`: the metatable widgets of the class share.
 fn class_metatable(class: &'static str) -> impl Fn(&mut Vm, NativeCall) -> Ret {
     move |vm: &mut Vm, _c: NativeCall| Ok(vec![Value::Table(widgets::class_meta(vm, class))])
@@ -429,8 +424,6 @@ fn callstack_height(vm: &mut Vm, _c: NativeCall) -> Ret {
 pub fn functions() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("GetCurrentEnvironment", current_environment),
-        ("GetGlobalEnvironment", global_environment),
-        ("SwapToGlobalEnvironment", nothing),
         ("GetFrameMetatable", frame_metatable),
         ("GetButtonMetatable", button_metatable),
         ("GetTextureMetatable", texture_metatable),

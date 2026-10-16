@@ -232,7 +232,7 @@ pub fn build(
         .get(&el.tag.to_ascii_lowercase())
         .map(|(_, e)| e.clone());
     if let Some(i) = intrinsic {
-        apply(vm, cx, frame, id, &i);
+        apply_as_intrinsic(vm, cx, frame, id, &i);
     }
     apply(vm, cx, frame, id, el);
     widgets::run_script(vm, id, "OnLoad", &[]);
@@ -263,7 +263,18 @@ pub fn apply_template(vm: &mut Vm, frame: Value, name: &str) -> bool {
     let cx = Context {
         file: file.as_deref().unwrap_or("?"),
     };
+    let env = engine(vm)
+        .world
+        .ui
+        .template_envs
+        .get(&name.to_ascii_lowercase())
+        .copied();
+    let globals = vm.globals;
+    if let Some(env) = env {
+        vm.globals = env;
+    }
     apply(vm, &cx, frame, id, &t);
+    vm.globals = globals;
     true
 }
 
@@ -273,7 +284,14 @@ pub fn apply_intrinsic(vm: &mut Vm, frame: Value, el: &Rc<Element>) {
         return;
     };
     let cx = Context { file: "?" };
-    apply(vm, &cx, frame, id, el);
+    apply_as_intrinsic(vm, &cx, frame, id, el);
+}
+
+/// An intrinsic type's element: its scripts stay, whatever the widget sets.
+fn apply_as_intrinsic(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Element>) {
+    let was = std::mem::replace(&mut engine_mut(vm).world.ui.applying_intrinsic, true);
+    apply(vm, cx, frame, id, el);
+    engine_mut(vm).world.ui.applying_intrinsic = was;
 }
 
 /// Calls `frame:method(args…)`, if the widget has the method; an error is
@@ -681,10 +699,21 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
     } else {
         return;
     };
-    let order = s
-        .attr("inherit")
-        .or_else(|| s.attr("intrinsicOrder"))
-        .map(str::to_ascii_lowercase);
+    // An intrinsic type's own handlers stay, whatever the widget sets
+    // (`ScrollingMessageFrame`'s `OnPreLoad`, before the frame's OnLoad).
+    // Without an order, before (`DropdownButton`'s `OnLoad_Intrinsic`;
+    // unverified).
+    let in_intrinsic = engine(vm).world.ui.applying_intrinsic;
+    if let Some(order) = s
+        .attr("intrinsicOrder")
+        .or(in_intrinsic.then_some("precall"))
+    {
+        let props = engine(vm).world.widgets[id.0].props;
+        let key = vm.str(&widgets::intrinsic_key(&order.to_ascii_lowercase(), name));
+        let _ = vm.heap.table_mut(props).set(key, handler);
+        return;
+    }
+    let order = s.attr("inherit").map(str::to_ascii_lowercase);
     let scripts = engine(vm).world.widgets[id.0].scripts;
     let key = vm.heap.intern(name.as_bytes());
     let existing = vm.heap.table(scripts).get_str(key);
@@ -714,6 +743,15 @@ fn chain(vm: &mut Vm, a: Value, b: Value) -> Value {
 pub fn run_lua(vm: &mut Vm, path: &Path, chunk: &str, addon: &str, addon_table: Value) {
     let src = match std::fs::read(path) {
         Ok(s) => s,
+        // A TOC's file that is not there: skipped, as the client skips it
+        // (it only logs; unverified wording).
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            engine_mut(vm)
+                .world
+                .warnings
+                .push(format!("{chunk}: no such file"));
+            return;
+        }
         Err(e) => {
             engine_mut(vm).world.ui.errors.push(format!("{chunk}: {e}"));
             return;
