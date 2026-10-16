@@ -313,12 +313,17 @@ pub type EvalMemo = rustc_hash::FxHashMap<(wowlua_span::FileId, u32), Option<(Co
 /// have id 0 and are not), so asking again about a subtree of what was
 /// asked about takes constant time: `a and b and c` asks about `a and b`,
 /// then about `a`.
+///
+/// Lowering asks within its own recursion, about every operand of a chain,
+/// and only the first question goes deep: each level takes stack as it goes
+/// (as lowering does), where a `deep::run` would make a stack the size of
+/// the whole chain for every question.
 pub fn eval_tracked(
     e: &wowlua_syntax::ast::Expr,
     leaf: &dyn Fn(&wowlua_syntax::ast::Expr) -> Option<Const>,
     memo: &mut EvalMemo,
 ) -> Option<(Const, bool)> {
-    wowlua_syntax::deep::run(|| eval_tracked_rec(e, leaf, memo))
+    eval_tracked_rec(e, leaf, memo)
 }
 
 fn eval_tracked_rec(
@@ -332,7 +337,7 @@ fn eval_tracked_rec(
     {
         return found.clone();
     }
-    let found = eval_tracked_inner(e, leaf, memo);
+    let found = stacker::maybe_grow(64 * 1024, 1024 * 1024, || eval_tracked_inner(e, leaf, memo));
     if let Some(key) = key {
         memo.insert(key, found.clone());
     }
@@ -416,6 +421,37 @@ fn eval_with_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// After a deep chain was parsed, a question about a small expression
+    /// stays on the stack it was asked on: lowering asks about every
+    /// operand of a chain, and a stack the size of the chain for each
+    /// question took time in the square of its length.
+    #[test]
+    fn eval_tracked_does_not_grow_a_stack_for_the_whole_chain() {
+        let mut db = wowlua_span::SourceDb::new();
+        let deep = format!("local b = {}\n", vec!["true"; 5_000].join(" and "));
+        let file = db.add("deep.lua", deep.clone());
+        let _deep = wowlua_syntax::parse(deep.as_bytes(), file);
+        let chain = wowlua_syntax::deep::links();
+        assert!(chain >= wowlua_syntax::deep::DEEP, "{chain}");
+
+        let file = db.add("small.lua", "local x = y\n");
+        let parse = wowlua_syntax::parse(b"local x = y\n", file);
+        let mut name = None;
+        wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
+            if matches!(e.kind, wowlua_syntax::ast::ExprKind::Name(_)) {
+                name = name.or(Some(e));
+            }
+        });
+        let before = stacker::remaining_stack().unwrap();
+        let at_leaf = std::cell::Cell::new(0);
+        let leaf = |_: &wowlua_syntax::ast::Expr| {
+            at_leaf.set(stacker::remaining_stack().unwrap());
+            None
+        };
+        eval_tracked(name.unwrap(), &leaf, &mut EvalMemo::default());
+        assert!(at_leaf.get() <= before, "{} > {before}", at_leaf.get());
+    }
 
     #[test]
     fn formats_like_lua() {
