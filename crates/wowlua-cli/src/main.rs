@@ -86,6 +86,9 @@ pub struct TestArgs {
     /// Where report files go (default: `<build.out>/test`)
     #[arg(long)]
     pub output: Option<PathBuf>,
+    /// Run again whenever a file of the package changes
+    #[arg(long)]
+    pub watch: bool,
 }
 
 #[derive(Args, Debug, Clone)]

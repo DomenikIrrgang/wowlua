@@ -518,8 +518,75 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
 }
 
 /// `wowlua test` (spec Tooling §16.1): each addon's test files, once per
-/// flavor, in the emulated client; reports and coverage (§16.1.5, §16.1.6).
+/// flavor, in the emulated client; reports and coverage (§16.1.5, §16.1.6);
+/// with `--watch`, again after every change.
 pub fn test(out: &Output, global: &GlobalArgs, args: &crate::TestArgs) -> bool {
+    let (ok, watched) = test_once(out, global, args);
+    if !args.watch {
+        return ok;
+    }
+    let Some((root, out_dir)) = watched else {
+        return ok;
+    };
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut debouncer = match new_debouncer(Duration::from_millis(300), tx) {
+        Ok(d) => d,
+        Err(error) => {
+            let mut session = Session::new();
+            session.push(Diagnostic::plain_error(format!(
+                "cannot watch files: {error}"
+            )));
+            out.flush(&mut session);
+            return false;
+        }
+    };
+    if let Err(error) = debouncer.watcher().watch(&root, RecursiveMode::Recursive) {
+        let mut session = Session::new();
+        session.push(Diagnostic::plain_error(format!(
+            "cannot watch `{}`: {error}",
+            root.display()
+        )));
+        out.flush(&mut session);
+        return false;
+    }
+    let shown = relative(&root);
+    out.status(
+        "Watching",
+        format!(
+            "{} for changes (Ctrl+C to stop)",
+            if shown.is_empty() { "." } else { &shown }
+        ),
+    );
+    let relevant = |result: &Result<Vec<DebouncedEvent>, _>| {
+        result.as_ref().is_ok_and(|events| {
+            events.iter().any(|event| {
+                let path = &event.path;
+                !path.starts_with(&out_dir)
+                    && !path.components().any(|c| c.as_os_str() == ".git")
+                    && !path.to_string_lossy().contains(".wowlua-tmp")
+            })
+        })
+    };
+    while let Ok(result) = rx.recv() {
+        let mut changed = relevant(&result);
+        // Changes during the last run: one run for all.
+        while let Ok(result) = rx.try_recv() {
+            changed |= relevant(&result);
+        }
+        if changed {
+            test_once(out, global, args);
+        }
+    }
+    true
+}
+
+/// One `wowlua test` run: whether it passed, and the package root and
+/// output folder to watch.
+fn test_once(
+    out: &Output,
+    global: &GlobalArgs,
+    args: &crate::TestArgs,
+) -> (bool, Option<(PathBuf, PathBuf)>) {
     use termcolor::Color;
     let started = Instant::now();
     let filter = args.filter.as_deref();
@@ -527,8 +594,11 @@ pub fn test(out: &Output, global: &GlobalArgs, args: &crate::TestArgs) -> bool {
     let Some(projects) = wowlua_driver::load_projects(&mut session, &load_options(out, global))
     else {
         out.flush(&mut session);
-        return false;
+        return (false, None);
     };
+    let watched = projects
+        .first()
+        .map(|p| (p.root().to_path_buf(), p.manifest.out_dir()));
     let wanted: Vec<String> = args
         .flavor
         .iter()
@@ -804,7 +874,7 @@ pub fn test(out: &Output, global: &GlobalArgs, args: &crate::TestArgs) -> bool {
             (None, false, &format!(": tests failed: {summary}\n")),
         ]);
     }
-    ok
+    (ok, watched)
 }
 
 /// One test file's results, as the `pretty` reporter shows them.
