@@ -91,8 +91,8 @@ struct Group {
 
 struct Linter<'a> {
     text: &'a [u8],
-    /// The identifiers that occur in `text` (maximal runs of word bytes),
-    /// found the first time a rename asks.
+    /// The identifiers starting with `_` that occur in `text` (maximal runs
+    /// of word bytes), found the first time a rename asks.
     words: std::cell::OnceCell<rustc_hash::FxHashSet<&'a [u8]>>,
     bindings: Vec<Binding>,
     groups: Vec<Group>,
@@ -221,12 +221,13 @@ impl Linter<'_> {
         let word = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
         let n = name.as_bytes();
         // An occurrence bounded by non-word bytes is a maximal run of word
-        // bytes when the name is made of word bytes only.
-        if !n.is_empty() && n.iter().all(|&c| word(c)) {
+        // bytes when the name is made of word bytes only (renames are to
+        // `_name`).
+        if n.first() == Some(&b'_') && n.iter().all(|&c| word(c)) {
             let words = self.words.get_or_init(|| {
                 self.text
                     .split(|&c| !word(c))
-                    .filter(|w| !w.is_empty())
+                    .filter(|w| w.first() == Some(&b'_'))
                     .collect()
             });
             return !words.contains(n);
