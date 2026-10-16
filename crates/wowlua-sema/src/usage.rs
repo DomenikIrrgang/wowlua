@@ -64,7 +64,7 @@ impl Key {
 /// A key and fields below it (`MyAddon.Util.round` = Global(MyAddon), [Util, round]).
 pub type Path = (Key, Vec<String>);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Access {
     pub key: Key,
     pub span: Span,
@@ -74,7 +74,7 @@ pub struct Access {
     pub guarded: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CallTarget {
     Local(usize),
     Path(Path),
@@ -87,7 +87,7 @@ pub enum CallTarget {
     Unknown,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Call {
     pub target: CallTarget,
     pub span: Span,
@@ -98,7 +98,7 @@ pub struct Call {
     pub deferred: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Function {
     pub name: String,
     pub calls: Vec<Call>,
@@ -106,7 +106,7 @@ pub struct Function {
     pub called_params: HashSet<usize>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct FileUsage {
     /// Index 0 is the file's top level.
     pub functions: Vec<Function>,

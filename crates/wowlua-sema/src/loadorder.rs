@@ -84,16 +84,28 @@ pub fn analyze(
     };
     let is_active = |i: usize| active.get(i).copied().unwrap_or(true);
     let ordered = |i: usize| listed.get(i).copied().flatten().is_some();
-    let usages: Vec<Option<FileUsage>> = files
+    let usages: Vec<Option<std::sync::Arc<FileUsage>>> = files
         .iter()
         .enumerate()
         .map(|(i, f)| match (f.kind, f.parse) {
+            // A usage the caller has: the same as this flavor's (a usage
+            // reads only the table's deferred-call markers).
+            (FileKind::Wowlua | FileKind::Lua, parse) if is_active(i) && f.usage.is_some() => {
+                debug_assert!(
+                    parse.is_none_or(
+                        |p| *f.usage.as_deref().expect("usage") == file_usage(p, markers)
+                    ),
+                    "{} has another usage than it had",
+                    f.src_rel
+                );
+                f.usage.clone()
+            }
             (FileKind::Wowlua | FileKind::Lua, Some(p)) if is_active(i) => {
-                Some(file_usage(p, markers))
+                Some(std::sync::Arc::new(file_usage(p, markers)))
             }
             (FileKind::Xml, _) if is_active(i) => f
                 .xml
-                .map(|(text, file)| xml_file_usage(text, file, markers)),
+                .map(|(text, file)| std::sync::Arc::new(xml_file_usage(text, file, markers))),
             _ => None,
         })
         .collect();

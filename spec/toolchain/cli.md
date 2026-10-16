@@ -138,7 +138,9 @@ available.
 while a build runs cause one more build, not one each. It ignores the
 manifest's output folder (`build.out`), which its own builds write. Between
 builds it keeps every compiled file in memory and compiles again only what
-changed ([Compiler §13.9](compiler.md#139-caching-and-incremental-builds)):
+changed, and does not parse unchanged plain Lua files again unless
+`check.lua` type-checks them
+([Compiler §13.9](compiler.md#139-caching-and-incremental-builds)):
 each rebuild writes the same files and reports the same diagnostics as a fresh
 `wowlua build`.
 
