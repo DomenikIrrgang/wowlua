@@ -246,6 +246,10 @@ struct Walker<'a> {
 
 /// The usage summary of one file.
 pub fn file_usage(parse: &Parse, markers: &Markers) -> FileUsage {
+    wowlua_syntax::deep::run(|| file_usage_inner(parse, markers))
+}
+
+fn file_usage_inner(parse: &Parse, markers: &Markers) -> FileUsage {
     let mut w = Walker::new(markers);
     // Top-level classes and enums are hoisted locals.
     for s in &parse.chunk.block.stmts {

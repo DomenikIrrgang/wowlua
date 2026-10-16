@@ -479,7 +479,13 @@ pub struct InstallTarget {
 
 fn main() -> ExitCode {
     std::panic::set_hook(Box::new(|info| {
-        eprintln!("error: internal compiler error: {info}");
+        match info
+            .payload()
+            .downcast_ref::<wowlua_driver::LuaOutOfMemory>()
+        {
+            Some(oom) => eprintln!("error: internal compiler error: {oom}"),
+            None => eprintln!("error: internal compiler error: {info}"),
+        }
         eprintln!("note: please report this at https://github.com/DomenikIrrgang/wowlua/issues");
         std::process::exit(101);
     }));

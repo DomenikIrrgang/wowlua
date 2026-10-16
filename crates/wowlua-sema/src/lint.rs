@@ -10,6 +10,10 @@ use wowlua_syntax::ast::*;
 
 /// The lints of one file. `text` is the file's source.
 pub fn lint(parse: &Parse, text: &[u8]) -> Vec<Diagnostic> {
+    wowlua_syntax::deep::run(|| lint_inner(parse, text))
+}
+
+fn lint_inner(parse: &Parse, text: &[u8]) -> Vec<Diagnostic> {
     let mut l = Linter {
         text,
         words: std::cell::OnceCell::new(),

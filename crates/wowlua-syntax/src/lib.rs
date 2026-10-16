@@ -7,6 +7,7 @@
 //! build checks on its output.
 
 pub mod ast;
+pub mod deep;
 pub mod features;
 pub mod lexer;
 pub mod literal;
@@ -27,6 +28,16 @@ pub struct Parse {
     pub chunk: ast::Chunk,
     pub lexed: Lexed,
     pub diagnostics: Vec<Diagnostic>,
+}
+
+/// A deep chain (`deep`) drops with enough stack.
+impl Drop for Parse {
+    fn drop(&mut self) {
+        if deep::links() >= deep::DEEP {
+            let stmts = std::mem::take(&mut self.chunk.block.stmts);
+            deep::run(move || drop(stmts));
+        }
+    }
 }
 
 impl Parse {

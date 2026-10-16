@@ -915,6 +915,33 @@ print(build.debug and debugOnly() or "release")
     assert!(out.ends_with("release"), "{out}");
 }
 
+/// Long operator chains are valid Lua 5.1 (its parser builds them in a
+/// loop, and so does wowlua's), however deep the tree they make: every pass
+/// walks, clones and drops them without a stack overflow, and `and`/`or`
+/// chains lower in linear time.
+#[test]
+fn deep_operator_chains_compile() {
+    let dir = tempfile::tempdir().unwrap();
+    let terms = 50_000;
+    let sum = vec!["1"; terms].join(" + ");
+    let test = vec!["true"; terms].join(" and ") + " or " + &vec!["false"; terms].join(" or ");
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "deep", "version": "1.0.0" } }
+"#,
+            ),
+            ("src/sum.lua", &format!("local x = {sum}\nprint(x)\n")),
+            ("src/test.lua", &format!("local b = {test}\nprint(b)\n")),
+        ],
+    );
+    for args in [&["check"][..], &["build"], &["build", "--release"]] {
+        wowlua(dir.path()).args(args).assert().success();
+    }
+}
+
 /// With `check.lua`, a later flavor takes a plain Lua file's type check
 /// from an earlier one where what the file read of the declarations is the
 /// same (debug builds, and so this test, check every reused file again and

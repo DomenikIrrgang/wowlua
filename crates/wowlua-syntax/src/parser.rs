@@ -1130,11 +1130,13 @@ impl<'a> Parser<'a> {
         } else {
             self.simple_expr()?
         };
+        let mut links = 0;
         while let Some(op) = binary_op(self.kind()) {
             let (left, right) = op.priority();
             if left <= limit {
                 break;
             }
+            links += 1;
             let op_token = self.advance();
             let rhs = self.subexpr(right)?;
             self.check_coalesce_mix(op, &lhs, &rhs, &op_token);
@@ -1148,6 +1150,7 @@ impl<'a> Parser<'a> {
                 },
             };
         }
+        crate::deep::note(links);
         Ok(lhs)
     }
 
@@ -1307,7 +1310,9 @@ impl<'a> Parser<'a> {
     fn suffixed_expr(&mut self) -> PResult<Expr> {
         let start = self.tok(0).start;
         let mut e = self.primary_expr()?;
+        let mut links = 0;
         loop {
+            links += 1;
             let kind = match self.kind() {
                 T::Dot => {
                     self.advance();
@@ -1381,7 +1386,10 @@ impl<'a> Parser<'a> {
                         args: Box::new(args),
                     }
                 }
-                _ => return Ok(e),
+                _ => {
+                    crate::deep::note(links);
+                    return Ok(e);
+                }
             };
             e = Expr {
                 id: self.id(),

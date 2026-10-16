@@ -68,7 +68,7 @@ impl Feature {
 /// Every use of wowlua-only syntax in `chunk`, in source order.
 pub fn features(chunk: &Chunk) -> Vec<(Feature, Span)> {
     let mut out = Vec::new();
-    block(&chunk.block, &mut out);
+    crate::deep::run(|| block(&chunk.block, &mut out));
     out.sort_by_key(|(_, span)| span.start);
     out
 }

@@ -214,7 +214,13 @@ fn same_import(a: &ImportContext, b: &ImportContext) -> bool {
 }
 
 /// Lowers a parsed file without errors, as a script (no package context).
+/// IR made from a deep chain is deep too (`wowlua_luair::deep`).
+fn mark_deep() {
+    wowlua_luair::deep::note(wowlua_syntax::deep::links());
+}
+
 pub fn lower(parse: &Parse, src: &[u8]) -> Result<ir::Chunk, Vec<Diagnostic>> {
+    mark_deep();
     lower_with(parse, src, &Context::default())
 }
 
@@ -226,7 +232,9 @@ pub fn lower_with(parse: &Parse, src: &[u8], ctx: &Context) -> Result<ir::Chunk,
 /// Lowers a parsed file without errors, with what the build needs to know
 /// about it.
 pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered, Vec<Diagnostic>> {
+    mark_deep();
     let mut lowerer = Lowerer {
+        static_memo: Default::default(),
         parse,
         src,
         ctx,
@@ -552,6 +560,8 @@ struct LoopInfo {
 }
 
 struct Lowerer<'a> {
+    /// `static_condition`'s answers within the statement being lowered.
+    static_memo: std::cell::RefCell<constant::EvalMemo>,
     parse: &'a Parse,
     src: &'a [u8],
     ctx: &'a Context,
@@ -838,6 +848,8 @@ impl<'a> Lowerer<'a> {
     }
 
     fn stmt(&mut self, s: &Stmt) -> Vec<ir::Stmt> {
+        // What a name reads can change between statements (`const`).
+        self.static_memo.get_mut().clear();
         if !s.decorators.is_empty() && !self.kept_by_if(s) {
             return Vec::new();
         }
@@ -2522,13 +2534,10 @@ impl<'a> Lowerer<'a> {
     /// must read a `wowlua:meta` value or a `const` (decision T71), so plain
     /// Lua such as `if true then` is emitted as written.
     fn static_condition(&self, e: &Expr) -> Option<Const> {
-        let found = std::cell::Cell::new(false);
-        let value = constant::eval_with(e, &|leaf| {
-            let v = self.leaf_value(leaf, true);
-            found.set(found.get() || v.is_some());
-            v
-        })?;
-        found.get().then_some(value)
+        let mut memo = self.static_memo.borrow_mut();
+        let (value, found) =
+            constant::eval_tracked(e, &|leaf| self.leaf_value(leaf, true), &mut memo)?;
+        found.then_some(value)
     }
 
     /// A static condition (spec §6.4.1); `consts` allows folded constants
