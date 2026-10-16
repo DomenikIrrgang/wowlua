@@ -307,9 +307,59 @@ export type Expect<T> = {
     toHaveBeenCalledTimes: (n: number) -> (),
     --- A spy called with these arguments (compared deeply) at least once.
     toHaveBeenCalledWith: (...any) -> (),
+    --- A widget that is shown (`IsShown`), or visible: shown with every
+    --- parent (`IsVisible`) (decision T217).
+    toBeShown: () -> (),
+    toBeVisible: () -> (),
+    --- A font string's, edit box's or button's text, or that of a frame's
+    --- only font string.
+    toHaveText: (text: string) -> (),
+    --- A widget's size (within 0.01).
+    toHaveSize: (width: number, height: number) -> (),
+    --- A widget with a point on `other` (and these points, when given).
+    toBeAnchoredTo: (other: any, point: string?, relativePoint: string?) -> (),
+    --- A tooltip's lines: each the left text, or `{ left, right }`.
+    toHaveLines: (lines: any[]) -> (),
     --- The negated matchers: `expect(x).never.toBe(y)`.
     never: Expect<T>,
 }
+
+-- Custom matchers (decision T220), by name.
+local custom: { [string]: Fn } = {}
+
+local function widgetText(w: any): any
+    if type(w.GetText) == "function" then
+        return w:GetText()
+    end
+    if type(w.GetRegions) == "function" then
+        local found: any = nil
+        for _, r in ipairs({ w:GetRegions() }) do
+            if r.GetObjectType and r:GetObjectType() == "FontString" then
+                if found then
+                    return nil
+                end
+                found = r
+            end
+        end
+        return found and found:GetText()
+    end
+    return nil
+end
+
+local function tooltipLines(tip: any): { left: string?, right: string? }[]
+    local lines: { left: string?, right: string? }[] = {}
+    local name = tip.GetName and tip:GetName()
+    if not name or not tip.NumLines then
+        return lines
+    end
+    for i = 1, tip:NumLines() do
+        local left = _G[`{name}TextLeft{i}`]
+        local right = _G[`{name}TextRight{i}`]
+        local r = right and right:IsShown() and right:GetText() or nil
+        lines[i] = { left = left and left:GetText(), right = r }
+    end
+    return lines
+end
 
 -- The matchers on a value: `negated` flips each check.
 local function matchers(value: any, negated: boolean): any
@@ -391,6 +441,59 @@ local function matchers(value: any, negated: boolean): any
         local list = calls()
         check(#list == n, `expected {n} calls, got {#list}`, `expected a number of calls other than {n}`)
     end
+    function m.toBeShown()
+        check(value:IsShown() == true, `expected {show(value)} to be shown`, `expected {show(value)} to be hidden`)
+    end
+    function m.toBeVisible()
+        check(value:IsVisible() == true, `expected {show(value)} to be visible`, `expected {show(value)} not to be visible`)
+    end
+    function m.toHaveText(text: string)
+        local got = widgetText(value)
+        check(got == text, `expected the text {show(text)}, got {show(got)}`, `expected a text other than {show(text)}`)
+    end
+    function m.toHaveSize(width: number, height: number)
+        local w, h = value:GetSize()
+        local pass = math.abs(w - width) < 0.01 and math.abs(h - height) < 0.01
+        check(pass, `expected the size {width} x {height}, got {w} x {h}`, `expected a size other than {width} x {height}`)
+    end
+    function m.toBeAnchoredTo(other: any, point: string?, relativePoint: string?)
+        local found = false
+        local points: string[] = {}
+        for i = 1, value:GetNumPoints() do
+            local p, rel, rp = value:GetPoint(i)
+            points[#points + 1] = `{p} on {show(rel)} {rp}`
+            if rel == other and (point == nil or p == point) and (relativePoint == nil or rp == relativePoint) then
+                found = true
+            end
+        end
+        local which = (point or "a point") .. (relativePoint and ` to {relativePoint}` or "")
+        local got = #points > 0 and table.concat(points, ", ") or "no points"
+        check(found, `expected {which} on {show(other)}; it has {got}`, `expected no {which} on {show(other)}`)
+    end
+    function m.toHaveLines(lines: any[])
+        local got = tooltipLines(value)
+        local pass = #got == #lines
+        for i, want in ipairs(lines) do
+            local line = got[i]
+            if type(want) == "table" then
+                pass = pass and line ~= nil and line.left == want[1] and line.right == want[2]
+            else
+                pass = pass and line ~= nil and line.left == want
+            end
+        end
+        local shown: string[] = {}
+        for i, line in ipairs(got) do
+            shown[i] = line.right and `{show(line.left)} | {show(line.right)}` or show(line.left)
+        end
+        local text = #shown > 0 and table.concat(shown, "; ") or "none"
+        check(pass, `expected the lines {show(lines)}; got {text}`, "expected other lines")
+    end
+    for name, fn in pairs(custom) do
+        m[name] = function(...: any)
+            local pass, message, opposite = fn(value, ...)
+            check(pass == true, message ?? `expected {show(value)} to pass {name}`, opposite ?? `expected {show(value)} not to pass {name}`)
+        end
+    end
     function m.toHaveBeenCalledWith(...: any)
         local list = calls()
         local args = { n = select("#", ...), ... }
@@ -409,6 +512,18 @@ local function matchers(value: any, negated: boolean): any
         check(found, `expected a call with {showArgs(args)}; {got}`, `expected no call with {showArgs(args)}`)
     end
     return m
+end
+
+--- Defines a matcher (decision T220): `fn(actual, ...)` returns whether
+--- it passed, the message, and the negated one; `expect(x).name(...)` runs
+--- it, checked against `fn`'s signature. Export it under the same name:
+--- `export const toBeEven = matcher("toBeEven", function(n: number) … end)`.
+export function matcher<F>(name: string, fn: F): F
+    if (matchers(nil, false) :: any)[name] ~= nil then
+        error(`matcher: {name} is a matcher of wowlua:test`, 2)
+    end
+    custom[name] = fn :: any
+    return fn
 end
 
 --- Expectations on `value`.

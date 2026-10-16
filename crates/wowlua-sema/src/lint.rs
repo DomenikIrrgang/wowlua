@@ -876,7 +876,25 @@ impl Linter<'_> {
                 self.expr(obj);
                 self.expr(key);
             }
-            ExprKind::Field { obj, .. } | ExprKind::OptField { obj, .. } => self.expr(obj),
+            ExprKind::Field { obj, name } | ExprKind::OptField { obj, name } => {
+                // `expect(x).name(…)` runs the custom matcher `name`
+                // (wowlua:test, decision T220).
+                let mut target = obj.as_ref();
+                if let ExprKind::Field {
+                    obj: inner,
+                    name: n,
+                } = &target.kind
+                    && n.text.as_ref() == "never"
+                {
+                    target = inner.as_ref();
+                }
+                if let ExprKind::Call { callee, .. } = &target.kind
+                    && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "expect")
+                {
+                    self.use_name(&name.text);
+                }
+                self.expr(obj)
+            }
             ExprKind::Call { callee, args } | ExprKind::OptCall { callee, args } => {
                 self.expr(callee);
                 self.args(args);

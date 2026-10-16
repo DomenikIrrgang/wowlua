@@ -416,6 +416,11 @@ local function frames()
     b:SetText("Hi")
     expect(b:GetText()).toBe("Hi")
     expect(mock.printed()).toContain("loaded 1")
+    GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+    GameTooltip:AddLine("Hello")
+    GameTooltip:AddDoubleLine("Left", "Right")
+    GameTooltip:Show()
+    expect(GameTooltip).toHaveLines({ "Hello", { "Left", "Right" } })
 end
 "#,
             ),
@@ -561,4 +566,98 @@ end
     let (ok, out) = test(dir.path(), &[]);
     assert!(ok, "{out}");
     assert!(out.contains("2 passed, 0 failed"), "{out}");
+}
+
+/// Widget matchers (decision T217) and custom matchers (T220), typed.
+#[test]
+fn widget_and_custom_matchers() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            (
+                "tests/matchers.wowlua",
+                r#"import matcher from "wowlua:test"
+
+export const toBeEven = matcher("toBeEven", function(n: number, by: number?): (boolean, string)
+    return n % (by ?? 2) == 0, `expected {n} to be even`
+end)
+"#,
+            ),
+            (
+                "tests/ui.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import toBeEven from "./matchers"
+
+@test("frames")
+local function frames()
+    local parent = CreateFrame("Frame", nil, UIParent)
+    parent:SetSize(200, 100)
+    parent:SetPoint("CENTER")
+    local child = CreateFrame("Frame", nil, parent)
+    child:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, -4)
+    local label = parent:CreateFontString(nil, "OVERLAY")
+    label:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+    label:SetText("Hello")
+    expect(parent).toBeShown()
+    expect(parent).toBeVisible()
+    expect(parent).toHaveSize(200, 100)
+    expect(parent).toHaveText("Hello")
+    expect(label).toHaveText("Hello")
+    expect(child).toBeAnchoredTo(parent, "TOPLEFT")
+    expect(child).never.toBeAnchoredTo(UIParent)
+    parent:Hide()
+    expect(child).toBeShown()
+    expect(child).never.toBeVisible()
+end
+
+@test("custom")
+local function customMatcher()
+    expect(4).toBeEven()
+    expect(9).toBeEven(3)
+    expect(3).never.toBeEven()
+end
+
+@test("a custom failure")
+local function customFailure()
+    expect(3).toBeEven()
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("2 passed, 1 failed"), "{out}");
+    assert!(out.contains("expected 3 to be even"), "{out}");
+    // Typed: the value against the matcher's first parameter, the
+    // arguments against the rest.
+    fs::write(
+        dir.path().join("tests/ui.test.wowlua"),
+        r#"import test, expect from "wowlua:test"
+import toBeEven from "./matchers"
+
+@test
+local function typed()
+    expect("x").toBeEven()
+    expect(4).toBeEven("two")
+    expect(4).toBeShown()
+end
+"#,
+    )
+    .unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(
+        out.contains("`toBeEven` takes `number`; the value is `\"x\"`"),
+        "{out}"
+    );
+    assert!(
+        out.contains("`\"two\"` is not assignable to `number?`"),
+        "{out}"
+    );
+    assert!(
+        out.contains("`toBeShown` needs a widget; the value is `4`"),
+        "{out}"
+    );
+    assert!(!out.contains("unused import"), "{out}");
 }

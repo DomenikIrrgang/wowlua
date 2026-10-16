@@ -10,6 +10,34 @@ use super::types::*;
 use wowlua_span::Span;
 use wowlua_syntax::ast::*;
 
+/// `wowlua:test`'s own matchers (and `never`): other names on an
+/// `expect(…)` are custom matchers.
+const BUILTIN_MATCHERS: &[&str] = &[
+    "toBe",
+    "toEqual",
+    "toBeNil",
+    "toBeTruthy",
+    "toBeFalsy",
+    "toBeInstanceOf",
+    "toContain",
+    "toHaveLength",
+    "toBeCloseTo",
+    "toThrow",
+    "toHaveBeenCalled",
+    "toHaveBeenCalledTimes",
+    "toHaveBeenCalledWith",
+    "toBeShown",
+    "toBeVisible",
+    "toHaveText",
+    "toHaveSize",
+    "toBeAnchoredTo",
+    "toHaveLines",
+    "toMatchSnapshot",
+    "toBeBlocked",
+    "toBeSecure",
+    "never",
+];
+
 /// What an expression gives: one value (without a heap allocation), or a
 /// pack (calls, `...`).
 pub(crate) enum Values {
@@ -203,6 +231,9 @@ impl Checker<'_> {
                 let (o, chained) = self.chain_obj(obj);
                 let opt = matches!(e.kind, ExprKind::OptField { .. });
                 let o = if opt { self.env.types.non_nil(o) } else { o };
+                if let Some(t) = self.custom_matcher(obj, o, name) {
+                    return single(t);
+                }
                 // A member the type lacks, in an existence test (`nil`) or
                 // in the region such a test guards (`any`).
                 let missing = (probed || guarded)
@@ -1784,6 +1815,61 @@ impl Checker<'_> {
         subst::apply_func(&mut self.env.types, f, &s)
     }
 
+    /// `expect(x).name` for a custom matcher of `wowlua:test` (decision
+    /// T220): a function `name` in scope taking the value first (made with
+    /// `matcher("name", fn)`); the value is checked against its first
+    /// parameter (E8121) and the call takes the rest.
+    fn custom_matcher(&mut self, obj: &Expr, o: TypeId, name: &Name) -> Option<TypeId> {
+        let mut target = obj;
+        if let ExprKind::Field {
+            obj: inner,
+            name: n,
+        } = &target.kind
+            && n.text.as_ref() == "never"
+        {
+            target = inner.as_ref();
+        }
+        let ExprKind::Call {
+            callee: expect,
+            args: expect_args,
+        } = &target.kind
+        else {
+            return None;
+        };
+        if self.intrinsic_of(expect).as_deref() != Some("test.expect")
+            || BUILTIN_MATCHERS.contains(&name.text.as_ref())
+        {
+            return None;
+        }
+        let _ = o;
+        let v = self.lookup_var(&name.text)?;
+        let Ty::Func(f) = self.env.types.get(self.var_type(v)).clone() else {
+            return None;
+        };
+        let first = f.params.first()?;
+        if let Some(subject) = expect_args.exprs().first()
+            && let Some(&t) = self.expr_types.get(&(subject.span.start, subject.span.end))
+            && !self.env.assignable(t, first.ty, self.mode)
+        {
+            let msg = format!(
+                "`{}` takes `{}`; the value is `{}`",
+                name.text,
+                self.env.display(first.ty),
+                self.env.display(t)
+            );
+            self.report("E8121", name.span, msg);
+        }
+        let call = Func {
+            type_params: Vec::new(),
+            params: f.params[1..].to_vec(),
+            rest: f.rest.clone(),
+            ret: Pack::empty(),
+            predicate: None,
+            unannotated: false,
+        };
+        Some(self.env.types.func(call))
+    }
+
     /// `expect(x).matcher(…)` of `wowlua:test` (decision T214): matchers
     /// that need a kind of value check `x`'s type (E8121), and
     /// `toHaveBeenCalledWith` takes the spied function's parameters.
@@ -1835,6 +1921,11 @@ impl Checker<'_> {
             "toThrow" | "toHaveBeenCalled" | "toHaveBeenCalledTimes" | "toHaveBeenCalledWith" => (
                 |ty| matches!(ty, Ty::Function | Ty::Func(_) | Ty::Intersection(_)),
                 "a function",
+            ),
+            "toBeShown" | "toBeVisible" | "toHaveText" | "toHaveSize" | "toBeAnchoredTo"
+            | "toHaveLines" => (
+                |ty| matches!(ty, Ty::Table | Ty::Record(_) | Ty::Named(..) | Ty::Map(..)),
+                "a widget",
             ),
             _ => return None,
         };

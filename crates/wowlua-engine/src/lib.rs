@@ -17,6 +17,7 @@ pub mod facts;
 pub mod framescript;
 pub mod gamedata;
 pub mod protection;
+pub mod tooltip;
 pub mod ui;
 pub mod units;
 pub mod widgetdata;
@@ -192,6 +193,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(curves::methods())
             .chain(framescript::methods())
             .chain(animations::methods())
+            .chain(tooltip::methods())
             .collect(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),

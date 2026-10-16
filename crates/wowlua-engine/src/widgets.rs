@@ -1694,7 +1694,7 @@ fn get_center(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 // --------------------------------------------------------------- text
 
 /// Whether a widget has a font: its own or a font object's.
-fn has_font(vm: &mut Vm, id: WidgetId) -> bool {
+pub(crate) fn has_font(vm: &mut Vm, id: WidgetId) -> bool {
     let props = engine(vm).world.widgets[id.0].props;
     stored_args(vm, props, "Font").is_some() || stored_args(vm, props, "FontObject").is_some()
 }
@@ -2286,7 +2286,7 @@ pub fn functions() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
 pub type MethodFn = fn(&mut Vm, WidgetId, NativeCall) -> Ret;
 
 /// Stores `args` as setter `stem`'s on a widget's properties.
-fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
+pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
     let props = engine(vm).world.widgets[id.0].props;
     let list = vm.new_table();
     for (k, v) in args.iter().enumerate() {
