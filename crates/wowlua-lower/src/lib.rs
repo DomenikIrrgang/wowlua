@@ -1055,9 +1055,9 @@ impl<'a> Lowerer<'a> {
                 vec![stmt(
                     K::NumericFor {
                         var: l.ident(&var.name),
-                        start: start_ir,
-                        limit: limit_ir,
-                        step,
+                        start: Box::new(start_ir),
+                        limit: Box::new(limit_ir),
+                        step: step.map(Box::new),
                         do_pos,
                         body: body_ir,
                     },
@@ -2085,7 +2085,7 @@ impl<'a> Lowerer<'a> {
                 let (obj, args) = self.call_parts(obj, args);
                 K::Method {
                     obj: Box::new(obj),
-                    name: self.ident(name),
+                    name: Box::new(self.ident(name)),
                     args,
                 }
             }
@@ -2184,7 +2184,7 @@ impl<'a> Lowerer<'a> {
             let mut lowered_field = match f {
                 TableField::Keyed { span, .. } => ir::Field::Keyed {
                     open: self.span_pos(*span),
-                    key: lowered.next().expect("key"),
+                    key: Box::new(lowered.next().expect("key")),
                     value: lowered.next().expect("value"),
                 },
                 TableField::Named { name, .. } => ir::Field::Named {
@@ -2500,7 +2500,7 @@ impl<'a> Lowerer<'a> {
             },
             LinkKind::Method(name, args) => ir::ExprKind::Method {
                 obj: Box::new(obj),
-                name: self.ident(name),
+                name: Box::new(self.ident(name)),
                 args: self.args_only(args),
             },
         };

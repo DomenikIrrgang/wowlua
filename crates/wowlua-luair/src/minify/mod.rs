@@ -161,8 +161,10 @@ pub fn rename_members(
     }
     impl Visitor for Members<'_> {
         fn expr(&mut self, e: &mut Expr) {
-            if let ExprKind::Field { name, .. } | ExprKind::Method { name, .. } = &mut e.kind {
-                self.member(name);
+            match &mut e.kind {
+                ExprKind::Field { name, .. } => self.member(name),
+                ExprKind::Method { name, .. } => self.member(name),
+                _ => {}
             }
         }
         fn stmt(&mut self, s: &mut Stmt) {
