@@ -10,6 +10,8 @@
 //! - `cargo xtask types fetch|gen [dir]`: the embedded wow-api declarations.
 //! - `cargo xtask packager-diff <release dir> <wowlua project>`: the M6
 //!   exit check against the BigWigs packager (every AddOn folder).
+//! - `cargo xtask parse-stats <dir>`: what the syntax trees of every Lua
+//!   file below a directory hold, and the heap they take (#19).
 
 use anyhow::{Context, Result, bail};
 use std::fs;
@@ -19,8 +21,13 @@ mod corpus;
 mod fixture;
 mod lua51;
 mod packager_diff;
+mod parse_stats;
 mod runtime;
 mod types;
+
+// Counts live heap bytes for `parse-stats`; forwards to the system allocator.
+#[global_allocator]
+static ALLOC: parse_stats::Counting = parse_stats::Counting;
 
 fn main() -> Result<()> {
     let task = std::env::args().nth(1).unwrap_or_default();
@@ -64,6 +71,12 @@ fn main() -> Result<()> {
                 check_current(path, lua, "runtime")?;
             }
             Ok(())
+        }
+        "parse-stats" => {
+            let Some(dir) = std::env::args().nth(2) else {
+                bail!("usage: cargo xtask parse-stats <dir>");
+            };
+            parse_stats::run(Path::new(&dir))
         }
         "corpus" => {
             let dir = std::env::args()
