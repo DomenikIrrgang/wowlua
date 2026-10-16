@@ -73,10 +73,26 @@ fn kind(vm: &mut Vm, name: &str) -> String {
     }
 }
 
+/// A global as the probe shows it: `number 5`, `boolean true`.
+fn shown(vm: &mut Vm, name: &str) -> String {
+    let v = vm.get_global(name);
+    match v {
+        Value::Nil => "absent".into(),
+        Value::Num(n) => format!("number {}", wowlua_vm::number::fmt_num(n)),
+        Value::Bool(b) => format!("boolean {b}"),
+        other => other.type_name().into(),
+    }
+}
+
+/// How many of the client's number and boolean globals (`/stdtest engine`,
+/// `scalars`) the engine with Blizzard's code has otherwise. It may only go
+/// down.
+const MAX_SCALARS_DIFFERENT: usize = 11;
+
 /// How many of the client's functions the engine still lacks: Blizzard Lua
 /// from files that fail partway (missing enums, constants, game data,
 /// animations). It may only go down.
-const MAX_MISSING: usize = 95;
+const MAX_MISSING: usize = 85;
 
 #[test]
 fn every_function_of_the_client_exists_with_its_kind() {
@@ -128,7 +144,43 @@ fn every_function_of_the_client_exists_with_its_kind() {
         )
         .expect("writes");
     }
-    eprintln!("{} of {total} missing", missing.len());
+    // The number and boolean globals.
+    let engine_fixture = std::fs::read_to_string(
+        repo().join("crates/wowlua-engine/tests/client/forever-camelot-engine.lua"),
+    )
+    .expect("the engine fixture");
+    let mut scalars = Vec::new();
+    let mut scalar_total = 0;
+    for line in engine_fixture.lines() {
+        let Some(rest) = line.trim().strip_prefix("[\"probe.scalars.") else {
+            continue;
+        };
+        let Some((name, expected)) = rest.split_once("\"] = \"") else {
+            continue;
+        };
+        let expected = expected.trim_end_matches("\",");
+        scalar_total += 1;
+        let ours = shown(&mut vm, name);
+        if ours != expected {
+            scalars.push(format!("{name}: client {expected}, ours {ours}"));
+        }
+    }
+    eprintln!(
+        "{} of {total} missing; {} of {scalar_total} globals differ",
+        missing.len(),
+        scalars.len()
+    );
+    if let Ok(path) = std::env::var("WOWLUA_INVENTORY_REPORT") {
+        let mut report = std::fs::read_to_string(&path).unwrap_or_default();
+        report.push_str(&format!("\nglobals:\n{}\n", scalars.join("\n")));
+        std::fs::write(path, report).expect("writes");
+    }
+    assert!(
+        scalars.len() <= MAX_SCALARS_DIFFERENT,
+        "of {scalar_total} globals, {} differ (at most {MAX_SCALARS_DIFFERENT}):\n{}",
+        scalars.len(),
+        scalars.join("\n")
+    );
     assert!(
         missing.len() <= MAX_MISSING && wrong.is_empty(),
         "of {total}: {} missing (at most {MAX_MISSING}), {} of another kind\nmissing: {}\nwrong kind: {}",

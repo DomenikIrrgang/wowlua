@@ -2015,8 +2015,10 @@ fn create_font(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// The frame system's API functions with behaviour.
-/// `EnumerateFrames([frame])`: the first frame, or the one made after
-/// `frame` (creation order; regions, fonts and animations are no frames).
+/// `EnumerateFrames([frame])`: the first frame, or the one after `frame`
+/// (regions, fonts and animations are no frames). Creation order here; the
+/// client's is another (`/stdtest engine`: UIParent 212th of 3,331 named
+/// frames, newer addons' frames first), its rule unknown.
 fn enumerate_frames(vm: &mut Vm, c: NativeCall) -> Ret {
     let start = match c.arg(1) {
         Value::Nil => 0,

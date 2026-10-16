@@ -286,9 +286,40 @@ fn fonts(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
+/// Each item quality's color (`/stdtest engine`, `qualityColors`): red,
+/// green, blue, alpha.
+const QUALITY_COLORS: [[f64; 4]; 9] = [
+    [0.61568629741669, 0.61568629741669, 0.61568629741669, 1.0],
+    [1.0, 1.0, 1.0, 1.0],
+    [0.11764706671238, 1.0, 0.0, 1.0],
+    [0.0, 0.43921571969986, 0.8666667342186, 1.0],
+    [0.63921570777893, 0.20784315466881, 0.93333339691162, 1.0],
+    [1.0, 0.50196081399918, 0.0, 1.0],
+    [0.90196084976196, 0.80000007152557, 0.50196081399918, 1.0],
+    [0.0, 0.80000007152557, 1.0, 1.0],
+    [0.0, 0.80000007152557, 1.0, 1.0],
+];
+
+/// `C_ColorOverrides.GetColorForQuality(quality)`: a `ColorMixin` color
+/// (camelot's; an unknown quality gives nothing, unverified).
+fn color_for_quality(vm: &mut Vm, c: NativeCall) -> Ret {
+    let q = vm.check_int(&c, 1)?;
+    let Some(rgba) = usize::try_from(q).ok().and_then(|q| QUALITY_COLORS.get(q)) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let fields: Vec<(String, Rec)> = ["a", "b", "g", "r"]
+        .iter()
+        .zip([rgba[3], rgba[2], rgba[1], rgba[0]])
+        .map(|(k, v)| (k.to_string(), Rec::Num(v)))
+        .chain(std::iter::once(("GetRGB".to_string(), Rec::Func)))
+        .collect();
+    Ok(vec![build(vm, &Rec::Table(fields))])
+}
+
 /// The functions with behaviour here.
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
+        ("C_ColorOverrides.GetColorForQuality", color_for_quality),
         (
             "C_Container.CalculateTotalNumberOfFreeBagSlots",
             free_bag_slots,

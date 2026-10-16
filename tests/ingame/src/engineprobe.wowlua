@@ -764,23 +764,6 @@ local function scalars(): { [string]: string }
     return out
 end
 
---- The named frames in `EnumerateFrames`' order (creation order: the
---- order Blizzard's addons loaded in), and how many frames there are.
-local function frameOrder(): { [string]: string }
-    const names: string[] = {}
-    local count = 0
-    local f: any = EnumerateFrames()
-    while f do
-        count = count + 1
-        local ok, name = pcall(f.GetName, f)
-        if ok and type(name) == "string" and not issecretvalue(name) then
-            names[#names + 1] = name
-        end
-        f = EnumerateFrames(f)
-    end
-    return { count = tostring(count), names = table.concat(names, " ") }
-end
-
 --- Each CVar's default (`C_CVar.GetCVarDefault`; not the player's value).
 local function cvarDefaults(): { [string]: string }
     const out: { [string]: string } = {}
@@ -886,7 +869,6 @@ export function engineProbe(arg: string?)
         loadCalls = loadCalls(),
         constants = tables(G.Constants),
         scalars = scalars(),
-        frameOrder = frameOrder(),
         hidden = hidden(),
         qualityColors = qualityColors(),
         blizzardAtStart = table.concat(LOADED_AT_START, " "),

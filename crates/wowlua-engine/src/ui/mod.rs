@@ -584,6 +584,10 @@ pub fn load(vm: &mut Vm, interface: &Path, global_strings: Option<&Path>) -> Rep
     if let Some(path) = global_strings {
         load_global_strings(vm, path);
     }
+    // What only Blizzard's code sees; its EnvironmentCleanup.lua removes it.
+    for s in engine(vm).secure_tables.clone() {
+        vm.heap.table_mut(s.root).set_str(s.name, s.table);
+    }
     let (startup, all) = startup_addons(interface, &t);
     {
         let ui = &mut engine_mut(vm).world.ui;

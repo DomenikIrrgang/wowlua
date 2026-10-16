@@ -170,6 +170,20 @@ fn fixture() -> BTreeMap<String, String> {
         .collect()
 }
 
+/// The number globals the client defines itself (the engine's data).
+fn client_globals() -> &'static std::collections::HashSet<String> {
+    static NAMES: std::sync::OnceLock<std::collections::HashSet<String>> =
+        std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        fs::read_to_string(repo().join("crates/wowlua-engine/data/camelot-globals.txt"))
+            .expect("the globals")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| l.split('\t').next().map(str::to_string))
+            .collect()
+    })
+}
+
 /// Results that depend on the character, the moment, the session or
 /// Blizzard's UI code (not loaded here): not compared.
 fn compared(key: &str) -> bool {
@@ -209,6 +223,11 @@ fn compared(key: &str) -> bool {
         "probe.loadCalls.GetXPExhaustion",
         "probe.loadCalls.IsGuildLeader",
     ];
+    // Of the globals, the client's own (`LE_*`); Blizzard's code sets the
+    // rest.
+    if let Some(name) = key.strip_prefix("probe.scalars.") {
+        return client_globals().contains(name);
+    }
     !SKIP.iter().any(|s| key.starts_with(s))
         && !key.ends_with(".GetDebugName")
         && !key.ends_with(".GetEffectiveScale")
@@ -254,9 +273,12 @@ fn the_engine_answers_the_probe_battery_as_the_client_did() {
             )),
         }
     }
-    // `Enum` and `Constants` were recorded whole: nothing more either.
+    // `Enum`, `Constants` and the number globals were recorded whole:
+    // nothing more either.
     for key in ours.keys().filter(|k| {
-        (k.starts_with("probe.enums.") || k.starts_with("probe.constants."))
+        ["probe.enums.", "probe.constants.", "probe.scalars."]
+            .iter()
+            .any(|p| k.starts_with(p))
             && !theirs.contains_key(*k)
     }) {
         differences.push(format!(

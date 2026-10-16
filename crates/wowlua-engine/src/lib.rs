@@ -45,6 +45,8 @@ pub struct Engine {
     /// Functions without behaviour that secure code called (they returned
     /// their documented types' empty values), by name.
     pub defaulted: std::collections::BTreeSet<&'static str>,
+    /// Tables Blizzard's code alone sees while it loads.
+    pub secure_tables: Vec<SecureTable>,
 }
 
 impl Engine {
@@ -138,9 +140,22 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         let k = vm.heap.intern(name.as_bytes());
         vm.heap.table_mut(constants).set_str(k, Value::Table(t));
     }
+    // The number globals the client defines (`LE_*`).
     if flavor == "camelot" {
-        recorded_tables(vm, include_str!("../data/camelot-enums.txt"));
+        for line in include_str!("../data/camelot-globals.txt").lines() {
+            if let Some((name, n)) = line.split_once('\t')
+                && let Ok(n) = n.parse::<f64>()
+                && vm.get_global(name).is_nil()
+            {
+                vm.set_global(name, Value::Num(n));
+            }
+        }
     }
+    let secure_tables = if flavor == "camelot" {
+        recorded_tables(vm, include_str!("../data/camelot-enums.txt"))
+    } else {
+        Vec::new()
+    };
     vm.host = Some(Box::new(Engine {
         flavor: flavor.to_string(),
         api,
@@ -169,6 +184,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         refusals: Vec::new(),
         animations: Default::default(),
         defaulted: Default::default(),
+        secure_tables,
     }));
     // Protected functions the documentation lacks.
     for &name in protection::PROTECTED {
@@ -319,13 +335,13 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The global table `name`, made if missing.
 /// `Enum` and `Constants` as the client has them where its documentation
 /// differs (`data/<flavor>-enums.txt`, from `/stdtest engine`): a line
 /// `Enum.X.Field<TAB>number 5` sets a field, `…<TAB>-` removes a field or a
-/// whole table, `…<TAB>hidden` keeps a table off `pairs`, reachable
-/// through the root's `__index`.
-fn recorded_tables(vm: &mut Vm, data: &str) {
+/// whole table, `…<TAB>secure` takes a table out for Blizzard's code
+/// alone (returned: put back while it loads, `ui::load`).
+fn recorded_tables(vm: &mut Vm, data: &str) -> Vec<SecureTable> {
+    let mut secure = Vec::new();
     for line in data.lines().filter(|l| !l.starts_with('#')) {
         let Some((name, value)) = line.split_once('\t') else {
             continue;
@@ -337,12 +353,20 @@ fn recorded_tables(vm: &mut Vm, data: &str) {
         let root = namespace(vm, root);
         let tkey = vm.heap.intern(table.as_bytes());
         let Some(field) = parts.next() else {
-            if value == "hidden" {
-                let hidden = hidden_tables(vm, root);
-                let t = vm.heap.table(root).get_str(tkey);
-                vm.heap.table_mut(hidden).set_str(tkey, t);
+            if value == "secure" {
+                let table = match vm.heap.table(root).get_str(tkey) {
+                    t @ Value::Table(_) => t,
+                    _ => stand_in_enum(vm),
+                };
+                widgets::keep(vm, table);
+                widgets::keep(vm, Value::Str(tkey));
+                secure.push(SecureTable {
+                    root,
+                    name: tkey,
+                    table,
+                });
             }
-            if value == "-" || value == "hidden" {
+            if value == "-" || value == "secure" {
                 vm.heap.table_mut(root).set_str(tkey, Value::Nil);
             }
             continue;
@@ -365,22 +389,37 @@ fn recorded_tables(vm: &mut Vm, data: &str) {
         let fkey = vm.heap.intern(field.as_bytes());
         vm.heap.table_mut(t).set_str(fkey, v);
     }
+    secure
 }
 
-/// The tables `root` keeps off `pairs`: its metatable's `__index`.
-fn hidden_tables(vm: &mut Vm, root: wowlua_vm::TableRef) -> wowlua_vm::TableRef {
-    if let Some(meta) = vm.heap.table(root).meta
-        && let Value::Table(t) = vm.heap.table(meta).get_str(vm.names.index)
-    {
-        return t;
+/// A table only Blizzard's code sees while it loads (`Enum.StoreError`).
+#[derive(Clone, Copy)]
+pub struct SecureTable {
+    pub root: wowlua_vm::TableRef,
+    pub name: wowlua_vm::StrRef,
+    pub table: Value,
+}
+
+/// An enumeration whose values are unknown: each field read gets the next
+/// number (0, 1, …) and keeps it.
+fn stand_in_enum(vm: &mut Vm) -> Value {
+    fn next_value(vm: &mut Vm, c: NativeCall) -> Ret {
+        let Value::Table(t) = c.arg(1) else {
+            return Ok(vec![Value::Nil]);
+        };
+        let n = vm.heap.table(t).entries().count() as f64;
+        let _ = vm.heap.table_mut(t).set(c.arg(2), Value::Num(n));
+        Ok(vec![Value::Num(n)])
     }
-    let (meta, hidden) = (vm.new_table(), vm.new_table());
-    let index = vm.names.index;
-    vm.heap.table_mut(meta).set_str(index, Value::Table(hidden));
-    vm.heap.table_mut(root).meta = Some(meta);
-    hidden
+    let (t, meta) = (vm.new_table(), vm.new_table());
+    let index = vm.native("__index", next_value);
+    let k = vm.names.index;
+    vm.heap.table_mut(meta).set_str(k, index);
+    vm.heap.table_mut(t).meta = Some(meta);
+    Value::Table(t)
 }
 
+/// The global table `name`, made if missing.
 fn namespace(vm: &mut Vm, name: &str) -> wowlua_vm::TableRef {
     if let Value::Table(t) = vm.get_global(name) {
         return t;

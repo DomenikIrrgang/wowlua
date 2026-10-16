@@ -2,40 +2,52 @@
 # the documentation (`/stdtest engine`, fixture
 # tests/client/forever-camelot-engine.lua): `name<TAB>value` sets a field
 # (`number 57`, `string x`, `boolean true`), `name<TAB>-` removes a field
-# or a whole table, `name<TAB>hidden` keeps a table `pairs` does not list
-# (the client's Blizzard code reads `Enum.VasTransactionPurchaseResult` and
-# `Enum.VasServiceType`; that all such tables are so is unverified).
+# or a whole table, `name<TAB>secure` makes a table only Blizzard's code
+# sees while it loads: its EnvironmentCleanup.lua removes it before addons
+# load (a documented table, or a stand-in numbering its fields on first use;
+# the client's values are unknown).
+Enum.BattlepayBannerType	secure
+Enum.BattlepayBoostProduct	secure
+Enum.BattlepayCardType	secure
+Enum.BattlepayDisplayFlags	secure
+Enum.BattlepayGroupDisplayType	secure
+Enum.BattlepayProductDecorator	secure
+Enum.BattlepayProductGroupFlags	secure
+Enum.PurchaseEligibility	secure
+Enum.StoreError	secure
+Enum.VasPurchaseState	secure
+Enum.VasServiceType	secure
+Enum.VasTransactionPurchaseResult	secure
 Constants.LootConsts_Camelot	-
 Constants.PetConsts_Camelot	-
 Constants.QuestInfoLuaConsts	-
 Constants.QuestLogConstsMainlineCamelot	-
-Enum.CharCreateAnimTurnType	hidden
-Enum.CharCreateAnimTurnTypeMeta	hidden
-Enum.CharSectionCondition	hidden
-Enum.CharSectionConditionMeta	hidden
-Enum.ConfigurationWarning	hidden
-Enum.ConfigurationWarningMeta	hidden
-Enum.RestrictionType	hidden
-Enum.RestrictionTypeMeta	hidden
-Enum.UnitTokenType	hidden
-Enum.UnitTokenTypeMeta	hidden
-Enum.VasTransactionPurchaseResult	hidden
-Enum.WarbandEventState	hidden
-Enum.WarbandEventStateMeta	hidden
-Enum.WarbandGroupFlags	hidden
-Enum.WarbandGroupFlagsMeta	hidden
-Enum.WarbandPlacementDisplayInfoType	hidden
-Enum.WarbandPlacementDisplayInfoTypeMeta	hidden
-Enum.WarbandSceneAnimationEvent	hidden
-Enum.WarbandSceneAnimationEventMeta	hidden
-Enum.WarbandSceneAnimationSheatheState	hidden
-Enum.WarbandSceneAnimationSheatheStateMeta	hidden
-Enum.WarbandSceneAnimationStandState	hidden
-Enum.WarbandSceneAnimationStandStateFlags	hidden
-Enum.WarbandSceneAnimationStandStateFlagsMeta	hidden
-Enum.WarbandSceneAnimationStandStateMeta	hidden
-Enum.WarbandScenePlacementType	hidden
-Enum.WarbandScenePlacementTypeMeta	hidden
+Enum.CharCreateAnimTurnType	-
+Enum.CharCreateAnimTurnTypeMeta	-
+Enum.CharSectionCondition	-
+Enum.CharSectionConditionMeta	-
+Enum.ConfigurationWarning	-
+Enum.ConfigurationWarningMeta	-
+Enum.RestrictionType	-
+Enum.RestrictionTypeMeta	-
+Enum.UnitTokenType	-
+Enum.UnitTokenTypeMeta	-
+Enum.WarbandEventState	-
+Enum.WarbandEventStateMeta	-
+Enum.WarbandGroupFlags	-
+Enum.WarbandGroupFlagsMeta	-
+Enum.WarbandPlacementDisplayInfoType	-
+Enum.WarbandPlacementDisplayInfoTypeMeta	-
+Enum.WarbandSceneAnimationEvent	-
+Enum.WarbandSceneAnimationEventMeta	-
+Enum.WarbandSceneAnimationSheatheState	-
+Enum.WarbandSceneAnimationSheatheStateMeta	-
+Enum.WarbandSceneAnimationStandState	-
+Enum.WarbandSceneAnimationStandStateFlags	-
+Enum.WarbandSceneAnimationStandStateFlagsMeta	-
+Enum.WarbandSceneAnimationStandStateMeta	-
+Enum.WarbandScenePlacementType	-
+Enum.WarbandScenePlacementTypeMeta	-
 Constants.AccountStoreConsts.KegLegRenownCurrencyID	number 2814
 Constants.AccountStoreConsts.PlunderstormPlunderCurrencyID	number 3139
 Constants.AccountStoreConsts.PlunderstormStoreFrontID	number 1
