@@ -292,13 +292,21 @@ pub fn analyze(
     let mut definers: BTreeMap<Key, Vec<(usize, bool, Span)>> = BTreeMap::new();
     let mut add_def = |key: &Key, file: usize, lt: bool, span: Span| {
         let key = canon(&same_table, key);
-        if !definers.contains_key(&*key) {
-            definers.insert(key.clone().into_owned(), Vec::new());
-        }
-        let list = definers.get_mut(&*key).expect("inserted");
-        match list.iter_mut().find(|(f, _, _)| *f == file) {
+        let add = |list: &mut Vec<(usize, bool, Span)>| match list
+            .iter_mut()
+            .find(|(f, _, _)| *f == file)
+        {
             Some(entry) => entry.1 |= lt,
             None => list.push((file, lt, span)),
+        };
+        // One lookup for a key seen before; a new one is inserted owned.
+        match definers.get_mut(&*key) {
+            Some(list) => add(list),
+            None => {
+                let mut list = Vec::new();
+                add(&mut list);
+                definers.insert(key.into_owned(), list);
+            }
         }
     };
     for (file, u) in usages.iter().enumerate() {
