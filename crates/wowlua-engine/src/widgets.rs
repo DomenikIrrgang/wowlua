@@ -2047,6 +2047,94 @@ pub fn functions() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
 /// A method's behaviour: the widget, the call (self first).
 pub type MethodFn = fn(&mut Vm, WidgetId, NativeCall) -> Ret;
 
+/// Stores `args` as setter `stem`'s on a widget's properties.
+fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
+    let props = engine(vm).world.widgets[id.0].props;
+    let list = vm.new_table();
+    for (k, v) in args.iter().enumerate() {
+        let _ = vm.heap.table_mut(list).set(Value::Num(k as f64 + 1.0), *v);
+    }
+    let n = vm.str("n");
+    let _ = vm
+        .heap
+        .table_mut(list)
+        .set(n, Value::Num(args.len() as f64));
+    let key = vm.str(stem);
+    let _ = vm.heap.table_mut(props).set(key, Value::Table(list));
+}
+
+/// A button's `kind` texture (`Normal`, `Highlight`): the one set, else a
+/// new texture of the button's (the highlight's in layer HIGHLIGHT, the
+/// others' in ARTWORK; unverified).
+fn button_texture(vm: &mut Vm, id: WidgetId, kind: &str) -> Value {
+    let props = engine(vm).world.widgets[id.0].props;
+    let stem = format!("{kind}Texture");
+    if let Some(t) = stored_args(vm, props, &stem).and_then(|v| v.first().copied())
+        && widget_of(vm, t).is_some()
+    {
+        return t;
+    }
+    let t = create(vm, "Texture", None, Some(id));
+    if let Some(tid) = widget_of(vm, t) {
+        let layer = vm.str(if kind == "Highlight" {
+            "HIGHLIGHT"
+        } else {
+            "ARTWORK"
+        });
+        store(vm, tid, "DrawLayer", &[layer, Value::Num(0.0)]);
+    }
+    store(vm, id, &stem, &[t]);
+    t
+}
+
+/// `SetXTexture(asset)`: a texture widget becomes the button's, a file its
+/// texture's; `SetXAtlas(atlas, …)` the atlas of its texture.
+fn set_button_texture(vm: &mut Vm, id: WidgetId, c: &NativeCall, kind: &str, atlas: bool) -> Ret {
+    let asset = c.arg(2);
+    if !atlas && widget_of(vm, asset).is_some() {
+        store(vm, id, &format!("{kind}Texture"), &[asset]);
+        return Ok(vec![]);
+    }
+    let t = button_texture(vm, id, kind);
+    if let Some(tid) = widget_of(vm, t) {
+        let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+        store(vm, tid, if atlas { "Atlas" } else { "Texture" }, &args);
+    }
+    if atlas {
+        let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+        store(vm, id, &format!("{kind}Atlas"), &args);
+    }
+    Ok(vec![])
+}
+
+macro_rules! button_textures {
+    ($($kind:literal: $set:ident, $atlas:ident;)*) => {
+        $(
+            fn $set(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+                set_button_texture(vm, id, &c, $kind, false)
+            }
+            fn $atlas(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+                set_button_texture(vm, id, &c, $kind, true)
+            }
+        )*
+        fn button_texture_methods() -> Vec<(&'static str, MethodFn)> {
+            vec![$(
+                (concat!("Set", $kind, "Texture"), $set as MethodFn),
+                (concat!("Set", $kind, "Atlas"), $atlas as MethodFn),
+            )*]
+        }
+    };
+}
+
+button_textures! {
+    "Normal": set_normal_texture, set_normal_atlas;
+    "Pushed": set_pushed_texture, set_pushed_atlas;
+    "Disabled": set_disabled_texture, set_disabled_atlas;
+    "Highlight": set_highlight_texture, set_highlight_atlas;
+    "Checked": set_checked_texture, set_checked_atlas;
+    "DisabledChecked": set_disabled_checked_texture, set_disabled_checked_atlas;
+}
+
 /// The methods with behaviour, by name (any class that has the method).
 pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
     fn font_string(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
@@ -2062,7 +2150,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         create_region(vm, id, c, "Line")
     }
     vec![
-        ("SetScript", set_script),
+        ("SetScript", set_script as MethodFn),
         ("GetScript", get_script),
         ("HookScript", hook_script),
         ("HasScript", has_script_method),
@@ -2137,4 +2225,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("SetVertexColor", set_vertex_color),
         ("GetVertexColor", get_vertex_color),
     ]
+    .into_iter()
+    .chain(button_texture_methods())
+    .collect()
 }

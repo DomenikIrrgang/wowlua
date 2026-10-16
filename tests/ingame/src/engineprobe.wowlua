@@ -764,6 +764,32 @@ local function scalars(): { [string]: string }
     return out
 end
 
+--- Every CVar the client has (`ConsoleGetAllCommands`, as Blizzard's
+--- console lists them) and its default; other commands by type, counted.
+local function allCVars(): { [string]: string }
+    const out: { [string]: string } = {}
+    if not (G.ConsoleGetAllCommands and C_CVar and C_CVar.GetCVarDefault) then
+        return { absent = "ConsoleGetAllCommands or C_CVar.GetCVarDefault" }
+    end
+    local ok, commands = pcall(G.ConsoleGetAllCommands)
+    if not ok or type(commands) ~= "table" then
+        return { error = tostring(commands) }
+    end
+    const cvarType = G.Enum.ConsoleCommandType and G.Enum.ConsoleCommandType.Cvar
+    const counts: { [string]: number } = {}
+    for _, info in ipairs(commands :: any[]) do
+        const t = tostring(info.commandType)
+        counts[t] = (counts[t] or 0) + 1
+        if info.commandType == cvarType and type(info.command) == "string" then
+            out[info.command] = results(C_CVar.GetCVarDefault, info.command)
+        end
+    end
+    for t, n in pairs(counts) do
+        out[`#type {t}`] = tostring(n)
+    end
+    return out
+end
+
 --- Each CVar's default (`C_CVar.GetCVarDefault`; not the player's value).
 local function cvarDefaults(): { [string]: string }
     const out: { [string]: string } = {}
@@ -870,6 +896,7 @@ export function engineProbe(arg: string?)
         constants = tables(G.Constants),
         scalars = scalars(),
         hidden = hidden(),
+        allCVars = allCVars(),
         qualityColors = qualityColors(),
         blizzardAtStart = table.concat(LOADED_AT_START, " "),
         blizzardNow = table.concat(blizzardLoaded(), " "),

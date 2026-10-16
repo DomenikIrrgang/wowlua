@@ -3,8 +3,9 @@
 -- Lua (FrameXML, SharedXML), which wowlua emulates in different layers.
 -- Functions are recorded as native ("C") or Lua (`coroutine.create` takes
 -- only Lua functions), tables as widgets (their object type) or tables, and
--- the members of the `C_` namespaces and the libraries the same way. Saved
--- in StdTestState.inventory (after /reload).
+-- the members of the `C_` namespaces, the libraries and any other table
+-- with a C function (`Kiosk`) the same way. Saved in StdTestState.inventory
+-- (after /reload).
 import state from "/state"
 import say from "/harness"
 
@@ -45,10 +46,21 @@ export function inventory()
         if type(name) == "string" then
             globals[name] = kind(value)
             count += 1
-            if type(value) == "table" and (name:match("^C_") or tContains(LIBRARIES, name)) then
+            if type(value) == "table" and globals[name] == "table" then
                 local ok, m = pcall(members, value :: table)
-                namespaces[name] = ok and m or { ["?"] = tostring(m) }
-                spaces += 1
+                local native = false
+                if ok then
+                    for _, k in pairs(m) do
+                        if k == "C" then
+                            native = true
+                            break
+                        end
+                    end
+                end
+                if name:match("^C_") or tContains(LIBRARIES, name) or native then
+                    namespaces[name] = ok and m or { ["?"] = tostring(m) }
+                    spaces += 1
+                end
             end
         end
     end

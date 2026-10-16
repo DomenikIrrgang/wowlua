@@ -342,6 +342,16 @@ fn apply(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Element>
             }
         }
     }
+    // A template's `parent` for a widget its element gave none
+    // (`ContainerFrameTemplate`'s `ContainerFrameContainer`).
+    if let Some(p) = el.attr("parent")
+        && engine(vm).world.widgets[id.0].parent.is_none()
+    {
+        let g = vm.get_global(p);
+        if widgets::widget_of(vm, g).is_some() {
+            call_method(vm, cx, el.line, frame, "SetParent", &[g]);
+        }
+    }
     if let Some(key) = el.attr("parentKey")
         && let Some(p) = engine(vm).world.widgets[id.0].parent
     {

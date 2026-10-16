@@ -325,6 +325,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             free_bag_slots,
         ),
         ("C_PvP.GetZonePVPInfo", zone_pvp_info),
+        ("C_PetJournal.GetNumPets", zeros),
         ("C_QuestLog.GetNumQuestLogEntries", zeros),
         ("C_VoiceChat.GetTtsVoices", empty_list),
         ("GetCursorPosition", zeros),
