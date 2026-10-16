@@ -106,6 +106,10 @@ impl Checker<'_> {
     /// The synthetic variable of a field path; `create` makes one (its base
     /// is the field's type as declared).
     pub fn field_var(&mut self, e: &Expr, create: bool) -> Option<VarId> {
+        // Nothing to find before a condition narrows a field.
+        if !create && self.field_vars.is_empty() {
+            return None;
+        }
         let (root, path) = self.field_path(e)?;
         if let Some(&v) = self.field_vars.get(&(root, path.as_str().into())) {
             return Some(v);

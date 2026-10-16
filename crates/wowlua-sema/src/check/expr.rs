@@ -187,7 +187,10 @@ impl Checker<'_> {
                     return single(self.super_member(&name.text, name.span));
                 }
                 let probed = self.probes.contains(&e.span);
-                let path = self.api_path_of(e);
+                // Only shared mode and existence guards read the path.
+                let path = (self.shared.is_some() || !self.guard.present.is_empty())
+                    .then(|| self.api_path_of(e))
+                    .flatten();
                 if self.shared.is_some()
                     && !probed
                     && let Some(path) = &path
