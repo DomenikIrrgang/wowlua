@@ -42,7 +42,7 @@ pub fn check_package(
     extra_globals: &HashSet<String>,
     shared: Option<&flavors::SharedFlavors>,
 ) -> Vec<Diagnostic> {
-    check_package_full(files, analysis, settings, extra_globals, shared, None).diagnostics
+    check_package_full(files, analysis, settings, extra_globals, shared, None, &[]).diagnostics
 }
 
 /// What checking a package produces.
@@ -70,6 +70,7 @@ pub fn check_package_full(
     extra_globals: &HashSet<String>,
     shared: Option<&flavors::SharedFlavors>,
     mut reuse: Option<reuse::Reuse<'_>>,
+    global_defs: &[Option<Vec<String>>],
 ) -> CheckOutput {
     let mut type_names = HashMap::new();
     let mut value_checks = HashMap::new();
@@ -221,11 +222,17 @@ pub fn check_package_full(
                 .or_default(),
             None => &mut fresh,
         };
-        globals.fill(parse, wowlua, checked, &markers);
+        globals.fill(
+            parse,
+            wowlua,
+            checked,
+            &markers,
+            global_defs.get(i).and_then(Option::as_deref),
+        );
         #[cfg(debug_assertions)]
         {
             let mut again = FileGlobals::default();
-            again.fill(parse, wowlua, checked, &markers);
+            again.fill(parse, wowlua, checked, &markers, None);
             assert_eq!(
                 (
                     wowlua.then_some(&again.decorated),
@@ -464,6 +471,7 @@ impl FileGlobals {
         wowlua: bool,
         checked: bool,
         markers: &crate::usage::Markers,
+        global_defs: Option<&[String]>,
     ) {
         if wowlua && self.decorated.is_none() {
             let mut names = Vec::new();
@@ -471,12 +479,19 @@ impl FileGlobals {
             self.decorated = Some(names);
         }
         if checked && self.assigned.is_none() {
-            let mut names = Vec::new();
-            for d in crate::usage::file_usage(parse, markers).defs {
-                if let crate::usage::Key::Global(name) = d.key {
-                    names.push(name);
-                }
-            }
+            // The load order's usage of the file has them (its markers
+            // differ, which changes only deferred calls).
+            let mut names = match global_defs {
+                Some(defs) => defs.to_vec(),
+                None => crate::usage::file_usage(parse, markers)
+                    .defs
+                    .into_iter()
+                    .filter_map(|d| match d.key {
+                        crate::usage::Key::Global(name) => Some(name),
+                        _ => None,
+                    })
+                    .collect(),
+            };
             // `CreateFrame(type, "Name", …)` creates the global `Name`.
             wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
                 if let ExprKind::Call { callee, args } = &e.kind
@@ -924,6 +939,7 @@ mod tests {
                     cache: &mut cache,
                     store: k == 0,
                 }),
+                &[],
             );
             if k == 0 {
                 stored = cache.stored() == 1;

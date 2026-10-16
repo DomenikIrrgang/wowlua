@@ -941,6 +941,7 @@ pub fn compile_flavor(
                     cache: &mut cache.checks,
                     store,
                 }),
+            &order.global_defs,
         );
         diagnostics.extend(checked.diagnostics);
         out.type_names = checked.type_names;

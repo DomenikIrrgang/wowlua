@@ -21,6 +21,9 @@ pub struct LoadOrder {
     /// Imports read through their module table: (file, import start).
     pub lazy: HashSet<(usize, u32)>,
     pub diagnostics: Vec<Diagnostic>,
+    /// By file: the globals an active source file assigns (its
+    /// `Key::Global` defs, in order), which the type check also needs.
+    pub global_defs: Vec<Option<Vec<String>>>,
 }
 
 /// Why an edge exists: the use and the call chain that runs it.
@@ -317,7 +320,25 @@ pub fn analyze(
         }
     }
 
-    let mut out = LoadOrder::default();
+    let mut out = LoadOrder {
+        global_defs: usages
+            .iter()
+            .zip(files)
+            .map(|(u, f)| match (u, f.kind) {
+                (Some(u), FileKind::Wowlua | FileKind::Lua) => Some(
+                    u.defs
+                        .iter()
+                        .filter_map(|d| match &d.key {
+                            Key::Global(name) => Some(name.clone()),
+                            _ => None,
+                        })
+                        .collect(),
+                ),
+                _ => None,
+            })
+            .collect(),
+        ..LoadOrder::default()
+    };
     let mut edges: Vec<Edge> = Vec::new();
     let mut warned: BTreeSet<String> = BTreeSet::new();
     let chain_of = |root: usize, file: usize, f: usize| -> String {

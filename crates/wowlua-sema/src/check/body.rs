@@ -134,6 +134,8 @@ pub struct Checker<'e> {
 
 impl<'e> Checker<'e> {
     pub fn new(env: &'e mut Env, info: &FileInfo<'e>, parse: &wowlua_syntax::Parse) -> Checker<'e> {
+        let (reassigned, assigned_in_closures, assigned_later) =
+            reassigned_in_closures(&parse.chunk.block);
         let mut c = Checker {
             env,
             mode: info.mode,
@@ -157,9 +159,9 @@ impl<'e> Checker<'e> {
             exports: FxHashMap::default(),
             private_methods: FxHashMap::default(),
             global_classes: FxHashSet::default(),
-            reassigned: reassigned_in_closures(&parse.chunk.block).0,
-            assigned_in_closures: reassigned_in_closures(&parse.chunk.block).1,
-            assigned_later: reassigned_in_closures(&parse.chunk.block).2,
+            reassigned,
+            assigned_in_closures,
+            assigned_later,
             pure_lua: info.pure_lua,
             top_vararg: None,
             dynamic_env: calls_setfenv(&parse.chunk.block),
