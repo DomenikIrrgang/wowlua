@@ -19,6 +19,7 @@ mod corpus;
 mod fixture;
 mod lua51;
 mod packager_diff;
+mod profile;
 mod runtime;
 mod types;
 
@@ -33,6 +34,13 @@ fn main() -> Result<()> {
                 bail!("usage: cargo xtask fixture <SavedVariables/StdTest.lua> <name>");
             };
             fixture::run(&root, Path::new(&saved), &name)
+        }
+        "profile" => {
+            let (Some(saved), Some(out)) = (std::env::args().nth(2), std::env::args().nth(3))
+            else {
+                bail!("usage: cargo xtask profile <SavedVariables/StdTest.lua> <out.json>");
+            };
+            profile::run(Path::new(&saved), Path::new(&out))
         }
         "schema" => write_if_changed(&schema_path(&root), &wowlua_manifest::schema_json()),
         "runtime" => {

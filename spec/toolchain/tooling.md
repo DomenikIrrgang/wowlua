@@ -265,7 +265,11 @@ addon loads:
 }
 ```
 
-`character` is `mock.setPlayer`'s data; `items` and `spells` are
+`/stdtest snapshot` records the character's world in the client (StdTest,
+then `/reload`), and `cargo xtask profile <SavedVariables/StdTest.lua>
+<out.json>` writes it as a profile with the character's name and realm, a
+player target's name and identifying CVars scrubbed. `character` is
+`mock.setPlayer`'s data; `items` and `spells` are
 `defineItem` and `defineSpell` data (items cached unless `cached` is
 `false`); equipment slots are IDs or the client's slot names
 (`GetInventorySlotInfo`); a unit's `target`, `focus`, `group` (`"party"`,

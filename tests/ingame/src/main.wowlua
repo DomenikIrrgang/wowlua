@@ -58,6 +58,7 @@ import _ from "/suites/format"
 import _ from "/suites/version"
 import _ from "/suites/roster"
 import _ from "/suites/secure"
+import snapshot from "/snapshot"
 
 local function concat(a: TestRecord[], b: TestRecord[]): TestRecord[]
     local out: TestRecord[] = {}
@@ -125,6 +126,10 @@ local commands = router({
         args = { "rest" },
         help = "Record what the client's engine does: /stdtest engine [order | protected | blocked | record <label> | stop] (then /reload)",
         run = function(arg: string?) engineProbe(arg) end,
+    },
+    snapshot = {
+        help = "Record the world your character is in, as a world profile for wowlua test (then /reload)",
+        run = function() snapshot() end,
     },
     argcheck = {
         help = "Record how documented functions check their arguments (then /reload)",
