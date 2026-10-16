@@ -23,6 +23,7 @@ mod luacheck;
 mod meta;
 pub mod package;
 pub mod packaging;
+pub mod parallel;
 pub mod pkgmeta;
 mod private_names;
 pub mod project;

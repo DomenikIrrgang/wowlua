@@ -154,6 +154,7 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
         minify: None,
         bundle: None,
         only: None,
+        jobs: global.jobs(),
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -457,6 +458,7 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
         minify: None,
         bundle: None,
         only: None,
+        jobs: global.jobs(),
     };
     let result = load_and_build(out, &mut session, global, &request, None);
     let ok = out.flush(&mut session);
@@ -490,6 +492,7 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
         minify: None,
         bundle: None,
         only: None,
+        jobs: global.jobs(),
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -557,6 +560,7 @@ pub fn compile(out: &Output, global: &GlobalArgs, args: &crate::CompileArgs) -> 
             files,
             project_declarations: in_project,
         }),
+        jobs: global.jobs(),
     };
     let build = wowlua_driver::build(&mut session, &project, &request);
     apply_lints(&mut session, &project);
@@ -755,6 +759,7 @@ pub fn install(out: &Output, global: &GlobalArgs, profile: &str, target: &Instal
         minify: None,
         bundle: None,
         only: None,
+        jobs: global.jobs(),
     };
     let Some(built) = load_and_build_all(out, &mut session, global, &request) else {
         out.flush(&mut session);
@@ -1053,6 +1058,7 @@ pub fn dev(
         minify: None,
         bundle: None,
         only: None,
+        jobs: global.jobs(),
     };
     let install = install_request(target, link);
     // What one build compiled, for the next ones.
@@ -1174,6 +1180,7 @@ fn apply_fixes(out: &Output, global: &GlobalArgs, lints_only: bool) -> Option<us
         minify: None,
         bundle: None,
         only: None,
+        jobs: global.jobs(),
     };
     let mut total = 0;
     let mut files: std::collections::BTreeSet<PathBuf> = Default::default();
@@ -1231,6 +1238,7 @@ pub fn lint(out: &Output, global: &GlobalArgs, fix: bool) -> bool {
         minify: None,
         bundle: None,
         only: None,
+        jobs: global.jobs(),
     };
     let Some(project) = wowlua_driver::load_project(&mut session, &load_options(out, global))
     else {
@@ -1292,6 +1300,7 @@ pub fn fix(out: &Output, global: &GlobalArgs, manifest: bool) -> bool {
         minify: None,
         bundle: None,
         only: None,
+        jobs: global.jobs(),
     };
     let _ = load_and_build(out, &mut session, global, &request, None);
     out.flush(&mut session)

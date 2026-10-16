@@ -50,6 +50,16 @@ pub struct GlobalArgs {
     /// Treat warnings as errors
     #[arg(long, global = true)]
     pub deny_warnings: bool,
+    /// Worker threads for per-file work (1: none)
+    #[arg(short = 'j', long, global = true, value_name = "N")]
+    pub jobs: Option<usize>,
+}
+
+impl GlobalArgs {
+    /// `--jobs`, else `WOWLUA_JOBS`, else the config, else the default.
+    pub fn jobs(&self) -> wowlua_driver::parallel::Jobs {
+        wowlua_driver::parallel::Jobs::resolve(self.jobs)
+    }
 }
 
 #[derive(Args, Debug, Clone)]
@@ -479,6 +489,12 @@ pub struct InstallTarget {
 
 fn main() -> ExitCode {
     std::panic::set_hook(Box::new(|info| {
+        // A job's panic is caught: its region runs again in order, which
+        // reports it here as a sequential build would.
+        if wowlua_driver::parallel::in_job() {
+            wowlua_driver::parallel::record_panic(info.to_string());
+            return;
+        }
         match info
             .payload()
             .downcast_ref::<wowlua_driver::LuaOutOfMemory>()

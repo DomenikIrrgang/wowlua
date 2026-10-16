@@ -17,6 +17,7 @@ fn request() -> BuildRequest {
         minify: None,
         bundle: None,
         only: None,
+        jobs: wowlua_driver::parallel::Jobs::default(),
     }
 }
 

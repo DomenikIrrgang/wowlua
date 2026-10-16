@@ -37,6 +37,8 @@ pub struct BuildRequest {
     /// `wowlua compile`: only these files, without assets and without the
     /// in-game dev tooling (there is no AddOn folder to load it from).
     pub only: Option<Only>,
+    /// Worker threads and memory for per-file work (`--jobs`, #8).
+    pub jobs: crate::parallel::Jobs,
 }
 
 /// The files `wowlua compile` compiles.
@@ -61,6 +63,7 @@ impl BuildRequest {
             minify: None,
             bundle: None,
             only: None,
+            jobs: crate::parallel::Jobs::default(),
         }
     }
 }
@@ -813,6 +816,7 @@ fn build_inner(
         &raw,
         cache.as_deref_mut(),
         summarize,
+        &request.jobs,
     );
     crate::compile::add_libraries(
         &mut session.db,
@@ -870,6 +874,7 @@ fn build_inner(
     // Lints (spec appendix B), once per file: `.wowlua` files, and `.lua`
     // files with `check.lua`. `--!nolint` turns them off for a file.
     let mut nolint: HashSet<wowlua_span::FileId> = HashSet::new();
+    let mut lint_files: Vec<usize> = Vec::new();
     for (i, (source, file)) in files.iter().enumerate() {
         // A summarized file is not linted (it would not be summarized).
         if let Some(crate::compile::Front::Summarized { nolint: off, .. }) = parsed.fronts.get(i) {
@@ -902,9 +907,20 @@ fn build_inner(
             _ => false,
         };
         if lintable {
-            diagnostics.extend(wowlua_sema::lint::lint(parse, &raw[&source.rel]));
+            lint_files.push(i);
         }
     }
+    // Linting is pure per file: on worker threads (#8), in file order.
+    request.jobs.region(
+        lint_files,
+        |&i| raw[&files[i].0.rel].len() as u64,
+        20,
+        |i| {
+            let parse = parsed.parses[i].as_ref().expect("linted files are parsed");
+            wowlua_sema::lint::lint(parse, &raw[&files[i].0.rel])
+        },
+        |lints| diagnostics.extend(lints),
+    );
     // Plain Lua files compiled for instrumentation (decision T97): not
     // embedded libraries, nor files another AddOn loads.
     let lower_lua: HashSet<String> =
@@ -1102,6 +1118,7 @@ fn build_inner(
             &minify,
             &mut flavor_cache,
             idx + 1 < compile_flavors.len(),
+            &request.jobs,
         );
         builds.push(FlavorBuild {
             flavor: flavor.clone(),

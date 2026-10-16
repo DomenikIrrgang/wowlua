@@ -592,6 +592,9 @@ fn package_native(
                         minify: config.minify.clone(),
                         bundle: config.bundle,
                         only: None,
+                        // `WOWLUA_JOBS` and the config apply; `--jobs` is
+                        // a build flag.
+                        jobs: crate::parallel::Jobs::resolve(None),
                     };
                     let build = crate::build(session, project, &build_request)?;
                     // The package's own license files ship next to the AddOn.
@@ -778,6 +781,7 @@ fn package_like_the_packager(
                     minify: None,
                     bundle: None,
                     only: None,
+                    jobs: crate::parallel::Jobs::resolve(None),
                 };
                 builds.push(crate::build(session, project, &build_request)?);
             }

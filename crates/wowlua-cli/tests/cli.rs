@@ -915,6 +915,71 @@ print(build.debug and debugOnly() or "release")
     assert!(out.ends_with("release"), "{out}");
 }
 
+/// `--jobs 4` (parallel regions, also for a small project when explicit)
+/// gives what `--jobs 1` gives: the same warnings in the same order, and
+/// the same files.
+#[test]
+fn parallel_builds_equal_sequential_builds() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut files: Vec<(String, String)> = vec![(
+        "wowlua.json".into(),
+        r#"{ "package": { "name": "par", "version": "1.0.0" },
+  "flavors": { "standard": {}, "vanilla": {} }, "check": { "lua": true } }
+"#
+        .into(),
+    )];
+    for n in 0..12 {
+        files.push((
+            format!("src/f{n:02}.lua"),
+            format!("local _, ns = ...\nlocal unused{n} = 1\nns.v{n} = {{ {n}, \"{n}\" }}\nprint(ns.v{n}.x, C_Seasons)\n"),
+        ));
+    }
+    files.push((
+        "src/m.wowlua".into(),
+        "@deprecated(\"no\")\nlocal function old(): number return 1 end\nprint(old())\n".into(),
+    ));
+    let refs: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(a, b)| (a.as_str(), b.as_str()))
+        .collect();
+    write(dir.path(), &refs);
+    let run = |jobs: &str, profile: &str| {
+        let _ = std::fs::remove_dir_all(dir.path().join("dist"));
+        let assert = wowlua(dir.path())
+            .args([
+                "build",
+                "--message-format",
+                "short",
+                "-j",
+                jobs,
+                "--profile",
+                profile,
+            ])
+            .assert()
+            .success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let warnings: Vec<String> = stderr
+            .lines()
+            .filter(|l| l.starts_with("src/"))
+            .map(str::to_string)
+            .collect();
+        let dist = dir.path().join("dist").join(profile).join("Par");
+        let tree: Vec<(String, Vec<u8>)> = files_in(&dist)
+            .into_iter()
+            .map(|f| {
+                let bytes = std::fs::read(dist.join(&f)).unwrap();
+                (f, bytes)
+            })
+            .collect();
+        (warnings, tree)
+    };
+    for profile in ["dev", "release"] {
+        let sequential = run("1", profile);
+        assert!(!sequential.0.is_empty());
+        assert_eq!(run("4", profile), sequential, "{profile}");
+    }
+}
+
 /// Long operator chains are valid Lua 5.1 (its parser builds them in a
 /// loop, and so does wowlua's), however deep the tree they make: every pass
 /// walks, clones and drops them without a stack overflow, and `and`/`or`

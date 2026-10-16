@@ -148,6 +148,27 @@ impl BuildCache {
         file: FileId,
         bytes: &[u8],
     ) -> Option<Diagnostic> {
+        self.lua_check_with(db, rel, file, bytes, None)
+    }
+
+    /// Whether the Lua 5.1 check of a source is kept (without using it).
+    pub(crate) fn has_lua_check(&mut self, rel: &str, file: FileId, bytes: &[u8]) -> bool {
+        let hash = self.hash(rel, bytes);
+        self.lua_checks
+            .get(rel)
+            .is_some_and(|c| c.file == file && c.hash == hash)
+    }
+
+    /// [`BuildCache::lua_check`], with the check computed already when it
+    /// is not kept (`computed`, by a parallel job).
+    pub(crate) fn lua_check_with(
+        &mut self,
+        db: &SourceDb,
+        rel: &str,
+        file: FileId,
+        bytes: &[u8],
+        computed: Option<Option<Diagnostic>>,
+    ) -> Option<Diagnostic> {
         let hash = self.hash(rel, bytes);
         let generation = self.generation;
         if let Some(c) = self.lua_checks.get_mut(rel)
@@ -164,7 +185,7 @@ impl BuildCache {
             );
             return c.result.clone();
         }
-        let result = crate::luacheck::check(db, file, bytes);
+        let result = computed.unwrap_or_else(|| crate::luacheck::check(db, file, bytes));
         self.lua_checks.insert(
             rel.to_string(),
             LuaCheck {

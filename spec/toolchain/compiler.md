@@ -123,7 +123,7 @@ identical effective settings share one build.
 | 1 | Load manifest | manifest | `wowlua.json` → `Manifest` | `package.wowlua` is checked **before** schema validation (E4300), then JSON-schema validation, profile inheritance and merging, workspace expansion |
 | 2 | Resolve | pkg | `Manifest` + lockfile → `ResolvedGraph` | Fetches sources into the cache. `--locked` / `--frozen` / `--offline` honored. Pins the flavor table version ([Package manager §10.6](package-manager.md#106-lockfile)). |
 | 3 | Discover | driver | file system → `SourceDb` | Project sources (`build.src`, `build.exclude`, `.gitignore`), dependency sources, used standard-library modules, implicit types packages, locale JSON files, XML files, assets |
-| 4 | Parse | syntax, xml | bytes → `Ast` / `XmlDoc` + diagnostics | Parallel per file (rayon). Error-recovering. XML `<Script>`/`<Include>` references are collected. Parsing is shared by all configurations, except for files changed by stage 5. |
+| 4 | Parse | syntax, xml | bytes → `Ast` / `XmlDoc` + diagnostics | Parallel per file (`--jobs`; together with each plain Lua file's Lua 5.1 check). Error-recovering. XML `<Script>`/`<Include>` references are collected. Parsing is shared by all configurations, except for files changed by stage 5. |
 | 5 | Preprocess | driver | passthrough text → text | Only with `compat.packager-keywords`: BigWigs keyword substitution on passthrough `.lua`/`.xml` files, per configuration and flavor ([CLI §12.6](cli.md#126-adopting-an-existing-addon)). Affected files are re-parsed per flavor. |
 | 6 | Locales | lower, sema | locale JSON → Lua IR + `L` type | Key and placeholder checks, generation of the `L` record type used by stage 11 |
 | 7 | Meta binding | sema | configuration, flavor → `ConstEnv` | Values of `wowlua:meta` exports (for libraries: the consuming addon's `addon`/`build`/`flavor`, the library's own `features`/`config`) |
@@ -399,7 +399,7 @@ user error otherwise:
 | JSON manifest, preserving formatting on edit | `serde`, `serde_json`, `jsonc-parser`-style CST editing for `wowlua add` (`json-patch` fallback) |
 | JSON schema | `schemars` (generated from the manifest types) |
 | Diagnostics rendering | `codespan-reporting` |
-| Parallelism | `rayon` |
+| Parallelism | `std::thread` worker pools with a memory budget (`wowlua-driver/src/parallel.rs`): parsing, lowering and finishing, and linting run per file on workers and are merged in file order |
 | Hashing | `rustc-hash` (in-memory), `blake3` (content hashes), `sha2` (lockfile checksums) |
 | Deterministic maps | `indexmap` |
 | Semver and resolution | `semver`, `pubgrub` |

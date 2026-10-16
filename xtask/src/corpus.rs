@@ -564,6 +564,8 @@ fn check_addon(rel: &str, work: &Path) -> Result<AddonReport> {
         return Ok(out);
     };
     let mut request = wowlua_driver::BuildRequest::new("dev");
+    // The runner builds packages in parallel itself.
+    request.jobs = wowlua_driver::parallel::Jobs::one();
     request.write = false;
     let build = wowlua_driver::build(&mut session, &project, &request);
     for d in session.diagnostics.iter() {
@@ -637,6 +639,7 @@ fn check_addon(rel: &str, work: &Path) -> Result<AddonReport> {
     for level in ["none", "strip", "compact", "rename", "max"] {
         let mut session = wowlua_driver::Session::new();
         let mut release = wowlua_driver::BuildRequest::new("release");
+        release.jobs = wowlua_driver::parallel::Jobs::one();
         release.write = false;
         release.minify = Some(level.into());
         release.bundle = Some(true);
