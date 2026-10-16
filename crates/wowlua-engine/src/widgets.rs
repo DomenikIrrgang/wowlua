@@ -192,6 +192,47 @@ pub fn class_meta(vm: &mut Vm, name: &str) -> TableRef {
     }
     let methods = vm.new_table();
     let classes = lineage(engine(vm), name);
+    // The client's own list where recorded (camelot): exactly those
+    // methods, documented or not (`/stdtest engine`).
+    let recorded = crate::widgetdata::data(&engine(vm).flavor)
+        .and_then(|d| d.methods.get(name))
+        .cloned();
+    if let Some(names) = recorded {
+        for short in names {
+            // The nearest documented method of that name.
+            let doc = classes.iter().find_map(|class| {
+                let e = engine(vm);
+                e.api.classes.get(class).and_then(|c| {
+                    c.methods
+                        .iter()
+                        .copied()
+                        .find(|&i| e.api.methods[i].short == short)
+                })
+            });
+            let native = match doc {
+                Some(i) => {
+                    let short = engine(vm).api.methods[i].short;
+                    vm.native_with(short, method, vec![Value::Num(i as f64)])
+                }
+                None => {
+                    let full = vm.str(&format!("{name}:{short}"));
+                    let leaked: &'static str = Box::leak(short.clone().into_boxed_str());
+                    vm.native_with(leaked, undocumented_method, vec![full])
+                }
+            };
+            keep(vm, native);
+            let key = vm.heap.intern(short.as_bytes());
+            vm.heap.table_mut(methods).set_str(key, native);
+        }
+        let meta = vm.new_table();
+        let index = vm.heap.intern(b"__index");
+        vm.heap
+            .table_mut(meta)
+            .set_str(index, Value::Table(methods));
+        keep(vm, Value::Table(meta));
+        engine_mut(vm).world.classes.insert(name.to_string(), meta);
+        return meta;
+    }
     // Farthest base first, so nearer classes override.
     for class in classes.iter().rev() {
         let indexes = engine(vm)
@@ -270,6 +311,12 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         resize_bounds: None,
         frame: false,
     };
+    let mut w = w;
+    // A font string starts 1 x 1 (`/stdtest engine`).
+    if class == "FontString" {
+        w.width = 1.0;
+        w.height = 1.0;
+    }
     let world = &mut engine_mut(vm).world;
     world.widgets.push(w);
     if let Some(p) = parent {
@@ -514,6 +561,75 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
     stored(vm, id, f, &c)
 }
 
+/// A method the client has but the documentation lacks (`CheckButton:
+/// GetChecked`, `GameTooltip:AddLine`): its behaviour, the stored setter
+/// and getter rules, nothing for Blizzard's code, else not mocked.
+fn undocumented_method(vm: &mut Vm, c: NativeCall) -> Ret {
+    let full = match c.upvals.first().copied() {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => "?".into(),
+    };
+    let short = full
+        .split_once(':')
+        .map_or(full.as_str(), |(_, s)| s)
+        .to_string();
+    let Some(id) = widget_of(vm, c.arg(1)) else {
+        let msg = format!("Wrong object type for function - Usage: self:{short}()");
+        return Err(vm.api_arg_error(1, &msg));
+    };
+    let behaviour = engine(vm).method_behaviour(&full, &short);
+    if let Some(b) = behaviour {
+        return b(vm, id, c);
+    }
+    let props = engine(vm).world.widgets[id.0].props;
+    if let Some(stem) = short.strip_prefix("Set") {
+        let list = vm.new_table();
+        for (k, v) in c.args.iter().skip(1).enumerate() {
+            let _ = vm.heap.table_mut(list).set(Value::Num(k as f64 + 1.0), *v);
+        }
+        let n = vm.str("n");
+        let _ = vm
+            .heap
+            .table_mut(list)
+            .set(n, Value::Num((c.len() - 1) as f64));
+        let key = vm.str(stem);
+        let _ = vm.heap.table_mut(props).set(key, Value::Table(list));
+        return Ok(vec![]);
+    }
+    for prefix in ["Get", "Is"] {
+        if let Some(stem) = short.strip_prefix(prefix)
+            && let Some(values) = stored_args(vm, props, stem)
+        {
+            return Ok(if prefix == "Is" {
+                vec![Value::Bool(values.first().is_some_and(|v| v.truthy()))]
+            } else {
+                values
+            });
+        }
+    }
+    let class = engine(vm).world.widgets[id.0].class.clone();
+    if let Some(values) = recorded_default(engine(vm), &class, &short) {
+        return Ok(values.iter().map(|r| r.value(vm)).collect());
+    }
+    if crate::protection::blizzard_caller(vm) {
+        return Ok(vec![]);
+    }
+    Err(vm.error(&format!("{full} is not mocked")))
+}
+
+/// A fresh widget's results for a getter, as the client gave them for the
+/// class or its nearest recorded base (`/stdtest engine`).
+pub fn recorded_default(
+    e: &Engine,
+    class: &str,
+    getter: &str,
+) -> Option<&'static Vec<crate::widgetdata::Recorded>> {
+    let data = crate::widgetdata::data(&e.flavor)?;
+    lineage(e, class)
+        .iter()
+        .find_map(|c| data.defaults.get(&(c.clone(), getter.to_string())))
+}
+
 /// The stored arguments of setter `stem`, if it ran.
 pub fn stored_args(vm: &mut Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
     let key = vm.str(stem);
@@ -578,6 +694,16 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
     {
         return Ok(values);
     }
+    // Nothing stored: a fresh widget's results, where recorded.
+    let has_stored = short
+        .strip_prefix("Is")
+        .is_some_and(|stem| stored_args(vm, props, stem).is_some());
+    if !has_stored {
+        let class = engine(vm).world.widgets[id.0].class.clone();
+        if let Some(values) = recorded_default(engine(vm), &class, short) {
+            return Ok(values.iter().map(|r| r.value(vm)).collect());
+        }
+    }
     if let Some(stem) = short.strip_prefix("Is")
         && returns.len() == 1
     {
@@ -609,6 +735,14 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
 /// The script types a class has (from the annotations' `Script<Class>`
 /// unions; unverified), with `OnLoad` and `OnUpdate` for every widget.
 pub fn has_script(e: &Engine, class: &str, script: &str) -> bool {
+    // The client's answers where recorded (camelot: `/stdtest engine`).
+    if let Some(data) = crate::widgetdata::data(&e.flavor)
+        && let Some(&yes) = lineage(e, class)
+            .iter()
+            .find_map(|c| data.scripts.get(&(c.clone(), script.to_string())))
+    {
+        return yes;
+    }
     if script == "OnLoad" || script == "OnUpdate" {
         return true;
     }
@@ -968,11 +1102,31 @@ fn get_object_type(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![vm.str(&class)])
 }
 
+/// The documentation's mixin classes: not object types
+/// (`IsObjectType("ScriptRegion")` is false, `/stdtest engine`).
+const MIXIN_CLASSES: &[&str] = &[
+    "ScriptObject",
+    "FrameScriptObject",
+    "ScriptRegion",
+    "ScriptRegionResizing",
+    "TextureBase",
+    "AnimatableObject",
+];
+
+/// `IsObjectType(type)`: the widget's object types (Object, Region, Frame,
+/// Button, …; lines and mask textures are textures too).
 fn is_object_type(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let t = vm.check_str(&c, 2)?;
     let t = String::from_utf8_lossy(vm.str_bytes(t)).into_owned();
     let class = engine(vm).world.widgets[id.0].class.clone();
-    Ok(vec![Value::Bool(is_a(engine(vm), &class, &t))])
+    let e = engine(vm);
+    let texture =
+        matches!(class.as_str(), "Line" | "MaskTexture") && t.eq_ignore_ascii_case("Texture");
+    let yes = texture
+        || lineage(e, &class).iter().any(|c| {
+            c.eq_ignore_ascii_case(&t) && !MIXIN_CLASSES.iter().any(|m| m.eq_ignore_ascii_case(c))
+        });
+    Ok(vec![Value::Bool(yes)])
 }
 
 fn get_parent(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
@@ -1184,13 +1338,42 @@ fn set_all_points(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// A line has start and end points, not anchors (`/stdtest engine`).
+fn not_for_lines(vm: &mut Vm, id: WidgetId, method: &str) -> Result<(), LuaError> {
+    let class = engine(vm).world.widgets[id.0].class.clone();
+    if class == "Line" {
+        return Err(c_error(
+            vm,
+            &format!("{class}:{method}(): Wrong object type for function"),
+            true,
+        ));
+    }
+    Ok(())
+}
+
+/// `GetRect()`: left, bottom, width and height, nothing while unanchored.
+fn get_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let s = effective_scale(engine(vm), id);
+    Ok(match bounds(vm, id, 0) {
+        Some(b) if !engine(vm).world.widgets[id.0].points.is_empty() => vec![
+            Value::Num(b.0 / s),
+            Value::Num(b.1 / s),
+            Value::Num(b.2 / s),
+            Value::Num(b.3 / s),
+        ],
+        _ => vec![],
+    })
+}
+
 fn get_num_points(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    not_for_lines(vm, id, "GetNumPoints")?;
     Ok(vec![Value::Num(
         engine(vm).world.widgets[id.0].points.len() as f64,
     )])
 }
 
 fn get_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    not_for_lines(vm, id, "GetPoint")?;
     let i = vm.opt_int(&c, 2, 1)?;
     let Some(p) = engine(vm).world.widgets[id.0]
         .points
@@ -1417,9 +1600,14 @@ fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 }
 
 fn get_text(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![
-        engine(vm).world.widgets[id.0].text.unwrap_or(Value::Nil),
-    ])
+    let w = &engine(vm).world.widgets[id.0];
+    // An edit box's text starts empty, not nil (`/stdtest engine`).
+    let edit_box = w.class == "EditBox";
+    Ok(vec![match w.text {
+        Some(t) => t,
+        None if edit_box => vm.str(""),
+        None => Value::Nil,
+    }])
 }
 
 fn set_formatted_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
@@ -1895,6 +2083,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("GetTop", get_top),
         ("GetBottom", get_bottom),
         ("GetCenter", get_center),
+        ("GetRect", get_rect),
         ("SetText", set_text),
         ("GetText", get_text),
         ("SetFormattedText", set_formatted_text),

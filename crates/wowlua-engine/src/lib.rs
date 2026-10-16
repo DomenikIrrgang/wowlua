@@ -15,6 +15,7 @@ pub mod gamedata;
 pub mod protection;
 pub mod ui;
 pub mod units;
+pub mod widgetdata;
 pub mod widgets;
 
 use std::collections::HashMap;
@@ -268,6 +269,19 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         let w = &mut engine_mut(vm).world.widgets[id.0];
         w.width = widgets::SCREEN.0;
         w.height = widgets::SCREEN.1;
+        // Anchored to the screen at both corners, and protected
+        // (`/stdtest engine`).
+        w.protected = true;
+        w.explicitly_protected = true;
+        for p in ["TOPLEFT", "BOTTOMRIGHT"] {
+            w.points.push(widgets::Point {
+                point: p.into(),
+                relative: None,
+                relative_point: p.into(),
+                x: 0.0,
+                y: 0.0,
+            });
+        }
     }
     widgets::create(vm, "Frame", Some("WorldFrame".into()), None);
     Ok(())

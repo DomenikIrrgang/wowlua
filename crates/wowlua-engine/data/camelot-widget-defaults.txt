@@ -1,0 +1,366 @@
+# A fresh widget's getters on WoW Forever 1.60.1 (/stdtest engine), type<TAB>getter<TAB>
+# results as the probe shows them ("N: type value, ..."); session-dependent ones left out.
+Button	CanChangeProtectedState	1: boolean true
+Button	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+Button	GetEffectiveAlpha	1: number 1
+Button	GetFlattensRenderLayers	1: boolean false
+Button	GetFrameLevel	1: number 1
+Button	GetFrameStrata	1: string MEDIUM
+Button	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+Button	GetID	1: number 0
+Button	GetNumRegions	1: number 0
+Button	GetResizeBounds	4: number 0, number 0, number 0, number 0
+Button	GetText	0: 
+Button	HasFixedFrameLevel	1: boolean false
+Button	HasFixedFrameStrata	1: boolean false
+Button	IsClampedToScreen	1: boolean false
+Button	IsEnabled	1: boolean true
+Button	IsIgnoringParentAlpha	1: boolean false
+Button	IsIgnoringParentScale	1: boolean false
+Button	IsKeyboardEnabled	1: boolean false
+Button	IsMouseClickEnabled	1: boolean true
+Button	IsMouseEnabled	1: boolean true
+Button	IsMouseMotionEnabled	1: boolean true
+Button	IsMouseWheelEnabled	1: boolean false
+Button	IsMovable	1: boolean false
+Button	IsObjectLoaded	1: boolean true
+Button	IsResizable	1: boolean false
+Button	IsToplevel	1: boolean false
+Button	IsUserPlaced	1: boolean false
+CheckButton	CanChangeProtectedState	1: boolean true
+CheckButton	GetChecked	1: boolean false
+CheckButton	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+CheckButton	GetEffectiveAlpha	1: number 1
+CheckButton	GetFlattensRenderLayers	1: boolean false
+CheckButton	GetFrameLevel	1: number 1
+CheckButton	GetFrameStrata	1: string MEDIUM
+CheckButton	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+CheckButton	GetID	1: number 0
+CheckButton	GetNumRegions	1: number 0
+CheckButton	GetResizeBounds	4: number 0, number 0, number 0, number 0
+CheckButton	GetText	0: 
+CheckButton	HasFixedFrameLevel	1: boolean false
+CheckButton	HasFixedFrameStrata	1: boolean false
+CheckButton	IsClampedToScreen	1: boolean false
+CheckButton	IsEnabled	1: boolean true
+CheckButton	IsIgnoringParentAlpha	1: boolean false
+CheckButton	IsIgnoringParentScale	1: boolean false
+CheckButton	IsKeyboardEnabled	1: boolean false
+CheckButton	IsMouseClickEnabled	1: boolean true
+CheckButton	IsMouseEnabled	1: boolean true
+CheckButton	IsMouseMotionEnabled	1: boolean true
+CheckButton	IsMouseWheelEnabled	1: boolean false
+CheckButton	IsMovable	1: boolean false
+CheckButton	IsObjectLoaded	1: boolean true
+CheckButton	IsResizable	1: boolean false
+CheckButton	IsToplevel	1: boolean false
+CheckButton	IsUserPlaced	1: boolean false
+ColorSelect	CanChangeProtectedState	1: boolean true
+ColorSelect	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+ColorSelect	GetEffectiveAlpha	1: number 1
+ColorSelect	GetFlattensRenderLayers	1: boolean false
+ColorSelect	GetFrameLevel	1: number 1
+ColorSelect	GetFrameStrata	1: string MEDIUM
+ColorSelect	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+ColorSelect	GetID	1: number 0
+ColorSelect	GetNumRegions	1: number 0
+ColorSelect	GetResizeBounds	4: number 0, number 0, number 0, number 0
+ColorSelect	HasFixedFrameLevel	1: boolean false
+ColorSelect	HasFixedFrameStrata	1: boolean false
+ColorSelect	IsClampedToScreen	1: boolean false
+ColorSelect	IsIgnoringParentAlpha	1: boolean false
+ColorSelect	IsIgnoringParentScale	1: boolean false
+ColorSelect	IsKeyboardEnabled	1: boolean false
+ColorSelect	IsMouseClickEnabled	1: boolean true
+ColorSelect	IsMouseEnabled	1: boolean true
+ColorSelect	IsMouseMotionEnabled	1: boolean true
+ColorSelect	IsMouseWheelEnabled	1: boolean false
+ColorSelect	IsMovable	1: boolean false
+ColorSelect	IsObjectLoaded	1: boolean true
+ColorSelect	IsResizable	1: boolean false
+ColorSelect	IsToplevel	1: boolean false
+ColorSelect	IsUserPlaced	1: boolean false
+Cooldown	CanChangeProtectedState	1: boolean true
+Cooldown	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+Cooldown	GetEffectiveAlpha	1: number 1
+Cooldown	GetFlattensRenderLayers	1: boolean false
+Cooldown	GetFrameLevel	1: number 1
+Cooldown	GetFrameStrata	1: string MEDIUM
+Cooldown	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+Cooldown	GetID	1: number 0
+Cooldown	GetNumRegions	1: number 1
+Cooldown	GetResizeBounds	4: number 0, number 0, number 0, number 0
+Cooldown	HasFixedFrameLevel	1: boolean false
+Cooldown	HasFixedFrameStrata	1: boolean false
+Cooldown	IsClampedToScreen	1: boolean false
+Cooldown	IsIgnoringParentAlpha	1: boolean false
+Cooldown	IsIgnoringParentScale	1: boolean false
+Cooldown	IsKeyboardEnabled	1: boolean false
+Cooldown	IsMouseClickEnabled	1: boolean false
+Cooldown	IsMouseEnabled	1: boolean false
+Cooldown	IsMouseMotionEnabled	1: boolean false
+Cooldown	IsMouseWheelEnabled	1: boolean false
+Cooldown	IsMovable	1: boolean false
+Cooldown	IsObjectLoaded	1: boolean true
+Cooldown	IsResizable	1: boolean false
+Cooldown	IsToplevel	1: boolean false
+Cooldown	IsUserPlaced	1: boolean false
+EditBox	CanChangeProtectedState	1: boolean true
+EditBox	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+EditBox	GetEffectiveAlpha	1: number 1
+EditBox	GetFlattensRenderLayers	1: boolean false
+EditBox	GetFont	3: nil nil, number 0, string 
+EditBox	GetFrameLevel	1: number 1
+EditBox	GetFrameStrata	1: string MEDIUM
+EditBox	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+EditBox	GetID	1: number 0
+EditBox	GetJustifyH	1: string LEFT
+EditBox	GetJustifyV	1: string MIDDLE
+EditBox	GetNumRegions	1: number 2
+EditBox	GetResizeBounds	4: number 0, number 0, number 0, number 0
+EditBox	GetText	1: string 
+EditBox	GetTextColor	4: number 1, number 1, number 1, number 1
+EditBox	HasFixedFrameLevel	1: boolean false
+EditBox	HasFixedFrameStrata	1: boolean false
+EditBox	IsClampedToScreen	1: boolean false
+EditBox	IsEnabled	1: boolean true
+EditBox	IsIgnoringParentAlpha	1: boolean false
+EditBox	IsIgnoringParentScale	1: boolean false
+EditBox	IsKeyboardEnabled	1: boolean true
+EditBox	IsMouseClickEnabled	1: boolean true
+EditBox	IsMouseEnabled	1: boolean true
+EditBox	IsMouseMotionEnabled	1: boolean true
+EditBox	IsMouseWheelEnabled	1: boolean false
+EditBox	IsMovable	1: boolean false
+EditBox	IsObjectLoaded	1: boolean true
+EditBox	IsResizable	1: boolean false
+EditBox	IsToplevel	1: boolean false
+EditBox	IsUserPlaced	1: boolean false
+FontString	CanChangeProtectedState	1: boolean true
+FontString	GetDrawLayer	2: string OVERLAY, number 0
+FontString	GetFont	3: nil nil, number -1566.5118408203, string 
+FontString	GetJustifyH	1: string CENTER
+FontString	GetJustifyV	1: string MIDDLE
+FontString	GetText	0: 
+FontString	GetTextColor	4: number 1, number 1, number 1, number 1
+FontString	IsIgnoringParentAlpha	1: boolean false
+FontString	IsIgnoringParentScale	1: boolean false
+FontString	IsMouseClickEnabled	1: boolean false
+FontString	IsMouseEnabled	1: boolean false
+FontString	IsMouseMotionEnabled	1: boolean false
+FontString	IsMouseWheelEnabled	1: boolean false
+FontString	IsObjectLoaded	1: boolean true
+Frame	CanChangeProtectedState	1: boolean true
+Frame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+Frame	GetEffectiveAlpha	1: number 1
+Frame	GetFlattensRenderLayers	1: boolean false
+Frame	GetFrameLevel	1: number 1
+Frame	GetFrameStrata	1: string MEDIUM
+Frame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+Frame	GetID	1: number 0
+Frame	GetNumRegions	1: number 0
+Frame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+Frame	HasFixedFrameLevel	1: boolean false
+Frame	HasFixedFrameStrata	1: boolean false
+Frame	IsClampedToScreen	1: boolean false
+Frame	IsIgnoringParentAlpha	1: boolean false
+Frame	IsIgnoringParentScale	1: boolean false
+Frame	IsKeyboardEnabled	1: boolean false
+Frame	IsMouseClickEnabled	1: boolean false
+Frame	IsMouseEnabled	1: boolean false
+Frame	IsMouseMotionEnabled	1: boolean false
+Frame	IsMouseWheelEnabled	1: boolean false
+Frame	IsMovable	1: boolean false
+Frame	IsObjectLoaded	1: boolean true
+Frame	IsResizable	1: boolean false
+Frame	IsToplevel	1: boolean false
+Frame	IsUserPlaced	1: boolean false
+GameTooltip	CanChangeProtectedState	1: boolean true
+GameTooltip	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+GameTooltip	GetEffectiveAlpha	1: number 1
+GameTooltip	GetFlattensRenderLayers	1: boolean false
+GameTooltip	GetFrameLevel	1: number 1
+GameTooltip	GetFrameStrata	1: string MEDIUM
+GameTooltip	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+GameTooltip	GetID	1: number 0
+GameTooltip	GetNumRegions	1: number 0
+GameTooltip	GetResizeBounds	4: number 0, number 0, number 0, number 0
+GameTooltip	HasFixedFrameLevel	1: boolean false
+GameTooltip	HasFixedFrameStrata	1: boolean false
+GameTooltip	IsClampedToScreen	1: boolean false
+GameTooltip	IsIgnoringParentAlpha	1: boolean false
+GameTooltip	IsIgnoringParentScale	1: boolean false
+GameTooltip	IsKeyboardEnabled	1: boolean false
+GameTooltip	IsMouseClickEnabled	1: boolean false
+GameTooltip	IsMouseEnabled	1: boolean false
+GameTooltip	IsMouseMotionEnabled	1: boolean false
+GameTooltip	IsMouseWheelEnabled	1: boolean false
+GameTooltip	IsMovable	1: boolean false
+GameTooltip	IsObjectLoaded	1: boolean true
+GameTooltip	IsResizable	1: boolean false
+GameTooltip	IsToplevel	1: boolean false
+GameTooltip	IsUserPlaced	1: boolean false
+Line	CanChangeProtectedState	1: boolean true
+Line	GetDrawLayer	2: string ARTWORK, number 0
+Line	GetTexture	0: 
+Line	IsIgnoringParentAlpha	1: boolean false
+Line	IsIgnoringParentScale	1: boolean false
+Line	IsMouseClickEnabled	1: boolean false
+Line	IsMouseEnabled	1: boolean false
+Line	IsMouseMotionEnabled	1: boolean false
+Line	IsMouseWheelEnabled	1: boolean false
+Line	IsObjectLoaded	1: boolean true
+MaskTexture	CanChangeProtectedState	1: boolean true
+MaskTexture	GetDrawLayer	2: string ARTWORK, number 0
+MaskTexture	GetTexture	0: 
+MaskTexture	IsIgnoringParentAlpha	1: boolean false
+MaskTexture	IsIgnoringParentScale	1: boolean false
+MaskTexture	IsMouseClickEnabled	1: boolean false
+MaskTexture	IsMouseEnabled	1: boolean false
+MaskTexture	IsMouseMotionEnabled	1: boolean false
+MaskTexture	IsMouseWheelEnabled	1: boolean false
+MaskTexture	IsObjectLoaded	1: boolean true
+MessageFrame	CanChangeProtectedState	1: boolean true
+MessageFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+MessageFrame	GetEffectiveAlpha	1: number 1
+MessageFrame	GetFlattensRenderLayers	1: boolean false
+MessageFrame	GetFont	3: nil nil, number 0, string 
+MessageFrame	GetFrameLevel	1: number 1
+MessageFrame	GetFrameStrata	1: string MEDIUM
+MessageFrame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+MessageFrame	GetID	1: number 0
+MessageFrame	GetJustifyH	1: string CENTER
+MessageFrame	GetJustifyV	1: string MIDDLE
+MessageFrame	GetNumRegions	1: number 0
+MessageFrame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+MessageFrame	GetTextColor	4: number 1, number 1, number 1, number 1
+MessageFrame	HasFixedFrameLevel	1: boolean false
+MessageFrame	HasFixedFrameStrata	1: boolean false
+MessageFrame	IsClampedToScreen	1: boolean false
+MessageFrame	IsIgnoringParentAlpha	1: boolean false
+MessageFrame	IsIgnoringParentScale	1: boolean false
+MessageFrame	IsKeyboardEnabled	1: boolean false
+MessageFrame	IsMouseClickEnabled	1: boolean false
+MessageFrame	IsMouseEnabled	1: boolean false
+MessageFrame	IsMouseMotionEnabled	1: boolean false
+MessageFrame	IsMouseWheelEnabled	1: boolean false
+MessageFrame	IsMovable	1: boolean false
+MessageFrame	IsObjectLoaded	1: boolean true
+MessageFrame	IsResizable	1: boolean false
+MessageFrame	IsToplevel	1: boolean false
+MessageFrame	IsUserPlaced	1: boolean false
+ScrollFrame	CanChangeProtectedState	1: boolean true
+ScrollFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+ScrollFrame	GetEffectiveAlpha	1: number 1
+ScrollFrame	GetFlattensRenderLayers	1: boolean false
+ScrollFrame	GetFrameLevel	1: number 1
+ScrollFrame	GetFrameStrata	1: string MEDIUM
+ScrollFrame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+ScrollFrame	GetID	1: number 0
+ScrollFrame	GetNumRegions	1: number 0
+ScrollFrame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+ScrollFrame	HasFixedFrameLevel	1: boolean false
+ScrollFrame	HasFixedFrameStrata	1: boolean false
+ScrollFrame	IsClampedToScreen	1: boolean false
+ScrollFrame	IsIgnoringParentAlpha	1: boolean false
+ScrollFrame	IsIgnoringParentScale	1: boolean false
+ScrollFrame	IsKeyboardEnabled	1: boolean false
+ScrollFrame	IsMouseClickEnabled	1: boolean false
+ScrollFrame	IsMouseEnabled	1: boolean false
+ScrollFrame	IsMouseMotionEnabled	1: boolean false
+ScrollFrame	IsMouseWheelEnabled	1: boolean false
+ScrollFrame	IsMovable	1: boolean false
+ScrollFrame	IsObjectLoaded	1: boolean true
+ScrollFrame	IsResizable	1: boolean false
+ScrollFrame	IsToplevel	1: boolean false
+ScrollFrame	IsUserPlaced	1: boolean false
+SimpleHTML	CanChangeProtectedState	1: boolean true
+SimpleHTML	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+SimpleHTML	GetEffectiveAlpha	1: number 1
+SimpleHTML	GetFlattensRenderLayers	1: boolean false
+SimpleHTML	GetFrameLevel	1: number 1
+SimpleHTML	GetFrameStrata	1: string MEDIUM
+SimpleHTML	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+SimpleHTML	GetID	1: number 0
+SimpleHTML	GetNumRegions	1: number 0
+SimpleHTML	GetResizeBounds	4: number 0, number 0, number 0, number 0
+SimpleHTML	HasFixedFrameLevel	1: boolean false
+SimpleHTML	HasFixedFrameStrata	1: boolean false
+SimpleHTML	IsClampedToScreen	1: boolean false
+SimpleHTML	IsIgnoringParentAlpha	1: boolean false
+SimpleHTML	IsIgnoringParentScale	1: boolean false
+SimpleHTML	IsKeyboardEnabled	1: boolean false
+SimpleHTML	IsMouseClickEnabled	1: boolean false
+SimpleHTML	IsMouseEnabled	1: boolean false
+SimpleHTML	IsMouseMotionEnabled	1: boolean false
+SimpleHTML	IsMouseWheelEnabled	1: boolean false
+SimpleHTML	IsMovable	1: boolean false
+SimpleHTML	IsObjectLoaded	1: boolean true
+SimpleHTML	IsResizable	1: boolean false
+SimpleHTML	IsToplevel	1: boolean false
+SimpleHTML	IsUserPlaced	1: boolean false
+Slider	CanChangeProtectedState	1: boolean true
+Slider	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+Slider	GetEffectiveAlpha	1: number 1
+Slider	GetFlattensRenderLayers	1: boolean false
+Slider	GetFrameLevel	1: number 1
+Slider	GetFrameStrata	1: string MEDIUM
+Slider	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+Slider	GetID	1: number 0
+Slider	GetMinMaxValues	2: number 0, number 0
+Slider	GetNumRegions	1: number 0
+Slider	GetResizeBounds	4: number 0, number 0, number 0, number 0
+Slider	GetValue	1: number 0
+Slider	HasFixedFrameLevel	1: boolean false
+Slider	HasFixedFrameStrata	1: boolean false
+Slider	IsClampedToScreen	1: boolean false
+Slider	IsEnabled	1: boolean true
+Slider	IsIgnoringParentAlpha	1: boolean false
+Slider	IsIgnoringParentScale	1: boolean false
+Slider	IsKeyboardEnabled	1: boolean false
+Slider	IsMouseClickEnabled	1: boolean true
+Slider	IsMouseEnabled	1: boolean true
+Slider	IsMouseMotionEnabled	1: boolean true
+Slider	IsMouseWheelEnabled	1: boolean false
+Slider	IsMovable	1: boolean false
+Slider	IsObjectLoaded	1: boolean true
+Slider	IsResizable	1: boolean false
+Slider	IsToplevel	1: boolean false
+Slider	IsUserPlaced	1: boolean false
+StatusBar	CanChangeProtectedState	1: boolean true
+StatusBar	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+StatusBar	GetEffectiveAlpha	1: number 1
+StatusBar	GetFlattensRenderLayers	1: boolean false
+StatusBar	GetFrameLevel	1: number 1
+StatusBar	GetFrameStrata	1: string MEDIUM
+StatusBar	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+StatusBar	GetID	1: number 0
+StatusBar	GetMinMaxValues	2: number 0, number 0
+StatusBar	GetNumRegions	1: number 0
+StatusBar	GetResizeBounds	4: number 0, number 0, number 0, number 0
+StatusBar	GetValue	1: number 0
+StatusBar	HasFixedFrameLevel	1: boolean false
+StatusBar	HasFixedFrameStrata	1: boolean false
+StatusBar	IsClampedToScreen	1: boolean false
+StatusBar	IsIgnoringParentAlpha	1: boolean false
+StatusBar	IsIgnoringParentScale	1: boolean false
+StatusBar	IsKeyboardEnabled	1: boolean false
+StatusBar	IsMouseClickEnabled	1: boolean false
+StatusBar	IsMouseEnabled	1: boolean false
+StatusBar	IsMouseMotionEnabled	1: boolean false
+StatusBar	IsMouseWheelEnabled	1: boolean false
+StatusBar	IsMovable	1: boolean false
+StatusBar	IsObjectLoaded	1: boolean true
+StatusBar	IsResizable	1: boolean false
+StatusBar	IsToplevel	1: boolean false
+StatusBar	IsUserPlaced	1: boolean false
+Texture	CanChangeProtectedState	1: boolean true
+Texture	GetDrawLayer	2: string ARTWORK, number 0
+Texture	GetTexture	0: 
+Texture	IsIgnoringParentAlpha	1: boolean false
+Texture	IsIgnoringParentScale	1: boolean false
+Texture	IsMouseClickEnabled	1: boolean false
+Texture	IsMouseEnabled	1: boolean false
+Texture	IsMouseMotionEnabled	1: boolean false
+Texture	IsMouseWheelEnabled	1: boolean false
+Texture	IsObjectLoaded	1: boolean true

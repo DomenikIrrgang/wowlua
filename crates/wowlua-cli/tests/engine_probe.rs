@@ -177,7 +177,11 @@ fn compared(key: &str) -> bool {
         "probe.client",
         "probe.getTime",
         "probe.units.",
-        "probe.widgets.",
+        "probe.widgets.AuraContainer.",
+        // Session values: addresses, the UI scale, the screen.
+        "probe.widgets.UIParent.getters.Get",
+        "probe.widgets.FontString.getters.GetFont",
+        "probe.widgets.SimpleHTML.getters.GetTextColor",
         "probe.cvarDefaults.",
         "probe.blizzard",
         "probe.behaviours.CreateFrame('EventFrame')",
@@ -188,6 +192,8 @@ fn compared(key: &str) -> bool {
         "probe.errors.GetScript",
     ];
     !SKIP.iter().any(|s| key.starts_with(s))
+        && !key.ends_with(".GetDebugName")
+        && !key.ends_with(".GetEffectiveScale")
 }
 
 #[test]

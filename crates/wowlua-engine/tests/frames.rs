@@ -140,7 +140,7 @@ local fs = f:CreateFontString(nil, 'OVERLAY')
 local noFont = select(2, pcall(fs.SetText, fs, 'hi'))
 fs:SetFont('Fonts\\FRIZQT__.TTF', 12, '')
 fs:SetText('hi')
-return f:GetLeft(), f:GetTop(), f:GetFrameStrata(), fs:GetText(), fs:GetObjectType(), select(2, pcall(f.GetHitRectInsets, f)), f:GetFrameLevel(), noFont",
+return f:GetLeft(), f:GetTop(), f:GetFrameStrata(), fs:GetText(), fs:GetObjectType(), select(2, pcall(f.GetBoundsRect, f)), f:GetFrameLevel(), noFont",
     );
     assert_eq!(
         r,
@@ -150,7 +150,7 @@ return f:GetLeft(), f:GetTop(), f:GetFrameStrata(), fs:GetText(), fs:GetObjectTy
             "HIGH",
             "hi",
             "FontString",
-            "Frame:GetHitRectInsets is not mocked",
+            "Frame:GetBoundsRect is not mocked",
             "1",
             "FontString:SetText(): Font not set\nLua Taint: MyAddon"
         ]
