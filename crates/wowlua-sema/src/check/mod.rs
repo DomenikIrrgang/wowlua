@@ -21,7 +21,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::{HashMap, HashSet};
 use types::{Field, Record, Ty, TypeId, Types};
 use wowlua_diagnostics::Diagnostic;
-use wowlua_syntax::ast::{ImportClause, StmtKind};
+use wowlua_syntax::ast::{ExprKind, ImportClause, StmtKind};
 
 /// How one file is checked (spec §2.1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -575,6 +575,93 @@ struct FileOutcome {
     exports: FxHashMap<Box<str>, TypeId>,
 }
 
+/// Compile-time tests of `wowlua:test` (decision T219): a function with
+/// `@expectError("E2001", …)` must produce exactly these errors (and these
+/// warnings, of those it names); they are then dropped. Otherwise E8122
+/// says what it produced.
+fn expected_errors(
+    intrinsics: &crate::stdlib::Intrinsics,
+    parse: &wowlua_syntax::Parse,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for st in &parse.chunk.block.stmts {
+        let (name, func_span) = match &st.kind {
+            StmtKind::LocalFunction { name, func } => (name.text.to_string(), func.span),
+            StmtKind::Function { name, func } => (
+                name.path
+                    .iter()
+                    .map(|n| n.text.as_ref())
+                    .collect::<Vec<_>>()
+                    .join("."),
+                func.span,
+            ),
+            _ => continue,
+        };
+        let Some(d) = st.decorators.iter().find(|d| {
+            let id = match d.path.as_slice() {
+                [n] => intrinsics.get(&n.text, None),
+                [m, n] => intrinsics.get(&m.text, Some(&n.text)),
+                _ => None,
+            };
+            id == Some("test.expectError")
+        }) else {
+            continue;
+        };
+        let mut wanted: Vec<String> = d
+            .args
+            .as_ref()
+            .map(|a| a.exprs())
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|e| match &e.kind {
+                ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value).into_owned()),
+                _ => None,
+            })
+            .collect();
+        wanted.sort();
+        let inside = |diag: &Diagnostic| {
+            diag.labels.first().is_some_and(|l| {
+                l.span.file == func_span.file
+                    && l.span.start >= func_span.start
+                    && l.span.end <= func_span.end
+            })
+        };
+        // The errors inside, and the warnings it expects.
+        let mut got: Vec<String> = diagnostics
+            .iter()
+            .filter(|diag| inside(diag))
+            .filter_map(|diag| diag.code)
+            .filter(|c| c.starts_with('E') || wanted.iter().any(|w| w == c))
+            .map(str::to_string)
+            .collect();
+        got.sort();
+        if got == wanted {
+            diagnostics.retain(|diag| {
+                !(inside(diag) && diag.code.is_some_and(|c| wanted.iter().any(|w| w == c)))
+            });
+        } else {
+            let shown = |list: &[String]| {
+                if list.is_empty() {
+                    "none".to_string()
+                } else {
+                    list.join(", ")
+                }
+            };
+            diagnostics.push(
+                Diagnostic::error(
+                    "E8122",
+                    format!(
+                        "`{name}` should not compile with {}; it gives {}",
+                        shown(&wanted),
+                        shown(&got)
+                    ),
+                )
+                .with_label(d.span, "expected here"),
+            );
+        }
+    }
+}
+
 /// Checks file `i` in `env`.
 fn check_file_in(
     env: &mut env::Env,
@@ -695,6 +782,7 @@ fn check_file_in(
     out.global_classes
         .extend(std::mem::take(&mut checker.global_classes));
     out.exports = std::mem::take(&mut checker.exports);
+    expected_errors(&info.intrinsics, parse, &mut checker.diagnostics);
     out.diagnostics.append(&mut checker.diagnostics);
     out.diagnostics.append(&mut env.diagnostics);
     // A standard-library module's declarations give its exports as

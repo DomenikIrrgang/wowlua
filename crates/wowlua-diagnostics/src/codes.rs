@@ -208,6 +208,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E8119", summary: "`import internal` outside a test file" },
     CodeInfo { code: "E8120", summary: "A `@cases` case does not match the test function's parameters" },
     CodeInfo { code: "E8121", summary: "A matcher used on a value of a kind it does not take (`toHaveLength` on a number)" },
+    CodeInfo { code: "E8122", summary: "An `@expectError` function gives other diagnostics than it names" },
     CodeInfo { code: "E8300", summary: "Standard-library function unavailable on a targeted flavor (no fallback)" },
     CodeInfo { code: "W8301", summary: "Standard-library function uses a reduced fallback on a targeted flavor (lists missing fields or features)" },
     CodeInfo { code: "E8310", summary: "Invalid token in a literal aura filter" },

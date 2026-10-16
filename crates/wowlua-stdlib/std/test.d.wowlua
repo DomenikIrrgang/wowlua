@@ -13,6 +13,8 @@ declare global only: any
 declare global flavors: any
 @intrinsic("test.cases")
 declare global cases: any
+@intrinsic("test.expectError")
+declare global expectError: any
 @intrinsic("test.beforeEach")
 declare global beforeEach: any
 @intrinsic("test.afterEach")

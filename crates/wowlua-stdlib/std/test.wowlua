@@ -18,6 +18,8 @@ type Entry = {
     flavors?: string[],
     cases?: any[],
     timeout?: number,
+    --- A compile-time test (`@expectError`): checked by the compiler, never run.
+    compileTime?: boolean,
 }
 
 type Job = {
@@ -161,6 +163,17 @@ end
 export function cases(list: any[]): any
     return function(fn: Fn, ctx: DecoratorContext?)
         entry(fn, ctx).cases = list
+    end
+end
+
+--- `@expectError("E2001", …)`: a compile-time test (decision T219). The
+--- function must not compile, with exactly these diagnostics; the compiler
+--- checks it (E8122 otherwise), and it is never run.
+export function expectError(...: string): any
+    return function(fn: Fn, ctx: DecoratorContext?)
+        local e = entry(fn, ctx)
+        e.test = true
+        e.compileTime = true
     end
 end
 
@@ -765,6 +778,10 @@ wl.tests = {
             end
         end
         local e = target :: Entry
+        -- The compiler checked a compile-time test; nothing runs.
+        if e.compileTime then
+            return job
+        end
         for _, h in ipairs(hookPhases("beforeEach")) do
             add(h, false)
         end
@@ -772,6 +789,9 @@ wl.tests = {
             current = e
             snapshotCount = 0
             currentName = c and wl.tests.caseName(i :: number, c) or e.name
+            if e.compileTime then
+                return
+            end
             local case: any = c and (e.cases :: any[])[c]
             if type(case) == "table" then
                 local list = case :: any[]

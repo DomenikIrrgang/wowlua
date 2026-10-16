@@ -733,3 +733,49 @@ end
     assert!(ok, "{out}");
     assert!(out.contains("snapshots: 1 removed"), "{out}");
 }
+
+/// Compile-time tests (decision T219): `@expectError` passes when the
+/// function gives exactly these diagnostics, which are dropped; otherwise
+/// E8122.
+#[test]
+fn compile_time_tests() {
+    let body = |codes: &str| {
+        format!(
+            r#"import test, expect, expectError from "wowlua:test"
+
+local function record(n: number): number
+    return n
+end
+
+@expectError({codes})
+local function wrongArgument()
+    record("two")
+end
+
+@test
+local function runs()
+    expect(record(2)).toBe(2)
+end
+"#
+        )
+    };
+    let dir = project(
+        r#""standard": {}"#,
+        &[("tests/types.test.wowlua", &body("\"E2001\""))],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("✓ wrongArgument"), "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+    fs::write(
+        dir.path().join("tests/types.test.wowlua"),
+        body("\"E2005\""),
+    )
+    .unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(
+        out.contains("`wrongArgument` should not compile with E2005; it gives E2001"),
+        "{out}"
+    );
+}

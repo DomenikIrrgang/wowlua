@@ -55,9 +55,8 @@ pub(crate) fn intrinsic(id: &str) -> Option<Intrinsic> {
         | "lifecycle.onLogout" => Some(Intrinsic::Registering),
         // wowlua:test
         "test.test" | "test.skip" | "test.only" | "test.flavors" | "test.cases"
-        | "test.beforeEach" | "test.afterEach" | "test.beforeAll" | "test.afterAll" => {
-            Some(Intrinsic::Registering)
-        }
+        | "test.expectError" | "test.beforeEach" | "test.afterEach" | "test.beforeAll"
+        | "test.afterAll" => Some(Intrinsic::Registering),
         _ => None,
     }
 }
