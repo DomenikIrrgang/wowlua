@@ -216,6 +216,42 @@ impl Jobs {
         jobs
     }
 
+    /// Drops `items` on workers, the heaviest first (#49): freeing a large
+    /// project's syntax trees is otherwise serial work at the end of a
+    /// build. With one thread, or a total weight below `small` when not
+    /// explicit, they are dropped here. Dropping has no effect but freeing.
+    pub(crate) fn drop_all<T: Send>(&self, items: Vec<T>, weight: impl Fn(&T) -> u64) {
+        let total: u64 = items.iter().map(&weight).sum();
+        let small = 256 * 1024;
+        if self.threads.get() == 1 || items.len() < 2 || (!self.explicit && total < small) {
+            drop(items);
+            return;
+        }
+        let mut items: Vec<(u64, T)> = items.into_iter().map(|t| (weight(&t), t)).collect();
+        items.sort_by_key(|(w, _)| std::cmp::Reverse(*w));
+        let queue = Mutex::new(items.into_iter());
+        let next = || queue.lock().unwrap_or_else(|e| e.into_inner()).next();
+        std::thread::scope(|scope| {
+            for _ in 0..self.threads.get() {
+                let spawned = std::thread::Builder::new()
+                    .name("wowlua-worker".into())
+                    .stack_size(STACK)
+                    .spawn_scoped(scope, || {
+                        while let Some(item) = next() {
+                            drop(item);
+                        }
+                    });
+                if spawned.is_err() {
+                    break;
+                }
+            }
+        });
+        // Whatever no worker took (none could be started).
+        while let Some(item) = next() {
+            drop(item);
+        }
+    }
+
     /// One thread: today's sequential code.
     pub fn one() -> Jobs {
         Jobs {
@@ -265,6 +301,13 @@ impl Jobs {
                 results.into_iter().for_each(merge);
             }
         }
+    }
+}
+
+/// The load order's per-file work on the workers (#49).
+impl wowlua_sema::loadorder::Spread for Jobs {
+    fn each(&self, n: usize, weight: &(dyn Fn(usize) -> u64 + Sync), f: &(dyn Fn(usize) + Sync)) {
+        self.region((0..n).collect(), |&i| weight(i), 1, f, |()| {});
     }
 }
 
