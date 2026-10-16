@@ -550,6 +550,33 @@ impl Types {
             })
     }
 
+    /// Whether `t` has a shape (as `shape(t).is_some()`, without making it).
+    fn has_shape(&self, t: TypeId) -> bool {
+        if t <= Types::FALSE {
+            return true;
+        }
+        let variadic = |r: &Option<Rest>| match r {
+            None => true,
+            Some(Rest::Variadic(t)) => self.has_shape(*t),
+            Some(Rest::Pack(_)) => false,
+        };
+        match self.get(t) {
+            Ty::Num(_) | Ty::Str(_) => true,
+            Ty::Array(e) | Ty::Secret(e) => self.has_shape(*e),
+            Ty::Map(k, v) => self.has_shape(*k) && self.has_shape(*v),
+            Ty::Union(m) => m.iter().all(|&m| self.has_shape(m)),
+            Ty::Func(f) => {
+                f.type_params.is_empty()
+                    && f.params.iter().all(|p| self.has_shape(p.ty))
+                    && variadic(&f.rest)
+                    && f.ret.types.iter().all(|&t| self.has_shape(t))
+                    && variadic(&f.ret.rest)
+                    && f.predicate.is_none_or(|(_, t)| self.has_shape(t))
+            }
+            _ => false,
+        }
+    }
+
     /// `t`'s shape, if it has one.
     fn shape(&self, t: TypeId) -> Option<Shape> {
         if t <= Types::FALSE {
@@ -851,7 +878,7 @@ impl Types {
                     if ordered.len() >= 2 {
                         let unborn: Vec<TypeId> =
                             ordered.into_iter().filter(|&m| !self.is_born(m)).collect();
-                        let shaped = unborn.iter().all(|&m| self.shape(m).is_some());
+                        let shaped = unborn.iter().all(|&m| self.has_shape(m));
                         if let Some(b) = &mut self.births {
                             b.order_sensitive |= !shaped;
                             b.unborn.extend(unborn);
@@ -1186,6 +1213,45 @@ mod tests {
             Some(vec![(str_shape("g"), false)]),
             "rolled back births are forgotten"
         );
+    }
+
+    /// `has_shape` is `shape(..).is_some()`.
+    #[test]
+    fn has_shape_agrees_with_shape() {
+        let mut types = Types::new();
+        let s = types.str("s");
+        let arr = types.array(s);
+        let named = types.intern(Ty::Named(DefId(0), Vec::new()));
+        let bad = types.array(named);
+        let f = types.func(Func {
+            type_params: Vec::new(),
+            params: vec![Param {
+                name: None,
+                ty: arr,
+                optional: true,
+            }],
+            rest: Some(Rest::Variadic(Types::NUMBER)),
+            ret: Pack::single(s),
+            predicate: None,
+            unannotated: false,
+        });
+        let g = types.func(Func {
+            type_params: Vec::new(),
+            params: Vec::new(),
+            rest: None,
+            ret: Pack::single(bad),
+            predicate: None,
+            unannotated: false,
+        });
+        let u = types.union(&[s, arr, Types::NIL]);
+        for t in [Types::ANY, s, arr, named, bad, f, g, u] {
+            assert_eq!(
+                types.has_shape(t),
+                types.shape(t).is_some(),
+                "{:?}",
+                types.get(t)
+            );
+        }
     }
 
     /// After a rollback the arena is as it was: the same types get the
