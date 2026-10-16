@@ -1,4 +1,4 @@
-# WoW Forever 1.60.1 (70374): where its `Enum` and `Constants` differ from
+# WoW Forever 1.60.1 (70425): where its `Enum` and `Constants` differ from
 # the documentation (`/stdtest engine`, fixture
 # tests/client/forever-camelot-engine.lua): `name<TAB>value` sets a field
 # (`number 57`, `string x`, `boolean true`), `name<TAB>-` removes a field
@@ -66,7 +66,6 @@ Constants.CurrencyConsts.CLASSIC_ARENA_POINTS_CURRENCY_ID	number 1900
 Constants.CurrencyConsts.CLASSIC_CONQUEST_CURRENCY_ID	number 390
 Constants.CurrencyConsts.HONOR_PER_CURRENCY	number 10
 Constants.CurrencyConsts.PLAYER_CURRENCY_CLIENT_FLAGS	number 12
-Constants.DeathRecapConsts.SWING_DAMAGE_SPELL_ID	number 88163
 Constants.EditModeLayoutConsts_Mainline.EditModeDefaultLayout	number 0
 Constants.EncounterTimelineIconMasks.EncounterTimelineDamageAlertIcons	number 512
 Constants.EncounterTimelineIconMasks.EncounterTimelineDeadlyIcons	number 1
@@ -97,15 +96,6 @@ Constants.ItemConsts.CASTER_WEAPON_SPELL_HEALING_MULT_WITH_FLAG	number 3.7599999
 Constants.ItemConsts.CURRENT_ARTIFACT_POWERS_VERSION	number 1
 Constants.ItemConsts.CURRENT_ITEM_SAVE_VERSION	number 2
 Constants.LFG_ROLEConstants.LFG_ROLE_ANY	number 3
-Constants.LegacyConsts.LEGACY_DEFAULT_CATEGORY_DRUID	number 15577
-Constants.LegacyConsts.LEGACY_DEFAULT_CATEGORY_HUNTER	number 15578
-Constants.LegacyConsts.LEGACY_DEFAULT_CATEGORY_MAGE	number 15579
-Constants.LegacyConsts.LEGACY_DEFAULT_CATEGORY_PALADIN	number 15580
-Constants.LegacyConsts.LEGACY_DEFAULT_CATEGORY_PRIEST	number 15581
-Constants.LegacyConsts.LEGACY_DEFAULT_CATEGORY_ROGUE	number 15582
-Constants.LegacyConsts.LEGACY_DEFAULT_CATEGORY_SHAMAN	number 15583
-Constants.LegacyConsts.LEGACY_DEFAULT_CATEGORY_WARLOCK	number 15584
-Constants.LegacyConsts.LEGACY_DEFAULT_CATEGORY_WARRIOR	number 15585
 Constants.LootConsts.MasterLootQualityThreshold	number 4
 Constants.PetConsts.DEFAULT_PET_PERSONALITY	number 1
 Constants.PetConsts.EXTRA_PET_STABLE_SLOT	number -1
@@ -138,8 +128,6 @@ Constants.UICharacterClasses.Rogue	number 4
 Constants.UICharacterClasses.Shaman	number 7
 Constants.UICharacterClasses.Warlock	number 9
 Constants.UICharacterClasses.Warrior	number 1
-Constants.UnitAuraUIConstants.GROUP_BUFF_VISUAL_ALERT_LIST_SIZE	number 128
-Constants.UnitAuraUIConstants.HIDDEN_GROUP_BUFF_LIST_SIZE	number 128
 Constants.WeeklyRewardsConsts.ABORT_ITEM_RETENTION_DAYS	number 15
 Constants.WeeklyRewardsConsts.WEEKLY_REWARD_ITEM_RETENTION_DAYS	number 15
 Enum.AccountStateFlags.AccountUpgradeComplete	number 4
@@ -461,16 +449,6 @@ Enum.DiscordMessageIDMeta.MinValue	string 0x0000000000000000
 Enum.DiscordMessageIDMeta.NumValues	string 0x0000000000000001
 Enum.EditModeChatFrameDisplayOnlySetting.Height	number 5
 Enum.EditModeChatFrameDisplayOnlySetting.Width	number 4
-Enum.EvictionType.JoinParty	number 2
-Enum.EvictionType.LeaveParty	number 3
-Enum.EvictionType.Outsider	number 0
-Enum.EvictionType.OutsiderParty	number 1
-Enum.EvictionType.ServerExpiryAggressive	number 5
-Enum.EvictionType.ServerExpiryNormal	number 4
-Enum.EvictionType.ServerExpiryParty	number 6
-Enum.EvictionTypeMeta.MaxValue	number 6
-Enum.EvictionTypeMeta.MinValue	number 0
-Enum.EvictionTypeMeta.NumValues	number 7
 Enum.GameMode.Plunderstorm	number 2
 Enum.GameMode.Standard	number 1
 Enum.GameMode.WoWHack	number 3
@@ -1112,20 +1090,6 @@ Enum.ResidentType.Resident	number 0
 Enum.ResidentTypeMeta.MaxValue	number 2
 Enum.ResidentTypeMeta.MinValue	number 0
 Enum.ResidentTypeMeta.NumValues	number 3
-Enum.SdToggleUsageLocation.BarberShop	number 2
-Enum.SdToggleUsageLocation.BeforeLogin	number 0
-Enum.SdToggleUsageLocation.CharacterCreation	number 1
-Enum.SdToggleUsageLocation.OptionsMenu	number 3
-Enum.SdToggleUsageLocationMeta.MaxValue	number 3
-Enum.SdToggleUsageLocationMeta.MinValue	number 0
-Enum.SdToggleUsageLocationMeta.NumValues	number 4
-Enum.SdToggleUsageLocationUI.BarberShop	number 2
-Enum.SdToggleUsageLocationUI.BeforeLogin	number 0
-Enum.SdToggleUsageLocationUI.CharacterCreation	number 1
-Enum.SdToggleUsageLocationUI.OptionsMenu	number 3
-Enum.SdToggleUsageLocationUIMeta.MaxValue	number 3
-Enum.SdToggleUsageLocationUIMeta.MinValue	number 0
-Enum.SdToggleUsageLocationUIMeta.NumValues	number 4
 Enum.ShutdownSessionReason.AccountLoginCommand	number 4
 Enum.ShutdownSessionReason.Error	number 6
 Enum.ShutdownSessionReason.ForceLogoutCommand	number 2

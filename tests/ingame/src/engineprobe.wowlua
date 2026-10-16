@@ -401,7 +401,7 @@ const BLIZZARD_ADDONS = {
     "Blizzard_FramerateFrame", "Blizzard_FrameStack", "Blizzard_FrameXML", "Blizzard_FrameXMLBase",
     "Blizzard_FrameXMLUtil", "Blizzard_FriendsFrame", "Blizzard_FullscreenBrowser", "Blizzard_Game",
     "Blizzard_GameMenu", "Blizzard_GameMenuEsc", "Blizzard_GameModeSelect", "Blizzard_Gamepad",
-    "Blizzard_GamepadActionBars", "Blizzard_GamepadSharedUtility",
+    "Blizzard_GamepadActionBars", "Blizzard_GamepadSharedUtility", "Blizzard_GamepadSharedUtilitySecure",
     "Blizzard_GamepadSmartNavigation", "Blizzard_GamepadSoftCursor", "Blizzard_GamepadTargeting",
     "Blizzard_GameTooltip", "Blizzard_GarrisonBase", "Blizzard_GarrisonTemplates",
     "Blizzard_GarrisonUI", "Blizzard_GenericShoppingCart", "Blizzard_GenericTraitUI",
@@ -858,61 +858,9 @@ local function timers(done: (r: { [string]: string }) -> ())
     C_Timer.After(0, function() log[#log + 1] = "after0" end)
 end
 
-export function engineProbe(arg: string?)
-    const st = state() :: any
-    const words: string[] = {}
-    for w in (arg ?? ""):gmatch("%S+") do
-        words[#words + 1] = w
-    end
-    if words[1] == "record" then
-        startRecording(words[2] ?? "unnamed")
-        return
-    elseif words[1] == "stop" then
-        stopRecording()
-        return
-    elseif words[1] == "order" then
-        dispatchOrder()
-        return
-    elseif words[1] == "protected" then
-        protectedProbe()
-        return
-    elseif words[1] == "blocked" then
-        blockedProbe()
-        return
-    elseif words[1] == "comm" then
-        commProbe()
-        return
-    end
-    const probe: { [string]: any } = {
-        client = `{(GetBuildInfo())}`,
-        widgets = widgets(),
-        identities = identities(),
-        errors = errors(),
-        order = order(),
-        behaviours = behaviours(),
-        cvarDefaults = cvarDefaults(),
-        enums = tables(G.Enum),
-        loadCalls = loadCalls(),
-        constants = tables(G.Constants),
-        scalars = scalars(),
-        hidden = hidden(),
-        allCVars = allCVars(),
-        qualityColors = qualityColors(),
-        blizzardAtStart = table.concat(LOADED_AT_START, " "),
-        blizzardNow = table.concat(blizzardLoaded(), " "),
-        units = units(),
-        getTime = show(GetTime()),
-    }
-    st.engineProbe = probe
-    timers(function(r: { [string]: string })
-        probe.timers = r
-        say("engine: recorded; type /reload so the file is written")
-    end)
-    say("engine: probing (timers finish within a second)...")
-end
 
 -- Dispatch order: frames made A, B, C, D; registered C, A, D, B.
-function dispatchOrder()
+local function dispatchOrder()
     const st = state() :: any
     const seen: string[] = {}
     const made: { [string]: any } = {}
@@ -958,7 +906,7 @@ end
 local recorder: any = nil
 local recording: { [string]: any }? = nil
 
-function startRecording(label: string)
+local function startRecording(label: string)
     const st = state() :: any
     st.engineRecords = st.engineRecords ?? {}
     const log: string[] = {}
@@ -980,7 +928,7 @@ function startRecording(label: string)
     say(`engine record "{label}": recording every event; /stdtest engine stop when done`)
 end
 
-function stopRecording()
+local function stopRecording()
     if recorder then
         recorder:UnregisterAllEvents()
     end
@@ -1011,7 +959,7 @@ end
 
 -- Protected functions from addon code, out of combat: only harmless ones
 -- (targeting yourself, stopping what is not running).
-function protectedProbe()
+local function protectedProbe()
     const st = state() :: any
     const out: { [string]: string } = {}
     const calls: any[] = {
@@ -1041,7 +989,7 @@ end
 
 -- Protected frames in combat: named and anonymous secure buttons, a plain
 -- one; called from addon code half a second after combat starts.
-function blockedProbe()
+local function blockedProbe()
     const st = state() :: any
     const named = CreateFrame("Button", "StdTestSecureButton", UIParent, "SecureActionButtonTemplate")
     const anon = CreateFrame("Button", nil, UIParent, "SecureActionButtonTemplate")
@@ -1090,7 +1038,7 @@ end
 
 -- Addon messages: prefixes, send results, and when a whisper to yourself
 -- arrives (only to yourself; the guild only when not in one).
-function commProbe()
+local function commProbe()
     const st = state() :: any
     const out: { [string]: string } = {}
     const arrivals: string[] = {}
@@ -1163,4 +1111,57 @@ function commProbe()
         say(`engine comm: {#arrivals} messages arrived; type /reload so the file is written`)
     end)
     say("engine comm: probing (two seconds)...")
+end
+
+export function engineProbe(arg: string?)
+    const st = state() :: any
+    const words: string[] = {}
+    for w in (arg ?? ""):gmatch("%S+") do
+        words[#words + 1] = w
+    end
+    if words[1] == "record" then
+        startRecording(words[2] ?? "unnamed")
+        return
+    elseif words[1] == "stop" then
+        stopRecording()
+        return
+    elseif words[1] == "order" then
+        dispatchOrder()
+        return
+    elseif words[1] == "protected" then
+        protectedProbe()
+        return
+    elseif words[1] == "blocked" then
+        blockedProbe()
+        return
+    elseif words[1] == "comm" then
+        commProbe()
+        return
+    end
+    const probe: { [string]: any } = {
+        client = `{(GetBuildInfo())} ({select(2, GetBuildInfo())})`,
+        widgets = widgets(),
+        identities = identities(),
+        errors = errors(),
+        order = order(),
+        behaviours = behaviours(),
+        cvarDefaults = cvarDefaults(),
+        enums = tables(G.Enum),
+        loadCalls = loadCalls(),
+        constants = tables(G.Constants),
+        scalars = scalars(),
+        hidden = hidden(),
+        allCVars = allCVars(),
+        qualityColors = qualityColors(),
+        blizzardAtStart = table.concat(LOADED_AT_START, " "),
+        blizzardNow = table.concat(blizzardLoaded(), " "),
+        units = units(),
+        getTime = show(GetTime()),
+    }
+    st.engineProbe = probe
+    timers(function(r: { [string]: string })
+        probe.timers = r
+        say("engine: recorded; type /reload so the file is written")
+    end)
+    say("engine: probing (timers finish within a second)...")
 end

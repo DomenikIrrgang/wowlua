@@ -223,6 +223,11 @@ fn compared(key: &str) -> bool {
         "probe.loadCalls.GetXPExhaustion",
         "probe.loadCalls.IsGuildLeader",
     ];
+    // The client's other console commands are unknown here, and so are
+    // the CVars it has without a default.
+    if key.starts_with("probe.allCVars.#type") {
+        return false;
+    }
     // Of the globals, the client's own (`LE_*`); Blizzard's code sets the
     // rest.
     if let Some(name) = key.strip_prefix("probe.scalars.") {
@@ -264,7 +269,10 @@ fn the_engine_answers_the_probe_battery_as_the_client_did() {
     let ours = flatten(&mut vm);
     let theirs = fixture();
     let mut differences = Vec::new();
-    for (key, expected) in theirs.iter().filter(|(k, _)| compared(k)) {
+    for (key, expected) in theirs
+        .iter()
+        .filter(|(k, v)| compared(k) && !(k.starts_with("probe.allCVars.") && v.as_str() == "0: "))
+    {
         match ours.get(key) {
             Some(mine) if mine == expected => {}
             mine => differences.push(format!(
@@ -273,12 +281,17 @@ fn the_engine_answers_the_probe_battery_as_the_client_did() {
             )),
         }
     }
-    // `Enum`, `Constants` and the number globals were recorded whole:
-    // nothing more either.
+    // `Enum`, `Constants`, the number globals and the CVars were recorded
+    // whole: nothing more either.
     for key in ours.keys().filter(|k| {
-        ["probe.enums.", "probe.constants.", "probe.scalars."]
-            .iter()
-            .any(|p| k.starts_with(p))
+        [
+            "probe.enums.",
+            "probe.constants.",
+            "probe.scalars.",
+            "probe.allCVars.",
+        ]
+        .iter()
+        .any(|p| k.starts_with(p))
             && !theirs.contains_key(*k)
     }) {
         differences.push(format!(

@@ -87,12 +87,12 @@ fn shown(vm: &mut Vm, name: &str) -> String {
 /// How many of the client's number and boolean globals (`/stdtest engine`,
 /// `scalars`) the engine with Blizzard's code has otherwise. It may only go
 /// down.
-const MAX_SCALARS_DIFFERENT: usize = 11;
+const MAX_SCALARS_DIFFERENT: usize = 4;
 
 /// How many of the client's functions the engine still lacks: Blizzard Lua
 /// from files that fail partway (missing enums, constants, game data,
 /// animations). It may only go down.
-const MAX_MISSING: usize = 85;
+const MAX_MISSING: usize = 11;
 
 #[test]
 fn every_function_of_the_client_exists_with_its_kind() {

@@ -1,4 +1,4 @@
-# WoW Forever 1.60.1 (70374): the number globals the client defines itself
+# WoW Forever 1.60.1 (70425): the number globals the client defines itself
 # (`/stdtest engine`, `scalars`: those no Blizzard Lua file assigns;
 # `LE_*` and `NUM_LE_*`). `name<TAB>value`.
 LE_ACTIONBAR_STATE_MAIN	1

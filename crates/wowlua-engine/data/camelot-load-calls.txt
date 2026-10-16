@@ -1,4 +1,4 @@
-# WoW Forever 1.60.1 (70374): what functions Blizzard's code calls at load
+# WoW Forever 1.60.1 (70425): what functions Blizzard's code calls at load
 # return, without arguments (`/stdtest engine`, `loadCalls`): the
 # client's own answers, the same for every character. `name<TAB>results`
 # as the probe shows them (`2: number 0, boolean true`; tables

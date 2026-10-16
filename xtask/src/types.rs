@@ -82,15 +82,32 @@ fn git(args: &[&str], dir: Option<&Path>) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-/// The flavors and the documentation tag of each: the newest version of
-/// the flavor's live clients that the mirror has a tag for.
-fn flavor_tags() -> Result<Vec<(String, String)>> {
+/// The flavors, the documentation tag of each (the newest version of the
+/// flavor's live clients that the mirror has a tag for) and the commit it
+/// points to now: the mirror moves a version's tag to each new build.
+fn flavor_tags() -> Result<Vec<(String, String, String)>> {
     let tags_out = git(&["ls-remote", "--tags", UI_REPO], None)?;
-    let tags: HashSet<String> = tags_out
-        .lines()
-        .filter_map(|l| l.split("refs/tags/").nth(1))
-        .map(|t| t.trim_end_matches("^{}").to_string())
-        .collect();
+    // Tag → commit (an annotated tag's peeled line, `^{}`, wins).
+    let mut commits: HashMap<String, String> = HashMap::new();
+    for line in tags_out.lines() {
+        let Some((sha, name)) = line.split_once('\t') else {
+            continue;
+        };
+        let Some(name) = name.strip_prefix("refs/tags/") else {
+            continue;
+        };
+        match name.strip_suffix("^{}") {
+            Some(tag) => {
+                commits.insert(tag.to_string(), sha.to_string());
+            }
+            None => {
+                commits
+                    .entry(name.to_string())
+                    .or_insert_with(|| sha.to_string());
+            }
+        }
+    }
+    let tags: HashSet<String> = commits.keys().cloned().collect();
     let table = wowlua_flavors::table();
     let mut out = Vec::new();
     for flavor in &table.flavors {
@@ -108,7 +125,7 @@ fn flavor_tags() -> Result<Vec<(String, String)>> {
             .collect();
         versions.sort_by_key(|v| std::cmp::Reverse(version_key(v)));
         match versions.iter().find(|v| tags.contains(**v)) {
-            Some(v) => out.push((flavor.id.clone(), v.to_string())),
+            Some(v) => out.push((flavor.id.clone(), v.to_string(), commits[*v].clone())),
             None => bail!(
                 "no wow-ui-source tag for flavor {} (clients {:?})",
                 flavor.id,
@@ -125,10 +142,11 @@ fn version_key(v: &str) -> Vec<u32> {
 
 pub fn fetch(dir: &Path) -> Result<()> {
     fs::create_dir_all(dir)?;
-    for (flavor, tag) in flavor_tags()? {
+    for (flavor, tag, commit) in flavor_tags()? {
         let target = dir.join(&flavor);
         let marker = target.join(".wowlua-tag");
-        let stamp = format!("{tag} addons");
+        // The commit too: the tag moves with each build.
+        let stamp = format!("{tag} {commit} addons");
         if fs::read_to_string(&marker).ok().as_deref() == Some(stamp.as_str()) {
             println!("{flavor}: {tag} (cached)");
             continue;
@@ -478,7 +496,7 @@ fn compiler_type_names(root: &Path) -> Result<HashSet<String>> {
 
 pub fn generate(root: &Path, dir: &Path) -> Result<()> {
     let mut flavors = Vec::new();
-    for (flavor, tag) in flavor_tags()? {
+    for (flavor, _, _) in flavor_tags()? {
         let docs = dir.join(&flavor).join(DOCS_DIR);
         if !docs.exists() {
             bail!(
@@ -504,9 +522,15 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
         let strings_text = fs::read_to_string(dir.join("strings").join(format!("{commit}.lua")))
             .context("global strings missing: run `cargo xtask types fetch`")?;
         let lod_files = lod_files(&dir.join(&flavor).join("Interface/AddOns"))?;
+        // The build on disk, as the mirror's commit names it:
+        // `1.60.1 (70425)`.
+        let build = git(&["log", "-1", "--format=%s"], Some(&dir.join(&flavor)))?;
+        let build = build.trim();
+        let ui_sha = git(&["rev-parse", "HEAD"], Some(&dir.join(&flavor)))?;
+        let ui_commit = &ui_sha.trim()[..12.min(ui_sha.trim().len())];
         flavors.push(wowlua_types_gen::FlavorDocs {
             id: flavor,
-            source: format!("wow-ui-source {tag}; global string and API names from Ketho's BlizzardInterfaceResources {branch} {commit}"),
+            source: format!("wow-ui-source {build}, commit {ui_commit}; global string and API names from Ketho's BlizzardInterfaceResources {branch} {commit}"),
             files,
             ui_lua,
             ui_xml,

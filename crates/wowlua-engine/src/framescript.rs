@@ -221,6 +221,61 @@ fn get_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![cvar_get(vm, &name).map_or(Value::Nil, |v| vm.str(&v))])
 }
 
+/// `C_CVar.GetCVarDefault(name)`: the default, whatever the value now.
+fn get_cvar_default(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = string_arg(vm, &c, 1)?;
+    let default = engine(vm)
+        .world
+        .cvar_defaults
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(&name))
+        .map(|(_, v)| v.clone());
+    Ok(vec![default.map_or(Value::Nil, |v| vm.str(&v))])
+}
+
+/// `ConsoleGetAllCommands()`: the CVars, as console commands of type
+/// `Enum.ConsoleCommandType.Cvar` (the client's other commands, 74 on
+/// Forever, are unknown here).
+fn console_get_all_commands(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let names: Vec<String> = engine(vm)
+        .world
+        .cvar_defaults
+        .iter()
+        .map(|(k, _)| k.clone())
+        .collect();
+    let mut cvar_type = vm.get_global("Enum");
+    for key in ["ConsoleCommandType", "Cvar"] {
+        cvar_type = match cvar_type {
+            Value::Table(t) => {
+                let k = vm.str(key);
+                vm.heap.table(t).get(k)
+            }
+            _ => Value::Nil,
+        };
+    }
+    let list = vm.new_table();
+    for (i, name) in names.iter().enumerate() {
+        let t = vm.new_table();
+        let fields = [
+            ("command", vm.str(name)),
+            ("help", vm.str("")),
+            ("category", Value::Num(0.0)),
+            ("commandType", cvar_type),
+            ("scriptContents", vm.str("")),
+            ("scriptParameters", vm.str("")),
+        ];
+        for (k, v) in fields {
+            let k = vm.str(k);
+            let _ = vm.heap.table_mut(t).set(k, v);
+        }
+        let _ = vm
+            .heap
+            .table_mut(list)
+            .set(Value::Num((i + 1) as f64), Value::Table(t));
+    }
+    Ok(vec![Value::Table(list)])
+}
+
 fn get_cvar_bool(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = string_arg(vm, &c, 1)?;
     Ok(vec![cvar_get(vm, &name).map_or(Value::Nil, |v| {
@@ -398,7 +453,8 @@ pub fn functions() -> Vec<(&'static str, NativeFn)> {
         ("UnregisterUnitEventCallback", unregister_event_callback),
         ("C_CVar.GetCVar", get_cvar),
         ("C_CVar.GetCVarBool", get_cvar_bool),
-        ("C_CVar.GetCVarDefault", get_cvar),
+        ("C_CVar.GetCVarDefault", get_cvar_default),
+        ("ConsoleGetAllCommands", console_get_all_commands),
         ("C_CVar.RegisterCVar", register_cvar),
         ("C_CVar.SetCVar", set_cvar),
         ("C_Texture.GetAtlasInfo", atlas_info),

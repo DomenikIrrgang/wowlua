@@ -337,8 +337,12 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetRealmName", realm_name),
         ("GetRestState", rest_state),
         ("GetScreenHeight", screen_height),
+        ("GetActiveLootRollIDs", empty_list),
+        ("GetSpellConfirmationPromptsInfo", empty_list),
         ("GetXPExhaustion", nothing),
         ("IsGuildLeader", no),
+        // Not a convention kiosk.
+        ("Kiosk.IsEnabled", no),
     ]
 }
 

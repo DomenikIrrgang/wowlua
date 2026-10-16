@@ -307,6 +307,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     } else {
         vec![("loadDeprecationFallbacks".into(), "1".into())]
     };
+    engine_mut(vm).world.cvar_defaults = cvars.clone();
     engine_mut(vm).world.cvars.extend(cvars);
     // Undocumented C functions with behaviour.
     let create_frame = vm.native("CreateFrame", widgets::create_frame);

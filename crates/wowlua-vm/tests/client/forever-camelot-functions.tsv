@@ -1,5 +1,7 @@
-# Every function of WoW Forever 1.60.1 (70374)'s in-game environment, C or Lua:
-# /stdtest inventory (globals, C_ namespaces, libraries).
+# Every function of WoW Forever 1.60.1 (70425)'s in-game environment, C or Lua:
+# /stdtest inventory with StdTest alone (globals, C_ namespaces, libraries and
+# any other table of C functions: Kiosk, Blizzard's secure utilities); StdTest's
+# own globals left out.
 APIDocumentation_LoadUI	Lua
 AbbreviateLargeNumbers	C
 AbbreviateNumbers	C
@@ -136,6 +138,11 @@ AssistUnit	C
 AttachGlyphToSpell	C
 AttackTarget	C
 AuctionHouseFrame_LoadUI	Lua
+AuraContainerInbound.GetDefaultAuraDurationFormatter	Lua
+AuraContainerInbound.ResetTooltipStyle	Lua
+AuraContainerInbound.SetTooltipBackdrop	C
+AuraContainerInbound.SetTooltipNineSlice	C
+AuraContainerInbound.SetTooltipTextureSlice	C
 AutoChooseCurrentGraphicsSetting	C
 AutoCompleteButton_OnClick	Lua
 AutoCompleteEditBox_AddHighlightedText	Lua
@@ -236,7 +243,6 @@ BattlePetToolTip_Show	Lua
 BattlePetToolTip_ShowLink	Lua
 BattlePetToolTip_UnpackBattlePetLink	Lua
 BattlePetTooltipJournalClick_OnClick	Lua
-BattlePetTooltipTemplate_AddTextLine	Lua
 BattlePetTooltipTemplate_SetBattlePet	Lua
 BattlePetTooltip_OnLoad	Lua
 BattlefieldMap_LoadUI	Lua
@@ -619,6 +625,7 @@ C_AuctionHouse.GetItemCommodityStatus	C
 C_AuctionHouse.GetItemKeyFromItem	C
 C_AuctionHouse.GetItemKeyInfo	C
 C_AuctionHouse.GetItemKeyRequiredLevel	C
+C_AuctionHouse.GetItemKeySampleLink	C
 C_AuctionHouse.GetItemSearchResultInfo	C
 C_AuctionHouse.GetItemSearchResultsQuantity	C
 C_AuctionHouse.GetMaxBidItemBid	C
@@ -798,6 +805,7 @@ C_BarberShop.SetViewingShapeshiftForm	C
 C_BarberShop.ZoomCamera	C
 C_BattleNet.AreFriendTagsEnabled	C
 C_BattleNet.AreHighResTexturesInstalled	C
+C_BattleNet.AreRealIDFriendsEnabled	C
 C_BattleNet.AreTitleFriendCustomNamesEnabled	C
 C_BattleNet.AreTitleFriendsEnabled	C
 C_BattleNet.BNCheckBattleTagInviteToRecentAlly	C
@@ -809,6 +817,7 @@ C_BattleNet.GetCustomTitleFriendName	C
 C_BattleNet.GetFriendAccountInfo	C
 C_BattleNet.GetFriendGameAccountInfo	C
 C_BattleNet.GetFriendInviteInfo	C
+C_BattleNet.GetFriendLevelFromInviteText	C
 C_BattleNet.GetFriendNumGameAccounts	C
 C_BattleNet.GetGameAccountInfoByGUID	C
 C_BattleNet.GetGameAccountInfoByID	C
@@ -1926,6 +1935,7 @@ C_EventUtils.IsCallbackEvent	C
 C_EventUtils.IsEventValid	C
 C_ExpansionTrial.OnTrialLevelUpDialogClicked	C
 C_ExpansionTrial.OnTrialLevelUpDialogShown	C
+C_ExternalEventURL.CanShow	C
 C_ExternalEventURL.HasURL	C
 C_ExternalEventURL.IsNew	C
 C_ExternalEventURL.LaunchURL	C
@@ -2027,7 +2037,6 @@ C_GameRules.SetForeverExperiencePreset	C
 C_GameRules.SetSDHDToggleValue	C
 C_GamepadTargeting.Disable	C
 C_GamepadTargeting.Enable	C
-C_GamepadTargeting.HasReticleHoverTarget	C
 C_GamepadTargeting.SetFilter	C
 C_GamepadUI.GetFirstGamepadActionBarStorageSlotIndexForActiveStance	C
 C_GamepadUI.GetFirstGamepadActionStorageSlotIndex	C
@@ -4996,6 +5005,7 @@ C_Trophy.MonumentSaveSelection	C
 C_Tutorial.AbandonTutorialArea	C
 C_Tutorial.GetCombatEventInfo	C
 C_Tutorial.ReturnToTutorialArea	C
+C_Tutorial.SendTutorialStartButtonTelem	C
 C_UI.DoesAnyDisplayHaveNotch	C
 C_UI.GetTopLeftNotchSafeRegion	C
 C_UI.GetTopRightNotchSafeRegion	C
@@ -5376,6 +5386,7 @@ CastSpellByID	C
 CastSpellByName	C
 CastingBarAnim_OnFadeOutFinish	Lua
 CastingBarAnim_OnInterruptSparkAnimFinish	Lua
+CatalogShopFocusCarouselGamepad	Lua
 CatalogShopFocusGamepad	Lua
 CatalogShopHideProductDetails	Lua
 CatalogShopRefreshGamepadPurchaseButton	Lua
@@ -5385,6 +5396,7 @@ CatalogShopSetItemTooltip	Lua
 CatalogShopSetupGamepad	Lua
 CatalogShopShowProductDetails	Lua
 CatalogShopTopUpFrame_GetFrame	Lua
+CatalogShopUnfocusCarouselGamepad	Lua
 CatalogShopUnfocusGamepad	Lua
 CatalogShopVisibilityUpdated	Lua
 CatmullRom_Calculate2DPointOnCurve	Lua
@@ -6005,6 +6017,17 @@ ContainerFrame_UpdateLocked	Lua
 ContainerFrame_UpdateLockedItem	Lua
 ContainerFrame_UpdatePortraitPosition	Lua
 ContainsIf	Lua
+ContentTrackingUtil.DisplayTrackingError	Lua
+ContentTrackingUtil.GetTrackingMapInfoByEncounterID	Lua
+ContentTrackingUtil.IsContentTrackedInEncounter	Lua
+ContentTrackingUtil.IsContentTrackingEnabled	Lua
+ContentTrackingUtil.IsTrackingModifierDown	C
+ContentTrackingUtil.MakeCombinedID	Lua
+ContentTrackingUtil.OpenMapToTrackable	Lua
+ContentTrackingUtil.ProcessChatLink	Lua
+ContentTrackingUtil.RegisterTrackableElement	Lua
+ContentTrackingUtil.SplitCombinedID	Lua
+ContentTrackingUtil.UnregisterTrackableElement	Lua
 ContributionCollectionFrame_LoadUI	Lua
 ConvertItemToBindToAccount	C
 ConvertPixelsToUI	Lua
@@ -6580,7 +6603,6 @@ FloatingGarrisonMissionTooltip_OnHide	Lua
 FloatingGarrisonMissionTooltip_OnShow	Lua
 FloatingGarrisonMission_Show	Lua
 FloatingGarrisonMission_Toggle	Lua
-FloatingPetBattleAbility_Show	Lua
 FlowContainer_AddLineBreak	Lua
 FlowContainer_AddObject	Lua
 FlowContainer_AddPrimarySpacer	Lua
@@ -6706,11 +6728,6 @@ GameLimitedMode_IsBankedXPActive	Lua
 GameMenuFrame_EscapePressed	Lua
 GameMenuFrame_IsShown	Lua
 GameMenuFrame_Show	Lua
-GameTimeFrame_OnClick	Lua
-GameTimeFrame_OnEnter	Lua
-GameTimeFrame_OnEvent	Lua
-GameTimeFrame_OnLoad	Lua
-GameTimeFrame_OnUpdate	Lua
 GameTimeFrame_SetDate	Lua
 GameTime_ComputeMilitaryTime	Lua
 GameTime_ComputeMinutes	Lua
@@ -6994,6 +7011,7 @@ GetCorpseRecoveryDelay	C
 GetCorruption	C
 GetCorruptionResistance	C
 GetCreatureDifficultyColor	Lua
+GetCreditsDisplayInfo	C
 GetCritChance	C
 GetCritChanceFromStat	C
 GetCritChanceProvidesParryEffect	C
@@ -7017,6 +7035,7 @@ GetCurrentRegionName	C
 GetCurrentScaledResolution	C
 GetCurrentScenarioType	Lua
 GetCurrentTitle	C
+GetCursorCenterPosition	C
 GetCursorDelta	C
 GetCursorInfo	C
 GetCursorMoney	C
@@ -7399,6 +7418,7 @@ GetNumWarGameTypes	C
 GetNumWatchedTokens	Lua
 GetOSLocale	C
 GetObjectiveText	C
+GetOffhandHitModifier	C
 GetOnBarHighlightMark	Lua
 GetOptOutOfLoot	C
 GetOrCreateTableEntry	Lua
@@ -7430,6 +7450,8 @@ GetPetActionCooldown	C
 GetPetActionInfo	C
 GetPetActionSlotUsable	C
 GetPetActionsUsable	C
+GetPetCritChance	C
+GetPetDodgeChance	C
 GetPetExperience	C
 GetPetHitChanceModifier	C
 GetPetIcon	C
@@ -8011,6 +8033,7 @@ IsControlKeyDown	C
 IsCpuBound	C
 IsCurrentAction	Lua
 IsCurrentQuestFailed	C
+IsCursorVisible	C
 IsDebugBuild	C
 IsDemonHunterAvailable	C
 IsDisplayChannelModerator	C
@@ -8213,6 +8236,22 @@ KeyCommand_Create	Lua
 KeyCommand_CreateKey	Lua
 KeyCommand_Update	Lua
 KeybindFrames_InQuickKeybindMode	Lua
+Kiosk.EnableGodMode	C
+Kiosk.GetCharacterTemplateSetID	C
+Kiosk.GetKioskLoginInfo	C
+Kiosk.GetSecondsRemaining	C
+Kiosk.GetSessionDuration	C
+Kiosk.IsCompetitiveModeEnabled	C
+Kiosk.IsEnabled	C
+Kiosk.IsExpired	C
+Kiosk.IsHousingResetPending	C
+Kiosk.IsInLobby	C
+Kiosk.IsSessionActive	C
+Kiosk.IsSessionTimed	C
+Kiosk.RequestHousingReset	C
+Kiosk.ShouldDeleteAllCharacters	C
+Kiosk.ShutdownSession	C
+Kiosk.StartSession	C
 Kiosk_HandlePlayerEnteringWorld	Lua
 Kiosk_LoadUI	Lua
 LFD_IsEmpowered	Lua
@@ -8580,6 +8619,7 @@ MultiCastActionButton_OnLoad	Lua
 MultiCastActionButton_OnPostClick	Lua
 MultiCastActionButton_OnShow	Lua
 MultiCastActionButton_Update	Lua
+MultiCastButton_ApplyOverrides	Lua
 MultiCastFlyoutButton_OnClick	Lua
 MultiCastFlyoutButton_OnEnter	Lua
 MultiCastFlyoutButton_OnLeave	Lua
@@ -8845,6 +8885,7 @@ PaperDollFrame_SetStat	Lua
 PaperDollFrame_SetStatTooltip	Lua
 PaperDollFrame_SetStatTooltip2	Lua
 PaperDollFrame_SetVersatility	Lua
+PaperDollFrame_SetWarlockPetManaRegen	Lua
 PaperDollFrame_SetWeaponSkill	Lua
 PaperDollFrame_ShowFlightSpeed	Lua
 PaperDollFrame_ShowSidebar	Lua
@@ -9034,8 +9075,11 @@ PlayerFrame_ToPlayerArt	Lua
 PlayerFrame_ToVehicleArt	Lua
 PlayerFrame_Update	Lua
 PlayerFrame_UpdateArt	Lua
+PlayerFrame_UpdateFlashTextureVisuals	Lua
 PlayerFrame_UpdateGroupIndicator	Lua
+PlayerFrame_UpdateHealthBarVisuals	Lua
 PlayerFrame_UpdateLevel	Lua
+PlayerFrame_UpdateManaBarVisuals	Lua
 PlayerFrame_UpdatePartyLeader	Lua
 PlayerFrame_UpdatePlayerNameTextAnchor	Lua
 PlayerFrame_UpdatePlayerRestLoop	Lua
@@ -9045,6 +9089,7 @@ PlayerFrame_UpdatePvPTimerText	Lua
 PlayerFrame_UpdateReadyCheck	Lua
 PlayerFrame_UpdateRolesAssigned	Lua
 PlayerFrame_UpdateStatus	Lua
+PlayerFrame_UpdateStatusTextureVisuals	Lua
 PlayerFrame_UpdateVoiceStatus	Lua
 PlayerGetTimerunningSeasonID	C
 PlayerHasPrimaryProfession	Lua
@@ -10455,6 +10500,13 @@ UnitFrameManaCostPredictionBars_Update	Lua
 UnitFramePortrait_Update	Lua
 UnitFrameThreatIndicator_Initialize	Lua
 UnitFrameThreatIndicator_OnEvent	Lua
+UnitFrameUtil.GetArenaOpponentSpecDisplayInfo	C
+UnitFrameUtil.GetUnitPvPIndicatorDisplayInfo	C
+UnitFrameUtil.GetUnitRoleIconDisplayInfo	C
+UnitFrameUtil.UpdateArenaOpponentSpecDisplay	C
+UnitFrameUtil.UpdateArenaOpponentSpecDisplayName	C
+UnitFrameUtil.UpdateUnitFrameRoleIcon	C
+UnitFrameUtil.UpdateUnitPvPIndicator	C
 UnitFrame_Initialize	Lua
 UnitFrame_OnEnter	Lua
 UnitFrame_OnEvent	Lua

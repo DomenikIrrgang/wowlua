@@ -9927,11 +9927,6 @@ declare global CollectionMicroButtonMixin: table
 declare global CollectionsMicroButton_SetAlert: (...any) -> ...any
 declare global CollectionsMicroButton_SetAlertShown: (...any) -> ...any
 declare global EJMicroButtonMixin: table
-declare global GameTimeFrame_OnLoad: (...any) -> ...any
-declare global GameTimeFrame_OnEnter: (...any) -> ...any
-declare global GameTimeFrame_OnEvent: (...any) -> ...any
-declare global GameTimeFrame_OnUpdate: (...any) -> ...any
-declare global GameTimeFrame_OnClick: (...any) -> ...any
 declare global GameTimeFrame_SetDate: (...any) -> ...any
 declare global MINIMAPPING_TIMER: number
 declare global MINIMAPPING_FADE_TIMER: number
@@ -13769,12 +13764,7 @@ declare global HelpMicroButton: Button
 declare global AchievementMicroButton: Button
 declare global CollectionsMicroButton: Button
 declare global EJMicroButton: Button
-declare global GameTimeCalendarInvitesTexture: Texture
-declare global GameTimeCalendarInvitesGlow: Texture
-declare global GameTimeCalendarEventAlarmTexture: Texture
 declare global MinimapCluster: Frame
-declare global MinimapZoneText: FontString
-declare global MiniMapMailIcon: Texture
 declare global MinimapBackdrop: Frame
 declare global MinimapCompassTexture: Texture
 @onDemand("Blizzard_MovePad")

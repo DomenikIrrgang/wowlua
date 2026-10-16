@@ -1,5 +1,6 @@
-# The C functions of WoW Forever 1.60.1 (70374)'s environment (/stdtest inventory;
-# crates/wowlua-vm/tests/client/forever-camelot-functions.tsv), one per line.
+# The C functions of WoW Forever 1.60.1 (70425)'s environment (/stdtest inventory;
+# crates/wowlua-vm/tests/client/forever-camelot-functions.tsv; Blizzard's Lua tables' secure
+# delegates left out), one per line.
 AbbreviateLargeNumbers
 AbbreviateNumbers
 abs
@@ -367,6 +368,7 @@ C_AuctionHouse.GetItemCommodityStatus
 C_AuctionHouse.GetItemKeyFromItem
 C_AuctionHouse.GetItemKeyInfo
 C_AuctionHouse.GetItemKeyRequiredLevel
+C_AuctionHouse.GetItemKeySampleLink
 C_AuctionHouse.GetItemSearchResultInfo
 C_AuctionHouse.GetItemSearchResultsQuantity
 C_AuctionHouse.GetMaxBidItemBid
@@ -546,6 +548,7 @@ C_BarberShop.SetViewingShapeshiftForm
 C_BarberShop.ZoomCamera
 C_BattleNet.AreFriendTagsEnabled
 C_BattleNet.AreHighResTexturesInstalled
+C_BattleNet.AreRealIDFriendsEnabled
 C_BattleNet.AreTitleFriendCustomNamesEnabled
 C_BattleNet.AreTitleFriendsEnabled
 C_BattleNet.BNCheckBattleTagInviteToRecentAlly
@@ -557,6 +560,7 @@ C_BattleNet.GetCustomTitleFriendName
 C_BattleNet.GetFriendAccountInfo
 C_BattleNet.GetFriendGameAccountInfo
 C_BattleNet.GetFriendInviteInfo
+C_BattleNet.GetFriendLevelFromInviteText
 C_BattleNet.GetFriendNumGameAccounts
 C_BattleNet.GetGameAccountInfoByGUID
 C_BattleNet.GetGameAccountInfoByID
@@ -1670,6 +1674,7 @@ C_EventUtils.IsCallbackEvent
 C_EventUtils.IsEventValid
 C_ExpansionTrial.OnTrialLevelUpDialogClicked
 C_ExpansionTrial.OnTrialLevelUpDialogShown
+C_ExternalEventURL.CanShow
 C_ExternalEventURL.HasURL
 C_ExternalEventURL.IsNew
 C_ExternalEventURL.LaunchURL
@@ -1742,7 +1747,6 @@ C_GamePad.StickIndexToConfigName
 C_GamePad.StopVibration
 C_GamepadTargeting.Disable
 C_GamepadTargeting.Enable
-C_GamepadTargeting.HasReticleHoverTarget
 C_GamepadTargeting.SetFilter
 C_GamepadUI.GetFirstGamepadActionBarStorageSlotIndexForActiveStance
 C_GamepadUI.GetFirstGamepadActionStorageSlotIndex
@@ -4717,6 +4721,7 @@ C_TTSSettings.ShouldOverrideMessage
 C_Tutorial.AbandonTutorialArea
 C_Tutorial.GetCombatEventInfo
 C_Tutorial.ReturnToTutorialArea
+C_Tutorial.SendTutorialStartButtonTelem
 C_UI.DoesAnyDisplayHaveNotch
 C_UI.GetTopLeftNotchSafeRegion
 C_UI.GetTopRightNotchSafeRegion
@@ -5388,6 +5393,7 @@ GetComparisonStatistic
 GetCorpseRecoveryDelay
 GetCorruption
 GetCorruptionResistance
+GetCreditsDisplayInfo
 GetCritChance
 GetCritChanceFromStat
 GetCritChanceProvidesParryEffect
@@ -5408,6 +5414,7 @@ GetCurrentRegion
 GetCurrentRegionName
 GetCurrentScaledResolution
 GetCurrentTitle
+GetCursorCenterPosition
 GetCursorDelta
 GetCursorInfo
 GetCursorMoney
@@ -5739,6 +5746,7 @@ GetNumUnspentPvpTalents
 GetNumUnspentTalents
 GetNumWarGameTypes
 GetObjectiveText
+GetOffhandHitModifier
 GetOptOutOfLoot
 GetOSLocale
 GetOverrideAPBySpellPower
@@ -5755,6 +5763,8 @@ GetPetActionCooldown
 GetPetActionInfo
 GetPetActionSlotUsable
 GetPetActionsUsable
+GetPetCritChance
+GetPetDodgeChance
 GetPetExperience
 GetPetHitChanceModifier
 GetPetIcon
@@ -6120,6 +6130,7 @@ IsChatDND
 IsControlKeyDown
 IsCpuBound
 IsCurrentQuestFailed
+IsCursorVisible
 IsDebugBuild
 IsDemonHunterAvailable
 IsDisplayChannelModerator
@@ -6266,6 +6277,22 @@ JoinSingleLFG
 JoinSkirmish
 JoinTemporaryChannel
 JumpOrAscendStart
+Kiosk.EnableGodMode
+Kiosk.GetCharacterTemplateSetID
+Kiosk.GetKioskLoginInfo
+Kiosk.GetSecondsRemaining
+Kiosk.GetSessionDuration
+Kiosk.IsCompetitiveModeEnabled
+Kiosk.IsEnabled
+Kiosk.IsExpired
+Kiosk.IsHousingResetPending
+Kiosk.IsInLobby
+Kiosk.IsSessionActive
+Kiosk.IsSessionTimed
+Kiosk.RequestHousingReset
+Kiosk.ShouldDeleteAllCharacters
+Kiosk.ShutdownSession
+Kiosk.StartSession
 LaunchURL
 ldexp
 LearnPvpTalent

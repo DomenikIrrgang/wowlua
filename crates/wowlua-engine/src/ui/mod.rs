@@ -560,6 +560,21 @@ fn load_global_strings(vm: &mut Vm, path: &Path) {
 /// `AddOns/Blizzard_*`), as secure code, after the client's global strings
 /// (`GlobalStrings.lua`: `NAME = "text"` lines) if given; `ADDON_LOADED`
 /// fires for each addon.
+/// `CreateSecureDelegate(f)`: a C function calling `f` (Blizzard's code
+/// only, while it loads; whether the call is secure for a tainted caller is
+/// unverified).
+fn create_secure_delegate(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    fn call_delegate(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+        let f = c.upvals.first().copied().unwrap_or(Value::Nil);
+        vm.call(f, &c.args)
+    }
+    let f = c.arg(1);
+    if !matches!(f, Value::Func(_)) {
+        return Err(vm.error("Usage: CreateSecureDelegate(func)"));
+    }
+    Ok(vec![vm.native_with("delegate", call_delegate, vec![f])])
+}
+
 pub fn load(vm: &mut Vm, interface: &Path, global_strings: Option<&Path>) -> Report {
     let flavor = engine(vm).flavor.clone();
     let t = Target::new(&flavor);
@@ -588,6 +603,8 @@ pub fn load(vm: &mut Vm, interface: &Path, global_strings: Option<&Path>) -> Rep
     for s in engine(vm).secure_tables.clone() {
         vm.heap.table_mut(s.root).set_str(s.name, s.table);
     }
+    let delegate = vm.native("CreateSecureDelegate", create_secure_delegate);
+    vm.set_global("CreateSecureDelegate", delegate);
     let (startup, all) = startup_addons(interface, &t);
     {
         let ui = &mut engine_mut(vm).world.ui;

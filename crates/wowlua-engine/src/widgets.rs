@@ -102,6 +102,8 @@ pub struct World {
     pub callbacks: Vec<crate::framescript::Callback>,
     /// CVars: name and value, as strings.
     pub cvars: Vec<(String, String)>,
+    /// The CVars' defaults (the client's, for camelot), in its order.
+    pub cvar_defaults: Vec<(String, String)>,
     /// Whether `PLAYER_LOGIN` fired.
     pub logged_in: bool,
     /// Addons `ADDON_LOADED` fired for, lower-case.
