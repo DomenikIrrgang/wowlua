@@ -2060,15 +2060,18 @@ local function show(ok: boolean, message: any)
     print(ok, message)
 end
 local t = Tracker.new()
-show(pcall(t.record, t, "5"))
-show(pcall(t.record, t, 5, 7))
-show(pcall(place, "UP", { x = 1, y = 2 }))
-show(pcall(place, "LEFT", { x = 1 }))
-show(pcall(place, "LEFT", { x = 1, y = 2 }, nil, 1, "two"))
-show(pcall(place, "RIGHT", { x = 1, y = 2 }))
+-- Wrong arguments on purpose, past the static checks (`pcall` checks its
+-- arguments against the function's parameters).
+local record: any, unchecked: any = t.record, place
+show(pcall(record, t, "5"))
+show(pcall(record, t, 5, 7))
+show(pcall(unchecked, "UP", { x = 1, y = 2 }))
+show(pcall(unchecked, "LEFT", { x = 1 }))
+show(pcall(unchecked, "LEFT", { x = 1, y = 2 }, nil, 1, "two"))
+show(pcall(unchecked, "RIGHT", { x = 1, y = 2 }))
 show(pcall(strict, {}))
-show(pcall(loose, "x"))
-show(pcall(inner, "x"))
+show(pcall(loose :: any, "x"))
+show(pcall(inner :: any, "x"))
 show(pcall(function() return (_G.missing :: number) end))
 "#;
     write(
@@ -2112,7 +2115,7 @@ show(pcall(function() return (_G.missing :: number) end))
     );
     assert_eq!(
         lines[9],
-        "false Chk: src/main.wowlua:40: bad value for '::' (number expected, got nil)"
+        "false Chk: src/main.wowlua:43: bad value for '::' (number expected, got nil)"
     );
 }
 

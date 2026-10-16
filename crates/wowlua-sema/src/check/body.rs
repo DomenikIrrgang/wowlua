@@ -570,6 +570,83 @@ impl<'e> Checker<'e> {
         self.next_handler = self.decorated_handler(&s.decorators);
         stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.stmt_inner(s));
         self.next_handler = None;
+        if !s.decorators.is_empty() {
+            self.check_cases(s);
+        }
+    }
+
+    /// `@cases(list)` of `wowlua:test` (decision T215): every case fits the
+    /// test function's parameters (E8120).
+    fn check_cases(&mut self, s: &Stmt) {
+        let func = match &s.kind {
+            StmtKind::LocalFunction { func, .. } | StmtKind::Function { func, .. } => func,
+            _ => return,
+        };
+        let Some(d) = s.decorators.iter().find(|d| {
+            let id = match d.path.as_slice() {
+                [n] => self.intrinsic_path(&n.text, None),
+                [m, n] => self.intrinsic_path(&m.text, Some(&n.text)),
+                _ => None,
+            };
+            id.as_deref() == Some("test.cases")
+        }) else {
+            return;
+        };
+        let Some(ExprKind::Table(entries)) = d
+            .args
+            .as_ref()
+            .and_then(|a| a.exprs().first().map(|e| e.kind.clone()))
+        else {
+            return;
+        };
+        let sig = self.env.func_sig(func, &self.scope.clone(), false);
+        for (n, entry) in entries.iter().enumerate() {
+            let TableField::Positional(case) = entry else {
+                continue;
+            };
+            // A table literal holds the arguments; another value is the only one.
+            let values: Vec<&Expr> = match &case.kind {
+                ExprKind::Table(fields) => fields
+                    .iter()
+                    .filter_map(|f| match f {
+                        TableField::Positional(v) => Some(v),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => vec![case],
+            };
+            let n = n + 1;
+            if values.len() > sig.params.len() && sig.rest.is_none() {
+                let msg = format!(
+                    "case {n} has {} values; the test takes {}",
+                    values.len(),
+                    sig.params.len()
+                );
+                self.report("E8120", case.span, msg);
+                continue;
+            }
+            if let Some(p) = sig.params.iter().skip(values.len()).find(|p| !p.optional) {
+                let msg = format!(
+                    "case {n} has no value for `{}`",
+                    p.name.as_deref().unwrap_or("?")
+                );
+                self.report("E8120", case.span, msg);
+                continue;
+            }
+            for (i, v) in values.iter().enumerate() {
+                let Some(p) = sig.params.get(i) else { break };
+                let t = self.infer(v);
+                if !self.env.assignable(t, p.ty, self.mode) {
+                    let msg = format!(
+                        "case {n}: `{}` is not assignable to `{}` (parameter `{}`)",
+                        self.env.display(t),
+                        self.env.display(p.ty),
+                        p.name.as_deref().unwrap_or("?")
+                    );
+                    self.report("E8120", v.span, msg);
+                }
+            }
+        }
     }
 
     /// The standard-library `@intrinsic` id a callee (`on`, `events.on`)

@@ -1,5 +1,8 @@
 -- Compiler behavior of `wowlua:test` (spec Tooling §16.1.3): the test
--- decorators register the final function value.
+-- decorators register the final function value; `expect`'s matchers check
+-- the kind of value they need (decision T214).
+@intrinsic("test.expect")
+declare global expect: any
 @intrinsic("test.test")
 declare global test: any
 @intrinsic("test.skip")

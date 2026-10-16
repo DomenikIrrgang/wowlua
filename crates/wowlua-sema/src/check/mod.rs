@@ -1477,6 +1477,23 @@ mod tests {
         ok(
             "local t: number[] = {}\ntable.insert(t, 1)\nlocal n = select(\"#\", 1, 2)\nprint(n + 1)\n",
         );
+        // A pack parameter of a function type (`(A...) -> R...`) binds the
+        // parameters of a function passed for it, literals with annotated
+        // parameters included.
+        let wrap = "local function wrap<A..., R...>(fn: (A...) -> R...): (A...) -> R...\n    return fn\nend\n";
+        err(
+            &format!("{wrap}local w = wrap(function(a: number, b: string) end)\nw(\"x\", 1)\n"),
+            "E2001",
+        );
+        ok(&format!(
+            "{wrap}local w = wrap(function(a: number, b: string) end)\nw(1, \"x\")\n"
+        ));
+        err(
+            &format!(
+                "{wrap}local function named(a: number): string return tostring(a) end\nlocal s: number = wrap(named)(1)\n"
+            ),
+            "E2001",
+        );
     }
 
     #[test]

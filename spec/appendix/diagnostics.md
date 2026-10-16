@@ -245,6 +245,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | E8118 | `wowlua:log` level function used as a value (cannot be stripped) |
 | E8119 | `import internal` outside a test file |
 | E8120 | A `@cases` case does not match the test function's parameters |
+| E8121 | A matcher used on a value of a kind it does not take (`toHaveLength` on a number) |
 | E8300 | Standard-library function unavailable on a targeted flavor (no fallback) |
 | E8310 | Invalid token in a literal aura filter |
 | E8330 | Unknown tooltip kind |

@@ -66,7 +66,9 @@ end
 
 --- A short number ("8.5K", "1.2M"); a secret gives a secret string.
 export function abbreviate(n: number | Secret<number>): string | Secret<string>
-    local ok, text = pcall(AbbreviateNumbers, n)
+    -- Its declaration takes no secret; whether the client takes one is
+    -- tried, with the fallback below.
+    local ok, text = pcall(AbbreviateNumbers :: any, n)
     if ok then
         return text
     end

@@ -442,3 +442,45 @@ end
     assert!(text.contains("1 passed, 0 failed"), "{text}");
     assert!(!text.contains("raised"), "{text}");
 }
+
+/// Typed matchers (decision T214) and cases (T215) are checked when the
+/// tests compile.
+#[test]
+fn matchers_and_cases_are_type_checked() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[(
+            "tests/typed.test.wowlua",
+            r#"import test, expect, cases from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test
+local function wrong()
+    local count = 3
+    expect(count).toBe("3")
+    expect(count).toHaveLength(3)
+    local s = mock.spy(function(_a: number, _b: string) end)
+    expect(s).toHaveBeenCalledWith("x", 1)
+end
+
+@test
+@cases({ { 1, 2 }, { "a", 2 }, { 1 }, { 1, 2, 3 } })
+local function sums(a: number, b: number)
+    expect(a + b).never.toBe(0)
+end
+"#,
+        )],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    for wanted in [
+        "`\"3\"` is not assignable to `number`",
+        "`toHaveLength` needs a string or a table; the value is `number`",
+        "`\"x\"` is not assignable to `number`",
+        "case 2: `\"a\"` is not assignable to `number` (parameter `a`)",
+        "case 3 has no value for `b`",
+        "case 4 has 3 values; the test takes 2",
+    ] {
+        assert!(out.contains(wanted), "missing {wanted:?} in:\n{out}");
+    }
+}

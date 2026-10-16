@@ -100,10 +100,13 @@ test, unless the test read it with `mock.errors()`.
 
 **Typed matchers** (decision T214). `expect` is generic: `expect(x)` has the
 type `Expect<T>` for the type `T` of `x`, and its matchers take `T`:
-`expect(count).toBe("3")` is a type error, as is `toHaveLength` on a value
-that has no length. A spy keeps the type of the function it spies on, so
+`expect(count).toBe("3")` is a type error, as is a matcher on a kind of
+value it does not take (E8121: `toHaveLength` and `toContain` need a string
+or a table, `toBeCloseTo` a number, `toThrow` and the spy matchers a
+function). A spy keeps the type of the function it spies on, so
 `toHaveBeenCalledWith(...)` checks its arguments against that function's
-parameters.
+parameters. Matchers are called with a dot: `expect` returns a table of
+them.
 
 **Parametrized tests** (decision T215). `@cases` gives a test its cases;
 each runs and is reported on its own, named after the test and the case's

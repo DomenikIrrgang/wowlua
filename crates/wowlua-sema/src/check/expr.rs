@@ -1784,6 +1784,96 @@ impl Checker<'_> {
         subst::apply_func(&mut self.env.types, f, &s)
     }
 
+    /// `expect(x).matcher(…)` of `wowlua:test` (decision T214): matchers
+    /// that need a kind of value check `x`'s type (E8121), and
+    /// `toHaveBeenCalledWith` takes the spied function's parameters.
+    fn matcher_call_type(&mut self, callee: &Expr, c: TypeId) -> Option<TypeId> {
+        let ExprKind::Field { obj, name } = &callee.kind else {
+            return None;
+        };
+        let mut target = obj.as_ref();
+        if let ExprKind::Field {
+            obj: inner,
+            name: n,
+        } = &target.kind
+            && n.text.as_ref() == "never"
+        {
+            target = inner.as_ref();
+        }
+        let ExprKind::Call {
+            callee: expect,
+            args: expect_args,
+        } = &target.kind
+        else {
+            return None;
+        };
+        if self.intrinsic_of(expect).as_deref() != Some("test.expect") {
+            return None;
+        }
+        let subject = *expect_args.exprs().first()?;
+        let t = *self
+            .expr_types
+            .get(&(subject.span.start, subject.span.end))?;
+        let matcher = name.text.as_ref();
+        let (fits, what): (fn(&Ty) -> bool, &str) = match matcher {
+            "toHaveLength" | "toContain" => (
+                |ty| {
+                    matches!(
+                        ty,
+                        Ty::String
+                            | Ty::Str(_)
+                            | Ty::Table
+                            | Ty::Array(_)
+                            | Ty::Map(..)
+                            | Ty::Record(_)
+                            | Ty::Named(..)
+                    )
+                },
+                "a string or a table",
+            ),
+            "toBeCloseTo" => (|ty| matches!(ty, Ty::Number | Ty::Num(_)), "a number"),
+            "toThrow" | "toHaveBeenCalled" | "toHaveBeenCalledTimes" | "toHaveBeenCalledWith" => (
+                |ty| matches!(ty, Ty::Function | Ty::Func(_) | Ty::Intersection(_)),
+                "a function",
+            ),
+            _ => return None,
+        };
+        let members: Vec<TypeId> = match self.env.types.get(t) {
+            Ty::Union(m) => m.clone(),
+            _ => vec![t],
+        };
+        let ok = members.iter().all(|&m| {
+            let ty = self.env.types.get(m);
+            matches!(
+                ty,
+                Ty::Any | Ty::Unknown | Ty::Error | Ty::Param(_) | Ty::Nil
+            ) || fits(ty)
+        });
+        if !ok {
+            let msg = format!(
+                "`{matcher}` needs {what}; the value is `{}`",
+                self.env.display(t)
+            );
+            self.report("E8121", callee.span, msg);
+            return Some(c);
+        }
+        let spied_type = self.env.types.non_nil(t);
+        if matcher == "toHaveBeenCalledWith"
+            && let Ty::Func(spied) = self.env.types.get(spied_type).clone()
+        {
+            let f = Func {
+                type_params: Vec::new(),
+                params: spied.params.clone(),
+                rest: spied.rest.clone(),
+                ret: Pack::empty(),
+                predicate: None,
+                unannotated: false,
+            };
+            return Some(self.env.types.func(f));
+        }
+        None
+    }
+
     /// `saved.bind(name, { defaults = … })` returns the data table: the
     /// type of the defaults (spec stdlib "saved").
     fn saved_bind_type(&mut self, callee: &Expr, args: &Args) -> Option<TypeId> {
@@ -2338,6 +2428,9 @@ impl Checker<'_> {
     }
 
     fn stdlib_call_type(&mut self, callee: &Expr, args: &Args, c: TypeId) -> TypeId {
+        if let Some(t) = self.matcher_call_type(callee, c) {
+            return t;
+        }
         let Some(id) = self.intrinsic_of(callee) else {
             return c;
         };
@@ -2426,7 +2519,21 @@ impl Checker<'_> {
                 }
             }
             for (i, e) in exprs.iter().enumerate() {
-                if matches!(e.kind, ExprKind::Function(_)) {
+                if let ExprKind::Function(lit) = &e.kind {
+                    // A literal with every parameter annotated gives its
+                    // parameters' types (`spy(function(a: number) end)`);
+                    // its body is checked in the second pass.
+                    let annotated = lit.type_params.is_empty()
+                        && lit.params.iter().all(|p| p.ty.is_some())
+                        && lit.vararg.as_ref().is_none_or(|v| v.ty.is_some());
+                    if annotated && let Some(p) = self.param_at(f, i) {
+                        let mut sig = self.env.func_sig(lit, &self.scope.clone(), false);
+                        if lit.ret.is_none() {
+                            sig.ret = Pack::any();
+                        }
+                        let t = self.env.types.func(sig);
+                        self.unify(p, t, &mut s);
+                    }
                     continue;
                 }
                 let fixed = self
@@ -2448,11 +2555,35 @@ impl Checker<'_> {
             // The variadic tail binds a pack parameter. A function literal
             // (typed in the second pass) takes the type the pack was bound
             // to at its position by an earlier parameter, or `any`.
-            if let Some(Rest::Pack(p)) = &f.rest {
+            // A function of unknown signature (`function`, `any`) for a
+            // `(A...) -> …` parameter: `A` is anything.
+            let mut open_packs: Vec<ParamId> = Vec::new();
+            for (i, t) in arg_types.iter().enumerate() {
+                let (Some(t), Some(pt)) = (t, self.param_at(f, i)) else {
+                    continue;
+                };
+                if matches!(self.env.types.get(*t), Ty::Function | Ty::Any)
+                    && let Ty::Func(pf) = self.env.types.get(pt).clone()
+                    && let Some(Rest::Pack(p)) = &pf.rest
+                {
+                    open_packs.push(*p);
+                }
+            }
+            for p in &open_packs {
+                s.packs.insert(*p, Pack::any());
+            }
+            if let Some(Rest::Pack(p)) = &f.rest
+                && !open_packs.contains(p)
+            {
                 let fixed = f.params.len();
                 let bound = s.packs.get(p).cloned();
                 let mut pack = Pack::default();
                 for (k, t) in arg_types.iter().skip(fixed).enumerate() {
+                    // A final `...` or call passes any number of values.
+                    if fixed + k + 1 == exprs.len() && is_multi(exprs[fixed + k]) {
+                        pack.rest = Some(Rest::Variadic(t.unwrap_or(Types::ANY)));
+                        break;
+                    }
                     let from_bound = || bound.as_ref().and_then(|b| b.types.get(k).copied());
                     pack.types.push(t.or_else(from_bound).unwrap_or(Types::ANY));
                 }
@@ -2654,6 +2785,21 @@ impl Checker<'_> {
             (Ty::Func(pf), Ty::Func(af)) => {
                 for (pp, ap) in pf.params.iter().zip(&af.params) {
                     self.unify(pp.ty, ap.ty, s);
+                }
+                // `(A...) -> …`: the pack is the remaining parameters.
+                if let Some(Rest::Pack(p)) = &pf.rest
+                    && !s.packs.contains_key(p)
+                {
+                    let rest = Pack {
+                        types: af
+                            .params
+                            .iter()
+                            .skip(pf.params.len())
+                            .map(|q| q.ty)
+                            .collect(),
+                        rest: af.rest.clone(),
+                    };
+                    s.packs.insert(*p, rest);
                 }
                 for (pr, ar) in pf.ret.types.iter().zip(&af.ret.types) {
                     self.unify(*pr, *ar, s);
