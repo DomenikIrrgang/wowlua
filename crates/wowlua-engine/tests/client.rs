@@ -41,7 +41,7 @@ fn strings(vm: &Vm, t: Value) -> BTreeMap<String, String> {
         .collect()
 }
 
-fn fixture() -> BTreeMap<String, String> {
+fn fixture_part(part: &str) -> BTreeMap<String, String> {
     let src = std::fs::read(repo().join("crates/wowlua-vm/tests/client/forever-camelot.lua"))
         .expect("the fixture");
     let mut vm = Vm::new();
@@ -50,9 +50,13 @@ fn fixture() -> BTreeMap<String, String> {
     let Value::Table(t) = r[0] else {
         panic!("a table")
     };
-    let k = vm.str("results");
+    let k = vm.str(part);
     let results = vm.heap.table(t).get(k);
     strings(&vm, results)
+}
+
+fn fixture() -> BTreeMap<String, String> {
+    fixture_part("results")
 }
 
 #[test]
@@ -90,6 +94,7 @@ fn all_cases_match_the_client() {
     let driver = vm.load(DRIVER.as_bytes(), "=driver").expect("compiles");
     let r = vm.call(driver, &[chunk]).expect("the cases run");
     let ours = strings(&vm, r[0]);
+    let our_kinds = strings(&vm, r[1]);
     let theirs = fixture();
     let mut differences = Vec::new();
     let mut matched = 0;
@@ -99,6 +104,16 @@ fn all_cases_match_the_client() {
             mine => differences.push(format!(
                 "{source}\n    client: {expected}\n    ours:   {}",
                 mine.map_or("<not run>", String::as_str)
+            )),
+        }
+    }
+    // Each library function's kind (C or Lua), as the client has it.
+    for (name, expected) in &fixture_part("kinds") {
+        match our_kinds.get(name) {
+            Some(mine) if mine == expected => {}
+            mine => differences.push(format!(
+                "kind of {name}\n    client: {expected}\n    ours:   {}",
+                mine.map_or("<missing>", String::as_str)
             )),
         }
     }

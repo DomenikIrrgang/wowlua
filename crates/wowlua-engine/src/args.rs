@@ -26,6 +26,8 @@ enum Family {
     /// A C float (widget methods' `number`): refused outside ±FLT_MAX, a
     /// non-number included.
     Float,
+    /// A number, a non-number refused as "not a numerical value".
+    Numerical,
     /// A string (or a number).
     Str,
     /// A string, refused with "Expected a string." (restricted unit tokens).
@@ -50,6 +52,7 @@ fn family(api: &Api, ty: &str, arg: &Json, method: bool) -> Family {
     let int = |(min, max): (f64, f64), index| Family::Int { min, max, index };
     match ty {
         "luaIndex" => return int(U32, true),
+        "__numerical" => return Family::Numerical,
         "number" if method => return Family::Float,
         "number" => return int(I32, false),
         "EncounterTimelineEventID" => return int(U32, false),
@@ -99,6 +102,19 @@ fn family(api: &Api, ty: &str, arg: &Json, method: bool) -> Family {
     }
 }
 
+/// Functions whose client takes other arguments than the documentation
+/// says (`/stdtest restrictions`): their arguments as the client checks
+/// them.
+fn overridden_arguments(name: &str) -> Option<Json> {
+    match name {
+        // One spell book item, not a slot and a bank.
+        "C_Secrets.ShouldSpellBookItemCooldownBeSecret" => Some(serde_json::json!([
+            { "Name": "spellBookItem", "Type": "__numerical", "Nilable": false }
+        ])),
+        _ => None,
+    }
+}
+
 /// Integer arguments whose C type the documentation does not tell (both are
 /// `number`): unsigned where the probe found them so.
 const UNSIGNED: &[(&str, usize)] = &[("C_ChatInfo.IsValidChatLine", 1)];
@@ -106,6 +122,11 @@ const UNSIGNED: &[(&str, usize)] = &[("C_ChatInfo.IsValidChatLine", 1)];
 /// The client's usage line: `Usage: local a, (b)* = C_X.Fn(x [, y])`.
 pub fn usage(f: &Function) -> String {
     let list = |key: &str| {
+        if key == "Arguments"
+            && let Some(Json::Array(a)) = overridden_arguments(f.name)
+        {
+            return a;
+        }
         f.doc
             .get(key)
             .and_then(Json::as_array)
@@ -196,12 +217,15 @@ pub fn check_from(
     c: &NativeCall,
     first: usize,
 ) -> Result<(), LuaError> {
-    let args = f
-        .doc
-        .get("Arguments")
-        .and_then(Json::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let args = match overridden_arguments(f.name) {
+        Some(Json::Array(a)) => a,
+        _ => f
+            .doc
+            .get("Arguments")
+            .and_then(Json::as_array)
+            .cloned()
+            .unwrap_or_default(),
+    };
     // A method's arguments count `self` as the first (`/stdtest engine`).
     let method = first == 2;
     for (i, arg) in args.iter().enumerate() {
@@ -249,6 +273,7 @@ enum Refusal {
     Type,
     Range(f64, f64),
     FloatRange,
+    NotNumerical,
     String,
     This,
     Secret(&'static str),
@@ -281,6 +306,7 @@ fn refuses_type(vm: &mut Vm, family: Family, v: Value) -> Option<Refusal> {
             (!(min..=max).contains(&n)).then_some(Refusal::Range(min, max))
         }
         Family::Number => vm.tonumber(v).is_none().then_some(Refusal::Type),
+        Family::Numerical => vm.tonumber(v).is_none().then_some(Refusal::NotNumerical),
         Family::Float => match vm.tonumber(v) {
             Some(n) if n.abs() <= f64::from(f32::MAX) => None,
             _ => Some(Refusal::FloatRange),
@@ -341,6 +367,7 @@ fn fail(vm: &mut Vm, f: &Function, n: usize, why: Option<Refusal>, method: bool)
         None | Some(Refusal::Type) => usage,
         Some(Refusal::Range(..) | Refusal::FloatRange) => unreachable!("raised above"),
         Some(Refusal::String) => format!("Expected a string. - {usage}"),
+        Some(Refusal::NotNumerical) => format!("not a numerical value - {usage}"),
         Some(Refusal::This) => format!(
             "Attempt to find 'this' in non-table object (used '.' instead of ':' ?) - {usage}"
         ),

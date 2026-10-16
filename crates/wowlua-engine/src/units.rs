@@ -90,6 +90,29 @@ pub struct Units {
 
 pub const PLAYER: UnitId = UnitId(0);
 
+/// A class file's ID (`UnitClass`'s third result).
+fn class_id(class: &str) -> f64 {
+    const CLASSES: &[&str] = &[
+        "WARRIOR",
+        "PALADIN",
+        "HUNTER",
+        "ROGUE",
+        "PRIEST",
+        "DEATHKNIGHT",
+        "SHAMAN",
+        "MAGE",
+        "WARLOCK",
+        "MONK",
+        "DRUID",
+        "DEMONHUNTER",
+        "EVOKER",
+    ];
+    CLASSES
+        .iter()
+        .position(|c| *c == class)
+        .map_or(0.0, |i| i as f64 + 1.0)
+}
+
 /// The player the world starts with.
 pub fn install(vm: &mut Vm) {
     let player = Unit {
@@ -282,7 +305,12 @@ pub fn secret_results(vm: &Vm, doc: &serde_json::Value, c: &NativeCall) -> bool 
     if flag("SecretOnRestrictedMaps") && active(u, &[MAP]) {
         return true;
     }
-    let Some(id) = unit else { return false };
+    let Some(id) = unit else {
+        // A unit that does not exist: its maximum health and casting are
+        // secret (`/stdtest restrictions`, no target).
+        return flag("SecretWhenUnitHealthMaxRestricted")
+            || flag("SecretWhenUnitSpellCastRestricted");
+    };
     let player_controlled = u.list[id.0].player;
     if (flag("SecretWhenUnitHealthMaxRestricted") || flag("SecretWhenUnitPowerMaxRestricted"))
         && !player_controlled
@@ -353,14 +381,30 @@ fn unit_name(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
-fn unit_level(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, u| vec![Value::Num(u.level)])
+/// For a unit that does not exist, the numbers are 0 and the flags false
+/// (`/stdtest restrictions`: no target; identity calls give nothing).
+fn with_unit_or(
+    vm: &mut Vm,
+    c: &NativeCall,
+    none: Value,
+    f: impl FnOnce(&mut Vm, &Unit) -> Vec<Value>,
+) -> Ret {
+    if unit_arg(vm, c, 1).is_none() {
+        return Ok(vec![none]);
+    }
+    with_unit(vm, c, f)
 }
 
+fn unit_level(vm: &mut Vm, c: NativeCall) -> Ret {
+    with_unit_or(vm, &c, Value::Num(0.0), |_, u| vec![Value::Num(u.level)])
+}
+
+/// `UnitClass`: an NPC's class name is its own name (`/stdtest
+/// restrictions`: "Plainstrider", "WARRIOR", 1).
 fn unit_class(vm: &mut Vm, c: NativeCall) -> Ret {
     with_unit(vm, &c, |vm, u| {
         vec![
-            vm.str(&u.class_name),
+            vm.str(if u.player { &u.class_name } else { &u.name }),
             vm.str(&u.class),
             Value::Num(u.class_id),
         ]
@@ -376,19 +420,23 @@ fn unit_sex(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn unit_health(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, u| vec![Value::Num(u.health)])
+    with_unit_or(vm, &c, Value::Num(0.0), |_, u| vec![Value::Num(u.health)])
 }
 
 fn unit_health_max(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, u| vec![Value::Num(u.health_max)])
+    with_unit_or(vm, &c, Value::Num(0.0), |_, u| {
+        vec![Value::Num(u.health_max)]
+    })
 }
 
 fn unit_power(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, u| vec![Value::Num(u.power)])
+    with_unit_or(vm, &c, Value::Num(0.0), |_, u| vec![Value::Num(u.power)])
 }
 
 fn unit_power_max(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, u| vec![Value::Num(u.power_max)])
+    with_unit_or(vm, &c, Value::Num(0.0), |_, u| {
+        vec![Value::Num(u.power_max)]
+    })
 }
 
 fn unit_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -404,7 +452,9 @@ fn unit_is_player(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn unit_affecting_combat(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, u| vec![Value::Bool(u.in_combat)])
+    with_unit_or(vm, &c, Value::Bool(false), |_, u| {
+        vec![Value::Bool(u.in_combat)]
+    })
 }
 
 fn unit_is_unit(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -534,9 +584,30 @@ fn check_allow_protected(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// functions' results follow.
 fn should_be_secret(flag: &'static str) -> impl Fn(&mut Vm, NativeCall) -> Ret {
     move |vm: &mut Vm, c: NativeCall| {
+        // A unit that does not exist: its maximum health and its casting
+        // are secret (`/stdtest restrictions`, no target).
+        if matches!(
+            flag,
+            "SecretWhenUnitHealthMaxRestricted" | "SecretWhenUnitSpellCastRestricted"
+        ) && unit_arg(vm, &c, 1).is_none()
+        {
+            return Ok(vec![Value::Bool(true)]);
+        }
         let doc = serde_json::json!({ flag: true });
         Ok(vec![Value::Bool(secret_results(vm, &doc, &c))])
     }
+}
+
+/// `C_Secrets.Get…Secrecy(…)`: contextually secret (2) in every recorded
+/// state.
+fn contextually_secret(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(2.0)])
+}
+
+/// Spells' auras and cooldowns, and unit stats: secret in combat
+/// (`/stdtest restrictions`).
+fn secret_in_combat(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(active(&engine(vm).units, &[COMBAT]))])
 }
 
 macro_rules! should {
@@ -609,6 +680,13 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("C_Secrets.ShouldUnitSpellCastingBeSecret", should_casting),
         ("C_Secrets.ShouldAurasBeSecret", should_auras),
         ("C_Secrets.ShouldCooldownsBeSecret", should_cooldowns),
+        ("C_Secrets.GetPowerTypeSecrecy", contextually_secret),
+        ("C_Secrets.GetSpellAuraSecrecy", contextually_secret),
+        ("C_Secrets.GetSpellCastSecrecy", contextually_secret),
+        ("C_Secrets.GetSpellCooldownSecrecy", contextually_secret),
+        ("C_Secrets.ShouldSpellAuraBeSecret", secret_in_combat),
+        ("C_Secrets.ShouldSpellCooldownBeSecret", secret_in_combat),
+        ("C_Secrets.ShouldUnitStatsBeSecret", secret_in_combat),
     ]
 }
 
@@ -743,7 +821,7 @@ pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
             _ => None,
         },
         level: num(vm, "level", 1.0),
-        class_id: num(vm, "classID", 0.0),
+        class_id: num(vm, "classID", class_id(&class)),
         class,
         class_name,
         race: text(vm, "race", if player { "Human" } else { "" }),
