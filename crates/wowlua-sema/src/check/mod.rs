@@ -864,6 +864,147 @@ mod tests {
         d
     }
 
+    /// Checks `src` as a plain Lua file in two flavors whose extra
+    /// declarations are `a` and `b`, the first storing into the cache the
+    /// second looks up in: whether the first stored the file and the second
+    /// reused it, and the cache.
+    fn reuse_between(src: &str, a: &str, b: &str) -> (bool, bool, reuse::CheckCache) {
+        let mut db = SourceDb::new();
+        let file = db.add("t.lua", src.to_string());
+        let main = wowlua_syntax::parse(src.as_bytes(), file);
+        assert!(!main.has_errors(), "{:?}", main.diagnostics);
+        let mut cache = reuse::CheckCache::default();
+        let mut stored = false;
+        for (k, extra) in [a, b].into_iter().enumerate() {
+            let mut decls = wowlua_stdlib_files();
+            decls.push(("<test>/extra.d.wowlua", extra));
+            let parses: Vec<(String, wowlua_syntax::Parse)> = decls
+                .into_iter()
+                .map(|(path, text)| {
+                    let f = db.add(path, text.to_string());
+                    let p = wowlua_syntax::parse(text.as_bytes(), f);
+                    assert!(!p.has_errors(), "{path}: {:?}", p.diagnostics);
+                    (path.to_string(), p)
+                })
+                .collect();
+            let mut inputs: Vec<FileInput> = parses
+                .iter()
+                .map(|(path, p)| FileInput {
+                    src_rel: path.clone(),
+                    kind: FileKind::Declaration,
+                    parse: Some(p),
+                    xml: None,
+                    meta: None,
+                    main_of: None,
+                    globals: Default::default(),
+                })
+                .collect();
+            inputs.push(FileInput {
+                src_rel: "t.lua".into(),
+                kind: FileKind::Lua,
+                parse: Some(&main),
+                xml: None,
+                meta: None,
+                main_of: None,
+                globals: Default::default(),
+            });
+            let analysis = crate::analyze(&inputs, None);
+            let mut settings: Vec<Option<FileSettings>> = vec![None; inputs.len()];
+            *settings.last_mut().expect("main") = Some(FileSettings {
+                mode: Mode::Basic,
+                pure_lua: true,
+            });
+            check_package_full(
+                &inputs,
+                &analysis,
+                &settings,
+                &HashSet::new(),
+                None,
+                Some(reuse::Reuse {
+                    cache: &mut cache,
+                    store: k == 0,
+                }),
+            );
+            if k == 0 {
+                stored = cache.stored() == 1;
+            }
+        }
+        let hit = cache.hits == 1;
+        (stored, hit, cache)
+    }
+
+    /// A plain Lua file is reused where what it read is the same, and only
+    /// there (debug builds check every reuse again and compare).
+    #[test]
+    fn plain_lua_is_reused_where_its_reads_are_the_same() {
+        let reused = |src: &str, a: &str, b: &str| {
+            let (stored, hit, _) = reuse_between(src, a, b);
+            assert!(stored, "not stored: {src}\n{a}");
+            hit
+        };
+        let src = "print(Foo() + 1)\n";
+        let foo = "declare function Foo(): number\n";
+        assert!(reused(src, foo, foo), "the same declarations");
+        assert!(
+            reused(
+                src,
+                "declare function Foo(): number\ndeclare function Bar(): number\n",
+                "declare function Foo(): number\ndeclare function Bar(): string\n",
+            ),
+            "a global it does not read differs"
+        );
+        assert!(
+            !reused(src, foo, "declare function Foo(): string\n"),
+            "a global it reads changes type"
+        );
+        assert!(
+            !reused(src, foo, "declare function Other(): number\n"),
+            "a global it reads is only in one flavor"
+        );
+        assert!(
+            !reused(
+                "print(C_X.A() + 1)\n",
+                "declare namespace C_X\n    function A(): number\n    function B(): number\nend\n",
+                "declare namespace C_X\n    function A(): number\n    function B(): string\nend\n",
+            ),
+            "a member of a declaration it reads changes"
+        );
+        assert!(
+            !reused(
+                "local v = V\nprint(v)\n",
+                "declare global V: \"a\" | \"b\"\n",
+                "declare global W: \"b\"\ndeclare global V: \"a\" | \"b\"\n",
+            ),
+            "an API union's members are in another order"
+        );
+    }
+
+    /// The names a plain Lua file looks up are recorded, found or not:
+    /// globals, a namespace whose member it reads, and the addon namespace
+    /// of `...`.
+    #[test]
+    fn plain_lua_records_what_it_looks_up() {
+        let src = "local _, ns = ...\nns.x = 1\nprint(Foo(), Missing, string.format(\"%d\", 1))\n";
+        let foo = "declare function Foo(): number\n";
+        let (stored, _, cache) = reuse_between(src, foo, foo);
+        assert!(stored);
+        let roots = cache.roots();
+        for root in [
+            declared::Root::Global("Foo".into()),
+            declared::Root::Global("Missing".into()),
+            declared::Root::Global("print".into()),
+            declared::Root::Global("string".into()),
+        ] {
+            assert!(roots.contains(&root), "{root:?} not in {roots:#?}");
+        }
+        assert!(
+            roots
+                .iter()
+                .any(|r| matches!(r, declared::Root::Type(n) if &**n == env::ADDON_NAMESPACE)),
+            "the addon namespace: {roots:#?}"
+        );
+    }
+
     fn wowlua_stdlib_files() -> Vec<(&'static str, &'static str)> {
         vec![(
             "<wowlua>/lua.d.wowlua",

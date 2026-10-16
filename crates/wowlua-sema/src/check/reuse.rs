@@ -93,6 +93,26 @@ impl CheckCache {
         })
     }
 
+    /// How many checks are stored, for tests.
+    #[cfg(test)]
+    pub(crate) fn stored(&self) -> usize {
+        self.entries.values().map(Vec::len).sum()
+    }
+
+    /// The names the stored checks looked up, for tests.
+    #[cfg(test)]
+    pub(crate) fn roots(&self) -> Vec<Root> {
+        let mut roots: Vec<Root> = self
+            .entries
+            .values()
+            .flatten()
+            .flat_map(|e| e.roots.iter().cloned())
+            .collect();
+        roots.sort();
+        roots.dedup();
+        roots
+    }
+
     /// Stores the check of `file`: `reads` is what it read of `env`.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn store(
