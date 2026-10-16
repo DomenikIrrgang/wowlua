@@ -7,7 +7,8 @@
 //!
 //! Unverified: the neutral answers' exact shape (`GetRestState` when not
 //! rested, `GetInstanceInfo` outside any map, `GetZonePVPInfo` without a
-//! zone) and `GetFonts`' order (creation order here).
+//! zone). `GetFonts`' order: creation order here; the client's changes
+//! between sessions (two runs of `/stdtest engine`).
 
 use std::collections::HashMap;
 use std::sync::OnceLock;

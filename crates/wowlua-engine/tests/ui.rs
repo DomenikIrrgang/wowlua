@@ -206,15 +206,7 @@ fn the_flavor_ui_code_loads() {
         .trim_end_matches("\",");
     let mut client: Vec<&str> = list.split(' ').collect();
     client.sort_unstable();
-    // Addons the probe did not ask about when the fixture was recorded
-    // (new in the build; Blizzard_CommunitiesSecure, loaded, requires it).
-    const NOT_YET_PROBED: &[&str] = &["Blizzard_GamepadSharedUtilitySecure"];
-    let mut ours: Vec<&str> = report
-        .addons
-        .iter()
-        .map(String::as_str)
-        .filter(|a| !NOT_YET_PROBED.contains(a))
-        .collect();
+    let mut ours: Vec<&str> = report.addons.iter().map(String::as_str).collect();
     ours.sort_unstable();
     assert_eq!(ours, client, "the startup set");
     if let Ok(path) = std::env::var("WOWLUA_UI_ADDONS") {
