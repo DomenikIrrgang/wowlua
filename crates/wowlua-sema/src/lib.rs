@@ -47,6 +47,11 @@ pub struct FileInput<'a> {
     /// A WoW API file's globals of a primitive type, which its parsed text
     /// leaves out (`wowlua_api::File::globals`); empty for other files.
     pub globals: wowlua_api::Globals,
+    /// The load-order usage of a source when the caller has it already
+    /// (`wowlua dev` keeps those of unchanged plain Lua files, whose `parse`
+    /// is then `None`: nothing else of sema reads a plain Lua file that is
+    /// neither type-checked nor an import's module).
+    pub usage: Option<std::sync::Arc<usage::FileUsage>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

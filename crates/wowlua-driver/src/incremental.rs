@@ -5,7 +5,9 @@
 
 use crate::compile::{CacheEntry, FlavorCache};
 use std::collections::HashMap;
+use std::sync::Arc;
 use wowlua_diagnostics::Diagnostic;
+use wowlua_sema::usage::FileUsage;
 use wowlua_span::{FileId, SourceDb};
 
 /// The cache of one `wowlua dev` session. One-shot commands never make one.
@@ -22,6 +24,8 @@ pub struct BuildCache {
     lua_checks: HashMap<String, LuaCheck>,
     /// The hashes of the files' bytes in this build, by `Source::rel`.
     hashes: HashMap<String, blake3::Hash>,
+    /// Plain Lua files a rebuild does not parse again, by `Source::rel`.
+    fronts: HashMap<String, FrontEntry>,
     /// What the last build took from the cache.
     pub stats: CacheStats,
 }
@@ -35,6 +39,20 @@ struct LuaCheck {
     generation: u64,
 }
 
+/// An unchanged plain Lua source a rebuild does not parse again (stage 3):
+/// one that parsed cleanly and that is neither type-checked nor linted.
+/// The build reads nothing else of its parse but its load-order usage
+/// (which is the same in every flavor: it reads only the flavor table's
+/// deferred-call markers) and `--!nolint`; lowering parses it again where
+/// a flavor's compile misses.
+struct FrontEntry {
+    file: FileId,
+    hash: blake3::Hash,
+    usage: Arc<FileUsage>,
+    nolint: bool,
+    generation: u64,
+}
+
 /// What a build took from the cache: per file and flavor compiled.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CacheStats {
@@ -45,6 +63,8 @@ pub struct CacheStats {
     /// Plain Lua sources whose type check (`check.lua`) a later flavor
     /// took from an earlier one of the same build.
     pub type_checks: usize,
+    /// Plain Lua sources that were not parsed again.
+    pub summarized: usize,
     /// The build-wide inputs changed, so the cache was emptied.
     pub cleared: bool,
 }
@@ -57,10 +77,57 @@ impl BuildCache {
             self.stats.cleared = self.config.is_some();
             self.files.clear();
             self.lua_checks.clear();
+            self.fronts.clear();
             self.config = Some(config);
         }
         self.hashes.clear();
         self.generation += 1;
+    }
+
+    /// The usage and `--!nolint` of an unchanged plain Lua source kept by
+    /// an earlier build, when its path, `FileId` and bytes are the same.
+    pub(crate) fn front(
+        &mut self,
+        rel: &str,
+        file: FileId,
+        bytes: &[u8],
+    ) -> Option<(Arc<FileUsage>, bool)> {
+        let hash = self.hash(rel, bytes);
+        let generation = self.generation;
+        let e = self.fronts.get_mut(rel)?;
+        if e.file != file || e.hash != hash {
+            return None;
+        }
+        e.generation = generation;
+        self.stats.summarized += 1;
+        Some((e.usage.clone(), e.nolint))
+    }
+
+    /// The hash of a source's bytes in this build.
+    pub(crate) fn source_hash(&mut self, rel: &str, bytes: &[u8]) -> blake3::Hash {
+        self.hash(rel, bytes)
+    }
+
+    /// Keeps a cleanly parsed plain Lua source for later builds.
+    pub(crate) fn keep_front(
+        &mut self,
+        rel: &str,
+        file: FileId,
+        hash: blake3::Hash,
+        usage: Arc<FileUsage>,
+        nolint: bool,
+    ) {
+        let generation = self.generation;
+        self.fronts.insert(
+            rel.to_string(),
+            FrontEntry {
+                file,
+                hash,
+                usage,
+                nolint,
+                generation,
+            },
+        );
     }
 
     fn hash(&mut self, rel: &str, bytes: &[u8]) -> blake3::Hash {
@@ -133,6 +200,7 @@ impl BuildCache {
         });
         self.files = files;
         self.lua_checks.retain(|_, c| c.generation == generation);
+        self.fronts.retain(|_, f| f.generation == generation);
     }
 }
 

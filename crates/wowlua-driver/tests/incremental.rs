@@ -151,12 +151,18 @@ fn an_edit_recompiles_only_the_edited_file() {
     ]);
     let cold = dev.rebuild();
     assert_eq!((cold.hits, cold.misses), (3, 3), "the second flavor reuses");
+    assert_eq!(cold.summarized, 0);
     let again = dev.rebuild();
     assert_eq!((again.hits, again.misses), (6, 0), "{again:?}");
+    assert_eq!(again.summarized, 3, "no file is parsed again: {again:?}");
     dev.write("src/a.lua", "local _, ns = ...\nns.a = 2 -- edited\n");
     let edit = dev.rebuild();
     assert_eq!((edit.hits, edit.misses), (5, 1), "{edit:?}");
     assert_eq!(edit.lua_checks, 2, "the unchanged files' Lua 5.1 checks");
+    assert_eq!(
+        edit.summarized, 2,
+        "only the edited file is parsed: {edit:?}"
+    );
 }
 
 /// A Lua 5.1 limit error (E5001) in a source stays reported on rebuilds.
@@ -421,6 +427,7 @@ fn check_lua_flavors_share_what_checks_the_same() {
     dev.write("src/b.lua", "local n = 2\nprint(n .. {})\n");
     let edit = dev.rebuild();
     assert_eq!(edit.type_checks, 3, "{edit:?}");
+    assert_eq!(edit.summarized, 0, "type-checked files keep their parses");
 }
 
 /// Replays edits on a real project (copied first): every Nth source gets

@@ -800,6 +800,11 @@ fn build_inner(
                 availability,
             }
         });
+    // `wowlua dev` does not parse unchanged plain Lua files again (#7
+    // stage 3), unless a pass reads every parse (`rename-private`, dead
+    // modules) or `check.lua` type-checks and lints them.
+    let summarize =
+        cache.is_some() && !passes.rename_private && !profile.optimize.dead_code && !check_cfg.lua;
     let mut parsed = crate::compile::parse_sources(
         &session.db,
         &mut diagnostics,
@@ -807,6 +812,7 @@ fn build_inner(
         &declarations,
         &raw,
         cache.as_deref_mut(),
+        summarize,
     );
     crate::compile::add_libraries(
         &mut session.db,
@@ -865,6 +871,13 @@ fn build_inner(
     // files with `check.lua`. `--!nolint` turns them off for a file.
     let mut nolint: HashSet<wowlua_span::FileId> = HashSet::new();
     for (i, (source, file)) in files.iter().enumerate() {
+        // A summarized file is not linted (it would not be summarized).
+        if let Some(crate::compile::Front::Summarized { nolint: off, .. }) = parsed.fronts.get(i) {
+            if *off {
+                nolint.insert(*file);
+            }
+            continue;
+        }
         let Some(parse) = parsed.parses.get(i).and_then(Option::as_ref) else {
             continue;
         };
@@ -1099,6 +1112,26 @@ fn build_inner(
     // The parses and the flavor cache are not read after compiling; freeing
     // them here keeps them out of the memory that assembly and bundling add
     // on top. `wowlua dev` keeps the cache for the next build.
+    // Plain Lua files no flavor type-checked and the build did not lint
+    // need no parse in a later build.
+    if let Some(cache) = cache.as_deref_mut() {
+        let checked: HashSet<usize> = builds
+            .iter()
+            .flat_map(|b| b.output.checked.iter().copied())
+            .collect();
+        for (i, front) in parsed.fronts.iter().enumerate() {
+            if let crate::compile::Front::Fresh {
+                hash,
+                usage,
+                nolint,
+            } = front
+                && !checked.contains(&i)
+            {
+                let (source, file) = &files[i];
+                cache.keep_front(&source.rel, *file, *hash, usage.clone(), *nolint);
+            }
+        }
+    }
     drop(parsed);
     drop(declarations);
     match cache {

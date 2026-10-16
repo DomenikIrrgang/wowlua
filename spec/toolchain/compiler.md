@@ -365,14 +365,21 @@ user error otherwise:
   - each compiled file (code, source map, diagnostics), by its source path,
     file id, content hash and lowering context, as within one build;
   - the Lua 5.1 check of each plain `.lua` source, by its path, file id and
-    content hash.
+    content hash;
+  - for each plain `.lua` source that parsed cleanly and that no flavor
+    type-checks (no `check.lua`), what the build reads of it besides its
+    code: its load-order usage and `--!nolint`, by its path, file id and
+    content hash. A rebuild does not parse such a file again unless a
+    flavor has to compile it again. With `rename-private` or dead-module
+    removal on, every source is parsed.
 
   A rebuild takes from it what compiling again would give, so it writes the
   same files and reports the same diagnostics as a fresh build. Files that
   read `wowlua:meta` are compiled every time, since `build.id` changes on
   every save. A change to the manifest, the lockfile, the dependencies or the
   build request empties the cache. Entries a build did not use are dropped.
-  Sources are still parsed and analyzed on every build.
+  `.wowlua` sources, changed sources and type-checked plain Lua are parsed
+  and analyzed on every build.
 - **Phase 2.** Persistent per-module cache in `dist/.cache/` keyed by the
   module's content hash, the compiler version, the effective configuration
   hash (profile, target overrides, feature set), the flavor, the flavor-table

@@ -32,6 +32,8 @@ pub struct Compiled {
 
 #[derive(Default)]
 pub struct CompileOutput {
+    /// The sources the type check ran on, by index.
+    pub checked: std::collections::HashSet<usize>,
     /// Compiled `.wowlua` sources by `Source::rel`. Flavors that compile a
     /// file the same share it; it is replaced, never changed.
     pub compiled: HashMap<String, Arc<Compiled>>,
@@ -276,9 +278,45 @@ pub fn minify_lua(
 
 /// The parsed sources of a package (shared by all flavors).
 pub struct Parsed {
+    /// `None` for XML files and summarized ones (`Front::Summarized`).
     pub(crate) parses: Vec<Option<Parse>>,
     pub(crate) ok: Vec<bool>,
+    /// What `wowlua dev` knows of plain Lua sources without their parse.
+    pub(crate) fronts: Vec<Front>,
     declarations: Vec<Parse>,
+}
+
+/// A plain Lua source in `wowlua dev` (#7 stage 3; see `BuildCache::front`).
+#[derive(Clone)]
+pub(crate) enum Front {
+    None,
+    /// Unchanged since an earlier build: not parsed.
+    Summarized {
+        usage: Arc<wowlua_sema::usage::FileUsage>,
+        nolint: bool,
+    },
+    /// Parsed cleanly: kept for later builds if no flavor type-checks it.
+    Fresh {
+        hash: blake3::Hash,
+        usage: Arc<wowlua_sema::usage::FileUsage>,
+        nolint: bool,
+    },
+}
+
+impl Parsed {
+    fn push(&mut self, parse: Option<Parse>, ok: bool) {
+        self.parses.push(parse);
+        self.ok.push(ok);
+        self.fronts.push(Front::None);
+    }
+
+    /// The load-order usage of file `i` known without a flavor.
+    pub(crate) fn usage(&self, i: usize) -> Option<Arc<wowlua_sema::usage::FileUsage>> {
+        match self.fronts.get(i)? {
+            Front::None => None,
+            Front::Summarized { usage, .. } | Front::Fresh { usage, .. } => Some(usage.clone()),
+        }
+    }
 }
 
 /// The line mode (spec codegen §14.5): the profile's, else `preserve` for
@@ -299,15 +337,33 @@ pub fn parse_sources(
     declarations: &[Declaration],
     raw: &HashMap<String, Arc<[u8]>>,
     mut cache: Option<&mut crate::BuildCache>,
+    summarize: bool,
 ) -> Parsed {
     let mut parses = Vec::with_capacity(files.len());
     let mut ok = vec![true; files.len()];
+    let mut fronts = vec![Front::None; files.len()];
+    // The usage of a plain Lua file depends only on the table markers.
+    let markers = summarize.then(wowlua_sema::usage::Markers::from_table);
     for (i, (source, file)) in files.iter().enumerate() {
         if source.kind == SourceKind::Xml {
             parses.push(None);
             continue;
         }
         let bytes = &raw[&source.rel];
+        // An unchanged plain Lua file kept by an earlier build: its Lua 5.1
+        // check is replayed as for a parsed one.
+        if summarize
+            && source.kind == SourceKind::Lua
+            && let Some(cache) = cache.as_deref_mut()
+            && let Some((usage, nolint)) = cache.front(&source.rel, *file, bytes)
+        {
+            if let Some(d) = cache.lua_check(db, &source.rel, *file, bytes) {
+                diagnostics.push(d);
+            }
+            fronts[i] = Front::Summarized { usage, nolint };
+            parses.push(None);
+            continue;
+        }
         let parsed = wowlua_syntax::parse(bytes, *file);
         if parsed.has_errors() {
             diagnostics.extend(parsed.diagnostics.clone());
@@ -327,11 +383,24 @@ pub fn parse_sources(
                     .with_help("rename the file to `.wowlua`"),
                 );
                 ok[i] = false;
-            } else if let Some(d) = match cache.as_deref_mut() {
-                Some(cache) => cache.lua_check(db, &source.rel, *file, bytes),
-                None => luacheck::check(db, *file, bytes),
-            } {
-                diagnostics.push(d);
+            } else {
+                if let Some(d) = match cache.as_deref_mut() {
+                    Some(cache) => cache.lua_check(db, &source.rel, *file, bytes),
+                    None => luacheck::check(db, *file, bytes),
+                } {
+                    diagnostics.push(d);
+                }
+                if let (Some(markers), Some(cache)) = (&markers, cache.as_deref_mut()) {
+                    fronts[i] = Front::Fresh {
+                        hash: cache.source_hash(&source.rel, bytes),
+                        usage: Arc::new(wowlua_sema::usage::file_usage(&parsed, markers)),
+                        nolint: parsed
+                            .chunk
+                            .directives
+                            .iter()
+                            .any(|d| d.name.as_ref() == "nolint"),
+                    };
+                }
             }
         }
         parses.push(Some(parsed));
@@ -349,6 +418,7 @@ pub fn parse_sources(
     Parsed {
         parses,
         ok,
+        fronts,
         declarations,
     }
 }
@@ -420,8 +490,7 @@ pub fn add_stdlib(
             }
             raw.insert(rel, module.source.into_bytes().into());
             files.push((source, file));
-            parsed.parses.push(Some(parse));
-            parsed.ok.push(ok);
+            parsed.push(Some(parse), ok);
             let declaration = declaration_overrides
                 .get(name.as_str())
                 .cloned()
@@ -632,16 +701,14 @@ pub fn add_libraries(
                 output: Some(l.output(&rel)),
             };
             if kind == SourceKind::Xml {
-                parsed.parses.push(None);
-                parsed.ok.push(true);
+                parsed.push(None, true);
             } else {
                 let parse = wowlua_syntax::parse(&bytes, file);
                 let ok = !parse.has_errors();
                 if !ok {
                     diagnostics.extend(parse.diagnostics.clone());
                 }
-                parsed.parses.push(Some(parse));
-                parsed.ok.push(ok);
+                parsed.push(Some(parse), ok);
             }
             raw.insert(src_rel, bytes.into());
             files.push((source, file));
@@ -820,7 +887,8 @@ pub fn compile_flavor(
     let mut inputs: Vec<FileInput> = files
         .iter()
         .zip(&parsed.parses)
-        .map(|((source, file), parse)| FileInput {
+        .enumerate()
+        .map(|(i, ((source, file), parse))| FileInput {
             src_rel: source.src_rel.clone(),
             kind: match source.kind {
                 SourceKind::Wowlua => FileKind::Wowlua,
@@ -837,6 +905,7 @@ pub fn compile_flavor(
                 .flatten(),
             meta: unit_of(&source.src_rel).map(|u| u.meta.as_ref()),
             globals: Default::default(),
+            usage: parsed.usage(i),
             main_of: unit_of(&source.src_rel)
                 .filter(|u| u.main.as_deref() == Some(source.src_rel.as_str()))
                 .and(wowlua_sema::package_of(&source.src_rel).map(str::to_string)),
@@ -851,6 +920,7 @@ pub fn compile_flavor(
             meta: None,
             main_of: None,
             globals: Default::default(),
+            usage: None,
         });
     }
     for d in api {
@@ -862,6 +932,7 @@ pub fn compile_flavor(
             meta: None,
             main_of: None,
             globals: d.globals,
+            usage: None,
         });
     }
     let analysis = wowlua_sema::analyze(&inputs, Some(&meta));
@@ -926,6 +997,12 @@ pub fn compile_flavor(
                 _ => None,
             },
         )
+        .collect();
+    out.checked = settings
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.is_some())
+        .map(|(i, _)| i)
         .collect();
     let mut private_methods = std::collections::HashSet::new();
     if settings.iter().any(Option::is_some) {
@@ -1103,8 +1180,17 @@ pub fn compile_flavor(
     // adds what lowering reports to `diagnostics`; `None` when it fails.
     let lower_file = |i: usize, ctx: Option<&Context>, diagnostics: &mut Vec<Diagnostic>| {
         let source = &files[i].0;
-        let parse = parsed.parses[i].as_ref().expect("parsed");
         let bytes = &raw[&source.rel];
+        // A summarized file (`Front::Summarized`) is parsed where a compile
+        // misses, and the parse dropped after lowering.
+        let reparsed;
+        let parse = match parsed.parses[i].as_ref() {
+            Some(parse) => parse,
+            None => {
+                reparsed = wowlua_syntax::parse(bytes, files[i].1);
+                &reparsed
+            }
+        };
         let Some(ctx) = ctx else {
             return match wowlua_lower::lower(parse, bytes) {
                 Ok(chunk) => Some(wowlua_lower::Lowered {

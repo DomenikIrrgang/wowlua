@@ -851,6 +851,7 @@ mod tests {
                 meta: None,
                 main_of: None,
                 globals: Default::default(),
+                usage: None,
             })
             .collect();
         inputs.push(FileInput {
@@ -861,6 +862,7 @@ mod tests {
             meta: None,
             main_of: None,
             globals: Default::default(),
+            usage: None,
         });
         let analysis = crate::analyze(&inputs, None);
         let mut settings: Vec<Option<FileSettings>> = vec![None; inputs.len()];
@@ -912,6 +914,7 @@ mod tests {
                     meta: None,
                     main_of: None,
                     globals: Default::default(),
+                    usage: None,
                 })
                 .collect();
             inputs.push(FileInput {
@@ -922,6 +925,7 @@ mod tests {
                 meta: None,
                 main_of: None,
                 globals: Default::default(),
+                usage: None,
             });
             let analysis = crate::analyze(&inputs, None);
             let mut settings: Vec<Option<FileSettings>> = vec![None; inputs.len()];
