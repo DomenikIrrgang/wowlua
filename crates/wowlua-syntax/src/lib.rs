@@ -14,6 +14,7 @@ pub mod literal;
 mod parser;
 pub mod search;
 pub mod token;
+pub mod view;
 pub mod visit;
 
 use wowlua_diagnostics::Diagnostic;
