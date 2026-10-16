@@ -379,7 +379,10 @@ user error otherwise:
   every save. A change to the manifest, the lockfile, the dependencies or the
   build request empties the cache. Entries a build did not use are dropped.
   `.wowlua` sources, changed sources and type-checked plain Lua are parsed
-  and analyzed on every build.
+  and analyzed on every build. A rebuild still replaces the AddOn folder as
+  a whole, but links each file whose bytes are those of the last build (and
+  that is on disk as that build left it) from the old folder instead of
+  writing it, and rewrites only the source maps that changed.
 - **Phase 2.** Persistent per-module cache in `dist/.cache/` keyed by the
   module's content hash, the compiler version, the effective configuration
   hash (profile, target overrides, feature set), the flavor, the flavor-table

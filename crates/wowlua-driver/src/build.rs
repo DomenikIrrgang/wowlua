@@ -1151,7 +1151,7 @@ fn build_inner(
     }
     drop(parsed);
     drop(declarations);
-    match cache {
+    match cache.as_deref_mut() {
         Some(cache) => cache.keep(flavor_cache),
         None => drop(flavor_cache),
     }
@@ -2354,10 +2354,19 @@ fn build_inner(
     let dir = request.out_dir.clone().unwrap_or_else(|| {
         wowlua_pkg::source::normalize(&manifest.out_dir().join(&profile.name).join(&addon_name))
     });
-    if request.write
-        && let Err(error) =
+    let written = match cache {
+        // `wowlua dev` (#7 stage 4): only what changed is written.
+        Some(cache) if request.write => {
+            let previous = cache.written.take();
+            crate::incremental::write_changed(&dir, &out, &addon_name, &maps, previous.as_ref())
+                .map(|w| cache.written = Some(w))
+        }
+        _ if request.write => {
             write_tree(&dir, &out).and_then(|()| write_maps(&dir, &addon_name, &maps))
-    {
+        }
+        _ => Ok(()),
+    };
+    if let Err(error) = written {
         session.push(
             Diagnostic::plain_error(format!("cannot write the build output: {error}"))
                 .with_path(&dir),
@@ -4595,7 +4604,7 @@ fn flatten_xml(
 /// Writes source maps outside the AddOn folder (spec codegen §14.6):
 /// `<parent>/.maps/<Addon>/<output path>.map`. Maps of per-flavor files
 /// (milestone M2) add a `<flavor>/` level.
-fn write_maps(
+pub(crate) fn write_maps(
     dir: &Path,
     addon: &str,
     maps: &BTreeMap<String, Arc<EncodedMap>>,

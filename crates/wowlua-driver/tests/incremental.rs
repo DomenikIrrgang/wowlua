@@ -57,6 +57,11 @@ fn tree(dir: &Path) -> BTreeMap<String, Vec<u8>> {
 
 fn run(root: &Path, cache: Option<&mut BuildCache>) -> Snapshot {
     let _ = std::fs::remove_dir_all(root.join("dist"));
+    run_over(root, cache)
+}
+
+/// [`run`] over the output of the last build, as `wowlua dev` does.
+fn run_over(root: &Path, cache: Option<&mut BuildCache>) -> Snapshot {
     let mut session = Session::new();
     let options = wowlua_driver::LoadOptions {
         cwd: root.to_path_buf(),
@@ -429,6 +434,47 @@ fn check_lua_flavors_share_what_checks_the_same() {
     let edit = dev.rebuild();
     assert_eq!(edit.type_checks, 3, "{edit:?}");
     assert_eq!(edit.summarized, 0, "type-checked files keep their parses");
+}
+
+/// Over the last build's output, a rebuild writes only what changed (#7
+/// stage 4): an unchanged file is linked from the old folder, an edited one
+/// written; folder and maps are what a fresh build writes.
+#[test]
+fn rebuilds_write_only_what_changed() {
+    let dev = Dev::new(&[
+        ("wowlua.json", MANIFEST),
+        ("src/a.lua", "local _, ns = ...\nns.a = 1\n"),
+        ("src/b.lua", "local _, ns = ...\nprint(ns.a)\n"),
+    ]);
+    let mut cache = BuildCache::default();
+    let file = |rel: &str| {
+        let dist = dev.root.join("dist").join("dev");
+        let addon = std::fs::read_dir(&dist)
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .find(|p| p.is_dir() && !p.file_name().unwrap().to_string_lossy().starts_with('.'))
+            .expect("the AddOn folder");
+        addon.join(rel)
+    };
+    run_over(&dev.root, Some(&mut cache));
+    #[cfg(unix)]
+    let inode = |rel: &str| {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(file(rel)).unwrap().ino()
+    };
+    #[cfg(unix)]
+    let before = (inode("src/a.lua"), inode("src/b.lua"));
+    dev.write("src/b.lua", "local _, ns = ...\nprint(ns.a, 2)\n");
+    let incremental = run_over(&dev.root, Some(&mut cache));
+    #[cfg(unix)]
+    {
+        assert_eq!(inode("src/a.lua"), before.0, "unchanged: linked");
+        assert_ne!(inode("src/b.lua"), before.1, "edited: written");
+    }
+    let fresh = run(&dev.root, None);
+    assert_eq!(incremental.dist, fresh.dist);
+    assert_eq!(incremental.diagnostics, fresh.diagnostics);
 }
 
 /// Replays edits on a real project (copied first): every Nth source gets
