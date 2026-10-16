@@ -3,6 +3,7 @@
 //! minification passes (spec optimization §15.4).
 
 pub mod bytecode;
+pub mod deep;
 pub mod emit;
 pub mod hygiene;
 pub mod ir;

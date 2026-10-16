@@ -5,12 +5,12 @@ use crate::ast::*;
 /// Calls `f` on `e` and every expression inside it, including those in
 /// nested function bodies.
 pub fn walk_expr<'a>(e: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
-    walk(e, f, true)
+    crate::deep::run(|| walk(e, f, true))
 }
 
 /// Like [`walk_expr`], without entering nested function bodies.
 pub fn walk_expr_shallow<'a>(e: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
-    walk(e, f, false)
+    crate::deep::run(|| walk(e, f, false))
 }
 
 fn walk<'a>(e: &'a Expr, f: &mut impl FnMut(&'a Expr), deep: bool) {
@@ -81,9 +81,11 @@ fn walk_args<'a>(args: &'a Args, f: &mut impl FnMut(&'a Expr), deep: bool) {
 /// Calls `f` on every statement in `block`, including those in nested
 /// blocks and function bodies.
 pub fn walk_stmts<'a>(block: &'a Block, f: &mut impl FnMut(&'a Stmt)) {
-    for s in &block.stmts {
-        walk_one_stmt(s, f);
-    }
+    crate::deep::run(|| {
+        for s in &block.stmts {
+            walk_one_stmt(s, f);
+        }
+    })
 }
 
 fn walk_one_stmt<'a>(s: &'a Stmt, f: &mut impl FnMut(&'a Stmt)) {

@@ -882,6 +882,7 @@ pub fn compile_flavor(
     let mut options = minify.passes.emit_options(line_mode(profile));
     options.mappings = source_maps;
     let mut out = CompileOutput::default();
+    wowlua_luair::deep::note(wowlua_syntax::deep::links());
 
     let unit_of = |src_rel: &str| wowlua_sema::package_of(src_rel).and_then(|n| libraries.get(n));
     let mut inputs: Vec<FileInput> = files
@@ -1104,68 +1105,71 @@ pub fn compile_flavor(
                   file: FileId,
                   diagnostics: &mut Vec<Diagnostic>|
      -> Option<Compiled> {
-        let optimized = optimize_and_emit(
-            chunk,
-            &Optimizations {
-                dead_code: profile.optimize.dead_code,
-                inline: profile.optimize.inline,
-                cache_globals: profile.optimize.cache_globals
-                    == wowlua_manifest::model::CacheGlobals::Safe,
-            },
-            &minify.passes,
-            &options,
-        );
-        for (pos, span) in inline_hints.get(&file).into_iter().flatten() {
-            use wowlua_luair::optimize::NotInlined;
-            let Some((_, why)) = optimized.not_inlined.iter().find(|(p, _)| p == pos) else {
-                continue;
-            };
-            let why = match why {
-                NotInlined::NotAnExpression => "its body is not a single `return` expression",
-                NotInlined::Recursive => "it is recursive",
-                NotInlined::Escapes => "it is used other than by calling it",
-            };
-            diagnostics.push(
-                Diagnostic::warning("W3031", format!("`@inline` is ignored: {why}"))
-                    .with_label(*span, "not inlined"),
+        // Lowered code is as deep as its source (`wowlua_luair::deep`).
+        wowlua_luair::deep::run(|| {
+            let optimized = optimize_and_emit(
+                chunk,
+                &Optimizations {
+                    dead_code: profile.optimize.dead_code,
+                    inline: profile.optimize.inline,
+                    cache_globals: profile.optimize.cache_globals
+                        == wowlua_manifest::model::CacheGlobals::Safe,
+                },
+                &minify.passes,
+                &options,
             );
-        }
-        if optimized.reduced {
-            diagnostics.push(
+            for (pos, span) in inline_hints.get(&file).into_iter().flatten() {
+                use wowlua_luair::optimize::NotInlined;
+                let Some((_, why)) = optimized.not_inlined.iter().find(|(p, _)| p == pos) else {
+                    continue;
+                };
+                let why = match why {
+                    NotInlined::NotAnExpression => "its body is not a single `return` expression",
+                    NotInlined::Recursive => "it is recursive",
+                    NotInlined::Escapes => "it is used other than by calling it",
+                };
+                diagnostics.push(
+                    Diagnostic::warning("W3031", format!("`@inline` is ignored: {why}"))
+                        .with_label(*span, "not inlined"),
+                );
+            }
+            if optimized.reduced {
+                diagnostics.push(
                 Diagnostic::note(
                     "`dedupe-strings`, `cache-globals` and `inline` are left out for this file: with them it would exceed a Lua 5.1 limit",
                 )
                 .with_path(&source.rel),
             );
-        }
-        let compiles = optimized.compiles;
-        let (emitted, original) = (optimized.emitted, optimized.original);
-        if let Some(d) = emitted_parse_error(&emitted.text, file, &source.rel) {
-            diagnostics.push(d);
-            return None;
-        }
-        // Without a byte order mark, no error means these bytes compiled.
-        let checked = match luacheck::check_unless_compiled(db, file, &emitted.text, compiles) {
-            Some(d) => {
-                diagnostics.push(d);
-                false
             }
-            None => !emitted.text.starts_with(b"\xEF\xBB\xBF"),
-        };
-        let output = source.output_path();
-        let map = source_maps.then(|| {
-            let name = output.rsplit('/').next().unwrap_or(&output);
-            Arc::new(wowlua_luair::sourcemap::encode_named(
-                &emitted.mappings,
-                name,
-                &source.rel,
-                &original,
-            ))
-        });
-        Some(Compiled {
-            code: emitted.text,
-            map,
-            compiles: checked,
+            let compiles = optimized.compiles;
+            let (emitted, original) = (optimized.emitted, optimized.original);
+            if let Some(d) = emitted_parse_error(&emitted.text, file, &source.rel) {
+                diagnostics.push(d);
+                return None;
+            }
+            // Without a byte order mark, no error means these bytes compiled.
+            let checked = match luacheck::check_unless_compiled(db, file, &emitted.text, compiles) {
+                Some(d) => {
+                    diagnostics.push(d);
+                    false
+                }
+                None => !emitted.text.starts_with(b"\xEF\xBB\xBF"),
+            };
+            let output = source.output_path();
+            let map = source_maps.then(|| {
+                let name = output.rsplit('/').next().unwrap_or(&output);
+                Arc::new(wowlua_luair::sourcemap::encode_named(
+                    &emitted.mappings,
+                    name,
+                    &source.rel,
+                    &original,
+                ))
+            });
+            Some(Compiled {
+                code: emitted.text,
+                map,
+                compiles: checked,
+            })
         })
     };
     // Each file is finished right after it is lowered, so only one file's
@@ -1179,50 +1183,52 @@ pub fn compile_flavor(
     // Lowers file `i` with its context, or as a script without one, and
     // adds what lowering reports to `diagnostics`; `None` when it fails.
     let lower_file = |i: usize, ctx: Option<&Context>, diagnostics: &mut Vec<Diagnostic>| {
-        let source = &files[i].0;
-        let bytes = &raw[&source.rel];
-        // A summarized file (`Front::Summarized`) is parsed where a compile
-        // misses, and the parse dropped after lowering.
-        let reparsed;
-        let parse = match parsed.parses[i].as_ref() {
-            Some(parse) => parse,
-            None => {
-                reparsed = wowlua_syntax::parse(bytes, files[i].1);
-                &reparsed
-            }
-        };
-        let Some(ctx) = ctx else {
-            return match wowlua_lower::lower(parse, bytes) {
-                Ok(chunk) => Some(wowlua_lower::Lowered {
-                    chunk,
-                    meta_used: BTreeSet::new(),
-                    uses_runtime: false,
-                    slices: BTreeSet::new(),
-                    warnings: Vec::new(),
-                    reads_meta: false,
-                }),
-                Err(errors) => {
-                    diagnostics.extend(errors);
-                    None
+        // Lowered code is as deep as its source (`wowlua_luair::deep`).
+        wowlua_luair::deep::run(|| {
+            let source = &files[i].0;
+            let bytes = &raw[&source.rel];
+            // A summarized file (`Front::Summarized`) is parsed where a compile
+            // misses, and the parse dropped after lowering.
+            let reparsed;
+            let parse = match parsed.parses[i].as_ref() {
+                Some(parse) => parse,
+                None => {
+                    reparsed = wowlua_syntax::parse(bytes, files[i].1);
+                    &reparsed
                 }
             };
-        };
-        let mut lowered = match wowlua_lower::lower_module(parse, bytes, ctx) {
-            Ok(lowered) => lowered,
-            Err(errors) => {
-                diagnostics.extend(errors);
-                return None;
-            }
-        };
-        // The runtime's `config` and `features` tables are the addon's: a
-        // library may only use their constant (scalar) values.
-        if ctx.dependency
-            && let Some((kind, path)) = lowered
-                .meta_used
-                .iter()
-                .find(|(k, _)| matches!(k, MetaKind::Config | MetaKind::Features))
-        {
-            diagnostics.push(
+            let Some(ctx) = ctx else {
+                return match wowlua_lower::lower(parse, bytes) {
+                    Ok(chunk) => Some(wowlua_lower::Lowered {
+                        chunk,
+                        meta_used: BTreeSet::new(),
+                        uses_runtime: false,
+                        slices: BTreeSet::new(),
+                        warnings: Vec::new(),
+                        reads_meta: false,
+                    }),
+                    Err(errors) => {
+                        diagnostics.extend(errors);
+                        None
+                    }
+                };
+            };
+            let mut lowered = match wowlua_lower::lower_module(parse, bytes, ctx) {
+                Ok(lowered) => lowered,
+                Err(errors) => {
+                    diagnostics.extend(errors);
+                    return None;
+                }
+            };
+            // The runtime's `config` and `features` tables are the addon's: a
+            // library may only use their constant (scalar) values.
+            if ctx.dependency
+                && let Some((kind, path)) = lowered
+                    .meta_used
+                    .iter()
+                    .find(|(k, _)| matches!(k, MetaKind::Config | MetaKind::Features))
+            {
+                diagnostics.push(
                 Diagnostic::plain_error(format!(
                     "library code reads `{}{}` at run time; a library may only use constant `config` and `features` values",
                     if *kind == MetaKind::Config { "config" } else { "features" },
@@ -1230,9 +1236,10 @@ pub fn compile_flavor(
                 ))
                 .with_path(&source.rel),
             );
-        }
-        diagnostics.append(&mut lowered.warnings);
-        Some(lowered)
+            }
+            diagnostics.append(&mut lowered.warnings);
+            Some(lowered)
+        })
     };
     // The checker's runtime checks and `typeName` texts by file, once (each
     // file's context gets its own).

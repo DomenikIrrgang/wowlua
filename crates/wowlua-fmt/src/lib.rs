@@ -44,9 +44,9 @@ pub enum Error {
 
 /// Formats `src` (the bytes of `file`).
 pub fn format(src: &[u8], file: FileId, config: &Config) -> Result<Vec<u8>, Error> {
-    let parsed = wowlua_syntax::parse(src, file);
+    let mut parsed = wowlua_syntax::parse(src, file);
     if parsed.has_errors() {
-        return Err(Error::Syntax(parsed.diagnostics));
+        return Err(Error::Syntax(std::mem::take(&mut parsed.diagnostics)));
     }
     if let Some((feature, span)) = wowlua_syntax::features::features(&parsed.chunk).first() {
         return Err(Error::Unsupported(

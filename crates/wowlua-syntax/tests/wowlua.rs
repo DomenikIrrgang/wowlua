@@ -32,7 +32,7 @@ fn ok(src: &str) -> Chunk {
         "{src:?}: {:?}",
         p.diagnostics.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
-    p.chunk
+    p.chunk.clone()
 }
 
 #[test]

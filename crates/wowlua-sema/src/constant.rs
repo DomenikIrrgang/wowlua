@@ -305,7 +305,84 @@ pub fn eval(e: &wowlua_syntax::ast::Expr, lookup: &dyn Fn(&str) -> Option<Const>
 
 /// Like [`eval`], with `leaf` resolving names and access paths (fields,
 /// indexes) to constants.
+/// What [`eval_tracked`] found for parsed expressions, by file and node id.
+pub type EvalMemo = rustc_hash::FxHashMap<(wowlua_span::FileId, u32), Option<(Const, bool)>>;
+
+/// [`eval_with`], with whether a leaf gave a value (`true`) or only
+/// literals did. A parsed node's answer is kept in `memo` (synthetic nodes
+/// have id 0 and are not), so asking again about a subtree of what was
+/// asked about takes constant time: `a and b and c` asks about `a and b`,
+/// then about `a`.
+pub fn eval_tracked(
+    e: &wowlua_syntax::ast::Expr,
+    leaf: &dyn Fn(&wowlua_syntax::ast::Expr) -> Option<Const>,
+    memo: &mut EvalMemo,
+) -> Option<(Const, bool)> {
+    wowlua_syntax::deep::run(|| eval_tracked_rec(e, leaf, memo))
+}
+
+fn eval_tracked_rec(
+    e: &wowlua_syntax::ast::Expr,
+    leaf: &dyn Fn(&wowlua_syntax::ast::Expr) -> Option<Const>,
+    memo: &mut EvalMemo,
+) -> Option<(Const, bool)> {
+    let key = (e.id.0 != 0).then_some((e.span.file, e.id.0));
+    if let Some(key) = key
+        && let Some(found) = memo.get(&key)
+    {
+        return found.clone();
+    }
+    let found = eval_tracked_inner(e, leaf, memo);
+    if let Some(key) = key {
+        memo.insert(key, found.clone());
+    }
+    found
+}
+
+/// As `eval_with_inner`; a value is found by a leaf when any of its parts
+/// is (every part was evaluated: a part without a value has none).
+fn eval_tracked_inner(
+    e: &wowlua_syntax::ast::Expr,
+    leaf: &dyn Fn(&wowlua_syntax::ast::Expr) -> Option<Const>,
+    memo: &mut EvalMemo,
+) -> Option<(Const, bool)> {
+    use wowlua_syntax::ast::{ExprKind, UnOp};
+    let literal = |c: Const| Some((c, false));
+    match &e.kind {
+        ExprKind::Nil => literal(Const::Nil),
+        ExprKind::True => literal(Const::Bool(true)),
+        ExprKind::False => literal(Const::Bool(false)),
+        ExprKind::Number(n) => n.value.map(|v| (Const::Number(v), false)),
+        ExprKind::String(s) => literal(Const::String(s.value.to_vec())),
+        ExprKind::Paren(inner) => eval_tracked_rec(inner, leaf, memo),
+        ExprKind::Cast { expr, .. } => eval_tracked_rec(expr, leaf, memo),
+        ExprKind::Unary { op, operand } => {
+            let (v, found) = eval_tracked_rec(operand, leaf, memo)?;
+            let v = match (op, v) {
+                (UnOp::Neg, Const::Number(n)) => Const::Number(-n),
+                (UnOp::Not, v) => Const::Bool(!v.truthy()),
+                (UnOp::BNot, Const::Number(n)) => Const::Number(fold_bnot(n)?),
+                _ => return None,
+            };
+            Some((v, found))
+        }
+        ExprKind::Binary { op, lhs, rhs } => {
+            let (a, fa) = eval_tracked_rec(lhs, leaf, memo)?;
+            let (b, fb) = eval_tracked_rec(rhs, leaf, memo)?;
+            fold_binary(*op, &a, &b).map(|v| (v, fa || fb))
+        }
+        _ => leaf(e).map(|v| (v, true)),
+    }
+}
+
 pub fn eval_with(
+    e: &wowlua_syntax::ast::Expr,
+    leaf: &dyn Fn(&wowlua_syntax::ast::Expr) -> Option<Const>,
+) -> Option<Const> {
+    wowlua_syntax::deep::run(|| eval_with_inner(e, leaf))
+}
+
+fn eval_with_inner(
     e: &wowlua_syntax::ast::Expr,
     leaf: &dyn Fn(&wowlua_syntax::ast::Expr) -> Option<Const>,
 ) -> Option<Const> {
@@ -316,10 +393,10 @@ pub fn eval_with(
         ExprKind::False => Some(Const::Bool(false)),
         ExprKind::Number(n) => n.value.map(Const::Number),
         ExprKind::String(s) => Some(Const::String(s.value.to_vec())),
-        ExprKind::Paren(inner) => eval_with(inner, leaf),
-        ExprKind::Cast { expr, .. } => eval_with(expr, leaf),
+        ExprKind::Paren(inner) => eval_with_inner(inner, leaf),
+        ExprKind::Cast { expr, .. } => eval_with_inner(expr, leaf),
         ExprKind::Unary { op, operand } => {
-            let v = eval_with(operand, leaf)?;
+            let v = eval_with_inner(operand, leaf)?;
             match (op, v) {
                 (UnOp::Neg, Const::Number(n)) => Some(Const::Number(-n)),
                 (UnOp::Not, v) => Some(Const::Bool(!v.truthy())),
@@ -328,8 +405,8 @@ pub fn eval_with(
             }
         }
         ExprKind::Binary { op, lhs, rhs } => {
-            let a = eval_with(lhs, leaf)?;
-            let b = eval_with(rhs, leaf)?;
+            let a = eval_with_inner(lhs, leaf)?;
+            let b = eval_with_inner(rhs, leaf)?;
             fold_binary(*op, &a, &b)
         }
         _ => leaf(e),
