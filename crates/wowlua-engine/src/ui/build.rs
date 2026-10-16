@@ -156,6 +156,11 @@ pub fn class_of(vm: &Vm, tag: &str) -> Option<String> {
                 .is_some_and(|w| w.eq_ignore_ascii_case(tag))
         })
         .map(|(name, _)| name.clone())
+        // A widget type the client has but the documentation lacks.
+        .or_else(|| {
+            tag.eq_ignore_ascii_case("AuraContainer")
+                .then(|| "AuraContainer".to_string())
+        })
 }
 
 /// A top-level widget element of a `<Ui>`: a template if virtual (and a
@@ -236,6 +241,11 @@ pub fn build(
     }
     apply(vm, cx, frame, id, el);
     widgets::run_script(vm, id, "OnLoad", &[]);
+    // Built visible: shown (unverified that the client runs OnShow here;
+    // Blizzard's PersonalResourceDisplay sets itself up in OnShow).
+    if widgets::visible(engine(vm), id) {
+        widgets::run_script(vm, id, "OnShow", &[]);
+    }
     Some(frame)
 }
 
@@ -401,6 +411,37 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
                     }
                 }
                 _ => cx.error(vm, el.line, format!("mixin {m} is not a table")),
+            }
+        }
+    }
+    // `<Mixins><Mixin key="X" [source="secure"]/></Mixins>`: from the
+    // globals, or the secure environment's (partitions and secure
+    // delegates not modelled).
+    for list in el
+        .children
+        .iter()
+        .filter(|c| c.tag.eq_ignore_ascii_case("Mixins"))
+    {
+        for m in &list.children {
+            let Some(key) = m.attr("key") else { continue };
+            let secure = m
+                .attr("source")
+                .is_some_and(|s| s.eq_ignore_ascii_case("secure"));
+            let globals = vm.globals;
+            if secure && let Some(env) = engine(vm).world.ui.secure_env {
+                vm.globals = env;
+            }
+            let src = vm.get_global(key);
+            vm.globals = globals;
+            match src {
+                Value::Table(src) => {
+                    let mut k = Value::Nil;
+                    while let Some((key, v)) = vm.heap.table(src).next(k).ok().flatten() {
+                        let _ = vm.heap.table_mut(table).set(key, v);
+                        k = key;
+                    }
+                }
+                _ => cx.error(vm, m.line, format!("mixin {key} is not a table")),
             }
         }
     }

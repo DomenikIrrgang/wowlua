@@ -211,6 +211,32 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
 
+/// The client's locales: enUS alone here (pending `/stdtest engine`'s
+/// `loadCalls`).
+fn available_locales(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let info = vm.new_table();
+    let (id, name) = (vm.str("localeId"), vm.str("localeName"));
+    let en = vm.str("enUS");
+    let _ = vm.heap.table_mut(info).set(id, Value::Num(0.0));
+    let _ = vm.heap.table_mut(info).set(name, en);
+    let list = vm.new_table();
+    let _ = vm
+        .heap
+        .table_mut(list)
+        .set(Value::Num(1.0), Value::Table(info));
+    Ok(vec![Value::Table(list)])
+}
+
+/// No group: no members of any role.
+fn group_member_counts(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let t = vm.new_table();
+    for role in ["TANK", "HEALER", "DAMAGER", "NOROLE"] {
+        let k = vm.str(role);
+        let _ = vm.heap.table_mut(t).set(k, Value::Num(0.0));
+    }
+    Ok(vec![Value::Table(t)])
+}
+
 /// No role chosen for the group finder.
 fn saved_roles(vm: &mut Vm, _c: NativeCall) -> Ret {
     let t = vm.new_table();
@@ -404,6 +430,7 @@ const INVENTORY_SLOTS: &[(&str, f64)] = &[
     ("BAG1SLOT", 21.0),
     ("BAG2SLOT", 22.0),
     ("BAG3SLOT", 23.0),
+    ("REAGENTBAG0SLOT", 24.0),
 ];
 
 /// `GetInventorySlotInfo(slotName)`: the slot's ID, its empty texture
@@ -546,7 +573,19 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetScreenHeight", screen_height),
         ("GetActiveLootRollIDs", empty_list),
         ("C_LFGList.GetApplications", empty_list),
+        // No pet battle, no nameplates.
+        ("C_PetBattles.GetNumPets", zero),
+        ("C_PetBattles.GetHealth", zero),
+        ("C_PetBattles.GetMaxHealth", zero),
+        ("C_PetBattles.GetPower", zero),
+        ("C_PetBattles.GetSpeed", zero),
+        ("C_PetBattles.GetLevel", zero),
+        ("C_PetBattles.GetXP", zeros),
+        ("C_NamePlate.GetNamePlateForUnit", nothing),
+        ("C_NamePlate.GetNamePlates", empty_list),
+        ("GetAvailableLocaleInfo", available_locales),
         ("C_LFGListRoles.GetSavedRoles", saved_roles),
+        ("GetGroupMemberCounts", group_member_counts),
         ("GetNetStats", net_stats),
         ("GetMirrorTimerInfo", mirror_timer_info),
         // No group, no role.

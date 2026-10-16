@@ -1,5 +1,31 @@
 # A fresh widget's getters on WoW Forever 1.60.1 (/stdtest engine), type<TAB>getter<TAB>
 # results as the probe shows them ("N: type value, ..."); session-dependent ones left out.
+AuraContainer	CanChangeProtectedState	1: boolean true
+AuraContainer	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+AuraContainer	GetEffectiveAlpha	1: number 1
+AuraContainer	GetFlattensRenderLayers	1: boolean false
+AuraContainer	GetFrameLevel	1: number 1
+AuraContainer	GetFrameStrata	1: string MEDIUM
+AuraContainer	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+AuraContainer	GetID	1: number 0
+AuraContainer	GetNumRegions	1: number 0
+AuraContainer	GetResizeBounds	4: number 0, number 0, number 0, number 0
+AuraContainer	HasFixedFrameLevel	1: boolean false
+AuraContainer	HasFixedFrameStrata	1: boolean false
+AuraContainer	IsClampedToScreen	1: boolean false
+AuraContainer	IsEnabled	1: boolean true
+AuraContainer	IsIgnoringParentAlpha	1: boolean false
+AuraContainer	IsIgnoringParentScale	1: boolean false
+AuraContainer	IsKeyboardEnabled	1: boolean false
+AuraContainer	IsMouseClickEnabled	1: boolean false
+AuraContainer	IsMouseEnabled	1: boolean false
+AuraContainer	IsMouseMotionEnabled	1: boolean false
+AuraContainer	IsMouseWheelEnabled	1: boolean false
+AuraContainer	IsMovable	1: boolean false
+AuraContainer	IsObjectLoaded	1: boolean true
+AuraContainer	IsResizable	1: boolean false
+AuraContainer	IsToplevel	1: boolean false
+AuraContainer	IsUserPlaced	1: boolean false
 Button	CanChangeProtectedState	1: boolean true
 Button	GetClampRectInsets	4: number 0, number 0, number 0, number 0
 Button	GetEffectiveAlpha	1: number 1

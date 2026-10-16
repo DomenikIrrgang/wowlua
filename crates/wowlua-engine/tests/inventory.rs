@@ -91,7 +91,7 @@ const MAX_SCALARS_DIFFERENT: usize = 1;
 
 /// How many distinct errors Blizzard's code raises, loading and once
 /// logged in (the client: none). It may only go down, to 0.
-const MAX_RUNTIME_ERRORS: usize = 19;
+const MAX_RUNTIME_ERRORS: usize = 4;
 
 #[test]
 fn every_function_of_the_client_exists_with_its_kind() {

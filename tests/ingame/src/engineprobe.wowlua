@@ -497,6 +497,7 @@ const LOADED_AT_START = blizzardLoaded()
 --- every login, so calling them again is no riskier).
 const LOAD_CALLS = {
     "C_ActionBar.GetMultiCastBarIndex", "C_ActionBar.GetBonusBarOffset", "GetNumShapeshiftForms",
+    "GetAvailableLocaleInfo", "GetNumSpecializations", "GuildControlGetNumRanks", "BNGetNumFriends",
     "C_LFGList.GetApplications", "C_LFGListRoles.GetSavedRoles", "GetNetStats", "GetNumSubgroupMembers",
     "GetMaxBattlefieldID", "GetNumLanguages", "C_MountJournal.GetNumMountsNeedingFanfare",
     "C_PetJournal.GetNumPetsNeedingFanfare",
@@ -767,7 +768,8 @@ local function slotInfo(): { [string]: string }
         "AMMOSLOT", "HEADSLOT", "NECKSLOT", "SHOULDERSLOT", "SHIRTSLOT", "CHESTSLOT", "WAISTSLOT",
         "LEGSSLOT", "FEETSLOT", "WRISTSLOT", "HANDSSLOT", "FINGER0SLOT", "FINGER1SLOT",
         "TRINKET0SLOT", "TRINKET1SLOT", "BACKSLOT", "MAINHANDSLOT", "SECONDARYHANDSLOT",
-        "RANGEDSLOT", "TABARDSLOT", "BAG0SLOT", "NOSUCHSLOT",
+        "RANGEDSLOT", "TABARDSLOT", "BAG0SLOT", "BAG1SLOT", "BAG2SLOT", "BAG3SLOT",
+        "REAGENTBAG0SLOT", "NOSUCHSLOT",
     }) do
         out[name] = results(G.GetInventorySlotInfo, name)
     end
@@ -786,6 +788,31 @@ local function forbidden(): { [string]: string }
         GetObjectType = results(function() return f:GetObjectType() end),
         IsShown = results(function() return f:IsShown() end),
     }
+end
+
+--- The errors the client's Blizzard code raised this session, as
+--- Blizzard's ScriptErrorsFrame keeps them (shown or not): message, count,
+--- the stack's first lines.
+local function blizzardErrors(): { [string]: string }
+    const out: { [string]: string } = {}
+    const frame: any = G.ScriptErrorsFrame
+    if type(frame) ~= "table" or type(frame.errorData) ~= "table" then
+        return { absent = "ScriptErrorsFrame.errorData" }
+    end
+    for i, e in ipairs(frame.errorData :: any[]) do
+        if type(e) == "table" then
+            const stack = tostring(e.stack or "")
+            const lines: string[] = {}
+            for line in stack:gmatch("[^\n]+") do
+                if #lines < 4 then
+                    lines[#lines + 1] = line
+                end
+            end
+            out[tostring(i)] = `{tostring(e.count)}x {tostring(e.message):sub(1, 300)} | {table.concat(lines, " | ")}`
+        end
+    end
+    out.total = tostring(#(frame.errorData :: any[]))
+    return out
 end
 
 --- Every global number and boolean (`LE_*`: the client's own; others
@@ -1192,6 +1219,7 @@ export function engineProbe(arg: string?)
         qualityColors = qualityColors(),
         slotInfo = slotInfo(),
         forbidden = forbidden(),
+        blizzardErrors = blizzardErrors(),
         blizzardAtStart = table.concat(LOADED_AT_START, " "),
         blizzardNow = table.concat(blizzardLoaded(), " "),
         units = units(),

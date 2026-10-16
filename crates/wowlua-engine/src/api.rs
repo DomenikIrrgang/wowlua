@@ -60,6 +60,9 @@ pub struct Api {
     /// Classes the declarations describe: their base and method names
     /// (for widget types the client's own list was not recorded for).
     pub declared: HashMap<String, (Option<String>, Vec<String>)>,
+    /// Functions the documentation gives Blizzard's secure code alone
+    /// (`Environment: SecureOnly`): namespace and name.
+    pub secure_only: Vec<(&'static str, &'static str)>,
 }
 
 /// Names live as long as the process: natives' names are `&'static str`.
@@ -170,6 +173,7 @@ fn parse(gz: &[u8]) -> Api {
             })
             .unwrap_or_default(),
         declared: HashMap::new(),
+        secure_only: Vec::new(),
     };
     let str_of = |v: &Json, k: &str| v.get(k).and_then(Json::as_str).map(str::to_string);
     let list = |v: &Json, k: &str| {
@@ -225,15 +229,18 @@ fn parse(gz: &[u8]) -> Api {
                 let Some(short) = str_of(&f, "Name") else {
                     continue;
                 };
-                // Blizzard's code only: addons do not have it.
-                let env = str_of(&f, "Environment").or_else(|| system_env.clone());
-                if env.as_deref() == Some("SecureOnly") {
-                    continue;
-                }
                 // A function may name its own namespace.
                 let namespace = str_of(&f, "Namespace")
                     .filter(|n| !n.is_empty())
                     .or_else(|| system_namespace.clone());
+                // Blizzard's secure code only: addons do not have it.
+                let env = str_of(&f, "Environment").or_else(|| system_env.clone());
+                if env.as_deref() == Some("SecureOnly") {
+                    if let Some(ns) = &namespace {
+                        api.secure_only.push((leak(ns), leak(&short)));
+                    }
+                    continue;
+                }
                 let name = match &namespace {
                     Some(ns) => format!("{ns}.{short}"),
                     None => short.clone(),

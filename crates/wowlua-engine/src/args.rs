@@ -143,8 +143,11 @@ fn relax(f: &Function, args: &mut [Json]) {
                 set(i, "Nilable", Json::Bool(true));
             }
         }
-        // Clearing an attribute (UIParentPanelManager).
-        (true, "SetAttributeNoHandler") => set(1, "Nilable", Json::Bool(true)),
+        // Any value, nil too (UIParentPanelManager stores true and numbers).
+        (true, "SetAttributeNoHandler") => {
+            set(1, "Nilable", Json::Bool(true));
+            set(1, "Type", Json::from("LuaValueVariant"));
+        }
         _ => {}
     }
 }

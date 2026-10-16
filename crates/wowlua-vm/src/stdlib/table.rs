@@ -189,7 +189,8 @@ fn sort_comp(vm: &mut Vm, f: Value, a: Value, b: Value) -> Result<bool, LuaError
 
 fn sort(vm: &mut Vm, c: NativeCall) -> Ret {
     let (t, n) = aux_getn(vm, &c, 1)?;
-    let f = if c.has(2) {
+    // `luaL_checktype` only when not none or nil: `sort(t, nil)` sorts.
+    let f = if c.has(2) && !c.arg(2).is_nil() {
         vm.check_func(&c, 2)?
     } else {
         Value::Nil

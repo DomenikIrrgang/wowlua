@@ -279,6 +279,25 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         let native = vm.native_with(short, facts::recorded_call, vec![upval]);
         vm.heap.table_mut(table).set_str(key, native);
     }
+    // The documentation's secure-only functions (`C_PingSecure`): for the
+    // secure environment, without behaviour.
+    let mut secure_only: std::collections::BTreeMap<&str, Vec<&'static str>> = Default::default();
+    for (ns, f) in &api.secure_only {
+        secure_only.entry(ns).or_default().push(f);
+    }
+    for (ns, functions) in secure_only {
+        let t = vm.new_table();
+        for f in functions {
+            let name = vm.str(&format!("{ns}.{f}"));
+            let native = vm.native_with(f, undocumented_function, vec![name]);
+            let k = vm.heap.intern(f.as_bytes());
+            vm.heap.table_mut(t).set_str(k, native);
+        }
+        let k = vm.heap.intern(ns.as_bytes());
+        widgets::keep(vm, Value::Table(t));
+        widgets::keep(vm, Value::Str(k));
+        engine_mut(vm).secure_namespaces.push((k, Value::Table(t)));
+    }
     // Documented namespaces none of whose functions the client's addons
     // have: Blizzard's secure code's alone.
     if flavor == "camelot" {

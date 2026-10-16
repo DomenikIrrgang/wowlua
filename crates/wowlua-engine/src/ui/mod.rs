@@ -8,8 +8,9 @@
 //! suffixed TOC first, not load-on-demand unless a startup addon depends on
 //! it, beta- and PTR-only ones on such clients. Their order is inferred
 //! from what Blizzard's code needs at load (unverified beyond that):
-//! Blizzard_SharedXMLBase and Blizzard_SharedXML, then the `LoadFirst`
-//! ones, then the rest, by name, each after the addons it depends on.
+//! Blizzard_SharedXMLBase and Blizzard_SharedXML, then the secure
+//! environment's addons, then the `LoadFirst` ones, then the rest, by
+//! name, each after the addons it depends on.
 //!
 //! `UseSecureEnvironment` addons run with globals of their own, reading
 //! through to the addons' (theirs stay out of them: WoW Forever's addons
@@ -289,6 +290,14 @@ fn startup_addons(interface: &Path, t: &Target) -> (Vec<Addon>, HashMap<String, 
     for base in ["blizzard_sharedxmlbase", "blizzard_sharedxml"] {
         if all.contains_key(base) {
             visit(base, &all, &mut seen, &mut order);
+        }
+    }
+    // Then the secure environment's addons (Blizzard_UnitFrame builds
+    // Blizzard_AuraContainer's aura containers at load, naming no
+    // dependency on it).
+    for n in &names {
+        if all[n].secure && !all[n].on_demand {
+            visit(n, &all, &mut seen, &mut order);
         }
     }
     for first in [true, false] {
@@ -571,14 +580,19 @@ fn load_addon_files_in(vm: &mut Vm, root: &Path, t: &Target, addon: &Addon, only
         }
         let path = resolve(&addon.dir, &t.path(&rel));
         // `[LoadIntoEnvironment global]`: a secure addon's file for the
-        // addons' globals (Blizzard_AuraContainerInbound.lua).
-        let into_global = file.conditions.iter().any(|c| {
-            c.name.eq_ignore_ascii_case("LoadIntoEnvironment")
-                && c.values.iter().any(|v| v.eq_ignore_ascii_case("global"))
-        });
+        // addons' globals (Blizzard_AuraContainerInbound.lua); `secure`: an
+        // addon's file for the secure ones (TargetFrameAuraContainer.lua).
+        let into = |env: &str| {
+            file.conditions.iter().any(|c| {
+                c.name.eq_ignore_ascii_case("LoadIntoEnvironment")
+                    && c.values.iter().any(|v| v.eq_ignore_ascii_case(env))
+            })
+        };
         let globals = vm.globals;
-        if into_global {
+        if into("global") {
             vm.globals = engine(vm).main_globals;
+        } else if into("secure") {
+            vm.globals = secure_env(vm);
         }
         load_file(vm, root, &path, &addon.name, table);
         vm.globals = globals;

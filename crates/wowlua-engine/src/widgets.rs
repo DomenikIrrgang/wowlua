@@ -172,6 +172,10 @@ fn lineage(e: &Engine, name: &str) -> Vec<String> {
         }
         if let Some(class) = e.api.classes.get(&c) {
             todo.extend(class.bases.iter().rev().cloned());
+        } else if c == "AuraContainer" {
+            // A frame of its own methods (`/stdtest engine`: its object
+            // type is Frame).
+            todo.push("Frame".to_string());
         }
         out.push(c);
     }
@@ -1192,7 +1196,13 @@ fn get_name(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 
 fn get_object_type(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let class = engine(vm).world.widgets[id.0].class.clone();
-    Ok(vec![vm.str(&class)])
+    // An aura container says Frame (`/stdtest engine`).
+    let shown = if class == "AuraContainer" {
+        "Frame"
+    } else {
+        &class
+    };
+    Ok(vec![vm.str(shown)])
 }
 
 /// The documentation's mixin classes: not object types
@@ -1844,6 +1854,19 @@ fn set_attribute(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `SetAttributeNoHandler(name, value)`: the attribute, without
+/// `OnAttributeChanged`.
+fn set_attribute_no_handler(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let Value::Str(key) = c.arg(2) else {
+        return Err(c_error(vm, "Arguments: (\"name\", value)", true));
+    };
+    let lower = String::from_utf8_lossy(vm.str_bytes(key)).to_lowercase();
+    let name = vm.str(&lower);
+    let attributes = engine(vm).world.widgets[id.0].attributes;
+    let _ = vm.heap.table_mut(attributes).set(name, c.arg(3));
+    Ok(vec![])
+}
+
 fn attribute(vm: &mut Vm, id: WidgetId, name: &str) -> Value {
     let attributes = engine(vm).world.widgets[id.0].attributes;
     let key = vm.str(&name.to_lowercase());
@@ -1994,6 +2017,12 @@ fn get_font(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     // string's height is garbage there).
     let flags = vm.str("");
     Ok(vec![Value::Nil, Value::Num(0.0), flags])
+}
+
+/// `GetLineHeight()`: the font's height (its own or a font object's).
+fn get_line_height(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let font = get_font(vm, id, c)?;
+    Ok(vec![font.get(1).copied().unwrap_or(Value::Num(0.0))])
 }
 
 /// Whether Blizzard's secure code made the widget.
@@ -2401,6 +2430,8 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("SetNormalFontObject", set_normal_font_object),
         ("SetParentKey", set_parent_key),
         ("GetTextScale", get_text_scale),
+        ("GetLineHeight", get_line_height),
+        ("SetAttributeNoHandler", set_attribute_no_handler),
         ("GetStatusBarTexture", get_status_bar_texture),
         ("SetStatusBarTexture", set_status_bar_texture),
         ("SetFontString", set_font_string),
