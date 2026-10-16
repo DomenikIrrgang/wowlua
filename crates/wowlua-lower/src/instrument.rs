@@ -29,7 +29,7 @@ pub(crate) struct FnMarks {
     pub reflect_meta: Option<ir::Expr>,
 }
 
-impl Lowerer<'_> {
+impl<'a> Lowerer<'a> {
     /// Adds the wrappers to the lowered statements of a file.
     pub(crate) fn instrument(&mut self, stmts: &mut Vec<ir::Stmt>) {
         let tools = &self.ctx.tools;
@@ -263,45 +263,45 @@ fn path_label(e: &ir::Expr) -> Option<String> {
     }
 }
 
-impl Lowerer<'_> {
+impl<'a> Lowerer<'a> {
     /// The monitor's routing of a call (spec §7.9): `frame:SetScript(…)`,
     /// `frame:HookScript(…)` and the global `C_Timer` functions become calls
     /// of `__wl.mon` helpers with the call's location.
-    pub(crate) fn monitor_call(&mut self, e: &Expr) -> Option<ir::Expr> {
+    pub(crate) fn monitor_call(&mut self, e: Expr<'a>) -> Option<ir::Expr> {
         if !self.ctx.tools.monitor || self.ctx.compiler_known || self.ctx.dependency {
             return None;
         }
-        let (helper, items, arity): (&str, Vec<&Expr>, usize) = match &e.kind {
+        let (helper, items, arity): (&str, Vec<Expr<'a>>, usize) = match e.kind() {
             // Other method calls are not routed (`None`, as in the last arm).
             ExprKind::Method { obj, name, args } => {
-                let Args::Parens { args, .. } = &**args else {
+                let ArgsKind::Parens { args, .. } = args.kind() else {
                     return None;
                 };
-                if args.len() != 2 || !matches!(name.text.as_ref(), "SetScript" | "HookScript") {
+                if args.len() != 2 || !matches!(name.text(), "SetScript" | "HookScript") {
                     return None;
                 }
-                let helper = if name.text.as_ref() == "SetScript" {
+                let helper = if name.text() == "SetScript" {
                     "setScript"
                 } else {
                     "hookScript"
                 };
-                let mut items = vec![&**obj];
-                items.extend(args.iter());
+                let mut items = vec![obj];
+                items.extend(args);
                 (helper, items, 3)
             }
-            ExprKind::Call {
-                callee,
-                args: Args::Parens { args, .. },
-            } => {
-                let ExprKind::Field { obj, name } = &callee.kind else {
+            ExprKind::Call { callee, args } => {
+                let ArgsKind::Parens { args, .. } = args.kind() else {
                     return None;
                 };
-                if !matches!(&obj.kind, ExprKind::Name(n) if n.text.as_ref() == "C_Timer")
+                let ExprKind::Field { obj, name } = callee.kind() else {
+                    return None;
+                };
+                if !matches!(obj.kind(), ExprKind::Name(n) if n.text() == "C_Timer")
                     || self.is_local("C_Timer")
                 {
                     return None;
                 }
-                let (helper, arity) = match name.text.as_ref() {
+                let (helper, arity) = match name.text() {
                     "After" => ("after", 2),
                     "NewTimer" => ("newTimer", 2),
                     "NewTicker" => ("newTicker", 3),
@@ -314,12 +314,12 @@ impl Lowerer<'_> {
             }
             _ => return None,
         };
-        let pos = self.span_pos(e.span);
+        let pos = self.span_pos(e.span());
         let mut lowered = self.seq(&items);
         while lowered.len() < arity {
             lowered.push(lit(ir::ExprKind::Nil, pos));
         }
-        lowered.push(self.string(&self.location(e.span), pos));
+        lowered.push(self.string(&self.location(e.span()), pos));
         self.uses_runtime = true;
         self.slices.insert(Slice::Monitor);
         let wl = self.runtime_ref(pos);

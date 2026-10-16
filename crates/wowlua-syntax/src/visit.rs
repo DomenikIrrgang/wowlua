@@ -73,7 +73,7 @@ fn walk<'t>(e: Expr<'t>, f: &mut impl FnMut(Expr<'t>), deep: bool) {
 }
 
 fn walk_args<'t>(args: Args<'t>, f: &mut impl FnMut(Expr<'t>), deep: bool) {
-    args.exprs().for_each(|a| walk(a, f, deep));
+    args.exprs().iter().for_each(|a| walk(a, f, deep));
 }
 
 /// Calls `f` on every statement in `block`, including those in nested

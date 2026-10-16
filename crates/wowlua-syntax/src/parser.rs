@@ -783,10 +783,13 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
+            let span = self.span_from(at.start);
+            let call = Box::new(Decorator::call_of(&path, args.as_ref(), span));
             out.push(Decorator {
                 path,
                 args,
-                span: self.span_from(at.start),
+                span,
+                call,
             });
         }
         Ok(out)

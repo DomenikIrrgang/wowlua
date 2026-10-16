@@ -5,7 +5,7 @@
 use super::*;
 use wowlua_sema::check::runtime::{RuntimeCheck, ValueCheck};
 
-impl Lowerer<'_> {
+impl<'a> Lowerer<'a> {
     /// Whether a function with these marks gets entry checks.
     pub(crate) fn checks_function(&self, marks: &FnMarks) -> bool {
         if marks.unchecked || self.ctx.compiler_known || self.ctx.dependency {
@@ -19,7 +19,7 @@ impl Lowerer<'_> {
     }
 
     /// The entry checks of a function's annotated parameters.
-    pub(crate) fn entry_checks(&mut self, f: &FuncBody, label: &str) -> Vec<ir::Stmt> {
+    pub(crate) fn entry_checks(&mut self, f: &FnShape<'a>, label: &str) -> Vec<ir::Stmt> {
         let pos = self.span_pos(f.params_span);
         let location = format!("{}:{}", self.ctx.file, pos.line);
         let mut out = Vec::new();
@@ -29,14 +29,14 @@ impl Lowerer<'_> {
             let Some(check) = self
                 .ctx
                 .value_checks
-                .get(&(p.name.span.start, p.name.span.end))
+                .get(&(p.name.span().start, p.name.span().end))
                 .cloned()
             else {
                 continue;
             };
-            let value = name_expr(self.ident(&p.name));
+            let value = name_expr(self.ident(p.name));
             let cond = self.check_cond(&check, value.clone(), pos);
-            let fail = self.check_fail(i + 1, &p.name.text, label, &location, &check, value, pos);
+            let fail = self.check_fail(i + 1, p.name.text(), label, &location, &check, value, pos);
             out.push(if_stmt(not(cond, pos), vec![fail], pos));
         }
         // `...: T`: value by value.
@@ -107,11 +107,11 @@ impl Lowerer<'_> {
 
     /// `x :: T` in profiles that check everything: the value, checked
     /// through a temporary.
-    pub(crate) fn checked_cast(&mut self, e: &Expr, value: ir::Expr) -> ir::Expr {
+    pub(crate) fn checked_cast(&mut self, e: Expr<'a>, value: ir::Expr) -> ir::Expr {
         let Some(check) = self
             .ctx
             .value_checks
-            .get(&(e.span.start, e.span.end))
+            .get(&(e.span().start, e.span().end))
             .cloned()
             .filter(|_| {
                 self.ctx.tools.runtime_checks == 2
@@ -121,7 +121,7 @@ impl Lowerer<'_> {
         else {
             return value;
         };
-        let pos = self.span_pos(e.span);
+        let pos = self.span_pos(e.span());
         let t = self.temp("c");
         self.prelude.push(local(generated(&t, pos), value, pos));
         let v = name_expr(generated(&t, pos));
@@ -132,7 +132,7 @@ impl Lowerer<'_> {
             vec![
                 self.string(&check.expected, pos),
                 v.clone(),
-                self.string(&self.location(e.span), pos),
+                self.string(&self.location(e.span()), pos),
             ],
             pos,
         );

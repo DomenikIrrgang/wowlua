@@ -669,7 +669,7 @@ impl<'a> Walker<'a> {
     /// library's decorators only register or wrap it: it runs later.
     fn decorators(&mut self, decorators: &[Decorator], first: usize) {
         for d in decorators.iter().filter(|d| !d.is_core()) {
-            let callee = self.expr(&d.expr());
+            let callee = self.expr(d.expr());
             let target: Vec<Info> = (first < self.out.functions.len())
                 .then_some(Info::Function(first))
                 .into_iter()

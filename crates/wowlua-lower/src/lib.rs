@@ -24,9 +24,9 @@ use wowlua_sema::constant::{self, Const, quote};
 use wowlua_sema::meta::{Lookup, Meta, MetaKind};
 use wowlua_span::Span;
 use wowlua_syntax::Parse;
-use wowlua_syntax::ast::*;
 use wowlua_syntax::search::partition_point_near;
 use wowlua_syntax::token::TriviaKind;
+use wowlua_syntax::view::*;
 
 pub use wowlua_sema::constant::{format_g14, format_number};
 
@@ -266,7 +266,7 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
     // Exported functions, classes and enums are hoisted (spec §5.1,
     // decisions L24 and T76).
     let hoisted = lowerer.hoist();
-    let mut stmts = lowerer.stmts(&parse.chunk.block.stmts);
+    let mut stmts = lowerer.stmts(parse.view().block().stmts());
     if !lowerer.errors.is_empty() {
         return Err(lowerer.errors);
     }
@@ -353,16 +353,16 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
 }
 
 /// The display name of a function declaration (`Tracker.record`, `M:load`).
-fn func_name(name: &FuncName) -> String {
+fn func_name(name: FuncName<'_>) -> String {
     let mut out = name
-        .path
+        .path()
         .iter()
-        .map(|n| n.text.as_ref())
+        .map(|n| n.text())
         .collect::<Vec<_>>()
         .join(".");
-    if let Some(m) = &name.method {
+    if let Some(m) = name.method() {
         out.push(':');
-        out.push_str(&m.text);
+        out.push_str(m.text());
     }
     out
 }
@@ -559,6 +559,69 @@ struct LoopInfo {
     break_flag: Option<String>,
 }
 
+/// A function as lowering sees it: a function of the tree, or an
+/// accessor's parameter and body (#19: lowering builds no syntax nodes).
+#[derive(Clone)]
+pub(crate) struct FnShape<'a> {
+    pub params: Vec<FnParam<'a>>,
+    pub vararg: Option<Vararg<'a>>,
+    pub ret: Option<RetType<'a>>,
+    pub body: Block<'a>,
+    /// The parameter list, `(` to `)`.
+    pub params_span: Span,
+    /// The closing `end`.
+    pub end_span: Span,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct FnParam<'a> {
+    pub name: Name<'a>,
+    pub ty: Option<Type<'a>>,
+    pub default: Option<Expr<'a>>,
+}
+
+impl<'a> FnShape<'a> {
+    pub(crate) fn of(f: Func<'a>) -> Self {
+        FnShape {
+            params: f
+                .params()
+                .iter()
+                .map(|p| FnParam {
+                    name: p.name(),
+                    ty: p.ty(),
+                    default: p.default(),
+                })
+                .collect(),
+            vararg: f.vararg(),
+            ret: f.ret(),
+            body: f.body(),
+            params_span: f.params_span(),
+            end_span: f.end_span(),
+        }
+    }
+
+    /// An accessor: an optional parameter (a setter's), and its body, whose
+    /// span stands for the parameter list and the end.
+    pub(crate) fn accessor(param: Option<Name<'a>>, body: Block<'a>) -> Self {
+        let span = body.span();
+        FnShape {
+            params: param
+                .map(|name| FnParam {
+                    name,
+                    ty: None,
+                    default: None,
+                })
+                .into_iter()
+                .collect(),
+            vararg: None,
+            ret: None,
+            body,
+            params_span: span,
+            end_span: span,
+        }
+    }
+}
+
 struct Lowerer<'a> {
     /// `static_condition`'s answers within the statement being lowered.
     static_memo: std::cell::RefCell<constant::EvalMemo>,
@@ -719,19 +782,19 @@ impl<'a> Lowerer<'a> {
 
     /// The binding a name expression refers to, `None` for a plain local;
     /// uses of `@deprecated` bindings are reported (W3030).
-    fn name_binding(&mut self, n: &Name) -> Option<Binding> {
-        if let Some(message) = self.deprecated_of(&n.text) {
+    fn name_binding(&mut self, n: Name<'a>) -> Option<Binding> {
+        if let Some(message) = self.deprecated_of(n.text()) {
             let detail = message.map(|m| format!(": {m}")).unwrap_or_default();
             self.warnings.push(
-                Diagnostic::warning("W3030", format!("`{}` is deprecated{detail}", n.text))
-                    .with_label(n.span, "used here"),
+                Diagnostic::warning("W3030", format!("`{}` is deprecated{detail}", n.text()))
+                    .with_label(n.span(), "used here"),
             );
         }
         if !self.scopes.seen().non_local {
-            debug_assert!(matches!(self.lookup(&n.text), None | Some(Binding::Local)));
+            debug_assert!(matches!(self.lookup(n.text()), None | Some(Binding::Local)));
             return None;
         }
-        match self.lookup(&n.text) {
+        match self.lookup(n.text()) {
             None | Some(Binding::Local) => None,
             Some(b) => Some(b.clone()),
         }
@@ -802,11 +865,11 @@ impl<'a> Lowerer<'a> {
     /// Lowers operands left to right. When one needs preceding statements,
     /// earlier operands with side effects are moved into temporaries first,
     /// so Lua's evaluation order is kept (codegen §14.4).
-    fn seq(&mut self, items: &[&Expr]) -> Vec<ir::Expr> {
+    fn seq(&mut self, items: &[Expr<'a>]) -> Vec<ir::Expr> {
         let mut out: Vec<ir::Expr> = Vec::with_capacity(items.len());
         for e in items {
             let start = self.prelude.len();
-            let lowered = self.expr(e);
+            let lowered = self.expr(*e);
             if self.prelude.len() > start {
                 let mut hoisted = Vec::new();
                 for prev in out.iter_mut() {
@@ -834,7 +897,7 @@ impl<'a> Lowerer<'a> {
 
     // ------------------------------------------------------------- blocks --
 
-    fn stmts(&mut self, stmts: &[Stmt]) -> Vec<ir::Stmt> {
+    fn stmts(&mut self, stmts: Stmts<'a>) -> Vec<ir::Stmt> {
         let mut out = Vec::new();
         for s in stmts {
             out.extend(self.stmt(s));
@@ -842,25 +905,25 @@ impl<'a> Lowerer<'a> {
         out
     }
 
-    fn block(&mut self, b: &Block) -> ir::Block {
+    fn block(&mut self, b: Block<'a>) -> ir::Block {
         self.push_scope();
-        let stmts = self.stmts(&b.stmts);
+        let stmts = self.stmts(b.stmts());
         self.pop_scope();
         ir::Block {
             stmts,
-            end: self.next_token_pos(b.span.end),
+            end: self.next_token_pos(b.span().end),
         }
     }
 
-    fn stmt(&mut self, s: &Stmt) -> Vec<ir::Stmt> {
+    fn stmt(&mut self, s: Stmt<'a>) -> Vec<ir::Stmt> {
         // What a name reads can change between statements (`const`).
         self.static_memo.get_mut().clear();
-        if !s.decorators.is_empty() && !self.kept_by_if(s) {
+        if !s.decorators().is_empty() && !self.kept_by_if(s) {
             return Vec::new();
         }
-        if s.decorators
+        if s.decorators()
             .iter()
-            .any(|d| wowlua_sema::meta::if_condition(d).is_none())
+            .any(|d| wowlua_sema::meta::if_condition(d.ast()).is_none())
         {
             return grow(|| self.decorated_stmt(s));
         }
@@ -869,27 +932,28 @@ impl<'a> Lowerer<'a> {
 
     /// `@if(condition)` (spec §6.4.3): a declaration whose static condition
     /// is false is removed; its names are remembered for E1020.
-    fn kept_by_if(&mut self, s: &Stmt) -> bool {
-        let import = matches!(s.kind, StmtKind::Import(_));
-        let keep = self.kept_by_if_decorators(&s.decorators, import);
+    fn kept_by_if(&mut self, s: Stmt<'a>) -> bool {
+        let import = matches!(s.kind(), StmtKind::Import(_));
+        let keep = self.kept_by_if_decorators(s.decorators(), import);
         if !keep {
             for name in declared_names(s) {
-                self.declare(&name, Binding::Removed(s.span));
+                self.declare(&name, Binding::Removed(s.span()));
             }
         }
         keep
     }
 
     /// Evaluates the `@if` decorators of a declaration or class member.
-    fn kept_by_if_decorators(&mut self, decorators: &[Decorator], import: bool) -> bool {
+    fn kept_by_if_decorators(&mut self, decorators: Decorators<'a>, import: bool) -> bool {
         let mut keep = true;
         for d in decorators {
-            let Some(cond) = wowlua_sema::meta::if_condition(d) else {
+            let Some(cond) = wowlua_sema::meta::if_condition(d.ast()) else {
                 continue;
             };
+            let cond = cond.map(Expr::of);
             let Some(cond) = cond else {
                 if !import {
-                    self.error("E1040", d.span, "`@if` takes one condition");
+                    self.error("E1040", d.span(), "`@if` takes one condition");
                 }
                 continue;
             };
@@ -902,13 +966,13 @@ impl<'a> Lowerer<'a> {
                 {
                     self.error(
                         "E1039",
-                        cond.span,
+                        cond.span(),
                         "`flavor` is not a constant in shared flavor mode; use a runtime check",
                     )
                 }
                 None => self.error(
                     "E1040",
-                    cond.span,
+                    cond.span(),
                     "`@if` conditions must be static: `wowlua:meta` paths, constants and literals",
                 ),
             }
@@ -916,10 +980,9 @@ impl<'a> Lowerer<'a> {
         keep
     }
 
-    fn uses_flavor(&self, e: &Expr) -> bool {
+    fn uses_flavor(&self, e: Expr<'a>) -> bool {
         let mut found = false;
-        wowlua_syntax::visit::walk_expr(wowlua_syntax::view::Expr::of(e), &mut |x| {
-            let x = x.ast();
+        wowlua_syntax::visit::walk_expr(e, &mut |x| {
             if let Some((MetaKind::Flavor, _)) = self.meta_path(x) {
                 found = true;
             }
@@ -927,22 +990,22 @@ impl<'a> Lowerer<'a> {
         found
     }
 
-    fn stmt_inner(&mut self, s: &Stmt) -> Vec<ir::Stmt> {
+    fn stmt_inner(&mut self, s: Stmt<'a>) -> Vec<ir::Stmt> {
         use ir::StmtKind as K;
-        let pos = self.span_pos(s.span);
-        match &s.kind {
+        let pos = self.span_pos(s.span());
+        match s.kind() {
             StmtKind::Local { names, values } => {
                 let saved = std::mem::take(&mut self.prelude);
-                let refs: Vec<&Expr> = values.iter().collect();
+                let refs: Vec<Expr<'a>> = values.iter().collect();
                 let mut lowered = self.seq(&refs);
                 self.set_separators(values, &mut lowered);
                 let mut out = std::mem::replace(&mut self.prelude, saved);
                 for n in names {
-                    self.declare(&n.name.text, Binding::Local);
+                    self.declare(n.name.text(), Binding::Local);
                 }
                 out.push(stmt(
                     K::Local {
-                        names: names.iter().map(|n| self.ident(&n.name)).collect(),
+                        names: names.iter().map(|n| self.ident(n.name)).collect(),
                         values: lowered,
                     },
                     pos,
@@ -953,7 +1016,7 @@ impl<'a> Lowerer<'a> {
                 self.wrapped(pos, |l| l.assignment(targets, values, pos))
             }
             StmtKind::Compound { target, op, value } => {
-                self.wrapped(pos, |l| l.compound(target, *op, value, pos))
+                self.wrapped(pos, |l| l.compound(target, op, value, pos))
             }
             StmtKind::Call(e) if self.is_removed_call(e) => Vec::new(),
             StmtKind::Call(e) if self.call_intrinsic(e).is_some() => {
@@ -970,9 +1033,9 @@ impl<'a> Lowerer<'a> {
             }),
             StmtKind::Do(b) => vec![stmt(K::Do(self.block(b)), pos)],
             StmtKind::While { cond, body } => {
-                let do_pos = self.next_token_pos(cond.span.end);
+                let do_pos = self.next_token_pos(cond.span().end);
                 let (pre, c) = self.isolated(|l| l.expr(cond));
-                let end = self.next_token_pos(body.span.end);
+                let end = self.next_token_pos(body.span().end);
                 if pre.is_empty() {
                     let body = self.loop_body(body, do_pos, end, None);
                     vec![stmt(
@@ -1006,7 +1069,7 @@ impl<'a> Lowerer<'a> {
                 }
             }
             StmtKind::Repeat { body, cond } => {
-                let until = self.next_token_pos(body.span.end);
+                let until = self.next_token_pos(body.span().end);
                 self.push_scope();
                 let mut lowered = self.loop_body_stmts(body, pos, until);
                 let (pre, c) = self.isolated(|l| l.expr(cond));
@@ -1029,9 +1092,9 @@ impl<'a> Lowerer<'a> {
                 elseifs,
                 else_block,
             } => {
-                let mut clauses: Vec<(&Expr, &Block)> = vec![(cond, then_block)];
-                clauses.extend(elseifs.iter().map(|(c, b)| (c, b)));
-                self.if_chain(&clauses, else_block.as_deref(), pos)
+                let mut clauses: Vec<(Expr<'a>, Block<'a>)> = vec![(cond, then_block)];
+                clauses.extend(elseifs.iter());
+                self.if_chain(&clauses, else_block, pos)
             }
             StmtKind::NumericFor {
                 var,
@@ -1040,8 +1103,8 @@ impl<'a> Lowerer<'a> {
                 step,
                 body,
             } => self.wrapped(pos, |l| {
-                let mut items: Vec<&Expr> = vec![start, limit];
-                if let Some(s) = step.as_deref() {
+                let mut items: Vec<Expr<'a>> = vec![start, limit];
+                if let Some(s) = step {
                     items.push(s);
                 }
                 let mut header = l.seq(&items);
@@ -1049,18 +1112,21 @@ impl<'a> Lowerer<'a> {
                 let limit_ir = header.pop().expect("limit");
                 let start_ir = header.pop().expect("start");
                 let last_end = match &step {
-                    Some(_) => items.last().map(|e| e.span.end).unwrap_or(limit.span.end),
-                    None => limit.span.end,
+                    Some(_) => items
+                        .last()
+                        .map(|e| e.span().end)
+                        .unwrap_or(limit.span().end),
+                    None => limit.span().end,
                 };
                 let do_pos = l.next_token_pos(last_end);
-                let end = l.next_token_pos(body.span.end);
+                let end = l.next_token_pos(body.span().end);
                 l.push_scope();
-                l.declare(&var.name.text, Binding::Local);
+                l.declare(var.name.text(), Binding::Local);
                 let body_ir = l.loop_body(body, do_pos, end, None);
                 l.pop_scope();
                 vec![stmt(
                     K::NumericFor {
-                        var: l.ident(&var.name),
+                        var: l.ident(var.name),
                         start: Box::new(start_ir),
                         limit: Box::new(limit_ir),
                         step: step.map(Box::new),
@@ -1071,23 +1137,23 @@ impl<'a> Lowerer<'a> {
                 )]
             }),
             StmtKind::GenericFor { vars, exprs, body } => self.wrapped(pos, |l| {
-                let refs: Vec<&Expr> = exprs.iter().collect();
+                let refs: Vec<Expr<'a>> = exprs.iter().collect();
                 let mut lowered = l.seq(&refs);
                 l.set_separators(exprs, &mut lowered);
                 let do_pos = exprs
                     .last()
-                    .map(|e| l.next_token_pos(e.span.end))
+                    .map(|e| l.next_token_pos(e.span().end))
                     .unwrap_or(Pos::NONE);
-                let end = l.next_token_pos(body.span.end);
+                let end = l.next_token_pos(body.span().end);
                 l.push_scope();
                 for v in vars {
-                    l.declare(&v.name.text, Binding::Local);
+                    l.declare(v.name.text(), Binding::Local);
                 }
                 let body_ir = l.loop_body(body, do_pos, end, None);
                 l.pop_scope();
                 vec![stmt(
                     K::GenericFor {
-                        vars: vars.iter().map(|v| l.ident(&v.name)).collect(),
+                        vars: vars.iter().map(|v| l.ident(v.name)).collect(),
                         exprs: lowered,
                         do_pos,
                         body: body_ir,
@@ -1096,23 +1162,23 @@ impl<'a> Lowerer<'a> {
                 )]
             }),
             StmtKind::Function { name, func } => {
-                if name.path.len() == 1 && name.method.is_none() {
-                    self.check_assignable(&name.path[0]);
+                if name.path().len() == 1 && name.method().is_none() {
+                    self.check_assignable(name.path().at(0));
                 }
-                let method = name.method.is_some();
+                let method = name.method().is_some();
                 self.next_fn_name = Some(func_name(name));
                 vec![stmt(
                     K::Function {
-                        path: name.path.iter().map(|n| self.ident(n)).collect(),
-                        method: name.method.as_ref().map(|n| self.ident(n)),
+                        path: name.path().iter().map(|n| self.ident(n)).collect(),
+                        method: name.method().as_ref().map(|n| self.ident(*n)),
                         func: self.func(func, method),
                     },
                     pos,
                 )]
             }
             StmtKind::LocalFunction { name, func } => {
-                self.declare(&name.text, Binding::Local);
-                self.next_fn_name = Some(name.text.to_string());
+                self.declare(name.text(), Binding::Local);
+                self.next_fn_name = Some(name.text().to_string());
                 vec![stmt(
                     K::LocalFunction {
                         name: self.ident(name),
@@ -1128,7 +1194,7 @@ impl<'a> Lowerer<'a> {
                 vec![stmt(K::Return(vec![name_expr(ident("self", pos))]), pos)]
             }
             StmtKind::Return(values) => self.wrapped(pos, |l| {
-                let refs: Vec<&Expr> = values.iter().collect();
+                let refs: Vec<Expr<'a>> = values.iter().collect();
                 let mut lowered = l.seq(&refs);
                 l.set_separators(values, &mut lowered);
                 vec![stmt(K::Return(lowered), pos)]
@@ -1150,20 +1216,20 @@ impl<'a> Lowerer<'a> {
             // `continue` leaves the `repeat … until true` wrapper.
             StmtKind::Continue => vec![stmt(K::Break, pos)],
             StmtKind::LocalDestructure { fields, value, .. } => {
-                self.destructure(fields, value.as_deref(), s.span, pos)
+                self.destructure(fields, value, s.span(), pos)
             }
             StmtKind::Const { name, value, .. } => {
                 let Some(value) = value else {
                     return Vec::new();
                 };
                 if let Some(c) = self.const_value(value) {
-                    self.declare(&name.text, Binding::Const(c));
+                    self.declare(name.text(), Binding::Const(c));
                     return Vec::new();
                 }
                 let saved = std::mem::take(&mut self.prelude);
                 let lowered = self.expr(value);
                 let mut out = std::mem::replace(&mut self.prelude, saved);
-                self.declare(&name.text, Binding::ConstLocal);
+                self.declare(name.text(), Binding::ConstLocal);
                 out.push(stmt(
                     K::Local {
                         names: vec![self.ident(name)],
@@ -1175,7 +1241,7 @@ impl<'a> Lowerer<'a> {
             }
             // Type-only declarations are erased.
             StmtKind::TypeAlias(_) | StmtKind::Interface(_) | StmtKind::Declare(_) => Vec::new(),
-            StmtKind::Import(import) => self.import(import, s.span, pos),
+            StmtKind::Import(import) => self.import(import, s.span(), pos),
             StmtKind::Export(inner) => self.export(inner, pos),
             StmtKind::Class(c) => self.class_decl(c, &decorate::Decorations::default(), false),
             StmtKind::Enum(e) => self.enum_decl(e, &decorate::Decorations::default(), false),
@@ -1183,38 +1249,38 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn ident(&self, n: &Name) -> ir::Ident {
-        ir::Ident::new(&*n.text, self.span_pos(n.span))
+    fn ident(&self, n: Name<'a>) -> ir::Ident {
+        ir::Ident::new(n.text(), self.span_pos(n.span()))
     }
 
-    fn set_separators(&self, es: &[Expr], out: &mut [ir::Expr]) {
+    fn set_separators(&self, es: Exprs<'a>, out: &mut [ir::Expr]) {
         for (i, e) in es.iter().enumerate().take(es.len().saturating_sub(1)) {
             if let Some(x) = out.get_mut(i) {
-                x.sep = self.next_token_pos(e.span.end);
+                x.sep = self.next_token_pos(e.span().end);
             }
         }
     }
 
     /// Assignment to a constant (E2010) or to an imported or exported
     /// binding (E1010) is an error.
-    fn check_assignable(&mut self, name: &Name) {
+    fn check_assignable(&mut self, name: Name<'a>) {
         if !self.scopes.seen().non_local {
             debug_assert!(matches!(
-                self.lookup(&name.text),
+                self.lookup(name.text()),
                 None | Some(Binding::Local)
             ));
             return;
         }
-        match self.lookup(&name.text) {
+        match self.lookup(name.text()) {
             Some(Binding::Const(_) | Binding::ConstLocal) => self.error(
                 "E2010",
-                name.span,
-                format!("cannot assign to the constant `{}`", name.text),
+                name.span(),
+                format!("cannot assign to the constant `{}`", name.text()),
             ),
             Some(Binding::Enum { .. }) => self.error(
                 "E2010",
-                name.span,
-                format!("cannot assign to the enum `{}`", name.text),
+                name.span(),
+                format!("cannot assign to the enum `{}`", name.text()),
             ),
             Some(
                 Binding::Import
@@ -1228,15 +1294,15 @@ impl<'a> Lowerer<'a> {
                 | Binding::DebugOnlyRemoved,
             ) => self.error(
                 "E1010",
-                name.span,
-                format!("cannot assign to the imported binding `{}`", name.text),
+                name.span(),
+                format!("cannot assign to the imported binding `{}`", name.text()),
             ),
             Some(Binding::Export | Binding::Class { exported: true, .. }) => self.error(
                 "E1010",
-                name.span,
+                name.span(),
                 format!(
                     "cannot assign to the exported binding `{}`; mutate a table's contents or export accessor functions",
-                    name.text
+                    name.text()
                 ),
             ),
             _ => {}
@@ -1248,14 +1314,14 @@ impl<'a> Lowerer<'a> {
     /// The statements of a loop body, wrapped for `continue` when needed
     /// (spec §1.3.6). The body's own scope is opened by the caller for
     /// `repeat` (its `until` sees the body's locals).
-    fn loop_body_stmts(&mut self, body: &Block, anchor: Pos, end: Pos) -> Vec<ir::Stmt> {
-        let (has_continue, has_break) = loop_flags(&body.stmts);
+    fn loop_body_stmts(&mut self, body: Block<'a>, anchor: Pos, end: Pos) -> Vec<ir::Stmt> {
+        let (has_continue, has_break) = loop_flags(body.stmts());
         if !has_continue {
             self.loops.push(LoopInfo {
                 wrapped: false,
                 break_flag: None,
             });
-            let stmts = self.stmts(&body.stmts);
+            let stmts = self.stmts(body.stmts());
             self.loops.pop();
             return stmts;
         }
@@ -1265,7 +1331,7 @@ impl<'a> Lowerer<'a> {
             break_flag: flag.clone(),
         });
         self.push_scope();
-        let inner = self.stmts(&body.stmts);
+        let inner = self.stmts(body.stmts());
         self.pop_scope();
         self.loops.pop();
         let mut out = Vec::new();
@@ -1295,7 +1361,7 @@ impl<'a> Lowerer<'a> {
 
     fn loop_body(
         &mut self,
-        body: &Block,
+        body: Block<'a>,
         anchor: Pos,
         end: Pos,
         check: Option<Vec<ir::Stmt>>,
@@ -1311,13 +1377,13 @@ impl<'a> Lowerer<'a> {
 
     fn if_chain(
         &mut self,
-        clauses: &[(&Expr, &Block)],
-        else_block: Option<&Block>,
+        clauses: &[(Expr<'a>, Block<'a>)],
+        else_block: Option<Block<'a>>,
         pos: Pos,
     ) -> Vec<ir::Stmt> {
         // Static conditions (spec §6.4.2): a false branch is removed (not
         // lowered); a true branch becomes the final one.
-        let mut kept: Vec<(&Expr, &Block)> = Vec::new();
+        let mut kept: Vec<(Expr<'a>, Block<'a>)> = Vec::new();
         let mut last = else_block;
         for &(c, b) in clauses {
             match self.static_condition(c) {
@@ -1354,12 +1420,12 @@ impl<'a> Lowerer<'a> {
     fn if_rest(
         &mut self,
         first: (Vec<ir::Stmt>, ir::Expr),
-        clauses: &[(&Expr, &Block)],
-        else_block: Option<&Block>,
+        clauses: &[(Expr<'a>, Block<'a>)],
+        else_block: Option<Block<'a>>,
         pos: Pos,
     ) -> (Vec<ir::Stmt>, ir::Stmt) {
         let (pre, cond) = first;
-        let then_pos = self.next_token_pos(clauses[0].0.span.end);
+        let then_pos = self.next_token_pos(clauses[0].0.span().end);
         let mut ir_clauses = vec![ir::IfClause {
             cond,
             then_pos,
@@ -1371,7 +1437,7 @@ impl<'a> Lowerer<'a> {
             let (c, b) = clauses[i];
             let (cpre, cond) = self.isolated(|l| l.expr(c));
             if !cpre.is_empty() {
-                let cpos = self.span_pos(c.span);
+                let cpos = self.span_pos(c.span());
                 let (npre, nested) = self.if_rest((cpre, cond), &clauses[i..], else_block, cpos);
                 let mut stmts = npre;
                 stmts.push(nested);
@@ -1390,7 +1456,7 @@ impl<'a> Lowerer<'a> {
                     ),
                 );
             }
-            let then_pos = self.next_token_pos(c.span.end);
+            let then_pos = self.next_token_pos(c.span().end);
             ir_clauses.push(ir::IfClause {
                 cond,
                 then_pos,
@@ -1415,7 +1481,11 @@ impl<'a> Lowerer<'a> {
 
     // ---------------------------------------------------------- functions --
 
-    fn func(&mut self, f: &FuncBody, method: bool) -> ir::Func {
+    fn func(&mut self, f: Func<'a>, method: bool) -> ir::Func {
+        self.func_shape(&FnShape::of(f), method)
+    }
+
+    pub(crate) fn func_shape(&mut self, f: &FnShape<'a>, method: bool) -> ir::Func {
         let name = self.next_fn_name.take();
         let mut marks = std::mem::take(&mut self.next_fn_marks);
         marks.label = name.clone();
@@ -1431,7 +1501,7 @@ impl<'a> Lowerer<'a> {
         lowered
     }
 
-    fn func_inner(&mut self, f: &FuncBody, method: bool, checks: bool) -> ir::Func {
+    fn func_inner(&mut self, f: &FnShape<'a>, method: bool, checks: bool) -> ir::Func {
         self.func_depth += 1;
         let saved_loops = std::mem::take(&mut self.loops);
         let saved_prelude = std::mem::take(&mut self.prelude);
@@ -1440,7 +1510,7 @@ impl<'a> Lowerer<'a> {
             self.declare("self", Binding::Local);
         }
         for p in &f.params {
-            self.declare(&p.name.text, Binding::Local);
+            self.declare(p.name.text(), Binding::Local);
         }
         let pos = self.span_pos(f.params_span);
         let mut stmts = self.default_params(f);
@@ -1454,14 +1524,14 @@ impl<'a> Lowerer<'a> {
                 .unwrap_or_else(|| "?".into());
             stmts.extend(self.entry_checks(f, &label));
         }
-        stmts.extend(self.stmts(&f.body.stmts));
+        stmts.extend(self.stmts(f.body.stmts()));
         self.pop_scope();
         self.loops = saved_loops;
         self.prelude = saved_prelude;
         self.func_depth -= 1;
         ir::Func {
             pos,
-            params: f.params.iter().map(|p| self.ident(&p.name)).collect(),
+            params: f.params.iter().map(|p| self.ident(p.name)).collect(),
             vararg: f.vararg.is_some(),
             body: ir::Block {
                 stmts,
@@ -1472,13 +1542,13 @@ impl<'a> Lowerer<'a> {
 
     /// Default parameter values (spec §1.3.5), on the parameter line; the
     /// parameters are declared by the caller.
-    fn default_params(&mut self, f: &FuncBody) -> Vec<ir::Stmt> {
+    fn default_params(&mut self, f: &FnShape<'a>) -> Vec<ir::Stmt> {
         let pos = self.span_pos(f.params_span);
         let mut stmts = Vec::new();
         for p in &f.params {
             if let Some(default) = &p.default {
-                let (pre, value) = self.isolated(|l| l.expr(default));
-                let name = self.ident(&p.name);
+                let (pre, value) = self.isolated(|l| l.expr(*default));
+                let name = self.ident(p.name);
                 let mut body = pre;
                 body.push(assign(name_expr(name.clone()), value, pos));
                 let cond = binary(
@@ -1494,18 +1564,18 @@ impl<'a> Lowerer<'a> {
     }
 
     /// A call statement of a removed `@debugOnly` function (spec §4.3).
-    fn is_removed_call(&self, e: &Expr) -> bool {
+    fn is_removed_call(&self, e: Expr<'a>) -> bool {
         if !self.scopes.seen().non_local {
             return false;
         }
-        matches!(&e.kind, ExprKind::Call { callee, .. } if matches!(&callee.kind, ExprKind::Name(n) if matches!(self.lookup(&n.text), Some(Binding::DebugOnlyRemoved))))
+        matches!(e.kind(), ExprKind::Call { callee, .. } if matches!(callee.kind(), ExprKind::Name(n) if matches!(self.lookup(n.text()), Some(Binding::DebugOnlyRemoved))))
     }
 
     /// The arguments of a call as a list.
-    fn args_list(&mut self, args: &Args) -> Vec<ir::Expr> {
-        match args {
-            Args::Parens { args, .. } => self.exprs(args),
-            Args::Table(e) | Args::String(e) => vec![self.expr(e)],
+    fn args_list(&mut self, args: Args<'a>) -> Vec<ir::Expr> {
+        match args.kind() {
+            ArgsKind::Parens { args, .. } => self.exprs(args),
+            ArgsKind::Table(e) | ArgsKind::String(e) => vec![self.expr(e)],
         }
     }
 
@@ -1528,8 +1598,8 @@ impl<'a> Lowerer<'a> {
 
     /// An import (spec §5.2, §5.5): one local per binding, on the import's
     /// line; folded constants are inlined; types are erased.
-    fn import(&mut self, import: &Import, span: Span, pos: Pos) -> Vec<ir::Stmt> {
-        if import.type_only {
+    fn import(&mut self, import: Import<'a>, span: Span, pos: Pos) -> Vec<ir::Stmt> {
+        if import.type_only() {
             return Vec::new();
         }
         let Some(target) = self.ctx.imports.get(&span.start).cloned() else {
@@ -1549,17 +1619,17 @@ impl<'a> Lowerer<'a> {
                 intrinsics,
             } => (id, lazy, exports, attrs, intrinsics),
             ImportContext::Meta => {
-                match &import.clause {
+                match &import.clause() {
                     ImportClause::Names(specs) => {
                         for spec in specs {
-                            if let Some(kind) = MetaKind::from_export(&spec.name.text) {
-                                let local_name = spec.alias.as_ref().unwrap_or(&spec.name);
-                                self.declare(&local_name.text, Binding::Meta(kind));
+                            if let Some(kind) = MetaKind::from_export(spec.name.text()) {
+                                let local_name = spec.alias.unwrap_or(spec.name);
+                                self.declare(local_name.text(), Binding::Meta(kind));
                             }
                         }
                     }
                     ImportClause::Namespace(name) => {
-                        self.declare(&name.text, Binding::MetaNamespace)
+                        self.declare(name.text(), Binding::MetaNamespace)
                     }
                     ImportClause::SideEffect => {}
                 }
@@ -1567,7 +1637,7 @@ impl<'a> Lowerer<'a> {
             }
             ImportContext::LoadOnly => return Vec::new(),
         };
-        match &import.clause {
+        match &import.clause() {
             ImportClause::SideEffect => Vec::new(),
             ImportClause::Namespace(name) => {
                 let binding = if intrinsics.is_empty() {
@@ -1575,50 +1645,47 @@ impl<'a> Lowerer<'a> {
                 } else {
                     Binding::IntrinsicNamespace(Arc::new(intrinsics.clone()))
                 };
-                self.declare(&name.text, binding);
+                self.declare(name.text(), binding);
                 self.module_tables
-                    .insert(id.clone(), (name.text.to_string(), false));
+                    .insert(id.clone(), (name.text().to_string(), false));
                 let value = self.require(&id, lazy, pos);
-                vec![local(self.ident(name), value, pos)]
+                vec![local(self.ident(*name), value, pos)]
             }
             ImportClause::Names(specs) => {
-                let mut values: Vec<&ImportSpec> = Vec::new();
+                let mut values: Vec<ImportSpec<'a>> = Vec::new();
                 let mut kinds: Vec<(String, Binding)> = Vec::new();
                 for spec in specs {
-                    let local_name = spec.alias.as_ref().unwrap_or(&spec.name);
-                    let attr = attrs
-                        .get(spec.name.text.as_ref())
-                        .cloned()
-                        .unwrap_or_default();
+                    let local_name = spec.alias.unwrap_or(spec.name);
+                    let attr = attrs.get(spec.name.text()).cloned().unwrap_or_default();
                     if let Some(message) = attr.deprecated {
-                        self.mark_deprecated(&local_name.text, message);
+                        self.mark_deprecated(local_name.text(), message);
                     }
                     if attr.debug_only && !self.ctx.debug {
-                        self.declare(&local_name.text, Binding::DebugOnlyRemoved);
+                        self.declare(local_name.text(), Binding::DebugOnlyRemoved);
                         continue;
                     }
-                    match exports.get(spec.name.text.as_ref()) {
+                    match exports.get(spec.name.text()) {
                         Some(wowlua_sema::Export::Const(Some(c))) => {
-                            self.declare(&local_name.text, Binding::Const(c.clone()))
+                            self.declare(local_name.text(), Binding::Const(c.clone()))
                         }
                         Some(wowlua_sema::Export::Type) => {}
                         Some(wowlua_sema::Export::Class(info)) => {
                             kinds.push((
-                                local_name.text.to_string(),
+                                local_name.text().to_string(),
                                 Binding::ImportedClass(info.clone()),
                             ));
                             values.push(spec);
                         }
                         Some(wowlua_sema::Export::Enum(info)) => {
                             kinds.push((
-                                local_name.text.to_string(),
+                                local_name.text().to_string(),
                                 Binding::ImportedEnum(info.clone()),
                             ));
                             values.push(spec);
                         }
-                        _ if intrinsics.contains_key(spec.name.text.as_ref()) => {
-                            let id = intrinsics[spec.name.text.as_ref()].clone();
-                            kinds.push((local_name.text.to_string(), Binding::Intrinsic(id)));
+                        _ if intrinsics.contains_key(spec.name.text()) => {
+                            let id = intrinsics[spec.name.text()].clone();
+                            kinds.push((local_name.text().to_string(), Binding::Intrinsic(id)));
                             values.push(spec);
                         }
                         _ => values.push(spec),
@@ -1632,12 +1699,12 @@ impl<'a> Lowerer<'a> {
                     self.module_tables.insert(id.clone(), (table.clone(), true));
                     let value = self.require(&id, true, pos);
                     for spec in &values {
-                        let local_name = spec.alias.as_ref().unwrap_or(&spec.name);
+                        let local_name = spec.alias.unwrap_or(spec.name);
                         self.declare(
-                            &local_name.text,
+                            local_name.text(),
                             Binding::LazyImport {
                                 table: table.clone(),
-                                name: spec.name.text.to_string(),
+                                name: spec.name.text().to_string(),
                             },
                         );
                     }
@@ -1655,15 +1722,15 @@ impl<'a> Lowerer<'a> {
                 };
                 let names: Vec<ir::Ident> = values
                     .iter()
-                    .map(|spec| self.ident(spec.alias.as_ref().unwrap_or(&spec.name)))
+                    .map(|spec| self.ident(spec.alias.unwrap_or(spec.name)))
                     .collect();
                 let fields: Vec<ir::Expr> = values
                     .iter()
-                    .map(|spec| field(source.clone(), &spec.name.text, pos))
+                    .map(|spec| field(source.clone(), spec.name.text(), pos))
                     .collect();
                 for spec in &values {
-                    let local_name = spec.alias.as_ref().unwrap_or(&spec.name);
-                    self.declare(&local_name.text, Binding::Import);
+                    let local_name = spec.alias.unwrap_or(spec.name);
+                    self.declare(local_name.text(), Binding::Import);
                 }
                 for (name, binding) in kinds {
                     self.declare(&name, binding);
@@ -1688,41 +1755,41 @@ impl<'a> Lowerer<'a> {
 
     /// `export <declaration>` (spec §5.1): the declaration, then its values
     /// stored in the module's export table.
-    fn export(&mut self, inner: &Stmt, pos: Pos) -> Vec<ir::Stmt> {
-        match &inner.kind {
+    fn export(&mut self, inner: Stmt<'a>, pos: Pos) -> Vec<ir::Stmt> {
+        match inner.kind() {
             StmtKind::Local { names, .. } => {
                 let mut out = self.stmt(inner);
                 for n in names {
-                    self.declare(&n.name.text, Binding::Export);
-                    let value = name_expr(self.ident(&n.name));
-                    let s = self.export_assign(&n.name.text, value, pos);
+                    self.declare(n.name.text(), Binding::Export);
+                    let value = name_expr(self.ident(n.name));
+                    let s = self.export_assign(n.name.text(), value, pos);
                     out.push(s);
                 }
                 out
             }
             StmtKind::Function { name, func } => {
-                let n = &name.path[0];
-                let fpos = self.span_pos(inner.span);
+                let n = &name.path().at(0);
+                let fpos = self.span_pos(inner.span());
                 self.next_fn_name = Some(func_name(name));
                 self.next_fn_marks.exported = true;
                 let f = self.func(func, false);
-                self.pending.remove(n.text.as_ref());
-                let target = name_expr(self.ident(n));
+                self.pending.remove(n.text());
+                let target = name_expr(self.ident(*n));
                 let value = ir::Expr::new(ir::ExprKind::Function(Box::new(f)), fpos);
-                let export = self.export_assign(&n.text, name_expr(self.ident(n)), pos);
+                let export = self.export_assign(n.text(), name_expr(self.ident(*n)), pos);
                 vec![assign(target, value, fpos), export]
             }
             StmtKind::Const { name, value, .. } => {
                 let mut out = self.stmt(inner);
-                let exported = match self.lookup(&name.text).cloned() {
+                let exported = match self.lookup(name.text()).cloned() {
                     Some(Binding::Const(c)) => c.to_expr(pos),
                     _ => {
-                        self.declare(&name.text, Binding::Export);
+                        self.declare(name.text(), Binding::Export);
                         name_expr(self.ident(name))
                     }
                 };
                 if value.is_some() {
-                    let s = self.export_assign(&name.text, exported, pos);
+                    let s = self.export_assign(name.text(), exported, pos);
                     out.push(s);
                 }
                 out
@@ -1738,8 +1805,8 @@ impl<'a> Lowerer<'a> {
 
     /// The parts of an assignment target, lowered: `(object, key)` for
     /// fields and indexes, `(name, None)` for names.
-    fn target_parts(t: &Expr) -> Vec<&Expr> {
-        match &t.kind {
+    fn target_parts(t: Expr<'a>) -> Vec<Expr<'a>> {
+        match t.kind() {
             ExprKind::Index { obj, key } => vec![obj, key],
             ExprKind::Field { obj, .. } => vec![obj],
             _ => Vec::new(),
@@ -1747,38 +1814,38 @@ impl<'a> Lowerer<'a> {
     }
 
     /// Assignment to an enum member (E2010).
-    fn check_enum_target(&mut self, t: &Expr) {
+    fn check_enum_target(&mut self, t: Expr<'a>) {
         if !self.scopes.seen().enums {
             return;
         }
-        let obj = match &t.kind {
+        let obj = match t.kind() {
             ExprKind::Field { obj, .. } | ExprKind::Index { obj, .. } => obj,
             _ => return,
         };
-        if let ExprKind::Name(n) = &obj.kind
+        if let ExprKind::Name(n) = obj.kind()
             && matches!(
-                self.lookup(&n.text),
+                self.lookup(n.text()),
                 Some(Binding::Enum { .. } | Binding::ImportedEnum(_))
             )
         {
             self.error(
                 "E2010",
-                t.span,
-                format!("cannot assign to a member of the enum `{}`", n.text),
+                t.span(),
+                format!("cannot assign to a member of the enum `{}`", n.text()),
             );
         }
     }
 
-    fn assignment(&mut self, targets: &[Expr], values: &[Expr], pos: Pos) -> Vec<ir::Stmt> {
+    fn assignment(&mut self, targets: Exprs<'a>, values: Exprs<'a>, pos: Pos) -> Vec<ir::Stmt> {
         for t in targets {
             self.check_meta_target(t);
             self.check_enum_target(t);
-            if let ExprKind::Name(n) = &t.kind {
+            if let ExprKind::Name(n) = t.kind() {
                 self.check_assignable(n);
             }
         }
         // Lua evaluates the targets' subexpressions, then the values.
-        let mut operands: Vec<&Expr> = Vec::new();
+        let mut operands: Vec<Expr<'a>> = Vec::new();
         let mut counts = Vec::new();
         for t in targets {
             let parts = Self::target_parts(t);
@@ -1789,8 +1856,8 @@ impl<'a> Lowerer<'a> {
         let mut lowered = self.seq(&operands).into_iter();
         let mut ir_targets = Vec::new();
         for (t, n) in targets.iter().zip(counts) {
-            let tpos = self.span_pos(t.span);
-            let kind = match (&t.kind, n) {
+            let tpos = self.span_pos(t.span());
+            let kind = match (&t.kind(), n) {
                 (ExprKind::Index { .. }, 2) => {
                     let obj = lowered.next().expect("object");
                     let key = lowered.next().expect("key");
@@ -1801,9 +1868,9 @@ impl<'a> Lowerer<'a> {
                 }
                 (ExprKind::Field { name, .. }, 1) => ir::ExprKind::Field {
                     obj: Box::new(lowered.next().expect("object")),
-                    name: self.ident(name),
+                    name: self.ident(*name),
                 },
-                (ExprKind::Name(n), _) => ir::ExprKind::Name(self.ident(n)),
+                (ExprKind::Name(n), _) => ir::ExprKind::Name(self.ident(*n)),
                 _ => ir::ExprKind::Nil,
             };
             ir_targets.push(ir::Expr::new(kind, tpos));
@@ -1822,11 +1889,17 @@ impl<'a> Lowerer<'a> {
 
     /// `a op= e` (spec §1.3.4): every subexpression of the target that
     /// contains a call is evaluated once.
-    fn compound(&mut self, target: &Expr, op: CompoundOp, value: &Expr, pos: Pos) -> Vec<ir::Stmt> {
+    fn compound(
+        &mut self,
+        target: Expr<'a>,
+        op: CompoundOp,
+        value: Expr<'a>,
+        pos: Pos,
+    ) -> Vec<ir::Stmt> {
         self.check_meta_target(target);
         self.check_enum_target(target);
-        let tpos = self.span_pos(target.span);
-        let (write, read) = match &target.kind {
+        let tpos = self.span_pos(target.span());
+        let (write, read) = match target.kind() {
             ExprKind::Name(n) => {
                 self.check_assignable(n);
                 let e = name_expr(self.ident(n));
@@ -1902,8 +1975,8 @@ impl<'a> Lowerer<'a> {
     /// `local { a, b = 1 } = e` (spec §1.3.3).
     fn destructure(
         &mut self,
-        fields: &[DestructField],
-        value: Option<&Expr>,
+        fields: DestructFields<'a>,
+        value: Option<Expr<'a>>,
         span: Span,
         pos: Pos,
     ) -> Vec<ir::Stmt> {
@@ -1920,19 +1993,19 @@ impl<'a> Lowerer<'a> {
             _ => self.store_temp(v, "t"),
         };
         let mut out = std::mem::replace(&mut self.prelude, saved);
-        let names: Vec<ir::Ident> = fields.iter().map(|f| self.ident(&f.name)).collect();
+        let names: Vec<ir::Ident> = fields.iter().map(|f| self.ident(f.name)).collect();
         let values: Vec<ir::Expr> = fields
             .iter()
-            .map(|f| field(source.clone(), &f.name.text, self.span_pos(f.name.span)))
+            .map(|f| field(source.clone(), f.name.text(), self.span_pos(f.name.span())))
             .collect();
         for f in fields {
-            self.declare(&f.name.text, Binding::Local);
+            self.declare(f.name.text(), Binding::Local);
         }
         out.push(stmt(ir::StmtKind::Local { names, values }, pos));
         for f in fields {
             if let Some(default) = &f.default {
-                let (pre, d) = self.isolated(|l| l.expr(default));
-                let name = self.ident(&f.name);
+                let (pre, d) = self.isolated(|l| l.expr(*default));
+                let name = self.ident(f.name);
                 let mut body = pre;
                 body.push(assign(name_expr(name.clone()), d, pos));
                 let cond = binary(
@@ -1949,24 +2022,24 @@ impl<'a> Lowerer<'a> {
 
     // -------------------------------------------------------- expressions --
 
-    fn exprs(&mut self, es: &[Expr]) -> Vec<ir::Expr> {
-        let refs: Vec<&Expr> = es.iter().collect();
+    fn exprs(&mut self, es: Exprs<'a>) -> Vec<ir::Expr> {
+        let refs: Vec<Expr<'a>> = es.iter().collect();
         let mut out = self.seq(&refs);
         self.set_separators(es, &mut out);
         out
     }
 
-    fn expr(&mut self, e: &Expr) -> ir::Expr {
+    fn expr(&mut self, e: Expr<'a>) -> ir::Expr {
         grow(|| self.expr_inner(e))
     }
 
-    fn expr_inner(&mut self, e: &Expr) -> ir::Expr {
+    fn expr_inner(&mut self, e: Expr<'a>) -> ir::Expr {
         use ir::ExprKind as K;
-        let pos = self.span_pos(e.span);
+        let pos = self.span_pos(e.span());
         if let Some((kind, path)) = self.meta_path(e) {
             return self.meta_expr(kind, path, e);
         }
-        if let ExprKind::Call { callee, args } = &e.kind
+        if let ExprKind::Call { callee, args } = e.kind()
             && let Some((MetaKind::Asset, path)) = self.meta_path(callee)
             && path.is_empty()
         {
@@ -1980,37 +2053,37 @@ impl<'a> Lowerer<'a> {
         if let Some(routed) = self.monitor_call(e) {
             return routed;
         }
-        let kind = match &e.kind {
+        let kind = match e.kind() {
             ExprKind::Nil => K::Nil,
             ExprKind::True => K::True,
             ExprKind::False => K::False,
             ExprKind::Number(n) => {
-                if wowlua_syntax::lexer::is_wowlua_numeral(&n.raw) {
-                    K::Number(format_number(n.value.unwrap_or(0.0)))
+                if wowlua_syntax::lexer::is_wowlua_numeral(n.raw()) {
+                    K::Number(format_number(n.value().unwrap_or(0.0)))
                 } else {
-                    K::Number(String::from(&*n.raw))
+                    K::Number(String::from(n.raw()))
                 }
             }
-            ExprKind::String(s) => K::String(s.raw.to_vec()),
+            ExprKind::String(s) => K::String(s.raw().to_vec()),
             ExprKind::Vararg => K::Vararg,
             ExprKind::Function(f) => K::Function(Box::new(self.func(f, false))),
-            ExprKind::Table(fields) => self.table(fields, e.span),
-            ExprKind::Name(n) if n.text.as_ref() == "super" && self.is_super(e) => {
-                return self.super_value(n.span, pos);
+            ExprKind::Table(fields) => self.table(fields, e.span()),
+            ExprKind::Name(n) if n.text() == "super" && self.is_super(e) => {
+                return self.super_value(n.span(), pos);
             }
             ExprKind::Name(n) => match self.name_binding(n) {
                 Some(Binding::Const(c)) => return c.to_expr(pos),
                 Some(Binding::Intrinsic(id)) => {
-                    self.check_intrinsic_value(&id, n.span);
+                    self.check_intrinsic_value(&id, n.span());
                     K::Name(self.ident(n))
                 }
                 Some(Binding::DebugOnlyRemoved) => {
                     self.error(
                         "E3032",
-                        n.span,
+                        n.span(),
                         format!(
                             "`{}` is `@debugOnly`: it can only be called as a statement (the calls are removed from release builds)",
-                            n.text
+                            n.text()
                         ),
                     );
                     K::Nil
@@ -2022,22 +2095,22 @@ impl<'a> Lowerer<'a> {
                     self.errors.push(
                         Diagnostic::error(
                             "E1020",
-                            format!("`{}` was removed by `@if` for this build", n.text),
+                            format!("`{}` was removed by `@if` for this build", n.text()),
                         )
-                        .with_label(n.span, "used here")
+                        .with_label(n.span(), "used here")
                         .with_label(decl, "removed here"),
                     );
                     K::Name(self.ident(n))
                 }
                 Some(Binding::Export | Binding::Class { .. } | Binding::Enum { .. })
-                    if self.func_depth == 0 && self.pending.contains(n.text.as_ref()) =>
+                    if self.func_depth == 0 && self.pending.contains(n.text()) =>
                 {
                     self.error(
                         "E1037",
-                        n.span,
+                        n.span(),
                         format!(
                             "`{}` is used before its definition runs (hoisted functions are `nil` until then)",
-                            n.text
+                            n.text()
                         ),
                     );
                     K::Name(self.ident(n))
@@ -2045,12 +2118,12 @@ impl<'a> Lowerer<'a> {
                 _ => K::Name(self.ident(n)),
             },
             ExprKind::Index { obj, key }
-                if matches!(&key.kind, ExprKind::String(_))
-                    && let ExprKind::String(k) = &key.kind
+                if matches!(key.kind(), ExprKind::String(_))
+                    && let ExprKind::String(k) = key.kind()
                     && let Some(v) = self.enum_member(
                         obj,
-                        &String::from_utf8_lossy(&k.value),
-                        key.span,
+                        &String::from_utf8_lossy(&k.value()),
+                        key.span(),
                         pos,
                     ) =>
             {
@@ -2064,7 +2137,7 @@ impl<'a> Lowerer<'a> {
                 }
             }
             ExprKind::Field { obj, name } => {
-                if let Some(v) = self.enum_member(obj, &name.text, name.span, pos) {
+                if let Some(v) = self.enum_member(obj, name.text(), name.span(), pos) {
                     return v;
                 }
                 K::Field {
@@ -2097,11 +2170,11 @@ impl<'a> Lowerer<'a> {
             }
             ExprKind::Paren(inner) => K::Paren {
                 inner: Box::new(self.expr(inner)),
-                close: self.close_pos(e.span),
+                close: self.close_pos(e.span()),
             },
-            ExprKind::Binary { op, lhs, rhs } => return self.binary_expr(*op, lhs, rhs, e),
+            ExprKind::Binary { op, lhs, rhs } => return self.binary_expr(op, lhs, rhs, e),
             ExprKind::Unary { op, operand } => {
-                if *op == UnOp::BNot {
+                if op == UnOp::BNot {
                     if let Some(Const::Number(n)) = self.const_value(operand)
                         && let Some(v) = constant::fold_bnot(n)
                     {
@@ -2134,10 +2207,10 @@ impl<'a> Lowerer<'a> {
         ir::Expr::new(kind, pos)
     }
 
-    fn call_parts(&mut self, callee: &Expr, args: &Args) -> (ir::Expr, ir::Args) {
-        match args {
-            Args::Parens { args, span } => {
-                let mut items: Vec<&Expr> = vec![callee];
+    fn call_parts(&mut self, callee: Expr<'a>, args: Args<'a>) -> (ir::Expr, ir::Args) {
+        match args.kind() {
+            ArgsKind::Parens { args, span } => {
+                let mut items: Vec<Expr<'a>> = vec![callee];
                 items.extend(args.iter());
                 let mut lowered = self.seq(&items);
                 let callee = lowered.remove(0);
@@ -2146,11 +2219,11 @@ impl<'a> Lowerer<'a> {
                     callee,
                     ir::Args::Parens {
                         args: lowered,
-                        close: self.close_pos(*span),
+                        close: self.close_pos(span),
                     },
                 )
             }
-            Args::Table(t) => {
+            ArgsKind::Table(t) => {
                 let mut lowered = self.seq(&[callee, t]);
                 let table = lowered.pop().expect("table");
                 (
@@ -2158,21 +2231,21 @@ impl<'a> Lowerer<'a> {
                     ir::Args::Table(Box::new(table)),
                 )
             }
-            Args::String(s) => {
+            ArgsKind::String(s) => {
                 let c = self.expr(callee);
                 (c, ir::Args::String(Box::new(self.expr(s))))
             }
         }
     }
 
-    fn table(&mut self, fields: &[TableField], span: Span) -> ir::ExprKind {
+    fn table(&mut self, fields: TableFields<'a>, span: Span) -> ir::ExprKind {
         // Both lists sized up front: the fields stay in the IR until the
         // file is emitted, and pushing would leave room unused.
         let keyed = fields
             .iter()
             .filter(|f| matches!(f, TableField::Keyed { .. }))
             .count();
-        let mut operands: Vec<&Expr> = Vec::with_capacity(fields.len() + keyed);
+        let mut operands: Vec<Expr<'a>> = Vec::with_capacity(fields.len() + keyed);
         for f in fields {
             match f {
                 TableField::Keyed { key, value, .. } => {
@@ -2189,7 +2262,7 @@ impl<'a> Lowerer<'a> {
         for (i, f) in fields.iter().enumerate() {
             let mut lowered_field = match f {
                 TableField::Keyed { span, .. } => ir::Field::Keyed {
-                    open: self.span_pos(*span),
+                    open: self.span_pos(span),
                     key: Box::new(lowered.next().expect("key")),
                     value: lowered.next().expect("value"),
                 },
@@ -2203,7 +2276,7 @@ impl<'a> Lowerer<'a> {
                 let end = match f {
                     TableField::Keyed { value, .. }
                     | TableField::Named { value, .. }
-                    | TableField::Positional(value) => value.span.end,
+                    | TableField::Positional(value) => value.span().end,
                 };
                 let sep = self.next_token_pos(end);
                 match &mut lowered_field {
@@ -2220,9 +2293,9 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn binary_expr(&mut self, op: BinOp, lhs: &Expr, rhs: &Expr, e: &Expr) -> ir::Expr {
-        let pos = self.span_pos(e.span);
-        let op_pos = self.next_token_pos(lhs.span.end);
+    fn binary_expr(&mut self, op: BinOp, lhs: Expr<'a>, rhs: Expr<'a>, e: Expr<'a>) -> ir::Expr {
+        let pos = self.span_pos(e.span());
+        let op_pos = self.next_token_pos(lhs.span().end);
         match op {
             BinOp::And | BinOp::Or | BinOp::Coalesce => {
                 // A static left operand simplifies the expression (spec
@@ -2299,8 +2372,8 @@ impl<'a> Lowerer<'a> {
                         op: inner,
                         lhs: l,
                         rhs: r,
-                    } = &left.kind
-                        && *inner == op
+                    } = left.kind()
+                        && inner == op
                     {
                         operands.push(r);
                         left = l;
@@ -2349,7 +2422,7 @@ impl<'a> Lowerer<'a> {
 
     /// A backtick string (spec §1.2.4): parts joined with `..`, every
     /// embedded value through `tostring`, at most 50 operands per group.
-    fn interp(&mut self, parts: &[InterpPart], pos: Pos) -> ir::Expr {
+    fn interp(&mut self, parts: InterpParts<'a>, pos: Pos) -> ir::Expr {
         // Constant parts (literals, `const`s, `wowlua:meta` scalars, enum
         // members) are folded into the text: their type is known.
         let constants: Vec<Option<Vec<u8>>> = parts
@@ -2359,7 +2432,7 @@ impl<'a> Lowerer<'a> {
                 InterpPart::Text { .. } => None,
             })
             .collect();
-        let exprs: Vec<&Expr> = parts
+        let exprs: Vec<Expr<'a>> = parts
             .iter()
             .zip(&constants)
             .filter_map(|(p, c)| match (p, c) {
@@ -2381,21 +2454,21 @@ impl<'a> Lowerer<'a> {
             match (part, constant) {
                 (InterpPart::Text { value, span, .. }, _) => {
                     if text.is_empty() {
-                        text_pos = self.span_pos(*span);
+                        text_pos = self.span_pos(span);
                     }
-                    text.extend_from_slice(value);
+                    text.extend_from_slice(&value);
                 }
                 (InterpPart::Expr(e), Some(value)) => {
                     if text.is_empty() {
-                        text_pos = self.span_pos(e.span);
+                        text_pos = self.span_pos(e.span());
                     }
                     text.extend_from_slice(&value);
                 }
                 (InterpPart::Expr(e), None) => {
                     flush(&mut text, text_pos, &mut operands);
                     let v = values.next().expect("a value per part");
-                    let tostring = self.global("tostring", None, self.span_pos(e.span));
-                    operands.push(call(tostring, vec![v], self.span_pos(e.span)));
+                    let tostring = self.global("tostring", None, self.span_pos(e.span()));
+                    operands.push(call(tostring, vec![v], self.span_pos(e.span())));
                 }
             }
         }
@@ -2422,10 +2495,10 @@ impl<'a> Lowerer<'a> {
     }
 
     /// The text of a constant embedded value, as `tostring` would make it.
-    fn constant_text(&mut self, e: &Expr) -> Option<Vec<u8>> {
-        let value = match &e.kind {
+    fn constant_text(&mut self, e: Expr<'a>) -> Option<Vec<u8>> {
+        let value = match e.kind() {
             ExprKind::Field { obj, name } if self.is_enum_object(obj) => {
-                self.enum_value(obj, &name.text)?
+                self.enum_value(obj, name.text())?
             }
             _ => self.static_value(e)?,
         };
@@ -2442,8 +2515,8 @@ impl<'a> Lowerer<'a> {
     /// evaluated into a temporary step by step, and each `?.` guards the
     /// rest with `if t ~= nil then … end`. As a statement, the final call
     /// is a call statement. Returns the temporary (expression form).
-    fn optional_chain(&mut self, e: &Expr, statement: bool) -> Option<ir::Expr> {
-        let pos = self.span_pos(e.span);
+    fn optional_chain(&mut self, e: Expr<'a>, statement: bool) -> Option<ir::Expr> {
+        let pos = self.span_pos(e.span());
         let (base, links) = flatten_chain(e);
         let first_opt = links
             .iter()
@@ -2489,9 +2562,9 @@ impl<'a> Lowerer<'a> {
         (!statement).then(tref)
     }
 
-    fn apply_link(&mut self, obj: ir::Expr, link: &Link) -> ir::Expr {
+    fn apply_link(&mut self, obj: ir::Expr, link: &Link<'a>) -> ir::Expr {
         let pos = obj.pos;
-        let kind = match &link.kind {
+        let kind = match link.kind {
             LinkKind::Field(name) => ir::ExprKind::Field {
                 obj: Box::new(obj),
                 name: self.ident(name),
@@ -2513,14 +2586,14 @@ impl<'a> Lowerer<'a> {
         ir::Expr::new(kind, pos)
     }
 
-    fn args_only(&mut self, args: &Args) -> ir::Args {
-        match args {
-            Args::Parens { args, span } => ir::Args::Parens {
+    fn args_only(&mut self, args: Args<'a>) -> ir::Args {
+        match args.kind() {
+            ArgsKind::Parens { args, span } => ir::Args::Parens {
                 args: self.exprs(args),
-                close: self.close_pos(*span),
+                close: self.close_pos(span),
             },
-            Args::Table(t) => ir::Args::Table(Box::new(self.expr(t))),
-            Args::String(s) => ir::Args::String(Box::new(self.expr(s))),
+            ArgsKind::Table(t) => ir::Args::Table(Box::new(self.expr(t))),
+            ArgsKind::String(s) => ir::Args::String(Box::new(self.expr(s))),
         }
     }
 
@@ -2528,32 +2601,35 @@ impl<'a> Lowerer<'a> {
 
     /// The value of a constant expression (spec §1.3.2), if it is one:
     /// literals, folded constants and scalar `wowlua:meta` values.
-    fn const_value(&self, e: &Expr) -> Option<Const> {
+    fn const_value(&self, e: Expr<'a>) -> Option<Const> {
         self.static_value(e)
     }
 
-    fn static_value(&self, e: &Expr) -> Option<Const> {
+    fn static_value(&self, e: Expr<'a>) -> Option<Const> {
         self.static_value_with(e, true)
     }
 
     /// A static condition that simplifies `if` chains and `and`/`or`: it
     /// must read a `wowlua:meta` value or a `const` (decision T71), so plain
     /// Lua such as `if true then` is emitted as written.
-    fn static_condition(&self, e: &Expr) -> Option<Const> {
+    fn static_condition(&self, e: Expr<'a>) -> Option<Const> {
         let mut memo = self.static_memo.borrow_mut();
-        let (value, found) =
-            constant::eval_tracked(e, &|leaf| self.leaf_value(leaf, true), &mut memo)?;
+        let (value, found) = constant::eval_tracked(
+            e.ast(),
+            &|leaf| self.leaf_value(Expr::of(leaf), true),
+            &mut memo,
+        )?;
         found.then_some(value)
     }
 
     /// A static condition (spec §6.4.1); `consts` allows folded constants
     /// (not in `@if` on imports).
-    fn static_value_with(&self, e: &Expr, consts: bool) -> Option<Const> {
-        constant::eval_with(e, &|leaf| self.leaf_value(leaf, consts))
+    fn static_value_with(&self, e: Expr<'a>, consts: bool) -> Option<Const> {
+        constant::eval_with(e.ast(), &|leaf| self.leaf_value(Expr::of(leaf), consts))
     }
 
     /// The value of a `wowlua:meta` path or (with `consts`) a `const`.
-    fn leaf_value(&self, leaf: &Expr, consts: bool) -> Option<Const> {
+    fn leaf_value(&self, leaf: Expr<'a>, consts: bool) -> Option<Const> {
         if let Some((kind, path)) = self.meta_path(leaf) {
             let meta = self.meta()?;
             return match meta.lookup(kind, &path) {
@@ -2564,9 +2640,9 @@ impl<'a> Lowerer<'a> {
         if !consts {
             return None;
         }
-        match &leaf.kind {
+        match leaf.kind() {
             ExprKind::Name(_) if !self.scopes.seen().consts => None,
-            ExprKind::Name(n) => match self.lookup(&n.text) {
+            ExprKind::Name(n) => match self.lookup(n.text()) {
                 Some(Binding::Const(c)) => Some(c.clone()),
                 _ => None,
             },
@@ -2575,13 +2651,13 @@ impl<'a> Lowerer<'a> {
     }
 
     /// A constant access path into `wowlua:meta` (spec §6.2).
-    fn meta_path(&self, e: &Expr) -> Option<(MetaKind, Vec<String>)> {
+    fn meta_path(&self, e: Expr<'a>) -> Option<(MetaKind, Vec<String>)> {
         if !self.scopes.seen().meta {
             // No name can resolve to a `wowlua:meta` binding.
             return None;
         }
         let mut namespace = false;
-        let found = wowlua_sema::meta::access_path(e, &|name| match self.lookup(name) {
+        let found = wowlua_sema::meta::access_path(e.ast(), &|name| match self.lookup(name) {
             Some(Binding::Meta(k)) => Some(*k),
             // `M.build…`: the first path element names the export; it is
             // resolved below.
@@ -2590,12 +2666,12 @@ impl<'a> Lowerer<'a> {
         })?;
         let mut base = e;
         while let ExprKind::Field { obj, .. } | ExprKind::Index { obj, .. } | ExprKind::Paren(obj) =
-            &base.kind
+            &base.kind()
         {
-            base = obj;
+            base = *obj;
         }
-        if let ExprKind::Name(n) = &base.kind
-            && matches!(self.lookup(&n.text), Some(Binding::MetaNamespace))
+        if let ExprKind::Name(n) = base.kind()
+            && matches!(self.lookup(n.text()), Some(Binding::MetaNamespace))
         {
             namespace = true;
         }
@@ -2609,12 +2685,12 @@ impl<'a> Lowerer<'a> {
 
     /// A `wowlua:meta` access: a literal for scalars, the runtime tables
     /// otherwise (spec §6.2).
-    fn meta_expr(&mut self, kind: MetaKind, path: Vec<String>, e: &Expr) -> ir::Expr {
-        let pos = self.span_pos(e.span);
+    fn meta_expr(&mut self, kind: MetaKind, path: Vec<String>, e: Expr<'a>) -> ir::Expr {
+        let pos = self.span_pos(e.span());
         let Some(meta) = self.meta().cloned() else {
             self.error(
                 "E1015",
-                e.span,
+                e.span(),
                 "`wowlua:meta` needs the package context (build the package with `wowlua build`)",
             );
             return lit(ir::ExprKind::Nil, pos);
@@ -2622,7 +2698,7 @@ impl<'a> Lowerer<'a> {
         if kind == MetaKind::Asset {
             self.error(
                 "E2003",
-                e.span,
+                e.span(),
                 "`asset` is a function: call it with an asset path",
             );
             return lit(ir::ExprKind::Nil, pos);
@@ -2630,7 +2706,7 @@ impl<'a> Lowerer<'a> {
         match meta.lookup(kind, &path) {
             Lookup::Const(c) => c.to_expr(pos),
             Lookup::Missing(message) => {
-                self.error("E2003", e.span, message);
+                self.error("E2003", e.span(), message);
                 lit(ir::ExprKind::Nil, pos)
             }
             Lookup::Runtime => {
@@ -2673,22 +2749,22 @@ impl<'a> Lowerer<'a> {
     }
 
     /// `asset("path")` (spec §6.2.1): the full in-game path of an asset.
-    fn asset(&mut self, args: &Args, e: &Expr) -> ir::Expr {
-        let pos = self.span_pos(e.span);
-        let arg = match args {
-            Args::Parens { args, .. } if args.len() == 1 => Some(&args[0]),
-            Args::String(s) => Some(s.as_ref()),
+    fn asset(&mut self, args: Args<'a>, e: Expr<'a>) -> ir::Expr {
+        let pos = self.span_pos(e.span());
+        let arg = match args.kind() {
+            ArgsKind::Parens { args, .. } if args.len() == 1 => args.first(),
+            ArgsKind::String(s) => Some(s),
             _ => None,
         };
         let path = match arg.and_then(|a| self.static_value(a)) {
             Some(Const::String(p)) => String::from_utf8_lossy(&p).into_owned(),
             _ => {
-                self.error("E1038", e.span, "`asset()` takes a constant path string");
+                self.error("E1038", e.span(), "`asset()` takes a constant path string");
                 return lit(ir::ExprKind::Nil, pos);
             }
         };
         let Some(meta) = self.meta().cloned() else {
-            self.error("E1015", e.span, "`wowlua:meta` needs the package context");
+            self.error("E1015", e.span(), "`wowlua:meta` needs the package context");
             return lit(ir::ExprKind::Nil, pos);
         };
         if let Some(full) = meta.assets.get(&path) {
@@ -2699,21 +2775,23 @@ impl<'a> Lowerer<'a> {
             Some(actual) => format!("`{path}` differs in case from the asset `{actual}`"),
             None => format!("`{path}` is not an asset of the package (`build.assets`)"),
         };
-        self.error("E1038", e.span, message);
+        self.error("E1038", e.span(), message);
         lit(ir::ExprKind::Nil, pos)
     }
 
     /// `wowlua:meta` values are read-only (E2010).
-    fn check_meta_target(&mut self, target: &Expr) {
-        if matches!(target.kind, ExprKind::Field { .. } | ExprKind::Index { .. })
-            && let Some((kind, path)) = self.meta_path(target)
+    fn check_meta_target(&mut self, target: Expr<'a>) {
+        if matches!(
+            target.kind(),
+            ExprKind::Field { .. } | ExprKind::Index { .. }
+        ) && let Some((kind, path)) = self.meta_path(target)
         {
             let shown: Vec<&str> = std::iter::once(kind.name())
                 .chain(path.iter().map(String::as_str))
                 .collect();
             self.error(
                 "E2010",
-                target.span,
+                target.span(),
                 format!("`{}` is a read-only `wowlua:meta` value", shown.join(".")),
             );
         }
@@ -2721,24 +2799,24 @@ impl<'a> Lowerer<'a> {
 }
 
 /// The names a declaration statement binds (for `@if`).
-fn declared_names(s: &Stmt) -> Vec<String> {
-    match &s.kind {
-        StmtKind::Local { names, .. } => names.iter().map(|n| n.name.text.to_string()).collect(),
+fn declared_names(s: Stmt<'_>) -> Vec<String> {
+    match s.kind() {
+        StmtKind::Local { names, .. } => names.iter().map(|n| n.name.text().to_string()).collect(),
         StmtKind::LocalDestructure { fields, .. } => {
-            fields.iter().map(|f| f.name.text.to_string()).collect()
+            fields.iter().map(|f| f.name.text().to_string()).collect()
         }
         StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
-            vec![name.text.to_string()]
+            vec![name.text().to_string()]
         }
-        StmtKind::Function { name, .. } if name.path.len() == 1 && name.method.is_none() => {
-            vec![name.path[0].text.to_string()]
+        StmtKind::Function { name, .. } if name.path().len() == 1 && name.method().is_none() => {
+            vec![name.path().first().expect("a name").text().to_string()]
         }
-        StmtKind::Import(import) => match &import.clause {
+        StmtKind::Import(import) => match import.clause() {
             ImportClause::Names(specs) => specs
                 .iter()
-                .map(|s| s.alias.as_ref().unwrap_or(&s.name).text.to_string())
+                .map(|s| s.alias.unwrap_or(s.name).text().to_string())
                 .collect(),
-            ImportClause::Namespace(n) => vec![n.text.to_string()],
+            ImportClause::Namespace(n) => vec![n.text().to_string()],
             ImportClause::SideEffect => Vec::new(),
         },
         StmtKind::Export(inner) => declared_names(inner),
@@ -2796,27 +2874,27 @@ fn lua_binop(op: BinOp) -> ir::BinOp {
 
 /// Whether the body of the loop being lowered uses `continue` and `break`
 /// for this loop (nested loops and functions have their own).
-fn loop_flags(stmts: &[Stmt]) -> (bool, bool) {
+fn loop_flags(stmts: Stmts<'_>) -> (bool, bool) {
     let mut cont = false;
     let mut brk = false;
-    fn walk(stmts: &[Stmt], cont: &mut bool, brk: &mut bool) {
+    fn walk(stmts: Stmts<'_>, cont: &mut bool, brk: &mut bool) {
         for s in stmts {
-            match &s.kind {
+            match s.kind() {
                 StmtKind::Continue => *cont = true,
                 StmtKind::Break => *brk = true,
-                StmtKind::Do(b) => walk(&b.stmts, cont, brk),
+                StmtKind::Do(b) => walk(b.stmts(), cont, brk),
                 StmtKind::If {
                     then_block,
                     elseifs,
                     else_block,
                     ..
                 } => {
-                    walk(&then_block.stmts, cont, brk);
+                    walk(then_block.stmts(), cont, brk);
                     for (_, b) in elseifs {
-                        walk(&b.stmts, cont, brk);
+                        walk(b.stmts(), cont, brk);
                     }
                     if let Some(b) = else_block {
-                        walk(&b.stmts, cont, brk);
+                        walk(b.stmts(), cont, brk);
                     }
                 }
                 _ => {}
@@ -2835,16 +2913,16 @@ struct Link<'a> {
 }
 
 enum LinkKind<'a> {
-    Field(&'a Name),
-    Index(&'a Expr),
-    Call(&'a Args),
-    Method(&'a Name, &'a Args),
+    Field(Name<'a>),
+    Index(Expr<'a>),
+    Call(Args<'a>),
+    Method(Name<'a>, Args<'a>),
 }
 
 /// `e` is a chain (field, index, call or method access) that contains a
 /// `?.` link (spec §1.4.1: short-circuiting covers the rest of the chain).
-fn chain_has_optional(e: &Expr) -> bool {
-    match &e.kind {
+fn chain_has_optional(e: Expr<'_>) -> bool {
+    match e.kind() {
         ExprKind::OptField { .. }
         | ExprKind::OptIndex { .. }
         | ExprKind::OptMethod { .. }
@@ -2858,11 +2936,11 @@ fn chain_has_optional(e: &Expr) -> bool {
 }
 
 /// Splits a chain into its base expression and links, outermost last.
-fn flatten_chain(e: &Expr) -> (&Expr, Vec<Link<'_>>) {
+fn flatten_chain(e: Expr<'_>) -> (Expr<'_>, Vec<Link<'_>>) {
     let mut links = Vec::new();
     let mut current = e;
     loop {
-        let (next, link) = match &current.kind {
+        let (next, link) = match current.kind() {
             ExprKind::Field { obj, name } => (
                 obj,
                 Link {

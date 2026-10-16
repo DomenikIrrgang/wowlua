@@ -50,6 +50,11 @@ impl<'t, A, V> List<'t, A, V> {
         self.items.get(index).map(self.view)
     }
 
+    /// Item `index`; panics past the end, like indexing a slice.
+    pub fn at(&self, index: usize) -> V {
+        (self.view)(&self.items[index])
+    }
+
     pub fn first(&self) -> Option<V> {
         self.items.first().map(self.view)
     }
@@ -64,6 +69,15 @@ impl<'t, A, V> List<'t, A, V> {
 }
 
 impl<'t, A, V> IntoIterator for List<'t, A, V> {
+    type Item = V;
+    type IntoIter = std::iter::Map<std::slice::Iter<'t, A>, fn(&'t A) -> V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'t, A, V> IntoIterator for &List<'t, A, V> {
     type Item = V;
     type IntoIter = std::iter::Map<std::slice::Iter<'t, A>, fn(&'t A) -> V>;
 
@@ -509,6 +523,12 @@ impl<'t> Decorator<'t> {
         self.0.span
     }
 
+    /// The decorator as an expression: its path, called with its arguments
+    /// (`@a.b(x)` is `a.b(x)`, spec §4.5).
+    pub fn expr(self) -> Expr<'t> {
+        Expr::new(&self.0.call)
+    }
+
     /// A core decorator (a single name from [`ast::CORE_DECORATORS`]).
     pub fn is_core(self) -> bool {
         self.0.is_core()
@@ -756,12 +776,12 @@ impl<'t> Args<'t> {
     }
 
     /// The argument expressions, in order.
-    pub fn exprs(self) -> ArgExprs<'t> {
+    pub fn exprs(self) -> Exprs<'t> {
         let items: &'t [ast::Expr] = match self.0 {
             ast::Args::Parens { args, .. } => args,
             ast::Args::Table(e) | ast::Args::String(e) => std::slice::from_ref(&**e),
         };
-        ArgExprs(items.iter())
+        List::new(items, Expr::new)
     }
 
     /// How many arguments there are.
@@ -776,30 +796,6 @@ impl<'t> Args<'t> {
         self.len() == 0
     }
 }
-
-/// The expressions of [`Args::exprs`].
-#[derive(Clone, Debug)]
-pub struct ArgExprs<'t>(std::slice::Iter<'t, ast::Expr>);
-
-impl<'t> Iterator for ArgExprs<'t> {
-    type Item = Expr<'t>;
-
-    fn next(&mut self) -> Option<Expr<'t>> {
-        self.0.next().map(Expr::new)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
-    }
-}
-
-impl DoubleEndedIterator for ArgExprs<'_> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        self.0.next_back().map(Expr::new)
-    }
-}
-
-impl ExactSizeIterator for ArgExprs<'_> {}
 
 #[derive(Clone, Copy, Debug)]
 pub enum ArgsKind<'t> {

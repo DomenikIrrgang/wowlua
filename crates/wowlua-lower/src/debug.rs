@@ -14,27 +14,27 @@ const STATEMENT_ONLY: &[&str] = &[
     "debug.watch",
 ];
 
-impl Lowerer<'_> {
+impl<'a> Lowerer<'a> {
     /// The `@intrinsic` id of a call's callee: an imported intrinsic
     /// (`assert(x)`) or a member of a namespace import (`debug.assert(x)`).
-    pub(crate) fn call_intrinsic(&self, e: &Expr) -> Option<String> {
+    pub(crate) fn call_intrinsic(&self, e: Expr<'a>) -> Option<String> {
         if !self.scopes.seen().intrinsics {
             return None;
         }
-        let ExprKind::Call { callee, .. } = &e.kind else {
+        let ExprKind::Call { callee, .. } = e.kind() else {
             return None;
         };
-        let id = match &callee.kind {
-            ExprKind::Name(n) => match self.lookup(&n.text) {
+        let id = match callee.kind() {
+            ExprKind::Name(n) => match self.lookup(n.text()) {
                 Some(Binding::Intrinsic(id)) => id.clone(),
                 _ => return None,
             },
-            ExprKind::Field { obj, name } => match &obj.kind {
-                ExprKind::Name(m) => match self.lookup(&m.text) {
-                    Some(Binding::IntrinsicNamespace(map)) => map.get(name.text.as_ref())?.clone(),
+            ExprKind::Field { obj, name } => match obj.kind() {
+                ExprKind::Name(m) => match self.lookup(m.text()) {
+                    Some(Binding::IntrinsicNamespace(map)) => map.get(name.text())?.clone(),
                     // `log.info(…)` through the `log` object.
                     Some(Binding::Intrinsic(obj_id)) if obj_id == "log.object" => {
-                        format!("log.{}", name.text)
+                        format!("log.{}", name.text())
                     }
                     _ => return None,
                 },
@@ -51,12 +51,18 @@ impl Lowerer<'_> {
 
     /// A call of a `wowlua:log` level function: removed below the
     /// compiled level, else `emitAt(level, location, …)` on the module.
-    fn log_call(&mut self, id: &str, callee: &Expr, args: &Args, e: &Expr) -> Option<ir::Expr> {
+    fn log_call(
+        &mut self,
+        id: &str,
+        callee: Expr<'a>,
+        args: Args<'a>,
+        e: Expr<'a>,
+    ) -> Option<ir::Expr> {
         let rank = log_rank(id)?;
         if rank < self.ctx.tools.log_level {
             return None;
         }
-        let pos = self.span_pos(e.span);
+        let pos = self.span_pos(e.span());
         let level = id.trim_start_matches("log.");
         let Some((table, generated_name)) = self.module_tables.get("wowlua:log").cloned() else {
             let f = self.intrinsic_callee(callee);
@@ -64,7 +70,7 @@ impl Lowerer<'_> {
             return Some(call(f, a, pos));
         };
         let location = if self.ctx.debug {
-            self.string(&self.location(e.span), pos)
+            self.string(&self.location(e.span()), pos)
         } else {
             lit(ir::ExprKind::Nil, pos)
         };
@@ -117,8 +123,8 @@ impl Lowerer<'_> {
     }
 
     /// A call statement of an intrinsic.
-    pub(crate) fn intrinsic_stmt(&mut self, id: &str, e: &Expr, pos: Pos) -> Vec<ir::Stmt> {
-        let ExprKind::Call { callee, args } = &e.kind else {
+    pub(crate) fn intrinsic_stmt(&mut self, id: &str, e: Expr<'a>, pos: Pos) -> Vec<ir::Stmt> {
+        let ExprKind::Call { callee, args } = e.kind() else {
             return Vec::new();
         };
         let tools = &self.ctx.tools;
@@ -146,14 +152,14 @@ impl Lowerer<'_> {
                 while a.len() < 2 {
                     a.push(lit(ir::ExprKind::Nil, pos));
                 }
-                a.push(self.string(&self.location(e.span), pos));
+                a.push(self.string(&self.location(e.span()), pos));
                 call(f, a, pos)
             }
             "debug.dump" => {
                 let f = self.intrinsic_callee(callee);
-                let mut a = vec![self.string(&self.location(e.span), pos)];
+                let mut a = vec![self.string(&self.location(e.span()), pos)];
                 for x in args.exprs() {
-                    a.push(self.string(&self.source_text(x.span), pos));
+                    a.push(self.string(&self.source_text(x.span()), pos));
                     a.push(self.expr(x));
                 }
                 call(f, a, pos)
@@ -178,11 +184,11 @@ impl Lowerer<'_> {
     pub(crate) fn intrinsic_expr(
         &mut self,
         id: &str,
-        callee: &Expr,
-        args: &Args,
-        e: &Expr,
+        callee: Expr<'a>,
+        args: Args<'a>,
+        e: Expr<'a>,
     ) -> ir::Expr {
-        let pos = self.span_pos(e.span);
+        let pos = self.span_pos(e.span());
         let exprs = args.exprs();
         if log_rank(id).is_some() {
             return self
@@ -195,7 +201,7 @@ impl Lowerer<'_> {
                     "W7010",
                     "reflection metadata is requested, but this profile has `reflection = \"none\"`",
                 )
-                .with_label(e.span, "returns nil"),
+                .with_label(e.span(), "returns nil"),
             );
         }
         match id {
@@ -203,7 +209,7 @@ impl Lowerer<'_> {
                 let name = id.trim_start_matches("debug.");
                 self.error(
                     "E3045",
-                    e.span,
+                    e.span(),
                     format!(
                         "`{name}` can only be a call statement, because the call may be removed"
                     ),
@@ -211,13 +217,13 @@ impl Lowerer<'_> {
                 lit(ir::ExprKind::Nil, pos)
             }
             "color.hex" => self.color_hex(callee, args, e),
-            "debug.location" => self.string(&self.location(e.span), pos),
+            "debug.location" => self.string(&self.location(e.span()), pos),
             "debug.nameof" => match exprs.first().and_then(|x| nameof(x)) {
                 Some(name) => self.string(&name, pos),
                 None => {
                     self.error(
                         "E7001",
-                        e.span,
+                        e.span(),
                         "`nameof` needs a name, a field access or an index with a string key",
                     );
                     lit(ir::ExprKind::Nil, pos)
@@ -226,7 +232,7 @@ impl Lowerer<'_> {
             "debug.typeName" => {
                 let name = exprs
                     .first()
-                    .and_then(|x| self.ctx.type_names.get(&(x.span.start, x.span.end)))
+                    .and_then(|x| self.ctx.type_names.get(&(x.span().start, x.span().end)))
                     .cloned()
                     .unwrap_or_else(|| "any".into());
                 self.string(&name, pos)
@@ -235,7 +241,7 @@ impl Lowerer<'_> {
                 if id == "debug.todo" && !self.ctx.debug {
                     self.warnings.push(
                         Diagnostic::warning("W7001", "`todo()` in a release build")
-                            .with_label(e.span, "raises \"not implemented\" when it runs"),
+                            .with_label(e.span(), "raises \"not implemented\" when it runs"),
                     );
                 }
                 let f = self.intrinsic_callee(callee);
@@ -243,13 +249,13 @@ impl Lowerer<'_> {
                     Some(x) => vec![self.expr(x)],
                     None => vec![lit(ir::ExprKind::Nil, pos)],
                 };
-                a.push(self.string(&self.location(e.span), pos));
+                a.push(self.string(&self.location(e.span()), pos));
                 call(f, a, pos)
             }
             // Without profiling, `measure(label, fn, ...)` is `fn(...)`.
             "debug.measure" if !self.ctx.debug && exprs.len() >= 2 => {
-                let f = self.expr(exprs[1]);
-                let rest: Vec<ir::Expr> = exprs[2..].iter().map(|x| self.expr(x)).collect();
+                let f = self.expr(exprs.at(1));
+                let rest: Vec<ir::Expr> = exprs.iter().skip(2).map(|x| self.expr(x)).collect();
                 call(f, rest, pos)
             }
             "debug.stats" if !self.ctx.debug && !self.ctx.tools.profiling => lit(
@@ -271,8 +277,8 @@ impl Lowerer<'_> {
     /// The callee of an intrinsic call (a direct call is not a value use).
     /// `color.hex("ff8800")`: a constant argument is validated (E8390) and
     /// folded to `CreateColor(r, g, b, a)`; anything else calls the module.
-    fn color_hex(&mut self, callee: &Expr, args: &Args, e: &Expr) -> ir::Expr {
-        let pos = self.span_pos(e.span);
+    fn color_hex(&mut self, callee: Expr<'a>, args: Args<'a>, e: Expr<'a>) -> ir::Expr {
+        let pos = self.span_pos(e.span());
         let exprs = args.exprs();
         let text = match exprs.first().and_then(|x| self.const_value(x)) {
             Some(Const::String(s)) if exprs.len() == 1 => String::from_utf8_lossy(&s).into_owned(),
@@ -298,7 +304,7 @@ impl Lowerer<'_> {
         let Some(mut c) = bytes.filter(|_| digits.is_ascii()) else {
             self.error(
                 "E8390",
-                exprs[0].span,
+                exprs.at(0).span(),
                 format!("`{text}` is not a color: write \"rrggbb\" or \"aarrggbb\" in hex digits, optionally after `#`"),
             );
             return lit(ir::ExprKind::Nil, pos);
@@ -317,8 +323,8 @@ impl Lowerer<'_> {
         call(f, a, pos)
     }
 
-    fn intrinsic_callee(&mut self, callee: &Expr) -> ir::Expr {
-        match &callee.kind {
+    fn intrinsic_callee(&mut self, callee: Expr<'a>) -> ir::Expr {
+        match callee.kind() {
             ExprKind::Name(n) => name_expr(self.ident(n)),
             _ => self.expr(callee),
         }
@@ -350,14 +356,14 @@ fn log_rank(id: &str) -> Option<u8> {
 }
 
 /// The final identifier of `nameof(expr)`.
-fn nameof(e: &Expr) -> Option<String> {
-    match &e.kind {
-        ExprKind::Name(n) => Some(n.text.to_string()),
+fn nameof(e: Expr<'_>) -> Option<String> {
+    match e.kind() {
+        ExprKind::Name(n) => Some(n.text().to_string()),
         ExprKind::Field { name, .. } | ExprKind::OptField { name, .. } => {
-            Some(name.text.to_string())
+            Some(name.text().to_string())
         }
-        ExprKind::Index { key, .. } | ExprKind::OptIndex { key, .. } => match &key.kind {
-            ExprKind::String(s) => Some(String::from_utf8_lossy(&s.value).into_owned()),
+        ExprKind::Index { key, .. } | ExprKind::OptIndex { key, .. } => match key.kind() {
+            ExprKind::String(s) => Some(String::from_utf8_lossy(&s.value()).into_owned()),
             _ => None,
         },
         ExprKind::Paren(inner) => nameof(inner),

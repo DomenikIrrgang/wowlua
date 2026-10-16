@@ -198,6 +198,10 @@ pub struct Decorator {
     pub path: Vec<Name>,
     pub args: Option<Args>,
     pub span: Span,
+    /// The decorator as an expression: its path, called with its
+    /// arguments (`@a.b(x)` is `a.b(x)`, spec §4.5). A node of the tree,
+    /// so consumers never build one (#19); [`Decorator::call_of`] makes it.
+    pub call: Box<Expr>,
 }
 
 /// Core decorators (spec §4.3): always in scope, they win over lexical
@@ -233,19 +237,26 @@ impl Decorator {
         self.path.len() == 1 && self.path[0].text.as_ref() == name
     }
 
-    /// The decorator as an expression: its path, called with its arguments
-    /// (`@a.b(x)` is `a.b(x)`, spec §4.5).
-    pub fn expr(&self) -> Expr {
+    /// The decorator as an expression (`@a.b(x)` is `a.b(x)`).
+    pub fn expr(&self) -> &Expr {
+        &self.call
+    }
+
+    /// The expression of a decorator with `path`, `args` and `span`: the
+    /// path's names (each field access from the first name to its own),
+    /// called with the arguments over the decorator's span. Its nodes have
+    /// id 0, as made-up nodes do.
+    pub fn call_of(path: &[Name], args: Option<&Args>, span: Span) -> Expr {
         let mk = |span: Span, kind: ExprKind| Expr {
             id: NodeId(0),
             span,
             kind,
         };
-        let mut e = mk(self.path[0].span, ExprKind::Name(self.path[0].clone()));
-        for n in &self.path[1..] {
+        let mut e = mk(path[0].span, ExprKind::Name(path[0].clone()));
+        for n in &path[1..] {
             let span = Span {
                 file: n.span.file,
-                start: self.path[0].span.start,
+                start: path[0].span.start,
                 end: n.span.end,
             };
             e = mk(
@@ -256,9 +267,9 @@ impl Decorator {
                 },
             );
         }
-        match &self.args {
+        match args {
             Some(args) => mk(
-                self.span,
+                span,
                 ExprKind::Call {
                     callee: Box::new(e),
                     args: args.clone(),
