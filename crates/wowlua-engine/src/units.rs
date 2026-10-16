@@ -35,6 +35,9 @@ pub struct Unit {
     pub guid: String,
     pub name: String,
     pub realm: Option<String>,
+    /// WoW Forever's characters' last name: `UnitName`'s second value there
+    /// (`/stdtest engine`: "Suther", "Stargazer"), not the realm.
+    pub last_name: Option<String>,
     pub level: f64,
     /// The class's file name (`WARRIOR`), its name and ID.
     pub class: String,
@@ -119,6 +122,7 @@ pub fn install(vm: &mut Vm) {
         guid: "Player-4621-0A000001".into(),
         name: "Player".into(),
         realm: None,
+        last_name: None,
         level: 60.0,
         class: "WARRIOR".into(),
         class_name: "Warrior".into(),
@@ -359,6 +363,7 @@ fn clone_unit(u: &Unit) -> Unit {
         guid: u.guid.clone(),
         name: u.name.clone(),
         realm: u.realm.clone(),
+        last_name: u.last_name.clone(),
         class: u.class.clone(),
         class_name: u.class_name.clone(),
         race: u.race.clone(),
@@ -376,8 +381,14 @@ fn unit_guid(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn unit_name(vm: &mut Vm, c: NativeCall) -> Ret {
     with_unit(vm, &c, |vm, u| {
-        let realm = u.realm.as_ref().map_or(Value::Nil, |r| vm.str(r));
-        vec![vm.str(&u.name), realm]
+        // On WoW Forever the second value is the last name; elsewhere a
+        // player from another realm's realm.
+        let second = u
+            .last_name
+            .as_ref()
+            .or(u.realm.as_ref())
+            .map_or(Value::Nil, |r| vm.str(r));
+        vec![vm.str(&u.name), second]
     })
 }
 
@@ -817,6 +828,10 @@ pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
         guid: text(vm, "guid", &default_guid),
         name: text(vm, "name", "Unit"),
         realm: match get(vm, "realm") {
+            Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+            _ => None,
+        },
+        last_name: match get(vm, "lastName") {
             Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
             _ => None,
         },

@@ -5,9 +5,12 @@
 //! receives (to a group or guild they are in, a whisper to themselves)
 //! comes back as `CHAT_MSG_ADDON` on the next frame, for a registered
 //! prefix only. Tests deliver other players' messages
-//! (`receiveAddonMessage`). Unverified until `/stdtest engine comm` runs:
-//! the prefix limit (16 characters) and count, the message limit (255
-//! bytes), which chat types refuse what, the echo and its delay.
+//! (`receiveAddonMessage`). As `/stdtest engine comm` recorded: prefixes
+//! of 1 to 16 characters (else InvalidPrefix), a duplicate refused; SAY and
+//! unknown chat types InvalidChatType, a whisper without a target
+//! TargetRequired; a 256-byte message and one with a zero byte go out.
+//! Unverified: the message limit, the prefix count, the echo, its delay
+//! and the whisper target that reaches the player.
 //!
 //! Slash commands: the `slash(line)` control runs `/cmd args` as the chat
 //! box does, through `SlashCmdList` and the `SLASH_<KEY><n>` globals.
@@ -37,7 +40,9 @@ pub struct Chat {
 
 const MAX_PREFIX: usize = 16;
 const MAX_PREFIXES: usize = 128;
-const MAX_MESSAGE: usize = 255;
+/// Not 255 (`/stdtest engine comm`: 256 bytes go out); the real limit is
+/// being probed.
+const MAX_MESSAGE: usize = 4000;
 
 /// `SendAddonMessageResult`'s values.
 mod result {
@@ -160,7 +165,7 @@ fn send(vm: &mut Vm, c: NativeCall) -> Ret {
     let in_group = !u.group.is_empty();
     let r = if prefix.is_empty() || prefix.len() > MAX_PREFIX {
         result::INVALID_PREFIX
-    } else if message.len() > MAX_MESSAGE || message.contains(&0) {
+    } else if message.len() > MAX_MESSAGE {
         result::INVALID_MESSAGE
     } else if units::active(u, &[units::CHAT]) {
         result::LOCKDOWN

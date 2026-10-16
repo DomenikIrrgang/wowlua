@@ -995,7 +995,7 @@ function commProbe()
         const at = sentAt[msg]
         const delay = at and string.format("%.3f", GetTime() - at) or "?"
         const own = UnitName("player") :: any
-        const who = (sender == own and "name") or (sender:find("-") and "name-realm") or sender
+        const who = (sender == own and "first name") or (sender:find("-") and "name-realm") or (sender:find(" ") and "first and last name") or "other"
         arrivals[#arrivals + 1] = `{prefix} {msg} {channel} sender={who} target={target == own and "name" or target} after={delay}s rest={table.concat(extra, ";")}`
     end)
     const reg = C_ChatInfo.RegisterAddonMessagePrefix
@@ -1006,7 +1006,7 @@ function commProbe()
     out["register empty"] = results(reg, "")
     out["registered StdTestA"] = results(C_ChatInfo.IsAddonMessagePrefixRegistered, "StdTestA")
     out["registered never"] = results(C_ChatInfo.IsAddonMessagePrefixRegistered, "StdTestNever")
-    const me = UnitName("player") :: any
+    const me = (UnitName("player")) :: any
     const send = C_ChatInfo.SendAddonMessage
     local n = 0
     local function sendTimed(label: string, ...: any)
@@ -1014,11 +1014,25 @@ function commProbe()
         sentAt[`m{n}`] = GetTime()
         out[label] = results(send, ...)
     end
-    sendTimed("WHISPER self", "StdTestA", "m1", "WHISPER", me)
-    sendTimed("WHISPER self, unregistered prefix", "StdTestNever", "m2", "WHISPER", me)
+    -- WoW Forever's characters have a first and a last name: which target
+    -- reaches yourself.
+    local first: any, second: any = UnitName("player")
+    local fullName: any, fullRealm: any = UnitFullName("player")
+    const realm: any = GetNormalizedRealmName and GetNormalizedRealmName() or fullRealm
+    out["UnitName(player) values"] = tostring(select("#", UnitName("player")))
+    out["UnitFullName(player) realm is set"] = tostring(fullRealm ~= nil and fullRealm ~= "")
+    out["GetNormalizedRealmName is set"] = tostring(realm ~= nil and realm ~= "")
+    out["UnitName second value is the realm"] = tostring(second ~= nil and second == fullRealm)
+    sendTimed("WHISPER first name", "StdTestA", "m1", "WHISPER", first)
+    sendTimed("WHISPER first name, unregistered prefix", "StdTestNever", "m2", "WHISPER", first)
+    sendTimed("WHISPER name-realm", "StdTestA", "m3", "WHISPER", `{fullName}-{realm}`)
+    if second then
+        sendTimed("WHISPER first and last name", "StdTestA", "m4", "WHISPER", `{first} {second}`)
+    end
     out["WHISPER no target"] = results(send, "StdTestA", "x", "WHISPER")
-    out["message 255 bytes"] = results(send, "StdTestA", string.rep("x", 255), "WHISPER", me)
-    out["message 256 bytes"] = results(send, "StdTestA", string.rep("x", 256), "WHISPER", me)
+    for _, size in ipairs({ 255, 256, 1000, 4000, 4096, 4097, 8192 }) do
+        out[`message {size} bytes`] = results(send, "StdTestA", string.rep("x", size), "WHISPER", me)
+    end
     out["message with \\0"] = results(send, "StdTestA", "a\0b", "WHISPER", me)
     out["prefix 17 chars"] = results(send, "StdTest1234567890", "x", "WHISPER", me)
     out["chat type NOPE"] = results(send, "StdTestA", "x", "NOPE")

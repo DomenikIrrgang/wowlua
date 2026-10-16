@@ -45,7 +45,8 @@ mock.receiveAddonMessage('MyPrefix', 'from them', 'GUILD', 'Friend-Realm')
 mock.receiveAddonMessage('Unregistered', 'x', 'GUILD', 'Friend-Realm')
 return ok, again, long, party, whisper, big, #mock.sentAddonMessages(), tostring(C_ChatInfo.IsAddonMessagePrefixRegistered('MyPrefix'))",
     );
-    assert_eq!(r, ["0", "1", "2", "5", "0", "2", "1", "true"]);
+    // A 256-byte message goes out (`/stdtest engine comm`).
+    assert_eq!(r, ["0", "1", "2", "5", "0", "0", "2", "true"]);
     wowlua_engine::clock::advance_frames(&mut vm, 2, 1000.0 / 60.0);
     let got = run(&mut vm, "return table.concat(Got, ' | ')");
     assert_eq!(
