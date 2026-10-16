@@ -25,6 +25,8 @@ pub struct CheckCache {
     /// The package's extra and assigned globals of the flavor that stored
     /// entries; a flavor with other ones reuses nothing.
     package: Option<(FxHashSet<String>, FxHashSet<String>)>,
+    /// What each file adds to the package's globals, by path and `FileId`.
+    pub(crate) globals: FxHashMap<(Box<str>, FileId), super::FileGlobals>,
     /// Files reused and checked, for tests.
     pub hits: usize,
     pub misses: usize,

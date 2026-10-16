@@ -204,26 +204,46 @@ pub fn check_package_full(
     let mut extra_globals: FxHashSet<String> = extra_globals.iter().cloned().collect();
     let mut assigned_globals = FxHashSet::default();
     let markers = crate::usage::Markers::default();
+    // They depend on nothing but the file's parse: later flavors of the
+    // build take them from the first (#6).
+    let mut cached = reuse.as_mut().map(|r| &mut r.cache.globals);
     for (i, f) in files.iter().enumerate() {
         let Some(parse) = f.parse else { continue };
-        if f.kind == FileKind::Wowlua {
-            global_decorated(&parse.chunk.block, &mut extra_globals);
+        let wowlua = f.kind == FileKind::Wowlua;
+        let checked = settings.get(i).copied().flatten().is_some();
+        if !wowlua && !checked {
+            continue;
         }
-        if settings.get(i).copied().flatten().is_some() {
-            for d in crate::usage::file_usage(parse, &markers).defs {
-                if let crate::usage::Key::Global(name) = d.key {
-                    assigned_globals.insert(name);
-                }
-            }
-            // `CreateFrame(type, "Name", …)` creates the global `Name`.
-            wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
-                if let ExprKind::Call { callee, args } = &e.kind
-                    && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "CreateFrame")
-                    && let Some(ExprKind::String(lit)) = args.exprs().get(1).map(|a| &a.kind)
-                {
-                    assigned_globals.insert(String::from_utf8_lossy(&lit.value).into_owned());
-                }
-            });
+        let mut fresh = FileGlobals::default();
+        let globals = match cached.as_mut() {
+            Some(c) => c
+                .entry((f.src_rel.as_str().into(), parse.chunk.span.file))
+                .or_default(),
+            None => &mut fresh,
+        };
+        globals.fill(parse, wowlua, checked, &markers);
+        #[cfg(debug_assertions)]
+        {
+            let mut again = FileGlobals::default();
+            again.fill(parse, wowlua, checked, &markers);
+            assert_eq!(
+                (
+                    wowlua.then_some(&again.decorated),
+                    checked.then_some(&again.assigned)
+                ),
+                (
+                    wowlua.then_some(&globals.decorated),
+                    checked.then_some(&globals.assigned)
+                ),
+                "{} has other globals than it had",
+                f.src_rel
+            );
+        }
+        if wowlua {
+            extra_globals.extend(globals.decorated.iter().flatten().cloned());
+        }
+        if checked {
+            assigned_globals.extend(globals.assigned.iter().flatten().cloned());
         }
     }
     let extra_globals = &extra_globals;
@@ -427,8 +447,52 @@ fn type_refs<'a>(t: &'a wowlua_syntax::ast::Type, out: &mut Vec<&'a str>) {
     }
 }
 
+/// What one file adds to the package's globals: the names its `@global`
+/// declarations create (a `.wowlua` file), and the globals it assigns (a
+/// checked file). `None` until computed.
+#[derive(Default)]
+pub(crate) struct FileGlobals {
+    decorated: Option<Vec<String>>,
+    assigned: Option<Vec<String>>,
+}
+
+impl FileGlobals {
+    /// Computes the parts a file of this kind needs that are not known yet.
+    fn fill(
+        &mut self,
+        parse: &wowlua_syntax::Parse,
+        wowlua: bool,
+        checked: bool,
+        markers: &crate::usage::Markers,
+    ) {
+        if wowlua && self.decorated.is_none() {
+            let mut names = Vec::new();
+            global_decorated(&parse.chunk.block, &mut names);
+            self.decorated = Some(names);
+        }
+        if checked && self.assigned.is_none() {
+            let mut names = Vec::new();
+            for d in crate::usage::file_usage(parse, markers).defs {
+                if let crate::usage::Key::Global(name) = d.key {
+                    names.push(name);
+                }
+            }
+            // `CreateFrame(type, "Name", …)` creates the global `Name`.
+            wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
+                if let ExprKind::Call { callee, args } = &e.kind
+                    && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "CreateFrame")
+                    && let Some(ExprKind::String(lit)) = args.exprs().get(1).map(|a| &a.kind)
+                {
+                    names.push(String::from_utf8_lossy(&lit.value).into_owned());
+                }
+            });
+            self.assigned = Some(names);
+        }
+    }
+}
+
 /// Names of declarations decorated with `@global`.
-fn global_decorated(block: &wowlua_syntax::ast::Block, out: &mut FxHashSet<String>) {
+fn global_decorated(block: &wowlua_syntax::ast::Block, out: &mut Vec<String>) {
     use wowlua_syntax::ast::ExprKind;
     for s in &block.stmts {
         let Some(d) = s.decorators.iter().find(|d| d.is_named("global")) else {
@@ -444,7 +508,7 @@ fn global_decorated(block: &wowlua_syntax::ast::Block, out: &mut FxHashSet<Strin
                 _ => None,
             });
         if let Some(name) = explicit {
-            out.insert(name);
+            out.push(name);
             continue;
         }
         let inner = match &s.kind {
@@ -456,10 +520,10 @@ fn global_decorated(block: &wowlua_syntax::ast::Block, out: &mut FxHashSet<Strin
                 out.extend(names.iter().map(|n| n.name.text.to_string()))
             }
             StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
-                out.insert(name.text.to_string());
+                out.push(name.text.to_string());
             }
             StmtKind::Function { name, .. } => {
-                out.insert(
+                out.push(
                     name.method
                         .as_ref()
                         .unwrap_or_else(|| name.path.last().expect("a name"))
@@ -468,10 +532,10 @@ fn global_decorated(block: &wowlua_syntax::ast::Block, out: &mut FxHashSet<Strin
                 );
             }
             StmtKind::Class(c) => {
-                out.insert(c.name.text.to_string());
+                out.push(c.name.text.to_string());
             }
             StmtKind::Enum(e) => {
-                out.insert(e.name.text.to_string());
+                out.push(e.name.text.to_string());
             }
             _ => {}
         }
