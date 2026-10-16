@@ -131,6 +131,33 @@ impl Cache {
                 }
             }
         }
+        // Lua compile results (`compile/<hash>`): each entry's modification
+        // time is its last use.
+        let compile = self.root.join("compile");
+        for entry in walkdir::WalkDir::new(&compile)
+            .min_depth(1)
+            .max_depth(1)
+            .into_iter()
+            .flatten()
+            .filter(|e| e.file_type().is_file())
+        {
+            let Ok(meta) = entry.metadata() else {
+                continue;
+            };
+            let stale = match older_than {
+                None => true,
+                Some(limit) => meta
+                    .modified()
+                    .is_ok_and(|t| now.duration_since(t).unwrap_or_default() > limit),
+            };
+            if stale && std::fs::remove_file(entry.path()).is_ok() {
+                freed += meta.len();
+                removed.push(entry.into_path());
+            }
+        }
+        if older_than.is_none() {
+            remove(&compile)?;
+        }
         Ok((removed, freed))
     }
 }
@@ -201,5 +228,38 @@ pub(crate) fn commit(staged: &Path, target: &Path) -> io::Result<()> {
             let _ = remove(staged);
             Err(e)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Compile results unused for longer than the limit go; `--all` takes
+    /// the whole directory.
+    #[test]
+    fn clean_removes_old_compile_results() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::at(dir.path());
+        let old = cache.root.join("compile/old");
+        let new = cache.root.join("compile/new");
+        for path in [&old, &new] {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"ok\n").unwrap();
+        }
+        let long_ago = SystemTime::now() - Duration::from_secs(40 * 24 * 60 * 60);
+        std::fs::File::options()
+            .append(true)
+            .open(&old)
+            .unwrap()
+            .set_modified(long_ago)
+            .unwrap();
+        let (removed, _) = cache
+            .clean(Some(Duration::from_secs(30 * 24 * 60 * 60)))
+            .unwrap();
+        assert_eq!(removed, vec![old.clone()]);
+        assert!(new.exists());
+        cache.clean(None).unwrap();
+        assert!(!cache.root.join("compile").exists());
     }
 }

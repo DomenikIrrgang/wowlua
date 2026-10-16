@@ -241,6 +241,7 @@ libraries.
 | `…/cache/checkouts/<kind>-<name>-<hash>-<pin>/` | Exported trees: one per git commit, SVN revision; without version-control metadata |
 | `…/cache/archives/<sha256>`, `…/cache/archives/<sha256>.d/` | Downloaded archives and their extracted trees |
 | `…/cache/registry/<registry>/<name>/<version>/` | Unpacked registry packages and index cache |
+| `…/cache/compile/<hash>` | Lua 5.1 compile results (see below) |
 | `…/maps/<build id>/` | Archived source maps of published builds ([Code generation §14.6](codegen.md#146-source-maps)) |
 | `…/config.json` | Global configuration: WoW install paths, registries (see [CLI](cli.md#127-configuration)). Tokens are not stored here unless the OS keychain is unavailable (§10.11). |
 
@@ -248,6 +249,22 @@ libraries.
 days; every use stamps the entry (`<entry>.used`). `--all` removes everything
 (decision T109). All cache writes are atomic
 (write to a temp location, then rename), so concurrent builds are safe.
+
+**Compile results.** Builds compile Lua with the embedded Lua 5.1 to report
+its limits (E5001) and to choose between the optimizer's variants. The
+result depends only on the bytes, the chunk name and the Lua build, so the
+CLI keeps it in `…/cache/compile/<hash>` (a blake3 hash of the three): a
+later build of the same bytes takes it from there, and only that build's
+new or changed files are compiled. An entry is created once and records
+its length; one cut short is a miss and is written again, so concurrent
+builds are safe. An entry's modification time is its last use: when the
+cache grows past `build.compile-cache-size` (MiB, default 256), the least
+recently used entries are removed, at most once a day, until it is back
+under three quarters of the limit. `cache clean` removes entries unused for
+30 days, `--all` all of them. `WOWLUA_NO_COMPILE_CACHE=1` or
+`build.compile-cache: false` turns the cache off ([CLI
+§12.7](cli.md#127-configuration); decision T208). Debug builds of wowlua compile anyway and
+check that the two results agree.
 
 ## 10.8 Workspaces
 
