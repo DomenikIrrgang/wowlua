@@ -374,14 +374,20 @@ fn apply(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Element>
         }
     }
     if let Some(text) = el.attr("text") {
-        // A global string's name or the text itself.
+        // A global string's name or the text itself. A font string's is
+        // set as XML sets it, before its font may come (a button's
+        // `NormalFont` follows its `ButtonText`).
         let g = vm.get_global(text);
         let v = if matches!(g, Value::Str(_)) {
             g
         } else {
             vm.str(text)
         };
-        call_method(vm, cx, el.line, frame, "SetText", &[v]);
+        if engine(vm).world.widgets[id.0].class == "FontString" {
+            engine_mut(vm).world.widgets[id.0].text = Some(v);
+        } else {
+            call_method(vm, cx, el.line, frame, "SetText", &[v]);
+        }
     }
     for child in &el.children {
         apply_child(vm, cx, frame, id, child);

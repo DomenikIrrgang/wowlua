@@ -314,6 +314,51 @@ fn is_addon_loaded(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(loaded), Value::Bool(loaded)])
 }
 
+/// `C_AddOns.LoadAddOn(name)`: a Blizzard addon of the loaded UI code
+/// loads (true); without it, or for another addon, (false, "MISSING")
+/// (unverified reason).
+fn load_addon(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = match vm.hidden(c.arg(1)) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => String::new(),
+    };
+    match crate::ui::load_addon(vm, &name) {
+        Some(true) => Ok(vec![Value::Bool(true), Value::Nil]),
+        _ => Ok(vec![Value::Bool(false), vm.str("MISSING")]),
+    }
+}
+
+/// `C_LFGList.GetPremadeGroupFinderStyle()`: camelot's group finder is the
+/// vanilla style (the client loads Blizzard_GroupFinder_VanillaStyle,
+/// `/stdtest engine`); other flavors' is unverified (the enum's first).
+fn premade_group_finder_style(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let api = engine(vm).api;
+    let wanted = if engine(vm).flavor == "camelot" {
+        "Vanilla"
+    } else {
+        ""
+    };
+    let style = api
+        .enums
+        .iter()
+        .find(|(n, _)| *n == "PremadeGroupFinderStyle")
+        .and_then(|(_, fields)| {
+            fields
+                .iter()
+                .find(|(f, _)| f == wanted)
+                .or_else(|| fields.first())
+                .map(|(_, v)| *v)
+        })
+        .unwrap_or(0.0);
+    Ok(vec![Value::Num(style)])
+}
+
+/// `C_LFGInfo.IsGroupFinderEnabled()`: on camelot, yes (the client loads
+/// its group finder at login, `/stdtest engine`); elsewhere unverified.
+fn group_finder_enabled(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(engine(vm).flavor == "camelot")])
+}
+
 fn is_logged_in(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(engine(vm).world.logged_in)])
 }
@@ -362,6 +407,12 @@ pub fn functions() -> Vec<(&'static str, NativeFn)> {
         ("GetBuildInfo", build_info),
         ("IsLoggedIn", is_logged_in),
         ("C_AddOns.IsAddOnLoaded", is_addon_loaded),
+        ("C_AddOns.LoadAddOn", load_addon),
+        (
+            "C_LFGList.GetPremadeGroupFinderStyle",
+            premade_group_finder_style,
+        ),
+        ("C_LFGInfo.IsGroupFinderEnabled", group_finder_enabled),
     ]
 }
 

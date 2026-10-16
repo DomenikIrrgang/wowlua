@@ -486,6 +486,121 @@ end
 -- Taken as StdTest loads (Blizzard's startup addons are loaded by then).
 const LOADED_AT_START = blizzardLoaded()
 
+--- Argument-free functions Blizzard's UI code calls while it loads (the
+--- engine had no behaviour for them; read-only ones: the client calls them at
+--- every login, so calling them again is no riskier).
+const LOAD_CALLS = {
+    "C_ActionBar.GetActionBarPage", "C_ActionBar.GetExtraBarIndex",
+    "C_ActionBar.IsPossessBarVisible", "C_ActionBar.ShouldShowKeyring", "C_AddOns.GetNumAddOns",
+    "C_AddOns.IsAddonVersionCheckEnabled", "C_ArtifactUI.GetEquippedArtifactInfo",
+    "C_Bank.ShouldUsePlayerBagsInBank", "C_CVar.AreCVarsLoaded", "C_Calendar.GetNumPendingInvites",
+    "C_CatalogShop.GetAvailableCategoryIDs", "C_ChallengeMode.GetLeaverPenaltyWarningTimeLeft",
+    "C_ClubFinder.GetClubRecruitmentSettings", "C_ClubFinder.IsEnabled",
+    "C_CombatAudioAlert.IsEnabled", "C_Commentator.IsSpectating",
+    "C_Container.CalculateTotalNumberOfFreeBagSlots",
+    "C_ContentTracking.GetCollectableSourceTrackingEnabled",
+    "C_CraftingOrders.GetPersonalOrdersInfo", "C_DateAndTime.IsDayTime",
+    "C_Discord.GetGuildLinkStatus", "C_Discord.IsEnabled", "C_Discord.IsUserOAuthed",
+    "C_FriendList.IsLegacyFriendSystemEnabled", "C_GameRules.GetActiveGameMode",
+    "C_GameRules.IsHardcoreActive", "C_GuildBank.IsGuildBankEnabled", "C_Housing.IsInsideHouse",
+    "C_Minimap.ShouldUseHybridMinimap", "C_Navigation.GetFrame", "C_PaperDollInfo.AmmoNeeded",
+    "C_PaperDollInfo.IsRangedSlotShown", "C_PartyInfo.GetInstanceAbandonVoteTime",
+    "C_ProfSpecs.GetNewSpecReminderProfName", "C_ProfSpecs.ShouldShowPointsReminder",
+    "C_PvP.GetActiveMatchState", "C_PvP.GetZonePVPInfo", "C_PvP.IsInBrawl", "C_PvP.IsMatchActive",
+    "C_PvP.IsMatchComplete", "C_QuestLog.GetNumQuestLogEntries", "C_QuestLog.GetQuestTimers",
+    "C_QuestSession.GetSessionBeginDetails", "C_RecruitAFriend.IsRecruitingEnabled",
+    "C_RecruitAFriend.IsSystemEnabled", "C_ScriptedAnimations.GetAllScriptedAnimationEffects",
+    "C_SocialQueue.GetConfig", "C_SocialRestrictions.CanReceiveChat",
+    "C_SpecializationInfo.GetAllClassIDs", "C_Spell.GetTargetSpellID",
+    "C_Spell.TargetSpellChecksItemCondition", "C_Spell.TargetSpellIsEnchanting",
+    "C_Spell.TargetSpellJumpsUpgradeTrack", "C_Spell.TargetSpellReplacesBonusTree",
+    "C_SuperTrack.GetSuperTrackedContent", "C_SuperTrack.GetSuperTrackedMapPin",
+    "C_SuperTrack.GetSuperTrackedQuestID", "C_SuperTrack.GetSuperTrackedVignette",
+    "C_TTSSettings.GetSpeechRate", "C_TTSSettings.GetSpeechVolume",
+    "C_TransmogOutfitInfo.GetAllSlotLocationInfo", "C_UIColor.GetColors",
+    "C_UIWidgetManager.GetBelowMinimapWidgetSetID", "C_UIWidgetManager.GetPowerBarWidgetSetID",
+    "C_UIWidgetManager.GetTopCenterWidgetSetID", "C_UnitAuras.GetGroupBuffVisualAlerts",
+    "C_UnitAuras.GetHiddenGroupBuffs", "C_VoiceChat.GetActiveChannelID", "C_VoiceChat.GetTtsVoices",
+    "C_VoiceChat.IsLoggedIn", "C_VoiceChat.IsTranscriptionAllowed",
+    "C_ZoneAbility.GetActiveAbilities", "CanPortGraveyard", "GetCursorPosition",
+    "GetDungeonDifficultyID", "GetErrorCallstackHeight", "GetExpansionLevel",
+    "GetExpansionTrialInfo", "GetFileStreamingStatus", "GetFonts", "GetGameTime", "GetInstanceInfo",
+    "GetMinimapZoneText", "GetPhysicalScreenSize", "GetRealmName", "GetRestState",
+    "GetScreenHeight", "GetSubZoneText", "GetXPExhaustion", "HasKey", "IsAltKeyDown",
+    "IsControlKeyDown", "IsGuildLeader", "IsInJailersTower", "IsRestrictedAccount",
+    "IsShiftKeyDown", "IsTrialAccount", "IsVeteranTrialAccount", "PlayerIsTimerunning",
+    "RegionalUniqueNamesEnabled",
+}
+
+--- A value in full: tables to depth 4, keys sorted, secrets marked.
+local function deep(v: any, depth: number): string
+    if type(v) ~= "table" or issecretvalue(v) then
+        return show(v)
+    end
+    if depth >= 4 then
+        return "table"
+    end
+    const keys: string[] = {}
+    const values: { [string]: any } = {}
+    for k, inner in pairs(v :: table) do
+        const key = tostring(k)
+        keys[#keys + 1] = key
+        values[key] = inner
+    end
+    table.sort(keys)
+    const parts: string[] = {}
+    for _, k in ipairs(keys) do
+        parts[#parts + 1] = `{k}={deep(values[k], depth + 1)}`
+    end
+    return `\{{table.concat(parts, ",")}\}`
+end
+
+--- What each load-time call returns.
+local function loadCalls(): { [string]: string }
+    const out: { [string]: string } = {}
+    for _, name in ipairs(LOAD_CALLS) do
+        local f: any = G
+        for part in name:gmatch("[^.]+") do
+            f = type(f) == "table" and f[part] or nil
+        end
+        if type(f) ~= "function" then
+            out[name] = "absent"
+        else
+            const packed = { pcall(f) }
+            if not packed[1] then
+                out[name] = `error: {tostring(packed[2])}`
+            else
+                const parts: string[] = {}
+                for i = 2, select("#", unpack(packed)) do
+                    parts[#parts + 1] = deep(packed[i], 1)
+                end
+                out[name] = `{#parts}: {table.concat(parts, ", ")}`
+            end
+        end
+    end
+    return out
+end
+
+--- Every `Enum` and `Constants` table the client has, field by field (the
+--- documentation lacks some: `Enum.GameMode`, values of
+--- `Constants.InventoryConstants`).
+local function tables(root: any): { [string]: string }
+    const out: { [string]: string } = {}
+    if type(root) ~= "table" then
+        return out
+    end
+    for name, t in pairs(root) do
+        if type(t) == "table" then
+            for field, value in pairs(t) do
+                out[`{tostring(name)}.{tostring(field)}`] = show(value)
+            end
+        else
+            out[tostring(name)] = show(t)
+        end
+    end
+    return out
+end
+
 --- The CVars camelot's UI code reads by name (grep of `GetCVar*("…")` in
 --- wow-ui-source 1.60.1), for their defaults: what the engine starts with.
 const CVARS = {
@@ -665,6 +780,9 @@ export function engineProbe(arg: string?)
         order = order(),
         behaviours = behaviours(),
         cvarDefaults = cvarDefaults(),
+        enums = tables(G.Enum),
+        loadCalls = loadCalls(),
+        constants = tables(G.Constants),
         blizzardAtStart = table.concat(LOADED_AT_START, " "),
         blizzardNow = table.concat(blizzardLoaded(), " "),
         units = units(),

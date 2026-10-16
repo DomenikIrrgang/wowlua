@@ -35,6 +35,11 @@ pub struct Registry {
     pub errors: Vec<String>,
     /// The addons loaded, in order.
     pub loaded: Vec<String>,
+    /// Every Blizzard addon of the UI code, by lower-case name: what
+    /// `C_AddOns.LoadAddOn` can load later.
+    available: HashMap<String, Addon>,
+    /// The folder holding `Interface`, once the code is loaded.
+    root: Option<PathBuf>,
 }
 
 /// What loading the UI code did.
@@ -114,6 +119,7 @@ impl Target {
 }
 
 /// One Blizzard addon: its directory, TOC and dependencies.
+#[derive(Clone)]
 struct Addon {
     name: String,
     dir: PathBuf,
@@ -133,11 +139,12 @@ fn directive<'a>(toc: &'a wowlua_toc::ParsedToc, t: &Target, key: &str) -> Vec<&
         .collect()
 }
 
-/// The addons the game loads at startup, in load order.
-fn startup_addons(interface: &Path, t: &Target) -> Vec<Addon> {
+/// The addons the game loads at startup, in load order, and every addon
+/// it could load (by lower-case name).
+fn startup_addons(interface: &Path, t: &Target) -> (Vec<Addon>, HashMap<String, Addon>) {
     let mut all: HashMap<String, Addon> = HashMap::new();
     let Ok(dirs) = std::fs::read_dir(interface.join("AddOns")) else {
-        return Vec::new();
+        return (Vec::new(), HashMap::new());
     };
     for entry in dirs.flatten() {
         let dir = entry.path();
@@ -254,7 +261,83 @@ fn startup_addons(interface: &Path, t: &Target) -> Vec<Addon> {
             }
         }
     }
-    order.into_iter().filter_map(|n| all.remove(&n)).collect()
+    let startup = order.iter().filter_map(|n| all.get(n).cloned()).collect();
+    (startup, all)
+}
+
+/// A TOC line's file and whether it is marked `[Bootstrap]`: loaded at
+/// startup for a load-on-demand addon (its `…_LoadUI` functions).
+fn bootstrap(path: &str) -> (String, bool) {
+    let trimmed = path.trim_end();
+    match trimmed
+        .to_ascii_lowercase()
+        .strip_suffix("[bootstrap]")
+        .map(str::len)
+    {
+        Some(len) => (trimmed[..len].trim_end().to_string(), true),
+        None => (trimmed.to_string(), false),
+    }
+}
+
+/// Loads an addon's files (all but its bootstrap ones, or only those),
+/// then fires `ADDON_LOADED` unless only bootstrapping.
+fn load_addon_files(vm: &mut Vm, root: &Path, t: &Target, addon: &Addon, only_bootstrap: bool) {
+    let table = Value::Table(vm.new_table());
+    for file in &addon.toc.files {
+        if !t.allows(&file.conditions) {
+            continue;
+        }
+        let (rel, marked) = bootstrap(&file.path);
+        let is_bootstrap = marked
+            || file
+                .conditions
+                .iter()
+                .any(|c| c.name.eq_ignore_ascii_case("Bootstrap"));
+        if is_bootstrap != only_bootstrap {
+            continue;
+        }
+        let path = resolve(&addon.dir, &t.path(&rel));
+        load_file(vm, root, &path, &addon.name, table);
+    }
+    if only_bootstrap {
+        return;
+    }
+    engine_mut(vm).world.ui.loaded.push(addon.name.clone());
+    let name = vm.str(&addon.name);
+    crate::widgets::fire_event(vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
+}
+
+/// `C_AddOns.LoadAddOn(name)` for Blizzard's addons: their dependencies,
+/// then their files. `Some(true)` once loaded (or if it was), `Some(false)`
+/// for an addon the code does not have, `None` without the UI code.
+pub fn load_addon(vm: &mut Vm, name: &str) -> Option<bool> {
+    let root = engine(vm).world.ui.root.clone()?;
+    let key = name.to_ascii_lowercase();
+    if engine(vm)
+        .world
+        .ui
+        .loaded
+        .iter()
+        .any(|l| l.eq_ignore_ascii_case(name))
+    {
+        return Some(true);
+    }
+    let Some(addon) = engine(vm).world.ui.available.get(&key).cloned() else {
+        return Some(false);
+    };
+    for dep in &addon.deps {
+        if engine(vm)
+            .world
+            .ui
+            .available
+            .contains_key(&dep.to_ascii_lowercase())
+        {
+            load_addon(vm, dep);
+        }
+    }
+    let t = Target::new(&engine(vm).flavor.clone());
+    load_addon_files(vm, &root, &t, &addon, false);
+    Some(true)
 }
 
 /// Loads one UI file (`.lua` or `.xml`) of an addon.
@@ -501,19 +584,24 @@ pub fn load(vm: &mut Vm, interface: &Path, global_strings: Option<&Path>) -> Rep
     if let Some(path) = global_strings {
         load_global_strings(vm, path);
     }
-    for addon in startup_addons(interface, &t) {
-        let table = Value::Table(vm.new_table());
-        for file in &addon.toc.files {
-            if !t.allows(&file.conditions) {
-                continue;
-            }
-            let rel = t.path(&file.path);
-            let path = resolve(&addon.dir, &rel);
-            load_file(vm, &root, &path, &addon.name, table);
-        }
-        engine_mut(vm).world.ui.loaded.push(addon.name.clone());
-        let name = vm.str(&addon.name);
-        crate::widgets::fire_event(vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
+    let (startup, all) = startup_addons(interface, &t);
+    {
+        let ui = &mut engine_mut(vm).world.ui;
+        ui.available = all.clone();
+        ui.root = Some(root.clone());
+    }
+    for addon in &startup {
+        load_addon_files(vm, &root, &t, addon, false);
+    }
+    // The load-on-demand addons' bootstrap files (order unverified: after
+    // the startup addons, by name).
+    let mut rest: Vec<&Addon> = all
+        .values()
+        .filter(|a| !startup.iter().any(|s| s.name == a.name))
+        .collect();
+    rest.sort_by(|a, b| a.name.cmp(&b.name));
+    for addon in rest {
+        load_addon_files(vm, &root, &t, addon, true);
     }
     // Blizzard's code may have set its own handler meanwhile.
     if let (Value::Func(a), Value::Func(b)) = (vm.error_handler, recorder)
