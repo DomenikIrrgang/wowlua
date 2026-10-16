@@ -389,3 +389,56 @@ fn a_new_addon_passes_its_tests() {
     assert!(ok, "{out}");
     assert!(out.contains("✓ greets at login"), "{out}");
 }
+
+/// `test.blizzard-ui`: Blizzard's UI code (from `cargo xtask types fetch`,
+/// skipped without it) loads before the addon; `print` goes through its
+/// print handler.
+#[test]
+fn blizzard_ui_loads_before_the_addon() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\", 1)\n"),
+            (
+                "tests/ui.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("Blizzard's frames")
+local function frames()
+    expect(GameTooltip).never.toBeNil()
+    local b = CreateFrame("Button", nil, UIParent, "UIPanelButtonTemplate")
+    b:SetText("Hi")
+    expect(b:GetText()).toBe("Hi")
+    expect(mock.printed()).toContain("loaded 1")
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("1 passed, 0 failed"), "{text}");
+    assert!(!text.contains("raised"), "{text}");
+}

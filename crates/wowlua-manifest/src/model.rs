@@ -69,6 +69,8 @@ pub struct Manifest {
     #[serde(default)]
     pub fmt: Fmt,
     #[serde(default)]
+    pub test: TestSettings,
+    #[serde(default)]
     pub compat: Compat,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace: Option<Workspace>,
@@ -913,6 +915,16 @@ pub enum QuoteStyle {
     Double,
     Single,
     Preserve,
+}
+
+/// `test` (spec §9.18): `wowlua test`'s settings.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct TestSettings {
+    /// Load the flavor's Blizzard UI code as secure code before the addon
+    /// (spec emulator §17.7).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub blizzard_ui: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

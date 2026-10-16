@@ -617,7 +617,7 @@ used.
 
 ## 9.18 `test`
 
-Planned (M9).
+`blizzard-ui` since M9 S4; the coverage keys and `reporters` come with S5.
 
 | Key | Type | Default | Meaning |
 |-----|------|---------|---------|

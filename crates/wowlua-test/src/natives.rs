@@ -74,6 +74,43 @@ fn errors(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
+/// What `print` shows, as Blizzard's print handler joins it: each value's
+/// `tostring`, separated by spaces.
+fn record_print(vm: &mut Vm, c: NativeCall) -> Ret {
+    let mut parts = Vec::new();
+    for &v in &c.args {
+        let s = vm.tostring(v)?;
+        let s = vm.hidden(s);
+        parts.push(match s {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => "?".into(),
+        });
+    }
+    let line = parts.join(" ");
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        s.printed.extend_from_slice(line.as_bytes());
+        s.printed.push(b'\n');
+    });
+    Ok(vec![])
+}
+
+/// The client's `print`: through Blizzard's print handler when its UI code
+/// is loaded (recorded, then shown in the chat frame), else recorded only.
+pub fn install_print(vm: &mut Vm) {
+    let record = vm.native("print", record_print);
+    let src = b"local record = ...
+if setprinthandler and getprinthandler then
+    local shown = getprinthandler()
+    setprinthandler(function(...) record(...) return shown(...) end)
+else
+    print = function(...) record(...) end
+end";
+    if let Ok(f) = vm.load(src, "=[wowlua test]") {
+        let _ = vm.call(f, &[record]);
+    }
+}
+
 /// `mock.printed()`: the lines printed so far.
 fn printed(vm: &mut Vm, _c: NativeCall) -> Ret {
     let text = STATE.with(|s| String::from_utf8_lossy(&s.borrow().printed).into_owned());

@@ -48,6 +48,11 @@ pub use project::{
 };
 pub use sources::TestRole;
 
+/// wowlua's cache folder (`$WOWLUA_HOME/cache`).
+pub fn cache_root() -> Option<std::path::PathBuf> {
+    wowlua_pkg::Cache::new().map(|c| c.root)
+}
+
 /// Version of this compiler.
 pub const COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");
 

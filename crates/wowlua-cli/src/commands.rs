@@ -570,13 +570,48 @@ pub fn test(out: &Output, global: &GlobalArgs, filter: Option<&str>, flavors: Ve
                 ok = false;
                 continue;
             };
+            let blizzard_ui = if project.manifest.manifest.test.blizzard_ui {
+                match wowlua_test::ui_source(&flavor, &|what| out.status("Fetching", what)) {
+                    Ok(ui) => Some(ui),
+                    Err(e) => {
+                        out.colored(&[
+                            (Some(Color::Red), true, "error"),
+                            (None, false, &format!(": test.blizzard-ui: {e}\n")),
+                        ]);
+                        ok = false;
+                        continue;
+                    }
+                }
+            } else {
+                None
+            };
             let suite = wowlua_test::Suite {
                 build: &build,
                 flavor: flavor.clone(),
                 root: project.root().to_path_buf(),
                 src: project.manifest.manifest.build.src.clone(),
+                blizzard_ui,
             };
-            for result in wowlua_test::run(&suite, filter, threads) {
+            let results = wowlua_test::run(&suite, filter, threads);
+            if let Some(errors) = results
+                .iter()
+                .map(|r| &r.blizzard_errors)
+                .find(|e| !e.is_empty())
+            {
+                out.colored(&[
+                    (Some(Color::Yellow), true, "warning"),
+                    (
+                        None,
+                        false,
+                        &format!(
+                            ": Blizzard's UI code for {flavor} raised {} errors while loading (the emulation's gaps); the first: {}\n",
+                            errors.len(),
+                            errors[0]
+                        ),
+                    ),
+                ]);
+            }
+            for result in results {
                 files += 1;
                 let bad = result.failed();
                 let (word, color) = if bad {

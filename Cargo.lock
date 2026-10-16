@@ -2705,6 +2705,7 @@ version = "0.9.0"
 dependencies = [
  "regex",
  "tempfile",
+ "wowlua-api",
  "wowlua-driver",
  "wowlua-engine",
  "wowlua-flavors",

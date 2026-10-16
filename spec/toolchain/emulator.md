@@ -248,8 +248,9 @@ Off by default: mock-only tests start faster (decision T186).
 
 The code comes from wow-ui-source at the flavor's client version and the
 global strings from the same dump the declarations use, downloaded on first
-use into a user cache keyed by version (decision T204; about 5 seconds and
-7 MB per flavor, once). The engine's loader (`wowlua_engine::ui::load`)
+use into a user cache keyed by version (decision T204; about 10 seconds and
+45 MB per flavor, once: `$WOWLUA_HOME/cache/blizzard-ui/`, at the commit the
+flavor's declarations name; `WOWLUA_UI_SOURCE` names a local copy instead). The engine's loader (`wowlua_engine::ui::load`)
 takes the flavor's `Interface` folder and its global strings:
 
 - **Startup set** (as `/stdtest engine` recorded: the 201 Blizzard addons

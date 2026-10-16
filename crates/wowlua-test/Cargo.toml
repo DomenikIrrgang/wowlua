@@ -10,6 +10,7 @@ authors.workspace = true
 
 [dependencies]
 regex.workspace = true
+wowlua-api.workspace = true
 wowlua-driver.workspace = true
 wowlua-engine.workspace = true
 wowlua-flavors.workspace = true

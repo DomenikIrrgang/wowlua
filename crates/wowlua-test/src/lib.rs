@@ -5,7 +5,10 @@
 //! registered them, each in a coroutine the runner steps, advancing the
 //! game's frames while a test waits.
 
+mod blizzard;
 mod natives;
+
+pub use blizzard::{UiSource, ui_source};
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -21,6 +24,8 @@ pub struct Suite<'a> {
     /// The package root and its `build.src`, to show source paths.
     pub root: PathBuf,
     pub src: String,
+    /// `test.blizzard-ui`: Blizzard's UI code, loaded before the addon.
+    pub blizzard_ui: Option<UiSource>,
 }
 
 /// One test file's run for one flavor.
@@ -36,6 +41,8 @@ pub struct FileResult {
     /// What the file's code printed.
     pub printed: String,
     pub seconds: f64,
+    /// Errors Blizzard's UI code raised while loading (the engine's gaps).
+    pub blizzard_errors: Vec<String>,
 }
 
 impl FileResult {
@@ -216,8 +223,9 @@ fn run_file(suite: &Suite, file: &TestFile, filter: Option<&str>) -> FileResult 
         error: None,
         printed: String::new(),
         seconds: 0.0,
+        blizzard_errors: Vec::new(),
     };
-    match load(suite, file) {
+    match load(suite, file, &mut result.blizzard_errors) {
         Ok(mut state) => {
             run_tests(suite, &mut state, filter, &mut result);
         }
@@ -234,14 +242,19 @@ struct Loaded {
     tests: TableRef,
 }
 
-fn load(suite: &Suite, file: &TestFile) -> Result<Loaded, String> {
+fn load(suite: &Suite, file: &TestFile, blizzard: &mut Vec<String>) -> Result<Loaded, String> {
     let build = suite.build;
     let dir = &build.dir;
     let name = build.addon_name.clone();
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, &suite.flavor)?;
     natives::reset();
+    if let Some(ui) = &suite.blizzard_ui {
+        let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+        *blizzard = report.errors;
+    }
     vm.set_output(natives::print_sink);
+    natives::install_print(&mut vm);
     vm.error_handler = vm.native("errorhandler", natives::error_handler);
     // The addon table, with the runtime's table holding the mock's engine.
     let ns = vm.new_table();
