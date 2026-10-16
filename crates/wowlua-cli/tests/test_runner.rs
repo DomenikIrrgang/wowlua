@@ -1211,6 +1211,16 @@ fn example_tests() {
     example("widget-demo", "3 passed, 0 failed");
 }
 
+/// The typed-demo example's tests: modules, world profiles, compile-time
+/// tests, every flavor of a shared-mode package (no Blizzard UI needed).
+#[test]
+fn typed_demo_example() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/typed-demo");
+    let (ok, out) = test(&root, &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("36 passed, 0 failed"), "{out}");
+}
+
 fn example(name: &str, summary: &str) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let source = root.join("target/types-src");

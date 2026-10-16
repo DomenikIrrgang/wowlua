@@ -1,0 +1,69 @@
+-- The typed demo's modules, and the addon in the emulated client (without
+-- Blizzard's UI: it needs none). A world profile gives the character money.
+import test, expect, cases, expectError, config from "wowlua:test"
+import * as mock from "wowlua:mock"
+import Ring from "/ring"
+import Source, isEarned, format from "/money"
+import type Change from "/money"
+import Ledger from "/ledger"
+config({ profile = "rich" })
+
+@test("a ring keeps the newest values")
+@cases({ { 2, { 4, 5 } }, { 3, { 3, 4, 5 } }, { 5, { 1, 2, 3, 4, 5 } }, { 8, { 1, 2, 3, 4, 5 } } })
+local function keepsNewest(capacity: number, kept: number[])
+    local ring = Ring.new(capacity) :: Ring<number>
+    for i = 1, 5 do
+        ring:push(i)
+    end
+    expect(ring:toArray()).toEqual(kept)
+    expect(ring.size).toBe(#kept)
+end
+
+@test("money formats as gold, silver and copper")
+@cases({ { 0, "0g 0s 0c" }, { 1234567, "123g 45s 67c" }, { -150, "-0g 1s 50c" } })
+local function formats(copper: number, text: string)
+    expect(format(copper)).toBe(text)
+end
+
+@test("the ledger tells earnings from spendings")
+local function ledger()
+    local l = Ledger.new(100, 10)
+    local earned = l:update(150, 1, Source.Loot) :: Change
+    expect(isEarned(earned)).toBe(true)
+    expect(earned.amount).toBe(50)
+    expect(l:update(150, 2, Source.Other)).toBeNil()
+    local spent = l:update(120, 3, Source.Vendor) :: Change
+    expect(isEarned(spent)).toBe(false)
+    expect(l.net).toBe(20)
+end
+
+@test("the session starts with the character's money")
+local function session()
+    expect(mock.printed()).toContain("Typed Demo: session 1, 123g 45s 67c. Type /tdemo.")
+    expect(TypedDemoDB).toEqual({ sessions = 1 })
+end
+
+@test("money changes reach the ledger")
+local function moneyChanges()
+    -- The warband bank is not part of the simulated world: a fake.
+    if _G.C_Bank then
+        mock.fake("C_Bank.FetchDepositedMoney", function(): number return 0 end)
+    end
+    mock.player:setMoney(1234567 + 5000)
+    mock.slash("/tdemo")
+    local shown = table.concat(mock.printed(), "\n")
+    expect(shown).toContain("earned 0g 50s 0c, spent 0g 0s 0c, net 0g 50s 0c")
+end
+
+-- What the types reject.
+@expectError("E2001")
+local function ringOfNumbersTakesNoStrings()
+    local ring = Ring.new(3) :: Ring<number>
+    ring:push("five")
+end
+
+@expectError("E2001")
+local function sourcesAreTheEnum()
+    local l = Ledger.new(0, 1)
+    l:update(10, 0, "loot")
+end

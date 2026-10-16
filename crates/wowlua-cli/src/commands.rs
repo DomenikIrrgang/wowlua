@@ -634,36 +634,56 @@ fn test_once(
         }
         root = project.root().to_path_buf();
         title = project.addon_name();
-        let addon = project.addon_name();
-        for flavor in project.manifest.flavors.clone() {
-            if !wanted.is_empty() && !wanted.contains(&flavor) {
-                continue;
-            }
-            let request = BuildRequest {
-                profile: "test".into(),
-                flavors: Some(vec![flavor.clone()]),
-                out_dir: Some(wowlua_test::build_dir(
-                    &project.manifest.out_dir(),
+        let selected: Vec<String> = project
+            .manifest
+            .flavors
+            .iter()
+            .filter(|f| wanted.is_empty() || wanted.contains(f))
+            .cloned()
+            .collect();
+        // A shared-mode package is one build for all its flavors (its
+        // flavor guards need them all); split mode builds each.
+        let shared_mode = project.manifest.manifest.build.flavor_mode
+            == wowlua_manifest::model::FlavorMode::Shared;
+        let mut shared: Option<Option<BuildOutput>> = None;
+        for flavor in selected.clone() {
+            let owned: Option<BuildOutput>;
+            let build: &BuildOutput = if shared_mode {
+                if shared.is_none() {
+                    // All the package's flavors: shared code compiles for them all.
+                    let all = project.manifest.flavors.clone();
+                    shared = Some(test_build(
+                        out,
+                        global,
+                        &mut session,
+                        &project,
+                        all,
+                        "shared",
+                    ));
+                }
+                match shared.as_ref().and_then(Option::as_ref) {
+                    Some(b) => b,
+                    None => {
+                        ok = false;
+                        continue;
+                    }
+                }
+            } else {
+                owned = test_build(
+                    out,
+                    global,
+                    &mut session,
+                    &project,
+                    vec![flavor.clone()],
                     &flavor,
-                    &addon,
-                )),
-                write: true,
-                nolib: false,
-                minify: None,
-                bundle: None,
-                only: None,
-                jobs: global.jobs(),
-                tests: true,
-            };
-            let build = wowlua_driver::build(&mut session, &project, &request);
-            apply_lints(&mut session, &project);
-            if !out.flush(&mut session) {
-                ok = false;
-                continue;
-            }
-            let Some(build) = build else {
-                ok = false;
-                continue;
+                );
+                match &owned {
+                    Some(b) => b,
+                    None => {
+                        ok = false;
+                        continue;
+                    }
+                }
             };
             let blizzard_ui = if test_settings.blizzard_ui {
                 match wowlua_test::ui_source(&flavor, &|what| out.status("Fetching", what)) {
@@ -681,7 +701,7 @@ fn test_once(
                 None
             };
             let suite = wowlua_test::Suite {
-                build: &build,
+                build,
                 flavor: flavor.clone(),
                 root: project.root().to_path_buf(),
                 src: project.manifest.manifest.build.src.clone(),
@@ -875,6 +895,40 @@ fn test_once(
         ]);
     }
     (ok, watched)
+}
+
+/// A test build of `project` for `flavors` in `<out>/.test/<dir>/<Name>`
+/// (its diagnostics shown); `None` when it fails.
+fn test_build(
+    out: &Output,
+    global: &GlobalArgs,
+    session: &mut Session,
+    project: &Project,
+    flavors: Vec<String>,
+    dir: &str,
+) -> Option<BuildOutput> {
+    let request = BuildRequest {
+        profile: "test".into(),
+        flavors: Some(flavors),
+        out_dir: Some(wowlua_test::build_dir(
+            &project.manifest.out_dir(),
+            dir,
+            &project.addon_name(),
+        )),
+        write: true,
+        nolib: false,
+        minify: None,
+        bundle: None,
+        only: None,
+        jobs: global.jobs(),
+        tests: true,
+    };
+    let build = wowlua_driver::build(session, project, &request);
+    apply_lints(session, project);
+    if !out.flush(session) {
+        return None;
+    }
+    build
 }
 
 /// One test file's results, as the `pretty` reporter shows them.

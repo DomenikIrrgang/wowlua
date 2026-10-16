@@ -379,6 +379,18 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     // Undocumented C functions with behaviour.
     let create_frame = vm.native("CreateFrame", widgets::create_frame);
     vm.set_global("CreateFrame", create_frame);
+    // The client's project ID, and the project constants (WoW Forever has
+    // these, `/stdtest engine`; other flavors unverified). Blizzard's UI
+    // code sets its own again when it loads.
+    let project = wowlua_flavors::table()
+        .flavor(flavor)
+        .map_or(1, |f| f.project_id);
+    vm.set_global("WOW_PROJECT_ID", Value::Num(f64::from(project)));
+    vm.set_global("WOW_PROJECT_MAINLINE", Value::Num(1.0));
+    vm.set_global("WOW_PROJECT_CLASSIC", Value::Num(2.0));
+    if flavor == "camelot" {
+        vm.set_global("WOW_PROJECT_CAMELOT", Value::Num(18.0));
+    }
     // Blizzard's slash command registry (its chat code makes it; addons
     // and the engine's slash control use it without the UI code too).
     let slash = vm.new_table();
