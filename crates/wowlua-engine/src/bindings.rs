@@ -108,6 +108,10 @@ pub fn press_binding(vm: &mut Vm, c: NativeCall) -> Ret {
 pub fn press_key(vm: &mut Vm, c: NativeCall) -> Ret {
     let key = vm.check_str(&c, 1)?;
     let key = String::from_utf8_lossy(vm.str_bytes(key)).to_uppercase();
+    // A focused edit box takes its keys first.
+    if crate::input::edit_box_key(vm, &key) {
+        return Ok(vec![]);
+    }
     let bound = engine(vm)
         .world
         .bindings

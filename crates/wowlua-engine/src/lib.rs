@@ -16,6 +16,7 @@ pub mod curves;
 pub mod facts;
 pub mod framescript;
 pub mod gamedata;
+pub mod input;
 pub mod protection;
 pub mod tooltip;
 pub mod ui;
@@ -176,6 +177,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(auras::behaviours())
             .chain(gamedata::behaviours())
             .chain(character::behaviours())
+            .chain(input::behaviours())
             .chain(chat::behaviours())
             .chain(bindings::behaviours())
             .chain(facts::behaviours())
@@ -194,6 +196,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(framescript::methods())
             .chain(animations::methods())
             .chain(tooltip::methods())
+            .chain(input::methods())
             .collect(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),

@@ -263,9 +263,24 @@ export function script(frame: any, name: string, ...: any)
     engine().script(frame, name, ...)
 end
 
---- Clicks a button (`"LeftButton"` by default).
+--- The user's click on a visible frame (`"LeftButton"` by default):
+--- `OnMouseDown`, `OnMouseUp`, then an enabled button's `PreClick`,
+--- `OnClick` and `PostClick`.
 export function click(frame: any, button: string?)
-    engine().script(frame, "OnClick", button ?? "LeftButton", false)
+    engine().click(frame, button ?? "LeftButton")
+end
+
+--- Moves the mouse over a frame (`nil`: away): `OnLeave` of the last one,
+--- `OnEnter` of this one; `GetMouseFoci` and `IsMouseOver` follow.
+export function hover(frame: any?)
+    engine().hover(frame)
+end
+
+--- Types into a visible edit box: it gets the keyboard focus
+--- (`OnEditFocusGained`), then each character runs `OnChar` and
+--- `OnTextChanged(true)`. `mock.pressKey("ENTER")` then goes to it.
+export function typeText(editBox: any, text: string)
+    engine().type(editBox, text)
 end
 
 --- Drags a frame (or an overlay's moving parent) by `dx`, `dy`.

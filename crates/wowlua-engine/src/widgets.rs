@@ -121,6 +121,8 @@ pub struct World {
     pub bindings: crate::bindings::Bindings,
     /// The player's money, equipment, bags and place.
     pub character: crate::character::Character,
+    /// The mouse's and the keyboard's focus.
+    pub input: crate::input::Input,
 }
 
 /// UIParent's size in screen units at scale 1: 1920 x 1080, as WoW Forever
@@ -165,7 +167,7 @@ pub fn widget_of(vm: &Vm, v: Value) -> Option<WidgetId> {
 }
 
 /// The class `name` and its bases, nearest first.
-fn lineage(e: &Engine, name: &str) -> Vec<String> {
+pub(crate) fn lineage(e: &Engine, name: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut todo = vec![name.to_string()];
     while let Some(c) = todo.pop() {

@@ -910,3 +910,57 @@ mock.module(clock, { now = function(): string return "x" end, later = 1 })
     assert!(out.contains("the module has no export `later`"), "{out}");
     assert!(out.contains("is not assignable to `() -> number`"), "{out}");
 }
+
+/// GUI tests act as the user: hover, click, type and keys.
+#[test]
+fn gui_input() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[(
+            "tests/gui.test.wowlua",
+            r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("hover and click")
+local function hoverClick()
+    local seen: string[] = {}
+    local b = CreateFrame("Button", "GuiButton", UIParent)
+    b:SetSize(80, 20)
+    b:SetPoint("CENTER")
+    for _, s in ipairs({ "OnEnter", "OnLeave", "OnMouseDown", "OnMouseUp", "PreClick", "OnClick", "PostClick" }) do
+        b:SetScript(s, function() seen[#seen + 1] = s end)
+    end
+    mock.hover(b)
+    expect(b:IsMouseOver()).toBe(true)
+    expect(GetMouseFoci()[1]).toBe(b)
+    mock.click(b)
+    mock.hover(nil)
+    expect(seen).toEqual({ "OnEnter", "OnMouseDown", "OnMouseUp", "PreClick", "OnClick", "PostClick", "OnLeave" })
+    b:Disable()
+    seen = {}
+    mock.click(b)
+    expect(seen).toEqual({ "OnMouseDown", "OnMouseUp" })
+    b:Hide()
+    expect(function() mock.click(b) end).toThrow("GuiButton is not visible")
+end
+
+@test("type and press enter")
+local function typing()
+    local box = CreateFrame("EditBox", nil, UIParent)
+    local changes = 0
+    local entered: string? = nil
+    box:SetScript("OnTextChanged", function(_: EditBox, user: boolean) if user then changes = changes + 1 end end)
+    box:SetScript("OnEnterPressed", function(self: EditBox) entered = self:GetText() end)
+    mock.typeText(box, "hello")
+    expect(box:HasFocus()).toBe(true)
+    expect(changes).toBe(5)
+    mock.pressKey("ENTER")
+    expect(entered).toBe("hello")
+end
+"#,
+        )],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+}
