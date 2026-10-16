@@ -915,6 +915,68 @@ print(build.debug and debugOnly() or "release")
     assert!(out.ends_with("release"), "{out}");
 }
 
+/// With `check.lua`, a later flavor takes a plain Lua file's type check
+/// from an earlier one where what the file read of the declarations is the
+/// same (debug builds, and so this test, check every reused file again and
+/// compare): each warning is reported once, at its place among the others,
+/// and a file that reads an API that differs between flavors reports what
+/// each flavor finds.
+#[test]
+fn check_lua_flavors_share_what_checks_the_same() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "reuse", "version": "1.0.0" },
+  "flavors": { "standard": {}, "vanilla": {}, "camelot": {} },
+  "check": { "lua": true } }
+"#,
+            ),
+            // Reads no API.
+            (
+                "src/data.lua",
+                "local t = { x = 1 }\nlocal n = 1\nprint(n .. {}, t.x())\n",
+            ),
+            // Only vanilla declares `C_Seasons`.
+            ("src/seasons.lua", "print(C_Seasons.HasActiveSeason())\n"),
+            // One result in standard and vanilla, two in camelot.
+            (
+                "src/haste.lua",
+                "local a, b = GetRangedHaste()\nprint(a + b)\n",
+            ),
+            // A union of two declared types: never stored.
+            (
+                "src/union.lua",
+                "local f = math.random() > 0.5 and UIParent or GameTooltip\nprint(string.rep(f, 2))\n",
+            ),
+            (
+                "src/typename.lua",
+                "local v = { a = 1 }\nprint(typeName(v), v.b)\n",
+            ),
+        ],
+    );
+    let assert = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    let warnings: Vec<&str> = stderr.lines().filter(|l| l.starts_with("src/")).collect();
+    assert_eq!(
+        warnings,
+        [
+            "src/data.lua:3:16: warning[W2004]: a value of type `number` is not callable",
+            "src/haste.lua:2:7: warning[W2040]: `number | Secret<number>` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first",
+            "src/seasons.lua:1:7: warning[W1001]: `C_Seasons` is not a declared global",
+            "src/typename.lua:2:7: warning[W1001]: `typeName` is not a declared global",
+            "src/union.lua:2:18: warning[W2001]: `GameTooltip | UIParent` is not assignable to `string`",
+            "src/haste.lua:2:11: warning[W2040]: `number | Secret<number>` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first",
+        ],
+        "{stderr}"
+    );
+}
+
 /// In split mode a file compiles the same for every flavor unless it reads
 /// `wowlua:meta` or imports a value that differs: only those are stored per
 /// flavor, and what the others report is reported once.

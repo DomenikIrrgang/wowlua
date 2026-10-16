@@ -6,12 +6,12 @@
 //! flavor's ids.
 
 use super::FileSettings;
-use super::declared::{Peeked, Root};
+use super::declared::{DefRead, Peeked, Root};
 use super::env::{Def, Env, Member, ParamInfo};
 use super::types::{DefId, Field, Func, Pack, ParamId, Record, Rest, Ty, TypeId, Unborn};
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::{FileId, Span};
 
@@ -37,8 +37,8 @@ const MAX_ENTRIES: usize = 3;
 struct CheckEntry {
     settings: FileSettings,
     roots: Vec<Root>,
-    /// The labels of the declarations whose contents the file read.
-    read: BTreeSet<u32>,
+    /// What the file read of declarations, by their labels.
+    read: BTreeMap<u32, DefRead>,
     fingerprint: Vec<u8>,
     /// What the order of its unions depends on.
     unborn: Unborn,
@@ -93,6 +93,26 @@ impl CheckCache {
         })
     }
 
+    /// How many checks are stored, for tests.
+    #[cfg(test)]
+    pub(crate) fn stored(&self) -> usize {
+        self.entries.values().map(Vec::len).sum()
+    }
+
+    /// The names the stored checks looked up, for tests.
+    #[cfg(test)]
+    pub(crate) fn roots(&self) -> Vec<Root> {
+        let mut roots: Vec<Root> = self
+            .entries
+            .values()
+            .flatten()
+            .flat_map(|e| e.roots.iter().cloned())
+            .collect();
+        roots.sort();
+        roots.dedup();
+        roots
+    }
+
     /// Stores the check of `file`: `reads` is what it read of `env`.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn store(
@@ -135,11 +155,11 @@ impl CheckCache {
     }
 }
 
-/// Which declarations the walk writes out in full: those the file read, by
-/// their ids in the flavor that checked it, or by their labels elsewhere.
+/// What the walk writes out of declarations: what the file read, by their
+/// ids in the flavor that checked it, or by their labels elsewhere.
 enum Expand<'a> {
-    Defs(&'a BTreeSet<DefId>),
-    Labels(&'a BTreeSet<u32>),
+    Defs(&'a BTreeMap<DefId, DefRead>),
+    Labels(&'a BTreeMap<u32, DefRead>),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -374,7 +394,7 @@ impl Walk<'_> {
         self.tag(u8::from(*renamable));
     }
 
-    fn def_node(&mut self, d: DefId, full: bool) {
+    fn def_node(&mut self, d: DefId, read: Option<&DefRead>) {
         let Def {
             name,
             kind,
@@ -393,8 +413,58 @@ impl Walk<'_> {
         self.tag(b'D');
         self.bytes(name.as_bytes());
         self.bytes(format!("{kind:?}").as_bytes());
-        if !full {
+        let Some(read) = read else {
             self.tag(0);
+            return;
+        };
+        if !read.whole {
+            // Only the parts it read.
+            self.tag(2);
+            if read.header {
+                self.tag(1);
+                self.def_header(d);
+            } else {
+                self.tag(0);
+            }
+            for (list, names) in [(members, &read.members), (statics, &read.statics)] {
+                self.num(names.len() as u64);
+                for n in names {
+                    match list.get(n) {
+                        Some(m) => {
+                            self.tag(1);
+                            self.member(n, m);
+                        }
+                        None => {
+                            self.tag(0);
+                            self.bytes(n.as_bytes());
+                        }
+                    }
+                }
+            }
+            self.num(read.enum_named.len() as u64);
+            for n in &read.enum_named {
+                self.bytes(n.as_bytes());
+                match enum_members.iter().position(|(k, _)| k == n) {
+                    Some(i) => {
+                        self.tag(1);
+                        self.num(i as u64);
+                        self.ty(enum_members[i].1);
+                    }
+                    None => self.tag(0),
+                }
+            }
+            self.num(read.enum_at.len() as u64);
+            for &i in &read.enum_at {
+                self.num(u64::from(i));
+                match enum_members.get(i as usize) {
+                    Some((k, t)) => {
+                        self.tag(1);
+                        self.bytes(k.as_bytes());
+                        self.ty(*t);
+                    }
+                    None => self.tag(0),
+                }
+            }
             return;
         }
         self.tag(1);
@@ -431,6 +501,43 @@ impl Walk<'_> {
         }
     }
 
+    /// Every field of a declaration but its name, kind and member lists.
+    fn def_header(&mut self, d: DefId) {
+        let Def {
+            name: _,
+            kind: _,
+            params,
+            members: _,
+            statics: _,
+            bases,
+            alias,
+            enum_members: _,
+            is_abstract,
+            widget,
+            native,
+            indexer,
+            span,
+        } = self.env.def_unrecorded(d);
+        self.num(params.len() as u64);
+        for &p in params {
+            self.label(Node::Param(p));
+        }
+        self.num(bases.len() as u64);
+        for &b in bases {
+            self.ty(b);
+        }
+        self.opt_ty(*alias);
+        self.tag(u8::from(*is_abstract));
+        self.bytes(widget.as_deref().unwrap_or("\0").as_bytes());
+        self.tag(u8::from(*native));
+        self.opt_ty(indexer.map(|(k, _)| k));
+        self.opt_ty(indexer.map(|(_, v)| v));
+        match span {
+            Some(s) => self.bytes(format!("{:?}", (s.file, s.start, s.end)).as_bytes()),
+            None => self.tag(0),
+        }
+    }
+
     fn param_node(&mut self, p: ParamId) {
         let ParamInfo {
             name,
@@ -448,7 +555,11 @@ impl Walk<'_> {
 /// declarations `expand` names written out in full; with the labels of
 /// those declarations. `None` when a declaration the file read is not
 /// reached from its roots (it cannot be compared).
-fn fingerprint(env: &Env, roots: &[Root], expand: Expand<'_>) -> Option<(Vec<u8>, BTreeSet<u32>)> {
+fn fingerprint(
+    env: &Env,
+    roots: &[Root],
+    expand: Expand<'_>,
+) -> Option<(Vec<u8>, BTreeMap<u32, DefRead>)> {
     let mut w = Walk {
         env,
         out: Vec::new(),
@@ -479,20 +590,23 @@ fn fingerprint(env: &Env, roots: &[Root], expand: Expand<'_>) -> Option<(Vec<u8>
             }
         }
     }
-    let mut read = BTreeSet::new();
+    let mut read = BTreeMap::new();
     while let Some(node) = w.queue.pop_front() {
         match node {
             Node::Type(t) => w.type_node(t),
             Node::Def(d) => {
                 let label = w.labels[&node];
-                let full = match &expand {
-                    Expand::Defs(ids) => ids.contains(&d),
-                    Expand::Labels(labels) => labels.contains(&label),
+                let found = match &expand {
+                    Expand::Defs(ids) => {
+                        let found = ids.get(&d);
+                        if let Some(r) = found {
+                            read.insert(label, r.clone());
+                        }
+                        found
+                    }
+                    Expand::Labels(labels) => labels.get(&label),
                 };
-                if full {
-                    read.insert(label);
-                }
-                w.def_node(d, full);
+                w.def_node(d, found);
             }
             Node::Param(p) => w.param_node(p),
         }

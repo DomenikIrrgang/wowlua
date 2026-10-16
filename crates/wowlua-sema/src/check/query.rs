@@ -93,9 +93,9 @@ impl Env {
             }
             Ty::Func(f) => self.display_func(f, depth),
             Ty::Named(def, args) => {
-                let name = &self.def(*def).name;
+                let name = self.view(*def).name();
                 if args.is_empty() {
-                    name.clone()
+                    name.to_string()
                 } else {
                     format!(
                         "{name}<{}>",
@@ -103,15 +103,18 @@ impl Env {
                     )
                 }
             }
-            Ty::ClassOf(def) => match self.def(*def).kind {
-                DefKind::Class => format!("ClassOf<{}>", self.def(*def).name),
-                _ => format!("typeof {}", self.def(*def).name),
-            },
+            Ty::ClassOf(def) => {
+                let v = self.view(*def);
+                match v.kind() {
+                    DefKind::Class => format!("ClassOf<{}>", v.name()),
+                    _ => format!("typeof {}", v.name()),
+                }
+            }
             Ty::EnumMember(def, i) => {
-                let e = self.def(*def);
-                match e.enum_members.get(*i as usize) {
-                    Some((m, _)) => format!("{}.{m}", e.name),
-                    None => e.name.clone(),
+                let e = self.view(*def);
+                match e.enum_member_at(*i) {
+                    Some((m, _)) => format!("{}.{m}", e.name()),
+                    None => e.name().to_string(),
                 }
             }
             Ty::Param(p) => self.params[p.0 as usize].name.to_string(),
@@ -160,8 +163,8 @@ impl Env {
     /// The superclass or extended interfaces of a named type, with type
     /// arguments substituted.
     pub fn bases_of(&mut self, def: DefId, args: &[TypeId]) -> Vec<TypeId> {
-        let params = self.def(def).params.clone();
-        let bases = self.def(def).bases.clone();
+        let params = self.view(def).params().to_vec();
+        let bases = self.view(def).bases().to_vec();
         bases
             .into_iter()
             .map(|b| subst::substitute(&mut self.types, b, &params, args))
@@ -191,8 +194,8 @@ impl Env {
         if !seen.insert(def) {
             return None;
         }
-        if let Some(m) = self.def(def).members.get(name).cloned() {
-            let params = self.def(def).params.clone();
+        if let Some(m) = self.view(def).member(name).cloned() {
+            let params = self.view(def).params().to_vec();
             let ty = subst::substitute(&mut self.types, m.ty, &params, args);
             return Some((Member { ty, ..m }, def));
         }
@@ -211,7 +214,7 @@ impl Env {
         let mut current = Some(def);
         let mut guard = 0;
         while let Some(d) = current {
-            if let Some(m) = self.def(d).statics.get(name) {
+            if let Some(m) = self.view(d).static_member(name) {
                 return Some(m.clone());
             }
             guard += 1;
@@ -219,8 +222,8 @@ impl Env {
                 return None;
             }
             current = self
-                .def(d)
-                .bases
+                .view(d)
+                .bases()
                 .first()
                 .and_then(|&b| match self.types.get(b) {
                     Ty::Named(bd, _) => Some(*bd),
@@ -236,28 +239,23 @@ impl Env {
         let mut current = Some(def);
         let mut guard = 0;
         while let Some(d) = current {
-            if let Some(i) = self.def(d).indexer {
+            let v = self.view(d);
+            if let Some(i) = v.indexer() {
                 return Some(i);
             }
             // Declared (native) classes are open: frames and mixins get
             // fields at run time, and the declarations are incomplete.
-            if self.def(d).widget.is_some()
-                || (self.def(d).native && self.def(d).kind == DefKind::Class)
-            {
+            if v.widget().is_some() || (v.native() && v.kind() == DefKind::Class) {
                 return Some((Types::STRING, Types::ANY));
             }
             guard += 1;
             if guard > 64 {
                 return None;
             }
-            current = self
-                .def(d)
-                .bases
-                .first()
-                .and_then(|&b| match self.types.get(b) {
-                    Ty::Named(bd, _) => Some(*bd),
-                    _ => None,
-                });
+            current = v.bases().first().and_then(|&b| match self.types.get(b) {
+                Ty::Named(bd, _) => Some(*bd),
+                _ => None,
+            });
         }
         None
     }
@@ -273,7 +271,7 @@ impl Env {
             if !seen.insert(d) {
                 continue;
             }
-            for &b in &self.def(d).bases {
+            for &b in self.view(d).bases() {
                 if let Ty::Named(bd, _) = self.types.get(b) {
                     stack.push(*bd);
                 }

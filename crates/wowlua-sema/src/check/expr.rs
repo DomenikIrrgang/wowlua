@@ -560,7 +560,7 @@ impl Checker<'_> {
                 .env
                 .static_member(d, name)
                 .map(|m| m.ty)
-                .or_else(|| self.env.def(d).members.get(name).map(|m| m.ty)),
+                .or_else(|| self.env.view(d).member(name).map(|m| m.ty)),
             _ => None,
         }
     }
@@ -693,7 +693,8 @@ impl Checker<'_> {
                         self.check_assignable(span, value, want);
                     }
                     None => {
-                        if self.env.indexer_of(d).is_none() && self.env.def(d).kind != DefKind::Enum
+                        if self.env.indexer_of(d).is_none()
+                            && self.env.view(d).kind() != DefKind::Enum
                         {
                             if name == "__wowlua" {
                                 self.report(
@@ -701,7 +702,9 @@ impl Checker<'_> {
                                     span,
                                     "`__wowlua` is reserved for the wowlua runtime",
                                 );
-                            } else if !self.env.def(d).native || self.env.def(d).widget.is_none() {
+                            } else if !self.env.view(d).native()
+                                || self.env.view(d).widget().is_none()
+                            {
                                 let msg =
                                     format!("`{}` has no field `{name}`", self.env.display(m));
                                 self.report("E2003", span, msg);
@@ -716,7 +719,7 @@ impl Checker<'_> {
                     }
                 },
                 Ty::ClassOf(d) => {
-                    if self.env.def(d).kind == DefKind::Enum {
+                    if self.env.view(d).kind() == DefKind::Enum {
                         self.report(
                             "E2010",
                             span,
@@ -993,7 +996,7 @@ impl Checker<'_> {
                 }
                 Ty::Map(_, v) => Some(self.env.types.optional(v)),
                 Ty::Named(d, args) => {
-                    if self.env.def(d).kind == DefKind::Enum {
+                    if self.env.view(d).kind() == DefKind::Enum {
                         Some(Types::ANY)
                     } else {
                         match self.env.instance_member(d, &args, name) {
@@ -1085,31 +1088,28 @@ impl Checker<'_> {
 
     /// `C.name` for a class value, namespace or enum.
     fn static_type(&mut self, d: DefId, name: &str, span: Span, quiet: bool) -> Option<TypeId> {
-        match self.env.def(d).kind {
+        match self.env.view(d).kind() {
             DefKind::Enum => {
-                let idx = self
-                    .env
-                    .def(d)
-                    .enum_members
-                    .iter()
-                    .position(|(n, _)| n.as_ref() == name);
+                let idx = self.env.view(d).enum_position(name);
                 match idx {
                     Some(i) => Some(self.env.types.intern(Ty::EnumMember(d, i as u32))),
                     None => {
                         if !quiet {
-                            let msg =
-                                format!("enum `{}` has no member `{name}`", self.env.def(d).name);
+                            let msg = format!(
+                                "enum `{}` has no member `{name}`",
+                                self.env.view(d).name()
+                            );
                             self.report("E2003", span, msg);
                         }
                         Some(Types::ERROR)
                     }
                 }
             }
-            DefKind::Namespace => match self.env.def(d).members.get(name).map(|m| m.ty) {
+            DefKind::Namespace => match self.env.view(d).member(name).map(|m| m.ty) {
                 Some(t) => Some(t),
                 None => {
                     if !quiet {
-                        let msg = format!("`{}` has no member `{name}`", self.env.def(d).name);
+                        let msg = format!("`{}` has no member `{name}`", self.env.view(d).name());
                         self.report("E2003", span, msg);
                     }
                     Some(Types::ERROR)
@@ -1124,8 +1124,13 @@ impl Checker<'_> {
                 }
                 None => {
                     // Instance methods through the class (`C.method(self, …)`).
-                    let args: Vec<TypeId> =
-                        self.env.def(d).params.iter().map(|_| Types::ANY).collect();
+                    let args: Vec<TypeId> = self
+                        .env
+                        .view(d)
+                        .params()
+                        .iter()
+                        .map(|_| Types::ANY)
+                        .collect();
                     match self.env.instance_member(d, &args, name) {
                         Some((m, owner)) if m.kind == MemberKind::Method => {
                             if m.renamable {
@@ -1135,10 +1140,10 @@ impl Checker<'_> {
                             Some(self.env.with_self(m.ty, inst))
                         }
                         _ => {
-                            if !quiet && !self.env.def(d).native {
+                            if !quiet && !self.env.view(d).native() {
                                 let msg = format!(
                                     "class `{}` has no static member `{name}`",
-                                    self.env.def(d).name
+                                    self.env.view(d).name()
                                 );
                                 self.report("E2003", span, msg);
                             }
@@ -1166,7 +1171,7 @@ impl Checker<'_> {
                     .string_member(name)
                     .map(|f| self.drop_first(f))
                     .unwrap_or(Types::ANY),
-                Ty::Named(d, args) if self.env.def(d).kind != DefKind::Enum => {
+                Ty::Named(d, args) if self.env.view(d).kind() != DefKind::Enum => {
                     match self.env.instance_member(d, &args, name) {
                         Some((mem, owner)) => {
                             if mem.renamable {

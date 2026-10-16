@@ -393,7 +393,8 @@ fn check_lua_warnings_are_the_same() {
 
 /// With `check.lua`, a later flavor takes the type check of a plain Lua
 /// file from an earlier one when what the file reads of the declarations
-/// is the same there: not for a file that reads an API that differs.
+/// is the same there: not for a file that reads an API that differs, nor
+/// for one with a union of declared types (its order can differ).
 #[test]
 fn check_lua_flavors_share_what_checks_the_same() {
     let mut dev = Dev::new(&[
@@ -409,12 +410,17 @@ fn check_lua_flavors_share_what_checks_the_same() {
         ),
         ("src/b.lua", "local n = 1\nprint(n .. {})\n"),
         ("src/c.lua", "print(C_Seasons.HasActiveSeason())\n"),
+        (
+            "src/d.lua",
+            "local f = math.random() > 0.5 and UIParent or GameTooltip\nprint(string.rep(f, 2))\n",
+        ),
+        ("src/e.lua", "local v = { a = 1 }\nprint(typeName(v))\n"),
     ]);
     let cold = dev.rebuild();
-    assert_eq!(cold.type_checks, 2, "{cold:?}");
+    assert_eq!(cold.type_checks, 3, "a, b and e: {cold:?}");
     dev.write("src/b.lua", "local n = 2\nprint(n .. {})\n");
     let edit = dev.rebuild();
-    assert_eq!(edit.type_checks, 2, "{edit:?}");
+    assert_eq!(edit.type_checks, 3, "{edit:?}");
 }
 
 /// Replays edits on a real project (copied first): every Nth source gets

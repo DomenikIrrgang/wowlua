@@ -20,13 +20,39 @@ pub enum Root {
 }
 
 /// What a check read: the names it looked up (with whether they were
-/// found) and the declarations whose contents it read; `opaque` when it read
-/// something else of the declarations (its results cannot be reused).
+/// found) and what it read of declarations; `opaque` when it read something
+/// else of the declarations (its results cannot be reused).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Reads {
     pub roots: BTreeMap<Root, bool>,
-    pub defs: BTreeSet<DefId>,
+    pub defs: BTreeMap<DefId, DefRead>,
     pub opaque: bool,
+}
+
+/// What a check read of one declaration (its name and kind are always
+/// part of the fingerprint): all of it, or parts.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DefRead {
+    pub whole: bool,
+    /// Every field but the member lists: params, bases, alias,
+    /// abstractness, widget, nativeness, indexer, span.
+    pub header: bool,
+    /// Members and statics looked up by name, found or not.
+    pub members: BTreeSet<Box<str>>,
+    pub statics: BTreeSet<Box<str>>,
+    /// Enum members looked up by name, and by position.
+    pub enum_named: BTreeSet<Box<str>>,
+    pub enum_at: BTreeSet<u32>,
+}
+
+/// A part of a declaration (see [`DefRead`]).
+#[derive(Clone, Copy, Debug)]
+pub enum Part<'a> {
+    Header,
+    Member(&'a str),
+    Static(&'a str),
+    EnumNamed(&'a str),
+    EnumAt(u32),
 }
 
 #[derive(Default)]
@@ -47,10 +73,32 @@ impl Declared {
         }
     }
 
-    /// Records that the contents of `def` were read.
+    /// Records that all of `def` was read.
     pub(crate) fn note_def(&self, def: DefId) {
         if let Some(reads) = self.reads.borrow_mut().as_mut() {
-            reads.defs.insert(def);
+            reads.defs.entry(def).or_default().whole = true;
+        }
+    }
+
+    /// Records that a part of `def` was read.
+    pub(crate) fn note_part(&self, def: DefId, part: Part<'_>) {
+        if let Some(reads) = self.reads.borrow_mut().as_mut() {
+            let read = reads.defs.entry(def).or_default();
+            match part {
+                Part::Header => read.header = true,
+                Part::Member(n) => {
+                    read.members.insert(n.into());
+                }
+                Part::Static(n) => {
+                    read.statics.insert(n.into());
+                }
+                Part::EnumNamed(n) => {
+                    read.enum_named.insert(n.into());
+                }
+                Part::EnumAt(i) => {
+                    read.enum_at.insert(i);
+                }
+            }
         }
     }
 
