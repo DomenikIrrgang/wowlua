@@ -172,10 +172,6 @@ fn lineage(e: &Engine, name: &str) -> Vec<String> {
         }
         if let Some(class) = e.api.classes.get(&c) {
             todo.extend(class.bases.iter().rev().cloned());
-        } else if c == "AuraContainer" {
-            // A frame of its own methods (`/stdtest engine`: its object
-            // type is Frame).
-            todo.push("Frame".to_string());
         }
         out.push(c);
     }
@@ -379,12 +375,24 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
 }
 
 /// Addon code may not use a forbidden widget (unverified wording).
-fn refuse_forbidden(vm: &mut Vm, id: WidgetId, short: &str) -> Result<(), LuaError> {
+fn refuse_forbidden(
+    vm: &mut Vm,
+    id: WidgetId,
+    short: &str,
+    usage: Option<String>,
+) -> Result<(), LuaError> {
     if engine(vm).world.widgets[id.0].forbidden
         && short != "IsForbidden"
         && crate::protection::tainted(vm)
     {
-        return Err(vm.error("Attempt to access forbidden object from code tainted by an AddOn"));
+        // `/stdtest engine`: "calling 'GetObjectType' on bad self (Attempt
+        // to access forbidden object from code tainted by an AddOn - Usage:
+        // local objectType = self:GetObjectType())".
+        let usage = usage.map(|u| format!(" - {u}")).unwrap_or_default();
+        let msg = format!(
+            "calling '{short}' on bad self (Attempt to access forbidden object from code tainted by an AddOn{usage})"
+        );
+        return Err(vm.error(&msg));
     }
     Ok(())
 }
@@ -590,7 +598,7 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
             return Err(vm.api_arg_error(1, &msg));
         }
     };
-    refuse_forbidden(vm, id, f.short)?;
+    refuse_forbidden(vm, id, f.short, Some(crate::args::usage(f)))?;
     // The documented arguments first (`/stdtest engine blocked`: a bad
     // argument errors on a blocked frame), but where the client's method takes more
     // than the documentation lists (`SetPoint(point, x, y)`): its
@@ -639,7 +647,7 @@ fn undocumented_method(vm: &mut Vm, c: NativeCall) -> Ret {
         let msg = format!("Wrong object type for function - Usage: self:{short}()");
         return Err(vm.api_arg_error(1, &msg));
     };
-    refuse_forbidden(vm, id, &short)?;
+    refuse_forbidden(vm, id, &short, None)?;
     let behaviour = engine(vm).method_behaviour(&full, &short);
     if let Some(b) = behaviour {
         return b(vm, id, c);
@@ -1196,11 +1204,11 @@ fn get_name(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 
 fn get_object_type(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let class = engine(vm).world.widgets[id.0].class.clone();
-    // An aura container says Frame (`/stdtest engine`).
-    let shown = if class == "AuraContainer" {
-        "Frame"
-    } else {
-        &class
+    // As the client names them (`/stdtest engine`).
+    let shown = match class.as_str() {
+        "AuraContainer" => "Frame",
+        "Checkout" => "BlizzardCheckout",
+        other => other,
     };
     Ok(vec![vm.str(shown)])
 }

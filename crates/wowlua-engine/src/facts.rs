@@ -211,22 +211,6 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
 
-/// The client's locales: enUS alone here (pending `/stdtest engine`'s
-/// `loadCalls`).
-fn available_locales(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let info = vm.new_table();
-    let (id, name) = (vm.str("localeId"), vm.str("localeName"));
-    let en = vm.str("enUS");
-    let _ = vm.heap.table_mut(info).set(id, Value::Num(0.0));
-    let _ = vm.heap.table_mut(info).set(name, en);
-    let list = vm.new_table();
-    let _ = vm
-        .heap
-        .table_mut(list)
-        .set(Value::Num(1.0), Value::Table(info));
-    Ok(vec![Value::Table(list)])
-}
-
 /// No group: no members of any role.
 fn group_member_counts(vm: &mut Vm, _c: NativeCall) -> Ret {
     let t = vm.new_table();
@@ -269,10 +253,6 @@ fn mirror_timer_info(vm: &mut Vm, _c: NativeCall) -> Ret {
         Value::Bool(false),
         empty,
     ])
-}
-
-fn multi_cast_bar_index(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(12.0)])
 }
 
 fn no_role(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -402,40 +382,38 @@ fn swap_to_global_environment(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// Inventory slot names and their IDs (the client's `INVSLOT_*`,
-/// `/stdtest engine`).
-const INVENTORY_SLOTS: &[(&str, f64)] = &[
-    ("AMMOSLOT", 0.0),
-    ("HEADSLOT", 1.0),
-    ("NECKSLOT", 2.0),
-    ("SHOULDERSLOT", 3.0),
-    ("SHIRTSLOT", 4.0),
-    ("CHESTSLOT", 5.0),
-    ("WAISTSLOT", 6.0),
-    ("LEGSSLOT", 7.0),
-    ("FEETSLOT", 8.0),
-    ("WRISTSLOT", 9.0),
-    ("HANDSSLOT", 10.0),
-    ("FINGER0SLOT", 11.0),
-    ("FINGER1SLOT", 12.0),
-    ("TRINKET0SLOT", 13.0),
-    ("TRINKET1SLOT", 14.0),
-    ("BACKSLOT", 15.0),
-    ("MAINHANDSLOT", 16.0),
-    ("SECONDARYHANDSLOT", 17.0),
-    ("RANGEDSLOT", 18.0),
-    ("TABARDSLOT", 19.0),
-    // The bag slots (20-23 in the classic clients; pending `slotInfo`).
-    ("BAG0SLOT", 20.0),
-    ("BAG1SLOT", 21.0),
-    ("BAG2SLOT", 22.0),
-    ("BAG3SLOT", 23.0),
-    ("REAGENTBAG0SLOT", 24.0),
+/// Inventory slot names: ID, empty slot texture, whether it checks relics
+/// (`/stdtest engine`, `slotInfo`).
+const INVENTORY_SLOTS: &[(&str, f64, f64, bool)] = &[
+    ("AMMOSLOT", 0.0, 136520.0, false),
+    ("HEADSLOT", 1.0, 136516.0, false),
+    ("NECKSLOT", 2.0, 136519.0, false),
+    ("SHOULDERSLOT", 3.0, 136526.0, false),
+    ("SHIRTSLOT", 4.0, 136525.0, false),
+    ("CHESTSLOT", 5.0, 136512.0, false),
+    ("WAISTSLOT", 6.0, 136529.0, false),
+    ("LEGSSLOT", 7.0, 136517.0, false),
+    ("FEETSLOT", 8.0, 136513.0, false),
+    ("WRISTSLOT", 9.0, 136530.0, false),
+    ("HANDSSLOT", 10.0, 136515.0, false),
+    ("FINGER0SLOT", 11.0, 136514.0, false),
+    ("FINGER1SLOT", 12.0, 136514.0, false),
+    ("TRINKET0SLOT", 13.0, 136528.0, false),
+    ("TRINKET1SLOT", 14.0, 136528.0, false),
+    ("BACKSLOT", 15.0, 136512.0, false),
+    ("MAINHANDSLOT", 16.0, 136518.0, false),
+    ("SECONDARYHANDSLOT", 17.0, 136524.0, false),
+    ("RANGEDSLOT", 18.0, 136520.0, true),
+    ("TABARDSLOT", 19.0, 136527.0, false),
+    ("BAG0SLOT", 31.0, 4760248.0, false),
+    ("BAG1SLOT", 32.0, 4760248.0, false),
+    ("BAG2SLOT", 33.0, 4760248.0, false),
+    ("BAG3SLOT", 34.0, 4760248.0, false),
+    ("REAGENTBAG0SLOT", 35.0, 4760248.0, false),
 ];
 
-/// `GetInventorySlotInfo(slotName)`: the slot's ID, its empty texture
-/// (unknown: 0), whether it checks relics (false); nothing for another
-/// name (unverified).
+/// `GetInventorySlotInfo(slotName)`: the slot's ID, its empty texture,
+/// whether it checks relics; nothing for another name.
 fn inventory_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = match c.arg(1) {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).to_uppercase(),
@@ -443,8 +421,10 @@ fn inventory_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     Ok(INVENTORY_SLOTS
         .iter()
-        .find(|(n, _)| *n == name)
-        .map(|(_, id)| vec![Value::Num(*id), Value::Num(0.0), Value::Bool(false)])
+        .find(|(n, ..)| *n == name)
+        .map(|(_, id, texture, relic)| {
+            vec![Value::Num(*id), Value::Num(*texture), Value::Bool(*relic)]
+        })
         .unwrap_or_default())
 }
 
@@ -480,7 +460,7 @@ fn outfit_slot_from_inventory_slot(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(n) => n.trunc(),
         _ => 0.0,
     } + 1.0;
-    let Some((name, _)) = INVENTORY_SLOTS.iter().find(|(_, id)| *id == inv) else {
+    let Some((name, ..)) = INVENTORY_SLOTS.iter().find(|(_, id, ..)| *id == inv) else {
         return Ok(vec![]);
     };
     for loc in slot_locations() {
@@ -583,21 +563,17 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_PetBattles.GetXP", zeros),
         ("C_NamePlate.GetNamePlateForUnit", nothing),
         ("C_NamePlate.GetNamePlates", empty_list),
-        ("GetAvailableLocaleInfo", available_locales),
         ("C_LFGListRoles.GetSavedRoles", saved_roles),
         ("GetGroupMemberCounts", group_member_counts),
         ("GetNetStats", net_stats),
         ("GetMirrorTimerInfo", mirror_timer_info),
         // No group, no role.
         ("UnitGroupRolesAssigned", no_role),
-        // Pending the next `/stdtest engine` (`loadCalls`): 0 until then.
+        // The probed character's (`loadCalls`); the neutral world's 0.
         ("GetMaxBattlefieldID", zero),
-        // The totem bar's page (its actions 133-144 in the classic clients).
-        ("C_ActionBar.GetMultiCastBarIndex", multi_cast_bar_index),
         ("GetNumLanguages", zero),
         // No forms (a warrior's stances aside: unverified).
         ("GetNumShapeshiftForms", zero),
-        ("GetNumSpecializations", zero),
         ("GuildControlGetNumRanks", zero),
         ("BNGetNumFriends", four_zeros),
         ("C_LFGList.GetAvailableCategories", empty_list),

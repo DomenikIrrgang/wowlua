@@ -89,10 +89,6 @@ fn shown(vm: &mut Vm, name: &str) -> String {
 /// down.
 const MAX_SCALARS_DIFFERENT: usize = 1;
 
-/// How many distinct errors Blizzard's code raises, loading and once
-/// logged in (the client: none). It may only go down, to 0.
-const MAX_RUNTIME_ERRORS: usize = 4;
-
 #[test]
 fn every_function_of_the_client_exists_with_its_kind() {
     let Some(mut vm) = client() else {
@@ -166,9 +162,11 @@ fn every_function_of_the_client_exists_with_its_kind() {
         )
         .collect();
     eprintln!("{} distinct errors", distinct.len());
+    // The client raises none (`/stdtest engine`: Blizzard's ScriptErrorsFrame
+    // kept no error), and neither may the engine.
     assert!(
-        distinct.len() <= MAX_RUNTIME_ERRORS,
-        "{} distinct errors (at most {MAX_RUNTIME_ERRORS}):\n{}",
+        distinct.is_empty(),
+        "Blizzard's code raised {} distinct errors:\n{}",
         distinct.len(),
         distinct.iter().cloned().collect::<Vec<_>>().join("\n")
     );

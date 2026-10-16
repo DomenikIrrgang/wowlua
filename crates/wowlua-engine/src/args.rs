@@ -338,12 +338,13 @@ fn refuses_type(vm: &mut Vm, family: Family, v: Value) -> Option<Refusal> {
     match family {
         Family::Any => None,
         Family::Int { min, max, index } => {
-            let Some(mut n) = vm.tonumber(v) else {
+            let Some(n) = vm.tonumber(v) else {
                 return Some(Refusal::Range(min, max));
             };
-            if index {
-                n -= 1.0;
-            }
+            // A Lua index's range is the raw value's, 0 included (the
+            // client logs no error for Blizzard's gamepad bars registering
+            // action 0, `/stdtest engine` `blizzardErrors`).
+            let _ = index;
             (!(min..=max).contains(&n)).then_some(Refusal::Range(min, max))
         }
         Family::Number => vm.tonumber(v).is_none().then_some(Refusal::Type),

@@ -124,6 +124,17 @@ pub fn api(flavor: &str) -> Option<&'static Api> {
             }
         }
     }
+    // Frame types the client has that the documentation lacks or gives no
+    // base (`/stdtest engine`: each a Frame by IsObjectType).
+    for name in ["Browser", "OffScreenFrame", "AuraContainer", "Checkout"] {
+        let class = parsed.classes.entry(name.to_string()).or_default();
+        if class.bases.is_empty() {
+            class.bases.push("Frame".to_string());
+        }
+        if class.widget.is_none() {
+            class.widget = Some(name.to_string());
+        }
+    }
     let api: &'static Api = Box::leak(Box::new(parsed));
     cache.insert(flavor.to_string(), api);
     Some(api)

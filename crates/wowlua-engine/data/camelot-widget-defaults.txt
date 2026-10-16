@@ -1,5 +1,30 @@
 # A fresh widget's getters on WoW Forever 1.60.1 (/stdtest engine), type<TAB>getter<TAB>
 # results as the probe shows them ("N: type value, ..."); session-dependent ones left out.
+ArchaeologyDigSiteFrame	CanChangeProtectedState	1: boolean true
+ArchaeologyDigSiteFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+ArchaeologyDigSiteFrame	GetEffectiveAlpha	1: number 1
+ArchaeologyDigSiteFrame	GetFlattensRenderLayers	1: boolean false
+ArchaeologyDigSiteFrame	GetFrameLevel	1: number 1
+ArchaeologyDigSiteFrame	GetFrameStrata	1: string MEDIUM
+ArchaeologyDigSiteFrame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+ArchaeologyDigSiteFrame	GetID	1: number 0
+ArchaeologyDigSiteFrame	GetNumRegions	1: number 0
+ArchaeologyDigSiteFrame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+ArchaeologyDigSiteFrame	HasFixedFrameLevel	1: boolean false
+ArchaeologyDigSiteFrame	HasFixedFrameStrata	1: boolean false
+ArchaeologyDigSiteFrame	IsClampedToScreen	1: boolean false
+ArchaeologyDigSiteFrame	IsIgnoringParentAlpha	1: boolean false
+ArchaeologyDigSiteFrame	IsIgnoringParentScale	1: boolean false
+ArchaeologyDigSiteFrame	IsKeyboardEnabled	1: boolean false
+ArchaeologyDigSiteFrame	IsMouseClickEnabled	1: boolean false
+ArchaeologyDigSiteFrame	IsMouseEnabled	1: boolean false
+ArchaeologyDigSiteFrame	IsMouseMotionEnabled	1: boolean false
+ArchaeologyDigSiteFrame	IsMouseWheelEnabled	1: boolean false
+ArchaeologyDigSiteFrame	IsMovable	1: boolean false
+ArchaeologyDigSiteFrame	IsObjectLoaded	1: boolean true
+ArchaeologyDigSiteFrame	IsResizable	1: boolean false
+ArchaeologyDigSiteFrame	IsToplevel	1: boolean false
+ArchaeologyDigSiteFrame	IsUserPlaced	1: boolean false
 AuraContainer	CanChangeProtectedState	1: boolean true
 AuraContainer	GetClampRectInsets	4: number 0, number 0, number 0, number 0
 AuraContainer	GetEffectiveAlpha	1: number 1
@@ -26,6 +51,31 @@ AuraContainer	IsObjectLoaded	1: boolean true
 AuraContainer	IsResizable	1: boolean false
 AuraContainer	IsToplevel	1: boolean false
 AuraContainer	IsUserPlaced	1: boolean false
+Browser	CanChangeProtectedState	1: boolean true
+Browser	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+Browser	GetEffectiveAlpha	1: number 1
+Browser	GetFlattensRenderLayers	1: boolean false
+Browser	GetFrameLevel	1: number 1
+Browser	GetFrameStrata	1: string MEDIUM
+Browser	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+Browser	GetID	1: number 0
+Browser	GetNumRegions	1: number 0
+Browser	GetResizeBounds	4: number 0, number 0, number 0, number 0
+Browser	HasFixedFrameLevel	1: boolean false
+Browser	HasFixedFrameStrata	1: boolean false
+Browser	IsClampedToScreen	1: boolean false
+Browser	IsIgnoringParentAlpha	1: boolean false
+Browser	IsIgnoringParentScale	1: boolean false
+Browser	IsKeyboardEnabled	1: boolean true
+Browser	IsMouseClickEnabled	1: boolean true
+Browser	IsMouseEnabled	1: boolean true
+Browser	IsMouseMotionEnabled	1: boolean true
+Browser	IsMouseWheelEnabled	1: boolean true
+Browser	IsMovable	1: boolean false
+Browser	IsObjectLoaded	1: boolean true
+Browser	IsResizable	1: boolean true
+Browser	IsToplevel	1: boolean false
+Browser	IsUserPlaced	1: boolean false
 Button	CanChangeProtectedState	1: boolean true
 Button	GetClampRectInsets	4: number 0, number 0, number 0, number 0
 Button	GetEffectiveAlpha	1: number 1
@@ -81,6 +131,56 @@ CheckButton	IsObjectLoaded	1: boolean true
 CheckButton	IsResizable	1: boolean false
 CheckButton	IsToplevel	1: boolean false
 CheckButton	IsUserPlaced	1: boolean false
+Checkout	CanChangeProtectedState	1: boolean true
+Checkout	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+Checkout	GetEffectiveAlpha	1: number 1
+Checkout	GetFlattensRenderLayers	1: boolean false
+Checkout	GetFrameLevel	1: number 1
+Checkout	GetFrameStrata	1: string MEDIUM
+Checkout	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+Checkout	GetID	1: number 0
+Checkout	GetNumRegions	1: number 0
+Checkout	GetResizeBounds	4: number 0, number 0, number 0, number 0
+Checkout	HasFixedFrameLevel	1: boolean false
+Checkout	HasFixedFrameStrata	1: boolean false
+Checkout	IsClampedToScreen	1: boolean false
+Checkout	IsIgnoringParentAlpha	1: boolean false
+Checkout	IsIgnoringParentScale	1: boolean false
+Checkout	IsKeyboardEnabled	1: boolean true
+Checkout	IsMouseClickEnabled	1: boolean true
+Checkout	IsMouseEnabled	1: boolean true
+Checkout	IsMouseMotionEnabled	1: boolean true
+Checkout	IsMouseWheelEnabled	1: boolean true
+Checkout	IsMovable	1: boolean false
+Checkout	IsObjectLoaded	1: boolean true
+Checkout	IsResizable	1: boolean true
+Checkout	IsToplevel	1: boolean false
+Checkout	IsUserPlaced	1: boolean false
+CinematicModel	CanChangeProtectedState	1: boolean true
+CinematicModel	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+CinematicModel	GetEffectiveAlpha	1: number 1
+CinematicModel	GetFlattensRenderLayers	1: boolean false
+CinematicModel	GetFrameLevel	1: number 1
+CinematicModel	GetFrameStrata	1: string MEDIUM
+CinematicModel	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+CinematicModel	GetID	1: number 0
+CinematicModel	GetNumRegions	1: number 0
+CinematicModel	GetResizeBounds	4: number 0, number 0, number 0, number 0
+CinematicModel	HasFixedFrameLevel	1: boolean false
+CinematicModel	HasFixedFrameStrata	1: boolean false
+CinematicModel	IsClampedToScreen	1: boolean false
+CinematicModel	IsIgnoringParentAlpha	1: boolean false
+CinematicModel	IsIgnoringParentScale	1: boolean false
+CinematicModel	IsKeyboardEnabled	1: boolean false
+CinematicModel	IsMouseClickEnabled	1: boolean false
+CinematicModel	IsMouseEnabled	1: boolean false
+CinematicModel	IsMouseMotionEnabled	1: boolean false
+CinematicModel	IsMouseWheelEnabled	1: boolean false
+CinematicModel	IsMovable	1: boolean false
+CinematicModel	IsObjectLoaded	1: boolean true
+CinematicModel	IsResizable	1: boolean false
+CinematicModel	IsToplevel	1: boolean false
+CinematicModel	IsUserPlaced	1: boolean false
 ColorSelect	CanChangeProtectedState	1: boolean true
 ColorSelect	GetClampRectInsets	4: number 0, number 0, number 0, number 0
 ColorSelect	GetEffectiveAlpha	1: number 1
@@ -106,6 +206,33 @@ ColorSelect	IsObjectLoaded	1: boolean true
 ColorSelect	IsResizable	1: boolean false
 ColorSelect	IsToplevel	1: boolean false
 ColorSelect	IsUserPlaced	1: boolean false
+ContainedAlertFrame	CanChangeProtectedState	1: boolean true
+ContainedAlertFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+ContainedAlertFrame	GetEffectiveAlpha	1: number 1
+ContainedAlertFrame	GetFlattensRenderLayers	1: boolean false
+ContainedAlertFrame	GetFrameLevel	1: number 1
+ContainedAlertFrame	GetFrameStrata	1: string MEDIUM
+ContainedAlertFrame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+ContainedAlertFrame	GetID	1: number 0
+ContainedAlertFrame	GetNumRegions	1: number 0
+ContainedAlertFrame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+ContainedAlertFrame	GetText	0: 
+ContainedAlertFrame	HasFixedFrameLevel	1: boolean false
+ContainedAlertFrame	HasFixedFrameStrata	1: boolean false
+ContainedAlertFrame	IsClampedToScreen	1: boolean false
+ContainedAlertFrame	IsEnabled	1: boolean true
+ContainedAlertFrame	IsIgnoringParentAlpha	1: boolean false
+ContainedAlertFrame	IsIgnoringParentScale	1: boolean false
+ContainedAlertFrame	IsKeyboardEnabled	1: boolean false
+ContainedAlertFrame	IsMouseClickEnabled	1: boolean true
+ContainedAlertFrame	IsMouseEnabled	1: boolean true
+ContainedAlertFrame	IsMouseMotionEnabled	1: boolean true
+ContainedAlertFrame	IsMouseWheelEnabled	1: boolean false
+ContainedAlertFrame	IsMovable	1: boolean false
+ContainedAlertFrame	IsObjectLoaded	1: boolean true
+ContainedAlertFrame	IsResizable	1: boolean false
+ContainedAlertFrame	IsToplevel	1: boolean false
+ContainedAlertFrame	IsUserPlaced	1: boolean false
 Cooldown	CanChangeProtectedState	1: boolean true
 Cooldown	GetClampRectInsets	4: number 0, number 0, number 0, number 0
 Cooldown	GetEffectiveAlpha	1: number 1
@@ -131,6 +258,58 @@ Cooldown	IsObjectLoaded	1: boolean true
 Cooldown	IsResizable	1: boolean false
 Cooldown	IsToplevel	1: boolean false
 Cooldown	IsUserPlaced	1: boolean false
+DressUpModel	CanChangeProtectedState	1: boolean true
+DressUpModel	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+DressUpModel	GetEffectiveAlpha	1: number 1
+DressUpModel	GetFlattensRenderLayers	1: boolean false
+DressUpModel	GetFrameLevel	1: number 1
+DressUpModel	GetFrameStrata	1: string MEDIUM
+DressUpModel	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+DressUpModel	GetID	1: number 0
+DressUpModel	GetNumRegions	1: number 0
+DressUpModel	GetResizeBounds	4: number 0, number 0, number 0, number 0
+DressUpModel	HasFixedFrameLevel	1: boolean false
+DressUpModel	HasFixedFrameStrata	1: boolean false
+DressUpModel	IsClampedToScreen	1: boolean false
+DressUpModel	IsIgnoringParentAlpha	1: boolean false
+DressUpModel	IsIgnoringParentScale	1: boolean false
+DressUpModel	IsKeyboardEnabled	1: boolean false
+DressUpModel	IsMouseClickEnabled	1: boolean false
+DressUpModel	IsMouseEnabled	1: boolean false
+DressUpModel	IsMouseMotionEnabled	1: boolean false
+DressUpModel	IsMouseWheelEnabled	1: boolean false
+DressUpModel	IsMovable	1: boolean false
+DressUpModel	IsObjectLoaded	1: boolean true
+DressUpModel	IsResizable	1: boolean false
+DressUpModel	IsToplevel	1: boolean false
+DressUpModel	IsUserPlaced	1: boolean false
+DropdownButton	CanChangeProtectedState	1: boolean true
+DropdownButton	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+DropdownButton	GetEffectiveAlpha	1: number 1
+DropdownButton	GetFlattensRenderLayers	1: boolean false
+DropdownButton	GetFrameLevel	1: number 1
+DropdownButton	GetFrameStrata	1: string MEDIUM
+DropdownButton	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+DropdownButton	GetID	1: number 0
+DropdownButton	GetNumRegions	1: number 0
+DropdownButton	GetResizeBounds	4: number 0, number 0, number 0, number 0
+DropdownButton	GetText	0: 
+DropdownButton	HasFixedFrameLevel	1: boolean false
+DropdownButton	HasFixedFrameStrata	1: boolean false
+DropdownButton	IsClampedToScreen	1: boolean false
+DropdownButton	IsEnabled	1: boolean true
+DropdownButton	IsIgnoringParentAlpha	1: boolean false
+DropdownButton	IsIgnoringParentScale	1: boolean false
+DropdownButton	IsKeyboardEnabled	1: boolean false
+DropdownButton	IsMouseClickEnabled	1: boolean true
+DropdownButton	IsMouseEnabled	1: boolean true
+DropdownButton	IsMouseMotionEnabled	1: boolean true
+DropdownButton	IsMouseWheelEnabled	1: boolean false
+DropdownButton	IsMovable	1: boolean false
+DropdownButton	IsObjectLoaded	1: boolean true
+DropdownButton	IsResizable	1: boolean false
+DropdownButton	IsToplevel	1: boolean false
+DropdownButton	IsUserPlaced	1: boolean false
 EditBox	CanChangeProtectedState	1: boolean true
 EditBox	GetClampRectInsets	4: number 0, number 0, number 0, number 0
 EditBox	GetEffectiveAlpha	1: number 1
@@ -162,6 +341,56 @@ EditBox	IsObjectLoaded	1: boolean true
 EditBox	IsResizable	1: boolean false
 EditBox	IsToplevel	1: boolean false
 EditBox	IsUserPlaced	1: boolean false
+EventFrame	CanChangeProtectedState	1: boolean true
+EventFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+EventFrame	GetEffectiveAlpha	1: number 1
+EventFrame	GetFlattensRenderLayers	1: boolean false
+EventFrame	GetFrameLevel	1: number 1
+EventFrame	GetFrameStrata	1: string MEDIUM
+EventFrame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+EventFrame	GetID	1: number 0
+EventFrame	GetNumRegions	1: number 0
+EventFrame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+EventFrame	HasFixedFrameLevel	1: boolean false
+EventFrame	HasFixedFrameStrata	1: boolean false
+EventFrame	IsClampedToScreen	1: boolean false
+EventFrame	IsIgnoringParentAlpha	1: boolean false
+EventFrame	IsIgnoringParentScale	1: boolean false
+EventFrame	IsKeyboardEnabled	1: boolean false
+EventFrame	IsMouseClickEnabled	1: boolean true
+EventFrame	IsMouseEnabled	1: boolean true
+EventFrame	IsMouseMotionEnabled	1: boolean true
+EventFrame	IsMouseWheelEnabled	1: boolean false
+EventFrame	IsMovable	1: boolean false
+EventFrame	IsObjectLoaded	1: boolean true
+EventFrame	IsResizable	1: boolean false
+EventFrame	IsToplevel	1: boolean false
+EventFrame	IsUserPlaced	1: boolean false
+FogOfWarFrame	CanChangeProtectedState	1: boolean true
+FogOfWarFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+FogOfWarFrame	GetEffectiveAlpha	1: number 1
+FogOfWarFrame	GetFlattensRenderLayers	1: boolean false
+FogOfWarFrame	GetFrameLevel	1: number 1
+FogOfWarFrame	GetFrameStrata	1: string MEDIUM
+FogOfWarFrame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+FogOfWarFrame	GetID	1: number 0
+FogOfWarFrame	GetNumRegions	1: number 0
+FogOfWarFrame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+FogOfWarFrame	HasFixedFrameLevel	1: boolean false
+FogOfWarFrame	HasFixedFrameStrata	1: boolean false
+FogOfWarFrame	IsClampedToScreen	1: boolean false
+FogOfWarFrame	IsIgnoringParentAlpha	1: boolean false
+FogOfWarFrame	IsIgnoringParentScale	1: boolean false
+FogOfWarFrame	IsKeyboardEnabled	1: boolean false
+FogOfWarFrame	IsMouseClickEnabled	1: boolean false
+FogOfWarFrame	IsMouseEnabled	1: boolean false
+FogOfWarFrame	IsMouseMotionEnabled	1: boolean false
+FogOfWarFrame	IsMouseWheelEnabled	1: boolean false
+FogOfWarFrame	IsMovable	1: boolean false
+FogOfWarFrame	IsObjectLoaded	1: boolean true
+FogOfWarFrame	IsResizable	1: boolean false
+FogOfWarFrame	IsToplevel	1: boolean false
+FogOfWarFrame	IsUserPlaced	1: boolean false
 FontString	CanChangeProtectedState	1: boolean true
 FontString	GetDrawLayer	2: string OVERLAY, number 0
 FontString	GetFont	3: nil nil, number -1566.5118408203, string 
@@ -275,6 +504,182 @@ MessageFrame	IsObjectLoaded	1: boolean true
 MessageFrame	IsResizable	1: boolean false
 MessageFrame	IsToplevel	1: boolean false
 MessageFrame	IsUserPlaced	1: boolean false
+Model	CanChangeProtectedState	1: boolean true
+Model	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+Model	GetEffectiveAlpha	1: number 1
+Model	GetFlattensRenderLayers	1: boolean false
+Model	GetFrameLevel	1: number 1
+Model	GetFrameStrata	1: string MEDIUM
+Model	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+Model	GetID	1: number 0
+Model	GetNumRegions	1: number 0
+Model	GetResizeBounds	4: number 0, number 0, number 0, number 0
+Model	HasFixedFrameLevel	1: boolean false
+Model	HasFixedFrameStrata	1: boolean false
+Model	IsClampedToScreen	1: boolean false
+Model	IsIgnoringParentAlpha	1: boolean false
+Model	IsIgnoringParentScale	1: boolean false
+Model	IsKeyboardEnabled	1: boolean false
+Model	IsMouseClickEnabled	1: boolean false
+Model	IsMouseEnabled	1: boolean false
+Model	IsMouseMotionEnabled	1: boolean false
+Model	IsMouseWheelEnabled	1: boolean false
+Model	IsMovable	1: boolean false
+Model	IsObjectLoaded	1: boolean true
+Model	IsResizable	1: boolean false
+Model	IsToplevel	1: boolean false
+Model	IsUserPlaced	1: boolean false
+ModelScene	CanChangeProtectedState	1: boolean true
+ModelScene	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+ModelScene	GetDrawLayer	2: string ARTWORK, number 0
+ModelScene	GetEffectiveAlpha	1: number 1
+ModelScene	GetFlattensRenderLayers	1: boolean false
+ModelScene	GetFrameLevel	1: number 1
+ModelScene	GetFrameStrata	1: string MEDIUM
+ModelScene	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+ModelScene	GetID	1: number 0
+ModelScene	GetNumRegions	1: number 0
+ModelScene	GetResizeBounds	4: number 0, number 0, number 0, number 0
+ModelScene	HasFixedFrameLevel	1: boolean false
+ModelScene	HasFixedFrameStrata	1: boolean false
+ModelScene	IsClampedToScreen	1: boolean false
+ModelScene	IsIgnoringParentAlpha	1: boolean false
+ModelScene	IsIgnoringParentScale	1: boolean false
+ModelScene	IsKeyboardEnabled	1: boolean false
+ModelScene	IsMouseClickEnabled	1: boolean false
+ModelScene	IsMouseEnabled	1: boolean false
+ModelScene	IsMouseMotionEnabled	1: boolean false
+ModelScene	IsMouseWheelEnabled	1: boolean false
+ModelScene	IsMovable	1: boolean false
+ModelScene	IsObjectLoaded	1: boolean true
+ModelScene	IsResizable	1: boolean false
+ModelScene	IsToplevel	1: boolean false
+ModelScene	IsUserPlaced	1: boolean false
+MovieFrame	CanChangeProtectedState	1: boolean true
+MovieFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+MovieFrame	GetEffectiveAlpha	1: number 1
+MovieFrame	GetFlattensRenderLayers	1: boolean false
+MovieFrame	GetFrameLevel	1: number 1
+MovieFrame	GetFrameStrata	1: string MEDIUM
+MovieFrame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+MovieFrame	GetID	1: number 0
+MovieFrame	GetNumRegions	1: number 0
+MovieFrame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+MovieFrame	HasFixedFrameLevel	1: boolean false
+MovieFrame	HasFixedFrameStrata	1: boolean false
+MovieFrame	IsClampedToScreen	1: boolean false
+MovieFrame	IsIgnoringParentAlpha	1: boolean false
+MovieFrame	IsIgnoringParentScale	1: boolean false
+MovieFrame	IsKeyboardEnabled	1: boolean false
+MovieFrame	IsMouseClickEnabled	1: boolean false
+MovieFrame	IsMouseEnabled	1: boolean false
+MovieFrame	IsMouseMotionEnabled	1: boolean false
+MovieFrame	IsMouseWheelEnabled	1: boolean false
+MovieFrame	IsMovable	1: boolean false
+MovieFrame	IsObjectLoaded	1: boolean true
+MovieFrame	IsResizable	1: boolean false
+MovieFrame	IsToplevel	1: boolean false
+MovieFrame	IsUserPlaced	1: boolean false
+OffScreenFrame	CanChangeProtectedState	1: boolean true
+OffScreenFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+OffScreenFrame	GetEffectiveAlpha	1: number 1
+OffScreenFrame	GetFlattensRenderLayers	1: boolean false
+OffScreenFrame	GetFrameLevel	1: number 1
+OffScreenFrame	GetFrameStrata	1: string MEDIUM
+OffScreenFrame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+OffScreenFrame	GetID	1: number 0
+OffScreenFrame	GetNumRegions	1: number 0
+OffScreenFrame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+OffScreenFrame	HasFixedFrameLevel	1: boolean false
+OffScreenFrame	HasFixedFrameStrata	1: boolean false
+OffScreenFrame	IsClampedToScreen	1: boolean false
+OffScreenFrame	IsIgnoringParentAlpha	1: boolean false
+OffScreenFrame	IsIgnoringParentScale	1: boolean false
+OffScreenFrame	IsKeyboardEnabled	1: boolean false
+OffScreenFrame	IsMouseClickEnabled	1: boolean false
+OffScreenFrame	IsMouseEnabled	1: boolean false
+OffScreenFrame	IsMouseMotionEnabled	1: boolean false
+OffScreenFrame	IsMouseWheelEnabled	1: boolean false
+OffScreenFrame	IsMovable	1: boolean false
+OffScreenFrame	IsObjectLoaded	1: boolean true
+OffScreenFrame	IsResizable	1: boolean false
+OffScreenFrame	IsToplevel	1: boolean false
+OffScreenFrame	IsUserPlaced	1: boolean false
+PlayerModel	CanChangeProtectedState	1: boolean true
+PlayerModel	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+PlayerModel	GetEffectiveAlpha	1: number 1
+PlayerModel	GetFlattensRenderLayers	1: boolean false
+PlayerModel	GetFrameLevel	1: number 1
+PlayerModel	GetFrameStrata	1: string MEDIUM
+PlayerModel	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+PlayerModel	GetID	1: number 0
+PlayerModel	GetNumRegions	1: number 0
+PlayerModel	GetResizeBounds	4: number 0, number 0, number 0, number 0
+PlayerModel	HasFixedFrameLevel	1: boolean false
+PlayerModel	HasFixedFrameStrata	1: boolean false
+PlayerModel	IsClampedToScreen	1: boolean false
+PlayerModel	IsIgnoringParentAlpha	1: boolean false
+PlayerModel	IsIgnoringParentScale	1: boolean false
+PlayerModel	IsKeyboardEnabled	1: boolean false
+PlayerModel	IsMouseClickEnabled	1: boolean false
+PlayerModel	IsMouseEnabled	1: boolean false
+PlayerModel	IsMouseMotionEnabled	1: boolean false
+PlayerModel	IsMouseWheelEnabled	1: boolean false
+PlayerModel	IsMovable	1: boolean false
+PlayerModel	IsObjectLoaded	1: boolean true
+PlayerModel	IsResizable	1: boolean false
+PlayerModel	IsToplevel	1: boolean false
+PlayerModel	IsUserPlaced	1: boolean false
+QuestPOIFrame	CanChangeProtectedState	1: boolean true
+QuestPOIFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+QuestPOIFrame	GetEffectiveAlpha	1: number 1
+QuestPOIFrame	GetFlattensRenderLayers	1: boolean false
+QuestPOIFrame	GetFrameLevel	1: number 1
+QuestPOIFrame	GetFrameStrata	1: string MEDIUM
+QuestPOIFrame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+QuestPOIFrame	GetID	1: number 0
+QuestPOIFrame	GetNumRegions	1: number 0
+QuestPOIFrame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+QuestPOIFrame	HasFixedFrameLevel	1: boolean false
+QuestPOIFrame	HasFixedFrameStrata	1: boolean false
+QuestPOIFrame	IsClampedToScreen	1: boolean false
+QuestPOIFrame	IsIgnoringParentAlpha	1: boolean false
+QuestPOIFrame	IsIgnoringParentScale	1: boolean false
+QuestPOIFrame	IsKeyboardEnabled	1: boolean false
+QuestPOIFrame	IsMouseClickEnabled	1: boolean false
+QuestPOIFrame	IsMouseEnabled	1: boolean false
+QuestPOIFrame	IsMouseMotionEnabled	1: boolean false
+QuestPOIFrame	IsMouseWheelEnabled	1: boolean false
+QuestPOIFrame	IsMovable	1: boolean false
+QuestPOIFrame	IsObjectLoaded	1: boolean true
+QuestPOIFrame	IsResizable	1: boolean false
+QuestPOIFrame	IsToplevel	1: boolean false
+QuestPOIFrame	IsUserPlaced	1: boolean false
+ScenarioPOIFrame	CanChangeProtectedState	1: boolean true
+ScenarioPOIFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+ScenarioPOIFrame	GetEffectiveAlpha	1: number 1
+ScenarioPOIFrame	GetFlattensRenderLayers	1: boolean false
+ScenarioPOIFrame	GetFrameLevel	1: number 1
+ScenarioPOIFrame	GetFrameStrata	1: string MEDIUM
+ScenarioPOIFrame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+ScenarioPOIFrame	GetID	1: number 0
+ScenarioPOIFrame	GetNumRegions	1: number 0
+ScenarioPOIFrame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+ScenarioPOIFrame	HasFixedFrameLevel	1: boolean false
+ScenarioPOIFrame	HasFixedFrameStrata	1: boolean false
+ScenarioPOIFrame	IsClampedToScreen	1: boolean false
+ScenarioPOIFrame	IsIgnoringParentAlpha	1: boolean false
+ScenarioPOIFrame	IsIgnoringParentScale	1: boolean false
+ScenarioPOIFrame	IsKeyboardEnabled	1: boolean false
+ScenarioPOIFrame	IsMouseClickEnabled	1: boolean false
+ScenarioPOIFrame	IsMouseEnabled	1: boolean false
+ScenarioPOIFrame	IsMouseMotionEnabled	1: boolean false
+ScenarioPOIFrame	IsMouseWheelEnabled	1: boolean false
+ScenarioPOIFrame	IsMovable	1: boolean false
+ScenarioPOIFrame	IsObjectLoaded	1: boolean true
+ScenarioPOIFrame	IsResizable	1: boolean false
+ScenarioPOIFrame	IsToplevel	1: boolean false
+ScenarioPOIFrame	IsUserPlaced	1: boolean false
 ScrollFrame	CanChangeProtectedState	1: boolean true
 ScrollFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
 ScrollFrame	GetEffectiveAlpha	1: number 1
@@ -300,6 +705,35 @@ ScrollFrame	IsObjectLoaded	1: boolean true
 ScrollFrame	IsResizable	1: boolean false
 ScrollFrame	IsToplevel	1: boolean false
 ScrollFrame	IsUserPlaced	1: boolean false
+ScrollingMessageFrame	CanChangeProtectedState	1: boolean true
+ScrollingMessageFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+ScrollingMessageFrame	GetEffectiveAlpha	1: number 1
+ScrollingMessageFrame	GetFlattensRenderLayers	1: boolean false
+ScrollingMessageFrame	GetFont	3: nil nil, number 0, string 
+ScrollingMessageFrame	GetFrameLevel	1: number 1
+ScrollingMessageFrame	GetFrameStrata	1: string MEDIUM
+ScrollingMessageFrame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+ScrollingMessageFrame	GetID	1: number 0
+ScrollingMessageFrame	GetJustifyH	1: string CENTER
+ScrollingMessageFrame	GetJustifyV	1: string MIDDLE
+ScrollingMessageFrame	GetNumRegions	1: number 0
+ScrollingMessageFrame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+ScrollingMessageFrame	GetTextColor	4: number 1, number 1, number 1, number 1
+ScrollingMessageFrame	HasFixedFrameLevel	1: boolean false
+ScrollingMessageFrame	HasFixedFrameStrata	1: boolean false
+ScrollingMessageFrame	IsClampedToScreen	1: boolean false
+ScrollingMessageFrame	IsIgnoringParentAlpha	1: boolean false
+ScrollingMessageFrame	IsIgnoringParentScale	1: boolean false
+ScrollingMessageFrame	IsKeyboardEnabled	1: boolean false
+ScrollingMessageFrame	IsMouseClickEnabled	1: boolean false
+ScrollingMessageFrame	IsMouseEnabled	1: boolean false
+ScrollingMessageFrame	IsMouseMotionEnabled	1: boolean false
+ScrollingMessageFrame	IsMouseWheelEnabled	1: boolean false
+ScrollingMessageFrame	IsMovable	1: boolean false
+ScrollingMessageFrame	IsObjectLoaded	1: boolean true
+ScrollingMessageFrame	IsResizable	1: boolean false
+ScrollingMessageFrame	IsToplevel	1: boolean false
+ScrollingMessageFrame	IsUserPlaced	1: boolean false
 SimpleHTML	CanChangeProtectedState	1: boolean true
 SimpleHTML	GetClampRectInsets	4: number 0, number 0, number 0, number 0
 SimpleHTML	GetEffectiveAlpha	1: number 1
@@ -380,6 +814,31 @@ StatusBar	IsObjectLoaded	1: boolean true
 StatusBar	IsResizable	1: boolean false
 StatusBar	IsToplevel	1: boolean false
 StatusBar	IsUserPlaced	1: boolean false
+TabardModel	CanChangeProtectedState	1: boolean true
+TabardModel	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+TabardModel	GetEffectiveAlpha	1: number 1
+TabardModel	GetFlattensRenderLayers	1: boolean false
+TabardModel	GetFrameLevel	1: number 1
+TabardModel	GetFrameStrata	1: string MEDIUM
+TabardModel	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+TabardModel	GetID	1: number 0
+TabardModel	GetNumRegions	1: number 0
+TabardModel	GetResizeBounds	4: number 0, number 0, number 0, number 0
+TabardModel	HasFixedFrameLevel	1: boolean false
+TabardModel	HasFixedFrameStrata	1: boolean false
+TabardModel	IsClampedToScreen	1: boolean false
+TabardModel	IsIgnoringParentAlpha	1: boolean false
+TabardModel	IsIgnoringParentScale	1: boolean false
+TabardModel	IsKeyboardEnabled	1: boolean false
+TabardModel	IsMouseClickEnabled	1: boolean false
+TabardModel	IsMouseEnabled	1: boolean false
+TabardModel	IsMouseMotionEnabled	1: boolean false
+TabardModel	IsMouseWheelEnabled	1: boolean false
+TabardModel	IsMovable	1: boolean false
+TabardModel	IsObjectLoaded	1: boolean true
+TabardModel	IsResizable	1: boolean false
+TabardModel	IsToplevel	1: boolean false
+TabardModel	IsUserPlaced	1: boolean false
 Texture	CanChangeProtectedState	1: boolean true
 Texture	GetDrawLayer	2: string ARTWORK, number 0
 Texture	GetTexture	0: 
@@ -390,3 +849,28 @@ Texture	IsMouseEnabled	1: boolean false
 Texture	IsMouseMotionEnabled	1: boolean false
 Texture	IsMouseWheelEnabled	1: boolean false
 Texture	IsObjectLoaded	1: boolean true
+UnitPositionFrame	CanChangeProtectedState	1: boolean true
+UnitPositionFrame	GetClampRectInsets	4: number 0, number 0, number 0, number 0
+UnitPositionFrame	GetEffectiveAlpha	1: number 1
+UnitPositionFrame	GetFlattensRenderLayers	1: boolean false
+UnitPositionFrame	GetFrameLevel	1: number 1
+UnitPositionFrame	GetFrameStrata	1: string MEDIUM
+UnitPositionFrame	GetHitRectInsets	4: number 0, number 0, number 0, number 0
+UnitPositionFrame	GetID	1: number 0
+UnitPositionFrame	GetNumRegions	1: number 0
+UnitPositionFrame	GetResizeBounds	4: number 0, number 0, number 0, number 0
+UnitPositionFrame	HasFixedFrameLevel	1: boolean false
+UnitPositionFrame	HasFixedFrameStrata	1: boolean false
+UnitPositionFrame	IsClampedToScreen	1: boolean false
+UnitPositionFrame	IsIgnoringParentAlpha	1: boolean false
+UnitPositionFrame	IsIgnoringParentScale	1: boolean false
+UnitPositionFrame	IsKeyboardEnabled	1: boolean false
+UnitPositionFrame	IsMouseClickEnabled	1: boolean false
+UnitPositionFrame	IsMouseEnabled	1: boolean false
+UnitPositionFrame	IsMouseMotionEnabled	1: boolean false
+UnitPositionFrame	IsMouseWheelEnabled	1: boolean false
+UnitPositionFrame	IsMovable	1: boolean false
+UnitPositionFrame	IsObjectLoaded	1: boolean true
+UnitPositionFrame	IsResizable	1: boolean false
+UnitPositionFrame	IsToplevel	1: boolean false
+UnitPositionFrame	IsUserPlaced	1: boolean false

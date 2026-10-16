@@ -446,6 +446,8 @@ fn table_library() {
         "table.foreachi({'a', 'b'}, print) print(table.foreach({x = 1}, function(k, v) return k .. v end))",
     );
     same("local t = {5, 2, 8, 1, 9, 3, 7, 4, 6, 0} table.sort(t) print(table.concat(t, ' '))");
+    // A nil comparator is the default order.
+    same("local t = {3, 1, 2} table.sort(t, nil) print(table.concat(t, ' '))");
     same(
         "local t = {5, 2, 8, 1, 9, 3, 7, 4, 6, 0} table.sort(t, function(a, b) return a > b end) print(table.concat(t, ' '))",
     );

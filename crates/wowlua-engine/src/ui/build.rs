@@ -156,11 +156,6 @@ pub fn class_of(vm: &Vm, tag: &str) -> Option<String> {
                 .is_some_and(|w| w.eq_ignore_ascii_case(tag))
         })
         .map(|(name, _)| name.clone())
-        // A widget type the client has but the documentation lacks.
-        .or_else(|| {
-            tag.eq_ignore_ascii_case("AuraContainer")
-                .then(|| "AuraContainer".to_string())
-        })
 }
 
 /// A top-level widget element of a `<Ui>`: a template if virtual (and a

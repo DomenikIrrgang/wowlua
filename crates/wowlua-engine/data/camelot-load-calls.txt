@@ -4,7 +4,9 @@
 # as the probe shows them (`2: number 0, boolean true`; tables
 # `{key=value,...}`, keys sorted; `function` marks a mixin's methods).
 C_ActionBar.GetActionBarPage	1: number 1
+C_ActionBar.GetBonusBarOffset	1: number 0
 C_ActionBar.GetExtraBarIndex	1: number 34
+C_ActionBar.GetMultiCastBarIndex	1: number 12
 C_ActionBar.IsPossessBarVisible	1: boolean false
 C_ActionBar.ShouldShowKeyring	1: boolean true
 C_AddOns.IsAddonVersionCheckEnabled	1: boolean true
@@ -29,11 +31,14 @@ C_GameRules.GetActiveGameMode	1: number 1
 C_GameRules.IsHardcoreActive	1: boolean false
 C_GuildBank.IsGuildBankEnabled	1: boolean true
 C_Housing.IsInsideHouse	1: boolean false
+C_LFGList.GetApplications	1: {}
 C_Minimap.ShouldUseHybridMinimap	1: boolean false
+C_MountJournal.GetNumMountsNeedingFanfare	1: number 0
 C_Navigation.GetFrame	0: 
 C_PaperDollInfo.AmmoNeeded	1: boolean true
 C_PaperDollInfo.IsRangedSlotShown	1: boolean true
 C_PartyInfo.GetInstanceAbandonVoteTime	2: number 0, number 0
+C_PetJournal.GetNumPetsNeedingFanfare	1: number 0
 C_ProfSpecs.GetNewSpecReminderProfName	0: 
 C_ProfSpecs.ShouldShowPointsReminder	1: boolean false
 C_PvP.GetActiveMatchState	1: number 0
@@ -71,11 +76,13 @@ C_VoiceChat.IsLoggedIn	1: boolean false
 C_VoiceChat.IsTranscriptionAllowed	1: boolean true
 C_ZoneAbility.GetActiveAbilities	1: {}
 CanPortGraveyard	1: boolean false
+GetAvailableLocaleInfo	1: {1={localeId=number 0,localeName=string enUS},10={localeId=number 10,localeName=string ptBR},2={localeId=number 1,localeName=string koKR},3={localeId=number 2,localeName=string frFR},4={localeId=number 3,localeName=string deDE},5={localeId=number 4,localeName=string zhCN},6={localeId=number 6,localeName=string esES},7={localeId=number 5,localeName=string zhTW},8={localeId=number 7,localeName=string esMX},9={localeId=number 8,localeName=string ruRU}}
 GetDungeonDifficultyID	1: number 1
 GetErrorCallstackHeight	0: 
 GetExpansionLevel	1: number 0
 GetExpansionTrialInfo	1: boolean false
 GetFileStreamingStatus	1: number 0
+GetNumSpecializations	1: number 1
 GetSubZoneText	1: string 
 HasKey	1: boolean false
 IsAltKeyDown	1: boolean false

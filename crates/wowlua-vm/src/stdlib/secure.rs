@@ -101,12 +101,13 @@ fn securecall(vm: &mut Vm, c: NativeCall) -> Ret {
     let saved = vm.taint().saved();
     let mut f = c.slot(1);
     if let Value::Str(_) | Value::Num(_) = f.v {
-        // A name: the global, read as `lua_rawget` reads it.
+        // A name: the global, read as `lua_rawget` reads it, in the
+        // caller's globals (a host may run code with other globals).
         let key = match f.v {
             Value::Num(n) => vm.str(&crate::number::fmt_num(n)),
             k => k,
         };
-        let g = vm.globals;
+        let g = vm.caller_env(1);
         let s = vm.heap.table(g).get_slot(key);
         f = vm.taint_mut().copy(s);
     }

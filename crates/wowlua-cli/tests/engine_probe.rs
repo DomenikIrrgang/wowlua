@@ -222,6 +222,19 @@ fn compared(key: &str) -> bool {
         "probe.loadCalls.GetScreenHeight",
         "probe.loadCalls.GetXPExhaustion",
         "probe.loadCalls.IsGuildLeader",
+        "probe.loadCalls.GetNumLanguages",
+        "probe.loadCalls.GetNumShapeshiftForms",
+        "probe.loadCalls.C_LFGListRoles.GetSavedRoles",
+        "probe.loadCalls.GetNetStats",
+        "probe.loadCalls.GuildControlGetNumRanks",
+        "probe.loadCalls.BNGetNumFriends",
+        // Blizzard's UI code makes these (not loaded here): the intrinsic
+        // types and its secure store frame.
+        "probe.widgets.EventFrame.",
+        "probe.widgets.ScrollingMessageFrame.",
+        "probe.widgets.DropdownButton.",
+        "probe.widgets.ContainedAlertFrame.",
+        "probe.forbidden.",
     ];
     // The client's other console commands are unknown here, and so are
     // the CVars it has without a default.
