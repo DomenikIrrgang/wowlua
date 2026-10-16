@@ -10,7 +10,7 @@ use crate::{Analysis, FileInput, FileKind, Target, is_compiler_known};
 use std::collections::{HashMap, HashSet};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 
 /// What the checks need from the manifest.
 #[derive(Clone, Debug, Default)]
@@ -280,31 +280,31 @@ fn macro_conditional(text: &str) -> Result<Vec<String>, String> {
 }
 
 /// `f` or `a.b` as text, for a call's callee.
-fn call_name(callee: &Expr) -> Option<String> {
-    match &callee.kind {
-        ExprKind::Name(n) => Some(n.text.to_string()),
-        ExprKind::Field { obj, name } => match &obj.kind {
-            ExprKind::Name(o) => Some(format!("{}.{}", o.text, name.text)),
+fn call_name(callee: Expr<'_>) -> Option<String> {
+    match callee.kind() {
+        ExprKind::Name(n) => Some(n.text().to_string()),
+        ExprKind::Field { obj, name } => match obj.kind() {
+            ExprKind::Name(o) => Some(format!("{}.{}", o.text(), name.text())),
             _ => None,
         },
         _ => None,
     }
 }
 
-fn string(e: &Expr) -> Option<String> {
-    match &e.kind {
-        ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value).into_owned()),
+fn string(e: Expr<'_>) -> Option<String> {
+    match e.kind() {
+        ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value()).into_owned()),
         _ => None,
     }
 }
 
 impl Ctx<'_> {
     /// A constant (a literal or folded from the file's `const`s).
-    fn constant(&self, e: &Expr) -> Option<Const> {
+    fn constant(&self, e: Expr<'_>) -> Option<Const> {
         crate::constant::eval(e, &|name| self.consts.get(name).cloned())
     }
 
-    fn constant_string(&self, e: &Expr) -> Option<String> {
+    fn constant_string(&self, e: Expr<'_>) -> Option<String> {
         match self.constant(e)? {
             Const::String(s) => Some(String::from_utf8_lossy(&s).into_owned()),
             _ => None,
@@ -323,14 +323,14 @@ impl Ctx<'_> {
 
     /// A literal macro conditional (E8440); `visibility`: its values must
     /// be `show` or `hide` (E8441).
-    fn conditional(&mut self, e: &Expr, visibility: bool) {
+    fn conditional(&mut self, e: Expr<'_>, visibility: bool) {
         let Some(text) = self.constant_string(e) else {
             return;
         };
         match macro_conditional(&text) {
             Err(why) => self.error(
                 "E8440",
-                e.span,
+                e.span(),
                 format!("invalid macro conditional: {why}"),
                 "here",
             ),
@@ -343,7 +343,7 @@ impl Ctx<'_> {
                     }
                     self.error(
                         "E8441",
-                        e.span,
+                        e.span(),
                         format!("a visibility driver's values are `show` and `hide`, not `{v}`"),
                         "here",
                     );
@@ -355,39 +355,39 @@ impl Ctx<'_> {
     }
 
     /// An event or message name: known, and of the expected kind.
-    fn event_name(&mut self, e: &Expr, game_only: bool) {
+    fn event_name(&mut self, e: Expr<'_>, game_only: bool) {
         let Some(name) = string(e) else { return };
         let is_event = self.events.contains(&name);
         let is_message = self.messages.contains(&name);
         if !is_event && !is_message {
             self.error(
                 "E8003",
-                e.span,
+                e.span(),
                 format!("unknown event or message `{name}`"),
                 "not declared",
             );
         } else if game_only && !is_event {
             self.error(
                 "E8003",
-                e.span,
+                e.span(),
                 format!("`{name}` is a message; unit events must be WoW events"),
                 "a message",
             );
         }
     }
 
-    fn intrinsic(&self, bindings: &HashMap<String, Bound>, callee: &Expr) -> Option<String> {
-        match &callee.kind {
-            ExprKind::Name(n) => match bindings.get(n.text.as_ref())? {
+    fn intrinsic(&self, bindings: &HashMap<String, Bound>, callee: Expr<'_>) -> Option<String> {
+        match callee.kind() {
+            ExprKind::Name(n) => match bindings.get(n.text())? {
                 Bound::Intrinsic(id) => Some(id.clone()),
                 Bound::Namespace(_) => None,
             },
-            ExprKind::Field { obj, name } => match &obj.kind {
-                ExprKind::Name(m) => match bindings.get(m.text.as_ref())? {
+            ExprKind::Field { obj, name } => match obj.kind() {
+                ExprKind::Name(m) => match bindings.get(m.text())? {
                     Bound::Namespace(module) => self.analysis.modules[*module]
                         .as_ref()?
                         .intrinsics
-                        .get(name.text.as_ref())
+                        .get(name.text())
                         .cloned(),
                     Bound::Intrinsic(_) => None,
                 },
@@ -397,17 +397,18 @@ impl Ctx<'_> {
         }
     }
 
-    fn decorator(&self, bindings: &HashMap<String, Bound>, d: &Decorator) -> Option<String> {
-        match d.path.as_slice() {
-            [n] => match bindings.get(n.text.as_ref())? {
+    fn decorator(&self, bindings: &HashMap<String, Bound>, d: Decorator<'_>) -> Option<String> {
+        let path = d.path();
+        match path.len() {
+            1 => match bindings.get(path.at(0).text())? {
                 Bound::Intrinsic(id) => Some(id.clone()),
                 Bound::Namespace(_) => None,
             },
-            [m, n] => match bindings.get(m.text.as_ref())? {
+            2 => match bindings.get(path.at(0).text())? {
                 Bound::Namespace(module) => self.analysis.modules[*module]
                     .as_ref()?
                     .intrinsics
-                    .get(n.text.as_ref())
+                    .get(path.at(1).text())
                     .cloned(),
                 Bound::Intrinsic(_) => None,
             },
@@ -421,22 +422,22 @@ impl Ctx<'_> {
     fn decorators(
         &mut self,
         bindings: &HashMap<String, Bound>,
-        decorators: &[Decorator],
+        decorators: Decorators<'_>,
         instance_method: bool,
-        func: Option<&FuncBody>,
+        func: Option<Func<'_>>,
         top: bool,
     ) {
         for d in decorators {
             let Some(id) = self.decorator(bindings, d) else {
                 continue;
             };
-            let args: Vec<&Expr> = d.args.as_ref().map(|a| a.exprs()).unwrap_or_default();
+            let args: Exprs<'_> = d.args().map(|a| a.exprs()).unwrap_or_default();
             match id.as_str() {
                 "events.event" => {
                     if instance_method {
                         self.error(
                             "E8002",
-                            d.span,
+                            d.span(),
                             "`@event` on an instance method: register with `on(…, self)` in the constructor".into(),
                             "an instance method",
                         );
@@ -449,7 +450,7 @@ impl Ctx<'_> {
                     if instance_method {
                         self.error(
                             "E8002",
-                            d.span,
+                            d.span(),
                             "`@bucket` on an instance method: register with `onBucket(…, self)` in the constructor".into(),
                             "an instance method",
                         );
@@ -462,7 +463,7 @@ impl Ctx<'_> {
                     if instance_method {
                         self.error(
                             "E8002",
-                            d.span,
+                            d.span(),
                             "`@unitEvent` on an instance method: register with `onUnit(…, self)` in the constructor".into(),
                             "an instance method",
                         );
@@ -474,7 +475,7 @@ impl Ctx<'_> {
                     if !(1..=2).contains(&units) {
                         self.error(
                             "E8100",
-                            d.span,
+                            d.span(),
                             format!(
                                 "`@unitEvent` takes one or two units (WoW's limit), not {units}"
                             ),
@@ -487,7 +488,7 @@ impl Ctx<'_> {
                         self.slash_command(a);
                     }
                 }
-                "bindings.binding" => self.binding(d, &args, top && func.is_some()),
+                "bindings.binding" => self.binding(d, args, top && func.is_some()),
                 "tooltip.onTooltip" => {
                     if let Some(first) = args.first()
                         && !self.removed
@@ -497,12 +498,12 @@ impl Ctx<'_> {
                 }
                 "timer.throttle" | "timer.debounce" | "timer.nextFrame" | "combat.outOfCombat" => {
                     if let Some(f) = func
-                        && returns_values(&f.body)
+                        && returns_values(f.body())
                     {
                         let name = id.split('.').nth(1).unwrap_or(&id);
                         self.error(
                             "E8030",
-                            d.span,
+                            d.span(),
                             format!(
                                 "`@{name}` may run the function later, so it must not return values"
                             ),
@@ -517,11 +518,11 @@ impl Ctx<'_> {
 
     /// `@binding(name, opts)`: on a top-level function, with a literal name
     /// and constant options but the label.
-    fn binding(&mut self, d: &Decorator, args: &[&Expr], placed: bool) {
+    fn binding(&mut self, d: Decorator<'_>, args: Exprs<'_>, placed: bool) {
         if !placed {
             self.error(
                 "E8350",
-                d.span,
+                d.span(),
                 "`@binding` is allowed only on top-level function declarations".into(),
                 "not a top-level function",
             );
@@ -533,7 +534,7 @@ impl Ctx<'_> {
         let Some(name) = self.constant_string(first) else {
             self.error(
                 "E8350",
-                first.span,
+                first.span(),
                 "`@binding` needs the binding's name as a constant string".into(),
                 "not a constant",
             );
@@ -542,7 +543,7 @@ impl Ctx<'_> {
         if !binding_name(&name) {
             self.error(
                 "E8352",
-                first.span,
+                first.span(),
                 format!("`{name}` is no keybinding name: it matches `[A-Z][A-Z0-9_]*`"),
                 "invalid",
             );
@@ -552,9 +553,9 @@ impl Ctx<'_> {
             header: None,
             run_on_up: false,
             default: None,
-            span: first.span,
+            span: first.span(),
         };
-        match args.get(1).map(|a| &a.kind) {
+        match args.get(1).map(|a| a.kind()) {
             Some(ExprKind::Table(fields)) => {
                 for f in fields {
                     let TableField::Named {
@@ -563,14 +564,14 @@ impl Ctx<'_> {
                     else {
                         continue;
                     };
-                    let key = key.text.as_ref();
+                    let key = key.text();
                     match key {
                         "header" | "default" => match self.constant_string(value) {
                             Some(v) if key == "header" => decl.header = Some(v),
-                            Some(v) => decl.default = Some((v, value.span)),
+                            Some(v) => decl.default = Some((v, value.span())),
                             None => self.error(
                                 "E8350",
-                                value.span,
+                                value.span(),
                                 format!("`{key}` of `@binding` must be a constant string"),
                                 "not a constant",
                             ),
@@ -579,7 +580,7 @@ impl Ctx<'_> {
                             Some(Const::Bool(on)) => decl.run_on_up = on,
                             _ => self.error(
                                 "E8350",
-                                value.span,
+                                value.span(),
                                 "`runOnUp` of `@binding` must be a constant boolean".into(),
                                 "not a constant",
                             ),
@@ -591,7 +592,7 @@ impl Ctx<'_> {
             Some(_) => {
                 self.error(
                     "E8350",
-                    args[1].span,
+                    args.at(1).span(),
                     "the options of `@binding` must be a table literal".into(),
                     "not a table literal",
                 );
@@ -616,11 +617,11 @@ impl Ctx<'_> {
     }
 
     /// `header(id, label)`: a top-level statement with a literal id.
-    fn binding_header(&mut self, e: &Expr, args: &[&Expr], top: bool) {
+    fn binding_header(&mut self, e: Expr<'_>, args: Exprs<'_>, top: bool) {
         if !top {
             self.error(
                 "E8350",
-                e.span,
+                e.span(),
                 "`header` is allowed only as a statement at the module's top level".into(),
                 "not a top-level statement",
             );
@@ -629,7 +630,7 @@ impl Ctx<'_> {
         {
             self.error(
                 "E8350",
-                first.span,
+                first.span(),
                 "`header` needs the header's id as a constant string".into(),
                 "not a constant",
             );
@@ -647,7 +648,7 @@ impl Ctx<'_> {
 
     /// A literal aura filter: every word known to every flavor of this
     /// compilation, `!` only where the flavor negates (E8310).
-    fn aura_filter(&mut self, e: &Expr) {
+    fn aura_filter(&mut self, e: Expr<'_>) {
         let Some(filter) = self.constant_string(e) else {
             return;
         };
@@ -683,13 +684,13 @@ impl Ctx<'_> {
             }
         }
         for message in problems {
-            self.error("E8310", e.span, message, "in this aura filter");
+            self.error("E8310", e.span(), message, "in this aura filter");
         }
     }
 
     /// `aura.container(parent, { groups = { … } })`: the groups' filters
     /// (E8310), on flavors with aura containers (E8300).
-    fn aura_container(&mut self, e: &Expr, args: &[&Expr]) {
+    fn aura_container(&mut self, e: Expr<'_>, args: Exprs<'_>) {
         if self.removed {
             return;
         }
@@ -708,35 +709,35 @@ impl Ctx<'_> {
                         lacking.join(", ")
                     ),
                 )
-                .with_label(e.span, "not on every targeted flavor")
+                .with_label(e.span(), "not on every targeted flavor")
                 .with_help(
                     "guard it with `@if(flavor == …)`, or read auras with `aura.each` there",
                 ),
             );
         }
-        let Some(ExprKind::Table(fields)) = args.get(1).map(|a| &a.kind) else {
+        let Some(ExprKind::Table(fields)) = args.get(1).map(|a| a.kind()) else {
             return;
         };
         for f in fields {
             let TableField::Named { name, value, .. } = f else {
                 continue;
             };
-            if name.text.as_ref() != "groups" {
+            if name.text() != "groups" {
                 continue;
             }
-            let ExprKind::Table(groups) = &value.kind else {
+            let ExprKind::Table(groups) = value.kind() else {
                 continue;
             };
             for g in groups {
                 let TableField::Positional(group) = g else {
                     continue;
                 };
-                let ExprKind::Table(group_fields) = &group.kind else {
+                let ExprKind::Table(group_fields) = group.kind() else {
                     continue;
                 };
                 for gf in group_fields {
                     if let TableField::Named { name, value, .. } = gf
-                        && name.text.as_ref() == "filter"
+                        && name.text() == "filter"
                     {
                         self.aura_filter(value);
                     }
@@ -748,13 +749,12 @@ impl Ctx<'_> {
     /// W8430: a job's `ctx:check/yield/sleep/waitFor` inside a function
     /// handed to `pcall`, `xpcall`, `securecallfunction`, `table.sort` or
     /// `gsub`, which a coroutine cannot yield across.
-    fn job_yields(&mut self, body: &Block, ctx: &str) {
-        let mut boundaries: Vec<&Expr> = Vec::new();
-        wowlua_syntax::visit::walk_block(wowlua_syntax::view::Block::of(body), &mut |e| {
-            let e = e.ast();
-            let (callee_name, args) = match &e.kind {
+    fn job_yields(&mut self, body: Block<'_>, ctx: &str) {
+        let mut boundaries: Vec<Expr<'_>> = Vec::new();
+        wowlua_syntax::visit::walk_block(body, &mut |e| {
+            let (callee_name, args) = match e.kind() {
                 ExprKind::Call { callee, args } => (call_name(callee), args),
-                ExprKind::Method { name, args, .. } => (Some(name.text.to_string()), &**args),
+                ExprKind::Method { name, args, .. } => (Some(name.text().to_string()), args),
                 _ => return,
             };
             if matches!(
@@ -771,24 +771,23 @@ impl Ctx<'_> {
                 )
             ) {
                 for a in args.exprs() {
-                    if matches!(a.kind, ExprKind::Function(_)) {
+                    if matches!(a.kind(), ExprKind::Function(_)) {
                         boundaries.push(a);
                     }
                 }
             }
         });
         for boundary in boundaries {
-            let ExprKind::Function(f) = &boundary.kind else {
+            let ExprKind::Function(f) = boundary.kind() else {
                 continue;
             };
             let mut yields: Vec<Span> = Vec::new();
-            wowlua_syntax::visit::walk_block(wowlua_syntax::view::Block::of(&f.body), &mut |e| {
-                let e = e.ast();
-                if let ExprKind::Method { obj, name, .. } = &e.kind
-                    && matches!(&obj.kind, ExprKind::Name(n) if n.text.as_ref() == ctx)
-                    && matches!(name.text.as_ref(), "check" | "yield" | "sleep" | "waitFor")
+            wowlua_syntax::visit::walk_block(f.body(), &mut |e| {
+                if let ExprKind::Method { obj, name, .. } = e.kind()
+                    && matches!(obj.kind(), ExprKind::Name(n) if n.text() == ctx)
+                    && matches!(name.text(), "check" | "yield" | "sleep" | "waitFor")
                 {
-                    yields.push(e.span);
+                    yields.push(e.span());
                 }
             });
             for span in yields {
@@ -804,7 +803,7 @@ impl Ctx<'_> {
 
     /// A tooltip kind: known (E8330) and available on every flavor of this
     /// compilation (E8300).
-    fn tooltip_kind(&mut self, e: &Expr) {
+    fn tooltip_kind(&mut self, e: Expr<'_>) {
         let Some(kind) = self.constant_string(e) else {
             return;
         };
@@ -820,7 +819,7 @@ impl Ctx<'_> {
         if !flavors.iter().any(|(_, t)| t.kinds.contains(&kind)) {
             self.diagnostics.push(
                 Diagnostic::error("E8330", format!("unknown tooltip kind `{kind}`"))
-                    .with_label(e.span, "not an `Enum.TooltipDataType` name")
+                    .with_label(e.span(), "not an `Enum.TooltipDataType` name")
                     .with_help(
                         "for example \"Item\", \"Spell\", \"Unit\", \"Mount\" or \"Currency\"",
                     ),
@@ -846,7 +845,7 @@ impl Ctx<'_> {
                     lacking.join(", ")
                 ),
             )
-            .with_label(e.span, "not on every targeted flavor");
+            .with_label(e.span(), "not on every targeted flavor");
             if flavors
                 .iter()
                 .any(|(f, t)| !t.data_system && lacking.contains(&f.as_str()))
@@ -857,12 +856,12 @@ impl Ctx<'_> {
         }
     }
 
-    fn slash_command(&mut self, e: &Expr) {
+    fn slash_command(&mut self, e: Expr<'_>) {
         let Some(name) = string(e) else { return };
         if !name.starts_with('/') || name.len() < 2 || name.chars().any(char::is_whitespace) {
             self.error(
                 "E8101",
-                e.span,
+                e.span(),
                 format!("`{name}` is no slash command: it starts with `/` and has no spaces"),
                 "invalid",
             );
@@ -872,17 +871,17 @@ impl Ctx<'_> {
         if self.slash_seen.contains_key(&lower) {
             self.error(
                 "E8010",
-                e.span,
+                e.span(),
                 format!("the slash command `{name}` is registered twice"),
                 "again",
             );
         } else {
-            self.slash_seen.insert(lower.clone(), e.span);
+            self.slash_seen.insert(lower.clone(), e.span());
         }
         if BLIZZARD_COMMANDS.contains(&lower.as_str()) {
             self.warn(
                 "W8011",
-                e.span,
+                e.span(),
                 format!("`{name}` is one of the game's slash commands"),
                 "taken by the game",
             );
@@ -890,8 +889,8 @@ impl Ctx<'_> {
     }
 
     /// A call to the standard library; `top`: a top-level call statement.
-    fn call(&mut self, bindings: &HashMap<String, Bound>, e: &Expr, top: bool) {
-        let ExprKind::Call { callee, args } = &e.kind else {
+    fn call(&mut self, bindings: &HashMap<String, Bound>, e: Expr<'_>, top: bool) {
+        let ExprKind::Call { callee, args } = e.kind() else {
             return;
         };
         let Some(id) = self.intrinsic(bindings, callee) else {
@@ -904,7 +903,7 @@ impl Ctx<'_> {
                     self.event_name(first, false);
                 }
             }
-            "events.onBucket" => match args.first().map(|a| &a.kind) {
+            "events.onBucket" => match args.first().map(|a| a.kind()) {
                 Some(ExprKind::Table(fields)) => {
                     for field in fields {
                         if let TableField::Positional(v) = field {
@@ -912,19 +911,19 @@ impl Ctx<'_> {
                         }
                     }
                 }
-                Some(_) => self.event_name(args[0], false),
+                Some(_) => self.event_name(args.at(0), false),
                 None => {}
             },
             "events.onUnit" => {
                 if let Some(first) = args.first() {
                     self.event_name(first, true);
                 }
-                if let Some(ExprKind::Table(fields)) = args.get(1).map(|a| &a.kind)
+                if let Some(ExprKind::Table(fields)) = args.get(1).map(|a| a.kind())
                     && !(1..=2).contains(&fields.len())
                 {
                     self.error(
                         "E8100",
-                        args[1].span,
+                        args.at(1).span(),
                         format!(
                             "`onUnit` takes one or two units (WoW's limit), not {}",
                             fields.len()
@@ -940,14 +939,14 @@ impl Ctx<'_> {
                     if self.events.contains(&name) && !self.messages.contains(&name) {
                         self.error(
                             "E8001",
-                            first.span,
+                            first.span(),
                             format!("`{name}` is a WoW event; only messages can be sent"),
                             "a WoW event",
                         );
                     } else if !self.messages.contains(&name) {
                         self.error(
                             "E8003",
-                            first.span,
+                            first.span(),
                             format!("unknown message `{name}`: declare it with `declare message {name}(…)`"),
                             "not declared",
                         );
@@ -969,8 +968,8 @@ impl Ctx<'_> {
                     self.conditional(c, false);
                 }
             }
-            "saved.bind" => self.bind(e, &args),
-            "bindings.header" => self.binding_header(e, &args, top),
+            "saved.bind" => self.bind(e, args),
+            "bindings.header" => self.binding_header(e, args, top),
             "aura.each" | "aura.forEach" => {
                 if let Some(f) = args.get(1) {
                     self.aura_filter(f);
@@ -981,12 +980,12 @@ impl Ctx<'_> {
                     self.aura_filter(f);
                 }
             }
-            "aura.container" => self.aura_container(e, &args),
+            "aura.container" => self.aura_container(e, args),
             "jobs.start" => {
-                if let Some(ExprKind::Function(f)) = args.first().map(|a| &a.kind)
-                    && let Some(ctx) = f.params.first()
+                if let Some(ExprKind::Function(f)) = args.first().map(|a| a.kind())
+                    && let Some(ctx) = f.params().first()
                 {
-                    self.job_yields(&f.body, ctx.name.text.as_ref());
+                    self.job_yields(f.body(), ctx.name().text());
                 }
             }
             "media.register" | "media.fetch" | "media.list" => {
@@ -996,7 +995,7 @@ impl Ctx<'_> {
                 {
                     self.error(
                         "E8400",
-                        first.span,
+                        first.span(),
                         format!("`{kind}` is not a media kind: \"font\", \"statusbar\", \"border\", \"background\" or \"sound\""),
                         "unknown kind",
                     );
@@ -1011,17 +1010,17 @@ impl Ctx<'_> {
                 if let Some(first) = args.first()
                     && let Some(name) = string(first)
                 {
-                    self.keybinding_refs.push((name, first.span));
+                    self.keybinding_refs.push((name, first.span()));
                 }
             }
             "settings.register" => match self.settings_registered {
                 Some(first) => self.diagnostics.push(
                     Diagnostic::error("E8114", "`settings.register` is called more than once")
-                        .with_label(e.span, "again")
+                        .with_label(e.span(), "again")
                         .with_label(first, "first registered here")
                         .with_help("one options page per addon: put more pages in `subcategories`"),
                 ),
-                None => self.settings_registered = Some(e.span),
+                None => self.settings_registered = Some(e.span()),
             },
             "comm.open" => {
                 if let Some(prefix) = args.first().and_then(|a| string(a))
@@ -1029,7 +1028,7 @@ impl Ctx<'_> {
                 {
                     self.error(
                         "E8050",
-                        args[0].span,
+                        args.at(0).span(),
                         format!(
                             "the addon message prefix `{prefix}` has {} characters; the client takes 1 to 16",
                             prefix.len()
@@ -1041,13 +1040,13 @@ impl Ctx<'_> {
             "launcher.register" => match self.launcher_registered {
                 Some(first) => self.diagnostics.push(
                     Diagnostic::error("E8080", "`launcher.register` is called more than once")
-                        .with_label(e.span, "again")
+                        .with_label(e.span(), "again")
                         .with_label(first, "first registered here"),
                 ),
-                None => self.launcher_registered = Some(e.span),
+                None => self.launcher_registered = Some(e.span()),
             },
             "slash.router" => {
-                if let Some(ExprKind::Table(fields)) = args.first().map(|a| &a.kind) {
+                if let Some(ExprKind::Table(fields)) = args.first().map(|a| a.kind()) {
                     for field in fields {
                         if let TableField::Named { value, .. } = field {
                             self.router_command(value);
@@ -1059,12 +1058,12 @@ impl Ctx<'_> {
         }
     }
 
-    fn bind(&mut self, call: &Expr, args: &[&Expr]) {
+    fn bind(&mut self, call: Expr<'_>, args: Exprs<'_>) {
         let Some(first) = args.first() else { return };
         let Some(name) = string(first) else {
             self.error(
                 "E8102",
-                first.span,
+                first.span(),
                 "`saved.bind` needs the SavedVariable's name as a string literal".into(),
                 "not a literal",
             );
@@ -1074,7 +1073,7 @@ impl Ctx<'_> {
         if !self.config.saved.contains(&name) && !per_char {
             self.error(
                 "E8020",
-                first.span,
+                first.span(),
                 format!("`{name}` is not declared in `addon.saved-variables` or `addon.saved-variables-per-character`"),
                 "not in the manifest",
             );
@@ -1082,16 +1081,16 @@ impl Ctx<'_> {
         if let Some(previous) = self.bound_saved.get(&name).copied() {
             self.diagnostics.push(
                 Diagnostic::error("E8103", format!("`{name}` is bound twice"))
-                    .with_label(call.span, "again")
+                    .with_label(call.span(), "again")
                     .with_label(previous, "first bound here"),
             );
         } else {
-            self.bound_saved.insert(name.clone(), call.span);
+            self.bound_saved.insert(name.clone(), call.span());
         }
-        let profiles = args.get(1).is_some_and(|opts| match &opts.kind {
+        let profiles = args.get(1).is_some_and(|opts| match opts.kind() {
             ExprKind::Table(fields) => fields.iter().any(|f| {
                 matches!(f, TableField::Named { name, value, .. }
-                    if name.text.as_ref() == "profiles" && matches!(value.kind, ExprKind::True))
+                    if name.text() == "profiles" && matches!(value.kind(), ExprKind::True))
             }),
             _ => false,
         });
@@ -1099,7 +1098,7 @@ impl Ctx<'_> {
             if per_char {
                 self.error(
                     "E8117",
-                    first.span,
+                    first.span(),
                     format!(
                         "`{name}` is per character: profiles need an account-wide SavedVariable"
                     ),
@@ -1112,7 +1111,7 @@ impl Ctx<'_> {
             {
                 self.error(
                     "E8021",
-                    first.span,
+                    first.span(),
                     format!("profiles keep the active profile in `{name}PerChar`: add it to `addon.saved-variables-per-character`"),
                     "needs `PerChar`",
                 );
@@ -1122,44 +1121,41 @@ impl Ctx<'_> {
 
     /// One router command: valid `args` specs, `rest` last, and `run` taking
     /// one parameter per argument (plus the flags table).
-    fn router_command(&mut self, command: &Expr) {
-        let ExprKind::Table(fields) = &command.kind else {
+    fn router_command(&mut self, command: Expr<'_>) {
+        let ExprKind::Table(fields) = command.kind() else {
             return;
         };
         let field = |key: &str| {
             fields.iter().find_map(|f| match f {
-                TableField::Named { name, value, .. } if name.text.as_ref() == key => Some(value),
+                TableField::Named { name, value, .. } if name.text() == key => Some(value),
                 _ => None,
             })
         };
         let mut count = 0;
-        if let Some(Expr {
-            kind: ExprKind::Table(specs),
-            ..
-        }) = field("args")
-        {
+        if let Some(ExprKind::Table(specs)) = field("args").map(|e| e.kind()) {
             count = specs.len();
             for (i, spec) in specs.iter().enumerate() {
                 let TableField::Positional(value) = spec else {
                     continue;
                 };
-                let ok = match &value.kind {
+                let ok = match value.kind() {
                     ExprKind::String(lit) => {
-                        let s = String::from_utf8_lossy(&lit.value);
+                        let value = lit.value();
+                        let s = String::from_utf8_lossy(&value);
                         matches!(
                             s.as_ref(),
                             "string" | "number" | "boolean" | "string?" | "number?" | "boolean?"
                         ) || (s == "rest" && i + 1 == specs.len())
                     }
                     ExprKind::Table(choices) => choices.iter().all(|c| {
-                        matches!(c, TableField::Positional(v) if matches!(v.kind, ExprKind::String(_)))
+                        matches!(c, TableField::Positional(v) if matches!(v.kind(), ExprKind::String(_)))
                     }),
                     _ => true,
                 };
                 if !ok {
                     self.error(
                         "E8112",
-                        value.span,
+                        value.span(),
                         "an argument is \"string\", \"number\", \"boolean\" (with `?` when optional), a list of choices, or \"rest\" last".into(),
                         "invalid",
                     );
@@ -1169,21 +1165,18 @@ impl Ctx<'_> {
         if field("flags").is_some() {
             count += 1;
         }
-        if let Some(Expr {
-            kind: ExprKind::Function(f),
-            span,
-            ..
-        }) = field("run")
-            && f.vararg.is_none()
-            && f.params.len() != count
+        if let Some(run) = field("run")
+            && let ExprKind::Function(f) = run.kind()
+            && f.vararg().is_none()
+            && f.params().len() != count
         {
             self.error(
                 "E8112",
-                *span,
+                run.span(),
                 format!(
                     "`run` takes {} parameter(s) for its arguments and flags, not {}",
                     count,
-                    f.params.len()
+                    f.params().len()
                 ),
                 "here",
             );
@@ -1192,15 +1185,15 @@ impl Ctx<'_> {
 }
 
 /// `return` with values in the function's own body (not nested functions).
-fn returns_values(block: &Block) -> bool {
-    fn walk(stmts: &[Stmt]) -> bool {
-        stmts.iter().any(|s| match &s.kind {
+fn returns_values(block: Block<'_>) -> bool {
+    fn walk(stmts: Stmts<'_>) -> bool {
+        stmts.iter().any(|s| match s.kind() {
             StmtKind::Return(values) => !values.is_empty(),
             StmtKind::Do(b)
             | StmtKind::While { body: b, .. }
-            | StmtKind::Repeat { body: b, .. } => walk(&b.stmts),
+            | StmtKind::Repeat { body: b, .. } => walk(b.stmts()),
             StmtKind::NumericFor { body, .. } | StmtKind::GenericFor { body, .. } => {
-                walk(&body.stmts)
+                walk(body.stmts())
             }
             StmtKind::If {
                 then_block,
@@ -1208,14 +1201,14 @@ fn returns_values(block: &Block) -> bool {
                 else_block,
                 ..
             } => {
-                walk(&then_block.stmts)
-                    || elseifs.iter().any(|(_, b)| walk(&b.stmts))
-                    || else_block.as_ref().is_some_and(|b| walk(&b.stmts))
+                walk(then_block.stmts())
+                    || elseifs.iter().any(|(_, b)| walk(b.stmts()))
+                    || else_block.as_ref().is_some_and(|b| walk(b.stmts()))
             }
             _ => false,
         })
     }
-    walk(&block.stmts)
+    walk(block.stmts())
 }
 
 /// The names a file's imports bind to the standard library.
@@ -1224,11 +1217,11 @@ fn bindings(analysis: &Analysis, i: usize, parse: &wowlua_syntax::Parse) -> Hash
     let Some(info) = analysis.modules.get(i).and_then(Option::as_ref) else {
         return out;
     };
-    for s in &parse.chunk.block.stmts {
-        let StmtKind::Import(import) = &s.kind else {
+    for s in parse.view().block().stmts() {
+        let StmtKind::Import(import) = s.kind() else {
             continue;
         };
-        let Some(resolved) = info.imports.iter().find(|r| r.start == s.span.start) else {
+        let Some(resolved) = info.imports.iter().find(|r| r.start == s.span().start) else {
             continue;
         };
         let Target::Module(m) = resolved.target else {
@@ -1237,18 +1230,18 @@ fn bindings(analysis: &Analysis, i: usize, parse: &wowlua_syntax::Parse) -> Hash
         let Some(target) = analysis.modules[m].as_ref() else {
             continue;
         };
-        match &import.clause {
+        match &import.clause() {
             ImportClause::Names(specs) => {
                 for spec in specs {
-                    if let Some(id) = target.intrinsics.get(spec.name.text.as_ref()) {
+                    if let Some(id) = target.intrinsics.get(spec.name.text()) {
                         let local = spec.alias.as_ref().unwrap_or(&spec.name);
-                        out.insert(local.text.to_string(), Bound::Intrinsic(id.clone()));
+                        out.insert(local.text().to_string(), Bound::Intrinsic(id.clone()));
                     }
                 }
             }
             ImportClause::Namespace(n) => {
                 if !target.intrinsics.is_empty() {
-                    out.insert(n.text.to_string(), Bound::Namespace(m));
+                    out.insert(n.text().to_string(), Bound::Namespace(m));
                 }
             }
             ImportClause::SideEffect => {}
@@ -1330,21 +1323,21 @@ pub fn check(
     };
     for f in files {
         let Some(parse) = f.parse else { continue };
-        for s in &parse.chunk.block.stmts {
-            let decl = match &s.kind {
-                StmtKind::Declare(d) => d.as_ref(),
-                StmtKind::Export(inner) => match &inner.kind {
-                    StmtKind::Declare(d) => d.as_ref(),
+        for s in parse.view().block().stmts() {
+            let decl = match s.kind() {
+                StmtKind::Declare(d) => d,
+                StmtKind::Export(inner) => match inner.kind() {
+                    StmtKind::Declare(d) => d,
                     _ => continue,
                 },
                 _ => continue,
             };
-            match decl {
-                Declare::Event { name, .. } => {
-                    ctx.events.insert(name.text.to_string());
+            match decl.kind() {
+                DeclareKind::Event { name, .. } => {
+                    ctx.events.insert(name.text().to_string());
                 }
-                Declare::Message { name, .. } => {
-                    ctx.messages.insert(name.text.to_string());
+                DeclareKind::Message { name, .. } => {
+                    ctx.messages.insert(name.text().to_string());
                 }
                 _ => {}
             }
@@ -1360,49 +1353,40 @@ pub fn check(
             continue;
         }
         ctx.consts.clear();
-        for s in &parse.chunk.block.stmts {
-            let inner = match &s.kind {
-                StmtKind::Export(inner) => inner.as_ref(),
+        for s in parse.view().block().stmts() {
+            let inner = match s.kind() {
+                StmtKind::Export(inner) => inner,
                 _ => s,
             };
             if let StmtKind::Const {
                 name,
                 value: Some(value),
                 ..
-            } = &inner.kind
-                && let Some(c) = ctx.constant(value)
+            } = &inner.kind()
+                && let Some(c) = ctx.constant(*value)
             {
-                ctx.consts.insert(name.text.to_string(), c);
+                ctx.consts.insert(name.text().to_string(), c);
             }
         }
-        let top: HashSet<*const Stmt> = parse
-            .chunk
-            .block
-            .stmts
-            .iter()
-            .map(|s| s as *const Stmt)
-            .collect();
-        let mut stmts: Vec<&Stmt> = Vec::new();
-        wowlua_syntax::visit::walk_stmts(
-            wowlua_syntax::view::Block::of(&parse.chunk.block),
-            &mut |s| stmts.push(s.ast()),
-        );
+        let top: HashSet<Stmt<'_>> = parse.view().block().stmts().iter().collect();
+        let mut stmts: Vec<Stmt<'_>> = Vec::new();
+        wowlua_syntax::visit::walk_stmts(parse.view().block(), &mut |s| stmts.push(s));
         let mut i = 0;
         while i < stmts.len() {
             let s = stmts[i];
             i += 1;
-            let inner = match &s.kind {
-                StmtKind::Export(inner) => inner.as_ref(),
+            let inner = match s.kind() {
+                StmtKind::Export(inner) => inner,
                 _ => s,
             };
-            let at_top = top.contains(&(s as *const Stmt));
+            let at_top = top.contains(&s);
             ctx.removed = f.meta.or(meta).is_some_and(|meta| {
                 let kind_of = |n: &str| {
                     analysis.modules[file]
                         .as_ref()
                         .and_then(|m| m.meta_bindings.get(n).copied())
                 };
-                s.decorators.iter().any(|d| {
+                s.decorators().iter().any(|d| {
                     crate::meta::if_condition(d)
                         .flatten()
                         .and_then(|cond| {
@@ -1414,71 +1398,59 @@ pub fn check(
                 })
             });
             if ctx.removed {
-                ctx.removed_spans.push(s.span);
+                ctx.removed_spans.push(s.span());
             }
-            match &inner.kind {
+            match inner.kind() {
                 StmtKind::LocalFunction { func, .. } | StmtKind::Function { func, .. } => {
-                    ctx.decorators(&bound, &s.decorators, false, Some(func), at_top);
+                    ctx.decorators(&bound, s.decorators(), false, Some(func), at_top);
                 }
                 StmtKind::Class(c) => {
-                    for m in &c.members {
-                        let static_ = m.modifiers.contains(&Modifier::Static);
-                        if let ClassMemberKind::Method { func, .. } = &m.kind {
-                            ctx.decorators(&bound, &m.decorators, !static_, Some(func), false);
-                            wowlua_syntax::visit::walk_stmts(
-                                wowlua_syntax::view::Block::of(&func.body),
-                                &mut |s| stmts.push(s.ast()),
-                            );
+                    for m in c.members() {
+                        let static_ = m.modifiers().contains(&Modifier::Static);
+                        if let ClassMemberKind::Method { func, .. } = m.kind() {
+                            ctx.decorators(&bound, m.decorators(), !static_, Some(func), false);
+                            wowlua_syntax::visit::walk_stmts(func.body(), &mut |s| stmts.push(s));
                         }
                     }
                 }
-                _ => ctx.decorators(&bound, &s.decorators, false, None, at_top),
+                _ => ctx.decorators(&bound, s.decorators(), false, None, at_top),
             }
         }
-        let mut calls: Vec<&Expr> = Vec::new();
-        wowlua_syntax::visit::walk_block(
-            wowlua_syntax::view::Block::of(&parse.chunk.block),
-            &mut |e| {
-                let e = e.ast();
-                if matches!(e.kind, ExprKind::Call { .. }) {
-                    calls.push(e);
-                }
-            },
-        );
+        let mut calls: Vec<Expr<'_>> = Vec::new();
+        wowlua_syntax::visit::walk_block(parse.view().block(), &mut |e| {
+            if matches!(e.kind(), ExprKind::Call { .. }) {
+                calls.push(e);
+            }
+        });
         for s in &stmts {
-            if let StmtKind::Class(c) = &s.kind {
-                for m in &c.members {
-                    if let ClassMemberKind::Method { func, .. } = &m.kind {
-                        wowlua_syntax::visit::walk_block(
-                            wowlua_syntax::view::Block::of(&func.body),
-                            &mut |e| {
-                                let e = e.ast();
-                                if matches!(e.kind, ExprKind::Call { .. }) {
-                                    calls.push(e);
-                                }
-                            },
-                        );
+            if let StmtKind::Class(c) = s.kind() {
+                for m in c.members() {
+                    if let ClassMemberKind::Method { func, .. } = m.kind() {
+                        wowlua_syntax::visit::walk_block(func.body(), &mut |e| {
+                            if matches!(e.kind(), ExprKind::Call { .. }) {
+                                calls.push(e);
+                            }
+                        });
                     }
                 }
             }
         }
-        let top_calls: HashSet<*const Expr> = parse
-            .chunk
-            .block
-            .stmts
+        let top_calls: HashSet<Expr<'_>> = parse
+            .view()
+            .block()
+            .stmts()
             .iter()
-            .filter_map(|s| match &s.kind {
-                StmtKind::Call(e) => Some(e as *const Expr),
+            .filter_map(|s| match s.kind() {
+                StmtKind::Call(e) => Some(e),
                 _ => None,
             })
             .collect();
         for e in calls {
-            let removed = ctx
-                .removed_spans
-                .iter()
-                .any(|r| r.file == e.span.file && r.start <= e.span.start && e.span.end <= r.end);
+            let removed = ctx.removed_spans.iter().any(|r| {
+                r.file == e.span().file && r.start <= e.span().start && e.span().end <= r.end
+            });
             if !removed {
-                ctx.call(&bound, e, top_calls.contains(&(e as *const Expr)));
+                ctx.call(&bound, e, top_calls.contains(&e));
             }
         }
         ctx.removed_spans.clear();

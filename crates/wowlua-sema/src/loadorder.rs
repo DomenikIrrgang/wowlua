@@ -11,7 +11,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
-use wowlua_syntax::ast::{ImportClause, StmtKind};
+use wowlua_syntax::view::{ImportClause, StmtKind};
 
 #[derive(Debug, Default)]
 pub struct LoadOrder {
@@ -253,11 +253,11 @@ pub fn analyze_with(
         let (Some(parse), Some(info)) = (f.parse, &analysis.modules[file]) else {
             continue;
         };
-        for s in &parse.chunk.block.stmts {
-            let StmtKind::Import(import) = &s.kind else {
+        for s in parse.view().block().stmts() {
+            let StmtKind::Import(import) = s.kind() else {
                 continue;
             };
-            let Some(resolved) = info.imports.iter().find(|i| i.start == s.span.start) else {
+            let Some(resolved) = info.imports.iter().find(|i| i.start == s.span().start) else {
                 continue;
             };
             let target = match resolved.target {
@@ -265,13 +265,13 @@ pub fn analyze_with(
                 Target::Lua { file: l, .. } => l,
                 _ => continue,
             };
-            match &import.clause {
+            match &import.clause() {
                 ImportClause::Names(specs) => {
                     for spec in specs {
                         let local = spec.alias.as_ref().unwrap_or(&spec.name);
                         bindings.entry(file).or_default().insert(
-                            local.text.to_string(),
-                            (target, Some(spec.name.text.to_string())),
+                            local.text().to_string(),
+                            (target, Some(spec.name.text().to_string())),
                         );
                     }
                 }
@@ -279,7 +279,7 @@ pub fn analyze_with(
                     bindings
                         .entry(file)
                         .or_default()
-                        .insert(n.text.to_string(), (target, None));
+                        .insert(n.text().to_string(), (target, None));
                 }
                 ImportClause::SideEffect => {}
             }
@@ -785,21 +785,21 @@ pub fn analyze_with(
                 continue;
             }
             let Some(stmt) = parse
-                .chunk
-                .block
-                .stmts
+                .view()
+                .block()
+                .stmts()
                 .iter()
-                .find(|s| s.span.start == import.start)
+                .find(|s| s.span().start == import.start)
             else {
                 continue;
             };
-            let names: Vec<String> = match &stmt.kind {
-                StmtKind::Import(i) => match &i.clause {
+            let names: Vec<String> = match stmt.kind() {
+                StmtKind::Import(i) => match &i.clause() {
                     ImportClause::Names(specs) => specs
                         .iter()
-                        .map(|s| s.alias.as_ref().unwrap_or(&s.name).text.to_string())
+                        .map(|s| s.alias.as_ref().unwrap_or(&s.name).text().to_string())
                         .collect(),
-                    ImportClause::Namespace(n) => vec![n.text.to_string()],
+                    ImportClause::Namespace(n) => vec![n.text().to_string()],
                     ImportClause::SideEffect => Vec::new(),
                 },
                 _ => Vec::new(),
@@ -824,7 +824,7 @@ pub fn analyze_with(
                     true,
                     Reason {
                         what: "imports it with `import _`".into(),
-                        span: stmt.span,
+                        span: stmt.span(),
                         chain: "top-level code".into(),
                     },
                 ),
@@ -832,7 +832,7 @@ pub fn analyze_with(
                     false,
                     Reason {
                         what: "imports it".into(),
-                        span: stmt.span,
+                        span: stmt.span(),
                         chain: String::new(),
                     },
                 ),

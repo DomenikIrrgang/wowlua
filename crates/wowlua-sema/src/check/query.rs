@@ -13,7 +13,7 @@ pub enum Mode {
     Strict,
 }
 
-impl Env {
+impl Env<'_> {
     /// A type as messages show it.
     pub fn display(&self, t: TypeId) -> String {
         self.display_depth(t, 0)

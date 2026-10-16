@@ -99,7 +99,7 @@ impl<'a> Lowerer<'a> {
                 Base::None
             },
             widget: None,
-            members: sema_classes::members(c.ast()),
+            members: sema_classes::members(c),
         })
     }
 
@@ -108,7 +108,7 @@ impl<'a> Lowerer<'a> {
             return info.clone();
         }
         let mut diagnostics = Vec::new();
-        let info = sema_classes::enum_info(e.ast(), &|_| None, &mut diagnostics);
+        let info = sema_classes::enum_info(e, &|_| None, &mut diagnostics);
         self.errors.extend(diagnostics);
         Arc::new(info)
     }
@@ -124,7 +124,7 @@ impl<'a> Lowerer<'a> {
 
     /// The value a type path refers to (`extends a.b.C`).
     fn path_value(&mut self, t: Type<'a>, pos: Pos) -> ir::Expr {
-        let Some(path) = sema_classes::type_path(t.ast()) else {
+        let Some(path) = sema_classes::type_path(t) else {
             return lit(ir::ExprKind::Nil, pos);
         };
         let mut value = match self.lookup(&path[0]).cloned() {

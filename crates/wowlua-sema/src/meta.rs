@@ -4,7 +4,7 @@
 use crate::constant::{self, Const};
 use indexmap::IndexMap;
 use std::collections::HashMap;
-use wowlua_syntax::ast::{Expr, ExprKind};
+use wowlua_syntax::view::{ArgsKind, Decorator, Expr, ExprKind};
 
 /// A value of `wowlua:meta`.
 #[derive(Clone, Debug, PartialEq)]
@@ -218,21 +218,21 @@ impl Meta {
 /// A constant access path: `meta.a.b`, `meta["a"]`. `kind_of` gives the
 /// `wowlua:meta` export a name is bound to.
 pub fn access_path(
-    e: &Expr,
+    e: Expr<'_>,
     kind_of: &dyn Fn(&str) -> Option<MetaKind>,
 ) -> Option<(MetaKind, Vec<String>)> {
-    match &e.kind {
-        ExprKind::Name(n) => kind_of(&n.text).map(|k| (k, Vec::new())),
+    match e.kind() {
+        ExprKind::Name(n) => kind_of(n.text()).map(|k| (k, Vec::new())),
         ExprKind::Field { obj, name } => {
             let (k, mut path) = access_path(obj, kind_of)?;
-            path.push(name.text.to_string());
+            path.push(name.text().to_string());
             Some((k, path))
         }
         ExprKind::Index { obj, key } => {
-            let key = match &key.kind {
-                ExprKind::String(s) => String::from_utf8_lossy(&s.value).into_owned(),
+            let key = match key.kind() {
+                ExprKind::String(s) => String::from_utf8_lossy(&s.value()).into_owned(),
                 ExprKind::Number(n) => {
-                    let v = n.value?;
+                    let v = n.value()?;
                     if v.fract() != 0.0 {
                         return None;
                     }
@@ -253,7 +253,7 @@ pub fn access_path(
 /// paths (and `flavor` in split mode), folded constants and literals,
 /// combined with the allowed operators.
 pub fn static_value(
-    e: &Expr,
+    e: Expr<'_>,
     meta: &Meta,
     kind_of: &dyn Fn(&str) -> Option<MetaKind>,
     consts: &dyn Fn(&str) -> Option<Const>,
@@ -265,18 +265,17 @@ pub fn static_value(
                 _ => None,
             };
         }
-        match &leaf.kind {
-            ExprKind::Name(n) => consts(&n.text),
+        match leaf.kind() {
+            ExprKind::Name(n) => consts(n.text()),
             _ => None,
         }
     })
 }
 
 /// The expression uses `flavor` (E1039 in shared mode).
-pub fn uses_flavor(e: &Expr, kind_of: &dyn Fn(&str) -> Option<MetaKind>) -> bool {
+pub fn uses_flavor(e: Expr<'_>, kind_of: &dyn Fn(&str) -> Option<MetaKind>) -> bool {
     let mut found = false;
-    wowlua_syntax::visit::walk_expr(wowlua_syntax::view::Expr::of(e), &mut |x| {
-        let x = x.ast();
+    wowlua_syntax::visit::walk_expr(e, &mut |x| {
         if let Some((MetaKind::Flavor, _)) = access_path(x, kind_of) {
             found = true;
         }
@@ -285,12 +284,13 @@ pub fn uses_flavor(e: &Expr, kind_of: &dyn Fn(&str) -> Option<MetaKind>) -> bool
 }
 
 /// The `@if(condition)` decorator's condition, if `d` is one.
-pub fn if_condition(d: &wowlua_syntax::ast::Decorator) -> Option<Option<&Expr>> {
-    if !(d.path.len() == 1 && d.path[0].text.as_ref() == "if") {
+pub fn if_condition(d: Decorator<'_>) -> Option<Option<Expr<'_>>> {
+    let path = d.path();
+    if !(path.len() == 1 && path.at(0).text() == "if") {
         return None;
     }
-    Some(match &d.args {
-        Some(wowlua_syntax::ast::Args::Parens { args, .. }) if args.len() == 1 => Some(&args[0]),
+    Some(match d.args().map(|a| a.kind()) {
+        Some(ArgsKind::Parens { args, .. }) if args.len() == 1 => Some(args.at(0)),
         _ => None,
     })
 }

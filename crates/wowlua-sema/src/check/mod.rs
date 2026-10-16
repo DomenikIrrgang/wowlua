@@ -21,7 +21,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::{HashMap, HashSet};
 use types::{Field, Record, Ty, TypeId, Types};
 use wowlua_diagnostics::Diagnostic;
-use wowlua_syntax::ast::{ImportClause, StmtKind};
+use wowlua_syntax::view::{Block, ImportClause, RetType, StmtKind, Type, TypeArg};
 
 /// How one file is checked (spec §2.1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,24 +114,24 @@ pub fn check_package_full(
         };
         let mut imports = Vec::new();
         let mut namespaces = Vec::new();
-        for s in &parse.chunk.block.stmts {
-            let StmtKind::Import(import) = &s.kind else {
+        for s in parse.view().block().stmts() {
+            let StmtKind::Import(import) = s.kind() else {
                 continue;
             };
-            let Some(resolved) = info.imports.iter().find(|r| r.start == s.span.start) else {
+            let Some(resolved) = info.imports.iter().find(|r| r.start == s.span().start) else {
                 continue;
             };
             let Target::Module(m) = resolved.target else {
                 continue;
             };
-            match &import.clause {
+            match &import.clause() {
                 ImportClause::Names(specs) => {
                     for spec in specs {
                         let local = spec.alias.as_ref().unwrap_or(&spec.name);
-                        imports.push((local.text.clone(), m, spec.name.text.clone()));
+                        imports.push((local.text().into(), m, spec.name.text().into()));
                     }
                 }
-                ImportClause::Namespace(n) => namespaces.push((n.text.clone(), m)),
+                ImportClause::Namespace(n) => namespaces.push((n.text().into(), m)),
                 ImportClause::SideEffect => {}
             }
         }
@@ -218,7 +218,7 @@ pub fn check_package_full(
         let mut fresh = FileGlobals::default();
         let globals = match cached.as_mut() {
             Some(c) => c
-                .entry((f.src_rel.as_str().into(), parse.chunk.span.file))
+                .entry((f.src_rel.as_str().into(), parse.view().span().file))
                 .or_default(),
             None => &mut fresh,
         };
@@ -284,10 +284,11 @@ pub fn check_package_full(
         if reusable
             && let Some(reuse) = reuse.as_mut()
             && reuse.cache.package_matches(extra_globals, assigned_globals)
-            && let Some(reused) =
-                reuse
-                    .cache
-                    .lookup(&env, (&files[i].src_rel, parse.chunk.span.file), settings)
+            && let Some(reused) = reuse.cache.lookup(
+                &env,
+                (&files[i].src_rel, parse.view().span().file),
+                settings,
+            )
         {
             // Debug builds (and so the tests) check it again and compare.
             #[cfg(debug_assertions)]
@@ -364,7 +365,7 @@ pub fn check_package_full(
             {
                 reuse.cache.store(
                     &env,
-                    (&files[i].src_rel, parse.chunk.span.file),
+                    (&files[i].src_rel, parse.view().span().file),
                     settings,
                     &reads,
                     unborn,
@@ -434,15 +435,15 @@ pub fn check_package_full(
 }
 
 /// The type names a type annotation refers to.
-fn type_refs<'a>(t: &'a wowlua_syntax::ast::Type, out: &mut Vec<&'a str>) {
-    use wowlua_syntax::ast::TypeKind;
-    match &t.kind {
+fn type_refs<'a>(t: Type<'a>, out: &mut Vec<&'a str>) {
+    use wowlua_syntax::view::TypeKind;
+    match t.kind() {
         TypeKind::Ref { path, args } => {
             if let Some(last) = path.last() {
-                out.push(&last.text);
+                out.push(last.text());
             }
             for a in args {
-                if let wowlua_syntax::ast::TypeArg::Type(t) = a {
+                if let TypeArg::Type(t) = a {
                     type_refs(t, out);
                 }
             }
@@ -477,7 +478,7 @@ impl FileGlobals {
     ) {
         if wowlua && self.decorated.is_none() {
             let mut names = Vec::new();
-            global_decorated(&parse.chunk.block, &mut names);
+            global_decorated(parse.view().block(), &mut names);
             self.decorated = Some(names);
         }
         if checked && self.assigned.is_none() {
@@ -505,18 +506,17 @@ impl FileGlobals {
 }
 
 /// Names of declarations decorated with `@global`.
-fn global_decorated(block: &wowlua_syntax::ast::Block, out: &mut Vec<String>) {
-    use wowlua_syntax::ast::ExprKind;
-    for s in &block.stmts {
-        let Some(d) = s.decorators.iter().find(|d| d.is_named("global")) else {
+fn global_decorated(block: Block<'_>, out: &mut Vec<String>) {
+    use wowlua_syntax::view::ExprKind;
+    for s in block.stmts() {
+        let Some(d) = s.decorators().iter().find(|d| d.is_named("global")) else {
             continue;
         };
         let explicit = d
-            .args
-            .as_ref()
-            .and_then(|a| match a.exprs().first().map(|e| &e.kind) {
+            .args()
+            .and_then(|a| match a.exprs().first().map(|e| e.kind()) {
                 Some(ExprKind::String(lit)) => {
-                    Some(String::from_utf8_lossy(&lit.value).into_owned())
+                    Some(String::from_utf8_lossy(&lit.value()).into_owned())
                 }
                 _ => None,
             });
@@ -524,31 +524,30 @@ fn global_decorated(block: &wowlua_syntax::ast::Block, out: &mut Vec<String>) {
             out.push(name);
             continue;
         }
-        let inner = match &s.kind {
-            StmtKind::Export(i) => &i.kind,
+        let inner = match s.kind() {
+            StmtKind::Export(i) => i.kind(),
             k => k,
         };
         match inner {
             StmtKind::Local { names, .. } => {
-                out.extend(names.iter().map(|n| n.name.text.to_string()))
+                out.extend(names.iter().map(|n| n.name.text().to_string()))
             }
             StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
-                out.push(name.text.to_string());
+                out.push(name.text().to_string());
             }
             StmtKind::Function { name, .. } => {
                 out.push(
-                    name.method
-                        .as_ref()
-                        .unwrap_or_else(|| name.path.last().expect("a name"))
-                        .text
+                    name.method()
+                        .unwrap_or_else(|| name.path().last().expect("a name"))
+                        .text()
                         .to_string(),
                 );
             }
             StmtKind::Class(c) => {
-                out.push(c.name.text.to_string());
+                out.push(c.name().text().to_string());
             }
             StmtKind::Enum(e) => {
-                out.push(e.name.text.to_string());
+                out.push(e.name().text().to_string());
             }
             _ => {}
         }
@@ -638,38 +637,38 @@ fn check_file_in(
     // `@global` declarations hand their classes to other addons: the
     // class itself, the types of its values, the types its signature
     // names.
-    for st in &parse.chunk.block.stmts {
-        if !st.decorators.iter().any(|d| d.is_named("global")) {
+    for st in parse.view().block().stmts() {
+        if !st.decorators().iter().any(|d| d.is_named("global")) {
             continue;
         }
-        let inner = match &st.kind {
-            StmtKind::Export(i) => i.as_ref(),
+        let inner = match st.kind() {
+            StmtKind::Export(i) => i,
             _ => st,
         };
         let mut names: Vec<&str> = Vec::new();
-        match &inner.kind {
-            StmtKind::Class(c) => names.push(&c.name.text),
+        match inner.kind() {
+            StmtKind::Class(c) => names.push(c.name().text()),
             StmtKind::Local { names: ns, values } => {
                 for v in values {
-                    if let Some(&t) = checker.expr_types.get(&(v.span.start, v.span.end)) {
+                    if let Some(&t) = checker.expr_types.get(&(v.span().start, v.span().end)) {
                         checker.note_global_classes(t);
                     }
                 }
                 for n in ns {
                     if let Some(t) = &n.ty {
-                        type_refs(t, &mut names);
+                        type_refs(*t, &mut names);
                     }
                 }
             }
             StmtKind::LocalFunction { func, .. } | StmtKind::Function { func, .. } => {
-                for p in &func.params {
-                    if let Some(t) = &p.ty {
+                for p in func.params() {
+                    if let Some(t) = p.ty() {
                         type_refs(t, &mut names);
                     }
                 }
-                match &func.ret {
-                    Some(wowlua_syntax::ast::RetType::Single(t)) => type_refs(t, &mut names),
-                    Some(wowlua_syntax::ast::RetType::List { types, .. }) => {
+                match func.ret() {
+                    Some(RetType::Single(t)) => type_refs(t, &mut names),
+                    Some(RetType::List { types, .. }) => {
                         types.iter().for_each(|t| type_refs(t, &mut names))
                     }
                     _ => {}
@@ -733,14 +732,14 @@ fn import_types(
     let (Some(parse), Some(info)) = (files[file].parse, &analysis.modules[file]) else {
         return out;
     };
-    for s in &parse.chunk.block.stmts {
-        let StmtKind::Import(import) = &s.kind else {
+    for s in parse.view().block().stmts() {
+        let StmtKind::Import(import) = s.kind() else {
             continue;
         };
-        if import.type_only {
+        if import.type_only() {
             continue;
         }
-        let Some(resolved) = info.imports.iter().find(|r| r.start == s.span.start) else {
+        let Some(resolved) = info.imports.iter().find(|r| r.start == s.span().start) else {
             continue;
         };
         let module = match resolved.target {
@@ -772,12 +771,12 @@ fn import_types(
                 _ => Types::ANY,
             }
         };
-        match &import.clause {
+        match &import.clause() {
             ImportClause::Names(specs) => {
                 for spec in specs {
                     let local = spec.alias.as_ref().unwrap_or(&spec.name);
-                    let t = export_type(env, &spec.name.text);
-                    out.insert(local.text.clone(), t);
+                    let t = export_type(env, spec.name.text());
+                    out.insert(local.text().into(), t);
                 }
             }
             ImportClause::Namespace(n) => {
@@ -803,7 +802,7 @@ fn import_types(
                     }
                     None => Types::ANY,
                 };
-                out.insert(n.text.clone(), t);
+                out.insert(n.text().into(), t);
             }
             ImportClause::SideEffect => {}
         }

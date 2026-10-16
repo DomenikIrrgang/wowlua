@@ -6,7 +6,7 @@
 use wowlua_diagnostics::{Diagnostic, Edit};
 use wowlua_span::Span;
 use wowlua_syntax::Parse;
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 
 /// The lints of one file. `text` is the file's source.
 pub fn lint(parse: &Parse, text: &[u8]) -> Vec<Diagnostic> {
@@ -22,33 +22,33 @@ fn lint_inner(parse: &Parse, text: &[u8]) -> Vec<Diagnostic> {
         scopes: vec![Vec::new()],
         diagnostics: Vec::new(),
     };
-    let block = &parse.chunk.block;
+    let block = parse.view().block();
     let module = block
-        .stmts
+        .stmts()
         .iter()
-        .any(|s| matches!(s.kind, StmtKind::Import(_) | StmtKind::Export(_)));
+        .any(|s| matches!(s.kind(), StmtKind::Import(_) | StmtKind::Export(_)));
     // Top-level functions of a module are hoisted locals.
     if module {
-        for s in &block.stmts {
-            let (decorated, inner) = match &s.kind {
-                StmtKind::Export(inner) => (true, &**inner),
-                _ => (!s.decorators.is_empty(), s),
+        for s in block.stmts() {
+            let (decorated, inner) = match s.kind() {
+                StmtKind::Export(inner) => (true, inner),
+                _ => (!s.decorators().is_empty(), s),
             };
-            if let StmtKind::Function { name, .. } = &inner.kind
-                && name.path.len() == 1
-                && name.method.is_none()
+            if let StmtKind::Function { name, .. } = &inner.kind()
+                && name.path().len() == 1
+                && name.method().is_none()
             {
-                let kind = if decorated || !inner.decorators.is_empty() {
+                let kind = if decorated || !inner.decorators().is_empty() {
                     Kind::Exempt
                 } else {
                     Kind::Unused
                 };
-                let group = l.group(Some(l.delete(s.span)), 1);
-                l.declare(&name.path[0], kind, Some(group), false);
+                let group = l.group(Some(l.delete(s.span())), 1);
+                l.declare(name.path().at(0), kind, Some(group), false);
             }
         }
     }
-    for s in &block.stmts {
+    for s in block.stmts() {
         l.stmt(s);
     }
     l.pop_scope();
@@ -110,8 +110,8 @@ fn exempt_name(name: &str) -> bool {
 
 /// An expression without side effects (literals, names, functions, and
 /// tables of those).
-fn pure(e: &Expr) -> bool {
-    match &e.kind {
+fn pure(e: Expr<'_>) -> bool {
+    match e.kind() {
         ExprKind::Nil
         | ExprKind::True
         | ExprKind::False
@@ -314,32 +314,44 @@ impl Linter<'_> {
 
     /// Declares a binding in the current scope; `shadow`: report W1004 when
     /// it shadows a local of an enclosing scope.
-    fn declare(&mut self, name: &Name, kind: Kind, group: Option<usize>, shadow: bool) -> usize {
-        if shadow && kind != Kind::Exempt && !exempt_name(&name.text) {
+    fn declare(&mut self, name: Name<'_>, kind: Kind, group: Option<usize>, shadow: bool) -> usize {
+        self.declare_at(name.text(), name.span(), kind, group, shadow)
+    }
+
+    /// [`Self::declare`] for a name the source does not spell (`self`).
+    fn declare_at(
+        &mut self,
+        text: &str,
+        span: Span,
+        kind: Kind,
+        group: Option<usize>,
+        shadow: bool,
+    ) -> usize {
+        if shadow && kind != Kind::Exempt && !exempt_name(text) {
             let (current, outer) = self.scopes.split_last().expect("a scope");
-            let in_current = current.iter().any(|&i| self.bindings[i].name == name.text);
+            let in_current = current.iter().any(|&i| &*self.bindings[i].name == text);
             let shadowed = outer
                 .iter()
                 .rev()
                 .flat_map(|s| s.iter().rev())
                 .copied()
-                .find(|&i| self.bindings[i].name == name.text);
+                .find(|&i| &*self.bindings[i].name == text);
             if let Some(o) = shadowed
                 && !in_current
             {
                 let d = Diagnostic::warning(
                     "W1004",
-                    format!("`{}` shadows a local of an enclosing scope", name.text),
+                    format!("`{text}` shadows a local of an enclosing scope"),
                 )
-                .with_label(name.span, "declared here")
+                .with_label(span, "declared here")
                 .with_label(self.bindings[o].span, "shadowed local");
                 self.diagnostics.push(d);
             }
         }
         let i = self.bindings.len();
         self.bindings.push(Binding {
-            name: name.text.clone(),
-            span: name.span,
+            name: text.into(),
+            span,
             kind,
             used: false,
             group,
@@ -357,37 +369,37 @@ impl Linter<'_> {
 
     // ------------------------------------------------------------ blocks --
 
-    fn block(&mut self, b: &Block) {
+    fn block(&mut self, b: Block<'_>) {
         self.push_scope();
-        for s in &b.stmts {
+        for s in b.stmts() {
             self.stmt(s);
         }
         self.pop_scope();
     }
 
-    fn decorators(&mut self, ds: &[Decorator]) {
+    fn decorators(&mut self, ds: Decorators<'_>) {
         for d in ds {
             if !d.is_core() {
-                self.use_name(&d.path[0].text);
+                self.use_name(d.path().at(0).text());
             }
-            if let Some(args) = &d.args {
+            if let Some(args) = d.args() {
                 self.args(args);
             }
         }
     }
 
     /// The kind of a declared local (decorated declarations are exempt).
-    fn local_kind(s: &Stmt, kind: Kind) -> Kind {
-        if s.decorators.is_empty() {
+    fn local_kind(s: Stmt<'_>, kind: Kind) -> Kind {
+        if s.decorators().is_empty() {
             kind
         } else {
             Kind::Exempt
         }
     }
 
-    fn stmt(&mut self, s: &Stmt) {
-        self.decorators(&s.decorators);
-        match &s.kind {
+    fn stmt(&mut self, s: Stmt<'_>) {
+        self.decorators(s.decorators());
+        match s.kind() {
             StmtKind::Export(inner) => {
                 let first = self.bindings.len();
                 self.stmt(inner);
@@ -403,18 +415,13 @@ impl Linter<'_> {
                 }
                 for n in names {
                     if let Some(t) = &n.ty {
-                        self.ty(t);
+                        self.ty(*t);
                     }
                 }
-                let removal = values.iter().all(pure).then(|| self.delete(s.span));
+                let removal = values.iter().all(pure).then(|| self.delete(s.span()));
                 let group = self.group(removal, names.len());
                 for n in names {
-                    self.declare(
-                        &n.name,
-                        Self::local_kind(s, Kind::Unused),
-                        Some(group),
-                        true,
-                    );
+                    self.declare(n.name, Self::local_kind(s, Kind::Unused), Some(group), true);
                 }
             }
             StmtKind::LocalDestructure { fields, ty, value } => {
@@ -426,11 +433,11 @@ impl Linter<'_> {
                 }
                 for f in fields {
                     if let Some(d) = &f.default {
-                        self.expr(d);
+                        self.expr(*d);
                     }
                 }
                 for f in fields {
-                    self.declare(&f.name, Self::local_kind(s, Kind::NoFix), None, true);
+                    self.declare(f.name, Self::local_kind(s, Kind::NoFix), None, true);
                 }
             }
             StmtKind::Const { name, ty, value } => {
@@ -440,25 +447,22 @@ impl Linter<'_> {
                 if let Some(t) = ty {
                     self.ty(t);
                 }
-                let removal = value
-                    .as_deref()
-                    .is_none_or(pure)
-                    .then(|| self.delete(s.span));
+                let removal = value.is_none_or(pure).then(|| self.delete(s.span()));
                 let group = self.group(removal, 1);
                 self.declare(name, Self::local_kind(s, Kind::Unused), Some(group), true);
             }
             StmtKind::LocalFunction { name, func } => {
-                let group = self.group(Some(self.delete(s.span)), 1);
+                let group = self.group(Some(self.delete(s.span())), 1);
                 self.declare(name, Self::local_kind(s, Kind::Unused), Some(group), true);
                 self.func(func, false);
             }
             StmtKind::Function { name, func } => {
                 // `function a.b()` reads `a`; `function f()` assigns `f` (a
                 // hoisted local in a module, else a local or a global).
-                if name.path.len() > 1 || name.method.is_some() {
-                    self.use_name(&name.path[0].text);
+                if name.path().len() > 1 || name.method().is_some() {
+                    self.use_name(name.path().at(0).text());
                 }
-                self.func(func, name.method.is_some());
+                self.func(func, name.method().is_some());
             }
             StmtKind::Assign { targets, values } => {
                 for v in values {
@@ -480,7 +484,7 @@ impl Linter<'_> {
             }
             StmtKind::Repeat { body, cond } => {
                 self.push_scope();
-                for s in &body.stmts {
+                for s in body.stmts() {
                     self.stmt(s);
                 }
                 self.expr(cond);
@@ -516,9 +520,9 @@ impl Linter<'_> {
                 }
                 self.push_scope();
                 if let Some(t) = &var.ty {
-                    self.ty(t);
+                    self.ty(*t);
                 }
-                let i = self.declare(&var.name, Kind::Loop, None, true);
+                let i = self.declare(var.name, Kind::Loop, None, true);
                 self.block(body);
                 self.positional(&[i]);
                 self.pop_scope();
@@ -531,9 +535,9 @@ impl Linter<'_> {
                 let mut ids = Vec::new();
                 for v in vars {
                     if let Some(t) = &v.ty {
-                        self.ty(t);
+                        self.ty(*t);
                     }
-                    ids.push(self.declare(&v.name, Kind::Loop, None, true));
+                    ids.push(self.declare(v.name, Kind::Loop, None, true));
                 }
                 self.block(body);
                 self.positional(&ids);
@@ -548,58 +552,60 @@ impl Linter<'_> {
             StmtKind::Class(c) => self.class(c),
             StmtKind::Interface(i) => self.interface(i),
             StmtKind::Enum(e) => {
-                for item in &e.items {
+                for item in e.items() {
                     if let Some(v) = &item.value {
-                        self.expr(v);
+                        self.expr(*v);
                     }
                 }
             }
             StmtKind::TypeAlias(a) => {
-                self.type_params(&a.type_params);
-                self.ty(&a.ty);
+                self.type_params(a.type_params());
+                self.ty(a.ty());
             }
             StmtKind::Declare(_) => {}
-            StmtKind::Import(i) => self.import(i, s.span),
+            StmtKind::Import(i) => self.import(i, s.span()),
         }
     }
 
-    fn import(&mut self, i: &Import, span: Span) {
-        let from = String::from_utf8_lossy(&i.from.value).into_owned();
+    fn import(&mut self, i: Import<'_>, span: Span) {
+        let from = String::from_utf8_lossy(&i.from().value()).into_owned();
         // Removing every name: the statement goes when the import has no
         // load-order effect (type-only, standard library), else it becomes
         // `import _ from "…"`, which keeps the load order.
-        let whole = if i.type_only || from.starts_with("wowlua:") {
+        let whole = if i.type_only() || from.starts_with("wowlua:") {
             self.delete(span)
         } else {
-            let raw = String::from_utf8_lossy(&i.from.raw).into_owned();
+            let raw = String::from_utf8_lossy(i.from().raw()).into_owned();
             Edit {
                 span,
                 replacement: format!("import _ from {raw}"),
             }
         };
-        match &i.clause {
+        match i.clause() {
             ImportClause::SideEffect => {}
             ImportClause::Namespace(n) => {
                 let group = self.group(Some(whole), 1);
                 self.declare(n, Kind::Import, Some(group), false);
             }
             ImportClause::Names(specs) => {
-                let bound = |s: &ImportSpec| s.alias.clone().unwrap_or_else(|| s.name.clone());
-                if specs.iter().any(|s| bound(s).text.as_ref() == "_") {
+                fn bound(s: ImportSpec<'_>) -> Name<'_> {
+                    s.alias.unwrap_or(s.name)
+                }
+                if specs.iter().any(|s| bound(s).text() == "_") {
                     return;
                 }
                 let group = self.group(Some(whole), specs.len());
                 for (k, spec) in specs.iter().enumerate() {
-                    let end = |s: &ImportSpec| bound(s).span.end;
+                    let end = |s| bound(s).span().end;
                     // One name of several: delete it and its comma.
                     let own = if k + 1 < specs.len() {
-                        Some((spec.name.span.start, specs[k + 1].name.span.start))
+                        Some((spec.name.span().start, specs.at(k + 1).name.span().start))
                     } else if k > 0 {
-                        Some((end(&specs[k - 1]), end(spec)))
+                        Some((end(specs.at(k - 1)), end(spec)))
                     } else {
                         None
                     };
-                    let id = self.declare(&bound(spec), Kind::Import, Some(group), false);
+                    let id = self.declare(bound(spec), Kind::Import, Some(group), false);
                     self.bindings[id].own_removal = own.map(|(start, end)| Edit {
                         span: Span {
                             file: span.file,
@@ -616,74 +622,70 @@ impl Linter<'_> {
     // --------------------------------------------------------- functions --
 
     /// A function body; `method`: it has an implicit `self`.
-    fn func(&mut self, f: &FuncBody, method: bool) {
-        self.type_params(&f.type_params);
+    fn func(&mut self, f: Func<'_>, method: bool) {
+        self.type_params(f.type_params());
         self.push_scope();
         if method {
-            let name = Name {
-                text: "self".into(),
-                span: f.params_span,
-            };
-            self.declare(&name, Kind::Exempt, None, false);
+            self.declare_at("self", f.params_span(), Kind::Exempt, None, false);
         }
         let mut ids = Vec::new();
-        for p in &f.params {
-            self.decorators(&p.decorators);
-            if let Some(t) = &p.ty {
+        for p in f.params() {
+            self.decorators(p.decorators());
+            if let Some(t) = p.ty() {
                 self.ty(t);
             }
-            if let Some(d) = &p.default {
+            if let Some(d) = p.default() {
                 self.expr(d);
             }
-            let kind = if p.decorators.is_empty() {
+            let kind = if p.decorators().is_empty() {
                 Kind::Positional
             } else {
                 Kind::Exempt
             };
-            ids.push(self.declare(&p.name, kind, None, true));
+            ids.push(self.declare(p.name(), kind, None, true));
         }
-        if let Some(v) = &f.vararg
+        if let Some(v) = f.vararg()
             && let Some(t) = &v.ty
         {
-            self.vararg_ty(t);
+            self.vararg_ty(*t);
         }
-        if let Some(r) = &f.ret {
+        if let Some(r) = f.ret() {
             self.ret(r);
         }
-        self.block(&f.body);
+        self.block(f.body());
         self.positional(&ids);
         self.pop_scope();
     }
 
     /// A signature without a body (declarations, overloads): types only.
-    fn signature(&mut self, f: &FuncBody) {
-        self.type_params(&f.type_params);
-        for p in &f.params {
-            if let Some(t) = &p.ty {
+    fn signature(&mut self, f: Func<'_>) {
+        self.type_params(f.type_params());
+        for p in f.params() {
+            if let Some(t) = p.ty() {
                 self.ty(t);
             }
         }
-        if let Some(v) = &f.vararg
+        if let Some(v) = f.vararg()
             && let Some(t) = &v.ty
         {
-            self.vararg_ty(t);
+            self.vararg_ty(*t);
         }
-        if let Some(r) = &f.ret {
+        if let Some(r) = f.ret() {
             self.ret(r);
         }
     }
 
-    fn class(&mut self, c: &ClassDecl) {
-        self.type_params(&c.type_params);
-        if let Some(t) = &c.extends {
+    fn class(&mut self, c: ClassDecl<'_>) {
+        self.type_params(c.type_params());
+        if let Some(t) = c.extends() {
             self.ty(t);
         }
-        for t in &c.implements {
+        for t in c.implements() {
             self.ty(t);
         }
-        for m in &c.members {
-            self.decorators(&m.decorators);
-            match &m.kind {
+        for m in c.members() {
+            self.decorators(m.decorators());
+            match m.kind() {
                 ClassMemberKind::Field { ty, value, .. } => {
                     self.ty(ty);
                     if let Some(v) = value {
@@ -692,8 +694,8 @@ impl Linter<'_> {
                 }
                 ClassMemberKind::Method { func, has_body, .. }
                 | ClassMemberKind::Constructor { func, has_body } => {
-                    let is_static = m.modifiers.contains(&Modifier::Static);
-                    if *has_body {
+                    let is_static = m.modifiers().contains(&Modifier::Static);
+                    if has_body {
                         self.func(func, !is_static);
                     } else {
                         self.signature(func);
@@ -704,17 +706,17 @@ impl Linter<'_> {
                         self.ty(t);
                     }
                     self.push_scope();
-                    self.implicit_self(m.span);
+                    self.implicit_self(m.span());
                     self.block(body);
                     self.pop_scope();
                 }
                 ClassMemberKind::Setter { param, body, .. } => {
                     if let Some(t) = &param.ty {
-                        self.ty(t);
+                        self.ty(*t);
                     }
                     self.push_scope();
-                    self.implicit_self(m.span);
-                    let id = self.declare(&param.name, Kind::Positional, None, true);
+                    self.implicit_self(m.span());
+                    let id = self.declare(param.name, Kind::Positional, None, true);
                     self.block(body);
                     self.positional(&[id]);
                     self.pop_scope();
@@ -724,19 +726,15 @@ impl Linter<'_> {
     }
 
     fn implicit_self(&mut self, span: Span) {
-        let name = Name {
-            text: "self".into(),
-            span,
-        };
-        self.declare(&name, Kind::Exempt, None, false);
+        self.declare_at("self", span, Kind::Exempt, None, false);
     }
 
-    fn interface(&mut self, i: &InterfaceDecl) {
-        self.type_params(&i.type_params);
-        for t in &i.extends {
+    fn interface(&mut self, i: InterfaceDecl<'_>) {
+        self.type_params(i.type_params());
+        for t in i.extends() {
             self.ty(t);
         }
-        for m in &i.members {
+        for m in i.members() {
             match m {
                 InterfaceMember::Field { ty, .. } => self.ty(ty),
                 InterfaceMember::Method { sig, .. } => self.signature(sig),
@@ -746,18 +744,18 @@ impl Linter<'_> {
 
     // ------------------------------------------------------------- types --
 
-    fn type_params(&mut self, ps: &[TypeParam]) {
+    fn type_params(&mut self, ps: TypeParams<'_>) {
         for p in ps {
             if let Some(c) = &p.constraint {
-                self.ty(c);
+                self.ty(*c);
             }
         }
     }
 
-    fn ty(&mut self, t: &Type) {
-        match &t.kind {
+    fn ty(&mut self, t: Type<'_>) {
+        match t.kind() {
             TypeKind::Ref { path, args } => {
-                self.use_name(&path[0].text);
+                self.use_name(path.at(0).text());
                 for a in args {
                     match a {
                         TypeArg::Type(t) => self.ty(t),
@@ -788,14 +786,14 @@ impl Linter<'_> {
                 }
             }
             TypeKind::Function(f) => {
-                self.type_params(&f.type_params);
-                for p in &f.params {
-                    self.ty(&p.ty);
+                self.type_params(f.type_params());
+                for p in f.params() {
+                    self.ty(p.ty);
                 }
-                if let Some(v) = &f.vararg {
+                if let Some(v) = f.vararg() {
                     self.vararg_ty(v);
                 }
-                self.ret(&f.ret);
+                self.ret(f.ret());
             }
             TypeKind::Paren(t) | TypeKind::Optional(t) | TypeKind::Array(t) => self.ty(t),
             TypeKind::Union(ts) | TypeKind::Intersection(ts) => {
@@ -807,14 +805,14 @@ impl Linter<'_> {
         }
     }
 
-    fn vararg_ty(&mut self, v: &VarargType) {
+    fn vararg_ty(&mut self, v: VarargType<'_>) {
         match v {
             VarargType::Type(t) | VarargType::Expand(t) => self.ty(t),
             VarargType::Pack(_) => {}
         }
     }
 
-    fn ret(&mut self, r: &RetType) {
+    fn ret(&mut self, r: RetType<'_>) {
         match r {
             RetType::Single(t) | RetType::Predicate { ty: t, .. } => self.ty(t),
             RetType::List { types, vararg, .. } => {
@@ -832,26 +830,26 @@ impl Linter<'_> {
     // ------------------------------------------------------- expressions --
 
     /// An assignment target: a plain name is written, not read.
-    fn target(&mut self, t: &Expr) {
-        match &t.kind {
+    fn target(&mut self, t: Expr<'_>) {
+        match t.kind() {
             ExprKind::Name(_) => {}
             _ => self.expr(t),
         }
     }
 
-    fn args(&mut self, a: &Args) {
+    fn args(&mut self, a: Args<'_>) {
         for e in a.exprs() {
             self.expr(e);
         }
     }
 
-    fn expr(&mut self, e: &Expr) {
+    fn expr(&mut self, e: Expr<'_>) {
         stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.expr_inner(e))
     }
 
-    fn expr_inner(&mut self, e: &Expr) {
-        match &e.kind {
-            ExprKind::Name(n) => self.use_name(&n.text),
+    fn expr_inner(&mut self, e: Expr<'_>) {
+        match e.kind() {
+            ExprKind::Name(n) => self.use_name(n.text()),
             ExprKind::Function(f) => self.func(f, false),
             ExprKind::Table(fields) => {
                 for f in fields {

@@ -3,6 +3,7 @@
 //! bitwise operators with WoW's `bit` library semantics (32-bit, signed).
 
 use wowlua_luair::ir::{self, Pos};
+use wowlua_syntax::view::Expr;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Const {
@@ -227,7 +228,7 @@ fn concat_part(c: &Const) -> Option<Vec<u8>> {
 /// expression stays as it is): string ordering depends on the locale, and
 /// operations that would raise errors at run time are left to run time.
 pub fn fold_binary(op: wowlua_syntax::ast::BinOp, a: &Const, b: &Const) -> Option<Const> {
-    use wowlua_syntax::ast::BinOp as B;
+    use wowlua_syntax::view::BinOp as B;
     let num = |c: &Const| match c {
         Const::Number(n) => Some(*n),
         _ => None,
@@ -296,9 +297,9 @@ pub fn fold_binary(op: wowlua_syntax::ast::BinOp, a: &Const, b: &Const) -> Optio
 
 /// The value of a constant expression (spec §1.3.2), if it is one; `lookup`
 /// gives the values of folded constants by name.
-pub fn eval(e: &wowlua_syntax::ast::Expr, lookup: &dyn Fn(&str) -> Option<Const>) -> Option<Const> {
-    eval_with(e, &|leaf| match &leaf.kind {
-        wowlua_syntax::ast::ExprKind::Name(n) => lookup(&n.text),
+pub fn eval(e: Expr<'_>, lookup: &dyn Fn(&str) -> Option<Const>) -> Option<Const> {
+    eval_with(e, &|leaf| match leaf.kind() {
+        wowlua_syntax::view::ExprKind::Name(n) => lookup(n.text()),
         _ => None,
     })
 }
@@ -319,19 +320,19 @@ pub type EvalMemo = rustc_hash::FxHashMap<(wowlua_span::FileId, u32), Option<(Co
 /// (as lowering does), where a `deep::run` would make a stack the size of
 /// the whole chain for every question.
 pub fn eval_tracked(
-    e: &wowlua_syntax::ast::Expr,
-    leaf: &dyn Fn(&wowlua_syntax::ast::Expr) -> Option<Const>,
+    e: Expr<'_>,
+    leaf: &dyn Fn(Expr<'_>) -> Option<Const>,
     memo: &mut EvalMemo,
 ) -> Option<(Const, bool)> {
     eval_tracked_rec(e, leaf, memo)
 }
 
 fn eval_tracked_rec(
-    e: &wowlua_syntax::ast::Expr,
-    leaf: &dyn Fn(&wowlua_syntax::ast::Expr) -> Option<Const>,
+    e: Expr<'_>,
+    leaf: &dyn Fn(Expr<'_>) -> Option<Const>,
     memo: &mut EvalMemo,
 ) -> Option<(Const, bool)> {
-    let key = (e.id.0 != 0).then_some((e.span.file, e.id.0));
+    let key = (e.id() != 0).then_some((e.span().file, e.id()));
     if let Some(key) = key
         && let Some(found) = memo.get(&key)
     {
@@ -347,18 +348,18 @@ fn eval_tracked_rec(
 /// As `eval_with_inner`; a value is found by a leaf when any of its parts
 /// is (every part was evaluated: a part without a value has none).
 fn eval_tracked_inner(
-    e: &wowlua_syntax::ast::Expr,
-    leaf: &dyn Fn(&wowlua_syntax::ast::Expr) -> Option<Const>,
+    e: Expr<'_>,
+    leaf: &dyn Fn(Expr<'_>) -> Option<Const>,
     memo: &mut EvalMemo,
 ) -> Option<(Const, bool)> {
-    use wowlua_syntax::ast::{ExprKind, UnOp};
+    use wowlua_syntax::view::{ExprKind, UnOp};
     let literal = |c: Const| Some((c, false));
-    match &e.kind {
+    match e.kind() {
         ExprKind::Nil => literal(Const::Nil),
         ExprKind::True => literal(Const::Bool(true)),
         ExprKind::False => literal(Const::Bool(false)),
-        ExprKind::Number(n) => n.value.map(|v| (Const::Number(v), false)),
-        ExprKind::String(s) => literal(Const::String(s.value.to_vec())),
+        ExprKind::Number(n) => n.value().map(|v| (Const::Number(v), false)),
+        ExprKind::String(s) => literal(Const::String(s.value().to_vec())),
         ExprKind::Paren(inner) => eval_tracked_rec(inner, leaf, memo),
         ExprKind::Cast { expr, .. } => eval_tracked_rec(expr, leaf, memo),
         ExprKind::Unary { op, operand } => {
@@ -374,30 +375,24 @@ fn eval_tracked_inner(
         ExprKind::Binary { op, lhs, rhs } => {
             let (a, fa) = eval_tracked_rec(lhs, leaf, memo)?;
             let (b, fb) = eval_tracked_rec(rhs, leaf, memo)?;
-            fold_binary(*op, &a, &b).map(|v| (v, fa || fb))
+            fold_binary(op, &a, &b).map(|v| (v, fa || fb))
         }
         _ => leaf(e).map(|v| (v, true)),
     }
 }
 
-pub fn eval_with(
-    e: &wowlua_syntax::ast::Expr,
-    leaf: &dyn Fn(&wowlua_syntax::ast::Expr) -> Option<Const>,
-) -> Option<Const> {
+pub fn eval_with(e: Expr<'_>, leaf: &dyn Fn(Expr<'_>) -> Option<Const>) -> Option<Const> {
     wowlua_syntax::deep::run(|| eval_with_inner(e, leaf))
 }
 
-fn eval_with_inner(
-    e: &wowlua_syntax::ast::Expr,
-    leaf: &dyn Fn(&wowlua_syntax::ast::Expr) -> Option<Const>,
-) -> Option<Const> {
-    use wowlua_syntax::ast::{ExprKind, UnOp};
-    match &e.kind {
+fn eval_with_inner(e: Expr<'_>, leaf: &dyn Fn(Expr<'_>) -> Option<Const>) -> Option<Const> {
+    use wowlua_syntax::view::{ExprKind, UnOp};
+    match e.kind() {
         ExprKind::Nil => Some(Const::Nil),
         ExprKind::True => Some(Const::Bool(true)),
         ExprKind::False => Some(Const::Bool(false)),
-        ExprKind::Number(n) => n.value.map(Const::Number),
-        ExprKind::String(s) => Some(Const::String(s.value.to_vec())),
+        ExprKind::Number(n) => n.value().map(Const::Number),
+        ExprKind::String(s) => Some(Const::String(s.value().to_vec())),
         ExprKind::Paren(inner) => eval_with_inner(inner, leaf),
         ExprKind::Cast { expr, .. } => eval_with_inner(expr, leaf),
         ExprKind::Unary { op, operand } => {
@@ -412,7 +407,7 @@ fn eval_with_inner(
         ExprKind::Binary { op, lhs, rhs } => {
             let a = eval_with_inner(lhs, leaf)?;
             let b = eval_with_inner(rhs, leaf)?;
-            fold_binary(*op, &a, &b)
+            fold_binary(op, &a, &b)
         }
         _ => leaf(e),
     }
@@ -438,18 +433,14 @@ mod tests {
         let file = db.add("small.lua", "local x = y\n");
         let parse = wowlua_syntax::parse(b"local x = y\n", file);
         let mut name = None;
-        wowlua_syntax::visit::walk_block(
-            wowlua_syntax::view::Block::of(&parse.chunk.block),
-            &mut |e| {
-                let e = e.ast();
-                if matches!(e.kind, wowlua_syntax::ast::ExprKind::Name(_)) {
-                    name = name.or(Some(e));
-                }
-            },
-        );
+        wowlua_syntax::visit::walk_block(parse.view().block(), &mut |e| {
+            if matches!(e.kind(), wowlua_syntax::view::ExprKind::Name(_)) {
+                name = name.or(Some(e));
+            }
+        });
         let before = stacker::remaining_stack().unwrap();
         let at_leaf = std::cell::Cell::new(0);
-        let leaf = |_: &wowlua_syntax::ast::Expr| {
+        let leaf = |_: Expr<'_>| {
             at_leaf.set(stacker::remaining_stack().unwrap());
             None
         };

@@ -170,7 +170,7 @@ enum Node {
 }
 
 struct Walk<'e> {
-    env: &'e Env,
+    env: &'e Env<'e>,
     out: Vec<u8>,
     labels: FxHashMap<Node, u32>,
     queue: VecDeque<Node>,

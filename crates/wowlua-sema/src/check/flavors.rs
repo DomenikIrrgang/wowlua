@@ -4,7 +4,7 @@
 
 use super::body::Checker;
 use std::collections::{BTreeSet, HashMap, HashSet};
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 
 /// The flavors of a shared-mode build and where each API exists.
 #[derive(Clone, Debug, Default)]
@@ -43,14 +43,14 @@ impl Guard {
     }
 }
 
-impl Checker<'_> {
+impl Checker<'_, '_> {
     /// The API path of an expression (`C_EditMode`, `C_EditMode.GetLayouts`)
     /// when it names a global.
-    fn api_path(&self, e: &Expr) -> Option<String> {
-        match &e.kind {
-            ExprKind::Name(n) if self.lookup_var(&n.text).is_none() => Some(n.text.to_string()),
+    fn api_path(&self, e: Expr<'_>) -> Option<String> {
+        match e.kind() {
+            ExprKind::Name(n) if self.lookup_var(n.text()).is_none() => Some(n.text().to_string()),
             ExprKind::Field { obj, name } => {
-                self.api_path(obj).map(|p| format!("{p}.{}", name.text))
+                self.api_path(obj).map(|p| format!("{p}.{}", name.text()))
             }
             ExprKind::Paren(inner) => self.api_path(inner),
             _ => None,
@@ -59,8 +59,8 @@ impl Checker<'_> {
 
     /// Records the existence tests of a condition (the condition itself,
     /// operands of `not`, `and`, `or`, and `== nil`/`~= nil`).
-    pub fn mark_probes(&mut self, cond: &Expr) {
-        match &cond.kind {
+    pub fn mark_probes(&mut self, cond: Expr<'_>) {
+        match cond.kind() {
             ExprKind::Paren(inner) => self.mark_probes(inner),
             ExprKind::Unary {
                 op: UnOp::Not,
@@ -79,15 +79,15 @@ impl Checker<'_> {
                 lhs,
                 rhs,
             } => {
-                if matches!(rhs.kind, ExprKind::Nil) {
+                if matches!(rhs.kind(), ExprKind::Nil) {
                     self.mark_probes(lhs);
-                } else if matches!(lhs.kind, ExprKind::Nil) {
+                } else if matches!(lhs.kind(), ExprKind::Nil) {
                     self.mark_probes(rhs);
                 }
             }
             _ => {
                 if self.api_path(cond).is_some() {
-                    self.probes.insert(cond.span);
+                    self.probes.insert(cond.span());
                 }
             }
         }
@@ -95,23 +95,25 @@ impl Checker<'_> {
 
     /// The flavor a comparison operand names (`"standard"`, a
     /// `WOW_PROJECT_*` constant or number).
-    fn flavor_of(&self, e: &Expr, shared: &SharedFlavors, project: bool) -> Option<String> {
-        match &e.kind {
-            ExprKind::String(s) if !project => Some(String::from_utf8_lossy(&s.value).into_owned()),
+    fn flavor_of(&self, e: Expr<'_>, shared: &SharedFlavors, project: bool) -> Option<String> {
+        match e.kind() {
+            ExprKind::String(s) if !project => {
+                Some(String::from_utf8_lossy(&s.value()).into_owned())
+            }
             ExprKind::Number(n) if project => n
-                .value
+                .value()
                 .and_then(|v| shared.project_ids.get(&(v as u32)).cloned()),
             ExprKind::Name(n) if project => shared
                 .project_constants
-                .get(n.text.as_ref())
+                .get(n.text())
                 .and_then(|v| shared.project_ids.get(v).cloned()),
             _ => None,
         }
     }
 
     /// Guards where `cond` is true and where it is false.
-    pub fn narrow_guard(&self, cond: &Expr, g: &Guard) -> (Guard, Guard) {
-        match &cond.kind {
+    pub fn narrow_guard(&self, cond: Expr<'_>, g: &Guard) -> (Guard, Guard) {
+        match cond.kind() {
             ExprKind::Paren(inner) => self.narrow_guard(inner, g),
             ExprKind::Unary {
                 op: UnOp::Not,
@@ -143,8 +145,8 @@ impl Checker<'_> {
                 lhs,
                 rhs,
             } => {
-                let is_flavor = |e: &Expr| matches!(&e.kind, ExprKind::Name(n) if self.meta_flavor.contains(n.text.as_ref()));
-                let is_project = |e: &Expr| matches!(&e.kind, ExprKind::Name(n) if n.text.as_ref() == "WOW_PROJECT_ID" && self.lookup_var("WOW_PROJECT_ID").is_none());
+                let is_flavor = |e: Expr<'_>| matches!(e.kind(), ExprKind::Name(n) if self.meta_flavor.contains(n.text()));
+                let is_project = |e: Expr<'_>| matches!(e.kind(), ExprKind::Name(n) if n.text() == "WOW_PROJECT_ID" && self.lookup_var("WOW_PROJECT_ID").is_none());
                 let shared = self.shared.as_ref();
                 let named = shared.and_then(|shared| {
                     if is_flavor(lhs) {
@@ -161,15 +163,15 @@ impl Checker<'_> {
                 });
                 let (Some(shared), Some(flavor)) = (shared, named) else {
                     // `C_X ~= nil` / `C_X == nil`: an existence check.
-                    let tested = match (&lhs.kind, &rhs.kind) {
-                        (_, ExprKind::Nil) => Some(&**lhs),
-                        (ExprKind::Nil, _) => Some(&**rhs),
+                    let tested = match (lhs.kind(), rhs.kind()) {
+                        (_, ExprKind::Nil) => Some(&lhs),
+                        (ExprKind::Nil, _) => Some(&rhs),
                         _ => None,
                     };
                     return match tested {
                         Some(t) => {
-                            let (yes, no) = self.narrow_guard(t, g);
-                            if *op == BinOp::Ne {
+                            let (yes, no) = self.narrow_guard(*t, g);
+                            if op == BinOp::Ne {
                                 (yes, no)
                             } else {
                                 (no, yes)
@@ -183,7 +185,7 @@ impl Checker<'_> {
                 yes.flavors = Some(current.iter().filter(|f| **f == flavor).cloned().collect());
                 let mut no = g.clone();
                 no.flavors = Some(current.iter().filter(|f| **f != flavor).cloned().collect());
-                if *op == BinOp::Eq {
+                if op == BinOp::Eq {
                     (yes, no)
                 } else {
                     (no, yes)

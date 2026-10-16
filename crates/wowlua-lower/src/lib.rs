@@ -923,7 +923,7 @@ impl<'a> Lowerer<'a> {
         }
         if s.decorators()
             .iter()
-            .any(|d| wowlua_sema::meta::if_condition(d.ast()).is_none())
+            .any(|d| wowlua_sema::meta::if_condition(d).is_none())
         {
             return grow(|| self.decorated_stmt(s));
         }
@@ -947,10 +947,9 @@ impl<'a> Lowerer<'a> {
     fn kept_by_if_decorators(&mut self, decorators: Decorators<'a>, import: bool) -> bool {
         let mut keep = true;
         for d in decorators {
-            let Some(cond) = wowlua_sema::meta::if_condition(d.ast()) else {
+            let Some(cond) = wowlua_sema::meta::if_condition(d) else {
                 continue;
             };
-            let cond = cond.map(Expr::of);
             let Some(cond) = cond else {
                 if !import {
                     self.error("E1040", d.span(), "`@if` takes one condition");
@@ -2614,18 +2613,15 @@ impl<'a> Lowerer<'a> {
     /// Lua such as `if true then` is emitted as written.
     fn static_condition(&self, e: Expr<'a>) -> Option<Const> {
         let mut memo = self.static_memo.borrow_mut();
-        let (value, found) = constant::eval_tracked(
-            e.ast(),
-            &|leaf| self.leaf_value(Expr::of(leaf), true),
-            &mut memo,
-        )?;
+        let (value, found) =
+            constant::eval_tracked(e, &|leaf| self.leaf_value(leaf, true), &mut memo)?;
         found.then_some(value)
     }
 
     /// A static condition (spec §6.4.1); `consts` allows folded constants
     /// (not in `@if` on imports).
     fn static_value_with(&self, e: Expr<'a>, consts: bool) -> Option<Const> {
-        constant::eval_with(e.ast(), &|leaf| self.leaf_value(Expr::of(leaf), consts))
+        constant::eval_with(e, &|leaf| self.leaf_value(leaf, consts))
     }
 
     /// The value of a `wowlua:meta` path or (with `consts`) a `const`.
@@ -2657,7 +2653,7 @@ impl<'a> Lowerer<'a> {
             return None;
         }
         let mut namespace = false;
-        let found = wowlua_sema::meta::access_path(e.ast(), &|name| match self.lookup(name) {
+        let found = wowlua_sema::meta::access_path(e, &|name| match self.lookup(name) {
             Some(Binding::Meta(k)) => Some(*k),
             // `M.build…`: the first path element names the export; it is
             // resolved below.

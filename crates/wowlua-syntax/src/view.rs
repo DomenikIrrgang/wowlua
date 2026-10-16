@@ -63,6 +63,12 @@ impl<'t, A, V> List<'t, A, V> {
         self.items.last().map(self.view)
     }
 
+    /// The items, when there are exactly `N` (for matching like a slice
+    /// pattern: `if let Some([a, b]) = list.exactly()`).
+    pub fn exactly<const N: usize>(&self) -> Option<[V; N]> {
+        (self.items.len() == N).then(|| std::array::from_fn(|i| self.at(i)))
+    }
+
     pub fn iter(&self) -> std::iter::Map<std::slice::Iter<'t, A>, fn(&'t A) -> V> {
         self.items.iter().map(self.view)
     }
@@ -89,6 +95,13 @@ impl<'t, A, V> IntoIterator for &List<'t, A, V> {
 impl<A, V: std::fmt::Debug> std::fmt::Debug for List<'_, A, V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+impl<A, V> Default for List<'_, A, V> {
+    /// No items.
+    fn default() -> Self {
+        List::new(&[], |_| unreachable!("an empty list has no items"))
     }
 }
 
@@ -152,6 +165,13 @@ macro_rules! handle {
         }
 
         impl Eq for $name<'_> {}
+
+        impl std::hash::Hash for $name<'_> {
+            /// By identity, like `==`.
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                std::ptr::hash(self.0, state)
+            }
+        }
     };
 }
 
@@ -547,6 +567,12 @@ handle!(Expr, ast::Expr);
 impl<'t> Expr<'t> {
     pub fn span(self) -> Span {
         self.0.span
+    }
+
+    /// The node's number in its file, unique per parse; 0 for nodes the
+    /// compiler made (a decorator's call).
+    pub fn id(self) -> u32 {
+        self.0.id.0
     }
 
     pub fn kind(self) -> ExprKind<'t> {
