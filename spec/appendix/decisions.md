@@ -254,6 +254,7 @@ open for review.
 | T202 | `mock.fireEvent` fires only events the flavor documents, with the payload checked against the documentation **(user, M9)** | A misspelled event or a wrong payload fails the test instead of testing nothing. |
 | T203 | Game data comes from the tests by default (`mock.defineSpell`, `mock.defineItem`); optionally `wowlua data pull --wow <path>` reads it from the user's own client into a local cache, and `wowlua test --game-data` uses it; off by default, so CI tests with test data only **(user, M9)** | wowlua distributes no game data; CI has no WoW installation. |
 | T204 | With `test.blizzard-ui`, `wowlua test` downloads the flavor's Blizzard UI code (a wow-ui-source tarball at the flavor's client version) and its global strings on first use into a user cache keyed by version **(user, M9)** | About 5 seconds once per flavor (7 MB), then cached; works in CI and without WoW installed. |
+| T205 | Load order: W1033 is not reported for definers whose relative order the layout fixes: both placed by `build.load-order` (directly or through the XML file that loads them), both loaded by one XML file (document order), or an XML file and a file it loads; this extends T73 **(user, wowlua#3)** | An XML file's scripts load in document order, which wowlua keeps; a default locale file and the guarded locale files overriding it (MythicDungeonTools) are not ambiguous. On the corpus W1033 drops from 98 to 6. |
 
 ## Standard library
 

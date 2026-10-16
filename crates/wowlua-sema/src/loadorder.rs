@@ -83,7 +83,41 @@ pub fn analyze(
         false
     };
     let is_active = |i: usize| active.get(i).copied().unwrap_or(true);
-    let ordered = |i: usize| listed.get(i).copied().flatten().is_some();
+    // Where a file loads is fixed when `build.load-order` lists it, or when
+    // an XML file whose place is fixed loads it (in document order).
+    let ordered = |mut i: usize| {
+        for _ in 0..64 {
+            if listed.get(i).copied().flatten().is_some() {
+                return true;
+            }
+            match loaded_by.get(i).copied().flatten() {
+                Some(p) => i = p,
+                None => return false,
+            }
+        }
+        false
+    };
+    // The XML files that load a file, innermost first.
+    let loaders = |mut i: usize| {
+        let mut out = Vec::new();
+        while let Some(p) = loaded_by.get(i).copied().flatten() {
+            if out.len() == 64 {
+                break;
+            }
+            out.push(p);
+            i = p;
+        }
+        out
+    };
+    // Two files load in a fixed order when both have a fixed place, or when
+    // one XML file loads both, or one of them loads the other (in document
+    // order).
+    let fixed_pair = |a: usize, b: usize| {
+        (ordered(a) && ordered(b)) || {
+            let (la, lb) = (loaders(a), loaders(b));
+            la.contains(&b) || lb.contains(&a) || lb.iter().any(|x| la.contains(x))
+        }
+    };
     let usages: Vec<Option<std::sync::Arc<FileUsage>>> = files
         .iter()
         .enumerate()
@@ -498,7 +532,10 @@ pub fn analyze(
                     several => {
                         // Several files define the name at load time: their
                         // order is ambiguous unless `build.load-order` fixes it.
-                        let unordered = several.iter().any(|d| !ordered(d.0));
+                        let unordered = several
+                            .iter()
+                            .enumerate()
+                            .any(|(i, a)| several[i + 1..].iter().any(|b| !fixed_pair(a.0, b.0)));
                         if unordered && warned.insert(format!("ambiguous {}", access.key.display()))
                         {
                             let mut d = Diagnostic::warning(

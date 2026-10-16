@@ -264,9 +264,14 @@ Type-only imports never create edges.
   If a listed order contradicts an **import**, that is error E1035. If it
   contradicts an edge found by **usage analysis**, the listed order wins with
   warning W1035 (decision T70): without types the analysis over-approximates,
-  and `wowlua init` writes the order of a TOC that works. Files listed there
-  get no W1033. Edges between an XML file and the files it loads are ignored;
-  they load interleaved in document order.
+  and `wowlua init` writes the order of a TOC that works. Edges between an XML
+  file and the files it loads are ignored; they load interleaved in document
+  order.
+- **Fixed order** (decision T205). Files whose relative order the layout fixes
+  get no W1033: two files listed in `build.load-order` (directly, or loaded by
+  an XML file that is), two files one XML file loads (in document order, like
+  a default locale and the locale files that override it), and an XML file
+  and a file it loads.
 
 ### 5.4.6 Several flavors
 

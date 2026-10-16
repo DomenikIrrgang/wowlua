@@ -3800,6 +3800,37 @@ fn load_order_diagnostics() {
     }
 }
 
+/// Files whose order the layout fixes are not ambiguous: an XML file loads
+/// its scripts in document order, so two of them defining the same name at
+/// load time (a locale file overriding the default) get no W1033. Two files
+/// whose order nothing fixes still do (`load_order_diagnostics`).
+#[test]
+fn load_order_files_one_xml_loads_are_ordered() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"xmlpair\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/locales.xml",
+                "<Ui>\n  <Script file=\"loc/enUS.lua\"/>\n  <Script file=\"loc/deDE.lua\"/>\n</Ui>\n",
+            ),
+            ("src/loc/enUS.lua", "Greeting = \"Hello\"\n"),
+            (
+                "src/loc/deDE.lua",
+                "if GetLocale() ~= \"deDE\" then return end\nGreeting = \"Hallo\"\n",
+            ),
+            ("src/main.lua", "print(Greeting)\n"),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(!stderr.contains("W1033"), "{stderr}");
+}
+
 /// Runs compiled files in order in one Lua state, each as a chunk called
 /// with `("Compiled", ns)` like the client does; returns what they printed.
 fn run_compiled(files: &[std::path::PathBuf]) -> String {

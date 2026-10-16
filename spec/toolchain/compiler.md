@@ -270,7 +270,10 @@ This implements the load-order rules of
    with W1035 before cycles are searched.
 5. **Ambiguity.** Dynamic names (`_G["x" .. i]`), several writers of the same
    global or field, or `setfenv` make an edge undecidable. The files involved
-   keep their relative source order and warning W1033 names the cause.
+   keep their relative source order and warning W1033 names the cause, unless
+   the layout already fixes their order: both have a place in
+   `build.load-order` (directly or through the XML file that loads them), or
+   one XML file loads both (decision T205).
 
 ### 13.6.2 Lints
 
