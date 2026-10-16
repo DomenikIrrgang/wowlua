@@ -3934,6 +3934,60 @@ fn load_order_branches_for_non_function_arguments() {
     }
 }
 
+/// Lua compile results are kept in `$WOWLUA_HOME/cache/compile/` (#50): a
+/// second run takes them from there and reports exactly the same (debug
+/// builds, and so this test, also compile again and compare), and
+/// `WOWLUA_NO_COMPILE_CACHE` leaves the cache alone.
+#[test]
+fn compile_results_are_kept_between_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let locals: String = (0..201).map(|i| format!("local v{i} = {i}\n")).collect();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"cached\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/ok.lua", "local a = 1\nprint(a)\n"),
+            ("src/limit.lua", locals.as_str()),
+        ],
+    );
+    let entries = |home: &Path| {
+        fs::read_dir(home.join("cache/compile"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
+            .count()
+    };
+    let run = |envs: &[(&str, &str)]| {
+        let mut cmd = wowlua(dir.path());
+        for (k, v) in envs {
+            cmd.env(k, v);
+        }
+        let output = cmd.arg("check").assert().code(1).get_output().clone();
+        // Without the summary line, which has the time.
+        String::from_utf8_lossy(&output.stderr)
+            .lines()
+            .filter(|l| !l.contains(" in ") || l.contains('['))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let cold = run(&[]);
+    assert!(cold.contains("E5001"), "{cold}");
+    let home = dir.path().join(".wowlua-home");
+    let stored = entries(&home);
+    assert!(stored >= 2, "{stored}");
+    let warm = run(&[]);
+    assert_eq!(warm, cold);
+    assert_eq!(entries(&home), stored, "a warm run adds nothing");
+    std::fs::remove_dir_all(home.join("cache/compile")).unwrap();
+    let off = run(&[("WOWLUA_NO_COMPILE_CACHE", "1")]);
+    assert_eq!(off, cold);
+    assert!(!home.join("cache/compile").exists());
+}
+
 /// Runs compiled files in order in one Lua state, each as a chunk called
 /// with `("Compiled", ns)` like the client does; returns what they printed.
 fn run_compiled(files: &[std::path::PathBuf]) -> String {

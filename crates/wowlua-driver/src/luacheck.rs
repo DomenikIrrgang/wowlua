@@ -3,6 +3,7 @@
 //! generating code (too many locals, upvalues, constants, registers) as
 //! E5001. Syntax is checked by the compiler's own parser before this.
 
+use crate::compile_cache::Outcome;
 use mlua::Lua;
 use std::sync::LazyLock;
 use wowlua_diagnostics::Diagnostic;
@@ -53,7 +54,7 @@ pub(crate) fn no_memory_error<T>(result: mlua::Result<T>) -> mlua::Result<T> {
 /// Compiles `code` in the thread's shared state, as `name` when given.
 /// Called from plain Rust only, never from inside Lua: Lua's nesting limits
 /// count from the C call depth at load time.
-fn compile(code: &[u8], name: Option<String>) -> mlua::Result<()> {
+fn compile_fresh(code: &[u8], name: Option<&str>) -> Outcome {
     LUA.with(|lua| {
         let mut chunk = lua.load(code);
         if let Some(name) = name {
@@ -62,8 +63,32 @@ fn compile(code: &[u8], name: Option<String>) -> mlua::Result<()> {
         let result = no_memory_error(chunk.into_function().map(drop));
         // Back to the baseline heap, as when the state was closed.
         let _ = lua.gc_collect();
-        result
+        result.map_err(|error| match error {
+            mlua::Error::SyntaxError { message, .. } => message,
+            other => other.to_string(),
+        })
     })
+}
+
+/// Compiles `code` as `name`, or takes the outcome from the compile cache
+/// when the CLI turned it on (#50); debug builds compile anyway and check
+/// that the two agree. Running out of memory panics before anything is
+/// stored.
+fn compile(code: &[u8], name: Option<&str>) -> Outcome {
+    let Some(cache) = crate::compile_cache::get() else {
+        return compile_fresh(code, name);
+    };
+    if let Some(cached) = cache.get(name, code) {
+        debug_assert_eq!(
+            cached,
+            compile_fresh(code, name),
+            "the cached compile of {name:?}"
+        );
+        return cached;
+    }
+    let outcome = compile_fresh(code, name);
+    cache.put(name, code, &outcome);
+    outcome
 }
 
 /// Whether Lua 5.1 compiles `code` as it is (no byte order mark skipped).
@@ -98,11 +123,7 @@ fn chunk_name(db: &SourceDb, file: FileId) -> String {
 /// otherwise a diagnostic pointing at the reported line.
 pub fn check(db: &SourceDb, file: FileId, code: &[u8]) -> Option<Diagnostic> {
     let code = code.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(code);
-    let error = compile(code, Some(chunk_name(db, file))).err()?;
-    let raw = match &error {
-        mlua::Error::SyntaxError { message, .. } => message.clone(),
-        other => other.to_string(),
-    };
+    let raw = compile(code, Some(&chunk_name(db, file))).err()?;
     let first_line = raw.lines().next().unwrap_or(&raw).to_string();
     let (line, message) = match LINE_PREFIX.captures(&first_line) {
         Some(c) => (c[1].parse::<usize>().unwrap_or(1), c[2].to_string()),
@@ -205,11 +226,15 @@ mod tests {
         let file = db.add("src/a.lua", "");
         let fresh = |code: &[u8]| {
             let code_without_bom = code.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(code);
-            let named = Lua::new()
+            let named: Outcome = Lua::new()
                 .load(code_without_bom)
                 .set_name(chunk_name(&db, file))
                 .into_function()
-                .map(drop);
+                .map(drop)
+                .map_err(|error| match error {
+                    mlua::Error::SyntaxError { message, .. } => message,
+                    other => other.to_string(),
+                });
             let unnamed = Lua::new().load(code).into_function().is_ok();
             (format!("{named:?}"), unnamed)
         };
@@ -220,7 +245,7 @@ mod tests {
                         "{:?}",
                         compile(
                             code.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(code),
-                            Some(chunk_name(&db, file))
+                            Some(&chunk_name(&db, file))
                         )
                     ),
                     compiles(code),

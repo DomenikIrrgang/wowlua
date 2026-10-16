@@ -345,7 +345,7 @@ Global configuration lives in `$WOWLUA_HOME/config.json` (default `~/.wowlua/con
   "wow": { "path": "/Applications/World of Warcraft" },
   "registries": { "default": "https://registry.wowlua.dev" },
   "dev": { "link": false },
-  "build": { "jobs": 8, "jobs-memory": 1024 }
+  "build": { "jobs": 8, "jobs-memory": 1024, "compile-cache": true, "compile-cache-size": 256 }
 }
 ```
 
@@ -354,6 +354,9 @@ Global configuration lives in `$WOWLUA_HOME/config.json` (default `~/.wowlua/con
 files wait, and one larger than the cap is compiled alone. Projects under
 256 KiB of source are compiled on one thread unless `--jobs`,
 `WOWLUA_JOBS`, `WOWLUA_JOBS_MEMORY` or these keys set it.
+`build.compile-cache` (default `true`) keeps Lua compile results between
+runs, within `build.compile-cache-size` MiB (default 256; [Package manager
+§10.7](package-manager.md#107-cache)).
 
 API tokens live in the OS credential store (`wowlua login`). Only when no
 credential store is available does `wowlua login` write a `tokens` object into
@@ -363,7 +366,8 @@ this file ([Package manager §10.11](package-manager.md#1011-security)).
 credential store and use `config.json` only (headless machines, tests).
 
 Environment variables override config values: `WOWLUA_HOME`,
-`WOWLUA_WOW_PATH`, `WOWLUA_JOBS` and `WOWLUA_JOBS_MEMORY` (MiB), the token
+`WOWLUA_WOW_PATH`, `WOWLUA_JOBS` and `WOWLUA_JOBS_MEMORY` (MiB),
+`WOWLUA_NO_COMPILE_CACHE` (set to anything but `0`: no compile cache), the token
 variables in [Publishing §11.1.3](publishing.md#1113-tokens), and `NO_COLOR`.
 `--jobs` overrides both.
 

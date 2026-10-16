@@ -519,6 +519,10 @@ fn run() -> ExitCode {
         std::process::exit(101);
     }));
     let cli = Cli::parse();
+    // Lua compile results are kept between runs (#50, spec §10.7).
+    if let Some(cache) = wowlua_driver::compile_cache::CompileCache::from_env() {
+        wowlua_driver::compile_cache::enable(cache);
+    }
     let out = output::Output::new(&cli.global);
     let ok = match cli.command {
         Command::New {
