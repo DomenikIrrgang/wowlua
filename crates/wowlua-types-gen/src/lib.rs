@@ -432,7 +432,19 @@ pub fn generate(
             }
             events.sort();
             events.dedup();
-            *json = serde_json::json!({ "systems": systems, "classes": classes, "events": events });
+            // The UI code's templates, for `CreateFrame` without the code
+            // loaded.
+            let templates = flavors
+                .iter()
+                .find(|f| f.id == id)
+                .map(|f| framexml::templates(&f.ui_xml))
+                .unwrap_or_default();
+            *json = serde_json::json!({
+                "systems": systems,
+                "classes": classes,
+                "events": events,
+                "templates": templates,
+            });
         }
         out_flavors.push((id, d.emit(&header)));
     }

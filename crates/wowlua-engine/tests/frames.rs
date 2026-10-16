@@ -41,7 +41,7 @@ return type(f), type(f[0]), f == MyFrame and 'named' or 'not', f:GetName(), f:Ge
         r,
         [
             "table", "userdata", "named", "MyFrame", "Frame", "Button", "true", "true", "true",
-            "function", "true"
+            "function", "false"
         ]
     );
 }
@@ -99,8 +99,8 @@ return select(2, pcall(f.RegisterEvent, f, 'NO_SUCH_EVENT')), select(2, pcall(f.
     assert_eq!(
         r,
         [
-            "Frame:RegisterEvent(): Attempt to register unknown event \"NO_SUCH_EVENT\"",
-            "Frame:SetScript(): Frame doesn't have a \"OnClick\" script"
+            "Frame:RegisterEvent(): Frame:RegisterEvent(): Attempt to register unknown event \"NO_SUCH_EVENT\"",
+            "Frame:SetScript(): Cannot assign script handler for 'onclick' (script type not supported by this object)\nLua Taint: MyAddon"
         ]
     );
 }
@@ -117,14 +117,14 @@ for name, f in pairs({ p = p, c = c }) do
     f:SetScript('OnShow', function() log[#log + 1] = name .. '+' end)
     f:SetScript('OnHide', function() log[#log + 1] = name .. '-' end)
 end
-p:Hide()        -- p-, c- (c was visible)
+p:Hide()        -- c-, p- (children first; c was visible)
 c:Hide()        -- nothing: c not visible
 p:Show()        -- p+
 c:Show()        -- c+
 p:Show()        -- nothing
 return table.concat(log, ' '), tostring(c:IsVisible())",
     );
-    assert_eq!(r, ["p- c- p+ c+", "true"]);
+    assert_eq!(r, ["c- p- p+ c+", "true"]);
 }
 
 #[test]
@@ -137,8 +137,10 @@ f:SetSize(100, 50)
 f:SetPoint('BOTTOMLEFT', 10, 20)
 f:SetFrameStrata('HIGH')
 local fs = f:CreateFontString(nil, 'OVERLAY')
+local noFont = select(2, pcall(fs.SetText, fs, 'hi'))
+fs:SetFont('Fonts\\FRIZQT__.TTF', 12, '')
 fs:SetText('hi')
-return f:GetLeft(), f:GetTop(), f:GetFrameStrata(), fs:GetText(), fs:GetObjectType(), select(2, pcall(f.GetHitRectInsets, f)), f:GetFrameLevel()",
+return f:GetLeft(), f:GetTop(), f:GetFrameStrata(), fs:GetText(), fs:GetObjectType(), select(2, pcall(f.GetHitRectInsets, f)), f:GetFrameLevel(), noFont",
     );
     assert_eq!(
         r,
@@ -149,7 +151,8 @@ return f:GetLeft(), f:GetTop(), f:GetFrameStrata(), fs:GetText(), fs:GetObjectTy
             "hi",
             "FontString",
             "Frame:GetHitRectInsets is not mocked",
-            "1"
+            "1",
+            "FontString:SetText(): Font not set\nLua Taint: MyAddon"
         ]
     );
 }
@@ -213,16 +216,30 @@ fn templates_frame_types_and_fonts() {
         &mut vm,
         "E.defineTemplate('MyTemplate', function(f) f.fromTemplate = true end)
 E.defineFrameType('MyType', 'Button', function(f) f.custom = true end)
-local f = CreateFrame('Frame', nil, UIParent, 'MyTemplate, OtherTemplate')
+local f = CreateFrame('Frame', nil, UIParent, 'MyTemplate, BackdropTemplate')
+local unknown = select(2, pcall(CreateFrame, 'Frame', nil, nil, 'NoSuchTemplate'))
 local c = CreateFrame('mytype')
 CreateFont('MyFont')
 local fs = f:CreateFontString()
 fs:SetFontObject('MyFont')
 local ok = pcall(fs.SetFontObject, fs, 'NoSuchFont')
 return tostring(f.fromTemplate), tostring(c.custom), c:GetObjectType(), #E.warnings(), tostring(ok),
-    tostring(MyFont:IsObjectType('Font'))",
+    tostring(MyFont:IsObjectType('Font')), unknown",
     );
-    assert_eq!(r, ["true", "true", "Button", "1", "false", "true"]);
+    // BackdropTemplate is Blizzard's (not loaded: a warning); a name nobody
+    // defines fails as in the client.
+    assert_eq!(
+        r,
+        [
+            "true",
+            "true",
+            "Button",
+            "1",
+            "false",
+            "true",
+            "CreateFrame(): Couldn't find inherited node 'NoSuchTemplate'\nLua Taint: MyAddon"
+        ]
+    );
 }
 
 #[test]
@@ -235,6 +252,7 @@ fn drags_and_resize_grips() {
 f:SetSize(100, 50)
 f:SetPoint('CENTER')
 f:SetResizeBounds(80, 40, 120, 60)
+f:SetMovable(true)
 f:SetScript('OnDragStart', function(self) self:StartMoving() end)
 f:SetScript('OnDragStop', function(self) self:StopMovingOrSizing() end)
 E.drag(f, 10, 20)

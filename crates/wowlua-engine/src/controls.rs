@@ -206,7 +206,9 @@ fn define_frame_type(vm: &mut Vm, c: NativeCall) -> Ret {
 fn protect(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = widget_arg(vm, &c, 1)?;
     let on = !c.has(2) || c.arg(2).truthy();
-    engine_mut(vm).world.widgets[id.0].protected = on;
+    let w = &mut engine_mut(vm).world.widgets[id.0];
+    w.protected = on;
+    w.explicitly_protected = on;
     Ok(vec![])
 }
 

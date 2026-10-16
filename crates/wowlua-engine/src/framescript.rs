@@ -303,6 +303,17 @@ fn build_info(vm: &mut Vm, _c: NativeCall) -> Ret {
     ])
 }
 
+/// `C_AddOns.IsAddOnLoaded(name)`: (loaded or loading, loaded), once
+/// `ADDON_LOADED` fired for it.
+fn is_addon_loaded(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = match vm.hidden(c.arg(1)) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).to_lowercase(),
+        _ => return Ok(vec![Value::Bool(false), Value::Bool(false)]),
+    };
+    let loaded = engine(vm).world.loaded_addons.contains(&name);
+    Ok(vec![Value::Bool(loaded), Value::Bool(loaded)])
+}
+
 fn is_logged_in(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(engine(vm).world.logged_in)])
 }
@@ -350,6 +361,7 @@ pub fn functions() -> Vec<(&'static str, NativeFn)> {
         ("IsMacClient", falsy),
         ("GetBuildInfo", build_info),
         ("IsLoggedIn", is_logged_in),
+        ("C_AddOns.IsAddOnLoaded", is_addon_loaded),
     ]
 }
 

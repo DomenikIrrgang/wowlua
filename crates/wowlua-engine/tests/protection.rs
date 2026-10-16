@@ -85,11 +85,11 @@ return tostring(named:IsProtected()), tostring(outOfCombat), table.concat(seen, 
         [
             "true",
             "false",
-            "MySecureButton:Hide(),Button:SetPoint()",
+            "Hide(),SetPoint()",
             "true",
             "0",
             "false",
-            "0.5",
+            "0.501960813999176",
             "2"
         ]
     );

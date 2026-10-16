@@ -351,8 +351,9 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     let behaviour = engine.behaviours.get(f.name).copied();
     // Refused before the arguments are checked (unverified).
     if protection::is_protected(f.name, Some(&f.doc)) && protection::tainted(vm) {
-        protection::refuse(vm, "ADDON_ACTION_FORBIDDEN", format!("{}()", f.name));
-        return Ok(vec![]);
+        let action = protection::action_name(vm);
+        protection::refuse(vm, "ADDON_ACTION_FORBIDDEN", action);
+        return Ok(defaults(vm, api, &f.doc));
     }
     args::check(vm, api, f, &c)?;
     let Some(behaviour) = behaviour else {

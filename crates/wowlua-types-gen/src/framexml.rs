@@ -256,6 +256,41 @@ fn xml_globals(text: &str, widget_classes: &HashSet<String>, out: &mut IndexMap<
     }
 }
 
+/// The templates (`virtual="true"`) and intrinsic frame types the UI
+/// code's XML defines, by name: what `CreateFrame` and `inherits` may name.
+pub fn templates(ui_xml: &[(String, String)]) -> Vec<String> {
+    let mut out = std::collections::BTreeSet::new();
+    for (_, text) in ui_xml {
+        let mut reader = Reader::from_str(text);
+        loop {
+            match reader.read_event() {
+                Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
+                    let mut name = None;
+                    let mut template = false;
+                    for a in e.attributes().flatten() {
+                        let key = a.key.local_name();
+                        let key: &str = key.as_ref();
+                        let value = a.value.to_string();
+                        match key {
+                            "name" => name = Some(value),
+                            "virtual" | "intrinsic" => {
+                                template |= value.eq_ignore_ascii_case("true");
+                            }
+                            _ => {}
+                        }
+                    }
+                    if let Some(n) = name.filter(|n| template && !n.contains('$')) {
+                        out.insert(n);
+                    }
+                }
+                Ok(Event::Eof) | Err(_) => break,
+                _ => {}
+            }
+        }
+    }
+    out.into_iter().collect()
+}
+
 /// The names of a `GlobalAPI` dump (every quoted name).
 pub fn quoted_names(text: &str) -> HashSet<String> {
     text.lines()

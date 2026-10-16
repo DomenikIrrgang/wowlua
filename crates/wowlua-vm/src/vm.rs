@@ -2281,6 +2281,13 @@ impl Vm {
         }
     }
 
+    /// The name the running native function was called by, as Lua's debug
+    /// information sees the call site; none through `pcall` or from native
+    /// code.
+    pub fn called_as(&self) -> Option<String> {
+        self.native_call_name().map(|(_, name)| name)
+    }
+
     /// `bad argument #n to 'name' (msg)` (`luaL_argerror`).
     pub fn arg_error(&mut self, narg: usize, msg: &str) -> LuaError {
         let mut narg = narg;

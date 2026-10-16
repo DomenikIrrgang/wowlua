@@ -474,9 +474,10 @@ Mock.fire("UNIT_HEALTH", "target")
             "bags BAG_UPDATE 3",
             "bags BAG_UPDATE_DELAYED",
             "any health target",
-            // The unit handler and the plain one live on different frames.
-            "any health player",
+            // The unit handler and the plain one live on different frames,
+            // which get events in registration order (the client's).
             "health player",
+            "any health player",
             "login once",
             "ping 2",
         ],
@@ -2389,8 +2390,10 @@ Mock.awaitText("Move any item to another slot in your bags")
 Mock.fire("BAG_UPDATE", 0)
 Mock.fire("BAG_UPDATE", 1)
 Mock.awaitText("Hold Shift for a moment")
+-- Held for a moment, as the step asks.
 Mock.modifiers.SHIFT = true
 Mock.updateStateDrivers()
+Mock.advanceFrames(10)
 Mock.modifiers.SHIFT = nil
 Mock.awaitText("Enter combat again")
 Mock.fire("PLAYER_REGEN_DISABLED")

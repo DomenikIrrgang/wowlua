@@ -190,5 +190,8 @@ fn the_flavor_ui_code_loads() {
     for e in report.errors.iter().take(limit) {
         eprintln!("  {e}");
     }
+    if let Ok(path) = std::env::var("WOWLUA_UI_ADDONS") {
+        std::fs::write(path, report.addons.join("\n")).expect("writes");
+    }
     assert!(!report.addons.is_empty());
 }

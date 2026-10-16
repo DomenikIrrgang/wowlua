@@ -54,6 +54,9 @@ pub struct Api {
     pub structures: HashSet<String>,
     /// Type aliases from the declarations (`type ClubId = string`).
     pub aliases: HashMap<String, String>,
+    /// The templates and intrinsic frame types Blizzard's UI code defines,
+    /// lower-case.
+    pub templates: HashSet<String>,
 }
 
 /// Names live as long as the process: natives' names are `&'static str`.
@@ -121,6 +124,16 @@ fn parse(gz: &[u8]) -> Api {
         enum_names: HashSet::new(),
         structures: HashSet::new(),
         aliases: HashMap::new(),
+        templates: data
+            .get("templates")
+            .and_then(Json::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(Json::as_str)
+                    .map(str::to_ascii_lowercase)
+                    .collect()
+            })
+            .unwrap_or_default(),
     };
     let str_of = |v: &Json, k: &str| v.get(k).and_then(Json::as_str).map(str::to_string);
     let list = |v: &Json, k: &str| {

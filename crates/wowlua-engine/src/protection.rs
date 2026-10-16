@@ -3,8 +3,11 @@
 //! nothing and fires `ADDON_ACTION_FORBIDDEN`; a protected method of a
 //! protected frame does the same in combat lockdown with
 //! `ADDON_ACTION_BLOCKED`. Both payloads are the tainting addon's name and
-//! the action (`TargetUnit()`, `MyButton:Show()`); each refusal is kept
-//! with its taint report, for the test it fails.
+//! the action as Lua's debug information names the call (`UseAction()`
+//! from `UseAction(…)`, `UNKNOWN()` through `pcall`; `/stdtest taint` and
+//! `engine`); the call returns its documented results' empty values
+//! (`false` from `ClearTarget`). Each refusal is kept with its taint
+//! report, for the test it fails.
 //!
 //! Protected methods are the documentation's (`IsProtectedFunction`); the
 //! documentation does not mark global functions, so [`PROTECTED`] lists the
@@ -21,7 +24,12 @@ use crate::widgets::{self, WidgetId};
 use crate::{engine, engine_mut};
 
 /// Global functions only Blizzard's code may call (not in the
-/// documentation's flags; unverified, see the module).
+/// documentation's flags). `/stdtest engine protected` saw TargetUnit,
+/// ClearTarget, FocusUnit, AssistUnit, SpellStopCasting,
+/// SpellStopTargeting, MoveForwardStop, TurnLeftStop, StrafeLeftStop and
+/// PetFollow forbidden, ClearFocus, TargetLastTarget and StopAttack not;
+/// CastSpellByName with an unknown spell fired nothing (kept, unverified),
+/// and the rest are unverified.
 pub const PROTECTED: &[&str] = &[
     "AssistUnit",
     "AttackTarget",
@@ -33,7 +41,6 @@ pub const PROTECTED: &[&str] = &[
     "CastSpell",
     "CastSpellByID",
     "CastSpellByName",
-    "ClearFocus",
     "ClearTarget",
     "C_Container.UseContainerItem",
     "FocusUnit",
@@ -50,13 +57,11 @@ pub const PROTECTED: &[&str] = &[
     "SpellStopTargeting",
     "SpellTargetUnit",
     "StartAttack",
-    "StopAttack",
     "StrafeLeftStart",
     "StrafeLeftStop",
     "StrafeRightStart",
     "StrafeRightStop",
     "TargetLastEnemy",
-    "TargetLastTarget",
     "TargetNearestEnemy",
     "TargetNearestFriend",
     "TargetUnit",
@@ -101,6 +106,12 @@ pub fn is_protected(name: &str, doc: Option<&serde_json::Value>) -> bool {
             == Some(true)
 }
 
+/// The refused action's name: how the call site names the function, else
+/// `UNKNOWN`, with `()`.
+pub fn action_name(vm: &Vm) -> String {
+    format!("{}()", vm.called_as().unwrap_or_else(|| "UNKNOWN".into()))
+}
+
 /// Refuses `action`: keeps the refusal and fires `event` with the
 /// tainting addon and the action.
 pub fn refuse(vm: &mut Vm, event: &'static str, action: String) {
@@ -121,18 +132,20 @@ pub fn refuse(vm: &mut Vm, event: &'static str, action: String) {
 /// widget, for tainted code. The action names the widget by its name, or
 /// its type when it has none (unverified).
 pub fn refuses_method(vm: &mut Vm, id: WidgetId, f: &crate::api::Function) -> bool {
+    // `SetAttribute` too (`/stdtest engine blocked`).
     let protected_method = f
         .doc
         .get("IsProtectedFunction")
         .and_then(serde_json::Value::as_bool)
-        == Some(true);
+        == Some(true)
+        || f.short == "SetAttribute";
     let e = engine(vm);
     let w = &e.world.widgets[id.0];
     if !(protected_method && w.protected && e.units.lockdown && tainted(vm)) {
         return false;
     }
-    let who = w.name.clone().unwrap_or_else(|| w.class.clone());
-    refuse(vm, "ADDON_ACTION_BLOCKED", format!("{who}:{}()", f.short));
+    let action = action_name(vm);
+    refuse(vm, "ADDON_ACTION_BLOCKED", action);
     true
 }
 
@@ -143,8 +156,32 @@ pub fn protected_global(vm: &mut Vm, c: NativeCall) -> Ret {
         return Err(vm.error("a protected function without its name"));
     };
     let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    // A spell the player does not have fails before the protection
+    // (`/stdtest engine protected`: no event for an unknown spell).
+    if name == "CastSpellByName" {
+        let known = match c.arg(1) {
+            Value::Str(s) => {
+                let spell = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+                let spells: Vec<wowlua_vm::TableRef> =
+                    engine(vm).world.data.spells.values().copied().collect();
+                spells.into_iter().any(|t| {
+                    let k = vm.str("name");
+                    matches!(vm.heap.table(t).get(k), Value::Str(n) if vm.str_bytes(n) == spell.as_bytes())
+                })
+            }
+            _ => false,
+        };
+        if !known {
+            return Ok(vec![]);
+        }
+    }
     if tainted(vm) {
-        refuse(vm, "ADDON_ACTION_FORBIDDEN", format!("{name}()"));
+        let action = action_name(vm);
+        refuse(vm, "ADDON_ACTION_FORBIDDEN", action);
+        // What the recording saw these return when refused.
+        if matches!(name.as_str(), "SpellStopCasting" | "SpellStopTargeting") {
+            return Ok(vec![Value::Bool(false)]);
+        }
         return Ok(vec![]);
     }
     match engine(vm).behaviour(&name) {

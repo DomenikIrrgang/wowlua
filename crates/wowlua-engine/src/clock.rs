@@ -58,21 +58,22 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         let key = vm.heap.intern(name.as_bytes());
         vm.heap.table_mut(methods).set_str(key, native);
     }
+    // Handles are userdata whose metatable is hidden (`/stdtest engine`:
+    // no methods table to read; that `__metatable` is false is unverified).
     let meta = vm.new_table();
     let index = vm.heap.intern(b"__index");
     vm.heap
         .table_mut(meta)
         .set_str(index, Value::Table(methods));
+    let hidden = vm.heap.intern(b"__metatable");
+    vm.heap.table_mut(meta).set_str(hidden, Value::Bool(false));
     crate::widgets::keep(vm, Value::Table(meta));
     engine_mut(vm).timers.handle_meta = Some(meta);
     meta
 }
 
 fn timer_of(vm: &Vm, v: Value) -> Option<TimerId> {
-    let Value::Table(t) = v else { return None };
-    let Value::Userdata(u) = vm.heap.table(t).get(Value::Num(0.0)) else {
-        return None;
-    };
+    let Value::Userdata(u) = v else { return None };
     vm.heap.userdata(u).data.downcast_ref::<TimerId>().copied()
 }
 
@@ -111,23 +112,17 @@ fn schedule(vm: &mut Vm, seconds: f64, callback: Value, runs: f64, handle: bool)
     let mut out = Value::Nil;
     if handle {
         let meta = handle_meta(vm);
-        let t = vm.new_table();
         let ud = vm.heap.alloc_userdata(Userdata {
             serial: 0,
-            meta: None,
+            meta: Some(meta),
             env: None,
             data: Box::new(id),
         });
         let _ = vm
             .heap
-            .table_mut(t)
-            .set(Value::Num(0.0), Value::Userdata(ud));
-        vm.heap.table_mut(t).meta = Some(meta);
-        let _ = vm
-            .heap
             .table_mut(slot)
-            .set(Value::Num(2.0), Value::Table(t));
-        out = Value::Table(t);
+            .set(Value::Num(2.0), Value::Userdata(ud));
+        out = Value::Userdata(ud);
     }
     let due = now(vm) + seconds.max(0.0);
     engine_mut(vm).timers.list.push(Timer {
@@ -208,11 +203,15 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
     }
 }
 
-/// `n` frames of `ms` milliseconds: each runs the due timers, then every
-/// visible widget's `OnUpdate` (with the frame's seconds).
+/// `n` frames of `ms` milliseconds: each moves the clock, runs the
+/// `OnSizeChanged` the last frame's resizing owes, every visible widget's
+/// `OnUpdate` (with the frame's seconds), then the due timers, those an
+/// `OnUpdate` just set included (`/stdtest engine`: "update1 after0
+/// after0 (set in update1) update2").
 pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
     for _ in 0..n {
-        advance(vm, ms / 1000.0);
+        tick(vm, ms);
+        widgets::run_size_changes(vm);
         let count = engine(vm).world.widgets.len();
         let elapsed = Value::Num(ms / 1000.0);
         for i in 0..count {
@@ -221,6 +220,7 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
                 widgets::run_script(vm, id, "OnUpdate", &[elapsed]);
             }
         }
+        advance(vm, 0.0);
     }
 }
 

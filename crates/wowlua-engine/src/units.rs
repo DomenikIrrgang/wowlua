@@ -1086,8 +1086,25 @@ fn available_roles(_vm: &mut Vm, _c: NativeCall) -> Ret {
     ])
 }
 
+/// `ClearFocus()`: no focus (`PLAYER_FOCUS_CHANGED` if there was one).
+fn clear_focus(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if engine_mut(vm).units.focus.take().is_some() {
+        fire(vm, "PLAYER_FOCUS_CHANGED", &[]);
+    }
+    Ok(vec![])
+}
+
+/// Nothing to do in the world (no auto attack, no target history; the
+/// client returned nothing for addon code).
+fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![])
+}
+
 pub fn more_behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
+        ("ClearFocus", clear_focus),
+        ("TargetLastTarget", nothing),
+        ("StopAttack", nothing),
         ("UnitFactionGroup", unit_faction_group),
         ("UnitPVPName", unit_pvp_name),
         ("UnitIsGhost", unit_is_ghost),
