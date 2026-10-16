@@ -1,0 +1,169 @@
+//! The names the declarations give: global values, global types, event and
+//! message handlers, on-demand globals and the callbacks registry. Every
+//! read goes through an accessor that can record it, so a check can tell
+//! what it read of a flavor's declarations (#6); the maps are private, so
+//! a read that does not record does not compile.
+
+use super::types::{DefId, Func, TypeId};
+use rustc_hash::FxHashMap;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
+
+/// A name a check looked up.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Root {
+    Global(Box<str>),
+    Type(Box<str>),
+    Handler(Box<str>),
+    OnDemand(Box<str>),
+    CallbacksRegistry,
+}
+
+/// What a check read: the names it looked up (with whether they were
+/// found) and the declarations whose contents it read; `opaque` when it read
+/// something else of the declarations (its results cannot be reused).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Reads {
+    pub roots: BTreeMap<Root, bool>,
+    pub defs: BTreeSet<DefId>,
+    pub opaque: bool,
+}
+
+#[derive(Default)]
+pub struct Declared {
+    globals: FxHashMap<Box<str>, TypeId>,
+    global_types: FxHashMap<Box<str>, DefId>,
+    handlers: FxHashMap<Box<str>, Func>,
+    on_demand: FxHashMap<Box<str>, String>,
+    callbacks_registry: Option<DefId>,
+    /// While recording, what was read.
+    reads: RefCell<Option<Reads>>,
+}
+
+impl Declared {
+    fn note(&self, root: impl FnOnce() -> Root, found: bool) {
+        if let Some(reads) = self.reads.borrow_mut().as_mut() {
+            reads.roots.insert(root(), found);
+        }
+    }
+
+    /// Records that the contents of `def` were read.
+    pub(crate) fn note_def(&self, def: DefId) {
+        if let Some(reads) = self.reads.borrow_mut().as_mut() {
+            reads.defs.insert(def);
+        }
+    }
+
+    /// Records a read of declarations that fingerprints do not cover.
+    pub(crate) fn note_opaque(&self) {
+        if let Some(reads) = self.reads.borrow_mut().as_mut() {
+            reads.opaque = true;
+        }
+    }
+
+    /// Starts recording reads.
+    pub(crate) fn record(&self) {
+        *self.reads.borrow_mut() = Some(Reads::default());
+    }
+
+    /// Stops recording; what was read since [`Declared::record`].
+    pub(crate) fn recorded(&self) -> Option<Reads> {
+        self.reads.borrow_mut().take()
+    }
+
+    pub fn global(&self, name: &str) -> Option<TypeId> {
+        let found = self.globals.get(name).copied();
+        self.note(|| Root::Global(name.into()), found.is_some());
+        found
+    }
+
+    pub fn has_global(&self, name: &str) -> bool {
+        self.global(name).is_some()
+    }
+
+    pub fn global_type(&self, name: &str) -> Option<DefId> {
+        let found = self.global_types.get(name).copied();
+        self.note(|| Root::Type(name.into()), found.is_some());
+        found
+    }
+
+    pub fn handler(&self, name: &str) -> Option<&Func> {
+        let found = self.handlers.get(name);
+        self.note(|| Root::Handler(name.into()), found.is_some());
+        found
+    }
+
+    pub fn on_demand(&self, name: &str) -> Option<&str> {
+        let found = self.on_demand.get(name).map(String::as_str);
+        self.note(|| Root::OnDemand(name.into()), found.is_some());
+        found
+    }
+
+    pub fn callbacks_registry(&self) -> Option<DefId> {
+        self.note(
+            || Root::CallbacksRegistry,
+            self.callbacks_registry.is_some(),
+        );
+        self.callbacks_registry
+    }
+
+    pub fn set_global(&mut self, name: Box<str>, ty: TypeId) {
+        self.globals.insert(name, ty);
+    }
+
+    /// Declares `name` as `ty` unless it is declared already.
+    pub fn set_global_if_new(&mut self, name: &str, ty: TypeId) {
+        self.globals.entry(name.into()).or_insert(ty);
+    }
+
+    pub fn set_global_type(&mut self, name: Box<str>, def: DefId) {
+        self.global_types.insert(name, def);
+    }
+
+    pub fn set_handler(&mut self, name: Box<str>, handler: Func) {
+        self.handlers.insert(name, handler);
+    }
+
+    pub fn set_on_demand(&mut self, name: Box<str>, addon: String) {
+        self.on_demand.insert(name, addon);
+    }
+
+    pub fn set_callbacks_registry(&mut self, def: Option<DefId>) {
+        self.callbacks_registry = def;
+    }
+
+    /// Every global value, without recording: for tests and tools that
+    /// compare environments, never for checking.
+    pub fn unrecorded_globals(&self) -> impl Iterator<Item = (&str, TypeId)> {
+        self.globals.iter().map(|(k, &v)| (&**k, v))
+    }
+
+    /// Every global type, without recording (as `unrecorded_globals`).
+    pub fn unrecorded_global_types(&self) -> impl Iterator<Item = (&str, DefId)> {
+        self.global_types.iter().map(|(k, &v)| (&**k, v))
+    }
+
+    /// Every on-demand global, without recording (as `unrecorded_globals`).
+    pub fn unrecorded_on_demand(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.on_demand.iter().map(|(k, v)| (&**k, v.as_str()))
+    }
+
+    /// The answer `root` gives, without recording (for fingerprints).
+    pub(crate) fn peek(&self, root: &Root) -> Peeked<'_> {
+        match root {
+            Root::Global(n) => Peeked::Type(self.globals.get(n).copied()),
+            Root::Type(n) => Peeked::Def(self.global_types.get(n).copied()),
+            Root::Handler(n) => Peeked::Func(self.handlers.get(n)),
+            Root::OnDemand(n) => Peeked::Text(self.on_demand.get(n).map(String::as_str)),
+            Root::CallbacksRegistry => Peeked::Def(self.callbacks_registry),
+        }
+    }
+}
+
+/// What a [`Root`] resolves to.
+pub(crate) enum Peeked<'a> {
+    Type(Option<TypeId>),
+    Def(Option<DefId>),
+    Func(Option<&'a Func>),
+    Text(Option<&'a str>),
+}

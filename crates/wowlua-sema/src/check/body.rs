@@ -393,11 +393,7 @@ impl<'e> Checker<'e> {
     /// Checks a file's top level.
     pub fn check_file(&mut self, parse: &wowlua_syntax::Parse) {
         // `...` at the top level: (addon name, addon table) (spec §2.4.7).
-        let ns = self
-            .env
-            .global_types
-            .get(super::env::ADDON_NAMESPACE)
-            .copied();
+        let ns = self.env.declared.global_type(super::env::ADDON_NAMESPACE);
         let ns_ty = match ns {
             Some(d) => self.env.types.intern(Ty::Named(d, Vec::new())),
             None => Types::TABLE,
@@ -531,7 +527,7 @@ impl<'e> Checker<'e> {
             }
             match id.as_str() {
                 "events.event" if names.len() == 1 => {
-                    let f = self.env.handlers.get(names[0].as_str())?.clone();
+                    let f = self.env.declared.handler(names[0].as_str())?.clone();
                     return Some((f, format!("`{}`", names[0])));
                 }
                 "events.event" if names.len() > 1 && names.len() == args.len() => {
@@ -552,7 +548,7 @@ impl<'e> Checker<'e> {
                     return Some((f, format!("`{}`", names.join("`, `"))));
                 }
                 "events.unitEvent" if !names.is_empty() => {
-                    let f = self.env.handlers.get(names[0].as_str())?.clone();
+                    let f = self.env.declared.handler(names[0].as_str())?.clone();
                     return Some((f, format!("`{}`", names[0])));
                 }
                 _ => {}
