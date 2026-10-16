@@ -329,7 +329,10 @@ pub(crate) fn line_mode(profile: &Profile) -> LineMode {
     }
 }
 
-/// Parses every source once and checks the plain Lua files.
+/// Parses every source once and checks the plain Lua files, on worker
+/// threads when `jobs` allows (#8); diagnostics and the cache are handled
+/// on the calling thread, in file order, as when parsing one at a time.
+#[allow(clippy::too_many_arguments)]
 pub fn parse_sources(
     db: &SourceDb,
     diagnostics: &mut Vec<Diagnostic>,
@@ -338,88 +341,203 @@ pub fn parse_sources(
     raw: &HashMap<String, Arc<[u8]>>,
     mut cache: Option<&mut crate::BuildCache>,
     summarize: bool,
+    jobs: &crate::parallel::Jobs,
 ) -> Parsed {
-    let mut parses = Vec::with_capacity(files.len());
-    let mut ok = vec![true; files.len()];
-    let mut fronts = vec![Front::None; files.len()];
+    /// What to do with a source or declaration.
+    #[derive(Clone)]
+    enum Item {
+        /// An unchanged plain Lua file kept by an earlier build (#7): its
+        /// Lua 5.1 check is replayed as for a parsed one.
+        Summarized {
+            i: usize,
+            lua: Option<Diagnostic>,
+            usage: Arc<wowlua_sema::usage::FileUsage>,
+            nolint: bool,
+        },
+        /// Parse source `i`; `lua_kept`: its Lua 5.1 check is in the cache.
+        Source {
+            i: usize,
+            lua_kept: bool,
+        },
+        Declaration(usize),
+    }
+    /// What parsing an item gave (one per file, for the region only).
+    #[allow(clippy::large_enum_variant)]
+    enum Done {
+        Summarized {
+            i: usize,
+            lua: Option<Diagnostic>,
+            usage: Arc<wowlua_sema::usage::FileUsage>,
+            nolint: bool,
+        },
+        Source {
+            i: usize,
+            parse: Parse,
+            /// The parse failed, or the file has wowlua syntax (E0101).
+            failed: Option<Vec<Diagnostic>>,
+            /// The Lua 5.1 check, unless it is in the cache.
+            lua: Option<Option<Diagnostic>>,
+            usage: Option<Arc<wowlua_sema::usage::FileUsage>>,
+            nolint: bool,
+        },
+        Declaration(Parse),
+    }
     // The usage of a plain Lua file depends only on the table markers.
     let markers = summarize.then(wowlua_sema::usage::Markers::from_table);
+    let mut items = Vec::new();
     for (i, (source, file)) in files.iter().enumerate() {
         if source.kind == SourceKind::Xml {
-            parses.push(None);
             continue;
         }
         let bytes = &raw[&source.rel];
-        // An unchanged plain Lua file kept by an earlier build: its Lua 5.1
-        // check is replayed as for a parsed one.
         if summarize
             && source.kind == SourceKind::Lua
             && let Some(cache) = cache.as_deref_mut()
             && let Some((usage, nolint)) = cache.front(&source.rel, *file, bytes)
         {
-            if let Some(d) = cache.lua_check(db, &source.rel, *file, bytes) {
-                diagnostics.push(d);
-            }
-            fronts[i] = Front::Summarized { usage, nolint };
-            parses.push(None);
+            let lua = cache.lua_check(db, &source.rel, *file, bytes);
+            items.push(Item::Summarized {
+                i,
+                lua,
+                usage,
+                nolint,
+            });
             continue;
         }
-        let parsed = wowlua_syntax::parse(bytes, *file);
-        if parsed.has_errors() {
-            diagnostics.extend(parsed.diagnostics.clone());
-            ok[i] = false;
-        } else if source.kind == SourceKind::Lua {
-            if let Some((feature, span)) = wowlua_syntax::features::features(&parsed.chunk).first()
-            {
-                diagnostics.push(
-                    Diagnostic::error(
-                        "E0101",
-                        format!(
-                            "{} are wowlua syntax, but this is a `.lua` file",
-                            feature.describe()
-                        ),
-                    )
-                    .with_label(*span, "not Lua 5.1")
-                    .with_help("rename the file to `.wowlua`"),
-                );
-                ok[i] = false;
-            } else {
-                if let Some(d) = match cache.as_deref_mut() {
-                    Some(cache) => cache.lua_check(db, &source.rel, *file, bytes),
-                    None => luacheck::check(db, *file, bytes),
-                } {
-                    diagnostics.push(d);
-                }
-                if let (Some(markers), Some(cache)) = (&markers, cache.as_deref_mut()) {
-                    fronts[i] = Front::Fresh {
-                        hash: cache.source_hash(&source.rel, bytes),
-                        usage: Arc::new(wowlua_sema::usage::file_usage(&parsed, markers)),
-                        nolint: parsed
+        let lua_kept = source.kind == SourceKind::Lua
+            && cache
+                .as_deref_mut()
+                .is_some_and(|c| c.has_lua_check(&source.rel, *file, bytes));
+        items.push(Item::Source { i, lua_kept });
+    }
+    items.extend((0..declarations.len()).map(Item::Declaration));
+    let weight = |item: &Item| match item {
+        Item::Summarized { .. } => 0,
+        Item::Source { i, .. } => raw[&files[*i].0.rel].len() as u64,
+        Item::Declaration(d) => declarations[*d].bytes.len() as u64,
+    };
+    let compute = |item: Item| match item {
+        Item::Summarized {
+            i,
+            lua,
+            usage,
+            nolint,
+        } => Done::Summarized {
+            i,
+            lua,
+            usage,
+            nolint,
+        },
+        Item::Source { i, lua_kept } => {
+            let (source, file) = &files[i];
+            let bytes = &raw[&source.rel];
+            let parse = wowlua_syntax::parse(bytes, *file);
+            let mut failed = None;
+            let mut lua = None;
+            let mut usage = None;
+            let mut nolint = false;
+            if parse.has_errors() {
+                failed = Some(parse.diagnostics.clone());
+            } else if source.kind == SourceKind::Lua {
+                if let Some((feature, span)) =
+                    wowlua_syntax::features::features(&parse.chunk).first()
+                {
+                    failed = Some(vec![
+                        Diagnostic::error(
+                            "E0101",
+                            format!(
+                                "{} are wowlua syntax, but this is a `.lua` file",
+                                feature.describe()
+                            ),
+                        )
+                        .with_label(*span, "not Lua 5.1")
+                        .with_help("rename the file to `.wowlua`"),
+                    ]);
+                } else {
+                    if !lua_kept {
+                        lua = Some(luacheck::check(db, *file, bytes));
+                    }
+                    if let Some(markers) = &markers {
+                        usage = Some(Arc::new(wowlua_sema::usage::file_usage(&parse, markers)));
+                        nolint = parse
                             .chunk
                             .directives
                             .iter()
-                            .any(|d| d.name.as_ref() == "nolint"),
+                            .any(|d| d.name.as_ref() == "nolint");
+                    }
+                }
+            }
+            Done::Source {
+                i,
+                parse,
+                failed,
+                lua,
+                usage,
+                nolint,
+            }
+        }
+        Item::Declaration(d) => Done::Declaration(wowlua_syntax::parse(
+            &declarations[d].bytes,
+            declarations[d].file,
+        )),
+    };
+    let mut parses: Vec<Option<Parse>> = (0..files.len()).map(|_| None).collect();
+    let mut ok = vec![true; files.len()];
+    let mut fronts = vec![Front::None; files.len()];
+    let mut parsed_declarations = Vec::with_capacity(declarations.len());
+    // Parsing takes about this much memory per source byte while it runs
+    // (the tree it keeps is the build's anyway).
+    jobs.region(items, weight, 20, compute, |done| match done {
+        Done::Summarized {
+            i,
+            lua,
+            usage,
+            nolint,
+        } => {
+            diagnostics.extend(lua);
+            fronts[i] = Front::Summarized { usage, nolint };
+        }
+        Done::Source {
+            i,
+            parse,
+            failed,
+            lua,
+            usage,
+            nolint,
+        } => {
+            let (source, file) = &files[i];
+            if let Some(failed) = failed {
+                diagnostics.extend(failed);
+                ok[i] = false;
+            } else if source.kind == SourceKind::Lua {
+                let bytes = &raw[&source.rel];
+                let checked = match cache.as_deref_mut() {
+                    Some(cache) => cache.lua_check_with(db, &source.rel, *file, bytes, lua),
+                    None => lua.unwrap_or_else(|| luacheck::check(db, *file, bytes)),
+                };
+                diagnostics.extend(checked);
+                if let (Some(usage), Some(cache)) = (usage, cache.as_deref_mut()) {
+                    fronts[i] = Front::Fresh {
+                        hash: cache.source_hash(&source.rel, bytes),
+                        usage,
+                        nolint,
                     };
                 }
             }
+            parses[i] = Some(parse);
         }
-        parses.push(Some(parsed));
-    }
-    let declarations = declarations
-        .iter()
-        .map(|d| {
-            let parsed = wowlua_syntax::parse(&d.bytes, d.file);
-            if parsed.has_errors() {
-                diagnostics.extend(parsed.diagnostics.clone());
+        Done::Declaration(parse) => {
+            if parse.has_errors() {
+                diagnostics.extend(parse.diagnostics.clone());
             }
-            parsed
-        })
-        .collect();
+            parsed_declarations.push(parse);
+        }
+    });
     Parsed {
         parses,
         ok,
         fronts,
-        declarations,
+        declarations: parsed_declarations,
     }
 }
 
@@ -878,6 +996,7 @@ pub fn compile_flavor(
     minify: &Minify,
     cache: &mut FlavorCache,
     store: bool,
+    jobs: &crate::parallel::Jobs,
 ) -> CompileOutput {
     let mut options = minify.passes.emit_options(line_mode(profile));
     options.mappings = source_maps;
@@ -1257,6 +1376,41 @@ pub fn compile_flavor(
             .or_default()
             .insert((span.start, span.end), name.clone());
     }
+    /// A file to compile, planned in file order: taken from the cache, or
+    /// lowered (and in stream mode finished) by a job (one per file).
+    #[allow(clippy::large_enum_variant)]
+    enum Slot {
+        Hit {
+            i: usize,
+            lowering: Vec<Diagnostic>,
+            uses_runtime: bool,
+            slices: BTreeSet<wowlua_runtime::Slice>,
+            finishing: Vec<Diagnostic>,
+            compiled: Option<Arc<Compiled>>,
+        },
+        Miss {
+            i: usize,
+            ctx: Option<Context>,
+            hash: Option<blake3::Hash>,
+        },
+    }
+    /// What a job gave for a miss.
+    struct FileResult {
+        lowering: Vec<Diagnostic>,
+        /// `None` when lowering failed.
+        lowered: Option<LoweredFile>,
+    }
+    struct LoweredFile {
+        meta_used: BTreeSet<(MetaKind, Vec<String>)>,
+        uses_runtime: bool,
+        slices: BTreeSet<wowlua_runtime::Slice>,
+        reads_meta: bool,
+        /// The IR, kept for rename-private outside stream mode.
+        chunk: Option<wowlua_luair::ir::Chunk>,
+        finishing: Vec<Diagnostic>,
+        compiled: Option<Compiled>,
+    }
+    let mut slots: Vec<Slot> = Vec::new();
     for (i, (source, file)) in files.iter().enumerate() {
         let plain_lua = source.kind == SourceKind::Lua && lower_lua.contains(&source.rel);
         let minified_lua = source.kind == SourceKind::Lua && minify.lua.contains(&source.rel);
@@ -1332,59 +1486,137 @@ pub fn compile_flavor(
                     source.rel
                 );
             }
-            diagnostics.extend(reused.lowering.iter().cloned());
-            out.needs_runtime |= reused.uses_runtime;
-            out.slices.extend(reused.slices.iter().copied());
-            finish_diagnostics.extend(reused.finishing.iter().cloned());
-            if let Some(compiled) = &reused.compiled {
-                out.compiled
-                    .insert(source.rel.clone(), Arc::clone(compiled));
-            }
+            slots.push(Slot::Hit {
+                i,
+                lowering: reused.lowering.clone(),
+                uses_runtime: reused.uses_runtime,
+                slices: reused.slices.clone(),
+                finishing: reused.finishing.clone(),
+                compiled: reused.compiled.clone(),
+            });
             cache.hits += 1;
             continue;
         }
         cache.misses += 1;
-        let mark = diagnostics.len();
-        let Some(lowered) = lower_file(i, ctx.as_ref(), diagnostics) else {
-            continue;
+        slots.push(Slot::Miss { i, ctx, hash });
+    }
+    // Lowering and finishing are pure per file: on worker threads (#8),
+    // merged below in file order as compiling one file at a time would.
+    let misses: Vec<usize> = slots
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| matches!(s, Slot::Miss { .. }))
+        .map(|(k, _)| k)
+        .collect();
+    let weight = |k: &usize| match &slots[*k] {
+        Slot::Miss { i, .. } => raw[&files[*i].0.rel].len() as u64,
+        Slot::Hit { .. } => 0,
+    };
+    let compute = |k: usize| {
+        let Slot::Miss { i, ctx, .. } = &slots[k] else {
+            unreachable!("only misses are jobs")
         };
-        // Kept only for a later flavor or build, and only when the flavor's
-        // `wowlua:meta` did not shape it.
-        let keep = stream && (store || cache.generation.is_some()) && !lowered.reads_meta;
-        out.needs_runtime |= lowered.uses_runtime;
-        out.meta_used.extend(lowered.meta_used);
-        out.slices.extend(lowered.slices.iter().copied());
-        if !stream {
-            lowered_files.push((i, lowered.chunk));
-            continue;
-        }
-        let fmark = finish_diagnostics.len();
-        let compiled = finish(lowered.chunk, source, *file, &mut finish_diagnostics).map(Arc::new);
-        if let Some(compiled) = &compiled {
-            out.compiled
-                .insert(source.rel.clone(), Arc::clone(compiled));
-        }
-        let lowering = &diagnostics[mark..];
-        let finishing = &finish_diagnostics[fmark..];
-        // A later build may change another file a diagnostic points into.
-        let own = |d: &Diagnostic| d.labels.iter().all(|l| l.span.file == *file);
-        let foreign = cache.generation.is_some() && !lowering.iter().chain(finishing).all(own);
-        if keep && !foreign {
-            let entry = CacheEntry {
-                src_rel: source.src_rel.clone(),
-                kind: source.kind,
-                output: source.output.clone(),
-                file: *file,
-                hash,
-                ctx: ctx.map(|ctx| Context { meta: None, ..ctx }),
-                lowering: lowering.to_vec(),
+        let (source, file) = &files[*i];
+        let mut lowering = Vec::new();
+        let lowered = lower_file(*i, ctx.as_ref(), &mut lowering).map(|lowered| {
+            let mut finishing = Vec::new();
+            let (chunk, compiled) = if stream {
+                (None, finish(lowered.chunk, source, *file, &mut finishing))
+            } else {
+                (Some(lowered.chunk), None)
+            };
+            LoweredFile {
+                meta_used: lowered.meta_used,
                 uses_runtime: lowered.uses_runtime,
                 slices: lowered.slices,
-                finishing: finishing.to_vec(),
+                reads_meta: lowered.reads_meta,
+                chunk,
+                finishing,
                 compiled,
-                generation: cache.generation.unwrap_or(0),
-            };
-            cache.insert(source, entry);
+            }
+        });
+        FileResult { lowering, lowered }
+    };
+    // A job takes about this much memory per source byte (the release
+    // optimizations clone the IR).
+    let per_byte = if minify.passes.is_empty() && !profile.optimize.dead_code {
+        50
+    } else {
+        100
+    };
+    let mut results: Vec<FileResult> = Vec::with_capacity(misses.len());
+    jobs.region(misses, weight, per_byte, compute, |r| results.push(r));
+    let mut results = results.into_iter();
+    for slot in slots {
+        match slot {
+            Slot::Hit {
+                i,
+                lowering,
+                uses_runtime,
+                slices,
+                finishing,
+                compiled,
+            } => {
+                diagnostics.extend(lowering);
+                out.needs_runtime |= uses_runtime;
+                out.slices.extend(slices);
+                finish_diagnostics.extend(finishing);
+                if let Some(compiled) = compiled {
+                    out.compiled.insert(files[i].0.rel.clone(), compiled);
+                }
+            }
+            Slot::Miss { i, ctx, hash } => {
+                let (source, file) = &files[i];
+                let FileResult {
+                    lowering: lowering_diagnostics,
+                    lowered,
+                } = results.next().expect("a result per miss");
+                let mark = diagnostics.len();
+                diagnostics.extend(lowering_diagnostics);
+                let Some(lowered) = lowered else {
+                    continue;
+                };
+                // Kept only for a later flavor or build, and only when the
+                // flavor's `wowlua:meta` did not shape it.
+                let keep = stream && (store || cache.generation.is_some()) && !lowered.reads_meta;
+                out.needs_runtime |= lowered.uses_runtime;
+                out.meta_used.extend(lowered.meta_used);
+                out.slices.extend(lowered.slices.iter().copied());
+                if let Some(chunk) = lowered.chunk {
+                    lowered_files.push((i, chunk));
+                    continue;
+                }
+                let fmark = finish_diagnostics.len();
+                finish_diagnostics.extend(lowered.finishing);
+                let compiled = lowered.compiled.map(Arc::new);
+                if let Some(compiled) = &compiled {
+                    out.compiled
+                        .insert(source.rel.clone(), Arc::clone(compiled));
+                }
+                let lowering = &diagnostics[mark..];
+                let finishing = &finish_diagnostics[fmark..];
+                // A later build may change another file a diagnostic points into.
+                let own = |d: &Diagnostic| d.labels.iter().all(|l| l.span.file == *file);
+                let foreign =
+                    cache.generation.is_some() && !lowering.iter().chain(finishing).all(own);
+                if keep && !foreign {
+                    let entry = CacheEntry {
+                        src_rel: source.src_rel.clone(),
+                        kind: source.kind,
+                        output: source.output.clone(),
+                        file: *file,
+                        hash,
+                        ctx: ctx.map(|ctx| Context { meta: None, ..ctx }),
+                        lowering: lowering.to_vec(),
+                        uses_runtime: lowered.uses_runtime,
+                        slices: lowered.slices,
+                        finishing: finishing.to_vec(),
+                        compiled,
+                        generation: cache.generation.unwrap_or(0),
+                    };
+                    cache.insert(source, entry);
+                }
+            }
         }
     }
     if minify.passes.rename_private {

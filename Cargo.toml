@@ -77,6 +77,8 @@ all = { level = "warn", priority = -1 }
 result_large_err = "allow"
 
 [profile.release]
+# Keep `panic = "unwind"` (the default): parallel regions catch a job's
+# panic and run again in order (`wowlua_driver::parallel`).
 lto = "thin"
 codegen-units = 1
 strip = true

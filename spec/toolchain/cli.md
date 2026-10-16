@@ -20,6 +20,7 @@ wowlua <command> [options]
 | `--color auto\|always\|never` | Terminal colors |
 | `-q, --quiet` / `-v, --verbose` | Output verbosity. Tokens are always redacted. |
 | `--deny-warnings` | Treat warnings as errors |
+| `-j, --jobs <N>` | Worker threads for per-file work (parsing, lowering and finishing, linting); `1` runs it in order on one thread. Default: the number of cores, at most 8. The output and the order of diagnostics do not depend on it. |
 
 ## 12.2 Project commands
 
@@ -343,9 +344,16 @@ Global configuration lives in `$WOWLUA_HOME/config.json` (default `~/.wowlua/con
 {
   "wow": { "path": "/Applications/World of Warcraft" },
   "registries": { "default": "https://registry.wowlua.dev" },
-  "dev": { "link": false }
+  "dev": { "link": false },
+  "build": { "jobs": 8, "jobs-memory": 1024 }
 }
 ```
+
+`build.jobs` is the default for `--jobs`; `build.jobs-memory` (MiB, default
+1024) caps the memory the files compiled at the same time may take: larger
+files wait, and one larger than the cap is compiled alone. Projects under
+256 KiB of source are compiled on one thread unless `--jobs`,
+`WOWLUA_JOBS`, `WOWLUA_JOBS_MEMORY` or these keys set it.
 
 API tokens live in the OS credential store (`wowlua login`). Only when no
 credential store is available does `wowlua login` write a `tokens` object into
@@ -355,8 +363,9 @@ this file ([Package manager §10.11](package-manager.md#1011-security)).
 credential store and use `config.json` only (headless machines, tests).
 
 Environment variables override config values: `WOWLUA_HOME`,
-`WOWLUA_WOW_PATH`, the token variables in [Publishing §11.1.3](publishing.md#1113-tokens),
-and `NO_COLOR`.
+`WOWLUA_WOW_PATH`, `WOWLUA_JOBS` and `WOWLUA_JOBS_MEMORY` (MiB), the token
+variables in [Publishing §11.1.3](publishing.md#1113-tokens), and `NO_COLOR`.
+`--jobs` overrides both.
 
 ## 12.8 Exit codes
 
