@@ -177,12 +177,15 @@ impl<'a> Parser<'a> {
         tokens.token((self.pos + ahead).min(tokens.len() - 1))
     }
 
+    // The parser asks for kinds far more often than for whole tokens: read
+    // only the kinds (tokens are stored by field).
     fn kind(&self) -> TokenKind {
-        self.tok(0).kind
+        self.kind_at(0)
     }
 
     fn kind_at(&self, ahead: usize) -> TokenKind {
-        self.tok(ahead).kind
+        let tokens = &self.lexed.tokens;
+        tokens.kind((self.pos + ahead).min(tokens.len() - 1))
     }
 
     fn text_of(&self, token: &Token) -> &'a [u8] {
@@ -207,15 +210,36 @@ impl<'a> Parser<'a> {
         t
     }
 
-    fn prev(&self) -> Token {
-        self.lexed.tokens.token(self.pos.saturating_sub(1))
+    /// Steps over the current token without reading it (the caller knows
+    /// its kind).
+    fn bump(&mut self) {
+        if self.kind() != T::Eof {
+            self.pos += 1;
+        }
+    }
+
+    /// Where token `ahead` starts.
+    fn start_at(&self, ahead: usize) -> u32 {
+        let tokens = &self.lexed.tokens;
+        tokens.start((self.pos + ahead).min(tokens.len() - 1))
+    }
+
+    /// Where token `ahead` ends.
+    fn end_at(&self, ahead: usize) -> u32 {
+        let tokens = &self.lexed.tokens;
+        tokens.end((self.pos + ahead).min(tokens.len() - 1))
+    }
+
+    /// Where the previous token ends.
+    fn prev_end(&self) -> u32 {
+        self.lexed.tokens.end(self.pos.saturating_sub(1))
     }
 
     fn span_from(&self, start: u32) -> Span {
         let end = if self.pos == 0 {
             start
         } else {
-            self.prev().end
+            self.prev_end()
         };
         Span {
             file: self.file,
@@ -265,7 +289,7 @@ impl<'a> Parser<'a> {
 
     fn eat(&mut self, kind: TokenKind) -> bool {
         if self.check(kind) {
-            self.advance();
+            self.bump();
             true
         } else {
             false
@@ -327,7 +351,7 @@ impl<'a> Parser<'a> {
             return Ok(self.advance());
         }
         let what = close.describe();
-        let failed = if self.same_line(opened, self.tok(0).start) {
+        let failed = if self.same_line(opened, self.start_at(0)) {
             self.syntax_error(format!("{what} expected"))
         } else {
             let line = self.line_of(opened);
@@ -399,7 +423,7 @@ impl<'a> Parser<'a> {
 
     pub(crate) fn chunk(&mut self) -> Chunk {
         let directives = self.directives();
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let mut stmts = Vec::new();
         loop {
             let block = self.block();
@@ -408,7 +432,7 @@ impl<'a> Parser<'a> {
                 break;
             }
             let _ = self.syntax_error("'<eof>' expected");
-            self.advance();
+            self.bump();
         }
         debug_assert!(self.field_stack.is_empty() && self.expr_stack.is_empty());
         let span = Span {
@@ -464,7 +488,7 @@ impl<'a> Parser<'a> {
     }
 
     fn block_inner(&mut self) -> Block {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let mut stmts = Vec::new();
         if self.enter_level().is_err() {
             self.skip_to_block_end();
@@ -534,13 +558,13 @@ impl<'a> Parser<'a> {
 
     /// Skips to the next statement boundary after an error.
     fn recover(&mut self, before: usize) {
-        let error_line = self.line_of(self.tok(0).start);
+        let error_line = self.line_of(self.start_at(0));
         if self.pos == before {
-            self.advance();
+            self.bump();
         }
         loop {
             // A name or `(` starting a later line likely starts a statement.
-            if self.line_of(self.tok(0).start) > error_line
+            if self.line_of(self.start_at(0)) > error_line
                 && matches!(self.kind(), T::Name | T::LParen | T::At)
             {
                 return;
@@ -557,11 +581,11 @@ impl<'a> Parser<'a> {
                 | T::Do
                 | T::Break => return,
                 T::Semi => {
-                    self.advance();
+                    self.bump();
                     return;
                 }
                 _ => {
-                    self.advance();
+                    self.bump();
                 }
             }
         }
@@ -577,7 +601,7 @@ impl<'a> Parser<'a> {
                 T::End | T::Until => depth -= 1,
                 _ => {}
             }
-            self.advance();
+            self.bump();
         }
     }
 
@@ -603,12 +627,12 @@ impl<'a> Parser<'a> {
                 | T::QuestionColon
                 | T::ColonColon
         ) || compound_op(next.kind).is_some()
-            || (next.kind == T::LParen && self.same_line(self.tok(0).end, next.start));
+            || (next.kind == T::LParen && self.same_line(self.end_at(0), next.start));
         !follows
     }
 
     fn statement(&mut self) -> PResult<Stmt> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let decorators = if self.check(T::At) {
             self.decorators()?
         } else {
@@ -745,11 +769,11 @@ impl<'a> Parser<'a> {
             let at = self.advance();
             let mut path = vec![self.decorator_name()?];
             while self.check(T::Dot) {
-                self.advance();
+                self.bump();
                 path.push(self.decorator_name()?);
             }
             // Arguments must start on the decorator's line.
-            let same_line = self.same_line(self.prev().end, self.tok(0).start);
+            let same_line = self.same_line(self.prev_end(), self.start_at(0));
             let args = if same_line
                 && matches!(
                     self.kind(),
@@ -778,13 +802,13 @@ impl<'a> Parser<'a> {
         loop {
             match self.kind() {
                 T::Elseif => {
-                    self.advance();
+                    self.bump();
                     let c = self.expr()?;
                     self.expect(T::Then, "then")?;
                     elseifs.push((c, self.block()));
                 }
                 T::Else => {
-                    self.advance();
+                    self.bump();
                     else_block = Some(self.block());
                     self.expect_match(T::End, "if", opened)?;
                     break;
@@ -866,7 +890,7 @@ impl<'a> Parser<'a> {
         let first = self.typed_name()?;
         match self.kind() {
             T::Eq => {
-                self.advance();
+                self.bump();
                 let start = self.expr()?;
                 self.expect(T::Comma, ",")?;
                 let limit = self.expr()?;
@@ -903,10 +927,10 @@ impl<'a> Parser<'a> {
     }
 
     fn func_name(&mut self) -> PResult<FuncName> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let mut path = vec![self.name()?];
         while self.check(T::Dot) {
-            self.advance();
+            self.bump();
             path.push(self.name()?);
         }
         let method = if self.eat(T::Colon) {
@@ -932,7 +956,7 @@ impl<'a> Parser<'a> {
     }
 
     fn local_stat(&mut self) -> PResult<StmtKind> {
-        self.advance();
+        self.bump();
         if self.check(T::Function) {
             let opened = self.advance().start;
             let name = self.name()?;
@@ -1021,7 +1045,7 @@ impl<'a> Parser<'a> {
     }
 
     fn return_stat(&mut self) -> PResult<StmtKind> {
-        self.advance();
+        self.bump();
         if is_block_follow(self.kind()) || self.check(T::Semi) {
             return Ok(StmtKind::Return(Vec::new()));
         }
@@ -1049,7 +1073,7 @@ impl<'a> Parser<'a> {
         }
         if let Some(op) = compound_op(self.kind()) {
             self.check_target(&first)?;
-            self.advance();
+            self.bump();
             let value = self.expr()?;
             return Ok(StmtKind::Compound {
                 target: Box::new(first),
@@ -1115,9 +1139,9 @@ impl<'a> Parser<'a> {
     }
 
     fn subexpr_inner(&mut self, limit: u8) -> PResult<Expr> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let mut lhs = if let Some(op) = unary_op(self.kind()) {
-            self.advance();
+            self.bump();
             let operand = self.subexpr(UNARY_PRIORITY)?;
             Expr {
                 id: self.id(),
@@ -1175,7 +1199,7 @@ impl<'a> Parser<'a> {
     }
 
     fn simple_expr(&mut self) -> PResult<Expr> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let kind = match self.kind() {
             T::Number => {
                 let t = self.advance();
@@ -1186,15 +1210,15 @@ impl<'a> Parser<'a> {
                 ExprKind::String(self.string_lit(&t))
             }
             T::Nil => {
-                self.advance();
+                self.bump();
                 ExprKind::Nil
             }
             T::True => {
-                self.advance();
+                self.bump();
                 ExprKind::True
             }
             T::False => {
-                self.advance();
+                self.bump();
                 ExprKind::False
             }
             T::Ellipsis => {
@@ -1231,7 +1255,7 @@ impl<'a> Parser<'a> {
     /// `e :: T` (spec §1.4.3).
     fn casts(&mut self, mut e: Expr, start: u32) -> PResult<Expr> {
         while self.check(T::ColonColon) {
-            self.advance();
+            self.bump();
             let ty = self.ty()?;
             e = Expr {
                 id: self.id(),
@@ -1282,7 +1306,7 @@ impl<'a> Parser<'a> {
     }
 
     fn primary_expr(&mut self) -> PResult<Expr> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         match self.kind() {
             T::Name => {
                 let t = self.advance();
@@ -1308,14 +1332,14 @@ impl<'a> Parser<'a> {
     }
 
     fn suffixed_expr(&mut self) -> PResult<Expr> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let mut e = self.primary_expr()?;
         let mut links = 0;
         loop {
             links += 1;
             let kind = match self.kind() {
                 T::Dot => {
-                    self.advance();
+                    self.bump();
                     let name = self.name()?;
                     ExprKind::Field {
                         obj: Box::new(e),
@@ -1323,7 +1347,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 T::LBracket => {
-                    self.advance();
+                    self.bump();
                     let key = self.expr()?;
                     self.expect(T::RBracket, "]")?;
                     ExprKind::Index {
@@ -1332,7 +1356,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 T::Colon => {
-                    self.advance();
+                    self.bump();
                     let name = self.name()?;
                     let args = self.call_args()?;
                     ExprKind::Method {
@@ -1349,10 +1373,10 @@ impl<'a> Parser<'a> {
                     }
                 }
                 T::QuestionDot => {
-                    self.advance();
+                    self.bump();
                     match self.kind() {
                         T::LBracket => {
-                            self.advance();
+                            self.bump();
                             let key = self.expr()?;
                             self.expect(T::RBracket, "]")?;
                             ExprKind::OptIndex {
@@ -1377,7 +1401,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 T::QuestionColon => {
-                    self.advance();
+                    self.bump();
                     let name = self.name()?;
                     let args = self.call_args()?;
                     ExprKind::OptMethod {
@@ -1418,7 +1442,7 @@ impl<'a> Parser<'a> {
         match self.kind() {
             T::LParen => {
                 let t = self.tok(0);
-                if !self.same_line(self.prev().end, t.start) {
+                if !self.same_line(self.prev_end(), t.start) {
                     let span = self.token_span(&t);
                     self.error_at(
                         "E0104",
@@ -1429,7 +1453,7 @@ impl<'a> Parser<'a> {
                 self.paren_args()
             }
             T::LBrace => {
-                let start = self.tok(0).start;
+                let start = self.start_at(0);
                 let kind = self.table()?;
                 Ok(Args::Table(Box::new(Expr {
                     id: self.id(),
@@ -1464,10 +1488,10 @@ impl<'a> Parser<'a> {
             if self.check(T::RBrace) {
                 break;
             }
-            let start = self.tok(0).start;
+            let start = self.start_at(0);
             let field = match self.kind() {
                 T::LBracket => {
-                    self.advance();
+                    self.bump();
                     let key = self.expr()?;
                     self.expect(T::RBracket, "]")?;
                     self.expect(T::Eq, "=")?;
@@ -1480,14 +1504,14 @@ impl<'a> Parser<'a> {
                 }
                 T::Name if self.kind_at(1) == T::Eq && !self.keep_tree => {
                     // The name and `=`, with nothing to check.
-                    self.advance();
-                    self.advance();
+                    self.bump();
+                    self.bump();
                     self.expr()?;
                     None
                 }
                 T::Name if self.kind_at(1) == T::Eq => {
                     let name = self.name()?;
-                    self.advance();
+                    self.bump();
                     let value = self.expr()?;
                     let field = TableField::Named { name, value };
                     // The field's span is not stored: it runs from the name
@@ -1534,7 +1558,7 @@ impl<'a> Parser<'a> {
                     self.expect_match(T::InterpClose, "{", opened)?;
                 }
                 T::InterpEnd => {
-                    self.advance();
+                    self.bump();
                     break;
                 }
                 _ => {
@@ -1552,9 +1576,9 @@ impl<'a> Parser<'a> {
 
     /// `[<T>] ( params ) [: ret] block end`
     fn func_body(&mut self, opened: u32) -> PResult<FuncBody> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let type_params = self.type_params_opt()?;
-        let params_start = self.tok(0).start;
+        let params_start = self.start_at(0);
         let open = self.expect(T::LParen, "(")?;
         let (params, vararg) = self.param_list(false)?;
         self.expect_match(T::RParen, "(", open.start)?;
@@ -1585,9 +1609,9 @@ impl<'a> Parser<'a> {
 
     /// A signature without body: `[<T>] ( params ) [: ret]`.
     fn signature(&mut self, declaration: bool) -> PResult<FuncBody> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let type_params = self.type_params_opt()?;
-        let params_start = self.tok(0).start;
+        let params_start = self.start_at(0);
         let open = self.expect(T::LParen, "(")?;
         let (params, vararg) = self.param_list(declaration)?;
         self.expect_match(T::RParen, "(", open.start)?;
@@ -1695,7 +1719,7 @@ impl<'a> Parser<'a> {
             T::ShrEq => self.split_first(T::Gt, T::GtEq),
             _ => return Err(self.syntax_error("'>' expected")),
         }
-        self.advance();
+        self.bump();
         Ok(())
     }
 
@@ -1703,7 +1727,7 @@ impl<'a> Parser<'a> {
         if !self.check(T::Lt) {
             return Ok(Vec::new());
         }
-        self.advance();
+        self.bump();
         let mut params = Vec::new();
         loop {
             let name = self.name()?;
@@ -1715,7 +1739,7 @@ impl<'a> Parser<'a> {
                 });
             } else {
                 let constraint = if self.is_word("extends") {
-                    self.advance();
+                    self.bump();
                     Some(self.ty()?)
                 } else {
                     None
@@ -1736,7 +1760,7 @@ impl<'a> Parser<'a> {
 
     pub(crate) fn ty(&mut self) -> PResult<Type> {
         self.enter_level()?;
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let result = grow(|| {
             self.eat(T::Pipe);
             let first = self.intersection()?;
@@ -1762,7 +1786,7 @@ impl<'a> Parser<'a> {
     }
 
     fn intersection(&mut self) -> PResult<Type> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let first = self.postfix_type()?;
         self.intersection_rest(first, start)
     }
@@ -1783,7 +1807,7 @@ impl<'a> Parser<'a> {
     }
 
     fn postfix_type(&mut self) -> PResult<Type> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let base = self.primary_type()?;
         self.postfix_rest(base, start)
     }
@@ -1792,17 +1816,17 @@ impl<'a> Parser<'a> {
         loop {
             let kind = match self.kind() {
                 T::Question => {
-                    self.advance();
+                    self.bump();
                     TypeKind::Optional(Box::new(base))
                 }
                 T::QuestionColon => {
                     self.split_first(T::Question, T::Colon);
-                    self.advance();
+                    self.bump();
                     TypeKind::Optional(Box::new(base))
                 }
                 T::LBracket if self.kind_at(1) == T::RBracket => {
-                    self.advance();
-                    self.advance();
+                    self.bump();
+                    self.bump();
                     TypeKind::Array(Box::new(base))
                 }
                 _ => return Ok(base),
@@ -1823,22 +1847,22 @@ impl<'a> Parser<'a> {
     }
 
     fn primary_type(&mut self) -> PResult<Type> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let kind = match self.kind() {
             T::Nil => {
-                self.advance();
+                self.bump();
                 TypeKind::Nil
             }
             T::True => {
-                self.advance();
+                self.bump();
                 TypeKind::True
             }
             T::False => {
-                self.advance();
+                self.bump();
                 TypeKind::False
             }
             T::Function => {
-                self.advance();
+                self.bump();
                 TypeKind::AnyFunction
             }
             T::String | T::LongString => {
@@ -1850,7 +1874,7 @@ impl<'a> Parser<'a> {
                 TypeKind::Number(self.number_lit(&t))
             }
             T::Name if self.is_word("typeof") && self.kind_at(1) == T::LParen => {
-                self.advance();
+                self.bump();
                 let open = self.advance();
                 let e = self.expr()?;
                 self.expect_match(T::RParen, "(", open.start)?;
@@ -1890,7 +1914,7 @@ impl<'a> Parser<'a> {
     fn type_ref_parts(&mut self) -> PResult<(Vec<Name>, Vec<TypeArg>)> {
         let mut path = vec![self.name()?];
         while self.check(T::Dot) {
-            self.advance();
+            self.bump();
             path.push(self.name()?);
         }
         let args = if self.check(T::Lt) {
@@ -1902,7 +1926,7 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn type_ref(&mut self) -> PResult<Type> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let (path, args) = self.type_ref_parts()?;
         Ok(Type {
             id: self.id(),
@@ -1925,10 +1949,10 @@ impl<'a> Parser<'a> {
     }
 
     fn type_arg(&mut self) -> PResult<TypeArg> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         if self.check(T::Name) && self.kind_at(1) == T::Ellipsis {
             let name = self.name()?;
-            self.advance();
+            self.bump();
             return Ok(TypeArg::Pack(TypePack::Named(name)));
         }
         if self.check(T::LParen) {
@@ -1965,14 +1989,14 @@ impl<'a> Parser<'a> {
         if !self.check(T::RParen) {
             loop {
                 if self.check(T::Ellipsis) {
-                    self.advance();
+                    self.bump();
                     self.eat(T::Colon);
                     vararg = Some(self.vararg_type()?);
                     break;
                 }
                 let name = if self.check(T::Name) && self.kind_at(1) == T::Colon {
                     let n = self.name()?;
-                    self.advance();
+                    self.bump();
                     Some(n)
                 } else {
                     None
@@ -2018,17 +2042,17 @@ impl<'a> Parser<'a> {
     fn vararg_type(&mut self) -> PResult<VarargType> {
         if self.check(T::Name) && self.kind_at(1) == T::Ellipsis {
             let name = self.name()?;
-            self.advance();
+            self.bump();
             return Ok(VarargType::Pack(name));
         }
         Ok(VarargType::Type(self.ty()?))
     }
 
     fn ret_type(&mut self) -> PResult<RetType> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         if self.check(T::Name) && self.kind_at(1) == T::Ellipsis {
             let name = self.name()?;
-            self.advance();
+            self.bump();
             return Ok(RetType::Pack(name));
         }
         if self.check(T::Ellipsis) {
@@ -2044,10 +2068,10 @@ impl<'a> Parser<'a> {
         }
         if self.check(T::Name)
             && self.is_word_at(1, "is")
-            && self.same_line(self.tok(0).end, self.tok(1).start)
+            && self.same_line(self.end_at(0), self.start_at(1))
         {
             let name = self.name()?;
-            self.advance();
+            self.bump();
             let ty = self.ty()?;
             return Ok(RetType::Predicate { name, ty });
         }
@@ -2097,12 +2121,12 @@ impl<'a> Parser<'a> {
             if self.check(T::RBrace) {
                 break;
             }
-            let start = self.tok(0).start;
+            let start = self.start_at(0);
             let readonly = self.is_word("readonly")
                 && self.kind_at(1) == T::Name
                 && matches!(self.kind_at(2), T::Colon | T::QuestionColon);
             if readonly {
-                self.advance();
+                self.bump();
             }
             let field =
                 if self.check(T::Name) && matches!(self.kind_at(1), T::Colon | T::QuestionColon) {
@@ -2116,13 +2140,13 @@ impl<'a> Parser<'a> {
                         ty,
                     }
                 } else if self.check(T::LBracket) {
-                    self.advance();
+                    self.bump();
                     if matches!(self.kind(), T::String | T::LongString)
                         && self.kind_at(1) == T::RBracket
                     {
                         let t = self.advance();
                         let key = self.string_lit(&t);
-                        self.advance();
+                        self.bump();
                         self.expect(T::Colon, ":")?;
                         let ty = self.ty()?;
                         TableTypeField::NamedString {
@@ -2167,7 +2191,7 @@ impl<'a> Parser<'a> {
     fn type_list_after(&mut self, word: &str) -> PResult<Vec<Type>> {
         let mut out = Vec::new();
         if self.is_word(word) {
-            self.advance();
+            self.bump();
             out.push(self.type_ref()?);
             while self.eat(T::Comma) {
                 out.push(self.type_ref()?);
@@ -2179,13 +2203,13 @@ impl<'a> Parser<'a> {
     fn class_decl(&mut self) -> PResult<ClassDecl> {
         let is_abstract = self.is_word("abstract");
         if is_abstract {
-            self.advance();
+            self.bump();
         }
         let opened = self.advance().start; // class
         let name = self.name()?;
         let type_params = self.type_params_opt()?;
         let extends = if self.is_word("extends") {
-            self.advance();
+            self.bump();
             Some(self.type_ref()?)
         } else {
             None
@@ -2198,12 +2222,12 @@ impl<'a> Parser<'a> {
                 Ok(m) => members.push(m),
                 Err(Failed) => {
                     if self.pos == before {
-                        self.advance();
+                        self.bump();
                     }
                     while !matches!(self.kind(), T::End | T::Eof | T::Function | T::At)
                         && !self.is_member_start()
                     {
-                        self.advance();
+                        self.bump();
                     }
                 }
             }
@@ -2251,7 +2275,7 @@ impl<'a> Parser<'a> {
     }
 
     fn class_member(&mut self) -> PResult<ClassMember> {
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let decorators = if self.check(T::At) {
             self.decorators()?
         } else {
@@ -2319,7 +2343,7 @@ impl<'a> Parser<'a> {
             let name = self.name()?;
             let optional = match self.kind() {
                 T::QuestionColon => {
-                    self.advance();
+                    self.bump();
                     true
                 }
                 _ => {
@@ -2382,7 +2406,7 @@ impl<'a> Parser<'a> {
 
     fn interface_member(&mut self) -> PResult<InterfaceMember> {
         if self.check(T::Function) {
-            self.advance();
+            self.bump();
             let name = self.name()?;
             return Ok(InterfaceMember::Method {
                 name,
@@ -2391,12 +2415,12 @@ impl<'a> Parser<'a> {
         }
         let readonly = self.is_word("readonly") && self.kind_at(1) == T::Name;
         if readonly {
-            self.advance();
+            self.bump();
         }
         let name = self.name()?;
         let optional = match self.kind() {
             T::QuestionColon => {
-                self.advance();
+                self.bump();
                 true
             }
             _ => {
@@ -2463,7 +2487,7 @@ impl<'a> Parser<'a> {
                 let name = self.name()?;
                 let type_params = self.type_params_opt()?;
                 let extends = if self.is_word("extends") {
-                    self.advance();
+                    self.bump();
                     Some(self.type_ref()?)
                 } else {
                     None
@@ -2514,7 +2538,7 @@ impl<'a> Parser<'a> {
     fn ns_members(&mut self) -> PResult<Vec<NsMember>> {
         let mut out = Vec::new();
         while !self.check(T::End) && !self.check(T::Eof) {
-            let start = self.tok(0).start;
+            let start = self.start_at(0);
             let decorators = if self.check(T::At) {
                 self.decorators()?
             } else {
@@ -2537,7 +2561,7 @@ impl<'a> Parser<'a> {
                 let name = self.name()?;
                 let type_params = self.type_params_opt()?;
                 let extends = if self.is_word("extends") {
-                    self.advance();
+                    self.bump();
                     Some(self.type_ref()?)
                 } else {
                     None
@@ -2559,7 +2583,7 @@ impl<'a> Parser<'a> {
             } else {
                 let is_const = self.is_word("const") && self.kind_at(1) == T::Name;
                 if is_const {
-                    self.advance();
+                    self.bump();
                 }
                 let name = self.name()?;
                 self.expect(T::Colon, ":")?;
@@ -2578,7 +2602,7 @@ impl<'a> Parser<'a> {
     fn decl_members(&mut self) -> PResult<Vec<DeclMember>> {
         let mut out = Vec::new();
         while !self.check(T::End) && !self.check(T::Eof) {
-            let start = self.tok(0).start;
+            let start = self.start_at(0);
             let decorators = if self.check(T::At) {
                 self.decorators()?
             } else {
@@ -2587,7 +2611,7 @@ impl<'a> Parser<'a> {
             let is_static = self.is_word("static")
                 && !matches!(self.kind_at(1), T::Colon | T::QuestionColon | T::LParen);
             if is_static {
-                self.advance();
+                self.bump();
             }
             let kind = if self.eat(T::Function) {
                 let name = self.name()?;
@@ -2598,12 +2622,12 @@ impl<'a> Parser<'a> {
             } else {
                 let readonly = self.is_word("readonly") && self.kind_at(1) == T::Name;
                 if readonly {
-                    self.advance();
+                    self.bump();
                 }
                 let name = self.name()?;
                 let optional = match self.kind() {
                     T::QuestionColon => {
-                        self.advance();
+                        self.bump();
                         true
                     }
                     _ => {
@@ -2635,16 +2659,16 @@ impl<'a> Parser<'a> {
         let type_only =
             self.is_word("type") && self.kind_at(1) == T::Name && !self.is_word_at(1, "from");
         if type_only {
-            self.advance();
+            self.bump();
         }
         let clause = if self.eat(T::Star) {
             if !self.is_word("as") {
                 return Err(self.syntax_error("'as' expected"));
             }
-            self.advance();
+            self.bump();
             ImportClause::Namespace(self.name()?)
         } else if self.is_word("_") && !matches!(self.kind_at(1), T::Comma) {
-            self.advance();
+            self.bump();
             ImportClause::SideEffect
         } else {
             let mut specs = Vec::new();
@@ -2658,7 +2682,7 @@ impl<'a> Parser<'a> {
                     );
                 }
                 let alias = if self.is_word("as") {
-                    self.advance();
+                    self.bump();
                     Some(self.name()?)
                 } else {
                     None
@@ -2673,7 +2697,7 @@ impl<'a> Parser<'a> {
         if !self.is_word("from") {
             return Err(self.syntax_error("'from' expected"));
         }
-        self.advance();
+        self.bump();
         let t = self.expect_string()?;
         let from = self.string_lit(&t);
         Ok(Import {
@@ -2685,10 +2709,10 @@ impl<'a> Parser<'a> {
 
     fn export(&mut self, start: u32) -> PResult<StmtKind> {
         self.advance(); // export
-        let inner_start = self.tok(0).start;
+        let inner_start = self.start_at(0);
         let kind = match self.kind() {
             T::Local => {
-                self.advance();
+                self.bump();
                 let mut names = vec![self.typed_name()?];
                 while self.eat(T::Comma) {
                     names.push(self.typed_name()?);
