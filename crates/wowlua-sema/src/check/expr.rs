@@ -414,11 +414,11 @@ impl Checker<'_> {
     fn contextual_func(&mut self, t: TypeId) -> Option<Func> {
         for m in self.env.types.members(t) {
             match self.env.types.get(m).clone() {
-                Ty::Func(f) => return Some(*f),
+                Ty::Func(f) => return Some(std::sync::Arc::unwrap_or_clone(f)),
                 Ty::Intersection(ms) => {
                     for x in ms {
                         if let Ty::Func(f) = self.env.types.get(x).clone() {
-                            return Some(*f);
+                            return Some(std::sync::Arc::unwrap_or_clone(f));
                         }
                     }
                 }
@@ -1246,7 +1246,8 @@ impl Checker<'_> {
                 let out: Vec<TypeId> = members.into_iter().map(|m| self.drop_first(m)).collect();
                 self.env.types.union(&out)
             }
-            Ty::Func(mut f) => {
+            Ty::Func(f) => {
+                let mut f = std::sync::Arc::unwrap_or_clone(f);
                 if !f.params.is_empty() {
                     f.params.remove(0);
                 } else if matches!(f.rest, Some(Rest::Variadic(_))) {
@@ -1257,7 +1258,7 @@ impl Checker<'_> {
                 if let Some((i, p)) = f.predicate {
                     f.predicate = i.checked_sub(1).map(|i| (i, p));
                 }
-                self.env.types.intern(Ty::Func(f))
+                self.env.types.func(f)
             }
             Ty::Intersection(ms) => {
                 let ms: Vec<TypeId> = ms.iter().map(|&x| self.drop_first(x)).collect();
@@ -1608,8 +1609,8 @@ impl Checker<'_> {
 
     /// The results of a call without checking (other union members).
     fn call_quiet(&mut self, callee: TypeId, _args: &Args) -> Pack {
-        match self.env.types.get(callee).clone() {
-            Ty::Func(f) => f.ret,
+        match self.env.types.get(callee) {
+            Ty::Func(f) => f.ret.clone(),
             _ => Pack::any(),
         }
     }
@@ -2277,8 +2278,8 @@ impl Checker<'_> {
             return None;
         };
         f.params.truncate(1);
-        f.params.extend(ctor.params);
-        f.rest = ctor.rest;
+        f.params.extend(ctor.params.iter().cloned());
+        f.rest = ctor.rest.clone();
         f.ret = Pack::single(self.env.types.intern(Ty::Named(pool_def, vec![instance])));
         Some(self.env.types.func(f))
     }
@@ -2326,10 +2327,10 @@ impl Checker<'_> {
             self.report("E8420", first.span, msg);
             return m;
         };
-        let (Ty::Func(mut f), Some(h)) = (self.env.types.get(m).clone(), self.as_func(handler))
-        else {
+        let (Ty::Func(f), Some(h)) = (self.env.types.get(m).clone(), self.as_func(handler)) else {
             return m;
         };
+        let mut f = std::sync::Arc::unwrap_or_clone(f);
         if method == "fire" {
             f.params.truncate(1);
             f.params.extend(h.params);
@@ -2337,19 +2338,20 @@ impl Checker<'_> {
         } else if let Some(p) = f.params.get_mut(1) {
             p.ty = handler;
         }
-        self.env.types.intern(Ty::Func(f))
+        self.env.types.func(f)
     }
 
     fn stdlib_call_type(&mut self, callee: &Expr, args: &Args, c: TypeId) -> TypeId {
         let Some(id) = self.intrinsic_of(callee) else {
             return c;
         };
-        let Ty::Func(mut f) = self.env.types.get(c).clone() else {
+        let Ty::Func(f) = self.env.types.get(c).clone() else {
             return c;
         };
+        let mut f = std::sync::Arc::unwrap_or_clone(f);
         let exprs = args.exprs();
         if id == "pool.FramePool.new" {
-            return self.frame_pool_type(*f, &exprs).unwrap_or(c);
+            return self.frame_pool_type(f, &exprs).unwrap_or(c);
         }
         if id == "events.onBucket" {
             let names: Vec<&Expr> = match exprs.first().map(|e| &e.kind) {
@@ -2398,7 +2400,7 @@ impl Checker<'_> {
             }
             _ => return c,
         }
-        self.env.types.intern(Ty::Func(f))
+        self.env.types.func(f)
     }
 
     /// Checks a call of `f`: arity (E2006, W2055, E2007), argument types

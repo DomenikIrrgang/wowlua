@@ -511,7 +511,8 @@ impl Env {
     /// A method's type as a plain function with `self` as first parameter.
     pub fn with_self(&mut self, method: TypeId, receiver: TypeId) -> TypeId {
         match self.types.get(method).clone() {
-            Ty::Func(mut f) => {
+            Ty::Func(f) => {
+                let mut f = std::sync::Arc::unwrap_or_clone(f);
                 f.params.insert(
                     0,
                     Param {
@@ -523,7 +524,7 @@ impl Env {
                 if let Some((i, t)) = f.predicate {
                     f.predicate = Some((i + 1, t));
                 }
-                self.types.intern(Ty::Func(f))
+                self.types.func(f)
             }
             Ty::Intersection(m) => {
                 let m: Vec<TypeId> = m.iter().map(|&x| self.with_self(x, receiver)).collect();
