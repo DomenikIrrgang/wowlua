@@ -449,8 +449,13 @@ The test framework runs on wowlua's own emulation of the WoW client
   `@flavors`, `@cases`, `describe`, `config`, typed matchers, widget
   matchers, snapshots, custom matchers, `@expectError`) and `wowlua:mock`
   (the engine's controls, spies, stubs, fakes, waiting, printed output and
-  errors, `mock.module`, user input); world profiles with the character's
-  money, gear, bags and place; `import internal`.
+  errors, `mock.module`, user input, casting, modifier keys, taint
+  assertions); world profiles with the character's money, gear, bags and
+  place; `import internal`; `--watch`; the three examples have tests. Not
+  yet: `mock.reloadUI` (a test cannot go on in a fresh VM),
+  `mock.showTooltip` (the tooltip data system), `--game-data` (M13); the
+  standard and classic flavors' Blizzard UI code still errors in the
+  engine (camelot's runs without an error).
 - S5 **Coverage and reports**: lines, statements, branches, functions and
   conditions counted by the VM; terminal, JUnit, TAP, JSON, GitHub, lcov,
   Cobertura and an HTML report in the wowlua design system; thresholds.
