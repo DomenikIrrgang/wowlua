@@ -9,7 +9,7 @@
 //!   (`LUA_COMPAT_LSTR`),
 //! - names are ASCII letters, digits and `_` (the C locale).
 
-use crate::token::{Token, TokenKind, Trivia, TriviaKind};
+use crate::token::{Token, TokenKind, Tokens, Trivia, TriviaKind};
 use std::borrow::Cow;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::{FileId, Span};
@@ -17,7 +17,7 @@ use wowlua_span::{FileId, Span};
 /// The result of lexing one file.
 #[derive(Debug, Default)]
 pub struct Lexed {
-    pub tokens: Vec<Token>,
+    pub tokens: Tokens,
     pub trivia: Vec<Trivia>,
     /// Byte offset where each Lua line starts (line `n` starts at
     /// `line_starts[n - 1]`).
@@ -44,14 +44,17 @@ impl Lexed {
         offset - self.line_starts[line as usize - 1]
     }
 
-    /// The leading trivia of `tokens[index]`: it starts where the previous
-    /// token's ends.
+    /// The leading trivia of token `index`: the trivia between the previous
+    /// token's end (the file's start for the first) and its start.
     pub fn trivia_of(&self, index: usize) -> &[Trivia] {
-        let start = match index {
+        let from = match index {
             0 => 0,
-            i => self.tokens[i - 1].trivia_end,
+            i => self.tokens.end(i - 1),
         };
-        &self.trivia[start as usize..self.tokens[index].trivia_end as usize]
+        let to = self.tokens.start(index);
+        let lo = self.trivia.partition_point(|t| t.start < from);
+        let hi = lo + self.trivia[lo..].partition_point(|t| t.start < to);
+        &self.trivia[lo..hi]
     }
 }
 
@@ -76,10 +79,9 @@ struct Lexer<'a> {
 /// What [`lex_with`] records.
 #[derive(Clone, Copy, Debug)]
 pub struct LexOptions {
-    /// Records whitespace, line breaks and comments in `Lexed::trivia`.
-    /// Without it they are still scanned and checked, with the same
-    /// diagnostics, but `trivia` stays empty and every token's
-    /// `trivia_end` is 0.
+    /// Records line breaks and comments in `Lexed::trivia`. Without it they
+    /// are still scanned and checked, with the same diagnostics, but
+    /// `trivia` stays empty.
     pub trivia: bool,
 }
 
@@ -102,6 +104,11 @@ pub fn lex_with(src: &[u8], file: FileId, options: LexOptions) -> Lexed {
         keep_trivia: options.trivia,
     };
     lexer.run();
+    // Growing by doubling leaves up to half of each list unused, and the
+    // lists live as long as the tree (#19).
+    lexer.out.tokens.shrink_to_fit();
+    lexer.out.trivia.shrink_to_fit();
+    lexer.out.line_starts.shrink_to_fit();
     lexer.out
 }
 
@@ -177,7 +184,6 @@ impl<'a> Lexer<'a> {
                 continue;
             }
             self.trivia();
-            let trivia_end = self.out.trivia.len() as u32;
             let start = self.pos;
             let kind = if self.at_end() {
                 TokenKind::Eof
@@ -188,7 +194,6 @@ impl<'a> Lexer<'a> {
                 kind,
                 start: start as u32,
                 end: self.pos as u32,
-                trivia_end,
             });
             if kind == TokenKind::Eof {
                 if let Some(Mode::Expr { .. }) = self.modes.last() {
@@ -221,7 +226,6 @@ impl<'a> Lexer<'a> {
                 while !self.at_end() && is_space(self.peek(0)) {
                     self.pos += 1;
                 }
-                self.push_trivia(TriviaKind::Whitespace, start);
             } else if self.newline_len() > 0 {
                 self.consume_newline();
                 self.push_trivia(TriviaKind::Newline, start);
@@ -609,14 +613,12 @@ impl<'a> Lexer<'a> {
     }
 
     fn push_token(&mut self, kind: TokenKind, start: usize) {
-        // No trivia of its own: the range from the previous token's end is
-        // empty.
-        let trivia_end = self.out.trivia.len() as u32;
+        // No trivia of its own: nothing lies between the previous token's
+        // end and its start.
         self.out.tokens.push(Token {
             kind,
             start: start as u32,
             end: self.pos as u32,
-            trivia_end,
         });
     }
 

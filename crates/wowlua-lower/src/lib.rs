@@ -646,7 +646,7 @@ impl<'a> Lowerer<'a> {
 
     fn next_token_pos(&self, offset: u32) -> Pos {
         let tokens = &self.parse.lexed.tokens;
-        let i = partition_point_near(tokens, self.token_hint.get(), |t| t.start < offset);
+        let i = partition_point_near(tokens.starts(), self.token_hint.get(), |&s| s < offset);
         self.token_hint.set(i);
         match tokens.get(i) {
             Some(t) => self.pos(t.start),
@@ -660,7 +660,12 @@ impl<'a> Lowerer<'a> {
 
     fn comments(&self) -> Vec<ir::Comment> {
         let lexed = &self.parse.lexed;
-        let first = lexed.tokens.first().map(|t| t.trivia_end).unwrap_or(0) as usize;
+        // The trivia before the first token.
+        let first = lexed.tokens.first().map_or(0, |t| {
+            lexed
+                .trivia
+                .partition_point(|trivia| trivia.start < t.start)
+        });
         let mut out = Vec::new();
         let mut leading_license = false;
         for (i, trivia) in lexed.trivia.iter().enumerate() {

@@ -62,7 +62,7 @@ pub fn plan(recorded: &HashSet<Span>, parsed: &[Parsed], foreign: &[&[u8]]) -> P
     let mut unsafe_names: HashSet<String> = HashSet::new();
     let mut taken: HashSet<Vec<u8>> = HashSet::new();
     for p in parsed {
-        for token in &p.parse.lexed.tokens {
+        for token in p.parse.lexed.tokens.iter() {
             let Some(bytes) = p.bytes.get(token.start as usize..token.end as usize) else {
                 continue;
             };

@@ -23,15 +23,7 @@ fn agree(src: &[u8]) {
     let with = lex(src, file);
     let without = lex_with(src, file, LexOptions { trivia: false });
     assert!(without.trivia.is_empty());
-    let zeroed: Vec<_> = with
-        .tokens
-        .iter()
-        .map(|t| wowlua_syntax::token::Token {
-            trivia_end: 0,
-            ..*t
-        })
-        .collect();
-    assert_eq!(without.tokens, zeroed);
+    assert_eq!(without.tokens, with.tokens);
     assert_eq!(without.line_starts, with.line_starts);
     assert_eq!(
         format!("{:?}", without.diagnostics),

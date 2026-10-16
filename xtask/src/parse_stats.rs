@@ -621,11 +621,11 @@ pub fn run(dir: &Path) -> Result<()> {
     let mut errors = 0;
     for p in &parses {
         errors += usize::from(p.has_errors());
-        st.vec("tokens", &p.lexed.tokens);
+        st.heap("tokens", p.lexed.tokens.heap_bytes());
         st.vec("trivia", &p.lexed.trivia);
         st.vec("line starts", &p.lexed.line_starts);
         st.vec("diagnostics", &p.diagnostics);
-        for t in &p.lexed.tokens {
+        for t in p.lexed.tokens.iter() {
             *tokens.entry(format!("{:?}", t.kind)).or_default() += 1;
         }
         for t in &p.lexed.trivia {

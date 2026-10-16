@@ -298,7 +298,7 @@ impl Compiler<'_> {
         let rest = &self.src[at as usize..];
         let file = wowlua_span::SourceDb::new().add("", "");
         let lexed = wowlua_syntax::lexer::lex(rest, file);
-        let tok = lexed.tokens[0];
+        let tok = lexed.tokens.token(0);
         let near = match tok.kind {
             T::Eof => "'<eof>'".to_string(),
             T::String | T::LongString | T::Number | T::Name => {

@@ -2868,7 +2868,7 @@ fn parse_api(
     let file = db.add_static(f.path, f.text);
     let mut parse = wowlua_syntax::parse(f.text.as_bytes(), file);
     if !keep_tokens {
-        parse.lexed.tokens = Vec::new();
+        parse.lexed.tokens = Default::default();
         parse.lexed.trivia = Vec::new();
         parse.lexed.line_starts = Vec::new();
     }

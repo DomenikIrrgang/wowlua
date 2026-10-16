@@ -58,7 +58,6 @@ impl<'a> Formatter<'a> {
                         for next in &trivia[i + 1..] {
                             match next.kind {
                                 TriviaKind::Newline => newlines_after += 1,
-                                TriviaKind::Whitespace => {}
                                 _ => break,
                             }
                         }
@@ -87,7 +86,6 @@ impl<'a> Formatter<'a> {
                         // trails it.
                         seen_newline = false;
                     }
-                    TriviaKind::Whitespace => {}
                 }
             }
         }
@@ -104,7 +102,7 @@ impl<'a> Formatter<'a> {
     /// Start offset of the first token at or after `offset`.
     fn next_token(&self, offset: u32) -> u32 {
         let tokens = &self.parse.lexed.tokens;
-        let i = tokens.partition_point(|t| t.start < offset);
+        let i = tokens.first_from(offset);
         tokens.get(i).map(|t| t.start).unwrap_or(offset)
     }
 
@@ -204,15 +202,19 @@ impl<'a> Formatter<'a> {
     /// `offset` (before any leading comment; `;` tokens in between count).
     fn blank_line_between(&self, prev_end: u32, offset: u32) -> bool {
         let tokens = &self.parse.lexed.tokens;
-        let first = tokens.partition_point(|t| t.start < prev_end);
-        let last = tokens.partition_point(|t| t.start < offset);
+        let first = tokens.first_from(prev_end);
+        let last = tokens.first_from(offset);
         let mut newlines = 0;
-        let count = tokens.get(first..=last).map_or(0, <[_]>::len);
+        // The tokens `first..=last`, none if `last` is past the end.
+        let count = if last < tokens.len() {
+            last + 1 - first
+        } else {
+            0
+        };
         for index in first..first + count {
             for t in self.parse.lexed.trivia_of(index) {
                 match t.kind {
                     TriviaKind::Newline => newlines += 1,
-                    TriviaKind::Whitespace => {}
                     _ if newlines == 0 => {} // trailing comment of the previous line
                     _ => return newlines >= 2,
                 }

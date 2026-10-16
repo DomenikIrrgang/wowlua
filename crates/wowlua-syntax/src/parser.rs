@@ -172,9 +172,9 @@ impl<'a> Parser<'a> {
 
     // ------------------------------------------------------------ tokens --
 
-    fn tok(&self, ahead: usize) -> &Token {
+    fn tok(&self, ahead: usize) -> Token {
         let tokens = &self.lexed.tokens;
-        &tokens[(self.pos + ahead).min(tokens.len() - 1)]
+        tokens.token((self.pos + ahead).min(tokens.len() - 1))
     }
 
     fn kind(&self) -> TokenKind {
@@ -196,19 +196,19 @@ impl<'a> Parser<'a> {
 
     fn is_word_at(&self, ahead: usize, word: &str) -> bool {
         let t = self.tok(ahead);
-        t.kind == T::Name && self.text_of(t) == word.as_bytes()
+        t.kind == T::Name && self.text_of(&t) == word.as_bytes()
     }
 
     fn advance(&mut self) -> Token {
-        let t = *self.tok(0);
+        let t = self.tok(0);
         if t.kind != T::Eof {
             self.pos += 1;
         }
         t
     }
 
-    fn prev(&self) -> &Token {
-        &self.lexed.tokens[self.pos.saturating_sub(1)]
+    fn prev(&self) -> Token {
+        self.lexed.tokens.token(self.pos.saturating_sub(1))
     }
 
     fn span_from(&self, start: u32) -> Span {
@@ -282,12 +282,12 @@ impl<'a> Parser<'a> {
             T::Eof => "'<eof>'".to_string(),
             T::InterpText | T::String | T::LongString | T::Number | T::Name | T::Error => {
                 // A control character, as Lua names it (`luaX_token2str`).
-                if let [b] = self.text_of(t)
+                if let [b] = self.text_of(&t)
                     && (*b < 32 || *b == 127)
                 {
                     return format!("'char({b})'");
                 }
-                let text = String::from_utf8_lossy(self.text_of(t));
+                let text = String::from_utf8_lossy(self.text_of(&t));
                 let short: String = text.chars().take(40).collect();
                 format!("'{short}'")
             }
@@ -339,7 +339,7 @@ impl<'a> Parser<'a> {
         // there and keeps what it has, for the compiler's limits and the
         // editor.
         if self.check(T::Eof) {
-            return Ok(*self.tok(0));
+            return Ok(self.tok(0));
         }
         Err(failed)
     }
@@ -510,7 +510,7 @@ impl<'a> Parser<'a> {
                     if self.keep_tree {
                         stmts.push(Stmt {
                             id: self.id(),
-                            span: self.span_from(self.lexed.tokens[before].start),
+                            span: self.span_from(self.lexed.tokens.start(before)),
                             decorators: Vec::new(),
                             kind: StmtKind::Error,
                         });
@@ -1417,7 +1417,7 @@ impl<'a> Parser<'a> {
     fn call_args(&mut self) -> PResult<Args> {
         match self.kind() {
             T::LParen => {
-                let t = *self.tok(0);
+                let t = self.tok(0);
                 if !self.same_line(self.prev().end, t.start) {
                     let span = self.token_span(&t);
                     self.error_at(
@@ -1676,14 +1676,14 @@ impl<'a> Parser<'a> {
     /// Splits a `>>`, `>=`, `>>=` (or `?:`) token at its first character, in
     /// type context (spec §1.2.1).
     fn split_first(&mut self, first: TokenKind, rest: TokenKind) {
-        let t = self.lexed.tokens[self.pos];
+        let t = self.lexed.tokens.token(self.pos);
         let mut head = t;
         head.kind = first;
         head.end = t.start + 1;
         let mut tail = t;
         tail.kind = rest;
         tail.start = t.start + 1;
-        self.lexed.tokens[self.pos] = head;
+        self.lexed.tokens.set(self.pos, head);
         self.lexed.tokens.insert(self.pos + 1, tail);
     }
 
