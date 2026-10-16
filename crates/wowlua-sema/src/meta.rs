@@ -275,7 +275,8 @@ pub fn static_value(
 /// The expression uses `flavor` (E1039 in shared mode).
 pub fn uses_flavor(e: &Expr, kind_of: &dyn Fn(&str) -> Option<MetaKind>) -> bool {
     let mut found = false;
-    wowlua_syntax::visit::walk_expr(e, &mut |x| {
+    wowlua_syntax::visit::walk_expr(wowlua_syntax::view::Expr::of(e), &mut |x| {
+        let x = x.ast();
         if let Some((MetaKind::Flavor, _)) = access_path(x, kind_of) {
             found = true;
         }

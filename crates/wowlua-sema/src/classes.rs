@@ -601,7 +601,8 @@ fn nested_super_calls(body: &Block) -> Vec<Span> {
     let mut out = Vec::new();
     for s in &body.stmts {
         let top = is_super_call(s);
-        wowlua_syntax::visit::walk_stmt(s, &mut |e| {
+        wowlua_syntax::visit::walk_stmt(wowlua_syntax::view::Stmt::of(s), &mut |e| {
+            let e = e.ast();
             if let ExprKind::Call { callee, .. } = &e.kind
                 && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "super")
                 && !(top && matches!(&s.kind, StmtKind::Call(x) if x.span == e.span))
@@ -616,7 +617,8 @@ fn nested_super_calls(body: &Block) -> Vec<Span> {
 /// The first use of `self` in a statement.
 fn self_use(s: &Stmt) -> Option<Span> {
     let mut found = None;
-    wowlua_syntax::visit::walk_stmt(s, &mut |e| {
+    wowlua_syntax::visit::walk_stmt(wowlua_syntax::view::Stmt::of(s), &mut |e| {
+        let e = e.ast();
         if found.is_none()
             && let ExprKind::Name(n) = &e.kind
             && n.text.as_ref() == "self"
@@ -635,7 +637,10 @@ fn check_super_names(body: &Block, func: &FuncBody, out: &mut Vec<Diagnostic>) {
         .filter(|p| p.name.text.as_ref() == "super")
         .map(|p| p.name.span)
         .collect();
-    wowlua_syntax::visit::walk_stmts(body, &mut |s| match &s.kind {
+    wowlua_syntax::visit::walk_stmts(wowlua_syntax::view::Block::of(body), &mut |s| match &s
+        .ast()
+        .kind
+    {
         StmtKind::Local { names: n, .. } => names.extend(
             n.iter()
                 .filter(|x| x.name.text.as_ref() == "super")
@@ -660,7 +665,8 @@ fn check_super_names(body: &Block, func: &FuncBody, out: &mut Vec<Diagnostic>) {
 /// `...` in an initializer, outside nested functions.
 fn vararg_in(e: &Expr) -> Option<Span> {
     let mut found = None;
-    wowlua_syntax::visit::walk_expr_shallow(e, &mut |x| {
+    wowlua_syntax::visit::walk_expr_shallow(wowlua_syntax::view::Expr::of(e), &mut |x| {
+        let x = x.ast();
         if found.is_none() && matches!(x.kind, ExprKind::Vararg) {
             found = Some(x.span);
         }

@@ -246,65 +246,68 @@ fn function_ranges(path: &std::path::Path) -> Vec<(u32, u32, String)> {
             _ => None,
         }
     }
-    wowlua_syntax::visit::walk_stmts(&parse.chunk.block, &mut |s| match &s.kind {
-        StmtKind::Export(inner) => {
-            if let StmtKind::Function { name, func } = &inner.kind {
-                add(
-                    func,
-                    name.path
-                        .iter()
-                        .map(|p| p.text.as_ref())
-                        .collect::<Vec<_>>()
-                        .join("."),
-                );
-            }
-        }
-        StmtKind::Function { name, func } => {
-            let mut n = name
-                .path
-                .iter()
-                .map(|p| p.text.as_ref())
-                .collect::<Vec<_>>()
-                .join(".");
-            if let Some(m) = &name.method {
-                n = format!("{n}:{}", m.text);
-            }
-            add(func, n);
-        }
-        StmtKind::LocalFunction { name, func } => add(func, name.text.to_string()),
-        StmtKind::Local { names, values } => {
-            for (n, v) in names.iter().zip(values) {
-                if let ExprKind::Function(f) = &v.kind {
-                    add(f, n.name.text.to_string());
+    wowlua_syntax::visit::walk_stmts(
+        wowlua_syntax::view::Block::of(&parse.chunk.block),
+        &mut |s| match &s.ast().kind {
+            StmtKind::Export(inner) => {
+                if let StmtKind::Function { name, func } = &inner.kind {
+                    add(
+                        func,
+                        name.path
+                            .iter()
+                            .map(|p| p.text.as_ref())
+                            .collect::<Vec<_>>()
+                            .join("."),
+                    );
                 }
             }
-        }
-        StmtKind::Assign { targets, values } => {
-            for (t, v) in targets.iter().zip(values) {
-                if let (ExprKind::Function(f), Some(n)) = (&v.kind, path_name(t)) {
-                    add(f, n);
+            StmtKind::Function { name, func } => {
+                let mut n = name
+                    .path
+                    .iter()
+                    .map(|p| p.text.as_ref())
+                    .collect::<Vec<_>>()
+                    .join(".");
+                if let Some(m) = &name.method {
+                    n = format!("{n}:{}", m.text);
                 }
+                add(func, n);
             }
-        }
-        StmtKind::Class(c) => {
-            for m in &c.members {
-                match &m.kind {
-                    ClassMemberKind::Method { name, func, .. } => {
-                        let sep = if m.modifiers.contains(&Modifier::Static) {
-                            "."
-                        } else {
-                            ":"
-                        };
-                        add(func, format!("{}{sep}{}", c.name.text, name.text));
+            StmtKind::LocalFunction { name, func } => add(func, name.text.to_string()),
+            StmtKind::Local { names, values } => {
+                for (n, v) in names.iter().zip(values) {
+                    if let ExprKind::Function(f) = &v.kind {
+                        add(f, n.name.text.to_string());
                     }
-                    ClassMemberKind::Constructor { func, .. } => {
-                        add(func, format!("{}.new", c.name.text))
-                    }
-                    _ => {}
                 }
             }
-        }
-        _ => {}
-    });
+            StmtKind::Assign { targets, values } => {
+                for (t, v) in targets.iter().zip(values) {
+                    if let (ExprKind::Function(f), Some(n)) = (&v.kind, path_name(t)) {
+                        add(f, n);
+                    }
+                }
+            }
+            StmtKind::Class(c) => {
+                for m in &c.members {
+                    match &m.kind {
+                        ClassMemberKind::Method { name, func, .. } => {
+                            let sep = if m.modifiers.contains(&Modifier::Static) {
+                                "."
+                            } else {
+                                ":"
+                            };
+                            add(func, format!("{}{sep}{}", c.name.text, name.text));
+                        }
+                        ClassMemberKind::Constructor { func, .. } => {
+                            add(func, format!("{}.new", c.name.text))
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        },
+    );
     out
 }

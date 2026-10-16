@@ -1263,32 +1263,37 @@ pub fn compile_flavor(
                 continue;
             }
             let lexed = &parse.lexed;
-            wowlua_syntax::visit::walk_stmts(&parse.chunk.block, &mut |st| match &st.kind {
-                ast::StmtKind::LocalFunction { name, .. } if is_inline(&st.decorators) => {
-                    let pos = wowlua_luair::ir::Pos::new(
-                        lexed.line_of(name.span.start),
-                        lexed.column_of(name.span.start),
-                    );
-                    inline_hints
-                        .entry(*file)
-                        .or_default()
-                        .push((pos, name.span));
-                }
-                ast::StmtKind::Class(c) => {
-                    for m in &c.members {
-                        if is_inline(&m.decorators) {
-                            diagnostics.push(
+            wowlua_syntax::visit::walk_stmts(
+                wowlua_syntax::view::Block::of(&parse.chunk.block),
+                &mut |st| match &st.ast().kind {
+                    ast::StmtKind::LocalFunction { name, .. }
+                        if is_inline(&st.ast().decorators) =>
+                    {
+                        let pos = wowlua_luair::ir::Pos::new(
+                            lexed.line_of(name.span.start),
+                            lexed.column_of(name.span.start),
+                        );
+                        inline_hints
+                            .entry(*file)
+                            .or_default()
+                            .push((pos, name.span));
+                    }
+                    ast::StmtKind::Class(c) => {
+                        for m in &c.members {
+                            if is_inline(&m.decorators) {
+                                diagnostics.push(
                                 Diagnostic::warning(
                                     "W3031",
                                     "`@inline` is ignored: only local functions with a single `return` expression are inlined",
                                 )
                                 .with_label(m.span, "a method"),
                             );
+                            }
                         }
                     }
-                }
-                _ => {}
-            });
+                    _ => {}
+                },
+            );
         }
     }
     // Emits a lowered chunk: optimized, minified, checked to parse and to

@@ -1231,37 +1231,41 @@ pub(crate) fn for_each_expr<'p>(parse: &'p Parse, f: &mut impl FnMut(&'p Expr)) 
     let mut decorators: Vec<&'p Decorator> = Vec::new();
     let mut blocks: Vec<&'p Block> = vec![&parse.chunk.block];
     let mut exprs: Vec<&'p Expr> = Vec::new();
-    wowlua_syntax::visit::walk_stmts(&parse.chunk.block, &mut |s| {
-        decorators.extend(s.decorators.iter());
-        let kind = match &s.kind {
-            StmtKind::Export(inner) => &inner.kind,
-            k => k,
-        };
-        if let StmtKind::Class(c) = kind {
-            for m in &c.members {
-                decorators.extend(m.decorators.iter());
-                match &m.kind {
-                    ClassMemberKind::Field { value: Some(v), .. } => exprs.push(v),
-                    ClassMemberKind::Method { func, .. }
-                    | ClassMemberKind::Constructor { func, .. } => blocks.push(&func.body),
-                    ClassMemberKind::Getter { body, .. } | ClassMemberKind::Setter { body, .. } => {
-                        blocks.push(body)
+    wowlua_syntax::visit::walk_stmts(
+        wowlua_syntax::view::Block::of(&parse.chunk.block),
+        &mut |s| {
+            let s = s.ast();
+            decorators.extend(s.decorators.iter());
+            let kind = match &s.kind {
+                StmtKind::Export(inner) => &inner.kind,
+                k => k,
+            };
+            if let StmtKind::Class(c) = kind {
+                for m in &c.members {
+                    decorators.extend(m.decorators.iter());
+                    match &m.kind {
+                        ClassMemberKind::Field { value: Some(v), .. } => exprs.push(v),
+                        ClassMemberKind::Method { func, .. }
+                        | ClassMemberKind::Constructor { func, .. } => blocks.push(&func.body),
+                        ClassMemberKind::Getter { body, .. }
+                        | ClassMemberKind::Setter { body, .. } => blocks.push(body),
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
-        }
-    });
+        },
+    );
+    use wowlua_syntax::view;
     for b in blocks {
-        wowlua_syntax::visit::walk_block(b, f);
+        wowlua_syntax::visit::walk_block(view::Block::of(b), &mut |e| f(e.ast()));
     }
     for e in exprs {
-        wowlua_syntax::visit::walk_expr(e, f);
+        wowlua_syntax::visit::walk_expr(view::Expr::of(e), &mut |e| f(e.ast()));
     }
     for d in decorators {
         if let Some(args) = &d.args {
             for e in args.exprs() {
-                wowlua_syntax::visit::walk_expr(e, f);
+                wowlua_syntax::visit::walk_expr(view::Expr::of(e), &mut |e| f(e.ast()));
             }
         }
     }

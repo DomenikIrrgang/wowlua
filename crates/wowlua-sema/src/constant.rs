@@ -438,11 +438,15 @@ mod tests {
         let file = db.add("small.lua", "local x = y\n");
         let parse = wowlua_syntax::parse(b"local x = y\n", file);
         let mut name = None;
-        wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
-            if matches!(e.kind, wowlua_syntax::ast::ExprKind::Name(_)) {
-                name = name.or(Some(e));
-            }
-        });
+        wowlua_syntax::visit::walk_block(
+            wowlua_syntax::view::Block::of(&parse.chunk.block),
+            &mut |e| {
+                let e = e.ast();
+                if matches!(e.kind, wowlua_syntax::ast::ExprKind::Name(_)) {
+                    name = name.or(Some(e));
+                }
+            },
+        );
         let before = stacker::remaining_stack().unwrap();
         let at_leaf = std::cell::Cell::new(0);
         let leaf = |_: &wowlua_syntax::ast::Expr| {

@@ -750,7 +750,8 @@ impl Ctx<'_> {
     /// `gsub`, which a coroutine cannot yield across.
     fn job_yields(&mut self, body: &Block, ctx: &str) {
         let mut boundaries: Vec<&Expr> = Vec::new();
-        wowlua_syntax::visit::walk_block(body, &mut |e| {
+        wowlua_syntax::visit::walk_block(wowlua_syntax::view::Block::of(body), &mut |e| {
+            let e = e.ast();
             let (callee_name, args) = match &e.kind {
                 ExprKind::Call { callee, args } => (call_name(callee), args),
                 ExprKind::Method { name, args, .. } => (Some(name.text.to_string()), &**args),
@@ -781,7 +782,8 @@ impl Ctx<'_> {
                 continue;
             };
             let mut yields: Vec<Span> = Vec::new();
-            wowlua_syntax::visit::walk_block(&f.body, &mut |e| {
+            wowlua_syntax::visit::walk_block(wowlua_syntax::view::Block::of(&f.body), &mut |e| {
+                let e = e.ast();
                 if let ExprKind::Method { obj, name, .. } = &e.kind
                     && matches!(&obj.kind, ExprKind::Name(n) if n.text.as_ref() == ctx)
                     && matches!(name.text.as_ref(), "check" | "yield" | "sleep" | "waitFor")
@@ -1381,7 +1383,10 @@ pub fn check(
             .map(|s| s as *const Stmt)
             .collect();
         let mut stmts: Vec<&Stmt> = Vec::new();
-        wowlua_syntax::visit::walk_stmts(&parse.chunk.block, &mut |s| stmts.push(s));
+        wowlua_syntax::visit::walk_stmts(
+            wowlua_syntax::view::Block::of(&parse.chunk.block),
+            &mut |s| stmts.push(s.ast()),
+        );
         let mut i = 0;
         while i < stmts.len() {
             let s = stmts[i];
@@ -1420,7 +1425,10 @@ pub fn check(
                         let static_ = m.modifiers.contains(&Modifier::Static);
                         if let ClassMemberKind::Method { func, .. } = &m.kind {
                             ctx.decorators(&bound, &m.decorators, !static_, Some(func), false);
-                            wowlua_syntax::visit::walk_stmts(&func.body, &mut |s| stmts.push(s));
+                            wowlua_syntax::visit::walk_stmts(
+                                wowlua_syntax::view::Block::of(&func.body),
+                                &mut |s| stmts.push(s.ast()),
+                            );
                         }
                     }
                 }
@@ -1428,20 +1436,28 @@ pub fn check(
             }
         }
         let mut calls: Vec<&Expr> = Vec::new();
-        wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
-            if matches!(e.kind, ExprKind::Call { .. }) {
-                calls.push(e);
-            }
-        });
+        wowlua_syntax::visit::walk_block(
+            wowlua_syntax::view::Block::of(&parse.chunk.block),
+            &mut |e| {
+                let e = e.ast();
+                if matches!(e.kind, ExprKind::Call { .. }) {
+                    calls.push(e);
+                }
+            },
+        );
         for s in &stmts {
             if let StmtKind::Class(c) = &s.kind {
                 for m in &c.members {
                     if let ClassMemberKind::Method { func, .. } = &m.kind {
-                        wowlua_syntax::visit::walk_block(&func.body, &mut |e| {
-                            if matches!(e.kind, ExprKind::Call { .. }) {
-                                calls.push(e);
-                            }
-                        });
+                        wowlua_syntax::visit::walk_block(
+                            wowlua_syntax::view::Block::of(&func.body),
+                            &mut |e| {
+                                let e = e.ast();
+                                if matches!(e.kind, ExprKind::Call { .. }) {
+                                    calls.push(e);
+                                }
+                            },
+                        );
                     }
                 }
             }

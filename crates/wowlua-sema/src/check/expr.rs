@@ -1546,7 +1546,8 @@ impl Checker<'_> {
             };
             let mut found = None;
             for s in &f.body.stmts {
-                wowlua_syntax::visit::walk_stmt(s, &mut |e| {
+                wowlua_syntax::visit::walk_stmt(wowlua_syntax::view::Stmt::of(s), &mut |e| {
+                    let e = e.ast();
                     if found.is_none()
                         && let ExprKind::Call { callee, .. } = &e.kind
                         && let ExprKind::Field { obj, name } = &callee.kind

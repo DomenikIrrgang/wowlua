@@ -190,22 +190,26 @@ pub fn prepare(parse: &wowlua_syntax::Parse) -> Prepared {
         reassigned_in_closures(&parse.chunk.block);
     let mut type_name_args = Vec::new();
     let mut created_frames = Vec::new();
-    wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
-        let ExprKind::Call { callee, args } = &e.kind else {
-            return;
-        };
-        if (matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "typeName")
-            | matches!(&callee.kind, ExprKind::Field { name, .. } if name.text.as_ref() == "typeName"))
-            && let Some(arg) = args.exprs().first()
-        {
-            type_name_args.push(arg.span);
-        }
-        if matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "CreateFrame")
-            && let Some(ExprKind::String(lit)) = args.exprs().get(1).map(|a| &a.kind)
-        {
-            created_frames.push(String::from_utf8_lossy(&lit.value).into_owned());
-        }
-    });
+    wowlua_syntax::visit::walk_block(
+        wowlua_syntax::view::Block::of(&parse.chunk.block),
+        &mut |e| {
+            let e = e.ast();
+            let ExprKind::Call { callee, args } = &e.kind else {
+                return;
+            };
+            if (matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "typeName")
+                | matches!(&callee.kind, ExprKind::Field { name, .. } if name.text.as_ref() == "typeName"))
+                && let Some(arg) = args.exprs().first()
+            {
+                type_name_args.push(arg.span);
+            }
+            if matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "CreateFrame")
+                && let Some(ExprKind::String(lit)) = args.exprs().get(1).map(|a| &a.kind)
+            {
+                created_frames.push(String::from_utf8_lossy(&lit.value).into_owned());
+            }
+        },
+    );
     Prepared {
         reassigned,
         assigned_in_closures,
@@ -1008,7 +1012,10 @@ impl<'e> Checker<'e> {
     /// start (the body may run again).
     fn forget_assigned(&mut self, body: &Block) {
         let mut names = FxHashSet::default();
-        wowlua_syntax::visit::walk_stmts(body, &mut |s| match &s.kind {
+        wowlua_syntax::visit::walk_stmts(wowlua_syntax::view::Block::of(body), &mut |s| match &s
+            .ast()
+            .kind
+        {
             StmtKind::Assign { targets, .. } => {
                 for t in targets {
                     if let ExprKind::Name(n) = &t.kind {
@@ -1536,24 +1543,28 @@ impl<'e> Checker<'e> {
 fn calls_setfenv(b: &Block) -> bool {
     // Names of the functions this file defines.
     let mut defined: FxHashSet<Box<str>> = FxHashSet::default();
-    wowlua_syntax::visit::walk_stmts(b, &mut |s| match &s.kind {
-        StmtKind::LocalFunction { name, .. } => {
-            defined.insert(name.text.clone());
-        }
-        StmtKind::Function { name, .. } => {
-            defined.insert(name.path[name.path.len() - 1].text.clone());
-        }
-        StmtKind::Local { names, values, .. } => {
-            for (n, v) in names.iter().zip(values) {
-                if matches!(v.kind, ExprKind::Function(_)) {
-                    defined.insert(n.name.text.clone());
+    wowlua_syntax::visit::walk_stmts(
+        wowlua_syntax::view::Block::of(b),
+        &mut |s| match &s.ast().kind {
+            StmtKind::LocalFunction { name, .. } => {
+                defined.insert(name.text.clone());
+            }
+            StmtKind::Function { name, .. } => {
+                defined.insert(name.path[name.path.len() - 1].text.clone());
+            }
+            StmtKind::Local { names, values, .. } => {
+                for (n, v) in names.iter().zip(values) {
+                    if matches!(v.kind, ExprKind::Function(_)) {
+                        defined.insert(n.name.text.clone());
+                    }
                 }
             }
-        }
-        _ => {}
-    });
+            _ => {}
+        },
+    );
     let mut found = false;
-    wowlua_syntax::visit::walk_block(b, &mut |e| {
+    wowlua_syntax::visit::walk_block(wowlua_syntax::view::Block::of(b), &mut |e| {
+        let e = e.ast();
         if let ExprKind::Call { callee, args } = &e.kind
             && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "setfenv")
         {
@@ -1793,7 +1804,8 @@ fn reassigned_in_closures(b: &Block) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashS
         }
         fn expr(&mut self, e: &Expr) {
             let mut names: Vec<&Name> = Vec::new();
-            wowlua_syntax::visit::walk_expr_shallow(e, &mut |x| {
+            wowlua_syntax::visit::walk_expr_shallow(wowlua_syntax::view::Expr::of(e), &mut |x| {
+                let x = x.ast();
                 if let ExprKind::Name(n) = &x.kind {
                     names.push(n);
                 }
@@ -1802,7 +1814,8 @@ fn reassigned_in_closures(b: &Block) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashS
                 self.read(n);
             }
             let mut funcs: Vec<&FuncBody> = Vec::new();
-            wowlua_syntax::visit::walk_expr_shallow(e, &mut |x| {
+            wowlua_syntax::visit::walk_expr_shallow(wowlua_syntax::view::Expr::of(e), &mut |x| {
+                let x = x.ast();
                 if let ExprKind::Function(f) = &x.kind {
                     funcs.push(f);
                 }

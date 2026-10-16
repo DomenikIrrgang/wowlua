@@ -918,7 +918,8 @@ impl<'a> Lowerer<'a> {
 
     fn uses_flavor(&self, e: &Expr) -> bool {
         let mut found = false;
-        wowlua_syntax::visit::walk_expr(e, &mut |x| {
+        wowlua_syntax::visit::walk_expr(wowlua_syntax::view::Expr::of(e), &mut |x| {
+            let x = x.ast();
             if let Some((MetaKind::Flavor, _)) = self.meta_path(x) {
                 found = true;
             }
