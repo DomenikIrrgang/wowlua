@@ -1080,7 +1080,34 @@ pub fn compile_flavor(
     // Load order (spec §5.4): files listed in `build.load-order` keep their
     // listed order; files outside this flavor do not take part.
     let markers = wowlua_sema::usage::Markers::from_table().with_api(&inputs);
+    // The active sources' usages, on worker threads (#8): the load order
+    // takes them from `FileInput::usage`, and they go after it.
+    let wanted: Vec<usize> = (0..files.len())
+        .filter(|&i| {
+            matches!(inputs[i].kind, FileKind::Wowlua | FileKind::Lua)
+                && inputs[i].parse.is_some()
+                && inputs[i].usage.is_none()
+                && layout.active.get(i).copied().unwrap_or(true)
+        })
+        .collect();
+    let mut usages = Vec::with_capacity(wanted.len());
+    jobs.region(
+        wanted,
+        |&i| raw[&files[i].0.rel].len() as u64,
+        20,
+        |i| {
+            let parse = inputs[i].parse.expect("parsed");
+            (i, Arc::new(wowlua_sema::usage::file_usage(parse, &markers)))
+        },
+        |usage| usages.push(usage),
+    );
+    for (i, usage) in &usages {
+        inputs[*i].usage = Some(usage.clone());
+    }
     let order = wowlua_sema::loadorder::analyze(&inputs, &analysis, layout, &markers);
+    for (i, _) in usages {
+        inputs[i].usage = None;
+    }
     diagnostics.extend(order.diagnostics.iter().cloned());
     for &(a, b) in &order.constraints {
         if a < files.len() && b < files.len() {
