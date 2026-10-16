@@ -105,3 +105,36 @@ fn standard_library_as_written() {
     }
     println!("{same} of {} unchanged", all.len());
 }
+
+/// The generated API declarations as the formatter prints them
+/// (`--ignored --nocapture`): the first differences.
+#[test]
+#[ignore]
+fn api_declarations_as_written() {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/wowlua-api/data/camelot.d.wowlua");
+    let src = std::fs::read(&path).unwrap();
+    let mut db = SourceDb::new();
+    let file = db.add("x", String::from_utf8_lossy(&src).into_owned());
+    let config = Config {
+        indent: "    ".into(),
+        ..Config::default()
+    };
+    let out = format(&src, file, &config).unwrap();
+    let a = String::from_utf8_lossy(&src);
+    let b = String::from_utf8_lossy(&out);
+    let diffs: Vec<String> = a
+        .lines()
+        .zip(b.lines())
+        .enumerate()
+        .filter(|(_, (x, y))| x != y)
+        .take(8)
+        .map(|(i, (x, y))| format!("{}:\n- {x}\n+ {y}", i + 1))
+        .collect();
+    println!(
+        "{} lines, {} differ\n{}",
+        a.lines().count(),
+        a.lines().zip(b.lines()).filter(|(x, y)| x != y).count(),
+        diffs.join("\n")
+    );
+}

@@ -426,8 +426,8 @@ An opinionated formatter for `.wowlua` and `.d.wowlua`. It can optionally format
   break before `|` / `&`; class and interface members one per line with
   their blank lines kept; enums like tables; `import`, `export`, `const`,
   `continue`, compound assignment, destructuring, `?.`, `?:`, `??` and
-  `::` with single spaces; interpolated strings and `declare` statements
-  keep their text.
+  `::` with single spaces; `declare` statements like the declarations they
+  declare (members one per line); interpolated strings keep their text.
 - Formatting never changes semantics. Every formatted file is verified to
   produce the same AST (types, decorators and declarations included); an
   idempotence suite formats every `.wowlua` file of the repository twice.

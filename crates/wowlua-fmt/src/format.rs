@@ -472,7 +472,7 @@ impl<'a> Formatter<'a> {
         Doc::concat(parts)
     }
 
-    fn func_name(&mut self, name: &FuncName) -> Doc {
+    pub(crate) fn func_name(&mut self, name: &FuncName) -> Doc {
         let mut parts = Vec::new();
         for (i, n) in name.path.iter().enumerate() {
             if i > 0 {

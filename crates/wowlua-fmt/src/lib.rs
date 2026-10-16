@@ -1,6 +1,5 @@
 //! The wowlua formatter (spec tooling §16.3): StyLua-like, idempotent,
-//! comment-preserving, for Lua 5.1 and all of wowlua's syntax (M9 S6;
-//! `declare` statements keep their text).
+//! comment-preserving, for Lua 5.1 and all of wowlua's syntax (M9 S6).
 
 mod canon;
 mod doc;

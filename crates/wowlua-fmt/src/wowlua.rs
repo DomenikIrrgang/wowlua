@@ -1,8 +1,8 @@
 //! wowlua's own syntax (spec tooling §16.3, milestone M9 S6): types and
 //! annotations, generics, decorators, classes, interfaces, enums, type
-//! aliases, imports and exports, `const`, `continue`, compound assignment,
-//! destructuring, optional chaining, `??`, casts and interpolated strings.
-//! `declare` statements keep their text.
+//! aliases, `declare` statements, imports and exports, `const`,
+//! `continue`, compound assignment, destructuring, optional chaining, `??`,
+//! casts and interpolated strings (which keep their text).
 
 use crate::doc::Doc;
 use crate::format::Formatter;
@@ -491,16 +491,13 @@ impl Formatter<'_> {
                 let k = self.tok("export", start);
                 Doc::concat(vec![k, txt(" "), self.stmt(inner)])
             }
-            StmtKind::Declare(_) => {
+            StmtKind::Declare(d) => {
                 // From `declare` (the decorators are printed already).
                 let from = match s.decorators.last() {
                     Some(d) => self.next_token(d.span.end),
                     None => start,
                 };
-                self.verbatim(wowlua_span::Span {
-                    start: from,
-                    ..s.span
-                })
+                self.declare(d, from, s.span.end)
             }
             _ => txt(""),
         }
@@ -808,6 +805,219 @@ impl Formatter<'_> {
                 parts.push(txt(")"));
                 let end = self.prev_token(m.span.end);
                 parts.push(self.block(body, "end", end));
+            }
+        }
+        Doc::concat(parts)
+    }
+
+    /// `declare …` from the `declare` at `start`; `end`: the statement's.
+    fn declare(&mut self, d: &Declare, start: u32, end: u32) -> Doc {
+        let k = self.tok("declare", start);
+        let word = self.next_token(start + 1);
+        let close = self.prev_token(end);
+        match d {
+            Declare::Function { name, sig } => {
+                let f = self.tok("function", word);
+                let n = self.func_name(name);
+                Doc::concat(vec![k, txt(" "), f, txt(" "), n, self.signature(sig)])
+            }
+            Declare::Global { name, ty } => {
+                let g = self.tok("global", word);
+                let n = self.name(name);
+                Doc::concat(vec![k, txt(" "), g, txt(" "), n, txt(": "), self.ty(ty)])
+            }
+            Declare::Namespace { name, members } => {
+                let w = self.tok("namespace", word);
+                let n = self.name(name);
+                let body = self.ns_members(members, close);
+                Doc::concat(vec![k, txt(" "), w, txt(" "), n, body])
+            }
+            Declare::Class {
+                name,
+                type_params,
+                extends,
+                implements,
+                members,
+            } => {
+                let w = self.tok("class", word);
+                let head = self.class_head(name, type_params, extends.as_ref(), implements);
+                let body = self.decl_members(members, close);
+                Doc::concat(vec![k, txt(" "), w, head, body])
+            }
+            Declare::Interface(i) => {
+                let w = self.tok("interface", word);
+                Doc::concat(vec![k, txt(" "), w, self.interface_body(i, end)])
+            }
+            Declare::Event { name, params } | Declare::Message { name, params } => {
+                let kind = if matches!(d, Declare::Event { .. }) {
+                    "event"
+                } else {
+                    "message"
+                };
+                let w = self.tok(kind, word);
+                let n = self.name(name);
+                Doc::concat(vec![k, txt(" "), w, txt(" "), n, self.signature(params)])
+            }
+            Declare::Module { path, members } => {
+                let w = self.tok("module", word);
+                let p = self.string(path);
+                let body = self.ns_members(members, close);
+                Doc::concat(vec![k, txt(" "), w, txt(" "), Doc::text(p), body])
+            }
+        }
+    }
+
+    /// ` Name<T> extends A implements B, C`.
+    fn class_head(
+        &mut self,
+        name: &Name,
+        type_params: &[TypeParam],
+        extends: Option<&Type>,
+        implements: &[Type],
+    ) -> Doc {
+        let mut parts = vec![txt(" "), self.name(name), self.type_params(type_params)];
+        if let Some(e) = extends {
+            parts.push(txt(" extends "));
+            parts.push(self.ty(e));
+        }
+        if !implements.is_empty() {
+            parts.push(txt(" implements "));
+            for (i, t) in implements.iter().enumerate() {
+                if i > 0 {
+                    parts.push(txt(", "));
+                }
+                parts.push(self.ty(t));
+            }
+        }
+        Doc::concat(parts)
+    }
+
+    /// Members, one per line with their blank lines, then `end` at `close`.
+    fn members<M>(
+        &mut self,
+        members: &[M],
+        span: impl Fn(&M) -> wowlua_span::Span,
+        mut print: impl FnMut(&mut Self, &M) -> Doc,
+        close: u32,
+    ) -> Doc {
+        let mut body = Vec::new();
+        for (i, m) in members.iter().enumerate() {
+            let sp = span(m);
+            body.push(self.trailing_before(sp.start));
+            body.push(hard());
+            if i > 0 && self.blank_line_between(span(&members[i - 1]).end, sp.start) {
+                body.push(hard());
+            }
+            body.push(print(self, m));
+        }
+        let trailing = self.trailing_before(close);
+        let inner = self.inner_comments(close);
+        Doc::concat(vec![
+            Doc::indent(Doc::concat(vec![
+                Doc::concat(body),
+                trailing,
+                inner.unwrap_or_else(|| txt("")),
+            ])),
+            hard(),
+            self.tok("end", close),
+        ])
+    }
+
+    fn ns_members(&mut self, members: &[NsMember], close: u32) -> Doc {
+        self.members(members, |m| m.span, |f, m| f.ns_member(m), close)
+    }
+
+    fn ns_member(&mut self, m: &NsMember) -> Doc {
+        let mut parts = vec![self.decorators(&m.decorators)];
+        let kw = match m.decorators.last() {
+            Some(d) => self.next_token(d.span.end),
+            None => m.span.start,
+        };
+        let close = self.prev_token(m.span.end);
+        match &m.kind {
+            NsMemberKind::Function { name, sig } => {
+                parts.push(self.tok("function", kw));
+                parts.push(txt(" "));
+                parts.push(self.name(name));
+                parts.push(self.signature(sig));
+            }
+            NsMemberKind::Value { is_const, name, ty } => {
+                if *is_const {
+                    parts.push(self.tok("const", kw));
+                    parts.push(txt(" "));
+                }
+                parts.push(self.name(name));
+                parts.push(txt(": "));
+                parts.push(self.ty(ty));
+            }
+            NsMemberKind::Namespace { name, members } => {
+                parts.push(self.tok("namespace", kw));
+                parts.push(txt(" "));
+                parts.push(self.name(name));
+                parts.push(self.ns_members(members, close));
+            }
+            NsMemberKind::Class {
+                name,
+                type_params,
+                extends,
+                members,
+            } => {
+                parts.push(self.tok("class", kw));
+                parts.push(self.class_head(name, type_params, extends.as_ref(), &[]));
+                parts.push(self.decl_members(members, close));
+            }
+            NsMemberKind::Interface(i) => {
+                parts.push(self.tok("interface", kw));
+                parts.push(self.interface_body(i, m.span.end));
+            }
+            NsMemberKind::TypeAlias(a) => {
+                parts.push(self.tok("type", kw));
+                parts.push(txt(" "));
+                parts.push(self.name(&a.name));
+                parts.push(self.type_params(&a.type_params));
+                parts.push(txt(" = "));
+                parts.push(self.ty(&a.ty));
+            }
+            NsMemberKind::Enum(e) => parts.push(self.enum_decl(e, kw)),
+        }
+        Doc::concat(parts)
+    }
+
+    fn decl_members(&mut self, members: &[DeclMember], close: u32) -> Doc {
+        self.members(members, |m| m.span, |f, m| f.decl_member(m), close)
+    }
+
+    fn decl_member(&mut self, m: &DeclMember) -> Doc {
+        let mut parts = vec![self.decorators(&m.decorators)];
+        let mut kw = match m.decorators.last() {
+            Some(d) => self.next_token(d.span.end),
+            None => m.span.start,
+        };
+        if m.is_static {
+            parts.push(self.tok("static", kw));
+            parts.push(txt(" "));
+            kw = self.next_token(kw + 1);
+        }
+        match &m.kind {
+            DeclMemberKind::Function { name, sig } => {
+                parts.push(self.tok("function", kw));
+                parts.push(txt(" "));
+                parts.push(self.name(name));
+                parts.push(self.signature(sig));
+            }
+            DeclMemberKind::Field {
+                readonly,
+                name,
+                optional,
+                ty,
+            } => {
+                if *readonly {
+                    parts.push(self.tok("readonly", kw));
+                    parts.push(txt(" "));
+                }
+                parts.push(self.name(name));
+                parts.push(txt(if *optional { "?: " } else { ": " }));
+                parts.push(self.ty(ty));
             }
         }
         Doc::concat(parts)
