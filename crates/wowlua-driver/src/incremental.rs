@@ -26,6 +26,8 @@ pub struct BuildCache {
     hashes: HashMap<String, blake3::Hash>,
     /// Plain Lua files a rebuild does not parse again, by `Source::rel`.
     fronts: HashMap<String, FrontEntry>,
+    /// What the last build wrote (stage 4).
+    pub(crate) written: Option<Written>,
     /// What the last build took from the cache.
     pub stats: CacheStats,
 }
@@ -78,6 +80,7 @@ impl BuildCache {
             self.files.clear();
             self.lua_checks.clear();
             self.fronts.clear();
+            self.written = None;
             self.config = Some(config);
         }
         self.hashes.clear();
@@ -252,4 +255,148 @@ pub(crate) fn config_hash(
     add(format!("{:?}", project.workspace_addons).as_bytes());
     add(format!("{:?}", project.external_addons).as_bytes());
     h.finalize()
+}
+
+/// A file on disk as a build left it: its length and modification time.
+/// A file that still has them is the one the build wrote (nothing else
+/// writes into the output folder).
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Stamp(u64, std::time::SystemTime);
+
+fn stamp(path: &std::path::Path) -> Option<Stamp> {
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    meta.is_file().then_some(())?;
+    Some(Stamp(meta.len(), meta.modified().ok()?))
+}
+
+/// What a `wowlua dev` build wrote: the AddOn folder's files (a written
+/// file by its bytes' hash, a copied one by its source) and the source maps.
+pub(crate) struct Written {
+    dir: std::path::PathBuf,
+    files: HashMap<String, (Kept, Stamp)>,
+    maps_root: std::path::PathBuf,
+    maps: HashMap<String, (Arc<wowlua_luair::sourcemap::EncodedMap>, Stamp)>,
+}
+
+#[derive(PartialEq, Eq)]
+enum Kept {
+    Bytes(blake3::Hash),
+    Copy(std::path::PathBuf, Stamp),
+}
+
+/// `write_tree` and `write_maps` writing only what changed since the last
+/// build (#7 stage 4). The folder is still staged and swapped in whole; a
+/// file whose bytes (or copied source) are the same, and that is on disk as
+/// the last build left it, is hard-linked from the old folder instead of
+/// written. A map that is the same (`Arc`) and on disk as left stays; the
+/// others are written, and maps of files no longer built are removed. The
+/// result is what writing everything gives.
+pub(crate) fn write_changed(
+    dir: &std::path::Path,
+    out: &std::collections::BTreeMap<String, crate::build::Content>,
+    addon: &str,
+    maps: &std::collections::BTreeMap<String, Arc<wowlua_luair::sourcemap::EncodedMap>>,
+    previous: Option<&Written>,
+) -> std::io::Result<Written> {
+    use crate::build::Content;
+    let previous = previous.filter(|p| p.dir == dir);
+    let staged = crate::fsutil::temp_sibling(dir)?;
+    let mut files = HashMap::new();
+    for (path, content) in out {
+        let dest = staged.join(path);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let kept = match content {
+            Content::Bytes(bytes) => Kept::Bytes(blake3::hash(bytes)),
+            Content::Copy(from) => match stamp(from) {
+                Some(s) => Kept::Copy(from.clone(), s),
+                None => {
+                    // A source without a stamp is copied as always.
+                    std::fs::copy(from, &dest)?;
+                    continue;
+                }
+            },
+        };
+        let old = dir.join(path);
+        let linked = previous
+            .and_then(|p| p.files.get(path))
+            .is_some_and(|(k, s)| *k == kept && stamp(&old) == Some(*s))
+            && std::fs::hard_link(&old, &dest).is_ok();
+        if !linked {
+            match content {
+                Content::Bytes(bytes) => std::fs::write(&dest, bytes)?,
+                Content::Copy(from) => {
+                    std::fs::copy(from, &dest)?;
+                }
+            }
+        }
+        if let Some(s) = stamp(&dest) {
+            files.insert(path.clone(), (kept, s));
+        }
+    }
+    crate::fsutil::replace_dir(&staged, dir)?;
+    let maps_root = dir
+        .parent()
+        .map(|p| p.join(".maps").join(addon))
+        .unwrap_or_default();
+    let Some(previous) = previous.filter(|p| p.maps_root == maps_root) else {
+        crate::build::write_maps(dir, addon, maps)?;
+        let maps = maps
+            .iter()
+            .filter_map(|(rel, m)| Some((rel.clone(), (m.clone(), stamp(&maps_root.join(rel))?))))
+            .collect();
+        return Ok(Written {
+            dir: dir.to_path_buf(),
+            files,
+            maps_root,
+            maps,
+        });
+    };
+    let mut kept_maps = HashMap::new();
+    for (rel, map) in maps {
+        let path = maps_root.join(rel);
+        let same = previous
+            .maps
+            .get(rel)
+            .is_some_and(|(m, s)| Arc::ptr_eq(m, map) && stamp(&path) == Some(*s));
+        if !same {
+            crate::fsutil::write_file(&path, map.to_json().as_bytes())?;
+        }
+        if let Some(s) = stamp(&path) {
+            kept_maps.insert(rel.clone(), (map.clone(), s));
+        }
+    }
+    // Maps of files no longer built, and anything else there, go.
+    remove_others(&maps_root, &maps_root, maps)?;
+    Ok(Written {
+        dir: dir.to_path_buf(),
+        files,
+        maps_root,
+        maps: kept_maps,
+    })
+}
+
+/// Removes the files below `dir` that are not in `keep` (by path relative
+/// to `root`, `/` separators), and directories left empty.
+fn remove_others(
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    keep: &std::collections::BTreeMap<String, Arc<wowlua_luair::sourcemap::EncodedMap>>,
+) -> std::io::Result<()> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(());
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            remove_others(root, &path, keep)?;
+            let _ = std::fs::remove_dir(&path);
+        } else if crate::fsutil::relative_slash(&path, root)
+            .is_none_or(|rel| !keep.contains_key(&rel))
+        {
+            std::fs::remove_file(&path)?;
+        }
+    }
+    Ok(())
 }
