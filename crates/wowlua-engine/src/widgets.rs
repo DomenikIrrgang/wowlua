@@ -166,6 +166,17 @@ fn lineage(e: &Engine, name: &str) -> Vec<String> {
     out
 }
 
+/// The class a name means in any case: the annotations also declare
+/// case variants (`alpha`, `ALPHA`) deriving from the real one (`Alpha`).
+pub fn canonical_class(e: &Engine, name: &str) -> Option<String> {
+    e.api
+        .classes
+        .iter()
+        .filter(|(k, _)| k.eq_ignore_ascii_case(name))
+        .find(|(k, c)| !c.bases.iter().any(|b| b.eq_ignore_ascii_case(k) && b != *k))
+        .map(|(k, _)| k.clone())
+}
+
 /// Whether class `name` is or derives from `base` (`IsObjectType`).
 pub fn is_a(e: &Engine, name: &str, base: &str) -> bool {
     lineage(e, name)
@@ -504,7 +515,7 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// The stored arguments of setter `stem`, if it ran.
-fn stored_args(vm: &mut Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
+pub fn stored_args(vm: &mut Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
     let key = vm.str(stem);
     let Value::Table(list) = vm.heap.table(props).get(key) else {
         return None;
@@ -1012,7 +1023,10 @@ fn get_regions(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(e.world.widgets[id.0]
         .children
         .iter()
-        .filter(|&&k| !is_a(e, &e.world.widgets[k.0].class, "Frame"))
+        .filter(|&&k| {
+            let class = &e.world.widgets[k.0].class;
+            !is_a(e, class, "Frame") && is_a(e, class, "Region")
+        })
         .map(|&k| Value::Table(e.world.widgets[k.0].table))
         .collect())
 }

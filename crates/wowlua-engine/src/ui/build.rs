@@ -59,6 +59,7 @@ const FLAG_ATTRS: &[(&str, &str)] = &[
     ("autoFocus", "SetAutoFocus"),
     ("multiLine", "SetMultiLine"),
     ("wordwrap", "SetWordWrap"),
+    ("setToFinalAlpha", "SetToFinalAlpha"),
 ];
 
 /// String and number attributes passed to a setter.
@@ -72,6 +73,17 @@ const VALUE_ATTRS: &[(&str, &str)] = &[
     ("letters", "SetMaxLetters"),
     ("alpha", "SetAlpha"),
     ("scale", "SetScale"),
+    // Animations.
+    ("duration", "SetDuration"),
+    ("order", "SetOrder"),
+    ("startDelay", "SetStartDelay"),
+    ("endDelay", "SetEndDelay"),
+    ("smoothing", "SetSmoothing"),
+    ("fromAlpha", "SetFromAlpha"),
+    ("toAlpha", "SetToAlpha"),
+    ("looping", "SetLooping"),
+    ("childKey", "SetChildKey"),
+    ("targetKey", "SetTargetKey"),
 ];
 
 /// Parameters of inline script bodies (`...` after them, always).
@@ -128,6 +140,12 @@ pub fn class_of(vm: &Vm, tag: &str) -> Option<String> {
     let e = engine(vm);
     if let Some((base, _)) = e.world.ui.intrinsics.get(&tag.to_ascii_lowercase()) {
         return Some(base.clone());
+    }
+    // Animation groups and animations (`<Alpha>`, `<Translation>`).
+    if let Some(class) = crate::widgets::canonical_class(e, tag)
+        && (class == "AnimationGroup" || crate::widgets::is_a(e, &class, "Animation"))
+    {
+        return Some(class);
     }
     e.api
         .classes
@@ -500,6 +518,11 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
                 build(vm, cx, f, Some(id));
             }
         }
+        "animations" => {
+            for g in &child.children {
+                build(vm, cx, g, Some(id));
+            }
+        }
         "scrollchild" => {
             for f in &child.children {
                 if let Some(c) = build(vm, cx, f, Some(id)) {
@@ -553,6 +576,12 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
             if let Some(fs) = build_as(vm, cx, child, "FontString", Some(id)) {
                 call_method(vm, cx, child.line, frame, "SetFontString", &[fs]);
             }
+        }
+        _ if engine(vm).world.widgets[id.0].class == "AnimationGroup"
+            && class_of(vm, tag)
+                .is_some_and(|c| crate::widgets::is_a(engine(vm), &c, "Animation")) =>
+        {
+            build(vm, cx, child, Some(id));
         }
         _ => {
             if let Some((_, method)) = TEXTURE_SLOTS

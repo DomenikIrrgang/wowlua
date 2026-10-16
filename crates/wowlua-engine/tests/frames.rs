@@ -268,3 +268,30 @@ return left, bottom, f:GetWidth(), f:GetHeight(), p, f:GetTop(), #E.frames()",
     // The top stays at 429 + 0 as the frame grows to its maximum width.
     assert_eq!(r, ["472", "379", "120", "55", "TOPLEFT", "429", "4"]);
 }
+
+#[test]
+fn animation_groups_play_and_finish_on_the_frame_clock() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "Seen = {}
+local f = CreateFrame('Frame', nil, UIParent)
+local g = f:CreateAnimationGroup()
+local a = g:CreateAnimation('Alpha')
+a:SetDuration(0.5)
+local b = g:CreateAnimation('Translation')
+b:SetDuration(0.25)
+b:SetOrder(2)
+g:SetScript('OnPlay', function() Seen[#Seen + 1] = 'play' end)
+g:SetScript('OnFinished', function() Seen[#Seen + 1] = 'finished' end)
+g:Play()
+return tostring(g:IsPlaying()), g:GetDuration(), a:GetObjectType(), #{ g:GetAnimations() }, #{ f:GetAnimationGroups() }",
+    );
+    assert_eq!(r, ["true", "0.75", "Alpha", "2", "1"]);
+    wowlua_engine::clock::advance_frames(&mut vm, 30, 1000.0 / 60.0);
+    let mid = run(&mut vm, "return table.concat(Seen, ',')");
+    wowlua_engine::clock::advance_frames(&mut vm, 30, 1000.0 / 60.0);
+    let end = run(&mut vm, "return table.concat(Seen, ',')");
+    assert_eq!(mid, ["play"]);
+    assert_eq!(end, ["play,finished"]);
+}

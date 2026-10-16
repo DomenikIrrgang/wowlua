@@ -220,6 +220,7 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
                 widgets::run_script(vm, id, "OnUpdate", &[elapsed]);
             }
         }
+        crate::animations::tick(vm, ms / 1000.0);
         advance(vm, 0.0);
     }
 }

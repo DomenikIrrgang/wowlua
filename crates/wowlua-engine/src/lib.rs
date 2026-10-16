@@ -3,6 +3,7 @@
 //! with behaviour where tests need it; a function without behaviour fails
 //! with "`<name>` is not mocked", so gaps are visible.
 
+pub mod animations;
 pub mod api;
 pub mod args;
 pub mod auras;
@@ -33,6 +34,8 @@ pub struct Engine {
     pub world: widgets::World,
     pub timers: clock::Timers,
     pub units: units::Units,
+    /// Animation groups playing.
+    pub animations: animations::Animations,
     /// Protected actions refused so far.
     pub refusals: Vec<protection::Refusal>,
     /// Functions without behaviour that secure code called (they returned
@@ -148,11 +151,13 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .into_iter()
             .chain(curves::methods())
             .chain(framescript::methods())
+            .chain(animations::methods())
             .collect(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),
         units: units::Units::default(),
         refusals: Vec::new(),
+        animations: Default::default(),
         defaulted: Default::default(),
     }));
     // Protected functions the documentation lacks.
