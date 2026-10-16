@@ -25,7 +25,8 @@ struct Comment {
 }
 
 pub(crate) struct Formatter<'a> {
-    parse: &'a Parse,
+    pub(crate) parse: &'a Parse,
+    pub(crate) src: &'a [u8],
     quote: QuoteStyle,
     comments: Vec<Comment>,
     next_comment: usize,
@@ -93,6 +94,7 @@ impl<'a> Formatter<'a> {
         }
         Formatter {
             parse,
+            src,
             quote,
             comments,
             next_comment: 0,
@@ -101,8 +103,28 @@ impl<'a> Formatter<'a> {
 
     // ------------------------------------------------------------ tokens --
 
+    /// Start offset of the last token before `offset`.
+    pub(crate) fn prev_token(&self, offset: u32) -> u32 {
+        let tokens = &self.parse.lexed.tokens;
+        let i = tokens.partition_point(|t| t.start < offset);
+        i.checked_sub(1)
+            .and_then(|i| tokens.get(i))
+            .map_or(offset, |t| t.start)
+    }
+
+    /// Marks the comments before `offset` printed (text kept as it is).
+    pub(crate) fn skip_comments_before(&mut self, offset: u32) {
+        while self
+            .comments
+            .get(self.next_comment)
+            .is_some_and(|c| c.start < offset)
+        {
+            self.next_comment += 1;
+        }
+    }
+
     /// Start offset of the first token at or after `offset`.
-    fn next_token(&self, offset: u32) -> u32 {
+    pub(crate) fn next_token(&self, offset: u32) -> u32 {
         let tokens = &self.parse.lexed.tokens;
         let i = tokens.partition_point(|t| t.start < offset);
         tokens.get(i).map(|t| t.start).unwrap_or(offset)
@@ -110,7 +132,7 @@ impl<'a> Formatter<'a> {
 
     /// Comments before `offset` that were not printed yet: trailing ones go
     /// to the end of the current line, leading ones before the token.
-    fn comments_before(&mut self, offset: u32) -> Vec<Doc> {
+    pub(crate) fn comments_before(&mut self, offset: u32) -> Vec<Doc> {
         let mut parts = Vec::new();
         while let Some(c) = self.comments.get(self.next_comment) {
             if c.start >= offset {
@@ -140,7 +162,7 @@ impl<'a> Formatter<'a> {
 
     /// Trailing comments (on the line of the previous token) before
     /// `offset`, attached to the end of the current line.
-    fn trailing_before(&mut self, offset: u32) -> Doc {
+    pub(crate) fn trailing_before(&mut self, offset: u32) -> Doc {
         let mut parts = Vec::new();
         while let Some(c) = self.comments.get(self.next_comment) {
             if c.start >= offset || !c.trailing {
@@ -158,7 +180,7 @@ impl<'a> Formatter<'a> {
     }
 
     /// A token at source `offset`, preceded by the comments before it.
-    fn tok(&mut self, text: impl AsRef<[u8]>, offset: u32) -> Doc {
+    pub(crate) fn tok(&mut self, text: impl AsRef<[u8]>, offset: u32) -> Doc {
         let mut parts = self.comments_before(offset);
         parts.push(Doc::text(text));
         Doc::concat(parts)
@@ -166,7 +188,7 @@ impl<'a> Formatter<'a> {
 
     /// Comments before `offset` placed on their own lines inside a block
     /// (before its closing keyword).
-    fn inner_comments(&mut self, offset: u32) -> Option<Doc> {
+    pub(crate) fn inner_comments(&mut self, offset: u32) -> Option<Doc> {
         let start = self.next_comment;
         let mut parts = Vec::new();
         while let Some(c) = self.comments.get(self.next_comment) {
@@ -202,7 +224,7 @@ impl<'a> Formatter<'a> {
 
     /// The source had a blank line between `prev_end` and the token at
     /// `offset` (before any leading comment; `;` tokens in between count).
-    fn blank_line_between(&self, prev_end: u32, offset: u32) -> bool {
+    pub(crate) fn blank_line_between(&self, prev_end: u32, offset: u32) -> bool {
         let tokens = &self.parse.lexed.tokens;
         let first = tokens.partition_point(|t| t.start < prev_end);
         let last = tokens.partition_point(|t| t.start < offset);
@@ -248,7 +270,7 @@ impl<'a> Formatter<'a> {
     }
 
     /// A block's statements and its closing keyword at `close` (`end`, …).
-    fn block(&mut self, b: &Block, close: &str, close_offset: u32) -> Doc {
+    pub(crate) fn block(&mut self, b: &Block, close: &str, close_offset: u32) -> Doc {
         let first = b
             .stmts
             .first()
@@ -278,8 +300,15 @@ impl<'a> Formatter<'a> {
         self.next_token(b.span.end)
     }
 
-    fn stmt(&mut self, s: &Stmt) -> Doc {
-        grow(|| self.stmt_inner(s))
+    pub(crate) fn stmt(&mut self, s: &Stmt) -> Doc {
+        grow(|| {
+            if s.decorators.is_empty() {
+                self.stmt_inner(s)
+            } else {
+                let d = self.decorators(&s.decorators);
+                Doc::concat(vec![d, self.stmt_inner(s)])
+            }
+        })
     }
 
     fn stmt_inner(&mut self, s: &Stmt) -> Doc {
@@ -368,7 +397,7 @@ impl<'a> Formatter<'a> {
                 let mut parts = vec![
                     self.tok("for", start),
                     txt(" "),
-                    self.name(&var.name),
+                    self.typed_name(var),
                     txt(" = "),
                 ];
                 parts.push(self.expr(first));
@@ -415,17 +444,20 @@ impl<'a> Formatter<'a> {
                 let r = self.tok("return", start);
                 if values.is_empty() {
                     r
+                } else if values.len() == 1 {
+                    // One value: no list to indent (a returned function's
+                    // body is indented once).
+                    Doc::concat(vec![r, txt(" "), self.expr(&values[0])])
                 } else {
                     Doc::concat(vec![r, txt(" "), self.expr_list_group(values)])
                 }
             }
             StmtKind::Break => self.tok("break", start),
-            // Not reached: the formatter only handles Lua 5.1 syntax.
-            _ => txt(""),
+            _ => self.wowlua_stmt(s),
         }
     }
 
-    fn name(&mut self, n: &Name) -> Doc {
+    pub(crate) fn name(&mut self, n: &Name) -> Doc {
         self.tok(n.text.as_bytes(), n.span.start)
     }
 
@@ -435,7 +467,7 @@ impl<'a> Formatter<'a> {
             if i > 0 {
                 parts.push(txt(", "));
             }
-            parts.push(self.name(&n.name));
+            parts.push(self.typed_name(n));
         }
         Doc::concat(parts)
     }
@@ -455,22 +487,8 @@ impl<'a> Formatter<'a> {
         Doc::concat(parts)
     }
 
-    fn func_body(&mut self, f: &FuncBody) -> Doc {
-        let open = self.tok("(", f.params_span.start);
-        let mut params = Vec::new();
-        for (i, p) in f.params.iter().enumerate() {
-            if i > 0 {
-                params.push(txt(", "));
-            }
-            params.push(self.name(&p.name));
-        }
-        if let Some(v) = &f.vararg {
-            if !f.params.is_empty() {
-                params.push(txt(", "));
-            }
-            params.push(self.tok("...", v.span.start));
-        }
-        let close = self.tok(")", f.params_span.end.saturating_sub(1));
+    pub(crate) fn func_body(&mut self, f: &FuncBody) -> Doc {
+        let signature = self.signature(f);
         let first = f
             .body
             .stmts
@@ -480,7 +498,7 @@ impl<'a> Formatter<'a> {
         let header = self.trailing_before(first);
         let body = self.stmts(&f.body.stmts);
         let inner = self.inner_comments(f.end_span.start);
-        let mut parts = vec![open, Doc::concat(params), close, header];
+        let mut parts = vec![signature, header];
         if f.body.stmts.is_empty() && inner.is_none() {
             parts.push(txt(" "));
         } else {
@@ -534,7 +552,7 @@ impl<'a> Formatter<'a> {
 
     // ------------------------------------------------------- expressions --
 
-    fn expr(&mut self, e: &Expr) -> Doc {
+    pub(crate) fn expr(&mut self, e: &Expr) -> Doc {
         grow(|| self.expr_inner(e))
     }
 
@@ -619,14 +637,13 @@ impl<'a> Formatter<'a> {
                 };
                 Doc::concat(vec![o, space, inner])
             }
-            // Not reached: the formatter only handles Lua 5.1 syntax.
-            _ => txt(""),
+            _ => self.wowlua_expr(e),
         }
     }
 
     /// Call arguments, always parenthesized. A single table or function
     /// argument, or a function as the last argument, hugs the parentheses.
-    fn args(&mut self, args: &Args) -> Doc {
+    pub(crate) fn args(&mut self, args: &Args) -> Doc {
         match args {
             Args::Parens { args, span } => {
                 let open = self.tok("(", span.start);
@@ -750,7 +767,7 @@ impl<'a> Formatter<'a> {
 
     /// A string literal in the configured quote style, when that needs no
     /// new escapes.
-    fn string(&self, s: &StringLit) -> Vec<u8> {
+    pub(crate) fn string(&self, s: &StringLit) -> Vec<u8> {
         let raw = &s.raw;
         if s.long || self.quote == QuoteStyle::Preserve || raw.len() < 2 {
             return raw.to_vec();

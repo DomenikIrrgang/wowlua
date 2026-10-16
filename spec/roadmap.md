@@ -459,6 +459,9 @@ The test framework runs on wowlua's own emulation of the WoW client
   report above, `test.coverage` minimums and exclusions, `--coverage-per-flavor`;
   the HTML report names the design system's fonts (shipped with M11).
 - S6 `wowlua fmt` complete for all wowlua constructs, with an idempotence suite.
+  Built 2026-10-17: every construct but `declare` (its text kept); the AST
+  check covers types, decorators and declarations; the suite formats the
+  repository's 148 `.wowlua` files twice.
 - S7 Persistent incremental cache (phase 2), shared with the LSP.
 - S8 `wowlua lsp` and the VS Code extension, with a test explorer, coverage in
   the editor and "run test" code lenses; code examples in doc comments run as

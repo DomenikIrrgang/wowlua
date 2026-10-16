@@ -415,9 +415,19 @@ An opinionated formatter for `.wowlua` and `.d.wowlua`. It can optionally format
   except an empty function body (`function() end`); at most one blank line is
   kept; `;` is written only before a statement that starts with `(`.
   Trailing comments stay on their line, comments on their own line stay on
-  their own line.
+  their own line. wowlua's syntax (M9 S6): decorators each on their own
+  line; annotations as `name: T`, `name?: T` and `name: T = default`;
+  `function f<T extends X>(a: T, ...: U): R`; function types as
+  `(a: A, ...B) -> R` and a results list of one `...T` without
+  parentheses; table types like tables; long unions and intersections
+  break before `|` / `&`; class and interface members one per line with
+  their blank lines kept; enums like tables; `import`, `export`, `const`,
+  `continue`, compound assignment, destructuring, `?.`, `?:`, `??` and
+  `::` with single spaces; interpolated strings and `declare` statements
+  keep their text.
 - Formatting never changes semantics. Every formatted file is verified to
-  produce the same AST.
+  produce the same AST (types, decorators and declarations included); an
+  idempotence suite formats every `.wowlua` file of the repository twice.
 
 ## 16.4 Trace decoder (`wowlua trace`)
 
