@@ -1234,6 +1234,22 @@ pub fn compile_flavor(
         diagnostics.append(&mut lowered.warnings);
         Some(lowered)
     };
+    // The checker's runtime checks and `typeName` texts by file, once (each
+    // file's context gets its own).
+    let mut value_checks_of: HashMap<FileId, HashMap<(u32, u32), _>> = HashMap::new();
+    for (span, c) in &out.value_checks {
+        value_checks_of
+            .entry(span.file)
+            .or_default()
+            .insert((span.start, span.end), c.clone());
+    }
+    let mut type_names_of: HashMap<FileId, HashMap<(u32, u32), String>> = HashMap::new();
+    for (span, name) in &out.type_names {
+        type_names_of
+            .entry(span.file)
+            .or_default()
+            .insert((span.start, span.end), name.clone());
+    }
     for (i, (source, file)) in files.iter().enumerate() {
         let plain_lua = source.kind == SourceKind::Lua && lower_lua.contains(&source.rel);
         let minified_lua = source.kind == SourceKind::Lua && minify.lua.contains(&source.rel);
@@ -1262,18 +1278,8 @@ pub fn compile_flavor(
                 reflect_used,
                 monitor: profile.monitor,
             };
-            ctx.value_checks = out
-                .value_checks
-                .iter()
-                .filter(|(span, _)| span.file == *file)
-                .map(|(span, c)| ((span.start, span.end), c.clone()))
-                .collect();
-            ctx.type_names = out
-                .type_names
-                .iter()
-                .filter(|(span, _)| span.file == *file)
-                .map(|(span, name)| ((span.start, span.end), name.clone()))
-                .collect();
+            ctx.value_checks = value_checks_of.remove(file).unwrap_or_default();
+            ctx.type_names = type_names_of.remove(file).unwrap_or_default();
             ctx.compiler_known = wowlua_sema::is_compiler_known(&source.src_rel);
             ctx.dependency = unit.is_some();
             Some(ctx)
