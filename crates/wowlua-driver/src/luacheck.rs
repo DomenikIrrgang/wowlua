@@ -30,6 +30,26 @@ thread_local! {
     static LUA: Lua = Lua::new();
 }
 
+/// The payload of the panic when Lua runs out of memory while compiling:
+/// that is a failure of the compiler, never a result of the code (#8).
+#[derive(Debug)]
+pub struct LuaOutOfMemory;
+
+impl std::fmt::Display for LuaOutOfMemory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Lua ran out of memory while compiling")
+    }
+}
+
+/// `result`, unless Lua ran out of memory: that panics with
+/// [`LuaOutOfMemory`] instead of becoming a compile result.
+pub(crate) fn no_memory_error<T>(result: mlua::Result<T>) -> mlua::Result<T> {
+    if let Err(mlua::Error::MemoryError(_)) = &result {
+        std::panic::panic_any(LuaOutOfMemory);
+    }
+    result
+}
+
 /// Compiles `code` in the thread's shared state, as `name` when given.
 /// Called from plain Rust only, never from inside Lua: Lua's nesting limits
 /// count from the C call depth at load time.
@@ -39,7 +59,7 @@ fn compile(code: &[u8], name: Option<String>) -> mlua::Result<()> {
         if let Some(name) = name {
             chunk = chunk.set_name(name);
         }
-        let result = chunk.into_function().map(drop);
+        let result = no_memory_error(chunk.into_function().map(drop));
         // Back to the baseline heap, as when the state was closed.
         let _ = lua.gc_collect();
         result
@@ -105,6 +125,26 @@ pub fn check(db: &SourceDb, file: FileId, code: &[u8]) -> Option<Diagnostic> {
 
 #[cfg(test)]
 mod tests {
+    /// A Lua state out of memory panics with `LuaOutOfMemory` instead of
+    /// reporting the code as not compiling; other errors are results.
+    #[test]
+    fn out_of_memory_is_not_a_compile_result() {
+        let lua = Lua::new();
+        lua.set_memory_limit(lua.used_memory() + 64 * 1024).unwrap();
+        let items: String = (0..50_000).map(|i| format!("\"s{i}\", ")).collect();
+        let big = format!("return {{ {items} }}\n");
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            no_memory_error(lua.load(big.as_bytes()).into_function().map(drop))
+        }));
+        let payload = caught.expect_err("out of memory panics");
+        assert!(payload.downcast_ref::<LuaOutOfMemory>().is_some());
+        let syntax = no_memory_error(Lua::new().load(&b"x = = 1"[..]).into_function().map(drop));
+        assert!(
+            matches!(syntax, Err(mlua::Error::SyntaxError { .. })),
+            "{syntax:?}"
+        );
+    }
+
     use super::*;
 
     fn run(text: &str) -> Option<Diagnostic> {

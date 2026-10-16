@@ -4377,7 +4377,7 @@ fn bundle_output(
     let lua = mlua::Lua::new();
     let compiles = |bytes: &[u8]| {
         let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
-        lua.load(bytes).into_function().is_ok()
+        crate::luacheck::no_memory_error(lua.load(bytes).into_function()).is_ok()
     };
     let entries: Vec<(bool, Option<Vec<String>>)> = expanded
         .iter()
@@ -4477,11 +4477,11 @@ fn bundle_output(
                 // the Rust file and line of this call, so the name is pinned
                 // to the one it has always had: edits above leave the message
                 // unchanged.
-                if let Err(error) = lua
-                    .load(&text[..])
-                    .set_name("@crates/wowlua-driver/src/build.rs:4316")
-                    .into_function()
-                {
+                if let Err(error) = crate::luacheck::no_memory_error(
+                    lua.load(&text[..])
+                        .set_name("@crates/wowlua-driver/src/build.rs:4316")
+                        .into_function(),
+                ) {
                     session.push(Diagnostic::plain_error(format!(
                         "internal compiler error: the bundle `{path}` does not compile: {error}"
                     )));
