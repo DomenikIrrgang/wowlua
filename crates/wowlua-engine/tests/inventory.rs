@@ -116,10 +116,11 @@ fn every_function_of_the_client_exists_with_its_kind() {
             .iter()
             .copied()
             .collect();
+        let load_errors = wowlua_engine::engine(&vm).world.ui.errors.join("\n");
         std::fs::write(
             path,
             format!(
-                "missing:\n{}\n\nwrong kind:\n{}\n\nerrors after loading:\n{errors}\n\ndefaulted:\n{}\n",
+                "missing:\n{}\n\nwrong kind:\n{}\n\nerrors while loading:\n{load_errors}\n\nerrors after loading:\n{errors}\n\ndefaulted:\n{}\n",
                 missing.join("\n"),
                 wrong.join("\n"),
                 defaulted.join("\n")

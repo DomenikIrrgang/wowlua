@@ -323,7 +323,8 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
 /// `Enum` and `Constants` as the client has them where its documentation
 /// differs (`data/<flavor>-enums.txt`, from `/stdtest engine`): a line
 /// `Enum.X.Field<TAB>number 5` sets a field, `…<TAB>-` removes a field or a
-/// whole table.
+/// whole table, `…<TAB>hidden` keeps a table off `pairs`, reachable
+/// through the root's `__index`.
 fn recorded_tables(vm: &mut Vm, data: &str) {
     for line in data.lines().filter(|l| !l.starts_with('#')) {
         let Some((name, value)) = line.split_once('\t') else {
@@ -336,7 +337,12 @@ fn recorded_tables(vm: &mut Vm, data: &str) {
         let root = namespace(vm, root);
         let tkey = vm.heap.intern(table.as_bytes());
         let Some(field) = parts.next() else {
-            if value == "-" {
+            if value == "hidden" {
+                let hidden = hidden_tables(vm, root);
+                let t = vm.heap.table(root).get_str(tkey);
+                vm.heap.table_mut(hidden).set_str(tkey, t);
+            }
+            if value == "-" || value == "hidden" {
                 vm.heap.table_mut(root).set_str(tkey, Value::Nil);
             }
             continue;
@@ -359,6 +365,20 @@ fn recorded_tables(vm: &mut Vm, data: &str) {
         let fkey = vm.heap.intern(field.as_bytes());
         vm.heap.table_mut(t).set_str(fkey, v);
     }
+}
+
+/// The tables `root` keeps off `pairs`: its metatable's `__index`.
+fn hidden_tables(vm: &mut Vm, root: wowlua_vm::TableRef) -> wowlua_vm::TableRef {
+    if let Some(meta) = vm.heap.table(root).meta
+        && let Value::Table(t) = vm.heap.table(meta).get_str(vm.names.index)
+    {
+        return t;
+    }
+    let (meta, hidden) = (vm.new_table(), vm.new_table());
+    let index = vm.names.index;
+    vm.heap.table_mut(meta).set_str(index, Value::Table(hidden));
+    vm.heap.table_mut(root).meta = Some(meta);
+    hidden
 }
 
 fn namespace(vm: &mut Vm, name: &str) -> wowlua_vm::TableRef {
@@ -414,7 +434,19 @@ pub fn defaults(vm: &mut Vm, api: &api::Api, doc: &serde_json::Value) -> Vec<Val
                 | "BigUInteger" | "WOWMONEY" | "SingleColorValue" | "uiFontHeight" => {
                     Value::Num(0.0)
                 }
-                _ if r.get("Mixin").is_some() => Value::Table(vm.new_table()),
+                // An object of its mixin (`ColorMixin`), when Blizzard's code
+                // defined it.
+                _ if r.get("Mixin").is_some() => {
+                    let t = vm.new_table();
+                    let mixin = r.get("Mixin").and_then(serde_json::Value::as_str);
+                    if let Some(Value::Table(m)) = mixin.map(|m| vm.get_global(m)) {
+                        let methods: Vec<(Value, Value)> = vm.heap.table(m).entries().collect();
+                        for (k, f) in methods {
+                            let _ = vm.heap.table_mut(t).set(k, f);
+                        }
+                    }
+                    Value::Table(t)
+                }
                 _ if ty.ends_with("ID") || ty.ends_with("Id") || ty.ends_with("Index") => {
                     Value::Num(0.0)
                 }

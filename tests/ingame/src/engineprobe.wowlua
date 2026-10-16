@@ -684,6 +684,103 @@ const CVARS = {
     "worldQuestFilterReputation", "worldQuestFilterResources", "xpBarText",
 }
 
+--- `Enum` and `Constants` tables `pairs` did not list, yet the documentation
+--- has or Blizzard's code reads at load (`Enum.StoreError` in
+--- VASErrorLookup.lua): looked up by name, field by field.
+const HIDDEN_ENUMS = {
+    "BattlepayBannerType", "BattlepayBoostProduct", "BattlepayCardType", "BattlepayDisplayFlags",
+    "BattlepayGroupDisplayType", "BattlepayProductDecorator", "BattlepayProductGroupFlags",
+    "CharacterCreateType", "CharCreateAnimTurnType", "CharSectionCondition", "ConfigurationWarning",
+    "CreationClassDisabledReason", "CreationRaceDisabledReason", "GuideFrameState",
+    "PurchaseEligibility", "PvpMatchmakingType", "RestrictionType", "StoreError", "UnitTokenType",
+    "ValueAddedServiceType", "VasPurchaseState", "VasQueueStatus", "VasServiceType",
+    "VasTransactionPurchaseResult", "WarbandEventState", "WarbandGroupFlags",
+    "WarbandPlacementDisplayInfoType", "WarbandSceneAnimationEvent",
+    "WarbandSceneAnimationSheatheState", "WarbandSceneAnimationStandState",
+    "WarbandSceneAnimationStandStateFlags", "WarbandScenePlacementType",
+}
+const HIDDEN_CONSTANTS = {
+    "AssociativePriorityTable", "QuestWatchConsts_ClassicPostWrath", "LootConsts_Camelot",
+    "PetConsts_Camelot", "QuestInfoLuaConsts", "QuestLogConstsMainlineCamelot",
+}
+
+local function hidden(): { [string]: string }
+    const out: { [string]: string } = {
+        enumMetatable = type(getmetatable(G.Enum)),
+        constantsMetatable = type(getmetatable(G.Constants)),
+    }
+    const lists: { root: string, names: string[] }[] = {
+        { root = "Enum", names = HIDDEN_ENUMS },
+        { root = "Constants", names = HIDDEN_CONSTANTS },
+    }
+    for _, list in ipairs(lists) do
+        const root: any = G[list.root]
+        for _, name in ipairs(list.names) do
+            for _, n in ipairs({ name, `{name}Meta` }) do
+                const t = type(root) == "table" and root[n] or nil
+                out[`{list.root}.{n}`] = type(t)
+                if type(t) == "table" then
+                    for field, value in pairs(t) do
+                        out[`{list.root}.{n}.{tostring(field)}`] = show(value)
+                    end
+                end
+            end
+        end
+    end
+    return out
+end
+
+--- `C_ColorOverrides.GetColorForQuality` for each item quality, as
+--- Blizzard's ColorManager.lua calls it at load.
+local function qualityColors(): { [string]: string }
+    const out: { [string]: string } = {}
+    const meta: any = G.Enum.ItemQualityMeta
+    if not (G.C_ColorOverrides and meta) then
+        return { absent = "C_ColorOverrides or Enum.ItemQualityMeta" }
+    end
+    for i = 0, meta.NumValues - 1 do
+        local ok, c = pcall(G.C_ColorOverrides.GetColorForQuality, i)
+        if not ok then
+            out[tostring(i)] = `error: {tostring(c)}`
+        elseif type(c) == "table" then
+            out[tostring(i)] = `{show(c.r)}, {show(c.g)}, {show(c.b)}, {show(c.a)}`
+        else
+            out[tostring(i)] = show(c)
+        end
+    end
+    return out
+end
+
+--- Every global number and boolean (`LE_*`: the client's own; others
+--- Blizzard's code set).
+local function scalars(): { [string]: string }
+    const out: { [string]: string } = {}
+    for name, v in pairs(G) do
+        const t = type(v)
+        if type(name) == "string" and (t == "number" or t == "boolean") then
+            out[name] = show(v)
+        end
+    end
+    return out
+end
+
+--- The named frames in `EnumerateFrames`' order (creation order: the
+--- order Blizzard's addons loaded in), and how many frames there are.
+local function frameOrder(): { [string]: string }
+    const names: string[] = {}
+    local count = 0
+    local f: any = EnumerateFrames()
+    while f do
+        count = count + 1
+        local ok, name = pcall(f.GetName, f)
+        if ok and type(name) == "string" and not issecretvalue(name) then
+            names[#names + 1] = name
+        end
+        f = EnumerateFrames(f)
+    end
+    return { count = tostring(count), names = table.concat(names, " ") }
+end
+
 --- Each CVar's default (`C_CVar.GetCVarDefault`; not the player's value).
 local function cvarDefaults(): { [string]: string }
     const out: { [string]: string } = {}
@@ -788,15 +885,10 @@ export function engineProbe(arg: string?)
         enums = tables(G.Enum),
         loadCalls = loadCalls(),
         constants = tables(G.Constants),
-        -- Tables the documentation has and `pairs` did not find: absent, or
-        -- made on first use?
-        lookups = {
-            UnitTokenType = type(G.Enum.UnitTokenType),
-            VasTransactionPurchaseResult = type(G.Enum.VasTransactionPurchaseResult),
-            PetConsts_Camelot = type(G.Constants.PetConsts_Camelot),
-            enumMetatable = type(getmetatable(G.Enum)),
-            constantsMetatable = type(getmetatable(G.Constants)),
-        },
+        scalars = scalars(),
+        frameOrder = frameOrder(),
+        hidden = hidden(),
+        qualityColors = qualityColors(),
         blizzardAtStart = table.concat(LOADED_AT_START, " "),
         blizzardNow = table.concat(blizzardLoaded(), " "),
         units = units(),

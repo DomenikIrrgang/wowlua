@@ -2015,9 +2015,28 @@ fn create_font(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// The frame system's API functions with behaviour.
+/// `EnumerateFrames([frame])`: the first frame, or the one made after
+/// `frame` (creation order; regions, fonts and animations are no frames).
+fn enumerate_frames(vm: &mut Vm, c: NativeCall) -> Ret {
+    let start = match c.arg(1) {
+        Value::Nil => 0,
+        v => match widget_of(vm, v) {
+            Some(id) => id.0 + 1,
+            None => return Ok(vec![Value::Nil]),
+        },
+    };
+    let e = engine(vm);
+    let next = e.world.widgets[start.min(e.world.widgets.len())..]
+        .iter()
+        .find(|w| is_a(e, &w.class, "Frame"))
+        .map(|w| Value::Table(w.table));
+    Ok(vec![next.unwrap_or(Value::Nil)])
+}
+
 pub fn functions() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
         ("CreateFont", create_font),
+        ("EnumerateFrames", enumerate_frames),
         ("GetFramesRegisteredForEvent", frames_registered_for_event),
         ("C_EventUtils.IsEventValid", is_event_valid),
     ]
