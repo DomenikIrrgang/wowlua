@@ -227,6 +227,9 @@ enum Command {
         /// Restrict to these flavors
         #[arg(long, value_delimiter = ',')]
         flavor: Vec<String>,
+        /// Rewrite the snapshots that differ (and drop unused ones)
+        #[arg(short = 'u', long = "update-snapshots")]
+        update_snapshots: bool,
     },
     /// Compile files to Lua without making an AddOn folder
     Compile(CompileArgs),
@@ -558,9 +561,17 @@ fn run() -> ExitCode {
         Command::Check { profile, flavor } => {
             commands::check(&out, &cli.global, &profile.name("dev"), flavor)
         }
-        Command::Test { filter, flavor } => {
-            commands::test(&out, &cli.global, filter.as_deref(), flavor)
-        }
+        Command::Test {
+            filter,
+            flavor,
+            update_snapshots,
+        } => commands::test(
+            &out,
+            &cli.global,
+            filter.as_deref(),
+            flavor,
+            update_snapshots,
+        ),
         Command::Compile(args) => commands::compile(&out, &cli.global, &args),
         Command::Fmt { check, paths } => commands::fmt(&out, &cli.global, check, paths),
         Command::Dev {

@@ -42,6 +42,10 @@ local hooks = {
 local groups: string[] = {}
 local settings = { lifecycle = "auto", timeout = 10 }
 local current: Entry? = nil
+-- The running test's name (its case's, for a parametrized one) and how many
+-- snapshots it matched.
+local currentName = ""
+local snapshotCount = 0
 
 -- A value as messages show it: strings quoted, tables one level deep.
 local function show(v: any, depth: number?): string
@@ -320,12 +324,12 @@ export type Expect<T> = {
     toBeAnchoredTo: (other: any, point: string?, relativePoint: string?) -> (),
     --- A tooltip's lines: each the left text, or `{ left, right }`.
     toHaveLines: (lines: any[]) -> (),
+    --- The value's text matches the stored snapshot (decision T218);
+    --- `name` tells several of a test apart (else they are numbered).
+    toMatchSnapshot: (name: string?) -> (),
     --- The negated matchers: `expect(x).never.toBe(y)`.
     never: Expect<T>,
 }
-
--- Custom matchers (decision T220), by name.
-local custom: { [string]: Fn } = {}
 
 local function widgetText(w: any): any
     if type(w.GetText) == "function" then
@@ -345,6 +349,122 @@ local function widgetText(w: any): any
     end
     return nil
 end
+
+-- A number as snapshots show it: at most two decimals.
+local function shortNumber(n: number): string
+    if n == math.floor(n) and math.abs(n) < 1e15 then
+        return string.format("%d", n)
+    end
+    local s = string.format("%.2f", n):gsub("0+$", ""):gsub("%.$", "")
+    return s
+end
+
+local function isWidget(v: any): boolean
+    return type(v) == "table" and type(v.GetObjectType) == "function"
+end
+
+-- A widget's name in a snapshot.
+local function widgetLabel(w: any, from: any): string
+    if w == nil then
+        return "nil"
+    end
+    local name = w.GetName and w:GetName()
+    if name then
+        return name
+    end
+    if from and from.GetParent and w == from:GetParent() then
+        return "$parent"
+    end
+    return "<" .. (w.GetObjectType and w:GetObjectType() or "?") .. ">"
+end
+
+-- A value's text for snapshots: tables with their keys sorted, widgets as
+-- their tree (shown, size, points, text, then regions and children).
+local function serialize(v: any, indent: string, seen: { [any]: boolean }): string
+    if issecretvalue and issecretvalue(v) then
+        return "<secret>"
+    end
+    local t = type(v)
+    if t == "string" then
+        return string.format("%q", v)
+    elseif t == "number" then
+        return shortNumber(v)
+    elseif t ~= "table" then
+        return t == "function" and "<function>" or tostring(v)
+    end
+    if seen[v] then
+        return "<cycle>"
+    end
+    seen[v] = true
+    local inner = indent .. "  "
+    local lines: string[] = {}
+    if isWidget(v) then
+        local head = v:GetObjectType() .. " " .. widgetLabel(v, nil)
+        if v.IsShown then
+            lines[#lines + 1] = inner .. (v:IsShown() and "shown" or "hidden")
+        end
+        if v.GetSize then
+            local w, h = v:GetSize()
+            lines[#lines + 1] = `{inner}size {shortNumber(w)} x {shortNumber(h)}`
+        end
+        if v.GetNumPoints then
+            for i = 1, v:GetNumPoints() do
+                local p, rel, rp, x, y = v:GetPoint(i)
+                lines[#lines + 1] = `{inner}{p} on {widgetLabel(rel, v)} {rp} ({shortNumber(x or 0)}, {shortNumber(y or 0)})`
+            end
+        end
+        local text = widgetText(v)
+        if text ~= nil then
+            lines[#lines + 1] = inner .. "text " .. serialize(text, inner, seen)
+        end
+        local kids: any[] = {}
+        if v.GetRegions then
+            for _, r in ipairs({ v:GetRegions() }) do
+                kids[#kids + 1] = r
+            end
+        end
+        if v.GetChildren then
+            for _, c in ipairs({ v:GetChildren() }) do
+                kids[#kids + 1] = c
+            end
+        end
+        for _, k in ipairs(kids) do
+            lines[#lines + 1] = inner .. serialize(k, inner, seen)
+        end
+        seen[v] = nil
+        return head .. (#lines > 0 and "\n" .. table.concat(lines, "\n") or "")
+    end
+    local keys: any[] = {}
+    for k in pairs(v) do
+        keys[#keys + 1] = k
+    end
+    table.sort(keys, function(a: any, b: any): boolean
+        local ta, tb = type(a), type(b)
+        if ta ~= tb then
+            return ta == "number"
+        end
+        if ta == "number" or ta == "string" then
+            return a < b
+        end
+        return tostring(a) < tostring(b)
+    end)
+    local n = #v
+    for _, k in ipairs(keys) do
+        local key = ""
+        if not (type(k) == "number" and k >= 1 and k <= n and k % 1 == 0) then
+            key = (type(k) == "string" and k:match("^[%a_][%w_]*$")) and k .. " = " or `[{serialize(k, inner, seen)}] = `
+        end
+        lines[#lines + 1] = inner .. key .. serialize(v[k], inner, seen) .. ","
+    end
+    seen[v] = nil
+    if #lines == 0 then
+        return "{}"
+    end
+    return "{\n" .. table.concat(lines, "\n") .. "\n" .. indent .. "}"
+end
+
+-- Custom matchers (decision T220), by name.
+local custom: { [string]: Fn } = {}
 
 local function tooltipLines(tip: any): { left: string?, right: string? }[]
     local lines: { left: string?, right: string? }[] = {}
@@ -487,6 +607,21 @@ local function matchers(value: any, negated: boolean): any
         end
         local text = #shown > 0 and table.concat(shown, "; ") or "none"
         check(pass, `expected the lines {show(lines)}; got {text}`, "expected other lines")
+    end
+    function m.toMatchSnapshot(name: string?)
+        if negated then
+            fail("toMatchSnapshot cannot be negated", 1)
+        end
+        local engine = wl.mockEngine
+        if engine == nil then
+            fail("snapshots need `wowlua test`", 1)
+        end
+        snapshotCount = snapshotCount + 1
+        local key = currentName .. " › " .. (name ?? tostring(snapshotCount))
+        local same, diff = engine.snapshot(key, serialize(value, "", {}))
+        if not same then
+            fail(`the snapshot "{key}" differs (- stored, + now; wowlua test -u updates it):\n{diff}`, 1)
+        end
     end
     for name, fn in pairs(custom) do
         m[name] = function(...: any)
@@ -635,6 +770,8 @@ wl.tests = {
         end
         add(function()
             current = e
+            snapshotCount = 0
+            currentName = c and wl.tests.caseName(i :: number, c) or e.name
             local case: any = c and (e.cases :: any[])[c]
             if type(case) == "table" then
                 local list = case :: any[]

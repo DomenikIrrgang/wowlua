@@ -148,11 +148,15 @@ h)`, `toBeAnchoredTo(other, point?, relativePoint?)`, and
 line by line.
 
 **Snapshots** (decision T218). `expect(v).toMatchSnapshot(name?)` compares a
-value (serialized deterministically: keys sorted, frames as their widget tree
-with layout and text) with the snapshot stored in `__snapshots__/<test
-file>.snap` next to the test; a missing snapshot is written, a different one
-fails the test with a diff, and `wowlua test -u` rewrites them. Snapshots are
-reviewed in version control.
+value (serialized deterministically: keys sorted, numbers with at most two
+decimals, frames as their widget tree with shown state, size, points and
+text, then their regions and children) with the snapshot stored in
+`__snapshots__/<test file>.snap` next to the test, keyed by the test's name
+and `name` (else numbered); a missing snapshot is written, a different one
+fails the test with a line diff, and `wowlua test -u` rewrites them (and,
+when every test of the file ran, drops those no test matched). Snapshots
+are reviewed in version control: each is a `# <key>` line and its text,
+each line after `| `.
 
 **Compile-time tests** (decision T219). `@expectError` marks a function that
 must not compile: the test passes when the checker reports exactly these
@@ -301,7 +305,7 @@ Mocking (decision T187):
 ### 16.1.5 Running
 
 ```
-wowlua test [filter] [--flavor <f>] [--watch] [--coverage] [--reporter <r>,…] [--output <dir>] [--game-data]
+wowlua test [filter] [--flavor <f>] [-u] [--watch] [--coverage] [--reporter <r>,…] [--output <dir>] [--game-data]
 ```
 
 - Each test file runs once **per manifest flavor** by default. `--flavor`

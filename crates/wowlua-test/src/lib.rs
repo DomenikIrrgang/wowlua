@@ -8,6 +8,9 @@
 mod blizzard;
 mod natives;
 mod profile;
+mod snapshots;
+
+pub use snapshots::Summary as SnapshotSummary;
 
 pub use blizzard::{UiSource, ui_source};
 
@@ -29,6 +32,8 @@ pub struct Suite<'a> {
     pub blizzard_ui: Option<UiSource>,
     /// `test.profile`: the world profile of files that name none.
     pub profile: Option<String>,
+    /// `-u`: rewrite the snapshots that differ.
+    pub update_snapshots: bool,
 }
 
 fn widgets_keep(vm: &mut Vm, v: Value) {
@@ -50,6 +55,7 @@ pub struct FileResult {
     pub seconds: f64,
     /// Errors Blizzard's UI code raised while loading (the engine's gaps).
     pub blizzard_errors: Vec<String>,
+    pub snapshots: SnapshotSummary,
 }
 
 impl FileResult {
@@ -231,10 +237,17 @@ fn run_file(suite: &Suite, file: &TestFile, filter: Option<&str>) -> FileResult 
         printed: String::new(),
         seconds: 0.0,
         blizzard_errors: Vec::new(),
+        snapshots: SnapshotSummary::default(),
     };
+    snapshots::begin(&suite.root.join(&file.rel), suite.update_snapshots);
     match load(suite, file, &mut result.blizzard_errors) {
         Ok(mut state) => {
             run_tests(suite, &mut state, filter, &mut result);
+            let all_ran = filter.is_none() && result.error.is_none();
+            match snapshots::finish(all_ran) {
+                Ok(s) => result.snapshots = s,
+                Err(e) => result.error = Some(format!("writing the snapshots: {e}")),
+            }
         }
         Err(e) => result.error = Some(to_sources(suite, &e)),
     }

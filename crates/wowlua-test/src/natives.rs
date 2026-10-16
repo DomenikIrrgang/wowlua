@@ -155,6 +155,7 @@ pub fn extend(vm: &mut Vm, controls: TableRef, addon: &str) {
         ("printed", printed),
         ("secret", secret),
         ("login", login_control),
+        ("snapshot", crate::snapshots::snapshot_native),
     ] {
         let native = vm.native(key, f);
         let k = vm.heap.intern(key.as_bytes());

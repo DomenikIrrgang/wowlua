@@ -519,7 +519,13 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
 
 /// `wowlua test` (spec Tooling §16.1): each addon's test files, once per
 /// flavor, in the emulated client.
-pub fn test(out: &Output, global: &GlobalArgs, filter: Option<&str>, flavors: Vec<String>) -> bool {
+pub fn test(
+    out: &Output,
+    global: &GlobalArgs,
+    filter: Option<&str>,
+    flavors: Vec<String>,
+    update_snapshots: bool,
+) -> bool {
     use termcolor::Color;
     let started = Instant::now();
     let mut session = Session::new();
@@ -535,6 +541,7 @@ pub fn test(out: &Output, global: &GlobalArgs, filter: Option<&str>, flavors: Ve
     let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
     let mut ok = true;
     let (mut passed, mut failed, mut skipped, mut files) = (0, 0, 0, 0);
+    let mut snaps = wowlua_test::SnapshotSummary::default();
     for project in projects {
         if project.kind() != PackageKind::Addon {
             continue;
@@ -592,6 +599,7 @@ pub fn test(out: &Output, global: &GlobalArgs, filter: Option<&str>, flavors: Ve
                 src: project.manifest.manifest.build.src.clone(),
                 blizzard_ui,
                 profile: project.manifest.manifest.test.profile.clone(),
+                update_snapshots,
             };
             let results = wowlua_test::run(&suite, filter, threads);
             if let Some(errors) = results
@@ -614,6 +622,9 @@ pub fn test(out: &Output, global: &GlobalArgs, filter: Option<&str>, flavors: Ve
             }
             for result in results {
                 files += 1;
+                snaps.written += result.snapshots.written;
+                snaps.updated += result.snapshots.updated;
+                snaps.removed += result.snapshots.removed;
                 let bad = result.failed();
                 let (word, color) = if bad {
                     ("FAIL", Color::Red)
@@ -679,11 +690,23 @@ pub fn test(out: &Output, global: &GlobalArgs, filter: Option<&str>, flavors: Ve
             }
         }
     }
-    let summary = format!(
+    let mut summary = format!(
         "{passed} passed, {failed} failed, {skipped} skipped ({files} file{}) in {:.2}s",
         if files == 1 { "" } else { "s" },
         started.elapsed().as_secs_f64()
     );
+    let parts: Vec<String> = [
+        (snaps.written, "written"),
+        (snaps.updated, "updated"),
+        (snaps.removed, "removed"),
+    ]
+    .iter()
+    .filter(|(n, _)| *n > 0)
+    .map(|(n, what)| format!("{n} {what}"))
+    .collect();
+    if !parts.is_empty() {
+        summary.push_str(&format!("; snapshots: {}", parts.join(", ")));
+    }
     if ok {
         out.status("Tested", summary);
     } else {

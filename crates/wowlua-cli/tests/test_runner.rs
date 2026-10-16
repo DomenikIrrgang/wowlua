@@ -661,3 +661,75 @@ end
     );
     assert!(!out.contains("unused import"), "{out}");
 }
+
+/// Snapshots (decision T218): written when missing, compared after, shown
+/// as a diff when they differ, rewritten with `-u`.
+#[test]
+fn snapshots() {
+    let file = |kills: u32| {
+        format!(
+            r#"import test, expect from "wowlua:test"
+
+@test("state")
+local function state()
+    expect({{ kills = {kills}, name = "x", list = {{ 1, 2 }} }}).toMatchSnapshot()
+end
+
+@test("frame")
+local function frame()
+    local f = CreateFrame("Frame", "SnapFrame", UIParent)
+    f:SetSize(100, 50)
+    f:SetPoint("TOPLEFT", 10, -20)
+    local t = f:CreateFontString(nil, "OVERLAY")
+    t:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+    t:SetText("Hi")
+    expect(f).toMatchSnapshot("layout")
+end
+"#
+        )
+    };
+    let dir = project(r#""standard": {}"#, &[("tests/snap.test.wowlua", &file(1))]);
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("snapshots: 2 written"), "{out}");
+    let snap =
+        fs::read_to_string(dir.path().join("tests/__snapshots__/snap.test.wowlua.snap")).unwrap();
+    for line in [
+        "# state › 1",
+        "| {",
+        "|   kills = 1,",
+        "|   name = \"x\",",
+        "# frame › layout",
+        "| Frame SnapFrame",
+        "|   size 100 x 50",
+        "|   TOPLEFT on UIParent TOPLEFT (10, -20)",
+        "|   FontString <FontString>",
+        "|     text \"Hi\"",
+    ] {
+        assert!(snap.contains(line), "missing {line:?} in:\n{snap}");
+    }
+    // The same again: they match.
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok && !out.contains("snapshots:"), "{out}");
+    // A change fails with a diff; -u takes it.
+    fs::write(dir.path().join("tests/snap.test.wowlua"), file(2)).unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("- stored, + now"), "{out}");
+    assert!(
+        out.contains("-   kills = 1,") && out.contains("+   kills = 2,"),
+        "{out}"
+    );
+    let (ok, out) = test(dir.path(), &["-u"]);
+    assert!(ok, "{out}");
+    assert!(out.contains("snapshots: 1 updated"), "{out}");
+    // A snapshot no test matches goes with -u.
+    fs::write(
+        dir.path().join("tests/snap.test.wowlua"),
+        file(2).replace("toMatchSnapshot(\"layout\")", "toBeShown()"),
+    )
+    .unwrap();
+    let (ok, out) = test(dir.path(), &["-u"]);
+    assert!(ok, "{out}");
+    assert!(out.contains("snapshots: 1 removed"), "{out}");
+}
