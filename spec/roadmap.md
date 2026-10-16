@@ -427,6 +427,15 @@ The test framework runs on wowlua's own emulation of the WoW client
   in-game run.
 - S4 **Test framework**: `wowlua test`, `wowlua:test`, `wowlua:mock` (spies,
   stubs, fakes, scenario controls, taint assertions), per flavor, in parallel.
+  World profiles (decision T213): the character (name, class, race, level,
+  faction, stats), gear, bags, money, position, auras and the units around
+  the player with their distances, CVars, bindings and saved variables, loaded
+  before the addon; recorded from the client with `/stdtest snapshot`; every
+  part drivable during a test, each change firing the client's events in its
+  order. GUI tests act as the user (click, hover, drag, type, key bindings)
+  and assert what is shown. The groundwork for M12 to M14: the VM's debug
+  hooks (shared with S5's coverage) and the engine's file access behind an
+  interface (T212).
 - S5 **Coverage and reports**: lines, statements, branches, functions and
   conditions counted by the VM; terminal, JUnit, TAP, JSON, GitHub, lcov,
   Cobertura and an HTML report in the wowlua design system; thresholds.
@@ -492,3 +501,60 @@ release build over the unoptimized one, the corpus and differential tests show
 unchanged behavior, and an optimized addon is checked in game; a recording of
 a boss pull, taken in game with the dev window, is exported and opened with
 `wowlua prof report`.
+
+## M12: Debugger
+
+A debugger attaches to the emulated client (decision T209): the VM pauses and
+steps where the real client cannot be observed.
+
+- `wowlua debug` serves the Debug Adapter Protocol: breakpoints (also on
+  events, scripts and API calls), stepping through Lua and into event
+  dispatch, `OnUpdate` and timers, call stacks with the source-mapped wowlua
+  code, watches and a console, the taint and secrecy of every value.
+- Profiling from the VM's hooks: time and calls per function, event, frame
+  and `OnUpdate`, garbage per function (the views of M11's in-game tools,
+  T174).
+- A live UI channel (WebSocket): the frame tree, layout, draw layers, text and
+  textures of the current frame stream to a viewer, which sends mouse and
+  keyboard input back; the UI stays usable while paused or stepping.
+- The VS Code extension (M9 S8) attaches to it.
+
+**Exit:** a test or an addon session is stopped at a breakpoint inside an
+event handler, stepped through, inspected with watches, and clicked through
+in the viewer.
+
+## M13: Game data and rendering
+
+Real game data and assets from the user's own client, never distributed
+(decisions T203, T210).
+
+- A CASC reader for the local installation: the DB2 tables (spells, talents,
+  items, currencies, maps, …) behind the engine's game-data interface, next
+  to the tests' data and the world profiles' (T203, T213).
+- UI assets: BLP textures, texture atlases, fonts; text measured with the
+  client's fonts, so `GetStringWidth`, wrapping and truncation match the
+  client in tests too (T211).
+- A renderer on `wgpu` drawing the UI as the client does: strata, levels,
+  layers, blend modes, masks, texture coordinates, text (T211); 3D models
+  (`ModelScene`, M2 files) last.
+
+**Exit:** the debugger's viewer shows the default UI and an addon's frames
+from a world profile as the client draws them, with the client's spell and
+item data.
+
+## M14: Browser
+
+The compiler, the VM and the engine run in the browser as WebAssembly
+(decision T212).
+
+- `wasm32-unknown-unknown` builds of the compiler pipeline, the VM, the engine
+  and the renderer (`wgpu` on WebGPU or WebGL); file access through the
+  engine's file system interface; checked by CI from M9 S4 on.
+- A web playground: write wowlua, compile it, run the addon against the
+  emulated UI with a world profile, with the debugger's views in the page.
+- Shareable reproductions: code and profile in a link.
+- Game data from the user's own installation through the File System Access
+  API, read in the browser and never uploaded (T210).
+
+**Exit:** an addon from the corpus compiles, runs and is debugged in the
+browser against the default UI, from a link.
