@@ -86,8 +86,8 @@ impl Lowerer<'_> {
             out.push(stmt(
                 ir::StmtKind::NumericFor {
                     var: generated(&i, pos),
-                    start: lit(ir::ExprKind::Number("1".into()), pos),
-                    limit: count,
+                    start: Box::new(lit(ir::ExprKind::Number("1".into()), pos)),
+                    limit: Box::new(count),
                     step: None,
                     do_pos: pos,
                     body: ir::Block {

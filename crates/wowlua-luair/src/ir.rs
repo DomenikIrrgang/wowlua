@@ -85,9 +85,9 @@ pub enum StmtKind {
     },
     NumericFor {
         var: Ident,
-        start: Expr,
-        limit: Expr,
-        step: Option<Expr>,
+        start: Box<Expr>,
+        limit: Box<Expr>,
+        step: Option<Box<Expr>>,
         do_pos: Pos,
         body: Block,
     },
@@ -195,7 +195,7 @@ pub enum ExprKind {
     },
     Method {
         obj: Box<Expr>,
-        name: Ident,
+        name: Box<Ident>,
         args: Args,
     },
     /// Parentheses are kept: they truncate multiple values.
@@ -233,7 +233,7 @@ pub enum Field {
     /// `[key] = value`; `open` is the position of `[`.
     Keyed {
         open: Pos,
-        key: Expr,
+        key: Box<Expr>,
         value: Expr,
     },
     Named {
@@ -316,5 +316,19 @@ impl UnOp {
             UnOp::Not => "not",
             UnOp::Len => "#",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Rarely used parts stay boxed (#11, phase C): every expression,
+    /// table field and statement of a file's IR is this size.
+    #[test]
+    fn ir_nodes_stay_small() {
+        assert!(std::mem::size_of::<Expr>() <= 72);
+        assert!(std::mem::size_of::<Field>() <= 112);
+        assert!(std::mem::size_of::<Stmt>() <= 144);
     }
 }
