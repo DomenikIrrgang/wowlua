@@ -14,6 +14,7 @@
 --                            whispers to yourself (nothing reaches others)
 --   /stdtest engine blocked  arms a probe of protected frames: enter combat,
 --                            it runs half a second later
+--   /stdtest engine input    the scripts hovering, clicking and typing run
 --   /stdtest engine record <label> / stop
 --                            records every event (but the combat log) with
 --                            its payload, for a guided sequence of actions
@@ -992,6 +993,61 @@ local function startRecording(label: string)
     say(`engine record "{label}": recording every event; /stdtest engine stop when done`)
 end
 
+--- `/stdtest engine input`: the scripts a user's input runs, in order: a
+--- button to hover and click (with and without Shift), an edit box to
+--- click, type "ab" into and press Enter in; the log fills as you go, then
+--- /reload writes it (StdTestState.engineInput).
+local function inputProbe()
+    const st = state() :: any
+    const log: string[] = {}
+    st.engineInput = log
+    const start = GetTime()
+    local function note(what: string)
+        if #log < 500 then
+            log[#log + 1] = `{string.format("%.3f", GetTime() - start)} {what}`
+        end
+    end
+    const b = G.StdTestInputButton or CreateFrame("Button", "StdTestInputButton", UIParent, "UIPanelButtonTemplate")
+    b:SetSize(160, 28)
+    b:SetPoint("CENTER", 0, 60)
+    b:SetText("StdTest: click me")
+    b:RegisterForClicks("AnyUp")
+    b:Show()
+    for _, script in ipairs({ "OnEnter", "OnLeave", "OnMouseDown", "OnMouseUp", "PreClick", "OnClick", "PostClick" }) do
+        b:SetScript(script, function(_: any, ...: any)
+            const args: string[] = {}
+            for i = 1, select("#", ...) do
+                args[#args + 1] = tostring((select(i, ...)))
+            end
+            note(`button {script}({table.concat(args, ", ")}) shift={tostring(IsShiftKeyDown())}`)
+        end)
+    end
+    const e = G.StdTestInputBox or CreateFrame("EditBox", "StdTestInputBox", UIParent, "InputBoxTemplate")
+    e:SetSize(160, 24)
+    e:SetPoint("CENTER", 0, 20)
+    e:SetAutoFocus(false)
+    e:SetText("")
+    e:Show()
+    for _, script in ipairs({ "OnEditFocusGained", "OnEditFocusLost", "OnChar", "OnTextChanged", "OnEnterPressed", "OnEscapePressed", "OnTabPressed" }) do
+        e:SetScript(script, function(self: any, ...: any)
+            const args: string[] = {}
+            for i = 1, select("#", ...) do
+                args[#args + 1] = tostring((select(i, ...)))
+            end
+            note(`box {script}({table.concat(args, ", ")}) text={self:GetText()} focus={tostring(self:HasFocus())}`)
+            if script == "OnEnterPressed" or script == "OnEscapePressed" then
+                self:ClearFocus()
+            end
+        end)
+    end
+    const m = CreateFrame("Frame")
+    m:RegisterEvent("MODIFIER_STATE_CHANGED")
+    m:SetScript("OnEvent", function(_: any, event: string, key: string, down: number)
+        note(`{event}({key}, {tostring(down)})`)
+    end)
+    say("engine input: hover the button, click it, Shift-click it, click the box, type ab, press Enter, then /reload")
+end
+
 local function stopRecording()
     if recorder then
         recorder:UnregisterAllEvents()
@@ -1200,6 +1256,9 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "comm" then
         commProbe()
+        return
+    elseif words[1] == "input" then
+        inputProbe()
         return
     end
     const probe: { [string]: any } = {
