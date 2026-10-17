@@ -1557,10 +1557,15 @@ pub fn run_size_changes(vm: &mut Vm) {
     }
 }
 
-/// The `OnTextChanged(false)` this frame's `SetText` owes.
+/// The `OnTextChanged(false)` this frame's `SetText` owes, in the frames'
+/// update after `OnUpdate`: a hidden edit box's waits until it shows
+/// (unverified: the client updates visible frames only; probe queued).
 pub fn run_text_changes(vm: &mut Vm) {
     let set = std::mem::take(&mut engine_mut(vm).world.text_set);
-    for id in set.into_iter().rev() {
+    let (now, later): (Vec<WidgetId>, Vec<WidgetId>) =
+        set.into_iter().partition(|id| visible(engine(vm), *id));
+    engine_mut(vm).world.text_set = later;
+    for id in now.into_iter().rev() {
         run_script(vm, id, "OnTextChanged", &[Value::Bool(false)]);
     }
 }

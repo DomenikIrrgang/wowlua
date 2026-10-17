@@ -75,17 +75,32 @@ fn to_lua(vm: &mut Vm, v: &serde_json::Value) -> Value {
     }
 }
 
+/// The world of a test that names no profile: the flavor's fresh
+/// character as the client recorded it (camelot: a level 1 Human Warrior
+/// in Elwynn Forest, `/stdtest snapshot`; `cargo xtask profile` writes it).
+pub fn default_for(flavor: &str) -> Option<&'static str> {
+    match flavor {
+        "camelot" => Some(include_str!(
+            "../../wowlua-engine/data/camelot-default-character.json"
+        )),
+        _ => None,
+    }
+}
+
 /// Applies the profile in `path` with the engine's `controls`.
 pub fn apply(vm: &mut Vm, controls: TableRef, path: &Path) -> Result<(), String> {
     let text = std::fs::read_to_string(path)
         .map_err(|e| format!("the world profile {}: {e}", path.display()))?;
-    let json: serde_json::Value = serde_json::from_str(&text)
-        .map_err(|e| format!("the world profile {}: {e}", path.display()))?;
+    apply_text(vm, controls, &text, &path.display().to_string())
+}
+
+/// Applies a profile given as JSON text (`label` names it in errors).
+pub fn apply_text(vm: &mut Vm, controls: TableRef, text: &str, label: &str) -> Result<(), String> {
+    let path = label;
+    let json: serde_json::Value =
+        serde_json::from_str(text).map_err(|e| format!("the world profile {path}: {e}"))?;
     if !json.is_object() {
-        return Err(format!(
-            "the world profile {} is not a JSON object",
-            path.display()
-        ));
+        return Err(format!("the world profile {path} is not a JSON object"));
     }
     let profile = to_lua(vm, &json);
     crate::widgets_keep(vm, profile);
@@ -97,6 +112,6 @@ pub fn apply(vm: &mut Vm, controls: TableRef, path: &Path) -> Result<(), String>
                 Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
                 _ => "?".into(),
             };
-            format!("the world profile {}: {msg}", path.display())
+            format!("the world profile {path}: {msg}")
         })
 }

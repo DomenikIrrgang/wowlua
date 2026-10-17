@@ -349,6 +349,8 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
             .join("profiles")
             .join(format!("{name}.json"));
         profile::apply(&mut vm, controls, &path)?;
+    } else if let Some(text) = profile::default_for(&suite.flavor) {
+        profile::apply_text(&mut vm, controls, text, "of the fresh character")?;
     }
 
     // The addon's key bindings, which the client reads at startup.

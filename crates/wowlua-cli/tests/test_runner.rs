@@ -1444,6 +1444,82 @@ end
     assert!(text.contains("1 passed, 0 failed"), "{text}");
 }
 
+/// Every panel's key binding with Blizzard's UI, opened and closed, as the
+/// fresh character (the default) and as the recorded one (its profile):
+/// not a single Blizzard error, nothing refused.
+#[test]
+fn blizzard_ui_every_panel_binding() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let panels = |profile: &str| {
+        format!(
+            r#"import test, expect, config from "wowlua:test"
+import * as mock from "wowlua:mock"
+{profile}
+const BINDINGS = {{
+    "TOGGLEGAMEMENU", "TOGGLEBACKPACK", "TOGGLEBAG1", "TOGGLEBAG2", "TOGGLEBAG3", "TOGGLEBAG4", "OPENALLBAGS",
+    "TOGGLECHARACTER0", "TOGGLECHARACTER2", "TOGGLECURRENCY", "TOGGLECHARACTER4", "TOGGLESPELLBOOK",
+    "TOGGLEPROFESSIONBOOK", "TOGGLEPETBOOK", "TOGGLETALENTS", "TOGGLECOOLDOWNVIEWERSETTINGS", "TOGGLEQUESTLOG",
+    "TOGGLEWORLDMAP", "TOGGLEWORLDMAPSIZE", "TOGGLEMINIMAP", "TOGGLEBATTLEFIELDMINIMAP", "TOGGLEWORLDSTATESCORES",
+    "TOGGLEGUILDTAB", "TOGGLESOCIAL", "TOGGLEFRIENDSTAB", "TOGGLEWHOTAB", "TOGGLECHATTAB", "TOGGLERAIDTAB",
+    "TOGGLECOLLECTIONS", "TOGGLECOLLECTIONSMOUNTJOURNAL", "TOGGLECOLLECTIONSPETJOURNAL", "TOGGLECOLLECTIONSTOYBOX",
+    "TOGGLECOLLECTIONSWARDROBE", "TOGGLEUI", "TOGGLEFPS",
+}}
+
+@test("every panel, opened and closed")
+local function panels()
+    mock.nextFrame(60)
+    for _, name in ipairs(BINDINGS) do
+        mock.pressBinding(name)
+        mock.nextFrame(5)
+        mock.pressBinding(name)
+        mock.nextFrame(3)
+    end
+    expect(#mock.refusals()).toBe(0)
+end
+"#
+        )
+    };
+    let recorded = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../wowlua-engine/tests/client/forever-camelot-character.json"),
+    )
+    .unwrap();
+    let fresh = panels("");
+    let as_recorded = panels(r#"config({ profile = "recorded" })"#);
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            ("tests/fresh.test.wowlua", &fresh),
+            ("tests/recorded.test.wowlua", &as_recorded),
+            ("tests/profiles/recorded.json", &recorded),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("2 passed, 0 failed"), "{text}");
+}
+
 /// Tooltips with Blizzard's UI: the engine's tooltip data from the tests'
 /// game data, Blizzard's tooltip code, and an addon's post-call.
 #[test]

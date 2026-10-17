@@ -1460,6 +1460,43 @@ local function softProbe()
     say("engine soft: recorded; type /reload so the file is written")
 end
 
+--- When a hidden edit box's `SetText` gets its `OnTextChanged`
+--- (`/stdtest engine textchange`): set while its parent is hidden, frames
+--- pass, the parent shows, frames pass; into StdTestState.engineTextChange.
+local function textChangeProbe()
+    const st = state() :: any
+    const log: string[] = {}
+    const parent = CreateFrame("Frame", nil, UIParent)
+    parent:Hide()
+    const box = CreateFrame("EditBox", nil, parent)
+    box:SetAutoFocus(false)
+    box:SetScript("OnTextChanged", function(self: any, userInput: any)
+        log[#log + 1] = `changed({tostring(userInput)}, {self:GetText()}, visible {tostring(self:IsVisible())})`
+    end)
+    box:SetText("hidden")
+    log[#log + 1] = "set while hidden"
+    local frames = 0
+    const ticker = CreateFrame("Frame")
+    ticker:SetScript("OnUpdate", function()
+        frames += 1
+        log[#log + 1] = `update{frames}`
+        if frames == 3 then
+            parent:Show()
+            log[#log + 1] = "parent shown"
+        elseif frames == 6 then
+            parent:Hide()
+            box:SetText("")
+            log[#log + 1] = "hidden, set empty"
+            parent:Show()
+            log[#log + 1] = "shown again in the same frame"
+        elseif frames == 9 then
+            ticker:SetScript("OnUpdate", nil)
+            st.engineTextChange = table.concat(log, " | ")
+            say("engine textchange: recorded; type /reload so the file is written")
+        end
+    end)
+end
+
 export function engineProbe(arg: string?)
     const st = state() :: any
     const words: string[] = {}
@@ -1492,6 +1529,9 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "soft" then
         softProbe()
+        return
+    elseif words[1] == "textchange" then
+        textChangeProbe()
         return
     elseif words[1] == "answers" then
         answersProbe()

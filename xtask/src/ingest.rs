@@ -11,6 +11,9 @@
 //! - `/stdtest engine maps`: `…/forever-camelot-maps.lua` (and the data);
 //! - `/stdtest engine collections`: `…/forever-camelot-collections.lua`
 //!   (and the data);
+//! - the default character (a fresh level 1 Human Warrior's `/stdtest
+//!   snapshot`): `cargo xtask profile <its StdTest.lua>
+//!   crates/wowlua-engine/data/camelot-default-character.json`;
 //! - `/stdtest snapshot`: the character's world as a test profile,
 //!   `…/forever-camelot-character.json`;
 //! - the CVar flags: `crates/wowlua-engine/data/camelot-cvar-flags.txt`;

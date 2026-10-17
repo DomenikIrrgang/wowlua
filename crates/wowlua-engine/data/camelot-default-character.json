@@ -1,0 +1,2246 @@
+{
+  "actions": {
+    "1": {
+      "count": "",
+      "id": 6603,
+      "subType": "spell",
+      "texture": 135274,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "10": {
+      "count": "",
+      "id": 1259718,
+      "subType": "spell",
+      "texture": 136129,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "109": {
+      "count": "",
+      "id": 6603,
+      "subType": "spell",
+      "texture": 135274,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "11": {
+      "count": "",
+      "id": 20600,
+      "subType": "spell",
+      "texture": 136090,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "12": {
+      "count": "4",
+      "id": 117,
+      "texture": 133972,
+      "type": "item",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "181": {
+      "count": "",
+      "id": 20600,
+      "subType": "spell",
+      "texture": 136090,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "183": {
+      "count": "",
+      "id": 1259718,
+      "subType": "spell",
+      "texture": 136129,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "184": {
+      "count": "4",
+      "id": 117,
+      "texture": 133972,
+      "type": "item",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "2": {
+      "count": "",
+      "id": 78,
+      "subType": "spell",
+      "texture": 132282,
+      "type": "spell",
+      "usable": [
+        false,
+        true
+      ]
+    },
+    "200": {
+      "count": "",
+      "id": 78,
+      "subType": "spell",
+      "texture": 132282,
+      "type": "spell",
+      "usable": [
+        false,
+        true
+      ]
+    },
+    "272": {
+      "count": "",
+      "id": 78,
+      "subType": "spell",
+      "texture": 132282,
+      "type": "spell",
+      "usable": [
+        false,
+        true
+      ]
+    },
+    "73": {
+      "count": "",
+      "id": 6603,
+      "subType": "spell",
+      "texture": 135274,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "74": {
+      "count": "",
+      "id": 78,
+      "subType": "spell",
+      "texture": 132282,
+      "type": "spell",
+      "usable": [
+        false,
+        true
+      ]
+    },
+    "82": {
+      "count": "",
+      "id": 1259718,
+      "subType": "spell",
+      "texture": 136129,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "83": {
+      "count": "",
+      "id": 20600,
+      "subType": "spell",
+      "texture": 136090,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "84": {
+      "count": "4",
+      "id": 117,
+      "texture": 133972,
+      "type": "item",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "85": {
+      "count": "",
+      "id": 6603,
+      "subType": "spell",
+      "texture": 135274,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "97": {
+      "count": "",
+      "id": 6603,
+      "subType": "spell",
+      "texture": 135274,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    }
+  },
+  "auras": {},
+  "bags": {
+    "0": {
+      "items": [
+        {
+          "bound": false,
+          "count": 4,
+          "id": 117,
+          "link": "|cnIQ1:|Hitem:117::::::::1:1491:::::::::|h[Tough Jerky]|h|r"
+        },
+        {
+          "bound": true,
+          "count": 1,
+          "id": 6948,
+          "link": "|cnIQ1:|Hitem:6948::::::::1:1491::75:::::::|h[Hearthstone]|h|r"
+        }
+      ],
+      "slots": 20
+    }
+  },
+  "bindings": {
+    "-": "ACTIONBUTTON11",
+    "/": "OPENCHATSLASH",
+    "0": "ACTIONBUTTON10",
+    "1": "ACTIONBUTTON1",
+    "2": "ACTIONBUTTON2",
+    "3": "ACTIONBUTTON3",
+    "4": "ACTIONBUTTON4",
+    "5": "ACTIONBUTTON5",
+    "6": "ACTIONBUTTON6",
+    "7": "ACTIONBUTTON7",
+    "8": "ACTIONBUTTON8",
+    "9": "ACTIONBUTTON9",
+    "=": "ACTIONBUTTON12",
+    "A": "STRAFELEFT",
+    "ALT-Z": "TOGGLEUI",
+    "B": "TOGGLEBACKPACK",
+    "BUTTON3": "MOVEANDSTEER",
+    "BUTTON4": "MULTIACTIONBAR3BUTTON12",
+    "BUTTON5": "MULTIACTIONBAR3BUTTON6",
+    "C": "TOGGLECHARACTER0",
+    "CTRL--": "MASTERVOLUMEDOWN",
+    "CTRL-0": "BONUSACTIONBUTTON10",
+    "CTRL-1": "BONUSACTIONBUTTON1",
+    "CTRL-2": "BONUSACTIONBUTTON2",
+    "CTRL-3": "BONUSACTIONBUTTON3",
+    "CTRL-4": "BONUSACTIONBUTTON4",
+    "CTRL-5": "BONUSACTIONBUTTON5",
+    "CTRL-6": "BONUSACTIONBUTTON6",
+    "CTRL-7": "BONUSACTIONBUTTON7",
+    "CTRL-8": "BONUSACTIONBUTTON8",
+    "CTRL-9": "BONUSACTIONBUTTON9",
+    "CTRL-=": "MASTERVOLUMEUP",
+    "CTRL-F1": "SHAPESHIFTBUTTON1",
+    "CTRL-F10": "SHAPESHIFTBUTTON10",
+    "CTRL-F2": "SHAPESHIFTBUTTON2",
+    "CTRL-F3": "SHAPESHIFTBUTTON3",
+    "CTRL-F4": "SHAPESHIFTBUTTON4",
+    "CTRL-F5": "SHAPESHIFTBUTTON5",
+    "CTRL-F6": "SHAPESHIFTBUTTON6",
+    "CTRL-F7": "SHAPESHIFTBUTTON7",
+    "CTRL-F8": "SHAPESHIFTBUTTON8",
+    "CTRL-F9": "SHAPESHIFTBUTTON9",
+    "CTRL-M": "TOGGLEMUSIC",
+    "CTRL-PAGEDOWN": "COMBATLOGPAGEDOWN",
+    "CTRL-PAGEUP": "COMBATLOGPAGEUP",
+    "CTRL-R": "TOGGLEFPS",
+    "CTRL-S": "TOGGLESOUND",
+    "CTRL-SHIFT-PAGEDOWN": "COMBATLOGBOTTOM",
+    "CTRL-SHIFT-TAB": "TARGETPREVIOUSFRIEND",
+    "CTRL-TAB": "TARGETNEARESTFRIEND",
+    "CTRL-V": "ALLNAMEPLATES",
+    "D": "STRAFERIGHT",
+    "DELETE": "PITCHDOWN",
+    "DOWN": "MOVEBACKWARD",
+    "E": "MULTIACTIONBAR1BUTTON7",
+    "END": "NEXTVIEW",
+    "ENTER": "OPENCHAT",
+    "ESCAPE": "TOGGLEGAMEMENU",
+    "F": "MULTIACTIONBAR1BUTTON4",
+    "F1": "RAIDTARGET8",
+    "F10": "TOGGLEBAG3",
+    "F11": "TOGGLEBAG4",
+    "F12": "TOGGLEBACKPACK",
+    "F2": "RAIDTARGET7",
+    "F3": "RAIDTARGET4",
+    "F4": "RAIDTARGET6",
+    "F5": "TOGGLEPINGLISTENER",
+    "F6": "Open Issue Report",
+    "F7": "INTERACTTARGET",
+    "F8": "TOGGLEBAG1",
+    "F9": "TOGGLEBAG2",
+    "G": "MULTIACTIONBAR1BUTTON5",
+    "H": "TOGGLECHARACTER4",
+    "HOME": "PREVVIEW",
+    "I": "TOGGLEGROUPFINDER",
+    "INSERT": "PITCHUP",
+    "J": "TOGGLEGUILDTAB",
+    "K": "TOGGLEPROFESSIONBOOK",
+    "L": "TOGGLEQUESTLOG",
+    "LEFT": "TURNLEFT",
+    "M": "TOGGLEWORLDMAP",
+    "META-1": "MULTIACTIONBAR3BUTTON7",
+    "META-2": "MULTIACTIONBAR3BUTTON8",
+    "META-3": "MULTIACTIONBAR3BUTTON9",
+    "META-4": "MULTIACTIONBAR3BUTTON10",
+    "META-5": "MULTIACTIONBAR3BUTTON11",
+    "META-E": "MULTIACTIONBAR1BUTTON9",
+    "META-F": "MULTIACTIONBAR2BUTTON10",
+    "META-G": "MULTIACTIONBAR2BUTTON11",
+    "META-Q": "MULTIACTIONBAR1BUTTON10",
+    "META-R": "MULTIACTIONBAR2BUTTON7",
+    "META-T": "MULTIACTIONBAR2BUTTON8",
+    "META-V": "MULTIACTIONBAR2BUTTON12",
+    "META-Y": "MULTIACTIONBAR2BUTTON9",
+    "MOUSEWHEELDOWN": "CAMERAZOOMOUT",
+    "MOUSEWHEELUP": "CAMERAZOOMIN",
+    "N": "TOGGLETALENTS",
+    "NUMPAD0": "JUMP",
+    "NUMPAD5": "VEHICLEEXIT",
+    "NUMPADDIVIDE": "TOGGLERUN",
+    "NUMPADMINUS": "MINIMAPZOOMOUT",
+    "NUMPADPLUS": "MINIMAPZOOMIN",
+    "O": "TOGGLESOCIAL",
+    "P": "TOGGLESPELLBOOK",
+    "PAGEDOWN": "CHATPAGEDOWN",
+    "PAGEUP": "CHATPAGEUP",
+    "PRINTSCREEN": "SCREENSHOT",
+    "Q": "MULTIACTIONBAR1BUTTON8",
+    "R": "MULTIACTIONBAR1BUTTON1",
+    "RIGHT": "TURNRIGHT",
+    "S": "MOVEBACKWARD",
+    "SHIFT-1": "MULTIACTIONBAR3BUTTON1",
+    "SHIFT-2": "MULTIACTIONBAR3BUTTON2",
+    "SHIFT-3": "MULTIACTIONBAR3BUTTON3",
+    "SHIFT-4": "MULTIACTIONBAR3BUTTON4",
+    "SHIFT-5": "MULTIACTIONBAR3BUTTON5",
+    "SHIFT-6": "ACTIONPAGE6",
+    "SHIFT-B": "OPENALLBAGS",
+    "SHIFT-C": "ITEMCOMPARISONCYCLING",
+    "SHIFT-DOWN": "NEXTACTIONPAGE",
+    "SHIFT-E": "MULTIACTIONBAR1BUTTON11",
+    "SHIFT-F": "MULTIACTIONBAR2BUTTON4",
+    "SHIFT-F1": "TARGETPET",
+    "SHIFT-F2": "TARGETPARTYPET1",
+    "SHIFT-F3": "TARGETPARTYPET2",
+    "SHIFT-F4": "TARGETPARTYPET3",
+    "SHIFT-F5": "TARGETPARTYPET4",
+    "SHIFT-G": "MULTIACTIONBAR2BUTTON5",
+    "SHIFT-I": "TOGGLEPETBOOK",
+    "SHIFT-M": "TOGGLEBATTLEFIELDMINIMAP",
+    "SHIFT-MOUSEWHEELDOWN": "NEXTACTIONPAGE",
+    "SHIFT-MOUSEWHEELUP": "PREVIOUSACTIONPAGE",
+    "SHIFT-P": "TOGGLECOLLECTIONS",
+    "SHIFT-PAGEDOWN": "CHATBOTTOM",
+    "SHIFT-Q": "MULTIACTIONBAR1BUTTON12",
+    "SHIFT-R": "MULTIACTIONBAR2BUTTON1",
+    "SHIFT-SPACE": "TOGGLEWORLDSTATESCORES",
+    "SHIFT-T": "MULTIACTIONBAR2BUTTON2",
+    "SHIFT-TAB": "TARGETPREVIOUSENEMY",
+    "SHIFT-UP": "PREVIOUSACTIONPAGE",
+    "SHIFT-V": "MULTIACTIONBAR2BUTTON6",
+    "SHIFT-Y": "MULTIACTIONBAR2BUTTON3",
+    "SPACE": "JUMP",
+    "T": "MULTIACTIONBAR1BUTTON2",
+    "TAB": "TARGETNEARESTENEMY",
+    "U": "TOGGLELEGACYSYSTEM",
+    "UP": "MOVEFORWARD",
+    "V": "MULTIACTIONBAR1BUTTON6",
+    "W": "MOVEFORWARD",
+    "X": "SITORSTAND",
+    "Y": "MULTIACTIONBAR1BUTTON3",
+    "Z": "TOGGLESHEATH",
+    "`": "TOGGLEAUTORUN"
+  },
+  "units": {},
+  "character": {
+    "class": "WARRIOR",
+    "faction": "Alliance",
+    "level": 1,
+    "maxHealth": 60,
+    "maxPower": 100,
+    "name": "Player",
+    "powerType": 1,
+    "race": "Human",
+    "realm": "Realm",
+    "sex": 2
+  },
+  "client": "1.60.1 (70425)",
+  "cvars": {
+    "Brightness": "50",
+    "CACHE-WGOB-GameObjectsHotfixCount": "82",
+    "CACHE-WGOB-GameObjectsRecordCount": "19007",
+    "CACHE-WQST-QuestObjectiveHotfixCount": "20",
+    "CACHE-WQST-QuestObjectiveRecordCount": "8945",
+    "CACHE-WQST-QuestObjectiveXEffectHotfixCount": "6",
+    "CACHE-WQST-QuestObjectiveXEffectRecordCount": "143",
+    "CACHE-WQST-QuestV2HotfixCount": "429",
+    "CACHE-WQST-QuestV2RecordCount": "7777",
+    "Contrast": "50",
+    "EJLootClass": "1",
+    "GamepadDisableTooltips": "1",
+    "Gamma": "1.6000000238419",
+    "GxApi": "MTL",
+    "GxFullscreenResolution": "2560x1440",
+    "GxMonitor": "1",
+    "OutlineEngineMode": "2",
+    "RAIDOutlineEngineMode": "2",
+    "RAIDSSAO": "3",
+    "RAIDTerrainLodDiv": "512",
+    "RAIDWaterDetail": "2",
+    "RAIDentityShadowFadeScale": "25",
+    "RAIDfarclip": "7000",
+    "RAIDgiQuality": "3",
+    "RAIDgroundEffectDensity": "48",
+    "RAIDgroundEffectDist": "200",
+    "RAIDhorizonClip": "7000",
+    "RAIDhorizonStart": "1900",
+    "RAIDlodObjectCullSize": "18",
+    "RAIDlodObjectMinSize": "0",
+    "RAIDparticleDensity": "80",
+    "RAIDpbrLiquidDetail": "1",
+    "RAIDprojectedTextures": "1",
+    "RAIDreflectionMode": "2",
+    "RAIDrefraction": "2",
+    "RAIDrippleDetail": "1",
+    "RAIDshadowBlendCascades": "1",
+    "RAIDshadowMode": "3",
+    "RAIDshadowNumCascades": "3",
+    "RAIDshadowSoft": "1",
+    "RAIDshadowTextureSize": "2048",
+    "RAIDsunShafts": "2",
+    "RAIDterrainLodDist": "500",
+    "RAIDweatherDensity": "3",
+    "RAIDwmoLodDist": "400",
+    "SSAO": "3",
+    "ShakeStrengthCamera": "1",
+    "ShakeStrengthUI": "1",
+    "ShowAllSpellRanks": "1",
+    "SoftTargetInteract": "3",
+    "Sound_AmbienceVolume": "0",
+    "Sound_DialogVolume": "0",
+    "Sound_MasterVolume": "1",
+    "Sound_MusicVolume": "0",
+    "Sound_NumChannels": "128",
+    "Sound_OutputDriverName": "System Default",
+    "Sound_SFXVolume": "0",
+    "Sound_ZoneMusicNoDelay": "1",
+    "TerrainLodDiv": "512",
+    "UnitNameFriendlySpecialNPCName": "0",
+    "UnitNameHostleNPC": "0",
+    "UnitNameInteractiveNPC": "0",
+    "accessibilityScreenNarrationEnabled": "0",
+    "addFriendInfoShown": "1",
+    "agentUID": "wow_classic_beta",
+    "audioLocale": "enUS",
+    "autoLootDefault": "1",
+    "cameraDistanceMaxZoomFactor": "2",
+    "cameraSmoothStyle": "0",
+    "cameraView": "1",
+    "categorizeTrainerUI": "1",
+    "chatBubblesRaid": "1",
+    "collapsedCurrencyCategoryDefaults": "v21###$###&",
+    "countdownForCooldowns": "1",
+    "currencyCategoriesCollapsed": "v21###$###&",
+    "currentGameMode": "15",
+    "enableCollectionToasts": "0",
+    "enableLearnedRecipeToasts": "0",
+    "enableLootToasts": "0",
+    "engineSurvey": "8",
+    "engineSurveyPatch": "16001",
+    "entityShadowFadeScale": "25",
+    "farclip": "7000",
+    "ffxAntiAliasingMode": "0",
+    "flaggedTutorials": "v21###&###%###=###'",
+    "gameTip": "41",
+    "giQuality": "3",
+    "groundEffectDensity": "48",
+    "groundEffectDist": "200",
+    "hasSelectedExperiencePreset": "1",
+    "horizonClip": "7000",
+    "horizonStart": "1900",
+    "hwDetect": "0",
+    "lodObjectCullSize": "18",
+    "lodObjectMinSize": "0",
+    "mouseSpeed": "1.000000",
+    "nameplateNotSelectedAlpha": "1",
+    "nameplateShowEnemies": "1",
+    "nameplateShowFriendlyPlayers": "1",
+    "nameplateShowOnlyNameForFriendlyPlayerUnits": "1",
+    "nameplateSize": "3",
+    "nameplateStackingTypes": "\u0002A",
+    "nameplateUseClassColorForFriendlyPlayerUnitNames": "1",
+    "numCurrencyCategories": "5",
+    "numReputationHeaders": "3",
+    "particleDensity": "80",
+    "pbrLiquidDetail": "1",
+    "perksActivitiesPendingCompletion": "v21",
+    "petJournalFilterVersion": "1",
+    "petJournalTab": "5",
+    "playIntroMovie": "1",
+    "playerColorOverrides": "v21",
+    "projectedTextures": "1",
+    "questPOI": "0",
+    "reflectionMode": "2",
+    "refraction": "2",
+    "reputationsCollapsed": "v21",
+    "rippleDetail": "1",
+    "seenAlliedRaceUnlocks": "1",
+    "serviceTypeFilter": "7",
+    "shadowBlendCascades": "1",
+    "shadowMode": "3",
+    "shadowNumCascades": "3",
+    "shadowSoft": "1",
+    "shadowTextureSize": "2048",
+    "showPhotosensitivityWarning": "0",
+    "showScreenNarrationDialog": "0",
+    "showTargetOfTarget": "1",
+    "showTimestamps": "%I:%M ",
+    "showTutorials": "0",
+    "spellClutter": "2",
+    "spellVisualDensityFilterSetting": "2",
+    "sunShafts": "2",
+    "talentPointsSpent": "1",
+    "terrainLodDist": "500",
+    "textLocale": "enUS",
+    "timeMgrUseLocalTime": "1",
+    "timeMgrUseMilitaryTime": "1",
+    "toyBoxCollectedFilters": "\u0002B",
+    "uiScale": "0.6599999666214",
+    "videoOptionsVersion": "54",
+    "voiceProvider": "1",
+    "vsync": "0",
+    "waterDetail": "2",
+    "weatherDensity": "3",
+    "wmoLodDist": "400"
+  },
+  "equipment": {
+    "0": {
+      "id": 0
+    },
+    "16": {
+      "id": 25,
+      "link": "|cnIQ1:|Hitem:25::::::::1:1491::75:::::::|h[Worn Shortsword]|h|r"
+    },
+    "17": {
+      "id": 2362,
+      "link": "|cnIQ1:|Hitem:2362::::::::1:1491::75:::::::|h[Worn Wooden Shield]|h|r"
+    },
+    "4": {
+      "id": 38,
+      "link": "|cnIQ1:|Hitem:38::::::::1:1491::75:::::::|h[Recruit's Shirt]|h|r"
+    },
+    "7": {
+      "id": 39,
+      "link": "|cnIQ0:|Hitem:39::::::::1:1491::75:::::::|h[Recruit's Pants]|h|r"
+    },
+    "8": {
+      "id": 40,
+      "link": "|cnIQ1:|Hitem:40::::::::1:1491::75:::::::|h[Recruit's Boots]|h|r"
+    }
+  },
+  "channels": {
+    "joined": [
+      {
+        "name": "General",
+        "fullName": "General - Elwynn Forest",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": false,
+        "shortcut": "General",
+        "instanceID": 0,
+        "zoneChannelID": 1,
+        "channelType": 1,
+        "regional": false
+      },
+      {
+        "name": "Trade",
+        "fullName": "Trade",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": true,
+        "shortcut": "Trade",
+        "instanceID": 0,
+        "zoneChannelID": 2,
+        "channelType": 1,
+        "regional": false
+      },
+      {
+        "name": "LocalDefense",
+        "fullName": "LocalDefense - Elwynn Forest",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": false,
+        "shortcut": "LocalDefense",
+        "instanceID": 0,
+        "zoneChannelID": 22,
+        "channelType": 1,
+        "regional": false
+      },
+      {
+        "name": "Services",
+        "fullName": "Services",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": true,
+        "shortcut": "Services",
+        "instanceID": 0,
+        "zoneChannelID": 42,
+        "channelType": 1,
+        "regional": false
+      },
+      {
+        "name": "TradeLocal",
+        "fullName": "TradeLocal",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": true,
+        "shortcut": "TradeLocal",
+        "instanceID": 0,
+        "zoneChannelID": 46,
+        "channelType": 1,
+        "regional": false
+      }
+    ],
+    "groupChannels": 1,
+    "regionalService": true
+  },
+  "items": {
+    "0": {},
+    "117": {
+      "classID": 0,
+      "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
+      "icon": 133972,
+      "itemLevel": 5,
+      "link": "|cnIQ1:|Hitem:117::::::::1:1491:::::::::|h[Tough Jerky]|h|r",
+      "minLevel": 1,
+      "name": "Tough Jerky",
+      "quality": 1,
+      "sellPrice": 1,
+      "stackCount": 20,
+      "subType": "Food & Drink",
+      "subclassID": 5,
+      "type": "Consumable"
+    },
+    "2362": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_SHIELD",
+      "icon": 134955,
+      "itemLevel": 1,
+      "link": "|cnIQ1:|Hitem:2362::::::::1:1491:::::::::|h[Worn Wooden Shield]|h|r",
+      "minLevel": 1,
+      "name": "Worn Wooden Shield",
+      "quality": 1,
+      "sellPrice": 1,
+      "stackCount": 1,
+      "subType": "Shields",
+      "subclassID": 6,
+      "type": "Armor"
+    },
+    "25": {
+      "classID": 2,
+      "equipLoc": "INVTYPE_WEAPONMAINHAND",
+      "icon": 135274,
+      "itemLevel": 2,
+      "link": "|cnIQ1:|Hitem:25::::::::1:1491:::::::::|h[Worn Shortsword]|h|r",
+      "minLevel": 1,
+      "name": "Worn Shortsword",
+      "quality": 1,
+      "sellPrice": 7,
+      "stackCount": 1,
+      "subType": "One-Handed Swords",
+      "subclassID": 7,
+      "type": "Weapon"
+    },
+    "38": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_BODY",
+      "icon": 135009,
+      "itemLevel": 1,
+      "link": "|cnIQ1:|Hitem:38::::::::1:1491:::::::::|h[Recruit's Shirt]|h|r",
+      "minLevel": 0,
+      "name": "Recruit's Shirt",
+      "quality": 1,
+      "sellPrice": 1,
+      "stackCount": 1,
+      "subType": "Miscellaneous",
+      "subclassID": 0,
+      "type": "Armor"
+    },
+    "39": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_LEGS",
+      "icon": 134582,
+      "itemLevel": 1,
+      "link": "|cnIQ0:|Hitem:39::::::::1:1491:::::::::|h[Recruit's Pants]|h|r",
+      "minLevel": 1,
+      "name": "Recruit's Pants",
+      "quality": 0,
+      "sellPrice": 1,
+      "stackCount": 1,
+      "subType": "Cloth",
+      "subclassID": 1,
+      "type": "Armor"
+    },
+    "40": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_FEET",
+      "icon": 132540,
+      "itemLevel": 1,
+      "link": "|cnIQ1:|Hitem:40::::::::1:1491:::::::::|h[Recruit's Boots]|h|r",
+      "minLevel": 0,
+      "name": "Recruit's Boots",
+      "quality": 1,
+      "sellPrice": 1,
+      "stackCount": 1,
+      "subType": "Cloth",
+      "subclassID": 1,
+      "type": "Armor"
+    },
+    "6948": {
+      "classID": 15,
+      "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
+      "icon": 134414,
+      "itemLevel": 1,
+      "link": "|cnIQ1:|Hitem:6948::::::::1:1491:::::::::|h[Hearthstone]|h|r",
+      "minLevel": 0,
+      "name": "Hearthstone",
+      "quality": 1,
+      "sellPrice": 0,
+      "stackCount": 1,
+      "subType": "Junk",
+      "subclassID": 0,
+      "type": "Miscellaneous"
+    }
+  },
+  "money": 0,
+  "position": {
+    "mapID": 1429,
+    "subZone": "Northshire Valley",
+    "x": 0.480550229549408,
+    "y": 0.436522364616394,
+    "zone": "Elwynn Forest"
+  },
+  "stats": {
+    "activeSpecGroup": [
+      1
+    ],
+    "armor": [
+      0,
+      54,
+      54,
+      54
+    ],
+    "armorPenetration": [
+      0
+    ],
+    "attackPower": [
+      29,
+      0,
+      0
+    ],
+    "attackPowerBySpellPower": [
+      0
+    ],
+    "attackPowerForStat": [
+      [
+        46
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "attackSpeed": [
+      1.900000095367432,
+      null,
+      null
+    ],
+    "avoidance": [
+      0
+    ],
+    "block": [
+      4.840000152587891
+    ],
+    "combatConfig": [
+      [
+        16273023
+      ],
+      [
+        null
+      ]
+    ],
+    "combatRating": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "combatRatingBonus": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "cooldownViewerSet": {
+      "0": [
+        [
+          199859,
+          199700,
+          199867,
+          199709,
+          199557,
+          199615,
+          199582,
+          199585,
+          199599,
+          199621,
+          199683,
+          199598,
+          199593,
+          199583,
+          199696,
+          199607
+        ]
+      ],
+      "1": [
+        [
+          199625,
+          199633,
+          199643,
+          199650,
+          199861,
+          199698,
+          199668,
+          199641,
+          199714,
+          199558,
+          199639,
+          199584,
+          199631,
+          199649,
+          199653,
+          199609,
+          199610,
+          199611,
+          200185,
+          200187
+        ]
+      ],
+      "2": [
+        [
+          200436,
+          199663,
+          199695,
+          199697,
+          199669,
+          199632,
+          199640,
+          199642,
+          199670,
+          199647,
+          199646,
+          199645,
+          199608,
+          199715,
+          199862,
+          199648,
+          199667,
+          199654,
+          199699,
+          199677,
+          199612,
+          199614,
+          199613,
+          199630,
+          199656,
+          199664,
+          199559,
+          199567,
+          199592,
+          199671,
+          199638,
+          199606,
+          199678,
+          199688,
+          199716,
+          200186
+        ]
+      ],
+      "3": [
+        {}
+      ],
+      "4": [
+        {}
+      ],
+      "5": [
+        [
+          200345,
+          200346,
+          200347
+        ]
+      ],
+      "6": [
+        {}
+      ],
+      "7": [
+        [
+          200257,
+          200258
+        ]
+      ],
+      "8": [
+        {}
+      ]
+    },
+    "crit": [
+      6.839999675750732
+    ],
+    "critFromStat": [
+      [
+        0
+      ],
+      [
+        0.04999999701976776
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "damage": [
+      4.935714721679688,
+      6.935714721679688,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "defense": [
+      1,
+      0
+    ],
+    "dodge": [
+      4.840000152587891
+    ],
+    "dodgeFromAttribute": [
+      0.05000000074505806
+    ],
+    "earnedTalentPoint": [
+      false
+    ],
+    "expertise": [
+      0,
+      0,
+      0
+    ],
+    "groupBuffs": [
+      [
+        {
+          "displaySpellID": 6673,
+          "flags": 0,
+          "iconID": 132333,
+          "isKnown": false,
+          "name": "Battle Shout",
+          "spellID": 6673
+        }
+      ]
+    ],
+    "healthRegen": [
+      1.949999928474426,
+      0
+    ],
+    "healthRegenFromSpirit": [
+      2.599999904632568,
+      0
+    ],
+    "hit": [
+      0
+    ],
+    "honor": [
+      0
+    ],
+    "honorLevel": [
+      1
+    ],
+    "honorMax": [
+      5500
+    ],
+    "hpPerStamina": [
+      10
+    ],
+    "itemLevel": [
+      0,
+      0,
+      0
+    ],
+    "lifesteal": [
+      0
+    ],
+    "manaRegen": [
+      0,
+      0
+    ],
+    "manaRegenFromSpirit": [
+      5,
+      0
+    ],
+    "mastery": [
+      0,
+      0
+    ],
+    "meleeHaste": [
+      0
+    ],
+    "movement": [
+      0,
+      7,
+      7,
+      4.722221851348877
+    ],
+    "offhandHit": [
+      0
+    ],
+    "parry": [
+      0
+    ],
+    "powerRegen": [
+      -12.49899959564209,
+      0.001000000047497451
+    ],
+    "rangedAttackPower": [
+      21,
+      0,
+      0
+    ],
+    "rangedAttackPowerForStat": [
+      [
+        0
+      ],
+      [
+        40
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "rangedCrit": [
+      6.839999675750732
+    ],
+    "rangedDamage": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "rangedHaste": [
+      0,
+      0
+    ],
+    "rangedHit": [
+      0
+    ],
+    "resilience": [
+      0
+    ],
+    "resistance": {
+      "0": [
+        0,
+        54,
+        54,
+        54
+      ],
+      "1": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "2": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "3": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "4": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "5": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "6": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "restState": [
+      2,
+      "Normal",
+      1
+    ],
+    "restedXP": [
+      null
+    ],
+    "shapeshiftForm": [
+      1
+    ],
+    "shapeshiftFormID": [
+      17
+    ],
+    "shapeshiftFormInfo": [
+      [
+        132349,
+        true,
+        true,
+        2457
+      ],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    "shapeshiftForms": [
+      1
+    ],
+    "shieldBlock": [
+      1
+    ],
+    "specGroups": [
+      1
+    ],
+    "specialization": [
+      1
+    ],
+    "specializationInfo": [
+      [
+        1491,
+        "Warrior",
+        "",
+        626008,
+        "DAMAGER",
+        4,
+        0,
+        null,
+        0,
+        true
+      ],
+      [
+        0,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+        0,
+        true
+      ],
+      [
+        0,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+        0,
+        true
+      ],
+      [
+        0,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+        0,
+        true
+      ]
+    ],
+    "speed": [
+      0
+    ],
+    "spellCrit": [
+      2
+    ],
+    "spellCritFromStat": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "spellDamage": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "spellHaste": [
+      0
+    ],
+    "spellHealing": [
+      0
+    ],
+    "spellHit": [
+      0
+    ],
+    "spellPenetration": [
+      0
+    ],
+    "spellPowerByAttackPower": [
+      0
+    ],
+    "stat": [
+      [
+        23,
+        23,
+        0,
+        0
+      ],
+      [
+        20,
+        20,
+        0,
+        0
+      ],
+      [
+        22,
+        22,
+        0,
+        0
+      ],
+      [
+        20,
+        20,
+        0,
+        0
+      ],
+      [
+        20,
+        20,
+        0,
+        0
+      ]
+    ],
+    "talentSpecUI": [
+      false,
+      "This feature becomes available at level 5."
+    ],
+    "talentUI": [
+      false,
+      "This feature becomes available at level 5."
+    ],
+    "transmogSlot": {
+      "100": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1000": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1001": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "101": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1010": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1011": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "110": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "111": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1500": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1501": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1510": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1511": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1600": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156039,
+          "baseVisualID": 63223,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 7,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1601": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156039,
+          "baseVisualID": 63223,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 7,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1610": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 7,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1611": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 7,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1700": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156774,
+          "baseVisualID": 63878,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 6,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1701": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156774,
+          "baseVisualID": 63878,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 6,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1710": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 6,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1711": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 6,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1800": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1801": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1810": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1811": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1900": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1901": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1910": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1911": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "300": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "301": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "310": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "311": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "400": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156043,
+          "baseVisualID": 63227,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "401": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156043,
+          "baseVisualID": 63227,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "410": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "411": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "500": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "501": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "510": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "511": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "600": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "601": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "610": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "611": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "700": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156044,
+          "baseVisualID": 63228,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "701": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156044,
+          "baseVisualID": 63228,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "710": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "711": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "800": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156045,
+          "baseVisualID": 63229,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "801": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156045,
+          "baseVisualID": 63229,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "810": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "811": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "900": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "901": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "910": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "911": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ]
+    },
+    "versatility": {
+      "29": [
+        0
+      ],
+      "31": [
+        0
+      ]
+    },
+    "xp": [
+      0
+    ],
+    "xpDisabled": [
+      false
+    ],
+    "xpMax": [
+      400
+    ]
+  }
+}

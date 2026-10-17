@@ -155,6 +155,49 @@ fn get_class_info(vm: &mut Vm, c: NativeCall) -> Ret {
         .unwrap_or_default())
 }
 
+/// The classes camelot has (WoW Forever: `LocalizedClassList` lists nine;
+/// no class color for the others).
+const CAMELOT_CLASSES: &[f64] = &[1.0, 2.0, 3.0, 4.0, 5.0, 7.0, 8.0, 9.0, 11.0];
+
+/// `C_CreatureInfo.GetClassInfo(classID)`: `{ className, classFile,
+/// classID }` for camelot's classes; nil for another (recorded for 0;
+/// unverified for the rest, probes queued).
+fn creature_class_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => n,
+        _ => return Ok(vec![Value::Nil]),
+    };
+    let Some((i, file, name)) = CLASS_INFO
+        .iter()
+        .find(|(i, _, _)| *i == id && CAMELOT_CLASSES.contains(i))
+    else {
+        return Ok(vec![Value::Nil]);
+    };
+    let t = vm.new_table();
+    for (k, v) in [
+        ("className", vm.str(name)),
+        ("classFile", vm.str(file)),
+        ("classID", Value::Num(*i)),
+    ] {
+        let k = vm.str(k);
+        let _ = vm.heap.table_mut(t).set(k, v);
+    }
+    Ok(vec![Value::Table(t)])
+}
+
+/// `C_SpecializationInfo.GetAllClassIDs()`: camelot's classes (unverified,
+/// probe queued).
+fn all_class_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let t = vm.new_table();
+    for (i, id) in CAMELOT_CLASSES.iter().enumerate() {
+        let _ = vm
+            .heap
+            .table_mut(t)
+            .set(Value::Num(i as f64 + 1.0), Value::Num(*id));
+    }
+    Ok(vec![Value::Table(t)])
+}
+
 /// The player the world starts with.
 pub fn install(vm: &mut Vm) {
     let player = Unit {
@@ -1529,6 +1572,8 @@ fn unit_full_name(vm: &mut Vm, c: NativeCall) -> Ret {
 pub fn more_behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
         ("GetClassInfo", get_class_info),
+        ("C_CreatureInfo.GetClassInfo", creature_class_info),
+        ("C_SpecializationInfo.GetAllClassIDs", all_class_ids),
         ("UnitFullName", unit_full_name),
         ("ClearFocus", clear_focus),
         ("TargetLastTarget", nothing),

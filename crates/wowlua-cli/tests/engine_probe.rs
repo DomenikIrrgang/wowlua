@@ -500,7 +500,7 @@ __engine.pressKey("ENTER")"#,
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 3344;
+const ANSWERS_MATCHED: usize = 3345;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {
