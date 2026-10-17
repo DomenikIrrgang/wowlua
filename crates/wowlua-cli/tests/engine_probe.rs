@@ -231,6 +231,9 @@ fn compared(key: &str) -> bool {
         "probe.loadCalls.C_Navigation.GetFrame",
         "probe.loadCalls.C_SuperTrack.GetSuperTrackedQuestID",
         "probe.loadCalls.GetSubZoneText",
+        "probe.loadCalls.C_DateAndTime.IsDayTime",
+        // The player's own setting (and where the server stores it).
+        "probe.cvarFlags.GetCVarInfo(SoftTargetEnemy)",
         // Blizzard's UI code makes these (not loaded here): the intrinsic
         // types and its secure store frame.
         "probe.widgets.EventFrame.",
@@ -335,10 +338,28 @@ fn the_engine_answers_the_probe_battery_as_the_client_did() {
     let ours = flatten(&mut vm);
     let theirs = fixture();
     let mut differences = Vec::new();
+    // The client's CVars without a default are not the engine's (as above):
+    // the flag lists leave them out.
+    let no_default = |name: &str| {
+        theirs
+            .get(&format!("probe.allCVars.{name}"))
+            .is_some_and(|v| v == "0: ")
+    };
     for (key, expected) in theirs
         .iter()
         .filter(|(k, v)| compared(k) && !(k.starts_with("probe.allCVars.") && v.as_str() == "0: "))
     {
+        let filtered;
+        let expected = if key.starts_with("probe.cvarFlags.") && !key.contains('(') {
+            filtered = expected
+                .split(' ')
+                .filter(|n| !no_default(n))
+                .collect::<Vec<_>>()
+                .join(" ");
+            &filtered
+        } else {
+            expected
+        };
         match ours.get(key) {
             Some(mine) if same(key, expected, mine) => {}
             mine => differences.push(format!(

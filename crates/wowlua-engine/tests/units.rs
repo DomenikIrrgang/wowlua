@@ -206,6 +206,14 @@ mock.player:castSpell(5143, { castTime = 1, channel = true })",
         "SENT(player; nil; guid7; 5143)",
         "CHANNEL_START(player; nil; 5143; bar8)",
         "CURRENT_SPELL_CAST_CHANGED(false)",
+        // The server's late answer to the interrupt (0.4 s).
+        "INTERRUPTED(player; guid4; 647; nil; nil)",
+        "CURRENT_SPELL_CAST_CHANGED(false)",
+        "INTERRUPTED(player; guid4; 647; nil; nil)",
+        "CURRENT_SPELL_CAST_CHANGED(false)",
+        "INTERRUPTED(player; guid4; 647; nil; nil)",
+        "CURRENT_SPELL_CAST_CHANGED(false)",
+        "UI_ERROR_MESSAGE(57; Interrupted)",
         "CHANNEL_STOP(player; nil; 5143; nil; bar8)",
         "CURRENT_SPELL_CAST_CHANGED(false)",
     ];
@@ -270,4 +278,73 @@ return table.concat(seen, ' | ')",
             "target true true false | sent false | player false false false | sent true | player false false false"
         ]
     );
+}
+
+/// A secure CVar is refused to addons (`ADDON_ACTION_FORBIDDEN`, recorded
+/// for `SoftTargetEnemy`); others change, and `GetCVarInfo` gives the flags.
+#[test]
+fn secure_cvars_refuse_addons() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local refused = C_CVar.SetCVar('SoftTargetEnemy', 3)
+local soft = C_CVar.GetCVar('SoftTargetEnemy')
+C_CVar.SetCVar('autoLootDefault', 1)
+local r = mock.refusals()
+local _, default, _, _, _, secure, readOnly = C_CVar.GetCVarInfo('SoftTargetEnemy')
+return tostring(refused), soft, C_CVar.GetCVar('autoLootDefault'), #r, r[1].event, r[1].addon, default, tostring(secure), tostring(readOnly)",
+    );
+    assert_eq!(
+        r,
+        [
+            "nil",
+            "1",
+            "1",
+            "1",
+            "ADDON_ACTION_FORBIDDEN",
+            "MyAddon",
+            "1",
+            "true",
+            "false"
+        ]
+    );
+}
+
+/// A kill as the client recorded the player's (`/stdtest engine record
+/// combat`), and the target's `UNIT_TARGET("player")` echo 0.4 s later.
+#[test]
+fn kills_and_the_target_echo() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "Seen = {}
+local f = CreateFrame('Frame')
+for _, e in ipairs({ 'PARTY_KILL', 'UNIT_COMBAT', 'UNIT_LOOT', 'UNIT_DIED', 'PLAYER_TARGET_DIED',
+    'PLAYER_TARGET_CHANGED', 'UNIT_HEALTH', 'UNIT_TARGET' }) do
+    f:RegisterEvent(e)
+end
+f:SetScript('OnEvent', function(_, e, a, b)
+    local function show(v) return issecretvalue(v) and 'secret' or (type(v) == 'string' and v:match('^Creature') and 'guid') or tostring(v) end
+    Seen[#Seen + 1] = e .. '(' .. show(a) .. (b ~= nil and (', ' .. show(b)) or '') .. ')'
+end)
+local hogger = mock.spawnUnit({ name = 'Hogger', level = 11, reaction = 'hostile', health = 70 })
+local wolf = mock.spawnUnit({ name = 'Wolf', level = 5, reaction = 'hostile', health = 30 })
+mock.player:target(hogger)
+Seen[#Seen + 1] = '|'
+mock.player:enterCombat()
+hogger:kill({ by = mock.player, lootable = true })
+Seen[#Seen + 1] = '|'
+wolf:kill()
+return table.concat(Seen, ' ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "PLAYER_TARGET_CHANGED(nil) | PARTY_KILL(secret, secret) UNIT_COMBAT(target, WOUND) UNIT_LOOT(guid, true) \
+          UNIT_DIED(secret) PLAYER_TARGET_DIED(nil) PLAYER_TARGET_CHANGED(nil) | UNIT_DIED(secret)"
+        ]
+    );
+    wowlua_engine::clock::advance(&mut vm, 0.5);
+    let r = run(&mut vm, "return Seen[#Seen]");
+    assert_eq!(r, ["UNIT_TARGET(player)"]);
 }

@@ -15,8 +15,8 @@
 //! shape; other units' cast GUIDs and spell IDs secret, the player's
 //! `SENT` target in combat. Unverified: the default cast time (1.5 s), an interrupted
 //! channel's `INTERRUPTED`, other units' casts replacing a running one.
-//! Not modelled: the server's late `INTERRUPTED(…, nil, nil)` echoes and
-//! `UI_ERROR_MESSAGE(57, "Interrupted")` after an interrupt by moving.
+//! The player's interrupted cast is answered 0.4 s later (recorded for an
+//! interrupt by moving; unverified for other interrupts).
 
 use std::collections::HashMap;
 
@@ -258,10 +258,48 @@ fn cast_done(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `unit:interruptCast()`.
+/// The server's late answer to the player's interrupted cast
+/// (`/stdtest engine record cast`, an interrupt by moving: 0.35–0.54 s).
+const INTERRUPT_ECHO: f64 = 0.4;
+
+/// `unit:interruptCast()`; the player's is answered by the server later:
+/// three `INTERRUPTED(unit, castGUID, spellID, nil, nil)`, each with
+/// `CURRENT_SPELL_CAST_CHANGED(false)`, then `UI_ERROR_MESSAGE(57,
+/// "Interrupted")`.
 pub fn control_interrupt(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
+    let cast = engine(vm).units.casting.casts.get(&me).cloned();
     stop(vm, me, true);
+    if me == units::PLAYER
+        && let Some(cast) = cast
+        && !cast.channel
+    {
+        let g = vm.str(&cast.guid);
+        let echo = vm.native_with(
+            "interruptEcho",
+            interrupt_echo,
+            vec![g, Value::Num(cast.spell_id)],
+        );
+        crate::clock::after_engine(vm, INTERRUPT_ECHO, echo);
+    }
+    Ok(vec![])
+}
+
+fn interrupt_echo(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Some(&g), Some(&id)) = (c.upvals.first(), c.upvals.get(1)) else {
+        return Ok(vec![]);
+    };
+    for _ in 0..3 {
+        fire_cast(
+            vm,
+            "UNIT_SPELLCAST_INTERRUPTED",
+            units::PLAYER,
+            &[g, id, Value::Nil, Value::Nil],
+        );
+        cast_changed(vm, units::PLAYER);
+    }
+    let message = vm.str("Interrupted");
+    crate::widgets::fire_event(vm, "UI_ERROR_MESSAGE", &[Value::Num(57.0), message]);
     Ok(vec![])
 }
 

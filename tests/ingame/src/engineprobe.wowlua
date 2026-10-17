@@ -855,6 +855,39 @@ local function allCVars(): { [string]: string }
     return out
 end
 
+--- The CVars `C_CVar.GetCVarInfo` flags (secure: addons may not set them;
+--- read-only; locked from the user), by name, sorted.
+local function cvarFlags(): { [string]: string }
+    if not (G.ConsoleGetAllCommands and C_CVar and C_CVar.GetCVarInfo) then
+        return { absent = "ConsoleGetAllCommands or C_CVar.GetCVarInfo" }
+    end
+    const cvarType = G.Enum.ConsoleCommandType and G.Enum.ConsoleCommandType.Cvar
+    const lists: { [string]: string[] } = { secure = {}, readOnly = {}, locked = {} }
+    for _, info in ipairs(G.ConsoleGetAllCommands() :: any[]) do
+        if info.commandType == cvarType and type(info.command) == "string" then
+            local ok, _, _, _, _, locked, secure, readOnly = pcall(C_CVar.GetCVarInfo, info.command)
+            if ok then
+                if secure then
+                    table.insert(lists.secure, info.command)
+                end
+                if readOnly then
+                    table.insert(lists.readOnly, info.command)
+                end
+                if locked then
+                    table.insert(lists.locked, info.command)
+                end
+            end
+        end
+    end
+    const out: { [string]: string } = {}
+    for name, list in pairs(lists) do
+        table.sort(list)
+        out[name] = table.concat(list, " ")
+    end
+    out["GetCVarInfo(SoftTargetEnemy)"] = results(C_CVar.GetCVarInfo, "SoftTargetEnemy")
+    return out
+end
+
 --- Each CVar's default (`C_CVar.GetCVarDefault`; not the player's value).
 local function cvarDefaults(): { [string]: string }
     const out: { [string]: string } = {}
@@ -1313,6 +1346,78 @@ local function layoutSizes(): { [string]: string }
     return out
 end
 
+--- The merchant API's answers now (`/stdtest engine merchant`, at a vendor
+--- with the window open, and once away from one), into
+--- StdTestState.engineMerchant[open | closed].
+local function merchantProbe()
+    const st = state() :: any
+    const out: { [string]: string } = {}
+    -- Results with tables in full.
+    local function full(f: any, ...: any): string
+        const packed = { pcall(f, ...) }
+        if not packed[1] then
+            return `error: {tostring(packed[2])}`
+        end
+        const parts: string[] = {}
+        for k = 2, select("#", unpack(packed)) do
+            parts[#parts + 1] = deep(packed[k], 0)
+        end
+        return `{#parts}: {table.concat(parts, ", ")}`
+    end
+    const M = G.C_MerchantFrame
+    const n = (GetMerchantNumItems() :: any) ?? 0
+    out.GetMerchantNumItems = full(GetMerchantNumItems)
+    for i = 1, math.min(n, 8) do
+        out[`C_MerchantFrame.GetItemInfo({i})`] = full(M.GetItemInfo, i)
+        out[`GetMerchantItemLink({i})`] = full(G.GetMerchantItemLink, i)
+        out[`GetMerchantItemID({i})`] = full(G.GetMerchantItemID, i)
+        out[`GetMerchantItemMaxStack({i})`] = full(G.GetMerchantItemMaxStack, i)
+        out[`GetMerchantItemCostInfo({i})`] = full(G.GetMerchantItemCostInfo, i)
+        out[`CanAffordMerchantItem({i})`] = full(G.CanAffordMerchantItem, i)
+        out[`C_MerchantFrame.IsMerchantItemRefundable({i})`] = full(M.IsMerchantItemRefundable, i)
+    end
+    out["GetMerchantItemLink(999)"] = full(G.GetMerchantItemLink, 999)
+    out["C_MerchantFrame.GetItemInfo(999)"] = full(M.GetItemInfo, 999)
+    const buyback = (G.GetNumBuybackItems() :: any) ?? 0
+    out.GetNumBuybackItems = full(G.GetNumBuybackItems)
+    for i = 1, math.min(buyback, 3) do
+        out[`GetBuybackItemInfo({i})`] = full(G.GetBuybackItemInfo, i)
+        out[`GetBuybackItemLink({i})`] = full(G.GetBuybackItemLink, i)
+        out[`C_MerchantFrame.GetBuybackItemID({i})`] = full(M.GetBuybackItemID, i)
+    end
+    for _, name in ipairs({ "CanMerchantRepair", "GetRepairAllCost", "CanGuildBankRepair", "InRepairMode", "GetMerchantFilter" }) do
+        out[name] = full(G[name])
+    end
+    out["C_MerchantFrame.GetNumJunkItems"] = full(M.GetNumJunkItems)
+    out["C_MerchantFrame.IsSellAllJunkEnabled"] = full(M.IsSellAllJunkEnabled)
+    out["C_MerchantFrame.GetMerchantCurrencies"] = full(M.GetMerchantCurrencies)
+    out["UnitExists(npc)"] = full(UnitExists, "npc")
+    out["UnitName(npc)"] = full(UnitName, "npc")
+    out["MerchantFrame:IsShown()"] = tostring(G.MerchantFrame and G.MerchantFrame:IsShown())
+    st.engineMerchant = st.engineMerchant ?? {}
+    const which = n > 0 and "open" or "closed"
+    st.engineMerchant[which] = out
+    say(`engine merchant: recorded ({which}); type /reload so the file is written`)
+end
+
+--- The soft target tokens now (`/stdtest engine soft`, with a soft target
+--- shown), into StdTestState.engineSoft.
+local function softProbe()
+    const st = state() :: any
+    const out: { [string]: string } = {}
+    for _, unit in ipairs({ "softenemy", "softfriend", "softinteract", "target", "mouseover" }) do
+        out[`UnitExists({unit})`] = results(UnitExists, unit)
+        out[`UnitName({unit})`] = results(UnitName, unit)
+        out[`UnitIsUnit({unit}, target)`] = results(UnitIsUnit, unit, "target")
+        out[`UnitCanAttack(player, {unit})`] = results(UnitCanAttack, "player", unit)
+    end
+    for _, cvar in ipairs({ "SoftTargetEnemy", "SoftTargetFriend", "SoftTargetInteract", "SoftTargetForce", "SoftTargetMatchLocked" }) do
+        out[`GetCVar({cvar})`] = results(GetCVar, cvar)
+    end
+    st.engineSoft = out
+    say("engine soft: recorded; type /reload so the file is written")
+end
+
 export function engineProbe(arg: string?)
     const st = state() :: any
     const words: string[] = {}
@@ -1340,6 +1445,12 @@ export function engineProbe(arg: string?)
     elseif words[1] == "input" then
         inputProbe()
         return
+    elseif words[1] == "merchant" then
+        merchantProbe()
+        return
+    elseif words[1] == "soft" then
+        softProbe()
+        return
     end
     const probe: { [string]: any } = {
         client = `{(GetBuildInfo())} ({select(2, GetBuildInfo())})`,
@@ -1355,6 +1466,7 @@ export function engineProbe(arg: string?)
         scalars = scalars(),
         hidden = hidden(),
         allCVars = allCVars(),
+        cvarFlags = cvarFlags(),
         qualityColors = qualityColors(),
         slotInfo = slotInfo(),
         forbidden = forbidden(),

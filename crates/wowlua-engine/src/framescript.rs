@@ -281,8 +281,63 @@ fn register_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// A CVar's flags on camelot (`/stdtest engine`): (locked from the user,
+/// secure, read-only).
+fn cvar_flags(vm: &Vm, name: &str) -> (bool, bool, bool) {
+    if engine(vm).flavor != "camelot" {
+        return (false, false, false);
+    }
+    let has = |kind: &str| {
+        include_str!("../data/camelot-cvar-flags.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| l.split_once('\t'))
+            .any(|(k, n)| k == kind && n.eq_ignore_ascii_case(name))
+    };
+    (has("locked"), has("secure"), has("readOnly"))
+}
+
+/// `C_CVar.GetCVarInfo(name)`: value, default, stored on the server for the
+/// account and the character (unknown here: false), locked from the user,
+/// secure, read-only.
+fn get_cvar_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = string_arg(vm, &c, 1)?;
+    let Some(value) = cvar_get(vm, &name) else {
+        return Ok(vec![]);
+    };
+    let default = engine(vm)
+        .world
+        .cvar_defaults
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(&name))
+        .map(|(_, v)| v.clone())
+        .unwrap_or_default();
+    let (locked, secure, read_only) = cvar_flags(vm, &name);
+    Ok(vec![
+        vm.str(&value),
+        vm.str(&default),
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::Bool(locked),
+        Value::Bool(secure),
+        Value::Bool(read_only),
+    ])
+}
+
+/// `SetCVar(name, value)`: a secure CVar is refused to addons
+/// (`ADDON_ACTION_FORBIDDEN`, recorded for `SoftTargetEnemy` set from
+/// `/run`), a read-only one not changed (unverified: its result).
 fn set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = string_arg(vm, &c, 1)?;
+    let (_, secure, read_only) = cvar_flags(vm, &name);
+    if secure && crate::protection::tainted(vm) {
+        let action = crate::protection::action_name(vm);
+        crate::protection::refuse(vm, "ADDON_ACTION_FORBIDDEN", action);
+        return Ok(vec![]);
+    }
+    if read_only {
+        return Ok(vec![Value::Bool(false)]);
+    }
     let text = value_text(vm, c.arg(2));
     cvar_set(vm, &name, text.clone());
     let n = vm.str(&name);
@@ -439,6 +494,7 @@ pub fn functions() -> Vec<(&'static str, NativeFn)> {
         ("C_CVar.GetCVar", get_cvar),
         ("C_CVar.GetCVarBool", get_cvar_bool),
         ("C_CVar.GetCVarDefault", get_cvar_default),
+        ("C_CVar.GetCVarInfo", get_cvar_info),
         ("ConsoleGetAllCommands", console_get_all_commands),
         ("C_CVar.RegisterCVar", register_cvar),
         ("C_CVar.SetCVar", set_cvar),

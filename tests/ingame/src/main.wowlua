@@ -127,7 +127,7 @@ local commands = router({
     },
     engine = {
         args = { "rest" },
-        help = "Record what the client's engine does: /stdtest engine [order | protected | blocked | input | record <label> | stop] (then /reload)",
+        help = "Record what the client's engine does: /stdtest engine [order | protected | blocked | input | merchant | soft | record <label> | stop] (then /reload)",
         run = function(arg: string?) engineProbe(arg) end,
     },
     sv = {

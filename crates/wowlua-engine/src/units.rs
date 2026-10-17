@@ -996,6 +996,13 @@ fn target_arg(vm: &Vm, c: &NativeCall) -> Option<UnitId> {
     handle_of(vm, c.arg(2))
 }
 
+/// How long the server's `UNIT_TARGET("player")` takes after the player's
+/// `PLAYER_TARGET_CHANGED` (`/stdtest engine record target`: 0.4–0.6 s).
+pub const TARGET_ECHO: f64 = 0.4;
+
+/// `unit:target(other)`: the player's `PLAYER_TARGET_CHANGED()` at once and
+/// `UNIT_TARGET("player")` when the server's echo arrives; another unit's
+/// `UNIT_TARGET` at once (unverified).
 fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let new = target_arg(vm, &c);
@@ -1003,10 +1010,17 @@ fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
         engine_mut(vm).units.target = new;
         engine_mut(vm).units.list[PLAYER.0].target = new;
         fire(vm, "PLAYER_TARGET_CHANGED", &[]);
+        let echo = vm.native("targetEcho", target_echo);
+        crate::clock::after_engine(vm, TARGET_ECHO, echo);
     } else {
         engine_mut(vm).units.list[me.0].target = new;
+        fire_unit(vm, "UNIT_TARGET", me, &[]);
     }
-    fire_unit(vm, "UNIT_TARGET", me, &[]);
+    Ok(vec![])
+}
+
+fn target_echo(vm: &mut Vm, _c: NativeCall) -> Ret {
+    fire_unit(vm, "UNIT_TARGET", PLAYER, &[]);
     Ok(vec![])
 }
 
@@ -1062,25 +1076,81 @@ fn control_heal(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `unit:kill()`: its health to 0, `UNIT_DIED(guid)` (secret in combat),
-/// and for the player's target `PLAYER_TARGET_DIED()`, then the target
-/// cleared with `PLAYER_TARGET_CHANGED()` (`/stdtest engine record
-/// combat`; `PARTY_KILL`, `UNIT_COMBAT` and `UNIT_LOOT` not modelled).
+/// `unit:kill({ by?, lootable? })`, as the client recorded the player's
+/// kill (`/stdtest engine record combat`): `PARTY_KILL(killer, victim)` for
+/// a kill by the player or the group, the killing blow's
+/// `UNIT_COMBAT(unit, "WOUND", "", amount, 1)` when something killed it,
+/// `UNIT_LOOT(guid, true)` when lootable, `UNIT_DIED(guid)`, then for the
+/// player's target `PLAYER_TARGET_DIED()` and the target cleared
+/// (`PLAYER_TARGET_CHANGED()`), and `UNIT_HEALTH` last. GUIDs are secret in
+/// combat. Unverified: the killing blow's school (physical here).
 fn control_kill(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
-    let h = engine(vm).units.list[me.0].health;
-    change_health(vm, me, -h);
-    let guid = engine(vm).units.list[me.0].guid.clone();
-    let mut g = vm.str(&guid);
-    if active(&engine(vm).units, &[COMBAT]) {
-        g = vm.secret_wrap(g);
+    let opts = match c.arg(2) {
+        Value::Table(t) => Some(t),
+        _ => None,
+    };
+    let field = |vm: &mut Vm, k: &str| match opts {
+        Some(t) => {
+            let key = vm.str(k);
+            vm.heap.table(t).get(key)
+        }
+        None => Value::Nil,
+    };
+    let by_value = field(vm, "by");
+    let by = if by_value.is_nil() {
+        None
+    } else {
+        match handle_of(vm, by_value) {
+            Some(u) => Some(u),
+            None => return Err(vm.error("kill: `by` is a unit")),
+        }
+    };
+    let lootable = field(vm, "lootable").truthy();
+    let amount = engine(vm).units.list[me.0].health;
+    {
+        let u = &mut engine_mut(vm).units.list[me.0];
+        u.health = 0.0;
+        u.dead = true;
     }
+    let in_combat = active(&engine(vm).units, &[COMBAT]);
+    let guid_of = |vm: &mut Vm, id: UnitId| {
+        let g = engine(vm).units.list[id.0].guid.clone();
+        let v = vm.str(&g);
+        if in_combat { vm.secret_wrap(v) } else { v }
+    };
+    if let Some(killer) = by {
+        if ours(&engine(vm).units, killer) {
+            let k = guid_of(vm, killer);
+            let v = guid_of(vm, me);
+            fire(vm, "PARTY_KILL", &[k, v]);
+        }
+        let wound = vm.str("WOUND");
+        let empty = vm.str("");
+        fire_unit(
+            vm,
+            "UNIT_COMBAT",
+            me,
+            &[wound, empty, Value::Num(amount), Value::Num(1.0)],
+        );
+    }
+    if lootable {
+        let g = engine(vm).units.list[me.0].guid.clone();
+        let g = vm.str(&g);
+        fire(vm, "UNIT_LOOT", &[g, Value::Bool(true)]);
+    }
+    let g = guid_of(vm, me);
     fire(vm, "UNIT_DIED", &[g]);
     if engine(vm).units.target == Some(me) {
         fire(vm, "PLAYER_TARGET_DIED", &[]);
         engine_mut(vm).units.target = None;
+        engine_mut(vm).units.list[PLAYER.0].target = None;
         fire(vm, "PLAYER_TARGET_CHANGED", &[]);
+        // The server's `UNIT_TARGET("player")` (recorded 0.4 s after).
+        let echo = vm.native("targetEcho", target_echo);
+        crate::clock::after_engine(vm, TARGET_ECHO, echo);
     }
+    fire_unit(vm, "UNIT_HEALTH", me, &[]);
     Ok(vec![])
 }
 
