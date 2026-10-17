@@ -451,11 +451,16 @@ The test framework runs on wowlua's own emulation of the WoW client
   (the engine's controls, spies, stubs, fakes, waiting, printed output and
   errors, `mock.module`, user input, casting, modifier keys, taint
   assertions); world profiles with the character's money, gear, bags and
-  place; `import internal`; `--watch`; the three examples have tests. Not
-  yet: `mock.reloadUI` (a test cannot go on in a fresh VM), `--game-data`
-  (M13); the
-  standard and classic flavors' Blizzard UI code still errors in the
-  engine (camelot's runs without an error).
+  place; `import internal`; `--watch`; the three examples have tests.
+  Checked against the client's recordings (Forever 70425, 2026-10-17):
+  input, focus and text scripts; casts, equipment, bags, zones, targets,
+  combat, deaths and auras (their events, order and payloads); Blizzard's
+  UI runs through all of them without an error. Not yet: `mock.reloadUI`
+  (a test cannot go on in a fresh VM), `--game-data` (M13); events the
+  server sends late (`UNIT_TARGET`'s echo, an interrupt's repeated
+  `INTERRUPTED`), `PARTY_KILL` and `UNIT_LOOT`, merchants, soft targets;
+  the standard and classic flavors' Blizzard UI code still errors in the
+  engine (the focus is camelot's, which runs without an error).
 - S5 **Coverage and reports**: lines, statements, branches, functions and
   conditions counted by the VM; terminal, JUnit, TAP, JSON, GitHub, lcov,
   Cobertura and an HTML report in the wowlua design system; thresholds.
