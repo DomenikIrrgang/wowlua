@@ -79,7 +79,7 @@ impl<'a> Lowerer<'a> {
                                     self.string(&String::from_utf8_lossy(&s.value()), pos)
                                 }
                                 ExprKind::Number(n) => {
-                                    lit(ir::ExprKind::Number(n.raw().to_string()), pos)
+                                    lit(ir::ExprKind::Number(n.raw().into()), pos)
                                 }
                                 ExprKind::True => self.boolean(true, pos),
                                 ExprKind::False => self.boolean(false, pos),

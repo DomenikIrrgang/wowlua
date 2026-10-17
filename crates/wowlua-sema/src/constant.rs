@@ -34,7 +34,7 @@ impl Const {
             Const::Nil => K::Nil,
             Const::Bool(true) => K::True,
             Const::Bool(false) => K::False,
-            Const::String(s) => K::String(quote(s)),
+            Const::String(s) => K::String(quote(s).into()),
             Const::Number(n) => return number_expr(*n, pos),
         };
         ir::Expr::new(kind, pos)
@@ -54,7 +54,7 @@ pub fn number_expr(n: f64, pos: Pos) -> ir::Expr {
             pos,
         )
     };
-    let num = |s: &str| ir::Expr::new(K::Number(s.to_string()), pos);
+    let num = |s: &str| ir::Expr::new(K::Number(s.into()), pos);
     if n.is_nan() {
         return paren(binary(ir::BinOp::Div, num("0"), num("0"), pos));
     }

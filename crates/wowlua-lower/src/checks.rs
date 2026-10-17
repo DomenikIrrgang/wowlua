@@ -60,7 +60,7 @@ impl<'a> Lowerer<'a> {
             let index = binary(
                 ir::BinOp::Add,
                 name_expr(generated(&i, pos)),
-                lit(ir::ExprKind::Number(f.params.len().to_string()), pos),
+                lit(ir::ExprKind::Number(f.params.len().to_string().into()), pos),
                 pos,
             );
             let fail_call = self.fail_call(index, "...", label, &location, &check, v_expr, pos);
@@ -156,7 +156,7 @@ impl<'a> Lowerer<'a> {
         value: ir::Expr,
         pos: Pos,
     ) -> ir::Stmt {
-        let index = lit(ir::ExprKind::Number(index.to_string()), pos);
+        let index = lit(ir::ExprKind::Number(index.to_string().into()), pos);
         let c = self.fail_call(index, name, label, location, check, value, pos);
         stmt(ir::StmtKind::Call(c), pos)
     }
@@ -297,7 +297,7 @@ fn literal(text: &str, pos: Pos) -> ir::Expr {
     match text {
         "true" => lit(ir::ExprKind::True, pos),
         "false" => lit(ir::ExprKind::False, pos),
-        t if t.starts_with('"') => lit(ir::ExprKind::String(t.as_bytes().to_vec()), pos),
-        t => lit(ir::ExprKind::Number(t.to_string()), pos),
+        t if t.starts_with('"') => lit(ir::ExprKind::String(t.as_bytes().into()), pos),
+        t => lit(ir::ExprKind::Number(t.into()), pos),
     }
 }

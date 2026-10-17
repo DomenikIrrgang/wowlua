@@ -249,7 +249,7 @@ impl<'a> Lowerer<'a> {
             name: ident(n, pos),
             value,
         };
-        let s = |v: &str| lit(ir::ExprKind::String(quote(v.as_bytes())), pos);
+        let s = |v: &str| lit(ir::ExprKind::String(quote(v.as_bytes()).into()), pos);
         let mut fields = vec![
             named("kind", s(kind)),
             named("name", s(name)),
@@ -271,7 +271,7 @@ impl<'a> Lowerer<'a> {
         fields.push(named("file", s(&self.ctx.file)));
         fields.push(named(
             "line",
-            lit(ir::ExprKind::Number(pos.line.to_string()), pos),
+            lit(ir::ExprKind::Number(pos.line.to_string().into()), pos),
         ));
         lit(
             ir::ExprKind::Table {
@@ -338,10 +338,10 @@ impl<'a> Lowerer<'a> {
         self.slices.insert(Slice::Decorate);
         let mut args = vec![
             target.clone(),
-            lit(ir::ExprKind::String(quote(name.as_bytes())), pos),
+            lit(ir::ExprKind::String(quote(name.as_bytes()).into()), pos),
         ];
         if let Some(m) = message {
-            args.push(lit(ir::ExprKind::String(quote(m.as_bytes())), pos));
+            args.push(lit(ir::ExprKind::String(quote(m.as_bytes()).into()), pos));
         }
         let wl = self.runtime_ref(pos);
         assign(target, call(field(wl, "deprecated", pos), args, pos), pos)

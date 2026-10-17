@@ -171,9 +171,9 @@ pub enum ExprKind {
     True,
     False,
     /// A Lua 5.1 numeral, as it is emitted.
-    Number(String),
+    Number(crate::lit::Numeral),
     /// A string literal as it is emitted, including quotes or brackets.
-    String(Vec<u8>),
+    String(crate::lit::StrLit),
     Vararg,
     Function(Box<Func>),
     Table {

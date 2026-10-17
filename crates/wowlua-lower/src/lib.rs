@@ -298,7 +298,10 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         let module = field(name_expr(generated("__wl", line1)), "module", line1);
         let value = call(
             module,
-            vec![lit(ir::ExprKind::String(quote(id.as_bytes())), line1)],
+            vec![lit(
+                ir::ExprKind::String(quote(id.as_bytes()).into()),
+                line1,
+            )],
             line1,
         );
         prologue.push(local(generated("__wl_exports", line1), value, line1));
@@ -1584,7 +1587,7 @@ impl<'a> Lowerer<'a> {
     /// `__wl.require("id")` (`, true` for lazy bindings).
     fn require(&mut self, id: &str, lazy: bool, pos: Pos) -> ir::Expr {
         let wl = self.runtime_ref(pos);
-        let mut args = vec![lit(ir::ExprKind::String(quote(id.as_bytes())), pos)];
+        let mut args = vec![lit(ir::ExprKind::String(quote(id.as_bytes()).into()), pos)];
         if lazy {
             args.push(lit(ir::ExprKind::True, pos));
         }
@@ -2054,12 +2057,12 @@ impl<'a> Lowerer<'a> {
             ExprKind::False => K::False,
             ExprKind::Number(n) => {
                 if wowlua_syntax::lexer::is_wowlua_numeral(n.raw()) {
-                    K::Number(format_number(n.value().unwrap_or(0.0)))
+                    K::Number(format_number(n.value().unwrap_or(0.0)).into())
                 } else {
-                    K::Number(String::from(n.raw()))
+                    K::Number(n.raw().into())
                 }
             }
-            ExprKind::String(s) => K::String(s.raw().to_vec()),
+            ExprKind::String(s) => K::String(s.raw().into()),
             ExprKind::Vararg => K::Vararg,
             ExprKind::Function(f) => K::Function(Box::new(self.func(f, false))),
             ExprKind::Table(fields) => self.table(fields, e.span()),
@@ -2441,7 +2444,7 @@ impl<'a> Lowerer<'a> {
         let mut text_pos = Pos::NONE;
         let flush = |text: &mut Vec<u8>, text_pos: Pos, operands: &mut Vec<ir::Expr>| {
             if !text.is_empty() {
-                operands.push(lit(ir::ExprKind::String(quote(text)), text_pos));
+                operands.push(lit(ir::ExprKind::String(quote(text).into()), text_pos));
                 text.clear();
             }
         };
@@ -2469,7 +2472,7 @@ impl<'a> Lowerer<'a> {
         }
         flush(&mut text, text_pos, &mut operands);
         if operands.is_empty() {
-            return lit(ir::ExprKind::String(b"\"\"".to_vec()), pos);
+            return lit(ir::ExprKind::String(b"\"\"".as_slice().into()), pos);
         }
         let concat = |items: Vec<ir::Expr>| -> ir::Expr {
             let mut iter = items.into_iter().rev();
@@ -2727,7 +2730,7 @@ impl<'a> Lowerer<'a> {
                             ir::ExprKind::Index {
                                 obj: Box::new(value),
                                 key: Box::new(lit(
-                                    ir::ExprKind::String(quote(key.as_bytes())),
+                                    ir::ExprKind::String(quote(key.as_bytes()).into()),
                                     pos,
                                 )),
                             },
@@ -2760,7 +2763,7 @@ impl<'a> Lowerer<'a> {
             return lit(ir::ExprKind::Nil, pos);
         };
         if let Some(full) = meta.assets.get(&path) {
-            return lit(ir::ExprKind::String(quote(full.as_bytes())), pos);
+            return lit(ir::ExprKind::String(quote(full.as_bytes()).into()), pos);
         }
         let lower = path.to_ascii_lowercase();
         let message = match meta.assets.keys().find(|k| k.to_ascii_lowercase() == lower) {

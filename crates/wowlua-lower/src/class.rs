@@ -119,7 +119,7 @@ impl<'a> Lowerer<'a> {
     }
 
     pub(crate) fn string(&self, s: &str, pos: Pos) -> ir::Expr {
-        lit(ir::ExprKind::String(quote(s.as_bytes())), pos)
+        lit(ir::ExprKind::String(quote(s.as_bytes()).into()), pos)
     }
 
     /// The value a type path refers to (`extends a.b.C`).

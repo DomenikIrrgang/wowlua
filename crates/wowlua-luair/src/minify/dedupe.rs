@@ -151,7 +151,7 @@ pub fn apply(chunk: &mut Chunk, short_names: bool) {
                 .collect(),
             values: chosen
                 .iter()
-                .map(|b| Expr::new(ExprKind::String(encode_string(b, b'"')), Pos::NONE))
+                .map(|b| Expr::new(ExprKind::String(encode_string(b, b'"').into()), Pos::NONE))
                 .collect(),
         },
     };
