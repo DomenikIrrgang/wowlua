@@ -13,7 +13,7 @@
 //! `ZONE_CHANGED_NEW_AREA()`, a new subzone's lone `ZONE_CHANGED()`.
 //!
 //! Unverified (inferred from Blizzard's documentation and UI code):
-//! `BAG_CONTAINER_UPDATE` for a bag put in, the generated item links, the
+//! `BAG_CONTAINER_UPDATE` for a bag put in, other flavors' item links, the
 //! ranges of `CheckInteractDistance`'s indexes and `UnitInRange` (38
 //! yards), and the empty backpack's 16 slots.
 
@@ -141,7 +141,7 @@ const QUALITY_COLORS: [&str; 8] = [
 
 /// An item's link: the test's, the item data's, or one made like the
 /// client's (`|cff…|Hitem:ID::::::::LEVEL:::::|h[Name]|h|r`).
-fn link_of(vm: &mut Vm, held: &Held) -> Option<Value> {
+pub fn link_of(vm: &mut Vm, held: &Held) -> Option<Value> {
     if let Some(l) = &held.link {
         return Some(vm.str(l));
     }
@@ -158,13 +158,34 @@ fn link_of(vm: &mut Vm, held: &Held) -> Option<Value> {
         .copied()
         .unwrap_or(QUALITY_COLORS[1]);
     let level = engine(vm).units.list[units::PLAYER.0].level;
+    // Camelot's links name the quality's color and carry the player's
+    // specialization (`|cnIQ1:|Hitem:6529::::::::21:1486:::::::::|h…`,
+    // recorded; the specialization unknown here: empty).
+    if engine(vm).flavor == "camelot" {
+        return Some(vm.str(&format!(
+            "|cnIQ{quality}:|Hitem:{}::::::::{level}::::::::::|h[{name}]|h|r",
+            held.id
+        )));
+    }
     Some(vm.str(&format!(
         "|c{color}|Hitem:{}::::::::{level}:::::|h[{name}]|h|r",
         held.id
     )))
 }
 
-fn item_field(vm: &mut Vm, id: i64, key: &str) -> Value {
+/// An item's link by its ID (made like the client's).
+pub fn link_of_id(vm: &mut Vm, id: i64) -> Option<Value> {
+    let held = Held {
+        id,
+        count: 1.0,
+        link: None,
+        bound: false,
+        locked: false,
+    };
+    link_of(vm, &held)
+}
+
+pub fn item_field(vm: &mut Vm, id: i64, key: &str) -> Value {
     match item_data(vm, id) {
         Some(t) => field(vm, t, key),
         None => Value::Nil,

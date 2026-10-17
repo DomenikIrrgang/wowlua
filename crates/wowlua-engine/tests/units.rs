@@ -348,3 +348,164 @@ return table.concat(Seen, ' ')",
     let r = run(&mut vm, "return Seen[#Seen]");
     assert_eq!(r, ["UNIT_TARGET(player)"]);
 }
+
+/// Soft targets (`/stdtest engine record soft`, `softinteract`): their
+/// tokens, `PLAYER_SOFT_*_CHANGED`, and unit events for them.
+#[test]
+fn soft_targets() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local seen = {}
+local f = CreateFrame('Frame')
+for _, e in ipairs({ 'PLAYER_SOFT_ENEMY_CHANGED', 'PLAYER_SOFT_FRIEND_CHANGED', 'PLAYER_SOFT_INTERACT_CHANGED', 'UNIT_HEALTH' }) do
+    f:RegisterEvent(e)
+end
+f:SetScript('OnEvent', function(_, e, a, b)
+    local function show(v) return type(v) == 'string' and v:match('^Creature') and 'guid' or tostring(v) end
+    seen[#seen + 1] = e:gsub('PLAYER_SOFT_', '') .. '(' .. show(a) .. ', ' .. show(b) .. ')'
+end)
+local swoop = mock.spawnUnit({ name = 'Swoop', level = 4, reaction = 'hostile', health = 50 })
+local vendor = mock.spawnUnit({ name = 'Harn Longcast', level = 30, reaction = 'friendly' })
+mock.player:softTarget(swoop)
+local name, exists, same = UnitName('softenemy'), UnitExists('softenemy'), UnitIsUnit('softenemy', 'target')
+swoop:damage(5)
+mock.player:softTarget(vendor)
+mock.player:softTarget(vendor, 'interact')
+mock.player:softTarget(nil, 'interact')
+mock.player:softTarget(nil, 'enemy')
+return table.concat(seen, ' '), name, tostring(exists), tostring(same), UnitName('softfriend'), tostring(UnitExists('softenemy'))",
+    );
+    assert_eq!(
+        r,
+        [
+            "ENEMY_CHANGED(nil, nil) UNIT_HEALTH(softenemy, nil) FRIEND_CHANGED(nil, nil) \
+             INTERACT_CHANGED(nil, guid) INTERACT_CHANGED(guid, nil) ENEMY_CHANGED(nil, nil)",
+            "Swoop",
+            "true",
+            "false",
+            "Harn Longcast",
+            "false"
+        ]
+    );
+}
+
+/// A vendor as the client recorded one (`/stdtest engine record merchant`,
+/// `/stdtest engine merchant`): opening, buying, selling, buying back,
+/// closing, and the merchant API's answers.
+#[test]
+fn merchants() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "Seen = {}
+local f = CreateFrame('Frame')
+for _, e in ipairs({ 'MERCHANT_SHOW', 'MERCHANT_CLOSED', 'MERCHANT_UPDATE', 'MERCHANT_FILTER_ITEM_UPDATE',
+    'PLAYER_INTERACTION_MANAGER_FRAME_SHOW', 'PLAYER_INTERACTION_MANAGER_FRAME_HIDE', 'ITEM_PUSH',
+    'BAG_NEW_ITEMS_UPDATED', 'BAG_UPDATE', 'UNIT_INVENTORY_CHANGED', 'PLAYER_MONEY', 'BAG_UPDATE_DELAYED',
+    'ITEM_COUNT_CHANGED', 'ITEM_LOCK_CHANGED', 'ITEM_LOCKED', 'ITEM_UNLOCKED' }) do
+    f:RegisterEvent(e)
+end
+f:SetScript('OnEvent', function(_, e, a, b)
+    Seen[#Seen + 1] = e .. (a ~= nil and ('(' .. tostring(a) .. (b ~= nil and (',' .. tostring(b)) or '') .. ')') or '')
+end)
+mock.defineItem(6256, { name = 'Fishing Pole', icon = 132932, quality = 1 })
+mock.defineItem(6529, { name = 'Shiny Bauble', icon = 134335, quality = 1, sellPrice = 12, stackCount = 20 })
+mock.player:setMoney(1000)
+mock.openMerchant({ name = 'Harn Longcast', items = { { id = 6256, price = 23 }, { id = 6529, price = 50 } } })",
+    );
+    wowlua_engine::clock::advance_frames(&mut vm, 2, 1000.0 / 60.0);
+    let r = run(
+        &mut vm,
+        "local info = C_MerchantFrame.GetItemInfo(1)
+local out = { table.concat(Seen, ' '), GetMerchantNumItems(), info.name, info.price, info.numAvailable,
+    GetMerchantItemLink(2), GetMerchantItemMaxStack(2), select('#', CanAffordMerchantItem(1)),
+    UnitName('npc'), select('#', C_MerchantFrame.GetItemInfo(9)) }
+Seen = {}
+BuyMerchantItem(2, 1)
+return unpack(out)",
+    );
+    assert_eq!(
+        r,
+        [
+            "PLAYER_MONEY MERCHANT_SHOW PLAYER_INTERACTION_MANAGER_FRAME_SHOW(5) MERCHANT_FILTER_ITEM_UPDATE(6256) \
+             MERCHANT_FILTER_ITEM_UPDATE(6529) MERCHANT_UPDATE",
+            "2",
+            "Fishing Pole",
+            "23",
+            "-1",
+            "|cnIQ1:|Hitem:6529::::::::60::::::::::|h[Shiny Bauble]|h|r",
+            "20",
+            "0",
+            "Harn Longcast",
+            "0"
+        ]
+    );
+    // The server's answer to the purchase, the sale, the buyback.
+    wowlua_engine::clock::advance(&mut vm, 0.5);
+    let r = run(
+        &mut vm,
+        "local bought = table.concat(Seen, ' ')
+Seen = {}
+mock.sell(0, 1)
+local locked = table.concat(Seen, ' ')
+Seen = {}
+return bought, locked, GetMoney()",
+    );
+    assert_eq!(
+        r,
+        [
+            "MERCHANT_UPDATE ITEM_PUSH(0,134335) BAG_NEW_ITEMS_UPDATED BAG_UPDATE(0) BAG_UPDATE(-1) \
+             UNIT_INVENTORY_CHANGED(player) PLAYER_MONEY BAG_UPDATE(0) BAG_UPDATE(-1) BAG_UPDATE_DELAYED \
+             ITEM_COUNT_CHANGED(6529)",
+            "ITEM_LOCK_CHANGED(0,1) ITEM_LOCKED(0,1)",
+            "950"
+        ]
+    );
+    wowlua_engine::clock::advance(&mut vm, 0.5);
+    let r = run(
+        &mut vm,
+        "local sold = table.concat(Seen, ' ')
+local name, _, price, quantity, available, usable, bound = GetBuybackItemInfo(1)
+local money = GetMoney()
+Seen = {}
+BuybackItem(1)
+return sold, money, GetNumBuybackItems(), name, price, quantity, available, tostring(usable), tostring(bound)",
+    );
+    assert_eq!(
+        r,
+        [
+            "PLAYER_MONEY BAG_UPDATE(0) BAG_UPDATE(-1) MERCHANT_UPDATE BAG_UPDATE_DELAYED ITEM_COUNT_CHANGED(6529)",
+            "962",
+            "1",
+            "Shiny Bauble",
+            "12",
+            "1",
+            "0",
+            "true",
+            "false"
+        ]
+    );
+    wowlua_engine::clock::advance(&mut vm, 0.5);
+    let r = run(
+        &mut vm,
+        "local back = table.concat(Seen, ' ')
+Seen = {}
+mock.closeMerchant()
+return back, GetMoney(), GetNumBuybackItems(), C_Container.GetContainerItemID(0, 1), table.concat(Seen, ' '),
+    GetMerchantNumItems(), tostring(UnitExists('npc'))",
+    );
+    assert_eq!(
+        r,
+        [
+            "PLAYER_MONEY ITEM_LOCK_CHANGED(0,1) ITEM_UNLOCKED(0,1) BAG_UPDATE(0) BAG_UPDATE(-1) MERCHANT_UPDATE \
+             BAG_UPDATE_DELAYED ITEM_COUNT_CHANGED(6529)",
+            "950",
+            "0",
+            "6529",
+            "MERCHANT_CLOSED PLAYER_INTERACTION_MANAGER_FRAME_HIDE(5) PLAYER_INTERACTION_MANAGER_FRAME_HIDE(0)",
+            "0",
+            "false"
+        ]
+    );
+}

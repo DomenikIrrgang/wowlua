@@ -457,11 +457,11 @@ The test framework runs on wowlua's own emulation of the WoW client
   combat, deaths and auras (their events, order and payloads); Blizzard's
   UI runs through all of them without an error. `mock.reloadUI` reruns
   the test in a fresh VM with the SavedVariables as the client writes them
-  (`/stdtest sv`). Not yet: `--game-data` (M13); events the
-  server sends late (`UNIT_TARGET`'s echo, an interrupt's repeated
-  `INTERRUPTED`), `PARTY_KILL` and `UNIT_LOOT`, merchants, soft targets;
-  the standard and classic flavors' Blizzard UI code still errors in the
-  engine (the focus is camelot's, which runs without an error).
+  (`/stdtest sv`). Kills (`PARTY_KILL`, `UNIT_LOOT`), the server's late
+  answers (`UNIT_TARGET`, an interrupt's), soft targets, vendors and
+  secure CVars as recorded. Not yet: `--game-data` (M13); the standard and
+  classic flavors' Blizzard UI code still errors in the engine (the focus
+  is camelot's, which runs without an error).
 - S5 **Coverage and reports**: lines, statements, branches, functions and
   conditions counted by the VM; terminal, JUnit, TAP, JSON, GitHub, lcov,
   Cobertura and an HTML report in the wowlua design system; thresholds.

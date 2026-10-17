@@ -18,6 +18,7 @@ pub mod facts;
 pub mod framescript;
 pub mod gamedata;
 pub mod input;
+pub mod merchant;
 pub mod protection;
 pub mod tooltip;
 pub mod ui;
@@ -180,6 +181,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(character::behaviours())
             .chain(input::behaviours())
             .chain(casting::behaviours())
+            .chain(merchant::behaviours())
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())
             .chain(bindings::behaviours())

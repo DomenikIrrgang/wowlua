@@ -584,9 +584,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("IsGuildLeader", no),
         // Not a convention kiosk.
         ("Kiosk.IsEnabled", no),
-        // No merchant open: Blizzard's merchant frame counts its items at
-        // every `BAG_UPDATE`, open or not, without an error in the client.
-        ("GetMerchantNumItems", zero),
+        // No money on the cursor, no trade: Blizzard's money frames
+        // subtract them from GetMoney() (without an error in the client).
+        ("GetCursorMoney", zero),
+        ("GetPlayerTradeMoney", zero),
+        ("GetTargetTradeMoney", zero),
     ]
 }
 

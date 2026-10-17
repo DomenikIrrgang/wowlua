@@ -126,6 +126,7 @@ pub struct World {
     pub bindings: crate::bindings::Bindings,
     /// The player's money, equipment, bags and place.
     pub character: crate::character::Character,
+    pub merchant: crate::merchant::Merchant,
     /// The mouse's and the keyboard's focus.
     pub input: crate::input::Input,
 }

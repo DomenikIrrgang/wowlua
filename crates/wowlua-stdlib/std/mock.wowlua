@@ -13,9 +13,15 @@ export interface MockUnit
     function target(unit: MockUnit?)
     function focus(unit: MockUnit?)
     function mouseover(unit: MockUnit?)
+    --- The player's soft target of `kind` (by default the enemy for a
+    --- hostile or neutral unit, else the friend; `nil` clears it):
+    --- `PLAYER_SOFT_ENEMY_CHANGED`, `…_FRIEND_CHANGED`, `…_INTERACT_CHANGED`.
+    function softTarget(unit: MockUnit?, kind: ("enemy" | "friend" | "interact")?)
     function damage(amount: number)
     function heal(amount: number)
-    function kill()
+    --- Dies (`UNIT_DIED`); `by` the player or the group: `PARTY_KILL` and
+    --- the killing blow's `UNIT_COMBAT`; `lootable`: `UNIT_LOOT`.
+    function kill(opts: { by?: MockUnit, lootable?: boolean }?)
     function setPower(powerType: number, amount: number)
     function enterCombat()
     function leaveCombat()
@@ -30,7 +36,8 @@ export interface MockUnit
     --- Starts casting (`UNIT_SPELLCAST_START`, or `CHANNEL_START`); it ends
     --- `castTime` seconds later (the spell data's, else 1.5).
     function castSpell(spellID: number, opts: { castTime?: number, channel?: boolean, notInterruptible?: boolean }?)
-    --- Interrupts the cast (`UNIT_SPELLCAST_INTERRUPTED`).
+    --- Interrupts the cast (`UNIT_SPELLCAST_INTERRUPTED`); the player's is
+    --- answered by the server 0.4 s later.
     function interruptCast()
     --- How far from the player, in yards (`nil`: unknown).
     function setDistance(yards: number?)
@@ -111,6 +118,28 @@ end
 --- A bag's contents (`nil`: no bag): `BAG_UPDATE`, `BAG_UPDATE_DELAYED`.
 export function setBag(bag: number, contents: { slots?: number, items?: { [number]: number | HeldItem } }?)
     engine().setBag(bag, contents)
+end
+
+--- An item a vendor sells: `price` for `stack` of it (`available`: -1
+--- unlimited).
+export type MerchantItem = { id: number, price?: number, stack?: number, available?: number, maxStack?: number, usable?: boolean }
+
+--- Opens a vendor's window (`MERCHANT_SHOW`, then `MERCHANT_UPDATE`): the
+--- vendor is the `npc` unit. Buying, selling and buying back go through
+--- the client's API, answered by the server 0.4 s later.
+export function openMerchant(data: { name?: string, items?: MerchantItem[], canRepair?: boolean, repairCost?: number })
+    engine().openMerchant(data)
+end
+
+--- Closes the vendor's window (`MERCHANT_CLOSED`).
+export function closeMerchant()
+    engine().closeMerchant()
+end
+
+--- The user's right-click on a bag item at the vendor: sold (locked at
+--- once, `PLAYER_MONEY` when the server answers).
+export function sell(bag: number, slot: number)
+    engine().sell(bag, slot)
 end
 
 --- Where the player is: `ZONE_CHANGED_NEW_AREA` for a new zone,

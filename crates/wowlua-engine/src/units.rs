@@ -77,6 +77,10 @@ pub struct Units {
     pub target: Option<UnitId>,
     pub focus: Option<UnitId>,
     pub mouseover: Option<UnitId>,
+    /// The soft targets: the enemy, the friend, the interact unit.
+    pub soft: [Option<UnitId>; 3],
+    /// The NPC the player talks to (`npc`: a vendor).
+    pub npc: Option<UnitId>,
     pub nameplates: Vec<Option<UnitId>>,
     /// The group without the player, in order; a raid when `raid`.
     pub group: Vec<UnitId>,
@@ -209,6 +213,10 @@ fn base_token<'a>(u: &Units, t: &'a str) -> Option<(Option<UnitId>, &'a str)> {
         ("target", u.target),
         ("focus", u.focus),
         ("mouseover", u.mouseover),
+        ("softenemy", u.soft[0]),
+        ("softfriend", u.soft[1]),
+        ("softinteract", u.soft[2]),
+        ("npc", u.npc),
         ("none", None),
     ] {
         if let Some(rest) = t.strip_prefix(name) {
@@ -264,6 +272,16 @@ pub fn tokens_of(u: &Units, id: UnitId) -> Vec<String> {
     }
     if u.target.is_some_and(|t| u.list[t.0].target == Some(id)) {
         out.push("targettarget".into());
+    }
+    // After target (`/stdtest engine record combat`: UNIT_AURA for
+    // softenemy after target); the rest's order unverified.
+    for (i, name) in ["softenemy", "softfriend", "softinteract"]
+        .iter()
+        .enumerate()
+    {
+        if u.soft[i] == Some(id) {
+            out.push((*name).into());
+        }
     }
     if u.focus == Some(id) {
         out.push("focus".into());
@@ -800,6 +818,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
     let methods = vm.new_table();
     for (name, f) in [
         ("target", control_target as wowlua_vm::NativeFn),
+        ("softTarget", control_soft_target),
         ("focus", control_focus),
         ("mouseover", control_mouseover),
         ("damage", control_damage),
@@ -901,6 +920,20 @@ pub fn set_player(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// A unit from a test's data; `player_guid`: the player's (it keeps its
 /// GUID unless the data has one).
+/// A friendly NPC named `name`, spawned.
+pub fn spawn_named(vm: &mut Vm, name: &str) -> UnitId {
+    let data = vm.new_table();
+    for (k, v) in [("name", name), ("reaction", "friendly")] {
+        let key = vm.str(k);
+        let v = vm.str(v);
+        let _ = vm.heap.table_mut(data).set(key, v);
+    }
+    let unit = unit_from(vm, Some(data), None);
+    let units = &mut engine_mut(vm).units;
+    units.list.push(unit);
+    UnitId(units.list.len() - 1)
+}
+
 fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -> Unit {
     let get = |vm: &mut Vm, k: &str| -> Value {
         match data {
@@ -1015,6 +1048,56 @@ fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
     } else {
         engine_mut(vm).units.list[me.0].target = new;
         fire_unit(vm, "UNIT_TARGET", me, &[]);
+    }
+    Ok(vec![])
+}
+
+/// `unit:softTarget(other [, kind])` (the player): the soft target of
+/// `kind` ("enemy", "friend", "interact"; by default "enemy" for a hostile
+/// or neutral unit, else "friend"); nil clears it. `PLAYER_SOFT_ENEMY_CHANGED()` and
+/// `PLAYER_SOFT_FRIEND_CHANGED()` have no arguments,
+/// `PLAYER_SOFT_INTERACT_CHANGED(oldGUID, newGUID)` the GUIDs
+/// (`/stdtest engine record soft`, `softinteract`). Unverified: the soft
+/// targeting CVars are not consulted.
+fn control_soft_target(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = this(vm, &c)?;
+    if me != PLAYER {
+        return Err(vm.error("softTarget: the player's"));
+    }
+    let new = target_arg(vm, &c);
+    let kind = match c.arg(3) {
+        Value::Str(k) => String::from_utf8_lossy(vm.str_bytes(k)).into_owned(),
+        _ => match new {
+            Some(id) if engine(vm).units.list[id.0].reaction != Reaction::Friendly => {
+                "enemy".into()
+            }
+            Some(_) => "friend".into(),
+            None => return Err(vm.error("softTarget(nil, kind): which soft target to clear")),
+        },
+    };
+    let (i, event) = match kind.as_str() {
+        "enemy" => (0, "PLAYER_SOFT_ENEMY_CHANGED"),
+        "friend" => (1, "PLAYER_SOFT_FRIEND_CHANGED"),
+        "interact" => (2, "PLAYER_SOFT_INTERACT_CHANGED"),
+        _ => return Err(vm.error("softTarget: kind is \"enemy\", \"friend\" or \"interact\"")),
+    };
+    let old = engine(vm).units.soft[i];
+    if old == new {
+        return Ok(vec![]);
+    }
+    engine_mut(vm).units.soft[i] = new;
+    if i == 2 {
+        let guid = |vm: &mut Vm, id: Option<UnitId>| match id {
+            Some(id) => {
+                let g = engine(vm).units.list[id.0].guid.clone();
+                vm.str(&g)
+            }
+            None => Value::Nil,
+        };
+        let (o, n) = (guid(vm, old), guid(vm, new));
+        fire(vm, event, &[o, n]);
+    } else {
+        fire(vm, event, &[]);
     }
     Ok(vec![])
 }
