@@ -509,3 +509,60 @@ return back, GetMoney(), GetNumBuybackItems(), C_Container.GetContainerItemID(0,
         ]
     );
 }
+
+/// Repairs and full bags at a vendor (`/stdtest engine record vendor2`).
+#[test]
+fn repairs_and_full_bags() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "Seen = {}
+local f = CreateFrame('Frame')
+for _, e in ipairs({ 'UPDATE_INVENTORY_DURABILITY', 'PLAYER_MONEY', 'UI_ERROR_MESSAGE', 'ITEM_PUSH', 'CHAT_MSG_LOOT' }) do
+    f:RegisterEvent(e)
+end
+f:SetScript('OnEvent', function(_, e, a, b) Seen[#Seen + 1] = e .. '(' .. tostring(a) .. ', ' .. tostring(b) .. ')' end)
+mock.defineItem(2375, { name = 'Battered Leather Gloves', icon = 132952, quality = 1 })
+mock.player:setMoney(1000)
+mock.setBag(0, { slots = 1, items = { [1] = 6948 } })
+mock.setBag(1, { slots = 1, items = {} })
+mock.openMerchant({ name = 'Varg Windwhisper', items = { { id = 2375, price = 10 } }, canRepair = true, repairCost = 100, damaged = 4 })
+Seen = {}
+BuyMerchantItem(1)",
+    );
+    wowlua_engine::clock::advance(&mut vm, 0.5);
+    let r = run(
+        &mut vm,
+        "local bought = table.concat(Seen, ' ')
+Seen = {}
+BuyMerchantItem(1)
+return bought",
+    );
+    assert_eq!(
+        r,
+        [
+            "ITEM_PUSH(31, 132952) CHAT_MSG_LOOT(You receive item: |cnIQ1:|Hitem:2375::::::::60::::::::::|h[Battered Leather Gloves]|h|r, Player) PLAYER_MONEY(nil, nil)"
+        ]
+    );
+    wowlua_engine::clock::advance(&mut vm, 0.5);
+    let r = run(
+        &mut vm,
+        "local full = table.concat(Seen, ' ')
+local cost, needed = GetRepairAllCost()
+Seen = {}
+RepairAllItems()
+return full, cost, tostring(needed), table.concat(Seen, ' '), GetMoney(), select('#', GetRepairAllCost())",
+    );
+    assert_eq!(
+        r,
+        [
+            "UI_ERROR_MESSAGE(3, Inventory is full.)",
+            "100",
+            "true",
+            "UPDATE_INVENTORY_DURABILITY(nil, nil) UPDATE_INVENTORY_DURABILITY(nil, nil) \
+             UPDATE_INVENTORY_DURABILITY(nil, nil) UPDATE_INVENTORY_DURABILITY(nil, nil) PLAYER_MONEY(nil, nil)",
+            "890",
+            "2"
+        ]
+    );
+}
