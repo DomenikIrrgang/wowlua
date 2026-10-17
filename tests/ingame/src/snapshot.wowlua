@@ -81,16 +81,40 @@ local function bags(items: { [number]: table }): table
             for slot = 1, slots do
                 const info = C_Container.GetContainerItemInfo(bag, slot)
                 if info then
+                    const quest = C_Container.GetContainerItemQuestInfo(bag, slot)
                     contents[slot] = {
                         id = info.itemID,
                         count = info.stackCount,
                         link = info.hyperlink,
                         bound = info.isBound,
+                        questItem = quest and quest.isQuestItem or nil,
+                        questID = quest and quest.questID or nil,
+                        questActive = quest and quest.isActive or nil,
                     }
                     itemData(items, info.itemID)
                 end
             end
             out[bag] = { slots = slots, items = contents }
+        end
+    end
+    return out
+end
+
+--- The action bars: each slot's action (`GetActionInfo`), its texture and
+--- count, as a test profile's `actions`.
+local function actions(): table
+    const out: { [number]: table } = {}
+    for slot = 1, 180 do
+        if C_ActionBar.HasAction(slot) then
+            local kind, id, subType = GetActionInfo(slot)
+            out[slot] = {
+                type = kind,
+                id = id,
+                subType = subType,
+                texture = C_ActionBar.GetActionTexture(slot),
+                count = C_ActionBar.GetActionDisplayCount(slot),
+                text = GetActionText(slot),
+            }
         end
     end
     return out
@@ -202,6 +226,7 @@ export function snapshot()
         units = units,
         cvars = cvars,
         bindings = bindings,
+        actions = actions,
     }
     const profile: { [string]: any } = {}
     const failed: string[] = {}

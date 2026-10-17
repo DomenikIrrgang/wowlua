@@ -179,6 +179,24 @@ fn tick(vm: &mut Vm, ms: f64) {
     vm.clock.now += ms / 1000.0;
 }
 
+/// Moves the clock by `seconds` without running anything (the client while
+/// it loads: `/stdtest engine startup`, no timer or OnUpdate before the
+/// loading screen goes).
+pub fn jump(vm: &mut Vm, seconds: f64) {
+    tick(vm, seconds.max(0.0) * 1000.0);
+}
+
+/// Timers overdue after loading come due now, once (a ticker does not
+/// catch up: recorded one tick of a 0.5 s ticker after a 7 s load).
+pub fn catch_up(vm: &mut Vm) {
+    let now = now(vm);
+    for t in engine_mut(vm).timers.list.iter_mut() {
+        if t.due < now {
+            t.due = now;
+        }
+    }
+}
+
 /// Advances the clock by `seconds`, running due timers in the order they
 /// come due (each at its time).
 pub fn advance(vm: &mut Vm, seconds: f64) {

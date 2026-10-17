@@ -81,6 +81,9 @@ pub struct Widget {
     pub resize_bounds: Option<(f64, f64, f64, f64)>,
     /// Created by `CreateFrame` (not a region or another script object).
     pub frame: bool,
+    /// The scroll frame this is the scroll child of (`SetScrollChild`): it
+    /// places the child.
+    pub scroll_parent: Option<WidgetId>,
 }
 
 /// The widgets, and each class's method table and metatable.
@@ -360,6 +363,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         enabled: true,
         resize_bounds: None,
         frame: false,
+        scroll_parent: None,
     };
     let mut w = w;
     // A font string starts 1 x 1 (`/stdtest engine`).
@@ -1668,8 +1672,15 @@ pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64
     if w.name.as_deref() == Some("UIParent") || depth > 64 {
         return Some((0.0, 0.0, SCREEN.0, SCREEN.1));
     }
-    w.points.first()?;
     let s = effective_scale(e, id);
+    // A scroll child without points of its own sits at its scroll frame's
+    // top left (unverified: the scroll offsets are not applied).
+    if w.points.is_empty() {
+        let p = w.scroll_parent?;
+        let r = bounds(vm, p, depth + 1)?;
+        let (width, height) = (w.width * s, w.height * s);
+        return Some((r.0, r.1 + r.3 - height, width, height));
+    }
     // Each point's place on the screen, and which edges it sets.
     let mut left = None;
     let mut right = None;
@@ -2337,6 +2348,25 @@ fn set_font_height(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `SetScrollChild(child)`: stored, and the child placed by this frame.
+fn set_scroll_child(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let child = widget_of(vm, c.arg(2));
+    // The previous child is no longer this frame's.
+    let props = engine(vm).world.widgets[id.0].props;
+    if let Some(old) = stored_args(vm, props, "ScrollChild")
+        .and_then(|a| a.first().copied())
+        .and_then(|v| widget_of(vm, v))
+        && engine(vm).world.widgets[old.0].scroll_parent == Some(id)
+    {
+        engine_mut(vm).world.widgets[old.0].scroll_parent = None;
+    }
+    store(vm, id, "ScrollChild", &[c.arg(2)]);
+    if let Some(child) = child {
+        engine_mut(vm).world.widgets[child.0].scroll_parent = Some(id);
+    }
+    Ok(vec![])
+}
+
 /// A setter's argument as the client keeps it: colors in eight bits each
 /// (text, shadow and vertex colors: `/stdtest engine` fontHeights), a
 /// font's height as camelot keeps it (`kept_font_height`).
@@ -2675,6 +2705,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("IsEnabled", is_enabled),
         ("SetVertexColor", set_vertex_color),
         ("SetFontHeight", set_font_height),
+        ("SetScrollChild", set_scroll_child),
         ("GetVertexColor", get_vertex_color),
     ]
     .into_iter()

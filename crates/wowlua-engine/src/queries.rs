@@ -120,8 +120,56 @@ fn inventory_item_locked(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(locked)])
 }
 
+/// `C_Scenario.GetInfo()`: not in a scenario (recorded: nil name, no
+/// stages, no flags, no rewards).
+fn no_scenario(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    let n = |x: f64| Value::Num(x);
+    Ok(vec![
+        Value::Nil,
+        n(0.0),
+        n(0.0),
+        n(0.0),
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::Bool(false),
+        n(0.0),
+        n(0.0),
+        n(0.0),
+        Value::Nil,
+        Value::Nil,
+        n(0.0),
+    ])
+}
+
+fn empty_table(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Table(vm.new_table())])
+}
+
+fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0)])
+}
+
+/// `C_SettingsUtil.NotifySettingsLoaded()`: `SETTINGS_LOADED` (Blizzard's
+/// settings registrar calls it once its settings are registered, inside
+/// the login's `PLAYER_ENTERING_WORLD`; recorded nested so).
+fn notify_settings_loaded(vm: &mut Vm, _c: NativeCall) -> Ret {
+    crate::widgets::fire_event(vm, "SETTINGS_LOADED", &[]);
+    Ok(vec![])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
+        (
+            "C_SettingsUtil.NotifySettingsLoaded",
+            notify_settings_loaded,
+        ),
+        ("C_Scenario.GetInfo", no_scenario),
+        // No saved instances.
+        ("GetNumSavedInstances", zero),
+        // No quest pop-ups (unverified: not yet asked).
+        ("GetNumAutoQuestPopUps", zero),
+        // No task quests (unverified: not yet asked).
+        ("GetTasksTable", empty_table),
         ("C_CombatLog.DoesObjectMatchFilter", combat_log_filter),
         ("C_CVar.GetCVarBitfield", cvar_bitfield),
         ("UnitIsConnected", unit_is_player_online),

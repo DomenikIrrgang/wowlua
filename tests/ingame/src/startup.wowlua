@@ -1,29 +1,63 @@
 -- /stdtest engine startup: arms a recording of the next login's events (a
 -- /reload), from StdTest's own ADDON_LOADED (its files load before it) to
--- three seconds after PLAYER_ENTERING_WORLD, into StdTestState.engineStartup.
+-- three seconds after PLAYER_ENTERING_WORLD, into StdTestState.engineStartup
+-- (a /reload) or engineStartupLogin (a fresh login).
 -- Unarmed, the recorder stops at that ADDON_LOADED (the saved variables say
 -- whether it is armed only then).
 import state from "/state"
 import say from "/harness"
 
---- A payload value: tables as their sorted keys, else type and value.
-local function show(v: any): string
+--- A payload value in full: tables to depth 3 (keys sorted), else type
+--- and value.
+local function show(v: any, depth: number?): string
     if issecretvalue(v) then
         return `secret {type(v)}`
     end
     if type(v) == "table" then
+        if (depth ?? 0) >= 3 then
+            return "table"
+        end
         const keys: string[] = {}
-        for k in pairs(v :: table) do
-            keys[#keys + 1] = tostring(k)
+        const values: { [string]: any } = {}
+        for k, inner in pairs(v :: table) do
+            const key = tostring(k)
+            keys[#keys + 1] = key
+            values[key] = inner
         end
         table.sort(keys)
-        return `\{{table.concat(keys, ",")}\}`
+        const parts: string[] = {}
+        for _, k in ipairs(keys) do
+            parts[#parts + 1] = `{k}={show(values[k], (depth ?? 0) + 1)}`
+        end
+        return `\{{table.concat(parts, ",")}\}`
     end
     return `{type(v)} {tostring(v)}`
 end
 
 local log: string[]? = {}
 const start = GetTime()
+-- Whether timers and OnUpdate run while the client loads: their runs are
+-- logged among the events.
+local ticks = 0
+C_Timer.NewTicker(0.5, function()
+    ticks = ticks + 1
+    const list = log
+    if list ~= nil and ticks <= 30 then
+        list[#list + 1] = `{string.format("%.3f", GetTime() - start)} TIMER_TICK({ticks})`
+    end
+end, 30)
+local updates = 0
+const updater = CreateFrame("Frame")
+updater:SetScript("OnUpdate", function(_: any, elapsed: number)
+    updates = updates + 1
+    const list = log
+    if list ~= nil and (updates <= 3 or updates % 30 == 0) then
+        list[#list + 1] = `{string.format("%.3f", GetTime() - start)} ON_UPDATE({updates}; {string.format("%.4f", elapsed)})`
+    end
+    if updates >= 600 then
+        updater:SetScript("OnUpdate", nil)
+    end
+end)
 const recorder = CreateFrame("Frame")
 recorder:RegisterAllEvents()
 recorder:SetScript("OnEvent", function(_: any, event: string, ...: any)
@@ -43,9 +77,15 @@ recorder:SetScript("OnEvent", function(_: any, event: string, ...: any)
             log = nil
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
+        -- A fresh login and a /reload are kept apart.
+        const initial = (...)
         C_Timer.After(3, function()
             const st = state() :: any
-            st.engineStartup = list
+            if initial then
+                st.engineStartupLogin = list
+            else
+                st.engineStartup = list
+            end
             st.armStartup = nil
             recorder:UnregisterAllEvents()
             log = nil
@@ -57,5 +97,5 @@ end)
 export function armStartup()
     const st = state() :: any
     st.armStartup = true
-    say("engine startup: armed; type /reload (the login is recorded, then /reload again)")
+    say("engine startup: armed; /reload, or log out and back in (the login is recorded), then /reload")
 end

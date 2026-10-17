@@ -11,7 +11,9 @@
 //! - `/stdtest snapshot`: the character's world as a test profile,
 //!   `…/forever-camelot-character.json`;
 //! - the CVar flags: `crates/wowlua-engine/data/camelot-cvar-flags.txt`;
-//! - the font heights: `crates/wowlua-engine/data/camelot-font-heights.txt`.
+//! - the font heights: `crates/wowlua-engine/data/camelot-font-heights.txt`;
+//! - the static functions' answers: `crates/wowlua-engine/data/camelot-answers.txt`;
+//! - the login: `crates/wowlua-engine/data/camelot-login.txt` (and reload).
 //!
 //! Each part is written only when the file has it.
 
@@ -127,6 +129,123 @@ fn write_table(path: &Path, header: &str, entries: &[(String, String)]) -> Resul
     Ok(())
 }
 
+/// Functions that answer from the client's own data or the account's
+/// settings (the same whatever the character): their recorded answers are
+/// the engine's.
+const STATIC: &[&str] = &[
+    "GetChatTypeIndex",
+    "C_GameRules.IsGameRuleActive",
+    "C_ClassColor.GetClassColor",
+    "C_TradeSkillUI.GetProfessionSkillLineID",
+    "C_SpecializationInfo.GetNumSpecializationsForClassID",
+    "C_CombatAudioAlert.GetThrottle",
+    "GetChatWindowInfo",
+    "GetChatWindowSavedDimensions",
+    "GetChatWindowSavedPosition",
+    "C_BattleNet.IsFriendTagSupportedForCurrentGameType",
+    "C_RecentAllies.IsInteractionCategoryFilterSupportedForCurrentGameType",
+    "GetLFGInfoServer",
+];
+
+/// Events of the player's session, not the client's startup: left out of
+/// the login data.
+const SESSION: &[&str] = &[
+    "CONSOLE_MESSAGE",
+    "SPELL_DATA_LOAD_RESULT",
+    "QUEST_DATA_LOAD_RESULT",
+    "ITEM_DATA_LOAD_RESULT",
+    "CHAT_MSG_",
+    "NAME_PLATE_",
+    "UNIT_SPELLCAST_",
+    "GUILD",
+    "BN_",
+    "CLUB_",
+    "RAF_",
+    "DISCORD",
+    "RECENT_ALLIES",
+    "TOKEN_",
+    "TABARD_",
+    "PLAYER_GUILD_UPDATE",
+    "CRITERIA_UPDATE",
+    "ACTION_RANGE_CHECK_UPDATE",
+    "SPELL_ACTIVATION_OVERLAY",
+    "UPDATE_MOUSEOVER_UNIT",
+    "CURSOR_CHANGED",
+    "WORLD_CURSOR_TOOLTIP_UPDATE",
+    "GLOBAL_MOUSE",
+    "GLOBAL_REGION_MOUSE",
+    "MODIFIER_STATE_CHANGED",
+    "PLAYER_SOFT_",
+    "CURRENT_SPELL_CAST_CHANGED",
+    // The recorder's own marks (when timers and OnUpdate run).
+    "TIMER_TICK",
+    "ON_UPDATE",
+];
+
+/// Events the test's world makes (its items, auras and action bars), not
+/// replayed as recorded.
+const WORLD: &[&str] = &[
+    "PLAYER_EQUIPED_SPELLS_CHANGED",
+    "BAG_UPDATE",
+    "UNIT_INVENTORY_CHANGED",
+    "UNIT_AURA",
+    "ACTION_USABLE_CHANGED",
+    "PLAYERBANKSLOTS_CHANGED",
+];
+
+/// The login's events as the engine replays them: one per line, the
+/// recorded time, the event and its arguments; `$ADDON`, `$BINDINGS`,
+/// `$CVAR` (the world's value of the CVar named before it), `$INVENTORY`
+/// (the inventory's load, made from the world's items) in place of what
+/// the test's world gives.
+fn login_data(me: &Identity, version: &str, lines: &[String]) -> String {
+    let mut out = format!(
+        "# WoW Forever {version}'s login (/stdtest engine startup), from the addon's\n\
+         # ADDON_LOADED to three seconds after PLAYER_ENTERING_WORLD: time, event and\n\
+         # arguments (as recorded; $-names the test's world fills in). The player's\n\
+         # session (chat, guild, Battle.net, others' casts, data loads) is left out\n\
+         # (cargo xtask ingest).\n"
+    );
+    let mut inventory = false;
+    for line in lines {
+        let Some((time, rest)) = line.split_once(' ') else {
+            continue;
+        };
+        let (event, args) = rest.split_once('(').unwrap_or((rest, ")"));
+        let args = args.strip_suffix(')').unwrap_or(args);
+        if SESSION.iter().any(|p| event.starts_with(p)) {
+            continue;
+        }
+        // Only the addon's own ADDON_LOADED: Blizzard's load-on-demand
+        // addons fire theirs as Blizzard's code loads them.
+        if event == "ADDON_LOADED" {
+            if args.starts_with("string StdTest;") {
+                let _ = writeln!(out, "{time}\tADDON_LOADED\t$ADDON; $BINDINGS");
+            }
+            continue;
+        }
+        if WORLD.contains(&event) {
+            if !inventory && event == "PLAYER_EQUIPED_SPELLS_CHANGED" {
+                inventory = true;
+                let _ = writeln!(out, "{time}\t$INVENTORY\t");
+            }
+            continue;
+        }
+        if event == "CVAR_UPDATE" {
+            let name = args.split("; ").next().unwrap_or("");
+            let _ = writeln!(out, "{time}\tCVAR_UPDATE\t{name}; $CVAR");
+            continue;
+        }
+        // A table's contents are not replayed (none of the startup's own
+        // events has one).
+        if args.contains('{') {
+            continue;
+        }
+        let _ = writeln!(out, "{time}\t{event}\t{}", me.scrub(args));
+    }
+    out
+}
+
 pub fn run(root: &Path, saved: &Path) -> Result<()> {
     let src = std::fs::read(saved).with_context(|| saved.display().to_string())?;
     let lua = mlua::Lua::new();
@@ -218,6 +337,32 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
         println!("wrote {}", path.display());
     }
 
+    // The client's login, as engine data (`/stdtest engine startup`).
+    for (key, file) in [
+        ("engineStartupLogin", "camelot-login.txt"),
+        ("engineStartup", "camelot-reload.txt"),
+    ] {
+        let Ok(list) = state.get::<mlua::Table>(key) else {
+            continue;
+        };
+        let lines: Vec<String> = list
+            .sequence_values::<String>()
+            .collect::<Result<_, _>>()
+            .map_err(|e| anyhow!("{e}"))?;
+        // A recording without full payloads (an older StdTest) is skipped.
+        if lines
+            .iter()
+            .any(|l| l.contains("ACTION_USABLE_CHANGED({1,"))
+        {
+            println!("skipped {key}: recorded without full payloads (record it again)");
+            continue;
+        }
+        let text = login_data(&me, &version, &lines);
+        let path = root.join("crates/wowlua-engine/data").join(file);
+        std::fs::write(&path, text)?;
+        println!("wrote {}", path.display());
+    }
+
     // The input recording, in order.
     if let Ok(input) = state.get::<mlua::Table>("engineInput") {
         let mut out = format!(
@@ -258,6 +403,21 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             entries.push((me.scrub(&call), me.scrub(&answer)));
         }
         entries.sort();
+        // The static functions' answers, as engine data.
+        let mut data = format!(
+            "# WoW Forever {version}'s answers to calls of functions that answer from the\n\
+             # client's own data (/stdtest engine answers), as the engine gives them:\n\
+             # the call, a tab, the answer (cargo xtask ingest).\n"
+        );
+        for (call, answer) in &entries {
+            let name = call.split('(').next().unwrap_or("");
+            if STATIC.contains(&name) && !answer.starts_with("error") {
+                let _ = writeln!(data, "{call}\t{answer}");
+            }
+        }
+        let path = root.join("crates/wowlua-engine/data/camelot-answers.txt");
+        std::fs::write(&path, data)?;
+        println!("wrote {}", path.display());
         write_table(
             &client.join("forever-camelot-answers.lua"),
             &format!(

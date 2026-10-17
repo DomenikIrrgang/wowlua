@@ -1,4 +1,258 @@
 {
+  "actions": {
+    "1": {
+      "count": "",
+      "id": 20271,
+      "subType": "spell",
+      "texture": 135959,
+      "type": "spell"
+    },
+    "12": {
+      "count": "",
+      "id": 25780,
+      "subType": "spell",
+      "texture": 135962,
+      "type": "spell"
+    },
+    "2": {
+      "count": "",
+      "id": 1311656,
+      "subType": "spell",
+      "texture": 135957,
+      "type": "spell"
+    },
+    "26": {
+      "count": "",
+      "id": 3100,
+      "subType": "spell",
+      "texture": 136241,
+      "type": "spell"
+    },
+    "27": {
+      "count": "",
+      "id": 2656,
+      "subType": "spell",
+      "texture": 135811,
+      "type": "spell"
+    },
+    "29": {
+      "count": "",
+      "id": 2580,
+      "subType": "spell",
+      "texture": 136025,
+      "type": "spell"
+    },
+    "3": {
+      "count": "",
+      "id": 20162,
+      "subType": "spell",
+      "texture": 135924,
+      "type": "spell"
+    },
+    "30": {
+      "count": "",
+      "id": 20217,
+      "subType": "spell",
+      "texture": 135995,
+      "type": "spell"
+    },
+    "31": {
+      "count": "",
+      "id": 19750,
+      "subType": "spell",
+      "texture": 135907,
+      "type": "spell"
+    },
+    "32": {
+      "count": "",
+      "id": 647,
+      "subType": "spell",
+      "texture": 135920,
+      "type": "spell"
+    },
+    "33": {
+      "count": "",
+      "id": 1044,
+      "subType": "spell",
+      "texture": 135968,
+      "type": "spell"
+    },
+    "35": {
+      "count": "",
+      "id": 19834,
+      "subType": "spell",
+      "texture": 135906,
+      "type": "spell"
+    },
+    "36": {
+      "count": "",
+      "id": 19742,
+      "subType": "spell",
+      "texture": 135970,
+      "type": "spell"
+    },
+    "39": {
+      "count": "",
+      "id": 1044,
+      "subType": "spell",
+      "texture": 135968,
+      "type": "spell"
+    },
+    "4": {
+      "count": "",
+      "id": 20288,
+      "subType": "spell",
+      "texture": 132325,
+      "type": "spell"
+    },
+    "40": {
+      "count": "0",
+      "id": 1205,
+      "texture": 132796,
+      "type": "item"
+    },
+    "41": {
+      "count": "",
+      "id": 5573,
+      "subType": "spell",
+      "texture": 135954,
+      "type": "spell"
+    },
+    "42": {
+      "count": "",
+      "id": 1022,
+      "subType": "spell",
+      "texture": 135964,
+      "type": "spell"
+    },
+    "43": {
+      "count": "",
+      "id": 20271,
+      "subType": "spell",
+      "texture": 135959,
+      "type": "spell"
+    },
+    "44": {
+      "count": "",
+      "id": 1866,
+      "subType": "spell",
+      "texture": 626003,
+      "type": "spell"
+    },
+    "45": {
+      "count": "",
+      "id": 26573,
+      "subType": "spell",
+      "texture": 135926,
+      "type": "spell"
+    },
+    "47": {
+      "count": "",
+      "id": 879,
+      "subType": "spell",
+      "texture": 135903,
+      "type": "spell"
+    },
+    "48": {
+      "count": "",
+      "id": 853,
+      "subType": "spell",
+      "texture": 135963,
+      "type": "spell"
+    },
+    "50": {
+      "count": "",
+      "id": 1022,
+      "subType": "spell",
+      "texture": 135964,
+      "type": "spell"
+    },
+    "54": {
+      "count": "",
+      "id": 7328,
+      "subType": "spell",
+      "texture": 135955,
+      "type": "spell"
+    },
+    "56": {
+      "count": "",
+      "id": 633,
+      "subType": "spell",
+      "texture": 135928,
+      "type": "spell"
+    },
+    "59": {
+      "count": "",
+      "id": 7744,
+      "subType": "spell",
+      "texture": 136187,
+      "type": "spell"
+    },
+    "61": {
+      "count": "",
+      "id": 1866,
+      "subType": "spell",
+      "texture": 626003,
+      "type": "spell"
+    },
+    "62": {
+      "count": "",
+      "id": 879,
+      "subType": "spell",
+      "texture": 135903,
+      "type": "spell"
+    },
+    "63": {
+      "count": "",
+      "id": 20577,
+      "subType": "spell",
+      "texture": 132278,
+      "type": "spell"
+    },
+    "64": {
+      "count": "",
+      "id": 1,
+      "subType": "",
+      "text": "Test",
+      "texture": 841219,
+      "type": "macro"
+    },
+    "65": {
+      "count": "",
+      "id": 26573,
+      "subType": "spell",
+      "texture": 135926,
+      "type": "spell"
+    },
+    "67": {
+      "count": "",
+      "id": 853,
+      "subType": "spell",
+      "texture": 135963,
+      "type": "spell"
+    },
+    "69": {
+      "count": "",
+      "id": 1152,
+      "subType": "spell",
+      "texture": 135949,
+      "type": "spell"
+    },
+    "70": {
+      "count": "",
+      "id": 5573,
+      "subType": "spell",
+      "texture": 135954,
+      "type": "spell"
+    },
+    "72": {
+      "count": "",
+      "id": 2656,
+      "subType": "spell",
+      "texture": 135811,
+      "type": "spell"
+    }
+  },
   "auras": [
     {
       "applications": 0,
@@ -11,104 +265,136 @@
   ],
   "bags": {
     "0": {
-      "items": {
-        "1": {
+      "items": [
+        {
           "bound": true,
           "count": 1,
           "id": 6948,
           "link": "|cnIQ1:|Hitem:6948::::::::21:1486::75:::::::|h[Hearthstone]|h|r"
         },
-        "11": {
-          "bound": true,
-          "count": 1,
-          "id": 277566,
-          "link": "|cnIQ1:|Hitem:277566::::::::21:1486:::::::::|h[Yelmak's Potion]|h|r"
-        },
-        "12": {
-          "bound": true,
-          "count": 1,
-          "id": 3317,
-          "link": "|cnIQ1:|Hitem:3317::::::::21:1486:::::::::|h[A Talking Head]|h|r"
-        },
-        "13": {
-          "bound": true,
-          "count": 1,
-          "id": 286176,
-          "link": "|cnIQ1:|Hitem:286176::::::::21:1486::11:::::::|h[Executor's Motivator]|h|r"
-        },
-        "14": {
-          "bound": true,
-          "count": 1,
-          "id": 267454,
-          "link": "|cnIQ1:|Hitem:267454::::::::21:1486:::::::::|h[Trevan's Weapon Notes]|h|r"
-        },
-        "15": {
-          "bound": true,
-          "count": 1,
-          "id": 16603,
-          "link": "|cnIQ1:|Hitem:16603::::::::21:1486::11:::::::|h[Enchanted Resonite Crystal]|h|r"
-        },
-        "16": {
-          "bound": true,
-          "count": 1,
-          "id": 14544,
-          "link": "|cnIQ1:|Hitem:14544::::::::21:1486:::::::::|h[Lieutenant's Insignia]|h|r"
-        },
-        "17": {
-          "bound": true,
-          "count": 1,
-          "id": 10649,
-          "link": "|cnIQ1:|Hitem:10649::::::::21:1486:::::::::|h[Nightmare Shard]|h|r"
-        },
-        "18": {
-          "bound": true,
-          "count": 13,
-          "id": 6443,
-          "link": "|cnIQ1:|Hitem:6443::::::::21:1486:::::::::|h[Deviate Hide]|h|r"
-        },
-        "19": {
-          "bound": true,
-          "count": 1,
-          "id": 5088,
-          "link": "|cnIQ1:|Hitem:5088::::::::21:1486:::::::::|h[Control Console Operating Manual]|h|r"
-        },
-        "2": {
+        {
           "bound": false,
           "count": 1,
           "id": 279968,
           "link": "|cnIQ1:|Hitem:279968::::::::21:1486:::::::::|h[First Aid Kit]|h|r"
         },
-        "20": {
-          "bound": false,
-          "count": 6,
-          "id": 5075,
-          "link": "|cnIQ1:|Hitem:5075::::::::21:1486:::::::::|h[Blood Shard]|h|r"
-        },
-        "3": {
+        {
           "bound": false,
           "count": 1,
           "id": 279944,
           "link": "|cnIQ1:|Hitem:279944::::::::21:1486:::::::::|h[Sharpening Wheel]|h|r"
         },
-        "5": {
+        {
+          "bound": false,
+          "count": 1,
+          "id": 6529,
+          "link": "|cnIQ1:|Hitem:6529::::::::21:1486:::::::::|h[Shiny Bauble]|h|r"
+        },
+        {
           "bound": false,
           "count": 1,
           "id": 5956,
           "link": "|cnIQ1:|Hitem:5956::::::::21:1486::14:::::::|h[Blacksmith Hammer]|h|r"
         },
-        "7": {
+        {
+          "bound": true,
+          "count": 1,
+          "id": 253664,
+          "link": "|cnIQ1:|Hitem:253664::::::::21:1486::::::::Player-0000-00000000:|h[Linen Reagent Bag]|h|r"
+        },
+        {
           "bound": false,
           "count": 1,
           "id": 4471,
           "link": "|cnIQ1:|Hitem:4471::::::::21:1486:::::::::|h[Flint and Tinder]|h|r"
         },
-        "8": {
+        {
           "bound": true,
           "count": 1,
           "id": 251382,
           "link": "|cnIQ3:|Hitem:251382::::::::21:1486::1:::::::|h[Plans: Protector's Silvered Chain Helm]|h|r"
+        },
+        {
+          "bound": true,
+          "count": 1,
+          "id": 286176,
+          "link": "|cnIQ1:|Hitem:286176::::::::21:1486::11:::::::|h[Executor's Motivator]|h|r",
+          "questItem": true
+        },
+        {
+          "bound": false,
+          "count": 1,
+          "id": 248682,
+          "link": "|cnIQ1:|Hitem:248682::::::::21:1486:::::::::|h[Waylaid Crate: Apprentice Herbs]|h|r"
+        },
+        {
+          "bound": true,
+          "count": 1,
+          "id": 277566,
+          "link": "|cnIQ1:|Hitem:277566::::::::21:1486:::::::::|h[Yelmak's Potion]|h|r",
+          "questItem": true
+        },
+        {
+          "bound": true,
+          "count": 1,
+          "id": 3317,
+          "link": "|cnIQ1:|Hitem:3317::::::::21:1486:::::::::|h[A Talking Head]|h|r",
+          "questActive": true,
+          "questID": 460
+        },
+        {
+          "bound": false,
+          "count": 1,
+          "id": 248685,
+          "link": "|cnIQ1:|Hitem:248685::::::::21:1486:::::::::|h[Waylaid Crate: Apprentice Curiosities]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 7,
+          "id": 2771,
+          "link": "|cnIQ1:|Hitem:2771::::::::21:1486:::::::::|h[Tin Ore]|h|r"
+        },
+        {
+          "bound": true,
+          "count": 1,
+          "id": 16603,
+          "link": "|cnIQ1:|Hitem:16603::::::::21:1486::11:::::::|h[Enchanted Resonite Crystal]|h|r",
+          "questItem": true
+        },
+        {
+          "bound": true,
+          "count": 1,
+          "id": 14544,
+          "link": "|cnIQ1:|Hitem:14544::::::::21:1486:::::::::|h[Lieutenant's Insignia]|h|r",
+          "questItem": true
+        },
+        {
+          "bound": true,
+          "count": 1,
+          "id": 10649,
+          "link": "|cnIQ1:|Hitem:10649::::::::21:1486:::::::::|h[Nightmare Shard]|h|r",
+          "questItem": true
+        },
+        {
+          "bound": true,
+          "count": 13,
+          "id": 6443,
+          "link": "|cnIQ1:|Hitem:6443::::::::21:1486:::::::::|h[Deviate Hide]|h|r",
+          "questItem": true
+        },
+        {
+          "bound": true,
+          "count": 1,
+          "id": 5088,
+          "link": "|cnIQ1:|Hitem:5088::::::::21:1486:::::::::|h[Control Console Operating Manual]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 6,
+          "id": 5075,
+          "link": "|cnIQ1:|Hitem:5075::::::::21:1486:::::::::|h[Blood Shard]|h|r"
         }
-      },
+      ],
       "slots": 20
     },
     "1": {
@@ -116,70 +402,64 @@
         {
           "bound": false,
           "count": 1,
+          "id": 2375,
+          "link": "|cnIQ1:|Hitem:2375::::::::21:1486::14:::::::|h[Battered Leather Gloves]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 1,
+          "id": 2375,
+          "link": "|cnIQ1:|Hitem:2375::::::::21:1486::14:::::::|h[Battered Leather Gloves]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 1,
           "id": 2901,
           "link": "|cnIQ1:|Hitem:2901::::::::21:1486::14:::::::|h[Mining Pick]|h|r"
         },
         {
+          "bound": true,
+          "count": 1,
+          "id": 267454,
+          "link": "|cnIQ1:|Hitem:267454::::::::21:1486:::::::::|h[Trevan's Weapon Notes]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 1,
+          "id": 4238,
+          "link": "|cnIQ1:|Hitem:4238::::::::21:1486::::::::Player-0000-00000000:|h[Linen Bag]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 1,
+          "id": 4238,
+          "link": "|cnIQ1:|Hitem:4238::::::::21:1486::::::::Player-0000-00000000:|h[Linen Bag]|h|r"
+        }
+      ],
+      "slots": 6
+    },
+    "2": {
+      "items": {
+        "2": {
           "bound": false,
           "count": 1,
           "id": 2840,
           "link": "|cnIQ1:|Hitem:2840::::::::21:1486:::::::::|h[Copper Bar]|h|r"
         },
-        {
+        "3": {
           "bound": false,
           "count": 13,
           "id": 2770,
           "link": "|cnIQ1:|Hitem:2770::::::::21:1486:::::::::|h[Copper Ore]|h|r"
         },
-        {
+        "4": {
           "bound": false,
           "count": 9,
           "id": 2836,
           "link": "|cnIQ1:|Hitem:2836::::::::21:1486:::::::::|h[Coarse Stone]|h|r"
         }
-      ],
-      "slots": 4
-    },
-    "2": {
-      "items": {},
-      "slots": 6
-    },
-    "3": {
-      "items": {},
-      "slots": 6
-    },
-    "4": {
-      "items": {},
-      "slots": 6
-    },
-    "5": {
-      "items": {
-        "1": {
-          "bound": false,
-          "count": 1,
-          "id": 248685,
-          "link": "|cnIQ1:|Hitem:248685::::::::21:1486:::::::::|h[Waylaid Crate: Apprentice Curiosities]|h|r"
-        },
-        "2": {
-          "bound": false,
-          "count": 1,
-          "id": 248682,
-          "link": "|cnIQ1:|Hitem:248682::::::::21:1486:::::::::|h[Waylaid Crate: Apprentice Herbs]|h|r"
-        },
-        "3": {
-          "bound": false,
-          "count": 1,
-          "id": 1206,
-          "link": "|cnIQ2:|Hitem:1206::::::::21:1486:::::::::|h[Moss Agate]|h|r"
-        },
-        "5": {
-          "bound": false,
-          "count": 7,
-          "id": 2771,
-          "link": "|cnIQ1:|Hitem:2771::::::::21:1486:::::::::|h[Tin Ore]|h|r"
-        }
       },
-      "slots": 6
+      "slots": 4
     }
   },
   "bindings": {
@@ -251,6 +531,7 @@
     "F4": "RAIDTARGET6",
     "F5": "TOGGLEPINGLISTENER",
     "F6": "Open Issue Report",
+    "F7": "INTERACTTARGET",
     "F8": "TOGGLEBAG1",
     "F9": "TOGGLEBAG2",
     "G": "MULTIACTIONBAR1BUTTON5",
@@ -367,7 +648,6 @@
     "GxFullscreenResolution": "2560x1440",
     "GxMonitor": "1",
     "OutlineEngineMode": "2",
-    "PraiseTheSun": "0",
     "RAIDOutlineEngineMode": "2",
     "RAIDSSAO": "3",
     "RAIDTerrainLodDiv": "512",
@@ -400,6 +680,9 @@
     "ShakeStrengthCamera": "1",
     "ShakeStrengthUI": "1",
     "ShowAllSpellRanks": "1",
+    "SoftTargetEnemy": "3",
+    "SoftTargetFriend": "3",
+    "SoftTargetInteract": "3",
     "Sound_AmbienceVolume": "0",
     "Sound_DialogVolume": "0",
     "Sound_MasterVolume": "1",
@@ -419,7 +702,7 @@
     "autoLootDefault": "1",
     "cameraDistanceMaxZoomFactor": "2",
     "cameraSavedDistance": "30.000000",
-    "cameraSavedPitch": "32.626163",
+    "cameraSavedPitch": "29.115789",
     "cameraSmoothStyle": "0",
     "cameraView": "1",
     "categorizeTrainerUI": "1",
@@ -439,11 +722,11 @@
     "farclip": "7000",
     "ffxAntiAliasingMode": "0",
     "flaggedTutorials": "v21###&###%###=###'",
-    "gameTip": "37",
+    "gameTip": "38",
     "giQuality": "3",
     "groundEffectDensity": "48",
     "groundEffectDist": "200",
-    "hardTrackedQuests": "v21##2~##fi#-~v##'d##-w##gh##hc##.P#-#y##G8##.K##(V##'{##-v##.k##-C##iW##,\\##fV##.c##-@##(/#.9}",
+    "hardTrackedQuests": "v21##2~##fi#-~v##'d##-w##gh##hc##.P#-#y##G8##.K##(V##'{##-v#.9}##.k##-C##iW##,\\##fV##.c##-@##(/",
     "hardTrackedWorldQuests": "v21",
     "hasSelectedExperiencePreset": "1",
     "horizonClip": "7000",
@@ -588,21 +871,6 @@
       "subclassID": 0,
       "type": "Quest"
     },
-    "1206": {
-      "classID": 7,
-      "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
-      "icon": 134105,
-      "itemLevel": 25,
-      "link": "|cnIQ2:|Hitem:1206::::::::21:1486:::::::::|h[Moss Agate]|h|r",
-      "minLevel": 0,
-      "name": "Moss Agate",
-      "quality": 2,
-      "sellPrice": 400,
-      "stackCount": 20,
-      "subType": "Other",
-      "subclassID": 11,
-      "type": "Trade Goods"
-    },
     "14147": {
       "classID": 4,
       "equipLoc": "INVTYPE_WRIST",
@@ -647,6 +915,21 @@
       "subType": "Quest",
       "subclassID": 0,
       "type": "Quest"
+    },
+    "2375": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_HAND",
+      "icon": 132952,
+      "itemLevel": 10,
+      "link": "|cnIQ1:|Hitem:2375::::::::21:1486:::::::::|h[Battered Leather Gloves]|h|r",
+      "minLevel": 5,
+      "name": "Battered Leather Gloves",
+      "quality": 1,
+      "sellPrice": 34,
+      "stackCount": 1,
+      "subType": "Leather",
+      "subclassID": 2,
+      "type": "Armor"
     },
     "248682": {
       "classID": 0,
@@ -707,6 +990,21 @@
       "subType": "Blacksmithing",
       "subclassID": 4,
       "type": "Recipe"
+    },
+    "253664": {
+      "classID": 1,
+      "equipLoc": "INVTYPE_BAG",
+      "icon": 348520,
+      "itemLevel": 5,
+      "link": "|cnIQ1:|Hitem:253664::::::::21:1486:::::::::|h[Linen Reagent Bag]|h|r",
+      "minLevel": 0,
+      "name": "Linen Reagent Bag",
+      "quality": 1,
+      "sellPrice": 200,
+      "stackCount": 1,
+      "subType": "Reagent Bag",
+      "subclassID": 11,
+      "type": "Container"
     },
     "267454": {
       "classID": 12,
@@ -963,6 +1261,21 @@
       "subclassID": 3,
       "type": "Armor"
     },
+    "4238": {
+      "classID": 1,
+      "equipLoc": "INVTYPE_BAG",
+      "icon": 133622,
+      "itemLevel": 5,
+      "link": "|cnIQ1:|Hitem:4238::::::::21:1486:::::::::|h[Linen Bag]|h|r",
+      "minLevel": 0,
+      "name": "Linen Bag",
+      "quality": 1,
+      "sellPrice": 200,
+      "stackCount": 1,
+      "subType": "Bag",
+      "subclassID": 0,
+      "type": "Container"
+    },
     "4471": {
       "classID": 7,
       "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
@@ -1068,6 +1381,21 @@
       "subclassID": 0,
       "type": "Quest"
     },
+    "6529": {
+      "classID": 0,
+      "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
+      "icon": 134335,
+      "itemLevel": 10,
+      "link": "|cnIQ1:|Hitem:6529::::::::21:1486:::::::::|h[Shiny Bauble]|h|r",
+      "minLevel": 0,
+      "name": "Shiny Bauble",
+      "quality": 1,
+      "sellPrice": 12,
+      "stackCount": 20,
+      "subType": "Other",
+      "subclassID": 8,
+      "type": "Consumable"
+    },
     "6948": {
       "classID": 15,
       "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
@@ -1084,12 +1412,12 @@
       "type": "Miscellaneous"
     }
   },
-  "money": 32978,
+  "money": 32938,
   "position": {
-    "mapID": 1456,
-    "subZone": "",
-    "x": 0.45988529920578,
-    "y": 0.4121838212013245,
-    "zone": "Thunder Bluff"
+    "mapID": 1412,
+    "subZone": "Bloodhoof Village",
+    "x": 0.4525937438011169,
+    "y": 0.6208386421203613,
+    "zone": "Mulgore"
   }
 }

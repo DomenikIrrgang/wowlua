@@ -18,9 +18,11 @@ pub mod facts;
 pub mod framescript;
 pub mod gamedata;
 pub mod input;
+pub mod login;
 pub mod merchant;
 pub mod protection;
 pub mod queries;
+pub mod recorded;
 pub mod tooltip;
 pub mod ui;
 pub mod units;
@@ -177,8 +179,11 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     vm.host = Some(Box::new(Engine {
         flavor: flavor.to_string(),
         api,
-        behaviours: clock::behaviours()
+        // The recorded answers first: any behaviour of the engine's own
+        // takes their place.
+        behaviours: recorded::behaviours(flavor)
             .into_iter()
+            .chain(clock::behaviours())
             .chain(units::behaviours())
             .chain(units::more_behaviours())
             .chain(curves::behaviours())
@@ -267,7 +272,10 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             }
         };
         if !exists {
-            let native = vm.native(short, f);
+            // Its full name as the upvalue (behaviours shared by several
+            // functions tell them apart by it).
+            let full = vm.str(name);
+            let native = vm.native_with(short, f, vec![full]);
             match ns {
                 None => vm.set_global(short, native),
                 Some(ns) => {
@@ -543,53 +551,70 @@ pub fn defaults(vm: &mut Vm, api: &api::Api, doc: &serde_json::Value) -> Vec<Val
     }
     returns
         .iter()
-        .map(|r| {
-            let nilable = r.get("Nilable").and_then(serde_json::Value::as_bool) == Some(true);
-            let ty = r
-                .get("Type")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("");
-            if nilable {
-                return Value::Nil;
-            }
-            let ty = api.aliases.get(ty).map(String::as_str).unwrap_or(ty);
-            match ty {
-                "bool" | "boolean" => Value::Bool(false),
-                "string" | "cstring" => vm.str(""),
-                "table" => Value::Table(vm.new_table()),
-                _ if api.structures.contains(ty) => Value::Table(vm.new_table()),
-                _ if api.enum_names.contains(ty) => api
-                    .enums
-                    .iter()
-                    .find(|(n, _)| *n == ty)
-                    .and_then(|(_, f)| f.first().map(|(_, v)| Value::Num(*v)))
-                    .unwrap_or(Value::Num(0.0)),
-                _ if ty.contains("string") => vm.str(""),
-                // Numbers by their alias; other types are objects.
-                "number" | "luaIndex" | "uiUnit" | "fileID" | "time_t" | "BigInteger"
-                | "BigUInteger" | "WOWMONEY" | "SingleColorValue" | "uiFontHeight" => {
-                    Value::Num(0.0)
-                }
-                // An object of its mixin (`ColorMixin`), when Blizzard's code
-                // defined it.
-                _ if r.get("Mixin").is_some() => {
-                    let t = vm.new_table();
-                    let mixin = r.get("Mixin").and_then(serde_json::Value::as_str);
-                    if let Some(Value::Table(m)) = mixin.map(|m| vm.get_global(m)) {
-                        let methods: Vec<(Value, Value)> = vm.heap.table(m).entries().collect();
-                        for (k, f) in methods {
-                            let _ = vm.heap.table_mut(t).set(k, f);
-                        }
-                    }
-                    Value::Table(t)
-                }
-                _ if ty.ends_with("ID") || ty.ends_with("Id") || ty.ends_with("Index") => {
-                    Value::Num(0.0)
-                }
-                _ => Value::Table(vm.new_table()),
-            }
-        })
+        .map(|r| default_value(vm, api, r, 0))
         .collect()
+}
+
+/// A documented value's empty value: a structure with its fields' (to a
+/// depth), a number 0, a string "", false, an empty table.
+fn default_value(vm: &mut Vm, api: &api::Api, r: &serde_json::Value, depth: usize) -> Value {
+    let nilable = r.get("Nilable").and_then(serde_json::Value::as_bool) == Some(true);
+    let ty = r
+        .get("Type")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    if nilable {
+        return Value::Nil;
+    }
+    let ty = api.aliases.get(ty).map(String::as_str).unwrap_or(ty);
+    match ty {
+        "bool" | "boolean" => Value::Bool(false),
+        "string" | "cstring" => vm.str(""),
+        "table" => Value::Table(vm.new_table()),
+        _ if api.structures.contains(ty) => {
+            let t = vm.new_table();
+            if depth < 4
+                && let Some(fields) = api.structure_fields.get(ty)
+            {
+                for f in fields {
+                    let Some(name) = f.get("Name").and_then(serde_json::Value::as_str) else {
+                        continue;
+                    };
+                    let v = default_value(vm, api, f, depth + 1);
+                    if !v.is_nil() {
+                        let k = vm.str(name);
+                        let _ = vm.heap.table_mut(t).set(k, v);
+                    }
+                }
+            }
+            Value::Table(t)
+        }
+        _ if api.enum_names.contains(ty) => api
+            .enums
+            .iter()
+            .find(|(n, _)| *n == ty)
+            .and_then(|(_, f)| f.first().map(|(_, v)| Value::Num(*v)))
+            .unwrap_or(Value::Num(0.0)),
+        _ if ty.contains("string") => vm.str(""),
+        // Numbers by their alias; other types are objects.
+        "number" | "luaIndex" | "uiUnit" | "fileID" | "time_t" | "BigInteger" | "BigUInteger"
+        | "WOWMONEY" | "SingleColorValue" | "uiFontHeight" => Value::Num(0.0),
+        // An object of its mixin (`ColorMixin`), when Blizzard's code
+        // defined it.
+        _ if r.get("Mixin").is_some() => {
+            let t = vm.new_table();
+            let mixin = r.get("Mixin").and_then(serde_json::Value::as_str);
+            if let Some(Value::Table(m)) = mixin.map(|m| vm.get_global(m)) {
+                let methods: Vec<(Value, Value)> = vm.heap.table(m).entries().collect();
+                for (k, f) in methods {
+                    let _ = vm.heap.table_mut(t).set(k, f);
+                }
+            }
+            Value::Table(t)
+        }
+        _ if ty.ends_with("ID") || ty.ends_with("Id") || ty.ends_with("Index") => Value::Num(0.0),
+        _ => Value::Table(vm.new_table()),
+    }
 }
 
 /// An undocumented C function without behaviour: nothing for Blizzard's
@@ -632,6 +657,14 @@ pub fn lua_helper(
 /// Notes a call secure code made without an answer: `name(args)`, the
 /// arguments from `first` on (literals; tables as `{}`).
 pub(crate) fn note_default(vm: &mut Vm, name: &str, c: &NativeCall, first: usize) {
+    let call = call_text(vm, name, c, first);
+    engine_mut(vm).defaulted_calls.insert(call);
+}
+
+/// A call as text, `name(1, "x", nil)`: its arguments from `first` on
+/// (literals; tables as `{}`). Probes ask the client these calls, and
+/// their answers are looked up by them.
+pub(crate) fn call_text(vm: &Vm, name: &str, c: &NativeCall, first: usize) -> String {
     let args: Vec<String> = (first..=c.len())
         .map(|i| match vm.hidden(c.arg(i)) {
             Value::Nil => "nil".to_string(),
@@ -643,8 +676,7 @@ pub(crate) fn note_default(vm: &mut Vm, name: &str, c: &NativeCall, first: usize
             _ => "?".to_string(),
         })
         .collect();
-    let call = format!("{name}({})", args.join(", "));
-    engine_mut(vm).defaulted_calls.insert(call);
+    format!("{name}({})", args.join(", "))
 }
 
 /// Every API function: its behaviour, or the "not mocked" error.

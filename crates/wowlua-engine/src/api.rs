@@ -52,6 +52,8 @@ pub struct Api {
     /// The documentation's enumerations and structures, by name.
     pub enum_names: HashSet<String>,
     pub structures: HashSet<String>,
+    /// A structure's fields (`Name`, `Type`, `Nilable`, …).
+    pub structure_fields: HashMap<String, Vec<Json>>,
     /// Type aliases from the declarations (`type ClubId = string`).
     pub aliases: HashMap<String, String>,
     /// The templates and intrinsic frame types Blizzard's UI code defines,
@@ -172,6 +174,7 @@ fn parse(gz: &[u8]) -> Api {
         constants: Vec::new(),
         enum_names: HashSet::new(),
         structures: HashSet::new(),
+        structure_fields: HashMap::new(),
         aliases: HashMap::new(),
         templates: data
             .get("templates")
@@ -279,6 +282,8 @@ fn parse(gz: &[u8]) -> Api {
                     api.callbacks.insert(tname);
                 }
                 Some("Structure") => {
+                    api.structure_fields
+                        .insert(tname.clone(), list(&t, "Fields"));
                     api.structures.insert(tname);
                 }
                 Some("Enumeration") => {

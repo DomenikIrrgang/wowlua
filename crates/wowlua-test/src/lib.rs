@@ -353,6 +353,7 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
 
     // The addon's key bindings, which the client reads at startup.
     let bindings = dir.join("Bindings.xml");
+    natives::set_has_bindings(bindings.exists());
     if bindings.exists() {
         wowlua_engine::bindings::load_bindings_xml(&mut vm, &bindings, Some(&name))?;
     }

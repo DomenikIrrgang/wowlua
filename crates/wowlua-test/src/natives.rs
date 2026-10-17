@@ -10,6 +10,8 @@ use wowlua_vm::{NativeCall, TableRef, Value, Vm};
 struct State {
     printed: Vec<u8>,
     errors: Vec<String>,
+    /// Where each error was raised (its stack), for the runner's reports.
+    stacks: Vec<String>,
     /// How many of `errors` a test has read (`mock.errors()`) or the runner
     /// reported.
     read: usize,
@@ -19,6 +21,7 @@ struct State {
     addon: String,
     /// The SavedVariables a reload keeps, set at the next login.
     saved: Option<Vec<(String, crate::saved::Saved)>>,
+    has_bindings: bool,
 }
 
 thread_local! {
@@ -39,11 +42,17 @@ pub fn take_printed() -> String {
     })
 }
 
-/// The errors since the last read, marked read.
+/// The errors since the last read, marked read: each with where it was
+/// raised.
 pub fn unread_errors() -> Vec<String> {
     STATE.with(|s| {
         let mut s = s.borrow_mut();
-        let unread = s.errors[s.read..].to_vec();
+        let unread = (s.read..s.errors.len())
+            .map(|i| match s.stacks.get(i) {
+                Some(stack) if !stack.is_empty() => format!("{}\n{stack}", s.errors[i]),
+                _ => s.errors[i].clone(),
+            })
+            .collect();
         s.read = s.errors.len();
         unread
     })
@@ -60,7 +69,12 @@ pub fn error_handler(vm: &mut Vm, c: NativeCall) -> Ret {
             _ => "?".into(),
         },
     };
-    STATE.with(|s| s.borrow_mut().errors.push(message));
+    let stack = vm.traceback(1);
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        s.errors.push(message);
+        s.stacks.push(stack);
+    });
     Ok(vec![v])
 }
 
@@ -168,21 +182,20 @@ pub fn drop_saved() {
 }
 
 /// Logging in: the SavedVariables a reload kept set before `ADDON_LOADED`,
-/// then `PLAYER_ENTERING_WORLD` with `isInitialLogin` or `isReloadingUi`.
+/// then the client's login (`wowlua_engine::login`).
 pub fn login(vm: &mut Vm, addon: &str) {
     let saved = STATE.with(|s| s.borrow_mut().saved.take());
     let reloading = saved.is_some();
     if let Some(saved) = &saved {
         crate::saved::restore(vm, saved);
     }
-    let name = vm.str(addon);
-    wowlua_engine::widgets::fire_event(vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
-    wowlua_engine::widgets::fire_event(vm, "PLAYER_LOGIN", &[]);
-    wowlua_engine::widgets::fire_event(
-        vm,
-        "PLAYER_ENTERING_WORLD",
-        &[Value::Bool(!reloading), Value::Bool(reloading)],
-    );
+    let has_bindings = STATE.with(|s| s.borrow().has_bindings);
+    wowlua_engine::login::login(vm, addon, has_bindings, reloading);
+}
+
+/// Whether the addon has a `Bindings.xml` (`ADDON_LOADED`'s second value).
+pub fn set_has_bindings(has: bool) {
+    STATE.with(|s| s.borrow_mut().has_bindings = has);
 }
 
 fn login_control(vm: &mut Vm, _c: NativeCall) -> Ret {

@@ -1,0 +1,239 @@
+# WoW Forever 1.60.1 (70425)'s answers to calls of functions that answer from the
+# client's own data (/stdtest engine answers), as the engine gives them:
+# the call, a tab, the answer (cargo xtask ingest).
+C_BattleNet.IsFriendTagSupportedForCurrentGameType(0)	1: boolean true
+C_BattleNet.IsFriendTagSupportedForCurrentGameType(1)	1: boolean true
+C_BattleNet.IsFriendTagSupportedForCurrentGameType(2)	1: boolean true
+C_BattleNet.IsFriendTagSupportedForCurrentGameType(3)	1: boolean true
+C_BattleNet.IsFriendTagSupportedForCurrentGameType(4)	1: boolean false
+C_BattleNet.IsFriendTagSupportedForCurrentGameType(5)	1: boolean true
+C_BattleNet.IsFriendTagSupportedForCurrentGameType(6)	1: boolean true
+C_BattleNet.IsFriendTagSupportedForCurrentGameType(7)	1: boolean true
+C_BattleNet.IsFriendTagSupportedForCurrentGameType(8)	1: boolean true
+C_BattleNet.IsFriendTagSupportedForCurrentGameType(9)	1: boolean true
+C_ClassColor.GetClassColor("ADVENTURER")	0: 
+C_ClassColor.GetClassColor("DEATHKNIGHT")	0: 
+C_ClassColor.GetClassColor("DEMONHUNTER")	0: 
+C_ClassColor.GetClassColor("DRUID")	1: {GenerateHexColor=function function,GenerateHexColorMarkup=function function,GenerateHexColorNoAlpha=function function,GetHSL=function function,GetRGB=function function,GetRGBA=function function,GetRGBAAsBytes=function function,GetRGBAsBytes=function function,IsEqualTo=function function,IsRGBEqualTo=function function,OnLoad=function function,SetRGB=function function,SetRGBA=function function,WrapTextInColorCode=function function,b=number 0.039215687662363,g=number 0.48627454042435,r=number 1}
+C_ClassColor.GetClassColor("EVOKER")	0: 
+C_ClassColor.GetClassColor("HUNTER")	1: {GenerateHexColor=function function,GenerateHexColorMarkup=function function,GenerateHexColorNoAlpha=function function,GetHSL=function function,GetRGB=function function,GetRGBA=function function,GetRGBAAsBytes=function function,GetRGBAsBytes=function function,IsEqualTo=function function,IsRGBEqualTo=function function,OnLoad=function function,SetRGB=function function,SetRGBA=function function,WrapTextInColorCode=function function,b=number 0.44705885648727,g=number 0.82745105028152,r=number 0.66666668653488}
+C_ClassColor.GetClassColor("MAGE")	1: {GenerateHexColor=function function,GenerateHexColorMarkup=function function,GenerateHexColorNoAlpha=function function,GetHSL=function function,GetRGB=function function,GetRGBA=function function,GetRGBAAsBytes=function function,GetRGBAsBytes=function function,IsEqualTo=function function,IsRGBEqualTo=function function,OnLoad=function function,SetRGB=function function,SetRGBA=function function,WrapTextInColorCode=function function,b=number 0.9215686917305,g=number 0.78039222955704,r=number 0.24705883860588}
+C_ClassColor.GetClassColor("MONK")	0: 
+C_ClassColor.GetClassColor("PALADIN")	1: {GenerateHexColor=function function,GenerateHexColorMarkup=function function,GenerateHexColorNoAlpha=function function,GetHSL=function function,GetRGB=function function,GetRGBA=function function,GetRGBAAsBytes=function function,GetRGBAsBytes=function function,IsEqualTo=function function,IsRGBEqualTo=function function,OnLoad=function function,SetRGB=function function,SetRGBA=function function,WrapTextInColorCode=function function,b=number 0.7294117808342,g=number 0.54901963472366,r=number 0.95686280727386}
+C_ClassColor.GetClassColor("PRIEST")	1: {GenerateHexColor=function function,GenerateHexColorMarkup=function function,GenerateHexColorNoAlpha=function function,GetHSL=function function,GetRGB=function function,GetRGBA=function function,GetRGBAAsBytes=function function,GetRGBAsBytes=function function,IsEqualTo=function function,IsRGBEqualTo=function function,OnLoad=function function,SetRGB=function function,SetRGBA=function function,WrapTextInColorCode=function function,b=number 1,g=number 1,r=number 1}
+C_ClassColor.GetClassColor("ROGUE")	1: {GenerateHexColor=function function,GenerateHexColorMarkup=function function,GenerateHexColorNoAlpha=function function,GetHSL=function function,GetRGB=function function,GetRGBA=function function,GetRGBAAsBytes=function function,GetRGBAsBytes=function function,IsEqualTo=function function,IsRGBEqualTo=function function,OnLoad=function function,SetRGB=function function,SetRGBA=function function,WrapTextInColorCode=function function,b=number 0.4078431725502,g=number 0.95686280727386,r=number 1}
+C_ClassColor.GetClassColor("SHAMAN")	1: {GenerateHexColor=function function,GenerateHexColorMarkup=function function,GenerateHexColorNoAlpha=function function,GetHSL=function function,GetRGB=function function,GetRGBA=function function,GetRGBAAsBytes=function function,GetRGBAsBytes=function function,IsEqualTo=function function,IsRGBEqualTo=function function,OnLoad=function function,SetRGB=function function,SetRGBA=function function,WrapTextInColorCode=function function,b=number 0.8666667342186,g=number 0.43921571969986,r=number 0}
+C_ClassColor.GetClassColor("TRAVELER")	0: 
+C_ClassColor.GetClassColor("WARLOCK")	1: {GenerateHexColor=function function,GenerateHexColorMarkup=function function,GenerateHexColorNoAlpha=function function,GetHSL=function function,GetRGB=function function,GetRGBA=function function,GetRGBAAsBytes=function function,GetRGBAsBytes=function function,IsEqualTo=function function,IsRGBEqualTo=function function,OnLoad=function function,SetRGB=function function,SetRGBA=function function,WrapTextInColorCode=function function,b=number 0.93333339691162,g=number 0.53333336114883,r=number 0.52941179275513}
+C_ClassColor.GetClassColor("WARRIOR")	1: {GenerateHexColor=function function,GenerateHexColorMarkup=function function,GenerateHexColorNoAlpha=function function,GetHSL=function function,GetRGB=function function,GetRGBA=function function,GetRGBAAsBytes=function function,GetRGBAsBytes=function function,IsEqualTo=function function,IsRGBEqualTo=function function,OnLoad=function function,SetRGB=function function,SetRGBA=function function,WrapTextInColorCode=function function,b=number 0.42745101451874,g=number 0.60784316062927,r=number 0.77647066116333}
+C_CombatAudioAlert.GetThrottle(0)	1: number 1
+C_CombatAudioAlert.GetThrottle(1)	1: number 0
+C_CombatAudioAlert.GetThrottle(10)	1: number 10
+C_CombatAudioAlert.GetThrottle(2)	1: number 0
+C_CombatAudioAlert.GetThrottle(3)	1: number 0
+C_CombatAudioAlert.GetThrottle(4)	1: number 0
+C_CombatAudioAlert.GetThrottle(5)	1: number 0
+C_CombatAudioAlert.GetThrottle(6)	1: number 0
+C_CombatAudioAlert.GetThrottle(7)	1: number 10
+C_CombatAudioAlert.GetThrottle(8)	1: number 10
+C_CombatAudioAlert.GetThrottle(9)	1: number 10
+C_GameRules.IsGameRuleActive(101)	1: boolean true
+C_GameRules.IsGameRuleActive(102)	1: boolean true
+C_GameRules.IsGameRuleActive(105)	1: boolean false
+C_GameRules.IsGameRuleActive(106)	1: boolean false
+C_GameRules.IsGameRuleActive(107)	1: boolean false
+C_GameRules.IsGameRuleActive(130)	1: boolean false
+C_GameRules.IsGameRuleActive(131)	1: boolean false
+C_GameRules.IsGameRuleActive(145)	1: boolean false
+C_GameRules.IsGameRuleActive(146)	1: boolean false
+C_GameRules.IsGameRuleActive(147)	1: boolean false
+C_GameRules.IsGameRuleActive(156)	1: boolean false
+C_GameRules.IsGameRuleActive(162)	1: boolean true
+C_GameRules.IsGameRuleActive(163)	1: boolean false
+C_GameRules.IsGameRuleActive(29)	1: boolean false
+C_GameRules.IsGameRuleActive(35)	1: boolean false
+C_GameRules.IsGameRuleActive(36)	1: boolean false
+C_GameRules.IsGameRuleActive(37)	1: boolean false
+C_GameRules.IsGameRuleActive(38)	1: boolean false
+C_GameRules.IsGameRuleActive(41)	1: boolean false
+C_GameRules.IsGameRuleActive(42)	1: boolean true
+C_GameRules.IsGameRuleActive(43)	1: boolean false
+C_GameRules.IsGameRuleActive(44)	1: boolean false
+C_GameRules.IsGameRuleActive(45)	1: boolean false
+C_GameRules.IsGameRuleActive(47)	1: boolean false
+C_GameRules.IsGameRuleActive(48)	1: boolean false
+C_GameRules.IsGameRuleActive(60)	1: boolean false
+C_GameRules.IsGameRuleActive(61)	1: boolean false
+C_GameRules.IsGameRuleActive(64)	1: boolean false
+C_GameRules.IsGameRuleActive(67)	1: boolean false
+C_GameRules.IsGameRuleActive(68)	1: boolean false
+C_GameRules.IsGameRuleActive(69)	1: boolean false
+C_GameRules.IsGameRuleActive(70)	1: boolean true
+C_GameRules.IsGameRuleActive(71)	1: boolean false
+C_GameRules.IsGameRuleActive(74)	1: boolean false
+C_GameRules.IsGameRuleActive(75)	1: boolean false
+C_GameRules.IsGameRuleActive(76)	1: boolean false
+C_GameRules.IsGameRuleActive(79)	1: boolean false
+C_GameRules.IsGameRuleActive(80)	1: boolean false
+C_GameRules.IsGameRuleActive(81)	1: boolean false
+C_GameRules.IsGameRuleActive(82)	1: boolean false
+C_GameRules.IsGameRuleActive(86)	1: boolean false
+C_RecentAllies.IsInteractionCategoryFilterSupportedForCurrentGameType(0)	1: boolean true
+C_RecentAllies.IsInteractionCategoryFilterSupportedForCurrentGameType(1)	1: boolean true
+C_RecentAllies.IsInteractionCategoryFilterSupportedForCurrentGameType(2)	1: boolean true
+C_RecentAllies.IsInteractionCategoryFilterSupportedForCurrentGameType(3)	1: boolean true
+C_RecentAllies.IsInteractionCategoryFilterSupportedForCurrentGameType(4)	1: boolean false
+C_RecentAllies.IsInteractionCategoryFilterSupportedForCurrentGameType(5)	1: boolean true
+C_SpecializationInfo.GetNumSpecializationsForClassID(1)	1: number 1
+C_SpecializationInfo.GetNumSpecializationsForClassID(11)	1: number 1
+C_SpecializationInfo.GetNumSpecializationsForClassID(2)	1: number 1
+C_SpecializationInfo.GetNumSpecializationsForClassID(3)	1: number 1
+C_SpecializationInfo.GetNumSpecializationsForClassID(4)	1: number 1
+C_SpecializationInfo.GetNumSpecializationsForClassID(5)	1: number 1
+C_SpecializationInfo.GetNumSpecializationsForClassID(7)	1: number 1
+C_SpecializationInfo.GetNumSpecializationsForClassID(8)	1: number 1
+C_SpecializationInfo.GetNumSpecializationsForClassID(9)	1: number 1
+C_TradeSkillUI.GetProfessionSkillLineID(0)	1: number 129
+C_TradeSkillUI.GetProfessionSkillLineID(1)	1: number 164
+C_TradeSkillUI.GetProfessionSkillLineID(10)	1: number 356
+C_TradeSkillUI.GetProfessionSkillLineID(11)	1: number 393
+C_TradeSkillUI.GetProfessionSkillLineID(12)	1: number 0
+C_TradeSkillUI.GetProfessionSkillLineID(13)	1: number 0
+C_TradeSkillUI.GetProfessionSkillLineID(14)	1: number 0
+C_TradeSkillUI.GetProfessionSkillLineID(2)	1: number 165
+C_TradeSkillUI.GetProfessionSkillLineID(3)	1: number 171
+C_TradeSkillUI.GetProfessionSkillLineID(4)	1: number 182
+C_TradeSkillUI.GetProfessionSkillLineID(5)	1: number 185
+C_TradeSkillUI.GetProfessionSkillLineID(6)	1: number 186
+C_TradeSkillUI.GetProfessionSkillLineID(7)	1: number 197
+C_TradeSkillUI.GetProfessionSkillLineID(8)	1: number 202
+C_TradeSkillUI.GetProfessionSkillLineID(9)	1: number 333
+GetChatTypeIndex("ACHIEVEMENT")	1: number 47
+GetChatTypeIndex("AFK")	1: number 24
+GetChatTypeIndex("BG_SYSTEM_ALLIANCE")	1: number 38
+GetChatTypeIndex("BG_SYSTEM_HORDE")	1: number 39
+GetChatTypeIndex("BG_SYSTEM_NEUTRAL")	1: number 37
+GetChatTypeIndex("BN_ALERT")	1: number 0
+GetChatTypeIndex("BN_BROADCAST")	1: number 0
+GetChatTypeIndex("BN_BROADCAST_INFORM")	1: number 0
+GetChatTypeIndex("BN_INLINE_TOAST_ALERT")	1: number 54
+GetChatTypeIndex("BN_INLINE_TOAST_BROADCAST")	1: number 55
+GetChatTypeIndex("BN_INLINE_TOAST_BROADCAST_INFORM")	1: number 56
+GetChatTypeIndex("BN_WHISPER")	1: number 52
+GetChatTypeIndex("BN_WHISPER_INFORM")	1: number 53
+GetChatTypeIndex("BN_WHISPER_PLAYER_OFFLINE")	1: number 58
+GetChatTypeIndex("CHANNEL")	1: number 18
+GetChatTypeIndex("CHANNEL1")	1: number 74
+GetChatTypeIndex("CHANNEL10")	1: number 83
+GetChatTypeIndex("CHANNEL11")	1: number 84
+GetChatTypeIndex("CHANNEL12")	1: number 85
+GetChatTypeIndex("CHANNEL13")	1: number 86
+GetChatTypeIndex("CHANNEL14")	1: number 87
+GetChatTypeIndex("CHANNEL15")	1: number 88
+GetChatTypeIndex("CHANNEL16")	1: number 89
+GetChatTypeIndex("CHANNEL17")	1: number 90
+GetChatTypeIndex("CHANNEL18")	1: number 91
+GetChatTypeIndex("CHANNEL19")	1: number 92
+GetChatTypeIndex("CHANNEL2")	1: number 75
+GetChatTypeIndex("CHANNEL20")	1: number 93
+GetChatTypeIndex("CHANNEL3")	1: number 76
+GetChatTypeIndex("CHANNEL4")	1: number 77
+GetChatTypeIndex("CHANNEL5")	1: number 78
+GetChatTypeIndex("CHANNEL6")	1: number 79
+GetChatTypeIndex("CHANNEL7")	1: number 80
+GetChatTypeIndex("CHANNEL8")	1: number 81
+GetChatTypeIndex("CHANNEL9")	1: number 82
+GetChatTypeIndex("CHANNEL_JOIN")	1: number 19
+GetChatTypeIndex("CHANNEL_LEAVE")	1: number 20
+GetChatTypeIndex("CHANNEL_LIST")	1: number 21
+GetChatTypeIndex("CHANNEL_NOTICE")	1: number 22
+GetChatTypeIndex("CHANNEL_NOTICE_USER")	1: number 23
+GetChatTypeIndex("COLLECTED_APPEARANCE")	1: number 73
+GetChatTypeIndex("COMBAT_FACTION_CHANGE")	1: number 36
+GetChatTypeIndex("COMBAT_HONOR_GAIN")	1: number 35
+GetChatTypeIndex("COMBAT_MISC_INFO")	1: number 33
+GetChatTypeIndex("COMBAT_XP_GAIN")	1: number 34
+GetChatTypeIndex("COMMUNITIES_CHANNEL")	1: number 66
+GetChatTypeIndex("CURRENCY")	1: number 59
+GetChatTypeIndex("DISCORD_PLAYER_NAME")	1: number 94
+GetChatTypeIndex("DND")	1: number 25
+GetChatTypeIndex("EMOTE")	1: number 11
+GetChatTypeIndex("ENCOUNTER_EVENT")	1: number 69
+GetChatTypeIndex("FILTERED")	1: number 44
+GetChatTypeIndex("GUILD")	1: number 5
+GetChatTypeIndex("GUILD_ACHIEVEMENT")	1: number 48
+GetChatTypeIndex("GUILD_DISCORD")	1: number 70
+GetChatTypeIndex("GUILD_ITEM_LOOTED")	1: number 65
+GetChatTypeIndex("IGNORED")	1: number 26
+GetChatTypeIndex("INSTANCE_CHAT")	1: number 63
+GetChatTypeIndex("INSTANCE_CHAT_LEADER")	1: number 64
+GetChatTypeIndex("LOOT")	1: number 28
+GetChatTypeIndex("MONEY")	1: number 29
+GetChatTypeIndex("MONSTER_EMOTE")	1: number 17
+GetChatTypeIndex("MONSTER_PARTY")	1: number 14
+GetChatTypeIndex("MONSTER_SAY")	1: number 13
+GetChatTypeIndex("MONSTER_WHISPER")	1: number 16
+GetChatTypeIndex("MONSTER_YELL")	1: number 15
+GetChatTypeIndex("OFFICER")	1: number 6
+GetChatTypeIndex("OPENING")	1: number 30
+GetChatTypeIndex("PARTY")	1: number 3
+GetChatTypeIndex("PARTY_LEADER")	1: number 50
+GetChatTypeIndex("PET_BATTLE_COMBAT_LOG")	1: number 61
+GetChatTypeIndex("PET_BATTLE_INFO")	1: number 62
+GetChatTypeIndex("PET_INFO")	1: number 32
+GetChatTypeIndex("PING")	1: number 68
+GetChatTypeIndex("QUEST_BOSS_EMOTE")	1: number 60
+GetChatTypeIndex("RAID")	1: number 4
+GetChatTypeIndex("RAID_BOSS_EMOTE")	1: number 42
+GetChatTypeIndex("RAID_BOSS_WHISPER")	1: number 43
+GetChatTypeIndex("RAID_LEADER")	1: number 40
+GetChatTypeIndex("RAID_WARNING")	1: number 41
+GetChatTypeIndex("REPLY")	1: number 0
+GetChatTypeIndex("RESTRICTED")	1: number 45
+GetChatTypeIndex("SAY")	1: number 2
+GetChatTypeIndex("SKILL")	1: number 27
+GetChatTypeIndex("SMART_WHISPER")	1: number 0
+GetChatTypeIndex("SYSTEM")	1: number 1
+GetChatTypeIndex("TARGETICONS")	1: number 51
+GetChatTypeIndex("TEXT_EMOTE")	1: number 12
+GetChatTypeIndex("TRADESKILLS")	1: number 31
+GetChatTypeIndex("VOICE_TEXT")	1: number 67
+GetChatTypeIndex("WHISPER")	1: number 8
+GetChatTypeIndex("WHISPER_INFORM")	1: number 10
+GetChatTypeIndex("YELL")	1: number 7
+GetChatWindowInfo(1)	10: string General, number 18, number 0, number 0, number 0, number 0.15686275064945, boolean true, boolean true, number 1, boolean false
+GetChatWindowInfo(10)	10: string , number 18, number 0, number 0, number 0, number 0.15686275064945, boolean false, boolean true, nil nil, boolean false
+GetChatWindowInfo(2)	10: string Log, number 18, number 0, number 0, number 0, number 0.15686275064945, boolean false, boolean true, number 2, boolean false
+GetChatWindowInfo(3)	10: string Voice, number 18, number 0, number 0, number 0, number 0.15686275064945, boolean false, boolean true, nil nil, boolean false
+GetChatWindowInfo(4)	10: string Global, number 18, number 0, number 0, number 0, number 0.24705883860588, boolean false, boolean true, number 3, boolean false
+GetChatWindowInfo(5)	10: string Test, number 18, number 0, number 0, number 0, number 0.24705883860588, boolean false, boolean true, nil nil, boolean false
+GetChatWindowInfo(6)	10: string , number 18, number 0, number 0, number 0, number 0.15686275064945, boolean false, boolean true, nil nil, boolean false
+GetChatWindowInfo(7)	10: string , number 18, number 0, number 0, number 0, number 0.15686275064945, boolean false, boolean true, nil nil, boolean false
+GetChatWindowInfo(8)	10: string , number 18, number 0, number 0, number 0, number 0.15686275064945, boolean false, boolean true, nil nil, boolean false
+GetChatWindowInfo(9)	10: string , number 18, number 0, number 0, number 0, number 0.15686275064945, boolean false, boolean true, nil nil, boolean false
+GetChatWindowSavedDimensions(10)	2: number 430, number 120
+GetChatWindowSavedDimensions(2)	2: number 429.99996948242, number 146
+GetChatWindowSavedDimensions(3)	2: number 430, number 120
+GetChatWindowSavedDimensions(4)	2: number 429.99996948242, number 169.99998474121
+GetChatWindowSavedDimensions(5)	2: number 430, number 120
+GetChatWindowSavedDimensions(6)	2: number 430, number 120
+GetChatWindowSavedDimensions(7)	2: number 430, number 120
+GetChatWindowSavedDimensions(8)	2: number 430, number 120
+GetChatWindowSavedDimensions(9)	2: number 430, number 120
+GetChatWindowSavedPosition(10)	0: 
+GetChatWindowSavedPosition(2)	3: string BOTTOMLEFT, number 0.016666999086738, number 0.029629999771714
+GetChatWindowSavedPosition(3)	0: 
+GetChatWindowSavedPosition(4)	3: string BOTTOMLEFT, number 0.016666999086738, number 0.029629999771714
+GetChatWindowSavedPosition(5)	0: 
+GetChatWindowSavedPosition(6)	0: 
+GetChatWindowSavedPosition(7)	0: 
+GetChatWindowSavedPosition(8)	0: 
+GetChatWindowSavedPosition(9)	0: 
+GetLFGInfoServer(1, nil)	16: boolean false, boolean false, boolean false, boolean false, boolean false, string , number 0, nil nil, boolean false, boolean false, boolean false, boolean false, number 0, number 0, number 0, number 0
+GetLFGInfoServer(2, nil)	16: boolean false, boolean false, boolean false, boolean false, boolean false, string , number 0, nil nil, boolean false, boolean false, boolean false, boolean false, number 0, number 0, number 0, number 0
+GetLFGInfoServer(3, nil)	16: boolean false, boolean false, boolean false, boolean false, boolean false, string , number 0, nil nil, boolean false, boolean false, boolean false, boolean false, number 0, number 0, number 0, number 0
+GetLFGInfoServer(4, nil)	16: boolean false, boolean false, boolean false, boolean false, boolean false, string , number 0, nil nil, boolean false, boolean false, boolean false, boolean false, number 0, number 0, number 0, number 0
+GetLFGInfoServer(5, nil)	16: boolean false, boolean false, boolean false, boolean false, boolean false, string , number 0, nil nil, boolean false, boolean false, boolean false, boolean false, number 0, number 0, number 0, number 0
+GetLFGInfoServer(6, nil)	16: boolean false, boolean false, boolean false, boolean false, boolean false, string , number 0, nil nil, boolean false, boolean false, boolean false, boolean false, number 0, number 0, number 0, number 0
+GetLFGInfoServer(7, nil)	16: boolean false, boolean false, boolean false, boolean false, boolean false, string , number 0, nil nil, boolean false, boolean false, boolean false, boolean false, number 0, number 0, number 0, number 0
+GetLFGInfoServer(8, nil)	16: boolean false, boolean false, boolean false, boolean false, boolean false, string , number 0, nil nil, boolean false, boolean false, boolean false, boolean false, number 0, number 0, number 0, number 0
