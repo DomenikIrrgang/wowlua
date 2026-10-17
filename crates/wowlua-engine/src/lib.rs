@@ -50,6 +50,10 @@ pub struct Engine {
     /// Functions without behaviour that secure code called (they returned
     /// their documented types' empty values), by name.
     pub defaulted: std::collections::BTreeSet<&'static str>,
+    /// Those calls with their arguments (`name(1, "x")`), and the client's
+    /// undocumented functions secure code called: what a probe asks the
+    /// client (`defaultedCalls`).
+    pub defaulted_calls: std::collections::BTreeSet<String>,
     /// Tables Blizzard's code alone sees while it loads.
     pub secure_tables: Vec<SecureTable>,
     /// The addons' globals (`GetGlobalEnvironment`), whatever environment
@@ -209,6 +213,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         refusals: Vec::new(),
         animations: Default::default(),
         defaulted: Default::default(),
+        defaulted_calls: Default::default(),
         secure_tables,
         main_globals: vm.globals,
         secure_namespaces: Vec::new(),
@@ -594,9 +599,28 @@ pub(crate) fn undocumented_function(vm: &mut Vm, c: NativeCall) -> Ret {
         return f(vm, c);
     }
     if protection::blizzard_caller(vm) {
+        note_default(vm, &name, &c, 1);
         return Ok(vec![]);
     }
     Err(vm.error(&format!("{name} is not mocked")))
+}
+
+/// Notes a call secure code made without an answer: `name(args)`, the
+/// arguments from `first` on (literals; tables as `{}`).
+pub(crate) fn note_default(vm: &mut Vm, name: &str, c: &NativeCall, first: usize) {
+    let args: Vec<String> = (first..=c.len())
+        .map(|i| match vm.hidden(c.arg(i)) {
+            Value::Nil => "nil".to_string(),
+            Value::Bool(b) => b.to_string(),
+            Value::Num(n) if n.fract() == 0.0 && n.abs() < 1e15 => format!("{}", n as i64),
+            Value::Num(n) => format!("{n}"),
+            Value::Str(s) => format!("{:?}", String::from_utf8_lossy(vm.str_bytes(s))),
+            Value::Table(_) => "{}".to_string(),
+            _ => "?".to_string(),
+        })
+        .collect();
+    let call = format!("{name}({})", args.join(", "));
+    engine_mut(vm).defaulted_calls.insert(call);
 }
 
 /// Every API function: its behaviour, or the "not mocked" error.
@@ -621,6 +645,7 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
         // Blizzard's code gets empty values; the addon's code an error.
         if protection::blizzard_caller(vm) {
             engine_mut(vm).defaulted.insert(f.name);
+            note_default(vm, f.name, &c, 1);
             return Ok(defaults(vm, api, &f.doc));
         }
         return Err(vm.error(&format!("{} is not mocked", f.name)));

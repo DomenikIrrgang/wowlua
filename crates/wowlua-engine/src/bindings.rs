@@ -78,8 +78,12 @@ pub fn define_binding(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// An addon's `Bindings.xml`, as the client reads it at startup: each
 /// `<Binding name header runOnUp>` with its body compiled as the addon's
-/// code, a function of `keystate`.
-pub fn load_bindings_xml(vm: &mut Vm, path: &std::path::Path, addon: &str) -> Result<(), String> {
+/// code (`None`: Blizzard's, secure), a function of `keystate`.
+pub fn load_bindings_xml(
+    vm: &mut Vm,
+    path: &std::path::Path,
+    addon: Option<&str>,
+) -> Result<(), String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let root = crate::ui::xml::parse(&text).map_err(|e| format!("Bindings.xml: {e}"))?;
     let mut list = Vec::new();
@@ -102,7 +106,14 @@ pub fn load_bindings_xml(vm: &mut Vm, path: &std::path::Path, addon: &str) -> Re
             "\n".repeat(b.line.saturating_sub(1)),
             b.text
         );
-        let f = vm.load_as(src.as_bytes(), "@Bindings.xml", addon)?;
+        let chunk = format!(
+            "@{}",
+            path.file_name().unwrap_or_default().to_string_lossy()
+        );
+        let f = match addon {
+            Some(addon) => vm.load_as(src.as_bytes(), &chunk, addon)?,
+            None => vm.load(src.as_bytes(), &chunk)?,
+        };
         let action = match vm.call(f, &[]) {
             Ok(r) => r.first().copied().unwrap_or(Value::Nil),
             Err(e) => {

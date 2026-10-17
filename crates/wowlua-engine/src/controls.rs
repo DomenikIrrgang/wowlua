@@ -261,6 +261,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("spawnUnit", units::spawn),
         ("setPlayer", units::set_player),
         ("setBag", crate::character::control_set_bag),
+        ("defaultedCalls", defaulted_calls),
         ("openMerchant", crate::merchant::control_open),
         ("closeMerchant", crate::merchant::control_close),
         ("sell", crate::merchant::control_sell),
@@ -282,4 +283,16 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
     let k = vm.heap.intern(b"player");
     vm.heap.table_mut(t).set_str(k, player);
     t
+}
+
+/// `defaultedCalls()`: the calls secure code made that the engine had no
+/// answer for, sorted (`name(args)`).
+fn defaulted_calls(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let list: Vec<String> = crate::engine(vm).defaulted_calls.iter().cloned().collect();
+    let t = vm.new_table();
+    for (i, call) in list.iter().enumerate() {
+        let v = vm.str(call);
+        let _ = vm.heap.table_mut(t).set(Value::Num(i as f64 + 1.0), v);
+    }
+    Ok(vec![Value::Table(t)])
 }

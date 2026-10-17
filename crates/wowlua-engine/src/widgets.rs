@@ -805,6 +805,7 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
     // Blizzard's code gets empty values; the addon's code an error.
     if crate::protection::blizzard_caller(vm) {
         engine_mut(vm).defaulted.insert(name);
+        crate::note_default(vm, name, c, 2);
         let api = engine(vm).api;
         return Ok(crate::defaults(vm, api, &f.doc));
     }
