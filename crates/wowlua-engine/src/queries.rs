@@ -157,6 +157,65 @@ fn notify_settings_loaded(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `UnitIsVisible(unit)`, `UnitIsInInteractRange(unit)`: the unit exists
+/// (recorded for units that do not: false; for a soft-interact target that
+/// does: in range). Unverified: units out of sight or range.
+fn unit_exists(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(units::unit_arg(vm, &c, 1).is_some())])
+}
+
+/// `GetUnitTotalModifiedMaxHealthPercent(unit)`: no maximum health
+/// modifier (recorded for the player and absent party members).
+fn no_max_health_modifier(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0)])
+}
+
+/// `C_Container.ContainerIDToInventoryID(bag)`: the bag's inventory slot,
+/// bag + 30 (recorded for bags 1 to 5). Unverified: the bank's bags.
+fn container_inventory_id(_vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![match num(c.arg(1)) {
+        Some(bag) if (1.0..=5.0).contains(&bag) => Value::Num(bag + 30.0),
+        _ => Value::Nil,
+    }])
+}
+
+/// A whole number as text, its digits grouped by threes with
+/// `LARGE_NUMBER_SEPERATOR` from 1000.
+fn grouped(vm: &mut Vm, n: f64) -> String {
+    let digits = format!("{}", n.abs().floor() as u64);
+    let sep = match vm.get_global("LARGE_NUMBER_SEPERATOR") {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => ",".to_string(),
+    };
+    let mut out = String::new();
+    for (i, ch) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push_str(&sep);
+        }
+        out.push(ch);
+    }
+    if n < 0.0 {
+        out.insert(0, '-');
+    }
+    out
+}
+
+/// `BreakUpLargeNumbers(n)`, `AbbreviateLargeNumbers(n)`,
+/// `AbbreviateNumbers(n)`: a whole number under 1000 as its digits
+/// (recorded). Unverified (probes queued): from 1000 (grouped here),
+/// fractions, the options.
+fn number_text(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = num(c.arg(1)).unwrap_or(0.0);
+    let text = if n.fract() == 0.0 && n.abs() < 1000.0 {
+        format!("{}", n as i64)
+    } else if n.fract() == 0.0 {
+        grouped(vm, n)
+    } else {
+        format!("{n}")
+    };
+    Ok(vec![vm.str(&text)])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         (
@@ -178,6 +237,41 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("UnitGetTotalAbsorbs", no_absorbs),
         ("UnitGetTotalHealAbsorbs", no_absorbs),
         ("UnitThreatSituation", nil),
+        ("UnitIsVisible", unit_exists),
+        ("UnitIsInInteractRange", unit_exists),
+        // Nothing of these for any unit yet (recorded for the player
+        // alone and absent party members).
+        ("UnitHasVehicleUI", no),
+        ("UnitHasVehiclePlayerFrameUI", no),
+        ("UnitInVehicle", no),
+        ("UnitIsPossessed", no),
+        ("UnitIsGameObject", no),
+        ("WorldLootObjectExists", no),
+        ("UnitHasLootInteraction", no),
+        ("C_IncomingSummon.HasIncomingSummon", no),
+        ("UnitHasIncomingResurrection", no),
+        ("UnitInOtherParty", no),
+        ("UnitInPartyIsAI", no),
+        ("UnitIsGroupLeader", no),
+        ("UnitIsGroupAssistant", no),
+        ("UnitIsPVP", no),
+        ("UnitIsPVPFreeForAll", no),
+        ("UnitPhaseReason", nil),
+        // Standing on the ground (recorded).
+        ("IsFalling", no),
+        ("IsFlying", no),
+        ("IsSwimming", no),
+        (
+            "GetUnitTotalModifiedMaxHealthPercent",
+            no_max_health_modifier,
+        ),
+        (
+            "C_Container.ContainerIDToInventoryID",
+            container_inventory_id,
+        ),
+        ("BreakUpLargeNumbers", number_text),
+        ("AbbreviateLargeNumbers", number_text),
+        ("AbbreviateNumbers", number_text),
         ("C_AzeriteEmpoweredItem.IsAzeriteEmpoweredItemByID", no),
         ("C_ItemSocketInfo.IsArtifactRelicItem", no),
         ("C_Soulbinds.IsItemConduitByItemInfo", no),

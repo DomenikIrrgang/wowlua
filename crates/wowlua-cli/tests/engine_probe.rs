@@ -494,7 +494,7 @@ __engine.pressKey("ENTER")"#,
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 1288;
+const ANSWERS_MATCHED: usize = 2207;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {
@@ -579,7 +579,8 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         .into_iter()
         .map(|(k, v)| (k, address.replace_all(&v, "$1").into_owned()))
         .collect();
-    // `WOWLUA_ANSWERS=GetFontInfo` shows that function's differences.
+    // `WOWLUA_ANSWERS=GetFontInfo` shows that function's differences (`*`:
+    // every function's).
     let show = std::env::var("WOWLUA_ANSWERS").ok();
     let mut shown = 0;
     let mut matched = 0;
@@ -590,7 +591,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         } else {
             if show
                 .as_deref()
-                .is_some_and(|f| call.starts_with(&format!("{f}(")))
+                .is_some_and(|f| f == "*" || call.starts_with(&format!("{f}(")))
                 && shown
                     < std::env::var("WOWLUA_ANSWERS_LIMIT")
                         .ok()
@@ -625,9 +626,14 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
     }
     let mut worst: Vec<_> = by_function.into_iter().collect();
     worst.sort_by_key(|a| std::cmp::Reverse(a.1));
+    // `WOWLUA_ANSWERS_TOP=1000` lists more of them.
+    let top = std::env::var("WOWLUA_ANSWERS_TOP")
+        .ok()
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(40);
     let summary: Vec<String> = worst
         .iter()
-        .take(40)
+        .take(top)
         .map(|(n, c)| format!("{c:5} {n}"))
         .collect();
     eprintln!(

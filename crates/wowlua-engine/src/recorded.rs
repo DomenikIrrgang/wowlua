@@ -38,7 +38,8 @@ pub fn functions() -> Vec<&'static str> {
 /// or a table `{key=value,…}` (a color, with `ColorMixin`'s methods, made
 /// with `CreateColor`).
 fn parse_value(vm: &mut Vm, text: &str) -> Value {
-    let text = text.trim();
+    // Not trimmed at the end: `string ` is the empty string.
+    let text = text.trim_start();
     if let Some(inner) = text.strip_prefix('{').and_then(|t| t.strip_suffix('}')) {
         let t = vm.new_table();
         let mut color = false;
@@ -66,8 +67,15 @@ fn parse_value(vm: &mut Vm, text: &str) -> Value {
             let create = vm.get_global("CreateColor");
             if !create.is_nil()
                 && let Ok(r) = vm.call(create, &rgba)
+                && let Some(Value::Table(color)) = r.first().copied()
             {
-                return r.first().copied().unwrap_or(Value::Table(t));
+                // A color recorded without alpha has none (`CreateColor`
+                // may default it).
+                if rgba[3].is_nil() {
+                    let a = vm.str("a");
+                    let _ = vm.heap.table_mut(color).set(a, Value::Nil);
+                }
+                return Value::Table(color);
             }
         }
         return Value::Table(t);
@@ -104,9 +112,12 @@ fn split_top(text: &str, sep: char) -> Vec<&str> {
 /// An answer's values: `n: v1, v2, …` (a string may hold ", ": values
 /// start with their type).
 fn parse_answer(vm: &mut Vm, answer: &str) -> Vec<Value> {
-    let Some((_, rest)) = answer.split_once(": ") else {
+    let Some((count, rest)) = answer.split_once(": ") else {
         return Vec::new();
     };
+    if count == "0" {
+        return Vec::new();
+    }
     let starts = regex_starts(rest);
     let mut values = Vec::new();
     for (i, &s) in starts.iter().enumerate() {
@@ -150,19 +161,32 @@ pub fn behaviours(flavor: &str) -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         .collect()
 }
 
-/// The behaviour of a function with recorded answers.
+/// The behaviour of a function with recorded answers; a call never
+/// recorded gets what an unanswered call gets (a documented function's
+/// empty values, an undocumented one's nothing), noted as unanswered.
 pub fn recorded(vm: &mut Vm, c: NativeCall) -> Ret {
-    let name = match c.upvals.first().copied() {
-        Some(Value::Num(i)) => engine(vm)
-            .api
-            .functions
-            .get(i as usize)
-            .map(|f| f.name.to_string())
-            .unwrap_or_default(),
-        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+    let (name, documented) = match c.upvals.first().copied() {
+        Some(Value::Num(i)) => {
+            let api = engine(vm).api;
+            match api.functions.get(i as usize) {
+                Some(f) => (f.name.to_string(), Some(&f.doc)),
+                None => return Ok(vec![]),
+            }
+        }
+        Some(Value::Str(s)) => (String::from_utf8_lossy(vm.str_bytes(s)).into_owned(), None),
         _ => return Ok(vec![]),
     };
-    Ok(lookup(vm, &name, &c).unwrap_or_default())
+    if let Some(values) = lookup(vm, &name, &c) {
+        return Ok(values);
+    }
+    crate::note_default(vm, &name, &c, 1);
+    Ok(match documented {
+        Some(doc) => {
+            let api = engine(vm).api;
+            crate::defaults(vm, api, doc)
+        }
+        None => Vec::new(),
+    })
 }
 
 /// The recorded answer to this call of `name`, if there is one.
