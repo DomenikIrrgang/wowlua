@@ -5,9 +5,13 @@
 //! Recorded on WoW Forever 1.60.1 (`/stdtest restrictions`): in combat,
 //! tainted code reading an aura fails with "`<Function>`(): Auras cannot be
 //! accessed when secret while tainted by '`<addon>`'" and a "Lua Taint:"
-//! line; on a restricted map outside combat the data is plain. Unverified:
-//! the filters beyond HELPFUL, HARMFUL, PLAYER and RAID; `UNIT_AURA`'s
-//! update information; secure code reading auras in combat (plain data).
+//! line; on a restricted map outside combat the data is plain. Recorded
+//! with `/stdtest engine record aura` and `combat`: `UNIT_AURA`'s update
+//! information (`isFullUpdate` false, one-element `addedAuras` or
+//! `removedAuraInstanceIDs`, empty keys absent; secret fields in combat)
+//! and the added aura's fields. Unverified: the filters beyond HELPFUL,
+//! HARMFUL, PLAYER and RAID; secure code reading auras in combat (plain
+//! data).
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{LuaError, NativeCall, NativeFn, TableRef, Value, Vm};

@@ -932,12 +932,26 @@ local function timers(done: (r: { [string]: string }) -> ())
     fresh:SetText("")
     text[#text + 1] = "fresh set empty"
     sized:SetSize(10, 10)
+    -- An anchored frame's `OnSizeChanged`: when, against the same marks.
+    const sizes: string[] = {}
+    const anchored = CreateFrame("Frame", nil, UIParent)
+    anchored:SetPoint("CENTER")
+    anchored:SetScript("OnSizeChanged", function(_: any, w: number, h: number)
+        sizes[#sizes + 1] = `size({w}x{h})`
+    end)
+    anchored:SetSize(12, 14)
+    sizes[#sizes + 1] = "set 12x14"
     const f = CreateFrame("Frame")
     local frames = 0
     f:SetScript("OnUpdate", function()
         frames += 1
         log[#log + 1] = `update{frames}`
         text[#text + 1] = `update{frames}`
+        sizes[#sizes + 1] = `update{frames}`
+        if frames == 2 then
+            anchored:SetSize(16, 18)
+            sizes[#sizes + 1] = "set 16x18 (in update2)"
+        end
         if frames == 1 then
             C_Timer.After(0, function() log[#log + 1] = "after0 (set in update1)" end)
             box:SetText("b")
@@ -952,12 +966,14 @@ local function timers(done: (r: { [string]: string }) -> ())
             f:SetScript("OnUpdate", nil)
             out.order = table.concat(log, " ")
             out.textChanged = table.concat(text, " ")
+            out.sizeChanged = table.concat(sizes, " ")
             done(out)
         end
     end)
     C_Timer.After(0, function()
         log[#log + 1] = "after0"
         text[#text + 1] = "after0"
+        sizes[#sizes + 1] = "after0"
     end)
 end
 

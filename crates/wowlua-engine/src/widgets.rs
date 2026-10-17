@@ -99,9 +99,9 @@ pub struct World {
     /// runs with the next frame, not at `SetSize`).
     pub resized: Vec<WidgetId>,
     /// Edit boxes Lua set the text of this frame: `OnTextChanged(false)`
-    /// runs at the frame's end, not at `SetText` (`/stdtest engine input`:
-    /// a script set after `SetText` still ran, at the same `GetTime`).
-    /// Unverified: once per frame, also for the same text.
+    /// runs once each after the frame's `OnUpdate`, not at `SetText`, with
+    /// the last text, also when it did not change, the last box set first
+    /// (`/stdtest engine`; unverified: by setting or making order).
     pub text_set: Vec<WidgetId>,
     /// Warnings for gaps that would make every test fail if they were errors
     /// (templates without Blizzard's UI code).
@@ -1543,7 +1543,8 @@ fn resize(vm: &mut Vm, id: WidgetId, w: Option<f64>, h: Option<f64>) {
     widget.height = h.unwrap_or(old.1);
     let new = (widget.width, widget.height);
     // `OnSizeChanged` waits for the next frame (`/stdtest engine`: none at
-    // `SetSize`; that it runs then is unverified).
+    // `SetSize`, none ever for a frame without points; that an anchored
+    // frame's runs then is unverified).
     let world = &mut engine_mut(vm).world;
     if new != old && !world.resized.contains(&id) {
         world.resized.push(id);
@@ -1555,6 +1556,9 @@ pub fn run_size_changes(vm: &mut Vm) {
     let resized = std::mem::take(&mut engine_mut(vm).world.resized);
     for id in resized {
         let w = &engine(vm).world.widgets[id.0];
+        if w.points.is_empty() {
+            continue;
+        }
         let size = [Value::Num(w.width), Value::Num(w.height)];
         run_script(vm, id, "OnSizeChanged", &size);
     }
@@ -1563,7 +1567,7 @@ pub fn run_size_changes(vm: &mut Vm) {
 /// The `OnTextChanged(false)` this frame's `SetText` owes.
 pub fn run_text_changes(vm: &mut Vm) {
     let set = std::mem::take(&mut engine_mut(vm).world.text_set);
-    for id in set {
+    for id in set.into_iter().rev() {
         run_script(vm, id, "OnTextChanged", &[Value::Bool(false)]);
     }
 }

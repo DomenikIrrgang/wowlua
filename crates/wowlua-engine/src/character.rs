@@ -5,16 +5,17 @@
 //!
 //! Verified against the client (`/stdtest engine record`, Forever 70425):
 //! `PLAYER_MONEY()`; `UNIT_INVENTORY_CHANGED("player")` before
-//! `PLAYER_EQUIPMENT_CHANGED(slot, false)` for a filled slot; `BAG_UPDATE`
-//! (the backpack's followed by `BAG_UPDATE(-1)`), `BAG_CLOSED` for a bag
-//! taken away, `BAG_CONTAINER_UPDATE()`, one `BAG_UPDATE_DELAYED()`, then
-//! `ITEM_COUNT_CHANGED(itemID)`; a new zone's lone `ZONE_CHANGED_NEW_AREA()`.
+//! `PLAYER_EQUIPMENT_CHANGED(slot, isEmpty)` (true for an emptied slot,
+//! false for a filled one); `BAG_UPDATE` (the backpack's followed by
+//! `BAG_UPDATE(-1)`), `BAG_CLOSED` for a bag taken away,
+//! `BAG_CONTAINER_UPDATE()`, one `BAG_UPDATE_DELAYED()`, then
+//! `ITEM_COUNT_CHANGED(itemID)`; a new zone's lone
+//! `ZONE_CHANGED_NEW_AREA()`, a new subzone's lone `ZONE_CHANGED()`.
 //!
 //! Unverified (inferred from Blizzard's documentation and UI code):
-//! `PLAYER_EQUIPMENT_CHANGED`'s `true` for an emptied slot, a subzone's
-//! `ZONE_CHANGED`, `BAG_CONTAINER_UPDATE` for a bag put in, the generated
-//! item links, the ranges of `CheckInteractDistance`'s indexes and
-//! `UnitInRange` (38 yards), and the empty backpack's 16 slots.
+//! `BAG_CONTAINER_UPDATE` for a bag put in, the generated item links, the
+//! ranges of `CheckInteractDistance`'s indexes and `UnitInRange` (38
+//! yards), and the empty backpack's 16 slots.
 
 use std::collections::BTreeMap;
 
@@ -235,7 +236,7 @@ fn get_inventory_item_count(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `unit:equip(slot, item)` / `unit:equip(slot, nil)` (the player):
 /// `UNIT_INVENTORY_CHANGED("player")`, then
-/// `PLAYER_EQUIPMENT_CHANGED(slot, hasCurrent)` (false for a filled slot).
+/// `PLAYER_EQUIPMENT_CHANGED(slot, isEmpty)`.
 pub fn control_equip(vm: &mut Vm, c: NativeCall) -> Ret {
     player_only(vm, &c, "equip")?;
     let slot = vm.check_int(&c, 2)?;

@@ -218,15 +218,15 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
     }
 }
 
-/// `n` frames of `ms` milliseconds: each ends the last frame (its
-/// `SetText`'s `OnTextChanged`), moves the clock, runs the
+/// `n` frames of `ms` milliseconds: each moves the clock, runs the
 /// `OnSizeChanged` the last frame's resizing owes, every visible widget's
-/// `OnUpdate` (with the frame's seconds), then the due timers, those an
-/// `OnUpdate` just set included (`/stdtest engine`: "update1 after0
-/// after0 (set in update1) update2").
+/// `OnUpdate` (with the frame's seconds), the `OnTextChanged` the frame's
+/// `SetText` owes (those before it and in `OnUpdate`), then the due
+/// timers, those an `OnUpdate` just set included (`/stdtest engine`:
+/// "update1 after0 after0 (set in update1) update2"; "update1 … changed
+/// after0").
 pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
     for _ in 0..n {
-        widgets::run_text_changes(vm);
         tick(vm, ms);
         widgets::run_size_changes(vm);
         let count = engine(vm).world.widgets.len();
@@ -237,6 +237,7 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
                 widgets::run_script(vm, id, "OnUpdate", &[elapsed]);
             }
         }
+        widgets::run_text_changes(vm);
         crate::animations::tick(vm, ms / 1000.0);
         advance(vm, 0.0);
     }
