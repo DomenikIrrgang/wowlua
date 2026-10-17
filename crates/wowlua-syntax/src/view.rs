@@ -14,7 +14,7 @@ use crate::tree::{self, NONE, Range, Sp, Tree};
 use std::borrow::Cow;
 use wowlua_span::Span;
 
-pub use crate::ast::{BinOp, CompoundOp, Directive, Modifier, UnOp};
+pub use crate::ops::{BinOp, CompoundOp, Directive, Modifier, UnOp};
 
 fn span(t: &Tree, s: Sp) -> Span {
     Span {
@@ -237,28 +237,24 @@ macro_rules! handle {
     };
 }
 
-/// A `Debug` that shows the node's kind.
-macro_rules! debug_kind {
-    ($name:ident) => {
+/// A `Debug` that shows the node's content (never its index), so two
+/// trees with the same content print the same.
+macro_rules! debug_fields {
+    ($name:ident { $($field:ident),* }) => {
         impl std::fmt::Debug for $name<'_> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.debug_tuple(stringify!($name))
-                    .field(&self.kind())
+                f.debug_struct(stringify!($name))
+                    $(.field(stringify!($field), &self.$field()))*
                     .finish()
             }
         }
     };
 }
 
-/// A `Debug` that shows the node's index.
-macro_rules! debug_index {
-    ($name:ident) => {
-        impl std::fmt::Debug for $name<'_> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}#{}", stringify!($name), self.i)
-            }
-        }
-    };
+/// The handle of expression `i` of `t` (for the parser, which walks what
+/// it built).
+pub(crate) fn expr_at(t: &Tree, i: u32) -> Expr<'_> {
+    Expr::new(t, i)
 }
 
 // ---------------------------------------------------------- the file --
@@ -267,7 +263,11 @@ handle!(
     /// A file's tree.
     Chunk
 );
-debug_index!(Chunk);
+debug_fields!(Chunk {
+    directives,
+    block,
+    span
+});
 
 impl<'t> Chunk<'t> {
     pub fn directives(self) -> &'t [Directive] {
@@ -291,7 +291,7 @@ impl crate::Parse {
 }
 
 handle!(Block);
-debug_index!(Block);
+debug_fields!(Block { span, stmts });
 
 impl<'t> Block<'t> {
     fn node(self) -> &'t tree::BlockNode {
@@ -310,7 +310,11 @@ impl<'t> Block<'t> {
 // ------------------------------------------------------------- statements --
 
 handle!(Stmt);
-debug_kind!(Stmt);
+debug_fields!(Stmt {
+    span,
+    decorators,
+    kind
+});
 
 impl<'t> Stmt<'t> {
     fn node(self) -> &'t tree::StmtNode {
@@ -538,7 +542,7 @@ handle!(
     /// `a.b.c:m`
     FuncName
 );
-debug_index!(FuncName);
+debug_fields!(FuncName { path, method, span });
 
 impl<'t> FuncName<'t> {
     fn node(self) -> &'t tree::FuncNameNode {
@@ -563,7 +567,16 @@ handle!(
     /// signature, whose body is empty).
     Func
 );
-debug_index!(Func);
+debug_fields!(Func {
+    type_params,
+    params,
+    vararg,
+    ret,
+    body,
+    params_span,
+    end_span,
+    span
+});
 
 impl<'t> Func<'t> {
     fn node(self) -> &'t tree::FuncNode {
@@ -610,7 +623,12 @@ impl<'t> Func<'t> {
 }
 
 handle!(Param);
-debug_index!(Param);
+debug_fields!(Param {
+    decorators,
+    name,
+    ty,
+    default
+});
 
 impl<'t> Param<'t> {
     fn node(self) -> &'t tree::ParamNode {
@@ -645,7 +663,12 @@ handle!(
     /// `@a.b(x)`
     Decorator
 );
-debug_index!(Decorator);
+debug_fields!(Decorator {
+    path,
+    args,
+    span,
+    expr
+});
 
 impl<'t> Decorator<'t> {
     fn node(self) -> &'t tree::DecoratorNode {
@@ -670,10 +693,10 @@ impl<'t> Decorator<'t> {
         Expr::new(self.t, self.node().call)
     }
 
-    /// A core decorator (a single name from [`crate::ast::CORE_DECORATORS`]).
+    /// A core decorator (a single name from [`crate::ops::CORE_DECORATORS`]).
     pub fn is_core(self) -> bool {
         let path = self.path();
-        path.len() == 1 && crate::ast::CORE_DECORATORS.contains(&path.at(0).text())
+        path.len() == 1 && crate::ops::CORE_DECORATORS.contains(&path.at(0).text())
     }
 
     /// The single name `name`.
@@ -686,7 +709,7 @@ impl<'t> Decorator<'t> {
 // ------------------------------------------------------------ expressions --
 
 handle!(Expr);
-debug_kind!(Expr);
+debug_fields!(Expr { span, kind });
 
 impl<'t> Expr<'t> {
     fn node(self) -> &'t tree::ExprNode {
@@ -889,7 +912,10 @@ impl std::hash::Hash for Name<'_> {
 
 impl std::fmt::Debug for Name<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Name").field(&self.text()).finish()
+        f.debug_tuple("Name")
+            .field(&self.text())
+            .field(&self.span())
+            .finish()
     }
 }
 
@@ -920,7 +946,10 @@ impl PartialEq for Number<'_> {
 
 impl std::fmt::Debug for Number<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Number").field(&self.raw()).finish()
+        f.debug_tuple("Number")
+            .field(&self.raw())
+            .field(&self.value())
+            .finish()
     }
 }
 
@@ -954,8 +983,10 @@ impl<'t> Str<'t> {
 
 impl std::fmt::Debug for Str<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Str")
-            .field(&String::from_utf8_lossy(self.raw()))
+        f.debug_struct("Str")
+            .field("raw", &self.raw().escape_ascii().to_string())
+            .field("value", &self.value().escape_ascii().to_string())
+            .field("long", &self.long())
             .finish()
     }
 }
@@ -994,7 +1025,7 @@ handle!(
     /// The arguments of a call.
     Args
 );
-debug_kind!(Args);
+debug_fields!(Args { kind });
 
 impl<'t> Args<'t> {
     fn data(self) -> tree::ArgsData {
@@ -1097,7 +1128,7 @@ impl<'t> TableField<'t> {
 // ------------------------------------------------------------------ types --
 
 handle!(Type);
-debug_kind!(Type);
+debug_fields!(Type { span, kind });
 
 impl<'t> Type<'t> {
     fn node(self) -> &'t tree::TypeNode {
@@ -1259,7 +1290,12 @@ handle!(
     /// `function(A, B): R`
     FunctionType
 );
-debug_index!(FunctionType);
+debug_fields!(FunctionType {
+    type_params,
+    params,
+    vararg,
+    ret
+});
 
 impl<'t> FunctionType<'t> {
     fn node(self) -> &'t tree::FnTypeNode {
@@ -1380,7 +1416,15 @@ impl<'t> TypeParam<'t> {
 // ----------------------------------------------------------- declarations --
 
 handle!(ClassDecl);
-debug_index!(ClassDecl);
+debug_fields!(ClassDecl {
+    is_abstract,
+    name,
+    type_params,
+    extends,
+    implements,
+    members,
+    end_span
+});
 
 impl<'t> ClassDecl<'t> {
     fn node(self) -> &'t tree::ClassNode {
@@ -1417,7 +1461,12 @@ impl<'t> ClassDecl<'t> {
 }
 
 handle!(ClassMember);
-debug_kind!(ClassMember);
+debug_fields!(ClassMember {
+    decorators,
+    modifiers,
+    span,
+    kind
+});
 
 impl<'t> ClassMember<'t> {
     fn node(self) -> &'t tree::ClassMemberNode {
@@ -1511,7 +1560,12 @@ pub enum ClassMemberKind<'t> {
 }
 
 handle!(InterfaceDecl);
-debug_index!(InterfaceDecl);
+debug_fields!(InterfaceDecl {
+    name,
+    type_params,
+    extends,
+    members
+});
 
 impl<'t> InterfaceDecl<'t> {
     fn node(self) -> &'t tree::InterfaceNode {
@@ -1572,7 +1626,7 @@ impl<'t> InterfaceMember<'t> {
 }
 
 handle!(EnumDecl);
-debug_index!(EnumDecl);
+debug_fields!(EnumDecl { name, items });
 
 impl<'t> EnumDecl<'t> {
     fn node(self) -> &'t tree::EnumNode {
@@ -1605,7 +1659,11 @@ impl<'t> EnumItem<'t> {
 }
 
 handle!(TypeAlias);
-debug_index!(TypeAlias);
+debug_fields!(TypeAlias {
+    name,
+    type_params,
+    ty
+});
 
 impl<'t> TypeAlias<'t> {
     fn node(self) -> &'t tree::AliasNode {
@@ -1629,7 +1687,7 @@ handle!(
     /// A `declare …` statement.
     Declare
 );
-debug_kind!(Declare);
+debug_fields!(Declare { kind });
 
 impl<'t> Declare<'t> {
     pub fn kind(self) -> DeclareKind<'t> {
@@ -1715,7 +1773,11 @@ pub enum DeclareKind<'t> {
 }
 
 handle!(NsMember);
-debug_kind!(NsMember);
+debug_fields!(NsMember {
+    decorators,
+    span,
+    kind
+});
 
 impl<'t> NsMember<'t> {
     fn node(self) -> &'t tree::NsMemberNode {
@@ -1792,7 +1854,12 @@ pub enum NsMemberKind<'t> {
 }
 
 handle!(DeclMember);
-debug_kind!(DeclMember);
+debug_fields!(DeclMember {
+    decorators,
+    is_static,
+    span,
+    kind
+});
 
 impl<'t> DeclMember<'t> {
     fn node(self) -> &'t tree::DeclMemberNode {
@@ -1848,7 +1915,11 @@ pub enum DeclMemberKind<'t> {
 }
 
 handle!(Import);
-debug_index!(Import);
+debug_fields!(Import {
+    clause,
+    type_only,
+    from
+});
 
 impl<'t> Import<'t> {
     fn node(self) -> &'t tree::ImportNode {

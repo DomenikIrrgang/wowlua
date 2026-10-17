@@ -6,13 +6,13 @@
 //! checks while generating code (locals, upvalues, registers), which the
 //! build checks on its output.
 
-/// The boxed tree the parser builds; [`tree`] flattens it.
-mod ast;
-mod ast_visit;
 pub mod deep;
 pub mod features;
+#[cfg(test)]
+mod legacy;
 pub mod lexer;
 pub mod literal;
+mod ops;
 mod parser;
 pub mod search;
 pub mod token;
@@ -51,18 +51,11 @@ pub fn parse(src: &[u8], file: FileId) -> Parse {
     let mut lexed = lexer::lex(src, file);
     let mut diagnostics = std::mem::take(&mut lexed.diagnostics);
     let mut parser = parser::Parser::new(src, file, lexed);
-    let chunk = parser.chunk();
-    let tree = tree::from_ast(&chunk, src, file);
-    // A deep chain (`deep`) drops with enough stack.
-    if deep::links() >= deep::DEEP {
-        deep::run(move || drop(chunk));
-    } else {
-        drop(chunk);
-    }
+    parser.chunk();
     diagnostics.append(&mut parser.diagnostics);
     diagnostics.sort_by_key(|d| d.labels.first().map(|l| l.span.start).unwrap_or(0));
     Parse {
-        tree,
+        tree: parser.t,
         lexed: parser.lexed,
         diagnostics,
     }

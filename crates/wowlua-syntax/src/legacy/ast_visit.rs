@@ -1,7 +1,7 @@
 //! The parser's walk over the boxed tree it builds (consumers walk the
 //! flat tree through [`crate::visit`]).
 
-use crate::ast::*;
+use super::ast::*;
 
 /// Calls `f` on `e` and every expression inside it, including those in
 /// nested function bodies.
