@@ -59,6 +59,8 @@ pub struct Unit {
     pub dead: bool,
     /// Flagged for PvP (`UnitIsPVP`).
     pub pvp: bool,
+    /// The player released as a ghost (`death.rs`).
+    pub ghost: bool,
     pub in_combat: bool,
     /// Whom the unit targets (`unittarget`).
     pub target: Option<UnitId>,
@@ -240,6 +242,7 @@ pub fn install(vm: &mut Vm) {
         power_type: 1.0,
         dead: false,
         pvp: false,
+        ghost: false,
         in_combat: false,
         target: None,
         alive_in_world: true,
@@ -991,7 +994,7 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("UnitPowerMax", unit_power_max),
         ("UnitPowerType", unit_power_type),
         ("UnitIsDead", unit_is_dead),
-        ("UnitIsDeadOrGhost", unit_is_dead),
+        ("UnitIsDeadOrGhost", unit_is_dead_or_ghost),
         ("UnitIsPlayer", unit_is_player),
         ("UnitAffectingCombat", unit_affecting_combat),
         ("UnitIsUnit", unit_is_unit),
@@ -1059,6 +1062,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("swing", control_swing),
         ("loot", crate::loot::control_loot),
         ("interact", crate::quests::control_interact),
+        ("die", crate::death::control_die),
         ("setThreat", control_set_threat),
         ("raiseSkill", control_raise_skill),
         ("leaveCombat", control_leave_combat),
@@ -1258,6 +1262,7 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         power_type: num(vm, "powerType", 0.0),
         dead: get(vm, "dead").truthy(),
         pvp: get(vm, "pvp").truthy(),
+        ghost: false,
         in_combat: false,
         target: None,
         alive_in_world: true,
@@ -1592,7 +1597,7 @@ fn identity_restricted(vm: &Vm) -> bool {
 /// A unit's GUID as events give it: secret where identities are
 /// restricted (Ragefire Chasm's `PARTY_KILL` and `UNIT_DIED`, `/stdtest
 /// engine record combat`), plain in the open world (scenario combat).
-fn event_guid(vm: &mut Vm, id: UnitId) -> Value {
+pub(crate) fn event_guid(vm: &mut Vm, id: UnitId) -> Value {
     let g = engine(vm).units.list[id.0].guid.clone();
     let v = vm.str(&g);
     if identity_restricted(vm) && !ours(&engine(vm).units, id) {
@@ -1727,11 +1732,24 @@ fn control_start_attack(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `player:stopAttack()`: auto attack off (`PLAYER_LEAVE_COMBAT`).
 fn control_stop_attack(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
-    if me == PLAYER && engine(vm).units.auto_attack {
+    if me == PLAYER {
+        stop_auto_attack(vm);
+    }
+    Ok(vec![])
+}
+
+/// The player's auto attack off (`PLAYER_LEAVE_COMBAT`), if on.
+pub(crate) fn stop_auto_attack(vm: &mut Vm) {
+    if engine(vm).units.auto_attack {
         engine_mut(vm).units.auto_attack = false;
         fire(vm, "PLAYER_LEAVE_COMBAT", &[]);
     }
-    Ok(vec![])
+}
+
+/// The player's power now `n`, told (`UNIT_POWER_UPDATE`), the usability
+/// left to the caller.
+pub(crate) fn set_player_power(vm: &mut Vm, n: f64) {
+    set_power_quietly(vm, PLAYER, n);
 }
 
 /// `player:raiseSkill(name, rank)`: a skill up, as recorded (scenarios
@@ -2076,16 +2094,21 @@ fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
         fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
     }
     if me == PLAYER {
-        // The reverse: PLAYER_IN_COMBAT_CHANGED, the restriction ending,
-        // REGEN_ENABLED, the player's flags.
-        engine_mut(vm).units.lockdown = false;
-        fire(vm, "PLAYER_IN_COMBAT_CHANGED", &[Value::Bool(false)]);
-        set_restriction(vm, COMBAT, false);
-        fire(vm, "PLAYER_REGEN_ENABLED", &[]);
-        fire_unit(vm, "UNIT_FLAGS", PLAYER, &[]);
+        player_out_of_combat(vm);
         crate::actions::update_usability(vm);
     }
     Ok(vec![])
+}
+
+/// The player out of combat: `PLAYER_IN_COMBAT_CHANGED(false)`, the
+/// restriction ending, `PLAYER_REGEN_ENABLED()`, the player's flags.
+pub(crate) fn player_out_of_combat(vm: &mut Vm) {
+    engine_mut(vm).units.list[PLAYER.0].in_combat = false;
+    engine_mut(vm).units.lockdown = false;
+    fire(vm, "PLAYER_IN_COMBAT_CHANGED", &[Value::Bool(false)]);
+    set_restriction(vm, COMBAT, false);
+    fire(vm, "PLAYER_REGEN_ENABLED", &[]);
+    fire_unit(vm, "UNIT_FLAGS", PLAYER, &[]);
 }
 
 fn control_show_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -2292,7 +2315,13 @@ fn unit_pvp_name(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn unit_is_ghost(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, _| vec![Value::Bool(false)])
+    with_unit(vm, &c, |_, u| vec![Value::Bool(u.ghost)])
+}
+
+fn unit_is_dead_or_ghost(vm: &mut Vm, c: NativeCall) -> Ret {
+    with_unit_or(vm, &c, Value::Bool(false), |_, u| {
+        vec![Value::Bool(u.dead || u.ghost)]
+    })
 }
 
 /// Not casting or channeling: no values.

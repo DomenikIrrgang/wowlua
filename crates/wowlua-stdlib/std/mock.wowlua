@@ -45,6 +45,11 @@ export interface MockUnit
     --- one in the log); too far (`setDistance` above 5 yards): the
     --- client's error.
     function interact(npc: MockUnit)
+    --- The player dies (the server's death: "You died.", `PLAYER_DEAD`,
+    --- the worn items' `durability` left by slot); Blizzard's popup
+    --- releases the spirit (`RepopMe`), `mock.nearCorpse` and its popup
+    --- take the corpse back (`RetrieveCorpse`).
+    function die(opts: { durability?: table, ghostAura?: number }?)
     function showNameplate()
     function hideNameplate()
     function despawn()
@@ -714,6 +719,17 @@ end
 --- faction, isUndiscovered } } }`, opened by its gossip (`opens = "taxi"`).
 export function defineTaxi(npc: MockUnit, data: table)
     engine().defineTaxi(npc, data)
+end
+
+--- The ghost reaches its corpse (`CORPSE_IN_RANGE`) or leaves it.
+export function nearCorpse(near: boolean)
+    engine().nearCorpse(near)
+end
+
+--- The client's error message by its name (`"BADATTACKFACING"`:
+--- `UI_ERROR_MESSAGE` with the client's code and text).
+export function gameError(name: string)
+    engine().gameError(name)
 end
 
 --- A level: `{ xpMax, health, power, talents, pvpTalentSlots, strength,

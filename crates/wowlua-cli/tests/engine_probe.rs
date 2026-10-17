@@ -770,6 +770,7 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
     wowlua_engine::login::login(&mut vm, "StdTest", true, false);
     wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
     let errors_before = wowlua_engine::engine(&vm).world.ui.errors.len();
+    let refusals_before = wowlua_engine::engine(&vm).refusals.len();
     addon(&mut vm, &format!("StdTestEngineProbe('scenario {name}')"));
     // What the UI shows, checked by the play script: `check(label, ok)`
     // collects the failures, `note(...)` what it saw.
@@ -833,6 +834,13 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
             } else {
                 errors.push(format!("{label}: {line}"));
             }
+        }
+    }
+    // An action forbidden to the addon: Blizzard's popup (a blocked one
+    // in combat is the recorder's own, as recorded).
+    for r in &wowlua_engine::engine(&vm).refusals[refusals_before..] {
+        if r.event == "ADDON_ACTION_FORBIDDEN" {
+            errors.push(format!("forbidden: {} {}", r.addon, r.action));
         }
     }
     errors.extend(end_state_differences(
@@ -1034,6 +1042,16 @@ const COMBAT_MATCHED: usize = 724;
 #[test]
 fn the_engine_plays_combat_as_the_client_did() {
     plays_as_the_client_did("combat", COMBAT_MATCHED);
+}
+
+/// How many of the death scenario's lines the engine plays as the client
+/// did: only ever up.
+const DEATH_MATCHED: usize = 1340;
+
+/// The death scenario: a fight lost, the spirit released, the corpse taken.
+#[test]
+fn the_engine_plays_death_as_the_client_did() {
+    plays_as_the_client_did("death", DEATH_MATCHED);
 }
 
 /// How many of the flight scenario's lines the engine plays as the client

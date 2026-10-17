@@ -6,7 +6,7 @@
 
 use std::path::Path;
 use wowlua_syntax::view::*;
-use wowlua_vm::{TableRef, Value, Vm};
+use wowlua_vm::{TableRef, Taint, Value, Vm};
 
 /// The profile a test file's `config({ profile = "…" })` names.
 pub fn named_in(source: &[u8]) -> Option<String> {
@@ -104,14 +104,30 @@ pub fn apply_text(vm: &mut Vm, controls: TableRef, text: &str, label: &str) -> R
     }
     let profile = to_lua(vm, &json);
     crate::widgets_keep(vm, profile);
-    let f = vm.load(include_bytes!("profile.lua"), "=[world profile]")?;
-    vm.call(f, &[Value::Table(controls), profile])
-        .map(|_| ())
-        .map_err(|e| {
-            let msg = match e.value {
-                Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
-                _ => "?".into(),
-            };
-            format!("the world profile {path}: {msg}")
-        })
+    // The world as it was: set untainted, as the client's own state (a
+    // tainted SetCVar of a secure one is forbidden: Blizzard's popup).
+    let saved = *vm.taint();
+    {
+        let t = vm.taint_mut();
+        t.stack = Taint::SECURE;
+        t.fixed = Taint::SECURE;
+        t.new_object = Taint::SECURE;
+        t.new_closure = Taint::SECURE;
+    }
+    let f = match vm.load(include_bytes!("profile.lua"), "=[world profile]") {
+        Ok(f) => f,
+        Err(e) => {
+            *vm.taint_mut() = saved;
+            return Err(e.to_string());
+        }
+    };
+    let ran = vm.call(f, &[Value::Table(controls), profile]);
+    *vm.taint_mut() = saved;
+    ran.map(|_| ()).map_err(|e| {
+        let msg = match e.value {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => "?".into(),
+        };
+        format!("the world profile {path}: {msg}")
+    })
 }

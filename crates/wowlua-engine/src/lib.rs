@@ -18,6 +18,7 @@ pub mod clock;
 pub mod controls;
 pub mod cursor;
 pub mod curves;
+pub mod death;
 pub mod editmode;
 pub mod facts;
 pub mod framescript;
@@ -220,6 +221,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(gossip::behaviours())
             .chain(trainer::behaviours())
             .chain(taxi::behaviours())
+            .chain(death::behaviours())
             .chain(queries::behaviours())
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())

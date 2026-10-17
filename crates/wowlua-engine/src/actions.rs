@@ -127,6 +127,11 @@ fn data_field(vm: &mut Vm, item: bool, id: Value, key: &str) -> Value {
 /// cost (its data's `powerCost`) only with that much of the player's
 /// power (`/stdtest engine scenario combat`: Tough Jerky, Heroic Strike).
 fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
+    // Dead or a ghost: nothing (recorded, every action at the death).
+    let p = &engine(vm).units.list[crate::units::PLAYER.0];
+    if p.dead || p.ghost {
+        return (false, false);
+    }
     let in_combat = engine(vm).units.list[crate::units::PLAYER.0].in_combat;
     if a.kind == "item" {
         let class = data_field(vm, true, a.id, "classID");

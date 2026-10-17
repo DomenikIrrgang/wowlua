@@ -293,6 +293,8 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("defineGossip", crate::gossip::control_define),
         ("defineTrainer", crate::trainer::control_define),
         ("defineTaxi", crate::taxi::control_define),
+        ("nearCorpse", crate::death::control_near_corpse),
+        ("gameError", game_error),
         ("defineLevel", crate::levels::control_define),
         ("spend", spend),
         ("spawnUnit", units::spawn),
@@ -336,4 +338,21 @@ fn defaulted_calls(vm: &mut Vm, _c: NativeCall) -> Ret {
         let _ = vm.heap.table_mut(t).set(Value::Num(i as f64 + 1.0), v);
     }
     Ok(vec![Value::Table(t)])
+}
+
+/// `gameError(name)`: the client's error message `name` (`"BADATTACKFACING"`:
+/// `UI_ERROR_MESSAGE(LE_GAME_ERR_BADATTACKFACING, ERR_BADATTACKFACING)`, as
+/// recorded for an auto attack facing away).
+fn game_error(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = match c.arg(1) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => return Err(vm.error("gameError: an error's name expected")),
+    };
+    let code = vm.get_global(&format!("LE_GAME_ERR_{name}"));
+    let text = vm.get_global(&format!("ERR_{name}"));
+    if code.is_nil() || text.is_nil() {
+        return Err(vm.error(&format!("gameError: no client error {name}")));
+    }
+    crate::widgets::fire_event(vm, "UI_ERROR_MESSAGE", &[code, text]);
+    Ok(vec![])
 }
