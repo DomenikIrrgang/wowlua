@@ -10,6 +10,7 @@ pub mod args;
 pub mod auras;
 pub mod bindings;
 pub mod casting;
+pub mod channels;
 pub mod character;
 pub mod chat;
 pub mod clock;
@@ -195,6 +196,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(character::behaviours())
             .chain(stats::behaviours())
             .chain(actions::behaviours())
+            .chain(channels::behaviours())
             .chain(input::behaviours())
             .chain(casting::behaviours())
             .chain(merchant::behaviours())
@@ -335,6 +337,10 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     // Documented namespaces none of whose functions the client's addons
     // have: Blizzard's secure code's alone.
     if flavor == "camelot" {
+        // A documented global the addons lack (recorded): the secure
+        // environment has it (`ui::secure_env`).
+        let k = vm.heap.intern(b"secretunwrap");
+        vm.heap.table_mut(vm.globals).set_str(k, Value::Nil);
         let client: std::collections::HashSet<&str> = include_str!("../data/camelot-functions.txt")
             .lines()
             .filter_map(|l| l.split_once('.').map(|(ns, _)| ns))
@@ -546,12 +552,13 @@ pub fn documented_values(vm: &mut Vm, api: &api::Api, doc: &serde_json::Value) -
         .cloned()
         .unwrap_or_default()
         .iter()
+        .filter(|r| r.get("StrideIndex").is_none())
         .map(|r| default_value(vm, api, r, 0))
         .collect()
 }
 
 /// A function's documented results as empty values: nil where nilable,
-/// false, 0, "", an empty table (unverified stand-ins).
+/// false, 0, "", an empty table, none of a list (unverified stand-ins).
 pub fn defaults(vm: &mut Vm, api: &api::Api, doc: &serde_json::Value) -> Vec<Value> {
     let returns = doc
         .get("Returns")
@@ -565,8 +572,10 @@ pub fn defaults(vm: &mut Vm, api: &api::Api, doc: &serde_json::Value) -> Vec<Val
     {
         return vec![];
     }
+    // A list of values (`StrideIndex`): none.
     returns
         .iter()
+        .filter(|r| r.get("StrideIndex").is_none())
         .map(|r| default_value(vm, api, r, 0))
         .collect()
 }
@@ -625,6 +634,16 @@ fn default_value(vm: &mut Vm, api: &api::Api, r: &serde_json::Value, depth: usiz
                 for (k, f) in methods {
                     let _ = vm.heap.table_mut(t).set(k, f);
                 }
+            }
+            // A vector at the origin (its coordinates are fields).
+            let axes: &[&str] = match ty {
+                "vector2" | "Vector2DMixin" => &["x", "y"],
+                "vector3" | "Vector3DMixin" => &["x", "y", "z"],
+                _ => &[],
+            };
+            for axis in axes {
+                let k = vm.str(axis);
+                let _ = vm.heap.table_mut(t).set(k, Value::Num(0.0));
             }
             Value::Table(t)
         }

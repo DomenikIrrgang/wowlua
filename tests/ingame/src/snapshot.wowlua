@@ -105,8 +105,14 @@ end
 --- count, as a test profile's `actions`.
 local function actions(): table
     const out: { [number]: table } = {}
-    for slot = 1, 180 do
-        if C_ActionBar.HasAction(slot) then
+    -- The bars and the gamepad bars (from 181), to the first slot the
+    -- client refuses.
+    for slot = 1, 540 do
+        local ok, has = pcall(C_ActionBar.HasAction, slot)
+        if not ok then
+            break
+        end
+        if has then
             local kind, id, subType = GetActionInfo(slot)
             out[slot] = {
                 type = kind,
@@ -296,14 +302,28 @@ local function channels(): table
         display[i] = results(GetChannelDisplayInfo(i))
     end
     const names: { [number]: table } = {}
+    const infos: { [number]: table } = {}
+    const regional: { [number]: table } = {}
+    const C = C_ChatInfo :: any
     for id = 1, 20 do
         names[id] = results(GetChannelName(id))
+    end
+    -- Each joined channel by its short name, as Blizzard's chat settings
+    -- ask (`GetChannelList`: number, name, disabled).
+    const list = { GetChannelList() }
+    for i = 1, #list, 3 do
+        const id = list[i] :: number
+        infos[id] = results(C.GetChannelInfoFromIdentifier(list[i + 1]))
+        regional[id] = results(C.IsChannelRegional(id))
     end
     return {
         list = results(GetChannelList()),
         displayCount = count,
         display = display,
         names = names,
+        infos = infos,
+        regional = regional,
+        regionalService = results(C.IsRegionalServiceAvailable()),
         groupChannels = results(GetNumGroupChannels()),
         generalLocalID = results((C_ChatInfo :: any).GetGeneralChannelLocalID()),
         generalID = results((C_ChatInfo :: any).GetGeneralChannelID()),

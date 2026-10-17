@@ -5,209 +5,393 @@
       "id": 20271,
       "subType": "spell",
       "texture": 135959,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        false,
+        false
+      ]
     },
     "12": {
       "count": "",
       "id": 25780,
       "subType": "spell",
       "texture": 135962,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "181": {
+      "count": "0",
+      "id": 159,
+      "texture": 132794,
+      "type": "item",
+      "usable": [
+        false,
+        false
+      ]
+    },
+    "182": {
+      "count": "",
+      "id": 7744,
+      "subType": "spell",
+      "texture": 136187,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "183": {
+      "count": "",
+      "id": 5502,
+      "subType": "spell",
+      "texture": 135974,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "184": {
+      "count": "0",
+      "id": 4604,
+      "texture": 134534,
+      "type": "item",
+      "usable": [
+        false,
+        false
+      ]
+    },
+    "197": {
+      "count": "",
+      "id": 20577,
+      "subType": "spell",
+      "texture": 132278,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "2": {
       "count": "",
       "id": 1311656,
       "subType": "spell",
       "texture": 135957,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "200": {
+      "count": "",
+      "id": 21084,
+      "subType": "spell",
+      "texture": 132325,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "26": {
       "count": "",
       "id": 3100,
       "subType": "spell",
       "texture": 136241,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "27": {
       "count": "",
       "id": 2656,
       "subType": "spell",
       "texture": 135811,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "29": {
       "count": "",
       "id": 2580,
       "subType": "spell",
       "texture": 136025,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "3": {
       "count": "",
       "id": 20162,
       "subType": "spell",
       "texture": 135924,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "30": {
       "count": "",
       "id": 20217,
       "subType": "spell",
       "texture": 135995,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "31": {
       "count": "",
       "id": 19750,
       "subType": "spell",
       "texture": 135907,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "32": {
       "count": "",
       "id": 647,
       "subType": "spell",
       "texture": 135920,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "33": {
       "count": "",
       "id": 1044,
       "subType": "spell",
       "texture": 135968,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "35": {
       "count": "",
       "id": 19834,
       "subType": "spell",
       "texture": 135906,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "36": {
       "count": "",
       "id": 19742,
       "subType": "spell",
       "texture": 135970,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "39": {
       "count": "",
       "id": 1044,
       "subType": "spell",
       "texture": 135968,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "4": {
       "count": "",
       "id": 20288,
       "subType": "spell",
       "texture": 132325,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "40": {
       "count": "0",
       "id": 1205,
       "texture": 132796,
-      "type": "item"
+      "type": "item",
+      "usable": [
+        false,
+        false
+      ]
     },
     "41": {
       "count": "",
       "id": 5573,
       "subType": "spell",
       "texture": 135954,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "42": {
       "count": "",
       "id": 1022,
       "subType": "spell",
       "texture": 135964,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "43": {
       "count": "",
       "id": 20271,
       "subType": "spell",
       "texture": 135959,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        false,
+        false
+      ]
     },
     "44": {
       "count": "",
       "id": 1866,
       "subType": "spell",
       "texture": 626003,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "45": {
       "count": "",
       "id": 26573,
       "subType": "spell",
       "texture": 135926,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "47": {
       "count": "",
       "id": 879,
       "subType": "spell",
       "texture": 135903,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "48": {
       "count": "",
       "id": 853,
       "subType": "spell",
       "texture": 135963,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "50": {
       "count": "",
       "id": 1022,
       "subType": "spell",
       "texture": 135964,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "54": {
       "count": "",
       "id": 7328,
       "subType": "spell",
       "texture": 135955,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "56": {
       "count": "",
       "id": 633,
       "subType": "spell",
       "texture": 135928,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "59": {
       "count": "",
       "id": 7744,
       "subType": "spell",
       "texture": 136187,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "61": {
       "count": "",
       "id": 1866,
       "subType": "spell",
       "texture": 626003,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "62": {
       "count": "",
       "id": 879,
       "subType": "spell",
       "texture": 135903,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "63": {
       "count": "",
       "id": 20577,
       "subType": "spell",
       "texture": 132278,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "64": {
       "count": "",
@@ -215,42 +399,66 @@
       "subType": "",
       "text": "Test",
       "texture": 841219,
-      "type": "macro"
+      "type": "macro",
+      "usable": [
+        true,
+        false
+      ]
     },
     "65": {
       "count": "",
       "id": 26573,
       "subType": "spell",
       "texture": 135926,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "67": {
       "count": "",
       "id": 853,
       "subType": "spell",
       "texture": 135963,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "69": {
       "count": "",
       "id": 1152,
       "subType": "spell",
       "texture": 135949,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "70": {
       "count": "",
       "id": 5573,
       "subType": "spell",
       "texture": 135954,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     },
     "72": {
       "count": "",
       "id": 2656,
       "subType": "spell",
       "texture": 135811,
-      "type": "spell"
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
     }
   },
   "auras": [
@@ -398,44 +606,38 @@
       "slots": 20
     },
     "1": {
-      "items": [
-        {
+      "items": {
+        "1": {
           "bound": false,
           "count": 1,
           "id": 2375,
           "link": "|cnIQ1:|Hitem:2375::::::::21:1486::14:::::::|h[Battered Leather Gloves]|h|r"
         },
-        {
-          "bound": false,
-          "count": 1,
-          "id": 2375,
-          "link": "|cnIQ1:|Hitem:2375::::::::21:1486::14:::::::|h[Battered Leather Gloves]|h|r"
-        },
-        {
+        "3": {
           "bound": false,
           "count": 1,
           "id": 2901,
           "link": "|cnIQ1:|Hitem:2901::::::::21:1486::14:::::::|h[Mining Pick]|h|r"
         },
-        {
+        "4": {
           "bound": true,
           "count": 1,
           "id": 267454,
           "link": "|cnIQ1:|Hitem:267454::::::::21:1486:::::::::|h[Trevan's Weapon Notes]|h|r"
         },
-        {
+        "5": {
           "bound": false,
           "count": 1,
           "id": 4238,
           "link": "|cnIQ1:|Hitem:4238::::::::21:1486::::::::Player-0000-00000000:|h[Linen Bag]|h|r"
         },
-        {
+        "6": {
           "bound": false,
           "count": 1,
           "id": 4238,
           "link": "|cnIQ1:|Hitem:4238::::::::21:1486::::::::Player-0000-00000000:|h[Linen Bag]|h|r"
         }
-      ],
+      },
       "slots": 6
     },
     "2": {
@@ -617,6 +819,7 @@
     "Z": "TOGGLESHEATH",
     "`": "TOGGLEAUTORUN"
   },
+  "units": {},
   "character": {
     "class": "PALADIN",
     "faction": "Horde",
@@ -702,7 +905,7 @@
     "autoLootDefault": "1",
     "cameraDistanceMaxZoomFactor": "2",
     "cameraSavedDistance": "30.000000",
-    "cameraSavedPitch": "29.115789",
+    "cameraSavedPitch": "42.010098",
     "cameraSmoothStyle": "0",
     "cameraView": "1",
     "categorizeTrainerUI": "1",
@@ -722,7 +925,7 @@
     "farclip": "7000",
     "ffxAntiAliasingMode": "0",
     "flaggedTutorials": "v21###&###%###=###'",
-    "gameTip": "38",
+    "gameTip": "41",
     "giQuality": "3",
     "groundEffectDensity": "48",
     "groundEffectDist": "200",
@@ -832,6 +1035,14 @@
       "id": 3480,
       "link": "|cnIQ2:|Hitem:3480::::::::21:1486::::::::Player-0000-00000000:|h[Rough Bronze Shoulders]|h|r"
     },
+    "31": {
+      "id": 279939,
+      "link": "|cnIQ1:|Hitem:279939::::::::21:1486:::::::::|h[Collecting Basket]|h|r"
+    },
+    "32": {
+      "id": 277115,
+      "link": "|cnIQ1:|Hitem:277115::::::::21:1486:::::::::|h[Apprentice's Mining Pack]|h|r"
+    },
     "4": {
       "id": 6125,
       "link": "|cnIQ1:|Hitem:6125::::::::21:1486::75:::::::|h[Brawler's Harness]|h|r"
@@ -853,7 +1064,78 @@
       "link": "|cnIQ3:|Hitem:14147:924:::::::21:1486::1:::::::|h[Cavedweller Bracers]|h|r"
     }
   },
-  "units": {},
+  "channels": {
+    "joined": [
+      {
+        "name": "LookingForGroup",
+        "fullName": "LookingForGroup",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": false,
+        "shortcut": "LookingForGroup",
+        "instanceID": 0,
+        "zoneChannelID": 26,
+        "channelType": 0,
+        "regional": false
+      },
+      {
+        "name": "General",
+        "fullName": "General - Thunder Bluff",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": false,
+        "shortcut": "General",
+        "instanceID": 0,
+        "zoneChannelID": 1,
+        "channelType": 1,
+        "regional": false
+      },
+      {
+        "name": "Trade",
+        "fullName": "Trade - English",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": false,
+        "shortcut": "Trade",
+        "instanceID": 0,
+        "zoneChannelID": 2,
+        "channelType": 1,
+        "regional": false
+      },
+      {
+        "name": "LocalDefense",
+        "fullName": "LocalDefense - Thunder Bluff",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": false,
+        "shortcut": "LocalDefense",
+        "instanceID": 0,
+        "zoneChannelID": 22,
+        "channelType": 1,
+        "regional": false
+      },
+      {
+        "name": "Services",
+        "fullName": "Trade (Services) - English",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": false,
+        "shortcut": "Services",
+        "instanceID": 0,
+        "zoneChannelID": 42,
+        "channelType": 1,
+        "regional": false
+      },
+      {
+        "name": "TradeLocal",
+        "fullName": "Trade (Local) - Thunder Bluff",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": false,
+        "shortcut": "TradeLocal",
+        "instanceID": 0,
+        "zoneChannelID": 46,
+        "channelType": 1,
+        "regional": false
+      }
+    ],
+    "groupChannels": 1,
+    "regionalService": true
+  },
   "items": {
     "0": {},
     "10649": {
@@ -1111,6 +1393,21 @@
       "subclassID": 7,
       "type": "Trade Goods"
     },
+    "277115": {
+      "classID": 1,
+      "equipLoc": "INVTYPE_BAG",
+      "icon": 133635,
+      "itemLevel": 1,
+      "link": "|cnIQ1:|Hitem:277115::::::::21:1486:::::::::|h[Apprentice's Mining Pack]|h|r",
+      "minLevel": 0,
+      "name": "Apprentice's Mining Pack",
+      "quality": 1,
+      "sellPrice": 6,
+      "stackCount": 1,
+      "subType": "Mining Bag",
+      "subclassID": 6,
+      "type": "Container"
+    },
     "277566": {
       "classID": 12,
       "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
@@ -1140,6 +1437,21 @@
       "subType": "Miscellaneous",
       "subclassID": 0,
       "type": "Armor"
+    },
+    "279939": {
+      "classID": 1,
+      "equipLoc": "INVTYPE_BAG",
+      "icon": 237271,
+      "itemLevel": 5,
+      "link": "|cnIQ1:|Hitem:279939::::::::21:1486:::::::::|h[Collecting Basket]|h|r",
+      "minLevel": 0,
+      "name": "Collecting Basket",
+      "quality": 1,
+      "sellPrice": 62,
+      "stackCount": 1,
+      "subType": "Bag",
+      "subclassID": 0,
+      "type": "Container"
     },
     "279944": {
       "classID": 0,
@@ -1412,12 +1724,1630 @@
       "type": "Miscellaneous"
     }
   },
-  "money": 32938,
+  "money": 32872,
   "position": {
-    "mapID": 1412,
-    "subZone": "Bloodhoof Village",
-    "x": 0.4525937438011169,
-    "y": 0.6208386421203613,
-    "zone": "Mulgore"
+    "mapID": 1456,
+    "subZone": "",
+    "x": 0.4038190245628357,
+    "y": 0.5256078243255615,
+    "zone": "Thunder Bluff"
+  },
+  "stats": {
+    "activeSpecGroup": [
+      1
+    ],
+    "armor": [
+      347,
+      1149,
+      1149,
+      802
+    ],
+    "armorPenetration": [
+      0
+    ],
+    "attackPower": [
+      177,
+      0,
+      0
+    ],
+    "attackPowerBySpellPower": [
+      0
+    ],
+    "attackPowerForStat": [
+      [
+        134
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "attackSpeed": [
+      2.600000143051148,
+      null,
+      null
+    ],
+    "avoidance": [
+      0
+    ],
+    "block": [
+      5.440000057220459
+    ],
+    "combatConfig": [
+      [
+        73810
+      ],
+      [
+        null
+      ]
+    ],
+    "combatRating": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "combatRatingBonus": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "cooldownViewerSet": {
+      "0": [
+        [
+          200531,
+          200339,
+          200341,
+          200302,
+          200307,
+          200300,
+          200265,
+          200309,
+          200297,
+          200301,
+          200293,
+          200303
+        ]
+      ],
+      "1": [
+        [
+          200168,
+          200169,
+          200274,
+          200306,
+          200287,
+          200267,
+          200278,
+          200271,
+          200386,
+          200276,
+          200284,
+          200294,
+          200304,
+          200282
+        ]
+      ],
+      "2": [
+        [
+          200180,
+          200269,
+          200383,
+          200385,
+          200268,
+          200289,
+          200388,
+          200291,
+          200292,
+          200296,
+          200270,
+          200310,
+          200387,
+          200308,
+          200389,
+          200288,
+          200305,
+          200340,
+          200342,
+          200379,
+          200381,
+          200380,
+          200382,
+          200281,
+          200266,
+          200280,
+          200290,
+          200286,
+          200285,
+          200272,
+          200277,
+          200275,
+          200215,
+          200273,
+          200279,
+          200298,
+          200299,
+          200283,
+          200295
+        ]
+      ],
+      "3": [
+        {}
+      ],
+      "4": [
+        {}
+      ],
+      "5": [
+        [
+          200345,
+          200346,
+          200347
+        ]
+      ],
+      "6": [
+        {}
+      ],
+      "7": [
+        [
+          200257,
+          200258
+        ]
+      ],
+      "8": [
+        {}
+      ]
+    },
+    "crit": [
+      4.361400127410889
+    ],
+    "critFromStat": [
+      [
+        0
+      ],
+      [
+        0.03701400011777878
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "damage": [
+      49.87143325805664,
+      65.87142944335938,
+      13.14285850524902,
+      13.14285850524902,
+      0,
+      0,
+      1
+    ],
+    "defense": [
+      104,
+      12
+    ],
+    "dodge": [
+      4.841399669647217
+    ],
+    "dodgeFromAttribute": [
+      0.03701399639248848
+    ],
+    "earnedTalentPoint": [
+      true
+    ],
+    "expertise": [
+      0,
+      0,
+      0
+    ],
+    "groupBuffs": [
+      [
+        {
+          "displaySpellID": 643,
+          "flags": 1,
+          "iconID": 135893,
+          "isKnown": true,
+          "name": "Devotion Aura",
+          "spellID": 465
+        },
+        {
+          "displaySpellID": 7294,
+          "flags": 1,
+          "iconID": 135873,
+          "isKnown": true,
+          "name": "Retribution Aura",
+          "spellID": 7294
+        },
+        {
+          "displaySpellID": 19746,
+          "flags": 1,
+          "iconID": 135933,
+          "isKnown": false,
+          "name": "Concentration Aura",
+          "spellID": 19746
+        },
+        {
+          "displaySpellID": 19876,
+          "flags": 1,
+          "iconID": 136192,
+          "isKnown": false,
+          "name": "Shadow Resistance Aura",
+          "spellID": 19876
+        },
+        {
+          "displaySpellID": 19888,
+          "flags": 1,
+          "iconID": 135865,
+          "isKnown": false,
+          "name": "Frost Resistance Aura",
+          "spellID": 19888
+        },
+        {
+          "displaySpellID": 19891,
+          "flags": 1,
+          "iconID": 135824,
+          "isKnown": false,
+          "name": "Fire Resistance Aura",
+          "spellID": 19891
+        },
+        {
+          "displaySpellID": 1044,
+          "flags": 1,
+          "iconID": 135968,
+          "isKnown": true,
+          "name": "Blessing of Freedom",
+          "spellID": 1044
+        },
+        {
+          "displaySpellID": 6940,
+          "flags": 1,
+          "iconID": 135966,
+          "isKnown": false,
+          "name": "Blessing of Sacrifice",
+          "spellID": 6940
+        },
+        {
+          "displaySpellID": 1022,
+          "flags": 1,
+          "iconID": 135964,
+          "isKnown": true,
+          "name": "Blessing of Protection",
+          "spellID": 1022
+        },
+        {
+          "displaySpellID": 19834,
+          "flags": 1,
+          "iconID": 135906,
+          "isKnown": true,
+          "name": "Blessing of Might",
+          "spellID": 19740
+        },
+        {
+          "displaySpellID": 20217,
+          "flags": 1,
+          "iconID": 135995,
+          "isKnown": true,
+          "name": "Blessing of Kings",
+          "spellID": 20217
+        },
+        {
+          "displaySpellID": 1038,
+          "flags": 1,
+          "iconID": 135967,
+          "isKnown": false,
+          "name": "Salvation",
+          "spellID": 1038
+        },
+        {
+          "displaySpellID": 19977,
+          "flags": 1,
+          "iconID": 135943,
+          "isKnown": false,
+          "name": "Blessing of Light",
+          "spellID": 19977
+        },
+        {
+          "displaySpellID": 19742,
+          "flags": 1,
+          "iconID": 135970,
+          "isKnown": true,
+          "name": "Blessing of Wisdom",
+          "spellID": 19742
+        },
+        {
+          "displaySpellID": 1310909,
+          "flags": 0,
+          "iconID": 236256,
+          "isKnown": false,
+          "name": "Light's Vigil",
+          "spellID": 1310909
+        }
+      ]
+    ],
+    "healthRegen": [
+      6.131104946136475,
+      0
+    ],
+    "healthRegenFromSpirit": [
+      8.174806594848633,
+      0
+    ],
+    "hit": [
+      3
+    ],
+    "honor": [
+      0
+    ],
+    "honorLevel": [
+      1
+    ],
+    "honorMax": [
+      5500
+    ],
+    "hpPerStamina": [
+      10
+    ],
+    "itemLevel": [
+      11.25,
+      11.25,
+      11.25
+    ],
+    "lifesteal": [
+      0
+    ],
+    "manaRegen": [
+      9.50100040435791,
+      0.001000000047497451
+    ],
+    "manaRegenFromSpirit": [
+      9.5,
+      0
+    ],
+    "mastery": [
+      0,
+      0
+    ],
+    "meleeHaste": [
+      0
+    ],
+    "movement": [
+      0,
+      7,
+      7,
+      4.722221851348877
+    ],
+    "offhandHit": [
+      3
+    ],
+    "parry": [
+      5.440000057220459
+    ],
+    "powerRegen": [
+      9.50100040435791,
+      0.001000000047497451
+    ],
+    "rangedAttackPower": [
+      0,
+      0,
+      0
+    ],
+    "rangedAttackPowerForStat": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "rangedCrit": [
+      0.2414000481367111
+    ],
+    "rangedDamage": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "rangedHaste": [
+      0,
+      0
+    ],
+    "rangedHit": [
+      3
+    ],
+    "resilience": [
+      0
+    ],
+    "resistance": {
+      "0": [
+        347,
+        1149,
+        1149,
+        802
+      ],
+      "1": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "2": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "3": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "4": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "5": [
+        10,
+        10,
+        10,
+        0
+      ],
+      "6": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "restState": [
+      1,
+      "Rested",
+      2
+    ],
+    "restedXP": [
+      38554
+    ],
+    "shapeshiftForm": [
+      1
+    ],
+    "shapeshiftFormID": [
+      null
+    ],
+    "shapeshiftFormInfo": [
+      [
+        136116,
+        true,
+        true,
+        643
+      ],
+      [
+        135873,
+        false,
+        true,
+        7294
+      ],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    "shapeshiftForms": [
+      2
+    ],
+    "shieldBlock": [
+      2
+    ],
+    "specGroups": [
+      1
+    ],
+    "specialization": [
+      1
+    ],
+    "specializationInfo": [
+      [
+        1486,
+        "Paladin",
+        "",
+        626003,
+        "DAMAGER",
+        4,
+        0,
+        null,
+        0,
+        true
+      ],
+      [
+        0,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+        0,
+        true
+      ],
+      [
+        0,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+        0,
+        true
+      ],
+      [
+        0,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+        0,
+        true
+      ]
+    ],
+    "speed": [
+      0
+    ],
+    "spellCrit": [
+      4.998499870300293
+    ],
+    "spellCritFromStat": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0.01498499978333712
+      ],
+      [
+        0
+      ]
+    ],
+    "spellDamage": [
+      [
+        0
+      ],
+      [
+        29
+      ],
+      [
+        29
+      ],
+      [
+        29
+      ],
+      [
+        29
+      ],
+      [
+        29
+      ],
+      [
+        29
+      ]
+    ],
+    "spellHaste": [
+      0
+    ],
+    "spellHealing": [
+      29
+    ],
+    "spellHit": [
+      3
+    ],
+    "spellPenetration": [
+      0
+    ],
+    "spellPowerByAttackPower": [
+      0
+    ],
+    "stat": [
+      [
+        67,
+        67,
+        22,
+        0
+      ],
+      [
+        31,
+        31,
+        0,
+        0
+      ],
+      [
+        75,
+        75,
+        32,
+        0
+      ],
+      [
+        37,
+        37,
+        6,
+        0
+      ],
+      [
+        38,
+        38,
+        3,
+        0
+      ]
+    ],
+    "talentSpecUI": [
+      true,
+      ""
+    ],
+    "talentUI": [
+      true,
+      ""
+    ],
+    "transmogSlot": {
+      "100": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1000": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 306408,
+          "baseVisualID": 129954,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1001": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 306408,
+          "baseVisualID": 129954,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "101": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1010": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1011": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "110": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "111": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1500": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 158142,
+          "baseVisualID": 64969,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1501": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 158142,
+          "baseVisualID": 64969,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1510": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1511": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1600": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 306416,
+          "baseVisualID": 130067,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 4,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1601": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 306416,
+          "baseVisualID": 130067,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 4,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1610": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 4,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1611": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 4,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1700": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1701": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1710": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1711": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1800": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1801": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1810": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1811": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1900": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1901": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1910": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1911": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "300": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 157337,
+          "baseVisualID": 64330,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "301": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 157337,
+          "baseVisualID": 64330,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "310": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "311": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "400": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 158325,
+          "baseVisualID": 65092,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "401": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 158325,
+          "baseVisualID": 65092,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "410": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "411": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "500": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 306405,
+          "baseVisualID": 129953,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "501": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 306405,
+          "baseVisualID": 129953,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "510": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "511": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "600": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 306401,
+          "baseVisualID": 129952,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "601": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 306401,
+          "baseVisualID": 129952,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "610": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "611": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "700": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "701": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "710": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "711": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "800": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 298030,
+          "baseVisualID": 65649,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "801": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 298030,
+          "baseVisualID": 65649,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "810": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "811": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "900": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 161280,
+          "baseVisualID": 67105,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "901": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 161280,
+          "baseVisualID": 67105,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "910": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "911": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 3,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ]
+    },
+    "versatility": {
+      "29": [
+        0
+      ],
+      "31": [
+        0
+      ]
+    },
+    "xp": [
+      6093
+    ],
+    "xpDisabled": [
+      false
+    ],
+    "xpMax": [
+      25200
+    ]
   }
 }

@@ -157,6 +157,7 @@
     ],
     "immediate-functions": [
       "pcall", "xpcall", "securecall", "securecallfunction", "securecallfunctionwithargs",
+      "securecallmethod",
       "table.sort", "sort", "string.gsub", "gsub", "table.foreach", "foreach", "table.foreachi",
       "coroutine.wrap", "coroutine.create", "Mixin", "CreateFromMixins"
     ]

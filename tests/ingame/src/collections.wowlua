@@ -1,0 +1,113 @@
+-- /stdtest engine collections: the account's collections as the client
+-- answers them, into StdTestState.engineCollectionAnswers[call] in the
+-- answers probe's form: each transmog category's info, counts and
+-- appearances (each one's sources and camera), the illusions, and the
+-- sizes of the mount, pet, toy and heirloom collections. Read-only calls
+-- only. Its size decides how the engine keeps it.
+import state from "/state"
+import say from "/harness"
+
+local function pack(...: any): { n: number, [number]: any }
+    return { n = select("#", ...), ... }
+end
+
+--- A value in full: tables to depth 4, keys sorted, secrets marked.
+local function show(v: any, depth: number): string
+    if issecretvalue(v) then
+        return `secret {type(v)}`
+    end
+    if type(v) == "string" then
+        return `string {v}`
+    end
+    if type(v) ~= "table" then
+        return `{type(v)} {tostring(v)}`
+    end
+    if depth >= 4 then
+        return "table"
+    end
+    const keys: string[] = {}
+    const values: { [string]: any } = {}
+    for k, inner in pairs(v :: table) do
+        const key = tostring(k)
+        keys[#keys + 1] = key
+        values[key] = inner
+    end
+    table.sort(keys)
+    const parts: string[] = {}
+    for _, k in ipairs(keys) do
+        parts[#parts + 1] = `{k}={show(values[k], depth + 1)}`
+    end
+    return `\{{table.concat(parts, ",")}\}`
+end
+
+export function collectionsProbe()
+    const st = state() :: any
+    const out: { [string]: string } = {}
+    const G = _G :: any
+    local bytes = 0
+    local function ask(call: string)
+        const f = loadstring("return " .. call)
+        if f == nil then
+            return
+        end
+        local ok, packed = pcall(function(): any return pack((f :: any)()) end)
+        if not ok then
+            out[call] = `error: {tostring(packed)}`
+            return
+        end
+        const p = packed :: { n: number, [number]: any }
+        const parts: string[] = {}
+        for i = 1, p.n do
+            parts[#parts + 1] = show(p[i], 0)
+        end
+        const text = `{p.n}: {table.concat(parts, ", ")}`
+        bytes = bytes + #text
+        out[call] = text
+    end
+    -- Each transmog category (the enum's values).
+    const categories: number[] = {}
+    for _, v in pairs(G.Enum.TransmogCollectionType ?? {}) do
+        if type(v) == "number" then
+            categories[#categories + 1] = v
+        end
+    end
+    table.sort(categories)
+    local appearances = 0
+    for _, cat in ipairs(categories) do
+        ask(`C_TransmogCollection.GetCategoryInfo({cat})`)
+        ask(`C_TransmogCollection.GetCategoryCollectedCount({cat})`)
+        ask(`C_TransmogCollection.GetCategoryTotal({cat})`)
+        ask(`C_TransmogCollection.GetCategoryAppearances({cat})`)
+        const list = C_TransmogCollection.GetCategoryAppearances(cat)
+        appearances = appearances + (list and #list or 0)
+        -- Each appearance's sources (all, and the player's class's) and
+        -- its camera.
+        local _, _, classID = UnitClass("player")
+        for _, visual in ipairs(list ?? {}) do
+            const id = visual.visualID
+            ask(`C_TransmogCollection.GetAppearanceSources({id}, {cat})`)
+            ask(`C_TransmogCollection.GetValidAppearanceSourcesForClass({id}, {classID}, {cat})`)
+            ask(`C_TransmogCollection.GetAppearanceCameraID({id})`)
+        end
+    end
+    for _, call in ipairs({
+        "C_TransmogCollection.GetIllusions()",
+        "C_TransmogCollection.GetNumTransmogSources()",
+        "C_TransmogCollection.GetNumMaxOutfits()",
+        "C_TransmogCollection.GetOutfits()",
+        "C_TransmogSets.GetAllSets()",
+        "C_MountJournal.GetNumMounts()",
+        "C_MountJournal.GetNumDisplayedMounts()",
+        "C_MountJournal.GetMountIDs()",
+        "C_PetJournal.GetNumPets()",
+        "C_ToyBox.GetNumToys()",
+        "C_ToyBox.GetNumLearnedDisplayedToys()",
+        "C_ToyBox.GetNumTotalDisplayedToys()",
+        "C_Heirloom.GetNumHeirlooms()",
+        "C_Heirloom.GetNumKnownHeirlooms()",
+    }) do
+        ask(call)
+    end
+    st.engineCollectionAnswers = out
+    say(`engine collections: {#categories} categories, {appearances} appearances, {math.floor(bytes / 1024)} KB; type /reload so the file is written`)
+end

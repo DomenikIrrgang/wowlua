@@ -30,6 +30,7 @@ fn build() -> tempfile::TempDir {
         "engineprobe.wowlua",
         "answers.wowlua",
         "maps.wowlua",
+        "collections.wowlua",
         "startup.wowlua",
     ] {
         fs::copy(repo().join("tests/ingame/src").join(file), src.join(file)).unwrap();
@@ -499,7 +500,7 @@ __engine.pressKey("ENTER")"#,
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 2842;
+const ANSWERS_MATCHED: usize = 3344;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {

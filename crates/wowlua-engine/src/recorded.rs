@@ -219,9 +219,36 @@ pub fn client_answer(vm: &mut Vm, c: &NativeCall) -> Vec<Value> {
     Vec::new()
 }
 
+/// The recorded answer to a call written as the engine writes calls
+/// (`C_X.F(1)`), if there is one.
+pub fn lookup_text(vm: &mut Vm, call: &str) -> Option<Vec<Value>> {
+    let answer = answers().get(call)?;
+    Some(parse_answer(vm, answer))
+}
+
 /// The recorded answer to this call of `name`, if there is one.
+///
+/// A call the recording lacks is asked again without its trailing tables
+/// and nils (Blizzard's code passes a transmog location or a nil
+/// variation that the probes leave out).
 pub fn lookup(vm: &mut Vm, name: &str, c: &NativeCall) -> Option<Vec<Value>> {
     let call = crate::call_text(vm, name, c, 1);
-    let answer = answers().get(call.as_str())?;
-    Some(parse_answer(vm, answer))
+    if let Some(answer) = answers().get(call.as_str()) {
+        return Some(parse_answer(vm, answer));
+    }
+    let mut args: Vec<&str> = call
+        .strip_prefix(name)?
+        .strip_prefix('(')?
+        .strip_suffix(')')?
+        .split(", ")
+        .filter(|a| !a.is_empty())
+        .collect();
+    while matches!(args.last(), Some(&"nil" | &"{}")) {
+        args.pop();
+        let shorter = format!("{name}({})", args.join(", "));
+        if let Some(answer) = answers().get(shorter.as_str()) {
+            return Some(parse_answer(vm, answer));
+        }
+    }
+    None
 }

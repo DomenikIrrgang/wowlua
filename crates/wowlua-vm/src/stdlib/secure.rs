@@ -1,7 +1,8 @@
 //! The client's secure execution API (spec emulator §17.4), as elune
 //! implements it (`lbaselib.c`, `lauxlib.c`): `issecure`,
 //! `issecurevariable`, `securecall`, `securecallfunction`,
-//! `secureexecuterange`, `hooksecurefunc`, `forceinsecure`, `scrub`.
+//! `securecallmethod`, `secureexecuterange`, `hooksecurefunc`,
+//! `forceinsecure`, `scrub`.
 
 use crate::error::LuaError;
 use crate::function::NativeCall;
@@ -20,6 +21,7 @@ pub fn open(vm: &mut Vm) {
         ("issecurevariable", issecurevariable),
         ("securecall", securecall),
         ("securecallfunction", securecallfunction),
+        ("securecallmethod", securecallmethod),
         ("secureexecuterange", secureexecuterange),
         ("hooksecurefunc", hooksecurefunc),
         ("scrub", scrub),
@@ -118,6 +120,20 @@ fn securecall(vm: &mut Vm, c: NativeCall) -> Ret {
 fn securecallfunction(vm: &mut Vm, c: NativeCall) -> Ret {
     let saved = vm.taint().saved();
     let results = call_restoring(vm, saved, c.slot(1), &c.slots(2));
+    Ok(vm.return_slots(results))
+}
+
+/// `securecallmethod(object, name, ...)`: `object:name(...)` as
+/// `securecallfunction` calls (the client has it; Blizzard's secure pools
+/// release through it). The method is read as an index reads it.
+/// Unverified: a missing method, the taint of the read.
+fn securecallmethod(vm: &mut Vm, c: NativeCall) -> Ret {
+    let saved = vm.taint().saved();
+    let object = c.slot(1);
+    let method = vm.index_slot(object.v, c.arg(2), None)?;
+    let mut args = vec![object];
+    args.extend(c.slots(3));
+    let results = call_restoring(vm, saved, method, &args);
     Ok(vm.return_slots(results))
 }
 

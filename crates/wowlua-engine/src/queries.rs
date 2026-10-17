@@ -172,22 +172,30 @@ fn no_max_health_modifier(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `C_Container.ContainerIDToInventoryID(bag)`: the bag's inventory slot,
-/// bag + 30 (recorded for bags 1 to 5). Unverified: the bank's bags.
+/// bag + 30 for the bags (1 to 5), bag + 58 for the bank's (6 to 11);
+/// nothing for the backpack, the bank and below (recorded). Unverified:
+/// past 11.
 fn container_inventory_id(_vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(vec![match num(c.arg(1)) {
-        Some(bag) if (1.0..=5.0).contains(&bag) => Value::Num(bag + 30.0),
-        _ => Value::Nil,
-    }])
+    Ok(match num(c.arg(1)) {
+        Some(bag) if (1.0..=5.0).contains(&bag) => vec![Value::Num(bag + 30.0)],
+        Some(bag) if (6.0..=11.0).contains(&bag) => vec![Value::Num(bag + 58.0)],
+        _ => vec![],
+    })
+}
+
+/// A global string, else `fallback`.
+fn global_text(vm: &mut Vm, name: &str, fallback: &str) -> String {
+    match vm.get_global(name) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => fallback.to_string(),
+    }
 }
 
 /// A whole number as text, its digits grouped by threes with
 /// `LARGE_NUMBER_SEPERATOR` from 1000.
 fn grouped(vm: &mut Vm, n: f64) -> String {
-    let digits = format!("{}", n.abs().floor() as u64);
-    let sep = match vm.get_global("LARGE_NUMBER_SEPERATOR") {
-        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
-        _ => ",".to_string(),
-    };
+    let digits = format!("{}", n.abs().round() as u64);
+    let sep = global_text(vm, "LARGE_NUMBER_SEPERATOR", ",");
     let mut out = String::new();
     for (i, ch) in digits.chars().enumerate() {
         if i > 0 && (digits.len() - i) % 3 == 0 {
@@ -201,20 +209,90 @@ fn grouped(vm: &mut Vm, n: f64) -> String {
     out
 }
 
-/// `BreakUpLargeNumbers(n)`, `AbbreviateLargeNumbers(n)`,
-/// `AbbreviateNumbers(n)`: a whole number under 1000 as its digits
-/// (recorded). Unverified (probes queued): from 1000 (grouped here),
-/// fractions, the options.
-fn number_text(vm: &mut Vm, c: NativeCall) -> Ret {
-    let n = num(c.arg(1)).unwrap_or(0.0);
-    let text = if n.fract() == 0.0 && n.abs() < 1000.0 {
+/// A number as Lua writes it (`%.14g`).
+fn lua_number(n: f64) -> String {
+    if n.fract() == 0.0 && n.abs() < 1e15 {
         format!("{}", n as i64)
+    } else {
+        let s = format!("{n:.14}");
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
+    }
+}
+
+/// `BreakUpLargeNumbers(n, natural)`: a whole number with its digits
+/// grouped; a fraction to one decimal (`999.99` → `1000.0`), or rounded
+/// whole with `natural` (recorded). Unverified: fractions from 1000.
+fn break_up_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = num(c.arg(1)).unwrap_or(0.0);
+    let natural = matches!(c.arg(2), Value::Bool(true));
+    let text = if n.fract() == 0.0 || natural {
+        grouped(vm, n)
+    } else {
+        format!("{n:.1}")
+    };
+    Ok(vec![vm.str(&text)])
+}
+
+/// `AbbreviateLargeNumbers(n)`: by its whole digits, from 9 the millions
+/// (`123 M`), from 6 the thousands (`1234 K`), else broken up (recorded).
+fn abbreviate_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = num(c.arg(1)).unwrap_or(0.0);
+    let digits = format!("{}", n.abs().trunc() as u64).len();
+    let sign = if n < 0.0 { "-" } else { "" };
+    let text = if digits > 8 {
+        let cap = global_text(vm, "SECOND_NUMBER_CAP", " M");
+        format!("{sign}{}{cap}", (n.abs() / 1e6).trunc())
+    } else if digits > 5 {
+        let cap = global_text(vm, "FIRST_NUMBER_CAP", " K");
+        format!("{sign}{}{cap}", (n.abs() / 1e3).trunc())
     } else if n.fract() == 0.0 {
         grouped(vm, n)
     } else {
-        format!("{n}")
+        lua_number(n)
     };
     Ok(vec![vm.str(&text)])
+}
+
+/// `AbbreviateNumbers(n)`: from 1000 by the breakpoints (`1.2K`, `12K`,
+/// `1.2M`, `1.2B`; one decimal below ten of a unit, truncated); smaller
+/// numbers and negatives as Lua writes them (recorded).
+fn abbreviate_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = num(c.arg(1)).unwrap_or(0.0);
+    let units = [
+        (1e12, "FOURTH_NUMBER_CAP_NO_SPACE", "T"),
+        (1e9, "THIRD_NUMBER_CAP_NO_SPACE", "B"),
+        (1e6, "SECOND_NUMBER_CAP_NO_SPACE", "M"),
+        (1e3, "FIRST_NUMBER_CAP_NO_SPACE", "K"),
+    ];
+    for (unit, cap, fallback) in units {
+        if n >= unit {
+            let value = if n >= unit * 10.0 {
+                (n / unit).trunc()
+            } else {
+                (n / (unit / 10.0)).trunc() / 10.0
+            };
+            let cap = global_text(vm, cap, fallback);
+            let text = format!("{}{cap}", lua_number(value));
+            return Ok(vec![vm.str(&text)]);
+        }
+    }
+    Ok(vec![vm.str(&lua_number(n))])
+}
+
+/// `C_TransmogCollection.GetCategoryAppearances(category, location)`: the
+/// category's appearances as recorded for the account (`/stdtest engine
+/// collections`, asked without a location); none for another category.
+/// Unverified: what the location changes.
+fn category_appearances(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(category) = num(c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    let call = format!(
+        "C_TransmogCollection.GetCategoryAppearances({})",
+        category as i64
+    );
+    Ok(crate::recorded::lookup_text(vm, &call)
+        .unwrap_or_else(|| vec![Value::Table(vm.new_table())]))
 }
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
@@ -224,6 +302,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             notify_settings_loaded,
         ),
         ("C_Scenario.GetInfo", no_scenario),
+        (
+            "C_TransmogCollection.GetCategoryAppearances",
+            category_appearances,
+        ),
         // No saved instances.
         ("GetNumSavedInstances", zero),
         // No quest pop-ups (unverified: not yet asked).
@@ -270,9 +352,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_Container.ContainerIDToInventoryID",
             container_inventory_id,
         ),
-        ("BreakUpLargeNumbers", number_text),
-        ("AbbreviateLargeNumbers", number_text),
-        ("AbbreviateNumbers", number_text),
+        ("BreakUpLargeNumbers", break_up_large_numbers),
+        ("AbbreviateLargeNumbers", abbreviate_large_numbers),
+        ("AbbreviateNumbers", abbreviate_numbers),
         ("C_AzeriteEmpoweredItem.IsAzeriteEmpoweredItemByID", no),
         ("C_ItemSocketInfo.IsArtifactRelicItem", no),
         ("C_Soulbinds.IsItemConduitByItemInfo", no),

@@ -71,6 +71,8 @@ pub struct Character {
     pub stats: crate::stats::Stats,
     /// The action bars (`actions.rs`).
     pub actions: crate::actions::Actions,
+    /// The chat channels (`channels.rs`).
+    pub channels: crate::channels::Channels,
 }
 
 impl Default for Character {
@@ -90,6 +92,7 @@ impl Default for Character {
             position: Position::default(),
             stats: crate::stats::defaults(),
             actions: Default::default(),
+            channels: Default::default(),
         }
     }
 }

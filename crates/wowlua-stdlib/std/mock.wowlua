@@ -290,6 +290,29 @@ export function setAction(slot: number, action: ActionData?)
     engine().setAction(slot, action)
 end
 
+--- A chat channel the player is in.
+export type ChannelData = {
+    name: string,
+    --- With its zone (`General - Thunder Bluff`); by default the name.
+    fullName?: string,
+    --- `CHANNEL_CATEGORY_WORLD`, `…_CUSTOM` (the default) or `…_GROUP`.
+    category?: string,
+    disabled?: boolean,
+    --- `C_ChatInfo.GetChannelInfoFromIdentifier`'s (the shortcut by
+    --- default the name; IDs 0) and `C_ChatInfo.IsChannelRegional`.
+    shortcut?: string,
+    instanceID?: number,
+    zoneChannelID?: number,
+    channelType?: number,
+    regional?: boolean,
+}
+
+--- The chat channels the player is in, numbered in order
+--- (`CHANNEL_UI_UPDATE`).
+export function setChannels(channels: { joined: ChannelData[], groupChannels?: number, regionalService?: boolean })
+    engine().setChannels(channels)
+end
+
 --- The API calls Blizzard's code made that the engine had no answer for
 --- (they returned empty values), as `name(args)`, sorted: what the engine
 --- does not know of the client yet.

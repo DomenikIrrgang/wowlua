@@ -391,9 +391,19 @@ fn secure_env(vm: &mut Vm) -> wowlua_vm::TableRef {
     for (k, v) in engine(vm).secure_namespaces.clone() {
         vm.heap.table_mut(env).set_str(k, v);
     }
+    // `secretunwrap(...)`: the values themselves (the addons' globals lack
+    // it, as recorded; Blizzard's auras key their frames by it).
+    let unwrap = vm.native("secretunwrap", secret_unwrap);
+    let k = vm.heap.intern(b"secretunwrap");
+    vm.heap.table_mut(env).set_str(k, unwrap);
     crate::widgets::keep(vm, Value::Table(env));
     engine_mut(vm).world.ui.secure_env = Some(env);
     env
+}
+
+/// `secretunwrap(...)`: its arguments, secrets revealed.
+fn secret_unwrap(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    Ok(c.args.iter().map(|&v| vm.hidden(v)).collect())
 }
 
 /// What Blizzard_EnvironmentCleanup removes from the addons' globals

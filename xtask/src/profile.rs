@@ -72,6 +72,74 @@ fn to_json(v: &mlua::Value) -> serde_json::Value {
     }
 }
 
+/// The chat channels as a profile's `channels` (`mock.setChannels`), from
+/// the client's lists (`GetChannelList`: number, name, disabled; the
+/// pane's rows: a channel's category; `GetChannelName`: its full name;
+/// `GetChannelInfoFromIdentifier` and `IsChannelRegional`: its info).
+fn channels(raw: &serde_json::Value) -> serde_json::Value {
+    let list = raw["list"].as_array().cloned().unwrap_or_default();
+    let display = raw["display"].as_array().cloned().unwrap_or_default();
+    let names = raw["names"].as_array().cloned().unwrap_or_default();
+    let mut joined = Vec::new();
+    for triple in list.chunks(3) {
+        let [number, name, disabled] = triple else {
+            continue;
+        };
+        let number = number.as_i64().unwrap_or(0);
+        let name = name.as_str().unwrap_or("");
+        // Its row in the pane (not a header).
+        let category = display.iter().find_map(|row| {
+            let row = row.as_array()?;
+            (row.first()?.as_str()? == name && row.get(1)?.as_bool() == Some(false))
+                .then(|| row.get(6)?.as_str().map(str::to_string))?
+        });
+        let full_name = names
+            .get((number - 1).max(0) as usize)
+            .and_then(|n| n.get(1))
+            .and_then(|n| n.as_str())
+            .unwrap_or(name);
+        let mut channel = serde_json::json!({
+            "name": name,
+            "fullName": full_name,
+            "category": category.unwrap_or_else(|| "CHANNEL_CATEGORY_CUSTOM".into()),
+            "disabled": disabled.as_bool().unwrap_or(false),
+        });
+        // Its info (`GetChannelInfoFromIdentifier`) and regional flag, by
+        // number.
+        let key = number.to_string();
+        let info = raw["infos"].get(&key).or_else(|| {
+            raw["infos"]
+                .as_array()
+                .and_then(|a| a.get((number - 1).max(0) as usize))
+        });
+        if let Some(info) = info.and_then(|i| i.get(0)).and_then(|i| i.as_object()) {
+            for k in ["shortcut", "instanceID", "zoneChannelID", "channelType"] {
+                if let Some(v) = info.get(k) {
+                    channel[k] = v.clone();
+                }
+            }
+        }
+        let regional = raw["regional"].get(&key).or_else(|| {
+            raw["regional"]
+                .as_array()
+                .and_then(|a| a.get((number - 1).max(0) as usize))
+        });
+        if let Some(r) = regional.and_then(|r| r.get(0)).and_then(|r| r.as_bool()) {
+            channel["regional"] = r.into();
+        }
+        joined.push(channel);
+    }
+    let group = raw["groupChannels"]
+        .get(0)
+        .cloned()
+        .unwrap_or(serde_json::json!(0));
+    let mut out = serde_json::json!({ "joined": joined, "groupChannels": group });
+    if let Some(b) = raw["regionalService"].get(0).and_then(|b| b.as_bool()) {
+        out["regionalService"] = b.into();
+    }
+    out
+}
+
 /// CVars whose names suggest they hold the account, the realm or the
 /// character.
 fn identifying(name: &str) -> bool {
@@ -127,6 +195,9 @@ pub fn run(saved: &Path, out: &Path) -> Result<()> {
                 u.insert("name".into(), format!("Player{}", i + 2).into());
             }
         }
+    }
+    if let Some(raw) = obj.remove("channels") {
+        obj.insert("channels".into(), channels(&raw));
     }
     if let Some(cvars) = obj.get_mut("cvars").and_then(|c| c.as_object_mut()) {
         cvars.retain(|k, v| {

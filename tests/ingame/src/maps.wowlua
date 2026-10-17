@@ -1,5 +1,6 @@
--- /stdtest engine maps: the client's map data (every map under the cosmic
--- map) as Blizzard's UI asks it, into StdTestState.engineMapAnswers[call]
+-- /stdtest engine maps: the client's map data (every map from the world
+-- map and the player's map, down through their children) as Blizzard's UI
+-- asks it, into StdTestState.engineMapAnswers[call]
 -- in the answers probe's form (`cargo xtask ingest` merges them). Static
 -- data only: no positions, exploration or quests.
 import state from "/state"
@@ -82,10 +83,30 @@ export function mapsProbe()
         end
         out[call] = `{p.n}: {table.concat(parts, ", ")}`
     end
-    -- Every map under the cosmic map, and the maps above each.
-    const ids: number[] = { 946 }
-    for _, info in ipairs(M.GetMapChildrenInfo(946, nil, true) ?? {}) do
-        ids[#ids + 1] = info.mapID
+    -- Every map from the world map (the fallback; Forever has no cosmic
+    -- map) and the player's map up, and each one's children down.
+    const ids: number[] = {}
+    const seen: { [number]: boolean } = {}
+    local function add(id: number?)
+        if id ~= nil and id > 0 and not seen[id] then
+            seen[id] = true
+            ids[#ids + 1] = id
+        end
+    end
+    add(946)
+    add(M.GetFallbackWorldMapID())
+    local up = M.GetBestMapForUnit("player")
+    while up ~= nil and up > 0 and not seen[up] do
+        add(up)
+        const info = M.GetMapInfo(up)
+        up = info and info.parentMapID
+    end
+    local i = 1
+    while i <= #ids do
+        for _, child in ipairs(M.GetMapChildrenInfo(ids[i]) ?? {}) do
+            add(child.mapID)
+        end
+        i = i + 1
     end
     ask("C_Map.GetFallbackWorldMapID()")
     for _, id in ipairs(ids) do

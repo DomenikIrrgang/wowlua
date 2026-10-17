@@ -9,6 +9,8 @@
 //! - `/stdtest engine input`: `…/forever-camelot-input.lua`;
 //! - `/stdtest engine answers`: `…/forever-camelot-answers.lua`;
 //! - `/stdtest engine maps`: `…/forever-camelot-maps.lua` (and the data);
+//! - `/stdtest engine collections`: `…/forever-camelot-collections.lua`
+//!   (and the data);
 //! - `/stdtest snapshot`: the character's world as a test profile,
 //!   `…/forever-camelot-character.json`;
 //! - the CVar flags: `crates/wowlua-engine/data/camelot-cvar-flags.txt`;
@@ -667,27 +669,41 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 let _ = writeln!(data, "{call}\t{answer}");
             }
         }
-        // The map data (`/stdtest engine maps`), all static.
-        if let Ok(maps) = state.get::<mlua::Table>("engineMapAnswers") {
-            let mut map_entries = Vec::new();
-            for pair in maps.pairs::<String, String>() {
-                let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
-                map_entries.push((call, answer));
-            }
-            map_entries.sort();
-            for (call, answer) in &map_entries {
-                if !answer.starts_with("error") && !entries.iter().any(|(c, _)| c == call) {
-                    let _ = writeln!(data, "{call}\t{answer}");
+        // The map data (`/stdtest engine maps`, all static) and the
+        // account's collections (`/stdtest engine collections`, the default
+        // world's).
+        for (key, fixture, about) in [
+            (
+                "engineMapAnswers",
+                "forever-camelot-maps.lua",
+                "/stdtest engine maps, the client's map data (every map from\n\
+                 the world map and the player's map down) as Blizzard's UI asks it",
+            ),
+            (
+                "engineCollectionAnswers",
+                "forever-camelot-collections.lua",
+                "/stdtest engine collections, the account's collections\n\
+                 (transmog appearances by category; mounts, pets, toys, heirlooms)",
+            ),
+        ] {
+            if let Ok(maps) = state.get::<mlua::Table>(key) {
+                let mut map_entries = Vec::new();
+                for pair in maps.pairs::<String, String>() {
+                    let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
+                    map_entries.push((call, answer));
                 }
+                map_entries.sort();
+                for (call, answer) in &map_entries {
+                    if !answer.starts_with("error") && !entries.iter().any(|(c, _)| c == call) {
+                        let _ = writeln!(data, "{call}\t{answer}");
+                    }
+                }
+                write_table(
+                    &client.join(fixture),
+                    &format!("WoW Forever {version}: {about} (cargo xtask ingest)."),
+                    &map_entries,
+                )?;
             }
-            write_table(
-                &client.join("forever-camelot-maps.lua"),
-                &format!(
-                    "WoW Forever {version}: /stdtest engine maps, the client's map data (every\n\
-                     map under the cosmic map) as Blizzard's UI asks it (cargo xtask ingest)."
-                ),
-                &map_entries,
-            )?;
         }
         let path = root.join("crates/wowlua-engine/data/camelot-answers.txt");
         std::fs::write(&path, data)?;
