@@ -2,12 +2,18 @@
 //! (spec compiler §13.5.2). Accepts exactly what Lua 5.1 accepts for pure Lua
 //! input, plus the wowlua grammar of spec appendix A. Errors are recovered at
 //! statement boundaries, so one run reports several independent errors.
+//!
+//! It builds the flat [`Tree`] directly (#19): an expression or type comes
+//! back as a node value, pushed into its array when its parent is built; the
+//! items of a list stay values until the list ends and are then pushed
+//! together, so that every list is a contiguous range of its array.
 
-use crate::ast::*;
 use crate::lexer::Lexed;
 use crate::literal;
+use crate::ops::*;
 use crate::search::partition_point_near;
 use crate::token::{Token, TokenKind};
+use crate::tree::*;
 use std::cell::Cell;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::{FileId, Span};
@@ -32,12 +38,20 @@ struct LoopCtx {
     has_continue: bool,
 }
 
+/// A parameter of a parenthesized type group, its type not pushed yet (the
+/// types of a pack are one list).
+struct GroupParam {
+    name: Option<Sp>,
+    ty: TypeNode,
+}
+
 pub(crate) struct Parser<'a> {
     src: &'a [u8],
     file: FileId,
     pub(crate) lexed: Lexed,
+    /// The tree being built.
+    pub(crate) t: Tree,
     pos: usize,
-    next_id: u32,
     pub(crate) diagnostics: Vec<Diagnostic>,
     depth: u32,
     funcs: Vec<FuncCtx>,
@@ -45,13 +59,13 @@ pub(crate) struct Parser<'a> {
     block_depth: u32,
     /// Position of the last error, to avoid reporting twice at one token.
     last_error_at: Option<usize>,
-    /// The fields of the tables being parsed, innermost last. A finished
-    /// table moves its own into a list of exactly their size: a list grown
-    /// by pushing keeps up to half of its room unused, which adds up to
-    /// gigabytes in the tables of a large data addon.
-    field_stack: Vec<TableField>,
+    /// The fields of the tables being parsed, innermost last; a finished
+    /// table pushes its own together.
+    field_stack: Vec<FieldData>,
     /// The same for the expression lists being parsed.
-    expr_stack: Vec<Expr>,
+    expr_stack: Vec<ExprNode>,
+    /// The same for the statements of the blocks being parsed.
+    stmt_stack: Vec<StmtNode>,
     /// Where the last line lookup ended in `lexed.line_starts`: the parser
     /// moves forward, so the next lookup starts its search there.
     line_hint: Cell<usize>,
@@ -138,14 +152,47 @@ const MODIFIERS: &[&str] = &[
     "overload",
 ];
 
+fn sp(s: Span) -> Sp {
+    Sp {
+        start: s.start,
+        end: s.end,
+    }
+}
+
+fn opt_id<T>(x: Option<T>, f: impl FnOnce(T) -> u32) -> u32 {
+    x.map_or(NONE, f)
+}
+
+/// Pushes `items` to `$self.t.$arr` together: their range.
+macro_rules! push_all {
+    ($self:ident, $arr:ident, $items:expr) => {{
+        let start = $self.t.$arr.len() as u32;
+        $self.t.$arr.extend($items);
+        Range {
+            start,
+            len: $self.t.$arr.len() as u32 - start,
+        }
+    }};
+}
+
+/// Pushes one item to `$self.t.$arr`: its index.
+macro_rules! push {
+    ($self:ident, $arr:ident, $item:expr) => {{
+        let item = $item;
+        $self.t.$arr.push(item);
+        $self.t.$arr.len() as u32 - 1
+    }};
+}
+
 impl<'a> Parser<'a> {
-    pub(crate) fn new(src: &'a [u8], file: FileId, lexed: Lexed) -> Self {
+    /// A parser of `src`, whose tree keeps `text` (`src` itself).
+    pub(crate) fn new(src: &'a [u8], file: FileId, lexed: Lexed, text: SourceText) -> Self {
         Parser {
             src,
             file,
             lexed,
+            t: Tree::empty(text, file),
             pos: 0,
-            next_id: 0,
             diagnostics: Vec::new(),
             depth: 0,
             funcs: vec![FuncCtx {
@@ -156,6 +203,7 @@ impl<'a> Parser<'a> {
             last_error_at: None,
             field_stack: Vec::new(),
             expr_stack: Vec::new(),
+            stmt_stack: Vec::new(),
             line_hint: Cell::new(0),
             keep_tree: true,
             unsure: false,
@@ -166,23 +214,82 @@ impl<'a> Parser<'a> {
     pub(crate) fn validating(src: &'a [u8], file: FileId, lexed: Lexed) -> Self {
         Parser {
             keep_tree: false,
-            ..Parser::new(src, file, lexed)
+            ..Parser::new(src, file, lexed, SourceText::new(src))
         }
+    }
+
+    // -------------------------------------------------------------- nodes --
+
+    fn push_expr(&mut self, e: ExprNode) -> u32 {
+        if let Some(leaf) = Tree::leaf(&e) {
+            let i = push!(self, leaves, leaf);
+            assert!(i < LEAF - 1, "too many expressions");
+            i | LEAF
+        } else {
+            let i = push!(self, exprs, e);
+            assert!(i < LEAF, "too many expressions");
+            i
+        }
+    }
+
+    fn push_type(&mut self, t: TypeNode) -> u32 {
+        push!(self, types, t)
+    }
+
+    fn push_block(&mut self, stmts: Range, span: Span) -> u32 {
+        push!(
+            self,
+            blocks,
+            BlockNode {
+                stmts,
+                span: sp(span),
+            }
+        )
+    }
+
+    fn expr_node(&self, span: Span, data: ExprData) -> ExprNode {
+        ExprNode {
+            span: sp(span),
+            data,
+        }
+    }
+
+    fn type_node(&self, span: Span, data: TypeData) -> TypeNode {
+        TypeNode {
+            span: sp(span),
+            data,
+        }
+    }
+
+    fn names(&mut self, names: Vec<Sp>) -> Range {
+        push_all!(self, names, names)
+    }
+
+    fn types(&mut self, types: Vec<TypeNode>) -> Range {
+        push_all!(self, types, types)
+    }
+
+    /// The text of the name at `s`.
+    fn text_at(&self, s: Sp) -> &'a [u8] {
+        &self.src[s.start as usize..s.end as usize]
     }
 
     // ------------------------------------------------------------ tokens --
 
-    fn tok(&self, ahead: usize) -> &Token {
+    fn tok(&self, ahead: usize) -> Token {
         let tokens = &self.lexed.tokens;
-        &tokens[(self.pos + ahead).min(tokens.len() - 1)]
+        tokens.token((self.pos + ahead).min(tokens.len() - 1))
     }
 
+    // The parser asks for kinds far more often than for whole tokens: read
+    // only the kinds (tokens are stored by field).
     fn kind(&self) -> TokenKind {
-        self.tok(0).kind
+        self.kind_at(0)
     }
 
     fn kind_at(&self, ahead: usize) -> TokenKind {
-        self.tok(ahead).kind
+        let tokens = &self.lexed.tokens;
+        tokens.kind((self.pos + ahead).min(tokens.len() - 1))
     }
 
     fn text_of(&self, token: &Token) -> &'a [u8] {
@@ -196,26 +303,47 @@ impl<'a> Parser<'a> {
 
     fn is_word_at(&self, ahead: usize, word: &str) -> bool {
         let t = self.tok(ahead);
-        t.kind == T::Name && self.text_of(t) == word.as_bytes()
+        t.kind == T::Name && self.text_of(&t) == word.as_bytes()
     }
 
     fn advance(&mut self) -> Token {
-        let t = *self.tok(0);
+        let t = self.tok(0);
         if t.kind != T::Eof {
             self.pos += 1;
         }
         t
     }
 
-    fn prev(&self) -> &Token {
-        &self.lexed.tokens[self.pos.saturating_sub(1)]
+    /// Steps over the current token without reading it (the caller knows
+    /// its kind).
+    fn bump(&mut self) {
+        if self.kind() != T::Eof {
+            self.pos += 1;
+        }
+    }
+
+    /// Where token `ahead` starts.
+    fn start_at(&self, ahead: usize) -> u32 {
+        let tokens = &self.lexed.tokens;
+        tokens.start((self.pos + ahead).min(tokens.len() - 1))
+    }
+
+    /// Where token `ahead` ends.
+    fn end_at(&self, ahead: usize) -> u32 {
+        let tokens = &self.lexed.tokens;
+        tokens.end((self.pos + ahead).min(tokens.len() - 1))
+    }
+
+    /// Where the previous token ends.
+    fn prev_end(&self) -> u32 {
+        self.lexed.tokens.end(self.pos.saturating_sub(1))
     }
 
     fn span_from(&self, start: u32) -> Span {
         let end = if self.pos == 0 {
             start
         } else {
-            self.prev().end
+            self.prev_end()
         };
         Span {
             file: self.file,
@@ -254,9 +382,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn id(&mut self) -> NodeId {
-        self.next_id += 1;
-        NodeId(self.next_id)
+    fn sp_span(&self, s: Sp) -> Span {
+        Span {
+            file: self.file,
+            start: s.start,
+            end: s.end,
+        }
     }
 
     fn check(&self, kind: TokenKind) -> bool {
@@ -265,7 +396,7 @@ impl<'a> Parser<'a> {
 
     fn eat(&mut self, kind: TokenKind) -> bool {
         if self.check(kind) {
-            self.advance();
+            self.bump();
             true
         } else {
             false
@@ -282,12 +413,12 @@ impl<'a> Parser<'a> {
             T::Eof => "'<eof>'".to_string(),
             T::InterpText | T::String | T::LongString | T::Number | T::Name | T::Error => {
                 // A control character, as Lua names it (`luaX_token2str`).
-                if let [b] = self.text_of(t)
+                if let [b] = self.text_of(&t)
                     && (*b < 32 || *b == 127)
                 {
                     return format!("'char({b})'");
                 }
-                let text = String::from_utf8_lossy(self.text_of(t));
+                let text = String::from_utf8_lossy(self.text_of(&t));
                 let short: String = text.chars().take(40).collect();
                 format!("'{short}'")
             }
@@ -327,7 +458,7 @@ impl<'a> Parser<'a> {
             return Ok(self.advance());
         }
         let what = close.describe();
-        let failed = if self.same_line(opened, self.tok(0).start) {
+        let failed = if self.same_line(opened, self.start_at(0)) {
             self.syntax_error(format!("{what} expected"))
         } else {
             let line = self.line_of(opened);
@@ -339,12 +470,12 @@ impl<'a> Parser<'a> {
         // there and keeps what it has, for the compiler's limits and the
         // editor.
         if self.check(T::Eof) {
-            return Ok(*self.tok(0));
+            return Ok(self.tok(0));
         }
         Err(failed)
     }
 
-    fn name(&mut self) -> PResult<Name> {
+    fn name(&mut self) -> PResult<Sp> {
         if self.check(T::Name) {
             let t = self.advance();
             Ok(self.make_name(&t))
@@ -354,7 +485,7 @@ impl<'a> Parser<'a> {
     }
 
     /// A decorator name may be a reserved word (`@if`).
-    fn decorator_name(&mut self) -> PResult<Name> {
+    fn decorator_name(&mut self) -> PResult<Sp> {
         if self.kind().is_keyword() {
             let t = self.advance();
             return Ok(self.make_name(&t));
@@ -362,10 +493,11 @@ impl<'a> Parser<'a> {
         self.name()
     }
 
-    fn make_name(&self, t: &Token) -> Name {
-        Name {
-            text: String::from_utf8_lossy(self.text_of(t)).into(),
-            span: self.token_span(t),
+    /// A name is its token: its text is the source there.
+    fn make_name(&self, t: &Token) -> Sp {
+        Sp {
+            start: t.start,
+            end: t.end,
         }
     }
 
@@ -397,37 +529,34 @@ impl<'a> Parser<'a> {
 
     // ------------------------------------------------------------- chunk --
 
-    pub(crate) fn chunk(&mut self) -> Chunk {
-        let directives = self.directives();
-        let start = self.tok(0).start;
-        let mut stmts = Vec::new();
+    /// Parses the file: its tree, finished.
+    pub(crate) fn chunk(&mut self) {
+        self.t.directives = self.directives();
+        let start = self.start_at(0);
+        let mark = self.stmt_stack.len();
         loop {
-            let block = self.block();
-            stmts.extend(block.stmts);
+            grow(|| self.block_stmts());
             if self.check(T::Eof) {
                 break;
             }
             let _ = self.syntax_error("'<eof>' expected");
-            self.advance();
+            self.bump();
         }
-        debug_assert!(self.field_stack.is_empty() && self.expr_stack.is_empty());
-        let span = Span {
-            file: self.file,
-            start: 0,
-            end: self.src.len() as u32,
-        };
-        Chunk {
-            directives,
-            block: Block {
-                stmts,
-                span: Span {
-                    file: self.file,
-                    start,
-                    end: self.src.len() as u32,
-                },
+        let stmts = push_all!(self, stmts, self.stmt_stack.drain(mark..));
+        debug_assert!(
+            self.field_stack.is_empty() && self.expr_stack.is_empty() && self.stmt_stack.is_empty()
+        );
+        let end = self.src.len() as u32;
+        self.t.root = self.push_block(
+            stmts,
+            Span {
+                file: self.file,
+                start,
+                end,
             },
-            span,
-        }
+        );
+        self.t.span = Sp { start: 0, end };
+        self.t.shrink();
     }
 
     /// `--!name` comments before the first token (spec §1.1.1).
@@ -459,19 +588,23 @@ impl<'a> Parser<'a> {
 
     // ------------------------------------------------------------ blocks --
 
-    fn block(&mut self) -> Block {
-        grow(|| self.block_inner())
+    /// A block: its index.
+    fn block(&mut self) -> u32 {
+        grow(|| {
+            let start = self.start_at(0);
+            let mark = self.stmt_stack.len();
+            self.block_stmts();
+            let stmts = push_all!(self, stmts, self.stmt_stack.drain(mark..));
+            let span = self.span_from(start);
+            self.push_block(stmts, span)
+        })
     }
 
-    fn block_inner(&mut self) -> Block {
-        let start = self.tok(0).start;
-        let mut stmts = Vec::new();
+    /// The statements of a block, left on `stmt_stack`.
+    fn block_stmts(&mut self) {
         if self.enter_level().is_err() {
             self.skip_to_block_end();
-            return Block {
-                stmts,
-                span: self.span_from(start),
-            };
+            return;
         }
         self.block_depth += 1;
         loop {
@@ -482,9 +615,9 @@ impl<'a> Parser<'a> {
             let last = matches!(self.kind(), T::Return | T::Break) || self.is_continue();
             match self.statement() {
                 Ok(stmt) => {
-                    let is_continue = matches!(stmt.kind, StmtKind::Continue);
+                    let is_continue = matches!(stmt.data, StmtData::Continue);
                     if self.keep_tree {
-                        stmts.push(stmt);
+                        self.stmt_stack.push(stmt);
                     }
                     self.eat(T::Semi);
                     if last {
@@ -508,11 +641,11 @@ impl<'a> Parser<'a> {
                 Err(Failed) => {
                     self.recover(before);
                     if self.keep_tree {
-                        stmts.push(Stmt {
-                            id: self.id(),
-                            span: self.span_from(self.lexed.tokens[before].start),
-                            decorators: Vec::new(),
-                            kind: StmtKind::Error,
+                        let span = self.span_from(self.lexed.tokens.start(before));
+                        self.stmt_stack.push(StmtNode {
+                            span: sp(span),
+                            decorators: Range::default(),
+                            data: StmtData::Error,
                         });
                     }
                 }
@@ -520,27 +653,17 @@ impl<'a> Parser<'a> {
         }
         self.block_depth -= 1;
         self.leave_level();
-        // Kept for the whole build: without the room the list grew.
-        if stmts.len() < stmts.capacity() {
-            let mut exact = Vec::with_capacity(stmts.len());
-            exact.append(&mut stmts);
-            stmts = exact;
-        }
-        Block {
-            stmts,
-            span: self.span_from(start),
-        }
     }
 
     /// Skips to the next statement boundary after an error.
     fn recover(&mut self, before: usize) {
-        let error_line = self.line_of(self.tok(0).start);
+        let error_line = self.line_of(self.start_at(0));
         if self.pos == before {
-            self.advance();
+            self.bump();
         }
         loop {
             // A name or `(` starting a later line likely starts a statement.
-            if self.line_of(self.tok(0).start) > error_line
+            if self.line_of(self.start_at(0)) > error_line
                 && matches!(self.kind(), T::Name | T::LParen | T::At)
             {
                 return;
@@ -557,11 +680,11 @@ impl<'a> Parser<'a> {
                 | T::Do
                 | T::Break => return,
                 T::Semi => {
-                    self.advance();
+                    self.bump();
                     return;
                 }
                 _ => {
-                    self.advance();
+                    self.bump();
                 }
             }
         }
@@ -577,7 +700,7 @@ impl<'a> Parser<'a> {
                 T::End | T::Until => depth -= 1,
                 _ => {}
             }
-            self.advance();
+            self.bump();
         }
     }
 
@@ -603,26 +726,26 @@ impl<'a> Parser<'a> {
                 | T::QuestionColon
                 | T::ColonColon
         ) || compound_op(next.kind).is_some()
-            || (next.kind == T::LParen && self.same_line(self.tok(0).end, next.start));
+            || (next.kind == T::LParen && self.same_line(self.end_at(0), next.start));
         !follows
     }
 
-    fn statement(&mut self) -> PResult<Stmt> {
-        let start = self.tok(0).start;
+    fn statement(&mut self) -> PResult<StmtNode> {
+        let start = self.start_at(0);
         let decorators = if self.check(T::At) {
             self.decorators()?
         } else {
-            Vec::new()
+            Range::default()
         };
-        let decorated = !decorators.is_empty();
-        let kind = match self.kind() {
+        let decorated = decorators.len > 0;
+        let data = match self.kind() {
             T::If => self.if_stat()?,
             T::While => self.while_stat()?,
             T::Do => {
                 let opened = self.advance().start;
                 let block = self.block();
                 self.expect_match(T::End, "do", opened)?;
-                StmtKind::Do(block)
+                StmtData::Do(block)
             }
             T::For => self.for_stat()?,
             T::Repeat => self.repeat_stat()?,
@@ -636,11 +759,11 @@ impl<'a> Parser<'a> {
                     let message = format!("no loop to break near {}", self.near());
                     self.error_at("E0106", span, message);
                 }
-                StmtKind::Break
+                StmtData::Break
             }
             T::Name => {
-                if let Some(kind) = self.contextual_stat(start)? {
-                    kind
+                if let Some(data) = self.contextual_stat(start)? {
+                    data
                 } else {
                     self.expr_stat()?
                 }
@@ -648,23 +771,22 @@ impl<'a> Parser<'a> {
             _ => self.expr_stat()?,
         };
         let span = self.span_from(start);
-        if decorated && !decoratable(&kind) {
+        if decorated && !decoratable(&data) {
             self.error_at(
                 "E0109",
                 span,
                 "a decorator must be followed by a declaration (function, local, const, class, …)",
             );
         }
-        Ok(Stmt {
-            id: self.id(),
-            span,
+        Ok(StmtNode {
+            span: sp(span),
             decorators,
-            kind,
+            data,
         })
     }
 
     /// Statements introduced by contextual keywords (spec §1.2.5).
-    fn contextual_stat(&mut self, start: u32) -> PResult<Option<StmtKind>> {
+    fn contextual_stat(&mut self, start: u32) -> PResult<Option<StmtData>> {
         let next = self.kind_at(1);
         let next_is_name = next == T::Name;
         let top_level = self.block_depth == 1;
@@ -685,23 +807,23 @@ impl<'a> Parser<'a> {
                 Some(l) => l.has_continue = true,
                 None => self.error_at("E0106", span, "`continue` outside a loop"),
             }
-            return Ok(Some(StmtKind::Continue));
+            return Ok(Some(StmtData::Continue));
         }
         if (self.is_word("class") && next_is_name)
             || (self.is_word("abstract") && self.is_word_at(1, "class"))
         {
             place(self, "E0115", "`class`");
-            return Ok(Some(StmtKind::Class(Box::new(self.class_decl()?))));
+            return Ok(Some(StmtData::Class(self.class_decl()?)));
         }
         if self.is_word("interface") && next_is_name {
-            return Ok(Some(StmtKind::Interface(Box::new(self.interface_decl()?))));
+            return Ok(Some(StmtData::Interface(self.interface_decl()?)));
         }
         if self.is_word("enum") && next_is_name {
             place(self, "E0115", "`enum`");
-            return Ok(Some(StmtKind::Enum(Box::new(self.enum_decl()?))));
+            return Ok(Some(StmtData::Enum(self.enum_decl()?)));
         }
         if self.is_word("type") && next_is_name {
-            return Ok(Some(StmtKind::TypeAlias(Box::new(self.type_alias()?))));
+            return Ok(Some(StmtData::TypeAlias(self.type_alias()?)));
         }
         if self.is_word("const") && next_is_name {
             return Ok(Some(self.const_decl(start)?));
@@ -721,11 +843,11 @@ impl<'a> Parser<'a> {
                 .any(|w| self.is_word_at(1, w)))
         {
             place(self, "E0115", "`declare`");
-            return Ok(Some(StmtKind::Declare(Box::new(self.declare()?))));
+            return Ok(Some(StmtData::Declare(self.declare()?)));
         }
         if self.is_word("import") && (next_is_name || next == T::Star) {
             place(self, "E0108", "`import`");
-            return Ok(Some(StmtKind::Import(Box::new(self.import()?))));
+            return Ok(Some(StmtData::Import(self.import()?)));
         }
         if self.is_word("export")
             && (matches!(next, T::Local | T::Function)
@@ -739,17 +861,17 @@ impl<'a> Parser<'a> {
         Ok(None)
     }
 
-    fn decorators(&mut self) -> PResult<Vec<Decorator>> {
+    fn decorators(&mut self) -> PResult<Range> {
         let mut out = Vec::new();
         while self.check(T::At) {
             let at = self.advance();
             let mut path = vec![self.decorator_name()?];
             while self.check(T::Dot) {
-                self.advance();
+                self.bump();
                 path.push(self.decorator_name()?);
             }
             // Arguments must start on the decorator's line.
-            let same_line = self.same_line(self.prev().end, self.tok(0).start);
+            let same_line = self.same_line(self.prev_end(), self.start_at(0));
             let args = if same_line
                 && matches!(
                     self.kind(),
@@ -759,16 +881,47 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            out.push(Decorator {
+            let span = self.span_from(at.start);
+            let call = self.decorator_call(&path, args, span);
+            let path = self.names(path);
+            out.push(DecoratorNode {
                 path,
-                args,
-                span: self.span_from(at.start),
+                args: args.unwrap_or(NONE),
+                span: sp(span),
+                call,
             });
         }
-        Ok(out)
+        Ok(push_all!(self, decorators, out))
     }
 
-    fn if_stat(&mut self) -> PResult<StmtKind> {
+    /// The decorator as an expression (`@a.b(x)` is `a.b(x)`, spec §4.5):
+    /// the path's names, each field access from the first name to its own,
+    /// called with the arguments over the decorator's span.
+    fn decorator_call(&mut self, path: &[Sp], args: Option<u32>, span: Span) -> u32 {
+        let first = path[0];
+        let mut e = self.push_expr(ExprNode {
+            span: first,
+            data: ExprData::Name(first),
+        });
+        for &n in &path[1..] {
+            e = self.push_expr(ExprNode {
+                span: Sp {
+                    start: first.start,
+                    end: n.end,
+                },
+                data: ExprData::Field { obj: e, name: n },
+            });
+        }
+        match args {
+            Some(args) => self.push_expr(ExprNode {
+                span: sp(span),
+                data: ExprData::Call { callee: e, args },
+            }),
+            None => e,
+        }
+    }
+
+    fn if_stat(&mut self) -> PResult<StmtData> {
         let opened = self.advance().start;
         let cond = self.expr()?;
         self.expect(T::Then, "then")?;
@@ -778,13 +931,14 @@ impl<'a> Parser<'a> {
         loop {
             match self.kind() {
                 T::Elseif => {
-                    self.advance();
+                    self.bump();
                     let c = self.expr()?;
                     self.expect(T::Then, "then")?;
+                    let c = self.push_expr(c);
                     elseifs.push((c, self.block()));
                 }
                 T::Else => {
-                    self.advance();
+                    self.bump();
                     else_block = Some(self.block());
                     self.expect_match(T::End, "if", opened)?;
                     break;
@@ -795,15 +949,15 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(StmtKind::If {
-            cond: Box::new(cond),
+        Ok(StmtData::If {
+            cond: self.push_expr(cond),
             then_block,
-            elseifs,
-            else_block: else_block.map(Box::new),
+            elseifs: push_all!(self, elseifs, elseifs),
+            else_block: else_block.unwrap_or(NONE),
         })
     }
 
-    fn loop_body(&mut self) -> (Block, bool) {
+    fn loop_body(&mut self) -> (u32, bool) {
         self.func().loops.push(LoopCtx {
             has_continue: false,
         });
@@ -812,61 +966,60 @@ impl<'a> Parser<'a> {
         (block, ctx.has_continue)
     }
 
-    fn while_stat(&mut self) -> PResult<StmtKind> {
+    fn while_stat(&mut self) -> PResult<StmtData> {
         let opened = self.advance().start;
         let cond = self.expr()?;
         self.expect(T::Do, "do")?;
         let (body, _) = self.loop_body();
         self.expect_match(T::End, "while", opened)?;
-        Ok(StmtKind::While {
-            cond: Box::new(cond),
+        Ok(StmtData::While {
+            cond: self.push_expr(cond),
             body,
         })
     }
 
-    fn repeat_stat(&mut self) -> PResult<StmtKind> {
+    fn repeat_stat(&mut self) -> PResult<StmtData> {
         let opened = self.advance().start;
         let (body, has_continue) = self.loop_body();
         self.expect_match(T::Until, "repeat", opened)?;
         let cond = self.expr()?;
+        let cond = self.push_expr(cond);
         if has_continue && !self.keep_tree {
             // Reads the body's statements and all of `cond`.
             self.unsure = true;
         } else if has_continue {
-            let locals = top_level_locals(&body);
-            if let Some(name) = first_name_use(&cond, &locals) {
+            let locals = self.top_level_locals(body);
+            if let Some(name) = self.first_name_use(cond, &locals) {
                 self.error_at(
                     "E0107",
-                    name.span,
+                    self.sp_span(name),
                     format!(
                         "`continue` cannot be used in this `repeat` loop: its `until` condition uses the body local `{}`",
-                        name.text
+                        String::from_utf8_lossy(self.text_at(name))
                     ),
                 );
             }
         }
-        Ok(StmtKind::Repeat {
-            body,
-            cond: Box::new(cond),
-        })
+        Ok(StmtData::Repeat { body, cond })
     }
 
-    fn typed_name(&mut self) -> PResult<TypedName> {
+    fn typed_name(&mut self) -> PResult<TypedNameNode> {
         let name = self.name()?;
         let ty = if self.eat(T::Colon) {
-            Some(self.ty()?)
+            let t = self.ty()?;
+            self.push_type(t)
         } else {
-            None
+            NONE
         };
-        Ok(TypedName { name, ty })
+        Ok(TypedNameNode { name, ty })
     }
 
-    fn for_stat(&mut self) -> PResult<StmtKind> {
+    fn for_stat(&mut self) -> PResult<StmtData> {
         let opened = self.advance().start;
         let first = self.typed_name()?;
         match self.kind() {
             T::Eq => {
-                self.advance();
+                self.bump();
                 let start = self.expr()?;
                 self.expect(T::Comma, ",")?;
                 let limit = self.expr()?;
@@ -878,11 +1031,15 @@ impl<'a> Parser<'a> {
                 self.expect(T::Do, "do")?;
                 let (body, _) = self.loop_body();
                 self.expect_match(T::End, "for", opened)?;
-                Ok(StmtKind::NumericFor {
-                    var: Box::new(first),
-                    start: Box::new(start),
-                    limit: Box::new(limit),
-                    step: step.map(Box::new),
+                let var = push!(self, typed_names, first);
+                let start = self.push_expr(start);
+                let limit = self.push_expr(limit);
+                let step = opt_id(step, |e| self.push_expr(e));
+                Ok(StmtData::NumericFor {
+                    var,
+                    start,
+                    limit,
+                    step,
                     body,
                 })
             }
@@ -896,17 +1053,22 @@ impl<'a> Parser<'a> {
                 self.expect(T::Do, "do")?;
                 let (body, _) = self.loop_body();
                 self.expect_match(T::End, "for", opened)?;
-                Ok(StmtKind::GenericFor { vars, exprs, body })
+                Ok(StmtData::GenericFor {
+                    vars: push_all!(self, typed_names, vars),
+                    exprs,
+                    body,
+                })
             }
             _ => Err(self.syntax_error("'=' or 'in' expected")),
         }
     }
 
-    fn func_name(&mut self) -> PResult<FuncName> {
-        let start = self.tok(0).start;
+    /// `a.b.c:m`: its index, and whether it is a single plain name.
+    fn func_name(&mut self) -> PResult<(u32, bool)> {
+        let start = self.start_at(0);
         let mut path = vec![self.name()?];
         while self.check(T::Dot) {
-            self.advance();
+            self.bump();
             path.push(self.name()?);
         }
         let method = if self.eat(T::Colon) {
@@ -914,33 +1076,37 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(FuncName {
-            path,
-            method,
-            span: self.span_from(start),
-        })
+        let plain = path.len() == 1 && method.is_none();
+        let path = self.names(path);
+        let span = self.span_from(start);
+        Ok((
+            push!(
+                self,
+                func_names,
+                FuncNameNode {
+                    path,
+                    method,
+                    span: sp(span),
+                }
+            ),
+            plain,
+        ))
     }
 
-    fn function_stat(&mut self) -> PResult<StmtKind> {
+    fn function_stat(&mut self) -> PResult<StmtData> {
         let opened = self.advance().start;
-        let name = self.func_name()?;
+        let (name, _) = self.func_name()?;
         let func = self.func_body(opened)?;
-        Ok(StmtKind::Function {
-            name,
-            func: Box::new(func),
-        })
+        Ok(StmtData::Function { name, func })
     }
 
-    fn local_stat(&mut self) -> PResult<StmtKind> {
-        self.advance();
+    fn local_stat(&mut self) -> PResult<StmtData> {
+        self.bump();
         if self.check(T::Function) {
             let opened = self.advance().start;
             let name = self.name()?;
             let func = self.func_body(opened)?;
-            return Ok(StmtKind::LocalFunction {
-                name,
-                func: Box::new(func),
-            });
+            return Ok(StmtData::LocalFunction { name, func });
         }
         if self.check(T::LBrace) {
             return self.destructure();
@@ -952,52 +1118,59 @@ impl<'a> Parser<'a> {
         let values = if self.eat(T::Eq) {
             self.expr_list()?
         } else {
-            Vec::new()
+            Range::default()
         };
-        Ok(StmtKind::Local { names, values })
+        Ok(StmtData::Local {
+            names: push_all!(self, typed_names, names),
+            values,
+        })
     }
 
     /// `local { a, b = 1 }: T = e` (spec §1.3.3)
-    fn destructure(&mut self) -> PResult<StmtKind> {
+    fn destructure(&mut self) -> PResult<StmtData> {
         let open = self.advance();
         let mut fields = Vec::new();
         loop {
             let name = self.name()?;
             let default = if self.eat(T::Eq) {
-                Some(self.expr()?)
+                let e = self.expr()?;
+                self.push_expr(e)
             } else {
-                None
+                NONE
             };
-            fields.push(DestructField { name, default });
+            fields.push(DestructNode { name, default });
             if !self.eat(T::Comma) || self.check(T::RBrace) {
                 break;
             }
         }
         self.expect_match(T::RBrace, "{", open.start)?;
         let ty = if self.eat(T::Colon) {
-            Some(self.ty()?)
+            let t = self.ty()?;
+            self.push_type(t)
         } else {
-            None
+            NONE
         };
         let value = if self.eat(T::Eq) {
-            Some(self.expr()?)
+            let e = self.expr()?;
+            self.push_expr(e)
         } else {
-            None
+            NONE
         };
-        Ok(StmtKind::LocalDestructure {
-            fields,
-            ty: ty.map(Box::new),
-            value: value.map(Box::new),
+        Ok(StmtData::LocalDestructure {
+            fields: push_all!(self, destructs, fields),
+            ty,
+            value,
         })
     }
 
-    fn const_decl(&mut self, start: u32) -> PResult<StmtKind> {
+    fn const_decl(&mut self, start: u32) -> PResult<StmtData> {
         self.advance(); // const
         let name = self.name()?;
         let ty = if self.eat(T::Colon) {
-            Some(self.ty()?)
+            let t = self.ty()?;
+            self.push_type(t)
         } else {
-            None
+            NONE
         };
         if self.check(T::Comma) {
             let span = self.token_span(&self.tok(0).clone());
@@ -1007,28 +1180,25 @@ impl<'a> Parser<'a> {
             }
         }
         let value = if self.eat(T::Eq) {
-            Some(self.expr()?)
+            let e = self.expr()?;
+            self.push_expr(e)
         } else {
             let span = self.span_from(start);
             self.error_at("E0112", span, "`const` needs an initializer");
-            None
+            NONE
         };
-        Ok(StmtKind::Const {
-            name,
-            ty: ty.map(Box::new),
-            value: value.map(Box::new),
-        })
+        Ok(StmtData::Const { name, ty, value })
     }
 
-    fn return_stat(&mut self) -> PResult<StmtKind> {
-        self.advance();
+    fn return_stat(&mut self) -> PResult<StmtData> {
+        self.bump();
         if is_block_follow(self.kind()) || self.check(T::Semi) {
-            return Ok(StmtKind::Return(Vec::new()));
+            return Ok(StmtData::Return(Range::default()));
         }
-        Ok(StmtKind::Return(self.expr_list()?))
+        Ok(StmtData::Return(self.expr_list()?))
     }
 
-    fn expr_stat(&mut self) -> PResult<StmtKind> {
+    fn expr_stat(&mut self) -> PResult<StmtData> {
         let first = self.suffixed_expr()?;
         if self.check(T::Eq) || self.check(T::Comma) {
             let mut targets = vec![first];
@@ -1045,47 +1215,110 @@ impl<'a> Parser<'a> {
             }
             self.expect(T::Eq, "=")?;
             let values = self.expr_list()?;
-            return Ok(StmtKind::Assign { targets, values });
+            return Ok(StmtData::Assign {
+                targets: push_all!(self, exprs, targets),
+                values,
+            });
         }
         if let Some(op) = compound_op(self.kind()) {
             self.check_target(&first)?;
-            self.advance();
+            self.bump();
             let value = self.expr()?;
-            return Ok(StmtKind::Compound {
-                target: Box::new(first),
+            return Ok(StmtData::Compound {
+                target: self.push_expr(first),
                 op,
-                value: Box::new(value),
+                value: self.push_expr(value),
             });
         }
-        if is_call(&first.kind) {
-            return Ok(StmtKind::Call(first));
+        if is_call(&first.data) {
+            return Ok(StmtData::Call(self.push_expr(first)));
         }
         Err(self.syntax_error("syntax error"))
     }
 
-    fn check_target(&mut self, target: &Expr) -> PResult<()> {
-        if contains_optional(target) {
+    fn check_target(&mut self, target: &ExprNode) -> PResult<()> {
+        if self.contains_optional(target) {
             self.error_at(
                 "E0113",
-                target.span,
+                self.sp_span(target.span),
                 "an optional chain cannot be assigned to",
             );
             return Err(Failed);
         }
-        match target.kind {
-            ExprKind::Name(_) | ExprKind::Index { .. } | ExprKind::Field { .. } => Ok(()),
+        match target.data {
+            ExprData::Name(_) | ExprData::Index { .. } | ExprData::Field { .. } => Ok(()),
             _ => Err(self.syntax_error("syntax error")),
         }
     }
 
+    /// The expression is or contains (along its prefix chain) an optional
+    /// access.
+    fn contains_optional(&self, e: &ExprNode) -> bool {
+        let mut e = *e;
+        loop {
+            match e.data {
+                ExprData::OptField { .. }
+                | ExprData::OptIndex { .. }
+                | ExprData::OptMethod { .. }
+                | ExprData::OptCall { .. } => return true,
+                ExprData::Field { obj, .. }
+                | ExprData::Index { obj, .. }
+                | ExprData::Call { callee: obj, .. }
+                | ExprData::Method { obj, .. } => e = self.t.expr(obj),
+                _ => return false,
+            }
+        }
+    }
+
+    /// Names declared at the top level of block `block` (visible in
+    /// `until`).
+    fn top_level_locals(&self, block: u32) -> Vec<&'a [u8]> {
+        let mut out = Vec::new();
+        let r = self.t.blocks[block as usize].stmts;
+        for stmt in &self.t.stmts[r.start as usize..(r.start + r.len) as usize] {
+            match stmt.data {
+                StmtData::Local { names, .. } => out.extend(
+                    self.t.typed_names[names.start as usize..(names.start + names.len) as usize]
+                        .iter()
+                        .map(|n| self.text_at(n.name)),
+                ),
+                StmtData::LocalFunction { name, .. } | StmtData::Const { name, .. } => {
+                    out.push(self.text_at(name))
+                }
+                StmtData::LocalDestructure { fields, .. } => out.extend(
+                    self.t.destructs[fields.start as usize..(fields.start + fields.len) as usize]
+                        .iter()
+                        .map(|f| self.text_at(f.name)),
+                ),
+                _ => {}
+            }
+        }
+        out
+    }
+
+    /// The first use of one of `names` in expression `e` (approximate:
+    /// ignores shadowing inside nested functions).
+    fn first_name_use(&self, e: u32, names: &[&[u8]]) -> Option<Sp> {
+        let mut found = None;
+        crate::visit::walk_expr(crate::view::expr_at(&self.t, e), &mut |x| {
+            if found.is_none()
+                && let crate::view::ExprKind::Name(n) = x.kind()
+                && names.contains(&n.text().as_bytes())
+            {
+                found = Some(sp(n.span()));
+            }
+        });
+        found
+    }
+
     // ------------------------------------------------------- expressions --
 
-    fn expr_list(&mut self) -> PResult<Vec<Expr>> {
+    fn expr_list(&mut self) -> PResult<Range> {
         // Taken off the stack on every path, so that a list that fails
         // leaves nothing behind for the list it is nested in.
         let mark = self.expr_stack.len();
         let result = self.expr_items();
-        let list = self.expr_stack.drain(mark..).collect();
+        let list = push_all!(self, exprs, self.expr_stack.drain(mark..));
         result.map(|()| list)
     }
 
@@ -1103,30 +1336,24 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    pub(crate) fn expr(&mut self) -> PResult<Expr> {
+    pub(crate) fn expr(&mut self) -> PResult<ExprNode> {
         self.subexpr(0)
     }
 
-    fn subexpr(&mut self, limit: u8) -> PResult<Expr> {
+    fn subexpr(&mut self, limit: u8) -> PResult<ExprNode> {
         self.enter_level()?;
         let result = grow(|| self.subexpr_inner(limit));
         self.leave_level();
         result
     }
 
-    fn subexpr_inner(&mut self, limit: u8) -> PResult<Expr> {
-        let start = self.tok(0).start;
+    fn subexpr_inner(&mut self, limit: u8) -> PResult<ExprNode> {
+        let start = self.start_at(0);
         let mut lhs = if let Some(op) = unary_op(self.kind()) {
-            self.advance();
+            self.bump();
             let operand = self.subexpr(UNARY_PRIORITY)?;
-            Expr {
-                id: self.id(),
-                span: self.span_from(start),
-                kind: ExprKind::Unary {
-                    op,
-                    operand: Box::new(operand),
-                },
-            }
+            let operand = self.push_expr(operand);
+            self.expr_node(self.span_from(start), ExprData::Unary { op, operand })
         } else {
             self.simple_expr()?
         };
@@ -1140,23 +1367,24 @@ impl<'a> Parser<'a> {
             let op_token = self.advance();
             let rhs = self.subexpr(right)?;
             self.check_coalesce_mix(op, &lhs, &rhs, &op_token);
-            lhs = Expr {
-                id: self.id(),
-                span: self.span_from(start),
-                kind: ExprKind::Binary {
+            let lhs_id = self.push_expr(lhs);
+            let rhs_id = self.push_expr(rhs);
+            lhs = self.expr_node(
+                self.span_from(start),
+                ExprData::Binary {
                     op,
-                    lhs: Box::new(lhs),
-                    rhs: Box::new(rhs),
+                    lhs: lhs_id,
+                    rhs: rhs_id,
                 },
-            };
+            );
         }
         crate::deep::note(links);
         Ok(lhs)
     }
 
     /// `??` and `and`/`or` cannot be mixed without parentheses (E0110).
-    fn check_coalesce_mix(&mut self, op: BinOp, lhs: &Expr, rhs: &Expr, op_token: &Token) {
-        let is = |e: &Expr, ops: &[BinOp]| matches!(&e.kind, ExprKind::Binary { op, .. } if ops.contains(op));
+    fn check_coalesce_mix(&mut self, op: BinOp, lhs: &ExprNode, rhs: &ExprNode, op_token: &Token) {
+        let is = |e: &ExprNode, ops: &[BinOp]| matches!(e.data, ExprData::Binary { op, .. } if ops.contains(&op));
         let mixed = match op {
             BinOp::Coalesce => {
                 is(lhs, &[BinOp::And, BinOp::Or]) || is(rhs, &[BinOp::And, BinOp::Or])
@@ -1174,28 +1402,28 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn simple_expr(&mut self) -> PResult<Expr> {
-        let start = self.tok(0).start;
-        let kind = match self.kind() {
+    fn simple_expr(&mut self) -> PResult<ExprNode> {
+        let start = self.start_at(0);
+        let data = match self.kind() {
             T::Number => {
                 let t = self.advance();
-                ExprKind::Number(self.number_lit(&t))
+                ExprData::Number(self.make_name(&t))
             }
             T::String | T::LongString => {
                 let t = self.advance();
-                ExprKind::String(self.string_lit(&t))
+                ExprData::String(self.string_lit(&t))
             }
             T::Nil => {
-                self.advance();
-                ExprKind::Nil
+                self.bump();
+                ExprData::Nil
             }
             T::True => {
-                self.advance();
-                ExprKind::True
+                self.bump();
+                ExprData::True
             }
             T::False => {
-                self.advance();
-                ExprKind::False
+                self.bump();
+                ExprData::False
             }
             T::Ellipsis => {
                 let t = self.advance();
@@ -1207,12 +1435,12 @@ impl<'a> Parser<'a> {
                         "cannot use '...' outside a vararg function near '...'",
                     );
                 }
-                ExprKind::Vararg
+                ExprData::Vararg
             }
             T::LBrace => self.table()?,
             T::Function => {
                 let opened = self.advance().start;
-                ExprKind::Function(Box::new(self.func_body(opened)?))
+                ExprData::Function(self.func_body(opened)?)
             }
             T::InterpStart => self.interp()?,
             _ => {
@@ -1220,170 +1448,183 @@ impl<'a> Parser<'a> {
                 return self.casts(e, start);
             }
         };
-        let e = Expr {
-            id: self.id(),
-            span: self.span_from(start),
-            kind,
-        };
+        let e = self.expr_node(self.span_from(start), data);
         self.casts(e, start)
     }
 
     /// `e :: T` (spec §1.4.3).
-    fn casts(&mut self, mut e: Expr, start: u32) -> PResult<Expr> {
+    fn casts(&mut self, mut e: ExprNode, start: u32) -> PResult<ExprNode> {
         while self.check(T::ColonColon) {
-            self.advance();
+            self.bump();
             let ty = self.ty()?;
-            e = Expr {
-                id: self.id(),
-                span: self.span_from(start),
-                kind: ExprKind::Cast {
-                    expr: Box::new(e),
-                    ty: Box::new(ty),
-                },
-            };
+            let expr = self.push_expr(e);
+            let ty = self.push_type(ty);
+            e = self.expr_node(self.span_from(start), ExprData::Cast { expr, ty });
         }
         Ok(e)
     }
 
-    fn number_lit(&self, t: &Token) -> NumberLit {
-        if !self.keep_tree {
-            return NumberLit {
-                raw: NumText::from(""),
-                value: None,
-            };
-        }
-        let raw = self.text_of(t);
-        NumberLit {
-            raw: NumText::from(&*String::from_utf8_lossy(raw)),
-            value: crate::lexer::number_value(raw).ok(),
-        }
+    /// Where `value` lies in the source within `raw` (from `from` bytes
+    /// in), if it does.
+    fn locate(&self, raw: Sp, value: &[u8], from: usize) -> Option<Sp> {
+        let bytes = self.text_at(raw);
+        let last = bytes.len().checked_sub(value.len())?;
+        (from..=last.min(from + 16))
+            .find(|&i| &bytes[i..i + value.len()] == value)
+            .map(|i| Sp {
+                start: raw.start + i as u32,
+                end: raw.start + (i + value.len()) as u32,
+            })
     }
 
-    fn string_lit(&self, t: &Token) -> StringLit {
+    /// `value`: in the source within `raw`, or else copied to `strbuf`.
+    fn store_value(&mut self, raw: Sp, value: &[u8], from: usize) -> (Sp, bool) {
+        if let Some(at) = self.locate(raw, value, from) {
+            return (at, false);
+        }
+        let start = self.t.strbuf.len() as u32;
+        self.t.strbuf.extend_from_slice(value);
+        (
+            Sp {
+                start,
+                end: self.t.strbuf.len() as u32,
+            },
+            true,
+        )
+    }
+
+    /// A string literal: its index.
+    fn string_lit(&mut self, t: &Token) -> u32 {
         let long = t.kind == T::LongString;
+        let raw = self.make_name(t);
         if !self.keep_tree {
-            return StringLit {
-                raw: Box::default(),
-                value: Box::default(),
-                long,
-            };
+            return push!(
+                self,
+                strs,
+                StrNode {
+                    raw,
+                    value: Sp { start: 0, end: 0 },
+                    in_buf: false,
+                    long,
+                }
+            );
         }
-        let raw = self.text_of(t);
+        let bytes = self.text_of(t);
         let value = if long {
-            literal::long_string_value(raw)
+            literal::long_string_value(bytes)
         } else {
-            literal::short_string_value(raw)
+            literal::short_string_value(bytes)
         };
-        StringLit {
-            raw: raw.into(),
-            value: value.into(),
-            long,
-        }
+        let (value, in_buf) = self.store_value(raw, &value, 1);
+        push!(
+            self,
+            strs,
+            StrNode {
+                raw,
+                value,
+                in_buf,
+                long,
+            }
+        )
     }
 
-    fn primary_expr(&mut self) -> PResult<Expr> {
-        let start = self.tok(0).start;
+    fn primary_expr(&mut self) -> PResult<ExprNode> {
+        let start = self.start_at(0);
         match self.kind() {
             T::Name => {
                 let t = self.advance();
                 let name = self.make_name(&t);
-                Ok(Expr {
-                    id: self.id(),
-                    span: name.span,
-                    kind: ExprKind::Name(name),
+                Ok(ExprNode {
+                    span: name,
+                    data: ExprData::Name(name),
                 })
             }
             T::LParen => {
                 let opened = self.advance().start;
                 let inner = self.expr()?;
                 self.expect_match(T::RParen, "(", opened)?;
-                Ok(Expr {
-                    id: self.id(),
-                    span: self.span_from(start),
-                    kind: ExprKind::Paren(Box::new(inner)),
-                })
+                let inner = self.push_expr(inner);
+                Ok(self.expr_node(self.span_from(start), ExprData::Paren(inner)))
             }
             _ => Err(self.syntax_error("unexpected symbol")),
         }
     }
 
-    fn suffixed_expr(&mut self) -> PResult<Expr> {
-        let start = self.tok(0).start;
+    fn suffixed_expr(&mut self) -> PResult<ExprNode> {
+        let start = self.start_at(0);
         let mut e = self.primary_expr()?;
         let mut links = 0;
         loop {
             links += 1;
-            let kind = match self.kind() {
+            let data = match self.kind() {
                 T::Dot => {
-                    self.advance();
+                    self.bump();
                     let name = self.name()?;
-                    ExprKind::Field {
-                        obj: Box::new(e),
+                    ExprData::Field {
+                        obj: self.push_expr(e),
                         name,
                     }
                 }
                 T::LBracket => {
-                    self.advance();
+                    self.bump();
                     let key = self.expr()?;
                     self.expect(T::RBracket, "]")?;
-                    ExprKind::Index {
-                        obj: Box::new(e),
-                        key: Box::new(key),
+                    ExprData::Index {
+                        obj: self.push_expr(e),
+                        key: self.push_expr(key),
                     }
                 }
                 T::Colon => {
-                    self.advance();
+                    self.bump();
                     let name = self.name()?;
                     let args = self.call_args()?;
-                    ExprKind::Method {
-                        obj: Box::new(e),
-                        name: Box::new(name),
-                        args: Box::new(args),
+                    ExprData::Method {
+                        obj: self.push_expr(e),
+                        method: push!(self, methods, MethodNode { name, args }),
                     }
                 }
                 T::LParen | T::LBrace | T::String | T::LongString => {
                     let args = self.call_args()?;
-                    ExprKind::Call {
-                        callee: Box::new(e),
+                    ExprData::Call {
+                        callee: self.push_expr(e),
                         args,
                     }
                 }
                 T::QuestionDot => {
-                    self.advance();
+                    self.bump();
                     match self.kind() {
                         T::LBracket => {
-                            self.advance();
+                            self.bump();
                             let key = self.expr()?;
                             self.expect(T::RBracket, "]")?;
-                            ExprKind::OptIndex {
-                                obj: Box::new(e),
-                                key: Box::new(key),
+                            ExprData::OptIndex {
+                                obj: self.push_expr(e),
+                                key: self.push_expr(key),
                             }
                         }
                         T::LParen => {
                             let args = self.paren_args()?;
-                            ExprKind::OptCall {
-                                callee: Box::new(e),
+                            ExprData::OptCall {
+                                callee: self.push_expr(e),
                                 args,
                             }
                         }
                         _ => {
                             let name = self.name()?;
-                            ExprKind::OptField {
-                                obj: Box::new(e),
+                            ExprData::OptField {
+                                obj: self.push_expr(e),
                                 name,
                             }
                         }
                     }
                 }
                 T::QuestionColon => {
-                    self.advance();
+                    self.bump();
                     let name = self.name()?;
                     let args = self.call_args()?;
-                    ExprKind::OptMethod {
-                        obj: Box::new(e),
-                        name: Box::new(name),
-                        args: Box::new(args),
+                    ExprData::OptMethod {
+                        obj: self.push_expr(e),
+                        method: push!(self, methods, MethodNode { name, args }),
                     }
                 }
                 _ => {
@@ -1391,34 +1632,36 @@ impl<'a> Parser<'a> {
                     return Ok(e);
                 }
             };
-            e = Expr {
-                id: self.id(),
-                span: self.span_from(start),
-                kind,
-            };
+            e = self.expr_node(self.span_from(start), data);
         }
     }
 
-    fn paren_args(&mut self) -> PResult<Args> {
+    /// `( … )` arguments: their index.
+    fn paren_args(&mut self) -> PResult<u32> {
         let open = self.advance();
         let args = if self.check(T::RParen) {
-            Vec::new()
+            Range::default()
         } else {
             self.expr_list()?
         };
         self.expect_match(T::RParen, "(", open.start)?;
-        Ok(Args::Parens {
-            // Exact already: `expr_list` sizes its list.
-            args: args.into_boxed_slice(),
-            span: self.span_from(open.start),
-        })
+        let span = self.span_from(open.start);
+        Ok(push!(
+            self,
+            args,
+            ArgsData::Parens {
+                args,
+                span: sp(span),
+            }
+        ))
     }
 
-    fn call_args(&mut self) -> PResult<Args> {
+    /// A call's arguments: their index.
+    fn call_args(&mut self) -> PResult<u32> {
         match self.kind() {
             T::LParen => {
-                let t = *self.tok(0);
-                if !self.same_line(self.prev().end, t.start) {
+                let t = self.tok(0);
+                if !self.same_line(self.prev_end(), t.start) {
                     let span = self.token_span(&t);
                     self.error_at(
                         "E0104",
@@ -1429,34 +1672,38 @@ impl<'a> Parser<'a> {
                 self.paren_args()
             }
             T::LBrace => {
-                let start = self.tok(0).start;
-                let kind = self.table()?;
-                Ok(Args::Table(Box::new(Expr {
-                    id: self.id(),
-                    span: self.span_from(start),
-                    kind,
-                })))
+                let start = self.start_at(0);
+                let data = self.table()?;
+                let e = self.expr_node(self.span_from(start), data);
+                let e = self.push_expr(e);
+                Ok(push!(self, args, ArgsData::Table(e)))
             }
             T::String | T::LongString => {
                 let t = self.advance();
                 let lit = self.string_lit(&t);
-                Ok(Args::String(Box::new(Expr {
-                    id: self.id(),
-                    span: self.token_span(&t),
-                    kind: ExprKind::String(lit),
-                })))
+                let e = self.expr_node(self.token_span(&t), ExprData::String(lit));
+                let e = self.push_expr(e);
+                Ok(push!(self, args, ArgsData::String(e)))
             }
             _ => Err(self.syntax_error("function arguments expected")),
         }
     }
 
-    fn table(&mut self) -> PResult<ExprKind> {
+    fn table(&mut self) -> PResult<ExprData> {
         let open = self.advance();
         // As in `expr_list`, the fields come off the stack on every path.
         let mark = self.field_stack.len();
         let result = self.table_fields(open.start);
-        let fields = self.field_stack.drain(mark..).collect();
-        result.map(|()| ExprKind::Table(fields))
+        let start = self.t.fields.len() as u32;
+        for f in self.field_stack.drain(mark..) {
+            let node = self.t.pack_field(f);
+            self.t.fields.push(node);
+        }
+        let fields = Range {
+            start,
+            len: self.t.fields.len() as u32 - start,
+        };
+        result.map(|()| ExprData::Table(fields))
     }
 
     fn table_fields(&mut self, opened: u32) -> PResult<()> {
@@ -1464,42 +1711,55 @@ impl<'a> Parser<'a> {
             if self.check(T::RBrace) {
                 break;
             }
-            let start = self.tok(0).start;
+            let start = self.start_at(0);
             let field = match self.kind() {
                 T::LBracket => {
-                    self.advance();
+                    self.bump();
                     let key = self.expr()?;
                     self.expect(T::RBracket, "]")?;
                     self.expect(T::Eq, "=")?;
                     let value = self.expr()?;
-                    self.keep_tree.then(|| TableField::Keyed {
-                        key: Box::new(key),
-                        value,
-                        span: self.span_from(start),
-                    })
+                    if self.keep_tree {
+                        let key = self.push_expr(key);
+                        let value = self.push_expr(value);
+                        let span = sp(self.span_from(start));
+                        Some(FieldData::Keyed {
+                            key,
+                            value,
+                            span: push!(self, spans, span),
+                        })
+                    } else {
+                        None
+                    }
                 }
                 T::Name if self.kind_at(1) == T::Eq && !self.keep_tree => {
                     // The name and `=`, with nothing to check.
-                    self.advance();
-                    self.advance();
+                    self.bump();
+                    self.bump();
                     self.expr()?;
                     None
                 }
                 T::Name if self.kind_at(1) == T::Eq => {
                     let name = self.name()?;
-                    self.advance();
+                    self.bump();
                     let value = self.expr()?;
-                    let field = TableField::Named { name, value };
                     // The field's span is not stored: it runs from the name
                     // to the end of the value. That relies on `expr()`
                     // returning a value whose span ends at the last token it
                     // consumed, the same end `span_from` takes.
-                    debug_assert_eq!(field.span(), self.span_from(start));
-                    Some(field)
+                    debug_assert_eq!((name.start, value.span.end), {
+                        let s = self.span_from(start);
+                        (s.start, s.end)
+                    });
+                    Some(FieldData::Named {
+                        name,
+                        value: self.push_expr(value),
+                    })
                 }
                 _ => {
                     let value = self.expr()?;
-                    self.keep_tree.then_some(TableField::Positional(value))
+                    self.keep_tree
+                        .then(|| FieldData::Positional(self.push_expr(value)))
                 }
             };
             if let Some(field) = field {
@@ -1514,27 +1774,31 @@ impl<'a> Parser<'a> {
     }
 
     /// A backtick string (spec §1.2.4).
-    fn interp(&mut self) -> PResult<ExprKind> {
+    fn interp(&mut self) -> PResult<ExprData> {
         let open = self.advance();
         let mut parts = Vec::new();
         loop {
             match self.kind() {
                 T::InterpText => {
                     let t = self.advance();
-                    let raw = self.text_of(&t);
-                    parts.push(InterpPart::Text {
-                        raw: raw.into(),
-                        value: literal::interp_text_value(raw).into(),
-                        span: self.token_span(&t),
+                    let raw = self.make_name(&t);
+                    let value = literal::interp_text_value(self.text_of(&t));
+                    let (value, in_buf) = self.store_value(raw, &value, 0);
+                    parts.push(InterpData::Text {
+                        raw,
+                        value,
+                        in_buf,
+                        span: raw,
                     });
                 }
                 T::InterpOpen => {
                     let opened = self.advance().start;
-                    parts.push(InterpPart::Expr(self.expr()?));
+                    let e = self.expr()?;
+                    parts.push(InterpData::Expr(self.push_expr(e)));
                     self.expect_match(T::InterpClose, "{", opened)?;
                 }
                 T::InterpEnd => {
-                    self.advance();
+                    self.bump();
                     break;
                 }
                 _ => {
@@ -1545,24 +1809,24 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(ExprKind::Interp(parts))
+        Ok(ExprData::Interp(push_all!(self, interps, parts)))
     }
 
     // --------------------------------------------------------- functions --
 
-    /// `[<T>] ( params ) [: ret] block end`
-    fn func_body(&mut self, opened: u32) -> PResult<FuncBody> {
-        let start = self.tok(0).start;
+    /// `[<T>] ( params ) [: ret] block end`: its index.
+    fn func_body(&mut self, opened: u32) -> PResult<u32> {
+        let start = self.start_at(0);
         let type_params = self.type_params_opt()?;
-        let params_start = self.tok(0).start;
+        let params_start = self.start_at(0);
         let open = self.expect(T::LParen, "(")?;
         let (params, vararg) = self.param_list(false)?;
         self.expect_match(T::RParen, "(", open.start)?;
         let params_span = self.span_from(params_start);
         let ret = if self.eat(T::Colon) {
-            Some(self.ret_type()?)
+            self.ret_type()?
         } else {
-            None
+            NONE
         };
         self.funcs.push(FuncCtx {
             vararg: vararg.is_some(),
@@ -1571,102 +1835,107 @@ impl<'a> Parser<'a> {
         let body = self.block();
         self.funcs.pop();
         let end = self.expect_match(T::End, "function", opened)?;
-        Ok(FuncBody {
-            type_params,
-            params,
-            vararg,
-            ret,
-            body,
-            params_span,
-            end_span: self.token_span(&end),
-            span: self.span_from(start),
-        })
+        let end_span = self.token_span(&end);
+        let span = self.span_from(start);
+        Ok(push!(
+            self,
+            funcs,
+            FuncNode {
+                type_params,
+                params,
+                vararg,
+                ret,
+                body,
+                params_span: sp(params_span),
+                end_span: sp(end_span),
+                span: sp(span),
+            }
+        ))
     }
 
-    /// A signature without body: `[<T>] ( params ) [: ret]`.
-    fn signature(&mut self, declaration: bool) -> PResult<FuncBody> {
-        let start = self.tok(0).start;
+    /// A signature without body: `[<T>] ( params ) [: ret]`; its index.
+    fn signature(&mut self, declaration: bool) -> PResult<u32> {
+        let start = self.start_at(0);
         let type_params = self.type_params_opt()?;
-        let params_start = self.tok(0).start;
+        let params_start = self.start_at(0);
         let open = self.expect(T::LParen, "(")?;
         let (params, vararg) = self.param_list(declaration)?;
         self.expect_match(T::RParen, "(", open.start)?;
         let params_span = self.span_from(params_start);
         let ret = if self.eat(T::Colon) {
-            Some(self.ret_type()?)
+            self.ret_type()?
         } else {
-            None
+            NONE
         };
         let span = self.span_from(start);
-        Ok(FuncBody {
-            type_params,
-            params,
-            vararg,
-            ret,
-            body: Block {
-                stmts: Vec::new(),
-                span: Span {
-                    file: self.file,
-                    start: span.end,
-                    end: span.end,
-                },
-            },
-            params_span,
-            end_span: Span {
-                file: self.file,
-                start: span.end,
-                end: span.end,
-            },
-            span,
-        })
+        let empty = Sp {
+            start: span.end,
+            end: span.end,
+        };
+        let body = self.push_block(Range::default(), self.sp_span(empty));
+        Ok(push!(
+            self,
+            funcs,
+            FuncNode {
+                type_params,
+                params,
+                vararg,
+                ret,
+                body,
+                params_span: sp(params_span),
+                end_span: empty,
+                span: sp(span),
+            }
+        ))
     }
 
-    fn param_list(&mut self, declaration: bool) -> PResult<(Vec<Param>, Option<Vararg>)> {
+    #[allow(clippy::type_complexity)]
+    fn param_list(&mut self, declaration: bool) -> PResult<(Range, Option<(Sp, u32)>)> {
         let mut params = Vec::new();
         if self.check(T::RParen) {
-            return Ok((params, None));
+            return Ok((Range::default(), None));
         }
         loop {
             let decorators = if declaration && self.check(T::At) {
                 self.decorators()?
             } else {
-                Vec::new()
+                Range::default()
             };
             if self.check(T::Ellipsis) {
                 let t = self.advance();
                 let ty = if self.eat(T::Colon) {
-                    Some(self.vararg_type()?)
+                    let v = self.vararg_type()?;
+                    push!(self, vararg_types, v)
                 } else {
-                    None
+                    NONE
                 };
-                let vararg = Vararg {
-                    span: self.span_from(t.start),
-                    ty,
-                };
-                return Ok((params, Some(vararg)));
+                let vararg = (sp(self.span_from(t.start)), ty);
+                return Ok((push_all!(self, params, params), Some(vararg)));
             }
             let name = match self.kind() {
                 T::Name => self.name()?,
                 _ => return Err(self.syntax_error("<name> or '...' expected")),
             };
             let ty = if self.eat(T::Colon) {
-                Some(self.ty()?)
+                let t = self.ty()?;
+                self.push_type(t)
             } else {
-                None
+                NONE
             };
             let default = if !declaration && self.eat(T::Eq) {
-                Some(self.expr()?)
+                let e = self.expr()?;
+                self.push_expr(e)
             } else {
-                None
+                NONE
             };
-            params.push(Param {
+            params.push(ParamNode {
                 decorators,
                 name,
                 ty,
-                default: default.map(Box::new),
+                default,
             });
             if !self.eat(T::Comma) {
-                return Ok((params, None));
+                return Ok((push_all!(self, params, params), None));
             }
         }
     }
@@ -1676,14 +1945,14 @@ impl<'a> Parser<'a> {
     /// Splits a `>>`, `>=`, `>>=` (or `?:`) token at its first character, in
     /// type context (spec §1.2.1).
     fn split_first(&mut self, first: TokenKind, rest: TokenKind) {
-        let t = self.lexed.tokens[self.pos];
+        let t = self.lexed.tokens.token(self.pos);
         let mut head = t;
         head.kind = first;
         head.end = t.start + 1;
         let mut tail = t;
         tail.kind = rest;
         tail.start = t.start + 1;
-        self.lexed.tokens[self.pos] = head;
+        self.lexed.tokens.set(self.pos, head);
         self.lexed.tokens.insert(self.pos + 1, tail);
     }
 
@@ -1695,32 +1964,33 @@ impl<'a> Parser<'a> {
             T::ShrEq => self.split_first(T::Gt, T::GtEq),
             _ => return Err(self.syntax_error("'>' expected")),
         }
-        self.advance();
+        self.bump();
         Ok(())
     }
 
-    fn type_params_opt(&mut self) -> PResult<Vec<TypeParam>> {
+    fn type_params_opt(&mut self) -> PResult<Range> {
         if !self.check(T::Lt) {
-            return Ok(Vec::new());
+            return Ok(Range::default());
         }
-        self.advance();
+        self.bump();
         let mut params = Vec::new();
         loop {
             let name = self.name()?;
             if self.eat(T::Ellipsis) {
-                params.push(TypeParam {
+                params.push(TypeParamNode {
                     name,
-                    constraint: None,
+                    constraint: NONE,
                     pack: true,
                 });
             } else {
                 let constraint = if self.is_word("extends") {
-                    self.advance();
-                    Some(self.ty()?)
+                    self.bump();
+                    let t = self.ty()?;
+                    self.push_type(t)
                 } else {
-                    None
+                    NONE
                 };
-                params.push(TypeParam {
+                params.push(TypeParamNode {
                     name,
                     constraint,
                     pack: false,
@@ -1731,12 +2001,12 @@ impl<'a> Parser<'a> {
             }
         }
         self.expect_gt()?;
-        Ok(params)
+        Ok(push_all!(self, type_params, params))
     }
 
-    pub(crate) fn ty(&mut self) -> PResult<Type> {
+    pub(crate) fn ty(&mut self) -> PResult<TypeNode> {
         self.enter_level()?;
-        let start = self.tok(0).start;
+        let start = self.start_at(0);
         let result = grow(|| {
             self.eat(T::Pipe);
             let first = self.intersection()?;
@@ -1746,7 +2016,7 @@ impl<'a> Parser<'a> {
         result
     }
 
-    fn union_rest(&mut self, first: Type, start: u32) -> PResult<Type> {
+    fn union_rest(&mut self, first: TypeNode, start: u32) -> PResult<TypeNode> {
         if !self.check(T::Pipe) {
             return Ok(first);
         }
@@ -1754,20 +2024,17 @@ impl<'a> Parser<'a> {
         while self.eat(T::Pipe) {
             members.push(self.intersection()?);
         }
-        Ok(Type {
-            id: self.id(),
-            span: self.span_from(start),
-            kind: TypeKind::Union(members),
-        })
+        let members = self.types(members);
+        Ok(self.type_node(self.span_from(start), TypeData::Union(members)))
     }
 
-    fn intersection(&mut self) -> PResult<Type> {
-        let start = self.tok(0).start;
+    fn intersection(&mut self) -> PResult<TypeNode> {
+        let start = self.start_at(0);
         let first = self.postfix_type()?;
         self.intersection_rest(first, start)
     }
 
-    fn intersection_rest(&mut self, first: Type, start: u32) -> PResult<Type> {
+    fn intersection_rest(&mut self, first: TypeNode, start: u32) -> PResult<TypeNode> {
         if !self.check(T::Amp) {
             return Ok(first);
         }
@@ -1775,90 +2042,83 @@ impl<'a> Parser<'a> {
         while self.eat(T::Amp) {
             members.push(self.postfix_type()?);
         }
-        Ok(Type {
-            id: self.id(),
-            span: self.span_from(start),
-            kind: TypeKind::Intersection(members),
-        })
+        let members = self.types(members);
+        Ok(self.type_node(self.span_from(start), TypeData::Intersection(members)))
     }
 
-    fn postfix_type(&mut self) -> PResult<Type> {
-        let start = self.tok(0).start;
+    fn postfix_type(&mut self) -> PResult<TypeNode> {
+        let start = self.start_at(0);
         let base = self.primary_type()?;
         self.postfix_rest(base, start)
     }
 
-    fn postfix_rest(&mut self, mut base: Type, start: u32) -> PResult<Type> {
+    fn postfix_rest(&mut self, mut base: TypeNode, start: u32) -> PResult<TypeNode> {
         loop {
-            let kind = match self.kind() {
+            let data = match self.kind() {
                 T::Question => {
-                    self.advance();
-                    TypeKind::Optional(Box::new(base))
+                    self.bump();
+                    TypeData::Optional(self.push_type(base))
                 }
                 T::QuestionColon => {
                     self.split_first(T::Question, T::Colon);
-                    self.advance();
-                    TypeKind::Optional(Box::new(base))
+                    self.bump();
+                    TypeData::Optional(self.push_type(base))
                 }
                 T::LBracket if self.kind_at(1) == T::RBracket => {
-                    self.advance();
-                    self.advance();
-                    TypeKind::Array(Box::new(base))
+                    self.bump();
+                    self.bump();
+                    TypeData::Array(self.push_type(base))
                 }
                 _ => return Ok(base),
             };
-            base = Type {
-                id: self.id(),
-                span: self.span_from(start),
-                kind,
-            };
+            base = self.type_node(self.span_from(start), data);
         }
     }
 
     /// Continues a type whose first primary was already parsed.
-    fn type_after_primary(&mut self, primary: Type, start: u32) -> PResult<Type> {
+    fn type_after_primary(&mut self, primary: TypeNode, start: u32) -> PResult<TypeNode> {
         let postfix = self.postfix_rest(primary, start)?;
         let isect = self.intersection_rest(postfix, start)?;
         self.union_rest(isect, start)
     }
 
-    fn primary_type(&mut self) -> PResult<Type> {
-        let start = self.tok(0).start;
-        let kind = match self.kind() {
+    fn primary_type(&mut self) -> PResult<TypeNode> {
+        let start = self.start_at(0);
+        let data = match self.kind() {
             T::Nil => {
-                self.advance();
-                TypeKind::Nil
+                self.bump();
+                TypeData::Nil
             }
             T::True => {
-                self.advance();
-                TypeKind::True
+                self.bump();
+                TypeData::True
             }
             T::False => {
-                self.advance();
-                TypeKind::False
+                self.bump();
+                TypeData::False
             }
             T::Function => {
-                self.advance();
-                TypeKind::AnyFunction
+                self.bump();
+                TypeData::AnyFunction
             }
             T::String | T::LongString => {
                 let t = self.advance();
-                TypeKind::String(self.string_lit(&t))
+                TypeData::String(self.string_lit(&t))
             }
             T::Number => {
                 let t = self.advance();
-                TypeKind::Number(self.number_lit(&t))
+                TypeData::Number(self.make_name(&t))
             }
             T::Name if self.is_word("typeof") && self.kind_at(1) == T::LParen => {
-                self.advance();
+                self.bump();
                 let open = self.advance();
                 let e = self.expr()?;
                 self.expect_match(T::RParen, "(", open.start)?;
-                TypeKind::Typeof(Box::new(e))
+                TypeData::Typeof(self.push_expr(e))
             }
             T::Name => {
                 let (path, args) = self.type_ref_parts()?;
-                TypeKind::Ref { path, args }
+                TypeData::Ref { path, args }
             }
             T::LBrace => self.table_type()?,
             T::Lt => {
@@ -1869,28 +2129,24 @@ impl<'a> Parser<'a> {
             T::LParen => {
                 let (params, vararg, _) = self.paren_group()?;
                 if self.check(T::Arrow) {
-                    return self.function_type_rest(Vec::new(), params, vararg, start);
+                    return self.function_type_rest(Range::default(), params, vararg, start);
                 }
                 if params.len() == 1 && params[0].name.is_none() && vararg.is_none() {
                     let inner = params.into_iter().next().expect("one").ty;
-                    TypeKind::Paren(Box::new(inner))
+                    TypeData::Paren(self.push_type(inner))
                 } else {
                     return Err(self.syntax_error("'->' expected"));
                 }
             }
             _ => return Err(self.syntax_error("type expected")),
         };
-        Ok(Type {
-            id: self.id(),
-            span: self.span_from(start),
-            kind,
-        })
+        Ok(self.type_node(self.span_from(start), data))
     }
 
-    fn type_ref_parts(&mut self) -> PResult<(Vec<Name>, Vec<TypeArg>)> {
+    fn type_ref_parts(&mut self) -> PResult<(Range, Range)> {
         let mut path = vec![self.name()?];
         while self.check(T::Dot) {
-            self.advance();
+            self.bump();
             path.push(self.name()?);
         }
         let args = if self.check(T::Lt) {
@@ -1898,20 +2154,17 @@ impl<'a> Parser<'a> {
         } else {
             Vec::new()
         };
-        Ok((path, args))
+        let path = self.names(path);
+        Ok((path, push_all!(self, type_args, args)))
     }
 
-    pub(crate) fn type_ref(&mut self) -> PResult<Type> {
-        let start = self.tok(0).start;
+    pub(crate) fn type_ref(&mut self) -> PResult<TypeNode> {
+        let start = self.start_at(0);
         let (path, args) = self.type_ref_parts()?;
-        Ok(Type {
-            id: self.id(),
-            span: self.span_from(start),
-            kind: TypeKind::Ref { path, args },
-        })
+        Ok(self.type_node(self.span_from(start), TypeData::Ref { path, args }))
     }
 
-    fn type_args(&mut self) -> PResult<Vec<TypeArg>> {
+    fn type_args(&mut self) -> PResult<Vec<TypeArgData>> {
         self.advance(); // <
         let mut args = Vec::new();
         loop {
@@ -1924,55 +2177,63 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    fn type_arg(&mut self) -> PResult<TypeArg> {
-        let start = self.tok(0).start;
+    fn type_arg(&mut self) -> PResult<TypeArgData> {
+        let start = self.start_at(0);
         if self.check(T::Name) && self.kind_at(1) == T::Ellipsis {
             let name = self.name()?;
-            self.advance();
-            return Ok(TypeArg::Pack(TypePack::Named(name)));
+            self.bump();
+            return Ok(TypeArgData::Pack(push!(
+                self,
+                type_packs,
+                TypePackData::Named(name)
+            )));
         }
         if self.check(T::LParen) {
             let (params, vararg, span) = self.paren_group()?;
             if self.check(T::Arrow) {
-                let f = self.function_type_rest(Vec::new(), params, vararg, start)?;
-                return Ok(TypeArg::Type(f));
+                let f = self.function_type_rest(Range::default(), params, vararg, start)?;
+                return Ok(TypeArgData::Type(self.push_type(f)));
             }
             if params.len() == 1 && params[0].name.is_none() && vararg.is_none() {
                 let inner = params.into_iter().next().expect("one").ty;
-                let paren = Type {
-                    id: self.id(),
-                    span,
-                    kind: TypeKind::Paren(Box::new(inner)),
-                };
-                return Ok(TypeArg::Type(self.type_after_primary(paren, start)?));
+                let inner = self.push_type(inner);
+                let paren = self.type_node(span, TypeData::Paren(inner));
+                let t = self.type_after_primary(paren, start)?;
+                return Ok(TypeArgData::Type(self.push_type(t)));
             }
-            let types = params.into_iter().map(|p| p.ty).collect();
-            return Ok(TypeArg::Pack(TypePack::List {
-                types,
-                vararg: vararg.map(Box::new),
-                span,
-            }));
+            let types = self.types(params.into_iter().map(|p| p.ty).collect());
+            let vararg = opt_id(vararg, |v| push!(self, vararg_types, v));
+            return Ok(TypeArgData::Pack(push!(
+                self,
+                type_packs,
+                TypePackData::List {
+                    types,
+                    vararg,
+                    span: sp(span),
+                }
+            )));
         }
-        Ok(TypeArg::Type(self.ty()?))
+        let t = self.ty()?;
+        Ok(TypeArgData::Type(self.push_type(t)))
     }
 
     /// `( [name:] T, …, ...: V )`, shared by function types, parenthesized
     /// types and type packs.
-    fn paren_group(&mut self) -> PResult<(Vec<ParamType>, Option<VarargType>, Span)> {
+    fn paren_group(&mut self) -> PResult<(Vec<GroupParam>, Option<VarargTypeData>, Span)> {
         let open = self.expect(T::LParen, "(")?;
         let mut params = Vec::new();
         let mut vararg = None;
         if !self.check(T::RParen) {
             loop {
                 if self.check(T::Ellipsis) {
-                    self.advance();
+                    self.bump();
                     self.eat(T::Colon);
                     vararg = Some(self.vararg_type()?);
                     break;
                 }
                 let name = if self.check(T::Name) && self.kind_at(1) == T::Colon {
                     let n = self.name()?;
-                    self.advance();
+                    self.bump();
                     Some(n)
                 } else {
                     None
@@ -1980,10 +2241,10 @@ impl<'a> Parser<'a> {
                 let ty = self.ty()?;
                 if name.is_none() && self.eat(T::Ellipsis) {
                     // `(A...)`, `(EventArgs<E>...)`: a pack expansion.
-                    vararg = Some(VarargType::Expand(ty));
+                    vararg = Some(VarargTypeData::Expand(self.push_type(ty)));
                     break;
                 }
-                params.push(ParamType { name, ty });
+                params.push(GroupParam { name, ty });
                 if !self.eat(T::Comma) {
                     break;
                 }
@@ -1995,150 +2256,175 @@ impl<'a> Parser<'a> {
 
     fn function_type_rest(
         &mut self,
-        type_params: Vec<TypeParam>,
-        params: Vec<ParamType>,
-        vararg: Option<VarargType>,
+        type_params: Range,
+        params: Vec<GroupParam>,
+        vararg: Option<VarargTypeData>,
         start: u32,
-    ) -> PResult<Type> {
+    ) -> PResult<TypeNode> {
         self.expect(T::Arrow, "->")?;
         let ret = self.ret_type()?;
-        Ok(Type {
-            id: self.id(),
-            span: self.span_from(start),
-            kind: TypeKind::Function(Box::new(FunctionType {
+        let params: Vec<ParamTypeNode> = params
+            .into_iter()
+            .map(|p| ParamTypeNode {
+                name: p.name,
+                ty: self.push_type(p.ty),
+            })
+            .collect();
+        let params = push_all!(self, param_types, params);
+        let vararg = opt_id(vararg, |v| push!(self, vararg_types, v));
+        let f = push!(
+            self,
+            fn_types,
+            FnTypeNode {
                 type_params,
                 params,
                 vararg,
                 ret,
-            })),
-        })
+            }
+        );
+        Ok(self.type_node(self.span_from(start), TypeData::Function(f)))
     }
 
     /// `T` or `T...` after `...:`.
-    fn vararg_type(&mut self) -> PResult<VarargType> {
+    fn vararg_type(&mut self) -> PResult<VarargTypeData> {
         if self.check(T::Name) && self.kind_at(1) == T::Ellipsis {
             let name = self.name()?;
-            self.advance();
-            return Ok(VarargType::Pack(name));
+            self.bump();
+            return Ok(VarargTypeData::Pack(name));
         }
-        Ok(VarargType::Type(self.ty()?))
+        let t = self.ty()?;
+        Ok(VarargTypeData::Type(self.push_type(t)))
     }
 
-    fn ret_type(&mut self) -> PResult<RetType> {
-        let start = self.tok(0).start;
+    /// A result type: its index.
+    fn ret_type(&mut self) -> PResult<u32> {
+        let r = self.ret_type_data()?;
+        Ok(push!(self, rets, r))
+    }
+
+    fn ret_type_data(&mut self) -> PResult<RetData> {
+        let start = self.start_at(0);
         if self.check(T::Name) && self.kind_at(1) == T::Ellipsis {
             let name = self.name()?;
-            self.advance();
-            return Ok(RetType::Pack(name));
+            self.bump();
+            return Ok(RetData::Pack(name));
         }
         if self.check(T::Ellipsis) {
             // `...any`: any number of results.
             let open = self.advance();
             self.eat(T::Colon);
             let vararg = self.vararg_type()?;
-            return Ok(RetType::List {
-                types: Vec::new(),
-                vararg: Some(Box::new(vararg)),
-                span: self.span_from(open.start),
+            let vararg = push!(self, vararg_types, vararg);
+            return Ok(RetData::List {
+                types: Range::default(),
+                vararg,
+                span: sp(self.span_from(open.start)),
             });
         }
         if self.check(T::Name)
             && self.is_word_at(1, "is")
-            && self.same_line(self.tok(0).end, self.tok(1).start)
+            && self.same_line(self.end_at(0), self.start_at(1))
         {
             let name = self.name()?;
-            self.advance();
+            self.bump();
             let ty = self.ty()?;
-            return Ok(RetType::Predicate { name, ty });
+            return Ok(RetData::Predicate {
+                name,
+                ty: self.push_type(ty),
+            });
         }
         if self.check(T::LParen) {
             let (params, vararg, span) = self.paren_group()?;
             if self.check(T::Arrow) {
-                let f = self.function_type_rest(Vec::new(), params, vararg, start)?;
-                return Ok(RetType::Single(f));
+                let f = self.function_type_rest(Range::default(), params, vararg, start)?;
+                return Ok(RetData::Single(self.push_type(f)));
             }
             if params.len() == 1 && params[0].name.is_none() && vararg.is_none() {
                 let inner = params.into_iter().next().expect("one").ty;
-                let paren = Type {
-                    id: self.id(),
-                    span,
-                    kind: TypeKind::Paren(Box::new(inner)),
-                };
-                return Ok(RetType::Single(self.type_after_primary(paren, start)?));
+                let inner = self.push_type(inner);
+                let paren = self.type_node(span, TypeData::Paren(inner));
+                let t = self.type_after_primary(paren, start)?;
+                return Ok(RetData::Single(self.push_type(t)));
             }
-            let types = params.into_iter().map(|p| p.ty).collect();
-            return Ok(RetType::List {
+            let types = self.types(params.into_iter().map(|p| p.ty).collect());
+            let vararg = opt_id(vararg, |v| push!(self, vararg_types, v));
+            return Ok(RetData::List {
                 types,
-                vararg: vararg.map(Box::new),
-                span,
+                vararg,
+                span: sp(span),
             });
         }
         let ty = self.ty()?;
         if self.check(T::Ellipsis) {
             let end = self.advance();
-            let span = Span {
-                file: self.file,
+            let span = Sp {
                 start,
                 end: end.end,
             };
-            return Ok(RetType::List {
-                types: Vec::new(),
-                vararg: Some(Box::new(VarargType::Expand(ty))),
+            let ty = self.push_type(ty);
+            let vararg = push!(self, vararg_types, VarargTypeData::Expand(ty));
+            return Ok(RetData::List {
+                types: Range::default(),
+                vararg,
                 span,
             });
         }
-        Ok(RetType::Single(ty))
+        Ok(RetData::Single(self.push_type(ty)))
     }
 
-    fn table_type(&mut self) -> PResult<TypeKind> {
+    fn table_type(&mut self) -> PResult<TypeData> {
         let open = self.advance();
         let mut fields = Vec::new();
         loop {
             if self.check(T::RBrace) {
                 break;
             }
-            let start = self.tok(0).start;
+            let start = self.start_at(0);
             let readonly = self.is_word("readonly")
                 && self.kind_at(1) == T::Name
                 && matches!(self.kind_at(2), T::Colon | T::QuestionColon);
             if readonly {
-                self.advance();
+                self.bump();
             }
             let field =
                 if self.check(T::Name) && matches!(self.kind_at(1), T::Colon | T::QuestionColon) {
                     let name = self.name()?;
                     let optional = self.advance().kind == T::QuestionColon;
                     let ty = self.ty()?;
-                    TableTypeField::Named {
+                    TableTypeFieldData::Named {
                         name,
                         optional,
                         readonly,
-                        ty,
+                        ty: self.push_type(ty),
                     }
                 } else if self.check(T::LBracket) {
-                    self.advance();
+                    self.bump();
                     if matches!(self.kind(), T::String | T::LongString)
                         && self.kind_at(1) == T::RBracket
                     {
                         let t = self.advance();
                         let key = self.string_lit(&t);
-                        self.advance();
+                        self.bump();
                         self.expect(T::Colon, ":")?;
                         let ty = self.ty()?;
-                        TableTypeField::NamedString {
+                        TableTypeFieldData::NamedString {
                             key,
-                            ty,
-                            span: self.span_from(start),
+                            ty: self.push_type(ty),
+                            span: sp(self.span_from(start)),
                         }
                     } else {
                         let key = self.ty()?;
                         self.expect(T::RBracket, "]")?;
                         self.expect(T::Colon, ":")?;
                         let value = self.ty()?;
-                        TableTypeField::Indexer { key, value }
+                        TableTypeFieldData::Indexer {
+                            key: self.push_type(key),
+                            value: self.push_type(value),
+                        }
                     }
                 } else {
-                    TableTypeField::Array(self.ty()?)
+                    let t = self.ty()?;
+                    TableTypeFieldData::Array(self.push_type(t))
                 };
             fields.push(field);
             if !(self.eat(T::Comma) || self.eat(T::Semi)) {
@@ -2146,50 +2432,63 @@ impl<'a> Parser<'a> {
             }
         }
         self.expect_match(T::RBrace, "{", open.start)?;
-        Ok(TypeKind::Table(fields))
+        Ok(TypeData::Table(push_all!(self, table_type_fields, fields)))
     }
 
     // ------------------------------------------------------ declarations --
 
-    fn type_alias(&mut self) -> PResult<TypeAlias> {
+    /// A type alias: its index.
+    fn type_alias(&mut self) -> PResult<u32> {
         self.advance(); // type
         let name = self.name()?;
         let type_params = self.type_params_opt()?;
         self.expect(T::Eq, "=")?;
         let ty = self.ty()?;
-        Ok(TypeAlias {
-            name,
-            type_params,
-            ty,
-        })
+        let ty = self.push_type(ty);
+        Ok(push!(
+            self,
+            aliases,
+            AliasNode {
+                name,
+                type_params,
+                ty,
+            }
+        ))
     }
 
-    fn type_list_after(&mut self, word: &str) -> PResult<Vec<Type>> {
+    fn type_list_after(&mut self, word: &str) -> PResult<Range> {
         let mut out = Vec::new();
         if self.is_word(word) {
-            self.advance();
+            self.bump();
             out.push(self.type_ref()?);
             while self.eat(T::Comma) {
                 out.push(self.type_ref()?);
             }
         }
-        Ok(out)
+        Ok(self.types(out))
     }
 
-    fn class_decl(&mut self) -> PResult<ClassDecl> {
+    /// An optional `extends T`: its type's index.
+    fn extends_opt(&mut self) -> PResult<u32> {
+        if self.is_word("extends") {
+            self.bump();
+            let t = self.type_ref()?;
+            Ok(self.push_type(t))
+        } else {
+            Ok(NONE)
+        }
+    }
+
+    /// A class: its index.
+    fn class_decl(&mut self) -> PResult<u32> {
         let is_abstract = self.is_word("abstract");
         if is_abstract {
-            self.advance();
+            self.bump();
         }
         let opened = self.advance().start; // class
         let name = self.name()?;
         let type_params = self.type_params_opt()?;
-        let extends = if self.is_word("extends") {
-            self.advance();
-            Some(self.type_ref()?)
-        } else {
-            None
-        };
+        let extends = self.extends_opt()?;
         let implements = self.type_list_after("implements")?;
         let mut members = Vec::new();
         while !self.check(T::End) && !self.check(T::Eof) {
@@ -2198,26 +2497,31 @@ impl<'a> Parser<'a> {
                 Ok(m) => members.push(m),
                 Err(Failed) => {
                     if self.pos == before {
-                        self.advance();
+                        self.bump();
                     }
                     while !matches!(self.kind(), T::End | T::Eof | T::Function | T::At)
                         && !self.is_member_start()
                     {
-                        self.advance();
+                        self.bump();
                     }
                 }
             }
         }
         let end = self.expect_match(T::End, "class", opened)?;
-        Ok(ClassDecl {
-            is_abstract,
-            name,
-            type_params,
-            extends,
-            implements,
-            members,
-            end_span: self.token_span(&end),
-        })
+        let members = push_all!(self, class_members, members);
+        Ok(push!(
+            self,
+            classes,
+            ClassNode {
+                is_abstract,
+                name,
+                type_params,
+                extends,
+                implements,
+                members,
+                end_span: sp(self.token_span(&end)),
+            }
+        ))
     }
 
     fn is_member_start(&self) -> bool {
@@ -2250,12 +2554,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn class_member(&mut self) -> PResult<ClassMember> {
-        let start = self.tok(0).start;
+    fn class_member(&mut self) -> PResult<ClassMemberNode> {
+        let start = self.start_at(0);
         let decorators = if self.check(T::At) {
             self.decorators()?
         } else {
-            Vec::new()
+            Range::default()
         };
         let mut modifiers = Vec::new();
         while self.is_modifier() {
@@ -2264,32 +2568,32 @@ impl<'a> Parser<'a> {
         let signature_only = modifiers
             .iter()
             .any(|m| matches!(m, Modifier::Abstract | Modifier::Overload));
-        let kind = if self.check(T::Function) {
+        let data = if self.check(T::Function) {
             let opened = self.advance().start;
             let name = self.name()?;
             if signature_only {
-                ClassMemberKind::Method {
+                ClassMemberData::Method {
                     name,
-                    func: Box::new(self.signature(false)?),
+                    func: self.signature(false)?,
                     has_body: false,
                 }
             } else {
-                ClassMemberKind::Method {
+                ClassMemberData::Method {
                     name,
-                    func: Box::new(self.method_body(opened)?),
+                    func: self.method_body(opened)?,
                     has_body: true,
                 }
             }
         } else if self.is_word("constructor") && self.kind_at(1) == T::LParen {
             let opened = self.advance().start;
             if signature_only {
-                ClassMemberKind::Constructor {
-                    func: Box::new(self.signature(false)?),
+                ClassMemberData::Constructor {
+                    func: self.signature(false)?,
                     has_body: false,
                 }
             } else {
-                ClassMemberKind::Constructor {
-                    func: Box::new(self.method_body(opened)?),
+                ClassMemberData::Constructor {
+                    func: self.method_body(opened)?,
                     has_body: true,
                 }
             }
@@ -2299,13 +2603,14 @@ impl<'a> Parser<'a> {
             let open = self.expect(T::LParen, "(")?;
             self.expect_match(T::RParen, "(", open.start)?;
             let ty = if self.eat(T::Colon) {
-                Some(self.ty()?)
+                let t = self.ty()?;
+                self.push_type(t)
             } else {
-                None
+                NONE
             };
             let body = self.method_block();
             self.expect_match(T::End, "get", opened)?;
-            ClassMemberKind::Getter { name, ty, body }
+            ClassMemberData::Getter { name, ty, body }
         } else if self.is_word("set") && self.kind_at(1) == T::Name {
             let opened = self.advance().start;
             let name = self.name()?;
@@ -2314,12 +2619,16 @@ impl<'a> Parser<'a> {
             self.expect_match(T::RParen, "(", open.start)?;
             let body = self.method_block();
             self.expect_match(T::End, "set", opened)?;
-            ClassMemberKind::Setter { name, param, body }
+            ClassMemberData::Setter {
+                name,
+                param: push!(self, typed_names, param),
+                body,
+            }
         } else if self.check(T::Name) {
             let name = self.name()?;
             let optional = match self.kind() {
                 T::QuestionColon => {
-                    self.advance();
+                    self.bump();
                     true
                 }
                 _ => {
@@ -2328,12 +2637,14 @@ impl<'a> Parser<'a> {
                 }
             };
             let ty = self.ty()?;
+            let ty = self.push_type(ty);
             let value = if self.eat(T::Eq) {
-                Some(self.expr()?)
+                let e = self.expr()?;
+                self.push_expr(e)
             } else {
-                None
+                NONE
             };
-            ClassMemberKind::Field {
+            ClassMemberData::Field {
                 name,
                 optional,
                 ty,
@@ -2342,27 +2653,29 @@ impl<'a> Parser<'a> {
         } else {
             return Err(self.syntax_error("class member expected"));
         };
-        Ok(ClassMember {
+        let modifiers = push_all!(self, modifiers, modifiers);
+        Ok(ClassMemberNode {
             decorators,
             modifiers,
-            span: self.span_from(start),
-            kind,
+            span: sp(self.span_from(start)),
+            data,
         })
     }
 
     /// Methods are vararg only when they declare `...`.
-    fn method_body(&mut self, opened: u32) -> PResult<FuncBody> {
+    fn method_body(&mut self, opened: u32) -> PResult<u32> {
         self.func_body(opened)
     }
 
-    fn method_block(&mut self) -> Block {
+    fn method_block(&mut self) -> u32 {
         self.funcs.push(FuncCtx::default());
         let block = self.block();
         self.funcs.pop();
         block
     }
 
-    fn interface_decl(&mut self) -> PResult<InterfaceDecl> {
+    /// An interface: its index.
+    fn interface_decl(&mut self) -> PResult<u32> {
         let opened = self.advance().start; // interface
         let name = self.name()?;
         let type_params = self.type_params_opt()?;
@@ -2372,31 +2685,36 @@ impl<'a> Parser<'a> {
             members.push(self.interface_member()?);
         }
         self.expect_match(T::End, "interface", opened)?;
-        Ok(InterfaceDecl {
-            name,
-            type_params,
-            extends,
-            members,
-        })
+        let members = push_all!(self, interface_members, members);
+        Ok(push!(
+            self,
+            interfaces,
+            InterfaceNode {
+                name,
+                type_params,
+                extends,
+                members,
+            }
+        ))
     }
 
-    fn interface_member(&mut self) -> PResult<InterfaceMember> {
+    fn interface_member(&mut self) -> PResult<InterfaceMemberData> {
         if self.check(T::Function) {
-            self.advance();
+            self.bump();
             let name = self.name()?;
-            return Ok(InterfaceMember::Method {
+            return Ok(InterfaceMemberData::Method {
                 name,
-                sig: Box::new(self.signature(false)?),
+                sig: self.signature(false)?,
             });
         }
         let readonly = self.is_word("readonly") && self.kind_at(1) == T::Name;
         if readonly {
-            self.advance();
+            self.bump();
         }
         let name = self.name()?;
         let optional = match self.kind() {
             T::QuestionColon => {
-                self.advance();
+                self.bump();
                 true
             }
             _ => {
@@ -2405,15 +2723,16 @@ impl<'a> Parser<'a> {
             }
         };
         let ty = self.ty()?;
-        Ok(InterfaceMember::Field {
+        Ok(InterfaceMemberData::Field {
             readonly,
             name,
             optional,
-            ty,
+            ty: self.push_type(ty),
         })
     }
 
-    fn enum_decl(&mut self) -> PResult<EnumDecl> {
+    /// An enum: its index.
+    fn enum_decl(&mut self) -> PResult<u32> {
         self.advance(); // enum
         let name = self.name()?;
         let open = self.expect(T::LBrace, "{")?;
@@ -2421,28 +2740,33 @@ impl<'a> Parser<'a> {
         while !self.check(T::RBrace) {
             let item = self.name()?;
             let value = if self.eat(T::Eq) {
-                Some(self.expr()?)
+                let e = self.expr()?;
+                self.push_expr(e)
             } else {
-                None
+                NONE
             };
-            items.push(EnumItem { name: item, value });
+            items.push(EnumItemNode { name: item, value });
             if !(self.eat(T::Comma) || self.eat(T::Semi)) {
                 break;
             }
         }
         self.expect_match(T::RBrace, "{", open.start)?;
-        Ok(EnumDecl { name, items })
+        let items = push_all!(self, enum_items, items);
+        Ok(push!(self, enums, EnumNode { name, items }))
     }
 
-    fn declare(&mut self) -> PResult<Declare> {
+    /// A `declare …`: its index.
+    fn declare(&mut self) -> PResult<u32> {
+        let d = self.declare_data()?;
+        Ok(push!(self, declares, d))
+    }
+
+    fn declare_data(&mut self) -> PResult<DeclareData> {
         let opened = self.advance().start; // declare
         if self.eat(T::Function) {
-            let name = self.func_name()?;
+            let (name, _) = self.func_name()?;
             let sig = self.signature(true)?;
-            return Ok(Declare::Function {
-                name,
-                sig: Box::new(sig),
-            });
+            return Ok(DeclareData::Function { name, sig });
         }
         let word = self.advance();
         let word = String::from_utf8_lossy(self.text_of(&word)).into_owned();
@@ -2451,27 +2775,25 @@ impl<'a> Parser<'a> {
                 let name = self.name()?;
                 self.expect(T::Colon, ":")?;
                 let ty = self.ty()?;
-                Ok(Declare::Global { name, ty })
+                Ok(DeclareData::Global {
+                    name,
+                    ty: self.push_type(ty),
+                })
             }
             "namespace" => {
                 let name = self.name()?;
                 let members = self.ns_members()?;
                 self.expect_match(T::End, "namespace", opened)?;
-                Ok(Declare::Namespace { name, members })
+                Ok(DeclareData::Namespace { name, members })
             }
             "class" => {
                 let name = self.name()?;
                 let type_params = self.type_params_opt()?;
-                let extends = if self.is_word("extends") {
-                    self.advance();
-                    Some(self.type_ref()?)
-                } else {
-                    None
-                };
+                let extends = self.extends_opt()?;
                 let implements = self.type_list_after("implements")?;
                 let members = self.decl_members()?;
                 self.expect_match(T::End, "class", opened)?;
-                Ok(Declare::Class {
+                Ok(DeclareData::Class {
                     name,
                     type_params,
                     extends,
@@ -2481,15 +2803,15 @@ impl<'a> Parser<'a> {
             }
             "interface" => {
                 self.pos -= 1;
-                Ok(Declare::Interface(self.interface_decl()?))
+                Ok(DeclareData::Interface(self.interface_decl()?))
             }
             "event" | "message" => {
                 let name = self.name()?;
-                let params = Box::new(self.signature(true)?);
+                let params = self.signature(true)?;
                 Ok(if word == "event" {
-                    Declare::Event { name, params }
+                    DeclareData::Event { name, params }
                 } else {
-                    Declare::Message { name, params }
+                    DeclareData::Message { name, params }
                 })
             }
             _ => {
@@ -2498,7 +2820,7 @@ impl<'a> Parser<'a> {
                 let path = self.string_lit(&t);
                 let members = self.ns_members()?;
                 self.expect_match(T::End, "module", opened)?;
-                Ok(Declare::Module { path, members })
+                Ok(DeclareData::Module { path, members })
             }
         }
     }
@@ -2511,99 +2833,98 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn ns_members(&mut self) -> PResult<Vec<NsMember>> {
+    fn ns_members(&mut self) -> PResult<Range> {
         let mut out = Vec::new();
         while !self.check(T::End) && !self.check(T::Eof) {
-            let start = self.tok(0).start;
+            let start = self.start_at(0);
             let decorators = if self.check(T::At) {
                 self.decorators()?
             } else {
-                Vec::new()
+                Range::default()
             };
-            let kind = if self.eat(T::Function) {
+            let data = if self.eat(T::Function) {
                 let name = self.name()?;
-                NsMemberKind::Function {
+                NsMemberData::Function {
                     name,
-                    sig: Box::new(self.signature(true)?),
+                    sig: self.signature(true)?,
                 }
             } else if self.is_word("namespace") && self.kind_at(1) == T::Name {
                 let opened = self.advance().start;
                 let name = self.name()?;
                 let members = self.ns_members()?;
                 self.expect_match(T::End, "namespace", opened)?;
-                NsMemberKind::Namespace { name, members }
+                NsMemberData::Namespace { name, members }
             } else if self.is_word("class") && self.kind_at(1) == T::Name {
                 let opened = self.advance().start;
                 let name = self.name()?;
                 let type_params = self.type_params_opt()?;
-                let extends = if self.is_word("extends") {
-                    self.advance();
-                    Some(self.type_ref()?)
-                } else {
-                    None
-                };
+                let extends = self.extends_opt()?;
                 let members = self.decl_members()?;
                 self.expect_match(T::End, "class", opened)?;
-                NsMemberKind::Class {
+                NsMemberData::Class {
                     name,
                     type_params,
                     extends,
                     members,
                 }
             } else if self.is_word("interface") && self.kind_at(1) == T::Name {
-                NsMemberKind::Interface(self.interface_decl()?)
+                NsMemberData::Interface(self.interface_decl()?)
             } else if self.is_word("type") && self.kind_at(1) == T::Name {
-                NsMemberKind::TypeAlias(self.type_alias()?)
+                NsMemberData::TypeAlias(self.type_alias()?)
             } else if self.is_word("enum") && self.kind_at(1) == T::Name {
-                NsMemberKind::Enum(self.enum_decl()?)
+                NsMemberData::Enum(self.enum_decl()?)
             } else {
                 let is_const = self.is_word("const") && self.kind_at(1) == T::Name;
                 if is_const {
-                    self.advance();
+                    self.bump();
                 }
                 let name = self.name()?;
                 self.expect(T::Colon, ":")?;
                 let ty = self.ty()?;
-                NsMemberKind::Value { is_const, name, ty }
+                NsMemberData::Value {
+                    is_const,
+                    name,
+                    ty: self.push_type(ty),
+                }
             };
-            out.push(NsMember {
+            out.push(NsMemberNode {
                 decorators,
-                span: self.span_from(start),
-                kind,
+                span: sp(self.span_from(start)),
+                data,
             });
         }
-        Ok(out)
+        Ok(push_all!(self, ns_members, out))
     }
 
-    fn decl_members(&mut self) -> PResult<Vec<DeclMember>> {
+    fn decl_members(&mut self) -> PResult<Range> {
         let mut out = Vec::new();
         while !self.check(T::End) && !self.check(T::Eof) {
-            let start = self.tok(0).start;
+            let start = self.start_at(0);
             let decorators = if self.check(T::At) {
                 self.decorators()?
             } else {
-                Vec::new()
+                Range::default()
             };
             let is_static = self.is_word("static")
                 && !matches!(self.kind_at(1), T::Colon | T::QuestionColon | T::LParen);
             if is_static {
-                self.advance();
+                self.bump();
             }
-            let kind = if self.eat(T::Function) {
+            let data = if self.eat(T::Function) {
                 let name = self.name()?;
-                DeclMemberKind::Function {
+                DeclMemberData::Function {
                     name,
-                    sig: Box::new(self.signature(true)?),
+                    sig: self.signature(true)?,
                 }
             } else {
                 let readonly = self.is_word("readonly") && self.kind_at(1) == T::Name;
                 if readonly {
-                    self.advance();
+                    self.bump();
                 }
                 let name = self.name()?;
                 let optional = match self.kind() {
                     T::QuestionColon => {
-                        self.advance();
+                        self.bump();
                         true
                     }
                     _ => {
@@ -2612,30 +2933,31 @@ impl<'a> Parser<'a> {
                     }
                 };
                 let ty = self.ty()?;
-                DeclMemberKind::Field {
+                DeclMemberData::Field {
                     readonly,
                     name,
                     optional,
-                    ty,
+                    ty: self.push_type(ty),
                 }
             };
-            out.push(DeclMember {
+            out.push(DeclMemberNode {
                 decorators,
                 is_static,
-                span: self.span_from(start),
-                kind,
+                span: sp(self.span_from(start)),
+                data,
             });
         }
-        Ok(out)
+        Ok(push_all!(self, decl_members, out))
     }
 
-    fn import(&mut self) -> PResult<Import> {
+    /// An import: its index.
+    fn import(&mut self) -> PResult<u32> {
         self.advance(); // import
         // `import type X from` is type-only; `import type from "x"` imports `type`.
         let type_only =
             self.is_word("type") && self.kind_at(1) == T::Name && !self.is_word_at(1, "from");
         if type_only {
-            self.advance();
+            self.bump();
         }
         // `import internal a from` reads a module's locals; `import
         // internal from "x"` imports `internal`.
@@ -2650,55 +2972,59 @@ impl<'a> Parser<'a> {
             if !self.is_word("as") {
                 return Err(self.syntax_error("'as' expected"));
             }
-            self.advance();
-            ImportClause::Namespace(self.name()?)
+            self.bump();
+            ImportClauseData::Namespace(self.name()?)
         } else if self.is_word("_") && !matches!(self.kind_at(1), T::Comma) {
-            self.advance();
-            ImportClause::SideEffect
+            self.bump();
+            ImportClauseData::SideEffect
         } else {
             let mut specs = Vec::new();
             loop {
                 let name = self.name()?;
-                if name.text.as_ref() == "_" {
+                if self.text_at(name) == b"_" {
                     self.error_at(
                         "E0117",
-                        name.span,
+                        self.sp_span(name),
                         "`import _` cannot be combined with other names",
                     );
                 }
                 let alias = if self.is_word("as") {
-                    self.advance();
+                    self.bump();
                     Some(self.name()?)
                 } else {
                     None
                 };
-                specs.push(ImportSpec { name, alias });
+                specs.push(ImportSpecNode { name, alias });
                 if !self.eat(T::Comma) {
                     break;
                 }
             }
-            ImportClause::Names(specs)
+            ImportClauseData::Names(push_all!(self, import_specs, specs))
         };
         if !self.is_word("from") {
             return Err(self.syntax_error("'from' expected"));
         }
-        self.advance();
+        self.bump();
         let t = self.expect_string()?;
         let from = self.string_lit(&t);
-        Ok(Import {
-            clause,
-            type_only,
-            internal,
-            from,
-        })
+        Ok(push!(
+            self,
+            imports,
+            ImportNode {
+                clause,
+                type_only,
+                internal,
+                from,
+            }
+        ))
     }
 
-    fn export(&mut self, start: u32) -> PResult<StmtKind> {
+    fn export(&mut self, start: u32) -> PResult<StmtData> {
         self.advance(); // export
-        let inner_start = self.tok(0).start;
-        let kind = match self.kind() {
+        let inner_start = self.start_at(0);
+        let data = match self.kind() {
             T::Local => {
-                self.advance();
+                self.bump();
                 let mut names = vec![self.typed_name()?];
                 while self.eat(T::Comma) {
                     names.push(self.typed_name()?);
@@ -2708,37 +3034,42 @@ impl<'a> Parser<'a> {
                 } else {
                     let span = self.span_from(start);
                     self.error_at("E0119", span, "`export local` needs an initializer");
-                    Vec::new()
+                    Range::default()
                 };
-                StmtKind::Local { names, values }
+                StmtData::Local {
+                    names: push_all!(self, typed_names, names),
+                    values,
+                }
             }
             T::Function => {
                 let opened = self.advance().start;
-                let name = self.func_name()?;
-                if name.path.len() > 1 || name.method.is_some() {
-                    self.error_at("E0118", name.span, "`export function` takes a plain name");
+                let (name, plain) = self.func_name()?;
+                if !plain {
+                    let span = self.sp_span(self.t.func_names[name as usize].span);
+                    self.error_at("E0118", span, "`export function` takes a plain name");
                 }
                 let func = self.func_body(opened)?;
-                StmtKind::Function {
-                    name,
-                    func: Box::new(func),
-                }
+                StmtData::Function { name, func }
             }
             _ if self.is_word("const") => self.const_decl(inner_start)?,
             _ if self.is_word("class") || self.is_word("abstract") => {
-                StmtKind::Class(Box::new(self.class_decl()?))
+                StmtData::Class(self.class_decl()?)
             }
-            _ if self.is_word("interface") => StmtKind::Interface(Box::new(self.interface_decl()?)),
-            _ if self.is_word("enum") => StmtKind::Enum(Box::new(self.enum_decl()?)),
-            _ => StmtKind::TypeAlias(Box::new(self.type_alias()?)),
+            _ if self.is_word("interface") => StmtData::Interface(self.interface_decl()?),
+            _ if self.is_word("enum") => StmtData::Enum(self.enum_decl()?),
+            _ => StmtData::TypeAlias(self.type_alias()?),
         };
-        let inner = Stmt {
-            id: self.id(),
-            span: self.span_from(inner_start),
-            decorators: Vec::new(),
-            kind,
-        };
-        Ok(StmtKind::Export(Box::new(inner)))
+        let span = self.span_from(inner_start);
+        let inner = push!(
+            self,
+            stmts,
+            StmtNode {
+                span: sp(span),
+                decorators: Range::default(),
+                data,
+            }
+        );
+        Ok(StmtData::Export(inner))
     }
 }
 
@@ -2748,77 +3079,30 @@ fn grow<R>(f: impl FnOnce() -> R) -> R {
     stacker::maybe_grow(64 * 1024, 1024 * 1024, f)
 }
 
-fn decoratable(kind: &StmtKind) -> bool {
+fn decoratable(data: &StmtData) -> bool {
     matches!(
-        kind,
-        StmtKind::Function { .. }
-            | StmtKind::LocalFunction { .. }
-            | StmtKind::Local { .. }
-            | StmtKind::LocalDestructure { .. }
-            | StmtKind::Const { .. }
-            | StmtKind::Class(_)
-            | StmtKind::Interface(_)
-            | StmtKind::Enum(_)
-            | StmtKind::TypeAlias(_)
-            | StmtKind::Declare(_)
-            | StmtKind::Import(_)
-            | StmtKind::Export(_)
+        data,
+        StmtData::Function { .. }
+            | StmtData::LocalFunction { .. }
+            | StmtData::Local { .. }
+            | StmtData::LocalDestructure { .. }
+            | StmtData::Const { .. }
+            | StmtData::Class(_)
+            | StmtData::Interface(_)
+            | StmtData::Enum(_)
+            | StmtData::TypeAlias(_)
+            | StmtData::Declare(_)
+            | StmtData::Import(_)
+            | StmtData::Export(_)
     )
 }
 
-fn is_call(kind: &ExprKind) -> bool {
+fn is_call(data: &ExprData) -> bool {
     matches!(
-        kind,
-        ExprKind::Call { .. }
-            | ExprKind::Method { .. }
-            | ExprKind::OptCall { .. }
-            | ExprKind::OptMethod { .. }
+        data,
+        ExprData::Call { .. }
+            | ExprData::Method { .. }
+            | ExprData::OptCall { .. }
+            | ExprData::OptMethod { .. }
     )
-}
-
-/// The expression is or contains (along its prefix chain) an optional access.
-fn contains_optional(e: &Expr) -> bool {
-    match &e.kind {
-        ExprKind::OptField { .. }
-        | ExprKind::OptIndex { .. }
-        | ExprKind::OptMethod { .. }
-        | ExprKind::OptCall { .. } => true,
-        ExprKind::Field { obj, .. } | ExprKind::Index { obj, .. } => contains_optional(obj),
-        ExprKind::Call { callee, .. } => contains_optional(callee),
-        ExprKind::Method { obj, .. } => contains_optional(obj),
-        _ => false,
-    }
-}
-
-/// Names declared at the top level of `block` (visible in `until`).
-fn top_level_locals(block: &Block) -> Vec<Box<str>> {
-    let mut out = Vec::new();
-    for stmt in &block.stmts {
-        match &stmt.kind {
-            StmtKind::Local { names, .. } => out.extend(names.iter().map(|n| n.name.text.clone())),
-            StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
-                out.push(name.text.clone())
-            }
-            StmtKind::LocalDestructure { fields, .. } => {
-                out.extend(fields.iter().map(|f| f.name.text.clone()))
-            }
-            _ => {}
-        }
-    }
-    out
-}
-
-/// The first use of one of `names` in `e` (approximate: ignores shadowing
-/// inside nested functions).
-fn first_name_use<'e>(e: &'e Expr, names: &[Box<str>]) -> Option<&'e Name> {
-    let mut found = None;
-    crate::visit::walk_expr(e, &mut |x: &'e Expr| {
-        if found.is_none()
-            && let ExprKind::Name(n) = &x.kind
-            && names.contains(&n.text)
-        {
-            found = Some(n);
-        }
-    });
-    found
 }

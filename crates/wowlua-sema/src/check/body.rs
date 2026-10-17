@@ -1,15 +1,16 @@
 //! Checking one file (spec chapter 2): scopes and locals, statements,
 //! function bodies with their returns, and class bodies.
 
-use super::env::{DefKind, Env, Scope};
+use super::env::{DefKind, Env, FnSig, Scope};
 use super::narrow::Flow;
 use super::query::Mode;
-use super::types::Field;
 use super::types::*;
+use super::types::{Field, Func, Types};
 use rustc_hash::{FxHashMap, FxHashSet};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::Func as FuncNode;
+use wowlua_syntax::view::*;
 
 /// The prefix of a file-level local's type among a module's exports
 /// (`import internal`, spec Tooling §16.1.3.1).
@@ -107,8 +108,8 @@ impl Scopes {
     }
 }
 
-pub struct Checker<'e> {
-    pub env: &'e mut Env,
+pub struct Checker<'e, 'p> {
+    pub env: &'e mut Env<'p>,
     pub mode: Mode,
     pub scope: Scope,
     pub(crate) vars: Vec<Var>,
@@ -191,37 +192,37 @@ pub struct Prepared {
 /// [`Prepared`] for a file.
 pub fn prepare(parse: &wowlua_syntax::Parse) -> Prepared {
     let (reassigned, assigned_in_closures, assigned_later) =
-        reassigned_in_closures(&parse.chunk.block);
+        reassigned_in_closures(parse.view().block());
     let mut type_name_args = Vec::new();
     let mut created_frames = Vec::new();
-    wowlua_syntax::visit::walk_block(&parse.chunk.block, &mut |e| {
-        let ExprKind::Call { callee, args } = &e.kind else {
+    wowlua_syntax::visit::walk_block(parse.view().block(), &mut |e| {
+        let ExprKind::Call { callee, args } = e.kind() else {
             return;
         };
-        if (matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "typeName")
-            | matches!(&callee.kind, ExprKind::Field { name, .. } if name.text.as_ref() == "typeName"))
+        if (matches!(callee.kind(), ExprKind::Name(n) if n.text() == "typeName")
+            | matches!(callee.kind(), ExprKind::Field { name, .. } if name.text() == "typeName"))
             && let Some(arg) = args.exprs().first()
         {
-            type_name_args.push(arg.span);
+            type_name_args.push(arg.span());
         }
-        if matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "CreateFrame")
-            && let Some(ExprKind::String(lit)) = args.exprs().get(1).map(|a| &a.kind)
+        if matches!(callee.kind(), ExprKind::Name(n) if n.text() == "CreateFrame")
+            && let Some(ExprKind::String(lit)) = args.exprs().get(1).map(|a| a.kind())
         {
-            created_frames.push(String::from_utf8_lossy(&lit.value).into_owned());
+            created_frames.push(String::from_utf8_lossy(&lit.value()).into_owned());
         }
     });
     Prepared {
         reassigned,
         assigned_in_closures,
         assigned_later,
-        dynamic_env: calls_setfenv(&parse.chunk.block),
+        dynamic_env: calls_setfenv(parse.view().block()),
         type_name_args,
         created_frames,
     }
 }
 
-impl<'e> Checker<'e> {
-    pub fn new(env: &'e mut Env, info: &FileInfo<'e>, prepared: &Prepared) -> Checker<'e> {
+impl<'e, 'p> Checker<'e, 'p> {
+    pub fn new(env: &'e mut Env<'p>, info: &FileInfo<'e>, prepared: &Prepared) -> Self {
         let Prepared {
             reassigned,
             assigned_in_closures,
@@ -399,13 +400,15 @@ impl<'e> Checker<'e> {
 
     /// An annotation's type; `typeof(expr)` parts are inferred first
     /// (spec §2.2.7).
-    pub fn annotation(&mut self, t: &Type) -> TypeId {
-        let mut exprs: Vec<&Expr> = Vec::new();
+    pub fn annotation(&mut self, t: Type<'_>) -> TypeId {
+        let mut exprs: Vec<Expr<'_>> = Vec::new();
         typeof_exprs(t, &mut exprs);
         for e in exprs {
             let ty = self.infer(e);
             let ty = self.env.types.widen(ty);
-            self.env.typeof_types.insert((e.span.start, e.span.end), ty);
+            self.env
+                .typeof_types
+                .insert((e.span().start, e.span().end), ty);
         }
         let scope = self.scope.clone();
         self.env.resolve(t, &scope)
@@ -512,34 +515,29 @@ impl<'e> Checker<'e> {
         };
         self.fns.push(top);
         self.top_vararg = Some((Types::STRING, ns_ty));
-        self.hoist(&parse.chunk.block);
-        self.block_stmts(&parse.chunk.block);
+        self.hoist(parse.view().block());
+        self.block_stmts(parse.view().block());
         // A module's file-level locals, for `import internal` (kept with
         // the exports, under `INTERNAL` + name).
-        let stmts = if self.is_module {
-            &parse.chunk.block.stmts[..]
-        } else {
-            &[]
-        };
-        for s in stmts {
-            let names: Vec<&str> = match &s.kind {
-                StmtKind::Local { names, .. } => {
-                    names.iter().map(|n| n.name.text.as_ref()).collect()
-                }
-                StmtKind::LocalFunction { name, .. } => vec![name.text.as_ref()],
-                StmtKind::Function { name, .. }
-                    if name.path.len() == 1 && name.method.is_none() =>
-                {
-                    vec![name.path[0].text.as_ref()]
-                }
-                StmtKind::Const { name, .. } => vec![name.text.as_ref()],
-                StmtKind::Class(c) => vec![c.name.text.as_ref()],
-                _ => Vec::new(),
-            };
-            for name in names {
-                if let Some(v) = self.lookup_var(name) {
-                    let t = self.var_type(v);
-                    self.exports.insert(format!("{INTERNAL}{name}").into(), t);
+        if self.is_module {
+            for s in parse.view().block().stmts() {
+                let names: Vec<&str> = match s.kind() {
+                    StmtKind::Local { names, .. } => names.iter().map(|n| n.name.text()).collect(),
+                    StmtKind::LocalFunction { name, .. } => vec![name.text()],
+                    StmtKind::Function { name, .. }
+                        if name.path().len() == 1 && name.method().is_none() =>
+                    {
+                        vec![name.path().at(0).text()]
+                    }
+                    StmtKind::Const { name, .. } => vec![name.text()],
+                    StmtKind::Class(c) => vec![c.name().text()],
+                    _ => Vec::new(),
+                };
+                for name in names {
+                    if let Some(v) = self.lookup_var(name) {
+                        let t = self.var_type(v);
+                        self.exports.insert(format!("{INTERNAL}{name}").into(), t);
+                    }
                 }
             }
         }
@@ -548,30 +546,32 @@ impl<'e> Checker<'e> {
 
     /// Top-level classes and enums are hoisted (decision T76), and so are
     /// the top-level functions of a module (spec §5.1).
-    fn hoist(&mut self, b: &Block) {
-        for s in &b.stmts {
-            let kind = match &s.kind {
-                StmtKind::Export(inner) => &inner.kind,
+    fn hoist(&mut self, b: Block<'_>) {
+        for s in b.stmts() {
+            let kind = match s.kind() {
+                StmtKind::Export(inner) => inner.kind(),
                 k => k,
             };
             match kind {
                 StmtKind::Function { name, func }
-                    if self.is_module && name.path.len() == 1 && name.method.is_none() =>
+                    if self.is_module && name.path().len() == 1 && name.method().is_none() =>
                 {
-                    let sig = self.env.func_sig(func, &self.scope.clone(), false);
+                    let sig = self
+                        .env
+                        .func_sig(&FnSig::of(func), &self.scope.clone(), false);
                     let t = self.env.types.func(sig);
-                    self.declare(&name.path[0].text, Some(t), t, false, None);
+                    self.declare(name.path().at(0).text(), Some(t), t, false, None);
                 }
                 StmtKind::Class(c) => {
-                    if let Some(def) = self.env.lookup_type(&c.name.text, &self.scope) {
+                    if let Some(def) = self.env.lookup_type(c.name().text(), &self.scope) {
                         let t = self.env.types.intern(Ty::ClassOf(def));
-                        self.declare(&c.name.text, Some(t), t, true, None);
+                        self.declare(c.name().text(), Some(t), t, true, None);
                     }
                 }
                 StmtKind::Enum(e) => {
-                    if let Some(def) = self.env.lookup_type(&e.name.text, &self.scope) {
+                    if let Some(def) = self.env.lookup_type(e.name().text(), &self.scope) {
                         let t = self.env.types.intern(Ty::ClassOf(def));
-                        self.declare(&e.name.text, Some(t), t, true, None);
+                        self.declare(e.name().text(), Some(t), t, true, None);
                     }
                 }
                 _ => {}
@@ -579,19 +579,19 @@ impl<'e> Checker<'e> {
         }
     }
 
-    pub fn block(&mut self, b: &Block) {
+    pub fn block(&mut self, b: Block<'_>) {
         self.push_scope();
         self.block_stmts(b);
         self.pop_scope();
     }
 
-    fn block_stmts(&mut self, b: &Block) {
+    fn block_stmts(&mut self, b: Block<'_>) {
         let outer = self.in_dead;
-        for s in &b.stmts {
+        for s in b.stmts() {
             // The first statement after a `return`, `break`, `continue` or
             // a call that never returns (W1005), once per region.
             if !self.live && !self.in_dead {
-                self.report("W1005", s.span, "unreachable code");
+                self.report("W1005", s.span(), "unreachable code");
                 self.in_dead = true;
             }
             self.stmt(s);
@@ -599,46 +599,49 @@ impl<'e> Checker<'e> {
         self.in_dead = outer;
     }
 
-    fn stmt(&mut self, s: &Stmt) {
-        self.next_handler = self.decorated_handler(&s.decorators);
+    fn stmt(&mut self, s: Stmt<'_>) {
+        self.next_handler = self.decorated_handler(s.decorators());
         stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.stmt_inner(s));
         self.next_handler = None;
-        if !s.decorators.is_empty() {
+        if !s.decorators().is_empty() {
             self.check_cases(s);
         }
     }
 
     /// `@cases(list)` of `wowlua:test` (decision T215): every case fits the
     /// test function's parameters (E8120).
-    fn check_cases(&mut self, s: &Stmt) {
-        let func = match &s.kind {
+    fn check_cases(&mut self, s: Stmt<'_>) {
+        let func = match s.kind() {
             StmtKind::LocalFunction { func, .. } | StmtKind::Function { func, .. } => func,
             _ => return,
         };
-        let Some(d) = s.decorators.iter().find(|d| {
-            let id = match d.path.as_slice() {
-                [n] => self.intrinsic_path(&n.text, None),
-                [m, n] => self.intrinsic_path(&m.text, Some(&n.text)),
-                _ => None,
+        let Some(d) = s.decorators().iter().find(|d| {
+            let path = d.path();
+            let id = if let Some([n]) = path.exactly::<1>() {
+                self.intrinsic_path(n.text(), None)
+            } else if let Some([m, n]) = path.exactly::<2>() {
+                self.intrinsic_path(m.text(), Some(n.text()))
+            } else {
+                None
             };
             id.as_deref() == Some("test.cases")
         }) else {
             return;
         };
-        let Some(ExprKind::Table(entries)) = d
-            .args
-            .as_ref()
-            .and_then(|a| a.exprs().first().map(|e| e.kind.clone()))
+        let Some(ExprKind::Table(entries)) =
+            d.args().and_then(|a| a.exprs().first().map(|e| e.kind()))
         else {
             return;
         };
-        let sig = self.env.func_sig(func, &self.scope.clone(), false);
+        let sig = self
+            .env
+            .func_sig(&FnSig::of(func), &self.scope.clone(), false);
         for (n, entry) in entries.iter().enumerate() {
             let TableField::Positional(case) = entry else {
                 continue;
             };
             // A table literal holds the arguments; another value is the only one.
-            let values: Vec<&Expr> = match &case.kind {
+            let values: Vec<Expr<'_>> = match case.kind() {
                 ExprKind::Table(fields) => fields
                     .iter()
                     .filter_map(|f| match f {
@@ -655,7 +658,7 @@ impl<'e> Checker<'e> {
                     values.len(),
                     sig.params.len()
                 );
-                self.report("E8120", case.span, msg);
+                self.report("E8120", case.span(), msg);
                 continue;
             }
             if let Some(p) = sig.params.iter().skip(values.len()).find(|p| !p.optional) {
@@ -663,12 +666,12 @@ impl<'e> Checker<'e> {
                     "case {n} has no value for `{}`",
                     p.name.as_deref().unwrap_or("?")
                 );
-                self.report("E8120", case.span, msg);
+                self.report("E8120", case.span(), msg);
                 continue;
             }
             for (i, v) in values.iter().enumerate() {
                 let Some(p) = sig.params.get(i) else { break };
-                let t = self.infer(v);
+                let t = self.infer(*v);
                 if !self.env.assignable(t, p.ty, self.mode) {
                     let msg = format!(
                         "case {n}: `{}` is not assignable to `{}` (parameter `{}`)",
@@ -676,7 +679,7 @@ impl<'e> Checker<'e> {
                         self.env.display(p.ty),
                         p.name.as_deref().unwrap_or("?")
                     );
-                    self.report("E8120", v.span, msg);
+                    self.report("E8120", v.span(), msg);
                 }
             }
         }
@@ -686,17 +689,17 @@ impl<'e> Checker<'e> {
     /// names through an import that no local shadows.
     /// A member of an intrinsic is named by the intrinsic's id and the
     /// member (`FramePool.new` → `pool.FramePool.new`).
-    pub(crate) fn intrinsic_of(&self, callee: &Expr) -> Option<String> {
-        match &callee.kind {
-            ExprKind::Name(n) => self.intrinsic_path(&n.text, None),
+    pub(crate) fn intrinsic_of(&self, callee: Expr<'_>) -> Option<String> {
+        match callee.kind() {
+            ExprKind::Name(n) => self.intrinsic_path(n.text(), None),
             ExprKind::Field { obj, name } => {
-                if let ExprKind::Name(m) = &obj.kind
-                    && let Some(id) = self.intrinsic_path(&m.text, Some(&name.text))
+                if let ExprKind::Name(m) = obj.kind()
+                    && let Some(id) = self.intrinsic_path(m.text(), Some(name.text()))
                 {
                     return Some(id);
                 }
                 self.intrinsic_of(obj)
-                    .map(|id| format!("{id}.{}", name.text))
+                    .map(|id| format!("{id}.{}", name.text()))
             }
             _ => None,
         }
@@ -714,15 +717,16 @@ impl<'e> Checker<'e> {
     /// The handler type an `@event` or `@unitEvent` decorator gives the
     /// function it decorates: the event's (or message's) parameters, or with
     /// several names the name first, then anything.
-    fn decorated_handler(&mut self, decorators: &[Decorator]) -> Option<(Func, String)> {
+    fn decorated_handler(&mut self, decorators: Decorators<'_>) -> Option<(Func, String)> {
         for d in decorators {
-            let id = match d.path.as_slice() {
-                [n] => self.intrinsic_path(&n.text, None),
-                [m, n] => self.intrinsic_path(&m.text, Some(&n.text)),
+            let path = d.path();
+            let id = match path.len() {
+                1 => self.intrinsic_path(path.at(0).text(), None),
+                2 => self.intrinsic_path(path.at(0).text(), Some(path.at(1).text())),
                 _ => None,
             };
             let Some(id) = id else { continue };
-            let args = d.args.as_ref().map(|a| a.exprs()).unwrap_or_default();
+            let args = d.args().as_ref().map(|a| a.exprs()).unwrap_or_default();
             let names: Vec<String> = args.iter().map_while(|e| literal_string(e)).collect();
             let (skip, event_names) = match id.as_str() {
                 "events.event" => (0, args.len()),
@@ -732,11 +736,11 @@ impl<'e> Checker<'e> {
             };
             for e in args.iter().skip(skip).take(event_names) {
                 if let Some(n) = literal_string(e) {
-                    self.check_event_available(&n, e.span);
+                    self.check_event_available(&n, e.span());
                 }
             }
             if id.starts_with("hooks.") {
-                self.check_hook_target(&id, &args, true);
+                self.check_hook_target(&id, args, true);
             }
             match id.as_str() {
                 "events.event" if names.len() == 1 => {
@@ -784,12 +788,12 @@ impl<'e> Checker<'e> {
         }
     }
 
-    fn stmt_inner(&mut self, s: &Stmt) {
-        match &s.kind {
+    fn stmt_inner(&mut self, s: Stmt<'_>) {
+        match s.kind() {
             StmtKind::Local { names, values } => {
                 let expected: Vec<Option<TypeId>> = names
                     .iter()
-                    .map(|n| n.ty.as_ref().map(|t| self.annotation(t)))
+                    .map(|n| n.ty.as_ref().map(|t| self.annotation(*t)))
                     .collect();
                 // Fresh literals widen (`local s = "a"` is a string); values
                 // typed elsewhere (a call's declared result, a variable,
@@ -798,7 +802,7 @@ impl<'e> Checker<'e> {
                     .iter()
                     .map(|v| {
                         matches!(
-                            v.kind,
+                            v.kind(),
                             ExprKind::Call { .. }
                                 | ExprKind::OptCall { .. }
                                 | ExprKind::Method { .. }
@@ -819,10 +823,11 @@ impl<'e> Checker<'e> {
                     if let Some(d) = declared
                         && !no_values
                     {
-                        let span = n.name.span;
+                        let span = n.name.span();
                         self.check_assignable(span, value, d);
                     }
-                    let id = self.declare(&n.name.text, declared, value, false, Some(n.name.span));
+                    let id =
+                        self.declare(n.name.text(), declared, value, false, Some(n.name.span()));
                     if declared.is_none() && keep.get(i).copied().unwrap_or(false) {
                         self.flow.insert(id, value);
                     }
@@ -860,7 +865,7 @@ impl<'e> Checker<'e> {
             StmtKind::Compound { target, op, value } => {
                 let current = self.infer(target);
                 let v = self.infer(value);
-                let result = self.compound_result(*op, current, v, s.span);
+                let result = self.compound_result(op, current, v, s.span());
                 self.assign_target(target, result);
             }
             StmtKind::Call(e) => {
@@ -870,8 +875,8 @@ impl<'e> Checker<'e> {
                     self.live = false;
                 }
                 // `assert(cond)` narrows like `if cond` (spec §2.5).
-                if let ExprKind::Call { callee, args } = &e.kind
-                    && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "assert" && self.lookup_var("assert").is_none())
+                if let ExprKind::Call { callee, args } = e.kind()
+                    && matches!(callee.kind(), ExprKind::Name(n) if n.text() == "assert" && self.lookup_var("assert").is_none())
                     && let Some(cond) = args.exprs().first()
                 {
                     let (t_flow, _) = self.narrow(cond, &self.flow.clone());
@@ -909,8 +914,8 @@ impl<'e> Checker<'e> {
                 elseifs,
                 else_block,
             } => {
-                let mut clauses: Vec<(&Expr, &Block)> = vec![(cond, then_block)];
-                clauses.extend(elseifs.iter().map(|(c, b)| (c, b)));
+                let mut clauses: Vec<(Expr<'_>, Block<'_>)> = vec![(cond, then_block)];
+                clauses.extend(elseifs.iter());
                 let mut ends: Vec<(Flow, bool, super::flavors::Guard)> = Vec::new();
                 for (c, b) in clauses {
                     self.mark_probes(c);
@@ -959,21 +964,18 @@ impl<'e> Checker<'e> {
                 step,
                 body,
             } => {
-                for e in [Some(start), Some(limit), step.as_ref()]
-                    .into_iter()
-                    .flatten()
-                {
+                for e in [Some(start), Some(limit), step].into_iter().flatten() {
                     let t = self.infer(e);
-                    self.check_assignable(e.span, t, Types::NUMBER);
+                    self.check_assignable(e.span(), t, Types::NUMBER);
                 }
                 self.forget_assigned(body);
                 self.push_scope();
                 self.declare(
-                    &var.name.text,
+                    var.name.text(),
                     Some(Types::NUMBER),
                     Types::NUMBER,
                     false,
-                    Some(var.name.span),
+                    Some(var.name.span()),
                 );
                 let entry = self.flow.clone();
                 self.block(body);
@@ -983,14 +985,21 @@ impl<'e> Checker<'e> {
             }
             StmtKind::GenericFor { vars, exprs, body } => {
                 let types = self.expr_list(exprs, &[]);
-                let loop_types =
-                    self.iteration_types(&types, exprs.first().map(|e| e.span).unwrap_or(s.span));
+                let loop_types = self
+                    .iteration_types(&types, exprs.first().map(|e| e.span()).unwrap_or(s.span()));
                 self.forget_assigned(body);
                 self.push_scope();
                 for (i, v) in vars.iter().enumerate() {
-                    let declared = v.ty.as_ref().map(|t| self.annotation(t));
+                    let declared = v.ty.as_ref().map(|t| self.annotation(*t));
                     let t = loop_types.get(i).copied().unwrap_or(Types::ANY);
-                    self.declare_with(&v.name.text, declared, t, false, Some(v.name.span), false);
+                    self.declare_with(
+                        v.name.text(),
+                        declared,
+                        t,
+                        false,
+                        Some(v.name.span()),
+                        false,
+                    );
                 }
                 let entry = self.flow.clone();
                 self.block(body);
@@ -1000,13 +1009,19 @@ impl<'e> Checker<'e> {
             }
             StmtKind::Function { name, func } => self.function_stmt(name, func),
             StmtKind::LocalFunction { name, func } => {
-                let sig = self.env.func_sig(func, &self.scope.clone(), false);
+                let sig = self
+                    .env
+                    .func_sig(&FnSig::of(func), &self.scope.clone(), false);
                 let t = self.env.types.func(sig);
-                let id = self.declare(&name.text, None, t, false, Some(name.span));
+                let id = self.declare(name.text(), None, t, false, Some(name.span()));
                 let handler = self.next_handler.take();
-                let actual = self.function_body(func, handler.as_ref().map(|h| h.0.clone()), None);
+                let actual = self.function_body(
+                    &FnSig::of(func),
+                    handler.as_ref().map(|h| h.0.clone()),
+                    None,
+                );
                 if let Some(h) = &handler {
-                    self.check_handler(actual, h, name.span);
+                    self.check_handler(actual, h, name.span());
                 }
                 self.flow.insert(id, actual);
                 self.vars[id.0 as usize].base = actual;
@@ -1019,7 +1034,7 @@ impl<'e> Checker<'e> {
                     .unwrap_or_default();
                 let pack = self.expr_pack(values, &expected_types);
                 if let Some(exp) = expected {
-                    self.check_pack(values, &pack, &exp, s.span);
+                    self.check_pack(values, &pack, &exp, s.span());
                 }
                 if let Some(f) = self.fns.last_mut() {
                     f.returns.push(pack);
@@ -1030,7 +1045,7 @@ impl<'e> Checker<'e> {
             StmtKind::LocalDestructure {
                 fields, value, ty, ..
             } => {
-                let declared = ty.as_ref().map(|t| self.annotation(t));
+                let declared = ty.as_ref().map(|t| self.annotation(*t));
                 let source = match value {
                     Some(v) => self.check(v, declared),
                     None => Types::ANY,
@@ -1038,35 +1053,35 @@ impl<'e> Checker<'e> {
                 let source = declared.unwrap_or(source);
                 for f in fields {
                     let field_ty = self
-                        .member_type(source, &f.name.text, f.name.span, false)
+                        .member_type(source, f.name.text(), f.name.span(), false)
                         .unwrap_or(Types::ANY);
                     let t = match &f.default {
                         Some(d) => {
-                            let dt = self.infer(d);
+                            let dt = self.infer(*d);
                             let non_nil = self.env.types.non_nil(field_ty);
                             self.env.types.union(&[non_nil, dt])
                         }
                         None => field_ty,
                     };
-                    self.declare(&f.name.text, None, t, false, Some(f.name.span));
+                    self.declare(f.name.text(), None, t, false, Some(f.name.span()));
                 }
             }
             StmtKind::Const { name, ty, value } => {
-                let declared = ty.as_ref().map(|t| self.annotation(t));
+                let declared = ty.as_ref().map(|t| self.annotation(*t));
                 let t = match value {
                     Some(v) => self.check(v, declared),
                     None => declared.unwrap_or(Types::ANY),
                 };
                 if let (Some(d), Some(v)) = (declared, value) {
-                    self.check_assignable(v.span, t, d);
+                    self.check_assignable(v.span(), t, d);
                 }
                 // `const` keeps literal types (spec §2.4).
                 let id = self.declare(
-                    &name.text,
+                    name.text(),
                     Some(declared.unwrap_or(t)),
                     t,
                     true,
-                    Some(name.span),
+                    Some(name.span()),
                 );
                 self.flow.insert(id, t);
             }
@@ -1091,11 +1106,11 @@ impl<'e> Checker<'e> {
 
     /// The assignment target is a global or lies in one (`X`, `_G.X`,
     /// `X.a.b`, `X[k]`): what it stores is reachable from other addons.
-    pub(crate) fn global_rooted(&self, target: &Expr) -> bool {
+    pub(crate) fn global_rooted(&self, target: Expr<'_>) -> bool {
         let mut e = target;
         loop {
-            match &e.kind {
-                ExprKind::Name(n) => return self.lookup_var(&n.text).is_none(),
+            match e.kind() {
+                ExprKind::Name(n) => return self.lookup_var(n.text()).is_none(),
                 ExprKind::Field { obj, .. } | ExprKind::Index { obj, .. } => e = obj,
                 _ => return false,
             }
@@ -1116,25 +1131,25 @@ impl<'e> Checker<'e> {
 
     /// Locals assigned in a loop body lose their narrowing at the loop
     /// start (the body may run again).
-    fn forget_assigned(&mut self, body: &Block) {
-        let mut names = FxHashSet::default();
-        wowlua_syntax::visit::walk_stmts(body, &mut |s| match &s.kind {
+    fn forget_assigned(&mut self, body: Block<'_>) {
+        let mut names: FxHashSet<&str> = FxHashSet::default();
+        wowlua_syntax::visit::walk_stmts(body, &mut |s| match s.kind() {
             StmtKind::Assign { targets, .. } => {
                 for t in targets {
-                    if let ExprKind::Name(n) = &t.kind {
-                        names.insert(n.text.clone());
+                    if let ExprKind::Name(n) = t.kind() {
+                        names.insert(n.text());
                     }
                 }
             }
             StmtKind::Compound { target, .. } => {
-                if let ExprKind::Name(n) = &target.kind {
-                    names.insert(n.text.clone());
+                if let ExprKind::Name(n) = target.kind() {
+                    names.insert(n.text());
                 }
             }
             _ => {}
         });
         for name in names {
-            if let Some(v) = self.lookup_var(&name) {
+            if let Some(v) = self.lookup_var(name) {
                 let var = self.vars[v.0 as usize].clone();
                 let t = match var.declared {
                     Some(d) => d,
@@ -1147,30 +1162,30 @@ impl<'e> Checker<'e> {
     }
 
     /// `function f()`, `function t.f()`, `function t:m()`.
-    fn function_stmt(&mut self, name: &FuncName, func: &FuncBody) {
-        let method = name.method.is_some();
+    fn function_stmt(&mut self, name: FuncName<'_>, func: FuncNode<'_>) {
+        let method = name.method().is_some();
         // The table the function is stored in gives `self`'s type.
         let mut owner: Option<TypeId> = None;
-        if name.path.len() > 1 || method {
+        if name.path().len() > 1 || method {
             // `t.a.f` is stored in `t.a`; `t.a:m` in `t.a` too.
-            let parents = if method {
-                &name.path[1..]
-            } else {
-                &name.path[1..name.path.len() - 1]
-            };
-            let mut t = self.name_type(&name.path[0]);
-            for n in parents {
+            let path = name.path();
+            let end = if method { path.len() } else { path.len() - 1 };
+            let mut t = self.name_type(path.at(0));
+            for n in path.iter().take(end).skip(1) {
                 t = self
-                    .member_type(t, &n.text, n.span, false)
+                    .member_type(t, n.text(), n.span(), false)
                     .unwrap_or(Types::ANY);
             }
             owner = Some(t);
         }
-        let expected = match (&owner, name.path.len(), &name.method) {
-            (Some(o), _, Some(m)) => self.member_type(*o, &m.text, m.span, true),
-            (Some(o), n, None) if n > 1 => {
-                self.member_type(*o, &name.path[n - 1].text, name.path[n - 1].span, true)
-            }
+        let expected = match (&owner, name.path().len(), &name.method()) {
+            (Some(o), _, Some(m)) => self.member_type(*o, m.text(), m.span(), true),
+            (Some(o), n, None) if n > 1 => self.member_type(
+                *o,
+                name.path().at(n - 1).text(),
+                name.path().at(n - 1).span(),
+                true,
+            ),
             _ => None,
         };
         let self_ty = if method { owner } else { None };
@@ -1178,29 +1193,28 @@ impl<'e> Checker<'e> {
         let expected = expected
             .and_then(|e| self.as_func(e))
             .or_else(|| handler.as_ref().map(|h| h.0.clone()));
-        let t = self.function_body(func, expected, self_ty);
+        let t = self.function_body(&FnSig::of(func), expected, self_ty);
         if let Some(h) = &handler {
             let span = name
-                .method
+                .method()
                 .as_ref()
-                .unwrap_or(&name.path[name.path.len() - 1])
-                .span;
+                .unwrap_or(&name.path().at(name.path().len() - 1))
+                .span();
             self.check_handler(t, h, span);
         }
-        if name.path.len() == 1 && !method {
-            let n = &name.path[0];
-            match self.lookup_var(&n.text) {
-                Some(v) => self.assign_var(v, t, n.span),
-                None => self.assign_global(n, t),
+        if name.path().len() == 1 && !method {
+            let n = &name.path().at(0);
+            match self.lookup_var(n.text()) {
+                Some(v) => self.assign_var(v, t, n.span()),
+                None => self.assign_global(*n, t),
             }
         } else if let Some(o) = owner {
             let last = name
-                .method
-                .as_ref()
-                .unwrap_or_else(|| name.path.last().expect("a name"));
+                .method()
+                .unwrap_or_else(|| name.path().last().expect("a name"));
             // A method stored in a table takes `self` first.
             let stored = if method { self.env.with_self(t, o) } else { t };
-            self.extend_open(o, &last.text, stored);
+            self.extend_open(o, last.text(), stored);
         }
     }
 
@@ -1215,7 +1229,7 @@ impl<'e> Checker<'e> {
     /// from the context (spec §2.4.3). Returns the function's type.
     pub fn function_body(
         &mut self,
-        f: &FuncBody,
+        f: &FnSig<'_>,
         expected: Option<Func>,
         self_ty: Option<TypeId>,
     ) -> TypeId {
@@ -1229,8 +1243,8 @@ impl<'e> Checker<'e> {
                 .iter()
                 .filter(|p| p.ty.is_none() && p.default.is_none())
             {
-                let msg = format!("parameter `{}` needs a type annotation", p.name.text);
-                self.report("E2050", p.name.span, msg);
+                let msg = format!("parameter `{}` needs a type annotation", p.name.text());
+                self.report("E2050", p.name.span(), msg);
             }
         }
         // Contextual parameter types for unannotated parameters.
@@ -1280,8 +1294,8 @@ impl<'e> Checker<'e> {
             self.declare("self", Some(st), st, false, None);
         }
         for (p, sp) in f.params.iter().zip(&sig.params) {
-            let declared = p.ty.as_ref().map(|_| sp.ty);
-            let t = match &p.default {
+            let declared = p.ty.map(|_| sp.ty);
+            let t = match p.default {
                 Some(d) => {
                     let dt = self.check(d, Some(sp.ty));
                     let non_nil = self.env.types.non_nil(sp.ty);
@@ -1298,14 +1312,14 @@ impl<'e> Checker<'e> {
             if p.ty.is_some()
                 && let Some(c) = self.value_check(t)
             {
-                self.value_checks.insert(p.name.span, c);
+                self.value_checks.insert(p.name.span(), c);
             }
             let id = self.declare(
-                &p.name.text,
+                p.name.text(),
                 declared.or(Some(sp.ty)),
                 t,
                 false,
-                Some(p.name.span),
+                Some(p.name.span()),
             );
             self.flow.insert(id, t);
         }
@@ -1313,7 +1327,7 @@ impl<'e> Checker<'e> {
             Rest::Variadic(t) => *t,
             Rest::Pack(_) => Types::ANY,
         });
-        if let (Some(v), Some(t)) = (&f.vararg, vararg)
+        if let (Some(v), Some(t)) = (f.vararg, vararg)
             && v.ty.is_some()
             && let Some(c) = self.value_check(t)
         {
@@ -1324,7 +1338,7 @@ impl<'e> Checker<'e> {
             returns: Vec::new(),
             vararg,
         });
-        self.block_stmts(&f.body);
+        self.block_stmts(f.body);
         let ctx = self.fns.pop().expect("function");
         let falls_through = self.live;
         self.pop_scope();
@@ -1383,7 +1397,7 @@ impl<'e> Checker<'e> {
     }
 
     /// Checks returned values against the annotated results.
-    fn check_pack(&mut self, values: &[Expr], got: &Pack, expected: &Pack, span: Span) {
+    fn check_pack(&mut self, values: Exprs<'_>, got: &Pack, expected: &Pack, span: Span) {
         for (i, &want) in expected.types.iter().enumerate() {
             let have = match got.types.get(i) {
                 Some(&t) => t,
@@ -1393,7 +1407,7 @@ impl<'e> Checker<'e> {
                     None => Types::NIL,
                 },
             };
-            let at = values.get(i).map(|v| v.span).unwrap_or(span);
+            let at = values.get(i).map(|v| v.span()).unwrap_or(span);
             self.check_assignable(at, have, want);
         }
         if expected.rest.is_none()
@@ -1402,7 +1416,7 @@ impl<'e> Checker<'e> {
         {
             let at = values
                 .get(expected.types.len())
-                .map(|v| v.span)
+                .map(|v| v.span())
                 .unwrap_or(span);
             self.report(
                 "E2001",
@@ -1416,8 +1430,8 @@ impl<'e> Checker<'e> {
     }
 
     /// The bodies of a class's methods (spec chapter 3).
-    fn class_body(&mut self, c: &ClassDecl) {
-        let Some(def) = self.env.lookup_type(&c.name.text, &self.scope) else {
+    fn class_body(&mut self, c: ClassDecl<'_>) {
+        let Some(def) = self.env.lookup_type(c.name().text(), &self.scope) else {
             return;
         };
         let instance = self.env.instance(def);
@@ -1431,27 +1445,19 @@ impl<'e> Checker<'e> {
         if self.mode == Mode::Strict {
             self.definite_assignment(c, def);
         }
-        for m in &c.members {
-            let is_static = m.modifiers.contains(&Modifier::Static);
+        for m in c.members() {
+            let is_static = m.modifiers().contains(&Modifier::Static);
             self.classes.push((def, is_static));
-            match &m.kind {
+            match m.kind() {
                 ClassMemberKind::Field {
                     value: Some(v),
                     name,
                     ..
                 } => {
                     let want = if is_static {
-                        self.env
-                            .def(def)
-                            .statics
-                            .get(name.text.as_ref())
-                            .map(|m| m.ty)
+                        self.env.def(def).statics.get(name.text()).map(|m| m.ty)
                     } else {
-                        self.env
-                            .def(def)
-                            .members
-                            .get(name.text.as_ref())
-                            .map(|m| m.ty)
+                        self.env.def(def).members.get(name.text()).map(|m| m.ty)
                     };
                     // Instance initializers see `self`.
                     self.push_scope();
@@ -1460,7 +1466,7 @@ impl<'e> Checker<'e> {
                     }
                     let t = self.check(v, want);
                     if let Some(w) = want {
-                        self.check_assignable(v.span, t, w);
+                        self.check_assignable(v.span(), t, w);
                     }
                     self.pop_scope();
                 }
@@ -1470,42 +1476,25 @@ impl<'e> Checker<'e> {
                     name,
                 } => {
                     let expected = if is_static {
-                        self.env
-                            .def(def)
-                            .statics
-                            .get(name.text.as_ref())
-                            .map(|m| m.ty)
+                        self.env.def(def).statics.get(name.text()).map(|m| m.ty)
                     } else {
-                        self.env
-                            .def(def)
-                            .members
-                            .get(name.text.as_ref())
-                            .map(|m| m.ty)
+                        self.env.def(def).members.get(name.text()).map(|m| m.ty)
                     };
                     let exp = expected.and_then(|e| self.as_func(e));
-                    self.function_body(func, exp, (!is_static).then_some(instance));
+                    self.function_body(&FnSig::of(func), exp, (!is_static).then_some(instance));
                 }
                 ClassMemberKind::Constructor {
                     func,
                     has_body: true,
                 } => {
-                    self.function_body(func, None, Some(instance));
+                    self.function_body(&FnSig::of(func), None, Some(instance));
                 }
                 ClassMemberKind::Getter { body, ty, .. } => {
-                    let fb = synthetic_body(body, ty.clone(), Vec::new());
+                    let fb = FnSig::accessor(body, ty, None);
                     self.function_body(&fb, None, (!is_static).then_some(instance));
                 }
                 ClassMemberKind::Setter { body, param, .. } => {
-                    let fb = synthetic_body(
-                        body,
-                        None,
-                        vec![wowlua_syntax::ast::Param {
-                            decorators: Vec::new(),
-                            name: param.name.clone(),
-                            ty: param.ty.clone(),
-                            default: None,
-                        }],
-                    );
+                    let fb = FnSig::accessor(body, None, Some(param));
                     self.function_body(&fb, None, (!is_static).then_some(instance));
                 }
                 _ => {}
@@ -1519,25 +1508,25 @@ impl<'e> Checker<'e> {
     /// Strict mode: non-optional instance fields without an initializer
     /// must be assigned by the constructor before it returns or calls a
     /// method on `self` (E2052).
-    fn definite_assignment(&mut self, c: &ClassDecl, def: DefId) {
-        let required: Vec<&Name> = c
-            .members
+    fn definite_assignment(&mut self, c: ClassDecl<'_>, def: DefId) {
+        let required: Vec<Name<'_>> = c
+            .members()
             .iter()
-            .filter(|m| !m.modifiers.contains(&Modifier::Static))
-            .filter_map(|m| match &m.kind {
+            .filter(|m| !m.modifiers().contains(&Modifier::Static))
+            .filter_map(|m| match m.kind() {
                 ClassMemberKind::Field {
                     name,
                     optional: false,
                     value: None,
                     ty,
-                } if !matches!(ty.kind, TypeKind::Optional(_)) => Some(name),
+                } if !matches!(ty.kind(), TypeKind::Optional(_)) => Some(name),
                 _ => None,
             })
             .collect();
         if required.is_empty() {
             return;
         }
-        let ctor = c.members.iter().find_map(|m| match &m.kind {
+        let ctor = c.members().iter().find_map(|m| match m.kind() {
             ClassMemberKind::Constructor {
                 func,
                 has_body: true,
@@ -1546,23 +1535,23 @@ impl<'e> Checker<'e> {
         });
         let mut assigned: FxHashSet<Box<str>> = FxHashSet::default();
         if let Some(f) = ctor {
-            for s in &f.body.stmts {
-                if let StmtKind::Assign { targets, .. } = &s.kind {
+            for s in f.body().stmts() {
+                if let StmtKind::Assign { targets, .. } = s.kind() {
                     for t in targets {
-                        if let ExprKind::Field { obj, name } = &t.kind
-                            && matches!(&obj.kind, ExprKind::Name(n) if n.text.as_ref() == "self")
+                        if let ExprKind::Field { obj, name } = t.kind()
+                            && matches!(obj.kind(), ExprKind::Name(n) if n.text() == "self")
                         {
-                            assigned.insert(name.text.clone());
+                            assigned.insert(name.text().into());
                         }
                     }
                 }
                 // A call of a method of wowlua code on `self` (which may read
                 // the fields) or a return ends the check; native methods
                 // (`self:SetSize(…)`) cannot read them.
-                let method = match &s.kind {
-                    StmtKind::Call(e) => match &e.kind {
-                        ExprKind::Method { obj, name, .. } if matches!(&obj.kind, ExprKind::Name(n) if n.text.as_ref() == "self") => {
-                            Some(name.text.clone())
+                let method = match s.kind() {
+                    StmtKind::Call(e) => match e.kind() {
+                        ExprKind::Method { obj, name, .. } if matches!(obj.kind(), ExprKind::Name(n) if n.text() == "self") => {
+                            Some(name.text())
                         }
                         _ => None,
                     },
@@ -1570,21 +1559,21 @@ impl<'e> Checker<'e> {
                 };
                 let calls_own = method.is_some_and(|m| {
                     self.env
-                        .instance_member(def, &[], &m)
+                        .instance_member(def, &[], m)
                         .is_none_or(|(_, owner)| !self.env.def(owner).native)
                 });
-                if calls_own || matches!(s.kind, StmtKind::Return(_)) {
+                if calls_own || matches!(s.kind(), StmtKind::Return(_)) {
                     break;
                 }
             }
         }
         for name in required {
-            if !assigned.contains(&name.text) {
+            if !assigned.contains(name.text()) {
                 let msg = format!(
                     "field `{}` is not assigned in the constructor (initialize it, assign it, or make it optional)",
-                    name.text
+                    name.text()
                 );
-                self.report("E2052", name.span, msg);
+                self.report("E2052", name.span(), msg);
             }
         }
     }
@@ -1643,20 +1632,20 @@ impl<'e> Checker<'e> {
 /// stack level, or with a function the file defines (by name). Setting the
 /// environment of other code (a chunk from `loadstring`) does not change
 /// how this file's names resolve.
-fn calls_setfenv(b: &Block) -> bool {
+fn calls_setfenv(b: Block<'_>) -> bool {
     // Names of the functions this file defines.
     let mut defined: FxHashSet<Box<str>> = FxHashSet::default();
-    wowlua_syntax::visit::walk_stmts(b, &mut |s| match &s.kind {
+    wowlua_syntax::visit::walk_stmts(b, &mut |s| match s.kind() {
         StmtKind::LocalFunction { name, .. } => {
-            defined.insert(name.text.clone());
+            defined.insert(name.text().into());
         }
         StmtKind::Function { name, .. } => {
-            defined.insert(name.path[name.path.len() - 1].text.clone());
+            defined.insert(name.path().at(name.path().len() - 1).text().into());
         }
         StmtKind::Local { names, values, .. } => {
             for (n, v) in names.iter().zip(values) {
-                if matches!(v.kind, ExprKind::Function(_)) {
-                    defined.insert(n.name.text.clone());
+                if matches!(v.kind(), ExprKind::Function(_)) {
+                    defined.insert(n.name.text().into());
                 }
             }
         }
@@ -1664,12 +1653,12 @@ fn calls_setfenv(b: &Block) -> bool {
     });
     let mut found = false;
     wowlua_syntax::visit::walk_block(b, &mut |e| {
-        if let ExprKind::Call { callee, args } = &e.kind
-            && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "setfenv")
+        if let ExprKind::Call { callee, args } = e.kind()
+            && matches!(callee.kind(), ExprKind::Name(n) if n.text() == "setfenv")
         {
-            let own = match args.exprs().first().map(|a| &a.kind) {
+            let own = match args.exprs().first().map(|a| a.kind()) {
                 Some(ExprKind::Number(_)) | None => true,
-                Some(ExprKind::Name(n)) => defined.contains(&n.text),
+                Some(ExprKind::Name(n)) => defined.contains(n.text()),
                 Some(ExprKind::Function(_)) => true,
                 _ => true,
             };
@@ -1682,8 +1671,8 @@ fn calls_setfenv(b: &Block) -> bool {
 }
 
 /// The `typeof(expr)` parts of a type.
-fn typeof_exprs<'t>(t: &'t Type, out: &mut Vec<&'t Expr>) {
-    match &t.kind {
+fn typeof_exprs<'t>(t: Type<'t>, out: &mut Vec<Expr<'t>>) {
+    match t.kind() {
         TypeKind::Typeof(e) => out.push(e),
         TypeKind::Paren(i) | TypeKind::Optional(i) | TypeKind::Array(i) => typeof_exprs(i, out),
         TypeKind::Union(ms) | TypeKind::Intersection(ms) => {
@@ -1722,39 +1711,21 @@ fn warning_code(code: &'static str) -> &'static str {
         .or_insert_with(|| Box::leak(format!("W{}", &code[1..]).into_boxed_str()))
 }
 
-fn exported_names(s: &Stmt) -> Vec<String> {
-    match &s.kind {
-        StmtKind::Local { names, .. } => names.iter().map(|n| n.name.text.to_string()).collect(),
-        StmtKind::Function { name, .. } => vec![name.path[0].text.to_string()],
-        StmtKind::Const { name, .. } => vec![name.text.to_string()],
-        StmtKind::Class(c) => vec![c.name.text.to_string()],
-        StmtKind::Enum(e) => vec![e.name.text.to_string()],
+fn exported_names(s: Stmt<'_>) -> Vec<String> {
+    match s.kind() {
+        StmtKind::Local { names, .. } => names.iter().map(|n| n.name.text().to_string()).collect(),
+        StmtKind::Function { name, .. } => vec![name.path().at(0).text().to_string()],
+        StmtKind::Const { name, .. } => vec![name.text().to_string()],
+        StmtKind::Class(c) => vec![c.name().text().to_string()],
+        StmtKind::Enum(e) => vec![e.name().text().to_string()],
         _ => Vec::new(),
-    }
-}
-
-/// A function body for an accessor (no `FuncBody` in the syntax tree).
-fn synthetic_body(
-    body: &Block,
-    ret: Option<Type>,
-    params: Vec<wowlua_syntax::ast::Param>,
-) -> FuncBody {
-    FuncBody {
-        type_params: Vec::new(),
-        params,
-        vararg: None,
-        ret: ret.map(RetType::Single),
-        body: body.clone(),
-        params_span: body.span,
-        end_span: body.span,
-        span: body.span,
     }
 }
 
 /// The declarations (by name start) of locals that are assigned from a
 /// nested function after their declaration or captured and assigned later;
 /// and of those assigned from a nested function.
-fn reassigned_in_closures(b: &Block) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashSet<u32>) {
+fn reassigned_in_closures(b: Block<'_>) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashSet<u32>) {
     struct Walk {
         scopes: Vec<FxHashMap<Box<str>, (u32, u32)>>,
         depth: u32,
@@ -1768,53 +1739,53 @@ fn reassigned_in_closures(b: &Block) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashS
         fn lookup(&self, n: &str) -> Option<(u32, u32)> {
             self.scopes.iter().rev().find_map(|s| s.get(n).copied())
         }
-        fn declare(&mut self, n: &Name) {
+        fn declare(&mut self, n: Name<'_>) {
             let d = self.depth;
             self.scopes
                 .last_mut()
                 .expect("scope")
-                .insert(n.text.clone(), (n.span.start, d));
+                .insert(n.text().into(), (n.span().start, d));
         }
-        fn assign(&mut self, n: &Name) {
-            if let Some((start, d)) = self.lookup(&n.text) {
+        fn assign(&mut self, n: Name<'_>) {
+            if let Some((start, d)) = self.lookup(n.text()) {
                 self.assigned.insert(start);
                 if d < self.depth {
                     self.out.insert(start);
                 }
             }
         }
-        fn read(&mut self, n: &Name) {
-            if let Some((start, d)) = self.lookup(&n.text)
+        fn read(&mut self, n: Name<'_>) {
+            if let Some((start, d)) = self.lookup(n.text())
                 && d < self.depth
             {
                 self.captured.insert(start);
             }
         }
-        fn block(&mut self, b: &Block) {
+        fn block(&mut self, b: Block<'_>) {
             self.scopes.push(FxHashMap::default());
-            for s in &b.stmts {
+            for s in b.stmts() {
                 self.stmt(s);
             }
             self.scopes.pop();
         }
-        fn func(&mut self, f: &FuncBody) {
+        fn func(&mut self, f: FuncNode<'_>) {
             self.depth += 1;
             self.scopes.push(FxHashMap::default());
-            for p in &f.params {
-                self.declare(&p.name);
+            for p in f.params() {
+                self.declare(p.name());
             }
-            self.block(&f.body);
+            self.block(f.body());
             self.scopes.pop();
             self.depth -= 1;
         }
-        fn stmt(&mut self, s: &Stmt) {
-            match &s.kind {
+        fn stmt(&mut self, s: Stmt<'_>) {
+            match s.kind() {
                 StmtKind::Local { names, values } => {
                     for v in values {
                         self.expr(v);
                     }
                     for n in names {
-                        self.declare(&n.name);
+                        self.declare(n.name);
                     }
                 }
                 StmtKind::LocalFunction { name, func } => {
@@ -1822,14 +1793,14 @@ fn reassigned_in_closures(b: &Block) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashS
                     self.func(func);
                 }
                 StmtKind::Function { name, func } => {
-                    if name.path.len() == 1 && name.method.is_none() {
-                        self.assign(&name.path[0]);
+                    if name.path().len() == 1 && name.method().is_none() {
+                        self.assign(name.path().at(0));
                     }
                     self.func(func);
                 }
                 StmtKind::Assign { targets, values } => {
                     for t in targets {
-                        match &t.kind {
+                        match t.kind() {
                             ExprKind::Name(n) => self.assign(n),
                             _ => self.expr(t),
                         }
@@ -1839,7 +1810,7 @@ fn reassigned_in_closures(b: &Block) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashS
                     }
                 }
                 StmtKind::Compound { target, value, .. } => {
-                    if let ExprKind::Name(n) = &target.kind {
+                    if let ExprKind::Name(n) = target.kind() {
                         self.assign(n);
                     }
                     self.expr(value);
@@ -1867,7 +1838,7 @@ fn reassigned_in_closures(b: &Block) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashS
                 }
                 StmtKind::NumericFor { var, body, .. } => {
                     self.scopes.push(FxHashMap::default());
-                    self.declare(&var.name);
+                    self.declare(var.name);
                     self.block(body);
                     self.scopes.pop();
                 }
@@ -1877,7 +1848,7 @@ fn reassigned_in_closures(b: &Block) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashS
                     }
                     self.scopes.push(FxHashMap::default());
                     for v in vars {
-                        self.declare(&v.name);
+                        self.declare(v.name);
                     }
                     self.block(body);
                     self.scopes.pop();
@@ -1890,8 +1861,8 @@ fn reassigned_in_closures(b: &Block) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashS
                     }
                 }
                 StmtKind::Class(c) => {
-                    for m in &c.members {
-                        match &m.kind {
+                    for m in c.members() {
+                        match m.kind() {
                             ClassMemberKind::Method { func, .. }
                             | ClassMemberKind::Constructor { func, .. } => self.func(func),
                             _ => {}
@@ -1901,19 +1872,19 @@ fn reassigned_in_closures(b: &Block) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashS
                 _ => {}
             }
         }
-        fn expr(&mut self, e: &Expr) {
-            let mut names: Vec<&Name> = Vec::new();
+        fn expr(&mut self, e: Expr<'_>) {
+            let mut names: Vec<Name<'_>> = Vec::new();
             wowlua_syntax::visit::walk_expr_shallow(e, &mut |x| {
-                if let ExprKind::Name(n) = &x.kind {
+                if let ExprKind::Name(n) = x.kind() {
                     names.push(n);
                 }
             });
             for n in names {
                 self.read(n);
             }
-            let mut funcs: Vec<&FuncBody> = Vec::new();
+            let mut funcs: Vec<FuncNode<'_>> = Vec::new();
             wowlua_syntax::visit::walk_expr_shallow(e, &mut |x| {
-                if let ExprKind::Function(f) = &x.kind {
+                if let ExprKind::Function(f) = x.kind() {
                     funcs.push(f);
                 }
             });
@@ -1938,9 +1909,9 @@ fn reassigned_in_closures(b: &Block) -> (FxHashSet<u32>, FxHashSet<u32>, FxHashS
     (out, in_closures, w.assigned)
 }
 
-fn literal_string(e: &Expr) -> Option<String> {
-    match &e.kind {
-        ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value).into_owned()),
+fn literal_string(e: Expr<'_>) -> Option<String> {
+    match e.kind() {
+        ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value()).into_owned()),
         _ => None,
     }
 }

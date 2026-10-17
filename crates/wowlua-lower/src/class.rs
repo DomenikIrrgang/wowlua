@@ -37,8 +37,8 @@ fn at(mut e: ir::Expr, pos: Pos) -> ir::Expr {
     e
 }
 
-fn has(m: &ClassMember, modifier: Modifier) -> bool {
-    m.modifiers.contains(&modifier)
+fn has(m: ClassMember<'_>, modifier: Modifier) -> bool {
+    m.modifiers().contains(&modifier)
 }
 
 impl<'a> Lowerer<'a> {
@@ -48,32 +48,29 @@ impl<'a> Lowerer<'a> {
         let parse = self.parse;
         let used = enum_value_uses(parse);
         let mut hoisted = Vec::new();
-        for s in &parse.chunk.block.stmts {
-            let (inner, exported) = match &s.kind {
-                StmtKind::Export(inner) => (inner.as_ref(), true),
+        for s in parse.view().block().stmts() {
+            let (inner, exported) = match s.kind() {
+                StmtKind::Export(inner) => (inner, true),
                 _ => (s, false),
             };
-            match &inner.kind {
+            match inner.kind() {
                 StmtKind::Function { name, .. } if exported && self.ctx.module.is_some() => {
-                    let n = name.path[0].text.to_string();
+                    let n = name.path().at(0).text().to_string();
                     self.declare(&n, Binding::Export);
                     self.pending.insert(n.clone());
                     hoisted.push(n);
                 }
                 StmtKind::Class(c) => {
-                    let n = c.name.text.to_string();
+                    let n = c.name().text().to_string();
                     let info = self.class_info(c);
                     self.declare(&n, Binding::Class { info, exported });
                     self.pending.insert(n.clone());
                     hoisted.push(n);
                 }
                 StmtKind::Enum(e) => {
-                    let n = e.name.text.to_string();
+                    let n = e.name().text().to_string();
                     let info = self.enum_info(e);
-                    let global = s
-                        .decorators
-                        .iter()
-                        .any(|d| d.path.len() == 1 && d.path[0].text.as_ref() == "global");
+                    let global = s.decorators().iter().any(|d| d.is_named("global"));
                     let table = exported || global || used.contains(&n);
                     self.declare(&n, Binding::Enum { info, table });
                     if table {
@@ -89,14 +86,14 @@ impl<'a> Lowerer<'a> {
 
     /// The class from the package analysis, or from the declaration alone
     /// (without package context).
-    fn class_info(&self, c: &ClassDecl) -> Arc<ClassInfo> {
-        if let Some(info) = self.ctx.classes.get(c.name.text.as_ref()) {
+    fn class_info(&self, c: ClassDecl<'a>) -> Arc<ClassInfo> {
+        if let Some(info) = self.ctx.classes.get(c.name().text()) {
             return info.clone();
         }
         Arc::new(ClassInfo {
-            name: c.name.text.to_string(),
-            is_abstract: c.is_abstract,
-            base: if c.extends.is_some() {
+            name: c.name().text().to_string(),
+            is_abstract: c.is_abstract(),
+            base: if c.extends().is_some() {
                 Base::Unknown
             } else {
                 Base::None
@@ -106,8 +103,8 @@ impl<'a> Lowerer<'a> {
         })
     }
 
-    fn enum_info(&mut self, e: &EnumDecl) -> Arc<EnumInfo> {
-        if let Some(info) = self.ctx.enums.get(e.name.text.as_ref()) {
+    fn enum_info(&mut self, e: EnumDecl<'a>) -> Arc<EnumInfo> {
+        if let Some(info) = self.ctx.enums.get(e.name().text()) {
             return info.clone();
         }
         let mut diagnostics = Vec::new();
@@ -122,11 +119,11 @@ impl<'a> Lowerer<'a> {
     }
 
     pub(crate) fn string(&self, s: &str, pos: Pos) -> ir::Expr {
-        lit(ir::ExprKind::String(quote(s.as_bytes())), pos)
+        lit(ir::ExprKind::String(quote(s.as_bytes()).into()), pos)
     }
 
     /// The value a type path refers to (`extends a.b.C`).
-    fn path_value(&mut self, t: &Type, pos: Pos) -> ir::Expr {
+    fn path_value(&mut self, t: Type<'a>, pos: Pos) -> ir::Expr {
         let Some(path) = sema_classes::type_path(t) else {
             return lit(ir::ExprKind::Nil, pos);
         };
@@ -173,16 +170,16 @@ impl<'a> Lowerer<'a> {
 
     pub(crate) fn class_decl(
         &mut self,
-        c: &ClassDecl,
-        deco: &Decorations,
+        c: ClassDecl<'a>,
+        deco: &Decorations<'a>,
         exported: bool,
     ) -> Vec<ir::Stmt> {
-        let name = c.name.text.to_string();
+        let name = c.name().text().to_string();
         // `@profile` / `@noprofile` on the class apply to its methods.
         let class_marks = self.class_marks.take().unwrap_or_default();
         // On the `class` line, not on a decorator's.
-        let pos = self.span_pos(c.name.span);
-        let end = self.span_pos(c.end_span);
+        let pos = self.span_pos(c.name().span());
+        let end = self.span_pos(c.end_span());
         let info = match self.lookup(&name).cloned() {
             Some(Binding::Class { info, .. }) => info,
             _ => self.class_info(c),
@@ -193,9 +190,9 @@ impl<'a> Lowerer<'a> {
             self.slices.insert(Slice::Widget);
         }
         let widget_root = matches!(info.base, Base::Widget { .. });
-        let base = match (&info.base, &c.extends) {
+        let base = match (&info.base, &c.extends()) {
             (Base::None | Base::Widget { .. }, _) | (_, None) => None,
-            (_, Some(t)) => Some(self.path_value(t, pos)),
+            (_, Some(t)) => Some(self.path_value(*t, pos)),
         };
         let cls = name_expr(ident(&name, pos));
         let mut out = Vec::new();
@@ -218,21 +215,21 @@ impl<'a> Lowerer<'a> {
             widget_root,
             is_static: false,
         });
-        let mut field_inits: Vec<&ClassMember> = Vec::new();
-        let mut statics: Vec<&ClassMember> = Vec::new();
+        let mut field_inits: Vec<ClassMember<'a>> = Vec::new();
+        let mut statics: Vec<ClassMember<'a>> = Vec::new();
         let mut has_ctor = false;
-        for m in &c.members {
-            if !m.decorators.is_empty() && !self.kept_by_if_decorators(&m.decorators, false) {
+        for m in &c.members() {
+            if !m.decorators().is_empty() && !self.kept_by_if_decorators(m.decorators(), false) {
                 continue;
             }
             let is_static = has(m, Modifier::Static);
             self.classes.last_mut().expect("class").is_static = is_static;
-            let mpos = self.span_pos(m.span);
-            match &m.kind {
+            let mpos = self.span_pos(m.span());
+            match m.kind() {
                 ClassMemberKind::Field {
                     name: fname, value, ..
                 } => {
-                    let d = self.decorations(&m.decorators, Target::Field);
+                    let d = self.decorations(m.decorators(), Target::Field);
                     if value.is_some() {
                         if is_static {
                             statics.push(m);
@@ -241,8 +238,13 @@ impl<'a> Lowerer<'a> {
                         }
                     }
                     if !d.user.is_empty() {
-                        let ctx =
-                            self.deco_ctx("field", &fname.text, is_static, Some(cls.clone()), mpos);
+                        let ctx = self.deco_ctx(
+                            "field",
+                            fname.text(),
+                            is_static,
+                            Some(cls.clone()),
+                            mpos,
+                        );
                         let mut args = vec![ctx];
                         args.extend(self.decorator_values(&d.user));
                         let apply = self.wl_call("decorateField", args, mpos);
@@ -258,10 +260,10 @@ impl<'a> Lowerer<'a> {
                     if has(m, Modifier::Overload) {
                         continue;
                     }
-                    let d = self.decorations(&m.decorators, Target::Method);
+                    let d = self.decorations(m.decorators(), Target::Method);
                     if !has_body {
                         if has(m, Modifier::Abstract) && self.ctx.debug {
-                            let args = vec![cls.clone(), self.string(&mname.text, mpos)];
+                            let args = vec![cls.clone(), self.string(mname.text(), mpos)];
                             let stub = self.wl_call("abstract", args, mpos);
                             out.push(stmt(ir::StmtKind::Call(stub), mpos));
                         }
@@ -280,12 +282,12 @@ impl<'a> Lowerer<'a> {
                             vararg: true,
                             body: ir::Block {
                                 stmts: Vec::new(),
-                                end: self.span_pos(func.end_span),
+                                end: self.span_pos(func.end_span()),
                             },
                         }
                     } else {
                         let sep = if is_static { "." } else { ":" };
-                        self.next_fn_name = Some(format!("{name}{sep}{}", mname.text));
+                        self.next_fn_name = Some(format!("{name}{sep}{}", mname.text()));
                         let public = !has(m, Modifier::Private) && !has(m, Modifier::Protected);
                         self.member_marks(&class_marks, exported && public);
                         self.func(func, !is_static)
@@ -303,14 +305,14 @@ impl<'a> Lowerer<'a> {
                         },
                         mpos,
                     ));
-                    let fend = self.span_pos(func.end_span);
-                    let target = field(cls.clone(), &mname.text, fend);
+                    let fend = self.span_pos(func.end_span());
+                    let target = field(cls.clone(), mname.text(), fend);
                     if !d.user.is_empty() && !removed {
                         let s = self.apply_decorators(
                             target.clone(),
                             &d.user,
                             "method",
-                            &mname.text,
+                            mname.text(),
                             is_static,
                             Some(cls.clone()),
                             fend,
@@ -320,7 +322,7 @@ impl<'a> Lowerer<'a> {
                     if let (Some(message), true) = (&d.deprecated, self.ctx.debug && !removed) {
                         out.push(self.deprecated_wrap(
                             target.clone(),
-                            &format!("{name}:{}", mname.text),
+                            &format!("{name}:{}", mname.text()),
                             message.clone(),
                             fend,
                         ));
@@ -330,7 +332,7 @@ impl<'a> Lowerer<'a> {
                         out.extend(self.script_handlers(
                             &cls,
                             &scripts,
-                            &mname.text,
+                            mname.text(),
                             widget.is_some() && !is_static,
                             fend,
                         ));
@@ -340,7 +342,7 @@ impl<'a> Lowerer<'a> {
                             target,
                             &d.register,
                             "method",
-                            &mname.text,
+                            mname.text(),
                             is_static,
                             Some(cls.clone()),
                             fend,
@@ -351,10 +353,10 @@ impl<'a> Lowerer<'a> {
                 ClassMemberKind::Getter {
                     name: gname, body, ..
                 } => {
-                    let d = self.decorations(&m.decorators, Target::Accessor);
+                    let d = self.decorations(m.decorators(), Target::Accessor);
                     let f = self.accessor_func(None, body, !is_static, mpos);
                     let kind = if is_static { "sget" } else { "get" };
-                    let s = self.accessor(&cls, kind, &gname.text, f, &d, is_static, mpos);
+                    let s = self.accessor(&cls, kind, gname.text(), f, &d, is_static, mpos);
                     out.push(s);
                 }
                 ClassMemberKind::Setter {
@@ -362,10 +364,10 @@ impl<'a> Lowerer<'a> {
                     param,
                     body,
                 } => {
-                    let d = self.decorations(&m.decorators, Target::Accessor);
-                    let f = self.accessor_func(Some(&param.name), body, !is_static, mpos);
+                    let d = self.decorations(m.decorators(), Target::Accessor);
+                    let f = self.accessor_func(Some(param.name), body, !is_static, mpos);
                     let kind = if is_static { "sset" } else { "set" };
-                    let s = self.accessor(&cls, kind, &sname.text, f, &d, is_static, mpos);
+                    let s = self.accessor(&cls, kind, sname.text(), f, &d, is_static, mpos);
                     out.push(s);
                 }
                 ClassMemberKind::Constructor { func, has_body } => {
@@ -373,7 +375,7 @@ impl<'a> Lowerer<'a> {
                         continue;
                     }
                     has_ctor = true;
-                    let d = self.decorations(&m.decorators, Target::Constructor);
+                    let d = self.decorations(m.decorators(), Target::Constructor);
                     self.next_fn_name = Some(format!("{name}.new"));
                     self.member_marks(&class_marks, exported);
                     let own_inits = widget.is_some() && !field_inits_of(c).is_empty();
@@ -394,7 +396,7 @@ impl<'a> Lowerer<'a> {
                     };
                     out.push(s);
                     if !d.user.is_empty() {
-                        let fend = self.span_pos(func.end_span);
+                        let fend = self.span_pos(func.end_span());
                         let key = if widget.is_some() { "__ctor" } else { "__init" };
                         let target = field(cls.clone(), key, fend);
                         let s = self.apply_decorators(
@@ -412,7 +414,7 @@ impl<'a> Lowerer<'a> {
             }
         }
         self.classes.last_mut().expect("class").is_static = false;
-        let field_inits: Vec<&ClassMember> = field_inits_of(c);
+        let field_inits: Vec<ClassMember<'a>> = field_inits_of(c);
         if !has_ctor {
             out.extend(self.implicit_ctor(
                 &name,
@@ -443,9 +445,9 @@ impl<'a> Lowerer<'a> {
                 name: fname,
                 value: Some(value),
                 ..
-            } = &m.kind
+            } = m.kind()
             {
-                let target = field(cls.clone(), &fname.text, end);
+                let target = field(cls.clone(), fname.text(), end);
                 out.extend(self.wrapped(end, |l| {
                     let v = l.expr(value);
                     vec![assign(target, v, end)]
@@ -461,7 +463,7 @@ impl<'a> Lowerer<'a> {
         // Full reflection metadata (spec §7.8.2).
         let reflection = self.ctx.tools.reflection;
         if reflection == 2 || (reflection == 1 && deco.reflect) {
-            let mut decorators: Vec<&Decorator> = deco.user.clone();
+            let mut decorators: Vec<Decorator<'a>> = deco.user.clone();
             decorators.extend(deco.register.iter().copied());
             let s = self.class_meta(c, &decorators, cls.clone(), end);
             out.push(s);
@@ -501,7 +503,7 @@ impl<'a> Lowerer<'a> {
     fn script_handlers(
         &mut self,
         cls: &ir::Expr,
-        scripts: &[&Decorator],
+        scripts: &[Decorator<'a>],
         method: &str,
         allowed: bool,
         pos: Pos,
@@ -511,33 +513,31 @@ impl<'a> Lowerer<'a> {
             if !allowed {
                 self.error(
                     "E3021",
-                    d.span,
+                    d.span(),
                     "`@script` applies to instance methods of widget classes",
                 );
                 continue;
             }
-            let args = d.args.as_ref().map(|a| a.exprs()).unwrap_or_default();
-            let name = match args.first().map(|e| &e.kind) {
-                Some(ExprKind::String(s)) => String::from_utf8_lossy(&s.value).into_owned(),
+            let args = d.args().map(|a| a.exprs());
+            let name = match args.and_then(|a| a.first()).map(|e| e.kind()) {
+                Some(ExprKind::String(s)) => String::from_utf8_lossy(&s.value()).into_owned(),
                 _ => {
                     self.error(
                         "E3021",
-                        d.span,
+                        d.span(),
                         "`@script` takes a script name: `@script(\"OnClick\")`",
                     );
                     continue;
                 }
             };
-            let hook = match args.get(1).map(|e| &e.kind) {
+            let hook = match args.and_then(|a| a.get(1)).map(|e| e.kind()) {
                 None => false,
                 Some(ExprKind::Table(fields)) => {
                     let mut hook = None;
                     for f in fields {
                         match f {
-                            TableField::Named { name, value, .. }
-                                if name.text.as_ref() == "hook" =>
-                            {
-                                hook = match value.kind {
+                            TableField::Named { name, value, .. } if name.text() == "hook" => {
+                                hook = match value.kind() {
                                     ExprKind::True => Some(true),
                                     ExprKind::False => Some(false),
                                     _ => None,
@@ -551,7 +551,7 @@ impl<'a> Lowerer<'a> {
                         None => {
                             self.error(
                                 "E3021",
-                                d.span,
+                                d.span(),
                                 "`@script` options are `{ hook = true }` or `{ hook = false }`",
                             );
                             continue;
@@ -561,7 +561,7 @@ impl<'a> Lowerer<'a> {
                 Some(_) => {
                     self.error(
                         "E3021",
-                        d.span,
+                        d.span(),
                         "`@script` options are `{ hook = true }` or `{ hook = false }`",
                     );
                     continue;
@@ -583,16 +583,16 @@ impl<'a> Lowerer<'a> {
 
     /// `self.x = <initializer>` for instance fields, in the current scope
     /// (where `self` is bound).
-    fn field_init_stmts(&mut self, inits: &[&ClassMember], pos: Pos) -> Vec<ir::Stmt> {
+    fn field_init_stmts(&mut self, inits: &[ClassMember<'a>], pos: Pos) -> Vec<ir::Stmt> {
         let mut out = Vec::new();
         for m in inits {
             if let ClassMemberKind::Field {
                 name,
                 value: Some(value),
                 ..
-            } = &m.kind
+            } = m.kind()
             {
-                let target = field(name_expr(ident("self", pos)), &name.text, pos);
+                let target = field(name_expr(ident("self", pos)), name.text(), pos);
                 out.extend(self.wrapped(pos, |l| {
                     let v = l.expr(value);
                     vec![assign(target, v, pos)]
@@ -623,25 +623,25 @@ impl<'a> Lowerer<'a> {
     /// initializers run first (base class) or right after `super(…)`.
     fn ctor(
         &mut self,
-        f: &FuncBody,
+        f: Func<'a>,
         name: &str,
         base: Option<ir::Expr>,
-        inits: &[&ClassMember],
+        inits: &[ClassMember<'a>],
         pos: Pos,
     ) -> ir::Stmt {
         let saved = self.enter_function();
         self.declare("self", Binding::Local);
-        for p in &f.params {
-            self.declare(&p.name.text, Binding::Local);
+        for p in &f.params() {
+            self.declare(p.name().text(), Binding::Local);
         }
-        let mut stmts = self.default_params(f);
+        let mut stmts = self.default_params(&FnShape::of(f));
         if base.is_none() {
             stmts.extend(self.field_init_stmts(inits, pos));
         }
-        for s in &f.body.stmts {
+        for s in &f.body().stmts() {
             match (super_call_args(s), &base) {
                 (Some(args), Some(b)) => {
-                    let spos = self.span_pos(s.span);
+                    let spos = self.span_pos(s.span());
                     let call_stmt = self.wrapped(spos, |l| {
                         let mut values = vec![name_expr(ident("self", spos))];
                         values.extend(l.exprs(args));
@@ -661,12 +661,12 @@ impl<'a> Lowerer<'a> {
             }
         }
         let func = ir::Func {
-            pos: self.span_pos(f.params_span),
-            params: f.params.iter().map(|p| self.ident(&p.name)).collect(),
-            vararg: f.vararg.is_some(),
+            pos: self.span_pos(f.params_span()),
+            params: f.params().iter().map(|p| self.ident(p.name())).collect(),
+            vararg: f.vararg().is_some(),
             body: ir::Block {
                 stmts,
-                end: self.span_pos(f.end_span),
+                end: self.span_pos(f.end_span()),
             },
         };
         self.leave_function(saved);
@@ -711,7 +711,7 @@ impl<'a> Lowerer<'a> {
     #[allow(clippy::too_many_arguments)]
     fn widget_ctor(
         &mut self,
-        f: &FuncBody,
+        f: Func<'a>,
         name: &str,
         widget: &str,
         root: bool,
@@ -720,17 +720,17 @@ impl<'a> Lowerer<'a> {
         pos: Pos,
     ) -> ir::Stmt {
         let saved = self.enter_function();
-        for p in &f.params {
-            self.declare(&p.name.text, Binding::Local);
+        for p in &f.params() {
+            self.declare(p.name().text(), Binding::Local);
         }
         let saved_ctor = self.widget_ctor.replace(self.func_depth);
-        let mut stmts = self.default_params(f);
+        let mut stmts = self.default_params(&FnShape::of(f));
         let mut ends_with_return = false;
-        for s in &f.body.stmts {
-            ends_with_return = matches!(s.kind, StmtKind::Return(_));
+        for s in &f.body().stmts() {
+            ends_with_return = matches!(s.kind(), StmtKind::Return(_));
             match super_call_args(s) {
                 Some(args) => {
-                    let spos = self.span_pos(s.span);
+                    let spos = self.span_pos(s.span());
                     let base = base.clone();
                     let created = self.wrapped(spos, |l| {
                         let values = l.exprs(args);
@@ -751,7 +751,7 @@ impl<'a> Lowerer<'a> {
                 None => stmts.extend(self.stmt(s)),
             }
         }
-        let end = self.span_pos(f.end_span);
+        let end = self.span_pos(f.end_span());
         if !ends_with_return {
             stmts.push(stmt(
                 ir::StmtKind::Return(vec![name_expr(ident("self", end))]),
@@ -760,11 +760,11 @@ impl<'a> Lowerer<'a> {
         }
         self.widget_ctor = saved_ctor;
         let mut params = vec![generated("__wl_cls", pos)];
-        params.extend(f.params.iter().map(|p| self.ident(&p.name)));
+        params.extend(f.params().iter().map(|p| self.ident(p.name())));
         let func = ir::Func {
-            pos: self.span_pos(f.params_span),
+            pos: self.span_pos(f.params_span()),
             params,
-            vararg: f.vararg.is_some(),
+            vararg: f.vararg().is_some(),
             body: ir::Block { stmts, end },
         };
         self.leave_function(saved);
@@ -785,7 +785,7 @@ impl<'a> Lowerer<'a> {
         widget: Option<&str>,
         root: bool,
         base: Option<ir::Expr>,
-        inits: &[&ClassMember],
+        inits: &[ClassMember<'a>],
         pos: Pos,
     ) -> Vec<ir::Stmt> {
         let saved = self.enter_function();
@@ -876,7 +876,7 @@ impl<'a> Lowerer<'a> {
 
     /// `function C.__initFields(self) … end`: a widget class's own field
     /// initializers (for `__ctor` and XML-created frames).
-    fn init_fields(&mut self, name: &str, inits: &[&ClassMember], pos: Pos) -> ir::Stmt {
+    fn init_fields(&mut self, name: &str, inits: &[ClassMember<'a>], pos: Pos) -> ir::Stmt {
         let saved = self.enter_function();
         self.declare("self", Binding::Local);
         let stmts = self.field_init_stmts(inits, pos);
@@ -900,31 +900,13 @@ impl<'a> Lowerer<'a> {
     /// parameter).
     fn accessor_func(
         &mut self,
-        param: Option<&Name>,
-        body: &Block,
+        param: Option<Name<'a>>,
+        body: Block<'a>,
         method: bool,
         pos: Pos,
     ) -> ir::Func {
-        let span = body.span;
-        let fb = FuncBody {
-            type_params: Vec::new(),
-            params: param
-                .map(|p| Param {
-                    decorators: Vec::new(),
-                    name: p.clone(),
-                    ty: None,
-                    default: None,
-                })
-                .into_iter()
-                .collect(),
-            vararg: None,
-            ret: None,
-            body: body.clone(),
-            params_span: span,
-            end_span: span,
-            span,
-        };
-        let mut f = self.func(&fb, method);
+        let span = body.span();
+        let mut f = self.func_shape(&FnShape::accessor(param, body), method);
         f.pos = pos;
         f.body.end = self.next_token_pos(span.end);
         if method {
@@ -940,7 +922,7 @@ impl<'a> Lowerer<'a> {
         kind: &str,
         name: &str,
         f: ir::Func,
-        d: &Decorations,
+        d: &Decorations<'a>,
         is_static: bool,
         pos: Pos,
     ) -> ir::Stmt {
@@ -989,12 +971,12 @@ impl<'a> Lowerer<'a> {
     /// `super:m(args)`: `Base.m(self, args)` (no `self` in static methods).
     pub(crate) fn super_method(
         &mut self,
-        obj: &Expr,
-        name: &Name,
-        args: &Args,
+        obj: Expr<'a>,
+        name: Name<'a>,
+        args: Args<'a>,
         pos: Pos,
     ) -> ir::Expr {
-        let base = self.super_value(obj.span, pos);
+        let base = self.super_value(obj.span(), pos);
         let is_static = self.classes.last().is_some_and(|c| c.is_static);
         let mut values = if is_static {
             Vec::new()
@@ -1002,12 +984,12 @@ impl<'a> Lowerer<'a> {
             vec![name_expr(ident("self", pos))]
         };
         values.extend(self.args_list(args));
-        call(field(base, &name.text, pos), values, pos)
+        call(field(base, name.text(), pos), values, pos)
     }
 
     /// `super` refers to the superclass here.
-    pub(crate) fn is_super(&self, e: &Expr) -> bool {
-        matches!(&e.kind, ExprKind::Name(n) if n.text.as_ref() == "super")
+    pub(crate) fn is_super(&self, e: Expr<'a>) -> bool {
+        matches!(e.kind(), ExprKind::Name(n) if n.text() == "super")
             && !self.classes.is_empty()
             && self.lookup("super").is_none()
     }
@@ -1016,11 +998,11 @@ impl<'a> Lowerer<'a> {
     /// (spec §3.4.3).
     pub(crate) fn enum_decl(
         &mut self,
-        e: &EnumDecl,
-        deco: &Decorations,
+        e: EnumDecl<'a>,
+        deco: &Decorations<'a>,
         exported: bool,
     ) -> Vec<ir::Stmt> {
-        let name = e.name.text.to_string();
+        let name = e.name().text().to_string();
         if let Some(message) = &deco.deprecated {
             self.mark_deprecated(&name, message.clone());
         }
@@ -1030,7 +1012,7 @@ impl<'a> Lowerer<'a> {
         else {
             return Vec::new();
         };
-        let pos = self.span_pos(e.name.span);
+        let pos = self.span_pos(e.name().span());
         let fields = info
             .members
             .iter()
@@ -1069,22 +1051,22 @@ impl<'a> Lowerer<'a> {
     }
 
     /// `obj` names an enum.
-    pub(crate) fn is_enum_object(&self, obj: &Expr) -> bool {
+    pub(crate) fn is_enum_object(&self, obj: Expr<'a>) -> bool {
         if !self.scopes.seen().enums {
             return false;
         }
-        matches!(&obj.kind, ExprKind::Name(n) if matches!(self.lookup(&n.text), Some(Binding::Enum { .. } | Binding::ImportedEnum(_))))
+        matches!(obj.kind(), ExprKind::Name(n) if matches!(self.lookup(n.text()), Some(Binding::Enum { .. } | Binding::ImportedEnum(_))))
     }
 
     /// The value of an enum member, if `obj` names an enum that has it.
-    pub(crate) fn enum_value(&self, obj: &Expr, key: &str) -> Option<Const> {
+    pub(crate) fn enum_value(&self, obj: Expr<'a>, key: &str) -> Option<Const> {
         if !self.scopes.seen().enums {
             return None;
         }
-        let ExprKind::Name(n) = &obj.kind else {
+        let ExprKind::Name(n) = obj.kind() else {
             return None;
         };
-        match self.lookup(&n.text)? {
+        match self.lookup(n.text())? {
             Binding::Enum { info, .. } | Binding::ImportedEnum(info) => info.value(key).cloned(),
             _ => None,
         }
@@ -1093,7 +1075,7 @@ impl<'a> Lowerer<'a> {
     /// An enum member read with a constant key: its value (spec §3.4.3).
     pub(crate) fn enum_member(
         &mut self,
-        obj: &Expr,
+        obj: Expr<'a>,
         key: &str,
         key_span: Span,
         pos: Pos,
@@ -1101,10 +1083,10 @@ impl<'a> Lowerer<'a> {
         if !self.scopes.seen().enums {
             return None;
         }
-        let ExprKind::Name(n) = &obj.kind else {
+        let ExprKind::Name(n) = obj.kind() else {
             return None;
         };
-        let info = match self.lookup(&n.text)? {
+        let info = match self.lookup(n.text())? {
             Binding::Enum { info, .. } | Binding::ImportedEnum(info) => info.clone(),
             _ => return None,
         };
@@ -1122,13 +1104,13 @@ impl<'a> Lowerer<'a> {
     }
 
     /// Instantiating an abstract class (E3002).
-    pub(crate) fn check_instantiation(&mut self, callee: &Expr) {
+    pub(crate) fn check_instantiation(&mut self, callee: Expr<'a>) {
         if !self.scopes.seen().classes {
             return;
         }
-        let target = match &callee.kind {
+        let target = match callee.kind() {
             ExprKind::Name(n) => Some(n),
-            ExprKind::Field { obj, name } if name.text.as_ref() == "new" => match &obj.kind {
+            ExprKind::Field { obj, name } if name.text() == "new" => match obj.kind() {
                 ExprKind::Name(n) => Some(n),
                 _ => None,
             },
@@ -1136,13 +1118,13 @@ impl<'a> Lowerer<'a> {
         };
         let Some(n) = target else { return };
         if let Some(Binding::Class { info, .. } | Binding::ImportedClass(info)) =
-            self.lookup(&n.text)
+            self.lookup(n.text())
             && info.is_abstract
         {
             let name = info.name.clone();
             self.error(
                 "E3002",
-                callee.span,
+                callee.span(),
                 format!("cannot instantiate the abstract class `{name}`"),
             );
         }
@@ -1150,25 +1132,25 @@ impl<'a> Lowerer<'a> {
 }
 
 /// The arguments of a top-level `super(…)` statement.
-fn super_call_args(s: &Stmt) -> Option<&[Expr]> {
-    let StmtKind::Call(e) = &s.kind else {
+fn super_call_args(s: Stmt<'_>) -> Option<Exprs<'_>> {
+    let StmtKind::Call(e) = s.kind() else {
         return None;
     };
-    let ExprKind::Call { callee, args } = &e.kind else {
+    let ExprKind::Call { callee, args } = e.kind() else {
         return None;
     };
-    match (&callee.kind, args) {
-        (ExprKind::Name(n), Args::Parens { args, .. }) if n.text.as_ref() == "super" => Some(args),
+    match (callee.kind(), args.kind()) {
+        (ExprKind::Name(n), ArgsKind::Parens { args, .. }) if n.text() == "super" => Some(args),
         _ => None,
     }
 }
 
-fn field_inits_of(c: &ClassDecl) -> Vec<&ClassMember> {
-    c.members
+fn field_inits_of(c: ClassDecl<'_>) -> Vec<ClassMember<'_>> {
+    c.members()
         .iter()
         .filter(|m| {
-            !has(m, Modifier::Static)
-                && matches!(m.kind, ClassMemberKind::Field { value: Some(_), .. })
+            !has(*m, Modifier::Static)
+                && matches!(m.kind(), ClassMemberKind::Field { value: Some(_), .. })
         })
         .collect()
 }
@@ -1188,13 +1170,13 @@ const LUA_KEYWORDS: &[&str] = &[
 /// Enum names used as values anywhere in the file (not only as `E.Member`).
 fn enum_value_uses(parse: &Parse) -> HashSet<String> {
     let mut enums = HashSet::new();
-    for s in &parse.chunk.block.stmts {
-        let kind = match &s.kind {
-            StmtKind::Export(inner) => &inner.kind,
+    for s in parse.view().block().stmts() {
+        let kind = match s.kind() {
+            StmtKind::Export(inner) => inner.kind(),
             k => k,
         };
         if let StmtKind::Enum(e) = kind {
-            enums.insert(e.name.text.to_string());
+            enums.insert(e.name().text().to_string());
         }
     }
     if enums.is_empty() {
@@ -1202,19 +1184,19 @@ fn enum_value_uses(parse: &Parse) -> HashSet<String> {
     }
     let mut member_objects: HashSet<u32> = HashSet::new();
     let mut names: Vec<(String, u32)> = Vec::new();
-    for_each_expr(parse, &mut |e| match &e.kind {
+    for_each_expr(parse, &mut |e| match e.kind() {
         ExprKind::Field { obj, .. } => {
-            if let ExprKind::Name(n) = &obj.kind {
-                member_objects.insert(n.span.start);
+            if let ExprKind::Name(n) = obj.kind() {
+                member_objects.insert(n.span().start);
             }
         }
-        ExprKind::Index { obj, key } if matches!(key.kind, ExprKind::String(_)) => {
-            if let ExprKind::Name(n) = &obj.kind {
-                member_objects.insert(n.span.start);
+        ExprKind::Index { obj, key } if matches!(key.kind(), ExprKind::String(_)) => {
+            if let ExprKind::Name(n) = obj.kind() {
+                member_objects.insert(n.span().start);
             }
         }
-        ExprKind::Name(n) if enums.contains(n.text.as_ref()) => {
-            names.push((n.text.to_string(), n.span.start))
+        ExprKind::Name(n) if enums.contains(n.text()) => {
+            names.push((n.text().to_string(), n.span().start))
         }
         _ => {}
     });
@@ -1227,23 +1209,24 @@ fn enum_value_uses(parse: &Parse) -> HashSet<String> {
 
 /// Calls `f` on every expression of the file, class members and decorator
 /// arguments included.
-pub(crate) fn for_each_expr<'p>(parse: &'p Parse, f: &mut impl FnMut(&'p Expr)) {
-    let mut decorators: Vec<&'p Decorator> = Vec::new();
-    let mut blocks: Vec<&'p Block> = vec![&parse.chunk.block];
-    let mut exprs: Vec<&'p Expr> = Vec::new();
-    wowlua_syntax::visit::walk_stmts(&parse.chunk.block, &mut |s| {
-        decorators.extend(s.decorators.iter());
-        let kind = match &s.kind {
-            StmtKind::Export(inner) => &inner.kind,
+pub(crate) fn for_each_expr<'p>(parse: &'p Parse, f: &mut impl FnMut(Expr<'p>)) {
+    let mut decorators: Vec<Decorator<'p>> = Vec::new();
+    let root = parse.view().block();
+    let mut blocks: Vec<Block<'p>> = vec![root];
+    let mut exprs: Vec<Expr<'p>> = Vec::new();
+    wowlua_syntax::visit::walk_stmts(root, &mut |s| {
+        decorators.extend(s.decorators());
+        let kind = match s.kind() {
+            StmtKind::Export(inner) => inner.kind(),
             k => k,
         };
         if let StmtKind::Class(c) = kind {
-            for m in &c.members {
-                decorators.extend(m.decorators.iter());
-                match &m.kind {
+            for m in c.members() {
+                decorators.extend(m.decorators());
+                match m.kind() {
                     ClassMemberKind::Field { value: Some(v), .. } => exprs.push(v),
                     ClassMemberKind::Method { func, .. }
-                    | ClassMemberKind::Constructor { func, .. } => blocks.push(&func.body),
+                    | ClassMemberKind::Constructor { func, .. } => blocks.push(func.body()),
                     ClassMemberKind::Getter { body, .. } | ClassMemberKind::Setter { body, .. } => {
                         blocks.push(body)
                     }
@@ -1259,7 +1242,7 @@ pub(crate) fn for_each_expr<'p>(parse: &'p Parse, f: &mut impl FnMut(&'p Expr)) 
         wowlua_syntax::visit::walk_expr(e, f);
     }
     for d in decorators {
-        if let Some(args) = &d.args {
+        if let Some(args) = d.args() {
             for e in args.exprs() {
                 wowlua_syntax::visit::walk_expr(e, f);
             }

@@ -155,6 +155,7 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
         bundle: None,
         only: None,
         jobs: global.jobs(),
+        keep_code: true,
         tests: false,
     };
     let result = load_and_build_all(out, &mut session, global, &request);
@@ -460,6 +461,7 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
         bundle: None,
         only: None,
         jobs: global.jobs(),
+        keep_code: true,
         tests: false,
     };
     let result = load_and_build(out, &mut session, global, &request, None);
@@ -495,6 +497,7 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
         bundle: None,
         only: None,
         jobs: global.jobs(),
+        keep_code: false,
         tests: false,
     };
     let result = load_and_build_all(out, &mut session, global, &request);
@@ -903,6 +906,7 @@ fn test_build(
         bundle: None,
         only: None,
         jobs: global.jobs(),
+        keep_code: true,
         tests: true,
     };
     let build = wowlua_driver::build(session, project, &request);
@@ -1026,6 +1030,7 @@ pub fn compile(out: &Output, global: &GlobalArgs, args: &crate::CompileArgs) -> 
             project_declarations: in_project,
         }),
         jobs: global.jobs(),
+        keep_code: true,
         tests: false,
     };
     let build = wowlua_driver::build(&mut session, &project, &request);
@@ -1226,6 +1231,7 @@ pub fn install(out: &Output, global: &GlobalArgs, profile: &str, target: &Instal
         bundle: None,
         only: None,
         jobs: global.jobs(),
+        keep_code: true,
         tests: false,
     };
     let Some(built) = load_and_build_all(out, &mut session, global, &request) else {
@@ -1526,6 +1532,7 @@ pub fn dev(
         bundle: None,
         only: None,
         jobs: global.jobs(),
+        keep_code: true,
         tests: false,
     };
     let install = install_request(target, link);
@@ -1649,6 +1656,7 @@ fn apply_fixes(out: &Output, global: &GlobalArgs, lints_only: bool) -> Option<us
         bundle: None,
         only: None,
         jobs: global.jobs(),
+        keep_code: true,
         tests: false,
     };
     let mut total = 0;
@@ -1708,6 +1716,7 @@ pub fn lint(out: &Output, global: &GlobalArgs, fix: bool) -> bool {
         bundle: None,
         only: None,
         jobs: global.jobs(),
+        keep_code: true,
         tests: false,
     };
     let Some(project) = wowlua_driver::load_project(&mut session, &load_options(out, global))
@@ -1771,6 +1780,7 @@ pub fn fix(out: &Output, global: &GlobalArgs, manifest: bool) -> bool {
         bundle: None,
         only: None,
         jobs: global.jobs(),
+        keep_code: true,
         tests: false,
     };
     let _ = load_and_build(out, &mut session, global, &request, None);

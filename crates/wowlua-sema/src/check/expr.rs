@@ -3,12 +3,12 @@
 //! overloads).
 
 use super::body::Checker;
-use super::env::{DefKind, MemberKind, Visibility};
+use super::env::{DefKind, FnSig, MemberKind, Visibility};
 use super::subst::{self, Subst};
-use super::types::Field;
 use super::types::*;
+use super::types::{Field, Func, Types};
 use wowlua_span::Span;
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 
 /// `wowlua:test`'s own matchers (and `never`): other names on an
 /// `expect(…)` are custom matchers.
@@ -60,15 +60,15 @@ impl From<Pack> for Values {
     }
 }
 
-impl Checker<'_> {
+impl Checker<'_, '_> {
     /// The type of an expression.
-    pub fn infer(&mut self, e: &Expr) -> TypeId {
+    pub fn infer(&mut self, e: Expr<'_>) -> TypeId {
         self.check(e, None)
     }
 
     /// The type of an expression where `expected` is wanted (contextual
     /// typing, spec §2.4.3). Mismatches are reported by the caller.
-    pub fn check(&mut self, e: &Expr, expected: Option<TypeId>) -> TypeId {
+    pub fn check(&mut self, e: Expr<'_>, expected: Option<TypeId>) -> TypeId {
         let values = stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.expr_inner(e, expected));
         let t = match values {
             Values::One(t) => t,
@@ -81,29 +81,30 @@ impl Checker<'_> {
                     _ => Types::NIL,
                 }),
         };
-        self.expr_types.insert((e.span.start, e.span.end), t);
+        self.expr_types.insert((e.span().start, e.span().end), t);
         t
     }
 
     /// All values of a multi-value expression (calls, `...`).
-    pub fn infer_multi(&mut self, e: &Expr) -> Pack {
+    pub fn infer_multi(&mut self, e: Expr<'_>) -> Pack {
         let pack =
             stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.expr_inner(e, None)).into_pack();
         let first = pack.types.first().copied().unwrap_or(Types::NIL);
-        self.expr_types.insert((e.span.start, e.span.end), first);
+        self.expr_types
+            .insert((e.span().start, e.span().end), first);
         pack
     }
 
     /// The type an expression was checked with (for predicates).
-    pub fn peek_type(&self, e: &Expr) -> TypeId {
+    pub fn peek_type(&self, e: Expr<'_>) -> TypeId {
         self.expr_types
-            .get(&(e.span.start, e.span.end))
+            .get(&(e.span().start, e.span().end))
             .copied()
             .unwrap_or(Types::ANY)
     }
 
     /// A list of expressions as values (the last one expands).
-    pub fn expr_list(&mut self, es: &[Expr], expected: &[Option<TypeId>]) -> Vec<TypeId> {
+    pub fn expr_list(&mut self, es: Exprs<'_>, expected: &[Option<TypeId>]) -> Vec<TypeId> {
         let pack = self.expr_pack(es, expected);
         let mut out = pack.types.clone();
         if let Some(Rest::Variadic(t)) = pack.rest {
@@ -115,7 +116,7 @@ impl Checker<'_> {
         out
     }
 
-    pub fn expr_pack(&mut self, es: &[Expr], expected: &[Option<TypeId>]) -> Pack {
+    pub fn expr_pack(&mut self, es: Exprs<'_>, expected: &[Option<TypeId>]) -> Pack {
         let mut types = Vec::new();
         let mut rest = None;
         for (i, e) in es.iter().enumerate() {
@@ -126,7 +127,8 @@ impl Checker<'_> {
                     let _ = (w, first);
                 }
                 let first = p.types.first().copied().unwrap_or(Types::NIL);
-                self.expr_types.insert((e.span.start, e.span.end), first);
+                self.expr_types
+                    .insert((e.span().start, e.span().end), first);
                 types.append(&mut p.types);
                 rest = p.rest;
             } else {
@@ -136,17 +138,17 @@ impl Checker<'_> {
         Pack { types, rest }
     }
 
-    fn expr_inner(&mut self, e: &Expr, expected: Option<TypeId>) -> Values {
+    fn expr_inner(&mut self, e: Expr<'_>, expected: Option<TypeId>) -> Values {
         let single = Values::One;
-        match &e.kind {
+        match e.kind() {
             ExprKind::Nil => single(Types::NIL),
             ExprKind::True => single(Types::TRUE),
             ExprKind::False => single(Types::FALSE),
-            ExprKind::Number(n) => single(match n.value {
+            ExprKind::Number(n) => single(match n.value() {
                 Some(v) => self.env.types.num(v),
                 None => Types::NUMBER,
             }),
-            ExprKind::String(s) => single(self.env.types.str(&String::from_utf8_lossy(&s.value))),
+            ExprKind::String(s) => single(self.env.types.str(&String::from_utf8_lossy(&s.value()))),
             ExprKind::Interp(parts) => {
                 for p in parts {
                     if let InterpPart::Expr(x) = p {
@@ -160,29 +162,29 @@ impl Checker<'_> {
                 let exp = expected.and_then(|t| self.contextual_func(t));
                 // A function passed as an argument or with an expected type
                 // is a callback.
-                self.callback_next = expected.is_some() || self.callbacks.contains(&e.span);
-                single(self.function_body(f, exp, None))
+                self.callback_next = expected.is_some() || self.callbacks.contains(&e.span());
+                single(self.function_body(&FnSig::of(f), exp, None))
             }
             ExprKind::Table(fields) => single(self.table(fields, expected)),
             // An existence test of an undeclared global: `nil`; inside the
             // region the test guards: `any`.
             ExprKind::Name(n)
-                if self.lookup_var(&n.text).is_none()
-                    && !self.env.declared.has_global(n.text.as_ref())
+                if self.lookup_var(n.text()).is_none()
+                    && !self.env.declared.has_global(n.text())
                     && !self.dynamic_env
-                    && n.text.as_ref() != "_G"
-                    && !self.extra_globals.contains(n.text.as_ref())
-                    && !self.assigned_globals.contains(n.text.as_ref())
-                    && (self.probes.contains(&e.span)
-                        || self.guard.present.contains(n.text.as_ref())) =>
+                    && n.text() != "_G"
+                    && !self.extra_globals.contains(n.text())
+                    && !self.assigned_globals.contains(n.text())
+                    && (self.probes.contains(&e.span())
+                        || self.guard.present.contains(n.text())) =>
             {
-                single(if self.probes.contains(&e.span) {
+                single(if self.probes.contains(&e.span()) {
                     Types::NIL
                 } else {
                     Types::ANY
                 })
             }
-            ExprKind::Name(n) if self.probes.contains(&e.span) => {
+            ExprKind::Name(n) if self.probes.contains(&e.span()) => {
                 let saved = self.shared.take();
                 let t = self.name_type(n);
                 self.shared = saved;
@@ -194,7 +196,7 @@ impl Checker<'_> {
                 let from = self.infer(expr);
                 let to = self.annotation(ty);
                 if let Some(c) = self.value_check(to) {
-                    self.value_checks.insert(e.span, c);
+                    self.value_checks.insert(e.span(), c);
                 }
                 // Assertions between incomparable types (E2015).
                 if !self.env.assignable(from, to, self.mode)
@@ -206,15 +208,15 @@ impl Checker<'_> {
                         self.env.display(from),
                         self.env.display(to)
                     );
-                    self.report("E2015", e.span, msg);
+                    self.report("E2015", e.span(), msg);
                 }
                 single(to)
             }
             ExprKind::Field { obj, name } | ExprKind::OptField { obj, name } => {
                 if self.is_super(obj) {
-                    return single(self.super_member(&name.text, name.span));
+                    return single(self.super_member(name.text(), name.span()));
                 }
-                let probed = self.probes.contains(&e.span);
+                let probed = self.probes.contains(&e.span());
                 // Only shared mode and existence guards read the path.
                 let path = (self.shared.is_some() || !self.guard.present.is_empty())
                     .then(|| self.api_path_of(e))
@@ -223,13 +225,13 @@ impl Checker<'_> {
                     && !probed
                     && let Some(path) = &path
                 {
-                    self.check_available(path, name.span);
+                    self.check_available(path, name.span());
                 }
                 let guarded = path
                     .as_ref()
                     .is_some_and(|p| self.guard.present.contains(p));
                 let (o, chained) = self.chain_obj(obj);
-                let opt = matches!(e.kind, ExprKind::OptField { .. });
+                let opt = matches!(e.kind(), ExprKind::OptField { .. });
                 let o = if opt { self.env.types.non_nil(o) } else { o };
                 if let Some(t) = self.custom_matcher(obj, o, name) {
                     return single(t);
@@ -237,11 +239,11 @@ impl Checker<'_> {
                 // A member the type lacks, in an existence test (`nil`) or
                 // in the region such a test guards (`any`).
                 let missing = (probed || guarded)
-                    && self.member_type(o, &name.text, name.span, true) == Some(Types::ERROR);
+                    && self.member_type(o, name.text(), name.span(), true) == Some(Types::ERROR);
                 let t = if missing {
                     if probed { Types::NIL } else { Types::ANY }
                 } else {
-                    self.member_type(o, &name.text, name.span, false)
+                    self.member_type(o, name.text(), name.span(), false)
                         .unwrap_or(Types::ANY)
                 };
                 let t = if opt || chained {
@@ -259,10 +261,10 @@ impl Checker<'_> {
             }
             ExprKind::Index { obj, key } | ExprKind::OptIndex { obj, key } => {
                 let (o, chained) = self.chain_obj(obj);
-                let opt = matches!(e.kind, ExprKind::OptIndex { .. });
+                let opt = matches!(e.kind(), ExprKind::OptIndex { .. });
                 let o = if opt { self.env.types.non_nil(o) } else { o };
                 let k = self.infer(key);
-                let t = self.index_type(o, k, key, e.span);
+                let t = self.index_type(o, k, key, e.span());
                 single(if opt || chained {
                     self.chain_end(e, t)
                 } else {
@@ -271,36 +273,36 @@ impl Checker<'_> {
             }
             ExprKind::Call { callee, args } | ExprKind::OptCall { callee, args } => {
                 self.mark_callbacks(args);
-                if let ExprKind::Name(n) = &callee.kind
-                    && n.text.as_ref() == "super"
+                if let ExprKind::Name(n) = callee.kind()
+                    && n.text() == "super"
                     && !self.classes.is_empty()
                 {
                     self.args_types(args, &[]);
                     return Values::Many(Pack::empty());
                 }
                 let (c, chained) = self.chain_obj(callee);
-                let opt = matches!(e.kind, ExprKind::OptCall { .. });
+                let opt = matches!(e.kind(), ExprKind::OptCall { .. });
                 let c = if opt { self.env.types.non_nil(c) } else { c };
                 // A method called with `.` and no receiver (E2008).
                 if args.exprs().is_empty()
-                    && let ExprKind::Field { obj, name } = &callee.kind
-                    && self.is_method_member(obj, &name.text)
+                    && let ExprKind::Field { obj, name } = callee.kind()
+                    && self.is_method_member(obj, name.text())
                 {
                     self.report(
                         "E2008",
-                        e.span,
-                        format!("`{}` is a method; call it with `:`", name.text),
+                        e.span(),
+                        format!("`{}` is a method; call it with `:`", name.text()),
                     );
                     return Values::Many(Pack::any());
                 }
                 self.check_yield_boundary(callee, args);
                 let c = self.stdlib_call_type(callee, args, c);
-                let mut results = self.call(c, None, args, e.span, expected);
+                let mut results = self.call(c, None, args, e.span(), expected);
                 self.forget_passed(None, args);
                 self.stdlib_after_call(callee, args);
                 // `assert(v)` returns `v` only where it is truthy.
-                if let ExprKind::Name(n) = &callee.kind
-                    && n.text.as_ref() == "assert"
+                if let ExprKind::Name(n) = callee.kind()
+                    && n.text() == "assert"
                     && self.lookup_var("assert").is_none()
                     && let Some(first) = results.types.first_mut()
                 {
@@ -314,10 +316,10 @@ impl Checker<'_> {
                     return Values::One(self.env.types.union(&[Types::STRING, secret]));
                 }
                 // `setmetatable(t, mt)`: `t` with `mt.__index` as fallback.
-                if let ExprKind::Name(n) = &callee.kind
-                    && n.text.as_ref() == "setmetatable"
+                if let ExprKind::Name(n) = callee.kind()
+                    && n.text() == "setmetatable"
                     && self.lookup_var("setmetatable").is_none()
-                    && let [t, mt] = args.exprs().as_slice()
+                    && let Some([t, mt]) = args.exprs().exactly()
                 {
                     return Values::One(self.with_metatable(t, mt));
                 }
@@ -332,24 +334,26 @@ impl Checker<'_> {
             ExprKind::Method { obj, name, args } | ExprKind::OptMethod { obj, name, args } => {
                 self.mark_callbacks(args);
                 if self.is_super(obj) {
-                    let m = self.super_member(&name.text, name.span);
+                    let m = self.super_member(name.text(), name.span());
                     let instance = self.scope.self_ty.unwrap_or(Types::ANY);
-                    return self.call(m, Some(instance), args, e.span, expected).into();
+                    return self
+                        .call(m, Some(instance), args, e.span(), expected)
+                        .into();
                 }
                 let (o, chained) = self.chain_obj(obj);
-                let opt = matches!(e.kind, ExprKind::OptMethod { .. });
+                let opt = matches!(e.kind(), ExprKind::OptMethod { .. });
                 let o = if opt { self.env.types.non_nil(o) } else { o };
                 // A function field a condition narrowed (`if t.f then t:f() end`).
                 let narrowed = self
                     .field_path(obj)
-                    .map(|(r, p)| (r, format!("{p}.{}", name.text)))
-                    .or_else(|| match &obj.kind {
-                        ExprKind::Name(n) => match self.lookup_var(&n.text) {
-                            Some(r) => Some((r, name.text.to_string())),
-                            None => self.env.declared.has_global(n.text.as_ref()).then(|| {
+                    .map(|(r, p)| (r, format!("{p}.{}", name.text())))
+                    .or_else(|| match obj.kind() {
+                        ExprKind::Name(n) => match self.lookup_var(n.text()) {
+                            Some(r) => Some((r, name.text().to_string())),
+                            None => self.env.declared.has_global(n.text()).then(|| {
                                 (
                                     super::narrow::GLOBAL_ROOT,
-                                    format!("{}.{}", n.text, name.text),
+                                    format!("{}.{}", n.text(), name.text()),
                                 )
                             }),
                         },
@@ -359,10 +363,10 @@ impl Checker<'_> {
                     .and_then(|v| self.flow.get(&v).copied());
                 let m = match narrowed {
                     Some(t) => self.drop_first(t),
-                    None => self.method_type(o, &name.text, name.span),
+                    None => self.method_type(o, name.text(), name.span()),
                 };
-                let m = self.registry_method_type(o, &name.text, args, m);
-                let results = self.call(m, Some(o), args, e.span, expected);
+                let m = self.registry_method_type(o, name.text(), args, m);
+                let results = self.call(m, Some(o), args, e.span(), expected);
                 self.forget_passed(Some(obj), args);
                 if opt || chained {
                     let first = results.types.first().copied().unwrap_or(Types::NIL);
@@ -371,29 +375,29 @@ impl Checker<'_> {
                 results.into()
             }
             ExprKind::Binary { op, lhs, rhs } => {
-                single(self.binary(*op, lhs, rhs, e.span, expected))
+                single(self.binary(op, lhs, rhs, e.span(), expected))
             }
             ExprKind::Unary { op, operand } => {
-                if *op == UnOp::Not {
+                if op == UnOp::Not {
                     self.mark_probes(operand);
                 }
                 let t = self.infer(operand);
                 single(match op {
                     UnOp::Not => Types::BOOLEAN,
                     UnOp::Len => {
-                        self.check_secret(t, operand.span);
+                        self.check_secret(t, operand.span());
                         if self.mode == super::query::Mode::Strict
                             && t != Types::ANY
                             && self.env.types.is_optional(t)
                         {
                             let msg = self.nil_message(t);
-                            self.report("E2005", operand.span, msg);
+                            self.report("E2005", operand.span(), msg);
                         }
                         Types::NUMBER
                     }
                     UnOp::Neg | UnOp::BNot => {
-                        self.check_secret(t, operand.span);
-                        self.arith_operand(t, operand.span);
+                        self.check_secret(t, operand.span());
+                        self.arith_operand(t, operand.span());
                         Types::NUMBER
                     }
                 })
@@ -458,39 +462,39 @@ impl Checker<'_> {
     // ------------------------------------------------------------ names --
 
     /// Records the function expressions among call arguments (callbacks).
-    fn mark_callbacks(&mut self, args: &Args) {
+    fn mark_callbacks(&mut self, args: Args<'_>) {
         for a in args.exprs() {
             let mut a = a;
-            while let ExprKind::Paren(inner) = &a.kind {
+            while let ExprKind::Paren(inner) = a.kind() {
                 a = inner;
             }
-            if matches!(a.kind, ExprKind::Function(_)) {
-                self.callbacks.insert(a.span);
+            if matches!(a.kind(), ExprKind::Function(_)) {
+                self.callbacks.insert(a.span());
             }
         }
     }
 
     /// The type of a name: a local, an import, or a global.
-    pub fn name_type(&mut self, n: &Name) -> TypeId {
-        if let Some(v) = self.lookup_var(&n.text) {
+    pub fn name_type(&mut self, n: Name<'_>) -> TypeId {
+        if let Some(v) = self.lookup_var(n.text()) {
             return self.var_type(v);
         }
-        self.check_available(&n.text, n.span);
-        if n.text.as_ref() == "super" && !self.classes.is_empty() {
-            return self.super_member("", n.span);
+        self.check_available(n.text(), n.span());
+        if n.text() == "super" && !self.classes.is_empty() {
+            return self.super_member("", n.span());
         }
-        match self.env.declared.global(n.text.as_ref()) {
+        match self.env.declared.global(n.text()) {
             Some(t) => t,
-            None if n.text.as_ref() == "_G" => Types::TABLE,
+            None if n.text() == "_G" => Types::TABLE,
             None if self.dynamic_env
-                || self.extra_globals.contains(n.text.as_ref())
-                || self.assigned_globals.contains(n.text.as_ref()) =>
+                || self.extra_globals.contains(n.text())
+                || self.assigned_globals.contains(n.text()) =>
             {
                 Types::ANY
             }
             None => {
-                let mut msg = format!("`{}` is not a declared global", n.text);
-                if n.text.as_ref() == "os" {
+                let mut msg = format!("`{}` is not a declared global", n.text());
+                if n.text() == "os" {
                     // Code written for plain Lua (decision S37).
                     msg.push_str(": WoW has no `os` library; use the globals `time()`, `date(…)` and `difftime(…)`, and `debugprofilestop()` (milliseconds) for `os.clock()`");
                 }
@@ -498,18 +502,18 @@ impl Checker<'_> {
                     super::query::Mode::Strict => "E1001",
                     super::query::Mode::Basic => "W1001",
                 };
-                self.report(code, n.span, msg);
+                self.report(code, n.span(), msg);
                 Types::ANY
             }
         }
     }
 
     /// Assigning a global (W1002 / E1002 unless declared).
-    pub fn assign_global(&mut self, n: &Name, value: TypeId) {
-        self.forget_fields(super::narrow::GLOBAL_ROOT, Some(&n.text));
-        match self.env.declared.global(n.text.as_ref()) {
-            Some(t) => self.check_assignable(n.span, value, t),
-            None if self.dynamic_env || self.extra_globals.contains(n.text.as_ref()) => {}
+    pub fn assign_global(&mut self, n: Name<'_>, value: TypeId) {
+        self.forget_fields(super::narrow::GLOBAL_ROOT, Some(n.text()));
+        match self.env.declared.global(n.text()) {
+            Some(t) => self.check_assignable(n.span(), value, t),
+            None if self.dynamic_env || self.extra_globals.contains(n.text()) => {}
             None => {
                 let code = match self.mode {
                     super::query::Mode::Strict => "E1002",
@@ -517,23 +521,23 @@ impl Checker<'_> {
                 };
                 self.report(
                     code,
-                    n.span,
-                    format!("assigns the undeclared global `{}` (declare it, use `_G.{}`, or make it `local`)", n.text, n.text),
+                    n.span(),
+                    format!("assigns the undeclared global `{}` (declare it, use `_G.{}`, or make it `local`)", n.text(), n.text()),
                 );
             }
         }
     }
 
     /// The type an assignment target expects (for contextual typing).
-    pub fn target_type(&mut self, t: &Expr) -> Option<TypeId> {
-        match &t.kind {
-            ExprKind::Name(n) => match self.lookup_var(&n.text) {
+    pub fn target_type(&mut self, t: Expr<'_>) -> Option<TypeId> {
+        match t.kind() {
+            ExprKind::Name(n) => match self.lookup_var(n.text()) {
                 Some(v) => self.vars[v.0 as usize].declared,
-                None => self.env.declared.global(n.text.as_ref()),
+                None => self.env.declared.global(n.text()),
             },
             ExprKind::Field { obj, name } => {
                 let o = self.peek_or_infer(obj);
-                self.field_type_quiet(o, &name.text)
+                self.field_type_quiet(o, name.text())
             }
             // `list[i] = …`, `map[k] = …`: the element type.
             ExprKind::Index { obj, .. } => {
@@ -550,15 +554,11 @@ impl Checker<'_> {
         }
     }
 
-    fn peek_or_infer(&mut self, e: &Expr) -> TypeId {
-        match &e.kind {
-            ExprKind::Name(n) => match self.lookup_var(&n.text) {
+    fn peek_or_infer(&mut self, e: Expr<'_>) -> TypeId {
+        match e.kind() {
+            ExprKind::Name(n) => match self.lookup_var(n.text()) {
                 Some(v) => self.var_type(v),
-                None => self
-                    .env
-                    .declared
-                    .global(n.text.as_ref())
-                    .unwrap_or(Types::ANY),
+                None => self.env.declared.global(n.text()).unwrap_or(Types::ANY),
             },
             _ => self.infer(e),
         }
@@ -569,9 +569,9 @@ impl Checker<'_> {
     /// `obj()`): its type, and whether it is part of an optional chain,
     /// which continues from its type before the short-circuit's `nil`
     /// (spec §1.4.1).
-    fn chain_obj(&mut self, obj: &Expr) -> (TypeId, bool) {
+    fn chain_obj(&mut self, obj: Expr<'_>) -> (TypeId, bool) {
         let t = self.infer(obj);
-        match self.chain_inner.get(&(obj.span.start, obj.span.end)) {
+        match self.chain_inner.get(&(obj.span().start, obj.span().end)) {
             Some(&inner) => (inner, true),
             None => (t, false),
         }
@@ -579,8 +579,8 @@ impl Checker<'_> {
 
     /// A link of an optional chain: its type is `t`, or `nil` when the chain
     /// short-circuits.
-    fn chain_end(&mut self, e: &Expr, t: TypeId) -> TypeId {
-        self.chain_inner.insert((e.span.start, e.span.end), t);
+    fn chain_end(&mut self, e: Expr<'_>, t: TypeId) -> TypeId {
+        self.chain_inner.insert((e.span().start, e.span().end), t);
         self.env.types.optional(t)
     }
 
@@ -621,21 +621,25 @@ impl Checker<'_> {
         }
     }
 
-    pub fn assign_target(&mut self, t: &Expr, value: TypeId) {
-        match &t.kind {
-            ExprKind::Name(n) => match self.lookup_var(&n.text) {
+    pub fn assign_target(&mut self, t: Expr<'_>, value: TypeId) {
+        match t.kind() {
+            ExprKind::Name(n) => match self.lookup_var(n.text()) {
                 Some(v) => {
                     if self.vars[v.0 as usize].is_const {
-                        self.report("E2010", n.span, format!("cannot assign to `{}`", n.text));
+                        self.report(
+                            "E2010",
+                            n.span(),
+                            format!("cannot assign to `{}`", n.text()),
+                        );
                     }
-                    self.assign_var(v, value, n.span)
+                    self.assign_var(v, value, n.span())
                 }
                 None => self.assign_global(n, value),
             },
             ExprKind::Field { obj, name } => {
                 let o = self.infer(obj);
                 let declared = self.declared_of(obj);
-                self.assign_field(o, &name.text, name.span, value, declared);
+                self.assign_field(o, name.text(), name.span(), value, declared);
                 // The field holds the assigned value now: its declared type,
                 // narrowed by whether the value can be `nil`.
                 if let Some((root, path)) = self.field_path(t) {
@@ -654,21 +658,21 @@ impl Checker<'_> {
             ExprKind::Index { obj, key } => {
                 let o = self.infer(obj);
                 let k = self.infer(key);
-                if let ExprKind::String(s) = &key.kind {
-                    let name = String::from_utf8_lossy(&s.value).into_owned();
+                if let ExprKind::String(s) = key.kind() {
+                    let name = String::from_utf8_lossy(&s.value()).into_owned();
                     let declared = self.declared_of(obj);
-                    self.assign_field(o, &name, key.span, value, declared);
+                    self.assign_field(o, &name, key.span(), value, declared);
                     return;
                 }
                 match self.env.types.get(o).clone() {
                     Ty::Array(e) => {
-                        self.check_assignable(key.span, k, Types::NUMBER);
-                        self.check_assignable(t.span, value, e);
+                        self.check_assignable(key.span(), k, Types::NUMBER);
+                        self.check_assignable(t.span(), value, e);
                     }
                     Ty::Map(kt, vt) => {
-                        self.check_assignable(key.span, k, kt);
+                        self.check_assignable(key.span(), k, kt);
                         let opt = self.env.types.optional(vt);
-                        self.check_assignable(t.span, value, opt);
+                        self.check_assignable(t.span(), value, opt);
                     }
                     _ => {}
                 }
@@ -680,10 +684,10 @@ impl Checker<'_> {
     }
 
     /// The annotated type of the variable `e` names, if it is one.
-    fn declared_of(&self, e: &Expr) -> Option<TypeId> {
-        match &e.kind {
+    fn declared_of(&self, e: Expr<'_>) -> Option<TypeId> {
+        match e.kind() {
             ExprKind::Name(n) => self
-                .lookup_var(&n.text)
+                .lookup_var(n.text())
                 .and_then(|v| self.vars[v.0 as usize].declared),
             _ => None,
         }
@@ -816,7 +820,7 @@ impl Checker<'_> {
 
     // ----------------------------------------------------------- tables --
 
-    fn table(&mut self, fields: &[TableField], expected: Option<TypeId>) -> TypeId {
+    fn table(&mut self, fields: TableFields<'_>, expected: Option<TypeId>) -> TypeId {
         // The expected record, array or map gives field types.
         let exp = expected.map(|t| self.env.types.non_nil(t));
         // An expected union of table types (`Earned | Spent`): the first
@@ -860,7 +864,7 @@ impl Checker<'_> {
             match f {
                 TableField::Named { name, value, .. } => {
                     let want =
-                        exp.and_then(|t| self.field_type_quiet(t, &name.text))
+                        exp.and_then(|t| self.field_type_quiet(t, name.text()))
                             .or(match &exp_ty {
                                 Some(Ty::Map(_, v)) => Some(*v),
                                 _ => None,
@@ -870,21 +874,21 @@ impl Checker<'_> {
                     if self.mode == super::query::Mode::Strict
                         && let Some(Ty::Record(r)) = &exp_ty
                         && r.indexer.is_none()
-                        && !r.fields.contains_key(name.text.as_ref())
+                        && !r.fields.contains_key(name.text())
                     {
                         let msg = format!(
                             "`{}` is not a field of `{}`",
-                            name.text,
+                            name.text(),
                             self.env.display(exp.expect("expected"))
                         );
-                        self.report("E2003", name.span, msg);
+                        self.report("E2003", name.span(), msg);
                     }
                     let t = self.check(value, want);
                     if let Some(w) = want {
-                        self.check_assignable(value.span, t, w);
+                        self.check_assignable(value.span(), t, w);
                     }
                     record.fields.insert(
-                        name.text.clone(),
+                        name.text().into(),
                         Field {
                             // Literals stay only where the expected type
                             // gives the field a type.
@@ -906,9 +910,9 @@ impl Checker<'_> {
                         _ => None,
                     };
                     let v = self.check(value, want);
-                    if let ExprKind::String(s) = &key.kind {
+                    if let ExprKind::String(s) = key.kind() {
                         record.fields.insert(
-                            String::from_utf8_lossy(&s.value).into(),
+                            String::from_utf8_lossy(&s.value()).into(),
                             Field {
                                 ty: self.env.types.widen(v),
                                 optional: false,
@@ -1311,19 +1315,19 @@ impl Checker<'_> {
         }
     }
 
-    fn index_type(&mut self, o: TypeId, k: TypeId, key: &Expr, span: Span) -> TypeId {
-        if let ExprKind::String(s) = &key.kind {
-            let name = String::from_utf8_lossy(&s.value).into_owned();
+    fn index_type(&mut self, o: TypeId, k: TypeId, key: Expr<'_>, span: Span) -> TypeId {
+        if let ExprKind::String(s) = key.kind() {
+            let name = String::from_utf8_lossy(&s.value()).into_owned();
             return self
-                .member_type(o, &name, key.span, false)
+                .member_type(o, &name, key.span(), false)
                 .unwrap_or(Types::ANY);
         }
-        self.check_secret(k, key.span);
+        self.check_secret(k, key.span());
         let mut out = Vec::new();
         for m in self.env.types.members(o) {
             let t = match self.env.types.get(m).clone() {
                 Ty::Array(e) => {
-                    self.check_assignable(key.span, k, Types::NUMBER);
+                    self.check_assignable(key.span(), k, Types::NUMBER);
                     // Array reads are `T` in every mode, although reading past
                     // the end gives `nil` (decision T95).
                     e
@@ -1363,8 +1367,8 @@ impl Checker<'_> {
     fn binary(
         &mut self,
         op: BinOp,
-        lhs: &Expr,
-        rhs: &Expr,
+        lhs: Expr<'_>,
+        rhs: Expr<'_>,
         span: Span,
         expected: Option<TypeId>,
     ) -> TypeId {
@@ -1407,15 +1411,15 @@ impl Checker<'_> {
             BinOp::Eq | BinOp::Ne => {
                 let l = self.infer(lhs);
                 let r = self.infer(rhs);
-                self.check_secret(l, lhs.span);
-                self.check_secret(r, rhs.span);
+                self.check_secret(l, lhs.span());
+                self.check_secret(r, rhs.span());
                 Types::BOOLEAN
             }
             BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
                 let l = self.infer(lhs);
                 let r = self.infer(rhs);
-                self.check_secret(l, lhs.span);
-                self.check_secret(r, rhs.span);
+                self.check_secret(l, lhs.span());
+                self.check_secret(r, rhs.span());
                 let ln = self.env.assignable(l, Types::NUMBER, self.mode);
                 let ls = self.env.assignable(l, Types::STRING, self.mode);
                 let rn = self.env.assignable(r, Types::NUMBER, self.mode);
@@ -1446,7 +1450,7 @@ impl Checker<'_> {
                             "cannot concatenate a value of type `{}`",
                             self.env.display(t)
                         );
-                        self.report("E2001", e.span, msg);
+                        self.report("E2001", e.span(), msg);
                     }
                 }
                 if self.is_secret(l) || self.is_secret(r) {
@@ -1458,12 +1462,12 @@ impl Checker<'_> {
             _ => {
                 let l = self.infer(lhs);
                 let r = self.infer(rhs);
-                self.check_secret(l, lhs.span);
-                self.check_secret(r, rhs.span);
-                self.arith_operand(l, lhs.span);
-                self.arith_operand(r, rhs.span);
+                self.check_secret(l, lhs.span());
+                self.check_secret(r, rhs.span());
+                self.arith_operand(l, lhs.span());
+                self.arith_operand(r, rhs.span());
                 if matches!(op, BinOp::Div | BinOp::IDiv | BinOp::Mod) {
-                    self.zero_divisor(r, rhs.span);
+                    self.zero_divisor(r, rhs.span());
                 }
                 Types::NUMBER
             }
@@ -1539,16 +1543,16 @@ impl Checker<'_> {
 
     // -------------------------------------------------------------- calls --
 
-    fn args_types(&mut self, args: &Args, expected: &[Option<TypeId>]) -> Pack {
-        match args {
-            Args::Parens { args, .. } => self.expr_pack(args, expected),
-            Args::Table(e) | Args::String(e) => {
+    fn args_types(&mut self, args: Args<'_>, expected: &[Option<TypeId>]) -> Pack {
+        match args.kind() {
+            ArgsKind::Parens { args, .. } => self.expr_pack(args, expected),
+            ArgsKind::Table(e) | ArgsKind::String(e) => {
                 Pack::single(self.check(e, expected.first().copied().flatten()))
             }
         }
     }
 
-    fn arg_exprs(args: &Args) -> Vec<&Expr> {
+    fn arg_exprs(args: Args<'_>) -> Exprs<'_> {
         args.exprs()
     }
 
@@ -1556,11 +1560,11 @@ impl Checker<'_> {
     /// members already handled). Returns the results.
     /// `coroutine.yield` inside a function passed to `pcall`, `xpcall` or
     /// a C callback cannot yield across that boundary (W2057).
-    fn check_yield_boundary(&mut self, callee: &Expr, args: &Args) {
-        let name = match &callee.kind {
-            ExprKind::Name(n) => n.text.to_string(),
-            ExprKind::Field { obj, name } => match &obj.kind {
-                ExprKind::Name(o) => format!("{}.{}", o.text, name.text),
+    fn check_yield_boundary(&mut self, callee: Expr<'_>, args: Args<'_>) {
+        let name = match callee.kind() {
+            ExprKind::Name(n) => n.text().to_string(),
+            ExprKind::Field { obj, name } => match obj.kind() {
+                ExprKind::Name(o) => format!("{}.{}", o.text(), name.text()),
                 _ => return,
             },
             _ => return,
@@ -1572,19 +1576,19 @@ impl Checker<'_> {
             return;
         }
         for a in args.exprs() {
-            let ExprKind::Function(f) = &a.kind else {
+            let ExprKind::Function(f) = a.kind() else {
                 continue;
             };
             let mut found = None;
-            for s in &f.body.stmts {
+            for s in f.body().stmts() {
                 wowlua_syntax::visit::walk_stmt(s, &mut |e| {
                     if found.is_none()
-                        && let ExprKind::Call { callee, .. } = &e.kind
-                        && let ExprKind::Field { obj, name } = &callee.kind
-                        && name.text.as_ref() == "yield"
-                        && matches!(&obj.kind, ExprKind::Name(c) if c.text.as_ref() == "coroutine")
+                        && let ExprKind::Call { callee, .. } = e.kind()
+                        && let ExprKind::Field { obj, name } = callee.kind()
+                        && name.text() == "yield"
+                        && matches!(obj.kind(), ExprKind::Name(c) if c.text() == "coroutine")
                     {
-                        found = Some(e.span);
+                        found = Some(e.span());
                     }
                 });
             }
@@ -1602,7 +1606,7 @@ impl Checker<'_> {
         &mut self,
         callee: TypeId,
         receiver: Option<TypeId>,
-        args: &Args,
+        args: Args<'_>,
         span: Span,
         expected: Option<TypeId>,
     ) -> Pack {
@@ -1635,7 +1639,7 @@ impl Checker<'_> {
     }
 
     /// The results of a call without checking (other union members).
-    fn call_quiet(&mut self, callee: TypeId, _args: &Args) -> Pack {
+    fn call_quiet(&mut self, callee: TypeId, _args: Args<'_>) -> Pack {
         match self.env.types.get(callee) {
             Ty::Func(f) => f.ret.clone(),
             _ => Pack::any(),
@@ -1645,7 +1649,7 @@ impl Checker<'_> {
     fn call_one(
         &mut self,
         callee: TypeId,
-        args: &Args,
+        args: Args<'_>,
         span: Span,
         expected: Option<TypeId>,
     ) -> Pack {
@@ -1717,7 +1721,7 @@ impl Checker<'_> {
     fn call_overloads(
         &mut self,
         overloads: &[TypeId],
-        args: &Args,
+        args: Args<'_>,
         span: Span,
         expected: Option<TypeId>,
     ) -> Pack {
@@ -1728,7 +1732,7 @@ impl Checker<'_> {
         let arg_types: Vec<TypeId> = exprs
             .iter()
             .map(|e| {
-                if matches!(e.kind, ExprKind::Function(_)) {
+                if matches!(e.kind(), ExprKind::Function(_)) {
                     Types::FUNCTION
                 } else {
                     self.peek_or_check(e)
@@ -1759,8 +1763,8 @@ impl Checker<'_> {
         Pack::any()
     }
 
-    fn peek_or_check(&mut self, e: &Expr) -> TypeId {
-        match self.expr_types.get(&(e.span.start, e.span.end)) {
+    fn peek_or_check(&mut self, e: Expr<'_>) -> TypeId {
+        match self.expr_types.get(&(e.span().start, e.span().end)) {
             Some(&t) => t,
             None => {
                 // A check without lasting effects on the flow.
@@ -1819,45 +1823,47 @@ impl Checker<'_> {
     /// T220): a function `name` in scope taking the value first (made with
     /// `matcher("name", fn)`); the value is checked against its first
     /// parameter (E8121) and the call takes the rest.
-    fn custom_matcher(&mut self, obj: &Expr, o: TypeId, name: &Name) -> Option<TypeId> {
+    fn custom_matcher(&mut self, obj: Expr<'_>, o: TypeId, name: Name<'_>) -> Option<TypeId> {
         let mut target = obj;
         if let ExprKind::Field {
             obj: inner,
             name: n,
-        } = &target.kind
-            && n.text.as_ref() == "never"
+        } = target.kind()
+            && n.text() == "never"
         {
-            target = inner.as_ref();
+            target = inner;
         }
         let ExprKind::Call {
             callee: expect,
             args: expect_args,
-        } = &target.kind
+        } = target.kind()
         else {
             return None;
         };
         if self.intrinsic_of(expect).as_deref() != Some("test.expect")
-            || BUILTIN_MATCHERS.contains(&name.text.as_ref())
+            || BUILTIN_MATCHERS.contains(&name.text())
         {
             return None;
         }
         let _ = o;
-        let v = self.lookup_var(&name.text)?;
+        let v = self.lookup_var(name.text())?;
         let Ty::Func(f) = self.env.types.get(self.var_type(v)).clone() else {
             return None;
         };
         let first = f.params.first()?;
         if let Some(subject) = expect_args.exprs().first()
-            && let Some(&t) = self.expr_types.get(&(subject.span.start, subject.span.end))
+            && let Some(&t) = self
+                .expr_types
+                .get(&(subject.span().start, subject.span().end))
             && !self.env.assignable(t, first.ty, self.mode)
         {
             let msg = format!(
                 "`{}` takes `{}`; the value is `{}`",
-                name.text,
+                name.text(),
                 self.env.display(first.ty),
                 self.env.display(t)
             );
-            self.report("E8121", name.span, msg);
+            self.report("E8121", name.span(), msg);
         }
         let call = Func {
             type_params: Vec::new(),
@@ -1873,34 +1879,34 @@ impl Checker<'_> {
     /// `expect(x).matcher(…)` of `wowlua:test` (decision T214): matchers
     /// that need a kind of value check `x`'s type (E8121), and
     /// `toHaveBeenCalledWith` takes the spied function's parameters.
-    fn matcher_call_type(&mut self, callee: &Expr, c: TypeId) -> Option<TypeId> {
-        let ExprKind::Field { obj, name } = &callee.kind else {
+    fn matcher_call_type(&mut self, callee: Expr<'_>, c: TypeId) -> Option<TypeId> {
+        let ExprKind::Field { obj, name } = callee.kind() else {
             return None;
         };
-        let mut target = obj.as_ref();
+        let mut target = obj;
         if let ExprKind::Field {
             obj: inner,
             name: n,
-        } = &target.kind
-            && n.text.as_ref() == "never"
+        } = target.kind()
+            && n.text() == "never"
         {
-            target = inner.as_ref();
+            target = inner;
         }
         let ExprKind::Call {
             callee: expect,
             args: expect_args,
-        } = &target.kind
+        } = target.kind()
         else {
             return None;
         };
         if self.intrinsic_of(expect).as_deref() != Some("test.expect") {
             return None;
         }
-        let subject = *expect_args.exprs().first()?;
+        let subject = expect_args.exprs().first()?;
         let t = *self
             .expr_types
-            .get(&(subject.span.start, subject.span.end))?;
-        let matcher = name.text.as_ref();
+            .get(&(subject.span().start, subject.span().end))?;
+        let matcher = name.text();
         let (fits, what): (fn(&Ty) -> bool, &str) = match matcher {
             "toHaveLength" | "toContain" => (
                 |ty| {
@@ -1949,7 +1955,7 @@ impl Checker<'_> {
                 "`{matcher}` needs {what}; the value is `{}`",
                 self.env.display(t)
             );
-            self.report("E8121", callee.span, msg);
+            self.report("E8121", callee.span(), msg);
             return Some(c);
         }
         let spied_type = self.env.types.non_nil(t);
@@ -1971,17 +1977,17 @@ impl Checker<'_> {
 
     /// `saved.bind(name, { defaults = … })` returns the data table: the
     /// type of the defaults (spec stdlib "saved").
-    fn saved_bind_type(&mut self, callee: &Expr, args: &Args) -> Option<TypeId> {
+    fn saved_bind_type(&mut self, callee: Expr<'_>, args: Args<'_>) -> Option<TypeId> {
         if self.intrinsic_of(callee).as_deref() != Some("saved.bind") {
             return None;
         }
-        let ExprKind::Table(fields) = &args.exprs().get(1)?.kind else {
+        let ExprKind::Table(fields) = &args.exprs().get(1)?.kind() else {
             return None;
         };
         fields.iter().find_map(|f| match f {
-            TableField::Named { name, value, .. } if name.text.as_ref() == "defaults" => self
+            TableField::Named { name, value, .. } if name.text() == "defaults" => self
                 .expr_types
-                .get(&(value.span.start, value.span.end))
+                .get(&(value.span().start, value.span().end))
                 .copied(),
             _ => None,
         })
@@ -1989,8 +1995,8 @@ impl Checker<'_> {
 
     /// `L.KEY(params)` of `wowlua:locale` with a value that may be secret:
     /// the string made from it is secret too (spec stdlib "locale").
-    fn secret_locale_call(&mut self, callee: &Expr, args: &Args) -> bool {
-        let ExprKind::Field { obj, .. } = &callee.kind else {
+    fn secret_locale_call(&mut self, callee: Expr<'_>, args: Args<'_>) -> bool {
+        let ExprKind::Field { obj, .. } = callee.kind() else {
             return false;
         };
         if self.intrinsic_of(obj).as_deref() != Some("locale.L") {
@@ -1998,7 +2004,7 @@ impl Checker<'_> {
         }
         args.exprs().first().is_some_and(|a| {
             self.expr_types
-                .get(&(a.span.start, a.span.end))
+                .get(&(a.span().start, a.span().end))
                 .is_some_and(|&t| {
                     self.secret_path(t, String::new(), &mut std::collections::HashSet::new())
                         .is_some()
@@ -2008,15 +2014,15 @@ impl Checker<'_> {
 
     /// Checks of standard-library calls that need their arguments' types:
     /// `Secret<…>` in `saved.bind` defaults (E8104), hook targets (W8040).
-    fn stdlib_after_call(&mut self, callee: &Expr, args: &Args) {
+    fn stdlib_after_call(&mut self, callee: Expr<'_>, args: Args<'_>) {
         let Some(id) = self.intrinsic_of(callee) else {
             return;
         };
         if id.starts_with("hooks.") {
-            self.check_hook_target(&id, &args.exprs(), false);
+            self.check_hook_target(&id, args.exprs(), false);
         }
         if id == "mock.module" {
-            self.check_mock_module(&args.exprs());
+            self.check_mock_module(args.exprs());
         }
         if id == "settings.register"
             && let Some(def) = args.exprs().first()
@@ -2030,12 +2036,12 @@ impl Checker<'_> {
         }
         if id == "saved.bind"
             && let Some(opts) = args.exprs().get(1)
-            && let ExprKind::Table(fields) = &opts.kind
+            && let ExprKind::Table(fields) = opts.kind()
         {
             for f in fields {
                 if let TableField::Named { name, value, .. } = f
-                    && name.text.as_ref() == "defaults"
-                    && let Some(&t) = self.expr_types.get(&(value.span.start, value.span.end))
+                    && name.text() == "defaults"
+                    && let Some(&t) = self.expr_types.get(&(value.span().start, value.span().end))
                     && let Some(path) =
                         self.secret_path(t, String::new(), &mut std::collections::HashSet::new())
                 {
@@ -2047,7 +2053,7 @@ impl Checker<'_> {
                     let msg = format!(
                         "the defaults of `saved.bind` contain a `Secret<…>` type{at}: secret values cannot be compared or saved"
                     );
-                    self.report("E8104", value.span, msg);
+                    self.report("E8104", value.span(), msg);
                 }
             }
         }
@@ -2055,31 +2061,31 @@ impl Checker<'_> {
 
     /// `mock.module(namespace, { name = value, … })` (decision T224): each
     /// replacement is an export of the module (E8123) of its type.
-    fn check_mock_module(&mut self, args: &[&Expr]) {
+    fn check_mock_module(&mut self, args: Exprs<'_>) {
         let (Some(ns), Some(repl)) = (args.first(), args.get(1)) else {
             return;
         };
-        let Some(&ns_type) = self.expr_types.get(&(ns.span.start, ns.span.end)) else {
+        let Some(&ns_type) = self.expr_types.get(&(ns.span().start, ns.span().end)) else {
             return;
         };
         let Ty::Record(record) = self.env.types.get(ns_type).clone() else {
             return;
         };
-        let ExprKind::Table(fields) = &repl.kind else {
+        let ExprKind::Table(fields) = repl.kind() else {
             return;
         };
         for f in fields {
             let TableField::Named { name, value, .. } = f else {
                 continue;
             };
-            match record.fields.get(name.text.as_ref()) {
+            match record.fields.get(name.text()) {
                 None => {
-                    let msg = format!("the module has no export `{}`", name.text);
-                    self.report("E8123", name.span, msg);
+                    let msg = format!("the module has no export `{}`", name.text());
+                    self.report("E8123", name.span(), msg);
                 }
                 Some(field) => {
-                    if let Some(&t) = self.expr_types.get(&(value.span.start, value.span.end)) {
-                        self.check_assignable(value.span, t, field.ty);
+                    if let Some(&t) = self.expr_types.get(&(value.span().start, value.span().end)) {
+                        self.check_assignable(value.span(), t, field.ty);
                     }
                 }
             }
@@ -2089,26 +2095,26 @@ impl Checker<'_> {
     /// `frames.movable(frame, { store = …, key = "…" })`: the store's field
     /// holds an optional position (E8340): `nil`, or a table with
     /// `point`, `relativePoint`, `x` and `y`.
-    fn check_movable(&mut self, opts: &Expr) {
-        let ExprKind::Table(fields) = &opts.kind else {
+    fn check_movable(&mut self, opts: Expr<'_>) {
+        let ExprKind::Table(fields) = opts.kind() else {
             return;
         };
         let field = |name: &str| {
             fields.iter().find_map(|f| match f {
-                TableField::Named { name: n, value, .. } if n.text.as_ref() == name => Some(value),
+                TableField::Named { name: n, value, .. } if n.text() == name => Some(value),
                 _ => None,
             })
         };
         let (Some(store), Some(key_expr)) = (field("store"), field("key")) else {
             return;
         };
-        let ExprKind::String(lit) = &key_expr.kind else {
+        let ExprKind::String(lit) = key_expr.kind() else {
             return;
         };
-        let Some(&store_type) = self.expr_types.get(&(store.span.start, store.span.end)) else {
+        let Some(&store_type) = self.expr_types.get(&(store.span().start, store.span().end)) else {
             return;
         };
-        let key = String::from_utf8_lossy(&lit.value).into_owned();
+        let key = String::from_utf8_lossy(&lit.value()).into_owned();
         let found = match self.env.types.get(store_type).clone() {
             Ty::Named(d, targs) => self.env.instance_member(d, &targs, &key).map(|(m, _)| m.ty),
             Ty::Record(r) => r.fields.get(key.as_str()).map(|f| f.ty),
@@ -2119,7 +2125,7 @@ impl Checker<'_> {
             matches!(self.env.types.get(value), Ty::Any | Ty::Unknown | Ty::Error)
                 || (self.env.types.is_optional(t)
                     && ["point", "relativePoint", "x", "y"].iter().all(|m| {
-                        matches!(self.member_type(value, m, key_expr.span, true), Some(t) if t != Types::ERROR)
+                        matches!(self.member_type(value, m, key_expr.span(), true), Some(t) if t != Types::ERROR)
                     }))
         });
         if !fits {
@@ -2129,25 +2135,25 @@ impl Checker<'_> {
             let msg = format!(
                 "the store's `{key}` is {shown}; a movable frame keeps its position in a `FramePosition?` field"
             );
-            self.report("E8340", key_expr.span, msg);
+            self.report("E8340", key_expr.span(), msg);
         }
     }
 
     /// `settings.register({ store = …, controls = { … } })`: every control's
     /// key is a field of the store (E8113) of the control's type (E8070),
     /// and dropdown values are of the field's type (E8107).
-    fn check_settings(&mut self, def: &Expr) {
-        let ExprKind::Table(fields) = &def.kind else {
+    fn check_settings(&mut self, def: Expr<'_>) {
+        let ExprKind::Table(fields) = def.kind() else {
             return;
         };
         let field = |name: &str| {
             fields.iter().find_map(|f| match f {
-                TableField::Named { name: n, value, .. } if n.text.as_ref() == name => Some(value),
+                TableField::Named { name: n, value, .. } if n.text() == name => Some(value),
                 _ => None,
             })
         };
         let Some(store) = field("store") else { return };
-        let Some(&store_type) = self.expr_types.get(&(store.span.start, store.span.end)) else {
+        let Some(&store_type) = self.expr_types.get(&(store.span().start, store.span().end)) else {
             return;
         };
         if matches!(
@@ -2156,18 +2162,16 @@ impl Checker<'_> {
         ) {
             return;
         }
-        let mut lists: Vec<&Expr> = field("controls").into_iter().collect();
+        let mut lists: Vec<Expr<'_>> = field("controls").into_iter().collect();
         if let Some(subs) = field("subcategories")
-            && let ExprKind::Table(entries) = &subs.kind
+            && let ExprKind::Table(entries) = subs.kind()
         {
             for e in entries {
                 if let TableField::Positional(sub) = e
-                    && let ExprKind::Table(sub_fields) = &sub.kind
+                    && let ExprKind::Table(sub_fields) = sub.kind()
                 {
                     lists.extend(sub_fields.iter().filter_map(|f| match f {
-                        TableField::Named { name, value, .. }
-                            if name.text.as_ref() == "controls" =>
-                        {
+                        TableField::Named { name, value, .. } if name.text() == "controls" => {
                             Some(value)
                         }
                         _ => None,
@@ -2176,21 +2180,21 @@ impl Checker<'_> {
             }
         }
         for list in lists {
-            let ExprKind::Table(entries) = &list.kind else {
+            let ExprKind::Table(entries) = list.kind() else {
                 continue;
             };
             for e in entries {
                 let TableField::Positional(control) = e else {
                     continue;
                 };
-                if let ExprKind::Call { callee, args } = &control.kind {
-                    self.check_settings_control(store_type, callee, &args.exprs());
+                if let ExprKind::Call { callee, args } = control.kind() {
+                    self.check_settings_control(store_type, callee, args.exprs());
                 }
             }
         }
     }
 
-    fn check_settings_control(&mut self, store: TypeId, callee: &Expr, args: &[&Expr]) {
+    fn check_settings_control(&mut self, store: TypeId, callee: Expr<'_>, args: Exprs<'_>) {
         let Some(id) = self.intrinsic_of(callee) else {
             return;
         };
@@ -2201,13 +2205,13 @@ impl Checker<'_> {
             "settings.color" => "color",
             _ => return,
         };
-        let Some(&key_expr) = args.first() else {
+        let Some(key_expr) = args.first() else {
             return;
         };
-        let ExprKind::String(lit) = &key_expr.kind else {
+        let ExprKind::String(lit) = key_expr.kind() else {
             return;
         };
-        let key = String::from_utf8_lossy(&lit.value).into_owned();
+        let key = String::from_utf8_lossy(&lit.value()).into_owned();
         let found = match self.env.types.get(store).clone() {
             Ty::Named(d, targs) => self.env.instance_member(d, &targs, &key).map(|(m, _)| m.ty),
             Ty::Record(r) => r.fields.get(key.as_str()).map(|f| f.ty),
@@ -2218,7 +2222,7 @@ impl Checker<'_> {
                 "the store `{}` has no field `{key}`",
                 self.env.display(store)
             );
-            self.report("E8113", key_expr.span, msg);
+            self.report("E8113", key_expr.span(), msg);
             return;
         };
         let value = self.env.types.non_nil(field);
@@ -2232,7 +2236,7 @@ impl Checker<'_> {
             "checkbox" => both(self, Types::BOOLEAN),
             "slider" => both(self, Types::NUMBER),
             "color" => ["r", "g", "b"].iter().all(|c| {
-                matches!(self.member_type(value, c, key_expr.span, true), Some(t)
+                matches!(self.member_type(value, c, key_expr.span(), true), Some(t)
                     if t != Types::ERROR && self.env.assignable(t, Types::NUMBER, self.mode))
             }),
             _ => true,
@@ -2247,12 +2251,12 @@ impl Checker<'_> {
                 "`{key}` is `{}`; a {kind} needs {wanted}",
                 self.env.display(field)
             );
-            self.report("E8070", key_expr.span, msg);
+            self.report("E8070", key_expr.span(), msg);
             return;
         }
         if kind == "dropdown"
             && let Some(opts) = args.get(1)
-            && let ExprKind::Table(opt_fields) = &opts.kind
+            && let ExprKind::Table(opt_fields) = opts.kind()
         {
             for f in opt_fields {
                 let TableField::Named {
@@ -2263,23 +2267,23 @@ impl Checker<'_> {
                 else {
                     continue;
                 };
-                if name.text.as_ref() != "options" {
+                if name.text() != "options" {
                     continue;
                 }
-                let ExprKind::Table(entries) = &options.kind else {
+                let ExprKind::Table(entries) = options.kind() else {
                     continue;
                 };
                 for entry in entries {
                     let TableField::Positional(option) = entry else {
                         continue;
                     };
-                    let ExprKind::Table(parts) = &option.kind else {
+                    let ExprKind::Table(parts) = option.kind() else {
                         continue;
                     };
                     for p in parts {
                         if let TableField::Named { name, value: v, .. } = p
-                            && name.text.as_ref() == "value"
-                            && let Some(&t) = self.expr_types.get(&(v.span.start, v.span.end))
+                            && name.text() == "value"
+                            && let Some(&t) = self.expr_types.get(&(v.span().start, v.span().end))
                             && !self.env.assignable(t, field, self.mode)
                         {
                             let msg = format!(
@@ -2287,7 +2291,7 @@ impl Checker<'_> {
                                 self.env.display(t),
                                 self.env.display(field)
                             );
-                            self.report("E8107", v.span, msg);
+                            self.report("E8107", v.span(), msg);
                         }
                     }
                 }
@@ -2298,11 +2302,13 @@ impl Checker<'_> {
     /// W8102: the target belongs to a load-on-demand addon, but the hook
     /// does not wait for it (`opts.addon`), or names it by an expression
     /// (evaluated before the addon loads).
-    fn check_hook_on_demand(&mut self, id: &str, args: &[&Expr], decorator: bool) {
-        let Some(&first) = args.first() else { return };
-        let (root, by_name) = match &first.kind {
-            ExprKind::String(lit) => (String::from_utf8_lossy(&lit.value).into_owned(), true),
-            ExprKind::Name(n) if self.lookup_var(&n.text).is_none() => (n.text.to_string(), false),
+    fn check_hook_on_demand(&mut self, id: &str, args: Exprs<'_>, decorator: bool) {
+        let Some(first) = args.first() else { return };
+        let (root, by_name) = match first.kind() {
+            ExprKind::String(lit) => (String::from_utf8_lossy(&lit.value()).into_owned(), true),
+            ExprKind::Name(n) if self.lookup_var(n.text()).is_none() => {
+                (n.text().to_string(), false)
+            }
             _ => return,
         };
         let Some(addon) = self
@@ -2313,17 +2319,18 @@ impl Checker<'_> {
         else {
             return;
         };
-        let has_method = matches!(args.get(1).map(|e| &e.kind), Some(ExprKind::String(_)));
+        let has_method = matches!(args.get(1).map(|e| e.kind()), Some(ExprKind::String(_)));
         let global_only = id == "hooks.hook" && !has_method;
         let opts_at = if decorator { 2 } else { 3 };
-        let waits = !global_only && match args.get(opts_at).map(|e| &e.kind) {
-            Some(ExprKind::Table(fields)) => fields.iter().any(
-                |f| matches!(f, TableField::Named { name, .. } if name.text.as_ref() == "addon"),
-            ),
-            // Options from elsewhere: cannot tell.
-            Some(_) => true,
-            None => false,
-        };
+        let waits = !global_only
+            && match args.get(opts_at).map(|e| e.kind()) {
+                Some(ExprKind::Table(fields)) => fields
+                    .iter()
+                    .any(|f| matches!(f, TableField::Named { name, .. } if name.text() == "addon")),
+                // Options from elsewhere: cannot tell.
+                Some(_) => true,
+                None => false,
+            };
         let msg = if global_only {
             format!(
                 "`{root}` exists only once the load-on-demand addon `{addon}` has loaded; hook it with `hook(_G, \"{root}\", fn, {{ addon = \"{addon}\" }})`"
@@ -2339,16 +2346,16 @@ impl Checker<'_> {
         } else {
             return;
         };
-        self.report("W8102", first.span, msg);
+        self.report("W8102", first.span(), msg);
     }
 
     /// A hook's target exists (W8040): `hook(name, fn)` and `@hook(name)`
     /// name a global function, `hook(target, method, …)` a method of the
     /// target, `hookScript(frame, …)` a frame. A target of a load-on-demand
     /// addon needs `opts.addon` and a name (W8102).
-    pub(crate) fn check_hook_target(&mut self, id: &str, args: &[&Expr], decorator: bool) {
-        let literal = |e: &Expr| match &e.kind {
-            ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value).into_owned()),
+    pub(crate) fn check_hook_target(&mut self, id: &str, args: Exprs<'_>, decorator: bool) {
+        let literal = |e: Expr<'_>| match e.kind() {
+            ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value()).into_owned()),
             _ => None,
         };
         self.check_hook_on_demand(id, args, decorator);
@@ -2358,8 +2365,8 @@ impl Checker<'_> {
                 || c.assigned_globals.contains(name)
                 || c.dynamic_env
         };
-        let Some(&first) = args.first() else { return };
-        let method = args.get(1).and_then(|e| literal(e));
+        let Some(first) = args.first() else { return };
+        let method = args.get(1).and_then(literal);
         let global_only = id == "hooks.hook" && method.is_none();
         if global_only || id == "hooks.hookScript" {
             if let Some(name) = literal(first)
@@ -2369,11 +2376,11 @@ impl Checker<'_> {
                 let msg = format!(
                     "`{name}` is not a declared global {what}; the hook fails where it is installed"
                 );
-                self.report("W8040", first.span, msg);
+                self.report("W8040", first.span(), msg);
             }
             return;
         }
-        let (Some(method), Some(&method_expr)) = (method, args.get(1)) else {
+        let (Some(method), Some(method_expr)) = (method, args.get(1)) else {
             return;
         };
         let target = match literal(first) {
@@ -2384,12 +2391,12 @@ impl Checker<'_> {
                         let msg = format!(
                             "`{name}` is not a declared global; the hook fails where it is installed"
                         );
-                        self.report("W8040", first.span, msg);
+                        self.report("W8040", first.span(), msg);
                     }
                     return;
                 }
             },
-            None => match self.expr_types.get(&(first.span.start, first.span.end)) {
+            None => match self.expr_types.get(&(first.span().start, first.span().end)) {
                 Some(&t) => t,
                 None => self.infer(first),
             },
@@ -2409,7 +2416,7 @@ impl Checker<'_> {
                     && self.env.def(d).indexer.is_none()
             }
             _ => matches!(
-                self.member_type(target, &method, method_expr.span, true),
+                self.member_type(target, &method, method_expr.span(), true),
                 None | Some(Types::ERROR)
             ),
         };
@@ -2418,7 +2425,7 @@ impl Checker<'_> {
                 "`{}` has no `{method}` to hook; the hook fails where it is installed",
                 self.env.display(target)
             );
-            self.report("W8040", method_expr.span, msg);
+            self.report("W8040", method_expr.span(), msg);
         }
     }
 
@@ -2472,9 +2479,9 @@ impl Checker<'_> {
 
     /// `FramePool.new(cls, ...)`: the rest of the arguments are `cls`'s
     /// constructor's, and the pool holds `cls`'s instances.
-    fn frame_pool_type(&mut self, mut f: Func, exprs: &[&Expr]) -> Option<TypeId> {
+    fn frame_pool_type(&mut self, mut f: Func, exprs: Exprs<'_>) -> Option<TypeId> {
         let first = exprs.first()?;
-        if !matches!(first.kind, ExprKind::Name(_) | ExprKind::Field { .. }) {
+        if !matches!(first.kind(), ExprKind::Name(_) | ExprKind::Field { .. }) {
             return None;
         }
         let cls = self.infer(first);
@@ -2507,7 +2514,13 @@ impl Checker<'_> {
     /// `registry:on/once/fire(name, …)` on a `callbacks.Registry<E>`: `name`
     /// must be a literal key of `E` (E8420); the handler, or the arguments,
     /// are checked against `E[name]` (spec stdlib "callbacks").
-    fn registry_method_type(&mut self, o: TypeId, method: &str, args: &Args, m: TypeId) -> TypeId {
+    fn registry_method_type(
+        &mut self,
+        o: TypeId,
+        method: &str,
+        args: Args<'_>,
+        m: TypeId,
+    ) -> TypeId {
         if !matches!(method, "on" | "once" | "fire") {
             return m;
         }
@@ -2527,21 +2540,21 @@ impl Checker<'_> {
         let Some(first) = exprs.first() else {
             return m;
         };
-        let ExprKind::String(lit) = &first.kind else {
+        let ExprKind::String(lit) = first.kind() else {
             let msg = format!(
                 "the event name of `{method}` must be a string literal naming a key of `{}`",
                 self.env.display(events)
             );
-            self.report("E8420", first.span, msg);
+            self.report("E8420", first.span(), msg);
             return m;
         };
-        let event = String::from_utf8_lossy(&lit.value).into_owned();
+        let event = String::from_utf8_lossy(&lit.value()).into_owned();
         let Some(handler) = self.field_type_quiet(events, &event) else {
             let msg = format!(
                 "`{event}` is not an event of `{}`",
                 self.env.display(events)
             );
-            self.report("E8420", first.span, msg);
+            self.report("E8420", first.span(), msg);
             return m;
         };
         let (Ty::Func(f), Some(h)) = (self.env.types.get(m).clone(), self.as_func(handler)) else {
@@ -2558,7 +2571,7 @@ impl Checker<'_> {
         self.env.types.func(f)
     }
 
-    fn stdlib_call_type(&mut self, callee: &Expr, args: &Args, c: TypeId) -> TypeId {
+    fn stdlib_call_type(&mut self, callee: Expr<'_>, args: Args<'_>, c: TypeId) -> TypeId {
         if let Some(t) = self.matcher_call_type(callee, c) {
             return t;
         }
@@ -2571,10 +2584,10 @@ impl Checker<'_> {
         let mut f = std::sync::Arc::unwrap_or_clone(f);
         let exprs = args.exprs();
         if id == "pool.FramePool.new" {
-            return self.frame_pool_type(f, &exprs).unwrap_or(c);
+            return self.frame_pool_type(f, exprs).unwrap_or(c);
         }
         if id == "events.onBucket" {
-            let names: Vec<&Expr> = match exprs.first().map(|e| &e.kind) {
+            let names: Vec<Expr<'_>> = match exprs.first().map(|e| e.kind()) {
                 Some(ExprKind::Table(fields)) => fields
                     .iter()
                     .filter_map(|f| match f {
@@ -2582,19 +2595,19 @@ impl Checker<'_> {
                         _ => None,
                     })
                     .collect(),
-                Some(_) => vec![exprs[0]],
+                Some(_) => vec![exprs.at(0)],
                 None => Vec::new(),
             };
             for e in names {
-                if let ExprKind::String(lit) = &e.kind {
-                    self.check_event_available(&String::from_utf8_lossy(&lit.value), e.span);
+                if let ExprKind::String(lit) = e.kind() {
+                    self.check_event_available(&String::from_utf8_lossy(&lit.value()), e.span());
                 }
             }
             return c;
         }
-        let (name, name_span) = match exprs.first().map(|e| (&e.kind, e.span)) {
+        let (name, name_span) = match exprs.first().map(|e| (e.kind(), e.span())) {
             Some((ExprKind::String(lit), span)) => {
-                (String::from_utf8_lossy(&lit.value).into_owned(), span)
+                (String::from_utf8_lossy(&lit.value()).into_owned(), span)
             }
             _ => return c,
         };
@@ -2628,7 +2641,7 @@ impl Checker<'_> {
     fn call_func(
         &mut self,
         f: &Func,
-        args: &Args,
+        args: Args<'_>,
         span: Span,
         expected: Option<TypeId>,
         report: bool,
@@ -2650,16 +2663,18 @@ impl Checker<'_> {
                 }
             }
             for (i, e) in exprs.iter().enumerate() {
-                if let ExprKind::Function(lit) = &e.kind {
+                if let ExprKind::Function(lit) = e.kind() {
                     // A literal with every parameter annotated gives its
                     // parameters' types (`spy(function(a: number) end)`);
                     // its body is checked in the second pass.
-                    let annotated = lit.type_params.is_empty()
-                        && lit.params.iter().all(|p| p.ty.is_some())
-                        && lit.vararg.as_ref().is_none_or(|v| v.ty.is_some());
+                    let annotated = lit.type_params().is_empty()
+                        && lit.params().iter().all(|p| p.ty().is_some())
+                        && lit.vararg().is_none_or(|v| v.ty.is_some());
                     if annotated && let Some(p) = self.param_at(f, i) {
-                        let mut sig = self.env.func_sig(lit, &self.scope.clone(), false);
-                        if lit.ret.is_none() {
+                        let mut sig =
+                            self.env
+                                .func_sig(&FnSig::of(lit), &self.scope.clone(), false);
+                        if lit.ret().is_none() {
                             sig.ret = Pack::any();
                         }
                         let t = self.env.types.func(sig);
@@ -2711,7 +2726,7 @@ impl Checker<'_> {
                 let mut pack = Pack::default();
                 for (k, t) in arg_types.iter().skip(fixed).enumerate() {
                     // A final `...` or call passes any number of values.
-                    if fixed + k + 1 == exprs.len() && is_multi(exprs[fixed + k]) {
+                    if fixed + k + 1 == exprs.len() && is_multi(exprs.at(fixed + k)) {
                         pack.rest = Some(Rest::Variadic(t.unwrap_or(Types::ANY)));
                         break;
                     }
@@ -2757,7 +2772,7 @@ impl Checker<'_> {
             let p = self.param_at(&f, i);
             let multi = i + 1 == n_args && is_multi(e);
             let t = match arg_types[i] {
-                Some(t) if !matches!(e.kind, ExprKind::Function(_)) => t,
+                Some(t) if !matches!(e.kind(), ExprKind::Function(_)) => t,
                 _ => {
                     if multi {
                         let pack = self.expr_inner(e, p).into_pack();
@@ -2767,13 +2782,14 @@ impl Checker<'_> {
                             (None, Some(Rest::Variadic(t))) => *t,
                             (None, _) => Types::NIL,
                         };
-                        self.expr_types.insert((e.span.start, e.span.end), first);
+                        self.expr_types
+                            .insert((e.span().start, e.span().end), first);
                         // The extra values of a final multi-value argument.
                         for (j, &extra) in pack.types.iter().enumerate().skip(1) {
                             if let Some(pt) = self.param_at(&f, i + j)
                                 && report
                             {
-                                self.check_assignable(e.span, extra, pt);
+                                self.check_assignable(e.span(), extra, pt);
                             }
                         }
                         first
@@ -2785,7 +2801,7 @@ impl Checker<'_> {
             match p {
                 Some(pt) => {
                     if report {
-                        self.check_assignable(e.span, t, pt);
+                        self.check_assignable(e.span(), t, pt);
                     }
                 }
                 None if report => {
@@ -2799,7 +2815,7 @@ impl Checker<'_> {
                         f.params.len(),
                         n_args
                     );
-                    self.report(code, e.span, msg);
+                    self.report(code, e.span(), msg);
                     break;
                 }
                 None => {}
@@ -2995,18 +3011,18 @@ impl Checker<'_> {
     }
 
     /// The API path of a field expression on a global (`C_X.Fn`).
-    fn api_path_of(&self, e: &Expr) -> Option<String> {
-        match &e.kind {
-            ExprKind::Name(n) if self.lookup_var(&n.text).is_none() => Some(n.text.to_string()),
-            ExprKind::Field { obj, name } => {
-                self.api_path_of(obj).map(|p| format!("{p}.{}", name.text))
-            }
+    fn api_path_of(&self, e: Expr<'_>) -> Option<String> {
+        match e.kind() {
+            ExprKind::Name(n) if self.lookup_var(n.text()).is_none() => Some(n.text().to_string()),
+            ExprKind::Field { obj, name } => self
+                .api_path_of(obj)
+                .map(|p| format!("{p}.{}", name.text())),
             _ => None,
         }
     }
 
     /// `obj.name` is a method of a class or declared class.
-    fn is_method_member(&mut self, obj: &Expr, name: &str) -> bool {
+    fn is_method_member(&mut self, obj: Expr<'_>, name: &str) -> bool {
         let o = self.peek_type(obj);
         match self.env.types.get(o).clone() {
             Ty::Named(d, args) => self
@@ -3020,7 +3036,7 @@ impl Checker<'_> {
     /// The type of `setmetatable(t, mt)` (spec §2.4.6): the fields of `t`,
     /// then those of `mt.__index` (methods included). Later additions to an
     /// open metatable are allowed through an indexer.
-    fn with_metatable(&mut self, t: &Expr, mt: &Expr) -> TypeId {
+    fn with_metatable(&mut self, t: Expr<'_>, mt: Expr<'_>) -> TypeId {
         let tt = self.peek_type(t);
         let mtt = self.peek_type(mt);
         let index = self.field_type_quiet(mtt, "__index");
@@ -3045,8 +3061,8 @@ impl Checker<'_> {
         self.env.types.record(r)
     }
 
-    pub fn is_super(&self, e: &Expr) -> bool {
-        matches!(&e.kind, ExprKind::Name(n) if n.text.as_ref() == "super")
+    pub fn is_super(&self, e: Expr<'_>) -> bool {
+        matches!(e.kind(), ExprKind::Name(n) if n.text() == "super")
             && !self.classes.is_empty()
             && self.lookup_var("super").is_none()
     }
@@ -3087,9 +3103,9 @@ impl Checker<'_> {
 }
 
 /// Expressions that may produce several values.
-pub fn is_multi(e: &Expr) -> bool {
+pub fn is_multi(e: Expr<'_>) -> bool {
     matches!(
-        e.kind,
+        e.kind(),
         ExprKind::Call { .. }
             | ExprKind::Method { .. }
             | ExprKind::OptCall { .. }

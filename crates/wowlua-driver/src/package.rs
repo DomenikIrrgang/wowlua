@@ -595,6 +595,7 @@ fn package_native(
                         // `WOWLUA_JOBS` and the config apply; `--jobs` is
                         // a build flag.
                         jobs: crate::parallel::Jobs::resolve(None),
+                        keep_code: true,
                         tests: false,
                     };
                     let build = crate::build(session, project, &build_request)?;
@@ -783,6 +784,7 @@ fn package_like_the_packager(
                     bundle: None,
                     only: None,
                     jobs: crate::parallel::Jobs::resolve(None),
+                    keep_code: true,
                     tests: false,
                 };
                 builds.push(crate::build(session, project, &build_request)?);

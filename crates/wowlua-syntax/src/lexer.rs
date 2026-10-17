@@ -9,7 +9,7 @@
 //!   (`LUA_COMPAT_LSTR`),
 //! - names are ASCII letters, digits and `_` (the C locale).
 
-use crate::token::{Token, TokenKind, Trivia, TriviaKind};
+use crate::token::{Token, TokenKind, Tokens, Trivia, TriviaKind};
 use std::borrow::Cow;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::{FileId, Span};
@@ -17,7 +17,7 @@ use wowlua_span::{FileId, Span};
 /// The result of lexing one file.
 #[derive(Debug, Default)]
 pub struct Lexed {
-    pub tokens: Vec<Token>,
+    pub tokens: Tokens,
     pub trivia: Vec<Trivia>,
     /// Byte offset where each Lua line starts (line `n` starts at
     /// `line_starts[n - 1]`).
@@ -44,14 +44,34 @@ impl Lexed {
         offset - self.line_starts[line as usize - 1]
     }
 
-    /// The leading trivia of `tokens[index]`: it starts where the previous
-    /// token's ends.
+    /// The leading trivia of token `index`: the trivia between the previous
+    /// token's end (the file's start for the first) and its start.
     pub fn trivia_of(&self, index: usize) -> &[Trivia] {
-        let start = match index {
+        let from = match index {
             0 => 0,
-            i => self.tokens[i - 1].trivia_end,
+            i => self.tokens.end(i - 1),
         };
-        &self.trivia[start as usize..self.tokens[index].trivia_end as usize]
+        let to = self.tokens.start(index);
+        let lo = self.trivia.partition_point(|t| t.start < from);
+        let hi = lo + self.trivia[lo..].partition_point(|t| t.start < to);
+        &self.trivia[lo..hi]
+    }
+
+    /// Frees the tokens; the trivia and line starts stay. For parses kept
+    /// past the parse whose readers need no tokens (#19): a data addon
+    /// has tens of millions of them.
+    pub fn drop_tokens(&mut self) {
+        self.tokens = Tokens::default();
+    }
+
+    /// Where the code of `src` (these tokens' source) starts: after a byte
+    /// order mark and a `#!` line.
+    pub fn code_start(&self) -> u32 {
+        match self.shebang {
+            Some((_, end)) => end,
+            None if self.bom => 3,
+            None => 0,
+        }
     }
 }
 
@@ -76,10 +96,9 @@ struct Lexer<'a> {
 /// What [`lex_with`] records.
 #[derive(Clone, Copy, Debug)]
 pub struct LexOptions {
-    /// Records whitespace, line breaks and comments in `Lexed::trivia`.
-    /// Without it they are still scanned and checked, with the same
-    /// diagnostics, but `trivia` stays empty and every token's
-    /// `trivia_end` is 0.
+    /// Records line breaks and comments in `Lexed::trivia`. Without it they
+    /// are still scanned and checked, with the same diagnostics, but
+    /// `trivia` stays empty.
     pub trivia: bool,
 }
 
@@ -102,7 +121,37 @@ pub fn lex_with(src: &[u8], file: FileId, options: LexOptions) -> Lexed {
         keep_trivia: options.trivia,
     };
     lexer.run();
+    // Growing by doubling leaves up to half of each list unused, and the
+    // lists live as long as the tree (#19).
+    lexer.out.tokens.shrink_to_fit();
+    lexer.out.trivia.shrink_to_fit();
+    lexer.out.line_starts.shrink_to_fit();
     lexer.out
+}
+
+/// The start of the first token at or after `offset` in `src` (the bytes
+/// of `file`), without the tokens: past the spaces, line breaks and
+/// comments there, or `src.len()` (the end-of-file token's start) when only
+/// those follow. `offset` must be where code may start
+/// ([`Lexed::code_start`], a token's end), not inside a backtick string's
+/// text.
+pub fn skip_trivia(src: &[u8], file: FileId, offset: u32) -> u32 {
+    let at = (offset as usize).min(src.len());
+    // Mostly a token follows at once (`,` after a field).
+    match src.get(at..).unwrap_or_default() {
+        [b'-', b'-', ..] | [b' ' | b'\t' | 0x0B | 0x0C | b'\n' | b'\r', ..] => {}
+        _ => return at as u32,
+    }
+    let mut lexer = Lexer {
+        src,
+        file,
+        pos: at,
+        out: Lexed::default(),
+        modes: Vec::new(),
+        keep_trivia: false,
+    };
+    lexer.trivia();
+    lexer.pos as u32
 }
 
 fn is_name_start(c: u8) -> bool {
@@ -177,7 +226,6 @@ impl<'a> Lexer<'a> {
                 continue;
             }
             self.trivia();
-            let trivia_end = self.out.trivia.len() as u32;
             let start = self.pos;
             let kind = if self.at_end() {
                 TokenKind::Eof
@@ -188,7 +236,6 @@ impl<'a> Lexer<'a> {
                 kind,
                 start: start as u32,
                 end: self.pos as u32,
-                trivia_end,
             });
             if kind == TokenKind::Eof {
                 if let Some(Mode::Expr { .. }) = self.modes.last() {
@@ -210,6 +257,9 @@ impl<'a> Lexer<'a> {
         });
     }
 
+    // Inlined into the token loop: called from `skip_trivia` too, it would
+    // not be, and lexing would cost 2% more.
+    #[inline(always)]
     fn trivia(&mut self) {
         loop {
             let start = self.pos;
@@ -221,7 +271,6 @@ impl<'a> Lexer<'a> {
                 while !self.at_end() && is_space(self.peek(0)) {
                     self.pos += 1;
                 }
-                self.push_trivia(TriviaKind::Whitespace, start);
             } else if self.newline_len() > 0 {
                 self.consume_newline();
                 self.push_trivia(TriviaKind::Newline, start);
@@ -609,14 +658,12 @@ impl<'a> Lexer<'a> {
     }
 
     fn push_token(&mut self, kind: TokenKind, start: usize) {
-        // No trivia of its own: the range from the previous token's end is
-        // empty.
-        let trivia_end = self.out.trivia.len() as u32;
+        // No trivia of its own: nothing lies between the previous token's
+        // end and its start.
         self.out.tokens.push(Token {
             kind,
             start: start as u32,
             end: self.pos as u32,
-            trivia_end,
         });
     }
 
@@ -845,7 +892,42 @@ fn lua_number(text: &str) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_plain_decimal, is_wowlua_numeral, number_value};
+    use super::{is_plain_decimal, is_wowlua_numeral, lex, number_value, skip_trivia};
+    use wowlua_span::SourceDb;
+
+    // From a token's end (or where the code starts), the scan finds the next
+    // token's start, as the lexer does.
+    #[test]
+    fn skipping_trivia_finds_the_next_token() {
+        let mut db = SourceDb::new();
+        for src in [
+            "",
+            "   ",
+            "-- only a comment",
+            "--[[ open",
+            "\u{feff}#!/bin/lua\nx = 1",
+            "#!/bin/lua",
+            "\u{feff}x",
+            "local a = 1 -- c\n--[==[ long\n]==]\n\r\n  b = {1, 2,\n 3}",
+            "f(a --[[x]], b)\n-- last\n",
+            "if x then\treturn end --[[ unfinished",
+            "a = -- \n --[[]] --[=[]]]=] -1",
+        ] {
+            let file = db.add("t.lua", src.to_string());
+            let lexed = lex(src.as_bytes(), file);
+            let tokens = &lexed.tokens;
+            let mut from = lexed.code_start();
+            for i in 0..tokens.len() {
+                let start = tokens.start(i);
+                assert_eq!(
+                    skip_trivia(src.as_bytes(), file, from),
+                    start,
+                    "{src:?} at {from}"
+                );
+                from = tokens.end(i);
+            }
+        }
+    }
 
     // The fast path gives what the full conversion gives.
     #[test]

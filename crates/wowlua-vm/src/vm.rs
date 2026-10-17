@@ -439,7 +439,7 @@ impl Vm {
         };
         let compiled = compiler::compile_with(
             &mut self.heap,
-            &parse.chunk,
+            parse.view(),
             src,
             Rc::from(chunkname),
             options,

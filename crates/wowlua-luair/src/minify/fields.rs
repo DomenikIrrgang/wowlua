@@ -77,7 +77,7 @@ impl Visitor for Analyze<'_> {
                                 .fields
                                 .entry(b)
                                 .or_default()
-                                .entry(name.name.clone())
+                                .entry(name.name.to_string())
                                 .or_default() += 1;
                         }
                     }
@@ -124,9 +124,9 @@ struct Rename<'a> {
 impl Rename<'_> {
     fn renamed(&self, occurrence: usize, id: &mut Ident) {
         if let Some(Ref::Local(b)) = self.res.occurrences.get(occurrence)
-            && let Some(new) = self.names.get(b).and_then(|m| m.get(&id.name))
+            && let Some(new) = self.names.get(b).and_then(|m| m.get(id.name.as_str()))
         {
-            id.name = new.clone();
+            id.rename(new.as_str());
         }
     }
 }

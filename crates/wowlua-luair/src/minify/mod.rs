@@ -115,7 +115,7 @@ fn shorten_literals(chunk: &mut Chunk, preserve_lines: bool) {
             match &mut e.kind {
                 ExprKind::Number(n) => {
                     if let Some(short) = literals::shorten_number(n) {
-                        *n = short;
+                        *n = short.into();
                     }
                 }
                 ExprKind::String(raw) => {
@@ -123,7 +123,7 @@ fn shorten_literals(chunk: &mut Chunk, preserve_lines: bool) {
                         return;
                     }
                     if let Some(short) = literals::shorten_string(raw) {
-                        *raw = short;
+                        *raw = short.into();
                     }
                 }
                 _ => {}
@@ -154,7 +154,7 @@ pub fn rename_members(
             {
                 self.found.push(id.pos);
                 if self.apply {
-                    id.name = new.clone();
+                    id.rename(new.as_str());
                 }
             }
         }

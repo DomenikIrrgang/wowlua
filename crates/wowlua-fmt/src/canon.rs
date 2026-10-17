@@ -4,24 +4,24 @@
 //! `f("x")`) do not matter; parentheses and literal values do.
 
 use std::fmt::Write;
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 
-pub fn fingerprint(chunk: &Chunk) -> String {
+pub fn fingerprint(chunk: Chunk<'_>) -> String {
     let mut out = String::new();
-    block(&chunk.block, &mut out);
+    block(chunk.block(), &mut out);
     out
 }
 
-fn block(b: &Block, out: &mut String) {
+fn block(b: Block<'_>, out: &mut String) {
     out.push('{');
-    for s in &b.stmts {
+    for s in &b.stmts() {
         stmt(s, out);
         out.push(';');
     }
     out.push('}');
 }
 
-fn list(es: &[Expr], out: &mut String) {
+fn list(es: Exprs<'_>, out: &mut String) {
     out.push('[');
     for e in es {
         expr(e, out);
@@ -48,6 +48,10 @@ fn regex_lite() -> &'static [(regex::Regex, &'static str)] {
             (r"\w*span: Span \{ [^}]* \},? ?", ""),
             (r"id: NodeId\(\d+\),? ?", ""),
             (r"raw: \[[^\]]*\],? ?", ""),
+            // The views print a name's span as a tuple field and a string
+            // literal's raw text as a string.
+            (r", Span \{ [^}]* \}", ""),
+            (r#"raw: "(?:[^"\\]|\\.)*",? ?"#, ""),
         ]
         .iter()
         .map(|(p, w)| (regex::Regex::new(p).expect("a valid pattern"), *w))
@@ -55,54 +59,54 @@ fn regex_lite() -> &'static [(regex::Regex, &'static str)] {
     })
 }
 
-fn decorators(ds: &[Decorator], out: &mut String) {
+fn decorators(ds: Decorators<'_>, out: &mut String) {
     for d in ds {
         out.push('@');
-        for n in &d.path {
-            let _ = write!(out, "{}.", n.text);
+        for n in &d.path() {
+            let _ = write!(out, "{}.", n.text());
         }
-        if let Some(a) = &d.args {
-            args(a, out);
+        if let Some(a) = &d.args() {
+            args(*a, out);
         }
     }
 }
 
-fn ty(t: &Type, out: &mut String) {
-    out.push_str(&plain(t));
+fn ty(t: Type<'_>, out: &mut String) {
+    out.push_str(&plain(&t));
 }
 
-fn func(f: &FuncBody, out: &mut String) {
+fn func(f: Func<'_>, out: &mut String) {
     out.push_str("fn");
-    out.push_str(&plain(&f.type_params));
+    out.push_str(&plain(&f.type_params()));
     out.push('(');
-    for p in &f.params {
-        decorators(&p.decorators, out);
-        let _ = write!(out, "{}", p.name.text);
-        if let Some(t) = &p.ty {
-            ty(t, out);
+    for p in &f.params() {
+        decorators(p.decorators(), out);
+        let _ = write!(out, "{}", p.name().text());
+        if let Some(t) = &p.ty() {
+            ty(*t, out);
         }
-        if let Some(d) = &p.default {
+        if let Some(d) = &p.default() {
             out.push('=');
-            expr(d, out);
+            expr(*d, out);
         }
         out.push(',');
     }
-    if let Some(v) = &f.vararg {
+    if let Some(v) = &f.vararg() {
         out.push_str("...");
         out.push_str(&plain(&v.ty));
     }
     out.push(')');
-    out.push_str(&plain(&f.ret));
-    block(&f.body, out);
+    out.push_str(&plain(&f.ret()));
+    block(f.body(), out);
 }
 
-fn stmt(s: &Stmt, out: &mut String) {
+fn stmt(s: Stmt<'_>, out: &mut String) {
     stacker::maybe_grow(64 * 1024, 1024 * 1024, || stmt_inner(s, out))
 }
 
-fn stmt_inner(s: &Stmt, out: &mut String) {
-    decorators(&s.decorators, out);
-    match &s.kind {
+fn stmt_inner(s: Stmt<'_>, out: &mut String) {
+    decorators(s.decorators(), out);
+    match s.kind() {
         StmtKind::Assign { targets, values } => {
             out.push_str("set");
             list(targets, out);
@@ -152,7 +156,7 @@ fn stmt_inner(s: &Stmt, out: &mut String) {
             step,
             body,
         } => {
-            let _ = write!(out, "for {}{}=", var.name.text, plain(&var.ty));
+            let _ = write!(out, "for {}{}=", var.name.text(), plain(&var.ty));
             expr(start, out);
             expr(limit, out);
             if let Some(s) = step {
@@ -163,29 +167,29 @@ fn stmt_inner(s: &Stmt, out: &mut String) {
         StmtKind::GenericFor { vars, exprs, body } => {
             out.push_str("forin ");
             for v in vars {
-                let _ = write!(out, "{}{},", v.name.text, plain(&v.ty));
+                let _ = write!(out, "{}{},", v.name.text(), plain(&v.ty));
             }
             list(exprs, out);
             block(body, out);
         }
         StmtKind::Function { name, func: f } => {
             out.push_str("function ");
-            for n in &name.path {
-                let _ = write!(out, "{}.", n.text);
+            for n in &name.path() {
+                let _ = write!(out, "{}.", n.text());
             }
-            if let Some(m) = &name.method {
-                let _ = write!(out, ":{}", m.text);
+            if let Some(m) = &name.method() {
+                let _ = write!(out, ":{}", m.text());
             }
             func(f, out);
         }
         StmtKind::LocalFunction { name, func: f } => {
-            let _ = write!(out, "localfn {}", name.text);
+            let _ = write!(out, "localfn {}", name.text());
             func(f, out);
         }
         StmtKind::Local { names, values } => {
             out.push_str("local ");
             for n in names {
-                let _ = write!(out, "{}{},", n.name.text, plain(&n.ty));
+                let _ = write!(out, "{}{},", n.name.text(), plain(&n.ty));
             }
             list(values, out);
         }
@@ -196,7 +200,7 @@ fn stmt_inner(s: &Stmt, out: &mut String) {
         }
         StmtKind::Continue => out.push_str("continue"),
         StmtKind::Const { name, ty: t, value } => {
-            let _ = write!(out, "const {}{}", name.text, plain(t));
+            let _ = write!(out, "const {}{}", name.text(), plain(&t));
             if let Some(v) = value {
                 expr(v, out);
             }
@@ -208,13 +212,13 @@ fn stmt_inner(s: &Stmt, out: &mut String) {
         } => {
             out.push_str("destructure");
             for f in fields {
-                let _ = write!(out, "{}", f.name.text);
+                let _ = write!(out, "{}", f.name.text());
                 if let Some(d) = &f.default {
-                    expr(d, out);
+                    expr(*d, out);
                 }
                 out.push(',');
             }
-            out.push_str(&plain(t));
+            out.push_str(&plain(&t));
             if let Some(v) = value {
                 expr(v, out);
             }
@@ -227,23 +231,23 @@ fn stmt_inner(s: &Stmt, out: &mut String) {
             let _ = write!(
                 out,
                 "class {} {} {}{}{}",
-                c.is_abstract,
-                c.name.text,
-                plain(&c.type_params),
-                plain(&c.extends),
-                plain(&c.implements)
+                c.is_abstract(),
+                c.name().text(),
+                plain(&c.type_params()),
+                plain(&c.extends()),
+                plain(&c.implements())
             );
-            for m in &c.members {
-                decorators(&m.decorators, out);
-                let _ = write!(out, "{:?}", m.modifiers);
-                match &m.kind {
+            for m in &c.members() {
+                decorators(m.decorators(), out);
+                let _ = write!(out, "{:?}", m.modifiers());
+                match m.kind() {
                     ClassMemberKind::Field {
                         name,
                         optional,
                         ty: t,
                         value,
                     } => {
-                        let _ = write!(out, "field {} {optional}", name.text);
+                        let _ = write!(out, "field {} {optional}", name.text());
                         ty(t, out);
                         if let Some(v) = value {
                             expr(v, out);
@@ -254,19 +258,19 @@ fn stmt_inner(s: &Stmt, out: &mut String) {
                         func: f,
                         has_body,
                     } => {
-                        let _ = write!(out, "method {} {has_body}", name.text);
+                        let _ = write!(out, "method {} {has_body}", name.text());
                         func(f, out);
                     }
                     ClassMemberKind::Getter { name, ty: t, body } => {
-                        let _ = write!(out, "get {}{}", name.text, plain(t));
+                        let _ = write!(out, "get {}{}", name.text(), plain(&t));
                         block(body, out);
                     }
                     ClassMemberKind::Setter { name, param, body } => {
                         let _ = write!(
                             out,
                             "set {} {}{}",
-                            name.text,
-                            param.name.text,
+                            name.text(),
+                            param.name.text(),
                             plain(&param.ty)
                         );
                         block(body, out);
@@ -279,27 +283,27 @@ fn stmt_inner(s: &Stmt, out: &mut String) {
                 out.push(';');
             }
         }
-        StmtKind::Interface(i) => out.push_str(&plain(i)),
+        StmtKind::Interface(i) => out.push_str(&plain(&i)),
         StmtKind::Enum(e) => {
-            let _ = write!(out, "enum {}", e.name.text);
-            for item in &e.items {
-                let _ = write!(out, "{}", item.name.text);
+            let _ = write!(out, "enum {}", e.name().text());
+            for item in &e.items() {
+                let _ = write!(out, "{}", item.name.text());
                 if let Some(v) = &item.value {
-                    expr(v, out);
+                    expr(*v, out);
                 }
                 out.push(',');
             }
         }
-        StmtKind::TypeAlias(a) => out.push_str(&plain(a)),
-        StmtKind::Declare(d) => out.push_str(&plain(d)),
+        StmtKind::TypeAlias(a) => out.push_str(&plain(&a)),
+        StmtKind::Declare(d) => out.push_str(&plain(&d)),
         StmtKind::Import(i) => {
             let _ = write!(
                 out,
                 "import {} {} {:?} {:?}",
-                i.type_only,
-                i.internal,
-                plain(&i.clause),
-                i.from.value
+                i.type_only(),
+                i.internal(),
+                plain(&i.clause()),
+                i.from().value()
             );
         }
         StmtKind::Return(values) => {
@@ -313,7 +317,7 @@ fn stmt_inner(s: &Stmt, out: &mut String) {
     }
 }
 
-fn args(a: &Args, out: &mut String) {
+fn args(a: Args<'_>, out: &mut String) {
     out.push('(');
     for e in a.exprs() {
         expr(e, out);
@@ -322,20 +326,20 @@ fn args(a: &Args, out: &mut String) {
     out.push(')');
 }
 
-fn expr(e: &Expr, out: &mut String) {
+fn expr(e: Expr<'_>, out: &mut String) {
     stacker::maybe_grow(64 * 1024, 1024 * 1024, || expr_inner(e, out))
 }
 
-fn expr_inner(e: &Expr, out: &mut String) {
-    match &e.kind {
+fn expr_inner(e: Expr<'_>, out: &mut String) {
+    match e.kind() {
         ExprKind::Nil => out.push_str("nil"),
         ExprKind::True => out.push_str("true"),
         ExprKind::False => out.push_str("false"),
         ExprKind::Number(n) => {
-            let _ = write!(out, "#{}", n.raw);
+            let _ = write!(out, "#{}", n.raw());
         }
         ExprKind::String(s) => {
-            let _ = write!(out, "{:?}", s.value);
+            let _ = write!(out, "{:?}", s.value());
         }
         ExprKind::Vararg => out.push_str("..."),
         ExprKind::Function(f) => func(f, out),
@@ -350,7 +354,7 @@ fn expr_inner(e: &Expr, out: &mut String) {
                         expr(value, out);
                     }
                     TableField::Named { name, value, .. } => {
-                        let _ = write!(out, "{}=", name.text);
+                        let _ = write!(out, "{}=", name.text());
                         expr(value, out);
                     }
                     TableField::Positional(v) => expr(v, out),
@@ -359,7 +363,7 @@ fn expr_inner(e: &Expr, out: &mut String) {
             }
             out.push('}');
         }
-        ExprKind::Name(n) => out.push_str(&n.text),
+        ExprKind::Name(n) => out.push_str(n.text()),
         ExprKind::Index { obj, key } => {
             expr(obj, out);
             out.push('[');
@@ -368,7 +372,7 @@ fn expr_inner(e: &Expr, out: &mut String) {
         }
         ExprKind::Field { obj, name } => {
             expr(obj, out);
-            let _ = write!(out, ".{}", name.text);
+            let _ = write!(out, ".{}", name.text());
         }
         ExprKind::Call { callee, args: a } => {
             expr(callee, out);
@@ -376,7 +380,7 @@ fn expr_inner(e: &Expr, out: &mut String) {
         }
         ExprKind::Method { obj, name, args: a } => {
             expr(obj, out);
-            let _ = write!(out, ":{}", name.text);
+            let _ = write!(out, ":{}", name.text());
             args(a, out);
         }
         ExprKind::Paren(inner) => {
@@ -398,7 +402,7 @@ fn expr_inner(e: &Expr, out: &mut String) {
         }
         ExprKind::OptField { obj, name } => {
             expr(obj, out);
-            let _ = write!(out, "?.{}", name.text);
+            let _ = write!(out, "?.{}", name.text());
         }
         ExprKind::OptIndex { obj, key } => {
             expr(obj, out);
@@ -408,7 +412,7 @@ fn expr_inner(e: &Expr, out: &mut String) {
         }
         ExprKind::OptMethod { obj, name, args: a } => {
             expr(obj, out);
-            let _ = write!(out, "?:{}", name.text);
+            let _ = write!(out, "?:{}", name.text());
             args(a, out);
         }
         ExprKind::OptCall { callee, args: a } => {

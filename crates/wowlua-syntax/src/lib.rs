@@ -6,16 +6,20 @@
 //! checks while generating code (locals, upvalues, registers), which the
 //! build checks on its output.
 
-pub mod ast;
 pub mod deep;
 pub mod features;
 pub mod lexer;
 pub mod literal;
+mod ops;
 mod parser;
 pub mod search;
 pub mod token;
+mod tree;
+pub mod view;
 pub mod visit;
 
+use std::sync::Arc;
+use tree::SourceText;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::FileId;
 
@@ -25,37 +29,49 @@ pub use lexer::Lexed;
 /// nodes where parsing failed), the tokens with their trivia, and diagnostics.
 #[derive(Debug)]
 pub struct Parse {
-    pub chunk: ast::Chunk,
+    tree: tree::Tree,
     pub lexed: Lexed,
     pub diagnostics: Vec<Diagnostic>,
-}
-
-/// A deep chain (`deep`) drops with enough stack.
-impl Drop for Parse {
-    fn drop(&mut self) {
-        if deep::links() >= deep::DEEP {
-            let stmts = std::mem::take(&mut self.chunk.block.stmts);
-            deep::run(move || drop(stmts));
-        }
-    }
 }
 
 impl Parse {
     pub fn has_errors(&self) -> bool {
         self.diagnostics.iter().any(Diagnostic::is_error)
     }
+
+    /// The heap the tree holds, by array: name, bytes, items (for `cargo
+    /// xtask parse-stats`).
+    pub fn tree_heap(&self) -> Vec<(&'static str, usize, usize)> {
+        self.tree.heap()
+    }
 }
 
-/// Parses `src`, the raw bytes of `file`.
+/// Parses `src`, the raw bytes of `file`. The tree keeps a copy of them.
 pub fn parse(src: &[u8], file: FileId) -> Parse {
+    parse_keeping(src, file, SourceText::new(src))
+}
+
+/// [`parse`] of a text the tree shares instead of copying it.
+pub fn parse_shared(text: &Arc<str>, file: FileId) -> Parse {
+    parse_keeping(text.as_bytes(), file, SourceText::Shared(text.clone()))
+}
+
+/// [`parse`] of a text compiled into the program (the WoW API), which the
+/// tree refers to instead of copying it.
+pub fn parse_static(text: &'static str, file: FileId) -> Parse {
+    parse_keeping(text.as_bytes(), file, SourceText::Static(text))
+}
+
+/// Parses `src` into a tree that keeps `text`, the same bytes.
+fn parse_keeping(src: &[u8], file: FileId, text: SourceText) -> Parse {
     let mut lexed = lexer::lex(src, file);
     let mut diagnostics = std::mem::take(&mut lexed.diagnostics);
-    let mut parser = parser::Parser::new(src, file, lexed);
-    let chunk = parser.chunk();
+    let mut parser = parser::Parser::new(src, file, lexed, text);
+    parser.chunk();
     diagnostics.append(&mut parser.diagnostics);
     diagnostics.sort_by_key(|d| d.labels.first().map(|l| l.span.start).unwrap_or(0));
     Parse {
-        chunk,
+        tree: parser.t,
         lexed: parser.lexed,
         diagnostics,
     }

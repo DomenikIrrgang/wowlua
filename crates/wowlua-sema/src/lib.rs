@@ -20,7 +20,7 @@ use std::sync::Arc;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
 use wowlua_syntax::Parse;
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileKind {
@@ -78,20 +78,20 @@ pub struct ExportAttrs {
 
 impl ExportAttrs {
     /// The core decorators of a statement that importers see.
-    pub fn of(decorators: &[Decorator]) -> ExportAttrs {
+    pub fn of(decorators: Decorators<'_>) -> ExportAttrs {
         let mut attrs = ExportAttrs::default();
         for d in decorators {
-            if d.path.len() != 1 {
+            if d.path().len() != 1 {
                 continue;
             }
-            match d.path[0].text.as_ref() {
+            match d.path().at(0).text() {
                 "deprecated" => {
                     let message =
-                        d.args
+                        d.args()
                             .as_ref()
-                            .and_then(|a| match a.exprs().first().map(|e| &e.kind) {
+                            .and_then(|a| match a.exprs().first().map(|e| e.kind()) {
                                 Some(ExprKind::String(s)) => {
-                                    Some(String::from_utf8_lossy(&s.value).into_owned())
+                                    Some(String::from_utf8_lossy(&s.value()).into_owned())
                                 }
                                 _ => None,
                             });
@@ -238,8 +238,8 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
             ..ModuleInfo::default()
         };
         let mut seen_other = false;
-        for s in &parse.chunk.block.stmts {
-            match &s.kind {
+        for s in parse.view().block().stmts() {
+            match s.kind() {
                 StmtKind::Import(import) => {
                     info.is_module = true;
                     if seen_other {
@@ -248,25 +248,25 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
                                 "E1011",
                                 "imports must come before every other statement",
                             )
-                            .with_label(s.span, "this import follows other code"),
+                            .with_label(s.span(), "this import follows other code"),
                         );
                     }
                     if import_removed(s, &info, f.meta.or(meta), &mut analysis.diagnostics) {
                         continue;
                     }
-                    let resolved = resolve(&import.from, &f.src_rel, &exact, &folded, files);
+                    let resolved = resolve(import.from(), &f.src_rel, &exact, &folded, files);
                     // Module internals are for test files (spec Tooling
                     // §16.1.3.1).
-                    if import.internal && !is_test_file(&f.src_rel) {
+                    if import.internal() && !is_test_file(&f.src_rel) {
                         analysis.diagnostics.push(
                             Diagnostic::error("E8119", "`import internal` is only for test files")
-                                .with_label(s.span, "here")
+                                .with_label(s.span(), "here")
                                 .with_help("export what other files use"),
                         );
                     }
                     // The test framework is for test files (spec Tooling
                     // §16.1.1).
-                    if matches!(&import.from.value[..], b"wowlua:test" | b"wowlua:mock")
+                    if matches!(&import.from().value()[..], b"wowlua:test" | b"wowlua:mock")
                         && !is_test_file(&f.src_rel)
                         && !is_compiler_known(&f.src_rel)
                     {
@@ -275,10 +275,10 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
                                 "E8108",
                                 format!(
                                     "`{}` is only for test files",
-                                    String::from_utf8_lossy(&import.from.value)
+                                    String::from_utf8_lossy(&import.from().value())
                                 ),
                             )
-                            .with_label(string_span(&import.from, s), "imported here")
+                            .with_label(string_span(import.from(), s), "imported here")
                             .with_help(
                                 "test files are `*.test.wowlua` files and the files under `tests/`",
                             ),
@@ -290,66 +290,71 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
                             if target == Target::Meta {
                                 bind_meta(import, &mut info.meta_bindings);
                             }
-                            if !import.type_only
+                            if !import.type_only()
                                 && let Some(dep) = target_file(&target)
                             {
                                 analysis.edges.push((dep, i));
                             }
-                            if import.internal
+                            if import.internal()
                                 && let (Target::Module(m), ImportClause::Names(specs)) =
-                                    (&target, &import.clause)
+                                    (&target, &import.clause())
                             {
                                 internal_requests.push((
                                     *m,
-                                    specs.iter().map(|sp| sp.name.text.to_string()).collect(),
+                                    specs.iter().map(|sp| sp.name.text().to_string()).collect(),
                                 ));
                             }
                             info.imports.push(Import {
-                                start: s.span.start,
+                                start: s.span().start,
                                 target,
-                                type_only: import.type_only,
-                                internal: import.internal,
+                                type_only: import.type_only(),
+                                internal: import.internal(),
                             });
                         }
                         Err(d) => analysis
                             .diagnostics
-                            .push(d.with_label(string_span(&import.from, s), "here")),
+                            .push(d.with_label(string_span(import.from(), s), "here")),
                     }
                 }
                 StmtKind::Export(inner) => {
                     info.is_module = true;
                     seen_other = true;
-                    let attrs = ExportAttrs::of(&s.decorators);
+                    let attrs = ExportAttrs::of(s.decorators());
                     if attrs != ExportAttrs::default() {
                         for name in exported_names_of(inner) {
                             info.export_attrs.insert(name, attrs.clone());
                         }
                     }
-                    match &inner.kind {
+                    match inner.kind() {
                         StmtKind::Local { names, .. } => {
                             for n in names {
-                                info.exports.insert(n.name.text.to_string(), Export::Value);
+                                info.exports
+                                    .insert(n.name.text().to_string(), Export::Value);
                             }
                         }
                         StmtKind::Function { name, .. } => {
                             info.exports
-                                .insert(name.path[0].text.to_string(), Export::Function);
+                                .insert(name.path().at(0).text().to_string(), Export::Function);
                         }
                         StmtKind::Const { name, .. } => {
                             info.exports
-                                .insert(name.text.to_string(), Export::Const(None));
+                                .insert(name.text().to_string(), Export::Const(None));
                         }
                         StmtKind::TypeAlias(t) => {
-                            info.exports.insert(t.name.text.to_string(), Export::Type);
+                            info.exports
+                                .insert(t.name().text().to_string(), Export::Type);
                         }
                         StmtKind::Interface(t) => {
-                            info.exports.insert(t.name.text.to_string(), Export::Type);
+                            info.exports
+                                .insert(t.name().text().to_string(), Export::Type);
                         }
                         StmtKind::Class(c) => {
-                            info.exports.insert(c.name.text.to_string(), Export::Value);
+                            info.exports
+                                .insert(c.name().text().to_string(), Export::Value);
                         }
                         StmtKind::Enum(e) => {
-                            info.exports.insert(e.name.text.to_string(), Export::Value);
+                            info.exports
+                                .insert(e.name().text().to_string(), Export::Value);
                         }
                         _ => {}
                     }
@@ -358,11 +363,11 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
             }
         }
         if info.is_module {
-            for s in &parse.chunk.block.stmts {
-                if matches!(s.kind, StmtKind::Return(_)) {
+            for s in parse.view().block().stmts() {
+                if matches!(s.kind(), StmtKind::Return(_)) {
                     analysis.diagnostics.push(
                         Diagnostic::error("E1032", "a module cannot `return` at its top level")
-                            .with_label(s.span, "exports after this would never be assigned"),
+                            .with_label(s.span(), "exports after this would never be assigned"),
                     );
                 }
             }
@@ -388,10 +393,10 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
             };
             let mut env: HashMap<String, Const> = imported_consts(info, &analysis.modules, parse);
             let mut updates = Vec::new();
-            for s in &parse.chunk.block.stmts {
-                let (name, value, exported) = match &s.kind {
+            for s in parse.view().block().stmts() {
+                let (name, value, exported) = match s.kind() {
                     StmtKind::Const { name, value, .. } => (name, value, false),
-                    StmtKind::Export(inner) => match &inner.kind {
+                    StmtKind::Export(inner) => match inner.kind() {
                         StmtKind::Const { name, value, .. } => (name, value, true),
                         _ => continue,
                     },
@@ -408,9 +413,9 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
                     None => constant::eval(value, &|n| env.get(n).cloned()),
                 };
                 if let Some(c) = folded {
-                    env.insert(name.text.to_string(), c.clone());
+                    env.insert(name.text().to_string(), c.clone());
                     if exported {
-                        updates.push((name.text.to_string(), c));
+                        updates.push((name.text().to_string(), c));
                     }
                 }
             }
@@ -448,8 +453,8 @@ fn intrinsics(files: &[FileInput], analysis: &mut Analysis) {
             .strip_suffix(".d.wowlua")
             .filter(|_| f.src_rel.starts_with(STDLIB_PREFIX))
             .and_then(|stem| index.get(format!("{stem}.wowlua").as_str()).copied());
-        for s in &parse.chunk.block.stmts {
-            for d in s.decorators.iter().filter(|d| d.is_named("intrinsic")) {
+        for s in parse.view().block().stmts() {
+            for d in s.decorators().iter().filter(|d| d.is_named("intrinsic")) {
                 let Some(m) = module else {
                     if !is_compiler_known(&f.src_rel) {
                         analysis.diagnostics.push(
@@ -457,23 +462,25 @@ fn intrinsics(files: &[FileInput], analysis: &mut Analysis) {
                                 "E3033",
                                 "`@intrinsic` is only for compiler-known modules (the standard library)",
                             )
-                            .with_label(d.span, "here"),
+                            .with_label(d.span(), "here"),
                         );
                     }
                     continue;
                 };
                 let id = match d
-                    .args
+                    .args()
                     .as_ref()
-                    .and_then(|a| a.exprs().first().map(|e| &e.kind))
+                    .and_then(|a| a.exprs().first().map(|e| e.kind()))
                 {
-                    Some(ExprKind::String(lit)) => String::from_utf8_lossy(&lit.value).into_owned(),
+                    Some(ExprKind::String(lit)) => {
+                        String::from_utf8_lossy(&lit.value()).into_owned()
+                    }
                     _ => continue,
                 };
-                let name = match &s.kind {
-                    StmtKind::Declare(decl) => match decl.as_ref() {
-                        Declare::Function { name, .. } => name.path[0].text.to_string(),
-                        Declare::Global { name, .. } => name.text.to_string(),
+                let name = match s.kind() {
+                    StmtKind::Declare(decl) => match decl.kind() {
+                        DeclareKind::Function { name, .. } => name.path().at(0).text().to_string(),
+                        DeclareKind::Global { name, .. } => name.text().to_string(),
                         _ => continue,
                     },
                     _ => continue,
@@ -504,7 +511,7 @@ fn classes_and_enums(files: &[FileInput], analysis: &mut Analysis) {
         let mut enums = IndexMap::new();
         for (e, _) in classes::declarations(parse).1 {
             let value = classes::enum_info(e, &|n| env.get(n).cloned(), &mut analysis.diagnostics);
-            enums.insert(e.name.text.to_string(), Arc::new(value));
+            enums.insert(e.name().text().to_string(), Arc::new(value));
         }
         analysis.modules[i].as_mut().expect("checked").enums = enums;
     }
@@ -517,7 +524,7 @@ fn classes_and_enums(files: &[FileInput], analysis: &mut Analysis) {
             classes::declarations(p)
                 .0
                 .into_iter()
-                .map(move |c| (i, c.name.text.to_string()))
+                .map(move |c| (i, c.name().text().to_string()))
         })
         .collect();
     let is_class = |m: usize, name: &str| class_names.contains(&(m, name.to_string()));
@@ -532,11 +539,11 @@ fn classes_and_enums(files: &[FileInput], analysis: &mut Analysis) {
             continue;
         }
         let local_classes: HashSet<String> =
-            decls.iter().map(|c| c.name.text.to_string()).collect();
+            decls.iter().map(|c| c.name().text().to_string()).collect();
         let locals = top_level_locals(parse);
         let (named, namespaces) = import_bindings(info, parse);
         for c in decls {
-            let base = match c.extends.as_ref().map(classes::type_path) {
+            let base = match c.extends().map(classes::type_path) {
                 None => classes::Base::None,
                 Some(None) => classes::Base::Unknown,
                 Some(Some(path)) => classes::resolve_base(
@@ -551,10 +558,10 @@ fn classes_and_enums(files: &[FileInput], analysis: &mut Analysis) {
                 ),
             };
             raw.push((
-                (i, c.name.text.to_string()),
+                (i, c.name().text().to_string()),
                 classes::ClassInfo {
-                    name: c.name.text.to_string(),
-                    is_abstract: c.is_abstract,
+                    name: c.name().text().to_string(),
+                    is_abstract: c.is_abstract(),
                     base,
                     widget: None,
                     members: classes::members(c),
@@ -590,9 +597,9 @@ fn classes_and_enums(files: &[FileInput], analysis: &mut Analysis) {
         };
         let mut module_classes = IndexMap::new();
         for c in classes::declarations(parse).0 {
-            let info = table[&(i, c.name.text.to_string())].clone();
+            let info = table[&(i, c.name().text().to_string())].clone();
             classes::check_class(c, &info, &table, &mut analysis.diagnostics);
-            module_classes.insert(c.name.text.to_string(), info);
+            module_classes.insert(c.name().text().to_string(), info);
         }
         let info = analysis.modules[i].as_mut().expect("checked");
         info.classes = module_classes;
@@ -613,20 +620,20 @@ fn module_consts(
     parse: &Parse,
 ) -> HashMap<String, Const> {
     let mut env = imported_consts(info, modules, parse);
-    for s in &parse.chunk.block.stmts {
+    for s in parse.view().block().stmts() {
         let StmtKind::Const {
             name,
             value: Some(value),
             ..
-        } = (match &s.kind {
-            StmtKind::Export(inner) => &inner.kind,
+        } = (match s.kind() {
+            StmtKind::Export(inner) => inner.kind(),
             k => k,
         })
         else {
             continue;
         };
         if let Some(c) = constant::eval(value, &|n| env.get(n).cloned()) {
-            env.insert(name.text.to_string(), c);
+            env.insert(name.text().to_string(), c);
         }
     }
     env
@@ -635,23 +642,23 @@ fn module_consts(
 /// Names bound at the top level of a file other than classes.
 fn top_level_locals(parse: &Parse) -> HashSet<String> {
     let mut out = HashSet::new();
-    for s in &parse.chunk.block.stmts {
-        let kind = match &s.kind {
-            StmtKind::Export(inner) => &inner.kind,
+    for s in parse.view().block().stmts() {
+        let kind = match s.kind() {
+            StmtKind::Export(inner) => inner.kind(),
             k => k,
         };
         match kind {
             StmtKind::Local { names, .. } => {
-                out.extend(names.iter().map(|n| n.name.text.to_string()))
+                out.extend(names.iter().map(|n| n.name.text().to_string()))
             }
             StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
-                out.insert(name.text.to_string());
+                out.insert(name.text().to_string());
             }
             StmtKind::LocalDestructure { fields, .. } => {
-                out.extend(fields.iter().map(|f| f.name.text.to_string()))
+                out.extend(fields.iter().map(|f| f.name.text().to_string()))
             }
             StmtKind::Enum(e) => {
-                out.insert(e.name.text.to_string());
+                out.insert(e.name().text().to_string());
             }
             _ => {}
         }
@@ -668,25 +675,25 @@ fn import_bindings(
 ) -> (HashMap<String, (usize, String)>, HashMap<String, usize>) {
     let mut named = HashMap::new();
     let mut namespaces = HashMap::new();
-    for s in &parse.chunk.block.stmts {
-        let StmtKind::Import(import) = &s.kind else {
+    for s in parse.view().block().stmts() {
+        let StmtKind::Import(import) = s.kind() else {
             continue;
         };
-        let Some(resolved) = info.imports.iter().find(|i| i.start == s.span.start) else {
+        let Some(resolved) = info.imports.iter().find(|i| i.start == s.span().start) else {
             continue;
         };
         let Target::Module(m) = resolved.target else {
             continue;
         };
-        match &import.clause {
+        match &import.clause() {
             ImportClause::Names(specs) => {
                 for spec in specs {
                     let local = spec.alias.as_ref().unwrap_or(&spec.name);
-                    named.insert(local.text.to_string(), (m, spec.name.text.to_string()));
+                    named.insert(local.text().to_string(), (m, spec.name.text().to_string()));
                 }
             }
             ImportClause::Namespace(n) => {
-                namespaces.insert(n.text.to_string(), m);
+                namespaces.insert(n.text().to_string(), m);
             }
             ImportClause::SideEffect => {}
         }
@@ -701,22 +708,22 @@ fn imported_consts(
     parse: &Parse,
 ) -> HashMap<String, Const> {
     let mut env = HashMap::new();
-    for s in &parse.chunk.block.stmts {
-        let StmtKind::Import(import) = &s.kind else {
+    for s in parse.view().block().stmts() {
+        let StmtKind::Import(import) = s.kind() else {
             continue;
         };
-        let Some(resolved) = info.imports.iter().find(|i| i.start == s.span.start) else {
+        let Some(resolved) = info.imports.iter().find(|i| i.start == s.span().start) else {
             continue;
         };
         let Target::Module(m) = resolved.target else {
             continue;
         };
         let Some(target) = &modules[m] else { continue };
-        if let ImportClause::Names(specs) = &import.clause {
+        if let ImportClause::Names(specs) = &import.clause() {
             for spec in specs {
-                if let Some(Export::Const(Some(c))) = target.exports.get(spec.name.text.as_ref()) {
+                if let Some(Export::Const(Some(c))) = target.exports.get(spec.name.text()) {
                     let local = spec.alias.as_ref().unwrap_or(&spec.name);
-                    env.insert(local.text.to_string(), c.clone());
+                    env.insert(local.text().to_string(), c.clone());
                 }
             }
         }
@@ -725,12 +732,12 @@ fn imported_consts(
 }
 
 /// Names bound by an import of `wowlua:meta`.
-fn bind_meta(import: &wowlua_syntax::ast::Import, out: &mut HashMap<String, MetaKind>) {
-    if let ImportClause::Names(specs) = &import.clause {
+fn bind_meta(import: wowlua_syntax::view::Import<'_>, out: &mut HashMap<String, MetaKind>) {
+    if let ImportClause::Names(specs) = &import.clause() {
         for spec in specs {
-            if let Some(kind) = MetaKind::from_export(&spec.name.text) {
+            if let Some(kind) = MetaKind::from_export(spec.name.text()) {
                 let local = spec.alias.as_ref().unwrap_or(&spec.name);
-                out.insert(local.text.to_string(), kind);
+                out.insert(local.text().to_string(), kind);
             }
         }
     }
@@ -740,7 +747,7 @@ fn bind_meta(import: &wowlua_syntax::ast::Import, out: &mut HashMap<String, Meta
 /// The condition may only use `wowlua:meta` paths and literals (E1040);
 /// `flavor` is not static in shared mode (E1039).
 fn import_removed(
-    stmt: &Stmt,
+    stmt: Stmt<'_>,
     info: &ModuleInfo,
     meta: Option<&Meta>,
     out: &mut Vec<Diagnostic>,
@@ -748,13 +755,14 @@ fn import_removed(
     let Some(meta) = meta else { return false };
     let kind_of = |n: &str| info.meta_bindings.get(n).copied();
     let mut removed = false;
-    for d in &stmt.decorators {
+    for d in stmt.decorators() {
         let Some(cond) = meta::if_condition(d) else {
             continue;
         };
         let Some(cond) = cond else {
             out.push(
-                Diagnostic::error("E1040", "`@if` takes one condition").with_label(d.span, "here"),
+                Diagnostic::error("E1040", "`@if` takes one condition")
+                    .with_label(d.span(), "here"),
             );
             continue;
         };
@@ -762,14 +770,14 @@ fn import_removed(
             Some(c) => removed |= !c.truthy(),
             None if meta.flavor.is_none() && meta::uses_flavor(cond, &kind_of) => out.push(
                 Diagnostic::error("E1039", "`flavor` is not a constant in shared flavor mode")
-                    .with_label(cond.span, "use a runtime check instead"),
+                    .with_label(cond.span(), "use a runtime check instead"),
             ),
             None => out.push(
                 Diagnostic::error(
                     "E1040",
                     "an `@if` on an import may only use `wowlua:meta` paths and literals",
                 )
-                .with_label(cond.span, "not static"),
+                .with_label(cond.span(), "not static"),
             ),
         }
     }
@@ -783,13 +791,13 @@ fn target_file(target: &Target) -> Option<usize> {
     }
 }
 
-fn string_span(lit: &StringLit, stmt: &Stmt) -> Span {
+fn string_span(lit: Str<'_>, stmt: Stmt<'_>) -> Span {
     // The specifier is the last token of the statement.
-    let len = lit.raw.len() as u32;
+    let len = lit.raw().len() as u32;
     Span {
-        file: stmt.span.file,
-        start: stmt.span.end.saturating_sub(len),
-        end: stmt.span.end,
+        file: stmt.span().file,
+        start: stmt.span().end.saturating_sub(len),
+        end: stmt.span().end,
     }
 }
 
@@ -809,13 +817,13 @@ fn normalize(path: &str) -> Option<String> {
 
 /// Resolves a module specifier (spec §5.3).
 fn resolve(
-    spec: &StringLit,
+    spec: Str<'_>,
     importer: &str,
     exact: &HashMap<&str, usize>,
     folded: &HashMap<String, &str>,
     files: &[FileInput],
 ) -> Result<Target, Diagnostic> {
-    let text = String::from_utf8_lossy(&spec.value).into_owned();
+    let text = String::from_utf8_lossy(&spec.value()).into_owned();
     if text == "wowlua:meta" {
         return Ok(Target::Meta);
     }
@@ -946,32 +954,32 @@ fn resolve(
 
 /// Named imports must exist in the target (E1012).
 fn check_names(
-    import: &wowlua_syntax::ast::Import,
+    import: wowlua_syntax::view::Import<'_>,
     target: &Target,
     files: &[FileInput],
     out: &mut Vec<Diagnostic>,
 ) {
-    let ImportClause::Names(specs) = &import.clause else {
+    let ImportClause::Names(specs) = &import.clause() else {
         if let (
             ImportClause::Namespace(name),
             Target::Xml(_)
             | Target::Lua {
                 declared: false, ..
             },
-        ) = (&import.clause, target)
+        ) = (&import.clause(), target)
         {
             out.push(
                 Diagnostic::error(
                     "E1012",
                     "this file has no exports; load it with `import _ from …`",
                 )
-                .with_label(name.span, "here"),
+                .with_label(name.span(), "here"),
             );
         }
         return;
     };
     let available: Option<Vec<String>> = match target {
-        Target::Module(i) if import.internal => files[*i].parse.map(file_locals),
+        Target::Module(i) if import.internal() => files[*i].parse.map(file_locals),
         Target::Module(i) => files[*i].parse.map(exported_names),
         Target::Lua {
             declared: true,
@@ -998,19 +1006,22 @@ fn check_names(
     };
     let Some(available) = available else { return };
     for spec in specs {
-        if !available.iter().any(|n| n == spec.name.text.as_ref()) {
+        if !available.iter().any(|n| n == spec.name.text()) {
             let message = match target {
                 Target::Xml(_)
                 | Target::Lua {
                     declared: false, ..
                 } => "this file has no exports; load it with `import _ from …`".to_string(),
-                _ if import.internal => {
-                    format!("module has no file-level local named `{}`", spec.name.text)
+                _ if import.internal() => {
+                    format!(
+                        "module has no file-level local named `{}`",
+                        spec.name.text()
+                    )
                 }
-                _ => format!("module has no export named `{}`", spec.name.text),
+                _ => format!("module has no export named `{}`", spec.name.text()),
             };
             out.push(
-                Diagnostic::error("E1012", message).with_label(spec.name.span, "not exported"),
+                Diagnostic::error("E1012", message).with_label(spec.name.span(), "not exported"),
             );
         }
     }
@@ -1020,20 +1031,22 @@ fn check_names(
 /// constants, classes, enums and types, exported or not.
 fn file_locals(parse: &Parse) -> Vec<String> {
     let mut out = exported_names(parse);
-    for s in &parse.chunk.block.stmts {
-        match &s.kind {
+    for s in parse.view().block().stmts() {
+        match s.kind() {
             StmtKind::Local { names, .. } => {
-                out.extend(names.iter().map(|n| n.name.text.to_string()))
+                out.extend(names.iter().map(|n| n.name.text().to_string()))
             }
-            StmtKind::LocalFunction { name, .. } => out.push(name.text.to_string()),
-            StmtKind::Function { name, .. } if name.path.len() == 1 && name.method.is_none() => {
-                out.push(name.path[0].text.to_string())
+            StmtKind::LocalFunction { name, .. } => out.push(name.text().to_string()),
+            StmtKind::Function { name, .. }
+                if name.path().len() == 1 && name.method().is_none() =>
+            {
+                out.push(name.path().at(0).text().to_string())
             }
-            StmtKind::Const { name, .. } => out.push(name.text.to_string()),
-            StmtKind::TypeAlias(t) => out.push(t.name.text.to_string()),
-            StmtKind::Interface(t) => out.push(t.name.text.to_string()),
-            StmtKind::Class(c) => out.push(c.name.text.to_string()),
-            StmtKind::Enum(e) => out.push(e.name.text.to_string()),
+            StmtKind::Const { name, .. } => out.push(name.text().to_string()),
+            StmtKind::TypeAlias(t) => out.push(t.name().text().to_string()),
+            StmtKind::Interface(t) => out.push(t.name().text().to_string()),
+            StmtKind::Class(c) => out.push(c.name().text().to_string()),
+            StmtKind::Enum(e) => out.push(e.name().text().to_string()),
             _ => {}
         }
     }
@@ -1041,33 +1054,33 @@ fn file_locals(parse: &Parse) -> Vec<String> {
 }
 
 /// The names an `export` statement declares.
-fn exported_names_of(inner: &Stmt) -> Vec<String> {
-    match &inner.kind {
-        StmtKind::Local { names, .. } => names.iter().map(|n| n.name.text.to_string()).collect(),
-        StmtKind::Function { name, .. } => vec![name.path[0].text.to_string()],
-        StmtKind::Const { name, .. } => vec![name.text.to_string()],
-        StmtKind::Class(c) => vec![c.name.text.to_string()],
-        StmtKind::Enum(e) => vec![e.name.text.to_string()],
+fn exported_names_of(inner: Stmt<'_>) -> Vec<String> {
+    match inner.kind() {
+        StmtKind::Local { names, .. } => names.iter().map(|n| n.name.text().to_string()).collect(),
+        StmtKind::Function { name, .. } => vec![name.path().at(0).text().to_string()],
+        StmtKind::Const { name, .. } => vec![name.text().to_string()],
+        StmtKind::Class(c) => vec![c.name().text().to_string()],
+        StmtKind::Enum(e) => vec![e.name().text().to_string()],
         _ => Vec::new(),
     }
 }
 
 fn exported_names(parse: &Parse) -> Vec<String> {
     let mut out = Vec::new();
-    for s in &parse.chunk.block.stmts {
-        let StmtKind::Export(inner) = &s.kind else {
+    for s in parse.view().block().stmts() {
+        let StmtKind::Export(inner) = s.kind() else {
             continue;
         };
-        match &inner.kind {
+        match inner.kind() {
             StmtKind::Local { names, .. } => {
-                out.extend(names.iter().map(|n| n.name.text.to_string()))
+                out.extend(names.iter().map(|n| n.name.text().to_string()))
             }
-            StmtKind::Function { name, .. } => out.push(name.path[0].text.to_string()),
-            StmtKind::Const { name, .. } => out.push(name.text.to_string()),
-            StmtKind::TypeAlias(t) => out.push(t.name.text.to_string()),
-            StmtKind::Interface(t) => out.push(t.name.text.to_string()),
-            StmtKind::Class(c) => out.push(c.name.text.to_string()),
-            StmtKind::Enum(e) => out.push(e.name.text.to_string()),
+            StmtKind::Function { name, .. } => out.push(name.path().at(0).text().to_string()),
+            StmtKind::Const { name, .. } => out.push(name.text().to_string()),
+            StmtKind::TypeAlias(t) => out.push(t.name().text().to_string()),
+            StmtKind::Interface(t) => out.push(t.name().text().to_string()),
+            StmtKind::Class(c) => out.push(c.name().text().to_string()),
+            StmtKind::Enum(e) => out.push(e.name().text().to_string()),
             _ => {}
         }
     }
@@ -1076,24 +1089,24 @@ fn exported_names(parse: &Parse) -> Vec<String> {
 
 fn declared_names(parse: &Parse) -> Vec<String> {
     let mut out = Vec::new();
-    for s in &parse.chunk.block.stmts {
-        let StmtKind::Declare(d) = &s.kind else {
+    for s in parse.view().block().stmts() {
+        let StmtKind::Declare(d) = s.kind() else {
             continue;
         };
-        let Declare::Module { members, .. } = d.as_ref() else {
+        let DeclareKind::Module { members, .. } = d.kind() else {
             continue;
         };
         for m in members {
-            let name = match &m.kind {
+            let name = match m.kind() {
                 NsMemberKind::Function { name, .. }
                 | NsMemberKind::Value { name, .. }
                 | NsMemberKind::Namespace { name, .. }
                 | NsMemberKind::Class { name, .. } => name,
-                NsMemberKind::Interface(i) => &i.name,
-                NsMemberKind::TypeAlias(t) => &t.name,
-                NsMemberKind::Enum(e) => &e.name,
+                NsMemberKind::Interface(i) => i.name(),
+                NsMemberKind::TypeAlias(t) => t.name(),
+                NsMemberKind::Enum(e) => e.name(),
             };
-            out.push(name.text.to_string());
+            out.push(name.text().to_string());
         }
     }
     out

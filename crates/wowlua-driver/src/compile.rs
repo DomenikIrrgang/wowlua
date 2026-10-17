@@ -28,6 +28,23 @@ pub struct Compiled {
     pub map: Option<Arc<wowlua_luair::sourcemap::EncodedMap>>,
     /// `code` has no byte order mark, and Lua 5.1 compiled exactly it.
     pub compiles: bool,
+    /// The code was dropped once checked (`BuildRequest::keep_code`):
+    /// `code` is empty, and this is the BLAKE3 hash of what it was.
+    pub dropped: Option<[u8; 32]>,
+}
+
+impl Compiled {
+    /// Whether the two hold the same code, also where it was dropped.
+    pub fn same_code(&self, other: &Compiled) -> bool {
+        let hash = |c: &Compiled| {
+            c.dropped
+                .unwrap_or_else(|| *blake3::hash(&c.code).as_bytes())
+        };
+        match (self.dropped, other.dropped) {
+            (None, None) => self.code == other.code,
+            _ => hash(self) == hash(other),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -95,7 +112,13 @@ fn check_settings(
 ) -> Option<wowlua_sema::check::FileSettings> {
     use wowlua_manifest::model::CheckMode;
     use wowlua_sema::check::{FileSettings, query::Mode};
-    let directive = |n: &str| parse.chunk.directives.iter().any(|d| d.name.as_ref() == n);
+    let directive = |n: &str| {
+        parse
+            .view()
+            .directives()
+            .iter()
+            .any(|d| d.name.as_ref() == n)
+    };
     if directive("nocheck") {
         return None;
     }
@@ -104,7 +127,7 @@ fn check_settings(
         || cfg.strict.is_match(&source.src_rel);
     match source.kind {
         SourceKind::Wowlua => {
-            let pure = wowlua_syntax::features::features(&parse.chunk).is_empty();
+            let pure = wowlua_syntax::features::features(parse.view()).is_empty();
             if opted_strict {
                 Some(FileSettings {
                     mode: Mode::Strict,
@@ -262,7 +285,7 @@ pub fn minify_lua(
     }
     let file = db.add(path, String::from_utf8_lossy(code).into_owned());
     let parse = wowlua_syntax::parse(code, file);
-    if parse.has_errors() || !wowlua_syntax::features::features(&parse.chunk).is_empty() {
+    if parse.has_errors() || !wowlua_syntax::features::features(parse.view()).is_empty() {
         return None;
     }
     let mut chunk = wowlua_lower::lower(&parse, code).ok()?;
@@ -284,6 +307,9 @@ pub struct Parsed {
     /// What `wowlua dev` knows of plain Lua sources without their parse.
     pub(crate) fronts: Vec<Front>,
     declarations: Vec<Parse>,
+    /// The parses keep their tokens (for `rename-private`); otherwise each
+    /// frees them once parsed (#19): no later pass reads them.
+    keep_tokens: bool,
 }
 
 impl Parsed {
@@ -311,10 +337,25 @@ pub(crate) enum Front {
 }
 
 impl Parsed {
-    fn push(&mut self, parse: Option<Parse>, ok: bool) {
+    fn push(&mut self, mut parse: Option<Parse>, ok: bool) {
+        if let Some(parse) = &mut parse {
+            self.finish(parse);
+        }
         self.parses.push(parse);
         self.ok.push(ok);
         self.fronts.push(Front::None);
+    }
+
+    fn push_declaration(&mut self, mut parse: Parse) {
+        self.finish(&mut parse);
+        self.declarations.push(parse);
+    }
+
+    /// Frees the tokens of a parse kept here, unless they are kept.
+    fn finish(&self, parse: &mut Parse) {
+        if !self.keep_tokens {
+            parse.lexed.drop_tokens();
+        }
     }
 
     /// The load-order usage of file `i` known without a flavor.
@@ -336,6 +377,18 @@ pub(crate) fn line_mode(profile: &Profile) -> LineMode {
     }
 }
 
+/// Parses `bytes`, the source of `file`. The tree shares the source
+/// database's text where it is these very bytes (valid UTF-8, nearly
+/// always) instead of copying them.
+fn parse_source(db: &SourceDb, file: FileId, bytes: &[u8]) -> Parse {
+    match db.get(file).shared_text() {
+        Some(text) if std::ptr::eq(text.as_bytes(), bytes) => {
+            wowlua_syntax::parse_shared(text, file)
+        }
+        _ => wowlua_syntax::parse(bytes, file),
+    }
+}
+
 /// Parses every source once and checks the plain Lua files, on worker
 /// threads when `jobs` allows (#8); diagnostics and the cache are handled
 /// on the calling thread, in file order, as when parsing one at a time.
@@ -348,6 +401,7 @@ pub fn parse_sources(
     raw: &HashMap<String, Arc<[u8]>>,
     mut cache: Option<&mut crate::BuildCache>,
     summarize: bool,
+    keep_tokens: bool,
     jobs: &crate::parallel::Jobs,
 ) -> Parsed {
     /// What to do with a source or declaration.
@@ -438,7 +492,7 @@ pub fn parse_sources(
         Item::Source { i, lua_kept } => {
             let (source, file) = &files[i];
             let bytes = &raw[&source.rel];
-            let parse = wowlua_syntax::parse(bytes, *file);
+            let mut parse = parse_source(db, *file, bytes);
             let mut failed = None;
             let mut lua = None;
             let mut usage = None;
@@ -447,7 +501,7 @@ pub fn parse_sources(
                 failed = Some(parse.diagnostics.clone());
             } else if source.kind == SourceKind::Lua {
                 if let Some((feature, span)) =
-                    wowlua_syntax::features::features(&parse.chunk).first()
+                    wowlua_syntax::features::features(parse.view()).first()
                 {
                     failed = Some(vec![
                         Diagnostic::error(
@@ -467,12 +521,15 @@ pub fn parse_sources(
                     if let Some(markers) = &markers {
                         usage = Some(Arc::new(wowlua_sema::usage::file_usage(&parse, markers)));
                         nolint = parse
-                            .chunk
-                            .directives
+                            .view()
+                            .directives()
                             .iter()
                             .any(|d| d.name.as_ref() == "nolint");
                     }
                 }
+            }
+            if !keep_tokens {
+                parse.lexed.drop_tokens();
             }
             Done::Source {
                 i,
@@ -483,10 +540,13 @@ pub fn parse_sources(
                 nolint,
             }
         }
-        Item::Declaration(d) => Done::Declaration(wowlua_syntax::parse(
-            &declarations[d].bytes,
-            declarations[d].file,
-        )),
+        Item::Declaration(d) => {
+            let mut parse = wowlua_syntax::parse(&declarations[d].bytes, declarations[d].file);
+            if !keep_tokens {
+                parse.lexed.drop_tokens();
+            }
+            Done::Declaration(parse)
+        }
     };
     let mut parses: Vec<Option<Parse>> = (0..files.len()).map(|_| None).collect();
     let mut ok = vec![true; files.len()];
@@ -545,6 +605,7 @@ pub fn parse_sources(
         ok,
         fronts,
         declarations: parsed_declarations,
+        keep_tokens,
     }
 }
 
@@ -576,9 +637,9 @@ pub fn add_stdlib(
     loop {
         let mut wanted: BTreeSet<String> = BTreeSet::new();
         for parse in parsed.parses[scanned..].iter().flatten() {
-            for s in &parse.chunk.block.stmts {
-                if let wowlua_syntax::ast::StmtKind::Import(import) = &s.kind {
-                    let spec = String::from_utf8_lossy(&import.from.value).into_owned();
+            for s in parse.view().block().stmts() {
+                if let wowlua_syntax::view::StmtKind::Import(import) = s.kind() {
+                    let spec = String::from_utf8_lossy(&import.from().value()).into_owned();
                     if let Some(name) = spec.strip_prefix("wowlua:")
                         && name != "meta"
                         && !loaded.contains(name)
@@ -638,7 +699,7 @@ pub fn add_stdlib(
                     file,
                     bytes: text.into_bytes().into(),
                 });
-                parsed.declarations.push(parse);
+                parsed.push_declaration(parse);
             }
         }
     }
@@ -734,11 +795,11 @@ pub fn add_libraries(
             let Some(parse) = parsed.parses.get(i).and_then(Option::as_ref) else {
                 continue;
             };
-            for s in &parse.chunk.block.stmts {
-                let wowlua_syntax::ast::StmtKind::Import(import) = &s.kind else {
+            for s in parse.view().block().stmts() {
+                let wowlua_syntax::view::StmtKind::Import(import) = s.kind() else {
                     continue;
                 };
-                let spec = String::from_utf8_lossy(&import.from.value).into_owned();
+                let spec = String::from_utf8_lossy(&import.from().value()).into_owned();
                 if spec.contains(':') {
                     continue;
                 }
@@ -808,7 +869,7 @@ pub fn add_libraries(
                     file,
                     bytes: bytes.into(),
                 });
-                parsed.declarations.push(parse);
+                parsed.push_declaration(parse);
                 continue;
             }
             let kind = if lower.ends_with(".wowlua") {
@@ -1006,6 +1067,8 @@ pub fn compile_flavor(
     minify: &Minify,
     cache: &mut FlavorCache,
     store: bool,
+    // `Some(kept)`: drop the code of every file but `kept` once checked.
+    drop_code: Option<&BTreeSet<String>>,
     jobs: &crate::parallel::Jobs,
 ) -> CompileOutput {
     let mut options = minify.passes.emit_options(line_mode(profile));
@@ -1254,11 +1317,8 @@ pub fn compile_flavor(
     let mut inline_hints: HashMap<FileId, Vec<(wowlua_luair::ir::Pos, wowlua_span::Span)>> =
         HashMap::new();
     if profile.optimize.inline {
-        use wowlua_syntax::ast;
-        let is_inline = |d: &[ast::Decorator]| {
-            d.iter()
-                .any(|d| d.path.len() == 1 && d.path[0].text.as_ref() == "inline")
-        };
+        use wowlua_syntax::view;
+        let is_inline = |d: view::Decorators<'_>| d.iter().any(|d| d.is_named("inline"));
         for (i, (source, file)) in files.iter().enumerate() {
             let Some(parse) = parsed.parses[i].as_ref() else {
                 continue;
@@ -1267,26 +1327,26 @@ pub fn compile_flavor(
                 continue;
             }
             let lexed = &parse.lexed;
-            wowlua_syntax::visit::walk_stmts(&parse.chunk.block, &mut |st| match &st.kind {
-                ast::StmtKind::LocalFunction { name, .. } if is_inline(&st.decorators) => {
+            wowlua_syntax::visit::walk_stmts(parse.view().block(), &mut |st| match st.kind() {
+                view::StmtKind::LocalFunction { name, .. } if is_inline(st.decorators()) => {
                     let pos = wowlua_luair::ir::Pos::new(
-                        lexed.line_of(name.span.start),
-                        lexed.column_of(name.span.start),
+                        lexed.line_of(name.span().start),
+                        lexed.column_of(name.span().start),
                     );
                     inline_hints
                         .entry(*file)
                         .or_default()
-                        .push((pos, name.span));
+                        .push((pos, name.span()));
                 }
-                ast::StmtKind::Class(c) => {
-                    for m in &c.members {
-                        if is_inline(&m.decorators) {
+                view::StmtKind::Class(c) => {
+                    for m in &c.members() {
+                        if is_inline(m.decorators()) {
                             diagnostics.push(
                                 Diagnostic::warning(
                                     "W3031",
                                     "`@inline` is ignored: only local functions with a single `return` expression are inlined",
                                 )
-                                .with_label(m.span, "a method"),
+                                .with_label(m.span(), "a method"),
                             );
                         }
                     }
@@ -1362,8 +1422,10 @@ pub fn compile_flavor(
                     &original,
                 ))
             });
+            let drop = drop_code.is_some_and(|kept| !kept.contains(&source.rel));
             Some(Compiled {
-                code: emitted.text,
+                dropped: drop.then(|| *blake3::hash(&emitted.text).as_bytes()),
+                code: if drop { Vec::new() } else { emitted.text },
                 map,
                 compiles: checked,
             })
@@ -1830,53 +1892,53 @@ fn dead_modules(
     required: &std::cell::OnceCell<std::collections::HashSet<String>>,
     find_required: impl Fn() -> std::collections::HashSet<String>,
 ) -> std::collections::HashSet<usize> {
-    use wowlua_syntax::ast;
-    fn pure(e: &ast::Expr) -> bool {
-        match &e.kind {
-            ast::ExprKind::Nil
-            | ast::ExprKind::True
-            | ast::ExprKind::False
-            | ast::ExprKind::Number(_)
-            | ast::ExprKind::String(_)
-            | ast::ExprKind::Function(_) => true,
-            ast::ExprKind::Table(fields) => fields.iter().all(|f| match f {
-                ast::TableField::Keyed { key, value, .. } => {
+    use wowlua_syntax::view;
+    fn pure(e: view::Expr<'_>) -> bool {
+        match e.kind() {
+            view::ExprKind::Nil
+            | view::ExprKind::True
+            | view::ExprKind::False
+            | view::ExprKind::Number(_)
+            | view::ExprKind::String(_)
+            | view::ExprKind::Function(_) => true,
+            view::ExprKind::Table(fields) => fields.iter().all(|f| match f {
+                view::TableField::Keyed { key, value, .. } => {
                     matches!(
-                        key.kind,
-                        ast::ExprKind::String(_) | ast::ExprKind::Number(_)
+                        key.kind(),
+                        view::ExprKind::String(_) | view::ExprKind::Number(_)
                     ) && pure(value)
                 }
-                ast::TableField::Named { value, .. } | ast::TableField::Positional(value) => {
+                view::TableField::Named { value, .. } | view::TableField::Positional(value) => {
                     pure(value)
                 }
             }),
             _ => false,
         }
     }
-    fn declaration(s: &ast::Stmt) -> bool {
-        s.decorators.is_empty()
-            && match &s.kind {
-                ast::StmtKind::Local { values, .. } => values.iter().all(pure),
-                ast::StmtKind::LocalFunction { .. }
-                | ast::StmtKind::Interface(_)
-                | ast::StmtKind::Enum(_)
-                | ast::StmtKind::TypeAlias(_)
-                | ast::StmtKind::Declare(_)
-                | ast::StmtKind::Import(_) => true,
-                ast::StmtKind::Const { value, .. } => value.as_deref().is_none_or(pure),
-                ast::StmtKind::Class(c) => c.members.iter().all(|m| {
-                    m.decorators.is_empty()
-                        && match &m.kind {
-                            ast::ClassMemberKind::Field { value, .. } => {
-                                !m.modifiers.contains(&ast::Modifier::Static)
-                                    || value.as_ref().is_none_or(pure)
+    fn declaration(s: view::Stmt<'_>) -> bool {
+        s.decorators().is_empty()
+            && match s.kind() {
+                view::StmtKind::Local { values, .. } => values.iter().all(pure),
+                view::StmtKind::LocalFunction { .. }
+                | view::StmtKind::Interface(_)
+                | view::StmtKind::Enum(_)
+                | view::StmtKind::TypeAlias(_)
+                | view::StmtKind::Declare(_)
+                | view::StmtKind::Import(_) => true,
+                view::StmtKind::Const { value, .. } => value.is_none_or(pure),
+                view::StmtKind::Class(c) => c.members().iter().all(|m| {
+                    m.decorators().is_empty()
+                        && match m.kind() {
+                            view::ClassMemberKind::Field { value, .. } => {
+                                !m.modifiers().contains(&view::Modifier::Static)
+                                    || value.is_none_or(pure)
                             }
                             _ => true,
                         }
                 }),
-                ast::StmtKind::Export(inner) => {
+                view::StmtKind::Export(inner) => {
                     // `export function f()` defines an export, not a global.
-                    matches!(&inner.kind, ast::StmtKind::Function { name, .. } if name.path.len() == 1 && name.method.is_none())
+                    matches!(inner.kind(), view::StmtKind::Function { name, .. } if name.path().len() == 1 && name.method().is_none())
                         || declaration(inner)
                 }
                 _ => false,
@@ -1892,7 +1954,7 @@ fn dead_modules(
             && !required.get_or_init(&find_required).contains(&info.id)
             && parsed.parses[i]
                 .as_ref()
-                .is_some_and(|p| p.chunk.block.stmts.iter().all(declaration))
+                .is_some_and(|p| p.view().block().stmts().iter().all(declaration))
     };
     // Everything else is kept, and so is what kept files import.
     let mut kept: Vec<bool> = (0..files.len()).map(|i| !candidate(i)).collect();
@@ -1996,6 +2058,29 @@ fn context(
 #[cfg(test)]
 mod limit_tests {
     use super::*;
+
+    // Dropped code compares by its hash, with dropped and kept code alike.
+    #[test]
+    fn dropped_code_compares_by_its_hash() {
+        let kept = |code: &[u8]| Compiled {
+            code: code.to_vec(),
+            map: None,
+            compiles: true,
+            dropped: None,
+        };
+        let dropped = |code: &[u8]| Compiled {
+            code: Vec::new(),
+            map: None,
+            compiles: true,
+            dropped: Some(*blake3::hash(code).as_bytes()),
+        };
+        assert!(kept(b"x = 1").same_code(&kept(b"x = 1")));
+        assert!(!kept(b"x = 1").same_code(&kept(b"x = 2")));
+        assert!(dropped(b"x = 1").same_code(&dropped(b"x = 1")));
+        assert!(!dropped(b"x = 1").same_code(&dropped(b"x = 2")));
+        assert!(dropped(b"x = 1").same_code(&kept(b"x = 1")));
+        assert!(!kept(b"x = 2").same_code(&dropped(b"x = 1")));
+    }
 
     /// Emitted code that does not parse is an internal error, worded with
     /// the parser's first message.

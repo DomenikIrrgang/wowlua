@@ -45,7 +45,7 @@ fn primitive(ty: &Ty) -> Option<&'static str> {
     })
 }
 
-impl Checker<'_> {
+impl Checker<'_, '_> {
     /// The runtime check of `t`, or `None` when it is not checkable (`any`,
     /// generics, …).
     pub(crate) fn value_check(&mut self, t: TypeId) -> Option<ValueCheck> {

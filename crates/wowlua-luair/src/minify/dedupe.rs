@@ -110,11 +110,7 @@ pub fn apply(chunk: &mut Chunk, short_names: bool) {
             match &mut e.kind {
                 ExprKind::String(raw) => {
                     if let Some(name) = replaced(raw) {
-                        e.kind = ExprKind::Name(Ident {
-                            name: name.clone(),
-                            generated: true,
-                            pos: e.pos,
-                        });
+                        e.kind = ExprKind::Name(Ident::new_generated(name.as_str(), e.pos));
                     }
                 }
                 // `f"…"` needs parentheses once the string is a name.
@@ -143,15 +139,11 @@ pub fn apply(chunk: &mut Chunk, short_names: bool) {
         kind: StmtKind::Local {
             names: chosen
                 .iter()
-                .map(|b| Ident {
-                    name: names[b].clone(),
-                    generated: true,
-                    pos: Pos::NONE,
-                })
+                .map(|b| Ident::new_generated(names[b].as_str(), Pos::NONE))
                 .collect(),
             values: chosen
                 .iter()
-                .map(|b| Expr::new(ExprKind::String(encode_string(b, b'"')), Pos::NONE))
+                .map(|b| Expr::new(ExprKind::String(encode_string(b, b'"').into()), Pos::NONE))
                 .collect(),
         },
     };

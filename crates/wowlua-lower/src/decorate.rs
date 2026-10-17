@@ -65,24 +65,24 @@ pub(crate) fn intrinsic(id: &str) -> Option<Intrinsic> {
 #[derive(Default)]
 pub(crate) struct Decorations<'d> {
     /// User decorators and wrapping framework decorators, top to bottom.
-    pub user: Vec<&'d Decorator>,
+    pub user: Vec<Decorator<'d>>,
     /// Registering framework decorators, top to bottom.
-    pub register: Vec<&'d Decorator>,
+    pub register: Vec<Decorator<'d>>,
     pub has_global: bool,
     /// `@global(name)`: the name (default: the declaration's name).
     pub global: Option<String>,
     /// `@deprecated(msg?)`.
     pub deprecated: Option<Option<String>>,
     /// `@script(name, opts?)` on widget class methods.
-    pub scripts: Vec<&'d Decorator>,
+    pub scripts: Vec<Decorator<'d>>,
     pub debug_only: bool,
     /// `@reflect` (spec §7.8.2).
     pub reflect: bool,
 }
 
-fn string_arg(d: &Decorator) -> Option<String> {
-    match d.args.as_ref()?.exprs().first().map(|e| &e.kind) {
-        Some(ExprKind::String(s)) => Some(String::from_utf8_lossy(&s.value).into_owned()),
+fn string_arg(d: Decorator<'_>) -> Option<String> {
+    match d.args()?.exprs().first().map(|e| e.kind()) {
+        Some(ExprKind::String(s)) => Some(String::from_utf8_lossy(&s.value()).into_owned()),
         _ => None,
     }
 }
@@ -107,11 +107,11 @@ fn target_name(t: Target) -> &'static str {
 impl<'a> Lowerer<'a> {
     /// Classifies and checks the decorators of a declaration (spec §4.2,
     /// §4.3): E3020, E3021, E3033, and the milestone of M5 decorators.
-    pub(crate) fn decorations<'d>(
+    pub(crate) fn decorations(
         &mut self,
-        decorators: &'d [Decorator],
+        decorators: Decorators<'a>,
         target: Target,
-    ) -> Decorations<'d> {
+    ) -> Decorations<'a> {
         use Target as T;
         let mut out = Decorations::default();
         for d in decorators {
@@ -120,14 +120,14 @@ impl<'a> Lowerer<'a> {
                     target,
                     T::Function | T::Method | T::Constructor | T::Accessor | T::Field | T::Class
                 ) {
-                    let first = d.path[0].text.as_ref();
+                    let first = d.path().at(0).text();
                     if let Some(Binding::Intrinsic(id)) = self.lookup(first).cloned() {
                         match intrinsic(&id) {
                             Some(Intrinsic::Wrapping) => out.user.push(d),
                             Some(Intrinsic::Registering) => out.register.push(d),
                             None => self.error(
                                 "E3033",
-                                d.span,
+                                d.span(),
                                 format!("unknown intrinsic `{id}` (the standard library needs a newer compiler)"),
                             ),
                         }
@@ -136,17 +136,17 @@ impl<'a> Lowerer<'a> {
                     } else {
                         self.error(
                             "E3020",
-                            d.span,
+                            d.span(),
                             format!(
                                 "unknown decorator `@{}`; decorators are core decorators, local or imported functions, or `@_G.…`",
-                                d.path.iter().map(|n| n.text.as_ref()).collect::<Vec<_>>().join(".")
+                                d.path().iter().map(|n| n.text()).collect::<Vec<_>>().join(".")
                             ),
                         );
                     }
                 } else {
                     self.error(
                         "E3021",
-                        d.span,
+                        d.span(),
                         format!(
                             "user decorators cannot be applied to {}",
                             target_name(target)
@@ -155,7 +155,7 @@ impl<'a> Lowerer<'a> {
                 }
                 continue;
             }
-            let name = d.path[0].text.as_ref();
+            let name = d.path().at(0).text();
             let allowed = match name {
                 "if" => continue,
                 "global" => matches!(target, T::Function | T::Class | T::Local | T::Enum),
@@ -179,7 +179,7 @@ impl<'a> Lowerer<'a> {
             if !allowed {
                 self.error(
                     "E3021",
-                    d.span,
+                    d.span(),
                     format!("`@{name}` cannot be applied to {}", target_name(target)),
                 );
                 continue;
@@ -207,9 +207,9 @@ impl<'a> Lowerer<'a> {
                 // function lowered next, or for every method of a class.
                 "profile" | "noprofile" | "trace" => {
                     let args = d
-                        .args
+                        .args()
                         .as_ref()
-                        .map(|a| self.args_list(a))
+                        .map(|a| self.args_list(*a))
                         .unwrap_or_default();
                     let marks = if target == T::Class {
                         self.class_marks.get_or_insert_with(FnMarks::default)
@@ -224,7 +224,7 @@ impl<'a> Lowerer<'a> {
                 }
                 "intrinsic" if !self.ctx.compiler_known => self.error(
                     "E3033",
-                    d.span,
+                    d.span(),
                     "`@intrinsic` is only for compiler-known modules (the standard library)",
                 ),
                 _ => {}
@@ -235,9 +235,9 @@ impl<'a> Lowerer<'a> {
 
     /// The values of user decorators, in source order: `@a.b(args)` is
     /// `a.b(args)` (spec §4.5).
-    pub(crate) fn decorator_values(&mut self, user: &[&Decorator]) -> Vec<ir::Expr> {
-        let exprs: Vec<Expr> = user.iter().map(|d| d.expr()).collect();
-        self.exprs(&exprs)
+    pub(crate) fn decorator_values(&mut self, user: &[Decorator<'a>]) -> Vec<ir::Expr> {
+        let exprs: Vec<Expr<'a>> = user.iter().map(|d| d.expr()).collect();
+        self.seq(&exprs)
     }
 
     /// The context table of a decorated declaration (spec §4.5).
@@ -253,7 +253,7 @@ impl<'a> Lowerer<'a> {
             name: ident(n, pos),
             value,
         };
-        let s = |v: &str| lit(ir::ExprKind::String(quote(v.as_bytes())), pos);
+        let s = |v: &str| lit(ir::ExprKind::String(quote(v.as_bytes()).into()), pos);
         let mut fields = vec![
             named("kind", s(kind)),
             named("name", s(name)),
@@ -275,7 +275,7 @@ impl<'a> Lowerer<'a> {
         fields.push(named("file", s(&self.ctx.file)));
         fields.push(named(
             "line",
-            lit(ir::ExprKind::Number(pos.line.to_string()), pos),
+            lit(ir::ExprKind::Number(pos.line.to_string().into()), pos),
         ));
         lit(
             ir::ExprKind::Table {
@@ -291,7 +291,7 @@ impl<'a> Lowerer<'a> {
     pub(crate) fn apply_decorators(
         &mut self,
         target: ir::Expr,
-        user: &[&Decorator],
+        user: &[Decorator<'a>],
         kind: &str,
         name: &str,
         is_static: bool,
@@ -313,7 +313,7 @@ impl<'a> Lowerer<'a> {
     pub(crate) fn apply_registering(
         &mut self,
         target: ir::Expr,
-        register: &[&Decorator],
+        register: &[Decorator<'a>],
         kind: &str,
         name: &str,
         is_static: bool,
@@ -342,10 +342,10 @@ impl<'a> Lowerer<'a> {
         self.slices.insert(Slice::Decorate);
         let mut args = vec![
             target.clone(),
-            lit(ir::ExprKind::String(quote(name.as_bytes())), pos),
+            lit(ir::ExprKind::String(quote(name.as_bytes()).into()), pos),
         ];
         if let Some(m) = message {
-            args.push(lit(ir::ExprKind::String(quote(m.as_bytes())), pos));
+            args.push(lit(ir::ExprKind::String(quote(m.as_bytes()).into()), pos));
         }
         let wl = self.runtime_ref(pos);
         assign(target, call(field(wl, "deprecated", pos), args, pos), pos)
@@ -363,8 +363,8 @@ impl<'a> Lowerer<'a> {
     }
 
     /// A `@debugOnly` function must return nothing (E3032).
-    pub(crate) fn check_debug_only(&mut self, f: &FuncBody) {
-        if let Some(span) = value_return(&f.body) {
+    pub(crate) fn check_debug_only(&mut self, f: Func<'a>) {
+        if let Some(span) = value_return(f.body()) {
             self.error(
                 "E3032",
                 span,
@@ -374,12 +374,12 @@ impl<'a> Lowerer<'a> {
     }
 
     /// A statement with decorators other than `@if` (spec §4.1).
-    pub(crate) fn decorated_stmt(&mut self, s: &Stmt) -> Vec<ir::Stmt> {
-        let (inner, exported) = match &s.kind {
-            StmtKind::Export(inner) => (inner.as_ref(), true),
+    pub(crate) fn decorated_stmt(&mut self, s: Stmt<'a>) -> Vec<ir::Stmt> {
+        let (inner, exported) = match s.kind() {
+            StmtKind::Export(inner) => (inner, true),
             _ => (s, false),
         };
-        let target = match &inner.kind {
+        let target = match inner.kind() {
             StmtKind::Function { .. } | StmtKind::LocalFunction { .. } => Target::Function,
             StmtKind::Class(_) => Target::Class,
             StmtKind::Enum(_) => Target::Enum,
@@ -391,22 +391,21 @@ impl<'a> Lowerer<'a> {
             StmtKind::Interface(_) | StmtKind::TypeAlias(_) => Target::Type,
             _ => Target::Other,
         };
-        let deco = self.decorations(&s.decorators, target);
-        let pos = self.span_pos(s.span);
-        match &inner.kind {
+        let deco = self.decorations(s.decorators(), target);
+        let pos = self.span_pos(s.span());
+        match inner.kind() {
             StmtKind::Class(c) => self.class_decl(c, &deco, exported),
             StmtKind::Enum(e) => self.enum_decl(e, &deco, exported),
             StmtKind::Function { name, func } => {
                 let label = name
-                    .method
-                    .as_ref()
-                    .unwrap_or_else(|| name.path.last().expect("a name"));
+                    .method()
+                    .unwrap_or_else(|| name.path().last().expect("a name"));
                 if deco.debug_only {
                     self.check_debug_only(func);
                     if !self.ctx.debug {
-                        if name.path.len() == 1 && name.method.is_none() {
-                            self.declare(&name.path[0].text, Binding::DebugOnlyRemoved);
-                            self.pending.remove(name.path[0].text.as_ref());
+                        if name.path().len() == 1 && name.method().is_none() {
+                            self.declare(name.path().at(0).text(), Binding::DebugOnlyRemoved);
+                            self.pending.remove(name.path().at(0).text());
                         }
                         return Vec::new();
                     }
@@ -418,18 +417,18 @@ impl<'a> Lowerer<'a> {
                 };
                 // The export assignment (if any) receives the final value.
                 let export = if exported { out.pop() } else { None };
-                let end = self.span_pos(func.end_span);
-                let mut target = name_expr(self.ident(&name.path[0]));
-                for n in name.path[1..].iter().chain(name.method.iter()) {
-                    target = field(target, &n.text, end);
+                let end = self.span_pos(func.end_span());
+                let mut target = name_expr(self.ident(name.path().at(0)));
+                for n in name.path().iter().skip(1).chain(name.method()) {
+                    target = field(target, n.text(), end);
                 }
                 target.pos = end;
-                self.finish_function(&mut out, target, &label.text, &deco, end);
-                if name.path.len() == 1
-                    && name.method.is_none()
+                self.finish_function(&mut out, target, label.text(), &deco, end);
+                if name.path().len() == 1
+                    && name.method().is_none()
                     && let Some(message) = &deco.deprecated
                 {
-                    self.mark_deprecated(&name.path[0].text, message.clone());
+                    self.mark_deprecated(name.path().at(0).text(), message.clone());
                 }
                 out.extend(export);
                 out
@@ -438,20 +437,20 @@ impl<'a> Lowerer<'a> {
                 if deco.debug_only {
                     self.check_debug_only(func);
                     if !self.ctx.debug {
-                        self.declare(&name.text, Binding::DebugOnlyRemoved);
+                        self.declare(name.text(), Binding::DebugOnlyRemoved);
                         return Vec::new();
                     }
                 }
-                let end = self.span_pos(func.end_span);
+                let end = self.span_pos(func.end_span());
                 // On the `local function` line, not on a decorator's.
-                let pos = self.span_pos(name.span);
+                let pos = self.span_pos(name.span());
                 let mut out = if deco.user.is_empty() {
                     self.stmt_inner(inner)
                 } else {
                     // `local f; f = function … end`: recursive calls go
                     // through the decorated value (spec §4.5.3).
-                    self.declare(&name.text, Binding::Local);
-                    self.next_fn_name = Some(name.text.to_string());
+                    self.declare(name.text(), Binding::Local);
+                    self.next_fn_name = Some(name.text().to_string());
                     let f = self.func(func, false);
                     vec![
                         stmt(
@@ -468,10 +467,10 @@ impl<'a> Lowerer<'a> {
                         ),
                     ]
                 };
-                let target = name_expr(ident(&name.text, end));
-                self.finish_function(&mut out, target, &name.text, &deco, end);
+                let target = name_expr(ident(name.text(), end));
+                self.finish_function(&mut out, target, name.text(), &deco, end);
                 if let Some(message) = &deco.deprecated {
-                    self.mark_deprecated(&name.text, message.clone());
+                    self.mark_deprecated(name.text(), message.clone());
                 }
                 out
             }
@@ -491,12 +490,12 @@ impl<'a> Lowerer<'a> {
                         let global = deco
                             .global
                             .clone()
-                            .unwrap_or_else(|| n.name.text.to_string());
-                        let value = name_expr(self.ident(&n.name));
+                            .unwrap_or_else(|| n.name.text().to_string());
+                        let value = name_expr(self.ident(n.name));
                         out.push(self.global_write(&global, value, pos));
                     }
                     if let Some(message) = &deco.deprecated {
-                        self.mark_deprecated(&n.name.text, message.clone());
+                        self.mark_deprecated(n.name.text(), message.clone());
                     }
                 }
                 out.extend(exports);
@@ -510,15 +509,18 @@ impl<'a> Lowerer<'a> {
                 };
                 let export = if exported { out.pop() } else { None };
                 if deco.has_global {
-                    let value = match self.lookup(&name.text).cloned() {
+                    let value = match self.lookup(name.text()).cloned() {
                         Some(Binding::Const(c)) => c.to_expr(pos),
                         _ => name_expr(self.ident(name)),
                     };
-                    let global = deco.global.clone().unwrap_or_else(|| name.text.to_string());
+                    let global = deco
+                        .global
+                        .clone()
+                        .unwrap_or_else(|| name.text().to_string());
                     out.push(self.global_write(&global, value, pos));
                 }
                 if let Some(message) = &deco.deprecated {
-                    self.mark_deprecated(&name.text, message.clone());
+                    self.mark_deprecated(name.text(), message.clone());
                 }
                 out.extend(export);
                 out
@@ -540,7 +542,7 @@ impl<'a> Lowerer<'a> {
         out: &mut Vec<ir::Stmt>,
         target: ir::Expr,
         name: &str,
-        deco: &Decorations,
+        deco: &Decorations<'a>,
         end: Pos,
     ) {
         if !deco.user.is_empty() {
@@ -571,10 +573,10 @@ impl<'a> Lowerer<'a> {
 }
 
 /// A `return` with values in a function body (not in nested functions).
-fn value_return(b: &Block) -> Option<Span> {
-    for s in &b.stmts {
-        let found = match &s.kind {
-            StmtKind::Return(values) if !values.is_empty() => Some(s.span),
+fn value_return(b: Block<'_>) -> Option<Span> {
+    for s in &b.stmts() {
+        let found = match s.kind() {
+            StmtKind::Return(values) if !values.is_empty() => Some(s.span()),
             StmtKind::Do(b)
             | StmtKind::While { body: b, .. }
             | StmtKind::Repeat { body: b, .. } => value_return(b),
@@ -588,7 +590,7 @@ fn value_return(b: &Block) -> Option<Span> {
                 ..
             } => value_return(then_block)
                 .or_else(|| elseifs.iter().find_map(|(_, b)| value_return(b)))
-                .or_else(|| else_block.as_deref().and_then(value_return)),
+                .or_else(|| else_block.and_then(value_return)),
             _ => None,
         };
         if found.is_some() {

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
 use wowlua_syntax::Parse;
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ClassInfo {
@@ -136,32 +136,31 @@ pub struct WidgetDecl {
 pub fn widget_decls(parses: &[&Parse]) -> HashMap<String, WidgetDecl> {
     let mut out = HashMap::new();
     for parse in parses {
-        for s in &parse.chunk.block.stmts {
-            let StmtKind::Declare(d) = &s.kind else {
+        for s in parse.view().block().stmts() {
+            let StmtKind::Declare(d) = s.kind() else {
                 continue;
             };
-            let Declare::Class { name, extends, .. } = d.as_ref() else {
+            let DeclareKind::Class { name, extends, .. } = d.kind() else {
                 continue;
             };
-            let widget = s.decorators.iter().find_map(|d| {
-                if d.path.len() != 1 || d.path[0].text.as_ref() != "widget" {
+            let widget = s.decorators().iter().find_map(|d| {
+                if d.path().len() != 1 || d.path().at(0).text() != "widget" {
                     return None;
                 }
-                match d.args.as_ref()?.exprs().first().map(|e| &e.kind) {
+                match d.args().as_ref()?.exprs().first().map(|e| e.kind()) {
                     Some(ExprKind::String(s)) => {
-                        Some(String::from_utf8_lossy(&s.value).into_owned())
+                        Some(String::from_utf8_lossy(&s.value()).into_owned())
                     }
                     _ => None,
                 }
             });
             let base = extends
-                .as_ref()
                 .and_then(type_path)
                 .and_then(|p| match p.as_slice() {
                     [one] => Some(one.clone()),
                     _ => None,
                 });
-            out.insert(name.text.to_string(), WidgetDecl { widget, base });
+            out.insert(name.text().to_string(), WidgetDecl { widget, base });
         }
     }
     out
@@ -183,45 +182,45 @@ impl WidgetDecl {
 }
 
 /// The path of a type reference (`a.b.C<T>` → `[a, b, C]`).
-pub fn type_path(t: &Type) -> Option<Vec<String>> {
-    match &t.kind {
-        TypeKind::Ref { path, .. } => Some(path.iter().map(|n| n.text.to_string()).collect()),
+pub fn type_path(t: Type<'_>) -> Option<Vec<String>> {
+    match t.kind() {
+        TypeKind::Ref { path, .. } => Some(path.iter().map(|n| n.text().to_string()).collect()),
         TypeKind::Paren(inner) => type_path(inner),
         _ => None,
     }
 }
 
 /// The top-level class and enum declarations of a file.
-pub fn declarations(parse: &Parse) -> (Vec<&ClassDecl>, Vec<(&EnumDecl, Span)>) {
+pub fn declarations(parse: &Parse) -> (Vec<ClassDecl<'_>>, Vec<(EnumDecl<'_>, Span)>) {
     let mut classes = Vec::new();
     let mut enums = Vec::new();
-    for s in &parse.chunk.block.stmts {
-        let kind = match &s.kind {
-            StmtKind::Export(inner) => &inner.kind,
+    for s in parse.view().block().stmts() {
+        let kind = match s.kind() {
+            StmtKind::Export(inner) => inner.kind(),
             k => k,
         };
         match kind {
-            StmtKind::Class(c) => classes.push(c.as_ref()),
-            StmtKind::Enum(e) => enums.push((e.as_ref(), s.span)),
+            StmtKind::Class(c) => classes.push(c),
+            StmtKind::Enum(e) => enums.push((e, s.span())),
             _ => {}
         }
     }
     (classes, enums)
 }
 
-fn has(member: &ClassMember, m: Modifier) -> bool {
-    member.modifiers.contains(&m)
+fn has(member: ClassMember<'_>, m: Modifier) -> bool {
+    member.modifiers().contains(&m)
 }
 
 /// The member summary of a class declaration (overload signatures are
 /// compile-time only and left out).
-pub fn members(c: &ClassDecl) -> Vec<Member> {
+pub fn members(c: ClassDecl<'_>) -> Vec<Member> {
     let mut out = Vec::new();
-    for m in &c.members {
+    for m in c.members() {
         if has(m, Modifier::Overload) {
             continue;
         }
-        let (name, kind) = match &m.kind {
+        let (name, kind) = match m.kind() {
             ClassMemberKind::Field { name, value, .. } => (
                 name,
                 MemberKind::Field {
@@ -238,18 +237,18 @@ pub fn members(c: &ClassDecl) -> Vec<Member> {
                     is_static: false,
                     is_abstract: false,
                     is_override: false,
-                    span: m.span,
+                    span: m.span(),
                 });
                 continue;
             }
         };
         out.push(Member {
-            name: name.text.to_string(),
+            name: name.text().to_string(),
             kind,
             is_static: has(m, Modifier::Static),
             is_abstract: has(m, Modifier::Abstract),
             is_override: has(m, Modifier::Override),
-            span: name.span,
+            span: name.span(),
         });
     }
     out
@@ -257,16 +256,16 @@ pub fn members(c: &ClassDecl) -> Vec<Member> {
 
 /// Folds the values of an enum (spec §3.4.1); E3010 and E3011.
 pub fn enum_info(
-    e: &EnumDecl,
+    e: EnumDecl<'_>,
     env: &dyn Fn(&str) -> Option<Const>,
     out: &mut Vec<Diagnostic>,
 ) -> EnumInfo {
     let mut members: Vec<(String, Const)> = Vec::new();
     let mut next = 1.0;
     let mut numeric: Option<bool> = None;
-    for item in &e.items {
+    for item in e.items() {
         let value = match &item.value {
-            Some(expr) => match constant::eval(expr, env) {
+            Some(expr) => match constant::eval(*expr, env) {
                 Some(c @ (Const::Number(_) | Const::String(_))) => c,
                 _ => {
                     out.push(
@@ -274,7 +273,7 @@ pub fn enum_info(
                             "E3010",
                             "enum member values must be number or string constants",
                         )
-                        .with_label(expr.span, "not a constant"),
+                        .with_label(expr.span(), "not a constant"),
                     );
                     continue;
                 }
@@ -286,10 +285,11 @@ pub fn enum_info(
                             "E3010",
                             format!(
                                 "enum `{}` has string values, so `{}` needs a value",
-                                e.name.text, item.name.text
+                                e.name().text(),
+                                item.name.text()
                             ),
                         )
-                        .with_label(item.name.span, "no value"),
+                        .with_label(item.name.span(), "no value"),
                     );
                     continue;
                 }
@@ -301,9 +301,9 @@ pub fn enum_info(
             Some(n) if n != is_number => out.push(
                 Diagnostic::error(
                     "E3010",
-                    format!("enum `{}` mixes numeric and string values", e.name.text),
+                    format!("enum `{}` mixes numeric and string values", e.name().text()),
                 )
-                .with_label(item.name.span, "here"),
+                .with_label(item.name.span(), "here"),
             ),
             _ => numeric = Some(is_number),
         }
@@ -314,27 +314,28 @@ pub fn enum_info(
             out.push(
                 Diagnostic::error(
                     "E3011",
-                    format!("duplicate value in enum `{}`", e.name.text),
+                    format!("duplicate value in enum `{}`", e.name().text()),
                 )
-                .with_label(item.name.span, "this value is used by an earlier member"),
+                .with_label(item.name.span(), "this value is used by an earlier member"),
             );
         }
-        if members.iter().any(|(n, _)| n == item.name.text.as_ref()) {
+        if members.iter().any(|(n, _)| n == item.name.text()) {
             out.push(
                 Diagnostic::error(
                     "E3011",
                     format!(
                         "duplicate member `{}` in enum `{}`",
-                        item.name.text, e.name.text
+                        item.name.text(),
+                        e.name().text()
                     ),
                 )
-                .with_label(item.name.span, "declared before"),
+                .with_label(item.name.span(), "declared before"),
             );
         }
-        members.push((item.name.text.to_string(), value));
+        members.push((item.name.text().to_string(), value));
     }
     EnumInfo {
-        name: e.name.text.to_string(),
+        name: e.name().text().to_string(),
         members,
     }
 }
@@ -368,7 +369,12 @@ pub fn ancestors(table: &ClassTable, info: &ClassInfo) -> (Vec<Arc<ClassInfo>>, 
 }
 
 /// The structural checks of one class declaration.
-pub fn check_class(c: &ClassDecl, info: &ClassInfo, table: &ClassTable, out: &mut Vec<Diagnostic>) {
+pub fn check_class(
+    c: ClassDecl<'_>,
+    info: &ClassInfo,
+    table: &ClassTable,
+    out: &mut Vec<Diagnostic>,
+) {
     let (chain, complete) = ancestors(table, info);
     let ends_in_widget = info.widget.is_some();
     let mut seen: HashMap<&str, MemberKind> = HashMap::new();
@@ -506,7 +512,7 @@ pub fn check_class(c: &ClassDecl, info: &ClassInfo, table: &ClassTable, out: &mu
                             .join(", ")
                     ),
                 )
-                .with_label(c.name.span, "not abstract"),
+                .with_label(c.name().span(), "not abstract"),
             );
         }
     }
@@ -514,10 +520,10 @@ pub fn check_class(c: &ClassDecl, info: &ClassInfo, table: &ClassTable, out: &mu
 }
 
 /// `super` rules (E3001, E3040) and `...` in initializers (E3041).
-fn check_bodies(c: &ClassDecl, info: &ClassInfo, out: &mut Vec<Diagnostic>) {
+fn check_bodies(c: ClassDecl<'_>, info: &ClassInfo, out: &mut Vec<Diagnostic>) {
     let derived = info.base != Base::None;
-    for m in &c.members {
-        match &m.kind {
+    for m in c.members() {
+        match m.kind() {
             ClassMemberKind::Field { value: Some(v), .. } => {
                 if let Some(span) = vararg_in(v) {
                     out.push(
@@ -530,17 +536,17 @@ fn check_bodies(c: &ClassDecl, info: &ClassInfo, out: &mut Vec<Diagnostic>) {
                 func,
                 has_body: true,
             } => {
-                check_super_names(&func.body, func, out);
+                check_super_names(func.body(), func, out);
                 let mut supers = Vec::new();
                 let mut self_before: Option<Span> = None;
-                for (i, s) in func.body.stmts.iter().enumerate() {
+                for (i, s) in func.body().stmts().iter().enumerate() {
                     if is_super_call(s) {
-                        supers.push((i, s.span));
+                        supers.push((i, s.span()));
                     } else if supers.is_empty() && self_before.is_none() {
                         self_before = self_use(s);
                     }
                 }
-                let nested = nested_super_calls(&func.body);
+                let nested = nested_super_calls(func.body());
                 for span in nested {
                     out.push(
                         Diagnostic::error(
@@ -568,7 +574,7 @@ fn check_bodies(c: &ClassDecl, info: &ClassInfo, out: &mut Vec<Diagnostic>) {
                             "E3001",
                             "the constructor of a derived class must call `super(...)`",
                         )
-                        .with_label(func.params_span, "this constructor"),
+                        .with_label(func.params_span(), "this constructor"),
                     ),
                     [(_, _), rest @ ..] => {
                         for (_, span) in rest {
@@ -586,27 +592,27 @@ fn check_bodies(c: &ClassDecl, info: &ClassInfo, out: &mut Vec<Diagnostic>) {
                     );
                 }
             }
-            ClassMemberKind::Method { func, .. } => check_super_names(&func.body, func, out),
+            ClassMemberKind::Method { func, .. } => check_super_names(func.body(), func, out),
             _ => {}
         }
     }
 }
 
-fn is_super_call(s: &Stmt) -> bool {
-    matches!(&s.kind, StmtKind::Call(e) if matches!(&e.kind, ExprKind::Call { callee, .. } if matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "super")))
+fn is_super_call(s: Stmt<'_>) -> bool {
+    matches!(s.kind(), StmtKind::Call(e) if matches!(e.kind(), ExprKind::Call { callee, .. } if matches!(callee.kind(), ExprKind::Name(n) if n.text() == "super")))
 }
 
 /// `super(...)` calls below the top level of a constructor body.
-fn nested_super_calls(body: &Block) -> Vec<Span> {
+fn nested_super_calls(body: Block<'_>) -> Vec<Span> {
     let mut out = Vec::new();
-    for s in &body.stmts {
+    for s in body.stmts() {
         let top = is_super_call(s);
         wowlua_syntax::visit::walk_stmt(s, &mut |e| {
-            if let ExprKind::Call { callee, .. } = &e.kind
-                && matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "super")
-                && !(top && matches!(&s.kind, StmtKind::Call(x) if x.span == e.span))
+            if let ExprKind::Call { callee, .. } = e.kind()
+                && matches!(callee.kind(), ExprKind::Name(n) if n.text() == "super")
+                && !(top && matches!(s.kind(), StmtKind::Call(x) if x.span() == e.span()))
             {
-                out.push(e.span);
+                out.push(e.span());
             }
         });
     }
@@ -614,36 +620,34 @@ fn nested_super_calls(body: &Block) -> Vec<Span> {
 }
 
 /// The first use of `self` in a statement.
-fn self_use(s: &Stmt) -> Option<Span> {
+fn self_use(s: Stmt<'_>) -> Option<Span> {
     let mut found = None;
     wowlua_syntax::visit::walk_stmt(s, &mut |e| {
         if found.is_none()
-            && let ExprKind::Name(n) = &e.kind
-            && n.text.as_ref() == "self"
+            && let ExprKind::Name(n) = e.kind()
+            && n.text() == "self"
         {
-            found = Some(n.span);
+            found = Some(n.span());
         }
     });
     found
 }
 
 /// Locals and parameters named `super` (E3040).
-fn check_super_names(body: &Block, func: &FuncBody, out: &mut Vec<Diagnostic>) {
+fn check_super_names(body: Block<'_>, func: Func<'_>, out: &mut Vec<Diagnostic>) {
     let mut names: Vec<Span> = func
-        .params
+        .params()
         .iter()
-        .filter(|p| p.name.text.as_ref() == "super")
-        .map(|p| p.name.span)
+        .filter(|p| p.name().text() == "super")
+        .map(|p| p.name().span())
         .collect();
-    wowlua_syntax::visit::walk_stmts(body, &mut |s| match &s.kind {
+    wowlua_syntax::visit::walk_stmts(body, &mut |s| match s.kind() {
         StmtKind::Local { names: n, .. } => names.extend(
             n.iter()
-                .filter(|x| x.name.text.as_ref() == "super")
-                .map(|x| x.name.span),
+                .filter(|x| x.name.text() == "super")
+                .map(|x| x.name.span()),
         ),
-        StmtKind::LocalFunction { name, .. } if name.text.as_ref() == "super" => {
-            names.push(name.span)
-        }
+        StmtKind::LocalFunction { name, .. } if name.text() == "super" => names.push(name.span()),
         _ => {}
     });
     for span in names {
@@ -658,11 +662,11 @@ fn check_super_names(body: &Block, func: &FuncBody, out: &mut Vec<Diagnostic>) {
 }
 
 /// `...` in an initializer, outside nested functions.
-fn vararg_in(e: &Expr) -> Option<Span> {
+fn vararg_in(e: Expr<'_>) -> Option<Span> {
     let mut found = None;
     wowlua_syntax::visit::walk_expr_shallow(e, &mut |x| {
-        if found.is_none() && matches!(x.kind, ExprKind::Vararg) {
-            found = Some(x.span);
+        if found.is_none() && matches!(x.kind(), ExprKind::Vararg) {
+            found = Some(x.span());
         }
     });
     found

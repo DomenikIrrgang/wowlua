@@ -5,30 +5,32 @@
 //! since the profile comes first), else `test.profile` of the manifest.
 
 use std::path::Path;
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 use wowlua_vm::{TableRef, Value, Vm};
 
 /// The profile a test file's `config({ profile = "…" })` names.
 pub fn named_in(source: &[u8]) -> Option<String> {
     let file = wowlua_span::SourceDb::new().add("", "");
     let parse = wowlua_syntax::parse(source, file);
-    parse.chunk.block.stmts.iter().find_map(|s| {
-        let StmtKind::Call(call) = &s.kind else {
+    parse.view().block().stmts().iter().find_map(|s| {
+        let StmtKind::Call(call) = s.kind() else {
             return None;
         };
-        let ExprKind::Call { callee, args } = &call.kind else {
+        let ExprKind::Call { callee, args } = call.kind() else {
             return None;
         };
-        if !matches!(&callee.kind, ExprKind::Name(n) if n.text.as_ref() == "config") {
+        if !matches!(callee.kind(), ExprKind::Name(n) if n.text() == "config") {
             return None;
         }
-        let ExprKind::Table(fields) = &args.exprs().first()?.kind else {
+        let ExprKind::Table(fields) = args.exprs().first()?.kind() else {
             return None;
         };
         fields.iter().find_map(|f| match f {
-            TableField::Named { name, value, .. } if name.text.as_ref() == "profile" => {
-                match &value.kind {
-                    ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value).into_owned()),
+            TableField::Named { name, value, .. } if name.text() == "profile" => {
+                match value.kind() {
+                    ExprKind::String(lit) => {
+                        Some(String::from_utf8_lossy(&lit.value()).into_owned())
+                    }
                     _ => None,
                 }
             }

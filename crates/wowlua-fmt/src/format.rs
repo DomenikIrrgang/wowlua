@@ -4,8 +4,8 @@
 
 use crate::doc::Doc;
 use wowlua_syntax::Parse;
-use wowlua_syntax::ast::*;
 use wowlua_syntax::token::TriviaKind;
+use wowlua_syntax::view::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QuoteStyle {
@@ -59,7 +59,6 @@ impl<'a> Formatter<'a> {
                         for next in &trivia[i + 1..] {
                             match next.kind {
                                 TriviaKind::Newline => newlines_after += 1,
-                                TriviaKind::Whitespace => {}
                                 _ => break,
                             }
                         }
@@ -88,7 +87,6 @@ impl<'a> Formatter<'a> {
                         // trails it.
                         seen_newline = false;
                     }
-                    TriviaKind::Whitespace => {}
                 }
             }
         }
@@ -106,7 +104,7 @@ impl<'a> Formatter<'a> {
     /// Start offset of the last token before `offset`.
     pub(crate) fn prev_token(&self, offset: u32) -> u32 {
         let tokens = &self.parse.lexed.tokens;
-        let i = tokens.partition_point(|t| t.start < offset);
+        let i = tokens.first_from(offset);
         i.checked_sub(1)
             .and_then(|i| tokens.get(i))
             .map_or(offset, |t| t.start)
@@ -126,7 +124,7 @@ impl<'a> Formatter<'a> {
     /// Start offset of the first token at or after `offset`.
     pub(crate) fn next_token(&self, offset: u32) -> u32 {
         let tokens = &self.parse.lexed.tokens;
-        let i = tokens.partition_point(|t| t.start < offset);
+        let i = tokens.first_from(offset);
         tokens.get(i).map(|t| t.start).unwrap_or(offset)
     }
 
@@ -226,15 +224,19 @@ impl<'a> Formatter<'a> {
     /// `offset` (before any leading comment; `;` tokens in between count).
     pub(crate) fn blank_line_between(&self, prev_end: u32, offset: u32) -> bool {
         let tokens = &self.parse.lexed.tokens;
-        let first = tokens.partition_point(|t| t.start < prev_end);
-        let last = tokens.partition_point(|t| t.start < offset);
+        let first = tokens.first_from(prev_end);
+        let last = tokens.first_from(offset);
         let mut newlines = 0;
-        let count = tokens.get(first..=last).map_or(0, <[_]>::len);
+        // The tokens `first..=last`, none if `last` is past the end.
+        let count = if last < tokens.len() {
+            last + 1 - first
+        } else {
+            0
+        };
         for index in first..first + count {
             for t in self.parse.lexed.trivia_of(index) {
                 match t.kind {
                     TriviaKind::Newline => newlines += 1,
-                    TriviaKind::Whitespace => {}
                     _ if newlines == 0 => {} // trailing comment of the previous line
                     _ => return newlines >= 2,
                 }
@@ -245,19 +247,19 @@ impl<'a> Formatter<'a> {
 
     // ------------------------------------------------------------ blocks --
 
-    pub(crate) fn chunk(&mut self, chunk: &Chunk) -> Doc {
-        let body = self.stmts(&chunk.block.stmts);
+    pub(crate) fn chunk(&mut self, chunk: Chunk<'_>) -> Doc {
+        let body = self.stmts(chunk.block().stmts());
         let rest = self.rest();
         Doc::concat(vec![body, rest])
     }
 
-    fn stmts(&mut self, stmts: &[Stmt]) -> Doc {
+    fn stmts(&mut self, stmts: Stmts<'_>) -> Doc {
         let mut parts = Vec::new();
         for (i, s) in stmts.iter().enumerate() {
             if i > 0 {
-                parts.push(self.trailing_before(s.span.start));
+                parts.push(self.trailing_before(s.span().start));
                 parts.push(hard());
-                if self.blank_line_between(stmts[i - 1].span.end, s.span.start) {
+                if self.blank_line_between(stmts.at(i - 1).span().end, s.span().start) {
                     parts.push(hard());
                 }
             }
@@ -270,19 +272,19 @@ impl<'a> Formatter<'a> {
     }
 
     /// A block's statements and its closing keyword at `close` (`end`, …).
-    pub(crate) fn block(&mut self, b: &Block, close: &str, close_offset: u32) -> Doc {
+    pub(crate) fn block(&mut self, b: Block<'_>, close: &str, close_offset: u32) -> Doc {
         let first = b
-            .stmts
+            .stmts()
             .first()
-            .map(|s| s.span.start)
+            .map(|s| s.span().start)
             .unwrap_or(close_offset);
         let header = self.trailing_before(first);
-        let body = self.stmts(&b.stmts);
+        let body = self.stmts(b.stmts());
         let inner = self.inner_comments(close_offset);
         let mut parts = vec![header];
-        if !b.stmts.is_empty() || inner.is_some() {
+        if !b.stmts().is_empty() || inner.is_some() {
             let mut indented = Vec::new();
-            if !b.stmts.is_empty() {
+            if !b.stmts().is_empty() {
                 indented.push(hard());
                 indented.push(body);
             }
@@ -296,29 +298,29 @@ impl<'a> Formatter<'a> {
         Doc::concat(parts)
     }
 
-    fn close_of(&self, b: &Block) -> u32 {
-        self.next_token(b.span.end)
+    fn close_of(&self, b: Block<'_>) -> u32 {
+        self.next_token(b.span().end)
     }
 
-    pub(crate) fn stmt(&mut self, s: &Stmt) -> Doc {
+    pub(crate) fn stmt(&mut self, s: Stmt<'_>) -> Doc {
         grow(|| {
-            if s.decorators.is_empty() {
+            if s.decorators().is_empty() {
                 self.stmt_inner(s)
             } else {
-                let d = self.decorators(&s.decorators);
+                let d = self.decorators(s.decorators());
                 Doc::concat(vec![d, self.stmt_inner(s)])
             }
         })
     }
 
-    fn stmt_inner(&mut self, s: &Stmt) -> Doc {
-        let start = s.span.start;
-        match &s.kind {
+    fn stmt_inner(&mut self, s: Stmt<'_>) -> Doc {
+        let start = s.span().start;
+        match s.kind() {
             StmtKind::Local { names, values } => {
                 let mut parts = vec![self.tok("local", start), txt(" "), self.names(names)];
                 if !values.is_empty() {
                     let eq =
-                        self.next_token(names.last().map(|n| n.name.span.end).unwrap_or(start));
+                        self.next_token(names.last().map(|n| n.name.span().end).unwrap_or(start));
                     parts.push(txt(" "));
                     parts.push(self.tok("=", eq));
                     parts.push(self.rhs(values));
@@ -327,7 +329,7 @@ impl<'a> Formatter<'a> {
             }
             StmtKind::Assign { targets, values } => {
                 let lhs = self.expr_list_flat(targets);
-                let eq = self.next_token(targets.last().map(|t| t.span.end).unwrap_or(start));
+                let eq = self.next_token(targets.last().map(|t| t.span().end).unwrap_or(start));
                 Doc::concat(vec![lhs, txt(" "), self.tok("=", eq), self.rhs(values)])
             }
             StmtKind::Call(e) => self.expr(e),
@@ -339,7 +341,7 @@ impl<'a> Formatter<'a> {
             StmtKind::While { cond, body } => {
                 let w = self.tok("while", start);
                 let c = self.expr(cond);
-                let d = self.tok("do", self.next_token(cond.span.end));
+                let d = self.tok("do", self.next_token(cond.span().end));
                 let close = self.close_of(body);
                 Doc::concat(vec![
                     w,
@@ -363,18 +365,17 @@ impl<'a> Formatter<'a> {
                 else_block,
             } => {
                 let mut parts = vec![self.tok("if", start), txt(" "), self.expr(cond), txt(" ")];
-                parts.push(self.tok("then", self.next_token(cond.span.end)));
+                parts.push(self.tok("then", self.next_token(cond.span().end)));
                 let mut prev = then_block;
                 let mut prev_close = self.close_of(then_block);
-                let mut clauses: Vec<(&Expr, &Block)> =
-                    elseifs.iter().map(|(c, b)| (c, b)).collect();
+                let mut clauses: Vec<(Expr<'_>, Block<'_>)> = elseifs.iter().collect();
                 clauses.reverse();
                 while let Some((c, b)) = clauses.pop() {
                     parts.push(self.block(prev, "elseif", prev_close));
                     parts.push(txt(" "));
                     parts.push(self.expr(c));
                     parts.push(txt(" "));
-                    parts.push(self.tok("then", self.next_token(c.span.end)));
+                    parts.push(self.tok("then", self.next_token(c.span().end)));
                     prev = b;
                     prev_close = self.close_of(b);
                 }
@@ -407,9 +408,9 @@ impl<'a> Formatter<'a> {
                     parts.push(txt(", "));
                     parts.push(self.expr(step));
                 }
-                let last = step.as_ref().unwrap_or(limit);
+                let last = step.unwrap_or(limit);
                 parts.push(txt(" "));
-                parts.push(self.tok("do", self.next_token(last.span.end)));
+                parts.push(self.tok("do", self.next_token(last.span().end)));
                 let close = self.close_of(body);
                 parts.push(self.block(body, "end", close));
                 Doc::concat(parts)
@@ -423,7 +424,7 @@ impl<'a> Formatter<'a> {
                 ];
                 parts.push(self.expr_list_flat(exprs));
                 parts.push(txt(" "));
-                let last = exprs.last().map(|e| e.span.end).unwrap_or(start);
+                let last = exprs.last().map(|e| e.span().end).unwrap_or(start);
                 parts.push(self.tok("do", self.next_token(last)));
                 let close = self.close_of(body);
                 parts.push(self.block(body, "end", close));
@@ -447,7 +448,7 @@ impl<'a> Formatter<'a> {
                 } else if values.len() == 1 {
                     // One value: no list to indent (a returned function's
                     // body is indented once).
-                    Doc::concat(vec![r, txt(" "), self.expr(&values[0])])
+                    Doc::concat(vec![r, txt(" "), self.expr(values.at(0))])
                 } else {
                     Doc::concat(vec![r, txt(" "), self.expr_list_group(values)])
                 }
@@ -457,11 +458,11 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    pub(crate) fn name(&mut self, n: &Name) -> Doc {
-        self.tok(n.text.as_bytes(), n.span.start)
+    pub(crate) fn name(&mut self, n: Name<'_>) -> Doc {
+        self.tok(n.text().as_bytes(), n.span().start)
     }
 
-    fn names(&mut self, names: &[TypedName]) -> Doc {
+    fn names(&mut self, names: TypedNames<'_>) -> Doc {
         let mut parts = Vec::new();
         for (i, n) in names.iter().enumerate() {
             if i > 0 {
@@ -472,38 +473,38 @@ impl<'a> Formatter<'a> {
         Doc::concat(parts)
     }
 
-    pub(crate) fn func_name(&mut self, name: &FuncName) -> Doc {
+    pub(crate) fn func_name(&mut self, name: FuncName<'_>) -> Doc {
         let mut parts = Vec::new();
-        for (i, n) in name.path.iter().enumerate() {
+        for (i, n) in name.path().iter().enumerate() {
             if i > 0 {
                 parts.push(txt("."));
             }
             parts.push(self.name(n));
         }
-        if let Some(m) = &name.method {
+        if let Some(m) = &name.method() {
             parts.push(txt(":"));
-            parts.push(self.name(m));
+            parts.push(self.name(*m));
         }
         Doc::concat(parts)
     }
 
-    pub(crate) fn func_body(&mut self, f: &FuncBody) -> Doc {
+    pub(crate) fn func_body(&mut self, f: Func<'_>) -> Doc {
         let signature = self.signature(f);
         let first = f
-            .body
-            .stmts
+            .body()
+            .stmts()
             .first()
-            .map(|s| s.span.start)
-            .unwrap_or(f.end_span.start);
+            .map(|s| s.span().start)
+            .unwrap_or(f.end_span().start);
         let header = self.trailing_before(first);
-        let body = self.stmts(&f.body.stmts);
-        let inner = self.inner_comments(f.end_span.start);
+        let body = self.stmts(f.body().stmts());
+        let inner = self.inner_comments(f.end_span().start);
         let mut parts = vec![signature, header];
-        if f.body.stmts.is_empty() && inner.is_none() {
+        if f.body().stmts().is_empty() && inner.is_none() {
             parts.push(txt(" "));
         } else {
             let mut indented = Vec::new();
-            if !f.body.stmts.is_empty() {
+            if !f.body().stmts().is_empty() {
                 indented.push(hard());
                 indented.push(body);
             }
@@ -513,20 +514,20 @@ impl<'a> Formatter<'a> {
             parts.push(Doc::indent(Doc::concat(indented)));
             parts.push(hard());
         }
-        parts.push(self.tok("end", f.end_span.start));
+        parts.push(self.tok("end", f.end_span().start));
         Doc::concat(parts)
     }
 
     /// ` = values`: one value stays on the line; several break as a group.
-    fn rhs(&mut self, values: &[Expr]) -> Doc {
+    fn rhs(&mut self, values: Exprs<'_>) -> Doc {
         if values.len() == 1 {
-            Doc::concat(vec![txt(" "), self.expr(&values[0])])
+            Doc::concat(vec![txt(" "), self.expr(values.at(0))])
         } else {
             Doc::concat(vec![txt(" "), self.expr_list_group(values)])
         }
     }
 
-    fn expr_list_flat(&mut self, es: &[Expr]) -> Doc {
+    fn expr_list_flat(&mut self, es: Exprs<'_>) -> Doc {
         let mut parts = Vec::new();
         for (i, e) in es.iter().enumerate() {
             if i > 0 {
@@ -537,12 +538,12 @@ impl<'a> Formatter<'a> {
         Doc::concat(parts)
     }
 
-    fn expr_list_group(&mut self, es: &[Expr]) -> Doc {
+    fn expr_list_group(&mut self, es: Exprs<'_>) -> Doc {
         let mut parts = Vec::new();
         for (i, e) in es.iter().enumerate() {
             if i > 0 {
                 parts.push(txt(","));
-                parts.push(self.trailing_before(e.span.start));
+                parts.push(self.trailing_before(e.span().start));
                 parts.push(Doc::Line);
             }
             parts.push(self.expr(e));
@@ -552,17 +553,17 @@ impl<'a> Formatter<'a> {
 
     // ------------------------------------------------------- expressions --
 
-    pub(crate) fn expr(&mut self, e: &Expr) -> Doc {
+    pub(crate) fn expr(&mut self, e: Expr<'_>) -> Doc {
         grow(|| self.expr_inner(e))
     }
 
-    fn expr_inner(&mut self, e: &Expr) -> Doc {
-        let start = e.span.start;
-        match &e.kind {
+    fn expr_inner(&mut self, e: Expr<'_>) -> Doc {
+        let start = e.span().start;
+        match e.kind() {
             ExprKind::Nil => self.tok("nil", start),
             ExprKind::True => self.tok("true", start),
             ExprKind::False => self.tok("false", start),
-            ExprKind::Number(n) => self.tok(n.raw.as_bytes(), start),
+            ExprKind::Number(n) => self.tok(n.raw().as_bytes(), start),
             ExprKind::String(s) => {
                 let text = self.string(s);
                 self.tok(&text, start)
@@ -572,13 +573,13 @@ impl<'a> Formatter<'a> {
                 let k = self.tok("function", start);
                 Doc::concat(vec![k, self.func_body(f)])
             }
-            ExprKind::Table(fields) => self.table(fields, e.span),
+            ExprKind::Table(fields) => self.table(fields, e.span()),
             ExprKind::Name(n) => self.name(n),
             ExprKind::Index { obj, key } => {
                 let o = self.expr(obj);
-                let open = self.tok("[", self.next_token(obj.span.end));
+                let open = self.tok("[", self.next_token(obj.span().end));
                 let k = self.expr(key);
-                let close = self.tok("]", self.next_token(key.span.end));
+                let close = self.tok("]", self.next_token(key.span().end));
                 // `t[ [[x]] ]`: `[[` would open a long string.
                 let pad = if is_long_string(key) {
                     txt(" ")
@@ -589,7 +590,7 @@ impl<'a> Formatter<'a> {
             }
             ExprKind::Field { obj, name } => {
                 let o = self.expr(obj);
-                let dot = self.tok(".", self.next_token(obj.span.end));
+                let dot = self.tok(".", self.next_token(obj.span().end));
                 Doc::concat(vec![o, dot, self.name(name)])
             }
             ExprKind::Call { callee, args } => {
@@ -598,20 +599,20 @@ impl<'a> Formatter<'a> {
             }
             ExprKind::Method { obj, name, args } => {
                 let o = self.expr(obj);
-                let colon = self.tok(":", self.next_token(obj.span.end));
+                let colon = self.tok(":", self.next_token(obj.span().end));
                 let n = self.name(name);
                 Doc::concat(vec![o, colon, n, self.args(args)])
             }
             ExprKind::Paren(inner) => {
                 let open = self.tok("(", start);
                 let i = self.expr(inner);
-                let close = self.tok(")", e.span.end.saturating_sub(1));
+                let close = self.tok(")", e.span().end.saturating_sub(1));
                 Doc::concat(vec![open, i, close])
             }
             ExprKind::Binary { op, lhs, rhs } => {
                 let l = self.expr(lhs);
-                let o = self.tok(op.as_str(), self.next_token(lhs.span.end));
-                let after = self.trailing_before(rhs.span.start);
+                let o = self.tok(op.as_str(), self.next_token(lhs.span().end));
+                let after = self.trailing_before(rhs.span().start);
                 let r = self.expr(rhs);
                 Doc::group(Doc::concat(vec![
                     l,
@@ -628,8 +629,8 @@ impl<'a> Formatter<'a> {
                     UnOp::Not => txt(" "),
                     // `- -x` must not become a comment.
                     UnOp::Neg
-                        if matches!(&operand.kind, ExprKind::Unary { op: UnOp::Neg, .. })
-                            || matches!(&operand.kind, ExprKind::Number(n) if n.raw.starts_with('-')) =>
+                        if matches!(operand.kind(), ExprKind::Unary { op: UnOp::Neg, .. })
+                            || matches!(operand.kind(), ExprKind::Number(n) if n.raw().starts_with('-')) =>
                     {
                         txt(" ")
                     }
@@ -643,9 +644,9 @@ impl<'a> Formatter<'a> {
 
     /// Call arguments, always parenthesized. A single table or function
     /// argument, or a function as the last argument, hugs the parentheses.
-    pub(crate) fn args(&mut self, args: &Args) -> Doc {
-        match args {
-            Args::Parens { args, span } => {
+    pub(crate) fn args(&mut self, args: Args<'_>) -> Doc {
+        match args.kind() {
+            ArgsKind::Parens { args, span } => {
                 let open = self.tok("(", span.start);
                 let close_offset = span.end.saturating_sub(1);
                 if args.is_empty() {
@@ -656,9 +657,9 @@ impl<'a> Formatter<'a> {
                         None => Doc::concat(vec![open, close]),
                     };
                 }
-                let last_hugs = args
-                    .last()
-                    .is_some_and(|a| matches!(a.kind, ExprKind::Function(_) | ExprKind::Table(_)));
+                let last_hugs = args.last().is_some_and(|a| {
+                    matches!(a.kind(), ExprKind::Function(_) | ExprKind::Table(_))
+                });
                 if last_hugs {
                     let mut parts = vec![open];
                     for (i, a) in args.iter().enumerate() {
@@ -670,11 +671,11 @@ impl<'a> Formatter<'a> {
                     parts.push(self.tok(")", close_offset));
                     return Doc::concat(parts);
                 }
-                let mut parts = vec![self.trailing_before(args[0].span.start)];
+                let mut parts = vec![self.trailing_before(args.at(0).span().start)];
                 for (i, a) in args.iter().enumerate() {
                     if i > 0 {
                         parts.push(txt(","));
-                        parts.push(self.trailing_before(a.span.start));
+                        parts.push(self.trailing_before(a.span().start));
                         parts.push(Doc::Line);
                     }
                     parts.push(self.expr(a));
@@ -694,11 +695,13 @@ impl<'a> Formatter<'a> {
                     close,
                 ]))
             }
-            Args::Table(e) | Args::String(e) => Doc::concat(vec![txt("("), self.expr(e), txt(")")]),
+            ArgsKind::Table(e) | ArgsKind::String(e) => {
+                Doc::concat(vec![txt("("), self.expr(e), txt(")")])
+            }
         }
     }
 
-    fn table(&mut self, fields: &[TableField], span: wowlua_span::Span) -> Doc {
+    fn table(&mut self, fields: TableFields<'_>, span: wowlua_span::Span) -> Doc {
         let open = self.tok("{", span.start);
         let close_offset = span.end.saturating_sub(1);
         if fields.is_empty() {
@@ -709,7 +712,7 @@ impl<'a> Formatter<'a> {
                 None => Doc::concat(vec![open, close]),
             };
         }
-        let head = self.trailing_before(field_start(&fields[0]));
+        let head = self.trailing_before(field_start(fields.at(0)));
         let mut parts = Vec::new();
         for (i, f) in fields.iter().enumerate() {
             if i > 0 {
@@ -721,8 +724,8 @@ impl<'a> Formatter<'a> {
                 TableField::Keyed { key, value, span } => {
                     let open_b = self.tok("[", span.start);
                     let k = self.expr(key);
-                    let close_b = self.tok("]", self.next_token(key.span.end));
-                    let eq = self.tok("=", self.next_token(self.next_token(key.span.end) + 1));
+                    let close_b = self.tok("]", self.next_token(key.span().end));
+                    let eq = self.tok("=", self.next_token(self.next_token(key.span().end) + 1));
                     let pad = if is_long_string(key) {
                         txt(" ")
                     } else {
@@ -742,7 +745,7 @@ impl<'a> Formatter<'a> {
                 }
                 TableField::Named { name, value, .. } => {
                     let n = self.name(name);
-                    let eq = self.tok("=", self.next_token(name.span.end));
+                    let eq = self.tok("=", self.next_token(name.span().end));
                     Doc::concat(vec![n, txt(" "), eq, txt(" "), self.expr(value)])
                 }
                 TableField::Positional(value) => self.expr(value),
@@ -767,9 +770,9 @@ impl<'a> Formatter<'a> {
 
     /// A string literal in the configured quote style, when that needs no
     /// new escapes.
-    pub(crate) fn string(&self, s: &StringLit) -> Vec<u8> {
-        let raw = &s.raw;
-        if s.long || self.quote == QuoteStyle::Preserve || raw.len() < 2 {
+    pub(crate) fn string(&self, s: Str<'_>) -> Vec<u8> {
+        let raw = &s.raw();
+        if s.long() || self.quote == QuoteStyle::Preserve || raw.len() < 2 {
             return raw.to_vec();
         }
         let (want, other) = match self.quote {
@@ -808,26 +811,26 @@ impl<'a> Formatter<'a> {
     }
 }
 
-fn is_long_string(e: &Expr) -> bool {
-    matches!(&e.kind, ExprKind::String(s) if s.long)
+fn is_long_string(e: Expr<'_>) -> bool {
+    matches!(e.kind(), ExprKind::String(s) if s.long())
 }
 
 fn spaced(text: &[u8]) -> Vec<u8> {
     [b" ".as_slice(), text].concat()
 }
 
-fn field_start(f: &TableField) -> u32 {
+fn field_start(f: TableField<'_>) -> u32 {
     match f {
         TableField::Keyed { span, .. } => span.start,
-        TableField::Named { name, .. } => name.span.start,
-        TableField::Positional(e) => e.span.start,
+        TableField::Named { name, .. } => name.span().start,
+        TableField::Positional(e) => e.span().start,
     }
 }
 
 /// The statement's first token is `(` (needs `;` before it).
-fn starts_with_paren(s: &Stmt) -> bool {
-    fn leftmost(e: &Expr) -> &Expr {
-        match &e.kind {
+fn starts_with_paren(s: Stmt<'_>) -> bool {
+    fn leftmost(e: Expr<'_>) -> Expr<'_> {
+        match e.kind() {
             ExprKind::Index { obj, .. }
             | ExprKind::Field { obj, .. }
             | ExprKind::Method { obj, .. } => leftmost(obj),
@@ -835,7 +838,7 @@ fn starts_with_paren(s: &Stmt) -> bool {
             _ => e,
         }
     }
-    let first = match &s.kind {
+    let first = match s.kind() {
         StmtKind::Call(e) => e,
         StmtKind::Assign { targets, .. } => match targets.first() {
             Some(t) => t,
@@ -843,5 +846,5 @@ fn starts_with_paren(s: &Stmt) -> bool {
         },
         _ => return false,
     };
-    matches!(leftmost(first).kind, ExprKind::Paren(_))
+    matches!(leftmost(first).kind(), ExprKind::Paren(_))
 }

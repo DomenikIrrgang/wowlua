@@ -21,7 +21,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::{HashMap, HashSet};
 use wowlua_span::{FileId, Span};
 use wowlua_syntax::Parse;
-use wowlua_syntax::ast::*;
+use wowlua_syntax::view::*;
 
 /// A name whose definition orders files: a global, an addon-table field,
 /// or a field of a table reached from one of them (`Lib.Register`,
@@ -165,17 +165,17 @@ impl Markers {
     /// `Namespace.Member`); declared globals of function type (Blizzard's
     /// Lua UI code) are not among them.
     pub fn with_api(mut self, files: &[crate::FileInput]) -> Markers {
-        fn members(prefix: &str, list: &[NsMember], out: &mut HashSet<String>) {
+        fn members(prefix: &str, list: NsMembers<'_>, out: &mut HashSet<String>) {
             for m in list {
-                match &m.kind {
+                match m.kind() {
                     NsMemberKind::Function { name, .. } => {
-                        out.insert(format!("{prefix}.{}", name.text));
+                        out.insert(format!("{prefix}.{}", name.text()));
                     }
                     NsMemberKind::Namespace {
                         name,
                         members: inner,
                     } => {
-                        members(&format!("{prefix}.{}", name.text), inner, out);
+                        members(&format!("{prefix}.{}", name.text()), inner, out);
                     }
                     _ => {}
                 }
@@ -186,20 +186,20 @@ impl Markers {
             .filter(|f| f.kind == crate::FileKind::Declaration)
         {
             let Some(parse) = f.parse else { continue };
-            for s in &parse.chunk.block.stmts {
-                let StmtKind::Declare(d) = &s.kind else {
+            for s in parse.view().block().stmts() {
+                let StmtKind::Declare(d) = s.kind() else {
                     continue;
                 };
-                match d.as_ref() {
-                    Declare::Function { name, .. } if name.method.is_none() => {
-                        let path: Vec<&str> = name.path.iter().map(|n| n.text.as_ref()).collect();
+                match d.kind() {
+                    DeclareKind::Function { name, .. } if name.method().is_none() => {
+                        let path: Vec<&str> = name.path().iter().map(|n| n.text()).collect();
                         self.api_functions.insert(path.join("."));
                     }
-                    Declare::Namespace {
+                    DeclareKind::Namespace {
                         name,
                         members: list,
                     } => {
-                        members(&name.text, list, &mut self.api_functions);
+                        members(name.text(), list, &mut self.api_functions);
                     }
                     _ => {}
                 }
@@ -268,18 +268,18 @@ pub fn file_usage(parse: &Parse, markers: &Markers) -> FileUsage {
 fn file_usage_inner(parse: &Parse, markers: &Markers) -> FileUsage {
     let mut w = Walker::new(markers);
     // Top-level classes and enums are hoisted locals.
-    for s in &parse.chunk.block.stmts {
-        let kind = match &s.kind {
-            StmtKind::Export(inner) => &inner.kind,
+    for s in parse.view().block().stmts() {
+        let kind = match s.kind() {
+            StmtKind::Export(inner) => inner.kind(),
             k => k,
         };
         match kind {
-            StmtKind::Class(c) => w.declare(&c.name.text, Local::Plain),
-            StmtKind::Enum(e) => w.declare(&e.name.text, Local::Plain),
+            StmtKind::Class(c) => w.declare(c.name().text(), Local::Plain),
+            StmtKind::Enum(e) => w.declare(e.name().text(), Local::Plain),
             _ => {}
         }
     }
-    w.block(&parse.chunk.block);
+    w.block(parse.view().block());
     w.out
 }
 
@@ -380,7 +380,7 @@ impl<'a> Walker<'a> {
             let calls = self.out.functions[self.current].calls.len();
             self.scopes.push(FxHashMap::default());
             self.declare("self", Local::Plain);
-            for s in &parse.chunk.block.stmts {
+            for s in parse.view().block().stmts() {
                 self.stmt(s);
             }
             self.scopes.pop();
@@ -428,11 +428,11 @@ impl<'a> Walker<'a> {
     }
 
     /// The position of a parameter of the current function that `e` names.
-    fn own_param(&self, e: &Expr) -> Option<usize> {
-        let ExprKind::Name(n) = &e.kind else {
+    fn own_param(&self, e: Expr<'_>) -> Option<usize> {
+        let ExprKind::Name(n) = e.kind() else {
             return None;
         };
-        self.param_owner(&n.text)
+        self.param_owner(n.text())
             .filter(|(owner, _)| *owner == self.current)
             .map(|(_, p)| p)
     }
@@ -440,8 +440,8 @@ impl<'a> Walker<'a> {
     /// The parameter that is no function when `cond` holds (`not p`,
     /// `p == nil`, `type(p) ~= "function"`), or, with `holds` false, when
     /// it does not hold (`p`, `p ~= nil`, `type(p) == "function"`).
-    fn not_function_param(&self, cond: &Expr, holds: bool) -> Option<usize> {
-        match &cond.kind {
+    fn not_function_param(&self, cond: Expr<'_>, holds: bool) -> Option<usize> {
+        match cond.kind() {
             ExprKind::Paren(inner) => self.not_function_param(inner, holds),
             ExprKind::Unary {
                 op: UnOp::Not,
@@ -453,23 +453,23 @@ impl<'a> Walker<'a> {
                 lhs,
                 rhs,
             } => {
-                let equal = (*op == BinOp::Eq) == holds;
-                if matches!(rhs.kind, ExprKind::Nil) {
+                let equal = (op == BinOp::Eq) == holds;
+                if matches!(rhs.kind(), ExprKind::Nil) {
                     return equal.then(|| self.own_param(lhs)).flatten();
                 }
-                if matches!(lhs.kind, ExprKind::Nil) {
+                if matches!(lhs.kind(), ExprKind::Nil) {
                     return equal.then(|| self.own_param(rhs)).flatten();
                 }
                 let (operand, _) = type_test(lhs, rhs)?;
-                let tested = if matches!(lhs.kind, ExprKind::String(_)) {
+                let tested = if matches!(lhs.kind(), ExprKind::String(_)) {
                     lhs
                 } else {
                     rhs
                 };
-                let ExprKind::String(t) = &tested.kind else {
+                let ExprKind::String(t) = tested.kind() else {
                     return None;
                 };
-                (*t.value == *b"function" && !equal)
+                (*t.value() == *b"function" && !equal)
                     .then(|| self.own_param(operand))
                     .flatten()
             }
@@ -479,7 +479,7 @@ impl<'a> Walker<'a> {
 
     /// Walks a block that runs only when parameter `param` (if any) is not
     /// a function; a condition already in force stays.
-    fn unless_block(&mut self, param: Option<usize>, keys: Vec<Key>, b: &Block) {
+    fn unless_block(&mut self, param: Option<usize>, keys: Vec<Key>, b: Block<'_>) {
         let saved = self.unless_function;
         if saved.is_none() {
             self.unless_function = param;
@@ -530,8 +530,8 @@ impl<'a> Walker<'a> {
 
     /// Walks an expression tested for truthiness; returns the keys that are
     /// defined when it is true.
-    fn test(&mut self, e: &Expr) -> Vec<Key> {
-        match &e.kind {
+    fn test(&mut self, e: Expr<'_>) -> Vec<Key> {
+        match e.kind() {
             ExprKind::Binary {
                 op: BinOp::And,
                 lhs,
@@ -564,14 +564,14 @@ impl<'a> Walker<'a> {
                 op: op @ (BinOp::Eq | BinOp::Ne),
                 lhs,
                 rhs,
-            } if matches!(lhs.kind, ExprKind::Nil) || matches!(rhs.kind, ExprKind::Nil) => {
-                let operand = if matches!(lhs.kind, ExprKind::Nil) {
+            } if matches!(lhs.kind(), ExprKind::Nil) || matches!(rhs.kind(), ExprKind::Nil) => {
+                let operand = if matches!(lhs.kind(), ExprKind::Nil) {
                     rhs
                 } else {
                     lhs
                 };
                 let keys = self.test_operand(operand);
-                if *op == BinOp::Ne { keys } else { Vec::new() }
+                if op == BinOp::Ne { keys } else { Vec::new() }
             }
             // `type(X) == "table"` (or `~= "nil"`) holds only when X exists.
             ExprKind::Binary {
@@ -582,12 +582,12 @@ impl<'a> Walker<'a> {
                 let (operand, nil) = type_test(lhs, rhs).expect("a type test");
                 self.expr(type_callee(lhs, rhs));
                 let keys = self.test_operand(operand);
-                self.expr(if matches!(lhs.kind, ExprKind::String(_)) {
+                self.expr(if matches!(lhs.kind(), ExprKind::String(_)) {
                     lhs
                 } else {
                     rhs
                 });
-                if (*op == BinOp::Eq) != nil {
+                if (op == BinOp::Eq) != nil {
                     keys
                 } else {
                     Vec::new()
@@ -600,7 +600,7 @@ impl<'a> Walker<'a> {
 
     /// Walks an operand of an existence test: a plain global or `ns` field
     /// read there is guarded.
-    fn test_operand(&mut self, e: &Expr) -> Vec<Key> {
+    fn test_operand(&mut self, e: Expr<'_>) -> Vec<Key> {
         let start = self.out.uses.len();
         let info = self.expr(e);
         self.probe(start, e, &info)
@@ -608,9 +608,9 @@ impl<'a> Walker<'a> {
 
     /// Marks the read of `e` (walked from use `start`, giving `info`) as an
     /// existence probe.
-    fn probe(&mut self, start: usize, e: &Expr, info: &Info) -> Vec<Key> {
+    fn probe(&mut self, start: usize, e: Expr<'_>, info: &Info) -> Vec<Key> {
         let plain = matches!(
-            e.kind,
+            e.kind(),
             ExprKind::Name(_)
                 | ExprKind::Field { .. }
                 | ExprKind::Index { .. }
@@ -634,7 +634,7 @@ impl<'a> Walker<'a> {
 
     /// Walks the object of an optional link (`X?.f`, `X?:m()`, `X?.()`): an
     /// existence probe of X.
-    fn probed(&mut self, e: &Expr) -> Info {
+    fn probed(&mut self, e: Expr<'_>) -> Info {
         let start = self.out.uses.len();
         let info = self.link(e);
         let keys = self.probe(start, e, &info);
@@ -643,75 +643,57 @@ impl<'a> Walker<'a> {
     }
 
     /// Walks a block with extra guarded keys.
-    fn guarded_block(&mut self, keys: Vec<Key>, b: &Block) {
+    fn guarded_block(&mut self, keys: Vec<Key>, b: Block<'_>) {
         let n = self.guards.len();
         self.guards.extend(keys);
         self.block(b);
         self.guards.truncate(n);
     }
 
-    fn block(&mut self, b: &Block) {
+    fn block(&mut self, b: Block<'_>) {
         self.scopes.push(FxHashMap::default());
-        for s in &b.stmts {
+        for s in b.stmts() {
             self.stmt(s);
         }
         self.scopes.pop();
     }
 
-    fn stmt(&mut self, s: &Stmt) {
+    fn stmt(&mut self, s: Stmt<'_>) {
         let first = self.out.functions.len();
         grow(|| self.stmt_inner(s));
-        self.decorators(&s.decorators, first);
+        self.decorators(s.decorators(), first);
     }
 
     /// User decorators are called at load time with the declared function
     /// (the first function the declaration created, if any). The standard
     /// library's decorators only register or wrap it: it runs later.
-    fn decorators(&mut self, decorators: &[Decorator], first: usize) {
+    fn decorators(&mut self, decorators: Decorators<'_>, first: usize) {
         for d in decorators.iter().filter(|d| !d.is_core()) {
-            let callee = self.expr(&d.expr());
+            let callee = self.expr(d.expr());
             let target: Vec<Info> = (first < self.out.functions.len())
                 .then_some(Info::Function(first))
                 .into_iter()
                 .collect();
             let deferred = d
-                .path
+                .path()
                 .first()
-                .is_some_and(|n| self.stdlib_imports.contains(n.text.as_ref()));
-            self.record_call(Self::call_target(&callee), &target, 0, d.span, deferred);
+                .is_some_and(|n| self.stdlib_imports.contains(n.text()));
+            self.record_call(Self::call_target(&callee), &target, 0, d.span(), deferred);
         }
     }
 
     /// A class: `extends` is read and static initializers run while the
     /// file loads; methods, accessors, the constructor and instance field
     /// initializers are functions.
-    fn class_decl(&mut self, c: &ClassDecl) {
-        if let Some(path) = c.extends.as_ref().and_then(crate::classes::type_path) {
-            let mk = |kind: ExprKind| Expr {
-                id: NodeId(0),
-                span: c.name.span,
-                kind,
-            };
-            let mut e = mk(ExprKind::Name(Name {
-                text: path[0].clone().into(),
-                span: c.name.span,
-            }));
-            for p in &path[1..] {
-                e = mk(ExprKind::Field {
-                    obj: Box::new(e),
-                    name: Name {
-                        text: p.clone().into(),
-                        span: c.name.span,
-                    },
-                });
-            }
-            self.expr(&e);
+    fn class_decl(&mut self, c: ClassDecl<'_>) {
+        if let Some(path) = c.extends().and_then(crate::classes::type_path) {
+            self.path_read(&path, c.name().span());
         }
-        let class = c.name.text.to_string();
-        for m in &c.members {
+        let class = c.name().text().to_string();
+        for m in c.members() {
             let first = self.out.functions.len();
-            let is_static = m.modifiers.contains(&Modifier::Static);
-            match &m.kind {
+            let is_static = m.modifiers().contains(&Modifier::Static);
+            match m.kind() {
                 ClassMemberKind::Field { value: Some(v), .. } if is_static => {
                     self.expr(v);
                 }
@@ -720,7 +702,7 @@ impl<'a> Walker<'a> {
                     value: Some(v),
                     ..
                 } => {
-                    self.body_function(&format!("{class} field {}", name.text), true, &[], |w| {
+                    self.body_function(&format!("{class} field {}", name.text()), true, &[], |w| {
                         w.expr(v);
                     });
                 }
@@ -729,7 +711,7 @@ impl<'a> Walker<'a> {
                     func,
                     has_body: true,
                 } => {
-                    self.function(func, &format!("{class}:{}", name.text), !is_static);
+                    self.function(func, &format!("{class}:{}", name.text()), !is_static);
                 }
                 ClassMemberKind::Constructor {
                     func,
@@ -739,16 +721,16 @@ impl<'a> Walker<'a> {
                 }
                 ClassMemberKind::Getter { name, body, .. } => {
                     self.body_function(
-                        &format!("{class}.{} getter", name.text),
+                        &format!("{class}.{} getter", name.text()),
                         !is_static,
                         &[],
                         |w| w.block(body),
                     );
                 }
                 ClassMemberKind::Setter { name, param, body } => {
-                    let p = param.name.text.to_string();
+                    let p = param.name.text().to_string();
                     self.body_function(
-                        &format!("{class}.{} setter", name.text),
+                        &format!("{class}.{} setter", name.text()),
                         !is_static,
                         &[p],
                         |w| w.block(body),
@@ -756,11 +738,11 @@ impl<'a> Walker<'a> {
                 }
                 _ => {}
             }
-            self.decorators(&m.decorators, first);
+            self.decorators(m.decorators(), first);
         }
     }
 
-    /// A function without a `FuncBody` (accessors, field initializers).
+    /// A function without a `Func` (accessors, field initializers).
     fn body_function(
         &mut self,
         name: &str,
@@ -796,8 +778,8 @@ impl<'a> Walker<'a> {
         id
     }
 
-    fn stmt_inner(&mut self, s: &Stmt) {
-        match &s.kind {
+    fn stmt_inner(&mut self, s: Stmt<'_>) {
+        match s.kind() {
             StmtKind::Local { names, values } => {
                 let infos: Vec<Info> = values.iter().map(|v| self.expr(v)).collect();
                 for (i, n) in names.iter().enumerate() {
@@ -813,17 +795,12 @@ impl<'a> Walker<'a> {
                             Local::Ns
                         }
                         _ => match values.get(i) {
-                            Some(
-                                value @ Expr {
-                                    kind: ExprKind::Table(_),
-                                    ..
-                                },
-                            ) => {
+                            Some(value) if matches!(value.kind(), ExprKind::Table(_)) => {
                                 let path = (
                                     Key::LocalTable(
-                                        n.name.span.file,
-                                        n.name.span.start,
-                                        n.name.text.to_string(),
+                                        n.name.span().file,
+                                        n.name.span().start,
+                                        n.name.text().to_string(),
                                     ),
                                     Vec::new(),
                                 );
@@ -833,13 +810,13 @@ impl<'a> Walker<'a> {
                             _ => Local::Plain,
                         },
                     };
-                    self.declare(&n.name.text, local);
+                    self.declare(n.name.text(), local);
                 }
             }
             StmtKind::Assign { targets, values } => {
                 let infos: Vec<Info> = values.iter().map(|v| self.expr(v)).collect();
                 for (i, t) in targets.iter().enumerate() {
-                    if let Some(path) = self.assign_target(t, infos.get(i), t.span, false)
+                    if let Some(path) = self.assign_target(t, infos.get(i), t.span(), false)
                         && let Some(value) = values.get(i)
                     {
                         self.constructor_fields(&path, value);
@@ -849,7 +826,7 @@ impl<'a> Walker<'a> {
             StmtKind::Compound { target, value, .. } => {
                 self.expr(target);
                 self.expr(value);
-                self.assign_target(target, None, target.span, true);
+                self.assign_target(target, None, target.span(), true);
             }
             StmtKind::Call(e) => {
                 self.expr(e);
@@ -861,7 +838,7 @@ impl<'a> Walker<'a> {
             }
             StmtKind::Repeat { body, cond } => {
                 self.scopes.push(FxHashMap::default());
-                for s in &body.stmts {
+                for s in body.stmts() {
                     self.stmt(s);
                 }
                 self.test(cond);
@@ -902,7 +879,7 @@ impl<'a> Walker<'a> {
                     self.expr(s);
                 }
                 self.scopes.push(FxHashMap::default());
-                self.declare(&var.name.text, Local::Plain);
+                self.declare(var.name.text(), Local::Plain);
                 self.block(body);
                 self.scopes.pop();
             }
@@ -912,42 +889,46 @@ impl<'a> Walker<'a> {
                 }
                 self.scopes.push(FxHashMap::default());
                 for v in vars {
-                    self.declare(&v.name.text, Local::Plain);
+                    self.declare(v.name.text(), Local::Plain);
                 }
                 self.block(body);
                 self.scopes.pop();
             }
             StmtKind::Function { name, func } => {
                 let display = func_name_display(name);
-                let f = self.function(func, &display, name.method.is_some());
-                let root = &name.path[0];
-                let mut fields: Vec<String> =
-                    name.path[1..].iter().map(|n| n.text.to_string()).collect();
-                if let Some(m) = &name.method {
-                    fields.push(m.text.to_string());
+                let f = self.function(func, &display, name.method().is_some());
+                let root = &name.path().at(0);
+                let mut fields: Vec<String> = name
+                    .path()
+                    .iter()
+                    .skip(1)
+                    .map(|n| n.text().to_string())
+                    .collect();
+                if let Some(m) = name.method() {
+                    fields.push(m.text().to_string());
                 }
-                match self.lookup(&root.text).cloned() {
+                match self.lookup(root.text()).cloned() {
                     Some(Local::Plain) | Some(Local::Function(_)) if fields.is_empty() => {
-                        self.declare_existing(&root.text, Local::Function(f));
+                        self.declare_existing(root.text(), Local::Function(f));
                     }
                     Some(Local::Ns) => {
                         if let Some((first, rest)) = fields.split_first() {
                             let key = Key::Ns(first.clone());
                             if rest.is_empty() {
-                                self.def_key(key.clone(), root.span);
+                                self.def_key(key.clone(), root.span());
                             } else {
-                                self.use_key(key.clone(), root.span);
-                                self.def_key(Key::of_path(key.clone(), rest.to_vec()), s.span);
+                                self.use_key(key.clone(), root.span());
+                                self.def_key(Key::of_path(key.clone(), rest.to_vec()), s.span());
                             }
                             self.out.function_defs.push(((key, rest.to_vec()), f));
                         }
                     }
                     Some(Local::Alias((key, prefix))) => {
-                        self.use_key(key.clone(), root.span);
+                        self.use_key(key.clone(), root.span());
                         let mut path = prefix.clone();
                         path.extend(fields);
                         if !path.is_empty() {
-                            self.def_key(Key::of_path(key.clone(), path.clone()), s.span);
+                            self.def_key(Key::of_path(key.clone(), path.clone()), s.span());
                         }
                         self.out.function_defs.push(((key, path), f));
                     }
@@ -956,16 +937,16 @@ impl<'a> Walker<'a> {
                             let current = self.current;
                             self.out
                                 .untracked_field_writes
-                                .push((last.clone(), current, s.span));
+                                .push((last.clone(), current, s.span()));
                         }
                     }
                     None => {
-                        let key = Key::Global(root.text.to_string());
+                        let key = Key::Global(root.text().to_string());
                         if fields.is_empty() {
-                            self.def_key(key.clone(), root.span);
+                            self.def_key(key.clone(), root.span());
                         } else {
-                            self.use_key(key.clone(), root.span);
-                            self.def_key(Key::of_path(key.clone(), fields.clone()), s.span);
+                            self.use_key(key.clone(), root.span());
+                            self.def_key(Key::of_path(key.clone(), fields.clone()), s.span());
                         }
                         self.out.function_defs.push(((key, fields), f));
                     }
@@ -973,8 +954,8 @@ impl<'a> Walker<'a> {
             }
             StmtKind::LocalFunction { name, func } => {
                 let id = self.out.functions.len();
-                self.declare(&name.text, Local::Function(id));
-                self.function(func, &name.text, false);
+                self.declare(name.text(), Local::Function(id));
+                self.function(func, name.text(), false);
             }
             StmtKind::Return(values) => {
                 for v in values {
@@ -987,44 +968,44 @@ impl<'a> Walker<'a> {
                 }
                 for f in fields {
                     if let Some(d) = &f.default {
-                        self.expr(d);
+                        self.expr(*d);
                     }
-                    self.declare(&f.name.text, Local::Plain);
+                    self.declare(f.name.text(), Local::Plain);
                 }
             }
             StmtKind::Const { name, value, .. } => {
-                let info = value.as_ref().map(|v| self.expr(v));
+                let info = value.as_ref().map(|v| self.expr(*v));
                 let local = match info {
                     Some(Info::Function(f)) => Local::Function(f),
                     _ => Local::Plain,
                 };
-                self.declare(&name.text, local);
+                self.declare(name.text(), local);
             }
             StmtKind::Import(import) => {
-                let stdlib = import.from.value.starts_with(b"wowlua:");
-                match &import.clause {
+                let stdlib = import.from().value().starts_with(b"wowlua:");
+                match &import.clause() {
                     ImportClause::Names(specs) => {
                         for spec in specs {
                             let local = spec.alias.as_ref().unwrap_or(&spec.name);
-                            self.declare(&local.text, Local::Import(local.text.to_string()));
+                            self.declare(local.text(), Local::Import(local.text().to_string()));
                             if stdlib {
-                                self.stdlib_imports.insert(local.text.to_string());
+                                self.stdlib_imports.insert(local.text().to_string());
                             }
                         }
                     }
                     ImportClause::Namespace(n) => {
-                        self.declare(&n.text, Local::Import(n.text.to_string()));
+                        self.declare(n.text(), Local::Import(n.text().to_string()));
                         if stdlib {
-                            self.stdlib_imports.insert(n.text.to_string());
+                            self.stdlib_imports.insert(n.text().to_string());
                         }
                     }
                     ImportClause::SideEffect => {}
                 }
             }
             StmtKind::Export(inner) => {
-                match &inner.kind {
+                match inner.kind() {
                     StmtKind::Function { name, func } => {
-                        let n = name.path[0].text.to_string();
+                        let n = name.path().at(0).text().to_string();
                         let f = self.function(func, &n, false);
                         self.declare(&n, Local::Function(f));
                         self.out.exported_functions.insert(n, f);
@@ -1033,15 +1014,15 @@ impl<'a> Walker<'a> {
                     StmtKind::Local { names, values } => {
                         self.stmt(inner);
                         for (i, n) in names.iter().enumerate() {
-                            if let Some(Expr {
-                                kind: ExprKind::Function(_),
-                                ..
-                            }) = values.get(i)
-                                && let Some(Local::Function(f)) = self.lookup(&n.name.text).cloned()
+                            if values
+                                .get(i)
+                                .is_some_and(|v| matches!(v.kind(), ExprKind::Function(_)))
+                                && let Some(Local::Function(f)) =
+                                    self.lookup(n.name.text()).cloned()
                             {
                                 self.out
                                     .exported_functions
-                                    .insert(n.name.text.to_string(), f);
+                                    .insert(n.name.text().to_string(), f);
                             }
                         }
                         return;
@@ -1086,7 +1067,7 @@ impl<'a> Walker<'a> {
     /// defining it. Returns the global or `ns` path the target defines.
     fn assign_target(
         &mut self,
-        t: &Expr,
+        t: Expr<'_>,
         value: Option<&Info>,
         span: Span,
         compound: bool,
@@ -1096,28 +1077,28 @@ impl<'a> Walker<'a> {
             _ => None,
         };
         let table = Self::table_of(value);
-        let (key, fields) = match &t.kind {
-            ExprKind::Name(n) => match self.lookup(&n.text) {
+        let (key, fields) = match t.kind() {
+            ExprKind::Name(n) => match self.lookup(n.text()) {
                 Some(_) => {
-                    if let Some((owner, p)) = self.param_owner(&n.text) {
+                    if let Some((owner, p)) = self.param_owner(n.text()) {
                         self.out.functions[owner].reassigned_params.insert(p);
                     }
                     if let Some(f) = function {
-                        self.declare_existing(&n.text, Local::Function(f));
+                        self.declare_existing(n.text(), Local::Function(f));
                     }
                     return None;
                 }
-                None => (Key::Global(n.text.to_string()), Vec::new()),
+                None => (Key::Global(n.text().to_string()), Vec::new()),
             },
             ExprKind::Field { obj, .. } | ExprKind::Index { obj, .. } => {
                 let obj_info = self.expr(obj);
-                let field = match &t.kind {
-                    ExprKind::Field { name, .. } => Some(name.text.to_string()),
+                let field = match t.kind() {
+                    ExprKind::Field { name, .. } => Some(name.text().to_string()),
                     ExprKind::Index { key, .. } => {
                         self.expr(key);
-                        match &key.kind {
+                        match key.kind() {
                             ExprKind::String(s) => {
-                                Some(String::from_utf8_lossy(&s.value).into_owned())
+                                Some(String::from_utf8_lossy(&s.value()).into_owned())
                             }
                             _ => None,
                         }
@@ -1169,14 +1150,14 @@ impl<'a> Walker<'a> {
 
     /// Defines the fields of a table constructor assigned to `path`
     /// (`Lib = { Register = function() end }`).
-    fn constructor_fields(&mut self, path: &Path, value: &Expr) {
-        let ExprKind::Table(fields) = &value.kind else {
+    fn constructor_fields(&mut self, path: &Path, value: Expr<'_>) {
+        let ExprKind::Table(fields) = value.kind() else {
             return;
         };
         for field in fields {
             if let TableField::Named { name, value } = field {
                 let mut inner = path.1.clone();
-                inner.push(name.text.to_string());
+                inner.push(name.text().to_string());
                 let inner = (path.0.clone(), inner);
                 self.def_key(Key::of_path(inner.0.clone(), inner.1.clone()), field.span());
                 self.constructor_fields(&inner, value);
@@ -1185,7 +1166,7 @@ impl<'a> Walker<'a> {
     }
 
     /// Walks a function body as a new function; returns its index.
-    fn function(&mut self, f: &FuncBody, name: &str, method: bool) -> usize {
+    fn function(&mut self, f: Func<'_>, name: &str, method: bool) -> usize {
         let id = self.out.functions.len();
         self.out.functions.push(Function {
             name: name.to_string(),
@@ -1202,13 +1183,13 @@ impl<'a> Walker<'a> {
         if method {
             self.declare("self", Local::Param(0));
         }
-        for (i, p) in f.params.iter().enumerate() {
-            self.declare(&p.name.text, Local::Param(i + usize::from(method)));
-            if let Some(d) = &p.default {
+        for (i, p) in f.params().iter().enumerate() {
+            self.declare(p.name().text(), Local::Param(i + usize::from(method)));
+            if let Some(d) = p.default() {
                 self.expr(d);
             }
         }
-        for s in &f.body.stmts {
+        for s in f.body().stmts() {
             self.stmt(s);
         }
         self.scopes.pop();
@@ -1267,15 +1248,15 @@ impl<'a> Walker<'a> {
         });
     }
 
-    fn args(&mut self, args: &Args) -> Vec<Info> {
+    fn args(&mut self, args: Args<'_>) -> Vec<Info> {
         args.exprs().into_iter().map(|a| self.expr(a)).collect()
     }
 
-    fn expr(&mut self, e: &Expr) -> Info {
+    fn expr(&mut self, e: Expr<'_>) -> Info {
         // The probe of an optional link guards the rest of its chain: its
         // keys stay guarded until the chain's outermost link is walked.
         let chain = matches!(
-            e.kind,
+            e.kind(),
             ExprKind::Field { .. }
                 | ExprKind::OptField { .. }
                 | ExprKind::Index { .. }
@@ -1295,31 +1276,50 @@ impl<'a> Walker<'a> {
     }
 
     /// Walks the object of a chain link.
-    fn link(&mut self, e: &Expr) -> Info {
+    fn link(&mut self, e: Expr<'_>) -> Info {
         self.link = true;
         self.expr(e)
     }
 
-    fn expr_inner(&mut self, e: &Expr) -> Info {
-        match &e.kind {
-            ExprKind::Name(n) => match self.lookup(&n.text).cloned() {
-                Some(Local::Function(f)) => Info::Function(f),
-                Some(Local::Ns) => Info::Ns,
-                Some(Local::Alias(p)) => Info::Path(p),
-                Some(Local::Import(b)) => {
-                    let current = self.current;
-                    self.out.import_uses.push((b.clone(), current, n.span));
-                    Info::Import(b, Vec::new())
-                }
-                Some(Local::Param(i)) => Info::Param(i),
-                Some(Local::Plain) => Info::Other,
-                None if n.text.as_ref() == "_G" => Info::GlobalTable,
-                None => {
-                    let key = Key::Global(n.text.to_string());
-                    self.use_key(key.clone(), n.span);
-                    Info::Path((key, Vec::new()))
-                }
-            },
+    /// Reads `a.b.c` as the expression of those names would, at `span`
+    /// (a class's `extends`, which the tree holds as a type).
+    fn path_read(&mut self, path: &[String], span: Span) {
+        self.link = false;
+        let n = self.guards.len();
+        let mut info = self.name(&path[0], span);
+        for p in &path[1..] {
+            info = self.field(info, p.clone(), span);
+        }
+        if path.len() > 1 {
+            self.guards.truncate(n);
+        }
+    }
+
+    /// A name read as an expression.
+    fn name(&mut self, text: &str, span: Span) -> Info {
+        match self.lookup(text).cloned() {
+            Some(Local::Function(f)) => Info::Function(f),
+            Some(Local::Ns) => Info::Ns,
+            Some(Local::Alias(p)) => Info::Path(p),
+            Some(Local::Import(b)) => {
+                let current = self.current;
+                self.out.import_uses.push((b.clone(), current, span));
+                Info::Import(b, Vec::new())
+            }
+            Some(Local::Param(i)) => Info::Param(i),
+            Some(Local::Plain) => Info::Other,
+            None if text == "_G" => Info::GlobalTable,
+            None => {
+                let key = Key::Global(text.to_string());
+                self.use_key(key.clone(), span);
+                Info::Path((key, Vec::new()))
+            }
+        }
+    }
+
+    fn expr_inner(&mut self, e: Expr<'_>) -> Info {
+        match e.kind() {
+            ExprKind::Name(n) => self.name(n.text(), n.span()),
             ExprKind::Vararg => {
                 if self.current == 0 {
                     Info::VarargNs
@@ -1329,36 +1329,38 @@ impl<'a> Walker<'a> {
             }
             ExprKind::Field { obj, name } => {
                 let o = self.link(obj);
-                self.field(o, name.text.to_string(), name.span)
+                self.field(o, name.text().to_string(), name.span())
             }
             // `X?.f` probes X: it may be nil.
             ExprKind::OptField { obj, name } => {
                 let o = self.probed(obj);
-                self.field(o, name.text.to_string(), name.span)
+                self.field(o, name.text().to_string(), name.span())
             }
             ExprKind::Index { obj, key } | ExprKind::OptIndex { obj, key } => {
-                let o = if matches!(e.kind, ExprKind::OptIndex { .. }) {
+                let o = if matches!(e.kind(), ExprKind::OptIndex { .. }) {
                     self.probed(obj)
                 } else {
                     self.link(obj)
                 };
                 self.expr(key);
-                match &key.kind {
-                    ExprKind::String(s) => {
-                        self.field(o, String::from_utf8_lossy(&s.value).into_owned(), key.span)
-                    }
+                match key.kind() {
+                    ExprKind::String(s) => self.field(
+                        o,
+                        String::from_utf8_lossy(&s.value()).into_owned(),
+                        key.span(),
+                    ),
                     _ => Info::Other,
                 }
             }
             ExprKind::Call { callee, args } | ExprKind::OptCall { callee, args } => {
-                let c = if matches!(e.kind, ExprKind::OptCall { .. }) {
+                let c = if matches!(e.kind(), ExprKind::OptCall { .. }) {
                     self.probed(callee)
                 } else {
                     self.link(callee)
                 };
                 // `type(X)` tests X's existence.
-                let arg_infos = match (&c, args.exprs().as_slice()) {
-                    (Info::Path((Key::Global(g), fields)), [only])
+                let arg_infos = match (&c, args.exprs().exactly()) {
+                    (Info::Path((Key::Global(g), fields)), Some([only]))
                         if g == "type" && fields.is_empty() =>
                     {
                         self.test_operand(only);
@@ -1370,7 +1372,7 @@ impl<'a> Walker<'a> {
                 if let Info::Path((Key::Global(g), fields)) = &c
                     && g == "select"
                     && fields.is_empty()
-                    && matches!(args.exprs().first().map(|a| &a.kind), Some(ExprKind::Number(n)) if n.value == Some(2.0))
+                    && matches!(args.exprs().first().map(|a| a.kind()), Some(ExprKind::Number(n)) if n.value() == Some(2.0))
                     && matches!(arg_infos.get(1), Some(Info::VarargNs))
                 {
                     return Info::Ns;
@@ -1379,7 +1381,7 @@ impl<'a> Walker<'a> {
                     && g == "setfenv"
                     && fields.is_empty()
                 {
-                    self.out.dynamic_write.get_or_insert(e.span);
+                    self.out.dynamic_write.get_or_insert(e.span());
                 }
                 // `X.RegisterCallback(…)` matches the method markers too.
                 let deferred = match &c {
@@ -1398,11 +1400,11 @@ impl<'a> Walker<'a> {
                     }
                     _ => false,
                 };
-                self.record_call(Self::call_target(&c), &arg_infos, 0, e.span, deferred);
+                self.record_call(Self::call_target(&c), &arg_infos, 0, e.span(), deferred);
                 Info::Other
             }
             ExprKind::Method { obj, name, args } | ExprKind::OptMethod { obj, name, args } => {
-                let o = if matches!(e.kind, ExprKind::OptMethod { .. }) {
+                let o = if matches!(e.kind(), ExprKind::OptMethod { .. }) {
                     self.probed(obj)
                 } else {
                     self.link(obj)
@@ -1410,23 +1412,23 @@ impl<'a> Walker<'a> {
                 match &o {
                     Info::Path((k, fields)) => {
                         let mut fields = fields.clone();
-                        fields.push(name.text.to_string());
-                        self.use_key(Key::of_path(k.clone(), fields), name.span);
+                        fields.push(name.text().to_string());
+                        self.use_key(Key::of_path(k.clone(), fields), name.span());
                     }
-                    Info::Ns => self.use_key(Key::Ns(name.text.to_string()), name.span),
+                    Info::Ns => self.use_key(Key::Ns(name.text().to_string()), name.span()),
                     _ => {}
                 }
                 let arg_infos = self.args(args);
                 let target = match &o {
                     Info::Path((k, fields)) => {
                         let mut fields = fields.clone();
-                        fields.push(name.text.to_string());
+                        fields.push(name.text().to_string());
                         CallTarget::Path((k.clone(), fields))
                     }
-                    Info::Ns => CallTarget::Path((Key::Ns(name.text.to_string()), Vec::new())),
+                    Info::Ns => CallTarget::Path((Key::Ns(name.text().to_string()), Vec::new())),
                     Info::Import(b, fields) => {
                         let mut fields = fields.clone();
-                        fields.push(name.text.to_string());
+                        fields.push(name.text().to_string());
                         CallTarget::Import {
                             binding: b.clone(),
                             fields,
@@ -1434,12 +1436,12 @@ impl<'a> Walker<'a> {
                     }
                     _ => CallTarget::Unknown,
                 };
-                let deferred = self.markers.deferred_methods.contains(name.text.as_ref());
-                self.record_call(target, &arg_infos, 1, e.span, deferred);
+                let deferred = self.markers.deferred_methods.contains(name.text());
+                self.record_call(target, &arg_infos, 1, e.span(), deferred);
                 Info::Other
             }
             ExprKind::Function(f) => {
-                Info::Function(self.function(f, &format!("function at {}", e.span.start), false))
+                Info::Function(self.function(f, &format!("function at {}", e.span().start), false))
             }
             ExprKind::Table(fields) => {
                 for field in fields {
@@ -1485,7 +1487,7 @@ impl<'a> Walker<'a> {
                 op: BinOp::Eq | BinOp::Ne,
                 lhs,
                 rhs,
-            } if matches!(lhs.kind, ExprKind::Nil) || matches!(rhs.kind, ExprKind::Nil) => {
+            } if matches!(lhs.kind(), ExprKind::Nil) || matches!(rhs.kind(), ExprKind::Nil) => {
                 self.test(e);
                 Info::Other
             }
@@ -1549,42 +1551,42 @@ impl<'a> Walker<'a> {
 }
 
 /// `type(X) == "s"` in either operand order: X and whether `s` is `"nil"`.
-fn type_test<'e>(lhs: &'e Expr, rhs: &'e Expr) -> Option<(&'e Expr, bool)> {
-    let (call, string) = match (&lhs.kind, &rhs.kind) {
+fn type_test<'e>(lhs: Expr<'e>, rhs: Expr<'e>) -> Option<(Expr<'e>, bool)> {
+    let (call, string) = match (lhs.kind(), rhs.kind()) {
         (ExprKind::Call { .. }, ExprKind::String(s)) => (lhs, s),
         (ExprKind::String(s), ExprKind::Call { .. }) => (rhs, s),
         _ => return None,
     };
-    let ExprKind::Call { callee, args } = &call.kind else {
+    let ExprKind::Call { callee, args } = call.kind() else {
         return None;
     };
-    let ExprKind::Name(n) = &callee.kind else {
+    let ExprKind::Name(n) = callee.kind() else {
         return None;
     };
-    match args.exprs().as_slice() {
-        [only] if n.text.as_ref() == "type" => Some((only, *string.value == *b"nil")),
+    match args.exprs().exactly() {
+        Some([only]) if n.text() == "type" => Some((only, *string.value() == *b"nil")),
         _ => None,
     }
 }
 
 /// The `type` callee of a type test.
-fn type_callee<'e>(lhs: &'e Expr, rhs: &'e Expr) -> &'e Expr {
-    let call = if matches!(lhs.kind, ExprKind::Call { .. }) {
+fn type_callee<'e>(lhs: Expr<'e>, rhs: Expr<'e>) -> Expr<'e> {
+    let call = if matches!(lhs.kind(), ExprKind::Call { .. }) {
         lhs
     } else {
         rhs
     };
-    match &call.kind {
+    match call.kind() {
         ExprKind::Call { callee, .. } => callee,
         _ => call,
     }
 }
 
-fn func_name_display(name: &FuncName) -> String {
-    let parts: Vec<&str> = name.path.iter().map(|n| n.text.as_ref()).collect();
+fn func_name_display(name: FuncName<'_>) -> String {
+    let parts: Vec<&str> = name.path().iter().map(|n| n.text()).collect();
     let path = parts.join(".");
-    match &name.method {
-        Some(m) => format!("{path}:{}", m.text),
+    match &name.method() {
+        Some(m) => format!("{path}:{}", m.text()),
         None => path,
     }
 }

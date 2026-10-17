@@ -109,6 +109,14 @@ impl SourceFile {
         &self.text
     }
 
+    /// The text, when it is shared (`SourceDb::add_shared`).
+    pub fn shared_text(&self) -> Option<&Arc<str>> {
+        match &self.text {
+            Text::Shared(text) => Some(text),
+            _ => None,
+        }
+    }
+
     /// Byte offsets at which each line starts.
     pub fn line_starts(&self) -> &[usize] {
         self.line_starts.get_or_init(|| {
