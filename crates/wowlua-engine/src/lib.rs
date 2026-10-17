@@ -21,6 +21,7 @@ pub mod framescript;
 pub mod gamedata;
 pub mod input;
 pub mod login;
+pub mod macros;
 pub mod merchant;
 pub mod protection;
 pub mod queries;
@@ -197,6 +198,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(stats::behaviours())
             .chain(actions::behaviours())
             .chain(channels::behaviours())
+            .chain(macros::behaviours())
             .chain(input::behaviours())
             .chain(casting::behaviours())
             .chain(merchant::behaviours())

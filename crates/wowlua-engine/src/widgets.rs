@@ -106,6 +106,9 @@ pub struct World {
     /// the last text, also when it did not change, the last box set first
     /// (`/stdtest engine`; unverified: by setting or making order).
     pub text_set: Vec<WidgetId>,
+    /// A message frame's messages: its message ID (if given) and the font
+    /// string showing it, oldest first.
+    pub messages: HashMap<usize, Vec<(Option<f64>, Value)>>,
     /// Warnings for gaps that would make every test fail if they were errors
     /// (templates without Blizzard's UI code).
     pub warnings: Vec<String>,
@@ -1340,6 +1343,98 @@ fn create_region(vm: &mut Vm, id: WidgetId, c: NativeCall, class: &str) -> Ret {
         }
     }
     Ok(vec![region])
+}
+
+// ------------------------------------------------------- message frames
+
+/// Calls `object:method(args…)` as Lua would.
+fn call_method(vm: &mut Vm, object: Value, method: &str, args: &[Value]) -> Ret {
+    let key = vm.str(method);
+    let f = vm.index_slot(object, key, None)?.v;
+    let mut all = vec![object];
+    all.extend_from_slice(args);
+    vm.call(f, &all)
+}
+
+/// `MessageFrame:AddMessage(text, r, g, b, a, messageID)`: a font string
+/// of the frame shows it (`GetFontStringByID` finds it by its ID).
+/// Unverified: fading, the line limit, the layout.
+fn add_message(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let class = engine(vm).world.widgets[id.0].class.clone();
+    if !is_a(engine(vm), &class, "MessageFrame") {
+        return Ok(vec![]);
+    }
+    let fs = create(vm, "FontString", None, Some(id));
+    keep(vm, fs);
+    // The frame's font.
+    let me = Value::Table(engine(vm).world.widgets[id.0].table);
+    let font = call_method(vm, me, "GetFontObject", &[])?;
+    match font.first().copied() {
+        Some(f) if widget_of(vm, f).is_some() => {
+            call_method(vm, fs, "SetFontObject", &[f])?;
+        }
+        _ => {
+            let font = call_method(vm, me, "GetFont", &[])?;
+            if matches!(font.first(), Some(Value::Str(_))) {
+                call_method(vm, fs, "SetFont", &font)?;
+            }
+        }
+    }
+    call_method(vm, fs, "SetText", &[c.arg(2)])?;
+    let color: Vec<Value> = (3..=6).map(|i| c.arg(i)).collect();
+    if color[..3].iter().all(|v| matches!(v, Value::Num(_))) {
+        let color = if color[3].is_nil() {
+            &color[..3]
+        } else {
+            &color[..]
+        };
+        call_method(vm, fs, "SetTextColor", color)?;
+    }
+    let message_id = match c.arg(7) {
+        Value::Num(n) => Some(n),
+        _ => None,
+    };
+    engine_mut(vm)
+        .world
+        .messages
+        .entry(id.0)
+        .or_default()
+        .push((message_id, fs));
+    Ok(vec![])
+}
+
+/// `GetFontStringByID(messageID)`: the font string of the last message
+/// with that ID, nil without one.
+fn get_font_string_by_id(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let Value::Num(wanted) = c.arg(2) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let found = engine(vm).world.messages.get(&id.0).and_then(|list| {
+        list.iter()
+            .rev()
+            .find(|(m, _)| *m == Some(wanted))
+            .map(|(_, fs)| *fs)
+    });
+    Ok(vec![found.unwrap_or(Value::Nil)])
+}
+
+/// `Clear()`: a message frame's messages gone (other classes' `Clear`
+/// does nothing yet).
+fn clear_messages(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let list = engine_mut(vm)
+        .world
+        .messages
+        .remove(&id.0)
+        .unwrap_or_default();
+    for (_, fs) in list {
+        call_method(vm, fs, "Hide", &[])?;
+    }
+    Ok(vec![])
+}
+
+/// `ResetMessageFadeByID(messageID)`: nothing fades yet.
+fn reset_message_fade(_vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![])
 }
 
 // -------------------------------------------------------------- layout
@@ -2651,6 +2746,10 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("GetRegions", get_regions),
         ("GetNumChildren", get_num_children),
         ("CreateFontString", font_string),
+        ("AddMessage", add_message),
+        ("GetFontStringByID", get_font_string_by_id),
+        ("ResetMessageFadeByID", reset_message_fade),
+        ("Clear", clear_messages),
         ("CreateTexture", texture),
         ("CreateMaskTexture", mask),
         ("CreateLine", line),

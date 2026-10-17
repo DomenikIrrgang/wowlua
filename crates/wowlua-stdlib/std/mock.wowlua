@@ -313,6 +313,15 @@ export function setChannels(channels: { joined: ChannelData[], groupChannels?: n
     engine().setChannels(channels)
 end
 
+--- A macro: its name, icon (a file ID or texture path) and body.
+export type MacroData = { name: string, icon?: number | string, body?: string }
+
+--- The macros, the account's then the character's, in the client's order
+--- (`UPDATE_MACROS`).
+export function setMacros(macros: { account?: MacroData[], character?: MacroData[] })
+    engine().setMacros(macros)
+end
+
 --- The API calls Blizzard's code made that the engine had no answer for
 --- (they returned empty values), as `name(args)`, sorted: what the engine
 --- does not know of the client yet.

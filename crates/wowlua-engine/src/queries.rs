@@ -324,6 +324,12 @@ fn class_appearance_sources(vm: &mut Vm, c: NativeCall) -> Ret {
         .unwrap_or_else(|| vec![Value::Table(vm.new_table())]))
 }
 
+/// `C_LFGList.GetFilteredSearchResults()`, `GetSearchResults()`: no groups
+/// found (no search made; the recording's were other players' listings).
+fn no_search_results(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0), Value::Table(vm.new_table())])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         (
@@ -331,6 +337,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             notify_settings_loaded,
         ),
         ("C_Scenario.GetInfo", no_scenario),
+        ("C_LFGList.GetFilteredSearchResults", no_search_results),
+        ("C_LFGList.GetSearchResults", no_search_results),
         (
             "C_TransmogCollection.GetCategoryAppearances",
             category_appearances,

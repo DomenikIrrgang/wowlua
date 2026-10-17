@@ -73,6 +73,8 @@ pub struct Character {
     pub actions: crate::actions::Actions,
     /// The chat channels (`channels.rs`).
     pub channels: crate::channels::Channels,
+    /// The macros (`macros.rs`).
+    pub macros: crate::macros::Macros,
 }
 
 impl Default for Character {
@@ -93,6 +95,7 @@ impl Default for Character {
             stats: crate::stats::defaults(),
             actions: Default::default(),
             channels: Default::default(),
+            macros: Default::default(),
         }
     }
 }

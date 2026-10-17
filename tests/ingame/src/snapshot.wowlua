@@ -196,6 +196,41 @@ const STATS: { key: string, fn: string, ask: string }[] = {
     { key = "shapeshiftFormInfo", fn = "GetShapeshiftFormInfo", ask = "index" },
     { key = "cooldownViewerSet", fn = "C_CooldownViewer.GetCooldownViewerCategorySet", ask = "index" },
     { key = "groupBuffs", fn = "C_CooldownViewer.GetGroupBuffItems", ask = "plain" },
+    { key = "spellBookSkillLines", fn = "C_SpellBook.GetNumSpellBookSkillLines", ask = "plain" },
+    { key = "spellBookSkillLine", fn = "C_SpellBook.GetSpellBookSkillLineInfo", ask = "index" },
+    { key = "classSkillLine", fn = "C_SpellBook.GetClassSkillLineInfo", ask = "plain" },
+    { key = "hasPetSpells", fn = "C_SpellBook.HasPetSpells", ask = "plain" },
+    { key = "spellBookItem", fn = "C_SpellBook.GetSpellBookItemInfo", ask = "slot" },
+    { key = "spellBookItemName", fn = "C_SpellBook.GetSpellBookItemName", ask = "slot" },
+    { key = "spellBookItemTexture", fn = "C_SpellBook.GetSpellBookItemTexture", ask = "slot" },
+    { key = "spellBookItemType", fn = "C_SpellBook.GetSpellBookItemType", ask = "slot" },
+    { key = "spellBookItemPassive", fn = "C_SpellBook.IsSpellBookItemPassive", ask = "slot" },
+    { key = "spellBookItemLowRank", fn = "C_SpellBook.IsSpellBookItemLowRank", ask = "slot" },
+    { key = "spellBookItemLevel", fn = "C_SpellBook.GetSpellBookItemLevelLearned", ask = "slot" },
+    { key = "spellBookItemLink", fn = "C_SpellBook.GetSpellBookItemLink", ask = "slot" },
+    { key = "professions", fn = "GetProfessions", ask = "plain" },
+    { key = "professionInfo", fn = "GetProfessionInfo", ask = "index" },
+    { key = "skillLines", fn = "C_SkillInfo.GetNumSkillLines", ask = "plain" },
+    { key = "skillLine", fn = "C_SkillInfo.GetSkillLineInfo", ask = "index" },
+    { key = "selectedSkill", fn = "C_SkillInfo.GetSelectedSkill", ask = "plain" },
+    { key = "factions", fn = "C_Reputation.GetNumFactions", ask = "plain" },
+    { key = "faction", fn = "C_Reputation.GetFactionDataByIndex", ask = "index" },
+    { key = "selectedFaction", fn = "C_Reputation.GetSelectedFaction", ask = "plain" },
+    { key = "watchedFaction", fn = "C_Reputation.GetWatchedFactionData", ask = "plain" },
+    { key = "currencyListSize", fn = "C_CurrencyInfo.GetCurrencyListSize", ask = "plain" },
+    { key = "currencyListInfo", fn = "C_CurrencyInfo.GetCurrencyListInfo", ask = "index" },
+    { key = "backpackCurrency", fn = "C_CurrencyInfo.GetBackpackCurrencyInfo", ask = "index" },
+    { key = "questLogEntries", fn = "C_QuestLog.GetNumQuestLogEntries", ask = "plain" },
+    { key = "questLogInfo", fn = "C_QuestLog.GetInfo", ask = "index" },
+    { key = "selectedQuest", fn = "C_QuestLog.GetSelectedQuest", ask = "plain" },
+    { key = "questWatches", fn = "C_QuestLog.GetNumQuestWatches", ask = "plain" },
+    { key = "questWatchID", fn = "C_QuestLog.GetQuestIDForQuestWatchIndex", ask = "index" },
+    { key = "questLogIndex", fn = "C_QuestLog.GetLogIndexForQuestID", ask = "index" },
+    { key = "questObjectives", fn = "C_QuestLog.GetQuestObjectives", ask = "index" },
+    { key = "questComplete", fn = "C_QuestLog.IsComplete", ask = "index" },
+    { key = "questWatchType", fn = "C_QuestLog.GetQuestWatchType", ask = "index" },
+    { key = "questTag", fn = "C_QuestLog.GetQuestTagInfo", ask = "index" },
+    { key = "questTitle", fn = "C_QuestLog.GetTitleForQuestID", ask = "index" },
     { key = "transmogSlot", fn = "C_Transmog.GetSlotVisualInfo", ask = "location" },
     { key = "combatRating", fn = "GetCombatRating", ask = "index" },
     { key = "combatRatingBonus", fn = "GetCombatRatingBonus", ask = "index" },
@@ -217,7 +252,55 @@ const INDICES: { [string]: number[] } = {
     combatConfig = { 1, 2 },
     shapeshiftFormInfo = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 },
     cooldownViewerSet = { 0, 1, 2, 3, 4, 5, 6, 7, 8 },
+    spellBookSkillLine = { 1, 2, 3, 4, 5, 6, 7, 8 },
 }
+
+--- The indices the client's own counts give (a stat not in `INDICES` and
+--- not here: the 31 combat ratings).
+local function counted(key: string): number[]?
+    const A = _G :: any
+    local function upTo(n: number?): number[]
+        const out: number[] = {}
+        for i = 1, n ?? 0 do
+            out[#out + 1] = i
+        end
+        return out
+    end
+    -- The quest IDs in the log.
+    local function questIDs(): number[]
+        const out: number[] = {}
+        for i = 1, A.C_QuestLog.GetNumQuestLogEntries() do
+            const info = A.C_QuestLog.GetInfo(i)
+            if info and info.questID and info.questID > 0 then
+                out[#out + 1] = info.questID
+            end
+        end
+        return out
+    end
+    if key == "skillLine" then
+        return upTo(A.C_SkillInfo.GetNumSkillLines())
+    elseif key == "faction" then
+        return upTo(A.C_Reputation.GetNumFactions())
+    elseif key == "currencyListInfo" then
+        return upTo(A.C_CurrencyInfo.GetCurrencyListSize())
+    elseif key == "backpackCurrency" then
+        return upTo(3)
+    elseif key == "questLogInfo" then
+        return upTo(A.C_QuestLog.GetNumQuestLogEntries())
+    elseif key == "questWatchID" then
+        return upTo(A.C_QuestLog.GetNumQuestWatches())
+    elseif key == "professionInfo" then
+        const out: number[] = {}
+        for _, i in pairs({ A.GetProfessions() }) do
+            out[#out + 1] = i
+        end
+        return out
+    elseif key == "questLogIndex" or key == "questObjectives" or key == "questComplete"
+        or key == "questWatchType" or key == "questTag" or key == "questTitle" then
+        return questIDs()
+    end
+    return nil
+end
 
 --- A call's results with their count (`n`; nils kept), secrets left out.
 local function results(...: any): table
@@ -252,7 +335,35 @@ local function stats(): table
             out[key] = results(f())
         else
             const byIndex: { [number]: table } = {}
-            if ask == "location" then
+            if ask == "slot" then
+                -- The player's spellbook slots, to the last skill line's
+                -- last item.
+                local last = 0
+                for line = 1, (C_SpellBook :: any).GetNumSpellBookSkillLines() do
+                    const info = (C_SpellBook :: any).GetSpellBookSkillLineInfo(line)
+                    if info then
+                        last = math.max(last, info.itemIndexOffset + info.numSpellBookItems)
+                    end
+                end
+                const slots: number[] = {}
+                for slot = 1, last do
+                    slots[#slots + 1] = slot
+                end
+                -- The professions' spells, past the skill lines.
+                const A = _G :: any
+                for _, prof in pairs({ A.GetProfessions() }) do
+                    local _, _, _, _, numSpells, spellOffset = A.GetProfessionInfo(prof)
+                    for k = 1, numSpells ?? 0 do
+                        slots[#slots + 1] = (spellOffset ?? 0) + k
+                    end
+                end
+                for _, slot in ipairs(slots) do
+                    local ok, r = pcall(function(): table return results(f(slot, 0)) end)
+                    if ok then
+                        byIndex[slot] = r
+                    end
+                end
+            elseif ask == "location" then
                 -- Each transmog location (slot, appearance or illusion,
                 -- main or secondary), by Blizzard's lookup key.
                 for slot = 1, 19 do
@@ -276,7 +387,7 @@ local function stats(): table
                     end
                 end
             else
-                for _, i in ipairs(INDICES[key] ?? ratings) do
+                for _, i in ipairs(INDICES[key] ?? counted(key) ?? ratings) do
                     if ask == "unitIndex" then
                         byIndex[i] = results(f("player", i))
                     elseif key == "cooldownViewerSet" then
@@ -288,6 +399,22 @@ local function stats(): table
             end
             out[key] = byIndex
         end
+    end
+    return out
+end
+
+--- The quest log's objectives as classic's functions give them (to check
+--- the engine's, which derives them from `C_QuestLog`).
+local function leaderBoards(): table
+    const A = _G :: any
+    const out: { [number]: table } = {}
+    for i = 1, A.C_QuestLog.GetNumQuestLogEntries() do
+        const n = A.GetNumQuestLeaderBoards(i)
+        const boards: { [number]: table } = { }
+        for j = 1, n ?? 0 do
+            boards[j] = results(A.GetQuestLogLeaderBoard(j, i))
+        end
+        out[i] = { count = n, boards = boards }
     end
     return out
 end
@@ -328,6 +455,24 @@ local function channels(): table
         generalLocalID = results((C_ChatInfo :: any).GetGeneralChannelLocalID()),
         generalID = results((C_ChatInfo :: any).GetGeneralChannelID()),
     }
+end
+
+--- The macros, the account's then the character's (`GetMacroInfo` in
+--- full, for the engine's macro model).
+local function macros(): table
+    local numAccount, numCharacter = GetNumMacros()
+    const out: { [string]: any } = { account = {}, character = {}, info = {} }
+    for i = 1, numAccount do
+        local name, icon, body = GetMacroInfo(i)
+        out.account[i] = { name = name, icon = icon, body = body }
+        out.info[i] = results(GetMacroInfo(i))
+    end
+    for i = 1, numCharacter do
+        local name, icon, body = GetMacroInfo(120 + i)
+        out.character[i] = { name = name, icon = icon, body = body }
+        out.info[120 + i] = results(GetMacroInfo(120 + i))
+    end
+    return out
 end
 
 local function position(): table
@@ -439,6 +584,8 @@ export function snapshot()
         actions = actions,
         stats = stats,
         channels = channels,
+        macros = macros,
+        leaderBoards = leaderBoards,
     }
     const profile: { [string]: any } = {}
     const failed: string[] = {}

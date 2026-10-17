@@ -216,6 +216,30 @@ pub fn run(saved: &Path, out: &Path) -> Result<()> {
         .iter()
         .filter(|s| s.len() > 2)
         .fold(text, |t, s| t.replace(s.as_str(), "Player"));
+    // The account's other character, the probes' player (`/stdtest
+    // engine`): account-wide parts (macros) may name it.
+    let battery_names: Option<String> = state
+        .get::<mlua::Table>("engineProbe")
+        .and_then(|p| p.get::<mlua::Table>("units"))
+        .and_then(|u| u.get::<String>("UnitName(player)"))
+        .ok();
+    let text = match battery_names {
+        Some(v) => {
+            let re = regex::Regex::new(r"string ([^,]+)").expect("a valid pattern");
+            let names: Vec<String> = re
+                .captures_iter(&v)
+                .map(|c| c[1].trim().to_string())
+                .collect();
+            let mut text = text;
+            for (name, as_) in names.iter().zip(["Player", "Lastname"]) {
+                if name.len() > 2 {
+                    text = text.replace(name.as_str(), as_);
+                }
+            }
+            text
+        }
+        None => text,
+    };
     std::fs::write(out, text + "\n").with_context(|| out.display().to_string())?;
     println!("wrote {}", out.display());
     if let Some(serde_json::Value::Array(e)) = errors

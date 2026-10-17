@@ -187,11 +187,42 @@ fn is_spell_known(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(field(vm, s, key).truthy())])
 }
 
+/// A spell the client has though no test defined it: in the recorded
+/// spellbook, or with recorded info (`C_Spell.GetSpellInfo`).
+fn client_spell(vm: &mut Vm, c: &NativeCall) -> bool {
+    let Value::Num(id) = vm.hidden(c.arg(1)) else {
+        return false;
+    };
+    crate::stats::spellbook_item(vm, id).is_some()
+        || crate::recorded::lookup_text(vm, &format!("C_Spell.GetSpellInfo({})", id as i64))
+            .is_some_and(|v| !v.is_empty() && !v[0].is_nil())
+}
+
 fn is_spell_data_cached(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(match spell(vm, &c) {
         Some((_, s)) => !matches!(field(vm, s, "cached"), Value::Bool(false)),
-        None => false,
+        None => client_spell(vm, &c),
     })])
+}
+
+/// `C_Spell.DoesSpellExist(spell)`: a defined spell or one the client has.
+fn does_spell_exist(vm: &mut Vm, c: NativeCall) -> Ret {
+    let exists = spell(vm, &c).is_some() || client_spell(vm, &c);
+    Ok(vec![Value::Bool(exists)])
+}
+
+/// `C_Spell.GetSpellSubtext(spell)`: a defined spell's `subtext`, a
+/// spellbook spell's (its item's `subName`), else as the client answered.
+fn get_spell_subtext(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some((_, s)) = spell(vm, &c) {
+        return Ok(vec![field(vm, s, "subtext")]);
+    }
+    if let Value::Num(id) = vm.hidden(c.arg(1))
+        && let Some(Value::Table(item)) = crate::stats::spellbook_item(vm, id)
+    {
+        return Ok(vec![field(vm, item, "subName")]);
+    }
+    Ok(crate::recorded::client_answer(vm, &c))
 }
 
 /// The engine's timers run a native after a delay: the load results.
@@ -375,6 +406,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Spell.GetSpellCooldown", get_spell_cooldown),
         ("C_Spell.GetSpellLink", get_spell_link),
         ("C_Spell.IsSpellDataCached", is_spell_data_cached),
+        ("C_Spell.DoesSpellExist", does_spell_exist),
+        ("C_Spell.GetSpellSubtext", get_spell_subtext),
         ("C_Spell.RequestLoadSpellData", request_load_spell_data),
         ("C_SpellBook.IsSpellKnown", is_spell_known),
         ("C_Item.GetItemInfo", get_item_info),

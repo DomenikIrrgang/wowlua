@@ -500,7 +500,7 @@ __engine.pressKey("ENTER")"#,
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 3345;
+const ANSWERS_MATCHED: usize = 3369;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {
@@ -652,4 +652,58 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         "{matched} of {} answered as the client did (was {ANSWERS_MATCHED})",
         theirs.len()
     );
+}
+
+/// Classic's quest objective functions (`GetNumQuestLeaderBoards`,
+/// `GetQuestLogLeaderBoard`), which the engine derives from the recorded
+/// quest log, answer as the client did for every entry of the recorded
+/// character's log (`/stdtest snapshot`'s `leaderBoards`).
+#[test]
+fn quest_objectives_derive_as_the_client_gave_them() {
+    let path = repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json");
+    let json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&path).expect("the profile")).expect("JSON");
+    let Some(recorded) = json["leaderBoards"].as_array() else {
+        panic!("the profile records the leader boards");
+    };
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let controls = wowlua_engine::controls::table(&mut vm);
+    wowlua_test::profile::apply(&mut vm, controls, &path).expect("the profile applies");
+    let as_text = |v: &serde_json::Value| match v {
+        serde_json::Value::Null => "nil".to_string(),
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Bool(b) => b.to_string(),
+        other => other.to_string(),
+    };
+    let mut expected = Vec::new();
+    for (i, entry) in recorded.iter().enumerate() {
+        expected.push(format!("{} {}", i + 1, entry["count"]));
+        for board in entry["boards"].as_array().into_iter().flatten() {
+            let parts: Vec<String> = board
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(as_text)
+                .collect();
+            expected.push(parts.join(" | "));
+        }
+    }
+    let src = format!(
+        "local out = {{}}
+for i = 1, {} do
+    local n = GetNumQuestLeaderBoards(i)
+    out[#out + 1] = i .. ' ' .. n
+    for j = 1, n do
+        local text, kind, finished = GetQuestLogLeaderBoard(j, i)
+        out[#out + 1] = tostring(text) .. ' | ' .. tostring(kind) .. ' | ' .. tostring(finished)
+    end
+end
+return table.concat(out, '\\n')",
+        recorded.len()
+    );
+    let f = vm.load(src.as_bytes(), "=objectives").expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let ours = text(&vm, r[0]);
+    assert_eq!(ours.lines().collect::<Vec<_>>(), expected);
 }

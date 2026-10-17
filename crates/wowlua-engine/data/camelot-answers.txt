@@ -91,7 +91,19 @@ C_ContentTracking.GetTrackedIDs(0)	1: {}
 C_ContentTracking.GetTrackedIDs(2)	1: {}
 C_ContentTracking.GetTrackedIDs(3)	1: {}
 C_CreatureInfo.GetClassInfo(0)	1: nil nil
+C_CreatureInfo.GetClassInfo(1)	1: {classFile=string WARRIOR,classID=number 1,className=string Warrior}
+C_CreatureInfo.GetClassInfo(10)	1: nil nil
+C_CreatureInfo.GetClassInfo(11)	1: {classFile=string DRUID,classID=number 11,className=string Druid}
+C_CreatureInfo.GetClassInfo(12)	1: nil nil
+C_CreatureInfo.GetClassInfo(13)	1: nil nil
 C_CreatureInfo.GetClassInfo(2)	1: {classFile=string PALADIN,classID=number 2,className=string Paladin}
+C_CreatureInfo.GetClassInfo(3)	1: {classFile=string HUNTER,classID=number 3,className=string Hunter}
+C_CreatureInfo.GetClassInfo(4)	1: {classFile=string ROGUE,classID=number 4,className=string Rogue}
+C_CreatureInfo.GetClassInfo(5)	1: {classFile=string PRIEST,classID=number 5,className=string Priest}
+C_CreatureInfo.GetClassInfo(6)	1: nil nil
+C_CreatureInfo.GetClassInfo(7)	1: {classFile=string SHAMAN,classID=number 7,className=string Shaman}
+C_CreatureInfo.GetClassInfo(8)	1: {classFile=string MAGE,classID=number 8,className=string Mage}
+C_CreatureInfo.GetClassInfo(9)	1: {classFile=string WARLOCK,classID=number 9,className=string Warlock}
 C_CurrencyInfo.DoesCurrentFilterRequireAccountCurrencyData()	1: boolean false
 C_DeathInfo.GetSelfResurrectOptions()	0: 
 C_DelvesUI.GetCurioNodeForCompanion(0, nil)	1: number 0
@@ -563,7 +575,7 @@ C_LFGInfo.CanPlayerUseLFD()	2: boolean true, string
 C_LFGInfo.CanPlayerUsePremadeGroup()	2: boolean true, string 
 C_LFGList.GetActiveEntryInfo()	0: 
 C_LFGList.GetAvailableRoles()	3: boolean true, boolean true, boolean true
-C_LFGList.GetFilteredSearchResults()	2: number 0, {}
+C_LFGList.GetFilteredSearchResults()	2: number 72, {1=number 24,10=number 23,11=number 19,12=number 55,13=number 14,14=number 29,15=number 66,16=number 58,17=number 46,18=number 60,19=number 62,2=number 8,20=number 31,21=number 35,22=number 1,23=number 15,24=number 30,25=number 49,26=number 47,27=number 18,28=number 12,29=number 17,3=number 10,30=number 22,31=number 68,32=number 64,33=number 65,34=number 67,35=number 45,36=number 11,37=number 16,38=number 13,39=number 71,4=number 50,40=number 42,41=number 3,42=number 38,43=number 51,44=number 57,45=number 28,46=number 41,47=number 9,48=number 61,49=number 72,5=number 33,50=number 59,51=number 44,52=number 36,53=number 63,54=number 25,55=number 7,56=number 56,57=number 20,58=number 2,59=number 37,6=number 53,60=number 69,61=number 27,62=number 39,63=number 26,64=number 52,65=number 21,66=number 6,67=number 54,68=number 5,69=number 4,7=number 70,70=number 40,71=number 34,72=number 32,8=number 48,9=number 43}
 C_LFGList.HasActiveEntryInfo()	1: boolean false
 C_LobbyMatchmakerInfo.IsInQueue()	1: boolean false
 C_Map.GetFallbackWorldMapID()	1: number 947

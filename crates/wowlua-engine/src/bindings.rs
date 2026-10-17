@@ -39,6 +39,9 @@ pub struct Bindings {
     /// Key → binding name (`SetBinding`).
     pub keys: Vec<(String, String)>,
     pub addons: Vec<Addon>,
+    /// The modified clicks (`<ModifiedClick action default>`): action,
+    /// key (`SHIFT`, `ALT-CTRL`, `NONE`).
+    pub modified_clicks: Vec<(String, String)>,
 }
 
 fn string(vm: &mut Vm, v: Value) -> Option<String> {
@@ -97,6 +100,26 @@ pub fn load_bindings_xml(
         }
     }
     collect(&root, &mut list);
+    // The modified clicks, with their defaults.
+    fn clicks(el: &crate::ui::xml::Element, out: &mut Vec<(String, String)>) {
+        for c in &el.children {
+            if c.tag.eq_ignore_ascii_case("ModifiedClick") {
+                if let (Some(action), Some(key)) = (c.attr("action"), c.attr("default")) {
+                    out.push((action.to_string(), key.to_string()));
+                }
+            } else {
+                clicks(c, out);
+            }
+        }
+    }
+    let mut found = Vec::new();
+    clicks(&root, &mut found);
+    for (action, key) in found {
+        let known = &mut engine_mut(vm).world.bindings.modified_clicks;
+        if !known.iter().any(|(a, _)| *a == action) {
+            known.push((action, key));
+        }
+    }
     for b in list {
         let Some(name) = b.attr("name") else {
             continue;
@@ -383,9 +406,101 @@ pub fn load_defined(vm: &mut Vm, name: &str) -> Option<bool> {
 }
 
 /// The functions with behaviour here.
+fn modified_click_of(vm: &Vm, action: &str) -> Option<String> {
+    engine(vm)
+        .world
+        .bindings
+        .modified_clicks
+        .iter()
+        .find(|(a, _)| a == action)
+        .map(|(_, k)| k.clone())
+}
+
+/// `GetModifiedClick(action)`: its key (`SHIFT`; the bindings' default).
+fn get_modified_click(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Str(a) = c.arg(1) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let action = String::from_utf8_lossy(vm.str_bytes(a)).into_owned();
+    Ok(vec![match modified_click_of(vm, &action) {
+        Some(k) => vm.str(&k),
+        None => Value::Nil,
+    }])
+}
+
+/// `SetModifiedClick(action, key)`.
+fn set_modified_click(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Str(a), Value::Str(k)) = (c.arg(1), c.arg(2)) else {
+        return Ok(vec![]);
+    };
+    let action = String::from_utf8_lossy(vm.str_bytes(a)).into_owned();
+    let key = String::from_utf8_lossy(vm.str_bytes(k)).into_owned();
+    let known = &mut engine_mut(vm).world.bindings.modified_clicks;
+    match known.iter_mut().find(|(a, _)| *a == action) {
+        Some(entry) => entry.1 = key,
+        None => known.push((action, key)),
+    }
+    Ok(vec![])
+}
+
+fn get_num_modified_click_actions(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(
+        engine(vm).world.bindings.modified_clicks.len() as f64,
+    )])
+}
+
+fn get_modified_click_action(vm: &mut Vm, c: NativeCall) -> Ret {
+    let i = match c.arg(1) {
+        Value::Num(n) if n >= 1.0 => n as usize,
+        _ => return Ok(vec![Value::Nil]),
+    };
+    let action = engine(vm)
+        .world
+        .bindings
+        .modified_clicks
+        .get(i - 1)
+        .map(|(a, _)| a.clone());
+    Ok(vec![match action {
+        Some(a) => vm.str(&a),
+        None => Value::Nil,
+    }])
+}
+
+/// `IsModifiedClick([action])`: the action's modifiers are held (`NONE`:
+/// never; no action: any modifier). Unverified: extra modifiers held,
+/// `NONE` (probe queued).
+fn is_modified_click(vm: &mut Vm, c: NativeCall) -> Ret {
+    let held = engine(vm).world.input.modifiers;
+    let key = match c.arg(1) {
+        Value::Str(a) => {
+            let action = String::from_utf8_lossy(vm.str_bytes(a)).into_owned();
+            modified_click_of(vm, &action)
+        }
+        _ => return Ok(vec![Value::Bool(held.iter().any(|h| *h))]),
+    };
+    let Some(key) = key else {
+        return Ok(vec![Value::Bool(false)]);
+    };
+    if key == "NONE" {
+        return Ok(vec![Value::Bool(false)]);
+    }
+    let on = key.split('-').all(|part| match part {
+        "SHIFT" => held[0],
+        "CTRL" => held[1],
+        "ALT" => held[2],
+        _ => false,
+    });
+    Ok(vec![Value::Bool(on)])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("SetBinding", set_binding),
+        ("GetModifiedClick", get_modified_click),
+        ("SetModifiedClick", set_modified_click),
+        ("GetNumModifiedClickActions", get_num_modified_click_actions),
+        ("GetModifiedClickAction", get_modified_click_action),
+        ("IsModifiedClick", is_modified_click),
         ("GetBindingAction", get_binding_action),
         ("GetBindingKey", get_binding_key),
         ("GetNumBindings", get_num_bindings),

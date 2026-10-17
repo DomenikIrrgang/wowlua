@@ -384,17 +384,9 @@
     "realm": "Realm",
     "sex": 2
   },
-  "client": "1.60.1 (70425)",
+  "client": "1.60.1 (70450)",
   "cvars": {
     "Brightness": "50",
-    "CACHE-WGOB-GameObjectsHotfixCount": "82",
-    "CACHE-WGOB-GameObjectsRecordCount": "19007",
-    "CACHE-WQST-QuestObjectiveHotfixCount": "20",
-    "CACHE-WQST-QuestObjectiveRecordCount": "8945",
-    "CACHE-WQST-QuestObjectiveXEffectHotfixCount": "6",
-    "CACHE-WQST-QuestObjectiveXEffectRecordCount": "143",
-    "CACHE-WQST-QuestV2HotfixCount": "429",
-    "CACHE-WQST-QuestV2RecordCount": "7777",
     "Contrast": "50",
     "EJLootClass": "1",
     "GamepadDisableTooltips": "1",
@@ -454,13 +446,15 @@
     "audioLocale": "enUS",
     "autoLootDefault": "1",
     "cameraDistanceMaxZoomFactor": "2",
+    "cameraSavedDistance": "30.000000",
+    "cameraSavedPitch": "24.549994",
     "cameraSmoothStyle": "0",
     "cameraView": "1",
     "categorizeTrainerUI": "1",
     "chatBubblesRaid": "1",
     "collapsedCurrencyCategoryDefaults": "v21###$###&",
     "countdownForCooldowns": "1",
-    "currencyCategoriesCollapsed": "v21###$###&",
+    "currencyCategoriesCollapsed": "v21###&###$",
     "currentGameMode": "15",
     "enableCollectionToasts": "0",
     "enableLearnedRecipeToasts": "0",
@@ -471,16 +465,19 @@
     "farclip": "7000",
     "ffxAntiAliasingMode": "0",
     "flaggedTutorials": "v21###&###%###=###'",
-    "gameTip": "41",
+    "gameTip": "43",
     "giQuality": "3",
     "groundEffectDensity": "48",
     "groundEffectDist": "200",
+    "hardTrackedQuests": "v21",
+    "hardTrackedWorldQuests": "v21",
     "hasSelectedExperiencePreset": "1",
     "horizonClip": "7000",
     "horizonStart": "1900",
     "hwDetect": "0",
     "lodObjectCullSize": "18",
     "lodObjectMinSize": "0",
+    "minimapShapeshiftTracking": "v21",
     "mouseSpeed": "1.000000",
     "nameplateNotSelectedAlpha": "1",
     "nameplateShowEnemies": "1",
@@ -525,6 +522,11 @@
     "timeMgrUseLocalTime": "1",
     "timeMgrUseMilitaryTime": "1",
     "toyBoxCollectedFilters": "\u0002B",
+    "trackedAchievements": "v21",
+    "trackedPerksActivities": "v21",
+    "trackedProfessionRecipes": "v21",
+    "trackedProfessionRecraftRecipes": "v21",
+    "trackedWorldQuests": "v21",
     "uiScale": "0.6599999666214",
     "videoOptionsVersion": "54",
     "voiceProvider": "1",
@@ -727,6 +729,23 @@
       "type": "Miscellaneous"
     }
   },
+  "macros": {
+    "account": [
+      {
+        "body": "/whisper Player Lastname hello\n",
+        "icon": 841219,
+        "name": "Test"
+      }
+    ],
+    "character": {},
+    "info": [
+      [
+        "Test",
+        841219,
+        "/whisper Player Lastname hello\n"
+      ]
+    ]
+  },
   "money": 0,
   "position": {
     "mapID": 1429,
@@ -781,8 +800,23 @@
     "avoidance": [
       0
     ],
+    "backpackCurrency": [
+      [],
+      [],
+      []
+    ],
     "block": [
       4.840000152587891
+    ],
+    "classSkillLine": [
+      {
+        "iconID": 626008,
+        "isGuild": false,
+        "itemIndexOffset": 0,
+        "name": "Warrior",
+        "numSpellBookItems": 0,
+        "shouldHide": false
+      }
     ],
     "combatConfig": [
       [
@@ -1113,6 +1147,10 @@
         0
       ]
     ],
+    "currencyListInfo": {},
+    "currencyListSize": [
+      0
+    ],
     "damage": [
       4.935714721679688,
       6.935714721679688,
@@ -1140,6 +1178,116 @@
       0,
       0
     ],
+    "faction": [
+      [
+        {
+          "atWarWith": false,
+          "canSetInactive": false,
+          "canToggleAtWar": true,
+          "currentReactionThreshold": 3000,
+          "currentStanding": 3300,
+          "description": "",
+          "factionID": 469,
+          "hasBonusRepGain": false,
+          "isAccountWide": false,
+          "isChild": false,
+          "isCollapsed": false,
+          "isHeader": true,
+          "isHeaderWithRep": false,
+          "isWatched": false,
+          "name": "Alliance",
+          "nextReactionThreshold": 9000,
+          "reaction": 5
+        }
+      ],
+      [
+        {
+          "atWarWith": false,
+          "canSetInactive": true,
+          "canToggleAtWar": false,
+          "currentReactionThreshold": 3000,
+          "currentStanding": 3100,
+          "description": "The Alliance capital is populated by Night Elves and is located in the island of Teldrassil.  Ruled by the Priestess of the Moon, Tyrande Whisperwind.",
+          "factionID": 69,
+          "hasBonusRepGain": false,
+          "isAccountWide": false,
+          "isChild": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "isHeaderWithRep": false,
+          "isWatched": false,
+          "name": "Darnassus",
+          "nextReactionThreshold": 9000,
+          "reaction": 5
+        }
+      ],
+      [
+        {
+          "atWarWith": false,
+          "canSetInactive": true,
+          "canToggleAtWar": false,
+          "currentReactionThreshold": 3000,
+          "currentStanding": 3100,
+          "description": "The former denizens of Gnomeregan, now living in exile in Ironforge and in league with the Alliance.",
+          "factionID": 54,
+          "hasBonusRepGain": false,
+          "isAccountWide": false,
+          "isChild": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "isHeaderWithRep": false,
+          "isWatched": false,
+          "name": "Gnomeregan Exiles",
+          "nextReactionThreshold": 9000,
+          "reaction": 5
+        }
+      ],
+      [
+        {
+          "atWarWith": false,
+          "canSetInactive": true,
+          "canToggleAtWar": false,
+          "currentReactionThreshold": 3000,
+          "currentStanding": 3100,
+          "description": "This Alliance capital is the pride of the Dun Morogh dwarves.  Home to King Magni.",
+          "factionID": 47,
+          "hasBonusRepGain": false,
+          "isAccountWide": false,
+          "isChild": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "isHeaderWithRep": false,
+          "isWatched": false,
+          "name": "Ironforge",
+          "nextReactionThreshold": 9000,
+          "reaction": 5
+        }
+      ],
+      [
+        {
+          "atWarWith": false,
+          "canSetInactive": true,
+          "canToggleAtWar": false,
+          "currentReactionThreshold": 3000,
+          "currentStanding": 4000,
+          "description": "One of the last bastions of human power, this Alliance capital is ruled by the child king, Anduin Wrynn.",
+          "factionID": 72,
+          "hasBonusRepGain": false,
+          "isAccountWide": false,
+          "isChild": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "isHeaderWithRep": false,
+          "isWatched": false,
+          "name": "Stormwind",
+          "nextReactionThreshold": 9000,
+          "reaction": 5
+        }
+      ]
+    ],
+    "factions": [
+      5
+    ],
     "groupBuffs": [
       [
         {
@@ -1152,6 +1300,7 @@
         }
       ]
     ],
+    "hasPetSpells": [],
     "healthRegen": [
       1.949999928474426,
       0
@@ -1213,6 +1362,31 @@
     "powerRegen": [
       -12.49899959564209,
       0.001000000047497451
+    ],
+    "professionInfo": {},
+    "professions": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "questComplete": {},
+    "questLogEntries": [
+      0,
+      0
+    ],
+    "questLogIndex": {},
+    "questLogInfo": {},
+    "questObjectives": {},
+    "questTag": {},
+    "questTitle": {},
+    "questWatchID": {},
+    "questWatchType": {},
+    "questWatches": [
+      0
     ],
     "rangedAttackPower": [
       21,
@@ -1309,6 +1483,15 @@
     "restedXP": [
       null
     ],
+    "selectedFaction": [
+      0
+    ],
+    "selectedQuest": [
+      0
+    ],
+    "selectedSkill": [
+      0
+    ],
     "shapeshiftForm": [
       1
     ],
@@ -1337,6 +1520,311 @@
     ],
     "shieldBlock": [
       1
+    ],
+    "skillLine": [
+      [
+        {
+          "costType": 0,
+          "description": "",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": true,
+          "maxRank": 0,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Class Skills",
+          "parentSkillLineID": 0,
+          "rank": 0,
+          "rankCost": 0,
+          "skillID": 7,
+          "skillLineCategoryID": 0,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 1,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Arms",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 26,
+          "skillLineCategoryID": 7,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": true,
+          "maxRank": 0,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Weapon Skills",
+          "parentSkillLineID": 0,
+          "rank": 0,
+          "rankCost": 0,
+          "skillID": 6,
+          "skillLineCategoryID": 0,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Higher weapon skill increases your chance to hit.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 5,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Axes",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 44,
+          "skillLineCategoryID": 6,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Higher defense makes you harder to hit and makes monsters less likely to land a crushing blow.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 5,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Defense",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 95,
+          "skillLineCategoryID": 6,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Higher weapon skill increases your chance to hit.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 5,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Maces",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 54,
+          "skillLineCategoryID": 6,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Higher weapon skill increases your chance to hit.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 5,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Swords",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 43,
+          "skillLineCategoryID": 6,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Higher skill increases your chance to hit.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 5,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Unarmed",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 162,
+          "skillLineCategoryID": 6,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": true,
+          "maxRank": 0,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Armor Proficiencies",
+          "parentSkillLineID": 0,
+          "rank": 0,
+          "rankCost": 0,
+          "skillID": 8,
+          "skillLineCategoryID": 0,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Allows the wearing of cloth armor.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 1,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Cloth",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 415,
+          "skillLineCategoryID": 8,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Allows the wearing of leather armor.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 1,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Leather",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 414,
+          "skillLineCategoryID": 8,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Allows the wearing of mail armor.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 1,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Mail",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 413,
+          "skillLineCategoryID": 8,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Allows the use of shields.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 1,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Shield",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 433,
+          "skillLineCategoryID": 8,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": true,
+          "maxRank": 0,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Languages",
+          "parentSkillLineID": 0,
+          "rank": 0,
+          "rankCost": 0,
+          "skillID": 10,
+          "skillLineCategoryID": 0,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 300,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Language: Common",
+          "parentSkillLineID": 0,
+          "rank": 300,
+          "rankCost": 0,
+          "skillID": 98,
+          "skillLineCategoryID": 10,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ]
+    ],
+    "skillLines": [
+      15
     ],
     "specGroups": [
       1
@@ -1396,6 +1884,485 @@
     ],
     "speed": [
       0
+    ],
+    "spellBookItem": [
+      [
+        {
+          "actionID": 6603,
+          "iconID": 135274,
+          "isOffSpec": false,
+          "isPassive": false,
+          "itemType": 1,
+          "name": "Attack",
+          "spellID": 6603,
+          "subName": ""
+        }
+      ],
+      [
+        {
+          "actionID": 20600,
+          "iconID": 136090,
+          "isOffSpec": false,
+          "isPassive": false,
+          "itemType": 1,
+          "name": "Perception",
+          "spellID": 20600,
+          "subName": "Racial"
+        }
+      ],
+      [
+        {
+          "actionID": 1259718,
+          "iconID": 136129,
+          "isOffSpec": false,
+          "isPassive": false,
+          "itemType": 1,
+          "name": "Will to Survive",
+          "spellID": 1259718,
+          "subName": "Racial"
+        }
+      ],
+      [
+        {
+          "actionID": 1293712,
+          "iconID": 132740,
+          "isOffSpec": false,
+          "isPassive": true,
+          "itemType": 1,
+          "name": "Armor Proficiency",
+          "spellID": 1293712,
+          "subName": ""
+        }
+      ],
+      [
+        {
+          "actionID": 107,
+          "iconID": 132110,
+          "isOffSpec": false,
+          "isPassive": true,
+          "itemType": 1,
+          "name": "Block",
+          "spellID": 107,
+          "subName": "Passive"
+        }
+      ],
+      [
+        {
+          "actionID": 81,
+          "iconID": 136047,
+          "isOffSpec": false,
+          "isPassive": true,
+          "itemType": 1,
+          "name": "Dodge",
+          "spellID": 81,
+          "subName": "Passive"
+        }
+      ],
+      [
+        {
+          "actionID": 1293657,
+          "iconID": 134331,
+          "isOffSpec": false,
+          "isPassive": true,
+          "itemType": 1,
+          "name": "Languages",
+          "spellID": 1293657,
+          "subName": ""
+        }
+      ],
+      [
+        {
+          "actionID": 20597,
+          "iconID": 132292,
+          "isOffSpec": false,
+          "isPassive": true,
+          "itemType": 1,
+          "name": "Ruthless",
+          "spellID": 20597,
+          "subName": "Racial Passive"
+        }
+      ],
+      [
+        {
+          "actionID": 20598,
+          "iconID": 132874,
+          "isOffSpec": false,
+          "isPassive": true,
+          "itemType": 1,
+          "name": "The Human Spirit",
+          "spellID": 20598,
+          "subName": "Racial Passive"
+        }
+      ],
+      [
+        {
+          "actionID": 2457,
+          "iconID": 132349,
+          "isOffSpec": false,
+          "isPassive": false,
+          "itemType": 1,
+          "name": "Battle Stance",
+          "skillLineIndex": 2,
+          "spellID": 2457,
+          "subName": ""
+        }
+      ],
+      [
+        {
+          "actionID": 78,
+          "iconID": 132282,
+          "isOffSpec": false,
+          "isPassive": false,
+          "itemType": 1,
+          "name": "Heroic Strike",
+          "skillLineIndex": 2,
+          "spellID": 78,
+          "subName": "Rank 1"
+        }
+      ],
+      [
+        {
+          "actionID": 269,
+          "iconID": 132349,
+          "isOffSpec": false,
+          "isPassive": false,
+          "itemType": 4,
+          "name": "Stances",
+          "skillLineIndex": 2,
+          "subName": ""
+        }
+      ]
+    ],
+    "spellBookItemLevel": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [
+        0
+      ]
+    ],
+    "spellBookItemLink": [
+      [
+        "|cff71d5ff|Hspell:6603:0|h[Attack]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:20600:0|h[Perception]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:1259718:0|h[Will to Survive]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:1293712:0|h[Armor Proficiency]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:107:0|h[Block]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:81:0|h[Dodge]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:1293657:0|h[Languages]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:20597:0|h[Ruthless]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:20598:0|h[The Human Spirit]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:2457:0|h[Battle Stance]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:78:0|h[Heroic Strike]|h|r"
+      ],
+      []
+    ],
+    "spellBookItemLowRank": [
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ]
+    ],
+    "spellBookItemName": [
+      [
+        "Attack",
+        ""
+      ],
+      [
+        "Perception",
+        "Racial"
+      ],
+      [
+        "Will to Survive",
+        "Racial"
+      ],
+      [
+        "Armor Proficiency",
+        ""
+      ],
+      [
+        "Block",
+        "Passive"
+      ],
+      [
+        "Dodge",
+        "Passive"
+      ],
+      [
+        "Languages",
+        ""
+      ],
+      [
+        "Ruthless",
+        "Racial Passive"
+      ],
+      [
+        "The Human Spirit",
+        "Racial Passive"
+      ],
+      [
+        "Battle Stance",
+        ""
+      ],
+      [
+        "Heroic Strike",
+        "Rank 1"
+      ],
+      [
+        "Stances",
+        ""
+      ]
+    ],
+    "spellBookItemPassive": [
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        true
+      ],
+      [
+        true
+      ],
+      [
+        true
+      ],
+      [
+        true
+      ],
+      [
+        true
+      ],
+      [
+        true
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ]
+    ],
+    "spellBookItemTexture": [
+      [
+        135274
+      ],
+      [
+        136090
+      ],
+      [
+        136129
+      ],
+      [
+        132740
+      ],
+      [
+        132110
+      ],
+      [
+        136047
+      ],
+      [
+        134331
+      ],
+      [
+        132292
+      ],
+      [
+        132874
+      ],
+      [
+        132349
+      ],
+      [
+        132282
+      ],
+      [
+        132349
+      ]
+    ],
+    "spellBookItemType": [
+      [
+        1,
+        6603,
+        6603
+      ],
+      [
+        1,
+        20600,
+        20600
+      ],
+      [
+        1,
+        1259718,
+        1259718
+      ],
+      [
+        1,
+        1293712,
+        1293712
+      ],
+      [
+        1,
+        107,
+        107
+      ],
+      [
+        1,
+        81,
+        81
+      ],
+      [
+        1,
+        1293657,
+        1293657
+      ],
+      [
+        1,
+        20597,
+        20597
+      ],
+      [
+        1,
+        20598,
+        20598
+      ],
+      [
+        1,
+        2457,
+        2457
+      ],
+      [
+        1,
+        78,
+        78
+      ],
+      [
+        4,
+        269,
+        null
+      ]
+    ],
+    "spellBookSkillLine": [
+      [
+        {
+          "iconID": 136830,
+          "isGuild": false,
+          "itemIndexOffset": 0,
+          "name": "General",
+          "numSpellBookItems": 9,
+          "shouldHide": false
+        }
+      ],
+      [
+        {
+          "iconID": 132292,
+          "isGuild": false,
+          "itemIndexOffset": 9,
+          "name": "Arms",
+          "numSpellBookItems": 3,
+          "shouldHide": false
+        }
+      ],
+      [],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    "spellBookSkillLines": [
+      2
     ],
     "spellCrit": [
       2
@@ -2233,6 +3200,9 @@
         0
       ]
     },
+    "watchedFaction": [
+      null
+    ],
     "xp": [
       0
     ],

@@ -1,6 +1,7 @@
 //! The player's stats as the client reports them (decision: modeled
 //! profile fields): attributes, damage, ratings, regeneration, experience,
-//! honor, talents, forms and appearances, each the full answer of the
+//! honor, talents, forms, appearances, the spellbook, professions, skills,
+//! reputations, currencies and the quest log, each the full answer of the
 //! client function that reports it.
 //! A world profile's `stats` (recorded by `/stdtest snapshot`) sets them,
 //! and tests change them with `mock.player:setStats`. The snapshot records
@@ -35,6 +36,9 @@ pub enum Ask {
     /// `f(location)`: by transmog location, `slotID * 100 + type * 10 +
     /// modification` (Blizzard's lookup key).
     Location,
+    /// `f(slot, bank)`: by the player's spellbook slot (the pet's bank:
+    /// nothing recorded yet).
+    Slot,
 }
 
 /// A stat: its key in a profile, the function that reports it, how it is
@@ -352,6 +356,220 @@ pub const STATS: &[Stat] = &[
         Plain,
         Some("COOLDOWN_VIEWER_DATA_LOADED"),
     ),
+    // The spellbook: its skill lines (tabs) and the player's items by slot.
+    stat(
+        "spellBookSkillLines",
+        "C_SpellBook.GetNumSpellBookSkillLines",
+        Plain,
+        Some("SPELLS_CHANGED"),
+    ),
+    stat(
+        "spellBookSkillLine",
+        "C_SpellBook.GetSpellBookSkillLineInfo",
+        Index,
+        Some("SPELLS_CHANGED"),
+    ),
+    stat(
+        "classSkillLine",
+        "C_SpellBook.GetClassSkillLineInfo",
+        Plain,
+        Some("SPELLS_CHANGED"),
+    ),
+    stat(
+        "hasPetSpells",
+        "C_SpellBook.HasPetSpells",
+        Plain,
+        Some("SPELLS_CHANGED"),
+    ),
+    stat(
+        "spellBookItem",
+        "C_SpellBook.GetSpellBookItemInfo",
+        Slot,
+        Some("SPELLS_CHANGED"),
+    ),
+    stat(
+        "spellBookItemName",
+        "C_SpellBook.GetSpellBookItemName",
+        Slot,
+        Some("SPELLS_CHANGED"),
+    ),
+    stat(
+        "spellBookItemTexture",
+        "C_SpellBook.GetSpellBookItemTexture",
+        Slot,
+        Some("SPELLS_CHANGED"),
+    ),
+    stat(
+        "spellBookItemType",
+        "C_SpellBook.GetSpellBookItemType",
+        Slot,
+        Some("SPELLS_CHANGED"),
+    ),
+    stat(
+        "spellBookItemPassive",
+        "C_SpellBook.IsSpellBookItemPassive",
+        Slot,
+        Some("SPELLS_CHANGED"),
+    ),
+    stat(
+        "spellBookItemLowRank",
+        "C_SpellBook.IsSpellBookItemLowRank",
+        Slot,
+        Some("SPELLS_CHANGED"),
+    ),
+    stat(
+        "spellBookItemLevel",
+        "C_SpellBook.GetSpellBookItemLevelLearned",
+        Slot,
+        Some("SPELLS_CHANGED"),
+    ),
+    stat(
+        "spellBookItemLink",
+        "C_SpellBook.GetSpellBookItemLink",
+        Slot,
+        Some("SPELLS_CHANGED"),
+    ),
+    // Professions.
+    stat(
+        "professions",
+        "GetProfessions",
+        Plain,
+        Some("SKILL_LINES_CHANGED"),
+    ),
+    stat(
+        "professionInfo",
+        "GetProfessionInfo",
+        Index,
+        Some("SKILL_LINES_CHANGED"),
+    ),
+    // Skills (by line), reputations (by faction), currencies (by line).
+    stat(
+        "skillLines",
+        "C_SkillInfo.GetNumSkillLines",
+        Plain,
+        Some("SKILL_LINES_CHANGED"),
+    ),
+    stat(
+        "skillLine",
+        "C_SkillInfo.GetSkillLineInfo",
+        Index,
+        Some("SKILL_LINES_CHANGED"),
+    ),
+    stat(
+        "selectedSkill",
+        "C_SkillInfo.GetSelectedSkill",
+        Plain,
+        Some("SKILL_LINES_CHANGED"),
+    ),
+    stat(
+        "factions",
+        "C_Reputation.GetNumFactions",
+        Plain,
+        Some("UPDATE_FACTION"),
+    ),
+    stat(
+        "faction",
+        "C_Reputation.GetFactionDataByIndex",
+        Index,
+        Some("UPDATE_FACTION"),
+    ),
+    stat(
+        "selectedFaction",
+        "C_Reputation.GetSelectedFaction",
+        Plain,
+        Some("UPDATE_FACTION"),
+    ),
+    stat(
+        "watchedFaction",
+        "C_Reputation.GetWatchedFactionData",
+        Plain,
+        Some("UPDATE_FACTION"),
+    ),
+    stat(
+        "currencyListSize",
+        "C_CurrencyInfo.GetCurrencyListSize",
+        Plain,
+        Some("CURRENCY_DISPLAY_UPDATE"),
+    ),
+    stat(
+        "currencyListInfo",
+        "C_CurrencyInfo.GetCurrencyListInfo",
+        Index,
+        Some("CURRENCY_DISPLAY_UPDATE"),
+    ),
+    stat(
+        "backpackCurrency",
+        "C_CurrencyInfo.GetBackpackCurrencyInfo",
+        Index,
+        Some("CURRENCY_DISPLAY_UPDATE"),
+    ),
+    // The quest log (by entry; by quest ID).
+    stat(
+        "questLogEntries",
+        "C_QuestLog.GetNumQuestLogEntries",
+        Plain,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questLogInfo",
+        "C_QuestLog.GetInfo",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "selectedQuest",
+        "C_QuestLog.GetSelectedQuest",
+        Plain,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questWatches",
+        "C_QuestLog.GetNumQuestWatches",
+        Plain,
+        Some("QUEST_WATCH_LIST_CHANGED"),
+    ),
+    stat(
+        "questWatchID",
+        "C_QuestLog.GetQuestIDForQuestWatchIndex",
+        Index,
+        Some("QUEST_WATCH_LIST_CHANGED"),
+    ),
+    stat(
+        "questLogIndex",
+        "C_QuestLog.GetLogIndexForQuestID",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questObjectives",
+        "C_QuestLog.GetQuestObjectives",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questComplete",
+        "C_QuestLog.IsComplete",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questWatchType",
+        "C_QuestLog.GetQuestWatchType",
+        Index,
+        Some("QUEST_WATCH_LIST_CHANGED"),
+    ),
+    stat(
+        "questTag",
+        "C_QuestLog.GetQuestTagInfo",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questTitle",
+        "C_QuestLog.GetTitleForQuestID",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
     // The equipped gear's appearances.
     stat(
         "transmogSlot",
@@ -557,7 +775,7 @@ pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
             return Err(vm.error(&format!("unit:setStats: no stat {key:?}")));
         };
         let entry = match (stat.ask, v) {
-            (UnitIndex | Index | ForStat | Location, Value::Table(inner)) => {
+            (UnitIndex | Index | ForStat | Location | Slot, Value::Table(inner)) => {
                 let mut map = match engine(vm).world.character.stats.get(stat.key) {
                     Some(Entry::ByIndex(m)) => m.clone(),
                     _ => BTreeMap::new(),
@@ -565,7 +783,7 @@ pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
                 map.extend(by_index(vm, inner));
                 Entry::ByIndex(map)
             }
-            (UnitIndex | Index | ForStat | Location, _) => {
+            (UnitIndex | Index | ForStat | Location | Slot, _) => {
                 return Err(vm.error(&format!("unit:setStats: {key} is by index ({{ [1] = … }})")));
             }
             (_, v) => Entry::One(answers_of(vm, v)),
@@ -644,6 +862,8 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
         UnitIndex => num(c.arg(2)),
         Index | ForStat => num(c.arg(1)),
         Location => location_key(vm, c.arg(1)),
+        // The player's bank (0) only.
+        Slot if matches!(c.arg(2), Value::Num(b) if b == 0.0) => num(c.arg(1)),
         _ => None,
     };
     let found = if player {
@@ -688,9 +908,137 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
     }
 }
 
+/// The player's spellbook slot holding `spell` (the recorded items'
+/// `spellID`).
+fn spellbook_slot_of(vm: &Vm, spell: f64) -> Option<i64> {
+    let Some(Entry::ByIndex(items)) = engine(vm).world.character.stats.get("spellBookItem") else {
+        return None;
+    };
+    items
+        .iter()
+        .find_map(|(slot, answer)| match answer.first() {
+            Some(Answer::Table(fields)) => fields
+                .iter()
+                .any(|(k, v)| {
+                    matches!(k, Answer::Str(k) if k == "spellID")
+                        && matches!(v, Answer::Num(n) if *n == spell)
+                })
+                .then_some(*slot),
+            _ => None,
+        })
+}
+
+/// The recorded spellbook item of `spell` (its `GetSpellBookItemInfo`).
+pub fn spellbook_item(vm: &mut Vm, spell: f64) -> Option<Value> {
+    let slot = spellbook_slot_of(vm, spell)?;
+    let Some(Entry::ByIndex(items)) = engine(vm).world.character.stats.get("spellBookItem") else {
+        return None;
+    };
+    let answer = items.get(&slot)?.first()?.clone();
+    Some(value_of(vm, &answer))
+}
+
+/// `C_SpellBook.FindSpellBookSlotForSpell(spellID, …)`: its slot and bank
+/// (the player's); nothing for a spell not in the book.
+fn find_spellbook_slot(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match num(c.arg(1)).and_then(|s| spellbook_slot_of(vm, s)) {
+        Some(slot) => vec![Value::Num(slot as f64), Value::Num(0.0)],
+        None => vec![],
+    })
+}
+
+/// `C_SpellBook.IsSpellInSpellBook(spellID [, bank])`: in the player's
+/// book (unverified: overrides, the pet's bank).
+fn is_spell_in_spellbook(vm: &mut Vm, c: NativeCall) -> Ret {
+    let pet = matches!(c.arg(2), Value::Num(b) if b == 1.0);
+    let found = !pet
+        && num(c.arg(1))
+            .and_then(|s| spellbook_slot_of(vm, s))
+            .is_some();
+    Ok(vec![Value::Bool(found)])
+}
+
+/// A recorded table's field.
+fn field_of<'a>(answer: &'a Answer, key: &str) -> Option<&'a Answer> {
+    match answer {
+        Answer::Table(fields) => fields
+            .iter()
+            .find(|(k, _)| matches!(k, Answer::Str(k) if k == key))
+            .map(|(_, v)| v),
+        _ => None,
+    }
+}
+
+/// The quest at a log index (its recorded `C_QuestLog.GetInfo`'s ID), and
+/// its recorded objectives.
+fn quest_objectives(vm: &Vm, log_index: f64) -> Option<Vec<Answer>> {
+    let stats = &engine(vm).world.character.stats;
+    let Some(Entry::ByIndex(log)) = stats.get("questLogInfo") else {
+        return None;
+    };
+    let info = log.get(&(log_index as i64))?.first()?;
+    let Answer::Num(quest) = field_of(info, "questID")? else {
+        return None;
+    };
+    let quest = *quest;
+    let Some(Entry::ByIndex(objectives)) = stats.get("questObjectives") else {
+        return None;
+    };
+    match objectives.get(&(quest as i64))?.first()? {
+        Answer::Table(entries) => {
+            let mut list: Vec<(f64, Answer)> = entries
+                .iter()
+                .filter_map(|(k, v)| match k {
+                    Answer::Num(i) => Some((*i, v.clone())),
+                    _ => None,
+                })
+                .collect();
+            list.sort_by(|a, b| a.0.total_cmp(&b.0));
+            Some(list.into_iter().map(|(_, v)| v).collect())
+        }
+        _ => None,
+    }
+}
+
+/// `GetNumQuestLeaderBoards(logIndex)`: the quest's objectives, derived
+/// from the recorded log and objectives (as the client gave them for every
+/// recorded entry; `quest_objectives_derive_as_the_client_gave_them`).
+fn num_quest_leader_boards(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = num(c.arg(1))
+        .and_then(|i| quest_objectives(vm, i))
+        .map_or(0, |o| o.len());
+    Ok(vec![Value::Num(n as f64)])
+}
+
+/// `GetQuestLogLeaderBoard(i, logIndex)`: the objective's text, type and
+/// whether it is finished (derived as `GetNumQuestLeaderBoards`).
+fn quest_log_leader_board(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Some(i), Some(log)) = (num(c.arg(1)), num(c.arg(2))) else {
+        return Ok(vec![]);
+    };
+    let Some(objective) =
+        quest_objectives(vm, log).and_then(|o| o.get((i as usize).wrapping_sub(1)).cloned())
+    else {
+        return Ok(vec![]);
+    };
+    Ok(["text", "type", "finished"]
+        .iter()
+        .map(|k| field_of(&objective, k).map_or(Value::Nil, |a| value_of(vm, a)))
+        .collect())
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     STATS
         .iter()
         .map(|s| (s.function, answer as NativeFn))
+        .chain([
+            (
+                "C_SpellBook.FindSpellBookSlotForSpell",
+                find_spellbook_slot as NativeFn,
+            ),
+            ("C_SpellBook.IsSpellInSpellBook", is_spell_in_spellbook),
+            ("GetNumQuestLeaderBoards", num_quest_leader_boards),
+            ("GetQuestLogLeaderBoard", quest_log_leader_board),
+        ])
         .collect()
 }

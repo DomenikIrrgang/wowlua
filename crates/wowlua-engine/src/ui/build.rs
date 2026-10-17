@@ -756,6 +756,50 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
                 call_method(vm, cx, child.line, frame, "SetFontString", &[fs]);
             }
         }
+        // A frame's own font (an edit box's, a message frame's): the
+        // element's font object, font and justification. Unverified: its
+        // nested height, color and shadow.
+        "fontstring"
+            if [
+                "EditBox",
+                "MessageFrame",
+                "ScrollingMessageFrame",
+                "SimpleHTML",
+            ]
+            .iter()
+            .any(|c| {
+                let class = engine(vm).world.widgets[id.0].class.clone();
+                crate::widgets::is_a(engine(vm), &class, c)
+            }) =>
+        {
+            if let Some(inherits) = child.attr("inherits") {
+                let font = vm.get_global(inherits);
+                if !font.is_nil() {
+                    call_method(vm, cx, child.line, frame, "SetFontObject", &[font]);
+                }
+            }
+            if let Some(file) = child.attr("font") {
+                let file = vm.str(file);
+                let size = child
+                    .attr("size")
+                    .and_then(|s| s.parse::<f64>().ok())
+                    .map_or(Value::Num(12.0), Value::Num);
+                let flags = vm.str(child.attr("outline").unwrap_or(""));
+                call_method(vm, cx, child.line, frame, "SetFont", &[file, size, flags]);
+            }
+            // SimpleHTML justifies by text type (unverified for this
+            // element).
+            let html = engine(vm).world.widgets[id.0].class == "SimpleHTML";
+            for (attr, method) in [("justifyH", "SetJustifyH"), ("justifyV", "SetJustifyV")] {
+                if html {
+                    break;
+                }
+                if let Some(v) = child.attr(attr) {
+                    let v = vm.str(v);
+                    call_method(vm, cx, child.line, frame, method, &[v]);
+                }
+            }
+        }
         _ if engine(vm).world.widgets[id.0].class == "AnimationGroup"
             && class_of(vm, tag)
                 .is_some_and(|c| crate::widgets::is_a(engine(vm), &c, "Animation")) =>

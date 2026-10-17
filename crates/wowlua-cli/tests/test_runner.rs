@@ -1520,6 +1520,177 @@ end
     assert!(text.contains("2 passed, 0 failed"), "{text}");
 }
 
+/// Every button in every panel with Blizzard's UI, hovered and clicked
+/// (each tab's content too), scroll areas wheeled, as the fresh and the
+/// recorded character: not a single Blizzard error, nothing refused.
+#[test]
+fn blizzard_ui_every_button_in_every_panel() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let clicks = |profile: &str| {
+        format!(
+            r#"import test, expect, config from "wowlua:test"
+import * as mock from "wowlua:mock"
+{profile}
+const BINDINGS = {{
+    "TOGGLEGAMEMENU", "TOGGLEBACKPACK", "OPENALLBAGS",
+    "TOGGLECHARACTER0", "TOGGLECHARACTER2", "TOGGLECURRENCY", "TOGGLECHARACTER4", "TOGGLESPELLBOOK",
+    "TOGGLEPROFESSIONBOOK", "TOGGLEPETBOOK", "TOGGLETALENTS", "TOGGLECOOLDOWNVIEWERSETTINGS", "TOGGLEQUESTLOG",
+    "TOGGLEWORLDMAP", "TOGGLEBATTLEFIELDMINIMAP", "TOGGLEWORLDSTATESCORES",
+    "TOGGLEGUILDTAB", "TOGGLESOCIAL", "TOGGLEWHOTAB", "TOGGLECHATTAB", "TOGGLERAIDTAB",
+    "TOGGLECOLLECTIONS", "TOGGLECOLLECTIONSMOUNTJOURNAL", "TOGGLECOLLECTIONSPETJOURNAL", "TOGGLECOLLECTIONSTOYBOX",
+    "TOGGLECOLLECTIONSWARDROBE",
+}}
+
+const G = _G :: any
+
+--- The visible top-level frames under UIParent.
+local function shown(): {{ [any]: boolean }}
+    const out: {{ [any]: boolean }} = {{}}
+    for _, f in ipairs({{ G.UIParent:GetChildren() }}) do
+        if not f:IsForbidden() and f:IsVisible() then
+            out[f] = true
+        end
+    end
+    return out
+end
+
+local function descendants(f: any, out: any[])
+    for _, c in ipairs({{ f:GetChildren() }}) do
+        if not c:IsForbidden() then
+            out[#out + 1] = c
+            descendants(c, out)
+        end
+    end
+end
+
+local function closeNew(before: {{ [any]: boolean }}, keep: any[])
+    for f in pairs(shown()) do
+        local kept = false
+        for _, r in ipairs(keep) do
+            kept = kept or r == f
+        end
+        if not before[f] and not kept and f:IsVisible() then
+            G.HideUIPanel(f)
+            if f:IsVisible() then
+                f:Hide()
+            end
+        end
+    end
+end
+
+@test("every button in every panel, hovered and clicked")
+local function clicks()
+    mock.nextFrame(60)
+    for _, binding in ipairs(BINDINGS) do
+        const before = shown()
+        mock.pressBinding(binding)
+        mock.nextFrame(5)
+        const roots: any[] = {{}}
+        for f in pairs(shown()) do
+            if not before[f] then
+                roots[#roots + 1] = f
+            end
+        end
+        -- Each visible, enabled button not yet clicked, looking again after
+        -- every click (a tab shows its content); scroll areas wheeled.
+        const done: {{ [any]: boolean }} = {{}}
+        local clicked = 0
+        while clicked < 400 do
+            const frames: any[] = {{}}
+            for _, r in ipairs(roots) do
+                if r:IsVisible() then
+                    descendants(r, frames)
+                end
+            end
+            local next: any = nil
+            for _, f in ipairs(frames) do
+                if not done[f] and f:IsVisible() then
+                    if f:IsObjectType("Button") and f:IsEnabled() then
+                        const name = f:GetName() ?? ""
+                        if name:find("Logout") or name:find("Quit") or name:find("ExitGame") then
+                            done[f] = true
+                        else
+                            next = f
+                            break
+                        end
+                    elseif f:IsObjectType("ScrollFrame") or f.GetScrollPercentage ~= nil then
+                        done[f] = true
+                        mock.wheel(f, -1)
+                        mock.wheel(f, 1)
+                        mock.nextFrame(1)
+                    end
+                end
+            end
+            if next == nil then
+                break
+            end
+            done[next] = true
+            mock.hover(next)
+            mock.click(next)
+            mock.nextFrame(2)
+            mock.hover(nil)
+            clicked += 1
+            local open = false
+            for _, r in ipairs(roots) do
+                open = open or r:IsVisible()
+            end
+            if not open then
+                mock.pressBinding(binding)
+                mock.nextFrame(3)
+            end
+            closeNew(before, roots)
+        end
+        mock.pressBinding(binding)
+        mock.nextFrame(2)
+        closeNew(before, {{}})
+        mock.nextFrame(3)
+    end
+    expect(#mock.refusals()).toBe(0)
+end
+"#
+        )
+    };
+    let recorded = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../wowlua-engine/tests/client/forever-camelot-character.json"),
+    )
+    .unwrap();
+    let fresh = clicks("");
+    let as_recorded = clicks(r#"config({ profile = "recorded" })"#);
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            ("tests/fresh.test.wowlua", &fresh),
+            ("tests/recorded.test.wowlua", &as_recorded),
+            ("tests/profiles/recorded.json", &recorded),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("2 passed, 0 failed"), "{text}");
+}
+
 /// Tooltips with Blizzard's UI: the engine's tooltip data from the tests'
 /// game data, Blizzard's tooltip code, and an addon's post-call.
 #[test]
