@@ -663,7 +663,9 @@ local function matchers(value: any, negated: boolean): any
             fail("snapshots need `wowlua test`", 1)
         end
         snapshotCount = snapshotCount + 1
-        local key = currentName .. " › " .. (name ?? tostring(snapshotCount))
+        -- A pass after `mock.reloadUI` has its own snapshots.
+        local pass = (wl.reloads ?? 0) > 0 and ` (after reload {wl.reloads})` or ""
+        local key = currentName .. pass .. " › " .. (name ?? tostring(snapshotCount))
         local same, diff = engine.snapshot(key, serialize(value, "", {}))
         if not same then
             fail(`the snapshot "{key}" differs (- stored, + now; wowlua test -u updates it):\n{diff}`, 1)
@@ -847,7 +849,7 @@ wl.tests = {
         return job
     end,
     -- Runs a job until it finishes ("pass", or "fail" with the message and
-    -- stack) or waits ("wait", "seconds" | "frames", amount).
+    -- stack) or waits ("wait", "seconds" | "frames" | "reload", amount).
     step = function(job: Job): (string, any, any)
         while job.i <= #job.phases do
             if job.co == nil then
@@ -859,7 +861,11 @@ wl.tests = {
             end
             local co = job.co :: thread
             local ok, a, b, c = coroutine.resume(co)
-            if not ok then
+            if not ok and a ~= nil and a == wl.reloadSignal then
+                -- `mock.reloadUI`: the pass ended; the teardown still runs.
+                job.co = nil
+                job.i = job.i + 1
+            elseif not ok then
                 job.failure = job.failure ?? failureOf(a, co)
                 job.co = nil
                 job.i = job.i + 1

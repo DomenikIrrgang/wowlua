@@ -171,6 +171,27 @@ export function login()
     engine().login()
 end
 
+-- Raised in the test's pass after `reloadUI`: the pass ends there.
+const reloadSignal = {}
+wl.reloadSignal = reloadSignal
+
+--- `/reload`: the test's pass ends here. The runner keeps the TOC's
+--- SavedVariables (as the client writes them), loads everything again in a
+--- fresh VM, logs in and runs the test again from the top, with
+--- `reloads()` one higher. The file's other tests go on as before.
+export function reloadUI()
+    if coroutine.running() == nil then
+        error("mock.reloadUI runs inside a test", 2)
+    end
+    coroutine.yield(waitToken, "reload", 0)
+    error(reloadSignal, 0)
+end
+
+--- How many times the running test reloaded the UI: 0 on its first pass.
+export function reloads(): number
+    return wl.reloads ?? 0
+end
+
 -- ------------------------------------------------------------------ time
 
 --- Moves the virtual clock by `sec`, running the timers that come due.

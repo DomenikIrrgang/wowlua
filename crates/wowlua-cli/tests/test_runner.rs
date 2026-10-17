@@ -918,6 +918,97 @@ mock.module(clock, { now = function(): string return "x" end, later = 1 })
     assert!(out.contains("is not assignable to `() -> number`"), "{out}");
 }
 
+/// `mock.reloadUI()`: the test runs again in a fresh VM with the
+/// SavedVariables as the client writes them (`/stdtest sv`), logged in as
+/// a reload; the file's next test runs where the file was.
+#[test]
+fn reload_ui() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "_G.Loaded = (_G.Loaded or 0) + 1\n"),
+            (
+                "tests/reload.test.wowlua",
+                r#"import test, expect, afterEach from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local entering: any[] = {}
+local f = CreateFrame("Frame")
+f:RegisterEvent("PLAYER_ENTERING_WORLD")
+f:SetScript("OnEvent", function(_, _, initial: boolean, reloading: boolean)
+    entering = { initial, reloading }
+end)
+local teardowns = 0
+
+@afterEach
+local function count()
+    teardowns = teardowns + 1
+end
+
+@test("the SavedVariables survive a reload")
+local function survives()
+    const db = _G :: any
+    if mock.reloads() == 0 then
+        expect(db.DemoDB).toBeNil()
+        expect(entering).toEqual({ true, false })
+        local shared = { tag = "shared" }
+        db.DemoDB = {
+            count = 1,
+            third = 1 / 3,
+            seventeen = 0.12345678901234567,
+            fn = print,
+            frame = CreateFrame("Frame"),
+            nested = { deep = true },
+            keys = { [1.5] = "float", [true] = "true", [-1] = "negative" },
+            a = shared,
+            b = shared,
+            time = GetTime(),
+        }
+        mock.reloadUI()
+        error("not reached")
+    end
+    expect(mock.reloads()).toBe(1)
+    expect(db.Loaded).toBe(1)
+    expect(entering).toEqual({ false, true })
+    expect(db.DemoDB.count).toBe(1)
+    expect(db.DemoDB.third).toBe(1 / 3)
+    expect(db.DemoDB.seventeen).toBe(0.1234567890123457)
+    expect(db.DemoDB.fn).toBeNil()
+    expect(db.DemoDB.frame[0]).toBeNil()
+    expect(db.DemoDB.nested.deep).toBe(true)
+    expect(db.DemoDB.keys).toEqual({ [1.5] = "float", [true] = "true", [-1] = "negative" })
+    expect(db.DemoDB.a == db.DemoDB.b).toBe(false)
+    expect(db.DemoDB.a.tag).toBe("shared")
+    expect(GetTime() >= db.DemoDB.time).toBe(true)
+end
+
+@test("twice")
+local function twice()
+    const db = _G :: any
+    db.DemoDB.passes = db.DemoDB.passes ?? {}
+    table.insert(db.DemoDB.passes, mock.reloads())
+    if mock.reloads() < 2 then
+        mock.reloadUI()
+    end
+    expect(db.DemoDB.passes).toEqual({ 0, 1, 2 })
+end
+
+@test("the next test runs where the file was")
+local function after()
+    expect(mock.reloads()).toBe(0)
+    expect((_G :: any).DemoDB.count).toBe(1)
+    -- Each test's first pass ran its teardown in this VM.
+    expect(teardowns).toBe(2)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("3 passed, 0 failed"), "{out}");
+}
+
 /// GUI tests act as the user: hover, click, type and keys.
 #[test]
 fn gui_input() {

@@ -17,6 +17,8 @@ struct State {
     /// read (`mock.refusals()`, `toBeBlocked`) or the runner reported.
     refusals_read: usize,
     addon: String,
+    /// The SavedVariables a reload keeps, set at the next login.
+    saved: Option<Vec<(String, crate::saved::Saved)>>,
 }
 
 thread_local! {
@@ -155,14 +157,31 @@ fn secret(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// The client's login: `ADDON_LOADED` for the addon, `PLAYER_LOGIN`,
 /// `PLAYER_ENTERING_WORLD` (an initial login).
+/// The SavedVariables the next login sets (after `mock.reloadUI`).
+pub fn keep_saved(saved: Vec<(String, crate::saved::Saved)>) {
+    STATE.with(|s| s.borrow_mut().saved = Some(saved));
+}
+
+/// Forgets SavedVariables no login took.
+pub fn drop_saved() {
+    STATE.with(|s| s.borrow_mut().saved = None);
+}
+
+/// Logging in: the SavedVariables a reload kept set before `ADDON_LOADED`,
+/// then `PLAYER_ENTERING_WORLD` with `isInitialLogin` or `isReloadingUi`.
 pub fn login(vm: &mut Vm, addon: &str) {
+    let saved = STATE.with(|s| s.borrow_mut().saved.take());
+    let reloading = saved.is_some();
+    if let Some(saved) = &saved {
+        crate::saved::restore(vm, saved);
+    }
     let name = vm.str(addon);
     wowlua_engine::widgets::fire_event(vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
     wowlua_engine::widgets::fire_event(vm, "PLAYER_LOGIN", &[]);
     wowlua_engine::widgets::fire_event(
         vm,
         "PLAYER_ENTERING_WORLD",
-        &[Value::Bool(true), Value::Bool(false)],
+        &[Value::Bool(!reloading), Value::Bool(reloading)],
     );
 }
 

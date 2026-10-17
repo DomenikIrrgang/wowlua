@@ -10,6 +10,7 @@ pub mod coverage;
 mod natives;
 mod profile;
 pub mod reports;
+mod saved;
 mod snapshots;
 
 pub use snapshots::Summary as SnapshotSummary;
@@ -250,14 +251,15 @@ fn run_file(suite: &Suite, file: &TestFile, filter: Option<&str>) -> FileResult 
         coverage: None,
     };
     snapshots::begin(&suite.root.join(&file.rel), suite.update_snapshots);
-    match load(suite, file) {
+    natives::reset();
+    match load(suite, file, None) {
         Ok(mut state) => {
-            run_tests(suite, &mut state, filter, &mut result);
-            if let Some(cov) = &state.vm.coverage {
-                let map = |chunk: &str| -> Option<String> {
-                    counted(chunk).then(|| source_of(suite, chunk))
-                };
-                result.coverage = Some(coverage::collect(&state.vm, cov, &suite.root, &map));
+            run_tests(suite, file, &mut state, filter, &mut result);
+            if let Some(mut report) = coverage_of(suite, &state.vm) {
+                for extra in &state.reloaded_coverage {
+                    report.merge(extra);
+                }
+                result.coverage = Some(report);
             }
             let all_ran = filter.is_none() && result.error.is_none();
             match snapshots::finish(all_ran) {
@@ -272,19 +274,40 @@ fn run_file(suite: &Suite, file: &TestFile, filter: Option<&str>) -> FileResult 
     result
 }
 
+/// The counts of a VM's run, by source file.
+fn coverage_of(suite: &Suite, vm: &Vm) -> Option<coverage::Report> {
+    let cov = vm.coverage.as_ref()?;
+    let map = |chunk: &str| -> Option<String> { counted(chunk).then(|| source_of(suite, chunk)) };
+    Some(coverage::collect(vm, cov, &suite.root, &map))
+}
+
 /// A test file's VM, loaded: the registry `wowlua:test` filled.
 struct Loaded {
     vm: Vm,
     tests: TableRef,
+    /// The variables the TOC saves.
+    saved: Vec<String>,
+    /// The coverage of the VMs `mock.reloadUI` made and dropped.
+    reloaded_coverage: Vec<coverage::Report>,
 }
 
-fn load(suite: &Suite, file: &TestFile) -> Result<Loaded, String> {
+/// After `mock.reloadUI`: the pass, and the clock's time, which goes on.
+struct Reload {
+    pass: usize,
+    now: f64,
+    elapsed_ms: f64,
+}
+
+fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loaded, String> {
     let build = suite.build;
     let dir = &build.dir;
     let name = build.addon_name.clone();
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, &suite.flavor)?;
-    natives::reset();
+    if let Some(r) = reload {
+        vm.clock.now = r.now;
+        vm.clock.elapsed_ms = r.elapsed_ms;
+    }
     if suite.coverage {
         vm.enable_coverage(Box::new(|chunk: &[u8]| {
             counted(&String::from_utf8_lossy(
@@ -312,6 +335,9 @@ fn load(suite: &Suite, file: &TestFile) -> Result<Loaded, String> {
     let controls = wowlua_engine::controls::table(&mut vm);
     natives::extend(&mut vm, controls, &name);
     set(&mut vm, wl, "mockEngine", Value::Table(controls));
+    if let Some(r) = reload {
+        set(&mut vm, wl, "reloads", Value::Num(r.pass as f64));
+    }
     wowlua_engine::widgets::keep(&mut vm, Value::Table(ns));
     let table = Value::Table(ns);
     // The world profile, before the addon (decision T213).
@@ -332,6 +358,7 @@ fn load(suite: &Suite, file: &TestFile) -> Result<Loaded, String> {
     }
     let toc = toc_path(build, &suite.flavor).ok_or("the build has no TOC file")?;
     let toc_text = std::fs::read_to_string(dir.join(&toc)).map_err(|e| e.to_string())?;
+    let saved = saved::names(&wowlua_toc::parse(&toc_text));
     let listed: Vec<String> = wowlua_toc::parse(&toc_text)
         .files
         .iter()
@@ -396,7 +423,12 @@ fn load(suite: &Suite, file: &TestFile) -> Result<Loaded, String> {
     if !manual {
         natives::login(&mut vm, &name);
     }
-    Ok(Loaded { vm, tests })
+    Ok(Loaded {
+        vm,
+        tests,
+        saved,
+        reloaded_coverage: Vec::new(),
+    })
 }
 
 /// The TOC the client would read for the flavor: the flavor's own
@@ -443,24 +475,36 @@ fn timeout_of(vm: &mut Vm, tests: TableRef) -> f64 {
 
 const FRAME_MS: f64 = 1000.0 / 60.0;
 
-/// Steps a job until it finishes: `Pass`, or `Fail`.
+/// Steps a job until it finishes (a reload outside a test fails it).
 fn drive(vm: &mut Vm, tests: TableRef, job: Value) -> Outcome {
+    drive_inner(vm, tests, job).unwrap_or_else(|| Outcome::Fail {
+        message: "mock.reloadUI runs only in a test".into(),
+        stack: String::new(),
+    })
+}
+
+/// Steps a job until it finishes (`None`: at `mock.reloadUI`; resumed,
+/// the job ends the pass and runs its teardown).
+fn drive_inner(vm: &mut Vm, tests: TableRef, job: Value) -> Option<Outcome> {
     let step = get(vm, tests, "step");
     loop {
         let r = match vm.call(step, &[job]) {
             Ok(r) => r,
             Err(e) => {
-                return Outcome::Fail {
+                return Some(Outcome::Fail {
                     message: error_text(vm, &e),
                     stack: e.traceback.clone(),
-                };
+                });
             }
         };
         let status = r.first().map(|&v| text(vm, v)).unwrap_or_default();
         match status.as_str() {
-            "pass" => return Outcome::Pass,
+            "pass" => return Some(Outcome::Pass),
             "wait" => {
                 let kind = r.get(1).map(|&v| text(vm, v)).unwrap_or_default();
+                if kind == "reload" {
+                    return None;
+                }
                 let amount = match r.get(2) {
                     Some(Value::Num(n)) => *n,
                     _ => 1.0,
@@ -472,12 +516,12 @@ fn drive(vm: &mut Vm, tests: TableRef, job: Value) -> Outcome {
                 };
                 let limit = timeout_of(vm, tests) * 1000.0 / FRAME_MS;
                 if frames > limit.ceil() {
-                    return Outcome::Fail {
+                    return Some(Outcome::Fail {
                         message: format!(
                             "a wait of {amount} {kind} is longer than the test's timeout"
                         ),
                         stack: String::new(),
-                    };
+                    });
                 }
                 let target = wowlua_engine::clock::now(vm) + amount;
                 wowlua_engine::clock::advance_frames(vm, frames.max(0.0) as usize, FRAME_MS);
@@ -491,7 +535,7 @@ fn drive(vm: &mut Vm, tests: TableRef, job: Value) -> Outcome {
             _ => {
                 let message = r.get(1).map(|&v| text(vm, v)).unwrap_or_default();
                 let stack = r.get(2).map(|&v| text(vm, v)).unwrap_or_default();
-                return Outcome::Fail { message, stack };
+                return Some(Outcome::Fail { message, stack });
             }
         }
     }
@@ -598,7 +642,107 @@ fn plan(
     planned
 }
 
-fn run_tests(suite: &Suite, state: &mut Loaded, filter: Option<&str>, result: &mut FileResult) {
+/// The most passes a test may reload into.
+const MAX_RELOADS: usize = 10;
+
+fn failed(message: String) -> Outcome {
+    Outcome::Fail {
+        message,
+        stack: String::new(),
+    }
+}
+
+/// A test, with its passes after `mock.reloadUI`: each in a fresh VM with
+/// the SavedVariables kept, the clock going on; the file's VM stays the
+/// first pass's.
+fn run_one(suite: &Suite, file: &TestFile, state: &mut Loaded, p: &Planned) -> Outcome {
+    let tests = state.tests;
+    let job = match start(&mut state.vm, tests, "test", Some(p.index), p.case) {
+        Ok(job) => job,
+        Err(e) => return failed(e),
+    };
+    if let Some(o) = drive_inner(&mut state.vm, tests, job) {
+        return o;
+    }
+    // The first pass ends: its teardown runs in the file's VM.
+    let mut saved = saved::capture(&mut state.vm, &state.saved);
+    let mut clock = (state.vm.clock.now, state.vm.clock.elapsed_ms);
+    if let Some(o @ Outcome::Fail { .. }) = drive_inner(&mut state.vm, tests, job) {
+        return o;
+    }
+    let mut pass = 0;
+    let outcome = loop {
+        pass += 1;
+        if pass > MAX_RELOADS {
+            break failed(format!(
+                "the test reloaded the UI more than {MAX_RELOADS} times"
+            ));
+        }
+        natives::keep_saved(saved.clone());
+        let reload = Reload {
+            pass,
+            now: clock.0,
+            elapsed_ms: clock.1,
+        };
+        let mut fresh = match load(suite, file, Some(&reload)) {
+            Ok(l) => l,
+            Err(e) => break failed(format!("reloading the UI: {e}")),
+        };
+        let pending = natives::unread_errors();
+        if !pending.is_empty() {
+            break failed(format!(
+                "an error reached the error handler while reloading:\n{}",
+                pending.join("\n")
+            ));
+        }
+        let tests = fresh.tests;
+        let vm = &mut fresh.vm;
+        let ended = match start(vm, tests, "beforeAll", None, None) {
+            Ok(job) => match drive(vm, tests, job) {
+                Outcome::Fail { message, .. } => Some(failed(format!(
+                    "@beforeAll failed after the reload: {message}"
+                ))),
+                _ => None,
+            },
+            Err(e) => Some(failed(e)),
+        };
+        let ended = ended.or_else(|| {
+            let job = match start(vm, tests, "test", Some(p.index), p.case) {
+                Ok(job) => job,
+                Err(e) => return Some(failed(e)),
+            };
+            let done = drive_inner(vm, tests, job);
+            if done.is_none() {
+                saved = saved::capture(vm, &fresh.saved);
+                clock = (vm.clock.now, vm.clock.elapsed_ms);
+                if let Some(o @ Outcome::Fail { .. }) = drive_inner(vm, tests, job) {
+                    return Some(o);
+                }
+            }
+            done
+        });
+        if let Ok(job) = start(vm, tests, "afterAll", None, None) {
+            let _ = drive(vm, tests, job);
+        }
+        if let Some(report) = coverage_of(suite, &fresh.vm) {
+            state.reloaded_coverage.push(report);
+        }
+        if let Some(o) = ended {
+            break o;
+        }
+    };
+    // A reload's SavedVariables a manual lifecycle never logged in with.
+    natives::drop_saved();
+    outcome
+}
+
+fn run_tests(
+    suite: &Suite,
+    file: &TestFile,
+    state: &mut Loaded,
+    filter: Option<&str>,
+    result: &mut FileResult,
+) {
     let tests = state.tests;
     let vm = &mut state.vm;
     let planned = plan(vm, tests, &suite.flavor, &result.file, filter);
@@ -658,13 +802,8 @@ fn run_tests(suite: &Suite, state: &mut Loaded, filter: Option<&str>, result: &m
             continue;
         }
         let started = Instant::now();
-        let mut outcome = match start(vm, tests, "test", Some(p.index), p.case) {
-            Ok(job) => drive(vm, tests, job),
-            Err(e) => Outcome::Fail {
-                message: e,
-                stack: String::new(),
-            },
-        };
+        let mut outcome = run_one(suite, file, state, p);
+        let vm = &mut state.vm;
         // An error no test read (`mock.errors()`) fails the test, and so
         // does a protected action refused because of taint (with its taint
         // chain) that no test expected (`toBeBlocked`, `mock.refusals()`).
@@ -694,6 +833,7 @@ fn run_tests(suite: &Suite, state: &mut Loaded, filter: Option<&str>, result: &m
             seconds: started.elapsed().as_secs_f64(),
         });
     }
+    let vm = &mut state.vm;
     if let Ok(job) = start(vm, tests, "afterAll", None, None)
         && let Outcome::Fail { message, .. } = drive(vm, tests, job)
     {
