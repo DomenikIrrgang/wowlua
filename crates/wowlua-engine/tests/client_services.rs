@@ -105,15 +105,15 @@ local f = CreateFrame('Frame')
 f:RegisterEvent('CHAT_MSG_ADDON')
 f:SetScript('OnEvent', function(_, _, _, msg, _, sender) Got[#Got + 1] = msg .. ' from ' .. sender end)
 C_ChatInfo.RegisterAddonMessagePrefix('P')
-mock.player:setName('Suther', 'Stargazer')
-C_ChatInfo.SendAddonMessage('P', 'first', 'WHISPER', 'Suther')
-C_ChatInfo.SendAddonMessage('P', 'full', 'WHISPER', 'Suther Stargazer')
+mock.player:setName('Tamsin', 'Ashford')
+C_ChatInfo.SendAddonMessage('P', 'first', 'WHISPER', 'Tamsin')
+C_ChatInfo.SendAddonMessage('P', 'full', 'WHISPER', 'Tamsin Ashford')
 local first, last = UnitName('player')
 local full, second = UnitFullName('player')
 return first, last, full, second",
     );
-    assert_eq!(r, ["Suther", "Stargazer", "Suther", "Stargazer"]);
+    assert_eq!(r, ["Tamsin", "Ashford", "Tamsin", "Ashford"]);
     wowlua_engine::clock::advance_frames(&mut vm, 2, 1000.0 / 60.0);
     let got = run(&mut vm, "return table.concat(Got, ' | ')");
-    assert_eq!(got, ["full from Suther Stargazer"]);
+    assert_eq!(got, ["full from Tamsin Ashford"]);
 }

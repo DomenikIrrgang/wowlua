@@ -36,7 +36,7 @@ pub struct Unit {
     pub name: String,
     pub realm: Option<String>,
     /// WoW Forever's characters' last name: `UnitName`'s second value there
-    /// (`/stdtest engine`: "Suther", "Stargazer"), not the realm.
+    /// (`/stdtest engine`: the first name, then the last), not the realm.
     pub last_name: Option<String>,
     pub level: f64,
     /// The class's file name (`WARRIOR`), its name and ID.
