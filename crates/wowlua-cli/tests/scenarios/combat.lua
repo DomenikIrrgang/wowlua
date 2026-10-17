@@ -28,13 +28,23 @@ e.defineSpell(78, { name = "Heroic Strike", powerCost = 15, nextSwing = true })
 -- The instant spell on slot 10: no target (its SENT names none).
 e.defineSpell(1259718, { targeted = false })
 local now = 0
+-- Time passes in frames, as in the client (60 a second: Blizzard's
+-- animations and OnUpdate code run), the rest of a step as one jump.
 local function at(t)
-    e.advanceTime(t - now)
+    local frames = math.floor((t - now) * 60)
+    if frames > 0 then
+        e.advanceFrames(frames, 1000 / 60)
+    end
+    e.advanceTime(math.max(0, t - now - frames / 60))
     now = t
 end
 at(2.561) player:target(wolf)
+local main = TargetFrame.TargetFrameContent.TargetFrameContentMain
+check("the target frame: Young Wolf, level 1", TargetFrame:IsShown() and main.Name:GetText() == "Young Wolf" and main.LevelText:GetText() == "1")
 at(2.864) player:startAttack()
 at(4.330) player:swing(wolf, 6, { power = 4 })
+local attackIcon = PlayerFrame.PlayerFrameContent.PlayerFrameContentContextual.AttackIcon
+check("in combat: the player frame's combat icon", attackIcon:IsVisible())
 wolf:setThreat(5)
 at(4.434) wolf:target(player)
 wolf:swing(player, 2, { victimPower = 7 })
@@ -70,4 +80,28 @@ at(20.808) player:heal(1)
 -- The corpse clicked: targeted, looted with autoloot.
 at(21.077) player:target(wolf)
 player:loot(wolf, { auto = true })
+at(21.700) check("the loot window open", LootFrame:IsShown())
 at(22.921)
+-- What Blizzard's UI shows at the end.
+local function chatHas(frame, text)
+    for i = 1, frame:GetNumMessages() do
+        if (frame:GetMessageInfo(i)) == text then return true end
+    end
+    return false
+end
+check("the target cleared: its frame hidden", not TargetFrame:IsShown())
+check("out of combat: no combat icon", not attackIcon:IsVisible())
+check("the loot window closed", not LootFrame:IsShown())
+check("chat: the skill up", chatHas(ChatFrame1, "Your skill in Defense has increased to 4."))
+check("chat: the loot", chatHas(ChatFrame1, "You receive loot: |cnIQ0:|Hitem:7073::::::::1:1491:::::::::|h[Broken Fang]|h|r")
+    and chatHas(ChatFrame1, "You receive loot: |cnIQ0:|Hitem:7074::::::::1:1491:::::::::|h[Chipped Claw]|h|r"))
+check("the combat log tab: the experience", chatHas(ChatFrame2, "Young Wolf dies, you gain 50 experience."))
+local xpBar
+local function find(f, depth)
+    if depth > 5 or not f or f:IsForbidden() or xpBar then return end
+    if f:IsObjectType("StatusBar") and f:IsVisible() then xpBar = f return end
+    for _, c in ipairs({ f:GetChildren() }) do find(c, depth + 1) end
+end
+find(MainStatusTrackingBarContainer, 0)
+local _, xpMax = xpBar:GetMinMaxValues()
+check("the experience bar: 151 of 400", xpBar:GetValue() == 151 and xpMax == 400)

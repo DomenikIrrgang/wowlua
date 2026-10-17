@@ -519,13 +519,15 @@ fn unit_token_from_guid(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn unit_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    let home = engine(vm).units.list[PLAYER.0].realm.clone();
     with_unit(vm, &c, |vm, u| {
         // On WoW Forever the second value is the last name; elsewhere a
-        // player from another realm's realm.
+        // player from another realm's realm (the player's own realm none).
+        let other_realm = u.realm.as_ref().filter(|r| Some(*r) != home.as_ref());
         let second = u
             .last_name
             .as_ref()
-            .or(u.realm.as_ref())
+            .or(other_realm)
             .map_or(Value::Nil, |r| vm.str(r));
         vec![vm.str(&u.name), second]
     })

@@ -741,7 +741,9 @@ fn usage_num(vm: &mut Vm, c: &NativeCall, n: usize, usage: &str) -> Result<f64, 
     if matches!(c.arg(n), Value::Secret(_)) && !vm.can_access_secrets() {
         return Err(vm.secret_usage_error(n, usage));
     }
-    match vm.tonumber(c.arg(n)) {
+    // Secure code may use a secret: its hidden value.
+    let v = vm.hidden(c.arg(n));
+    match vm.tonumber(v) {
         Some(x) => Ok(x),
         None => Err(vm.arg_error(n, usage)),
     }
@@ -749,6 +751,16 @@ fn usage_num(vm: &mut Vm, c: &NativeCall, n: usize, usage: &str) -> Result<f64, 
 
 fn num(x: f64) -> Ret {
     Ok(vec![Value::Num(x)])
+}
+
+/// A math extension's results: secret when any argument was (secure code
+/// computing from a secret gets a secret, decision T195).
+fn secretly(vm: &mut Vm, c: &NativeCall, r: Ret) -> Ret {
+    let secret = c.args.iter().any(|a| matches!(a, Value::Secret(_)));
+    if !secret {
+        return r;
+    }
+    Ok(r?.into_iter().map(|v| vm.secret_wrap(v)).collect())
 }
 
 /// C's `round`: halves away from zero.
@@ -761,28 +773,43 @@ fn round_half_away(x: f64) -> f64 {
 }
 
 fn clamp(vm: &mut Vm, c: NativeCall) -> Ret {
+    let r = clamp_plain(vm, &c);
+    secretly(vm, &c, r)
+}
+
+fn clamp_plain(vm: &mut Vm, c: &NativeCall) -> Ret {
     const USAGE: &str = "Usage: local clampedValue = math.clamp(value, minimum, maximum)";
-    let v = usage_num(vm, &c, 1, USAGE)?;
-    let lo = usage_num(vm, &c, 2, USAGE)?;
-    let hi = usage_num(vm, &c, 3, USAGE)?;
+    let v = usage_num(vm, c, 1, USAGE)?;
+    let lo = usage_num(vm, c, 2, USAGE)?;
+    let hi = usage_num(vm, c, 3, USAGE)?;
     // `fmin(fmax(value, minimum), maximum)`: NaN gives the minimum.
     num(v.max(lo).min(hi))
 }
 
 fn round(vm: &mut Vm, c: NativeCall) -> Ret {
+    let r = round_plain(vm, &c);
+    secretly(vm, &c, r)
+}
+
+fn round_plain(vm: &mut Vm, c: &NativeCall) -> Ret {
     const USAGE: &str = "Usage: local roundedValue = math.round(value [, decimalPlaces])";
-    let v = usage_num(vm, &c, 1, USAGE)?;
+    let v = usage_num(vm, c, 1, USAGE)?;
     let d = if c.arg(2).is_nil() {
         0.0
     } else {
-        usage_num(vm, &c, 2, USAGE)?
+        usage_num(vm, c, 2, USAGE)?
     };
     let m = 10f64.powf(d);
     num(round_half_away(v * m) / m)
 }
 
 fn sign(vm: &mut Vm, c: NativeCall) -> Ret {
-    let v = usage_num(vm, &c, 1, "Usage: local sign = math.sign(value)")?;
+    let r = sign_plain(vm, &c);
+    secretly(vm, &c, r)
+}
+
+fn sign_plain(vm: &mut Vm, c: &NativeCall) -> Ret {
+    let v = usage_num(vm, c, 1, "Usage: local sign = math.sign(value)")?;
     // NaN counts as negative.
     num(if v > 0.0 {
         1.0
@@ -794,10 +821,15 @@ fn sign(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn wrap(vm: &mut Vm, c: NativeCall) -> Ret {
+    let r = wrap_plain(vm, &c);
+    secretly(vm, &c, r)
+}
+
+fn wrap_plain(vm: &mut Vm, c: &NativeCall) -> Ret {
     const USAGE: &str = "Usage: local wrapped = math.wrap(value, minimum, maximum)";
-    let v = usage_num(vm, &c, 1, USAGE)?;
-    let lo = usage_num(vm, &c, 2, USAGE)?;
-    let hi = usage_num(vm, &c, 3, USAGE)?;
+    let v = usage_num(vm, c, 1, USAGE)?;
+    let lo = usage_num(vm, c, 2, USAGE)?;
+    let hi = usage_num(vm, c, 3, USAGE)?;
     // An empty or reversed range gives the minimum.
     if hi <= lo {
         return num(lo);
@@ -806,10 +838,15 @@ fn wrap(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn lerp(vm: &mut Vm, c: NativeCall) -> Ret {
+    let r = lerp_plain(vm, &c);
+    secretly(vm, &c, r)
+}
+
+fn lerp_plain(vm: &mut Vm, c: &NativeCall) -> Ret {
     const USAGE: &str = "Usage: local interpolatedValue = math.lerp(startValue, endValue, amount)";
-    let a = usage_num(vm, &c, 1, USAGE)?;
-    let b = usage_num(vm, &c, 2, USAGE)?;
-    let t = usage_num(vm, &c, 3, USAGE)?;
+    let a = usage_num(vm, c, 1, USAGE)?;
+    let b = usage_num(vm, c, 2, USAGE)?;
+    let t = usage_num(vm, c, 3, USAGE)?;
     num(a + (b - a) * t)
 }
 
@@ -819,27 +856,42 @@ fn normalized(v: f64, lo: f64, hi: f64) -> f64 {
 }
 
 fn normalize(vm: &mut Vm, c: NativeCall) -> Ret {
+    let r = normalize_plain(vm, &c);
+    secretly(vm, &c, r)
+}
+
+fn normalize_plain(vm: &mut Vm, c: &NativeCall) -> Ret {
     const USAGE: &str = "Usage: local normalizedValue = math.normalize(value, minimum, maximum)";
-    let v = usage_num(vm, &c, 1, USAGE)?;
-    let lo = usage_num(vm, &c, 2, USAGE)?;
-    let hi = usage_num(vm, &c, 3, USAGE)?;
+    let v = usage_num(vm, c, 1, USAGE)?;
+    let lo = usage_num(vm, c, 2, USAGE)?;
+    let hi = usage_num(vm, c, 3, USAGE)?;
     num(normalized(v, lo, hi))
 }
 
 fn remap(vm: &mut Vm, c: NativeCall) -> Ret {
+    let r = remap_plain(vm, &c);
+    secretly(vm, &c, r)
+}
+
+fn remap_plain(vm: &mut Vm, c: &NativeCall) -> Ret {
     const USAGE: &str = "Usage: local remappedValue = math.remap(value, sourceMinimum, sourceMaximum, destinationMinimum, destinationMaximum)";
-    let v = usage_num(vm, &c, 1, USAGE)?;
-    let a = usage_num(vm, &c, 2, USAGE)?;
-    let b = usage_num(vm, &c, 3, USAGE)?;
-    let x = usage_num(vm, &c, 4, USAGE)?;
-    let y = usage_num(vm, &c, 5, USAGE)?;
+    let v = usage_num(vm, c, 1, USAGE)?;
+    let a = usage_num(vm, c, 2, USAGE)?;
+    let b = usage_num(vm, c, 3, USAGE)?;
+    let x = usage_num(vm, c, 4, USAGE)?;
+    let y = usage_num(vm, c, 5, USAGE)?;
     num(x + (y - x) * normalized(v, a, b))
 }
 
 fn saturate(vm: &mut Vm, c: NativeCall) -> Ret {
+    let r = saturate_plain(vm, &c);
+    secretly(vm, &c, r)
+}
+
+fn saturate_plain(vm: &mut Vm, c: &NativeCall) -> Ret {
     let v = usage_num(
         vm,
-        &c,
+        c,
         1,
         "Usage: local saturatedValue = math.saturate(value)",
     )?;
@@ -849,17 +901,32 @@ fn saturate(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn isnan(vm: &mut Vm, c: NativeCall) -> Ret {
-    let v = usage_num(vm, &c, 1, "Usage: local nan = math.isnan(value)")?;
+    let r = isnan_plain(vm, &c);
+    secretly(vm, &c, r)
+}
+
+fn isnan_plain(vm: &mut Vm, c: &NativeCall) -> Ret {
+    let v = usage_num(vm, c, 1, "Usage: local nan = math.isnan(value)")?;
     Ok(vec![Value::Bool(v.is_nan())])
 }
 
 fn isinf(vm: &mut Vm, c: NativeCall) -> Ret {
-    let v = usage_num(vm, &c, 1, "Usage: local infinite = math.isinf(value)")?;
+    let r = isinf_plain(vm, &c);
+    secretly(vm, &c, r)
+}
+
+fn isinf_plain(vm: &mut Vm, c: &NativeCall) -> Ret {
+    let v = usage_num(vm, c, 1, "Usage: local infinite = math.isinf(value)")?;
     Ok(vec![Value::Bool(v.is_infinite())])
 }
 
 fn isfinite(vm: &mut Vm, c: NativeCall) -> Ret {
-    let v = usage_num(vm, &c, 1, "Usage: local finite = math.isfinite(value)")?;
+    let r = isfinite_plain(vm, &c);
+    secretly(vm, &c, r)
+}
+
+fn isfinite_plain(vm: &mut Vm, c: &NativeCall) -> Ret {
+    let v = usage_num(vm, c, 1, "Usage: local finite = math.isfinite(value)")?;
     Ok(vec![Value::Bool(v.is_finite())])
 }
 

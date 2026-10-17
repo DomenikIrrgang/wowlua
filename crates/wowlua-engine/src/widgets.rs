@@ -2235,21 +2235,26 @@ fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
             }
         };
         if let Some(fid) = widget_of(vm, fs) {
-            engine_mut(vm).world.widgets[fid.0].text = match c.arg(2) {
-                Value::Nil => None,
-                v => Some(v),
-            };
+            let t = kept_text(vm, c.arg(2));
+            engine_mut(vm).world.widgets[fid.0].text = t;
         }
     }
-    let t = match c.arg(2) {
-        Value::Nil => None,
-        v => Some(v),
-    };
+    let t = kept_text(vm, c.arg(2));
     engine_mut(vm).world.widgets[id.0].text = t;
     if is_a(engine(vm), &class, "EditBox") && !engine(vm).world.text_set.contains(&id) {
         engine_mut(vm).world.text_set.push(id);
     }
     Ok(vec![])
+}
+
+/// A text as a widget keeps it: a number as its string (`SetText(1)` reads
+/// back "1"; unverified, queued: answers' "FontString SetText number").
+fn kept_text(vm: &mut Vm, v: Value) -> Option<Value> {
+    match v {
+        Value::Nil => None,
+        Value::Num(_) => vm.tostring(v).ok(),
+        v => Some(v),
+    }
 }
 
 fn get_text(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {

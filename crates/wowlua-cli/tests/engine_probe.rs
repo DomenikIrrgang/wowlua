@@ -765,18 +765,20 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
         &fixtures.join(format!("{name}-before.json")),
     )
     .expect("the character's world");
-    let addon_name = vm.str("StdTest");
-    wowlua_engine::widgets::fire_event(&mut vm, "ADDON_LOADED", &[addon_name, Value::Bool(false)]);
-    wowlua_engine::widgets::fire_event(&mut vm, "PLAYER_LOGIN", &[]);
-    wowlua_engine::widgets::fire_event(
-        &mut vm,
-        "PLAYER_ENTERING_WORLD",
-        &[Value::Bool(true), Value::Bool(false)],
-    );
-    wowlua_engine::widgets::fire_event(&mut vm, "VARIABLES_LOADED", &[]);
+    // Logged in as the client logs in (the recorded login: the chat
+    // windows set up, …), as `wowlua test` does.
+    wowlua_engine::login::login(&mut vm, "StdTest", true, false);
     wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
     let errors_before = wowlua_engine::engine(&vm).world.ui.errors.len();
     addon(&mut vm, &format!("StdTestEngineProbe('scenario {name}')"));
+    // What the UI shows, checked by the play script: `check(label, ok)`
+    // collects the failures, `note(...)` what it saw.
+    addon(
+        &mut vm,
+        "ScenarioFailures, ScenarioNotes = {}, {}
+function check(label, ok) if not ok then ScenarioFailures[#ScenarioFailures + 1] = label end end
+function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((select(i, ...))) end ScenarioNotes[#ScenarioNotes + 1] = table.concat(t, ' ') end",
+    );
     let script =
         fs::read_to_string(repo().join(format!("crates/wowlua-cli/tests/scenarios/{name}.lua")))
             .expect("the play script");
@@ -814,10 +816,93 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
         .collect();
     theirs.sort();
     let theirs: Vec<String> = theirs.into_iter().map(|(_, v)| v).collect();
-    let errors: Vec<String> = wowlua_engine::engine(&vm).world.ui.errors[errors_before..].to_vec();
+    let mut errors: Vec<String> =
+        wowlua_engine::engine(&vm).world.ui.errors[errors_before..].to_vec();
+    for (global, label) in [
+        ("ScenarioNotes", "note"),
+        ("ScenarioFailures", "UI check failed"),
+    ] {
+        let Value::Table(t) = vm.get_global(global) else {
+            continue;
+        };
+        let n = vm.heap.table(t).border();
+        for i in 1..=n {
+            let line = text(&vm, vm.heap.table(t).get(Value::Num(i as f64)));
+            if label == "note" {
+                eprintln!("note: {line}");
+            } else {
+                errors.push(format!("{label}: {line}"));
+            }
+        }
+    }
+    errors.extend(end_state_differences(
+        &vm,
+        &fixtures.join(format!("{name}-after.json")),
+    ));
     let compared =
         |log: &[String]| -> Vec<String> { log.iter().filter_map(|l| scenario_line(l)).collect() };
     Some((compared(&ours), compared(&theirs), errors))
+}
+
+/// Where the engine's world at a scenario's end differs from the client's
+/// (its `-after.json` snapshot): the money, the experience, each bag
+/// slot's item and count.
+fn end_state_differences(vm: &Vm, after: &Path) -> Vec<String> {
+    let Ok(text) = fs::read_to_string(after) else {
+        return vec![];
+    };
+    let json: serde_json::Value = serde_json::from_str(&text).expect("a profile");
+    let e = wowlua_engine::engine(vm);
+    let mut out = Vec::new();
+    let money = json["money"].as_f64().unwrap_or(0.0);
+    if e.world.character.money != money {
+        out.push(format!(
+            "end: money {} (client {money})",
+            e.world.character.money
+        ));
+    }
+    if let Some(xp) = json["stats"]["xp"][0].as_f64() {
+        let ours = match e.world.character.stats.get("xp") {
+            Some(wowlua_engine::stats::Entry::One(a)) => match a.first() {
+                Some(wowlua_engine::stats::Answer::Num(n)) => Some(*n),
+                _ => None,
+            },
+            _ => None,
+        };
+        if ours != Some(xp) {
+            out.push(format!("end: xp {ours:?} (client {xp})"));
+        }
+    }
+    if let Some(bags) = json["bags"].as_object() {
+        for (bag, b) in bags {
+            let bag: i64 = bag.parse().unwrap_or(0);
+            let theirs: Vec<(i64, f64)> = b["items"]
+                .as_array()
+                .map(|items| {
+                    items
+                        .iter()
+                        .map(|i| {
+                            (
+                                i["id"].as_i64().unwrap_or(0),
+                                i["count"].as_f64().unwrap_or(1.0),
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let ours: Vec<(i64, f64)> = e
+                .world
+                .character
+                .bags
+                .get(&bag)
+                .map(|b| b.items.values().map(|h| (h.id, h.count)).collect())
+                .unwrap_or_default();
+            if ours != theirs {
+                out.push(format!("end: bag {bag} {ours:?} (client {theirs:?})"));
+            }
+        }
+    }
+    out
 }
 
 /// A scenario log's line as compared: without its time; none for the
