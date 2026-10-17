@@ -1093,7 +1093,7 @@ pub enum TableField<'t> {
 
 impl<'t> TableField<'t> {
     fn at(t: &'t Tree, i: u32) -> Self {
-        match t.fields[i as usize] {
+        match t.field(i) {
             tree::FieldData::Keyed {
                 key,
                 value,

@@ -272,6 +272,24 @@ pub(crate) enum ArgsData {
     String(u32),
 }
 
+/// A table field in 12 bytes (#19): three words, the kind in the top bits of
+/// the third. A data addon's tables have millions of fields.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct FieldNode {
+    a: u32,
+    b: u32,
+    c: u32,
+}
+
+const FIELD_KIND: u32 = 30;
+const FIELD_LOW: u32 = (1 << FIELD_KIND) - 1;
+const KEYED: u32 = 0;
+const NAMED: u32 = 1;
+const POSITIONAL: u32 = 2;
+/// In `wide_fields`, at `a`: a name ending or a span numbered past
+/// `FIELD_LOW` (a 1 GiB file).
+const WIDE: u32 = 3;
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum FieldData {
     /// `spans`: the field's span.
@@ -660,7 +678,8 @@ pub struct Tree {
     pub(crate) strbuf: Vec<u8>,
     pub(crate) interps: Vec<InterpData>,
     pub(crate) args: Vec<ArgsData>,
-    pub(crate) fields: Vec<FieldData>,
+    pub(crate) fields: Vec<FieldNode>,
+    pub(crate) wide_fields: Vec<FieldData>,
     pub(crate) spans: Vec<Sp>,
     pub(crate) types: Vec<TypeNode>,
     pub(crate) type_args: Vec<TypeArgData>,
@@ -707,6 +726,7 @@ macro_rules! arrays {
             interps,
             args,
             fields,
+            wide_fields,
             spans,
             types,
             type_args,
@@ -790,6 +810,52 @@ impl Tree {
         })
     }
 
+    /// Field `i`.
+    #[inline]
+    pub(crate) fn field(&self, i: u32) -> FieldData {
+        let FieldNode { a, b, c } = self.fields[i as usize];
+        match c >> FIELD_KIND {
+            KEYED => FieldData::Keyed {
+                key: a,
+                value: b,
+                span: c & FIELD_LOW,
+            },
+            NAMED => FieldData::Named {
+                name: Sp {
+                    start: a,
+                    end: c & FIELD_LOW,
+                },
+                value: b,
+            },
+            POSITIONAL => FieldData::Positional(a),
+            _ => self.wide_fields[a as usize],
+        }
+    }
+
+    /// Stores field `f` (`fields` holds what `pack_field` returns).
+    pub(crate) fn pack_field(&mut self, f: FieldData) -> FieldNode {
+        let node = |a, b, low: u32, kind| {
+            (low <= FIELD_LOW).then_some(FieldNode {
+                a,
+                b,
+                c: low | kind << FIELD_KIND,
+            })
+        };
+        let packed = match f {
+            FieldData::Keyed { key, value, span } => node(key, value, span, KEYED),
+            FieldData::Named { name, value } => node(name.start, value, name.end, NAMED),
+            FieldData::Positional(value) => node(value, 0, 0, POSITIONAL),
+        };
+        packed.unwrap_or_else(|| {
+            self.wide_fields.push(f);
+            FieldNode {
+                a: self.wide_fields.len() as u32 - 1,
+                b: 0,
+                c: WIDE << FIELD_KIND,
+            }
+        })
+    }
+
     /// Releases the arrays' unused capacity.
     pub(crate) fn shrink(&mut self) {
         macro_rules! shrink {
@@ -840,12 +906,55 @@ mod tests {
     fn nodes_stay_small() {
         assert!(size_of::<Sp>() == 8);
         assert!(size_of::<ExprNode>() <= 24);
-        assert!(size_of::<FieldData>() <= 16);
+        assert!(size_of::<FieldNode>() == 12);
         assert!(size_of::<StrNode>() <= 20);
         assert!(size_of::<TypeNode>() <= 28);
         assert!(size_of::<StmtNode>() <= 40);
         assert!(size_of::<ParamNode>() <= 24);
         assert!(size_of::<FuncNode>() <= 64);
+    }
+
+    // A packed field gives back the field, kept in `wide_fields` when its
+    // name's end or its span's number does not fit.
+    #[test]
+    fn fields_keep_their_parts() {
+        let mut t = Tree::empty(
+            SourceText::new(b""),
+            wowlua_span::SourceDb::new().add("t", ""),
+        );
+        let name = Sp { start: 3, end: 9 };
+        let far = Sp {
+            start: 3,
+            end: FIELD_LOW + 1,
+        };
+        for f in [
+            FieldData::Keyed {
+                key: LEAF | 4,
+                value: 5,
+                span: 6,
+            },
+            FieldData::Keyed {
+                key: 1,
+                value: 2,
+                span: FIELD_LOW + 1,
+            },
+            FieldData::Named {
+                name,
+                value: LEAF | 7,
+            },
+            FieldData::Named {
+                name: far,
+                value: 7,
+            },
+            FieldData::Positional(LEAF | 8),
+            FieldData::Positional(NONE - 1),
+        ] {
+            let node = t.pack_field(f);
+            t.fields.push(node);
+            let back = t.field(t.fields.len() as u32 - 1);
+            assert_eq!(format!("{back:?}"), format!("{f:?}"));
+        }
+        assert_eq!(t.wide_fields.len(), 2);
     }
 
     // A leaf gives back the expression it was made of; one ending past

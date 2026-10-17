@@ -1694,7 +1694,15 @@ impl<'a> Parser<'a> {
         // As in `expr_list`, the fields come off the stack on every path.
         let mark = self.field_stack.len();
         let result = self.table_fields(open.start);
-        let fields = push_all!(self, fields, self.field_stack.drain(mark..));
+        let start = self.t.fields.len() as u32;
+        for f in self.field_stack.drain(mark..) {
+            let node = self.t.pack_field(f);
+            self.t.fields.push(node);
+        }
+        let fields = Range {
+            start,
+            len: self.t.fields.len() as u32 - start,
+        };
         result.map(|()| ExprData::Table(fields))
     }
 
