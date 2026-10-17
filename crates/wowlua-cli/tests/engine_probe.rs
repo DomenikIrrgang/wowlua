@@ -404,12 +404,14 @@ fn the_engine_answers_the_probe_battery_as_the_client_did() {
     );
 }
 
-/// `/stdtest engine input` replayed with the engine's controls: the same
-/// scripts with the same arguments, in the client's order.
+/// `/stdtest engine input` (before its slider) replayed with the engine's
+/// controls: the same scripts with the same arguments, in the client's
+/// order.
 #[test]
 fn the_engine_takes_input_as_the_client_did() {
-    let src = fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-input.lua"))
-        .expect("the fixture");
+    let src =
+        fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-input-typing.lua"))
+            .expect("the fixture");
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
     wowlua_engine::controls::install(&mut vm, "__engine");
@@ -496,11 +498,252 @@ __engine.pressKey("ENTER")"#,
     assert_eq!(ours, client);
 }
 
+/// `/stdtest engine input` with its slider replayed with the engine's
+/// controls: the global mouse events around each click's scripts, an edit
+/// box losing the focus to a click elsewhere, the slider's thumb dragged
+/// (a drag's moves compared by where they end), the wheel over it.
+#[test]
+fn the_engine_takes_mouse_input_as_the_client_did() {
+    let src = fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-input.lua"))
+        .expect("the fixture");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    wowlua_engine::controls::install(&mut vm, "__engine");
+    let f = vm.load(&src, "=fixture").expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let n = vm.heap.table(t).border();
+    // Without the time, and the player's own Cmd presses (not replayed).
+    let client: Vec<String> = (1..=n)
+        .map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s))
+                .split_once(' ')
+                .expect("a time")
+                .1
+                .to_string(),
+            _ => panic!("a string"),
+        })
+        .filter(|l| !l.starts_with("MODIFIER_STATE_CHANGED(LMETA"))
+        .collect();
+    // The wheel's turns, in order, replayed as they came.
+    let wheel: Vec<String> = client
+        .iter()
+        .filter_map(|l| l.strip_prefix("slider OnMouseWheel("))
+        .map(|l| l.split(')').next().unwrap_or("0").to_string())
+        .collect();
+    // Where the thumb was let go.
+    let to = client
+        .iter()
+        .rev()
+        .find_map(|l| l.strip_prefix("slider OnValueChanged("))
+        .and_then(|l| l.split(',').next())
+        .expect("a drag")
+        .to_string();
+    // The probe's frames and scripts (its templates' looks aside).
+    addon(
+        &mut vm,
+        r##"InputLog = {}
+local function note(what) InputLog[#InputLog + 1] = what end
+local b = CreateFrame("Button", "StdTestInputButton", UIParent)
+b:SetSize(160, 28)
+b:SetPoint("CENTER", 0, 60)
+b:RegisterForClicks("AnyUp")
+for _, script in ipairs({ "OnEnter", "OnLeave", "OnMouseDown", "OnMouseUp", "PreClick", "OnClick", "PostClick" }) do
+    b:SetScript(script, function(_, ...)
+        local args = {}
+        for i = 1, select("#", ...) do args[#args + 1] = tostring((select(i, ...))) end
+        note(("button %s(%s) shift=%s"):format(script, table.concat(args, ", "), tostring(IsShiftKeyDown())))
+    end)
+end
+local e = CreateFrame("EditBox", "StdTestInputBox", UIParent)
+e:SetSize(160, 24)
+e:SetPoint("CENTER", 0, 20)
+e:SetAutoFocus(false)
+e:SetText("")
+e:Show()
+for _, script in ipairs({ "OnEditFocusGained", "OnEditFocusLost", "OnChar", "OnTextChanged", "OnEnterPressed", "OnEscapePressed", "OnTabPressed" }) do
+    e:SetScript(script, function(self, ...)
+        local args = {}
+        for i = 1, select("#", ...) do args[#args + 1] = tostring((select(i, ...))) end
+        note(("box %s(%s) text=%s focus=%s"):format(script, table.concat(args, ", "), self:GetText(), tostring(self:HasFocus())))
+        if script == "OnEnterPressed" or script == "OnEscapePressed" then self:ClearFocus() end
+    end)
+end
+local sl = CreateFrame("Slider", "StdTestInputSlider", UIParent)
+sl:SetSize(200, 17)
+sl:SetPoint("CENTER", 0, -20)
+sl:SetMinMaxValues(0, 10)
+sl:SetValueStep(2)
+sl:SetValue(0)
+sl:EnableMouseWheel(true)
+sl:Show()
+for _, script in ipairs({ "OnMouseDown", "OnMouseUp", "OnValueChanged", "OnMouseWheel" }) do
+    sl:SetScript(script, function(self, ...)
+        local args = {}
+        for i = 1, select("#", ...) do args[#args + 1] = tostring((select(i, ...))) end
+        note(("slider %s(%s) value=%s dragging=%s"):format(script, table.concat(args, ", "), tostring(self:GetValue()), tostring(self:IsDraggingThumb())))
+    end)
+end
+local m = CreateFrame("Frame")
+m:RegisterEvent("MODIFIER_STATE_CHANGED")
+m:RegisterEvent("GLOBAL_MOUSE_DOWN")
+m:RegisterEvent("GLOBAL_MOUSE_UP")
+m:SetScript("OnEvent", function(_, event, key, down) note(("%s(%s, %s)"):format(event, key, tostring(down))) end)"##,
+    );
+    wowlua_engine::clock::advance_frames(&mut vm, 1, 1000.0 / 60.0);
+    let turns: Vec<String> = wheel
+        .iter()
+        .map(|d| format!("__engine.wheel(sl, {d})"))
+        .collect();
+    addon(
+        &mut vm,
+        &format!(
+            r#"local b, e, sl = StdTestInputButton, StdTestInputBox, StdTestInputSlider
+__engine.hover(b)
+__engine.click(b)
+__engine.hover(nil)
+__engine.click(e)
+__engine.slide(sl, {to})
+{}"#,
+            turns.join("\n")
+        ),
+    );
+    let ours: Vec<String> = {
+        let log = vm.get_global("InputLog");
+        let Value::Table(t) = log else {
+            panic!("a log")
+        };
+        let n = vm.heap.table(t).border();
+        (1..=n)
+            .map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+                Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+                _ => panic!("a string"),
+            })
+            .collect()
+    };
+    // A drag's moves (after its mouse down) by where they end.
+    let moves = |log: &[String]| -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for l in log {
+            let is_move = l.starts_with("slider OnValueChanged(")
+                && out.last().is_some_and(|p| {
+                    p.starts_with("slider OnValueChanged(") || p.starts_with("slider OnMouseDown(")
+                })
+                && out.iter().any(|p| p.starts_with("slider OnMouseDown("));
+            if is_move
+                && out
+                    .last()
+                    .is_some_and(|p| p.starts_with("slider OnValueChanged("))
+            {
+                out.pop();
+            }
+            out.push(l.clone());
+        }
+        out
+    };
+    assert_eq!(moves(&ours), moves(&client));
+}
+
+/// `/stdtest engine keys` replayed: keyboard frames passing keys on, an
+/// override binding of J clicking a button; J, Shift-J, J kept by the top
+/// frame (it stops propagation in its handler), J past a keyboard frame
+/// without a key script. The same scripts, clicks and order as the client.
+#[test]
+fn the_engine_sends_keys_as_the_client_did() {
+    let src = fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-keys.lua"))
+        .expect("the fixture");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    wowlua_engine::controls::install(&mut vm, "__engine");
+    let f = vm.load(&src, "=fixture").expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let n = vm.heap.table(t).entries().count();
+    let client: Vec<String> = (1..=n)
+        .map(|i| {
+            let k = vm.str(&format!("{i:03}"));
+            match vm.heap.table(t).get(k) {
+                Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+                _ => panic!("a string"),
+            }
+        })
+        .collect();
+    addon(
+        &mut vm,
+        r##"KeyLog = {}
+Phase = 1
+local function note(what) KeyLog[#KeyLog + 1] = ("p%d %s"):format(Phase, what) end
+local owner = CreateFrame("Frame")
+local target = CreateFrame("Button", "StdTestKeyTarget", UIParent)
+target:RegisterForClicks("AnyDown", "AnyUp")
+target:SetScript("OnClick", function(_, button, down) note(("binding click %s down=%s"):format(button, tostring(down))) end)
+SetOverrideBindingClick(owner, true, "J", "StdTestKeyTarget")
+local function keyFrame(name, strata, level)
+    local f = CreateFrame("Frame", nil, UIParent)
+    f:SetFrameStrata(strata)
+    f:SetFrameLevel(level)
+    f:SetSize(10, 10)
+    f:SetPoint("TOPLEFT")
+    f:EnableKeyboard(true)
+    f:SetPropagateKeyboardInput(true)
+    f:SetScript("OnKeyDown", function(self, key)
+        if Phase == 3 and name == "top" and key == "J" then self:SetPropagateKeyboardInput(false) end
+        note(("%s down %s shift=%s propagate=%s"):format(name, key, tostring(IsShiftKeyDown()), tostring(self:GetPropagateKeyboardInput())))
+    end)
+    f:SetScript("OnKeyUp", function(_, key) note(("%s up %s"):format(name, key)) end)
+    return f
+end
+Top = keyFrame("top", "DIALOG", 5)
+keyFrame("high", "HIGH", 10)
+Bare = CreateFrame("Frame", nil, UIParent)
+Bare:SetFrameStrata("MEDIUM")
+Bare:SetSize(10, 10)
+Bare:SetPoint("TOPLEFT")
+Bare:SetScript("OnKeyDown", function() end)
+Bare:SetScript("OnKeyDown", nil)
+Bare:SetPropagateKeyboardInput(false)
+Bare:Hide()"##,
+    );
+    addon(
+        &mut vm,
+        r#"__engine.pressKey("J")
+Phase = 2
+__engine.setModifiers({ shift = true })
+__engine.pressKey("J")
+__engine.setModifiers({})
+Top:SetPropagateKeyboardInput(true)
+Phase = 3
+__engine.pressKey("J")
+Top:SetPropagateKeyboardInput(true)
+Phase = 4
+Bare:Show()
+KeyLog[#KeyLog + 1] = ("p4 bare keyboard %s propagate %s"):format(tostring(Bare:IsKeyboardEnabled()), tostring(Bare:GetPropagateKeyboardInput()))
+__engine.pressKey("J")"#,
+    );
+    let ours: Vec<String> = {
+        let Value::Table(t) = vm.get_global("KeyLog") else {
+            panic!("a log")
+        };
+        let n = vm.heap.table(t).border();
+        (1..=n)
+            .map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+                Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+                _ => panic!("a string"),
+            })
+            .collect()
+    };
+    assert_eq!(ours, client);
+}
+
 /// How many of the client's answers (`/stdtest engine answers`) the engine
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 4818;
+const ANSWERS_MATCHED: usize = 5151;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {
@@ -695,9 +938,6 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         // Differs between the client's sessions (380, 500, then 820) though
         // it lists 20: no stable answer to give.
         "GetNumModifiedClickActions",
-        // One float ulp above the plain conversion in each channel (0.4 →
-        // 0.40000003576279): the formula awaits "ColorSelect hsv more".
-        "ColorSelect hsv",
     ];
     let hex = regex::Regex::new(r"[0-9a-f]{10}").unwrap();
     let mut differ = Vec::new();

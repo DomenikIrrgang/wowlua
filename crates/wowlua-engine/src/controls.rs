@@ -295,6 +295,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("moveTo", crate::character::control_move_to),
         ("hover", crate::input::control_hover),
         ("click", crate::input::control_click),
+        ("slide", crate::input::control_slide),
         ("type", crate::input::control_type),
         ("setModifiers", crate::input::control_set_modifiers),
         ("addToGroup", units::add_to_group),

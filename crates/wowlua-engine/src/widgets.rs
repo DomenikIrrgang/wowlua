@@ -108,8 +108,13 @@ pub struct World {
     pub text_set: Vec<WidgetId>,
     /// A color select's color: red, green, blue, alpha.
     pub colors: HashMap<usize, [f64; 4]>,
+    /// A color select's hue, saturation and value as `SetColorHSV` gave
+    /// them (until a color is set by its red, green and blue).
+    pub color_hsv: HashMap<usize, [f64; 3]>,
     /// A slider's or a status bar's range and value.
     pub bars: HashMap<usize, crate::bars::Bar>,
+    /// The slider whose thumb the user drags.
+    pub dragging_thumb: Option<WidgetId>,
     /// Edit Mode's saved layouts and active one.
     pub edit_mode: crate::editmode::EditMode,
     /// A message frame's messages: its message ID (if given) and the font
@@ -1408,8 +1413,10 @@ fn create_region(vm: &mut Vm, id: WidgetId, c: NativeCall, class: &str) -> Ret {
 
 // --------------------------------------------------------- color selects
 
-/// A color select's color, white until set (recorded, as is
-/// `OnColorSelect` running for a color set by code).
+/// A color select's color, white until set, kept in eight bits each (0.4
+/// reads back 0.40000003576279); `OnColorSelect` runs for a color set by
+/// code; the hue, saturation and value read back as `SetColorHSV` gave
+/// them, else from the kept color (recorded).
 fn color_of(vm: &Vm, id: WidgetId) -> [f64; 4] {
     engine(vm)
         .world
@@ -1421,6 +1428,7 @@ fn color_of(vm: &Vm, id: WidgetId) -> [f64; 4] {
 
 /// Sets a color select's color; `OnColorSelect(r, g, b)` runs.
 fn select_color(vm: &mut Vm, id: WidgetId, rgb: [f64; 3]) {
+    engine_mut(vm).world.color_hsv.remove(&id.0);
     let a = color_of(vm, id)[3];
     engine_mut(vm)
         .world
@@ -1432,7 +1440,7 @@ fn select_color(vm: &mut Vm, id: WidgetId, rgb: [f64; 3]) {
 
 fn set_color_rgb(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let rgb = [2, 3, 4].map(|i| match c.arg(i) {
-        Value::Num(n) => n.clamp(0.0, 1.0),
+        Value::Num(n) => byte_float(n),
         _ => 0.0,
     });
     select_color(vm, id, rgb);
@@ -1455,13 +1463,38 @@ fn set_color_hsv(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         num(c.arg(3)).clamp(0.0, 1.0),
         num(c.arg(4)).clamp(0.0, 1.0),
     );
-    let k = |n: f64| (n + h / 60.0).rem_euclid(6.0);
-    let f = |n: f64| v - v * s * k(n).min(4.0 - k(n)).clamp(0.0, 1.0);
-    select_color(vm, id, [f(5.0), f(3.0), f(1.0)]);
+    // In single floats: the hue times 1/60, the sector's channels, each
+    // byte rounded half to even (recorded: 300 is sector 4 at its end, 0.3
+    // is 76).
+    let (h32, s32, v32) = (h as f32, s as f32, v as f32);
+    let hp = h32 * (1.0f32 / 60.0);
+    let sector = hp.floor();
+    let fr = hp - sector;
+    let p = v32 * (1.0 - s32);
+    let q = v32 * (1.0 - s32 * fr);
+    let t = v32 * (1.0 - s32 * (1.0 - fr));
+    let rgb = match (sector as i32).rem_euclid(6) {
+        0 => [v32, t, p],
+        1 => [q, v32, p],
+        2 => [p, v32, t],
+        3 => [p, q, v32],
+        4 => [t, p, v32],
+        _ => [v32, p, q],
+    };
+    let byte = |x: f32| f64::from((x * 255.0).round_ties_even() * (1.0f32 / 255.0));
+    select_color(vm, id, rgb.map(byte));
+    let single = |x: f64| f64::from(x as f32);
+    engine_mut(vm)
+        .world
+        .color_hsv
+        .insert(id.0, [single(h), single(s), single(v)]);
     Ok(vec![])
 }
 
 fn get_color_hsv(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    if let Some(hsv) = engine(vm).world.color_hsv.get(&id.0) {
+        return Ok(hsv.map(Value::Num).to_vec());
+    }
     let [r, g, b, _] = color_of(vm, id);
     let max = r.max(g).max(b);
     let min = r.min(g).min(b);
@@ -1476,7 +1509,8 @@ fn get_color_hsv(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
         60.0 * ((r - g) / d + 4.0)
     };
     let s = if max == 0.0 { 0.0 } else { d / max };
-    Ok(vec![Value::Num(h), Value::Num(s), Value::Num(max)])
+    let single = |x: f64| Value::Num(f64::from(x as f32));
+    Ok(vec![single(h), single(s), single(max)])
 }
 
 fn set_color_alpha(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {

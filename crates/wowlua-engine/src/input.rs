@@ -10,7 +10,10 @@
 //! `OnTextChanged(true)` per typed character; `MODIFIER_STATE_CHANGED`
 //! with `LSHIFT` and 1 / 0; a click on an edit box focusing it; the focus
 //! scripts' `userInput`, true while the user's action runs (also for a
-//! `ClearFocus` in `OnEnterPressed`).
+//! `ClearFocus` in `OnEnterPressed`); `GLOBAL_MOUSE_DOWN` before the
+//! click's scripts and `GLOBAL_MOUSE_UP` after them, an edit box losing the
+//! focus first to a click elsewhere; a slider's thumb dragged (`slide`).
+//! Keys (`/stdtest engine keys`): see `press_key`.
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
@@ -30,6 +33,9 @@ pub struct Input {
     /// The user's actions running (a click, typing, a key): scripts' and
     /// focus changes' `userInput`.
     pub user_actions: u32,
+    /// Modifier keys held that a keyboard frame kept: its `OnKeyUp` comes
+    /// with their release.
+    pub held_by: Vec<(String, WidgetId)>,
 }
 
 /// Runs `f` as the user's action.
@@ -53,12 +59,38 @@ pub fn control_set_modifiers(vm: &mut Vm, c: NativeCall) -> Ret {
         let held = vm.heap.table(t).get(k).truthy();
         if engine(vm).world.input.modifiers[i] != held {
             engine_mut(vm).world.input.modifiers[i] = held;
-            let key = vm.str(key);
+            let name = vm.str(key);
             crate::widgets::fire_event(
                 vm,
                 "MODIFIER_STATE_CHANGED",
-                &[key, Value::Num(if held { 1.0 } else { 0.0 })],
+                &[name, Value::Num(if held { 1.0 } else { 0.0 })],
             );
+            // The key itself, pressed: to the keyboard frames as any key
+            // (`/stdtest engine keys`: `OnKeyDown("LSHIFT")`; unverified:
+            // after the event, and its release to the frame that kept it).
+            if held && engine(vm).world.input.keyboard_focus.is_none() {
+                as_user(vm, |vm| {
+                    if let Some(id) = key_down_frames(vm, key) {
+                        engine_mut(vm)
+                            .world
+                            .input
+                            .held_by
+                            .push((key.to_string(), id));
+                    }
+                });
+            } else if !held {
+                let kept = engine(vm)
+                    .world
+                    .input
+                    .held_by
+                    .iter()
+                    .position(|(k, _)| k == key);
+                if let Some(at) = kept {
+                    let (_, id) = engine_mut(vm).world.input.held_by.remove(at);
+                    let name = vm.str(key);
+                    as_user(vm, |vm| widgets::run_script(vm, id, "OnKeyUp", &[name]));
+                }
+            }
         }
     }
     Ok(vec![])
@@ -152,12 +184,6 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
         widgets::run_script(vm, id, "OnEnter", &[Value::Bool(true)]);
     }
     as_user(vm, |vm| {
-        // Every click is also the global mouse events (Blizzard's menus close
-        // on one outside them). Unverified: their order against the scripts.
-        widgets::fire_event(vm, "GLOBAL_MOUSE_DOWN", &[button]);
-        widgets::run_script(vm, id, "OnMouseDown", &[button]);
-        widgets::fire_event(vm, "GLOBAL_MOUSE_UP", &[button]);
-        widgets::run_script(vm, id, "OnMouseUp", &[button, Value::Bool(true)]);
         let class = engine(vm).world.widgets[id.0].class.clone();
         let is = |vm: &Vm, kind: &str| {
             widgets::lineage(engine(vm), &class)
@@ -165,14 +191,63 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
                 .any(|c| c.eq_ignore_ascii_case(kind))
         };
         let enabled = engine(vm).world.widgets[id.0].enabled;
+        let edit_box = is(vm, "EditBox") && enabled;
+        // A click elsewhere takes the focus from an edit box, first.
+        if !edit_box {
+            set_keyboard_focus(vm, None);
+        }
+        widgets::fire_event(vm, "GLOBAL_MOUSE_DOWN", &[button]);
+        widgets::run_script(vm, id, "OnMouseDown", &[button]);
+        if edit_box {
+            set_keyboard_focus(vm, Some(id));
+        }
+        widgets::run_script(vm, id, "OnMouseUp", &[button, Value::Bool(true)]);
         if is(vm, "Button") && enabled {
             for script in ["PreClick", "OnClick", "PostClick"] {
                 widgets::run_script(vm, id, script, &[button, Value::Bool(false)]);
             }
         }
-        if is(vm, "EditBox") && enabled {
-            set_keyboard_focus(vm, Some(id));
+        widgets::fire_event(vm, "GLOBAL_MOUSE_UP", &[button]);
+    });
+    Ok(vec![])
+}
+
+/// `slide(slider, value)`: the slider's thumb dragged to `value` as the
+/// user drags it: the mouse down on the thumb (`OnValueChanged(value,
+/// true)` for where it is, then `OnMouseDown`), the thumb moved
+/// (`OnValueChanged(value, true)`, clamped, snapped only when it obeys
+/// its step on drag), the mouse up (`OnMouseUp`), the global mouse events
+/// around (`/stdtest engine input`).
+pub fn control_slide(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = widget_arg(vm, &c, 1, "mock.slide")?;
+    let to = vm.check_number(&c, 2)?;
+    if !widgets::visible(engine(vm), id) {
+        let name = label(vm, id);
+        return Err(vm.error(&format!("mock.slide: {name} is not visible")));
+    }
+    let class = engine(vm).world.widgets[id.0].class.clone();
+    if !widgets::is_a(engine(vm), &class, "Slider") {
+        let name = label(vm, id);
+        return Err(vm.error(&format!("mock.slide: {name} is not a slider")));
+    }
+    let left = vm.str("LeftButton");
+    let old = engine(vm).world.input.mouse_focus;
+    if old != Some(id) {
+        engine_mut(vm).world.input.mouse_focus = Some(id);
+        if let Some(o) = old {
+            widgets::run_script(vm, o, "OnLeave", &[Value::Bool(true)]);
         }
+        widgets::run_script(vm, id, "OnEnter", &[Value::Bool(true)]);
+    }
+    as_user(vm, |vm| {
+        set_keyboard_focus(vm, None);
+        widgets::fire_event(vm, "GLOBAL_MOUSE_DOWN", &[left]);
+        crate::bars::drag(vm, id, None);
+        widgets::run_script(vm, id, "OnMouseDown", &[left]);
+        crate::bars::drag(vm, id, Some(to));
+        crate::bars::end_drag(vm, id);
+        widgets::run_script(vm, id, "OnMouseUp", &[left, Value::Bool(true)]);
+        widgets::fire_event(vm, "GLOBAL_MOUSE_UP", &[left]);
     });
     Ok(vec![])
 }
@@ -307,41 +382,38 @@ fn chord(vm: &Vm, key: &str) -> String {
     out
 }
 
-/// A key pressed and released (as the user): the focused edit box takes
-/// it; else each keyboard frame, the top first, runs `OnKeyDown(key)`
-/// until one does not pass it on (it then has the key: its `OnKeyUp` alone
-/// runs, and no binding). A key no frame kept runs its chord's command
-/// (`chord`), down then up.
-///
-/// Verified (`/stdtest engine keys`, Forever 70425): the order, the frame
-/// that does not propagate keeping the key, its binding not run, the key's
-/// release to that frame alone. Unverified: the release when no frame kept
-/// the key (here: to every keyboard frame), a propagation turned off in the
-/// handler (here: it counts for this key), an unbound chord falling back
-/// to the bare key's command, a frame without a key handler passing keys.
-pub fn press_key(vm: &mut Vm, key: &str) {
-    if edit_box_key(vm, key) {
-        return;
-    }
+/// A key pressed on the keyboard frames, the top first: `OnKeyDown(key)`
+/// until one does not pass it on; that one, which then has the key.
+fn key_down_frames(vm: &mut Vm, key: &str) -> Option<WidgetId> {
     let k = vm.str(key);
-    let frames = keyboard_frames(vm);
-    let mut kept = None;
-    let mut reached = Vec::new();
-    for id in frames {
-        // A frame without a key handler lets keys by (unverified:
-        // `KeybindListener` stays keyboard-enabled after it listened, and
-        // the client's keys keep working).
+    for id in keyboard_frames(vm) {
+        // A frame without a key handler lets keys by (`KeybindListener`
+        // stays keyboard-enabled after it listened).
         if !has_key_handler(vm, id) {
             continue;
         }
         widgets::run_script(vm, id, "OnKeyDown", &[k]);
-        reached.push(id);
         if !propagates(vm, id) {
-            kept = Some(id);
-            break;
+            return Some(id);
         }
     }
-    if let Some(id) = kept {
+    None
+}
+
+/// A key pressed and released (as the user): the focused edit box takes
+/// it; else each keyboard frame, the top first, runs `OnKeyDown(key)`
+/// until one does not pass it on: that one has the key (its `OnKeyUp`
+/// alone runs, and no binding). A key no frame kept runs its chord's
+/// command (`chord`; an unbound chord the bare key's), down then up, and
+/// no frame's `OnKeyUp`. A propagation turned off in the handler counts
+/// for that key; a frame without a key handler lets keys by.
+/// (`/stdtest engine keys`, Forever 70425.)
+pub fn press_key(vm: &mut Vm, key: &str) {
+    if edit_box_key(vm, key) {
+        return;
+    }
+    if let Some(id) = key_down_frames(vm, key) {
+        let k = vm.str(key);
         widgets::run_script(vm, id, "OnKeyUp", &[k]);
         return;
     }
@@ -353,11 +425,6 @@ pub fn press_key(vm: &mut Vm, key: &str) {
     });
     if let Some(command) = &command {
         crate::bindings::run_command(vm, command, "down");
-    }
-    for id in reached {
-        widgets::run_script(vm, id, "OnKeyUp", &[k]);
-    }
-    if let Some(command) = &command {
         crate::bindings::run_command(vm, command, "up");
     }
 }

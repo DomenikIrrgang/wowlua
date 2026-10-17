@@ -1871,6 +1871,475 @@ end
     assert!(text.contains("2 passed, 0 failed"), "{text}");
 }
 
+/// The settings, every one as the player uses them: each category opened
+/// from the game menu; each row's controls clicked (checkboxes both ways,
+/// tabs, expanders), each menu's every entry chosen, dialogs confirmed,
+/// sliders dragged and wheeled; each key binding bound by clicking its button and
+/// pressing a chord, checked, unbound by a right click; every row of every
+/// list reached, the page found again when a control leaves it; sliders'
+/// thumbs dragged to each end; Defaults confirmed. Not a single Blizzard error, nothing refused.
+#[test]
+fn blizzard_ui_every_setting() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let settings = |profile: &str| {
+        format!(
+            r#"import test, expect, config from "wowlua:test"
+import * as mock from "wowlua:mock"
+{profile}
+
+const G = _G :: any
+
+local function descendants(f: any, out: any[])
+    for _, c in ipairs({{ f:GetChildren() }}) do
+        if not c:IsForbidden() then
+            out[#out + 1] = c
+            descendants(c, out)
+        end
+    end
+end
+
+--- The visible frames directly under WorldFrame and UIParent.
+local function topLevel(): {{ [any]: boolean }}
+    const out: {{ [any]: boolean }} = {{}}
+    for _, parent in ipairs({{ G.UIParent, G.WorldFrame }}) do
+        for _, f in ipairs({{ parent:GetChildren() }}) do
+            if f ~= G.UIParent and not f:IsForbidden() and f:IsVisible() then
+                out[f] = true
+            end
+        end
+    end
+    return out
+end
+
+local function buttonsIn(f: any): any[]
+    const all: any[] = {{}}
+    descendants(f, all)
+    const out: any[] = {{}}
+    for _, b in ipairs(all) do
+        if b:IsVisible() and b:IsObjectType("Button") and b:IsEnabled() then
+            out[#out + 1] = b
+        end
+    end
+    return out
+end
+
+--- A key binding row's binding (its initializer's index), if it is one.
+local function bindingOf(f: any): number?
+    const init = f.initializer
+    return init and init.data and init.data.bindingIndex
+end
+
+--- The chord the binding rows get: no default binds it.
+const CHORD = "CTRL-SHIFT-F9"
+
+@test("every setting: categories, checkboxes, every dropdown option, sliders, key bindings, buttons")
+local function settings()
+    mock.nextFrame(60)
+    const failures: string[] = {{}}
+    local function check(what: string, n: number)
+        const errs = mock.errors()
+        if #errs > n then
+            failures[#failures + 1] = `{{what}}: {{tostring(errs[n + 1]):sub(1, 240)}}`
+        end
+    end
+    const panel = G.SettingsPanel
+    const list = panel.CategoryList
+    const settingsList = panel.Container.SettingsList
+    -- Open the settings as the player does: the game menu's Options (the
+    -- menu key first closes the windows open, one at a time).
+    local function openSettings()
+        for _ = 1, 6 do
+            if panel:IsVisible() then
+                return
+            end
+            if G.GameMenuFrame:IsVisible() then
+                for _, b in ipairs(buttonsIn(G.GameMenuFrame)) do
+                    if b:GetText() == G.GAMEMENU_OPTIONS or b:GetText() == G.SETTINGS_TITLE then
+                        mock.click(b)
+                    end
+                end
+            else
+                mock.pressBinding("TOGGLEGAMEMENU")
+            end
+            mock.nextFrame(3)
+        end
+    end
+    --- The menu open (Blizzard's menu manager), if any.
+    local function openMenu(): any
+        return G.Menu.GetManager():GetOpenMenu()
+    end
+    --- The category list's row for `element`, scrolled to with the wheel.
+    local function rowOf(element: any): any
+        for _ = 1, 60 do
+            const f = list.ScrollBox:FindFrame(element)
+            if f and f:IsVisible() then
+                return f
+            end
+            -- Up first if it is above what shows, else down.
+            const index = list.ScrollBox:FindElementDataIndex(element) or 0
+            local first = math.huge
+            list.ScrollBox:ForEachFrame(function(r: any)
+                first = math.min(first, list.ScrollBox:FindElementDataIndex(r:GetElementData()) or math.huge)
+            end)
+            mock.wheel(list.ScrollBox, index < first and 1 or -1)
+            mock.nextFrame(1)
+        end
+        return nil
+    end
+    --- Selects a category by clicking its row: whether it is shown.
+    local function select(element: any, category: any): boolean
+        openSettings()
+        const row = rowOf(element)
+        if not row then
+            return false
+        end
+        if panel:GetCurrentCategory() ~= category then
+            const n = #mock.errors()
+            mock.click(row)
+            mock.nextFrame(3)
+            check(`category {{category:GetName()}}`, n)
+        end
+        return panel:IsVisible() and panel:GetCurrentCategory() == category
+    end
+    openSettings()
+    assert(panel:IsVisible(), "the settings opened")
+    const stats = {{ headers = 0, categories = 0, controls = 0, options = 0, sliders = 0, bindings = 0 }}
+
+    --- The dialogs an action raised (new frames, and any confirmation
+    --- shown): their first button (accept) clicked, Escape if they stay.
+    local function answerDialogs(before: {{ [any]: boolean }}, key: string)
+        const dialogs: {{ [any]: boolean }} = {{}}
+        for dialog in pairs(topLevel()) do
+            if not before[dialog] and dialog ~= panel then
+                dialogs[dialog] = true
+            end
+        end
+        for i = 1, 4 do
+            const popup = G[`StaticPopup{{i}}`]
+            if popup and popup:IsVisible() then
+                dialogs[popup] = true
+            end
+        end
+        for dialog in pairs(dialogs) do
+            if dialog:IsVisible() then
+                const first = buttonsIn(dialog)[1]
+                if first then
+                    const n = #mock.errors()
+                    mock.click(first)
+                    mock.nextFrame(1)
+                    check(`{{key}}: dialog {{tostring(dialog.which or dialog:GetDebugName())}}`, n)
+                end
+                if dialog:IsVisible() then
+                    mock.pressKey("ESCAPE")
+                    mock.nextFrame(1)
+                end
+            end
+        end
+    end
+
+    --- Uses every control of `category`'s rows, scrolling down its list;
+    --- comes back to the page (and the place in it) when a control leaves.
+    local function useSettings(element: any, category: any)
+        const name = category:GetName()
+        const done: {{ [any]: boolean }} = {{}}
+                local scrolled = 0
+        --- Whether the page is still this category's; if not, back to it.
+        local function stayed(what: string): boolean
+            if panel:IsVisible() and panel:GetCurrentCategory() == category then
+                return true
+            end
+            -- Whatever it opened, closed (a dialog, a frame), as the user
+            -- presses Escape.
+            for _ = 1, 3 do
+                if panel:IsVisible() then
+                    break
+                end
+                mock.pressKey("ESCAPE")
+                mock.nextFrame(2)
+            end
+            if not select(element, category) then
+                const shown: string[] = {{}}
+                for f in pairs(topLevel()) do
+                    shown[#shown + 1] = tostring(f:GetDebugName())
+                end
+                failures[#failures + 1] = `{{name}}: could not come back after {{what}} (panel {{tostring(panel:IsVisible())}}, menu {{tostring(G.GameMenuFrame:IsVisible())}}, current {{tostring(panel:GetCurrentCategory() and panel:GetCurrentCategory():GetName())}}, shown {{table.concat(shown, " ")}})`
+                return false
+            end
+            for _ = 1, scrolled do
+                mock.wheel(settingsList.ScrollBox, -1)
+            end
+            mock.nextFrame(1)
+            return false
+        end
+        --- A binding row: CHORD bound by clicking its button and pressing
+        --- the keys, then unbound by a right click.
+        local function useBinding(f: any, key: string): boolean
+            const action = G.GetBinding(bindingOf(f))
+            const button = f.Button1
+            if not (button and button:IsVisible() and button:IsEnabled()) then
+                return true
+            end
+            stats.bindings += 1
+            -- Binding replaces the action's keys: they are put back after.
+            const original = {{ G.GetBindingKey(action) }}
+            local n = #mock.errors()
+            mock.click(button)
+            mock.setModifiers({{ ctrl = true, shift = true }})
+            mock.pressKey("F9")
+            mock.setModifiers({{}})
+            mock.nextFrame(1)
+            check(`{{key}}: bind`, n)
+            local keys = table.concat({{ G.GetBindingKey(action) }}, ",")
+            if not keys:find(CHORD, 1, true) then
+                failures[#failures + 1] = `{{key}}: {{CHORD}} not bound to {{action}} (keys {{keys}})`
+            end
+            n = #mock.errors()
+            mock.click(button, "RightButton")
+            mock.nextFrame(1)
+            check(`{{key}}: unbind`, n)
+            keys = table.concat({{ G.GetBindingKey(action) }}, ",")
+            if keys:find(CHORD, 1, true) then
+                failures[#failures + 1] = `{{key}}: {{CHORD}} still bound to {{action}} after a right click`
+            end
+            for _, k in ipairs(original) do
+                G.SetBinding(k, action)
+            end
+            return stayed(`{{key}} binding`)
+        end
+        --- Every control of a row, in rounds until none is new (tabs and
+        --- expanders show more): whether the page stayed.
+        local function useRow(f: any, key: string): boolean
+            const clicked: {{ [any]: boolean }} = {{}}
+            for _ = 1, 6 do
+                local more = false
+                for _, b in ipairs(buttonsIn(f)) do
+                    const parent = b:GetParent()
+                    if bindingOf(parent) then
+                        if not clicked[parent] then
+                            clicked[parent] = true
+                            more = true
+                            if not useBinding(parent, `{{key}}/{{G.GetBinding(bindingOf(parent))}}`) then
+                                return false
+                            end
+                        end
+                    elseif b:IsVisible() and b:IsEnabled() and not clicked[b] then
+                        clicked[b] = true
+                        more = true
+                        stats.controls += 1
+                        const before = topLevel()
+                        local n = #mock.errors()
+                        mock.click(b)
+                        mock.nextFrame(1)
+                        check(`{{key}}: click`, n)
+                        -- A menu it opened (a dropdown's, a context menu):
+                        -- every entry chosen, the menu opened again by the
+                        -- same click before each; closed with Escape.
+                        if openMenu() then
+                            const count = #buttonsIn(openMenu())
+                            for i = 1, count do
+                                if not openMenu() then
+                                    mock.click(b)
+                                    mock.nextFrame(1)
+                                end
+                                const menu = openMenu()
+                                const entry = menu and buttonsIn(menu)[i]
+                                if not entry then
+                                    break
+                                end
+                                stats.options += 1
+                                n = #mock.errors()
+                                mock.click(entry)
+                                mock.nextFrame(1)
+                                check(`{{key}}: option {{i}}`, n)
+                                if not stayed(`{{key}} option {{i}}`) then
+                                    return false
+                                end
+                            end
+                            if openMenu() then
+                                mock.pressKey("ESCAPE")
+                                mock.nextFrame(1)
+                            end
+                            if openMenu() then
+                                failures[#failures + 1] = `{{key}}: Escape left its menu open`
+                            end
+                        end
+                        answerDialogs(before, key)
+                        if not stayed(`{{key}} {{tostring(b:GetDebugName())}}`) then
+                            return false
+                        end
+                    end
+                end
+                if not more then
+                    break
+                end
+            end
+            -- Its sliders: dragged and wheeled.
+            const all: any[] = {{}}
+            descendants(f, all)
+            for _, s in ipairs(all) do
+                if s:IsObjectType("Slider") and s:IsVisible() and s:IsEnabled() then
+                    stats.sliders += 1
+                    const n = #mock.errors()
+                    -- Its thumb dragged to each end and the middle; the
+                    -- wheel both ways.
+                    local lo, hi = s:GetMinMaxValues()
+                    for _, v in ipairs({{ hi, lo, (lo + hi) / 2 }}) do
+                        mock.slide(s, v)
+                        mock.nextFrame(1)
+                    end
+                    mock.wheel(s, 1)
+                    mock.wheel(s, -1)
+                    mock.nextFrame(1)
+                    check(`{{key}}: slider`, n)
+                end
+            end
+            return stayed(`{{key}} sliders`)
+        end
+        for _ = 1, 400 do
+            const frames: any[] = {{}}
+            settingsList.ScrollBox:ForEachFrame(function(f: any)
+                frames[#frames + 1] = f
+            end)
+            local again = false
+            for _, f in ipairs(frames) do
+                const data = f.GetElementData and f:GetElementData()
+                if f:IsVisible() and data and not done[data] then
+                    done[data] = true
+                    const label = data.data and data.data.name or data:GetTemplate()
+                    if not useRow(f, `{{name}}/{{tostring(label)}}`) then
+                        -- Back on the page: its frames are new.
+                        again = true
+                        break
+                    end
+                end
+            end
+            if not again then
+                const box = settingsList.ScrollBox
+                if not box:HasScrollableExtent() or box:GetScrollPercentage() >= 1 then
+                    break
+                end
+                mock.wheel(box, -1)
+                scrolled += 1
+                mock.nextFrame(1)
+            end
+        end
+        -- The rows the list held that no pass reached.
+        const missed: string[] = {{}}
+        const provider = settingsList.ScrollBox:GetDataProvider()
+        if provider then
+            provider:ForEach(function(e: any)
+                if not done[e] then
+                    missed[#missed + 1] = tostring(e.data and e.data.name or e:GetTemplate())
+                end
+            end)
+        end
+        if #missed > 0 then
+            failures[#failures + 1] = `{{name}}: rows not reached: {{table.concat(missed, ", ")}}`
+        end
+    end
+
+    -- Every category in the list, by its data (rows are made anew when the
+    -- panel opens again); headers collapsed and expanded again.
+    const elements: any[] = {{}}
+    list.ScrollBox:GetDataProvider():ForEach(function(e: any)
+        elements[#elements + 1] = e
+    end)
+    for _, element in ipairs(elements) do
+        const category = element.data and element.data.category
+        openSettings()
+        if category then
+            stats.categories += 1
+            if select(element, category) then
+                useSettings(element, category)
+            else
+                failures[#failures + 1] = `category {{category:GetName()}}: could not select it`
+            end
+        else
+            const row = rowOf(element)
+            if row then
+                stats.headers += 1
+                const n = #mock.errors()
+                mock.click(row)
+                mock.nextFrame(2)
+                mock.click(rowOf(element))
+                mock.nextFrame(2)
+                check(`header {{tostring(row.Label and row.Label:GetText())}}`, n)
+            end
+        end
+    end
+    -- Defaults (confirmed), then close.
+    openSettings()
+    for _, b in ipairs(buttonsIn(panel)) do
+        if b:GetText() == G.SETTINGS_DEFAULTS then
+            const before = topLevel()
+            const n = #mock.errors()
+            mock.click(b)
+            mock.nextFrame(2)
+            for dialog in pairs(topLevel()) do
+                if not before[dialog] and dialog ~= panel then
+                    const first = buttonsIn(dialog)[1]
+                    if first then
+                        mock.click(first)
+                        mock.nextFrame(2)
+                    end
+                end
+            end
+            check("defaults", n)
+        end
+    end
+    mock.pressKey("ESCAPE")
+    mock.nextFrame(2)
+    print(`headers {{stats.headers}}, categories {{stats.categories}}, controls {{stats.controls}}, menu options {{stats.options}}, sliders {{stats.sliders}}, key bindings {{stats.bindings}}`)
+    -- Not a single error; nothing refused.
+    if #failures > 0 then
+        error(table.concat(failures, "\n"), 0)
+    end
+    expect(#mock.refusals()).toBe(0)
+end
+"#
+        )
+    };
+    let recorded = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../wowlua-engine/tests/client/forever-camelot-character.json"),
+    )
+    .unwrap();
+    let fresh = settings("");
+    let as_recorded = settings(r#"config({ profile = "recorded" })"#);
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            ("tests/fresh.test.wowlua", &fresh),
+            ("tests/recorded.test.wowlua", &as_recorded),
+            ("tests/profiles/recorded.json", &recorded),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("2 passed, 0 failed"), "{text}");
+}
+
 /// Tooltips with Blizzard's UI: the engine's tooltip data from the tests'
 /// game data, Blizzard's tooltip code, and an addon's post-call.
 #[test]

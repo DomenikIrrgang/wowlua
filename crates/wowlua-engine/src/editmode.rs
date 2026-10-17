@@ -42,14 +42,17 @@ fn copy(vm: &mut Vm, v: Value) -> Value {
     }
 }
 
-/// The default preset's index: as recorded, else the first (Modern).
+/// The default preset's place among the layouts: Blizzard lists its
+/// presets first, in `Enum.EditModePresetLayouts` order, so the recorded
+/// default (0, Modern) is the first (unverified: a fresh account's).
 fn default_layout(vm: &mut Vm) -> f64 {
     crate::recorded::lookup_text(vm, "C_EditMode.GetEditModeDefaultLayout()")
         .and_then(|v| match v.first() {
             Some(Value::Num(n)) => Some(*n),
             _ => None,
         })
-        .unwrap_or(1.0)
+        .unwrap_or(0.0)
+        + 1.0
 }
 
 /// The layout info the client gives: `{ activeLayout, layouts }`.

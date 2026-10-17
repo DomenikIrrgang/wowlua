@@ -171,6 +171,8 @@ C_DelvesUI.GetFlavorNodeForCompanion(nil)	1: number 0
 C_DelvesUI.GetRoleNodeForCompanion(nil)	1: number 0
 C_DelvesUI.GetTraitTreeForCompanion(nil)	1: number 0
 C_Discord.IsVoiceEnabled()	1: boolean true
+C_EditMode.GetAccountSettings()	1: {1={setting=number 0,value=number 0},10={setting=number 9,value=number 1},11={setting=number 10,value=number 1},12={setting=number 11,value=number 0},13={setting=number 12,value=number 1},14={setting=number 13,value=number 1},15={setting=number 14,value=number 0},16={setting=number 15,value=number 0},17={setting=number 16,value=number 1},18={setting=number 17,value=number 0},19={setting=number 18,value=number 0},2={setting=number 1,value=number 100},20={setting=number 19,value=number 0},21={setting=number 20,value=number 0},22={setting=number 21,value=number 0},23={setting=number 22,value=number 1},24={setting=number 23,value=number 1},25={setting=number 24,value=number 1},26={setting=number 25,value=number 0},27={setting=number 26,value=number 0},28={setting=number 27,value=number 0},29={setting=number 28,value=number 1},3={setting=number 2,value=number 1},30={setting=number 29,value=number 0},31={setting=number 30,value=number 1},32={setting=number 31,value=number 1},33={setting=number 32,value=number 1},34={setting=number 33,value=number 0},35={setting=number 34,value=number 0},36={setting=number 35,value=number 0},37={setting=number 36,value=number 0},38={setting=number 37,value=number 0},4={setting=number 3,value=number 1},5={setting=number 4,value=number 0},6={setting=number 5,value=number 0},7={setting=number 6,value=number 1},8={setting=number 7,value=number 1},9={setting=number 8,value=number 1}}
+C_EditMode.GetEditModeDefaultLayout()	1: number 0
 C_EventScheduler.CanShowEvents()	1: boolean false
 C_EventScheduler.HasSavedReminders()	1: boolean false
 C_ExternalEventURL.CanShow()	1: boolean false
@@ -1758,6 +1760,336 @@ GetCurrentArenaSeason()	1: number 0
 GetCurrentBindingSet()	1: number 1
 GetCurrentGraphicsAPI()	1: string MTL
 GetGraphicsAPIs()	2: string MTL, string Auto
+GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 1, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 2, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 3, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 4, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 5, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 6, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 7, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 8, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 9, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsDepthEffects", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsDepthEffects", 1, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsDepthEffects", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsDepthEffects", 2, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsDepthEffects", 3, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsDepthEffects", 4, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsDepthEffects", 5, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsDepthEffects", 6, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsDepthEffects", 7, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsDepthEffects", 8, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsDepthEffects", 9, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsEnvironmentDetail", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsEnvironmentDetail", 1, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsEnvironmentDetail", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsEnvironmentDetail", 2, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsEnvironmentDetail", 3, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsEnvironmentDetail", 4, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsEnvironmentDetail", 5, false)	1: number 5
+GetGraphicsCVarValueForQualityLevel("graphicsEnvironmentDetail", 6, false)	1: number 6
+GetGraphicsCVarValueForQualityLevel("graphicsEnvironmentDetail", 7, false)	1: number 7
+GetGraphicsCVarValueForQualityLevel("graphicsEnvironmentDetail", 8, false)	1: number 8
+GetGraphicsCVarValueForQualityLevel("graphicsEnvironmentDetail", 9, false)	1: number 9
+GetGraphicsCVarValueForQualityLevel("graphicsGroundClutter", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsGroundClutter", 1, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsGroundClutter", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsGroundClutter", 2, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsGroundClutter", 3, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsGroundClutter", 4, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsGroundClutter", 5, false)	1: number 5
+GetGraphicsCVarValueForQualityLevel("graphicsGroundClutter", 6, false)	1: number 6
+GetGraphicsCVarValueForQualityLevel("graphicsGroundClutter", 7, false)	1: number 7
+GetGraphicsCVarValueForQualityLevel("graphicsGroundClutter", 8, false)	1: number 8
+GetGraphicsCVarValueForQualityLevel("graphicsGroundClutter", 9, false)	1: number 9
+GetGraphicsCVarValueForQualityLevel("graphicsLightMode", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsLightMode", 1, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsLightMode", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsLightMode", 2, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsLightMode", 3, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsLightMode", 4, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsLightMode", 5, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsLightMode", 6, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsLightMode", 7, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsLightMode", 8, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsLightMode", 9, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsLiquidDetail", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsLiquidDetail", 1, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsLiquidDetail", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsLiquidDetail", 2, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsLiquidDetail", 3, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsLiquidDetail", 4, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsLiquidDetail", 5, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsLiquidDetail", 6, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsLiquidDetail", 7, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsLiquidDetail", 8, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsLiquidDetail", 9, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsOutlineMode", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsOutlineMode", 1, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsOutlineMode", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsOutlineMode", 2, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsOutlineMode", 3, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsOutlineMode", 4, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsOutlineMode", 5, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsOutlineMode", 6, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsOutlineMode", 7, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsOutlineMode", 8, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsOutlineMode", 9, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsPBRLiquidDetail", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsPBRLiquidDetail", 1, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsPBRLiquidDetail", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsPBRLiquidDetail", 2, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsPBRLiquidDetail", 3, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsPBRLiquidDetail", 4, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsPBRLiquidDetail", 5, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsPBRLiquidDetail", 6, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsPBRLiquidDetail", 7, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsPBRLiquidDetail", 8, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsPBRLiquidDetail", 9, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsParticleDensity", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsParticleDensity", 1, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsParticleDensity", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsParticleDensity", 2, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsParticleDensity", 3, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsParticleDensity", 4, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsParticleDensity", 5, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsParticleDensity", 6, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsParticleDensity", 7, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsParticleDensity", 8, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsParticleDensity", 9, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsProjectedTextures", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsProjectedTextures", 1, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsProjectedTextures", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsProjectedTextures", 2, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsProjectedTextures", 3, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsProjectedTextures", 4, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsProjectedTextures", 5, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsProjectedTextures", 6, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsProjectedTextures", 7, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsProjectedTextures", 8, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsProjectedTextures", 9, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsSSAO", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsSSAO", 1, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsSSAO", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsSSAO", 2, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsSSAO", 3, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsSSAO", 4, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsSSAO", 5, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsSSAO", 6, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsSSAO", 7, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsSSAO", 8, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsSSAO", 9, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsShadowQuality", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsShadowQuality", 1, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsShadowQuality", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsShadowQuality", 2, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsShadowQuality", 3, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsShadowQuality", 4, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsShadowQuality", 5, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsShadowQuality", 6, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsShadowQuality", 7, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsShadowQuality", 8, false)	1: number 5
+GetGraphicsCVarValueForQualityLevel("graphicsShadowQuality", 9, false)	1: number 5
+GetGraphicsCVarValueForQualityLevel("graphicsSpellDensity", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsSpellDensity", 1, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsSpellDensity", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsSpellDensity", 2, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsSpellDensity", 3, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsSpellDensity", 4, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsSpellDensity", 5, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsSpellDensity", 6, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsSpellDensity", 7, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsSpellDensity", 8, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsSpellDensity", 9, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsTextureResolution", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsTextureResolution", 1, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsTextureResolution", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsTextureResolution", 2, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsTextureResolution", 3, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsTextureResolution", 4, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsTextureResolution", 5, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsTextureResolution", 6, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsTextureResolution", 7, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsTextureResolution", 8, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsTextureResolution", 9, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsViewDistance", 0, false)	1: number 0
+GetGraphicsCVarValueForQualityLevel("graphicsViewDistance", 1, false)	1: number 1
+GetGraphicsCVarValueForQualityLevel("graphicsViewDistance", 10, false)	0: 
+GetGraphicsCVarValueForQualityLevel("graphicsViewDistance", 2, false)	1: number 2
+GetGraphicsCVarValueForQualityLevel("graphicsViewDistance", 3, false)	1: number 3
+GetGraphicsCVarValueForQualityLevel("graphicsViewDistance", 4, false)	1: number 4
+GetGraphicsCVarValueForQualityLevel("graphicsViewDistance", 5, false)	1: number 5
+GetGraphicsCVarValueForQualityLevel("graphicsViewDistance", 6, false)	1: number 6
+GetGraphicsCVarValueForQualityLevel("graphicsViewDistance", 7, false)	1: number 7
+GetGraphicsCVarValueForQualityLevel("graphicsViewDistance", 8, false)	1: number 8
+GetGraphicsCVarValueForQualityLevel("graphicsViewDistance", 9, false)	1: number 9
+GetGraphicsCVarValueForQualityLevel("raidGraphicsComputeEffects", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsComputeEffects", 1, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsComputeEffects", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsComputeEffects", 2, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsComputeEffects", 3, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsComputeEffects", 4, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsComputeEffects", 5, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsComputeEffects", 6, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsComputeEffects", 7, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsComputeEffects", 8, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsComputeEffects", 9, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsDepthEffects", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsDepthEffects", 1, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsDepthEffects", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsDepthEffects", 2, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsDepthEffects", 3, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsDepthEffects", 4, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsDepthEffects", 5, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsDepthEffects", 6, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsDepthEffects", 7, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsDepthEffects", 8, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsDepthEffects", 9, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsEnvironmentDetail", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsEnvironmentDetail", 1, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsEnvironmentDetail", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsEnvironmentDetail", 2, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsEnvironmentDetail", 3, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsEnvironmentDetail", 4, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsEnvironmentDetail", 5, true)	1: number 5
+GetGraphicsCVarValueForQualityLevel("raidGraphicsEnvironmentDetail", 6, true)	1: number 6
+GetGraphicsCVarValueForQualityLevel("raidGraphicsEnvironmentDetail", 7, true)	1: number 7
+GetGraphicsCVarValueForQualityLevel("raidGraphicsEnvironmentDetail", 8, true)	1: number 8
+GetGraphicsCVarValueForQualityLevel("raidGraphicsEnvironmentDetail", 9, true)	1: number 9
+GetGraphicsCVarValueForQualityLevel("raidGraphicsGroundClutter", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsGroundClutter", 1, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsGroundClutter", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsGroundClutter", 2, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsGroundClutter", 3, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsGroundClutter", 4, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsGroundClutter", 5, true)	1: number 5
+GetGraphicsCVarValueForQualityLevel("raidGraphicsGroundClutter", 6, true)	1: number 6
+GetGraphicsCVarValueForQualityLevel("raidGraphicsGroundClutter", 7, true)	1: number 7
+GetGraphicsCVarValueForQualityLevel("raidGraphicsGroundClutter", 8, true)	1: number 8
+GetGraphicsCVarValueForQualityLevel("raidGraphicsGroundClutter", 9, true)	1: number 9
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLightMode", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLightMode", 1, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLightMode", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLightMode", 2, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLightMode", 3, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLightMode", 4, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLightMode", 5, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLightMode", 6, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLightMode", 7, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLightMode", 8, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLightMode", 9, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLiquidDetail", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLiquidDetail", 1, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLiquidDetail", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLiquidDetail", 2, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLiquidDetail", 3, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLiquidDetail", 4, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLiquidDetail", 5, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLiquidDetail", 6, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLiquidDetail", 7, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLiquidDetail", 8, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsLiquidDetail", 9, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsOutlineMode", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsOutlineMode", 1, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsOutlineMode", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsOutlineMode", 2, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsOutlineMode", 3, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsOutlineMode", 4, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsOutlineMode", 5, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsOutlineMode", 6, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsOutlineMode", 7, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsOutlineMode", 8, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsOutlineMode", 9, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsPBRLiquidDetail", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsPBRLiquidDetail", 1, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsPBRLiquidDetail", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsPBRLiquidDetail", 2, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsPBRLiquidDetail", 3, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsPBRLiquidDetail", 4, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsPBRLiquidDetail", 5, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsPBRLiquidDetail", 6, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsPBRLiquidDetail", 7, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsPBRLiquidDetail", 8, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsPBRLiquidDetail", 9, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsParticleDensity", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsParticleDensity", 1, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsParticleDensity", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsParticleDensity", 2, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsParticleDensity", 3, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsParticleDensity", 4, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsParticleDensity", 5, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsParticleDensity", 6, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsParticleDensity", 7, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsParticleDensity", 8, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsParticleDensity", 9, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsProjectedTextures", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsProjectedTextures", 1, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsProjectedTextures", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsProjectedTextures", 2, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsProjectedTextures", 3, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsProjectedTextures", 4, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsProjectedTextures", 5, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsProjectedTextures", 6, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsProjectedTextures", 7, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsProjectedTextures", 8, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsProjectedTextures", 9, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSSAO", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSSAO", 1, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSSAO", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSSAO", 2, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSSAO", 3, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSSAO", 4, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSSAO", 5, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSSAO", 6, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSSAO", 7, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSSAO", 8, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSSAO", 9, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsShadowQuality", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsShadowQuality", 1, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsShadowQuality", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsShadowQuality", 2, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsShadowQuality", 3, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsShadowQuality", 4, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsShadowQuality", 5, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsShadowQuality", 6, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsShadowQuality", 7, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsShadowQuality", 8, true)	1: number 5
+GetGraphicsCVarValueForQualityLevel("raidGraphicsShadowQuality", 9, true)	1: number 5
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSpellDensity", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSpellDensity", 1, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSpellDensity", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSpellDensity", 2, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSpellDensity", 3, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSpellDensity", 4, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSpellDensity", 5, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSpellDensity", 6, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSpellDensity", 7, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSpellDensity", 8, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsSpellDensity", 9, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsTextureResolution", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsTextureResolution", 1, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsTextureResolution", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsTextureResolution", 2, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsTextureResolution", 3, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsTextureResolution", 4, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsTextureResolution", 5, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsTextureResolution", 6, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsTextureResolution", 7, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsTextureResolution", 8, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsTextureResolution", 9, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsViewDistance", 0, true)	1: number 0
+GetGraphicsCVarValueForQualityLevel("raidGraphicsViewDistance", 1, true)	1: number 1
+GetGraphicsCVarValueForQualityLevel("raidGraphicsViewDistance", 10, true)	0: 
+GetGraphicsCVarValueForQualityLevel("raidGraphicsViewDistance", 2, true)	1: number 2
+GetGraphicsCVarValueForQualityLevel("raidGraphicsViewDistance", 3, true)	1: number 3
+GetGraphicsCVarValueForQualityLevel("raidGraphicsViewDistance", 4, true)	1: number 4
+GetGraphicsCVarValueForQualityLevel("raidGraphicsViewDistance", 5, true)	1: number 5
+GetGraphicsCVarValueForQualityLevel("raidGraphicsViewDistance", 6, true)	1: number 6
+GetGraphicsCVarValueForQualityLevel("raidGraphicsViewDistance", 7, true)	1: number 7
+GetGraphicsCVarValueForQualityLevel("raidGraphicsViewDistance", 8, true)	1: number 8
+GetGraphicsCVarValueForQualityLevel("raidGraphicsViewDistance", 9, true)	1: number 9
 GetInventorySlotInfo("CookingGear0Slot")	3: number 27, number 4760248, boolean false
 GetInventorySlotInfo("CookingToolSlot")	3: number 26, number 4760248, boolean false
 GetInventorySlotInfo("FishingGear0Slot")	3: number 29, number 4760248, boolean false

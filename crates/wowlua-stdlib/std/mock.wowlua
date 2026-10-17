@@ -544,6 +544,13 @@ end
 --- Drags `source` onto `target` as the user would: the source's
 --- `OnDragStart` (it picks something up), then its `OnDragStop` and, with
 --- something on the cursor, the target's `OnReceiveDrag`.
+--- Drags a slider's thumb to `value` as the user does: `OnValueChanged(
+--- value, true)` for where it is and where it goes (clamped; snapped to its
+--- step only if it obeys its step on drag), `OnMouseDown`, `OnMouseUp`.
+export function slide(slider: any, value: number)
+    engine().slide(slider, value)
+end
+
 export function dragTo(source: any, target: any)
     engine().dragTo(source, target)
 end

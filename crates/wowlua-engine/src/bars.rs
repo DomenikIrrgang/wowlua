@@ -9,7 +9,10 @@
 //! `(value, userInput)` (`SetValue`'s second argument), a bar's with the
 //! value alone. `SetMinMaxValues` runs `OnMinMaxChanged(min, max)` when the
 //! range changes, then clamps the value; a range whose maximum is below its
-//! minimum is an error; `SetValueStep` snaps the value again. A bar keeps
+//! minimum is an error; `SetValueStep` snaps the value again. Until a
+//! slider's value is set, neither a range nor a step moves it (it stays 0);
+//! a bar's first range clamps it, silently. A user's drag (`drag`) runs
+//! `OnValueChanged(value, true)` at each move, unsnapped. A bar keeps
 //! its color in eight bits; a slider's orientation is `VERTICAL` until set,
 //! a bar's `HORIZONTAL`.
 
@@ -27,10 +30,13 @@ pub struct Bar {
     pub value: f64,
     /// A slider's step (none for a bar).
     pub step: Option<f64>,
-    /// Whether a range was set: the first one clamps the value without
-    /// `OnValueChanged` (a fresh slider given 1 to 10 runs none for its 0;
-    /// unverified: that the value is then the minimum).
+    /// Whether a range was set: a bar's first clamps its value without
+    /// `OnValueChanged` (a fresh bar given 3 to 10 reads 3).
     pub ranged: bool,
+    /// Whether a slider's value was set: until then a range leaves it (a
+    /// fresh slider given 1 to 10, then 2 to 10, reads 0, no
+    /// `OnValueChanged`).
+    pub valued: bool,
 }
 
 /// A float as the client keeps it (a single float).
@@ -50,6 +56,7 @@ fn bar(vm: &Vm, id: WidgetId) -> Bar {
         value: 0.0,
         step: is_slider(vm, id).then_some(single(0.001)),
         ranged: false,
+        valued: false,
     })
 }
 
@@ -85,10 +92,52 @@ fn number(vm: &Vm, v: Value) -> f64 {
     vm.tonumber(v).unwrap_or(0.0)
 }
 
+/// The user dragging a slider's thumb: to `to` (clamped, snapped only when
+/// it obeys its step on drag), or where it is (`None`, the mouse down on
+/// it). `OnValueChanged(value, true)` runs at each move, the value changed
+/// or not (`/stdtest engine input`).
+pub fn drag(vm: &mut Vm, id: WidgetId, to: Option<f64>) {
+    engine_mut(vm).world.dragging_thumb = Some(id);
+    let mut b = bar(vm, id);
+    if let Some(v) = to {
+        let obeys = stored_or(vm, id, "ObeyStepOnDrag", vec![])
+            .first()
+            .is_some_and(|v| v.truthy());
+        let free = Bar {
+            step: if obeys { b.step } else { None },
+            ..b
+        };
+        b.value = kept_value(&free, v);
+        engine_mut(vm).world.bars.insert(id.0, b);
+    }
+    widgets::run_script(
+        vm,
+        id,
+        "OnValueChanged",
+        &[Value::Num(b.value), Value::Bool(true)],
+    );
+}
+
+/// The thumb let go.
+pub fn end_drag(vm: &mut Vm, id: WidgetId) {
+    if engine(vm).world.dragging_thumb == Some(id) {
+        engine_mut(vm).world.dragging_thumb = None;
+    }
+}
+
+fn is_dragging_thumb(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(
+        engine(vm).world.dragging_thumb == Some(id),
+    )])
+}
+
 /// `SetValue(value [, treatAsMouseEvent])` (a bar's second argument is
 /// its interpolation).
 fn set_value(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let v = number(vm, c.arg(2));
+    let mut b = bar(vm, id);
+    b.valued = true;
+    engine_mut(vm).world.bars.insert(id.0, b);
     let user = is_slider(vm, id) && c.arg(3).truthy();
     change(vm, id, v, user);
     Ok(vec![])
@@ -118,7 +167,8 @@ fn set_min_max_values(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     (b.min, b.max) = (min, max);
     let first = !b.ranged;
     b.ranged = true;
-    if first {
+    let slider = b.step.is_some();
+    if first && !slider {
         b.value = kept_value(&b, b.value);
     }
     engine_mut(vm).world.bars.insert(id.0, b);
@@ -128,8 +178,9 @@ fn set_min_max_values(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         "OnMinMaxChanged",
         &[Value::Num(min), Value::Num(max)],
     );
-    let value = bar(vm, id).value;
-    change(vm, id, value, false);
+    if !slider || b.valued {
+        change(vm, id, b.value, false);
+    }
     Ok(vec![])
 }
 
@@ -138,12 +189,14 @@ fn get_min_max_values(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(b.min), Value::Num(b.max)])
 }
 
-/// `SetValueStep(step)`: the value snaps to it.
+/// `SetValueStep(step)`: a value set snaps to it.
 fn set_value_step(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let mut b = bar(vm, id);
     b.step = Some(single(number(vm, c.arg(2))));
     engine_mut(vm).world.bars.insert(id.0, b);
-    change(vm, id, b.value, false);
+    if b.valued {
+        change(vm, id, b.value, false);
+    }
     Ok(vec![])
 }
 
@@ -288,6 +341,7 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("Slider:GetOrientation", get_orientation),
         ("Slider:SetThumbTexture", set_thumb_texture),
         ("Slider:GetThumbTexture", get_thumb_texture),
+        ("Slider:IsDraggingThumb", is_dragging_thumb),
         ("StatusBar:SetValue", set_value),
         ("StatusBar:GetValue", get_value),
         ("StatusBar:GetInterpolatedValue", get_value),
