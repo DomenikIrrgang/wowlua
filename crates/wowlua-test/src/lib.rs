@@ -57,8 +57,6 @@ pub struct FileResult {
     /// What the file's code printed.
     pub printed: String,
     pub seconds: f64,
-    /// Errors Blizzard's UI code raised while loading (the engine's gaps).
-    pub blizzard_errors: Vec<String>,
     pub snapshots: SnapshotSummary,
     /// With `--coverage`: what the file's tests ran of the addon.
     pub coverage: Option<coverage::Report>,
@@ -248,12 +246,11 @@ fn run_file(suite: &Suite, file: &TestFile, filter: Option<&str>) -> FileResult 
         error: None,
         printed: String::new(),
         seconds: 0.0,
-        blizzard_errors: Vec::new(),
         snapshots: SnapshotSummary::default(),
         coverage: None,
     };
     snapshots::begin(&suite.root.join(&file.rel), suite.update_snapshots);
-    match load(suite, file, &mut result.blizzard_errors) {
+    match load(suite, file) {
         Ok(mut state) => {
             run_tests(suite, &mut state, filter, &mut result);
             if let Some(cov) = &state.vm.coverage {
@@ -281,7 +278,7 @@ struct Loaded {
     tests: TableRef,
 }
 
-fn load(suite: &Suite, file: &TestFile, blizzard: &mut Vec<String>) -> Result<Loaded, String> {
+fn load(suite: &Suite, file: &TestFile) -> Result<Loaded, String> {
     let build = suite.build;
     let dir = &build.dir;
     let name = build.addon_name.clone();
@@ -297,7 +294,13 @@ fn load(suite: &Suite, file: &TestFile, blizzard: &mut Vec<String>) -> Result<Lo
     }
     if let Some(ui) = &suite.blizzard_ui {
         let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
-        *blizzard = report.errors;
+        if !report.errors.is_empty() {
+            return Err(format!(
+                "Blizzard's UI code raised {} errors while loading:\n{}",
+                report.errors.len(),
+                report.errors.join("\n")
+            ));
+        }
     }
     vm.set_output(natives::print_sink);
     natives::install_print(&mut vm);
@@ -614,14 +617,11 @@ fn run_tests(suite: &Suite, state: &mut Loaded, filter: Option<&str>, result: &m
             });
         }
     };
-    // Errors and refusals so far (loading, logging in) belong to no test.
-    // Blizzard's own code's are the emulation's gaps (warned about); the
-    // addon's fail the file.
+    // Errors and refusals so far (loading, logging in) belong to no test:
+    // they fail the file, Blizzard's code's included (it runs without an
+    // error in the client).
     let _ = natives::unread_refusals(vm);
-    let addons = |e: &String| ["src/", "tests/", "wowlua/"].iter().any(|p| e.contains(p));
-    let (pending, blizzard): (Vec<String>, Vec<String>) =
-        natives::unread_errors().into_iter().partition(addons);
-    result.blizzard_errors.extend(blizzard);
+    let pending = natives::unread_errors();
     if !pending.is_empty() {
         result.error = Some(to_sources(
             suite,

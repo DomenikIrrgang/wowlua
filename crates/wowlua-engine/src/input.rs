@@ -3,9 +3,14 @@
 //! clicks, an edit box's keyboard focus and typing (`OnChar`,
 //! `OnTextChanged` with `userInput`), and keys a focused edit box takes.
 //!
-//! Unverified (inferred from Blizzard's UI code): a click's script order
-//! (`OnMouseDown`, `OnMouseUp`, then `PreClick`, `OnClick`, `PostClick`
-//! for an enabled button), and the scripts typing runs per character.
+//! Verified against the client (`/stdtest engine input`, Forever 70425):
+//! `OnEnter(true)` and `OnLeave(true)`; a click's scripts (`OnMouseDown`,
+//! `OnMouseUp(button, true)`, then `PreClick`, `OnClick`, `PostClick` with
+//! `(button, false)` for an enabled button); `OnChar(char)` then
+//! `OnTextChanged(true)` per typed character; `MODIFIER_STATE_CHANGED`
+//! with `LSHIFT` and 1 / 0; a click on an edit box focusing it; the focus
+//! scripts' `userInput`, true while the user's action runs (also for a
+//! `ClearFocus` in `OnEnterPressed`).
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
@@ -22,6 +27,17 @@ pub struct Input {
     pub keyboard_focus: Option<WidgetId>,
     /// Shift, Ctrl and Alt held (the left keys).
     pub modifiers: [bool; 3],
+    /// The user's actions running (a click, typing, a key): scripts' and
+    /// focus changes' `userInput`.
+    pub user_actions: u32,
+}
+
+/// Runs `f` as the user's action.
+pub fn as_user<T>(vm: &mut Vm, f: impl FnOnce(&mut Vm) -> T) -> T {
+    engine_mut(vm).world.input.user_actions += 1;
+    let out = f(vm);
+    engine_mut(vm).world.input.user_actions -= 1;
+    out
 }
 
 const MODIFIERS: [(&str, &str); 3] = [("shift", "LSHIFT"), ("ctrl", "LCTRL"), ("alt", "LALT")];
@@ -125,19 +141,25 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Str(s) => Value::Str(s),
         _ => vm.str("LeftButton"),
     };
-    widgets::run_script(vm, id, "OnMouseDown", &[button]);
-    widgets::run_script(vm, id, "OnMouseUp", &[button, Value::Bool(true)]);
-    let is_button = {
+    as_user(vm, |vm| {
+        widgets::run_script(vm, id, "OnMouseDown", &[button]);
+        widgets::run_script(vm, id, "OnMouseUp", &[button, Value::Bool(true)]);
         let class = engine(vm).world.widgets[id.0].class.clone();
-        widgets::lineage(engine(vm), &class)
-            .iter()
-            .any(|c| c.eq_ignore_ascii_case("Button"))
-    };
-    if is_button && engine(vm).world.widgets[id.0].enabled {
-        for script in ["PreClick", "OnClick", "PostClick"] {
-            widgets::run_script(vm, id, script, &[button, Value::Bool(false)]);
+        let is = |vm: &Vm, kind: &str| {
+            widgets::lineage(engine(vm), &class)
+                .iter()
+                .any(|c| c.eq_ignore_ascii_case(kind))
+        };
+        let enabled = engine(vm).world.widgets[id.0].enabled;
+        if is(vm, "Button") && enabled {
+            for script in ["PreClick", "OnClick", "PostClick"] {
+                widgets::run_script(vm, id, script, &[button, Value::Bool(false)]);
+            }
         }
-    }
+        if is(vm, "EditBox") && enabled {
+            set_keyboard_focus(vm, Some(id));
+        }
+    });
     Ok(vec![])
 }
 
@@ -147,11 +169,12 @@ fn set_keyboard_focus(vm: &mut Vm, new: Option<WidgetId>) {
         return;
     }
     engine_mut(vm).world.input.keyboard_focus = new;
+    let user = Value::Bool(engine(vm).world.input.user_actions > 0);
     if let Some(o) = old {
-        widgets::run_script(vm, o, "OnEditFocusLost", &[]);
+        widgets::run_script(vm, o, "OnEditFocusLost", &[user]);
     }
     if let Some(n) = new {
-        widgets::run_script(vm, n, "OnEditFocusGained", &[]);
+        widgets::run_script(vm, n, "OnEditFocusGained", &[user]);
     }
 }
 
@@ -172,16 +195,18 @@ pub fn control_type(vm: &mut Vm, c: NativeCall) -> Ret {
         let name = label(vm, id);
         return Err(vm.error(&format!("mock.type: {name} is not visible")));
     }
-    set_keyboard_focus(vm, Some(id));
-    for ch in typed.chars() {
-        let mut text = text_of(vm, id);
-        text.push(ch);
-        let v = vm.str(&text);
-        engine_mut(vm).world.widgets[id.0].text = Some(v);
-        let ch = vm.str(&ch.to_string());
-        widgets::run_script(vm, id, "OnChar", &[ch]);
-        widgets::run_script(vm, id, "OnTextChanged", &[Value::Bool(true)]);
-    }
+    as_user(vm, |vm| {
+        set_keyboard_focus(vm, Some(id));
+        for ch in typed.chars() {
+            let mut text = text_of(vm, id);
+            text.push(ch);
+            let v = vm.str(&text);
+            engine_mut(vm).world.widgets[id.0].text = Some(v);
+            let ch = vm.str(&ch.to_string());
+            widgets::run_script(vm, id, "OnChar", &[ch]);
+            widgets::run_script(vm, id, "OnTextChanged", &[Value::Bool(true)]);
+        }
+    });
     Ok(vec![])
 }
 
@@ -198,7 +223,7 @@ pub fn edit_box_key(vm: &mut Vm, key: &str) -> bool {
         "SPACE" => "OnSpacePressed",
         _ => return false,
     };
-    widgets::run_script(vm, id, script, &[]);
+    as_user(vm, |vm| widgets::run_script(vm, id, script, &[]));
     true
 }
 

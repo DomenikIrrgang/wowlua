@@ -906,21 +906,59 @@ local function timers(done: (r: { [string]: string }) -> ())
     out["After returns"] = results(C_Timer.After, 100, function() end)
     -- Timers against OnUpdate within frames.
     const log: string[] = {}
+    -- An edit box's `OnTextChanged` for `SetText` (when, how often, for the
+    -- same text), against `OnUpdate`, timers and `OnSizeChanged`.
+    const text: string[] = {}
+    const box = CreateFrame("EditBox")
+    box:SetAutoFocus(false)
+    box:SetScript("OnTextChanged", function(self: any, userInput: any)
+        text[#text + 1] = `changed({tostring(userInput)}, {self:GetText()})`
+    end)
+    const fresh = CreateFrame("EditBox")
+    fresh:SetAutoFocus(false)
+    fresh:SetScript("OnTextChanged", function(self: any, userInput: any)
+        text[#text + 1] = `fresh({tostring(userInput)}, {self:GetText()})`
+    end)
+    const sized = CreateFrame("Frame", nil, UIParent)
+    sized:SetScript("OnSizeChanged", function(_: any, w: number, h: number)
+        text[#text + 1] = `size({w}x{h})`
+    end)
+    box:SetText("a")
+    text[#text + 1] = "set a"
+    box:SetText("a")
+    text[#text + 1] = "set a again"
+    box:SetText("b")
+    text[#text + 1] = "set b"
+    fresh:SetText("")
+    text[#text + 1] = "fresh set empty"
+    sized:SetSize(10, 10)
     const f = CreateFrame("Frame")
     local frames = 0
     f:SetScript("OnUpdate", function()
         frames += 1
         log[#log + 1] = `update{frames}`
+        text[#text + 1] = `update{frames}`
         if frames == 1 then
             C_Timer.After(0, function() log[#log + 1] = "after0 (set in update1)" end)
+            box:SetText("b")
+            text[#text + 1] = "set b (same, in update1)"
+        end
+        if frames == 2 then
+            box:SetText("c")
+            box:SetText("b")
+            text[#text + 1] = "set c then b (in update2)"
         end
         if frames >= 4 then
             f:SetScript("OnUpdate", nil)
             out.order = table.concat(log, " ")
+            out.textChanged = table.concat(text, " ")
             done(out)
         end
     end)
-    C_Timer.After(0, function() log[#log + 1] = "after0" end)
+    C_Timer.After(0, function()
+        log[#log + 1] = "after0"
+        text[#text + 1] = "after0"
+    end)
 end
 
 

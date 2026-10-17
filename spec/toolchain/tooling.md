@@ -78,9 +78,9 @@ For each test file and flavor, the runner:
 A test file opts out of step 5 with `config({ lifecycle = "manual" })` from
 `wowlua:test` at its top level, and then drives the lifecycle itself with
 `mock.login()`. Tests within one file share the VM. Each file starts fresh.
-An error while loading (a step above) fails the file; with
-`test.blizzard-ui`, errors of Blizzard's own code while loading and logging
-in are the emulation's gaps and only warned about. An error that reaches
+An error while loading (a step above) fails the file, Blizzard's code's
+included (with `test.blizzard-ui`: it runs without an error in the client,
+so the engine must too). An error that reaches
 the error handler during a test (an event handler's, a timer's) fails that
 test, unless the test read it with `mock.errors()`. The addon's
 `Bindings.xml` is read before its files load, as the client does.

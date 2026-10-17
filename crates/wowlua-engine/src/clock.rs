@@ -218,13 +218,15 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
     }
 }
 
-/// `n` frames of `ms` milliseconds: each moves the clock, runs the
+/// `n` frames of `ms` milliseconds: each ends the last frame (its
+/// `SetText`'s `OnTextChanged`), moves the clock, runs the
 /// `OnSizeChanged` the last frame's resizing owes, every visible widget's
 /// `OnUpdate` (with the frame's seconds), then the due timers, those an
 /// `OnUpdate` just set included (`/stdtest engine`: "update1 after0
 /// after0 (set in update1) update2").
 pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
     for _ in 0..n {
+        widgets::run_text_changes(vm);
         tick(vm, ms);
         widgets::run_size_changes(vm);
         let count = engine(vm).world.widgets.len();

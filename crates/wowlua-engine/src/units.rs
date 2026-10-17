@@ -415,6 +415,21 @@ fn unit_guid(vm: &mut Vm, c: NativeCall) -> Ret {
     with_unit(vm, &c, |vm, u| vec![vm.str(&u.guid)])
 }
 
+/// `UnitTokenFromGUID(guid)`: a token naming the unit (the first in
+/// `tokens_of`'s order; unverified which the client prefers), or nil.
+fn unit_token_from_guid(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Str(g) = c.arg(1) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let guid = String::from_utf8_lossy(vm.str_bytes(g)).into_owned();
+    let u = &engine(vm).units;
+    let token = (0..u.list.len())
+        .map(UnitId)
+        .filter(|id| u.list[id.0].guid == guid)
+        .find_map(|id| tokens_of(u, id).into_iter().next());
+    Ok(vec![token.map_or(Value::Nil, |t| vm.str(&t))])
+}
+
 fn unit_name(vm: &mut Vm, c: NativeCall) -> Ret {
     with_unit(vm, &c, |vm, u| {
         // On WoW Forever the second value is the last name; elsewhere a
@@ -718,6 +733,7 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
         ("UnitExists", unit_exists),
         ("UnitGUID", unit_guid),
+        ("UnitTokenFromGUID", unit_token_from_guid),
         ("UnitName", unit_name),
         ("UnitLevel", unit_level),
         ("UnitClass", unit_class),

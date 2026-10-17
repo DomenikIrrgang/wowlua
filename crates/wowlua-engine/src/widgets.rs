@@ -98,6 +98,11 @@ pub struct World {
     /// Widgets whose size changed since the last frame (`OnSizeChanged`
     /// runs with the next frame, not at `SetSize`).
     pub resized: Vec<WidgetId>,
+    /// Edit boxes Lua set the text of this frame: `OnTextChanged(false)`
+    /// runs at the frame's end, not at `SetText` (`/stdtest engine input`:
+    /// a script set after `SetText` still ran, at the same `GetTime`).
+    /// Unverified: once per frame, also for the same text.
+    pub text_set: Vec<WidgetId>,
     /// Warnings for gaps that would make every test fail if they were errors
     /// (templates without Blizzard's UI code).
     pub warnings: Vec<String>,
@@ -1555,6 +1560,14 @@ pub fn run_size_changes(vm: &mut Vm) {
     }
 }
 
+/// The `OnTextChanged(false)` this frame's `SetText` owes.
+pub fn run_text_changes(vm: &mut Vm) {
+    let set = std::mem::take(&mut engine_mut(vm).world.text_set);
+    for id in set {
+        run_script(vm, id, "OnTextChanged", &[Value::Bool(false)]);
+    }
+}
+
 /// A region's size: as laid out when its points give it one (two opposite
 /// points, `SetAllPoints`), else as set (unverified: recorded for fresh,
 /// unanchored widgets only).
@@ -1881,6 +1894,9 @@ fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         v => Some(v),
     };
     engine_mut(vm).world.widgets[id.0].text = t;
+    if is_a(engine(vm), &class, "EditBox") && !engine(vm).world.text_set.contains(&id) {
+        engine_mut(vm).world.text_set.push(id);
+    }
     Ok(vec![])
 }
 

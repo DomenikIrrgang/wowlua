@@ -147,7 +147,7 @@ pub fn press_binding(vm: &mut Vm, c: NativeCall) -> Ret {
         .opt_str(&c, 2)?
         .map(|s| String::from_utf8_lossy(vm.str_bytes(s)).into_owned())
         .unwrap_or_else(|| "down".into());
-    run_binding(vm, &name, &state);
+    crate::input::as_user(vm, |vm| run_binding(vm, &name, &state));
     Ok(vec![])
 }
 
@@ -167,8 +167,10 @@ pub fn press_key(vm: &mut Vm, c: NativeCall) -> Ret {
         .find(|(k, _)| *k == key)
         .map(|(_, b)| b.clone());
     if let Some(b) = bound {
-        run_binding(vm, &b, "down");
-        run_binding(vm, &b, "up");
+        crate::input::as_user(vm, |vm| {
+            run_binding(vm, &b, "down");
+            run_binding(vm, &b, "up");
+        });
     }
     Ok(vec![])
 }

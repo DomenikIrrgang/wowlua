@@ -1,6 +1,6 @@
 -- The demo window as a user sees it, in the emulated client with
--- Blizzard's UI (`test.blizzard-ui`), on WoW Forever (camelot).
-import test, expect, flavors from "wowlua:test"
+-- Blizzard's UI (`test.blizzard-ui`).
+import test, expect from "wowlua:test"
 import * as mock from "wowlua:mock"
 import DemoWindow from "/ui/window"
 
@@ -28,7 +28,6 @@ local function editBox(): EditBox
     error("no edit box")
 end
 
-@flavors("camelot")
 @test("/wdemo opens and closes the window")
 local function toggles()
     mock.slash("/wdemo")
@@ -39,7 +38,6 @@ local function toggles()
     expect(window()).never.toBeShown()
 end
 
-@flavors("camelot")
 @test("clicking the counter counts and fills the bar")
 local function counts()
     mock.slash("/wdemo")
@@ -51,7 +49,6 @@ local function counts()
     expect(window().progress:GetValue()).toBe(2)
 end
 
-@flavors("camelot")
 @test("typing and Enter add a row")
 local function addsRows()
     local box = editBox()

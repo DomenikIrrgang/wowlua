@@ -1,7 +1,5 @@
 -- Core Demo in the emulated client with Blizzard's UI (`test.blizzard-ui`).
--- The tests run on WoW Forever (camelot), whose UI code the engine runs
--- without an error so far.
-import test, expect, beforeEach, flavors from "wowlua:test"
+import test, expect, beforeEach from "wowlua:test"
 import * as mock from "wowlua:mock"
 
 -- The chat lines since the test started.
@@ -30,27 +28,23 @@ local function skipOldLines()
     newLines()
 end
 
-@flavors("camelot")
 @test("greets at login with the login count")
 local function greets()
     expect(mock.printed()).toContain("|cff33ff99CoreDemo|r: login #1, profile Default. Type /coredemo for commands.")
 end
 
-@flavors("camelot")
 @test("speaks again three seconds after login")
 local function afterThreeSeconds()
     mock.waitSeconds(3)
     expect(said("three seconds after login")).toBe(true)
 end
 
-@flavors("camelot")
 @test("/coredemo status shows the saved data")
 local function status()
     mock.slash("/coredemo status")
     expect(said("logins 1, scale 1, greet true, profile Default, in combat false")).toBe(true)
 end
 
-@flavors("camelot")
 @test("/coredemo scale stores the scale")
 local function scale()
     mock.slash("/coredemo scale 1.5")
@@ -58,7 +52,6 @@ local function scale()
     expect(said("scale 1.5")).toBe(true)
 end
 
-@flavors("camelot")
 @test("the box waits for the end of combat")
 local function boxAfterCombat()
     mock.player:enterCombat()
@@ -69,7 +62,6 @@ local function boxAfterCombat()
     expect(said("box toggled (out of combat)")).toBe(true)
 end
 
-@flavors("camelot")
 @test("the key binding toggles the box")
 local function binding()
     SetBinding("CTRL-B", "COREDEMO_TOGGLE_BOX")
@@ -77,7 +69,6 @@ local function binding()
     expect(said("box toggled")).toBe(true)
 end
 
-@flavors("camelot")
 @test("a new target is announced once a second at most")
 local function targets()
     local hogger = mock.spawnUnit({ name = "Hogger", level = 11 })
@@ -91,7 +82,6 @@ local function targets()
     expect(#lines).toBe(2)
 end
 
-@flavors("camelot")
 @test("profiles keep their own settings")
 local function profiles()
     mock.slash("/coredemo scale 2")

@@ -711,24 +711,6 @@ fn test_once(
                 coverage: args.coverage,
             };
             let results = wowlua_test::run(&suite, filter, threads);
-            if let Some(errors) = results
-                .iter()
-                .map(|r| &r.blizzard_errors)
-                .find(|e| !e.is_empty())
-            {
-                out.colored(&[
-                    (Some(Color::Yellow), true, "warning"),
-                    (
-                        None,
-                        false,
-                        &format!(
-                            ": Blizzard's UI code for {flavor} raised {} errors while loading (the emulation's gaps); the first: {}\n",
-                            errors.len(),
-                            errors[0]
-                        ),
-                    ),
-                ]);
-            }
             for result in &results {
                 if let Some(c) = &result.coverage {
                     let key = if args.coverage_per_flavor {

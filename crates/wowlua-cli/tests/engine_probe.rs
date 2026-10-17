@@ -251,6 +251,35 @@ fn compared(key: &str) -> bool {
         && !key.ends_with(".GetEffectiveScale")
 }
 
+/// Whether a result matches the client's: exactly, but layout sizes up to
+/// float precision (the client's last bits follow the session's screen and
+/// UI scale) and a list the client returns in its session's hash order as
+/// a set.
+fn same(key: &str, expected: &str, mine: &str) -> bool {
+    if expected == mine {
+        return true;
+    }
+    if key.starts_with("probe.layoutSizes.") {
+        let numbers =
+            |s: &str| -> Vec<f64> { s.split(' ').filter_map(|n| n.parse().ok()).collect() };
+        let (a, b) = (numbers(expected), numbers(mine));
+        return a.len() == b.len()
+            && a.iter()
+                .zip(&b)
+                .all(|(x, y)| (x - y).abs() <= x.abs() * 1e-6);
+    }
+    if key == "probe.loadCalls.C_UnitAuras.GetHiddenGroupBuffs" {
+        let values = |s: &str| -> std::collections::BTreeSet<String> {
+            s.split(['{', ',', '}'])
+                .filter_map(|e| e.split_once('=').map(|(_, v)| v.to_string()))
+                .collect()
+        };
+        let count = |s: &str| s.matches('=').count();
+        return count(expected) == count(mine) && values(expected) == values(mine);
+    }
+    false
+}
+
 #[test]
 fn the_engine_answers_the_probe_battery_as_the_client_did() {
     let dir = build();
@@ -287,7 +316,7 @@ fn the_engine_answers_the_probe_battery_as_the_client_did() {
         .filter(|(k, v)| compared(k) && !(k.starts_with("probe.allCVars.") && v.as_str() == "0: "))
     {
         match ours.get(key) {
-            Some(mine) if mine == expected => {}
+            Some(mine) if same(key, expected, mine) => {}
             mine => differences.push(format!(
                 "{key}\n    client: {expected}\n    ours:   {}",
                 mine.map_or("<missing>", String::as_str)
@@ -319,4 +348,96 @@ fn the_engine_answers_the_probe_battery_as_the_client_did() {
         theirs.keys().filter(|k| compared(k)).count(),
         differences.join("\n")
     );
+}
+
+/// `/stdtest engine input` replayed with the engine's controls: the same
+/// scripts with the same arguments, in the client's order.
+#[test]
+fn the_engine_takes_input_as_the_client_did() {
+    let src = fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-input.lua"))
+        .expect("the fixture");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    wowlua_engine::controls::install(&mut vm, "__engine");
+    let f = vm.load(&src, "=fixture").expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let n = vm.heap.table(t).border();
+    let client: Vec<String> = (1..=n)
+        .map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+            // Without the time: "19.298 button OnClick(...)".
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s))
+                .split_once(' ')
+                .expect("a time")
+                .1
+                .to_string(),
+            _ => panic!("a string"),
+        })
+        .collect();
+    // The probe's frames and scripts (its templates' looks aside).
+    addon(
+        &mut vm,
+        r##"InputLog = {}
+local function note(what) InputLog[#InputLog + 1] = what end
+local b = CreateFrame("Button", "StdTestInputButton", UIParent)
+b:SetSize(160, 28)
+b:SetPoint("CENTER", 0, 60)
+b:RegisterForClicks("AnyUp")
+for _, script in ipairs({ "OnEnter", "OnLeave", "OnMouseDown", "OnMouseUp", "PreClick", "OnClick", "PostClick" }) do
+    b:SetScript(script, function(_, ...)
+        local args = {}
+        for i = 1, select("#", ...) do args[#args + 1] = tostring((select(i, ...))) end
+        note(("button %s(%s) shift=%s"):format(script, table.concat(args, ", "), tostring(IsShiftKeyDown())))
+    end)
+end
+local e = CreateFrame("EditBox", "StdTestInputBox", UIParent)
+e:SetSize(160, 24)
+e:SetPoint("CENTER", 0, 20)
+e:SetAutoFocus(false)
+e:SetText("")
+e:Show()
+for _, script in ipairs({ "OnEditFocusGained", "OnEditFocusLost", "OnChar", "OnTextChanged", "OnEnterPressed", "OnEscapePressed", "OnTabPressed" }) do
+    e:SetScript(script, function(self, ...)
+        local args = {}
+        for i = 1, select("#", ...) do args[#args + 1] = tostring((select(i, ...))) end
+        note(("box %s(%s) text=%s focus=%s"):format(script, table.concat(args, ", "), self:GetText(), tostring(self:HasFocus())))
+        if script == "OnEnterPressed" or script == "OnEscapePressed" then self:ClearFocus() end
+    end)
+end
+local m = CreateFrame("Frame")
+m:RegisterEvent("MODIFIER_STATE_CHANGED")
+m:SetScript("OnEvent", function(_, event, key, down) note(("%s(%s, %s)"):format(event, key, tostring(down))) end)"##,
+    );
+    wowlua_engine::clock::advance_frames(&mut vm, 1, 1000.0 / 60.0);
+    addon(
+        &mut vm,
+        r#"local b, e = StdTestInputButton, StdTestInputBox
+__engine.hover(b) __engine.hover(nil)
+__engine.hover(b) __engine.hover(nil)
+__engine.hover(b)
+__engine.click(b)
+__engine.setModifiers({ shift = true })
+__engine.click(b)
+__engine.setModifiers({})
+__engine.hover(nil)
+__engine.click(e)
+__engine.type(e, "ab")
+__engine.pressKey("ENTER")"#,
+    );
+    let ours: Vec<String> = {
+        let log = vm.get_global("InputLog");
+        let Value::Table(t) = log else {
+            panic!("a log")
+        };
+        let n = vm.heap.table(t).border();
+        (1..=n)
+            .map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+                Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+                _ => panic!("a string"),
+            })
+            .collect()
+    };
+    assert_eq!(ours, client);
 }

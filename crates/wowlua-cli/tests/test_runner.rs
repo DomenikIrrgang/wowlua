@@ -1280,7 +1280,14 @@ end
 local function unit()
     local hogger = mock.spawnUnit({ name = "Hogger", level = 11, reaction = "hostile" })
     mock.player:target(hogger)
-    expect(mock.showTooltip("unit", { unit = "target" })).toEqual({ "Hogger", "Level 11" })
+    -- The beta client's issue reporter (Blizzard_PTRFeedback, loaded on
+    -- beta and PTR clients only) adds its line to unit tooltips.
+    expect(mock.showTooltip("unit", { unit = "target" })).toEqual({
+        "Hogger",
+        "Level 11",
+        " ",
+        "|c0042b1feThe 'Open Issue Report' keybind is not bound.\nBind via the PTR section in the Key Bindings Menu.",
+    })
 end
 "#,
             ),

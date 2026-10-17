@@ -108,6 +108,21 @@ local function read(kind: TooltipKind, tip: GameTooltip, data: TooltipData): Too
     return data
 end
 
+-- With the data system, from the client's data as Blizzard's `TooltipUtil`
+-- reads it: the tooltip's getters fail during a post-call (Forever 70425,
+-- `SetBagItem`: "attempt to call a nil value" in `GetItem`).
+local function fromData(kind: TooltipKind, raw: table, data: TooltipData): TooltipData
+    const r = raw :: any
+    if kind == "Item" then
+        if r.guid and C_Item.GetItemLinkByGUID then
+            data.link = C_Item.GetItemLinkByGUID(r.guid) ?? data.link
+        end
+    elseif kind == "Unit" then
+        data.unit = r.guid and UnitTokenFromGUID and UnitTokenFromGUID(r.guid) or nil
+    end
+    return data
+end
+
 -- With the data system: one post-call per kind, for every tooltip.
 local registered: { [string]: boolean } = {}
 
@@ -122,7 +137,7 @@ local function listen(kind: TooltipKind)
             return
         end
         const data: TooltipData = { kind = kind, id = raw.id, guid = raw.guid, link = raw.hyperlink, raw = raw }
-        dispatch(kind, tip, read(kind, tip, data))
+        dispatch(kind, tip, fromData(kind, raw, data))
     end)
 end
 

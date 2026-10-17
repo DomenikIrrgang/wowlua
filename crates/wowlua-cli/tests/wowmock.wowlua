@@ -567,6 +567,10 @@ UnitGUID = (function(unit: string): any
     return mockUnit(unit)?.guid ?? `GUID-{unit}`
 end) :: any
 
+UnitTokenFromGUID = (function(guid: string): string?
+    return guid:match("^GUID%-(.+)$")
+end) :: any
+
 -- The tooltip data system (setups without it set TooltipDataProcessor to nil).
 _G.Enum = {
     TooltipDataType = { Item = 0, Spell = 1, Unit = 2, Currency = 5, Mount = 10 },
