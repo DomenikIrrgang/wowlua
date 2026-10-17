@@ -56,6 +56,23 @@ impl Lexed {
         let hi = lo + self.trivia[lo..].partition_point(|t| t.start < to);
         &self.trivia[lo..hi]
     }
+
+    /// Frees the tokens; the trivia and line starts stay. For parses kept
+    /// past the parse whose readers need no tokens (#19): a data addon
+    /// has tens of millions of them.
+    pub fn drop_tokens(&mut self) {
+        self.tokens = Tokens::default();
+    }
+
+    /// Where the code of `src` (these tokens' source) starts: after a byte
+    /// order mark and a `#!` line.
+    pub fn code_start(&self) -> u32 {
+        match self.shebang {
+            Some((_, end)) => end,
+            None if self.bom => 3,
+            None => 0,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -110,6 +127,31 @@ pub fn lex_with(src: &[u8], file: FileId, options: LexOptions) -> Lexed {
     lexer.out.trivia.shrink_to_fit();
     lexer.out.line_starts.shrink_to_fit();
     lexer.out
+}
+
+/// The start of the first token at or after `offset` in `src` (the bytes
+/// of `file`), without the tokens: past the spaces, line breaks and
+/// comments there, or `src.len()` (the end-of-file token's start) when only
+/// those follow. `offset` must be where code may start
+/// ([`Lexed::code_start`], a token's end), not inside a backtick string's
+/// text.
+pub fn skip_trivia(src: &[u8], file: FileId, offset: u32) -> u32 {
+    let at = (offset as usize).min(src.len());
+    // Mostly a token follows at once (`,` after a field).
+    match src.get(at..).unwrap_or_default() {
+        [b'-', b'-', ..] | [b' ' | b'\t' | 0x0B | 0x0C | b'\n' | b'\r', ..] => {}
+        _ => return at as u32,
+    }
+    let mut lexer = Lexer {
+        src,
+        file,
+        pos: at,
+        out: Lexed::default(),
+        modes: Vec::new(),
+        keep_trivia: false,
+    };
+    lexer.trivia();
+    lexer.pos as u32
 }
 
 fn is_name_start(c: u8) -> bool {
@@ -215,6 +257,9 @@ impl<'a> Lexer<'a> {
         });
     }
 
+    // Inlined into the token loop: called from `skip_trivia` too, it would
+    // not be, and lexing would cost 2% more.
+    #[inline(always)]
     fn trivia(&mut self) {
         loop {
             let start = self.pos;
@@ -847,7 +892,42 @@ fn lua_number(text: &str) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_plain_decimal, is_wowlua_numeral, number_value};
+    use super::{is_plain_decimal, is_wowlua_numeral, lex, number_value, skip_trivia};
+    use wowlua_span::SourceDb;
+
+    // From a token's end (or where the code starts), the scan finds the next
+    // token's start, as the lexer does.
+    #[test]
+    fn skipping_trivia_finds_the_next_token() {
+        let mut db = SourceDb::new();
+        for src in [
+            "",
+            "   ",
+            "-- only a comment",
+            "--[[ open",
+            "\u{feff}#!/bin/lua\nx = 1",
+            "#!/bin/lua",
+            "\u{feff}x",
+            "local a = 1 -- c\n--[==[ long\n]==]\n\r\n  b = {1, 2,\n 3}",
+            "f(a --[[x]], b)\n-- last\n",
+            "if x then\treturn end --[[ unfinished",
+            "a = -- \n --[[]] --[=[]]]=] -1",
+        ] {
+            let file = db.add("t.lua", src.to_string());
+            let lexed = lex(src.as_bytes(), file);
+            let tokens = &lexed.tokens;
+            let mut from = lexed.code_start();
+            for i in 0..tokens.len() {
+                let start = tokens.start(i);
+                assert_eq!(
+                    skip_trivia(src.as_bytes(), file, from),
+                    start,
+                    "{src:?} at {from}"
+                );
+                from = tokens.end(i);
+            }
+        }
+    }
 
     // The fast path gives what the full conversion gives.
     #[test]

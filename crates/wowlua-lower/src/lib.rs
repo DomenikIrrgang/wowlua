@@ -261,7 +261,6 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         fn_marks: HashMap::new(),
         meta_read: std::cell::Cell::new(false),
         line_hint: std::cell::Cell::new(0),
-        token_hint: std::cell::Cell::new(0),
     };
     // Exported functions, classes and enums are hoisted (spec §5.1,
     // decisions L24 and T76).
@@ -666,11 +665,10 @@ struct Lowerer<'a> {
     fn_marks: HashMap<Pos, FnMarks>,
     /// `ctx.meta` was read ([`Lowerer::meta`]).
     meta_read: std::cell::Cell<bool>,
-    /// Where the last position lookups landed in `line_starts` and `tokens`:
-    /// lowering walks a file mostly forward, so the next lookup starts its
-    /// search there ([`partition_point_near`]).
+    /// Where the last position lookup landed in `line_starts`: lowering
+    /// walks a file mostly forward, so the next lookup starts its search
+    /// there ([`partition_point_near`]).
     line_hint: std::cell::Cell<usize>,
-    token_hint: std::cell::Cell<usize>,
 }
 
 const LICENSE_WORDS: &[&str] = &["license", "copyright", "spdx-license-identifier"];
@@ -707,14 +705,14 @@ impl<'a> Lowerer<'a> {
         self.pos(span.start)
     }
 
+    /// The position of the first token at or after `offset` (a token's
+    /// end), found in the source: the build frees the tokens after parsing.
     fn next_token_pos(&self, offset: u32) -> Pos {
-        let tokens = &self.parse.lexed.tokens;
-        let i = partition_point_near(tokens.starts(), self.token_hint.get(), |&s| s < offset);
-        self.token_hint.set(i);
-        match tokens.get(i) {
-            Some(t) => self.pos(t.start),
-            None => Pos::NONE,
+        if offset as usize > self.src.len() {
+            return Pos::NONE;
         }
+        let file = self.parse.view().span().file;
+        self.pos(wowlua_syntax::lexer::skip_trivia(self.src, file, offset))
     }
 
     fn close_pos(&self, span: Span) -> Pos {
@@ -724,11 +722,9 @@ impl<'a> Lowerer<'a> {
     fn comments(&self) -> Vec<ir::Comment> {
         let lexed = &self.parse.lexed;
         // The trivia before the first token.
-        let first = lexed.tokens.first().map_or(0, |t| {
-            lexed
-                .trivia
-                .partition_point(|trivia| trivia.start < t.start)
-        });
+        let file = self.parse.view().span().file;
+        let code = wowlua_syntax::lexer::skip_trivia(self.src, file, lexed.code_start());
+        let first = lexed.trivia.partition_point(|trivia| trivia.start < code);
         let mut out = Vec::new();
         let mut leading_license = false;
         for (i, trivia) in lexed.trivia.iter().enumerate() {

@@ -290,6 +290,9 @@ pub struct Parsed {
     /// What `wowlua dev` knows of plain Lua sources without their parse.
     pub(crate) fronts: Vec<Front>,
     declarations: Vec<Parse>,
+    /// The parses keep their tokens (for `rename-private`); otherwise each
+    /// frees them once parsed (#19): no later pass reads them.
+    keep_tokens: bool,
 }
 
 impl Parsed {
@@ -317,10 +320,25 @@ pub(crate) enum Front {
 }
 
 impl Parsed {
-    fn push(&mut self, parse: Option<Parse>, ok: bool) {
+    fn push(&mut self, mut parse: Option<Parse>, ok: bool) {
+        if let Some(parse) = &mut parse {
+            self.finish(parse);
+        }
         self.parses.push(parse);
         self.ok.push(ok);
         self.fronts.push(Front::None);
+    }
+
+    fn push_declaration(&mut self, mut parse: Parse) {
+        self.finish(&mut parse);
+        self.declarations.push(parse);
+    }
+
+    /// Frees the tokens of a parse kept here, unless they are kept.
+    fn finish(&self, parse: &mut Parse) {
+        if !self.keep_tokens {
+            parse.lexed.drop_tokens();
+        }
     }
 
     /// The load-order usage of file `i` known without a flavor.
@@ -354,6 +372,7 @@ pub fn parse_sources(
     raw: &HashMap<String, Arc<[u8]>>,
     mut cache: Option<&mut crate::BuildCache>,
     summarize: bool,
+    keep_tokens: bool,
     jobs: &crate::parallel::Jobs,
 ) -> Parsed {
     /// What to do with a source or declaration.
@@ -444,7 +463,7 @@ pub fn parse_sources(
         Item::Source { i, lua_kept } => {
             let (source, file) = &files[i];
             let bytes = &raw[&source.rel];
-            let parse = wowlua_syntax::parse(bytes, *file);
+            let mut parse = wowlua_syntax::parse(bytes, *file);
             let mut failed = None;
             let mut lua = None;
             let mut usage = None;
@@ -480,6 +499,9 @@ pub fn parse_sources(
                     }
                 }
             }
+            if !keep_tokens {
+                parse.lexed.drop_tokens();
+            }
             Done::Source {
                 i,
                 parse,
@@ -489,10 +511,13 @@ pub fn parse_sources(
                 nolint,
             }
         }
-        Item::Declaration(d) => Done::Declaration(wowlua_syntax::parse(
-            &declarations[d].bytes,
-            declarations[d].file,
-        )),
+        Item::Declaration(d) => {
+            let mut parse = wowlua_syntax::parse(&declarations[d].bytes, declarations[d].file);
+            if !keep_tokens {
+                parse.lexed.drop_tokens();
+            }
+            Done::Declaration(parse)
+        }
     };
     let mut parses: Vec<Option<Parse>> = (0..files.len()).map(|_| None).collect();
     let mut ok = vec![true; files.len()];
@@ -551,6 +576,7 @@ pub fn parse_sources(
         ok,
         fronts,
         declarations: parsed_declarations,
+        keep_tokens,
     }
 }
 
@@ -644,7 +670,7 @@ pub fn add_stdlib(
                     file,
                     bytes: text.into_bytes().into(),
                 });
-                parsed.declarations.push(parse);
+                parsed.push_declaration(parse);
             }
         }
     }
@@ -814,7 +840,7 @@ pub fn add_libraries(
                     file,
                     bytes: bytes.into(),
                 });
-                parsed.declarations.push(parse);
+                parsed.push_declaration(parse);
                 continue;
             }
             let kind = if lower.ends_with(".wowlua") {

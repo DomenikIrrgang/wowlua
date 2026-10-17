@@ -826,6 +826,7 @@ fn build_inner(
         &raw,
         cache.as_deref_mut(),
         summarize,
+        passes.rename_private,
         &request.jobs,
     );
     crate::compile::add_libraries(
