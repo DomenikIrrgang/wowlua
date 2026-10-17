@@ -47,6 +47,29 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test --workspace
 
+  # The tests that run Blizzard's UI code (camelot's, from wow-ui-source at
+  # the declarations' commit): skipped elsewhere without it.
+  blizzard-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/types-src
+          key: types-src-camelot-${{ hashFiles('xtask/src/types.rs', 'crates/wowlua-api/data/*.json.gz') }}
+      - name: Blizzard's UI code
+        run: |
+          cargo xtask types fetch ~/types-src
+          mkdir -p target
+          ln -sfn ~/types-src target/types-src
+        env:
+          WOWLUA_FETCH_ONLY: camelot
+      - run: cargo test -p wowlua-cli --test test_runner --test engine_probe
+
   msrv:
     runs-on: ubuntu-latest
     steps:

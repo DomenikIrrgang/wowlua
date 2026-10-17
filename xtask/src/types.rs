@@ -140,9 +140,67 @@ fn version_key(v: &str) -> Vec<u32> {
     v.split('.').filter_map(|p| p.parse().ok()).collect()
 }
 
+/// A flavor's UI code at the commit its declarations name
+/// (`-- … commit <sha>;` in `crates/wowlua-api/data/<flavor>.d.wowlua`).
+fn fetch_pinned(dir: &Path, flavor: &str) -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let decl = fs::read_to_string(root.join(format!("crates/wowlua-api/data/{flavor}.d.wowlua")))?;
+    let commit = decl
+        .lines()
+        .take(5)
+        .find_map(|l| l.split("commit ").nth(1))
+        .and_then(|rest| rest.get(..40))
+        .ok_or_else(|| anyhow::anyhow!("{flavor}'s declarations name no commit"))?
+        .to_string();
+    let target = dir.join(flavor);
+    let marker = target.join(".wowlua-tag");
+    let stamp = format!("pinned {commit} addons");
+    if fs::read_to_string(&marker).ok().as_deref() == Some(stamp.as_str()) {
+        println!("{flavor}: {commit} (cached)");
+        return Ok(());
+    }
+    if target.exists() {
+        fs::remove_dir_all(&target)?;
+    }
+    println!("{flavor}: fetching wow-ui-source {commit}");
+    fs::create_dir_all(&target)?;
+    git(&["init", "-q"], Some(&target))?;
+    git(&["remote", "add", "origin", UI_REPO], Some(&target))?;
+    git(
+        &["sparse-checkout", "set", "Interface/AddOns"],
+        Some(&target),
+    )?;
+    git(
+        &[
+            "fetch",
+            "-q",
+            "--depth",
+            "1",
+            "--filter=blob:none",
+            "origin",
+            &commit,
+        ],
+        Some(&target),
+    )?;
+    git(&["checkout", "-q", "FETCH_HEAD"], Some(&target))?;
+    fs::write(&marker, &stamp)?;
+    Ok(())
+}
+
 pub fn fetch(dir: &Path) -> Result<()> {
     fs::create_dir_all(dir)?;
-    for (flavor, tag, commit) in flavor_tags()? {
+    // `WOWLUA_FETCH_ONLY=camelot`: that flavor's UI code and strings alone,
+    // at the commit its declarations name (CI's Blizzard UI tests: the
+    // code the engine's recordings match), without Ketho's declarations.
+    let only = std::env::var("WOWLUA_FETCH_ONLY").ok();
+    let wanted = |flavor: &str| only.as_deref().is_none_or(|o| o == flavor);
+    if let Some(flavor) = &only {
+        fetch_pinned(dir, flavor)?;
+    }
+    for (flavor, tag, commit) in flavor_tags()?
+        .into_iter()
+        .filter(|(f, _, _)| only.is_none() && wanted(f))
+    {
         let target = dir.join(&flavor);
         let marker = target.join(".wowlua-tag");
         // The commit too: the tag moves with each build.
@@ -184,6 +242,7 @@ pub fn fetch(dir: &Path) -> Result<()> {
     ];
     for ((_, branch, commit), (kind, file)) in STRINGS
         .iter()
+        .filter(|(flavor, _, _)| wanted(flavor))
         .flat_map(|s| dumps.iter().map(move |d| (s, *d)))
     {
         let path = dir.join(kind).join(format!("{commit}.lua"));
@@ -204,6 +263,9 @@ pub fn fetch(dir: &Path) -> Result<()> {
         if !status.success() {
             bail!("downloading {url} failed");
         }
+    }
+    if only.is_some() {
+        return Ok(());
     }
     let ketho = dir.join("ketho");
     let marker = ketho.join(".wowlua-commit");
