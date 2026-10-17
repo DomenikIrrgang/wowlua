@@ -838,6 +838,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("interruptCast", crate::casting::control_interrupt),
         ("setDistance", crate::character::control_set_distance),
         ("setMoney", crate::character::control_set_money),
+        ("setStats", crate::stats::control_set_stats),
         ("equip", crate::character::control_equip),
     ] {
         let native = vm.native(name, f);

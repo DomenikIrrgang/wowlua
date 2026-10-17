@@ -1,0 +1,696 @@
+//! The player's stats as the client reports them (decision: modeled
+//! profile fields): attributes, damage, ratings, regeneration, experience,
+//! honor, talents, forms and appearances, each the full answer of the
+//! client function that reports it.
+//! A world profile's `stats` (recorded by `/stdtest snapshot`) sets them,
+//! and tests change them with `mock.player:setStats`. The snapshot records
+//! the same keys (`tests/ingame/src/snapshot.wowlua`; a test keeps the two
+//! lists together).
+//!
+//! The default character's stats are stand-ins (no recording of it yet):
+//! empty values, a whole damage multiplier, a two-second swing, no combat
+//! ratings, spell power or item level; one talent group; no transmog.
+
+use std::collections::BTreeMap;
+
+use wowlua_vm::stdlib::Ret;
+use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
+
+use crate::{engine, engine_mut, units, widgets};
+
+/// How a stat's function is asked.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Ask {
+    /// `f(unit)`: the player's.
+    Unit,
+    /// `f()`.
+    Plain,
+    /// `f(unit, i)`: by index (an attribute, a school).
+    UnitIndex,
+    /// `f(i)`: by index (a rating, a school).
+    Index,
+    /// `f(stat, value)`: by attribute, for the attribute's effective value
+    /// (as the character sheet asks it).
+    ForStat,
+    /// `f(location)`: by transmog location, `slotID * 100 + type * 10 +
+    /// modification` (Blizzard's lookup key).
+    Location,
+}
+
+/// A stat: its key in a profile, the function that reports it, how it is
+/// asked, and the event that tells of a change (unverified).
+pub struct Stat {
+    pub key: &'static str,
+    pub function: &'static str,
+    pub ask: Ask,
+    pub event: Option<&'static str>,
+}
+
+const fn stat(
+    key: &'static str,
+    function: &'static str,
+    ask: Ask,
+    event: Option<&'static str>,
+) -> Stat {
+    Stat {
+        key,
+        function,
+        ask,
+        event,
+    }
+}
+
+use Ask::*;
+
+/// Every stat (the client functions the character sheet computes from).
+pub const STATS: &[Stat] = &[
+    stat("stat", "UnitStat", UnitIndex, Some("UNIT_STATS")),
+    stat(
+        "resistance",
+        "UnitResistance",
+        UnitIndex,
+        Some("UNIT_RESISTANCES"),
+    ),
+    stat("armor", "UnitArmor", Unit, Some("UNIT_RESISTANCES")),
+    stat("damage", "UnitDamage", Unit, Some("UNIT_DAMAGE")),
+    stat(
+        "rangedDamage",
+        "UnitRangedDamage",
+        Unit,
+        Some("UNIT_RANGEDDAMAGE"),
+    ),
+    stat(
+        "attackSpeed",
+        "UnitAttackSpeed",
+        Unit,
+        Some("UNIT_ATTACK_SPEED"),
+    ),
+    stat(
+        "attackPower",
+        "UnitAttackPower",
+        Unit,
+        Some("UNIT_ATTACK_POWER"),
+    ),
+    stat(
+        "rangedAttackPower",
+        "UnitRangedAttackPower",
+        Unit,
+        Some("UNIT_RANGED_ATTACK_POWER"),
+    ),
+    stat("defense", "UnitDefenseSkill", Unit, Some("UNIT_DEFENSE")),
+    stat("hpPerStamina", "UnitHPPerStamina", Unit, None),
+    stat(
+        "spellHaste",
+        "UnitSpellHaste",
+        Unit,
+        Some("UNIT_SPELL_HASTE"),
+    ),
+    stat("movement", "GetUnitSpeed", Unit, None),
+    stat("xp", "UnitXP", Unit, Some("PLAYER_XP_UPDATE")),
+    stat("xpMax", "UnitXPMax", Unit, Some("PLAYER_XP_UPDATE")),
+    stat("honor", "UnitHonor", Unit, Some("HONOR_XP_UPDATE")),
+    stat("honorMax", "UnitHonorMax", Unit, Some("HONOR_XP_UPDATE")),
+    stat(
+        "honorLevel",
+        "UnitHonorLevel",
+        Unit,
+        Some("HONOR_LEVEL_UPDATE"),
+    ),
+    stat(
+        "restedXP",
+        "GetXPExhaustion",
+        Plain,
+        Some("UPDATE_EXHAUSTION"),
+    ),
+    stat(
+        "restState",
+        "GetRestState",
+        Plain,
+        Some("UPDATE_EXHAUSTION"),
+    ),
+    stat(
+        "xpDisabled",
+        "IsXPUserDisabled",
+        Plain,
+        Some("PLAYER_XP_UPDATE"),
+    ),
+    stat(
+        "expertise",
+        "GetExpertise",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "spellHealing",
+        "GetSpellBonusHealing",
+        Plain,
+        Some("SPELL_POWER_CHANGED"),
+    ),
+    stat("spellPenetration", "GetSpellPenetration", Plain, None),
+    stat(
+        "spellHit",
+        "GetSpellHitModifier",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "spellCrit",
+        "GetSpellCritChance",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "shieldBlock",
+        "GetShieldBlock",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "rangedHaste",
+        "GetRangedHaste",
+        Plain,
+        Some("UNIT_RANGEDDAMAGE"),
+    ),
+    stat(
+        "rangedCrit",
+        "GetRangedCritChance",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "rangedHit",
+        "GetRangedHitModifier",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat("crit", "GetCritChance", Plain, Some("COMBAT_RATING_UPDATE")),
+    stat("hit", "GetHitModifier", Plain, Some("COMBAT_RATING_UPDATE")),
+    stat(
+        "offhandHit",
+        "GetOffhandHitModifier",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "meleeHaste",
+        "GetMeleeHaste",
+        Plain,
+        Some("UNIT_ATTACK_SPEED"),
+    ),
+    stat("mastery", "GetMasteryEffect", Plain, Some("MASTERY_UPDATE")),
+    stat("powerRegen", "GetPowerRegen", Plain, None),
+    stat("manaRegen", "GetManaRegen", Plain, None),
+    stat("manaRegenFromSpirit", "GetManaRegenFromSpirit", Plain, None),
+    stat("healthRegen", "GetHealthRegen", Plain, None),
+    stat(
+        "healthRegenFromSpirit",
+        "GetHealthRegenFromSpirit",
+        Plain,
+        None,
+    ),
+    stat(
+        "block",
+        "GetBlockChance",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "dodge",
+        "GetDodgeChance",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "dodgeFromAttribute",
+        "GetDodgeChanceFromAttribute",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "parry",
+        "GetParryChance",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "resilience",
+        "GetModResilienceDamageReduction",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat("lifesteal", "GetLifesteal", Plain, Some("LIFESTEAL_UPDATE")),
+    stat("avoidance", "GetAvoidance", Plain, Some("AVOIDANCE_UPDATE")),
+    stat("speed", "GetSpeed", Plain, Some("SPEED_UPDATE")),
+    stat(
+        "itemLevel",
+        "GetAverageItemLevel",
+        Plain,
+        Some("PLAYER_AVG_ITEM_LEVEL_UPDATE"),
+    ),
+    stat(
+        "armorPenetration",
+        "GetArmorPenetration",
+        Plain,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "spellPowerByAttackPower",
+        "GetOverrideSpellPowerByAP",
+        Plain,
+        Some("SPELL_POWER_CHANGED"),
+    ),
+    stat(
+        "attackPowerBySpellPower",
+        "GetOverrideAPBySpellPower",
+        Plain,
+        Some("SPELL_POWER_CHANGED"),
+    ),
+    // Talents.
+    stat(
+        "specGroups",
+        "GetNumSpecGroups",
+        Plain,
+        Some("PLAYER_TALENT_UPDATE"),
+    ),
+    stat(
+        "activeSpecGroup",
+        "C_SpecializationInfo.GetActiveSpecGroup",
+        Plain,
+        Some("ACTIVE_TALENT_GROUP_CHANGED"),
+    ),
+    stat(
+        "specialization",
+        "C_SpecializationInfo.GetSpecialization",
+        Plain,
+        Some("PLAYER_SPECIALIZATION_CHANGED"),
+    ),
+    stat(
+        "specializationInfo",
+        "C_SpecializationInfo.GetSpecializationInfo",
+        Index,
+        Some("PLAYER_SPECIALIZATION_CHANGED"),
+    ),
+    stat(
+        "combatConfig",
+        "C_SpecializationInfo.GetCombatConfigIDForSpecGroup",
+        Index,
+        Some("PLAYER_TALENT_UPDATE"),
+    ),
+    stat(
+        "talentUI",
+        "C_SpecializationInfo.CanPlayerUseTalentUI",
+        Plain,
+        Some("PLAYER_TALENT_UPDATE"),
+    ),
+    stat(
+        "talentSpecUI",
+        "C_SpecializationInfo.CanPlayerUseTalentSpecUI",
+        Plain,
+        Some("PLAYER_TALENT_UPDATE"),
+    ),
+    stat(
+        "earnedTalentPoint",
+        "C_SpecializationInfo.HasPlayerEarnedATalentPoint",
+        Plain,
+        Some("PLAYER_TALENT_UPDATE"),
+    ),
+    // Shapeshift forms (a paladin's auras too).
+    stat(
+        "shapeshiftForms",
+        "GetNumShapeshiftForms",
+        Plain,
+        Some("UPDATE_SHAPESHIFT_FORMS"),
+    ),
+    stat(
+        "shapeshiftForm",
+        "GetShapeshiftForm",
+        Plain,
+        Some("UPDATE_SHAPESHIFT_FORM"),
+    ),
+    stat(
+        "shapeshiftFormID",
+        "GetShapeshiftFormID",
+        Plain,
+        Some("UPDATE_SHAPESHIFT_FORM"),
+    ),
+    stat(
+        "shapeshiftFormInfo",
+        "GetShapeshiftFormInfo",
+        Index,
+        Some("UPDATE_SHAPESHIFT_FORMS"),
+    ),
+    // The cooldown viewer's spells (by category) and group buffs.
+    stat(
+        "cooldownViewerSet",
+        "C_CooldownViewer.GetCooldownViewerCategorySet",
+        Index,
+        Some("COOLDOWN_VIEWER_DATA_LOADED"),
+    ),
+    stat(
+        "groupBuffs",
+        "C_CooldownViewer.GetGroupBuffItems",
+        Plain,
+        Some("COOLDOWN_VIEWER_DATA_LOADED"),
+    ),
+    // The equipped gear's appearances.
+    stat(
+        "transmogSlot",
+        "C_Transmog.GetSlotVisualInfo",
+        Location,
+        Some("TRANSMOGRIFY_UPDATE"),
+    ),
+    stat(
+        "combatRating",
+        "GetCombatRating",
+        Index,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "combatRatingBonus",
+        "GetCombatRatingBonus",
+        Index,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "spellDamage",
+        "GetSpellBonusDamage",
+        Index,
+        Some("SPELL_POWER_CHANGED"),
+    ),
+    stat(
+        "versatility",
+        "GetVersatilityBonus",
+        Index,
+        Some("COMBAT_RATING_UPDATE"),
+    ),
+    stat(
+        "attackPowerForStat",
+        "GetAttackPowerForStat",
+        ForStat,
+        Some("UNIT_STATS"),
+    ),
+    stat(
+        "rangedAttackPowerForStat",
+        "GetRangedAttackPowerForStat",
+        ForStat,
+        Some("UNIT_STATS"),
+    ),
+    stat(
+        "critFromStat",
+        "GetCritChanceFromStat",
+        ForStat,
+        Some("UNIT_STATS"),
+    ),
+    stat(
+        "spellCritFromStat",
+        "GetSpellCritChanceFromStat",
+        ForStat,
+        Some("UNIT_STATS"),
+    ),
+];
+
+/// A recorded value.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Answer {
+    Nil,
+    Bool(bool),
+    Num(f64),
+    Str(String),
+    /// A structure (`{ baseSourceID = 0, … }`).
+    Table(Vec<(Answer, Answer)>),
+}
+
+/// A stat's answer: one, or one per index.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Entry {
+    One(Vec<Answer>),
+    ByIndex(BTreeMap<i64, Vec<Answer>>),
+}
+
+/// The player's stats, by key.
+pub type Stats = BTreeMap<&'static str, Entry>;
+
+/// The default character's (stand-ins, see the module's note).
+pub fn defaults() -> Stats {
+    let mut s = Stats::new();
+    let n = Answer::Num;
+    s.insert(
+        "damage",
+        Entry::One(vec![n(0.0), n(0.0), n(0.0), n(0.0), n(0.0), n(0.0), n(1.0)]),
+    );
+    s.insert(
+        "rangedDamage",
+        Entry::One(vec![n(0.0), n(0.0), n(0.0), n(0.0), n(0.0), n(1.0)]),
+    );
+    s.insert(
+        "attackSpeed",
+        Entry::One(vec![n(2.0), Answer::Nil, Answer::Nil]),
+    );
+    // No combat ratings (documented nilable; the sheet adds to them).
+    let none: BTreeMap<i64, Vec<Answer>> = (1..=31).map(|i| (i, vec![n(0.0)])).collect();
+    s.insert("combatRating", Entry::ByIndex(none.clone()));
+    s.insert("combatRatingBonus", Entry::ByIndex(none));
+    // No spell power (nilable too).
+    let schools: BTreeMap<i64, Vec<Answer>> = (1..=7).map(|i| (i, vec![n(0.0)])).collect();
+    s.insert("spellDamage", Entry::ByIndex(schools));
+    // Overall, equipped and PvP (undocumented).
+    s.insert("itemLevel", Entry::One(vec![n(0.0), n(0.0), n(0.0)]));
+    // One talent group, active.
+    s.insert("specGroups", Entry::One(vec![n(1.0)]));
+    s.insert("activeSpecGroup", Entry::One(vec![n(1.0)]));
+    // Not rested.
+    s.insert("restedXP", Entry::One(vec![Answer::Nil]));
+    s.insert(
+        "restState",
+        Entry::One(vec![n(2.0), Answer::Str("Normal".into()), n(1.0)]),
+    );
+    s
+}
+
+fn answer_of(vm: &Vm, v: Value) -> Answer {
+    match vm.hidden(v) {
+        Value::Bool(b) => Answer::Bool(b),
+        Value::Num(n) => Answer::Num(n),
+        Value::Str(s) => Answer::Str(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+        Value::Table(t) => Answer::Table(
+            vm.heap
+                .table(t)
+                .entries()
+                .map(|(k, v)| (answer_of(vm, k), answer_of(vm, v)))
+                .collect(),
+        ),
+        _ => Answer::Nil,
+    }
+}
+
+fn value_of(vm: &mut Vm, a: &Answer) -> Value {
+    match a {
+        Answer::Nil => Value::Nil,
+        Answer::Bool(b) => Value::Bool(*b),
+        Answer::Num(n) => Value::Num(*n),
+        Answer::Str(s) => vm.str(s),
+        // A fresh table each time (callers change what they get).
+        Answer::Table(entries) => {
+            let t = vm.new_table();
+            for (k, v) in entries {
+                let k = value_of(vm, k);
+                let v = value_of(vm, v);
+                let _ = vm.heap.table_mut(t).set(k, v);
+            }
+            Value::Table(t)
+        }
+    }
+}
+
+/// A list of values (`{ 67, 67, 22, 0 }`; with nils, its length in `n`),
+/// or one value.
+fn answers_of(vm: &mut Vm, v: Value) -> Vec<Answer> {
+    match v {
+        Value::Table(t) => {
+            let key = vm.str("n");
+            let n = match vm.heap.table(t).get(key) {
+                Value::Num(n) if n >= 0.0 => n as usize,
+                _ => vm.heap.table(t).border(),
+            };
+            // A structure: the one value.
+            if n == 0 && vm.heap.table(t).entries().next().is_some() {
+                return vec![answer_of(vm, v)];
+            }
+            (1..=n)
+                .map(|i| answer_of(vm, vm.heap.table(t).get(Value::Num(i as f64))))
+                .collect()
+        }
+        other => vec![answer_of(vm, other)],
+    }
+}
+
+/// The answers for the indexed stat in `t` (`{ [1] = {…}, [2] = {…} }`).
+fn by_index(vm: &mut Vm, t: TableRef) -> BTreeMap<i64, Vec<Answer>> {
+    let entries: Vec<(Value, Value)> = vm.heap.table(t).entries().collect();
+    entries
+        .into_iter()
+        .filter_map(|(k, v)| match k {
+            Value::Num(i) if i.fract() == 0.0 => Some((i as i64, answers_of(vm, v))),
+            _ => None,
+        })
+        .collect()
+}
+
+/// `mock.player:setStats(stats)`: sets the stats given (by key; a value
+/// or the function's answer as a list; indexed stats by index), each
+/// change told by its event (unverified).
+pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
+    if units::this(vm, &c)? != units::PLAYER {
+        return Err(vm.error("unit:setStats: only the player has that"));
+    }
+    let Value::Table(t) = c.arg(2) else {
+        return Err(vm.error("unit:setStats: a table of stats expected"));
+    };
+    let mut events: Vec<&'static str> = Vec::new();
+    let entries: Vec<(Value, Value)> = vm.heap.table(t).entries().collect();
+    for (k, v) in entries {
+        let key = match k {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => return Err(vm.error("unit:setStats: stats are named by their keys")),
+        };
+        let Some(stat) = STATS.iter().find(|s| s.key == key) else {
+            return Err(vm.error(&format!("unit:setStats: no stat {key:?}")));
+        };
+        let entry = match (stat.ask, v) {
+            (UnitIndex | Index | ForStat | Location, Value::Table(inner)) => {
+                let mut map = match engine(vm).world.character.stats.get(stat.key) {
+                    Some(Entry::ByIndex(m)) => m.clone(),
+                    _ => BTreeMap::new(),
+                };
+                map.extend(by_index(vm, inner));
+                Entry::ByIndex(map)
+            }
+            (UnitIndex | Index | ForStat | Location, _) => {
+                return Err(vm.error(&format!("unit:setStats: {key} is by index ({{ [1] = … }})")));
+            }
+            (_, v) => Entry::One(answers_of(vm, v)),
+        };
+        engine_mut(vm).world.character.stats.insert(stat.key, entry);
+        if let Some(e) = stat.event
+            && !events.contains(&e)
+        {
+            events.push(e);
+        }
+    }
+    let player = vm.str("player");
+    for event in events {
+        let unit_event = event.starts_with("UNIT_") || event.ends_with("XP_UPDATE");
+        if unit_event {
+            widgets::fire_event(vm, event, &[player]);
+        } else {
+            widgets::fire_event(vm, event, &[]);
+        }
+    }
+    Ok(vec![])
+}
+
+fn num(v: Value) -> Option<f64> {
+    match v {
+        Value::Num(n) => Some(n),
+        _ => None,
+    }
+}
+
+/// A transmog location's key: `slotID * 100 + type * 10 + modification`.
+fn location_key(vm: &mut Vm, v: Value) -> Option<f64> {
+    let Value::Table(t) = v else {
+        return None;
+    };
+    let mut get = |k: &str| {
+        let key = vm.str(k);
+        num(vm.heap.table(t).get(key))
+    };
+    Some(
+        get("slotID")? * 100.0
+            + get("type").unwrap_or(0.0) * 10.0
+            + get("modification").unwrap_or(0.0),
+    )
+}
+
+/// The documented empty values of `name` (no stat for this call).
+fn empty(vm: &mut Vm, name: &str) -> Vec<Value> {
+    let api = engine(vm).api;
+    match api.functions.iter().find(|f| f.name == name) {
+        Some(f) => crate::defaults(vm, api, &f.doc),
+        None => Vec::new(),
+    }
+}
+
+/// A stat's function: the player's recorded answer.
+fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
+    // The function called: its index in the API, or (undocumented) name.
+    let name = match c.upvals.first().copied() {
+        Some(Value::Num(i)) => engine(vm)
+            .api
+            .functions
+            .get(i as usize)
+            .map(|f| f.name.to_string()),
+        Some(Value::Str(s)) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+        _ => None,
+    };
+    let Some(stat) = name.and_then(|n| STATS.iter().find(|s| s.function == n)) else {
+        return Ok(vec![]);
+    };
+    let player = match stat.ask {
+        Unit | UnitIndex => units::unit_arg(vm, &c, 1) == Some(units::PLAYER),
+        _ => true,
+    };
+    let index = match stat.ask {
+        UnitIndex => num(c.arg(2)),
+        Index | ForStat => num(c.arg(1)),
+        Location => location_key(vm, c.arg(1)),
+        _ => None,
+    };
+    let found = if player {
+        let ch = &engine(vm).world.character;
+        match (ch.stats.get(stat.key), index) {
+            (Some(Entry::One(v)), None) => Some(v.clone()),
+            (Some(Entry::ByIndex(m)), Some(i)) if i.fract() == 0.0 => {
+                let v = m.get(&(i as i64)).cloned();
+                // For the attribute's effective value only (as the sheet
+                // asks it); unverified for others.
+                if stat.ask == ForStat {
+                    let effective = match ch.stats.get("stat") {
+                        Some(Entry::ByIndex(s)) => s.get(&(i as i64)).and_then(|a| a.get(1)),
+                        _ => None,
+                    };
+                    match (effective, num(c.arg(2))) {
+                        (Some(Answer::Num(e)), Some(value)) if *e == value => v,
+                        _ => None,
+                    }
+                } else {
+                    v
+                }
+            }
+            _ => None,
+        }
+    } else {
+        None
+    };
+    match found {
+        Some(values) => Ok(values.iter().map(|a| value_of(vm, a)).collect()),
+        // A slot without a recorded appearance: none (stand-in).
+        None if stat.ask == Location && player => {
+            let api = engine(vm).api;
+            Ok(
+                match api.functions.iter().find(|f| f.name == stat.function) {
+                    Some(f) => crate::documented_values(vm, api, &f.doc),
+                    None => Vec::new(),
+                },
+            )
+        }
+        None => Ok(empty(vm, stat.function)),
+    }
+}
+
+pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
+    STATS
+        .iter()
+        .map(|s| (s.function, answer as NativeFn))
+        .collect()
+}

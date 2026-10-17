@@ -40,7 +40,8 @@ pub fn named_in(source: &[u8]) -> Option<String> {
 }
 
 /// A JSON value as Lua's: objects and arrays become tables (object keys
-/// that are whole numbers become number keys), `null` nil.
+/// that are whole numbers become number keys), `null` nil; an array with
+/// nulls keeps its length in `n` (a recorded answer).
 fn to_lua(vm: &mut Vm, v: &serde_json::Value) -> Value {
     match v {
         serde_json::Value::Null => Value::Nil,
@@ -52,6 +53,10 @@ fn to_lua(vm: &mut Vm, v: &serde_json::Value) -> Value {
             for (i, item) in list.iter().enumerate() {
                 let v = to_lua(vm, item);
                 let _ = vm.heap.table_mut(t).set(Value::Num(i as f64 + 1.0), v);
+            }
+            if list.iter().any(serde_json::Value::is_null) {
+                let n = vm.str("n");
+                let _ = vm.heap.table_mut(t).set(n, Value::Num(list.len() as f64));
             }
             Value::Table(t)
         }

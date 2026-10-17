@@ -263,6 +263,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("setBag", crate::character::control_set_bag),
         ("defaultedCalls", defaulted_calls),
         ("openMerchant", crate::merchant::control_open),
+        ("setAction", crate::actions::control_set_action),
         ("closeMerchant", crate::merchant::control_close),
         ("sell", crate::merchant::control_sell),
         ("moveTo", crate::character::control_move_to),

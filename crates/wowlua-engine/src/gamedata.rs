@@ -1,8 +1,9 @@
 //! Game data from the tests (decision T203): spells and items a test
 //! defines (`defineSpell(id, data)`, `defineItem(id, data, opts)`), read
 //! through `C_Spell`, `C_SpellBook` and `C_Item`. An ID nobody defined is
-//! data the client does not have. The data stays the test's table, so any
-//! value may be a secret.
+//! the client's own data as recorded (`/stdtest engine answers`; the spells
+//! Blizzard's UI names), else data the client does not have. The data
+//! stays the test's table, so any value may be a secret.
 //!
 //! As the M8 mock had them (unverified details): spell data is cached once
 //! defined unless `cached = false`; an item arrives `delay` seconds (0.2)
@@ -98,7 +99,7 @@ fn spell(vm: &mut Vm, c: &NativeCall) -> Option<(i64, TableRef)> {
 
 fn get_spell_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((id, s)) = spell(vm, &c) else {
-        return Ok(vec![]);
+        return Ok(crate::recorded::client_answer(vm, &c));
     };
     let t = vm.new_table();
     let name = field(vm, s, "name");
@@ -120,7 +121,7 @@ fn get_spell_info(vm: &mut Vm, c: NativeCall) -> Ret {
 fn spell_field(key: &'static str) -> impl Fn(&mut Vm, NativeCall) -> Ret {
     move |vm: &mut Vm, c: NativeCall| match spell(vm, &c) {
         Some((_, s)) => Ok(vec![field(vm, s, key)]),
-        None => Ok(vec![]),
+        None => Ok(crate::recorded::client_answer(vm, &c)),
     }
 }
 

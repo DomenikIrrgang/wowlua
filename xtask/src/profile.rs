@@ -7,8 +7,9 @@
 use anyhow::{Context, Result, anyhow};
 use std::path::Path;
 
-/// A Lua value as JSON: a table with the keys 1..n is an array, other
-/// tables objects (sorted keys).
+/// A Lua value as JSON: a table with the keys 1..n is an array (as is one
+/// with its length in `n`, its missing values null: a recorded answer),
+/// other tables objects (sorted keys).
 fn to_json(v: &mlua::Value) -> serde_json::Value {
     match v {
         mlua::Value::Nil => serde_json::Value::Null,
@@ -35,6 +36,24 @@ fn to_json(v: &mlua::Value) -> serde_json::Value {
                     other => (format!("{other:?}"), None),
                 };
                 pairs.push((key, to_json(&v), index));
+            }
+            // A recorded answer: `n` values, nils among them.
+            let length = pairs.iter().find_map(|(k, v, _)| match v {
+                serde_json::Value::Number(n) if k == "n" => n.as_i64(),
+                _ => None,
+            });
+            if let Some(len) = length
+                && pairs
+                    .iter()
+                    .all(|(k, _, i)| k == "n" || i.is_some_and(|i| i >= 1 && i <= len))
+            {
+                let mut list = vec![serde_json::Value::Null; len.max(0) as usize];
+                for (_, v, i) in pairs {
+                    if let Some(i) = i {
+                        list[i as usize - 1] = v;
+                    }
+                }
+                return serde_json::Value::Array(list);
             }
             let n = pairs.len() as i64;
             let array = n > 0

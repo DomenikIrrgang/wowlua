@@ -22,6 +22,7 @@
 -- checks refuse before any game code runs.
 import state from "/state"
 import answersProbe from "/answers"
+import mapsProbe from "/maps"
 import armStartup from "/startup"
 import say from "/harness"
 
@@ -1493,6 +1494,9 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "answers" then
         answersProbe()
+        return
+    elseif words[1] == "maps" then
+        mapsProbe()
         return
     elseif words[1] == "startup" then
         armStartup()

@@ -1,6 +1,7 @@
 -- A world profile (spec Tooling §16.1.4, decision T213), applied before the
--- addon loads: the character, game data, money, gear, bags, place, auras,
--- the units around, CVars, bindings and saved variables.
+-- addon loads: the character, game data, money, stats, gear, bags, action
+-- bars, place, auras, the units around, CVars, bindings and saved
+-- variables.
 local mock, profile = ...
 local function each(t, fn)
     if type(t) == "table" then
@@ -23,6 +24,9 @@ end)
 if profile.money then
     player:setMoney(profile.money)
 end
+if type(profile.stats) == "table" then
+    player:setStats(profile.stats)
+end
 each(profile.equipment, function(slot, item)
     if type(slot) == "string" and not tonumber(slot) then
         slot = GetInventorySlotInfo(slot)
@@ -31,6 +35,9 @@ each(profile.equipment, function(slot, item)
 end)
 each(profile.bags, function(bag, contents)
     mock.setBag(tonumber(bag), contents)
+end)
+each(profile.actions, function(slot, action)
+    mock.setAction(tonumber(slot), action)
 end)
 if type(profile.position) == "table" then
     mock.moveTo(profile.position)

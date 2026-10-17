@@ -8,6 +8,7 @@
 //!   `crates/wowlua-engine/tests/client/forever-camelot-engine.lua`;
 //! - `/stdtest engine input`: `…/forever-camelot-input.lua`;
 //! - `/stdtest engine answers`: `…/forever-camelot-answers.lua`;
+//! - `/stdtest engine maps`: `…/forever-camelot-maps.lua` (and the data);
 //! - `/stdtest snapshot`: the character's world as a test profile,
 //!   `…/forever-camelot-character.json`;
 //! - the CVar flags: `crates/wowlua-engine/data/camelot-cvar-flags.txt`;
@@ -135,6 +136,7 @@ fn write_table(path: &Path, header: &str, entries: &[(String, String)]) -> Resul
 const STATIC: &[&str] = &[
     // Game data.
     "GetChatTypeIndex",
+    "C_Map.",
     "C_GameRules.",
     "GetBuildOption",
     "C_ClassColor.GetClassColor",
@@ -144,14 +146,17 @@ const STATIC: &[&str] = &[
     "C_SpecializationInfo.GetNumSpecializationsForClassID",
     "C_TradeSkillUI.GetProfessionSkillLineID",
     "C_Spell.GetSchoolString",
+    // Spell data (the spells Blizzard's UI names; a test's own spells are
+    // defined by the test).
+    "C_Spell.GetSpellInfo",
+    "C_Spell.GetSpellName",
+    "C_Spell.GetSpellTexture",
+    "C_Spell.GetSpellDescription",
+    "GetInventorySlotInfo",
+    "C_PaperDollInfo.GetInventorySlotInfo",
     "C_ColorOverrides.GetColorOverrideInfo",
     "C_UIWidgetManager.GetWidgetSetInfo",
     "C_UIWidgetManager.GetObjectiveTrackerWidgetSetID",
-    "C_Map.GetFallbackWorldMapID",
-    "C_Map.GetMapArtID",
-    "C_Map.GetMapArtLayers",
-    "C_Map.GetMapInfo",
-    "C_Map.MapHasArt",
     "C_MountJournal.GetDynamicFlightModeSpellID",
     "C_MountJournal.GetNumMounts",
     "C_PetBattles.GetAllEffectNames",
@@ -661,6 +666,28 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             if (listed(STATIC) || listed(BASELINE)) && !answer.starts_with("error") {
                 let _ = writeln!(data, "{call}\t{answer}");
             }
+        }
+        // The map data (`/stdtest engine maps`), all static.
+        if let Ok(maps) = state.get::<mlua::Table>("engineMapAnswers") {
+            let mut map_entries = Vec::new();
+            for pair in maps.pairs::<String, String>() {
+                let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
+                map_entries.push((call, answer));
+            }
+            map_entries.sort();
+            for (call, answer) in &map_entries {
+                if !answer.starts_with("error") && !entries.iter().any(|(c, _)| c == call) {
+                    let _ = writeln!(data, "{call}\t{answer}");
+                }
+            }
+            write_table(
+                &client.join("forever-camelot-maps.lua"),
+                &format!(
+                    "WoW Forever {version}: /stdtest engine maps, the client's map data (every\n\
+                     map under the cosmic map) as Blizzard's UI asks it (cargo xtask ingest)."
+                ),
+                &map_entries,
+            )?;
         }
         let path = root.join("crates/wowlua-engine/data/camelot-answers.txt");
         std::fs::write(&path, data)?;

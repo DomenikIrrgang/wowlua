@@ -307,11 +307,6 @@ fn realm_name(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// Not rested: state 2, normal experience.
-fn rest_state(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let name = vm.str("Normal");
-    Ok(vec![Value::Num(2.0), name, Value::Num(1.0)])
-}
-
 fn physical_screen_size(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![
         Value::Num(widgets::SCREEN.0),
@@ -418,7 +413,8 @@ const INVENTORY_SLOTS: &[(&str, f64, f64, bool)] = &[
 ];
 
 /// `GetInventorySlotInfo(slotName)`: the slot's ID, its empty texture,
-/// whether it checks relics; nothing for another name.
+/// whether it checks relics; another name (the profession slots) as the
+/// client answered it.
 fn inventory_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = match c.arg(1) {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).to_uppercase(),
@@ -430,7 +426,7 @@ fn inventory_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
         .map(|(_, id, texture, relic)| {
             vec![Value::Num(*id), Value::Num(*texture), Value::Bool(*relic)]
         })
-        .unwrap_or_default())
+        .unwrap_or_else(|| crate::recorded::client_answer(vm, &c)))
 }
 
 /// The client's transmog slot locations (`C_TransmogOutfitInfo.
@@ -554,7 +550,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetMinimapZoneText", empty_string),
         ("GetPhysicalScreenSize", physical_screen_size),
         ("GetRealmName", realm_name),
-        ("GetRestState", rest_state),
         ("GetScreenHeight", screen_height),
         ("GetActiveLootRollIDs", empty_list),
         ("C_LFGList.GetApplications", empty_list),
@@ -585,7 +580,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_MountJournal.GetNumMountsNeedingFanfare", zero),
         ("C_PetJournal.GetNumPetsNeedingFanfare", zero),
         ("GetSpellConfirmationPromptsInfo", empty_list),
-        ("GetXPExhaustion", nothing),
         ("IsGuildLeader", no),
         // Not a convention kiosk.
         ("Kiosk.IsEnabled", no),

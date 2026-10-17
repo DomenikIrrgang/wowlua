@@ -30,7 +30,8 @@ fn combat_log_filter(_vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_CVar.GetCVarBitfield(name, index)`: bit `index` of a bitfield CVar,
-/// six bits a character above `@` (`closedInfoFrames`).
+/// six bits a character above `@` (`closedInfoFrames`), after a header of
+/// characters below `@` (recorded `\x02`; every recorded bit fits).
 fn cvar_bitfield(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Value::Str(name), Some(index)) = (c.arg(1), num(c.arg(2))) else {
         return Ok(vec![Value::Bool(false)]);
@@ -38,8 +39,8 @@ fn cvar_bitfield(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
     let value = framescript::cvar_get(vm, &name).unwrap_or_default();
     let i = (index as i64 - 1).max(0) as usize;
-    let set = value
-        .as_bytes()
+    let header = value.bytes().take_while(|b| *b < b'@').count();
+    let set = value.as_bytes()[header..]
         .get(i / 6)
         .is_some_and(|ch| (ch.wrapping_sub(b'@') >> (i % 6)) & 1 == 1);
     Ok(vec![Value::Bool(set)])

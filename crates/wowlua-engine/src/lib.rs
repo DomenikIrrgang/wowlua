@@ -3,6 +3,7 @@
 //! with behaviour where tests need it; a function without behaviour fails
 //! with "`<name>` is not mocked", so gaps are visible.
 
+pub mod actions;
 pub mod animations;
 pub mod api;
 pub mod args;
@@ -23,6 +24,7 @@ pub mod merchant;
 pub mod protection;
 pub mod queries;
 pub mod recorded;
+pub mod stats;
 pub mod tooltip;
 pub mod ui;
 pub mod units;
@@ -191,6 +193,8 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(auras::behaviours())
             .chain(gamedata::behaviours())
             .chain(character::behaviours())
+            .chain(stats::behaviours())
+            .chain(actions::behaviours())
             .chain(input::behaviours())
             .chain(casting::behaviours())
             .chain(merchant::behaviours())
@@ -532,6 +536,18 @@ fn namespace(vm: &mut Vm, name: &str) -> wowlua_vm::TableRef {
     let t = vm.new_table();
     vm.set_global(name, Value::Table(t));
     t
+}
+
+/// A function's documented results as empty values, even for one that may
+/// return nothing.
+pub fn documented_values(vm: &mut Vm, api: &api::Api, doc: &serde_json::Value) -> Vec<Value> {
+    doc.get("Returns")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .map(|r| default_value(vm, api, r, 0))
+        .collect()
 }
 
 /// A function's documented results as empty values: nil where nilable,

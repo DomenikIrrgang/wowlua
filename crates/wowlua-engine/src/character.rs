@@ -25,7 +25,7 @@ use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
 use crate::{engine, engine_mut, units, widgets};
 
 /// An item in an equipment slot or a bag slot.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Held {
     pub id: i64,
     pub count: f64,
@@ -33,6 +33,11 @@ pub struct Held {
     pub link: Option<String>,
     pub bound: bool,
     pub locked: bool,
+    /// A quest item (`C_Container.GetContainerItemQuestInfo`): one, the
+    /// quest it starts, whether that quest is active.
+    pub quest_item: bool,
+    pub quest_id: Option<f64>,
+    pub quest_active: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -62,6 +67,10 @@ pub struct Character {
     /// By bag ID (0 the backpack).
     pub bags: BTreeMap<i64, Bag>,
     pub position: Position,
+    /// The player's stats (`stats.rs`).
+    pub stats: crate::stats::Stats,
+    /// The action bars (`actions.rs`).
+    pub actions: crate::actions::Actions,
 }
 
 impl Default for Character {
@@ -79,6 +88,8 @@ impl Default for Character {
             equipment: BTreeMap::new(),
             bags,
             position: Position::default(),
+            stats: crate::stats::defaults(),
+            actions: Default::default(),
         }
     }
 }
@@ -103,15 +114,13 @@ fn num(v: Value) -> Option<f64> {
 }
 
 /// An item as a test gives it: its ID, or `{ id, count, link, bound,
-/// locked }`.
+/// locked, questItem, questID, questActive }`.
 fn held_of(vm: &mut Vm, v: Value) -> Option<Held> {
     match v {
         Value::Num(n) => Some(Held {
             id: n as i64,
             count: 1.0,
-            link: None,
-            bound: false,
-            locked: false,
+            ..Held::default()
         }),
         Value::Table(t) => {
             let id = num(field(vm, t, "id"))? as i64;
@@ -122,6 +131,9 @@ fn held_of(vm: &mut Vm, v: Value) -> Option<Held> {
                 link: text(vm, link),
                 bound: field(vm, t, "bound").truthy(),
                 locked: field(vm, t, "locked").truthy(),
+                quest_item: field(vm, t, "questItem").truthy(),
+                quest_id: num(field(vm, t, "questID")),
+                quest_active: field(vm, t, "questActive").truthy(),
             })
         }
         _ => None,
@@ -178,9 +190,7 @@ pub fn link_of_id(vm: &mut Vm, id: i64) -> Option<Value> {
     let held = Held {
         id,
         count: 1.0,
-        link: None,
-        bound: false,
-        locked: false,
+        ..Held::default()
     };
     link_of(vm, &held)
 }
@@ -638,10 +648,86 @@ pub fn control_set_distance(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+// ------------------------------------------------------- bags and slots
+
+/// `C_Container.GetContainerItemQuestInfo(bag, slot)`: the item's quest
+/// (none for an empty slot; recorded).
+fn container_item_quest_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let h = bag_slot(vm, &c).unwrap_or_default();
+    let t = vm.new_table();
+    let set = |vm: &mut Vm, k: &str, v: Value| {
+        let k = vm.str(k);
+        let _ = vm.heap.table_mut(t).set(k, v);
+    };
+    set(vm, "isQuestItem", Value::Bool(h.quest_item));
+    set(vm, "isActive", Value::Bool(h.quest_active));
+    if let Some(id) = h.quest_id {
+        set(vm, "questID", Value::Num(id));
+    }
+    Ok(vec![Value::Table(t)])
+}
+
+/// `C_Container.GetBagName(bag)`: the backpack's name, else the name of
+/// the bag in the bag's inventory slot (bag + 30); nil without one
+/// (recorded).
+fn bag_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(bag) = num(c.arg(1)).map(|b| b as i64) else {
+        return Ok(vec![Value::Nil]);
+    };
+    if bag == 0 {
+        let name = match vm.get_global("BACKPACK_TOOLTIP") {
+            Value::Str(s) => Value::Str(s),
+            _ => vm.str("Backpack"),
+        };
+        return Ok(vec![name]);
+    }
+    let held = engine(vm)
+        .world
+        .character
+        .equipment
+        .get(&(bag + 30))
+        .map(|h| h.id);
+    Ok(vec![match held {
+        Some(id) => item_field(vm, id, "name"),
+        None => Value::Nil,
+    }])
+}
+
+/// `GetInventoryAlertStatus(slot)`: no durability warning (recorded for
+/// whole gear; unverified for damaged).
+fn inventory_alert_status(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0)])
+}
+
+/// `GetInventoryItemCooldown(unit, slot)`: none running (recorded).
+fn inventory_item_cooldown(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![
+        Value::Num(0.0),
+        Value::Num(0.0),
+        Value::Num(0.0),
+        Value::Bool(false),
+    ])
+}
+
+/// `GetInventoryItemBroken(unit, slot)`, `GetInventoryItemEquippedUnusable(
+/// unit, slot)`: whole and usable (recorded; unverified otherwise).
+fn inventory_item_no(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(false)])
+}
+
 /// The functions with behaviour here.
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("GetMoney", get_money),
+        (
+            "C_Container.GetContainerItemQuestInfo",
+            container_item_quest_info,
+        ),
+        ("C_Container.GetBagName", bag_name),
+        ("GetInventoryAlertStatus", inventory_alert_status),
+        ("GetInventoryItemCooldown", inventory_item_cooldown),
+        ("GetInventoryItemBroken", inventory_item_no),
+        ("GetInventoryItemEquippedUnusable", inventory_item_no),
         ("GetInventoryItemID", get_inventory_item_id),
         ("GetInventoryItemLink", get_inventory_item_link),
         ("GetInventoryItemTexture", get_inventory_item_texture),

@@ -478,9 +478,7 @@ fn bought(vm: &mut Vm, c: NativeCall) -> Ret {
                     Held {
                         id,
                         count: quantity,
-                        link: None,
-                        bound: false,
-                        locked: false,
+                        ..Held::default()
                     },
                 );
             }

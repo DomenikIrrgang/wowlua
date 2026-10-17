@@ -189,6 +189,36 @@ pub fn recorded(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// The name of the API function called (from its upvalue: its index in
+/// the API, or its name).
+pub fn called_name(vm: &Vm, c: &NativeCall) -> Option<String> {
+    match c.upvals.first().copied() {
+        Some(Value::Num(i)) => engine(vm)
+            .api
+            .functions
+            .get(i as usize)
+            .map(|f| f.name.to_string()),
+        Some(Value::Str(s)) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+        _ => None,
+    }
+}
+
+/// Game data the test did not define, as the client gave it for this call
+/// (`/stdtest engine answers`); else nothing, noted as unanswered when
+/// Blizzard's code asked.
+pub fn client_answer(vm: &mut Vm, c: &NativeCall) -> Vec<Value> {
+    let Some(name) = called_name(vm, c) else {
+        return Vec::new();
+    };
+    if let Some(values) = lookup(vm, &name, c) {
+        return values;
+    }
+    if crate::protection::blizzard_caller(vm) {
+        crate::note_default(vm, &name, c, 1);
+    }
+    Vec::new()
+}
+
 /// The recorded answer to this call of `name`, if there is one.
 pub fn lookup(vm: &mut Vm, name: &str, c: &NativeCall) -> Option<Vec<Value>> {
     let call = crate::call_text(vm, name, c, 1);

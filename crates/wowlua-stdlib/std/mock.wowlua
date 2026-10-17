@@ -43,13 +43,154 @@ export interface MockUnit
     function setDistance(yards: number?)
     --- The player's money, in copper (`PLAYER_MONEY`).
     function setMoney(copper: number)
+    --- The player's stats given (the others stay), each change told by its
+    --- event (`UNIT_STATS`, `PLAYER_XP_UPDATE`, …):
+    --- `setStats({ xp = 0, stat = { [1] = { 67, 67, 22, 0 } } })`.
+    function setStats(stats: PlayerStats)
     --- The player's item in an inventory slot (`nil`: none):
     --- `PLAYER_EQUIPMENT_CHANGED`, `UNIT_INVENTORY_CHANGED`.
     function equip(slot: number, item: number | HeldItem | nil)
 end
 
+--- A stat's answer: the client function's results in order, or its one
+--- result.
+export type StatAnswer = number | boolean | string | (number | boolean | string)[]
+
+--- The player's stats (`unit:setStats`): each the answer of the client
+--- function that reports it.
+export type PlayerStats = {
+    --- `UnitStat` by index.
+    stat?: { [number]: StatAnswer },
+    --- `UnitResistance` by index.
+    resistance?: { [number]: StatAnswer },
+    --- `UnitArmor`.
+    armor?: StatAnswer,
+    --- `UnitDamage`.
+    damage?: StatAnswer,
+    --- `UnitRangedDamage`.
+    rangedDamage?: StatAnswer,
+    --- `UnitAttackSpeed`.
+    attackSpeed?: StatAnswer,
+    --- `UnitAttackPower`.
+    attackPower?: StatAnswer,
+    --- `UnitRangedAttackPower`.
+    rangedAttackPower?: StatAnswer,
+    --- `UnitDefenseSkill`.
+    defense?: StatAnswer,
+    --- `UnitHPPerStamina`.
+    hpPerStamina?: StatAnswer,
+    --- `UnitSpellHaste`.
+    spellHaste?: StatAnswer,
+    --- `GetUnitSpeed`.
+    movement?: StatAnswer,
+    --- `UnitXP`.
+    xp?: StatAnswer,
+    --- `UnitXPMax`.
+    xpMax?: StatAnswer,
+    --- `UnitHonor`.
+    honor?: StatAnswer,
+    --- `UnitHonorMax`.
+    honorMax?: StatAnswer,
+    --- `UnitHonorLevel`.
+    honorLevel?: StatAnswer,
+    --- `GetXPExhaustion`.
+    restedXP?: StatAnswer,
+    --- `GetRestState`.
+    restState?: StatAnswer,
+    --- `IsXPUserDisabled`.
+    xpDisabled?: StatAnswer,
+    --- `GetExpertise`.
+    expertise?: StatAnswer,
+    --- `GetSpellBonusHealing`.
+    spellHealing?: StatAnswer,
+    --- `GetSpellPenetration`.
+    spellPenetration?: StatAnswer,
+    --- `GetSpellHitModifier`.
+    spellHit?: StatAnswer,
+    --- `GetSpellCritChance`.
+    spellCrit?: StatAnswer,
+    --- `GetShieldBlock`.
+    shieldBlock?: StatAnswer,
+    --- `GetRangedHaste`.
+    rangedHaste?: StatAnswer,
+    --- `GetRangedCritChance`.
+    rangedCrit?: StatAnswer,
+    --- `GetRangedHitModifier`.
+    rangedHit?: StatAnswer,
+    --- `GetCritChance`.
+    crit?: StatAnswer,
+    --- `GetHitModifier`.
+    hit?: StatAnswer,
+    --- `GetOffhandHitModifier`.
+    offhandHit?: StatAnswer,
+    --- `GetMeleeHaste`.
+    meleeHaste?: StatAnswer,
+    --- `GetMasteryEffect`.
+    mastery?: StatAnswer,
+    --- `GetPowerRegen`.
+    powerRegen?: StatAnswer,
+    --- `GetManaRegen`.
+    manaRegen?: StatAnswer,
+    --- `GetManaRegenFromSpirit`.
+    manaRegenFromSpirit?: StatAnswer,
+    --- `GetHealthRegen`.
+    healthRegen?: StatAnswer,
+    --- `GetHealthRegenFromSpirit`.
+    healthRegenFromSpirit?: StatAnswer,
+    --- `GetBlockChance`.
+    block?: StatAnswer,
+    --- `GetDodgeChance`.
+    dodge?: StatAnswer,
+    --- `GetDodgeChanceFromAttribute`.
+    dodgeFromAttribute?: StatAnswer,
+    --- `GetParryChance`.
+    parry?: StatAnswer,
+    --- `GetModResilienceDamageReduction`.
+    resilience?: StatAnswer,
+    --- `GetLifesteal`.
+    lifesteal?: StatAnswer,
+    --- `GetAvoidance`.
+    avoidance?: StatAnswer,
+    --- `GetSpeed`.
+    speed?: StatAnswer,
+    --- `GetAverageItemLevel`.
+    itemLevel?: StatAnswer,
+    --- `GetArmorPenetration`.
+    armorPenetration?: StatAnswer,
+    --- `GetOverrideSpellPowerByAP`.
+    spellPowerByAttackPower?: StatAnswer,
+    --- `GetOverrideAPBySpellPower`.
+    attackPowerBySpellPower?: StatAnswer,
+    --- `GetCombatRating` by index.
+    combatRating?: { [number]: StatAnswer },
+    --- `GetCombatRatingBonus` by index.
+    combatRatingBonus?: { [number]: StatAnswer },
+    --- `GetSpellBonusDamage` by index.
+    spellDamage?: { [number]: StatAnswer },
+    --- `GetVersatilityBonus` by index.
+    versatility?: { [number]: StatAnswer },
+    --- `GetAttackPowerForStat` by attribute, at its effective value.
+    attackPowerForStat?: { [number]: StatAnswer },
+    --- `GetRangedAttackPowerForStat` by attribute, at its effective value.
+    rangedAttackPowerForStat?: { [number]: StatAnswer },
+    --- `GetCritChanceFromStat` by attribute, at its effective value.
+    critFromStat?: { [number]: StatAnswer },
+    --- `GetSpellCritChanceFromStat` by attribute, at its effective value.
+    spellCritFromStat?: { [number]: StatAnswer },
+}
+
 --- An item as the player holds it.
-export type HeldItem = { id: number, count?: number, link?: string, bound?: boolean, locked?: boolean }
+export type HeldItem = {
+    id: number,
+    count?: number,
+    link?: string,
+    bound?: boolean,
+    locked?: boolean,
+    --- A quest item; the quest it starts; whether that quest is active.
+    questItem?: boolean,
+    questID?: number,
+    questActive?: boolean,
+}
 
 --- What `spawnUnit` takes.
 export type UnitData = {
@@ -129,6 +270,24 @@ export type MerchantItem = { id: number, price?: number, stack?: number, availab
 --- the client's API, answered by the server 0.4 s later.
 export function openMerchant(data: { name?: string, items?: MerchantItem[], canRepair?: boolean, repairCost?: number })
     engine().openMerchant(data)
+end
+
+--- An action on the action bars (`GetActionInfo`'s type, ID and subtype;
+--- `usable`: `IsUsableAction`'s answers, by default usable).
+export type ActionData = {
+    type: string,
+    id?: number | string,
+    subType?: string,
+    texture?: number | string,
+    count?: string,
+    text?: string,
+    usable?: boolean | { [number]: boolean },
+}
+
+--- The action in an action bar slot (`nil`: none):
+--- `ACTIONBAR_SLOT_CHANGED`.
+export function setAction(slot: number, action: ActionData?)
+    engine().setAction(slot, action)
 end
 
 --- The API calls Blizzard's code made that the engine had no answer for

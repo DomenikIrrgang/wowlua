@@ -1,0 +1,114 @@
+-- /stdtest engine maps: the client's map data (every map under the cosmic
+-- map) as Blizzard's UI asks it, into StdTestState.engineMapAnswers[call]
+-- in the answers probe's form (`cargo xtask ingest` merges them). Static
+-- data only: no positions, exploration or quests.
+import state from "/state"
+import say from "/harness"
+
+local function pack(...: any): { n: number, [number]: any }
+    return { n = select("#", ...), ... }
+end
+
+--- A value in full: tables to depth 4, keys sorted, secrets marked.
+local function show(v: any, depth: number): string
+    if issecretvalue(v) then
+        return `secret {type(v)}`
+    end
+    if type(v) == "string" then
+        return `string {v}`
+    end
+    if type(v) ~= "table" then
+        return `{type(v)} {tostring(v)}`
+    end
+    if depth >= 4 then
+        return "table"
+    end
+    const keys: string[] = {}
+    const values: { [string]: any } = {}
+    for k, inner in pairs(v :: table) do
+        const key = tostring(k)
+        keys[#keys + 1] = key
+        values[key] = inner
+    end
+    table.sort(keys)
+    const parts: string[] = {}
+    for _, k in ipairs(keys) do
+        parts[#parts + 1] = `{k}={show(values[k], depth + 1)}`
+    end
+    return `\{{table.concat(parts, ",")}\}`
+end
+
+--- The functions asked of each map by its ID alone.
+const BY_ID: string[] = {
+    "GetMapInfo",
+    "GetMapArtID",
+    "GetMapArtLayers",
+    "GetMapChildrenInfo",
+    "GetMapGroupID",
+    "GetMapLevels",
+    "GetMapLinksForMap",
+    "GetMapBannersForMap",
+    "GetMapArtBackgroundAtlas",
+    "GetMapArtHelpTextPosition",
+    "GetMapArtZoneTextPosition",
+    "GetMapDisplayInfo",
+    "GetMapWorldSize",
+    "MapHasArt",
+    "IsCityMap",
+    "IsMapValidForNavBarDropdown",
+    "CanSetUserWaypointOnMap",
+}
+
+export function mapsProbe()
+    const st = state() :: any
+    const out: { [string]: string } = {}
+    const M = C_Map :: any
+    local asked = 0
+    local function ask(call: string, ...: any)
+        const f = M[(call:match("^C_Map%.(%w+)")) :: string]
+        if f == nil then
+            return
+        end
+        local ok, packed = pcall(function(...: any): any return pack(f(...)) end, ...)
+        asked = asked + 1
+        if not ok then
+            out[call] = `error: {tostring(packed)}`
+            return
+        end
+        const p = packed :: { n: number, [number]: any }
+        const parts: string[] = {}
+        for i = 1, p.n do
+            parts[#parts + 1] = show(p[i], 0)
+        end
+        out[call] = `{p.n}: {table.concat(parts, ", ")}`
+    end
+    -- Every map under the cosmic map, and the maps above each.
+    const ids: number[] = { 946 }
+    for _, info in ipairs(M.GetMapChildrenInfo(946, nil, true) ?? {}) do
+        ids[#ids + 1] = info.mapID
+    end
+    ask("C_Map.GetFallbackWorldMapID()")
+    for _, id in ipairs(ids) do
+        for _, name in ipairs(BY_ID) do
+            ask(`C_Map.{name}({id})`, id)
+        end
+        ask(`C_Map.GetMapChildrenInfo({id}, 3)`, id, 3)
+        ask(`C_Map.GetMapChildrenInfo({id}, nil, true)`, id, nil, true)
+        local layers = M.GetMapArtLayers(id)
+        for layer = 1, layers and #layers or 0 do
+            ask(`C_Map.GetMapArtLayerTextures({id}, {layer})`, id, layer)
+        end
+        const group = M.GetMapGroupID(id)
+        if group then
+            ask(`C_Map.GetMapGroupMembersInfo({group})`, group)
+        end
+        -- Its rectangle on each map above it.
+        local info = M.GetMapInfo(id)
+        while info and info.parentMapID and info.parentMapID > 0 do
+            ask(`C_Map.GetMapRectOnMap({id}, {info.parentMapID})`, id, info.parentMapID)
+            info = M.GetMapInfo(info.parentMapID)
+        end
+    end
+    st.engineMapAnswers = out
+    say(`engine maps: {#ids} maps, {asked} calls recorded; type /reload so the file is written`)
+end
