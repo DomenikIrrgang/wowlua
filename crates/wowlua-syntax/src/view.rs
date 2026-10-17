@@ -712,8 +712,8 @@ handle!(Expr);
 debug_fields!(Expr { span, kind });
 
 impl<'t> Expr<'t> {
-    fn node(self) -> &'t tree::ExprNode {
-        &self.t.exprs[self.i as usize]
+    fn node(self) -> tree::ExprNode {
+        self.t.expr(self.i)
     }
 
     pub fn span(self) -> Span {

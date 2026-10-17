@@ -11,6 +11,14 @@ use wowlua_span::FileId;
 /// No node (an absent optional child).
 pub(crate) const NONE: u32 = u32::MAX;
 
+/// Marks an expression index as one of `Tree::leaves` (#19 leaf packing).
+pub(crate) const LEAF: u32 = 1 << 31;
+
+/// A leaf keeps its kind in the top bits of its end (`Tree::leaf`); ends
+/// past `LEAF_END` (a 512 MiB file) keep whole nodes.
+const LEAF_KIND: u32 = 29;
+const LEAF_END: u32 = (1 << LEAF_KIND) - 1;
+
 /// A byte range of the source.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct Sp {
@@ -642,6 +650,11 @@ pub struct Tree {
     pub(crate) decorators: Vec<DecoratorNode>,
     pub(crate) names: Vec<Sp>,
     pub(crate) exprs: Vec<ExprNode>,
+    /// Leaf expressions (numerals, names, `nil`, `true`, `false`, `...`)
+    /// referred to one by one (not in a list): their span alone, with the
+    /// kind in it (`Tree::leaf`). A data addon's tables hold millions of
+    /// numerals.
+    pub(crate) leaves: Vec<Sp>,
     pub(crate) methods: Vec<MethodNode>,
     pub(crate) strs: Vec<StrNode>,
     pub(crate) strbuf: Vec<u8>,
@@ -687,6 +700,7 @@ macro_rules! arrays {
             decorators,
             names,
             exprs,
+            leaves,
             methods,
             strs,
             strbuf,
@@ -735,6 +749,45 @@ impl Tree {
             };
         }
         arrays!(new)
+    }
+
+    /// Expression `i`, in `exprs` or (with `LEAF`) in `leaves`.
+    #[inline]
+    pub(crate) fn expr(&self, i: u32) -> ExprNode {
+        if i & LEAF == 0 {
+            return self.exprs[i as usize];
+        }
+        let Sp { start, end } = self.leaves[(i & !LEAF) as usize];
+        let span = Sp {
+            start,
+            end: end & LEAF_END,
+        };
+        let data = match end >> LEAF_KIND {
+            0 => ExprData::Nil,
+            1 => ExprData::True,
+            2 => ExprData::False,
+            3 => ExprData::Vararg,
+            4 => ExprData::Number(span),
+            _ => ExprData::Name(span),
+        };
+        ExprNode { span, data }
+    }
+
+    /// `e` as a leaf (see `leaves`), if it is one.
+    pub(crate) fn leaf(e: &ExprNode) -> Option<Sp> {
+        let kind = match e.data {
+            ExprData::Nil => 0,
+            ExprData::True => 1,
+            ExprData::False => 2,
+            ExprData::Vararg => 3,
+            ExprData::Number(s) if s == e.span => 4,
+            ExprData::Name(s) if s == e.span => 5,
+            _ => return None,
+        };
+        (e.span.end <= LEAF_END).then_some(Sp {
+            start: e.span.start,
+            end: e.span.end | kind << LEAF_KIND,
+        })
     }
 
     /// Releases the arrays' unused capacity.
@@ -793,5 +846,53 @@ mod tests {
         assert!(size_of::<StmtNode>() <= 40);
         assert!(size_of::<ParamNode>() <= 24);
         assert!(size_of::<FuncNode>() <= 64);
+    }
+
+    // A leaf gives back the expression it was made of; one ending past
+    // `LEAF_END`, or a numeral or name whose text is not its span, stays a
+    // whole node.
+    #[test]
+    fn leaves_keep_their_kind_and_span() {
+        let span = Sp { start: 7, end: 12 };
+        let mut t = Tree::empty(
+            SourceText::new(b""),
+            wowlua_span::SourceDb::new().add("t", ""),
+        );
+        for data in [
+            ExprData::Nil,
+            ExprData::True,
+            ExprData::False,
+            ExprData::Vararg,
+            ExprData::Number(span),
+            ExprData::Name(span),
+        ] {
+            let e = ExprNode { span, data };
+            t.leaves.push(Tree::leaf(&e).expect("a leaf"));
+            let back = t.expr(LEAF | (t.leaves.len() as u32 - 1));
+            assert_eq!(back.span, span);
+            assert_eq!(format!("{:?}", back.data), format!("{data:?}"));
+        }
+        let far = Sp {
+            start: 0,
+            end: LEAF_END + 1,
+        };
+        assert!(
+            Tree::leaf(&ExprNode {
+                span: far,
+                data: ExprData::Nil
+            })
+            .is_none()
+        );
+        let other = Sp { start: 8, end: 12 };
+        let e = ExprNode {
+            span,
+            data: ExprData::Number(other),
+        };
+        assert!(Tree::leaf(&e).is_none());
+        let e = ExprNode {
+            span,
+            data: ExprData::Paren(0),
+        };
+        assert!(Tree::leaf(&e).is_none());
     }
 }

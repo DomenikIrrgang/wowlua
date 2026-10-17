@@ -221,7 +221,15 @@ impl<'a> Parser<'a> {
     // -------------------------------------------------------------- nodes --
 
     fn push_expr(&mut self, e: ExprNode) -> u32 {
-        push!(self, exprs, e)
+        if let Some(leaf) = Tree::leaf(&e) {
+            let i = push!(self, leaves, leaf);
+            assert!(i < LEAF - 1, "too many expressions");
+            i | LEAF
+        } else {
+            let i = push!(self, exprs, e);
+            assert!(i < LEAF, "too many expressions");
+            i
+        }
     }
 
     fn push_type(&mut self, t: TypeNode) -> u32 {
@@ -1246,7 +1254,7 @@ impl<'a> Parser<'a> {
     /// The expression is or contains (along its prefix chain) an optional
     /// access.
     fn contains_optional(&self, e: &ExprNode) -> bool {
-        let mut e = e;
+        let mut e = *e;
         loop {
             match e.data {
                 ExprData::OptField { .. }
@@ -1256,7 +1264,7 @@ impl<'a> Parser<'a> {
                 ExprData::Field { obj, .. }
                 | ExprData::Index { obj, .. }
                 | ExprData::Call { callee: obj, .. }
-                | ExprData::Method { obj, .. } => e = &self.t.exprs[obj as usize],
+                | ExprData::Method { obj, .. } => e = self.t.expr(obj),
                 _ => return false,
             }
         }
