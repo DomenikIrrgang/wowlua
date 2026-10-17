@@ -987,21 +987,21 @@ local function dispatchOrder()
 end
 
 --- A payload value for the recorder: a table as its keys (and a list's
---- first element's), else as `show` gives it.
-local function describe(v: any, depth: number): string
-    if type(v) ~= "table" or issecretvalue(v) or depth > 2 then
+--- first element's) down to `max` levels, else as `show` gives it.
+local function describe(v: any, depth: number, max: number): string
+    if type(v) ~= "table" or issecretvalue(v) or depth > max then
         return show(v)
     end
     const keys: string[] = {}
     for k, inner in pairs(v :: table) do
         if type(k) == "string" then
-            keys[#keys + 1] = `{k}={describe(inner, depth + 1)}`
+            keys[#keys + 1] = `{k}={describe(inner, depth + 1, max)}`
         end
     end
     table.sort(keys)
     const n = #(v :: any[])
     if n > 0 then
-        keys[#keys + 1] = `[{n}]={describe((v :: any[])[1], depth + 1)}`
+        keys[#keys + 1] = `[{n}]={describe((v :: any[])[1], depth + 1, max)}`
     end
     return `\{{table.concat(keys, ",")}\}`
 end
@@ -1022,8 +1022,10 @@ local function startRecording(label: string)
             return
         end
         const parts: string[] = {}
+        -- An aura update's aura data in full (its fields are three deep).
+        const max = event == "UNIT_AURA" and 3 or 2
         for i = 1, select("#", ...) do
-            parts[#parts + 1] = describe((select(i, ...)), 1)
+            parts[#parts + 1] = describe((select(i, ...)), 1, max)
         end
         log[#log + 1] = `{string.format("%.3f", GetTime() - start)} {event}({table.concat(parts, "; ")})`
     end)

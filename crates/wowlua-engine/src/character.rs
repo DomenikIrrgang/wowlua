@@ -3,10 +3,18 @@
 //! far other units are. Tests and world profiles set them through the
 //! controls; each change fires the events the client fires for it.
 //!
-//! Unverified (inferred from Blizzard's documentation and UI code, to be
-//! recorded with `/stdtest snapshot`): the order of the events a change
-//! fires, the generated item links, the ranges of `CheckInteractDistance`'s
-//! indexes and `UnitInRange` (38 yards), and the empty backpack's 16 slots.
+//! Verified against the client (`/stdtest engine record`, Forever 70425):
+//! `PLAYER_MONEY()`; `UNIT_INVENTORY_CHANGED("player")` before
+//! `PLAYER_EQUIPMENT_CHANGED(slot, false)` for a filled slot; `BAG_UPDATE`
+//! (the backpack's followed by `BAG_UPDATE(-1)`), `BAG_CLOSED` for a bag
+//! taken away, `BAG_CONTAINER_UPDATE()`, one `BAG_UPDATE_DELAYED()`, then
+//! `ITEM_COUNT_CHANGED(itemID)`; a new zone's lone `ZONE_CHANGED_NEW_AREA()`.
+//!
+//! Unverified (inferred from Blizzard's documentation and UI code):
+//! `PLAYER_EQUIPMENT_CHANGED`'s `true` for an emptied slot, a subzone's
+//! `ZONE_CHANGED`, `BAG_CONTAINER_UPDATE` for a bag put in, the generated
+//! item links, the ranges of `CheckInteractDistance`'s indexes and
+//! `UnitInRange` (38 yards), and the empty backpack's 16 slots.
 
 use std::collections::BTreeMap;
 
@@ -226,8 +234,8 @@ fn get_inventory_item_count(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `unit:equip(slot, item)` / `unit:equip(slot, nil)` (the player):
-/// `PLAYER_EQUIPMENT_CHANGED(slot, hasCurrent)`, then
-/// `UNIT_INVENTORY_CHANGED("player")`.
+/// `UNIT_INVENTORY_CHANGED("player")`, then
+/// `PLAYER_EQUIPMENT_CHANGED(slot, hasCurrent)` (false for a filled slot).
 pub fn control_equip(vm: &mut Vm, c: NativeCall) -> Ret {
     player_only(vm, &c, "equip")?;
     let slot = vm.check_int(&c, 2)?;
@@ -242,13 +250,13 @@ pub fn control_equip(vm: &mut Vm, c: NativeCall) -> Ret {
             eq.remove(&slot);
         }
     }
+    let player = vm.str("player");
+    widgets::fire_event(vm, "UNIT_INVENTORY_CHANGED", &[player]);
     widgets::fire_event(
         vm,
         "PLAYER_EQUIPMENT_CHANGED",
-        &[Value::Num(slot as f64), Value::Bool(has)],
+        &[Value::Num(slot as f64), Value::Bool(!has)],
     );
-    let player = vm.str("player");
-    widgets::fire_event(vm, "UNIT_INVENTORY_CHANGED", &[player]);
     Ok(vec![])
 }
 
@@ -353,9 +361,23 @@ fn get_item_count(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(in_bags + worn)])
 }
 
+/// Each item's count in the bags.
+fn bag_counts(vm: &Vm) -> BTreeMap<i64, f64> {
+    let mut out = BTreeMap::new();
+    for b in engine(vm).world.character.bags.values() {
+        for h in b.items.values() {
+            *out.entry(h.id).or_default() += h.count;
+        }
+    }
+    out
+}
+
 /// `mock.setBag(bag, { slots = n, items = { [slot] = item, … } })`: the
-/// bag's contents (`nil`: no bag there); `BAG_UPDATE(bag)`, then
-/// `BAG_UPDATE_DELAYED`.
+/// bag's contents (`nil`: no bag there); `BAG_CLOSED(bag)` for a bag taken
+/// away, `BAG_UPDATE(bag)` (the backpack's then `BAG_UPDATE(-1)`),
+/// `BAG_CONTAINER_UPDATE()` for a bag put in or taken away,
+/// `BAG_UPDATE_DELAYED()`, then `ITEM_COUNT_CHANGED(itemID)` per item whose
+/// count changed.
 pub fn control_set_bag(vm: &mut Vm, c: NativeCall) -> Ret {
     let bag = vm.check_int(&c, 1)?;
     let contents = match c.arg(2) {
@@ -374,7 +396,10 @@ pub fn control_set_bag(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         _ => None,
     };
+    let before = bag_counts(vm);
     let bags = &mut engine_mut(vm).world.character.bags;
+    let had = bags.contains_key(&bag);
+    let has = contents.is_some();
     match contents {
         Some(b) => {
             bags.insert(bag, b);
@@ -383,8 +408,29 @@ pub fn control_set_bag(vm: &mut Vm, c: NativeCall) -> Ret {
             bags.remove(&bag);
         }
     }
+    if had && !has {
+        widgets::fire_event(vm, "BAG_CLOSED", &[Value::Num(bag as f64)]);
+    }
     widgets::fire_event(vm, "BAG_UPDATE", &[Value::Num(bag as f64)]);
+    if bag == 0 {
+        widgets::fire_event(vm, "BAG_UPDATE", &[Value::Num(-1.0)]);
+    }
+    if bag > 0 && had != has {
+        widgets::fire_event(vm, "BAG_CONTAINER_UPDATE", &[]);
+    }
     widgets::fire_event(vm, "BAG_UPDATE_DELAYED", &[]);
+    let after = bag_counts(vm);
+    let changed: Vec<i64> = before
+        .keys()
+        .chain(after.keys())
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .filter(|id| before.get(id) != after.get(id))
+        .collect();
+    for id in changed {
+        widgets::fire_event(vm, "ITEM_COUNT_CHANGED", &[Value::Num(id as f64)]);
+    }
     Ok(vec![])
 }
 

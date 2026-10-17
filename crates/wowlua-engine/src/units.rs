@@ -1062,10 +1062,25 @@ fn control_heal(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `unit:kill()`: its health to 0, `UNIT_DIED(guid)` (secret in combat),
+/// and for the player's target `PLAYER_TARGET_DIED()`, then the target
+/// cleared with `PLAYER_TARGET_CHANGED()` (`/stdtest engine record
+/// combat`; `PARTY_KILL`, `UNIT_COMBAT` and `UNIT_LOOT` not modelled).
 fn control_kill(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let h = engine(vm).units.list[me.0].health;
     change_health(vm, me, -h);
+    let guid = engine(vm).units.list[me.0].guid.clone();
+    let mut g = vm.str(&guid);
+    if active(&engine(vm).units, &[COMBAT]) {
+        g = vm.secret_wrap(g);
+    }
+    fire(vm, "UNIT_DIED", &[g]);
+    if engine(vm).units.target == Some(me) {
+        fire(vm, "PLAYER_TARGET_DIED", &[]);
+        engine_mut(vm).units.target = None;
+        fire(vm, "PLAYER_TARGET_CHANGED", &[]);
+    }
     Ok(vec![])
 }
 

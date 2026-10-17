@@ -118,21 +118,36 @@ fn matches(a: &Aura, filter: &str) -> bool {
     })
 }
 
-/// `UNIT_AURA` for each of the unit's tokens, with the update information.
+/// `UNIT_AURA` for each of the unit's tokens, with the update information:
+/// its fields secret while auras are restricted (`/stdtest engine record
+/// aura` and `combat`: in combat, every token's).
 fn fire_update(vm: &mut Vm, id: UnitId, added: Option<&Aura>, removed: Option<f64>) {
+    let restricted = units::active(
+        &engine(vm).units,
+        &[
+            units::COMBAT,
+            units::ENCOUNTER,
+            units::CHALLENGE_MODE,
+            units::PVP_MATCH,
+        ],
+    );
+    let field = |vm: &mut Vm, v: Value| if restricted { vm.secret_wrap(v) } else { v };
     for token in units::tokens_of(&engine(vm).units, id) {
         let info = vm.new_table();
-        set(vm, info, "isFullUpdate", Value::Bool(false));
+        let full = field(vm, Value::Bool(false));
+        set(vm, info, "isFullUpdate", full);
         if let Some(a) = added {
             let list = vm.new_table();
             let data = aura_data(vm, a);
             let _ = vm.heap.table_mut(list).set(Value::Num(1.0), data);
-            set(vm, info, "addedAuras", Value::Table(list));
+            let list = field(vm, Value::Table(list));
+            set(vm, info, "addedAuras", list);
         }
         if let Some(r) = removed {
             let list = vm.new_table();
             let _ = vm.heap.table_mut(list).set(Value::Num(1.0), Value::Num(r));
-            set(vm, info, "removedAuraInstanceIDs", Value::Table(list));
+            let list = field(vm, Value::Table(list));
+            set(vm, info, "removedAuraInstanceIDs", list);
         }
         let t = vm.str(&token);
         widgets::fire_event(vm, "UNIT_AURA", &[t, Value::Table(info)]);

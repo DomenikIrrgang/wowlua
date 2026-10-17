@@ -2,10 +2,20 @@
 //! and `unit:interruptCast()` drive `UnitCastingInfo`, `UnitChannelInfo`
 //! and the `UNIT_SPELLCAST_*` events on the virtual clock.
 //!
-//! Unverified (from Blizzard's documentation and cast bar code): the
-//! events' order (`START`; then `SUCCEEDED` and `STOP`, or `INTERRUPTED`
-//! and `STOP`; channels `CHANNEL_START` / `CHANNEL_STOP`), the cast GUID's
-//! format, and the default cast time (1.5 s).
+//! Verified against the client (`/stdtest engine record cast`, Forever
+//! 70425): the player's `SENT(unit, target name | nil, castGUID, spellID)`;
+//! `START`; then `SUCCEEDED` and `STOP`, or `INTERRUPTED(unit, castGUID,
+//! spellID, nil, castBarID)` and `STOP`; each with the cast's
+//! `CastBar-<16 hex>` id last; `CURRENT_SPELL_CAST_CHANGED(false)` after the
+//! player's start and stop; an instant cast's `SUCCEEDED(…, nil)` between
+//! two of those, without `START` / `STOP`; a player's cast while casting `FAILED_QUIET` with
+//! `UI_ERROR_MESSAGE(280, "Another action is in progress")`, the running
+//! cast kept; channels' `CHANNEL_START(unit, nil, spellID, castBarID)` and
+//! `CHANNEL_STOP(unit, nil, spellID, nil, castBarID)`; the cast GUID's
+//! shape. Unverified: the default cast time (1.5 s), an interrupted
+//! channel's `INTERRUPTED`, other units' casts replacing a running one.
+//! Not modelled: the server's late `INTERRUPTED(…, nil, nil)` echoes and
+//! `UI_ERROR_MESSAGE(57, "Interrupted")` after an interrupt by moving.
 
 use std::collections::HashMap;
 
@@ -26,6 +36,7 @@ pub struct Cast {
     pub channel: bool,
     pub not_interruptible: bool,
     pub guid: String,
+    pub bar: String,
 }
 
 #[derive(Default)]
@@ -37,6 +48,38 @@ pub struct Casting {
 fn field(vm: &mut Vm, t: TableRef, key: &str) -> Value {
     let k = vm.str(key);
     vm.heap.table(t).get(k)
+}
+
+/// The player's `CURRENT_SPELL_CAST_CHANGED(false)`.
+fn cast_changed(vm: &mut Vm, unit: UnitId) {
+    if unit == units::PLAYER {
+        crate::widgets::fire_event(vm, "CURRENT_SPELL_CAST_CHANGED", &[Value::Bool(false)]);
+    }
+}
+
+/// The player's `UNIT_SPELLCAST_SENT(unit, target name, castGUID, spellID)`:
+/// the target's full name (with a last name), or nil.
+fn sent(vm: &mut Vm, unit: UnitId, guid: Value, spell_id: f64) {
+    if unit != units::PLAYER {
+        return;
+    }
+    let target = {
+        let u = &engine(vm).units;
+        u.target.map(|t| {
+            let t = &u.list[t.0];
+            match &t.last_name {
+                Some(last) => format!("{} {last}", t.name),
+                None => t.name.clone(),
+            }
+        })
+    };
+    let target = target.map_or(Value::Nil, |t| vm.str(&t));
+    units::fire_unit(
+        vm,
+        "UNIT_SPELLCAST_SENT",
+        unit,
+        &[target, guid, Value::Num(spell_id)],
+    );
 }
 
 fn events(channel: bool) -> (&'static str, &'static str) {
@@ -94,6 +137,29 @@ pub fn control_cast(vm: &mut Vm, c: NativeCall) -> Ret {
         c.next
     };
     let guid = format!("Cast-3-4621-0-1-{}-{:010X}", spell_id as i64, n);
+    let bar = format!("CastBar-{:016X}", 0x5EED_0000_0000_0000u64 + n);
+    let g = vm.str(&guid);
+    let id = Value::Num(spell_id);
+    if engine(vm).units.casting.casts.contains_key(&me) {
+        if me == units::PLAYER {
+            // The player's running cast stays; the new one fails.
+            sent(vm, me, g, spell_id);
+            units::fire_unit(vm, "UNIT_SPELLCAST_FAILED_QUIET", me, &[g, id, Value::Nil]);
+            cast_changed(vm, me);
+            let message = vm.str("Another action is in progress");
+            crate::widgets::fire_event(vm, "UI_ERROR_MESSAGE", &[Value::Num(280.0), message]);
+            return Ok(vec![]);
+        }
+        // Another unit's new cast replaces the one running (unverified).
+        stop(vm, me, true);
+    }
+    sent(vm, me, g, spell_id);
+    if seconds <= 0.0 && !channel {
+        cast_changed(vm, me);
+        units::fire_unit(vm, "UNIT_SPELLCAST_SUCCEEDED", me, &[g, id, Value::Nil]);
+        cast_changed(vm, me);
+        return Ok(vec![]);
+    }
     let cast = Cast {
         spell_id,
         name,
@@ -103,15 +169,15 @@ pub fn control_cast(vm: &mut Vm, c: NativeCall) -> Ret {
         channel,
         not_interruptible,
         guid: guid.clone(),
+        bar: bar.clone(),
     };
-    // A new cast replaces the one running.
-    if engine(vm).units.casting.casts.contains_key(&me) {
-        stop(vm, me, true);
-    }
     engine_mut(vm).units.casting.casts.insert(me, cast);
     let (start_event, _) = events(channel);
-    let g = vm.str(&guid);
-    units::fire_unit(vm, start_event, me, &[g, Value::Num(spell_id)]);
+    let b = vm.str(&bar);
+    // A channel has no cast GUID.
+    let shown = if channel { Value::Nil } else { g };
+    units::fire_unit(vm, start_event, me, &[shown, id, b]);
+    cast_changed(vm, me);
     let native = vm.native_with(
         "castDone",
         cast_done as NativeFn,
@@ -126,15 +192,30 @@ fn stop(vm: &mut Vm, unit: UnitId, interrupted: bool) {
     let Some(cast) = engine_mut(vm).units.casting.casts.remove(&unit) else {
         return;
     };
-    let g = vm.str(&cast.guid);
+    let g = if cast.channel {
+        Value::Nil
+    } else {
+        vm.str(&cast.guid)
+    };
     let id = Value::Num(cast.spell_id);
+    let b = vm.str(&cast.bar);
     if interrupted {
-        units::fire_unit(vm, "UNIT_SPELLCAST_INTERRUPTED", unit, &[g, id]);
+        units::fire_unit(
+            vm,
+            "UNIT_SPELLCAST_INTERRUPTED",
+            unit,
+            &[g, id, Value::Nil, b],
+        );
     } else if !cast.channel {
-        units::fire_unit(vm, "UNIT_SPELLCAST_SUCCEEDED", unit, &[g, id]);
+        units::fire_unit(vm, "UNIT_SPELLCAST_SUCCEEDED", unit, &[g, id, b]);
     }
     let (_, stop_event) = events(cast.channel);
-    units::fire_unit(vm, stop_event, unit, &[g, id]);
+    if cast.channel {
+        units::fire_unit(vm, stop_event, unit, &[g, id, Value::Nil, b]);
+    } else {
+        units::fire_unit(vm, stop_event, unit, &[g, id, b]);
+    }
+    cast_changed(vm, unit);
 }
 
 /// The cast's end, if it is still the unit's cast.

@@ -6,10 +6,17 @@ use std::fs;
 use std::path::Path;
 
 fn wowlua(dir: &Path) -> Command {
+    // The examples are in the repository: their home goes elsewhere.
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let home = if dir.starts_with(&repo) {
+        std::env::temp_dir().join(format!("wowlua-home-{}", std::process::id()))
+    } else {
+        dir.join(".wowlua-home")
+    };
     let mut cmd = Command::cargo_bin("wowlua").unwrap();
     cmd.current_dir(dir)
         .env("NO_COLOR", "1")
-        .env("WOWLUA_HOME", dir.join(".wowlua-home"))
+        .env("WOWLUA_HOME", home)
         .env_remove("WOWLUA_WOW_PATH")
         .env_remove("WOWLUA_STDLIB_DIR");
     cmd
@@ -555,7 +562,7 @@ local function changes()
     mock.setBag(0, { slots = 16, items = {} })
     mock.moveTo({ subZone = "Old Town" })
     mock.moveTo({ zone = "Elwynn Forest", mapID = 1429 })
-    expect(seen).toEqual({ "PLAYER_MONEY", "PLAYER_EQUIPMENT_CHANGED", "BAG_UPDATE", "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA" })
+    expect(seen).toEqual({ "PLAYER_MONEY", "PLAYER_EQUIPMENT_CHANGED", "BAG_UPDATE", "BAG_UPDATE", "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA" })
     expect(GetMoney()).toBe(10)
     expect(GetInventoryItemID("player", 16)).toBeNil()
 end

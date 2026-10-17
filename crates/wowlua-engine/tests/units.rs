@@ -135,3 +135,79 @@ return table.concat(added, ','), UnitName('nameplate2'), UnitName('targettarget'
         ["nameplate1,nameplate2", "B", "Player", "true", "false", "A"]
     );
 }
+
+/// The player's casts as the client recorded them (`/stdtest engine record
+/// cast`, Forever 70425): GUIDs and cast bar ids by first appearance.
+#[test]
+fn casts_as_the_client_recorded() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "CastLog = {}
+local names, n = {}, 0
+local function show(v)
+    if type(v) == 'string' and (v:match('^Cast%-') or v:match('^CastBar%-')) then
+        if not names[v] then
+            n = n + 1
+            names[v] = (v:match('^CastBar') and 'bar' or 'guid') .. n
+        end
+        return names[v]
+    end
+    return tostring(v)
+end
+local f = CreateFrame('Frame')
+for _, e in ipairs({ 'UNIT_SPELLCAST_SENT', 'UNIT_SPELLCAST_START', 'UNIT_SPELLCAST_STOP', 'UNIT_SPELLCAST_SUCCEEDED',
+    'UNIT_SPELLCAST_INTERRUPTED', 'UNIT_SPELLCAST_FAILED_QUIET', 'UNIT_SPELLCAST_CHANNEL_START',
+    'UNIT_SPELLCAST_CHANNEL_STOP', 'CURRENT_SPELL_CAST_CHANGED', 'UI_ERROR_MESSAGE' }) do
+    f:RegisterEvent(e)
+end
+f:SetScript('OnEvent', function(_, e, ...)
+    local args = {}
+    for i = 1, select('#', ...) do args[#args + 1] = show((select(i, ...))) end
+    CastLog[#CastLog + 1] = e:gsub('^UNIT_SPELLCAST_', '') .. '(' .. table.concat(args, '; ') .. ')'
+end)
+mock.player:castSpell(647, { castTime = 2.5 })
+mock.player:castSpell(647, { castTime = 2.5 })",
+    );
+    wowlua_engine::clock::advance(&mut vm, 3.0);
+    run(
+        &mut vm,
+        "mock.player:castSpell(647, { castTime = 2.5 })
+mock.player:interruptCast()
+mock.player:castSpell(19750, { castTime = 0 })
+mock.player:castSpell(5143, { castTime = 1, channel = true })",
+    );
+    wowlua_engine::clock::advance(&mut vm, 2.0);
+    let log = run(&mut vm, "return table.concat(CastLog, '\\n')");
+    let expected = [
+        "SENT(player; nil; guid1; 647)",
+        "START(player; guid1; 647; bar2)",
+        "CURRENT_SPELL_CAST_CHANGED(false)",
+        // A cast while casting fails; the running one goes on.
+        "SENT(player; nil; guid3; 647)",
+        "FAILED_QUIET(player; guid3; 647; nil)",
+        "CURRENT_SPELL_CAST_CHANGED(false)",
+        "UI_ERROR_MESSAGE(280; Another action is in progress)",
+        "SUCCEEDED(player; guid1; 647; bar2)",
+        "STOP(player; guid1; 647; bar2)",
+        "CURRENT_SPELL_CAST_CHANGED(false)",
+        "SENT(player; nil; guid4; 647)",
+        "START(player; guid4; 647; bar5)",
+        "CURRENT_SPELL_CAST_CHANGED(false)",
+        "INTERRUPTED(player; guid4; 647; nil; bar5)",
+        "STOP(player; guid4; 647; bar5)",
+        "CURRENT_SPELL_CAST_CHANGED(false)",
+        // Instant.
+        "SENT(player; nil; guid6; 19750)",
+        "CURRENT_SPELL_CAST_CHANGED(false)",
+        "SUCCEEDED(player; guid6; 19750; nil)",
+        "CURRENT_SPELL_CAST_CHANGED(false)",
+        // A channel: no cast GUID.
+        "SENT(player; nil; guid7; 5143)",
+        "CHANNEL_START(player; nil; 5143; bar8)",
+        "CURRENT_SPELL_CAST_CHANGED(false)",
+        "CHANNEL_STOP(player; nil; 5143; nil; bar8)",
+        "CURRENT_SPELL_CAST_CHANGED(false)",
+    ];
+    assert_eq!(log[0].lines().collect::<Vec<_>>(), expected);
+}
