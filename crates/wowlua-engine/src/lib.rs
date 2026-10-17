@@ -54,6 +54,8 @@ pub struct Engine {
     /// undocumented functions secure code called: what a probe asks the
     /// client (`defaultedCalls`).
     pub defaulted_calls: std::collections::BTreeSet<String>,
+    /// Lua helpers the engine compiled once (`lua_helper`).
+    pub lua_helpers: HashMap<&'static str, Value>,
     /// Tables Blizzard's code alone sees while it loads.
     pub secure_tables: Vec<SecureTable>,
     /// The addons' globals (`GetGlobalEnvironment`), whatever environment
@@ -214,6 +216,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         animations: Default::default(),
         defaulted: Default::default(),
         defaulted_calls: Default::default(),
+        lua_helpers: Default::default(),
         secure_tables,
         main_globals: vm.globals,
         secure_namespaces: Vec::new(),
@@ -603,6 +606,25 @@ pub(crate) fn undocumented_function(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     Err(vm.error(&format!("{name} is not mocked")))
+}
+
+/// A function the engine writes in Lua (`source` returns it), compiled
+/// once and kept; secure.
+pub fn lua_helper(
+    vm: &mut Vm,
+    name: &'static str,
+    source: &str,
+) -> Result<Value, wowlua_vm::LuaError> {
+    if let Some(v) = engine(vm).lua_helpers.get(name).copied() {
+        return Ok(v);
+    }
+    let f = vm
+        .load(source.as_bytes(), &format!("=[engine {name}]"))
+        .map_err(|e| vm.error(&e))?;
+    let v = vm.call(f, &[])?.first().copied().unwrap_or_default();
+    widgets::keep(vm, v);
+    engine_mut(vm).lua_helpers.insert(name, v);
+    Ok(v)
 }
 
 /// Notes a call secure code made without an answer: `name(args)`, the

@@ -81,6 +81,11 @@ fn addon(vm: &mut Vm, src: &str) {
 fn client(out: &Path) -> Vm {
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    client_in(vm, out)
+}
+
+/// StdTest loaded in an engine (with Blizzard's UI or not).
+fn client_in(mut vm: Vm, out: &Path) -> Vm {
     wowlua_engine::controls::install(&mut vm, "__engine");
     addon(&mut vm, "StdTestState = {}");
     let toc = fs::read_to_string(out.join("StdTest_Camelot.toc"))
@@ -489,13 +494,22 @@ __engine.pressKey("ENTER")"#,
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 6;
+const ANSWERS_MATCHED: usize = 306;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {
+    // The calls are Blizzard's UI's: its code (fonts, mixins) is loaded too.
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
     let dir = build();
     let out = dir.path().join("dist/dev/StdTest");
-    let mut vm = client(&out);
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
     let controls = wowlua_engine::controls::table(&mut vm);
     wowlua_test::profile::apply(
         &mut vm,
@@ -547,12 +561,51 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
             _ => None,
         })
         .collect();
+    let address = regex::Regex::new(r"(function|table|userdata|thread): 0x[0-9a-f]+").unwrap();
+    let ours: BTreeMap<String, String> = ours
+        .into_iter()
+        .map(|(k, v)| (k, address.replace_all(&v, "$1").into_owned()))
+        .collect();
+    // `WOWLUA_ANSWERS=GetFontInfo` shows that function's differences.
+    let show = std::env::var("WOWLUA_ANSWERS").ok();
+    let mut shown = 0;
     let mut matched = 0;
     let mut by_function: BTreeMap<String, usize> = BTreeMap::new();
     for (call, answer) in &theirs {
         if ours.get(call) == Some(answer) {
             matched += 1;
         } else {
+            if show
+                .as_deref()
+                .is_some_and(|f| call.starts_with(&format!("{f}(")))
+                && shown
+                    < std::env::var("WOWLUA_ANSWERS_LIMIT")
+                        .ok()
+                        .and_then(|n| n.parse().ok())
+                        .unwrap_or(8)
+            {
+                shown += 1;
+                let mine = ours.get(call).map_or("<missing>", String::as_str);
+                // From where they part.
+                let at = answer
+                    .bytes()
+                    .zip(mine.bytes())
+                    .take_while(|(a, b)| a == b)
+                    .count()
+                    .saturating_sub(40);
+                let from = |s: &str| {
+                    s.get(at..)
+                        .unwrap_or(s)
+                        .chars()
+                        .take(240)
+                        .collect::<String>()
+                };
+                eprintln!(
+                    "{call} (from byte {at})\n    client: {}\n    ours:   {}",
+                    from(answer),
+                    from(mine)
+                );
+            }
             let name = call.split('(').next().unwrap_or(call).to_string();
             *by_function.entry(name).or_default() += 1;
         }

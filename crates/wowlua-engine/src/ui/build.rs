@@ -522,14 +522,7 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
                 .and_then(|h| h.child("AbsValue"))
                 .and_then(|v| v.number("val"))
                 .unwrap_or(12.0);
-            let (file, flags) = (
-                vm.str(font),
-                vm.str(el.attr("outline").map_or("", |o| match o {
-                    "THICK" => "THICKOUTLINE",
-                    "NORMAL" => "OUTLINE",
-                    _ => "",
-                })),
-            );
+            let (file, flags) = (vm.str(font), vm.str(&super::xml_font_flags(el)));
             call_method(
                 vm,
                 cx,
@@ -564,6 +557,12 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
 }
 
 /// A `<Size>`'s or `<Offset>`'s dimensions: `x`/`y` or an `<AbsDimension>`.
+/// Whether a widget shows text (a font object, a font string).
+fn is_text(vm: &Vm, id: WidgetId) -> bool {
+    let class = &engine(vm).world.widgets[id.0].class;
+    class == "Font" || class == "FontString"
+}
+
 fn dims(el: &Element) -> (Option<f64>, Option<f64>) {
     let d = el.child("AbsDimension").map(|d| d.as_ref()).unwrap_or(el);
     (d.number("x"), d.number("y"))
@@ -673,6 +672,35 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
             for g in &child.children {
                 build(vm, cx, g, Some(id));
             }
+        }
+        // A font's or font string's text color and shadow.
+        "color" if is_text(vm, id) => {
+            let rgba = super::xml_color(vm, child);
+            call_method(vm, cx, child.line, frame, "SetTextColor", &rgba);
+        }
+        "shadow" if is_text(vm, id) => {
+            let (x, y) = match child.child("Offset") {
+                Some(o) => dims(o),
+                None => (child.number("x"), child.number("y")),
+            };
+            call_method(
+                vm,
+                cx,
+                child.line,
+                frame,
+                "SetShadowOffset",
+                &[Value::Num(x.unwrap_or(0.0)), Value::Num(y.unwrap_or(0.0))],
+            );
+            let rgba = match child.child("Color") {
+                Some(c) => super::xml_color(vm, c),
+                None => [
+                    Value::Num(0.0),
+                    Value::Num(0.0),
+                    Value::Num(0.0),
+                    Value::Num(1.0),
+                ],
+            };
+            call_method(vm, cx, child.line, frame, "SetShadowColor", &rgba);
         }
         "scrollchild" => {
             for f in &child.children {

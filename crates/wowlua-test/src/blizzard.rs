@@ -48,18 +48,29 @@ fn run(cmd: &mut Command, what: &str) -> Result<(), String> {
 }
 
 /// The flavor's UI code, fetched when the cache lacks it.
+/// The UI code in a `cargo xtask types fetch` directory (`target/types-src`):
+/// the flavor's `Interface` and its global strings, when there.
+pub fn ui_source_in(dir: &Path, flavor: &str) -> Option<UiSource> {
+    let (_, strings_commit) = commits(flavor)?;
+    let interface = dir.join(flavor).join("Interface");
+    if !interface.exists() {
+        return None;
+    }
+    Some(UiSource {
+        interface,
+        strings: strings_commit
+            .map(|c| dir.join("strings").join(format!("{c}.lua")))
+            .filter(|p| p.exists()),
+    })
+}
+
 pub fn ui_source(flavor: &str, status: &dyn Fn(&str)) -> Result<UiSource, String> {
     let (commit, strings_commit) = commits(flavor).ok_or_else(|| {
         format!("the `{flavor}` declarations do not name their wow-ui-source commit")
     })?;
     if let Some(dir) = std::env::var_os("WOWLUA_UI_SOURCE") {
-        let dir = PathBuf::from(dir);
-        return Ok(UiSource {
-            interface: dir.join(flavor).join("Interface"),
-            strings: strings_commit
-                .map(|c| dir.join("strings").join(format!("{c}.lua")))
-                .filter(|p| p.exists()),
-        });
+        return ui_source_in(&PathBuf::from(dir), flavor)
+            .ok_or_else(|| format!("no `{flavor}` UI code in WOWLUA_UI_SOURCE"));
     }
     let cache = wowlua_driver::cache_root()
         .ok_or("cannot find the cache (set `WOWLUA_HOME`)")?

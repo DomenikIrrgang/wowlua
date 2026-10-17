@@ -847,11 +847,29 @@ fn font_named(vm: &mut Vm, name: &str, el: &Element) {
             let _ = vm.call(m, &a);
         }
     };
+    // What the font inherits: the parent font's face, color, shadow and
+    // whether the user's text scale may scale it.
     if let Some(parent) = el.attr("inherits") {
         let p = vm.get_global(parent);
         if !p.is_nil() {
             call(vm, "SetFontObject", &[p]);
+            if let (Some(pid), Some(id)) = (
+                crate::widgets::widget_of(vm, p),
+                crate::widgets::widget_of(vm, f),
+            ) {
+                crate::widgets::inherit_font_style(vm, pid, id);
+            }
         }
+    }
+    if let Some(v) = el.attr("canBeUserScaled")
+        && let Some(id) = crate::widgets::widget_of(vm, f)
+    {
+        let props = engine(vm).world.widgets[id.0].props;
+        let k = vm.str("canBeUserScaled");
+        let _ = vm
+            .heap
+            .table_mut(props)
+            .set(k, Value::Bool(v.eq_ignore_ascii_case("true")));
     }
     if let Some(file) = el.attr("font") {
         let height = el
@@ -862,15 +880,86 @@ fn font_named(vm: &mut Vm, name: &str, el: &Element) {
                     .and_then(|v| v.number("val"))
             })
             .unwrap_or(12.0);
-        let outline = match el.attr("outline").map(str::to_ascii_uppercase).as_deref() {
-            Some("NORMAL") => "OUTLINE",
-            Some("THICK") => "THICKOUTLINE",
-            _ => "",
-        };
         let file = vm.str(file);
-        let flags = vm.str(outline);
+        let flags = vm.str(&xml_font_flags(el));
         call(vm, "SetFont", &[file, Value::Num(height), flags]);
     }
+    // The XML's colors, in eight bits each as the client keeps them.
+    if let Some(c) = el.child("Color") {
+        let rgba = xml_color(vm, c);
+        call(vm, "SetTextColor", &rgba);
+    }
+    if let Some(shadow) = el.child("Shadow") {
+        // `<Shadow x y>` or `<Shadow><Offset x y/>` (or its AbsDimension).
+        let offset = shadow.child("Offset").map(|o| {
+            let d = o.child("AbsDimension").map(|d| d.as_ref()).unwrap_or(o);
+            (d.number("x").unwrap_or(0.0), d.number("y").unwrap_or(0.0))
+        });
+        let (x, y) = offset.unwrap_or((
+            shadow.number("x").unwrap_or(0.0),
+            shadow.number("y").unwrap_or(0.0),
+        ));
+        call(vm, "SetShadowOffset", &[Value::Num(x), Value::Num(y)]);
+        let color = match shadow.child("Color") {
+            Some(c) => xml_color(vm, c),
+            None => [
+                Value::Num(0.0),
+                Value::Num(0.0),
+                Value::Num(0.0),
+                Value::Num(1.0),
+            ],
+        };
+        call(vm, "SetShadowColor", &color);
+    }
+}
+
+/// An XML font's flags as the client reports them (`GetFont`,
+/// `GetFontInfo`: `/stdtest engine answers`): `outline="NORMAL"` is
+/// OUTLINE, `"THICK"` OUTLINE and THICKOUTLINE; then SLUG, FILTER and
+/// FIXEDHEIGHT (`fixedSize`), joined with ", " (MONOCHROME's place
+/// unverified).
+pub(crate) fn xml_font_flags(el: &Element) -> String {
+    let mut flags = Vec::new();
+    match el.attr("outline").map(str::to_ascii_uppercase).as_deref() {
+        Some("NORMAL") => flags.push("OUTLINE"),
+        Some("THICK") => flags.extend(["OUTLINE", "THICKOUTLINE"]),
+        _ => {}
+    }
+    if el.flag("monochrome") {
+        flags.push("MONOCHROME");
+    }
+    if el.flag("slug") {
+        flags.push("SLUG");
+    }
+    if el.flag("filter") {
+        flags.push("FILTER");
+    }
+    if el.flag("fixedSize") {
+        flags.push("FIXEDHEIGHT");
+    }
+    flags.join(", ")
+}
+
+/// An XML `<Color r g b a/>` (or `color="WHITE_FONT_COLOR"`, a color
+/// object's): r, g, b and a (1 when not given), each in eight bits.
+pub(crate) fn xml_color(vm: &mut Vm, el: &Element) -> [Value; 4] {
+    let mut c = [
+        el.number("r").unwrap_or(0.0),
+        el.number("g").unwrap_or(0.0),
+        el.number("b").unwrap_or(0.0),
+        el.number("a").unwrap_or(1.0),
+    ];
+    if let Some(name) = el.attr("color")
+        && let Value::Table(t) = vm.get_global(name)
+    {
+        for (i, k) in ["r", "g", "b", "a"].iter().enumerate() {
+            let key = vm.str(k);
+            if let Value::Num(n) = vm.heap.table(t).get(key) {
+                c[i] = n;
+            }
+        }
+    }
+    c.map(|v| Value::Num(crate::widgets::byte_float(v)))
 }
 
 /// The client's global strings: the file's `NAME = "text";` lines (a line

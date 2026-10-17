@@ -889,6 +889,44 @@ local function cvarFlags(): { [string]: string }
     return out
 end
 
+--- Font heights as the client reports them after `SetFont` (it snaps
+--- some heights: XML 13 reads back 12), per font file, on a font object
+--- (`GetFont`, `GetFontInfo`) and a font string; and how Lua-set colors
+--- read back (eight bits each, as XML's?).
+local function fontHeights(): { [string]: string }
+    const out: { [string]: string } = {}
+    const font = G.StdTestProbeFont ?? CreateFont("StdTestProbeFont")
+    const holder = CreateFrame("Frame", nil, UIParent)
+    const fs = holder:CreateFontString()
+    for _, file in ipairs({ "Fonts\\FRIZQT__.TTF", "Fonts\\ARIALN.TTF", "Fonts\\MORPHEUS.TTF", "Fonts\\SKURRI.TTF" }) do
+        const parts: string[] = {}
+        for h = 1, 80 do
+            font:SetFont(file, h, "")
+            local _, got = font:GetFont()
+            const info = G.GetFontInfo and G.GetFontInfo(font)
+            fs:SetFont(file, h, "")
+            local _, inString = fs:GetFont()
+            parts[#parts + 1] = `{h}={tostring(got)}/{tostring(info and info.height)}/{tostring(inString)}`
+        end
+        out[file] = table.concat(parts, " ")
+    end
+    font:SetFont("Fonts\\FRIZQT__.TTF", 13.5, "OUTLINE")
+    out["13.5 OUTLINE"] = results(font.GetFont, font)
+    font:SetTextColor(0.82, 0.5, 0.123, 0.3)
+    out["font SetTextColor(0.82, 0.5, 0.123, 0.3)"] = results(font.GetTextColor, font)
+    fs:SetTextColor(0.82, 0.5, 0.123, 0.3)
+    out["fontstring SetTextColor(0.82, 0.5, 0.123, 0.3)"] = results(fs.GetTextColor, fs)
+    const tex = holder:CreateTexture()
+    tex:SetVertexColor(0.82, 0.5, 0.123, 0.3)
+    out["texture SetVertexColor(0.82, 0.5, 0.123, 0.3)"] = results(tex.GetVertexColor, tex)
+    font:SetShadowColor(0.82, 0.5, 0.123, 0.3)
+    out["font SetShadowColor(0.82, 0.5, 0.123, 0.3)"] = results(font.GetShadowColor, font)
+    const fresh = G.StdTestProbeFontFresh ?? CreateFont("StdTestProbeFontFresh")
+    out["fresh font GetTextColor"] = results(fresh.GetTextColor, fresh)
+    holder:Hide()
+    return out
+end
+
 --- Each CVar's default (`C_CVar.GetCVarDefault`; not the player's value).
 local function cvarDefaults(): { [string]: string }
     const out: { [string]: string } = {}
@@ -1471,6 +1509,7 @@ export function engineProbe(arg: string?)
         hidden = hidden(),
         allCVars = allCVars(),
         cvarFlags = cvarFlags(),
+        fontHeights = fontHeights(),
         qualityColors = qualityColors(),
         slotInfo = slotInfo(),
         forbidden = forbidden(),

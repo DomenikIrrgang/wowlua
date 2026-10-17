@@ -15,7 +15,7 @@ mod snapshots;
 
 pub use snapshots::Summary as SnapshotSummary;
 
-pub use blizzard::{UiSource, ui_source};
+pub use blizzard::{UiSource, ui_source, ui_source_in};
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};

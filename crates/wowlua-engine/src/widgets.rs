@@ -381,6 +381,11 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         let k = vm.heap.intern(n.as_bytes());
         vm.heap.table_mut(main).set_str(k, Value::Table(table));
     }
+    // A font object's text starts white (`/stdtest engine answers`: fonts
+    // without a color of their own).
+    if class == "Font" {
+        store(vm, id, "TextColor", &[Value::Num(1.0); 4]);
+    }
     Value::Table(table)
 }
 
@@ -1643,7 +1648,7 @@ fn set_alpha(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let a = number_arg(vm, &c, 2)?;
     // Kept in eight bits, read back as a float: 0.5 is 128/255
     // (`/stdtest engine`).
-    let a = f64::from((a.clamp(0.0, 1.0) * 255.0).round() as f32 / 255.0);
+    let a = byte_float(a);
     engine_mut(vm).world.widgets[id.0].alpha = a;
     Ok(vec![])
 }
@@ -2327,6 +2332,80 @@ fn is_event_valid(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(engine(vm).api.events.contains(&e))])
 }
 
+/// A color component as the client keeps it: in eight bits, read back as a
+/// float (the byte times the float 1/255: `/stdtest engine` alpha 0.5 is
+/// 0.50196081399918, `answers` 0.82 is 0.81960791349411).
+pub fn byte_float(v: f64) -> f64 {
+    let byte = (v.clamp(0.0, 1.0) * 255.0).round() as f32;
+    f64::from(byte * (1.0f32 / 255.0))
+}
+
+/// A font object's color, shadow and user scaling given to a font that
+/// inherits it (XML `inherits`).
+pub fn inherit_font_style(vm: &mut Vm, from: WidgetId, to: WidgetId) {
+    let (pf, pt) = (
+        engine(vm).world.widgets[from.0].props,
+        engine(vm).world.widgets[to.0].props,
+    );
+    for stem in ["TextColor", "ShadowColor", "ShadowOffset"] {
+        if let Some(args) = stored_args(vm, pf, stem) {
+            store(vm, to, stem, &args);
+        }
+    }
+    let k = vm.str("canBeUserScaled");
+    let v = vm.heap.table(pf).get(k);
+    if !v.is_nil() {
+        let _ = vm.heap.table_mut(pt).set(k, v);
+    }
+}
+
+const FONT_INFO: &str = r#"return function(font, scalable, shadowed)
+    local file, height, outline = font:GetFont()
+    local r, g, b, a = font:GetTextColor()
+    local function color(r, g, b, a)
+        if CreateColor then return CreateColor(r, g, b, a) end
+        return { r = r, g = g, b = b, a = a }
+    end
+    local shadow
+    if shadowed then
+        local sr, sg, sb, sa = font:GetShadowColor()
+        local sx, sy = font:GetShadowOffset()
+        shadow = { color = color(sr or 0, sg or 0, sb or 0, sa or 1), x = sx or 0, y = sy or 0 }
+    end
+    return {
+        canBeUserScaled = scalable,
+        color = color(r, g, b, a),
+        fontObject = font,
+        height = height,
+        outline = outline or "",
+        shadow = shadow,
+    }
+end"#;
+
+/// `GetFontInfo(font)`: a font object's (or a global font's, by name)
+/// height, outline, color and shadow, colors made with Blizzard's
+/// `CreateColor` (`/stdtest engine answers`).
+fn get_font_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let font = match c.arg(1) {
+        Value::Str(s) => {
+            let name = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+            vm.get_global(&name)
+        }
+        v => v,
+    };
+    let Some(id) = widget_of(vm, font) else {
+        return Ok(vec![]);
+    };
+    let props = engine(vm).world.widgets[id.0].props;
+    let k = vm.str("canBeUserScaled");
+    let scalable = Value::Bool(vm.heap.table(props).get(k).truthy());
+    // A shadow only when the font has one (recorded: no `shadow` else).
+    let shadowed = stored_args(vm, props, "ShadowColor").is_some()
+        || stored_args(vm, props, "ShadowOffset").is_some();
+    let helper = crate::lua_helper(vm, "GetFontInfo", FONT_INFO)?;
+    vm.call(helper, &[font, scalable, Value::Bool(shadowed)])
+}
+
 /// `CreateFont(name)`: a font object, global under its name.
 fn create_font(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = vm.check_str(&c, 1)?;
@@ -2358,6 +2437,7 @@ fn enumerate_frames(vm: &mut Vm, c: NativeCall) -> Ret {
 pub fn functions() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
         ("CreateFont", create_font),
+        ("GetFontInfo", get_font_info),
         ("EnumerateFrames", enumerate_frames),
         ("GetFramesRegisteredForEvent", frames_registered_for_event),
         ("C_EventUtils.IsEventValid", is_event_valid),

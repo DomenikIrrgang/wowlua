@@ -44,6 +44,10 @@ const SOCIAL: &[&str] = &[
 
 impl Identity {
     fn scrub(&self, text: &str) -> String {
+        // The session's addresses (`function: 0x…`).
+        let address = regex::Regex::new(r"(function|table|userdata|thread): 0x[0-9a-f]+")
+            .expect("a valid pattern");
+        let text = address.replace_all(text, "$1");
         let mut out = text.replace(&self.guid, "Player-0000-00000000");
         // Any other player's GUID.
         let guid = regex::Regex::new(r"Player-\d+-[0-9A-F]{8}").expect("a valid pattern");
