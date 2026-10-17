@@ -305,3 +305,52 @@ return tostring(g:IsPlaying()), g:GetDuration(), a:GetObjectType(), #{ g:GetAnim
     assert_eq!(mid, ["play"]);
     assert_eq!(end, ["play,finished"]);
 }
+
+/// A hidden edit box's `SetText`: its `OnTextChanged` waits until the box
+/// shows, then comes in that frame after `OnUpdate` (as `/stdtest engine
+/// textchange` recorded on Forever).
+#[test]
+fn a_hidden_edit_box_changes_text_once_it_shows() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    run(
+        &mut vm,
+        "local log = {}
+_G.textLog = log
+local parent = CreateFrame('Frame', nil, UIParent)
+parent:Hide()
+local box = CreateFrame('EditBox', nil, parent)
+box:SetAutoFocus(false)
+box:SetScript('OnTextChanged', function(self, userInput)
+    log[#log + 1] = 'changed(' .. tostring(userInput) .. ', ' .. self:GetText() .. ', visible ' .. tostring(self:IsVisible()) .. ')'
+end)
+box:SetText('hidden')
+log[#log + 1] = 'set while hidden'
+local frames = 0
+local ticker = CreateFrame('Frame')
+ticker:SetScript('OnUpdate', function()
+    frames = frames + 1
+    log[#log + 1] = 'update' .. frames
+    if frames == 3 then
+        parent:Show()
+        log[#log + 1] = 'parent shown'
+    elseif frames == 6 then
+        parent:Hide()
+        box:SetText('')
+        log[#log + 1] = 'hidden, set empty'
+        parent:Show()
+        log[#log + 1] = 'shown again in the same frame'
+    elseif frames == 9 then
+        ticker:SetScript('OnUpdate', nil)
+    end
+end)
+mock.advanceFrames(10)",
+    );
+    let r = run(&mut vm, "return table.concat(textLog, ' | ')");
+    assert_eq!(
+        r,
+        [
+            "set while hidden | update1 | update2 | update3 | parent shown | changed(false, hidden, visible true) | update4 | update5 | update6 | hidden, set empty | shown again in the same frame | changed(false, , visible true) | update7 | update8 | update9"
+        ]
+    );
+}
