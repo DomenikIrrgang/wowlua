@@ -478,6 +478,48 @@ pub fn control_set_bag(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `count` of item `id` into the bags: onto a stack of it with room (its
+/// data's `stackCount`), else into the first free slot; the bag, and
+/// whether the item took a new slot. None when the bags are full.
+pub fn add_to_bags(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, bool)> {
+    let stack = match item_field(vm, id, "stackCount") {
+        Value::Num(n) if n >= 1.0 => n,
+        _ => 1.0,
+    };
+    let bags = &mut engine_mut(vm).world.character.bags;
+    for (bag, b) in bags.iter_mut() {
+        for held in b.items.values_mut() {
+            if held.id == id && held.count + count <= stack {
+                held.count += count;
+                return Some((*bag, false));
+            }
+        }
+    }
+    for (bag, b) in bags.iter_mut() {
+        if let Some(slot) = (1..=b.slots).find(|s| !b.items.contains_key(s)) {
+            b.items.insert(
+                slot,
+                Held {
+                    id,
+                    count,
+                    ..Held::default()
+                },
+            );
+            return Some((*bag, true));
+        }
+    }
+    None
+}
+
+/// A bag's contents changed: `BAG_UPDATE(bag)` (the backpack's then
+/// `BAG_UPDATE(-1)`).
+pub fn bag_updated(vm: &mut Vm, bag: i64) {
+    widgets::fire_event(vm, "BAG_UPDATE", &[Value::Num(bag as f64)]);
+    if bag == 0 {
+        widgets::fire_event(vm, "BAG_UPDATE", &[Value::Num(-1.0)]);
+    }
+}
+
 // ------------------------------------------------------------------ place
 
 fn zone_text(get: fn(&Position) -> &str) -> impl Fn(&mut Vm, NativeCall) -> Ret {

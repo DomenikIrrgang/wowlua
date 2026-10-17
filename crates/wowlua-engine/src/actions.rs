@@ -234,6 +234,10 @@ fn get_action_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let enabled = action(vm, s).is_some();
+    // An empty slot's cooldown is plain in combat too (recorded).
+    if !enabled {
+        engine_mut(vm).plain_results = true;
+    }
     let t = table(
         vm,
         &[

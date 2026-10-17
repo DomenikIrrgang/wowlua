@@ -7,12 +7,20 @@
 local e = __engine
 local player = e.player
 e.setLatency(0.3)
+-- The warrior's names as the recording has them, scrubbed.
+player:setName("Player", "Lastname")
 local wolf = e.spawnUnit({
     name = "Young Wolf", guid = "Creature-0-6782-0-7-299-DEE9062BA3", npcID = 299, level = 1,
     reaction = "neutral", class = "WARRIOR", classID = 1, sex = 1, powerType = 1,
     creatureType = "Beast", creatureTypeID = 1, creatureFamily = "Wolf", creatureFamilyID = 1,
     -- Its health: the damage it took (6, 5, 6, 16, 7, 17).
     health = 57, maxHealth = 57,
+})
+-- What it drops (the recording's loot slots; Chipped Claw is not in the
+-- warrior's bags yet).
+e.defineItem(7074, {
+    name = "Chipped Claw", quality = 0, icon = 133723, stackCount = 10, classID = 15, subclassID = 0,
+    link = "|cnIQ0:|Hitem:7074::::::::1:1491:::::::::|h[Chipped Claw]|h|r",
 })
 -- Heroic Strike: on the next swing, its rage cost unverified (15; to
 -- record: C_Spell.GetSpellPowerCost(78)).
@@ -49,8 +57,10 @@ at(14.348) wolf:swing(player, 1, { victimPower = 14 })
 wolf:setThreat(47)
 at(14.454) player:setPower(15)
 at(14.849) player:useSpell(78)
-at(15.857) player:swing(wolf, 17, { spent = 0, power = 2, kill = { lootable = true, xp = 50 } })
+at(15.857) player:swing(wolf, 17, { spent = 0, power = 2, kill = { xp = 50, loot = { { id = 7073 }, { id = 7074 } } } })
 at(16.116) player:stopAttack()
 at(16.915) player:leaveCombat()
+-- The corpse clicked: targeted, looted with autoloot.
 at(21.077) player:target(wolf)
+player:loot(wolf, { auto = true })
 at(22.921)

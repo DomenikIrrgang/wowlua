@@ -65,6 +65,8 @@ pub struct Unit {
     pub classification: String,
     /// The player's threat on this creature (`setThreat`).
     pub threat: Option<f64>,
+    /// What its corpse holds (`kill({ loot })`): items and counts.
+    pub loot: Vec<(i64, f64)>,
     /// A creature's type and family: their names and IDs
     /// (`UnitCreatureType`, `UnitCreatureFamily`; none for players).
     pub creature_type: Option<(String, f64)>,
@@ -238,6 +240,7 @@ pub fn install(vm: &mut Vm) {
         distance: Some(0.0),
         classification: "normal".into(),
         threat: None,
+        loot: Vec::new(),
         creature_type: None,
         creature_family: None,
     };
@@ -485,6 +488,7 @@ fn clone_unit(u: &Unit) -> Unit {
         class_name: u.class_name.clone(),
         race: u.race.clone(),
         classification: u.classification.clone(),
+        loot: u.loot.clone(),
         creature_type: u.creature_type.clone(),
         creature_family: u.creature_family.clone(),
         ..*u
@@ -984,6 +988,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("startAttack", control_start_attack),
         ("stopAttack", control_stop_attack),
         ("swing", control_swing),
+        ("loot", crate::loot::control_loot),
         ("setThreat", control_set_threat),
         ("leaveCombat", control_leave_combat),
         ("showNameplate", control_show_nameplate),
@@ -1185,6 +1190,7 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         },
         classification: text(vm, "classification", "normal"),
         threat: None,
+        loot: Vec::new(),
         creature_type: match get(vm, "creatureType") {
             Value::Str(s) => Some((
                 String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
@@ -1436,6 +1442,7 @@ fn control_kill(vm: &mut Vm, c: NativeCall) -> Ret {
     kill_blow(vm, me, blow);
     kill_xp(vm, me, &opts, true);
     kill_xp(vm, me, &opts, false);
+    engine_mut(vm).units.list[me.0].loot = opts.loot.clone();
     died(vm, me, opts.lootable);
     Ok(vec![])
 }
@@ -1445,6 +1452,8 @@ pub(crate) struct Kill {
     pub by: Option<UnitId>,
     pub lootable: bool,
     pub xp: Option<f64>,
+    /// The corpse's items: `{ { id, count? }, … }`.
+    pub loot: Vec<(i64, f64)>,
 }
 
 impl Kill {
@@ -1454,6 +1463,7 @@ impl Kill {
                 by: None,
                 lootable: false,
                 xp: None,
+                loot: Vec::new(),
             });
         };
         let field = |vm: &mut Vm, k: &str| {
@@ -1474,7 +1484,29 @@ impl Kill {
             Value::Num(n) => Some(n),
             _ => None,
         };
-        Ok(Kill { by, lootable, xp })
+        let mut loot = Vec::new();
+        if let Value::Table(list) = field(vm, "loot") {
+            let n = vm.heap.table(list).border();
+            for i in 1..=n {
+                if let Value::Table(item) = vm.heap.table(list).get(Value::Num(i as f64)) {
+                    let (k_id, k_count) = (vm.str("id"), vm.str("count"));
+                    if let Value::Num(id) = vm.heap.table(item).get(k_id) {
+                        let count = match vm.heap.table(item).get(k_count) {
+                            Value::Num(c) => c,
+                            _ => 1.0,
+                        };
+                        loot.push((id as i64, count));
+                    }
+                }
+            }
+        }
+        let lootable = lootable || !loot.is_empty();
+        Ok(Kill {
+            by,
+            lootable,
+            xp,
+            loot,
+        })
     }
 }
 
@@ -1538,6 +1570,18 @@ pub(crate) fn kill_xp(vm: &mut Vm, me: UnitId, opts: &Kill, first: bool) {
     }
 }
 
+/// The player's target cleared by the world (its death, its corpse
+/// emptied): `PLAYER_TARGET_CHANGED()`, and the server's
+/// `UNIT_TARGET("player")` a round trip later.
+pub(crate) fn clear_target(vm: &mut Vm) {
+    engine_mut(vm).units.target = None;
+    engine_mut(vm).units.list[PLAYER.0].target = None;
+    fire(vm, "PLAYER_TARGET_CHANGED", &[]);
+    let echo = vm.native("targetEcho", target_echo);
+    let delay = crate::clock::server_delay(vm);
+    crate::clock::after_engine(vm, delay, echo);
+}
+
 /// The death's events. In the open world (`/stdtest engine scenario
 /// combat`): `UNIT_DIED(guid)`; for the player's target
 /// `PLAYER_TARGET_DIED()` and the target cleared (`PLAYER_TARGET_CHANGED()`
@@ -1562,12 +1606,7 @@ pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
     fire(vm, "UNIT_DIED", &[g]);
     if engine(vm).units.target == Some(me) {
         fire(vm, "PLAYER_TARGET_DIED", &[]);
-        engine_mut(vm).units.target = None;
-        engine_mut(vm).units.list[PLAYER.0].target = None;
-        fire(vm, "PLAYER_TARGET_CHANGED", &[]);
-        let echo = vm.native("targetEcho", target_echo);
-        let delay = crate::clock::server_delay(vm);
-        crate::clock::after_engine(vm, delay, echo);
+        clear_target(vm);
     }
     if !instance {
         loot(vm);
@@ -1762,6 +1801,7 @@ fn swing_with_spell(
     }
     if let Some(k) = &kill {
         kill_xp(vm, victim, k, false);
+        engine_mut(vm).units.list[victim.0].loot = k.loot.clone();
         died(vm, victim, k.lootable);
     }
     let changed = crate::actions::usability_changed(vm);

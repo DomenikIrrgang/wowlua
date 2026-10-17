@@ -116,6 +116,8 @@ pub struct World {
     pub color_hsv: HashMap<usize, [f64; 3]>,
     /// A slider's or a status bar's range and value.
     pub bars: HashMap<usize, crate::bars::Bar>,
+    /// The loot window.
+    pub loot: crate::loot::Loot,
     /// The chat's last line number (each message's eleventh value).
     pub next_chat_line: u64,
     /// The time a request takes to come back from the server

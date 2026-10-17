@@ -24,6 +24,7 @@ pub mod framescript;
 pub mod gamedata;
 pub mod input;
 pub mod login;
+pub mod loot;
 pub mod macros;
 pub mod merchant;
 pub mod protection;
@@ -45,6 +46,8 @@ use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
 pub struct Engine {
     pub flavor: String,
     pub api: &'static api::Api,
+    /// Set by a behaviour whose answer has nothing to hide this call.
+    pub plain_results: bool,
     /// Behaviour by function name (`C_Timer.After`).
     behaviours: HashMap<&'static str, NativeFn>,
     /// Widget methods' behaviour by name (`Show`), or by class and name
@@ -207,6 +210,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(input::behaviours())
             .chain(casting::behaviours())
             .chain(merchant::behaviours())
+            .chain(loot::behaviours())
             .chain(queries::behaviours())
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())
@@ -237,6 +241,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         animations: Default::default(),
         defaulted: Default::default(),
         defaulted_calls: Default::default(),
+        plain_results: false,
         lua_helpers: Default::default(),
         secure_tables,
         main_globals: vm.globals,
@@ -753,7 +758,10 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     // and the restrictions active say; a return marked never secret stays.
     let secret = units::secret_results(vm, &f.doc, &c);
     let results = behaviour(vm, c)?;
-    if !secret {
+    // A behaviour may say its answer has nothing to hide (an empty action
+    // slot's cooldown, recorded plain in combat).
+    let plain = std::mem::take(&mut engine_mut(vm).plain_results);
+    if !secret || plain {
         return Ok(results);
     }
     let returns = f
@@ -772,10 +780,39 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
                 .and_then(serde_json::Value::as_bool)
                 == Some(true);
             if never || v.is_nil() {
-                v
-            } else {
-                vm.secret_wrap(v)
+                return v;
             }
+            // A structure stays readable, its fields secret but those
+            // documented `NeverSecret` (`SpellCooldownInfo`'s `isActive`,
+            // `isEnabled`, `isOnGCD`: recorded in combat).
+            let ty = returns
+                .get(i)
+                .and_then(|r| r.get("Type"))
+                .and_then(serde_json::Value::as_str);
+            if let (Some(ty), Value::Table(t)) = (ty, v)
+                && let Some(fields) = api.structure_fields.get(ty)
+            {
+                for field in fields {
+                    let Some(name) = field.get("Name").and_then(serde_json::Value::as_str) else {
+                        continue;
+                    };
+                    if field
+                        .get("NeverSecret")
+                        .and_then(serde_json::Value::as_bool)
+                        == Some(true)
+                    {
+                        continue;
+                    }
+                    let k = vm.str(name);
+                    let fv = vm.heap.table(t).get(k);
+                    if !fv.is_nil() {
+                        let w = vm.secret_wrap(fv);
+                        let _ = vm.heap.table_mut(t).set(k, w);
+                    }
+                }
+                return v;
+            }
+            vm.secret_wrap(v)
         })
         .collect())
 }

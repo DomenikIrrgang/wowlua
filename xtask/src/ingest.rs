@@ -771,19 +771,16 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 r#"UnitName\(\\?"[a-z]+\\?"\) -> 2: string ([^,]+), string (.+)$"#,
             )
             .expect("a valid pattern");
+            // First every recording's names (a name one recording shows
+            // may be in another's chat), then each recording scrubbed of
+            // them all.
+            let mut all: Vec<(String, mlua::Table)> = Vec::new();
             for pair in scenarios.pairs::<String, mlua::Table>() {
-                let (name, scenario) = pair.map_err(|e| anyhow!("{e}"))?;
-                let file: String = name
-                    .chars()
-                    .map(|c| {
-                        if c.is_ascii_alphanumeric() {
-                            c.to_ascii_lowercase()
-                        } else {
-                            '-'
-                        }
-                    })
-                    .collect();
-                let mut secrets: Vec<String> = Vec::new();
+                all.push(pair.map_err(|e| anyhow!("{e}"))?);
+            }
+            let mut secrets: Vec<String> = Vec::new();
+            let mut profiles_of: Vec<Vec<(&str, String)>> = Vec::new();
+            for (_, scenario) in &all {
                 let mut profiles = Vec::new();
                 for part in ["before", "after"] {
                     let snapshot: mlua::Value = scenario.get(part).map_err(|e| anyhow!("{e}"))?;
@@ -794,11 +791,14 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                     secrets.extend(names);
                     profiles.push((part, text));
                 }
-                // Players' names: a player's `UnitName` answers with two
-                // names (first and last), an NPC's with one. The
-                // character's last name, and others' names, as whole words.
+                profiles_of.push(profiles);
+            }
+            // Players' names: a player's `UnitName` answers with two names
+            // (first and last), an NPC's with one. The character's last
+            // name, and others' names, as whole words.
+            let mut words: Vec<(String, &str)> = Vec::new();
+            for (_, scenario) in &all {
                 let log: mlua::Table = scenario.get("log").map_err(|e| anyhow!("{e}"))?;
-                let mut words: Vec<(String, &str)> = Vec::new();
                 for line in log.sequence_values::<String>() {
                     let line = line.map_err(|e| anyhow!("{e}"))?;
                     let line = me.scrub(&line);
@@ -813,8 +813,20 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                         }
                     }
                 }
-                words.sort();
-                words.dedup();
+            }
+            words.sort();
+            words.dedup();
+            for ((name, scenario), profiles) in all.iter().zip(profiles_of) {
+                let file: String = name
+                    .chars()
+                    .map(|c| {
+                        if c.is_ascii_alphanumeric() {
+                            c.to_ascii_lowercase()
+                        } else {
+                            '-'
+                        }
+                    })
+                    .collect();
                 let scrub = |text: &str| {
                     let text = secrets
                         .iter()

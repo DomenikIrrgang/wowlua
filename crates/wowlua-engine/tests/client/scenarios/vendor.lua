@@ -615,7 +615,7 @@ return {
     ["00610"] = "11.991 = C_Container.GetContainerNumFreeSlots(0) -> 2: number 13, number 0",
     ["00611"] = "11.991 BAG_UPDATE(number -1)",
     ["00612"] = "11.991 ITEM_PUSH(number 0; number 134955)",
-    ["00613"] = "11.991 CHAT_MSG_LOOT(string You receive item: |cnIQ1:|Hitem:17184::::::::2:1491::14:::::::|h[Small Shield]|h|r; string Player Lua; string ; string ; string Player Lua; string ; number 0; number 0; string ; number 0; number 20748; string Player-0000-00000000; number 0; boolean false; boolean false; boolean false; boolean false; {forwardedMessage=string ,fromDiscord=boolean false,globalName=string ,hasAttachment=boolean false,hasEmbed=boolean false,hasEmoji=boolean false,hasError=boolean false,hasForwardedMessage=boolean false,hasPoll=boolean false,hasSticker=boolean false,lastOnlineName=string ,type=number 0,userID=number 0})",
+    ["00613"] = "11.991 CHAT_MSG_LOOT(string You receive item: |cnIQ1:|Hitem:17184::::::::2:1491::14:::::::|h[Small Shield]|h|r; string Player Lastname; string ; string ; string Player Lastname; string ; number 0; number 0; string ; number 0; number 20748; string Player-0000-00000000; number 0; boolean false; boolean false; boolean false; boolean false; {forwardedMessage=string ,fromDiscord=boolean false,globalName=string ,hasAttachment=boolean false,hasEmbed=boolean false,hasEmoji=boolean false,hasError=boolean false,hasForwardedMessage=boolean false,hasPoll=boolean false,hasSticker=boolean false,lastOnlineName=string ,type=number 0,userID=number 0})",
     ["00614"] = "11.991 ITEM_DATA_LOAD_RESULT(number 2672; boolean true)",
     ["00615"] = "11.991 ITEM_DATA_LOAD_RESULT(number 7074; boolean true)",
     ["00616"] = "11.991 ITEM_DATA_LOAD_RESULT(number 80; boolean true)",

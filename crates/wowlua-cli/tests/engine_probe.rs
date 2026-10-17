@@ -875,6 +875,10 @@ fn scenario_line(line: &str) -> Option<String> {
     let guid = regex::Regex::new(r"Player-\d+-[0-9A-F]{8}").unwrap();
     let line = regex::Regex::new(r"^(CHAT_MSG_.*; number )\d+(; nil nil; number 0;)").unwrap();
     let body = guid.replace_all(body, "Player-0000-00000000");
+    // A cast's GUID by its kind and spell (its server, map and number are
+    // the session's).
+    let cast = regex::Regex::new(r"Cast-(\d)-\d+-\d+-\d+-(\d+)-[0-9A-F]+").unwrap();
+    let body = cast.replace_all(&body, "Cast-$1-$2");
     let body = line.replace(&body, "${1}<line>${2}").into_owned();
     // An answer's trailing nils dropped (the first recordings' recorder
     // lost them).
@@ -930,7 +934,7 @@ fn align(ours: &[String], theirs: &[String]) -> (usize, Vec<String>, Vec<String>
 
 /// How many of the combat scenario's lines the engine plays as the client
 /// did: only ever up.
-const COMBAT_MATCHED: usize = 510;
+const COMBAT_MATCHED: usize = 664;
 
 /// The combat scenario: a wolf targeted, fought, killed and looted.
 #[test]
