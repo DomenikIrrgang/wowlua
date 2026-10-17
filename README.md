@@ -17,6 +17,7 @@
   <a href="#install">install</a> ·
   <a href="#quick-start">quick start</a> ·
   <a href="#bring-your-addon">bring your addon</a> ·
+  <a href="docs/README.md">docs</a> ·
   <a href="spec/README.md">specification</a> ·
   <a href="spec/roadmap.md">roadmap</a> ·
   <a href="https://github.com/DomenikIrrgang/wowlua/releases">releases</a>
