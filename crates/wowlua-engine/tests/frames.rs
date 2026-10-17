@@ -180,9 +180,19 @@ local r, g, bb, a = t:GetVertexColor()
 return tostring(f:IsMovable()), tostring(f:IsMouseEnabled()), tostring(f:IsToplevel()), tostring(ok),
     select(2, fs:GetFont()), tostring(b:IsEnabled()), table.concat(Seen, ','), r .. g .. bb .. a",
     );
+    // A 14 high font keeps 13.999999046326 on camelot (`/stdtest engine`).
     assert_eq!(
         r,
-        ["true", "true", "true", "true", "14", "false", "off", "1001"]
+        [
+            "true",
+            "true",
+            "true",
+            "true",
+            "13.999999046326",
+            "false",
+            "off",
+            "1001"
+        ]
     );
 }
 

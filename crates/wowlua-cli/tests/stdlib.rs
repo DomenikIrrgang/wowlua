@@ -4851,7 +4851,8 @@ C(not pcall(StdLauncher.again, { icon = "x", label = "y", onClick = function() e
 local function vertex(t: any): number[] return { t:GetVertexColor() } end
 C(b.ring:IsShown() and b.disc:IsShown() and b.flatDisc == nil, "the client's look")
 StdLauncher.launcher.setTheme({ colors = { border = { 1, 0, 0 }, background = { 0, 0, 1, 0.5 } } })
-C(vertex(b.ring)[1] == 1 and vertex(b.ring)[2] == 0 and vertex(b.disc)[3] == 1 and vertex(b.disc)[4] == 0.5, "tinted ring and disc")
+-- Colors are kept in eight bits (0.5 reads back 128/255, as in the client).
+C(vertex(b.ring)[1] == 1 and vertex(b.ring)[2] == 0 and vertex(b.disc)[3] == 1 and math.abs(vertex(b.disc)[4] - 128 / 255) < 1e-6, "tinted ring and disc")
 StdLauncher.launcher.setTheme({ button = "flat", colors = { border = { 0, 1, 0 } } })
 C(not b.ring:IsShown() and not b.disc:IsShown() and b.flatDisc:IsShown() and vertex(b.flatBorder)[2] == 1, "flat: a disc and a border")
 StdLauncher.launcher.setTheme(nil)

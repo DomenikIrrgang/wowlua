@@ -1,0 +1,61 @@
+-- /stdtest engine startup: arms a recording of the next login's events (a
+-- /reload), from StdTest's own ADDON_LOADED (its files load before it) to
+-- three seconds after PLAYER_ENTERING_WORLD, into StdTestState.engineStartup.
+-- Unarmed, the recorder stops at that ADDON_LOADED (the saved variables say
+-- whether it is armed only then).
+import state from "/state"
+import say from "/harness"
+
+--- A payload value: tables as their sorted keys, else type and value.
+local function show(v: any): string
+    if issecretvalue(v) then
+        return `secret {type(v)}`
+    end
+    if type(v) == "table" then
+        const keys: string[] = {}
+        for k in pairs(v :: table) do
+            keys[#keys + 1] = tostring(k)
+        end
+        table.sort(keys)
+        return `\{{table.concat(keys, ",")}\}`
+    end
+    return `{type(v)} {tostring(v)}`
+end
+
+local log: string[]? = {}
+const start = GetTime()
+const recorder = CreateFrame("Frame")
+recorder:RegisterAllEvents()
+recorder:SetScript("OnEvent", function(_: any, event: string, ...: any)
+    const list = log
+    if list == nil or #list >= 4000 or event == "COMBAT_LOG_EVENT_UNFILTERED" then
+        return
+    end
+    const parts: string[] = {}
+    for i = 1, select("#", ...) do
+        parts[#parts + 1] = show((select(i, ...)))
+    end
+    list[#list + 1] = `{string.format("%.3f", GetTime() - start)} {event}({table.concat(parts, "; ")})`
+    if event == "ADDON_LOADED" and (...) == "StdTest" then
+        const st = state() :: any
+        if not st.armStartup then
+            recorder:UnregisterAllEvents()
+            log = nil
+        end
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        C_Timer.After(3, function()
+            const st = state() :: any
+            st.engineStartup = list
+            st.armStartup = nil
+            recorder:UnregisterAllEvents()
+            log = nil
+            say("engine startup: recorded; type /reload so the file is written")
+        end)
+    end
+end)
+
+export function armStartup()
+    const st = state() :: any
+    st.armStartup = true
+    say("engine startup: armed; type /reload (the login is recorded, then /reload again)")
+end

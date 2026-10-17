@@ -178,7 +178,7 @@ pub fn run_callbacks(vm: &mut Vm, event: &str, args: &[Value]) {
 
 // ----------------------------------------------------------------- CVars
 
-fn cvar_get(vm: &mut Vm, name: &str) -> Option<String> {
+pub(crate) fn cvar_get(vm: &mut Vm, name: &str) -> Option<String> {
     engine(vm)
         .world
         .cvars

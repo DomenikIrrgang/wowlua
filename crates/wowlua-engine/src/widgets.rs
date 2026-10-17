@@ -669,17 +669,8 @@ fn undocumented_method(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     let props = engine(vm).world.widgets[id.0].props;
     if let Some(stem) = short.strip_prefix("Set") {
-        let list = vm.new_table();
-        for (k, v) in c.args.iter().skip(1).enumerate() {
-            let _ = vm.heap.table_mut(list).set(Value::Num(k as f64 + 1.0), *v);
-        }
-        let n = vm.str("n");
-        let _ = vm
-            .heap
-            .table_mut(list)
-            .set(n, Value::Num((c.len() - 1) as f64));
-        let key = vm.str(stem);
-        let _ = vm.heap.table_mut(props).set(key, Value::Table(list));
+        let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+        store(vm, id, stem, &args);
         return Ok(vec![]);
     }
     for prefix in ["Get", "Is"] {
@@ -753,17 +744,8 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
         .map(str::to_string)
         .or_else(|| short.strip_prefix("Enable").map(|s| format!("{s}Enabled")));
     if let Some(stem) = setter {
-        let list = vm.new_table();
-        for (k, v) in c.args.iter().skip(1).enumerate() {
-            let _ = vm.heap.table_mut(list).set(Value::Num(k as f64 + 1.0), *v);
-        }
-        let n = vm.str("n");
-        let _ = vm
-            .heap
-            .table_mut(list)
-            .set(n, Value::Num((c.len() - 1) as f64));
-        let key = vm.str(&stem);
-        let _ = vm.heap.table_mut(props).set(key, Value::Table(list));
+        let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+        store(vm, id, &stem, &args);
         // A setter's documented results (`success`): it worked.
         return Ok(returns
             .iter()
@@ -2229,6 +2211,7 @@ fn set_vertex_color(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         *v = number_arg(vm, &c, i + 2)?;
     }
     rgba[3] = vm.opt_number(&c, 5, 1.0)?;
+    let rgba = rgba.map(byte_float);
     let props = engine(vm).world.widgets[id.0].props;
     let list = vm.new_table();
     for (i, v) in rgba.iter().enumerate() {
@@ -2332,6 +2315,62 @@ fn is_event_valid(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(engine(vm).api.events.contains(&e))])
 }
 
+/// `SetFontHeight(height)`: the font's height, kept as `SetFont` keeps it
+/// (Blizzard's text size manager scales user-scalable fonts so).
+fn set_font_height(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let h = number_arg(vm, &c, 2)?;
+    // The face as the font reports it now (its own, or its font object's).
+    let table = Value::Table(engine(vm).world.widgets[id.0].table);
+    let key = vm.str("GetFont");
+    let getter = vm.index(table, key, None)?;
+    let mut args = if getter.is_nil() {
+        Vec::new()
+    } else {
+        vm.call(getter, &[table])?
+    };
+    args.resize(3, Value::Nil);
+    if args[2].is_nil() {
+        args[2] = vm.str("");
+    }
+    args[1] = Value::Num(h);
+    store(vm, id, "Font", &args);
+    Ok(vec![])
+}
+
+/// A setter's argument as the client keeps it: colors in eight bits each
+/// (text, shadow and vertex colors: `/stdtest engine` fontHeights), a
+/// font's height as camelot keeps it (`kept_font_height`).
+fn kept(vm: &Vm, stem: &str, i: usize, v: Value) -> Value {
+    match (stem, i, v) {
+        ("TextColor" | "ShadowColor" | "VertexColor", 0..=3, Value::Num(n)) => {
+            Value::Num(byte_float(n))
+        }
+        ("Font", 1, Value::Num(h)) if engine(vm).flavor == "camelot" => {
+            Value::Num(kept_font_height(h))
+        }
+        _ => v,
+    }
+}
+
+/// The height camelot keeps for a font set to `h` (recorded for 1 to 80:
+/// 13 reads back 12.999999046326; others as set).
+pub fn kept_font_height(h: f64) -> f64 {
+    static TABLE: std::sync::OnceLock<HashMap<i64, f64>> = std::sync::OnceLock::new();
+    let table = TABLE.get_or_init(|| {
+        include_str!("../data/camelot-font-heights.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| l.split_once('\t'))
+            .filter_map(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))
+            .collect()
+    });
+    if h.fract() == 0.0 {
+        table.get(&(h as i64)).copied().unwrap_or(h)
+    } else {
+        h
+    }
+}
+
 /// A color component as the client keeps it: in eight bits, read back as a
 /// float (the byte times the float 1/255: `/stdtest engine` alpha 0.5 is
 /// 0.50196081399918, `answers` 0.82 is 0.81960791349411).
@@ -2376,7 +2415,7 @@ const FONT_INFO: &str = r#"return function(font, scalable, shadowed)
         canBeUserScaled = scalable,
         color = color(r, g, b, a),
         fontObject = font,
-        height = height,
+        height = height and math.floor(height),
         outline = outline or "",
         shadow = shadow,
     }
@@ -2451,8 +2490,12 @@ pub type MethodFn = fn(&mut Vm, WidgetId, NativeCall) -> Ret;
 pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
     let props = engine(vm).world.widgets[id.0].props;
     let list = vm.new_table();
+    // A fixed-height font keeps its height as set.
+    let fixed = stem == "Font"
+        && matches!(args.get(2), Some(Value::Str(f)) if String::from_utf8_lossy(vm.str_bytes(*f)).contains("FIXEDHEIGHT"));
     for (k, v) in args.iter().enumerate() {
-        let _ = vm.heap.table_mut(list).set(Value::Num(k as f64 + 1.0), *v);
+        let v = if fixed { *v } else { kept(vm, stem, k, *v) };
+        let _ = vm.heap.table_mut(list).set(Value::Num(k as f64 + 1.0), v);
     }
     let n = vm.str("n");
     let _ = vm
@@ -2631,6 +2674,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("Disable", disable),
         ("IsEnabled", is_enabled),
         ("SetVertexColor", set_vertex_color),
+        ("SetFontHeight", set_font_height),
         ("GetVertexColor", get_vertex_color),
     ]
     .into_iter()

@@ -26,7 +26,7 @@ fn build() -> tempfile::TempDir {
     fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
     let src = dir.path().join("src");
     fs::create_dir_all(&src).unwrap();
-    for file in ["engineprobe.wowlua", "answers.wowlua"] {
+    for file in ["engineprobe.wowlua", "answers.wowlua", "startup.wowlua"] {
         fs::copy(repo().join("tests/ingame/src").join(file), src.join(file)).unwrap();
     }
     fs::write(
@@ -494,7 +494,7 @@ __engine.pressKey("ENTER")"#,
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 306;
+const ANSWERS_MATCHED: usize = 1085;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {
@@ -517,6 +517,19 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         &repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json"),
     )
     .expect("the character's profile");
+    // Logged in, as the client was (Blizzard's code finishes setting up
+    // then: its text size manager scales the fonts).
+    let name = vm.str("StdTest");
+    wowlua_engine::widgets::fire_event(&mut vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
+    wowlua_engine::widgets::fire_event(&mut vm, "PLAYER_LOGIN", &[]);
+    wowlua_engine::widgets::fire_event(
+        &mut vm,
+        "PLAYER_ENTERING_WORLD",
+        &[Value::Bool(true), Value::Bool(false)],
+    );
+    // Its place in the login unverified (`/stdtest engine startup`).
+    wowlua_engine::widgets::fire_event(&mut vm, "VARIABLES_LOADED", &[]);
+    wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
     addon(&mut vm, "StdTestEngineProbe('answers')");
     let f = vm
         .load(

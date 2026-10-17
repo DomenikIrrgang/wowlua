@@ -20,6 +20,7 @@ pub mod gamedata;
 pub mod input;
 pub mod merchant;
 pub mod protection;
+pub mod queries;
 pub mod tooltip;
 pub mod ui;
 pub mod units;
@@ -188,6 +189,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(input::behaviours())
             .chain(casting::behaviours())
             .chain(merchant::behaviours())
+            .chain(queries::behaviours())
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())
             .chain(bindings::behaviours())

@@ -10,7 +10,8 @@
 //! - `/stdtest engine answers`: `…/forever-camelot-answers.lua`;
 //! - `/stdtest snapshot`: the character's world as a test profile,
 //!   `…/forever-camelot-character.json`;
-//! - the CVar flags: `crates/wowlua-engine/data/camelot-cvar-flags.txt`.
+//! - the CVar flags: `crates/wowlua-engine/data/camelot-cvar-flags.txt`;
+//! - the font heights: `crates/wowlua-engine/data/camelot-font-heights.txt`.
 //!
 //! Each part is written only when the file has it.
 
@@ -196,6 +197,24 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
     if any_flags {
         let path = root.join("crates/wowlua-engine/data/camelot-cvar-flags.txt");
         std::fs::write(&path, flags)?;
+        println!("wrote {}", path.display());
+    }
+
+    // The heights fonts keep after SetFont (the same for every file).
+    if let Some(list) = get("probe.fontHeights.Fonts\\FRIZQT__.TTF") {
+        let mut out = format!(
+            "# The heights a font keeps after SetFont on WoW Forever {version}, the same\n\
+             # for every font file (/stdtest engine, probe.fontHeights; GetFont's\n\
+             # height, GetFontInfo floors it); one per line: the height set, then kept.\n"
+        );
+        for entry in list.split_whitespace() {
+            if let Some((set, rest)) = entry.split_once('=') {
+                let kept = rest.split('/').next().unwrap_or(rest);
+                let _ = writeln!(out, "{set}\t{kept}");
+            }
+        }
+        let path = root.join("crates/wowlua-engine/data/camelot-font-heights.txt");
+        std::fs::write(&path, out)?;
         println!("wrote {}", path.display());
     }
 

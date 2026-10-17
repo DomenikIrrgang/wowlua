@@ -135,7 +135,7 @@ return table.concat(LoadLog, ','), tostring(FamilyLoaded), tostring(LazyLoaded),
             "templated",
             "3",
             "Shown text",
-            "14",
+            "13.999999046326", // 14 as camelot keeps it
             "false",
             "10",
             "hello",
