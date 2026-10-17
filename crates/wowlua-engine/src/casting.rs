@@ -12,7 +12,8 @@
 //! `UI_ERROR_MESSAGE(280, "Another action is in progress")`, the running
 //! cast kept; channels' `CHANNEL_START(unit, nil, spellID, castBarID)` and
 //! `CHANNEL_STOP(unit, nil, spellID, nil, castBarID)`; the cast GUID's
-//! shape. Unverified: the default cast time (1.5 s), an interrupted
+//! shape; other units' cast GUIDs and spell IDs secret, the player's
+//! `SENT` target in combat. Unverified: the default cast time (1.5 s), an interrupted
 //! channel's `INTERRUPTED`, other units' casts replacing a running one.
 //! Not modelled: the server's late `INTERRUPTED(…, nil, nil)` echoes and
 //! `UI_ERROR_MESSAGE(57, "Interrupted")` after an interrupt by moving.
@@ -73,13 +74,33 @@ fn sent(vm: &mut Vm, unit: UnitId, guid: Value, spell_id: f64) {
             }
         })
     };
-    let target = target.map_or(Value::Nil, |t| vm.str(&t));
+    let mut target = target.map_or(Value::Nil, |t| vm.str(&t));
+    // Secret in combat (`ConditionalSecret`; `/stdtest engine record
+    // combat`).
+    if !target.is_nil() && units::active(&engine(vm).units, &[units::COMBAT]) {
+        target = vm.secret_wrap(target);
+    }
     units::fire_unit(
         vm,
         "UNIT_SPELLCAST_SENT",
         unit,
         &[target, guid, Value::Num(spell_id)],
     );
+}
+
+/// A cast event for each of the unit's tokens: another unit's cast GUID
+/// and spell ID secret (`SecretWhenUnitSpellCastRestricted`; recorded for
+/// nameplates out of combat), its cast bar id never.
+fn fire_cast(vm: &mut Vm, event: &str, unit: UnitId, args: &[Value]) {
+    let mut args = args.to_vec();
+    if unit != units::PLAYER {
+        for v in args.iter_mut().take(2) {
+            if !v.is_nil() {
+                *v = vm.secret_wrap(*v);
+            }
+        }
+    }
+    units::fire_unit(vm, event, unit, &args);
 }
 
 fn events(channel: bool) -> (&'static str, &'static str) {
@@ -144,7 +165,7 @@ pub fn control_cast(vm: &mut Vm, c: NativeCall) -> Ret {
         if me == units::PLAYER {
             // The player's running cast stays; the new one fails.
             sent(vm, me, g, spell_id);
-            units::fire_unit(vm, "UNIT_SPELLCAST_FAILED_QUIET", me, &[g, id, Value::Nil]);
+            fire_cast(vm, "UNIT_SPELLCAST_FAILED_QUIET", me, &[g, id, Value::Nil]);
             cast_changed(vm, me);
             let message = vm.str("Another action is in progress");
             crate::widgets::fire_event(vm, "UI_ERROR_MESSAGE", &[Value::Num(280.0), message]);
@@ -156,7 +177,7 @@ pub fn control_cast(vm: &mut Vm, c: NativeCall) -> Ret {
     sent(vm, me, g, spell_id);
     if seconds <= 0.0 && !channel {
         cast_changed(vm, me);
-        units::fire_unit(vm, "UNIT_SPELLCAST_SUCCEEDED", me, &[g, id, Value::Nil]);
+        fire_cast(vm, "UNIT_SPELLCAST_SUCCEEDED", me, &[g, id, Value::Nil]);
         cast_changed(vm, me);
         return Ok(vec![]);
     }
@@ -176,7 +197,7 @@ pub fn control_cast(vm: &mut Vm, c: NativeCall) -> Ret {
     let b = vm.str(&bar);
     // A channel has no cast GUID.
     let shown = if channel { Value::Nil } else { g };
-    units::fire_unit(vm, start_event, me, &[shown, id, b]);
+    fire_cast(vm, start_event, me, &[shown, id, b]);
     cast_changed(vm, me);
     let native = vm.native_with(
         "castDone",
@@ -200,20 +221,20 @@ fn stop(vm: &mut Vm, unit: UnitId, interrupted: bool) {
     let id = Value::Num(cast.spell_id);
     let b = vm.str(&cast.bar);
     if interrupted {
-        units::fire_unit(
+        fire_cast(
             vm,
             "UNIT_SPELLCAST_INTERRUPTED",
             unit,
             &[g, id, Value::Nil, b],
         );
     } else if !cast.channel {
-        units::fire_unit(vm, "UNIT_SPELLCAST_SUCCEEDED", unit, &[g, id, b]);
+        fire_cast(vm, "UNIT_SPELLCAST_SUCCEEDED", unit, &[g, id, b]);
     }
     let (_, stop_event) = events(cast.channel);
     if cast.channel {
-        units::fire_unit(vm, stop_event, unit, &[g, id, Value::Nil, b]);
+        fire_cast(vm, stop_event, unit, &[g, id, Value::Nil, b]);
     } else {
-        units::fire_unit(vm, stop_event, unit, &[g, id, b]);
+        fire_cast(vm, stop_event, unit, &[g, id, b]);
     }
     cast_changed(vm, unit);
 }

@@ -235,3 +235,39 @@ return tostring(zero), d:GetTotalDuration(), d:GetRemainingDuration(), d:GetElap
     );
     assert_eq!(r, ["0", "true", "false"]);
 }
+
+/// Another unit's cast GUID and spell ID are secret, its cast bar id not;
+/// the player's `SENT` target is secret in combat (`/stdtest engine
+/// record aura` and `combat`).
+#[test]
+fn cast_payload_secrecy() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('UNIT_SPELLCAST_START')
+f:RegisterEvent('UNIT_SPELLCAST_SENT')
+f:SetScript('OnEvent', function(_, e, unit, a, b, c)
+    if e == 'UNIT_SPELLCAST_START' then
+        seen[#seen + 1] = ('%s %s %s %s'):format(unit, tostring(issecretvalue(a)), tostring(issecretvalue(b)), tostring(issecretvalue(c)))
+    else
+        seen[#seen + 1] = ('sent %s'):format(tostring(issecretvalue(a)))
+    end
+end)
+local hogger = mock.spawnUnit({ name = 'Hogger', level = 11, reaction = 'hostile' })
+mock.player:target(hogger)
+hogger:castSpell(133, { castTime = 1 })
+mock.player:castSpell(647, { castTime = 1 })
+mock.player:interruptCast()
+mock.player:enterCombat()
+mock.player:castSpell(647, { castTime = 1 })
+return table.concat(seen, ' | ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "target true true false | sent false | player false false false | sent true | player false false false"
+        ]
+    );
+}
