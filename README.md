@@ -14,6 +14,7 @@
 </p>
 
 <p align="center">
+  <a href="https://wowlua.dev"><b>wowlua.dev</b></a> ·
   <a href="#install">install</a> ·
   <a href="#quick-start">quick start</a> ·
   <a href="#bring-your-addon">bring your addon</a> ·
@@ -30,6 +31,8 @@ Warcraft AddOns, shipped as one binary. It type-checks your code against the
 WoW API of every game flavor, builds a complete AddOn, and publishes it to
 CurseForge, Wago, WoWInterface and GitHub with one command. Every Lua file you
 have today is already valid wowlua.
+
+Guides, the full reference and the changelog are at **[wowlua.dev](https://wowlua.dev)**.
 
 ## Four tools, one binary
 
