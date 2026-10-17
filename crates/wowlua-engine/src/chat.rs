@@ -223,7 +223,7 @@ fn send(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `_LOOT`, …), its payload as recorded (`/stdtest engine scenario
 /// combat`): the text, five empty strings, 0, 0, "", 0, the line's number,
 /// no GUID, 0, four falses, the Discord fields; `sender` the player's full
-/// name for loot.
+/// name for loot (with the player's GUID).
 pub fn game_message(vm: &mut Vm, event: &str, text: &str, sender: Option<&str>) {
     let line = {
         let e = crate::engine_mut(vm);
@@ -267,7 +267,14 @@ pub fn game_message(vm: &mut Vm, event: &str, text: &str, sender: Option<&str>) 
         s(vm, ""),
         Value::Num(0.0),
         Value::Num(line as f64),
-        Value::Nil,
+        if sender.is_some() {
+            let g = crate::engine(vm).units.list[crate::units::PLAYER.0]
+                .guid
+                .clone();
+            vm.str(&g)
+        } else {
+            Value::Nil
+        },
         Value::Num(0.0),
         Value::Bool(false),
         Value::Bool(false),

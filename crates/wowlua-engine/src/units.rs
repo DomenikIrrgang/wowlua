@@ -572,12 +572,16 @@ fn unit_race(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+// No such unit (a target cleared): level 0, "normal", not a player, not
+// dead (recorded, scenario combat).
+
 fn unit_effective_level(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, u| vec![Value::Num(u.level)])
+    with_unit_or(vm, &c, Value::Num(0.0), |_, u| vec![Value::Num(u.level)])
 }
 
 fn unit_classification(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |vm, u| vec![vm.str(&u.classification)])
+    let normal = vm.str("normal");
+    with_unit_or(vm, &c, normal, |vm, u| vec![vm.str(&u.classification)])
 }
 
 fn unit_creature_type(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -614,8 +618,9 @@ fn unit_should_display_name(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `UnitSelectionColor(unit [, useExtendedColors])`: a creature's by its
 /// reaction (recorded: a neutral wolf's yellow); the player's as recorded.
 fn unit_selection_color(vm: &mut Vm, c: NativeCall) -> Ret {
+    // No such unit: blue (recorded, a target cleared).
     let Some(id) = unit_arg(vm, &c, 1) else {
-        return Ok(vec![]);
+        return Ok([0.0, 0.0, 1.0, 1.0].map(Value::Num).to_vec());
     };
     if engine(vm).units.list[id.0].player {
         return Ok(
@@ -696,11 +701,13 @@ fn unit_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn unit_is_dead(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, u| vec![Value::Bool(u.dead)])
+    with_unit_or(vm, &c, Value::Bool(false), |_, u| vec![Value::Bool(u.dead)])
 }
 
 fn unit_is_player(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, u| vec![Value::Bool(u.player)])
+    with_unit_or(vm, &c, Value::Bool(false), |_, u| {
+        vec![Value::Bool(u.player)]
+    })
 }
 
 fn unit_affecting_combat(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -990,6 +997,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("swing", control_swing),
         ("loot", crate::loot::control_loot),
         ("setThreat", control_set_threat),
+        ("raiseSkill", control_raise_skill),
         ("leaveCombat", control_leave_combat),
         ("showNameplate", control_show_nameplate),
         ("hideNameplate", control_hide_nameplate),
@@ -1265,8 +1273,8 @@ fn control_set_threat(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// The player's threat on `mob`: whether tanking, the status, the scaled
 /// and raw percentages, the value; none without threat or alive (recorded:
-/// `true, 3, 100, 255, 5` alone on a wolf that targets the player).
-/// Unverified: others on the list.
+/// `true, 3, 100, 255, 5` alone on a wolf's list, before it turned on the
+/// player). Unverified: others on the list (here the player is alone).
 fn threat_of(vm: &Vm, unit: UnitId, mob: UnitId) -> Option<(bool, f64, f64, f64, f64)> {
     let u = &engine(vm).units;
     let m = &u.list[mob.0];
@@ -1274,14 +1282,7 @@ fn threat_of(vm: &Vm, unit: UnitId, mob: UnitId) -> Option<(bool, f64, f64, f64,
         return None;
     }
     let value = m.threat?;
-    let tanking = m.target == Some(PLAYER);
-    Some((
-        tanking,
-        if tanking { 3.0 } else { 1.0 },
-        100.0,
-        255.0,
-        value,
-    ))
+    Some((true, 3.0, 100.0, 255.0, value))
 }
 
 /// `UnitDetailedThreatSituation(unit, mob)`.
@@ -1591,6 +1592,14 @@ pub(crate) fn clear_target(vm: &mut Vm) {
 /// in the same frame; and `UNIT_HEALTH` last. The unit is dead before any.
 /// Unverified: what decides the order.
 pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
+    // A corpse is out of combat and targets no one (recorded: its
+    // `targettarget` gone when retargeted).
+    {
+        let u = &mut engine_mut(vm).units.list[me.0];
+        u.in_combat = false;
+        u.target = None;
+        u.threat = None;
+    }
     let instance = identity_restricted(vm);
     let loot = |vm: &mut Vm| {
         if lootable {
@@ -1652,6 +1661,41 @@ fn control_stop_attack(vm: &mut Vm, c: NativeCall) -> Ret {
     if me == PLAYER && engine(vm).units.auto_attack {
         engine_mut(vm).units.auto_attack = false;
         fire(vm, "PLAYER_LEAVE_COMBAT", &[]);
+    }
+    Ok(vec![])
+}
+
+/// `player:raiseSkill(name, rank)`: a skill up, as recorded (scenarios
+/// combat and quest: Defense, Swords): "Your skill in … has increased to
+/// …" (`CHAT_MSG_SKILL`), the player's `UNIT_ATTACK`, `UNIT_DEFENSE`,
+/// `UNIT_RANGED_ATTACK_POWER`, `SKILL_LINES_CHANGED()`,
+/// `MOUNT_JOURNAL_USABILITY_CHANGED()`, `PLAYER_DAMAGE_DONE_MODS` (twice
+/// for Defense, once for a weapon). Unverified: other skills; the skill
+/// lines' answers.
+fn control_raise_skill(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = this(vm, &c)?;
+    if me != PLAYER {
+        return Err(vm.error("raiseSkill: the player's"));
+    }
+    let name = vm.check_str(&c, 2)?;
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    let rank = vm.check_number(&c, 3)?;
+    let format = match vm.get_global("ERR_SKILL_UP_SI") {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => "Your skill in %s has increased to %d.".into(),
+    };
+    let text = format
+        .replacen("%s", &name, 1)
+        .replacen("%d", &format!("{rank}"), 1);
+    crate::chat::game_message(vm, "CHAT_MSG_SKILL", &text, None);
+    for e in ["UNIT_ATTACK", "UNIT_DEFENSE", "UNIT_RANGED_ATTACK_POWER"] {
+        fire_unit(vm, e, PLAYER, &[]);
+    }
+    fire(vm, "SKILL_LINES_CHANGED", &[]);
+    fire(vm, "MOUNT_JOURNAL_USABILITY_CHANGED", &[]);
+    let times = if name == "Defense" { 2 } else { 1 };
+    for _ in 0..times {
+        fire_unit(vm, "PLAYER_DAMAGE_DONE_MODS", PLAYER, &[]);
     }
     Ok(vec![])
 }
@@ -2107,7 +2151,12 @@ fn faction(race: &str) -> Option<&'static str> {
     }
 }
 
+/// `UnitFactionGroup`: a race's faction; a creature none; no such unit
+/// two empty strings (recorded, scenario combat).
 fn unit_faction_group(vm: &mut Vm, c: NativeCall) -> Ret {
+    if unit_arg(vm, &c, 1).is_none() {
+        return Ok(vec![vm.str(""), vm.str("")]);
+    }
     with_unit(vm, &c, |vm, u| match faction(&u.race) {
         Some(f) => vec![vm.str(f), vm.str(f)],
         None => vec![],

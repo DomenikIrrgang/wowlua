@@ -89,6 +89,8 @@ fn opened(vm: &mut Vm, c: NativeCall) -> Ret {
         l.items = items;
         l.pushed.clear();
     }
+    // Looting: the player's flags change (recorded just before).
+    units::fire_unit(vm, "UNIT_FLAGS", units::PLAYER, &[]);
     fire(vm, "LOOT_READY", &[Value::Bool(auto)]);
     fire(vm, "LOOT_OPENED", &[Value::Bool(auto), Value::Bool(false)]);
     fire(vm, "LOOT_READY", &[Value::Bool(auto)]);
@@ -122,10 +124,17 @@ fn push(vm: &mut Vm, id: i64, count: f64, bag: i64) {
             _ => String::new(),
         })
         .unwrap_or_default();
+    // The client's own format (camelot's without a period).
+    let format = |vm: &mut Vm, name: &str, default: &str| match vm.get_global(name) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => default.to_string(),
+    };
     let text = if count > 1.0 {
-        format!("You receive loot: {link}x{count}.")
+        format(vm, "LOOT_ITEM_SELF_MULTIPLE", "You receive loot: %sx%d")
+            .replacen("%s", &link, 1)
+            .replacen("%d", &format!("{count}"), 1)
     } else {
-        format!("You receive loot: {link}.")
+        format(vm, "LOOT_ITEM_SELF", "You receive loot: %s").replacen("%s", &link, 1)
     };
     let sender = {
         let p = &engine(vm).units.list[units::PLAYER.0];
@@ -151,10 +160,10 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     engine_mut(vm).world.loot.items[slot - 1].taken = true;
     fire(vm, "LOOT_SLOT_CLEARED", &[Value::Num(slot as f64)]);
-    let placed = crate::character::add_to_bags(vm, item.id, item.count);
-    let (bag, new_slot) = placed.unwrap_or((0, false));
     let last = engine(vm).world.loot.items.iter().all(|i| i.taken);
     if !last {
+        let placed = crate::character::add_to_bags(vm, item.id, item.count);
+        let (bag, new_slot) = placed.unwrap_or((0, false));
         push(vm, item.id, item.count, bag);
         engine_mut(vm)
             .world
@@ -173,12 +182,19 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     fire(vm, "LOOT_CLOSED", &[]);
     fire(vm, "LOOT_CLOSED", &[]);
+    // No longer looting: the flags a round trip later (recorded).
+    let delay = crate::clock::server_delay(vm);
+    let flags = vm.native("lootFlags", loot_flags as NativeFn);
+    crate::clock::after_engine(vm, delay, flags);
     let pushed = std::mem::take(&mut engine_mut(vm).world.loot.pushed);
     for (id, _, bag, _) in &pushed {
         crate::character::bag_updated(vm, *bag);
         fire(vm, "BAG_UPDATE_DELAYED", &[]);
         fire(vm, "ITEM_COUNT_CHANGED", &[Value::Num(*id as f64)]);
     }
+    // The last item reaches the bags after the others' update (recorded).
+    let placed = crate::character::add_to_bags(vm, item.id, item.count);
+    let (bag, new_slot) = placed.unwrap_or((0, false));
     crate::character::bag_updated(vm, bag);
     push(vm, item.id, item.count, bag);
     if new_slot {
@@ -190,6 +206,11 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
         fire(vm, "UNIT_LOOT", &[g, Value::Bool(false)]);
     }
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    Ok(vec![])
+}
+
+fn loot_flags(vm: &mut Vm, _c: NativeCall) -> Ret {
+    units::fire_unit(vm, "UNIT_FLAGS", units::PLAYER, &[]);
     Ok(vec![])
 }
 

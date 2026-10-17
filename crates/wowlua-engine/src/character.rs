@@ -363,6 +363,9 @@ fn get_container_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let link = link_of(vm, &h).unwrap_or(Value::Nil);
     let icon = item_field(vm, h.id, "icon");
     let quality = item_field(vm, h.id, "quality");
+    // No vendor price: no value (a Hearthstone, recorded).
+    let no_value = matches!(item_field(vm, h.id, "sellPrice"), Value::Num(p) if p == 0.0);
+    let name = item_field(vm, h.id, "name");
     for (k, v) in [
         ("iconFileID", icon),
         ("stackCount", Value::Num(h.count)),
@@ -372,7 +375,8 @@ fn get_container_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
         ("hasLoot", Value::Bool(false)),
         ("hyperlink", link),
         ("isFiltered", Value::Bool(false)),
-        ("hasNoValue", Value::Bool(false)),
+        ("hasNoValue", Value::Bool(no_value)),
+        ("itemName", name),
         ("itemID", Value::Num(h.id as f64)),
         ("isBound", Value::Bool(h.bound)),
     ] {

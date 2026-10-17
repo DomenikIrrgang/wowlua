@@ -34,6 +34,9 @@ export interface MockUnit
     --- `victimPower`: rage), the victim's health, and the combat text
     --- (`UNIT_COMBAT`) a moment later. `kind`: `WOUND` (default), `PARRY`,
     --- `DODGE`, `MISS`, `BLOCK`.
+    --- The player's skill `name` up to `rank` ("Your skill in … has
+    --- increased", the stats' events).
+    function raiseSkill(name: string, rank: number)
     function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number }?)
     function showNameplate()
     function hideNameplate()

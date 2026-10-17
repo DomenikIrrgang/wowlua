@@ -25,6 +25,8 @@ e.defineItem(7074, {
 -- Heroic Strike: on the next swing, its rage cost unverified (15; to
 -- record: C_Spell.GetSpellPowerCost(78)).
 e.defineSpell(78, { name = "Heroic Strike", powerCost = 15, nextSwing = true })
+-- The instant spell on slot 10: no target (its SENT names none).
+e.defineSpell(1259718, { targeted = false })
 local now = 0
 local function at(t)
     e.advanceTime(t - now)
@@ -44,6 +46,7 @@ at(7.135) wolf:setThreat(10)
 at(8.200) player:swing(wolf, 6, { power = 16 })
 at(8.305) wolf:setThreat(15)
 at(8.409) wolf:swing(player, 1, { victimPower = 17 })
+at(8.788) player:raiseSkill("Defense", 4)
 at(10.065) player:useSpell(78)
 at(10.103) player:swing(wolf, 0, { kind = "PARRY" })
 at(10.437) wolf:swing(player, 1, { victimPower = 18 })
@@ -60,6 +63,10 @@ at(14.849) player:useSpell(78)
 at(15.857) player:swing(wolf, 17, { spent = 0, power = 2, kill = { xp = 50, loot = { { id = 7073 }, { id = 7074 } } } })
 at(16.116) player:stopAttack()
 at(16.915) player:leaveCombat()
+-- Out of combat: rage fades, health comes back.
+at(18.782) player:setPower(0)
+player:heal(1)
+at(20.808) player:heal(1)
 -- The corpse clicked: targeted, looted with autoloot.
 at(21.077) player:target(wolf)
 player:loot(wolf, { auto = true })

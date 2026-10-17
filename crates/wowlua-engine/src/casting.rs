@@ -67,6 +67,9 @@ fn sent(vm: &mut Vm, unit: UnitId, guid: Value, spell_id: f64) {
     if unit != units::PLAYER {
         return;
     }
+    // A spell without a target (its data's `targeted = false`) names none
+    // (recorded: an instant self spell's nil).
+    let untargeted = matches!(spell_field(vm, spell_id, "targeted"), Value::Bool(false));
     let target = {
         let u = &engine(vm).units;
         u.target.map(|t| {
@@ -77,7 +80,10 @@ fn sent(vm: &mut Vm, unit: UnitId, guid: Value, spell_id: f64) {
             }
         })
     };
-    let mut target = target.map_or(Value::Nil, |t| vm.str(&t));
+    let mut target = match target {
+        Some(t) if !untargeted => vm.str(&t),
+        _ => Value::Nil,
+    };
     // Secret where units' identities are (`ConditionalSecret`): a
     // paladin's Judgement in Ragefire Chasm (its cast GUIDs' map 389)
     // secret, out of combat too (`/stdtest engine record combat`); a
