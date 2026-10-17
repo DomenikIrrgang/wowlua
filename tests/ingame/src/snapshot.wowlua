@@ -231,6 +231,25 @@ const STATS: { key: string, fn: string, ask: string }[] = {
     { key = "questWatchType", fn = "C_QuestLog.GetQuestWatchType", ask = "index" },
     { key = "questTag", fn = "C_QuestLog.GetQuestTagInfo", ask = "index" },
     { key = "questTitle", fn = "C_QuestLog.GetTitleForQuestID", ask = "index" },
+    { key = "spellBookItemCooldown", fn = "C_SpellBook.GetSpellBookItemCooldown", ask = "slot" },
+    { key = "spellBookItemAutoCast", fn = "C_SpellBook.GetSpellBookItemAutoCast", ask = "slot" },
+    { key = "spellBookItemFlyoutMember", fn = "C_SpellBook.IsSpellBookItemLooseFlyoutMember", ask = "slot" },
+    { key = "questFailed", fn = "C_QuestLog.IsFailed", ask = "index" },
+    { key = "questElite", fn = "C_QuestLog.IsEliteQuest", ask = "index" },
+    { key = "questDifficulty", fn = "C_QuestLog.GetQuestDifficultyLevel", ask = "index" },
+    { key = "questTheme", fn = "C_QuestLog.GetQuestDetailsTheme", ask = "index" },
+    { key = "questTimeAllowed", fn = "C_QuestLog.GetTimeAllowed", ask = "index" },
+    { key = "questDisabled", fn = "C_QuestLog.IsQuestDisabledForSession", ask = "index" },
+    { key = "questSequenced", fn = "IsQuestSequenced", ask = "index" },
+    { key = "questClassification", fn = "C_QuestInfoSystem.GetQuestClassification", ask = "index" },
+    { key = "questContentDifficulty", fn = "C_PlayerInfo.GetContentDifficultyQuestForPlayer", ask = "index" },
+    { key = "questGroup", fn = "C_LFGList.CanCreateQuestGroup", ask = "index" },
+    { key = "questSpecialItem", fn = "GetQuestLogSpecialItemInfo", ask = "index" },
+    { key = "factionParagon", fn = "C_Reputation.IsFactionParagonForCurrentPlayer", ask = "index" },
+    { key = "factionMajor", fn = "C_Reputation.IsMajorFaction", ask = "index" },
+    { key = "factionAccountWide", fn = "C_Reputation.IsAccountWideReputation", ask = "index" },
+    { key = "factionFriendship", fn = "C_GossipInfo.GetFriendshipReputation", ask = "index" },
+    { key = "cooldownViewerInfo", fn = "C_CooldownViewer.GetCooldownViewerCooldownInfo", ask = "index" },
     { key = "transmogSlot", fn = "C_Transmog.GetSlotVisualInfo", ask = "location" },
     { key = "combatRating", fn = "GetCombatRating", ask = "index" },
     { key = "combatRatingBonus", fn = "GetCombatRatingBonus", ask = "index" },
@@ -296,8 +315,34 @@ local function counted(key: string): number[]?
         end
         return out
     elseif key == "questLogIndex" or key == "questObjectives" or key == "questComplete"
-        or key == "questWatchType" or key == "questTag" or key == "questTitle" then
+        or key == "questWatchType" or key == "questTag" or key == "questTitle"
+        or key == "questFailed" or key == "questElite" or key == "questDifficulty"
+        or key == "questTheme" or key == "questTimeAllowed" or key == "questDisabled"
+        or key == "questSequenced" or key == "questClassification"
+        or key == "questContentDifficulty" or key == "questGroup" then
         return questIDs()
+    elseif key == "questSpecialItem" then
+        return upTo(A.C_QuestLog.GetNumQuestLogEntries())
+    elseif key == "factionParagon" or key == "factionMajor" or key == "factionAccountWide"
+        or key == "factionFriendship" then
+        -- The faction IDs in the list.
+        const out: number[] = {}
+        for i = 1, A.C_Reputation.GetNumFactions() do
+            const data = A.C_Reputation.GetFactionDataByIndex(i)
+            if data and data.factionID and data.factionID > 0 then
+                out[#out + 1] = data.factionID
+            end
+        end
+        return out
+    elseif key == "cooldownViewerInfo" then
+        -- The cooldown IDs of every category.
+        const out: number[] = {}
+        for category = 0, 8 do
+            for _, id in ipairs(A.C_CooldownViewer.GetCooldownViewerCategorySet(category, true) ?? {}) do
+                out[#out + 1] = id
+            end
+        end
+        return out
     end
     return nil
 end

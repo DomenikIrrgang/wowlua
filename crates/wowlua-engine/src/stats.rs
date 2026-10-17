@@ -570,6 +570,125 @@ pub const STATS: &[Stat] = &[
         Index,
         Some("QUEST_LOG_UPDATE"),
     ),
+    // The spellbook items' cooldowns, auto-cast and flyouts.
+    stat(
+        "spellBookItemCooldown",
+        "C_SpellBook.GetSpellBookItemCooldown",
+        Slot,
+        Some("SPELL_UPDATE_COOLDOWN"),
+    ),
+    stat(
+        "spellBookItemAutoCast",
+        "C_SpellBook.GetSpellBookItemAutoCast",
+        Slot,
+        Some("PET_BAR_UPDATE"),
+    ),
+    stat(
+        "spellBookItemFlyoutMember",
+        "C_SpellBook.IsSpellBookItemLooseFlyoutMember",
+        Slot,
+        Some("SPELLS_CHANGED"),
+    ),
+    // Each logged quest's details (by quest ID; the special item by log
+    // index).
+    stat(
+        "questFailed",
+        "C_QuestLog.IsFailed",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questElite",
+        "C_QuestLog.IsEliteQuest",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questDifficulty",
+        "C_QuestLog.GetQuestDifficultyLevel",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questTheme",
+        "C_QuestLog.GetQuestDetailsTheme",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questTimeAllowed",
+        "C_QuestLog.GetTimeAllowed",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questDisabled",
+        "C_QuestLog.IsQuestDisabledForSession",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questSequenced",
+        "IsQuestSequenced",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questClassification",
+        "C_QuestInfoSystem.GetQuestClassification",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questContentDifficulty",
+        "C_PlayerInfo.GetContentDifficultyQuestForPlayer",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questGroup",
+        "C_LFGList.CanCreateQuestGroup",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
+        "questSpecialItem",
+        "GetQuestLogSpecialItemInfo",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    // Each faction's kind (by faction ID).
+    stat(
+        "factionParagon",
+        "C_Reputation.IsFactionParagonForCurrentPlayer",
+        Index,
+        Some("UPDATE_FACTION"),
+    ),
+    stat(
+        "factionMajor",
+        "C_Reputation.IsMajorFaction",
+        Index,
+        Some("UPDATE_FACTION"),
+    ),
+    stat(
+        "factionAccountWide",
+        "C_Reputation.IsAccountWideReputation",
+        Index,
+        Some("UPDATE_FACTION"),
+    ),
+    stat(
+        "factionFriendship",
+        "C_GossipInfo.GetFriendshipReputation",
+        Index,
+        Some("UPDATE_FACTION"),
+    ),
+    // The cooldown viewer's entries (by cooldown ID).
+    stat(
+        "cooldownViewerInfo",
+        "C_CooldownViewer.GetCooldownViewerCooldownInfo",
+        Index,
+        Some("COOLDOWN_VIEWER_DATA_LOADED"),
+    ),
     // The equipped gear's appearances.
     stat(
         "transmogSlot",
@@ -1000,6 +1119,21 @@ fn quest_objectives(vm: &Vm, log_index: f64) -> Option<Vec<Answer>> {
     }
 }
 
+/// `C_QuestLog.GetQuestIDForLogIndex(logIndex)`: the entry's quest ID (from
+/// the recorded log; a header's is 0).
+fn quest_id_for_log_index(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = num(c.arg(1)).and_then(|i| {
+        let Some(Entry::ByIndex(log)) = engine(vm).world.character.stats.get("questLogInfo") else {
+            return None;
+        };
+        match field_of(log.get(&(i as i64))?.first()?, "questID")? {
+            Answer::Num(id) => Some(*id),
+            _ => None,
+        }
+    });
+    Ok(vec![id.map_or(Value::Nil, Value::Num)])
+}
+
 /// `GetNumQuestLeaderBoards(logIndex)`: the quest's objectives, derived
 /// from the recorded log and objectives (as the client gave them for every
 /// recorded entry; `quest_objectives_derive_as_the_client_gave_them`).
@@ -1038,6 +1172,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             ),
             ("C_SpellBook.IsSpellInSpellBook", is_spell_in_spellbook),
             ("GetNumQuestLeaderBoards", num_quest_leader_boards),
+            ("C_QuestLog.GetQuestIDForLogIndex", quest_id_for_log_index),
             ("GetQuestLogLeaderBoard", quest_log_leader_board),
         ])
         .collect()

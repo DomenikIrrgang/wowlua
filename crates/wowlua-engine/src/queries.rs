@@ -330,6 +330,31 @@ fn no_search_results(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0), Value::Table(vm.new_table())])
 }
 
+/// `C_ColorUtil.WrapTextInColor(text, color)`: `|cff` and the color's
+/// red, green and blue as hex (rounded), the text, `|r`; the alpha is not
+/// written (recorded).
+fn wrap_text_in_color(vm: &mut Vm, c: NativeCall) -> Ret {
+    let text = match vm.hidden(c.arg(1)) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        Value::Num(n) => format!("{n}"),
+        _ => String::new(),
+    };
+    let Value::Table(color) = c.arg(2) else {
+        return Ok(vec![vm.str(&text)]);
+    };
+    let mut hex = String::new();
+    for k in ["r", "g", "b"] {
+        let key = vm.str(k);
+        let v = num(vm.heap.table(color).get(key)).unwrap_or(0.0);
+        hex.push_str(&format!(
+            "{:02x}",
+            (v.clamp(0.0, 1.0) * 255.0).round() as u8
+        ));
+    }
+    let out = format!("|cff{hex}{text}|r");
+    Ok(vec![vm.str(&out)])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         (
@@ -337,7 +362,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             notify_settings_loaded,
         ),
         ("C_Scenario.GetInfo", no_scenario),
+        ("C_ColorUtil.WrapTextInColor", wrap_text_in_color),
         ("C_LFGList.GetFilteredSearchResults", no_search_results),
+        // Nothing tracked (unverified).
+        ("C_ContentTracking.IsTracking", no),
         ("C_LFGList.GetSearchResults", no_search_results),
         (
             "C_TransmogCollection.GetCategoryAppearances",

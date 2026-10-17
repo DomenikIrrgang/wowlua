@@ -7,7 +7,8 @@
 //! - `/stdtest engine` (and order, protected, blocked):
 //!   `crates/wowlua-engine/tests/client/forever-camelot-engine.lua`;
 //! - `/stdtest engine input`: `…/forever-camelot-input.lua`;
-//! - `/stdtest engine answers`: `…/forever-camelot-answers.lua`;
+//! - `/stdtest engine answers`: `…/forever-camelot-answers.lua` (its checks
+//!   `…/forever-camelot-checks.lua`);
 //! - `/stdtest engine maps`: `…/forever-camelot-maps.lua` (and the data);
 //! - `/stdtest engine collections`: `…/forever-camelot-collections.lua`
 //!   (and the data);
@@ -182,6 +183,7 @@ const STATIC: &[&str] = &[
     "C_KeyBindings.GetBindingIndex",
     "GetBindingText",
     "IsBindingForGamePad",
+    "C_KeyBindings.GetCustomBindingType",
     // The client's systems, as this build has them.
     "C_AccountServices.",
     "C_AdventureJournal.CanBeShown",
@@ -223,6 +225,16 @@ const STATIC: &[&str] = &[
     "NoPlayTime",
     "PartialPlayTime",
     // The machine's (the tests' screen is the recording's).
+    "GetMonitorCount",
+    "GetMonitorName",
+    "IsGraphicsSettingValueSupported",
+    "IsGraphicsCVarValueSupported",
+    "MultiSampleAntiAliasingSupported",
+    "GetAvailableLocales",
+    "Sound_GameSystem_GetNumOutputDrivers",
+    "Sound_GameSystem_GetOutputDriverNameByIndex",
+    "Sound_GameSystem_GetNumInputDrivers",
+    "Sound_GameSystem_GetInputDriverNameByIndex",
     "C_UI.ShouldUIParentAvoidNotch",
     "C_VideoOptions.",
     "GetCameraFOVDefaults",
@@ -671,6 +683,24 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             if (listed(STATIC) || listed(BASELINE)) && !answer.starts_with("error") {
                 let _ = writeln!(data, "{call}\t{answer}");
             }
+        }
+        // The checks of rules the call form cannot ask (`/stdtest engine
+        // answers`' CHECKS), for the engine's tests.
+        if let Ok(checks) = state.get::<mlua::Table>("engineChecks") {
+            let mut list = Vec::new();
+            for pair in checks.pairs::<String, String>() {
+                let (label, answer) = pair.map_err(|e| anyhow!("{e}"))?;
+                list.push((label, me.scrub(&answer)));
+            }
+            list.sort();
+            write_table(
+                &client.join("forever-camelot-checks.lua"),
+                &format!(
+                    "WoW Forever {version}: /stdtest engine answers' checks, the client's\n\
+                     answers to rules the call form cannot ask (cargo xtask ingest)."
+                ),
+                &list,
+            )?;
         }
         // The map data (`/stdtest engine maps`, all static) and the
         // account's collections (`/stdtest engine collections`, the default

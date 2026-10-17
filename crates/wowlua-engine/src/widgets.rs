@@ -1207,6 +1207,39 @@ fn get_name(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![name.map_or(Value::Nil, |n| vm.str(&n))])
 }
 
+/// `GetDebugName()`: the name; else the parent's debug name and the key
+/// the parent holds it under, or its address (recorded: `Parent.Child`,
+/// `UIParent.75fbc94630`, `75fbc944a0`; the engine's addresses are its
+/// own).
+fn debug_name(vm: &mut Vm, id: WidgetId) -> String {
+    let w = &engine(vm).world.widgets[id.0];
+    if let Some(name) = w.name.clone() {
+        return name;
+    }
+    let me = w.table;
+    let address = format!("{:x}", 0x0075_fbc9_0000u64 + id.0 as u64 * 0x10);
+    let Some(parent) = w.parent else {
+        return address;
+    };
+    let ptable = engine(vm).world.widgets[parent.0].table;
+    let key = vm
+        .heap
+        .table(ptable)
+        .entries()
+        .find_map(|(k, v)| match (k, v) {
+            (Value::Str(k), Value::Table(t)) if t == me => {
+                Some(String::from_utf8_lossy(vm.str_bytes(k)).into_owned())
+            }
+            _ => None,
+        });
+    format!("{}.{}", debug_name(vm, parent), key.unwrap_or(address))
+}
+
+fn get_debug_name(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let name = debug_name(vm, id);
+    Ok(vec![vm.str(&name)])
+}
+
 fn get_object_type(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let class = engine(vm).world.widgets[id.0].class.clone();
     // As the client names them (`/stdtest engine`).
@@ -1590,6 +1623,35 @@ fn get_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     else {
         return Ok(vec![]);
     };
+    let parent = engine(vm).world.widgets[id.0]
+        .parent
+        .map(|p| Value::Table(engine(vm).world.widgets[p.0].table));
+    let point = vm.str(&p.point);
+    let rp = vm.str(&p.relative_point);
+    Ok(vec![
+        point,
+        p.relative.or(parent).unwrap_or(Value::Nil),
+        rp,
+        Value::Num(p.x),
+        Value::Num(p.y),
+    ])
+}
+
+/// `GetPointByName(point)`: the anchor of that point as `GetPoint` gives
+/// it; nothing without one. Unverified: `resolveCollapsed`.
+fn get_point_by_name(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let Value::Str(name) = c.arg(2) else {
+        return Ok(vec![]);
+    };
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).to_uppercase();
+    let Some(i) = engine(vm).world.widgets[id.0]
+        .points
+        .iter()
+        .position(|p| p.point.eq_ignore_ascii_case(&name))
+    else {
+        return Ok(vec![]);
+    };
+    let p = engine(vm).world.widgets[id.0].points[i].clone();
     let parent = engine(vm).world.widgets[id.0]
         .parent
         .map(|p| Value::Table(engine(vm).world.widgets[p.0].table));
@@ -2738,6 +2800,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("IsShown", is_shown),
         ("IsVisible", is_visible),
         ("GetName", get_name),
+        ("GetDebugName", get_debug_name),
         ("GetObjectType", get_object_type),
         ("IsObjectType", is_object_type),
         ("GetParent", get_parent),
@@ -2754,6 +2817,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("CreateMaskTexture", mask),
         ("CreateLine", line),
         ("SetPoint", set_point),
+        ("GetPointByName", get_point_by_name),
         ("ClearAllPoints", clear_all_points),
         ("SetAllPoints", set_all_points),
         ("GetNumPoints", get_num_points),

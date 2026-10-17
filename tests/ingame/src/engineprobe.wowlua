@@ -1497,6 +1497,91 @@ local function textChangeProbe()
     end)
 end
 
+--- The cursor (`/stdtest engine cursor`, out of combat): a spell, a
+--- spellbook item, a macro, an action (taken and put back), a bag item and
+--- an equipped item (each taken and put back), each with `GetCursorInfo`
+--- and what the cursor holds, the events in between; nothing changed in
+--- the end. Into StdTestState.engineCursor.
+local function cursorProbe()
+    const st = state() :: any
+    const A = _G :: any
+    const log: string[] = {}
+    const events = CreateFrame("Frame")
+    for _, e in ipairs({ "CURSOR_CHANGED", "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_SHOWGRID", "ACTIONBAR_HIDEGRID",
+        "ITEM_LOCK_CHANGED", "BAG_UPDATE", "BAG_UPDATE_DELAYED", "PLAYER_EQUIPMENT_CHANGED", "UNIT_INVENTORY_CHANGED" }) do
+        events:RegisterEvent(e)
+    end
+    events:SetScript("OnEvent", function(_: any, e: string, ...: any)
+        const args: string[] = {}
+        for i = 1, select("#", ...) do
+            args[#args + 1] = tostring((select(i, ...)))
+        end
+        log[#log + 1] = `{e}({table.concat(args, ", ")})`
+    end)
+    local function note(step: string)
+        log[#log + 1] = `{step}: info {results(A.GetCursorInfo)} | item {results(A.CursorHasItem)} | spell {results(A.CursorHasSpell)} | macro {results(A.CursorHasMacro)} | money {results(A.CursorHasMoney)}`
+    end
+    note("start")
+    -- A spell, by ID and from the spellbook.
+    const item = A.C_SpellBook.GetSpellBookItemInfo(2, 0)
+    if item and item.spellID then
+        A.C_Spell.PickupSpell(item.spellID)
+        note(`PickupSpell({item.spellID})`)
+        A.ClearCursor()
+        note("ClearCursor")
+    end
+    A.C_SpellBook.PickupSpellBookItem(2, 0)
+    note("PickupSpellBookItem(2, 0)")
+    A.ClearCursor()
+    note("ClearCursor")
+    -- A macro.
+    if (A.GetNumMacros()) > 0 then
+        A.PickupMacro(1)
+        note("PickupMacro(1)")
+        A.ClearCursor()
+        note("ClearCursor")
+    end
+    -- An action, taken and put back.
+    for slot = 1, 120 do
+        if A.C_ActionBar.HasAction(slot) then
+            A.PickupAction(slot)
+            note(`PickupAction({slot}); HasAction {tostring(A.C_ActionBar.HasAction(slot))}`)
+            A.PlaceAction(slot)
+            note(`PlaceAction({slot}); HasAction {tostring(A.C_ActionBar.HasAction(slot))}`)
+            break
+        end
+    end
+    -- A bag item, taken and put back.
+    for slot = 1, A.C_Container.GetContainerNumSlots(0) do
+        const info = A.C_Container.GetContainerItemInfo(0, slot)
+        if info then
+            A.C_Container.PickupContainerItem(0, slot)
+            const locked = A.C_Container.GetContainerItemInfo(0, slot)
+            note(`PickupContainerItem(0, {slot}); locked {tostring(locked and locked.isLocked)}`)
+            A.C_Container.PickupContainerItem(0, slot)
+            note(`PickupContainerItem(0, {slot}) again`)
+            break
+        end
+    end
+    -- An equipped item, taken and put back.
+    for _, slot in ipairs({ 16, 5, 1 }) do
+        if A.GetInventoryItemID("player", slot) then
+            A.PickupInventoryItem(slot)
+            note(`PickupInventoryItem({slot}); locked {tostring(A.IsInventoryItemLocked(slot))}`)
+            A.PickupInventoryItem(slot)
+            note(`PickupInventoryItem({slot}) again`)
+            break
+        end
+    end
+    -- The events of the next frames too.
+    C_Timer.After(1, function()
+        events:UnregisterAllEvents()
+        note("after a second")
+        st.engineCursor = log
+        say("engine cursor: recorded; type /reload so the file is written")
+    end)
+end
+
 export function engineProbe(arg: string?)
     const st = state() :: any
     const words: string[] = {}
@@ -1532,6 +1617,9 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "textchange" then
         textChangeProbe()
+        return
+    elseif words[1] == "cursor" then
+        cursorProbe()
         return
     elseif words[1] == "answers" then
         answersProbe()

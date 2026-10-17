@@ -87,9 +87,36 @@ C_Container.IsContainerFiltered(3)	1: boolean false
 C_Container.IsContainerFiltered(4)	1: boolean false
 C_Container.IsContainerFiltered(5)	1: boolean false
 C_ContentTracking.GetCollectableSourceTypes()	1: {1=number 0,2=number 3}
+C_ContentTracking.GetTrackablesOnMap(0, 1412)	2: number 0, {}
+C_ContentTracking.GetTrackablesOnMap(0, 947)	2: number 0, {}
+C_ContentTracking.GetTrackablesOnMap(3, 1412)	2: number 0, {}
+C_ContentTracking.GetTrackablesOnMap(3, 947)	2: number 0, {}
 C_ContentTracking.GetTrackedIDs(0)	1: {}
 C_ContentTracking.GetTrackedIDs(2)	1: {}
 C_ContentTracking.GetTrackedIDs(3)	1: {}
+C_ContentTracking.IsTracking(0, 156397)	1: boolean false
+C_ContentTracking.IsTracking(0, 156403)	1: boolean false
+C_ContentTracking.IsTracking(0, 156444)	1: boolean false
+C_ContentTracking.IsTracking(0, 156849)	1: boolean false
+C_ContentTracking.IsTracking(0, 156909)	1: boolean false
+C_ContentTracking.IsTracking(0, 156936)	1: boolean false
+C_ContentTracking.IsTracking(0, 157709)	1: boolean false
+C_ContentTracking.IsTracking(0, 157712)	1: boolean false
+C_ContentTracking.IsTracking(0, 157835)	1: boolean false
+C_ContentTracking.IsTracking(0, 157837)	1: boolean false
+C_ContentTracking.IsTracking(0, 158035)	1: boolean false
+C_ContentTracking.IsTracking(0, 158494)	1: boolean false
+C_ContentTracking.IsTracking(0, 158812)	1: boolean false
+C_ContentTracking.IsTracking(0, 161236)	1: boolean false
+C_ContentTracking.IsTracking(0, 161244)	1: boolean false
+C_ContentTracking.IsTracking(0, 161250)	1: boolean false
+C_ContentTracking.IsTracking(0, 162214)	1: boolean false
+C_ContentTracking.IsTracking(0, 162215)	1: boolean false
+C_ContentTracking.IsTracking(0, 163221)	1: boolean false
+C_ContentTracking.IsTracking(0, 298574)	1: boolean false
+C_ContentTracking.IsTracking(0, 299176)	1: boolean false
+C_ContentTracking.IsTracking(0, 299186)	1: boolean false
+C_ContentTracking.IsTracking(0, 299188)	1: boolean false
 C_CreatureInfo.GetClassInfo(0)	1: nil nil
 C_CreatureInfo.GetClassInfo(1)	1: {classFile=string WARRIOR,classID=number 1,className=string Warrior}
 C_CreatureInfo.GetClassInfo(10)	1: nil nil
@@ -117,6 +144,7 @@ C_EventScheduler.HasSavedReminders()	1: boolean false
 C_ExternalEventURL.CanShow()	1: boolean false
 C_ExternalEventURL.HasURL()	1: boolean false
 C_FogOfWar.GetFogOfWarForMap(0)	1: nil nil
+C_FogOfWar.GetFogOfWarForMap(1412)	1: nil nil
 C_FrameManager.GetFrameVisibilityState(1)	1: boolean false
 C_GamePad.GetDeviceMappedState()	1: nil nil
 C_GameRules.GetForeverExperiencePreset()	1: number 0
@@ -140,6 +168,7 @@ C_GameRules.IsGameRuleActive(156)	1: boolean false
 C_GameRules.IsGameRuleActive(159)	1: boolean false
 C_GameRules.IsGameRuleActive(162)	1: boolean true
 C_GameRules.IsGameRuleActive(163)	1: boolean false
+C_GameRules.IsGameRuleActive(165)	1: boolean false
 C_GameRules.IsGameRuleActive(29)	1: boolean false
 C_GameRules.IsGameRuleActive(35)	1: boolean false
 C_GameRules.IsGameRuleActive(36)	1: boolean false
@@ -196,6 +225,381 @@ C_Housing.GetTrackedHouseGuid()	1: nil nil
 C_Housing.IsHousingServiceEnabled()	1: boolean false
 C_Housing.IsInsideHouseOrPlot()	1: boolean false
 C_KeyBindings.GetBindingIndex("INTERACTTARGET")	1: number 183
+C_KeyBindings.GetCustomBindingType(1)	1: nil nil
+C_KeyBindings.GetCustomBindingType(10)	1: nil nil
+C_KeyBindings.GetCustomBindingType(100)	1: nil nil
+C_KeyBindings.GetCustomBindingType(101)	1: nil nil
+C_KeyBindings.GetCustomBindingType(102)	1: nil nil
+C_KeyBindings.GetCustomBindingType(103)	1: nil nil
+C_KeyBindings.GetCustomBindingType(104)	1: nil nil
+C_KeyBindings.GetCustomBindingType(105)	1: nil nil
+C_KeyBindings.GetCustomBindingType(106)	1: nil nil
+C_KeyBindings.GetCustomBindingType(107)	1: nil nil
+C_KeyBindings.GetCustomBindingType(108)	1: nil nil
+C_KeyBindings.GetCustomBindingType(109)	1: nil nil
+C_KeyBindings.GetCustomBindingType(11)	1: nil nil
+C_KeyBindings.GetCustomBindingType(110)	1: nil nil
+C_KeyBindings.GetCustomBindingType(111)	1: nil nil
+C_KeyBindings.GetCustomBindingType(112)	1: nil nil
+C_KeyBindings.GetCustomBindingType(113)	1: nil nil
+C_KeyBindings.GetCustomBindingType(114)	1: nil nil
+C_KeyBindings.GetCustomBindingType(115)	1: nil nil
+C_KeyBindings.GetCustomBindingType(116)	1: nil nil
+C_KeyBindings.GetCustomBindingType(117)	1: nil nil
+C_KeyBindings.GetCustomBindingType(118)	1: nil nil
+C_KeyBindings.GetCustomBindingType(119)	1: nil nil
+C_KeyBindings.GetCustomBindingType(12)	1: nil nil
+C_KeyBindings.GetCustomBindingType(120)	1: nil nil
+C_KeyBindings.GetCustomBindingType(121)	1: nil nil
+C_KeyBindings.GetCustomBindingType(122)	1: nil nil
+C_KeyBindings.GetCustomBindingType(123)	1: nil nil
+C_KeyBindings.GetCustomBindingType(124)	1: nil nil
+C_KeyBindings.GetCustomBindingType(125)	1: nil nil
+C_KeyBindings.GetCustomBindingType(126)	1: nil nil
+C_KeyBindings.GetCustomBindingType(127)	1: nil nil
+C_KeyBindings.GetCustomBindingType(128)	1: nil nil
+C_KeyBindings.GetCustomBindingType(129)	1: nil nil
+C_KeyBindings.GetCustomBindingType(13)	1: nil nil
+C_KeyBindings.GetCustomBindingType(130)	1: nil nil
+C_KeyBindings.GetCustomBindingType(131)	1: nil nil
+C_KeyBindings.GetCustomBindingType(132)	1: nil nil
+C_KeyBindings.GetCustomBindingType(133)	1: nil nil
+C_KeyBindings.GetCustomBindingType(134)	1: nil nil
+C_KeyBindings.GetCustomBindingType(135)	1: nil nil
+C_KeyBindings.GetCustomBindingType(136)	1: nil nil
+C_KeyBindings.GetCustomBindingType(137)	1: nil nil
+C_KeyBindings.GetCustomBindingType(138)	1: nil nil
+C_KeyBindings.GetCustomBindingType(139)	1: nil nil
+C_KeyBindings.GetCustomBindingType(14)	1: nil nil
+C_KeyBindings.GetCustomBindingType(140)	1: nil nil
+C_KeyBindings.GetCustomBindingType(141)	1: nil nil
+C_KeyBindings.GetCustomBindingType(142)	1: nil nil
+C_KeyBindings.GetCustomBindingType(143)	1: nil nil
+C_KeyBindings.GetCustomBindingType(144)	1: nil nil
+C_KeyBindings.GetCustomBindingType(145)	1: nil nil
+C_KeyBindings.GetCustomBindingType(146)	1: nil nil
+C_KeyBindings.GetCustomBindingType(147)	1: nil nil
+C_KeyBindings.GetCustomBindingType(148)	1: nil nil
+C_KeyBindings.GetCustomBindingType(149)	1: nil nil
+C_KeyBindings.GetCustomBindingType(15)	1: nil nil
+C_KeyBindings.GetCustomBindingType(150)	1: nil nil
+C_KeyBindings.GetCustomBindingType(151)	1: nil nil
+C_KeyBindings.GetCustomBindingType(152)	1: nil nil
+C_KeyBindings.GetCustomBindingType(153)	1: nil nil
+C_KeyBindings.GetCustomBindingType(154)	1: nil nil
+C_KeyBindings.GetCustomBindingType(155)	1: nil nil
+C_KeyBindings.GetCustomBindingType(156)	1: nil nil
+C_KeyBindings.GetCustomBindingType(157)	1: nil nil
+C_KeyBindings.GetCustomBindingType(158)	1: nil nil
+C_KeyBindings.GetCustomBindingType(159)	1: nil nil
+C_KeyBindings.GetCustomBindingType(16)	1: nil nil
+C_KeyBindings.GetCustomBindingType(160)	1: nil nil
+C_KeyBindings.GetCustomBindingType(161)	1: nil nil
+C_KeyBindings.GetCustomBindingType(162)	1: nil nil
+C_KeyBindings.GetCustomBindingType(163)	1: nil nil
+C_KeyBindings.GetCustomBindingType(164)	1: nil nil
+C_KeyBindings.GetCustomBindingType(165)	1: nil nil
+C_KeyBindings.GetCustomBindingType(166)	1: nil nil
+C_KeyBindings.GetCustomBindingType(167)	1: nil nil
+C_KeyBindings.GetCustomBindingType(168)	1: nil nil
+C_KeyBindings.GetCustomBindingType(169)	1: nil nil
+C_KeyBindings.GetCustomBindingType(17)	1: nil nil
+C_KeyBindings.GetCustomBindingType(170)	1: nil nil
+C_KeyBindings.GetCustomBindingType(171)	1: nil nil
+C_KeyBindings.GetCustomBindingType(172)	1: nil nil
+C_KeyBindings.GetCustomBindingType(173)	1: nil nil
+C_KeyBindings.GetCustomBindingType(174)	1: nil nil
+C_KeyBindings.GetCustomBindingType(175)	1: nil nil
+C_KeyBindings.GetCustomBindingType(176)	1: nil nil
+C_KeyBindings.GetCustomBindingType(177)	1: nil nil
+C_KeyBindings.GetCustomBindingType(178)	1: nil nil
+C_KeyBindings.GetCustomBindingType(179)	1: nil nil
+C_KeyBindings.GetCustomBindingType(18)	1: nil nil
+C_KeyBindings.GetCustomBindingType(180)	1: nil nil
+C_KeyBindings.GetCustomBindingType(181)	1: nil nil
+C_KeyBindings.GetCustomBindingType(182)	1: nil nil
+C_KeyBindings.GetCustomBindingType(183)	1: nil nil
+C_KeyBindings.GetCustomBindingType(184)	1: nil nil
+C_KeyBindings.GetCustomBindingType(185)	1: nil nil
+C_KeyBindings.GetCustomBindingType(186)	1: nil nil
+C_KeyBindings.GetCustomBindingType(187)	1: nil nil
+C_KeyBindings.GetCustomBindingType(188)	1: nil nil
+C_KeyBindings.GetCustomBindingType(189)	1: nil nil
+C_KeyBindings.GetCustomBindingType(19)	1: nil nil
+C_KeyBindings.GetCustomBindingType(190)	1: nil nil
+C_KeyBindings.GetCustomBindingType(191)	1: nil nil
+C_KeyBindings.GetCustomBindingType(192)	1: nil nil
+C_KeyBindings.GetCustomBindingType(193)	1: nil nil
+C_KeyBindings.GetCustomBindingType(194)	1: nil nil
+C_KeyBindings.GetCustomBindingType(195)	1: nil nil
+C_KeyBindings.GetCustomBindingType(196)	1: nil nil
+C_KeyBindings.GetCustomBindingType(197)	1: nil nil
+C_KeyBindings.GetCustomBindingType(198)	1: nil nil
+C_KeyBindings.GetCustomBindingType(199)	1: nil nil
+C_KeyBindings.GetCustomBindingType(2)	1: nil nil
+C_KeyBindings.GetCustomBindingType(20)	1: nil nil
+C_KeyBindings.GetCustomBindingType(200)	1: nil nil
+C_KeyBindings.GetCustomBindingType(201)	1: nil nil
+C_KeyBindings.GetCustomBindingType(202)	1: nil nil
+C_KeyBindings.GetCustomBindingType(203)	1: nil nil
+C_KeyBindings.GetCustomBindingType(204)	1: nil nil
+C_KeyBindings.GetCustomBindingType(205)	1: nil nil
+C_KeyBindings.GetCustomBindingType(206)	1: nil nil
+C_KeyBindings.GetCustomBindingType(207)	1: nil nil
+C_KeyBindings.GetCustomBindingType(208)	1: nil nil
+C_KeyBindings.GetCustomBindingType(209)	1: nil nil
+C_KeyBindings.GetCustomBindingType(21)	1: nil nil
+C_KeyBindings.GetCustomBindingType(210)	1: nil nil
+C_KeyBindings.GetCustomBindingType(211)	1: nil nil
+C_KeyBindings.GetCustomBindingType(212)	1: nil nil
+C_KeyBindings.GetCustomBindingType(213)	1: nil nil
+C_KeyBindings.GetCustomBindingType(214)	1: nil nil
+C_KeyBindings.GetCustomBindingType(215)	1: nil nil
+C_KeyBindings.GetCustomBindingType(216)	1: nil nil
+C_KeyBindings.GetCustomBindingType(217)	1: nil nil
+C_KeyBindings.GetCustomBindingType(218)	1: nil nil
+C_KeyBindings.GetCustomBindingType(219)	1: nil nil
+C_KeyBindings.GetCustomBindingType(22)	1: nil nil
+C_KeyBindings.GetCustomBindingType(220)	1: nil nil
+C_KeyBindings.GetCustomBindingType(221)	1: nil nil
+C_KeyBindings.GetCustomBindingType(222)	1: nil nil
+C_KeyBindings.GetCustomBindingType(223)	1: nil nil
+C_KeyBindings.GetCustomBindingType(224)	1: nil nil
+C_KeyBindings.GetCustomBindingType(225)	1: nil nil
+C_KeyBindings.GetCustomBindingType(226)	1: nil nil
+C_KeyBindings.GetCustomBindingType(227)	1: nil nil
+C_KeyBindings.GetCustomBindingType(228)	1: nil nil
+C_KeyBindings.GetCustomBindingType(229)	1: nil nil
+C_KeyBindings.GetCustomBindingType(23)	1: nil nil
+C_KeyBindings.GetCustomBindingType(230)	1: nil nil
+C_KeyBindings.GetCustomBindingType(231)	1: nil nil
+C_KeyBindings.GetCustomBindingType(232)	1: nil nil
+C_KeyBindings.GetCustomBindingType(233)	1: nil nil
+C_KeyBindings.GetCustomBindingType(234)	1: nil nil
+C_KeyBindings.GetCustomBindingType(235)	1: nil nil
+C_KeyBindings.GetCustomBindingType(236)	1: nil nil
+C_KeyBindings.GetCustomBindingType(237)	1: nil nil
+C_KeyBindings.GetCustomBindingType(238)	1: nil nil
+C_KeyBindings.GetCustomBindingType(239)	1: nil nil
+C_KeyBindings.GetCustomBindingType(24)	1: nil nil
+C_KeyBindings.GetCustomBindingType(240)	1: nil nil
+C_KeyBindings.GetCustomBindingType(241)	1: nil nil
+C_KeyBindings.GetCustomBindingType(242)	1: nil nil
+C_KeyBindings.GetCustomBindingType(243)	1: nil nil
+C_KeyBindings.GetCustomBindingType(244)	1: nil nil
+C_KeyBindings.GetCustomBindingType(245)	1: nil nil
+C_KeyBindings.GetCustomBindingType(246)	1: nil nil
+C_KeyBindings.GetCustomBindingType(247)	1: nil nil
+C_KeyBindings.GetCustomBindingType(248)	1: nil nil
+C_KeyBindings.GetCustomBindingType(249)	1: nil nil
+C_KeyBindings.GetCustomBindingType(25)	1: nil nil
+C_KeyBindings.GetCustomBindingType(250)	1: nil nil
+C_KeyBindings.GetCustomBindingType(251)	1: nil nil
+C_KeyBindings.GetCustomBindingType(252)	1: nil nil
+C_KeyBindings.GetCustomBindingType(253)	1: nil nil
+C_KeyBindings.GetCustomBindingType(254)	1: nil nil
+C_KeyBindings.GetCustomBindingType(255)	1: nil nil
+C_KeyBindings.GetCustomBindingType(256)	1: nil nil
+C_KeyBindings.GetCustomBindingType(257)	1: nil nil
+C_KeyBindings.GetCustomBindingType(258)	1: nil nil
+C_KeyBindings.GetCustomBindingType(259)	1: nil nil
+C_KeyBindings.GetCustomBindingType(26)	1: nil nil
+C_KeyBindings.GetCustomBindingType(260)	1: nil nil
+C_KeyBindings.GetCustomBindingType(261)	1: nil nil
+C_KeyBindings.GetCustomBindingType(262)	1: nil nil
+C_KeyBindings.GetCustomBindingType(263)	1: nil nil
+C_KeyBindings.GetCustomBindingType(264)	1: nil nil
+C_KeyBindings.GetCustomBindingType(265)	1: nil nil
+C_KeyBindings.GetCustomBindingType(266)	1: nil nil
+C_KeyBindings.GetCustomBindingType(267)	1: nil nil
+C_KeyBindings.GetCustomBindingType(268)	1: nil nil
+C_KeyBindings.GetCustomBindingType(269)	1: nil nil
+C_KeyBindings.GetCustomBindingType(27)	1: nil nil
+C_KeyBindings.GetCustomBindingType(270)	1: nil nil
+C_KeyBindings.GetCustomBindingType(271)	1: nil nil
+C_KeyBindings.GetCustomBindingType(272)	1: nil nil
+C_KeyBindings.GetCustomBindingType(273)	1: nil nil
+C_KeyBindings.GetCustomBindingType(274)	1: nil nil
+C_KeyBindings.GetCustomBindingType(275)	1: nil nil
+C_KeyBindings.GetCustomBindingType(276)	1: nil nil
+C_KeyBindings.GetCustomBindingType(277)	1: nil nil
+C_KeyBindings.GetCustomBindingType(278)	1: nil nil
+C_KeyBindings.GetCustomBindingType(279)	1: nil nil
+C_KeyBindings.GetCustomBindingType(28)	1: nil nil
+C_KeyBindings.GetCustomBindingType(280)	1: nil nil
+C_KeyBindings.GetCustomBindingType(281)	1: nil nil
+C_KeyBindings.GetCustomBindingType(282)	1: nil nil
+C_KeyBindings.GetCustomBindingType(283)	1: nil nil
+C_KeyBindings.GetCustomBindingType(284)	1: nil nil
+C_KeyBindings.GetCustomBindingType(285)	1: nil nil
+C_KeyBindings.GetCustomBindingType(286)	1: nil nil
+C_KeyBindings.GetCustomBindingType(287)	1: nil nil
+C_KeyBindings.GetCustomBindingType(288)	1: nil nil
+C_KeyBindings.GetCustomBindingType(289)	1: nil nil
+C_KeyBindings.GetCustomBindingType(29)	1: nil nil
+C_KeyBindings.GetCustomBindingType(290)	1: nil nil
+C_KeyBindings.GetCustomBindingType(291)	1: nil nil
+C_KeyBindings.GetCustomBindingType(292)	1: nil nil
+C_KeyBindings.GetCustomBindingType(293)	1: nil nil
+C_KeyBindings.GetCustomBindingType(294)	1: nil nil
+C_KeyBindings.GetCustomBindingType(295)	1: nil nil
+C_KeyBindings.GetCustomBindingType(296)	1: nil nil
+C_KeyBindings.GetCustomBindingType(297)	1: nil nil
+C_KeyBindings.GetCustomBindingType(298)	1: nil nil
+C_KeyBindings.GetCustomBindingType(299)	1: nil nil
+C_KeyBindings.GetCustomBindingType(3)	1: nil nil
+C_KeyBindings.GetCustomBindingType(30)	1: number 0
+C_KeyBindings.GetCustomBindingType(300)	1: nil nil
+C_KeyBindings.GetCustomBindingType(301)	1: nil nil
+C_KeyBindings.GetCustomBindingType(302)	1: nil nil
+C_KeyBindings.GetCustomBindingType(303)	1: nil nil
+C_KeyBindings.GetCustomBindingType(304)	1: nil nil
+C_KeyBindings.GetCustomBindingType(305)	1: nil nil
+C_KeyBindings.GetCustomBindingType(306)	1: nil nil
+C_KeyBindings.GetCustomBindingType(307)	1: nil nil
+C_KeyBindings.GetCustomBindingType(308)	1: nil nil
+C_KeyBindings.GetCustomBindingType(309)	1: nil nil
+C_KeyBindings.GetCustomBindingType(31)	1: nil nil
+C_KeyBindings.GetCustomBindingType(310)	1: nil nil
+C_KeyBindings.GetCustomBindingType(311)	1: nil nil
+C_KeyBindings.GetCustomBindingType(312)	1: nil nil
+C_KeyBindings.GetCustomBindingType(313)	1: nil nil
+C_KeyBindings.GetCustomBindingType(314)	1: nil nil
+C_KeyBindings.GetCustomBindingType(315)	1: nil nil
+C_KeyBindings.GetCustomBindingType(316)	1: nil nil
+C_KeyBindings.GetCustomBindingType(317)	1: nil nil
+C_KeyBindings.GetCustomBindingType(318)	1: nil nil
+C_KeyBindings.GetCustomBindingType(319)	1: nil nil
+C_KeyBindings.GetCustomBindingType(32)	1: nil nil
+C_KeyBindings.GetCustomBindingType(320)	1: nil nil
+C_KeyBindings.GetCustomBindingType(321)	1: nil nil
+C_KeyBindings.GetCustomBindingType(322)	1: nil nil
+C_KeyBindings.GetCustomBindingType(323)	1: nil nil
+C_KeyBindings.GetCustomBindingType(324)	1: nil nil
+C_KeyBindings.GetCustomBindingType(325)	1: nil nil
+C_KeyBindings.GetCustomBindingType(326)	1: nil nil
+C_KeyBindings.GetCustomBindingType(327)	1: nil nil
+C_KeyBindings.GetCustomBindingType(328)	1: nil nil
+C_KeyBindings.GetCustomBindingType(329)	1: nil nil
+C_KeyBindings.GetCustomBindingType(33)	1: nil nil
+C_KeyBindings.GetCustomBindingType(330)	1: nil nil
+C_KeyBindings.GetCustomBindingType(331)	1: nil nil
+C_KeyBindings.GetCustomBindingType(332)	1: nil nil
+C_KeyBindings.GetCustomBindingType(333)	1: nil nil
+C_KeyBindings.GetCustomBindingType(334)	1: nil nil
+C_KeyBindings.GetCustomBindingType(335)	1: nil nil
+C_KeyBindings.GetCustomBindingType(336)	1: nil nil
+C_KeyBindings.GetCustomBindingType(337)	1: nil nil
+C_KeyBindings.GetCustomBindingType(338)	1: nil nil
+C_KeyBindings.GetCustomBindingType(339)	1: nil nil
+C_KeyBindings.GetCustomBindingType(34)	1: nil nil
+C_KeyBindings.GetCustomBindingType(340)	1: nil nil
+C_KeyBindings.GetCustomBindingType(341)	1: nil nil
+C_KeyBindings.GetCustomBindingType(342)	1: nil nil
+C_KeyBindings.GetCustomBindingType(343)	1: nil nil
+C_KeyBindings.GetCustomBindingType(344)	1: nil nil
+C_KeyBindings.GetCustomBindingType(345)	1: nil nil
+C_KeyBindings.GetCustomBindingType(346)	1: nil nil
+C_KeyBindings.GetCustomBindingType(347)	1: nil nil
+C_KeyBindings.GetCustomBindingType(348)	1: nil nil
+C_KeyBindings.GetCustomBindingType(349)	1: nil nil
+C_KeyBindings.GetCustomBindingType(35)	1: nil nil
+C_KeyBindings.GetCustomBindingType(350)	1: nil nil
+C_KeyBindings.GetCustomBindingType(351)	1: nil nil
+C_KeyBindings.GetCustomBindingType(352)	1: nil nil
+C_KeyBindings.GetCustomBindingType(353)	1: nil nil
+C_KeyBindings.GetCustomBindingType(354)	1: nil nil
+C_KeyBindings.GetCustomBindingType(355)	1: nil nil
+C_KeyBindings.GetCustomBindingType(356)	1: nil nil
+C_KeyBindings.GetCustomBindingType(357)	1: nil nil
+C_KeyBindings.GetCustomBindingType(358)	1: nil nil
+C_KeyBindings.GetCustomBindingType(359)	1: nil nil
+C_KeyBindings.GetCustomBindingType(36)	1: nil nil
+C_KeyBindings.GetCustomBindingType(360)	1: nil nil
+C_KeyBindings.GetCustomBindingType(361)	1: nil nil
+C_KeyBindings.GetCustomBindingType(362)	1: nil nil
+C_KeyBindings.GetCustomBindingType(363)	1: nil nil
+C_KeyBindings.GetCustomBindingType(364)	1: nil nil
+C_KeyBindings.GetCustomBindingType(365)	1: nil nil
+C_KeyBindings.GetCustomBindingType(366)	1: nil nil
+C_KeyBindings.GetCustomBindingType(367)	1: nil nil
+C_KeyBindings.GetCustomBindingType(368)	1: nil nil
+C_KeyBindings.GetCustomBindingType(369)	1: nil nil
+C_KeyBindings.GetCustomBindingType(37)	1: nil nil
+C_KeyBindings.GetCustomBindingType(370)	1: nil nil
+C_KeyBindings.GetCustomBindingType(371)	1: nil nil
+C_KeyBindings.GetCustomBindingType(372)	1: nil nil
+C_KeyBindings.GetCustomBindingType(373)	1: nil nil
+C_KeyBindings.GetCustomBindingType(374)	1: nil nil
+C_KeyBindings.GetCustomBindingType(375)	1: nil nil
+C_KeyBindings.GetCustomBindingType(38)	1: nil nil
+C_KeyBindings.GetCustomBindingType(39)	1: nil nil
+C_KeyBindings.GetCustomBindingType(4)	1: nil nil
+C_KeyBindings.GetCustomBindingType(40)	1: nil nil
+C_KeyBindings.GetCustomBindingType(41)	1: nil nil
+C_KeyBindings.GetCustomBindingType(42)	1: nil nil
+C_KeyBindings.GetCustomBindingType(43)	1: nil nil
+C_KeyBindings.GetCustomBindingType(44)	1: nil nil
+C_KeyBindings.GetCustomBindingType(45)	1: nil nil
+C_KeyBindings.GetCustomBindingType(46)	1: nil nil
+C_KeyBindings.GetCustomBindingType(47)	1: nil nil
+C_KeyBindings.GetCustomBindingType(48)	1: nil nil
+C_KeyBindings.GetCustomBindingType(49)	1: nil nil
+C_KeyBindings.GetCustomBindingType(5)	1: nil nil
+C_KeyBindings.GetCustomBindingType(50)	1: nil nil
+C_KeyBindings.GetCustomBindingType(51)	1: nil nil
+C_KeyBindings.GetCustomBindingType(52)	1: nil nil
+C_KeyBindings.GetCustomBindingType(53)	1: nil nil
+C_KeyBindings.GetCustomBindingType(54)	1: nil nil
+C_KeyBindings.GetCustomBindingType(55)	1: nil nil
+C_KeyBindings.GetCustomBindingType(56)	1: nil nil
+C_KeyBindings.GetCustomBindingType(57)	1: nil nil
+C_KeyBindings.GetCustomBindingType(58)	1: nil nil
+C_KeyBindings.GetCustomBindingType(59)	1: nil nil
+C_KeyBindings.GetCustomBindingType(6)	1: nil nil
+C_KeyBindings.GetCustomBindingType(60)	1: nil nil
+C_KeyBindings.GetCustomBindingType(61)	1: nil nil
+C_KeyBindings.GetCustomBindingType(62)	1: nil nil
+C_KeyBindings.GetCustomBindingType(63)	1: nil nil
+C_KeyBindings.GetCustomBindingType(64)	1: nil nil
+C_KeyBindings.GetCustomBindingType(65)	1: nil nil
+C_KeyBindings.GetCustomBindingType(66)	1: nil nil
+C_KeyBindings.GetCustomBindingType(67)	1: nil nil
+C_KeyBindings.GetCustomBindingType(68)	1: nil nil
+C_KeyBindings.GetCustomBindingType(69)	1: nil nil
+C_KeyBindings.GetCustomBindingType(7)	1: nil nil
+C_KeyBindings.GetCustomBindingType(70)	1: nil nil
+C_KeyBindings.GetCustomBindingType(71)	1: nil nil
+C_KeyBindings.GetCustomBindingType(72)	1: nil nil
+C_KeyBindings.GetCustomBindingType(73)	1: nil nil
+C_KeyBindings.GetCustomBindingType(74)	1: nil nil
+C_KeyBindings.GetCustomBindingType(75)	1: nil nil
+C_KeyBindings.GetCustomBindingType(76)	1: nil nil
+C_KeyBindings.GetCustomBindingType(77)	1: nil nil
+C_KeyBindings.GetCustomBindingType(78)	1: nil nil
+C_KeyBindings.GetCustomBindingType(79)	1: nil nil
+C_KeyBindings.GetCustomBindingType(8)	1: nil nil
+C_KeyBindings.GetCustomBindingType(80)	1: nil nil
+C_KeyBindings.GetCustomBindingType(81)	1: nil nil
+C_KeyBindings.GetCustomBindingType(82)	1: nil nil
+C_KeyBindings.GetCustomBindingType(83)	1: nil nil
+C_KeyBindings.GetCustomBindingType(84)	1: nil nil
+C_KeyBindings.GetCustomBindingType(85)	1: nil nil
+C_KeyBindings.GetCustomBindingType(86)	1: nil nil
+C_KeyBindings.GetCustomBindingType(87)	1: nil nil
+C_KeyBindings.GetCustomBindingType(88)	1: nil nil
+C_KeyBindings.GetCustomBindingType(89)	1: nil nil
+C_KeyBindings.GetCustomBindingType(9)	1: nil nil
+C_KeyBindings.GetCustomBindingType(90)	1: nil nil
+C_KeyBindings.GetCustomBindingType(91)	1: nil nil
+C_KeyBindings.GetCustomBindingType(92)	1: nil nil
+C_KeyBindings.GetCustomBindingType(93)	1: nil nil
+C_KeyBindings.GetCustomBindingType(94)	1: nil nil
+C_KeyBindings.GetCustomBindingType(95)	1: nil nil
+C_KeyBindings.GetCustomBindingType(96)	1: nil nil
+C_KeyBindings.GetCustomBindingType(97)	1: nil nil
+C_KeyBindings.GetCustomBindingType(98)	1: nil nil
+C_KeyBindings.GetCustomBindingType(99)	1: nil nil
 C_KeyBindings.GetSearchTagsForAction("ACTIONBUTTON1")	1: nil nil
 C_KeyBindings.GetSearchTagsForAction("ACTIONBUTTON10")	1: nil nil
 C_KeyBindings.GetSearchTagsForAction("ACTIONBUTTON11")	1: nil nil
@@ -575,7 +979,7 @@ C_LFGInfo.CanPlayerUseLFD()	2: boolean true, string
 C_LFGInfo.CanPlayerUsePremadeGroup()	2: boolean true, string 
 C_LFGList.GetActiveEntryInfo()	0: 
 C_LFGList.GetAvailableRoles()	3: boolean true, boolean true, boolean true
-C_LFGList.GetFilteredSearchResults()	2: number 72, {1=number 24,10=number 23,11=number 19,12=number 55,13=number 14,14=number 29,15=number 66,16=number 58,17=number 46,18=number 60,19=number 62,2=number 8,20=number 31,21=number 35,22=number 1,23=number 15,24=number 30,25=number 49,26=number 47,27=number 18,28=number 12,29=number 17,3=number 10,30=number 22,31=number 68,32=number 64,33=number 65,34=number 67,35=number 45,36=number 11,37=number 16,38=number 13,39=number 71,4=number 50,40=number 42,41=number 3,42=number 38,43=number 51,44=number 57,45=number 28,46=number 41,47=number 9,48=number 61,49=number 72,5=number 33,50=number 59,51=number 44,52=number 36,53=number 63,54=number 25,55=number 7,56=number 56,57=number 20,58=number 2,59=number 37,6=number 53,60=number 69,61=number 27,62=number 39,63=number 26,64=number 52,65=number 21,66=number 6,67=number 54,68=number 5,69=number 4,7=number 70,70=number 40,71=number 34,72=number 32,8=number 48,9=number 43}
+C_LFGList.GetFilteredSearchResults()	2: number 0, {}
 C_LFGList.HasActiveEntryInfo()	1: boolean false
 C_LobbyMatchmakerInfo.IsInQueue()	1: boolean false
 C_Map.GetFallbackWorldMapID()	1: number 947
@@ -635,22 +1039,33 @@ C_PvP.GetArenaCrowdControlInfo("arena2")	0:
 C_PvP.GetArenaCrowdControlInfo("arena3")	0: 
 C_PvP.GetArenaCrowdControlInfo("arena4")	0: 
 C_PvP.GetArenaCrowdControlInfo("arena5")	0: 
+C_PvP.GetBattlefieldVehicles(1412)	1: {}
 C_PvP.GetOutdoorPvPWaitTime(0)	1: nil nil
+C_PvP.GetOutdoorPvPWaitTime(1412)	1: nil nil
 C_PvP.GetOutdoorPvPWaitTime(1456)	1: nil nil
+C_PvP.GetOutdoorPvPWaitTime(947)	1: nil nil
 C_PvP.IsActiveBattlefield()	1: boolean false
 C_PvP.IsWarModeDesired()	1: boolean false
 C_QuestLog.CanAbandonQuest(0)	1: boolean false
 C_QuestLog.GetBountiesForMapID(0)	1: nil nil
+C_QuestLog.GetBountiesForMapID(1412)	1: nil nil
 C_QuestLog.GetBountiesForMapID(1456)	1: nil nil
+C_QuestLog.GetBountiesForMapID(947)	1: nil nil
 C_QuestLog.GetBountySetInfoForMapID(0)	0: 
+C_QuestLog.GetBountySetInfoForMapID(1412)	0: 
 C_QuestLog.GetBountySetInfoForMapID(1456)	0: 
+C_QuestLog.GetBountySetInfoForMapID(947)	0: 
 C_QuestLog.GetMaxNumQuests()	1: number 175
 C_QuestLog.GetNumWorldQuestWatches()	1: number 0
 C_QuestLog.GetQuestWatchType(0)	1: nil nil
 C_QuestLog.GetQuestsOnMap(0)	0: 
+C_QuestLog.GetQuestsOnMap(1412)	1: {1={inProgress=boolean true,isCombatAllyQuest=boolean false,isDaily=boolean false,isMapIndicatorQuest=boolean false,isMeta=boolean false,isQuestStart=boolean false,mapID=number 1413,numObjectives=number 1,questID=number 959,questTagType=number 0,x=number 0.73968881368637,y=number 0.24150304496288},2={inProgress=boolean true,isCombatAllyQuest=boolean false,isDaily=boolean false,isMapIndicatorQuest=boolean false,isMeta=boolean false,isQuestStart=boolean false,mapID=number 1413,numObjectives=number 1,questID=number 962,questTagType=number 0,x=number 0.75902503728867,y=number 0.22273209691048},3={inProgress=boolean true,isCombatAllyQuest=boolean false,isDaily=boolean false,isMapIndicatorQuest=boolean false,isMeta=boolean false,isQuestStart=boolean false,mapID=number 1456,numObjectives=number 0,questID=number 1063,x=number 0.43729209899902,y=number 0.32463139295578},4={inProgress=boolean true,isCombatAllyQuest=boolean false,isDaily=boolean false,isMapIndicatorQuest=boolean false,isMeta=boolean false,isQuestStart=boolean false,mapID=number 1413,numObjectives=number 1,questID=number 1486,questTagType=number 0,x=number 0.75512552261353,y=number 0.22419472038746},5={inProgress=boolean true,isCombatAllyQuest=boolean false,isDaily=boolean false,isMapIndicatorQuest=boolean false,isMeta=boolean false,isQuestStart=boolean false,mapID=number 1456,numObjectives=number 1,questID=number 3369,x=number 0.45224124193192,y=number 0.32073119282722},6={inProgress=boolean true,isCombatAllyQuest=boolean false,isDaily=boolean false,isMapIndicatorQuest=boolean false,isMeta=boolean false,isQuestStart=boolean false,mapID=number 1442,numObjectives=number 1,questID=number 6481,questTagType=number 0,x=number 0.33297234773636,y=number 0.064519971609116}}
 C_QuestLog.GetQuestsOnMap(1456)	1: {1={inProgress=boolean true,isCombatAllyQuest=boolean false,isDaily=boolean false,isMapIndicatorQuest=boolean false,isMeta=boolean false,isQuestStart=boolean false,mapID=number 1456,numObjectives=number 0,questID=number 1063,x=number 0.69812381267548,y=number 0.30898213386536},2={inProgress=boolean true,isCombatAllyQuest=boolean false,isDaily=boolean false,isMapIndicatorQuest=boolean false,isMeta=boolean false,isQuestStart=boolean false,mapID=number 1456,numObjectives=number 1,questID=number 3369,x=number 0.78626751899719,y=number 0.28598809242249}}
+C_QuestLog.GetQuestsOnMap(947)	1: {}
 C_QuestLog.GetZoneStoryInfo(0)	0: 
+C_QuestLog.GetZoneStoryInfo(1412)	0: 
 C_QuestLog.GetZoneStoryInfo(1456)	0: 
+C_QuestLog.GetZoneStoryInfo(947)	0: 
 C_QuestLog.HasActiveThreats()	1: boolean false
 C_QuestLog.IsPushableQuest(0)	1: boolean false
 C_QuestLog.IsQuestDisabledForSession(0)	1: boolean false
@@ -688,6 +1103,7 @@ C_SpecializationInfo.GetNumSpecializationsForClassID(7)	1: number 1
 C_SpecializationInfo.GetNumSpecializationsForClassID(8)	1: number 1
 C_SpecializationInfo.GetNumSpecializationsForClassID(9)	1: number 1
 C_SpectatingUI.IsSpectating()	1: boolean false
+C_Spell.GetMawPowerRarityInfoBySpellID(25780)	0: 
 C_Spell.GetMawPowerRarityInfoBySpellID(643)	0: 
 C_Spell.GetSchoolString(16)	1: string Frost
 C_Spell.GetSchoolString(4)	1: string Fire
@@ -736,7 +1152,9 @@ C_TTSSettings.GetSetting(2)	1: boolean true
 C_TTSSettings.GetSetting(3)	1: boolean true
 C_TTSSettings.GetSetting(4)	1: boolean false
 C_TaskQuest.GetQuestsOnMap(0)	0: 
+C_TaskQuest.GetQuestsOnMap(1412)	1: {}
 C_TaskQuest.GetQuestsOnMap(1456)	1: {}
+C_TaskQuest.GetQuestsOnMap(947)	1: {}
 C_ToyBox.GetNumFilteredToys()	1: number 0
 C_ToyBox.HasFavorites()	1: boolean false
 C_ToyBoxInfo.HasAnyToy()	1: boolean false
@@ -786,6 +1204,9 @@ C_UIWidgetManager.GetWidgetSetInfo(283)	1: {layoutDirection=number 0,verticalPad
 C_UIWidgetManager.GetWidgetSetInfo(514)	1: {layoutDirection=number 0,verticalPadding=number 0}
 C_UIWidgetManager.GetWidgetSetInfo(676)	0: 
 C_VideoOptions.AreHighResTexturesAvailable()	1: boolean false
+C_VideoOptions.GetCurrentGameWindowSize(1, true)	1: {Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1920,y=number 1080}
+C_VideoOptions.GetDefaultGameWindowSize(1)	1: {Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1920,y=number 1080}
+C_VideoOptions.GetGameWindowSizes(1, true)	1: {1={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1920,y=number 1080},2={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1600,y=number 900},3={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1344,y=number 756},4={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1280,y=number 720},5={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1024,y=number 576},6={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 960,y=number 540}}
 C_VideoOptions.IsLinearEnabledOnStart()	1: boolean true
 C_VideoOptions.IsOutlineModeSupported()	1: boolean false
 C_VideoOptions.IsPBRWaterSupported()	1: boolean true
@@ -808,29 +1229,173 @@ GetArenaOpponentSpec(2)	0:
 GetArenaOpponentSpec(3)	0: 
 GetArenaOpponentSpec(4)	0: 
 GetArenaOpponentSpec(5)	0: 
+GetAvailableLocales()	10: string enUS, string koKR, string frFR, string deDE, string zhCN, string esES, string zhTW, string esMX, string ruRU, string ptBR
 GetBackgroundLoadingStatus()	1: number 0
+GetBindingText("-")	1: string -
 GetBindingText("-", 1)	1: string -
+GetBindingText("/")	1: string /
+GetBindingText("0")	1: string 0
 GetBindingText("0", 1)	1: string 0
+GetBindingText("1")	1: string 1
 GetBindingText("1", 1)	1: string 1
+GetBindingText("2")	1: string 2
 GetBindingText("2", 1)	1: string 2
+GetBindingText("3")	1: string 3
 GetBindingText("3", 1)	1: string 3
+GetBindingText("4")	1: string 4
 GetBindingText("4", 1)	1: string 4
+GetBindingText("5")	1: string 5
 GetBindingText("5", 1)	1: string 5
+GetBindingText("6")	1: string 6
 GetBindingText("6", 1)	1: string 6
+GetBindingText("7")	1: string 7
 GetBindingText("7", 1)	1: string 7
+GetBindingText("8")	1: string 8
 GetBindingText("8", 1)	1: string 8
+GetBindingText("9")	1: string 9
 GetBindingText("9", 1)	1: string 9
+GetBindingText("=")	1: string =
 GetBindingText("=", 1)	1: string =
+GetBindingText("A")	1: string A
+GetBindingText("ALT-Z")	1: string ALT-Z
+GetBindingText("B")	1: string B
+GetBindingText("BUTTON3")	1: string Middle Mouse
+GetBindingText("BUTTON4")	1: string Mouse Button 4
+GetBindingText("BUTTON5")	1: string Mouse Button 5
 GetBindingText("C")	1: string C
+GetBindingText("CTRL--")	1: string CTRL--
+GetBindingText("CTRL-0")	1: string CTRL-0
+GetBindingText("CTRL-1")	1: string CTRL-1
+GetBindingText("CTRL-2")	1: string CTRL-2
+GetBindingText("CTRL-3")	1: string CTRL-3
+GetBindingText("CTRL-4")	1: string CTRL-4
+GetBindingText("CTRL-5")	1: string CTRL-5
+GetBindingText("CTRL-6")	1: string CTRL-6
+GetBindingText("CTRL-7")	1: string CTRL-7
+GetBindingText("CTRL-8")	1: string CTRL-8
+GetBindingText("CTRL-9")	1: string CTRL-9
+GetBindingText("CTRL-=")	1: string CTRL-=
+GetBindingText("CTRL-F1")	1: string CTRL-F1
+GetBindingText("CTRL-F10")	1: string CTRL-F10
+GetBindingText("CTRL-F2")	1: string CTRL-F2
+GetBindingText("CTRL-F3")	1: string CTRL-F3
+GetBindingText("CTRL-F4")	1: string CTRL-F4
+GetBindingText("CTRL-F5")	1: string CTRL-F5
+GetBindingText("CTRL-F6")	1: string CTRL-F6
+GetBindingText("CTRL-F7")	1: string CTRL-F7
+GetBindingText("CTRL-F8")	1: string CTRL-F8
+GetBindingText("CTRL-F9")	1: string CTRL-F9
+GetBindingText("CTRL-M")	1: string CTRL-M
+GetBindingText("CTRL-PAGEDOWN")	1: string CTRL-Page Down
+GetBindingText("CTRL-PAGEUP")	1: string CTRL-Page Up
+GetBindingText("CTRL-R")	1: string CTRL-R
+GetBindingText("CTRL-S")	1: string CTRL-S
+GetBindingText("CTRL-SHIFT-PAGEDOWN")	1: string CTRL-SHIFT-Page Down
+GetBindingText("CTRL-SHIFT-TAB")	1: string CTRL-SHIFT-Tab
+GetBindingText("CTRL-TAB")	1: string CTRL-Tab
+GetBindingText("CTRL-V")	1: string CTRL-V
+GetBindingText("D")	1: string D
+GetBindingText("DELETE")	1: string Del
+GetBindingText("DOWN")	1: string Down Arrow
+GetBindingText("E")	1: string E
+GetBindingText("END")	1: string End
+GetBindingText("ENTER")	1: string Return
+GetBindingText("ESCAPE")	1: string Escape
+GetBindingText("F")	1: string F
+GetBindingText("F1")	1: string F1
+GetBindingText("F10")	1: string F10
+GetBindingText("F11")	1: string F11
+GetBindingText("F12")	1: string F12
+GetBindingText("F2")	1: string F2
+GetBindingText("F3")	1: string F3
+GetBindingText("F4")	1: string F4
+GetBindingText("F5")	1: string F5
+GetBindingText("F6")	1: string F6
+GetBindingText("F7")	1: string F7
+GetBindingText("F8")	1: string F8
+GetBindingText("F9")	1: string F9
+GetBindingText("G")	1: string G
+GetBindingText("H")	1: string H
+GetBindingText("HOME")	1: string Home
 GetBindingText("I")	1: string I
+GetBindingText("INSERT")	1: string Help
 GetBindingText("J")	1: string J
 GetBindingText("K")	1: string K
 GetBindingText("L")	1: string L
+GetBindingText("LEFT")	1: string Left Arrow
 GetBindingText("M")	1: string M
+GetBindingText("META-1")	1: string CMD-1
+GetBindingText("META-2")	1: string CMD-2
+GetBindingText("META-3")	1: string CMD-3
+GetBindingText("META-4")	1: string CMD-4
+GetBindingText("META-5")	1: string CMD-5
+GetBindingText("META-E")	1: string CMD-E
+GetBindingText("META-F")	1: string CMD-F
+GetBindingText("META-G")	1: string CMD-G
+GetBindingText("META-Q")	1: string CMD-Q
+GetBindingText("META-R")	1: string CMD-R
+GetBindingText("META-T")	1: string CMD-T
+GetBindingText("META-V")	1: string CMD-V
+GetBindingText("META-Y")	1: string CMD-Y
+GetBindingText("MOUSEWHEELDOWN")	1: string Mouse Wheel Down
+GetBindingText("MOUSEWHEELUP")	1: string Mouse Wheel Up
 GetBindingText("N")	1: string N
+GetBindingText("NUMPAD0")	1: string Num Pad 0
+GetBindingText("NUMPAD5")	1: string Num Pad 5
+GetBindingText("NUMPADDIVIDE")	1: string Num Pad /
+GetBindingText("NUMPADMINUS")	1: string Num Pad -
+GetBindingText("NUMPADPLUS")	1: string Num Pad +
+GetBindingText("O")	1: string O
 GetBindingText("P")	1: string P
+GetBindingText("PAGEDOWN")	1: string Page Down
+GetBindingText("PAGEUP")	1: string Page Up
+GetBindingText("PRINTSCREEN")	1: string F13
+GetBindingText("Q")	1: string Q
+GetBindingText("R")	1: string R
+GetBindingText("RIGHT")	1: string Right Arrow
+GetBindingText("S")	1: string S
+GetBindingText("SHIFT-1")	1: string SHIFT-1
+GetBindingText("SHIFT-2")	1: string SHIFT-2
+GetBindingText("SHIFT-3")	1: string SHIFT-3
+GetBindingText("SHIFT-4")	1: string SHIFT-4
+GetBindingText("SHIFT-5")	1: string SHIFT-5
+GetBindingText("SHIFT-6")	1: string SHIFT-6
+GetBindingText("SHIFT-B")	1: string SHIFT-B
+GetBindingText("SHIFT-C")	1: string SHIFT-C
+GetBindingText("SHIFT-DOWN")	1: string SHIFT-Down Arrow
+GetBindingText("SHIFT-E")	1: string SHIFT-E
+GetBindingText("SHIFT-F")	1: string SHIFT-F
+GetBindingText("SHIFT-F1")	1: string SHIFT-F1
+GetBindingText("SHIFT-F2")	1: string SHIFT-F2
+GetBindingText("SHIFT-F3")	1: string SHIFT-F3
+GetBindingText("SHIFT-F4")	1: string SHIFT-F4
+GetBindingText("SHIFT-F5")	1: string SHIFT-F5
+GetBindingText("SHIFT-G")	1: string SHIFT-G
+GetBindingText("SHIFT-I")	1: string SHIFT-I
+GetBindingText("SHIFT-M")	1: string SHIFT-M
+GetBindingText("SHIFT-MOUSEWHEELDOWN")	1: string SHIFT-Mouse Wheel Down
+GetBindingText("SHIFT-MOUSEWHEELUP")	1: string SHIFT-Mouse Wheel Up
 GetBindingText("SHIFT-P")	1: string SHIFT-P
+GetBindingText("SHIFT-PAGEDOWN")	1: string SHIFT-Page Down
+GetBindingText("SHIFT-Q")	1: string SHIFT-Q
+GetBindingText("SHIFT-R")	1: string SHIFT-R
+GetBindingText("SHIFT-SPACE")	1: string SHIFT-Spacebar
+GetBindingText("SHIFT-T")	1: string SHIFT-T
+GetBindingText("SHIFT-TAB")	1: string SHIFT-Tab
+GetBindingText("SHIFT-UP")	1: string SHIFT-Up Arrow
+GetBindingText("SHIFT-V")	1: string SHIFT-V
+GetBindingText("SHIFT-Y")	1: string SHIFT-Y
+GetBindingText("SPACE")	1: string Spacebar
+GetBindingText("T")	1: string T
+GetBindingText("TAB")	1: string Tab
 GetBindingText("U")	1: string U
+GetBindingText("UP")	1: string Up Arrow
+GetBindingText("V")	1: string V
+GetBindingText("W")	1: string W
+GetBindingText("X")	1: string X
+GetBindingText("Y")	1: string Y
+GetBindingText("Z")	1: string Z
+GetBindingText("`")	1: string `
 GetBindingText(nil, 1)	1: string 
 GetBindingText(nil, true)	1: string 
 GetBuildOption("CanChangeAutoRangedCombatSpell")	1: boolean true
@@ -1008,6 +1573,7 @@ GetMaxLevelForPlayerExpansion()	1: number 60
 GetMaxPlayerLevel()	1: number 60
 GetMaxRenderScale()	1: number 2
 GetMinRenderScale()	1: number 0.33333334326744
+GetMonitorCount()	1: number 2
 GetNumArenaOpponentSpecs()	1: number 0
 GetNumSavedWorldBosses()	1: number 0
 GetPartyLFGID()	0: 
@@ -1072,6 +1638,10 @@ GetSpecializationInfoForClassID(7, 1, 2)	9: number 1489, string Shaman, string ,
 GetSpecializationInfoForClassID(8, 1, 2)	9: number 1482, string Mage, string , number 626001, string DAMAGER, boolean false, boolean false, nil nil, nil nil
 GetSpecializationInfoForClassID(9, 1, 2)	9: number 1490, string Warlock, string , number 626007, string DAMAGER, boolean false, boolean false, nil nil, nil nil
 GetSpecializationRoleEnum(0)	0: 
+GetSpecializationRoleEnum(1)	1: number 2
+GetText("FACTION_STANDING_LABEL4", 2)	1: string Neutral
+GetText("FACTION_STANDING_LABEL5", 2)	1: string Friendly
+GetText("FACTION_STANDING_LABEL6", 2)	1: string Honored
 GetText("NOT_READY", 2)	1: string Not Ready
 GetText("READY", 2)	1: string Ready
 GetTotemInfo(1)	7: boolean false, string , number 0, number 0, nil nil, number 0, number 0
@@ -1098,6 +1668,102 @@ IsBindingForGamePad("9")	1: boolean false
 IsBindingForGamePad("=")	1: boolean false
 IsCpuBound()	1: nil nil
 IsEveryoneAssistant()	1: boolean false
+IsGraphicsCVarValueSupported("LowLatencyMode", 0)	1: number 0
+IsGraphicsCVarValueSupported("LowLatencyMode", 1)	1: number 0
+IsGraphicsCVarValueSupported("LowLatencyMode", 2)	1: number 0
+IsGraphicsCVarValueSupported("LowLatencyMode", 3)	1: number 27
+IsGraphicsCVarValueSupported("LowLatencyMode", 4)	1: number 27
+IsGraphicsCVarValueSupported("LowLatencyMode", 5)	1: number 27
+IsGraphicsCVarValueSupported("msaaAlphaTest", 0)	1: number 0
+IsGraphicsCVarValueSupported("msaaAlphaTest", 1)	1: number 0
+IsGraphicsSettingValueSupported("PROXY_RAID_TEXTURE_RESOLUTION", 0, nil)	1: number 42
+IsGraphicsSettingValueSupported("PROXY_RAID_TEXTURE_RESOLUTION", 1, nil)	1: number 42
+IsGraphicsSettingValueSupported("PROXY_RAID_TEXTURE_RESOLUTION", 2, nil)	1: number 42
+IsGraphicsSettingValueSupported("PROXY_TEXTURE_RESOLUTION", 0, nil)	1: number 42
+IsGraphicsSettingValueSupported("PROXY_TEXTURE_RESOLUTION", 1, nil)	1: number 42
+IsGraphicsSettingValueSupported("PROXY_TEXTURE_RESOLUTION", 2, nil)	1: number 42
+IsGraphicsSettingValueSupported("graphicsComputeEffects", 0, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsComputeEffects", 1, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsComputeEffects", 2, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsComputeEffects", 3, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsComputeEffects", 4, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsDepthEffects", 0, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsDepthEffects", 1, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsDepthEffects", 2, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsDepthEffects", 3, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsLightMode", 0, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsLightMode", 1, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsLightMode", 2, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsLightMode", 3, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsLiquidDetail", 0, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsLiquidDetail", 1, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsLiquidDetail", 2, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsLiquidDetail", 3, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsPBRLiquidDetail", 0, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsPBRLiquidDetail", 1, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsPBRLiquidDetail", 2, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsParticleDensity", 1, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsParticleDensity", 2, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsParticleDensity", 3, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsParticleDensity", 4, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsParticleDensity", 5, false)	1: number 1
+IsGraphicsSettingValueSupported("graphicsProjectedTextures", 0, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsProjectedTextures", 1, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsSSAO", 0, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsSSAO", 1, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsSSAO", 2, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsSSAO", 3, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsSSAO", 4, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsShadowQuality", 0, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsShadowQuality", 1, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsShadowQuality", 2, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsShadowQuality", 3, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsShadowQuality", 4, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsShadowQuality", 5, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsSpellDensity", 0, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsSpellDensity", 1, false)	1: number 0
+IsGraphicsSettingValueSupported("graphicsSpellDensity", 2, false)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsComputeEffects", 0, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsComputeEffects", 1, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsComputeEffects", 2, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsComputeEffects", 3, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsComputeEffects", 4, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsDepthEffects", 0, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsDepthEffects", 1, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsDepthEffects", 2, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsDepthEffects", 3, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsLightMode", 0, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsLightMode", 1, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsLightMode", 2, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsLightMode", 3, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsLiquidDetail", 0, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsLiquidDetail", 1, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsLiquidDetail", 2, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsLiquidDetail", 3, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsPBRLiquidDetail", 0, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsPBRLiquidDetail", 1, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsPBRLiquidDetail", 2, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsParticleDensity", 1, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsParticleDensity", 2, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsParticleDensity", 3, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsParticleDensity", 4, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsParticleDensity", 5, true)	1: number 1
+IsGraphicsSettingValueSupported("raidGraphicsProjectedTextures", 0, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsProjectedTextures", 1, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsSSAO", 0, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsSSAO", 1, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsSSAO", 2, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsSSAO", 3, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsSSAO", 4, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsShadowQuality", 0, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsShadowQuality", 1, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsShadowQuality", 2, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsShadowQuality", 3, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsShadowQuality", 4, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsShadowQuality", 5, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsSpellDensity", 0, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsSpellDensity", 1, true)	1: number 0
+IsGraphicsSettingValueSupported("raidGraphicsSpellDensity", 2, true)	1: number 0
 IsInActiveWorldPVP()	1: boolean false
 IsInInstance()	2: boolean false, string none
 IsOnGroundFloorInJailersTower()	1: boolean false
@@ -1113,6 +1779,7 @@ IsTutorialFlagged(4)	1: boolean true
 IsTutorialFlagged(55)	1: boolean true
 LocalizedClassList(false)	1: {DRUID=string Druid,HUNTER=string Hunter,MAGE=string Mage,PALADIN=string Paladin,PRIEST=string Priest,ROGUE=string Rogue,SHAMAN=string Shaman,WARLOCK=string Warlock,WARRIOR=string Warrior}
 LocalizedClassList(true)	1: {DRUID=string Druid,HUNTER=string Hunter,MAGE=string Mage,PALADIN=string Paladin,PRIEST=string Priest,ROGUE=string Rogue,SHAMAN=string Shaman,WARLOCK=string Warlock,WARRIOR=string Warrior}
+MultiSampleAntiAliasingSupported()	0: 
 NoPlayTime()	1: nil nil
 PartialPlayTime()	1: nil nil
 PetHasActionBar()	1: boolean false

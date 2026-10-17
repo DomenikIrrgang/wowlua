@@ -500,7 +500,7 @@ __engine.pressKey("ENTER")"#,
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 3369;
+const ANSWERS_MATCHED: usize = 4038;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {
@@ -647,6 +647,66 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         theirs.len(),
         summary.join("\n")
     );
+    // The checks (rules the call form cannot ask) as the client answered
+    // them; addresses compared by their form.
+    let f = vm
+        .load(
+            b"local out = {} for k, v in pairs(StdTestState.engineChecks) do out[k] = v end return out",
+            "=checks",
+        )
+        .expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let our_checks: BTreeMap<String, String> = vm
+        .heap
+        .table(t)
+        .entries()
+        .filter_map(|(k, v)| match (k, v) {
+            (Value::Str(k), Value::Str(v)) => Some((
+                String::from_utf8_lossy(vm.str_bytes(k)).into_owned(),
+                String::from_utf8_lossy(vm.str_bytes(v)).into_owned(),
+            )),
+            _ => None,
+        })
+        .collect();
+    let src = fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-checks.lua"))
+        .expect("the checks");
+    let f = fixture_vm.load(&src, "=checks").expect("compiles");
+    let r = fixture_vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let their_checks: BTreeMap<String, String> = fixture_vm
+        .heap
+        .table(t)
+        .entries()
+        .filter_map(|(k, v)| match (k, v) {
+            (Value::Str(k), Value::Str(v)) => Some((
+                String::from_utf8_lossy(fixture_vm.str_bytes(k)).into_owned(),
+                String::from_utf8_lossy(fixture_vm.str_bytes(v)).into_owned(),
+            )),
+            _ => None,
+        })
+        .collect();
+    // Not yet answered as the client does, with the reason.
+    const KNOWN: &[&str] = &[
+        // 380 on the client; the bindings define 20 (to be recorded).
+        "GetNumModifiedClickActions",
+    ];
+    let hex = regex::Regex::new(r"[0-9a-f]{10}").unwrap();
+    let mut differ = Vec::new();
+    for (label, answer) in &their_checks {
+        if KNOWN.contains(&label.as_str()) {
+            continue;
+        }
+        let ours = our_checks.get(label).map_or("<missing>", String::as_str);
+        if hex.replace_all(ours, "ADDR") != hex.replace_all(answer, "ADDR") {
+            differ.push(format!("{label}: client {answer:?}, ours {ours:?}"));
+        }
+    }
+    assert!(differ.is_empty(), "checks differ:\n{}", differ.join("\n"));
     assert!(
         matched >= ANSWERS_MATCHED,
         "{matched} of {} answered as the client did (was {ANSWERS_MATCHED})",
