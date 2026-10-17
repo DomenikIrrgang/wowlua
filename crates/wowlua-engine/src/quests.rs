@@ -239,6 +239,10 @@ pub fn control_interact(vm: &mut Vm, c: NativeCall) -> Ret {
         fire(vm, "UI_ERROR_MESSAGE", &[Value::Num(code), text]);
         return Ok(vec![]);
     }
+    if crate::gossip::has(vm, npc) {
+        crate::gossip::interact(vm, npc);
+        return Ok(vec![]);
+    }
     let delay = crate::clock::server_delay(vm);
     let later = vm.native_with(
         "questDialog",

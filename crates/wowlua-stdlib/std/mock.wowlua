@@ -695,6 +695,20 @@ export function defineQuest(id: number, data: table)
     engine().defineQuest(id, data)
 end
 
+--- An NPC's gossip: `{ text, options = { { name, icon, gossipOptionID,
+--- opens } } }` (`opens = "trainer"`: its trainer). `unit:interact` opens
+--- it; choosing an option closes it and opens what the option does.
+export function defineGossip(npc: MockUnit, data: table)
+    engine().defineGossip(npc, data)
+end
+
+--- An NPC's trainer: `{ greeting, services = { { spell, name, icon, level,
+--- rank, cost, skillLine, skillLineIndex, rankData } } }`. Buying a
+--- service teaches the spell (onto the action bar's first empty slot).
+export function defineTrainer(npc: MockUnit, data: table)
+    engine().defineTrainer(npc, data)
+end
+
 --- A level: `{ xpMax, health, power, talents, pvpTalentSlots, strength,
 --- agility, stamina, intellect, spirit }`. Experience past the current
 --- level's end gains it (`PLAYER_LEVEL_UP`, a round trip later

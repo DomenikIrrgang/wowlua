@@ -22,6 +22,7 @@ pub mod editmode;
 pub mod facts;
 pub mod framescript;
 pub mod gamedata;
+pub mod gossip;
 pub mod input;
 pub mod levels;
 pub mod login;
@@ -34,6 +35,7 @@ pub mod quests;
 pub mod recorded;
 pub mod stats;
 pub mod tooltip;
+pub mod trainer;
 pub mod ui;
 pub mod units;
 pub mod widgetdata;
@@ -214,6 +216,8 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(merchant::behaviours())
             .chain(loot::behaviours())
             .chain(quests::behaviours())
+            .chain(gossip::behaviours())
+            .chain(trainer::behaviours())
             .chain(queries::behaviours())
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())

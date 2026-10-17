@@ -119,6 +119,8 @@ pub struct World {
     /// The loot window.
     pub loot: crate::loot::Loot,
     pub quests: crate::quests::Quests,
+    pub gossip: crate::gossip::Gossip,
+    pub trainers: crate::trainer::Trainers,
     /// The levels a test defined (`levels.rs`).
     pub levels: std::collections::BTreeMap<i64, wowlua_vm::TableRef>,
     /// The chat's last line number (each message's eleventh value).

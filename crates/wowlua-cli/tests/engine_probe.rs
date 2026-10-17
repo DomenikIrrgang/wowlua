@@ -876,20 +876,28 @@ fn end_state_differences(vm: &Vm, after: &Path) -> Vec<String> {
     if let Some(bags) = json["bags"].as_object() {
         for (bag, b) in bags {
             let bag: i64 = bag.parse().unwrap_or(0);
-            let theirs: Vec<(i64, f64)> = b["items"]
-                .as_array()
-                .map(|items| {
-                    items
+            // A list, or by slot (the newer snapshots).
+            let items: Vec<&serde_json::Value> = match &b["items"] {
+                serde_json::Value::Array(list) => list.iter().collect(),
+                serde_json::Value::Object(by_slot) => {
+                    let mut slots: Vec<(i64, &serde_json::Value)> = by_slot
                         .iter()
-                        .map(|i| {
-                            (
-                                i["id"].as_i64().unwrap_or(0),
-                                i["count"].as_f64().unwrap_or(1.0),
-                            )
-                        })
-                        .collect()
+                        .map(|(k, v)| (k.parse().unwrap_or(0), v))
+                        .collect();
+                    slots.sort_by_key(|(k, _)| *k);
+                    slots.into_iter().map(|(_, v)| v).collect()
+                }
+                _ => vec![],
+            };
+            let theirs: Vec<(i64, f64)> = items
+                .iter()
+                .map(|i| {
+                    (
+                        i["id"].as_i64().unwrap_or(0),
+                        i["count"].as_f64().unwrap_or(1.0),
+                    )
                 })
-                .unwrap_or_default();
+                .collect();
             let ours: Vec<(i64, f64)> = e
                 .world
                 .character
@@ -1026,6 +1034,16 @@ const COMBAT_MATCHED: usize = 724;
 #[test]
 fn the_engine_plays_combat_as_the_client_did() {
     plays_as_the_client_did("combat", COMBAT_MATCHED);
+}
+
+/// How many of the trainer scenario's lines the engine plays as the client
+/// did: only ever up.
+const TRAINER_MATCHED: usize = 171;
+
+/// The trainer scenario: its gossip, its services, one bought.
+#[test]
+fn the_engine_plays_trainer_as_the_client_did() {
+    plays_as_the_client_did("trainer", TRAINER_MATCHED);
 }
 
 /// How many of the vendor scenario's lines the engine plays as the client
