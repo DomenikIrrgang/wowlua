@@ -380,11 +380,7 @@ fn ident(name: &str, pos: Pos) -> ir::Ident {
 }
 
 fn generated(name: &str, pos: Pos) -> ir::Ident {
-    ir::Ident {
-        name: name.into(),
-        generated: true,
-        pos,
-    }
+    ir::Ident::new_generated(name, pos)
 }
 
 fn name_expr(id: ir::Ident) -> ir::Expr {
@@ -1987,7 +1983,7 @@ impl<'a> Lowerer<'a> {
         // A local or upvalue name is read directly; anything else once, into
         // a temporary that stays in scope until the end of the block.
         let source = match &v.kind {
-            ir::ExprKind::Name(id) if !id.generated && self.is_local(&id.name) => v,
+            ir::ExprKind::Name(id) if !id.generated() && self.is_local(&id.name) => v,
             _ => self.store_temp(v, "t"),
         };
         let mut out = std::mem::replace(&mut self.prelude, saved);

@@ -337,11 +337,7 @@ pub fn cache_globals(chunk: &mut Chunk) {
                     let local = local.clone();
                     let pos = e.pos;
                     // The new name's occurrence stands in for `lib`'s.
-                    e.kind = ExprKind::Name(Ident {
-                        name: local.into(),
-                        generated: true,
-                        pos,
-                    });
+                    e.kind = ExprKind::Name(Ident::new_generated(local, pos));
                 }
             }
             fn ident(&mut self, _id: &mut Ident, _use: Use) {
@@ -363,10 +359,10 @@ pub fn cache_globals(chunk: &mut Chunk) {
         kind: StmtKind::Local {
             names: chosen
                 .iter()
-                .map(|h| Ident {
-                    name: name_of(h).into(),
-                    generated: matches!(h, Hoisted::Field(..)),
-                    pos: Pos::NONE,
+                .map(|h| {
+                    let mut id = Ident::new(name_of(h), Pos::NONE);
+                    id.set_generated(matches!(h, Hoisted::Field(..)));
+                    id
                 })
                 .collect(),
             values: chosen

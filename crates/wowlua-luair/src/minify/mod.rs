@@ -154,7 +154,7 @@ pub fn rename_members(
             {
                 self.found.push(id.pos);
                 if self.apply {
-                    id.name = new.as_str().into();
+                    id.rename(new.as_str());
                 }
             }
         }

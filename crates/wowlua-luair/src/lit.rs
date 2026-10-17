@@ -5,16 +5,24 @@
 use std::fmt;
 use std::ops::Deref;
 
-/// Bytes stored inline up to [`Bytes::INLINE`], else on the heap. The same
-/// size as a `Vec<u8>`.
+/// Bytes stored inline up to [`Bytes::INLINE`], else on the heap, and a
+/// flag of their owner's (an identifier's `generated`) in the room left.
+/// The same size as a `Vec<u8>`.
 #[derive(Clone)]
 enum Bytes {
-    Inline { len: u8, bytes: [u8; Bytes::INLINE] },
-    Heap(Box<[u8]>),
+    Inline {
+        len: u8,
+        flag: bool,
+        bytes: [u8; Bytes::INLINE],
+    },
+    Heap {
+        flag: bool,
+        bytes: Box<[u8]>,
+    },
 }
 
 impl Bytes {
-    const INLINE: usize = 22;
+    const INLINE: usize = 21;
 
     fn new(bytes: &[u8]) -> Self {
         if bytes.len() <= Self::INLINE {
@@ -22,17 +30,33 @@ impl Bytes {
             inline[..bytes.len()].copy_from_slice(bytes);
             Bytes::Inline {
                 len: bytes.len() as u8,
+                flag: false,
                 bytes: inline,
             }
         } else {
-            Bytes::Heap(bytes.into())
+            Bytes::Heap {
+                flag: false,
+                bytes: bytes.into(),
+            }
         }
     }
 
     fn get(&self) -> &[u8] {
         match self {
-            Bytes::Inline { len, bytes } => &bytes[..*len as usize],
-            Bytes::Heap(bytes) => bytes,
+            Bytes::Inline { len, bytes, .. } => &bytes[..*len as usize],
+            Bytes::Heap { bytes, .. } => bytes,
+        }
+    }
+
+    fn flag(&self) -> bool {
+        match self {
+            Bytes::Inline { flag, .. } | Bytes::Heap { flag, .. } => *flag,
+        }
+    }
+
+    fn set_flag(&mut self, to: bool) {
+        match self {
+            Bytes::Inline { flag, .. } | Bytes::Heap { flag, .. } => *flag = to,
         }
     }
 }
@@ -94,6 +118,16 @@ pub struct Name(Bytes);
 impl Name {
     pub fn as_str(&self) -> &str {
         std::str::from_utf8(self.0.get()).expect("built from a str")
+    }
+
+    /// The identifier's `generated` flag, kept here to keep `Ident` at 32
+    /// bytes. Not part of the name: comparing and hashing leave it out.
+    pub(crate) fn flag(&self) -> bool {
+        self.0.flag()
+    }
+
+    pub(crate) fn set_flag(&mut self, to: bool) {
+        self.0.set_flag(to);
     }
 }
 
@@ -279,7 +313,11 @@ mod tests {
             assert_eq!(&*n, text);
             assert_eq!(n.to_string(), text);
             assert_eq!(format!("{n:?}"), format!("{:?}", String::from(text)));
-            let name = Name::from(text);
+            let mut name = Name::from(text);
+            assert!(!name.flag());
+            name.set_flag(true);
+            assert!(name.flag());
+            assert_eq!(name, Name::from(text), "the flag is not part of the name");
             assert_eq!(name, *text);
             assert_eq!(format!("{name:?}"), format!("{:?}", String::from(text)));
             let state = std::collections::hash_map::RandomState::new();

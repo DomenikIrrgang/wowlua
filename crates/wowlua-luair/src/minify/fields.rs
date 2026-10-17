@@ -126,7 +126,7 @@ impl Rename<'_> {
         if let Some(Ref::Local(b)) = self.res.occurrences.get(occurrence)
             && let Some(new) = self.names.get(b).and_then(|m| m.get(id.name.as_str()))
         {
-            id.name = new.as_str().into();
+            id.rename(new.as_str());
         }
     }
 }

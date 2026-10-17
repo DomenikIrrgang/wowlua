@@ -444,11 +444,11 @@ pub fn rename(
                 && let Some(name) = self.names.get(b)
                 && *name != id.name
             {
-                if id.pos.is_some() && !id.generated {
+                if id.pos.is_some() && !id.generated() {
                     self.original
                         .insert(id.pos, std::mem::take(&mut id.name).into());
                 }
-                id.name = name.as_str().into();
+                id.rename(name.as_str());
             }
             self.next += 1;
         }
