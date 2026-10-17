@@ -762,3 +762,23 @@ impl Tree {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::mem::size_of;
+
+    // Every node is a few u32: the tree's memory is these sizes times the
+    // node counts (`cargo xtask parse-stats`).
+    #[test]
+    fn nodes_stay_small() {
+        assert!(size_of::<Sp>() == 8);
+        assert!(size_of::<ExprNode>() <= 24);
+        assert!(size_of::<FieldData>() <= 16);
+        assert!(size_of::<StrNode>() <= 20);
+        assert!(size_of::<TypeNode>() <= 28);
+        assert!(size_of::<StmtNode>() <= 40);
+        assert!(size_of::<ParamNode>() <= 24);
+        assert!(size_of::<FuncNode>() <= 64);
+    }
+}

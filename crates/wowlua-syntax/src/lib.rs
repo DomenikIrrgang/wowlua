@@ -8,8 +8,6 @@
 
 pub mod deep;
 pub mod features;
-#[cfg(test)]
-mod legacy;
 pub mod lexer;
 pub mod literal;
 mod ops;
