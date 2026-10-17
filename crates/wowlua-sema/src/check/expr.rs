@@ -2366,7 +2366,7 @@ impl Checker<'_, '_> {
                 || c.dynamic_env
         };
         let Some(first) = args.first() else { return };
-        let method = args.get(1).and_then(&literal);
+        let method = args.get(1).and_then(literal);
         let global_only = id == "hooks.hook" && method.is_none();
         if global_only || id == "hooks.hookScript" {
             if let Some(name) = literal(first)
