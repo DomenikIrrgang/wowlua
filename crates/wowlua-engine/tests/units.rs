@@ -450,7 +450,7 @@ return unpack(out)",
             "Fishing Pole",
             "23",
             "-1",
-            "|cnIQ1:|Hitem:6529::::::::60::::::::::|h[Shiny Bauble]|h|r",
+            "|cnIQ1:|Hitem:6529::::::::60:::14:::::::|h[Shiny Bauble]|h|r",
             "20",
             "0",
             "Harn Longcast",
@@ -557,7 +557,7 @@ return bought",
     assert_eq!(
         r,
         [
-            "ITEM_PUSH(31, 132952) CHAT_MSG_LOOT(You receive item: |cnIQ1:|Hitem:2375::::::::60::::::::::|h[Battered Leather Gloves]|h|r, Player) PLAYER_MONEY(nil, nil)"
+            "ITEM_PUSH(31, 132952) CHAT_MSG_LOOT(You receive item: |cnIQ1:|Hitem:2375::::::::60:::14:::::::|h[Battered Leather Gloves]|h|r, Player) PLAYER_MONEY(nil, nil)"
         ]
     );
     wowlua_engine::clock::advance(&mut vm, 0.5);

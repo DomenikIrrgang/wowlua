@@ -453,9 +453,13 @@ pub fn secret_results(vm: &Vm, doc: &serde_json::Value, c: &NativeCall) -> bool 
     }
     // Another unit's power is secret even out of combat (the scenarios: a
     // wolf's, another player's out of combat; none targeted, 0); the
-    // player's in combat. Unverified: the group's.
+    // player's in combat, and the player's rage always (every scenario,
+    // out of combat too). Unverified: the group's; the player's other
+    // powers out of combat.
     if flag("SecretWhenUnitPowerRestricted")
-        && (!ours(u, id) || active(u, &[COMBAT, MAP, ENCOUNTER, CHALLENGE_MODE, PVP_MATCH]))
+        && (!ours(u, id)
+            || active(u, &[COMBAT, MAP, ENCOUNTER, CHALLENGE_MODE, PVP_MATCH])
+            || (id == PLAYER && u.list[id.0].power_type == 1.0))
     {
         return true;
     }
@@ -1049,6 +1053,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("setMoney", crate::character::control_set_money),
         ("setStats", crate::stats::control_set_stats),
         ("equip", crate::character::control_equip),
+        ("setDurability", crate::character::control_set_durability),
     ] {
         let native = vm.native(name, f);
         let key = vm.heap.intern(name.as_bytes());

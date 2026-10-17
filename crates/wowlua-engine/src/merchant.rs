@@ -239,11 +239,21 @@ fn item_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
+/// A merchant's goods' links: in the vendor's context (14, recorded:
+/// `/stdtest engine scenario vendor`).
 fn item_link(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(g) = goods(vm, &c) else {
         return Ok(vec![]);
     };
-    Ok(character::link_of_id(vm, g.id).into_iter().collect())
+    let link = character::link_in_context(vm, g.id, "14", &[]);
+    Ok(link.map(|l| vec![vm.str(&l)]).unwrap_or_default())
+}
+
+/// `C_MerchantFrame.IsMerchantItemRefundable(i)`: a merchant's goods are
+/// (inferred: the recorded purchase asked no confirmation, which Blizzard's
+/// frame shows for a non-refundable item; unrecorded).
+fn refundable(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(goods(vm, &c).is_some())])
 }
 
 fn item_id(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -313,7 +323,14 @@ fn repair_all(vm: &mut Vm, _c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     engine_mut(vm).world.character.money -= cost;
-    let damaged = merchant(vm).damaged;
+    // The worn items mended (their durability, where known; else the
+    // merchant's count).
+    let worn = character::repair_worn(vm);
+    let damaged = if worn > 0 {
+        worn as f64
+    } else {
+        merchant(vm).damaged
+    };
     merchant_mut(vm).repair_cost = 0.0;
     merchant_mut(vm).damaged = 0.0;
     for _ in 0..damaged as usize {
@@ -407,6 +424,8 @@ fn buy(vm: &mut Vm, c: NativeCall) -> Ret {
     let quantity = num(c.arg(2)).unwrap_or(g.stack).max(1.0);
     let cost = (g.price * quantity / g.stack.max(1.0)).round();
     if engine(vm).world.character.money < cost {
+        // The server refuses (`/stdtest engine scenario vendor`).
+        later(vm, "merchantTooDear", too_dear, vec![]);
         return Ok(vec![]);
     }
     later(
@@ -419,6 +438,20 @@ fn buy(vm: &mut Vm, c: NativeCall) -> Ret {
             Value::Num(cost),
         ],
     );
+    Ok(vec![])
+}
+
+/// "You don't have enough money." (`UI_ERROR_MESSAGE(48, …)`).
+fn too_dear(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let code = match vm.get_global("LE_GAME_ERR_NOT_ENOUGH_MONEY") {
+        Value::Num(n) => n,
+        _ => 48.0,
+    };
+    let text = match vm.get_global("ERR_NOT_ENOUGH_MONEY") {
+        Value::Str(s) => Value::Str(s),
+        _ => vm.str("You don't have enough money."),
+    };
+    fire(vm, "UI_ERROR_MESSAGE", &[Value::Num(code), text]);
     Ok(vec![])
 }
 
@@ -467,6 +500,8 @@ fn bought(vm: &mut Vm, c: NativeCall) -> Ret {
         fire(vm, "UI_ERROR_MESSAGE", &[Value::Num(3.0), message]);
         return Ok(vec![]);
     };
+    // Bought: in the vendor's context (14, recorded).
+    let link = character::link_in_context(vm, id, "14", &[]);
     {
         let w = &mut engine_mut(vm).world;
         w.character.money -= cost;
@@ -479,6 +514,7 @@ fn bought(vm: &mut Vm, c: NativeCall) -> Ret {
                     Held {
                         id,
                         count: quantity,
+                        link,
                         ..Held::default()
                     },
                 );
@@ -506,12 +542,7 @@ fn bought(vm: &mut Vm, c: NativeCall) -> Ret {
 /// payload the client gave it (`/stdtest engine record vendor2`; a count
 /// above one unverified: "<link>x<n>").
 fn loot_message(vm: &mut Vm, id: i64, quantity: f64) {
-    let link = character::link_of_id(vm, id)
-        .map(|v| match v {
-            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
-            _ => String::new(),
-        })
-        .unwrap_or_default();
+    let link = character::link_in_context(vm, id, "14", &[]).unwrap_or_default();
     let count = if quantity > 1.0 {
         format!("x{}", quantity as i64)
     } else {
@@ -746,7 +777,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetMerchantItemMaxStack", item_max_stack),
         ("GetMerchantItemCostInfo", cost_info),
         ("CanAffordMerchantItem", nothing),
-        ("C_MerchantFrame.IsMerchantItemRefundable", no),
+        ("C_MerchantFrame.IsMerchantItemRefundable", refundable),
         ("GetMerchantFilter", filter),
         ("CanMerchantRepair", can_repair),
         ("GetRepairAllCost", repair_all_cost),

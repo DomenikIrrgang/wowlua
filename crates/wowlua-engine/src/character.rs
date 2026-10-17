@@ -41,6 +41,8 @@ pub struct Held {
     /// Pushed into a new slot, its data not arrived yet: the slot is
     /// taken but reads empty (`loot.rs`; recorded).
     pub arriving: bool,
+    /// Worn gear's durability: current, maximum.
+    pub durability: Option<(f64, f64)>,
 }
 
 #[derive(Clone, Debug)]
@@ -150,6 +152,13 @@ fn held_of(vm: &mut Vm, v: Value) -> Option<Held> {
                 quest_id: num(field(vm, t, "questID")),
                 quest_active: field(vm, t, "questActive").truthy(),
                 arriving: false,
+                durability: match (
+                    num(field(vm, t, "durability")),
+                    num(field(vm, t, "maxDurability")),
+                ) {
+                    (Some(d), Some(m)) => Some((d, m)),
+                    _ => None,
+                },
             })
         }
         _ => None,
@@ -383,6 +392,54 @@ pub fn control_equip(vm: &mut Vm, c: NativeCall) -> Ret {
         &[Value::Num(slot as f64), Value::Bool(!has)],
     );
     Ok(vec![])
+}
+
+/// `unit:setDurability(slot, current, max)` (the player): a worn item's
+/// durability (no event: the snapshot's state).
+pub fn control_set_durability(vm: &mut Vm, c: NativeCall) -> Ret {
+    player_only(vm, &c, "setDurability")?;
+    let slot = vm.check_int(&c, 2)?;
+    let current = vm.check_number(&c, 3)?;
+    let max = vm.check_number(&c, 4)?;
+    match engine_mut(vm).world.character.equipment.get_mut(&slot) {
+        Some(h) => h.durability = Some((current, max)),
+        None => return Err(vm.error("setDurability: nothing worn there")),
+    }
+    Ok(vec![])
+}
+
+/// `GetInventoryItemDurability(slot)`: a worn item's durability; nothing
+/// for an empty slot or an item without (recorded).
+fn get_inventory_item_durability(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(slot) = num(c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    Ok(
+        match engine(vm)
+            .world
+            .character
+            .equipment
+            .get(&(slot as i64))
+            .and_then(|h| h.durability)
+        {
+            Some((d, m)) => vec![Value::Num(d), Value::Num(m)],
+            None => vec![],
+        },
+    )
+}
+
+/// The worn items' durability restored (a repair): how many were damaged.
+pub fn repair_worn(vm: &mut Vm) -> usize {
+    let mut n = 0;
+    for h in engine_mut(vm).world.character.equipment.values_mut() {
+        if let Some((d, m)) = h.durability
+            && d < m
+        {
+            h.durability = Some((m, m));
+            n += 1;
+        }
+    }
+    n
 }
 
 // ------------------------------------------------------------------- bags
@@ -1014,6 +1071,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetInventoryItemBroken", inventory_item_no),
         ("GetInventoryItemEquippedUnusable", inventory_item_no),
         ("GetInventoryItemID", get_inventory_item_id),
+        ("GetInventoryItemDurability", get_inventory_item_durability),
         ("GetInventoryItemLink", get_inventory_item_link),
         ("GetInventoryItemTexture", get_inventory_item_texture),
         ("GetInventoryItemQuality", get_inventory_item_quality),
