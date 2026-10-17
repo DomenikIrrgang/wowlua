@@ -5,6 +5,7 @@
 //! bytes. Read it through the [views](crate::view).
 
 use crate::ops::{BinOp, CompoundOp, Directive, Modifier, UnOp};
+use std::sync::Arc;
 use wowlua_span::FileId;
 
 /// No node (an absent optional child).
@@ -578,25 +579,37 @@ pub(crate) struct ImportSpecNode {
 }
 
 /// The source text, kept for names, numerals and literals: as a `str` when
-/// it is valid UTF-8 (nearly always), so their text needs no check.
+/// it is valid UTF-8 (nearly always), so their text needs no check; shared
+/// with the caller's copy where it has one.
 #[derive(Debug)]
 pub(crate) enum SourceText {
     Str(Box<str>),
+    Shared(Arc<str>),
+    Static(&'static str),
     Bytes(Box<[u8]>),
 }
 
 impl SourceText {
-    fn new(src: &[u8]) -> SourceText {
+    pub(crate) fn new(src: &[u8]) -> SourceText {
         match std::str::from_utf8(src) {
             Ok(s) => SourceText::Str(s.into()),
             Err(_) => SourceText::Bytes(src.into()),
         }
     }
 
+    fn as_str(&self) -> Option<&str> {
+        match self {
+            SourceText::Str(s) => Some(s),
+            SourceText::Shared(s) => Some(s),
+            SourceText::Static(s) => Some(s),
+            SourceText::Bytes(_) => None,
+        }
+    }
+
     pub fn bytes(&self) -> &[u8] {
         match self {
-            SourceText::Str(s) => s.as_bytes(),
             SourceText::Bytes(b) => b,
+            text => text.as_str().unwrap_or_default().as_bytes(),
         }
     }
 
@@ -604,8 +617,8 @@ impl SourceText {
     pub fn str(&self, sp: Sp) -> &str {
         let range = sp.start as usize..sp.end as usize;
         match self {
-            SourceText::Str(s) => &s[range],
             SourceText::Bytes(b) => std::str::from_utf8(&b[range]).expect("names are ASCII"),
+            text => &text.as_str().unwrap_or_default()[range],
         }
     }
 }
@@ -708,12 +721,12 @@ macro_rules! arrays {
 }
 
 impl Tree {
-    pub(crate) fn empty(src: &[u8], file: FileId) -> Tree {
+    pub(crate) fn empty(src: SourceText, file: FileId) -> Tree {
         macro_rules! new {
             ($($a:ident),*) => {
                 Tree {
                     file,
-                    src: SourceText::new(src),
+                    src,
                     span: Sp { start: 0, end: 0 },
                     directives: Vec::new(),
                     root: 0,

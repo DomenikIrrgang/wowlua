@@ -18,6 +18,8 @@ mod tree;
 pub mod view;
 pub mod visit;
 
+use std::sync::Arc;
+use tree::SourceText;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::FileId;
 
@@ -44,11 +46,27 @@ impl Parse {
     }
 }
 
-/// Parses `src`, the raw bytes of `file`.
+/// Parses `src`, the raw bytes of `file`. The tree keeps a copy of them.
 pub fn parse(src: &[u8], file: FileId) -> Parse {
+    parse_keeping(src, file, SourceText::new(src))
+}
+
+/// [`parse`] of a text the tree shares instead of copying it.
+pub fn parse_shared(text: &Arc<str>, file: FileId) -> Parse {
+    parse_keeping(text.as_bytes(), file, SourceText::Shared(text.clone()))
+}
+
+/// [`parse`] of a text compiled into the program (the WoW API), which the
+/// tree refers to instead of copying it.
+pub fn parse_static(text: &'static str, file: FileId) -> Parse {
+    parse_keeping(text.as_bytes(), file, SourceText::Static(text))
+}
+
+/// Parses `src` into a tree that keeps `text`, the same bytes.
+fn parse_keeping(src: &[u8], file: FileId, text: SourceText) -> Parse {
     let mut lexed = lexer::lex(src, file);
     let mut diagnostics = std::mem::take(&mut lexed.diagnostics);
-    let mut parser = parser::Parser::new(src, file, lexed);
+    let mut parser = parser::Parser::new(src, file, lexed, text);
     parser.chunk();
     diagnostics.append(&mut parser.diagnostics);
     diagnostics.sort_by_key(|d| d.labels.first().map(|l| l.span.start).unwrap_or(0));

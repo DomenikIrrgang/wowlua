@@ -185,12 +185,13 @@ macro_rules! push {
 }
 
 impl<'a> Parser<'a> {
-    pub(crate) fn new(src: &'a [u8], file: FileId, lexed: Lexed) -> Self {
+    /// A parser of `src`, whose tree keeps `text` (`src` itself).
+    pub(crate) fn new(src: &'a [u8], file: FileId, lexed: Lexed, text: SourceText) -> Self {
         Parser {
             src,
             file,
             lexed,
-            t: Tree::empty(src, file),
+            t: Tree::empty(text, file),
             pos: 0,
             diagnostics: Vec::new(),
             depth: 0,
@@ -213,7 +214,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn validating(src: &'a [u8], file: FileId, lexed: Lexed) -> Self {
         Parser {
             keep_tree: false,
-            ..Parser::new(src, file, lexed)
+            ..Parser::new(src, file, lexed, SourceText::new(src))
         }
     }
 

@@ -360,6 +360,18 @@ pub(crate) fn line_mode(profile: &Profile) -> LineMode {
     }
 }
 
+/// Parses `bytes`, the source of `file`. The tree shares the source
+/// database's text where it is these very bytes (valid UTF-8, nearly
+/// always) instead of copying them.
+fn parse_source(db: &SourceDb, file: FileId, bytes: &[u8]) -> Parse {
+    match db.get(file).shared_text() {
+        Some(text) if std::ptr::eq(text.as_bytes(), bytes) => {
+            wowlua_syntax::parse_shared(text, file)
+        }
+        _ => wowlua_syntax::parse(bytes, file),
+    }
+}
+
 /// Parses every source once and checks the plain Lua files, on worker
 /// threads when `jobs` allows (#8); diagnostics and the cache are handled
 /// on the calling thread, in file order, as when parsing one at a time.
@@ -463,7 +475,7 @@ pub fn parse_sources(
         Item::Source { i, lua_kept } => {
             let (source, file) = &files[i];
             let bytes = &raw[&source.rel];
-            let mut parse = wowlua_syntax::parse(bytes, *file);
+            let mut parse = parse_source(db, *file, bytes);
             let mut failed = None;
             let mut lua = None;
             let mut usage = None;

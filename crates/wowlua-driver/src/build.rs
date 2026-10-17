@@ -2867,7 +2867,7 @@ fn parse_api(
     keep_tokens: bool,
 ) -> crate::compile::ParsedDeclaration {
     let file = db.add_static(f.path, f.text);
-    let mut parse = wowlua_syntax::parse(f.text.as_bytes(), file);
+    let mut parse = wowlua_syntax::parse_static(f.text, file);
     if !keep_tokens {
         parse.lexed.tokens = Default::default();
         parse.lexed.trivia = Vec::new();
