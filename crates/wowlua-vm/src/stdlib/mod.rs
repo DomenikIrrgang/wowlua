@@ -95,6 +95,12 @@ impl Vm {
     pub fn check_table(&mut self, c: &NativeCall, n: usize) -> Result<TableRef, LuaError> {
         match c.arg(n) {
             Value::Table(t) => Ok(t),
+            // A secret table where secrets may be used (secure code: the
+            // client's own UI takes `UNIT_AURA`'s secret lists in combat).
+            v @ Value::Secret(_) if self.can_access_secrets() => match self.hidden(v) {
+                Value::Table(t) => Ok(t),
+                _ => Err(self.type_arg_error(n, "table", Some(v))),
+            },
             _ => Err(self.type_arg_error(n, "table", c.args.get(n - 1).copied())),
         }
     }

@@ -1249,6 +1249,85 @@ fn example(name: &str, summary: &str) {
     assert!(text.contains(summary), "{name}: {text}");
 }
 
+/// Blizzard's UI through the world's changes, without an error (it runs
+/// without one in the client): casts, money, gear, bags, auras in and out
+/// of combat (their secret updates), a target's death.
+#[test]
+fn blizzard_ui_through_world_changes() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            (
+                "tests/world.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("the world changes")
+local function world()
+    mock.nextFrame(60)
+    local p = mock.player :: any
+    p:castSpell(647, { castTime = 1 })
+    p:castSpell(647, { castTime = 1 })
+    mock.advanceTime(2)
+    p:castSpell(19750, { castTime = 0 })
+    p:castSpell(5143, { castTime = 1, channel = true })
+    p:interruptCast()
+    p:setMoney(40000)
+    p:equip(16, { id = 6948 })
+    p:equip(16, nil)
+    mock.setBag(0, { slots = 16, items = { [1] = { id = 6948 } } })
+    mock.setBag(2, { slots = 6, items = {} })
+    mock.setBag(2, nil)
+    local id = p:applyAura({ spellId = 20217, name = "Blessing of Kings", duration = 300 })
+    mock.nextFrame(5)
+    p:removeAura(id)
+    local hogger = mock.spawnUnit({ name = "Hogger", level = 11, reaction = "hostile", health = 666 })
+    p:target(hogger)
+    p:enterCombat()
+    mock.nextFrame(30)
+    local id2 = p:applyAura({ spellId = 20217, name = "Blessing of Kings", duration = 300 })
+    hogger:applyAura({ spellId = 772, name = "Rend", duration = 15, harmful = true, source = "player" })
+    mock.nextFrame(5)
+    p:removeAura(id2)
+    hogger:castSpell(133, { castTime = 1 })
+    mock.advanceTime(0.5)
+    hogger:kill()
+    mock.nextFrame(5)
+    p:leaveCombat()
+    mock.nextFrame(30)
+    expect(UnitExists("target")).toBe(false)
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("1 passed, 0 failed"), "{text}");
+}
+
 /// Tooltips with Blizzard's UI: the engine's tooltip data from the tests'
 /// game data, Blizzard's tooltip code, and an addon's post-call.
 #[test]

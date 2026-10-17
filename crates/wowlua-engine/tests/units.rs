@@ -211,3 +211,27 @@ mock.player:castSpell(5143, { castTime = 1, channel = true })",
     ];
     assert_eq!(log[0].lines().collect::<Vec<_>>(), expected);
 }
+
+/// Duration objects: a span on the clock, secret when set from secrets
+/// (in secure code, as Blizzard's aura buttons do).
+#[test]
+fn duration_objects() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "Span = C_DurationUtil.CreateDuration()
+local d = Span
+local zero = d:IsZero()
+d:SetTimeFromEnd(GetTime() + 10, 20)
+local copy = d:Copy()
+return tostring(zero), d:GetTotalDuration(), d:GetRemainingDuration(), d:GetElapsedPercent(),
+    tostring(d:IsActive()), tostring(d:HasSecretValues()), copy:GetEndTime() - GetTime()",
+    );
+    assert_eq!(r, ["true", "20", "10", "0.5", "true", "false", "10"]);
+    wowlua_engine::clock::advance(&mut vm, 15.0);
+    let r = run(
+        &mut vm,
+        "return Span:GetRemainingDuration(), tostring(Span:HasExpired()), tostring(Span:IsActive())",
+    );
+    assert_eq!(r, ["0", "true", "false"]);
+}

@@ -587,6 +587,10 @@ pub(crate) fn undocumented_function(vm: &mut Vm, c: NativeCall) -> Ret {
         Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
         _ => "?".into(),
     };
+    // Some have behaviour (the engine's world answers them).
+    if let Some(f) = engine(vm).behaviours.get(name.as_str()).copied() {
+        return f(vm, c);
+    }
     if protection::blizzard_caller(vm) {
         return Ok(vec![]);
     }

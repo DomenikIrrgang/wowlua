@@ -584,6 +584,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("IsGuildLeader", no),
         // Not a convention kiosk.
         ("Kiosk.IsEnabled", no),
+        // No merchant open: Blizzard's merchant frame counts its items at
+        // every `BAG_UPDATE`, open or not, without an error in the client.
+        ("GetMerchantNumItems", zero),
     ]
 }
 
