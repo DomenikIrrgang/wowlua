@@ -330,6 +330,30 @@ fn no_search_results(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0), Value::Table(vm.new_table())])
 }
 
+/// A color's code: `ff` and its red, green and blue as hex, rounded (as
+/// `WrapTextInColor` writes it, recorded; the alpha not written).
+fn color_code(vm: &mut Vm, color: Value) -> String {
+    let mut hex = String::from("ff");
+    if let Value::Table(color) = color {
+        for k in ["r", "g", "b"] {
+            let key = vm.str(k);
+            let v = num(vm.heap.table(color).get(key)).unwrap_or(0.0);
+            hex.push_str(&format!(
+                "{:02x}",
+                (v.clamp(0.0, 1.0) * 255.0).round() as u8
+            ));
+        }
+    }
+    hex
+}
+
+/// `C_ColorUtil.GenerateTextColorCode(color)`: the color's code
+/// (`ff2b9305`). Unverified: as `WrapTextInColor`'s (check queued).
+fn generate_text_color_code(vm: &mut Vm, c: NativeCall) -> Ret {
+    let code = color_code(vm, c.arg(1));
+    Ok(vec![vm.str(&code)])
+}
+
 /// `C_ColorUtil.WrapTextInColor(text, color)`: `|cff` and the color's
 /// red, green and blue as hex (rounded), the text, `|r`; the alpha is not
 /// written (recorded).
@@ -363,6 +387,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         ("C_Scenario.GetInfo", no_scenario),
         ("C_ColorUtil.WrapTextInColor", wrap_text_in_color),
+        (
+            "C_ColorUtil.GenerateTextColorCode",
+            generate_text_color_code,
+        ),
         ("C_LFGList.GetFilteredSearchResults", no_search_results),
         // Nothing tracked (unverified).
         ("C_ContentTracking.IsTracking", no),

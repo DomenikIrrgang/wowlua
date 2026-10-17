@@ -291,7 +291,7 @@ pub fn check_from(
             if optional {
                 continue;
             }
-            return Err(fail(vm, f, n, None, method));
+            return Err(fail(vm, f, n, None));
         }
         // Secrets: refused first, but by plain structures and widgets only
         // through their type check.
@@ -300,11 +300,11 @@ pub fn check_from(
             && !type_first
             && let Some(why) = refuses_secret(vm, f, arg)
         {
-            return Err(fail(vm, f, n, Some(Refusal::Secret(why)), method));
+            return Err(fail(vm, f, n, Some(Refusal::Secret(why))));
         }
         let h = if type_first { v } else { vm.hidden(v) };
         if let Some(r) = refuses_type(vm, family, h) {
-            return Err(fail(vm, f, n, Some(r), method));
+            return Err(fail(vm, f, n, Some(r)));
         }
     }
     Ok(())
@@ -380,23 +380,17 @@ fn refuses_type(vm: &mut Vm, family: Family, v: Value) -> Option<Refusal> {
     }
 }
 
-fn fail(vm: &mut Vm, f: &Function, n: usize, why: Option<Refusal>, method: bool) -> LuaError {
+fn fail(vm: &mut Vm, f: &Function, n: usize, why: Option<Refusal>) -> LuaError {
     let usage = usage(f);
+    // A range error is Lua's own (`luaL_argerror`: the caller's position and
+    // the function's name, a method's self not counted; through `pcall`,
+    // neither): `s:SetValue(math.huge)` and `GetActionAutocast("x")` called
+    // directly name themselves (`/stdtest engine answers`, argcheck). The
+    // others are the bindings', with neither.
     if let Some(Refusal::FloatRange) = why {
-        return vm.api_arg_error(
+        return vm.arg_error(
             n,
             &format!("outside of expected range -3.402823e+38 to 3.402823e+38 - {usage}"),
-        );
-    }
-    // A range error is Lua's own (`luaL_argerror`: the caller's position and
-    // the function's name); the others are the bindings', with neither. A
-    // method's is the bindings'.
-    if let Some(Refusal::Range(min, max)) = why
-        && method
-    {
-        return vm.api_arg_error(
-            n,
-            &format!("outside of expected range {min} to {max} - {usage}"),
         );
     }
     if let Some(Refusal::Range(min, max)) = why {

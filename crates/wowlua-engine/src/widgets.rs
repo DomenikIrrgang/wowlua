@@ -106,6 +106,12 @@ pub struct World {
     /// the last text, also when it did not change, the last box set first
     /// (`/stdtest engine`; unverified: by setting or making order).
     pub text_set: Vec<WidgetId>,
+    /// A color select's color: red, green, blue, alpha.
+    pub colors: HashMap<usize, [f64; 4]>,
+    /// A slider's or a status bar's range and value.
+    pub bars: HashMap<usize, crate::bars::Bar>,
+    /// Edit Mode's saved layouts and active one.
+    pub edit_mode: crate::editmode::EditMode,
     /// A message frame's messages: its message ID (if given) and the font
     /// string showing it, oldest first.
     pub messages: HashMap<usize, Vec<(Option<f64>, Value)>>,
@@ -931,7 +937,28 @@ fn set_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let f = c.arg(3);
     vm.heap.table_mut(scripts).set_str(key, f);
     vm.heap.table_mut(hooks).set_str(key, Value::Nil);
+    if !f.is_nil() {
+        key_script_set(vm, id, &s);
+    }
     Ok(vec![])
+}
+
+/// A key script given (set or hooked) turns the keyboard on; taking it
+/// away does not turn it off (`/stdtest engine answers` "Keyboard script
+/// enables": `KeybindListener` listens by its scripts alone).
+pub fn key_script_set(vm: &mut Vm, id: WidgetId, script: &str) {
+    if script == "OnKeyDown" || script == "OnKeyUp" {
+        store(vm, id, "KeyboardEnabled", &[Value::Bool(true)]);
+    }
+}
+
+/// `GetPropagateKeyboardInput()`: false until set.
+fn get_propagate_keyboard_input(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let props = engine(vm).world.widgets[id.0].props;
+    let on = stored_args(vm, props, "PropagateKeyboardInput")
+        .and_then(|v| v.first().copied())
+        .is_some_and(|v| v.truthy());
+    Ok(vec![Value::Bool(on)])
 }
 
 fn get_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
@@ -955,6 +982,7 @@ fn hook_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     };
     let n = vm.heap.table(list).border() as f64 + 1.0;
     let _ = vm.heap.table_mut(list).set(Value::Num(n), c.arg(3));
+    key_script_set(vm, id, &s);
     Ok(vec![])
 }
 
@@ -1376,6 +1404,94 @@ fn create_region(vm: &mut Vm, id: WidgetId, c: NativeCall, class: &str) -> Ret {
         }
     }
     Ok(vec![region])
+}
+
+// --------------------------------------------------------- color selects
+
+/// A color select's color, white until set (recorded, as is
+/// `OnColorSelect` running for a color set by code).
+fn color_of(vm: &Vm, id: WidgetId) -> [f64; 4] {
+    engine(vm)
+        .world
+        .colors
+        .get(&id.0)
+        .copied()
+        .unwrap_or([1.0, 1.0, 1.0, 1.0])
+}
+
+/// Sets a color select's color; `OnColorSelect(r, g, b)` runs.
+fn select_color(vm: &mut Vm, id: WidgetId, rgb: [f64; 3]) {
+    let a = color_of(vm, id)[3];
+    engine_mut(vm)
+        .world
+        .colors
+        .insert(id.0, [rgb[0], rgb[1], rgb[2], a]);
+    let args = rgb.map(Value::Num);
+    run_script(vm, id, "OnColorSelect", &args);
+}
+
+fn set_color_rgb(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let rgb = [2, 3, 4].map(|i| match c.arg(i) {
+        Value::Num(n) => n.clamp(0.0, 1.0),
+        _ => 0.0,
+    });
+    select_color(vm, id, rgb);
+    Ok(vec![])
+}
+
+fn get_color_rgb(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let [r, g, b, _] = color_of(vm, id);
+    Ok(vec![Value::Num(r), Value::Num(g), Value::Num(b)])
+}
+
+/// `SetColorHSV(hue 0-360, saturation, value)`.
+fn set_color_hsv(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let num = |v: Value| match v {
+        Value::Num(n) => n,
+        _ => 0.0,
+    };
+    let (h, s, v) = (
+        num(c.arg(2)).rem_euclid(360.0),
+        num(c.arg(3)).clamp(0.0, 1.0),
+        num(c.arg(4)).clamp(0.0, 1.0),
+    );
+    let k = |n: f64| (n + h / 60.0).rem_euclid(6.0);
+    let f = |n: f64| v - v * s * k(n).min(4.0 - k(n)).clamp(0.0, 1.0);
+    select_color(vm, id, [f(5.0), f(3.0), f(1.0)]);
+    Ok(vec![])
+}
+
+fn get_color_hsv(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let [r, g, b, _] = color_of(vm, id);
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let d = max - min;
+    let h = if d == 0.0 {
+        0.0
+    } else if max == r {
+        60.0 * ((g - b) / d).rem_euclid(6.0)
+    } else if max == g {
+        60.0 * ((b - r) / d + 2.0)
+    } else {
+        60.0 * ((r - g) / d + 4.0)
+    };
+    let s = if max == 0.0 { 0.0 } else { d / max };
+    Ok(vec![Value::Num(h), Value::Num(s), Value::Num(max)])
+}
+
+fn set_color_alpha(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let a = match c.arg(2) {
+        Value::Num(n) => n.clamp(0.0, 1.0),
+        _ => 1.0,
+    };
+    let mut color = color_of(vm, id);
+    color[3] = a;
+    engine_mut(vm).world.colors.insert(id.0, color);
+    Ok(vec![])
+}
+
+fn get_color_alpha(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(color_of(vm, id)[3])])
 }
 
 // ------------------------------------------------------- message frames
@@ -2169,6 +2285,12 @@ fn is_protected(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// `GetFrameLevel()`: what `SetFrameLevel` set, else one above the parent
 /// (unverified).
 fn get_frame_level(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(frame_level(vm, id))])
+}
+
+/// A frame's level: what `SetFrameLevel` set, else one above the parent
+/// (unverified).
+pub fn frame_level(vm: &mut Vm, id: WidgetId) -> f64 {
     let mut level = 0.0;
     let mut cur = Some(id);
     let mut depth = 0.0;
@@ -2185,7 +2307,39 @@ fn get_frame_level(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
             depth += 1.0;
         }
     }
-    Ok(vec![Value::Num(level + depth)])
+    level + depth
+}
+
+/// The stratas, lowest first.
+const STRATAS: [&str; 9] = [
+    "BACKGROUND",
+    "LOW",
+    "MEDIUM",
+    "HIGH",
+    "DIALOG",
+    "FULLSCREEN",
+    "FULLSCREEN_DIALOG",
+    "TOOLTIP",
+    "BLIZZARD",
+];
+
+/// A frame's strata as a rank (`STRATAS`): its own, else its parent's
+/// (`PARENT`, or none set), `MEDIUM` at the top.
+pub fn strata_rank(vm: &mut Vm, id: WidgetId) -> usize {
+    let mut cur = Some(id);
+    while let Some(w) = cur {
+        let props = engine(vm).world.widgets[w.0].props;
+        if let Some(Value::Str(s)) =
+            stored_args(vm, props, "FrameStrata").and_then(|v| v.first().copied())
+        {
+            let s = String::from_utf8_lossy(vm.str_bytes(s)).to_uppercase();
+            if let Some(rank) = STRATAS.iter().position(|x| *x == s) {
+                return rank;
+            }
+        }
+        cur = engine(vm).world.widgets[w.0].parent;
+    }
+    2
 }
 
 fn get_id(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
@@ -2788,6 +2942,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("SetScript", set_script as MethodFn),
         ("GetScript", get_script),
         ("HookScript", hook_script),
+        ("GetPropagateKeyboardInput", get_propagate_keyboard_input),
         ("HasScript", has_script_method),
         ("RegisterEvent", register_event),
         ("RegisterUnitEvent", register_unit_event),
@@ -2810,6 +2965,12 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("GetNumChildren", get_num_children),
         ("CreateFontString", font_string),
         ("AddMessage", add_message),
+        ("SetColorRGB", set_color_rgb),
+        ("GetColorRGB", get_color_rgb),
+        ("SetColorHSV", set_color_hsv),
+        ("GetColorHSV", get_color_hsv),
+        ("SetColorAlpha", set_color_alpha),
+        ("GetColorAlpha", get_color_alpha),
         ("GetFontStringByID", get_font_string_by_id),
         ("ResetMessageFadeByID", reset_message_fade),
         ("Clear", clear_messages),

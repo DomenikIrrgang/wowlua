@@ -1034,10 +1034,11 @@ local function hoverClick()
     mock.click(b)
     mock.hover(nil)
     expect(seen).toEqual({ "OnEnter", "OnMouseDown", "OnMouseUp", "PreClick", "OnClick", "PostClick", "OnLeave" })
+    -- The mouse comes back to click it again.
     b:Disable()
     seen = {}
     mock.click(b)
-    expect(seen).toEqual({ "OnMouseDown", "OnMouseUp" })
+    expect(seen).toEqual({ "OnEnter", "OnMouseDown", "OnMouseUp" })
     b:Hide()
     expect(function() mock.click(b) end).toThrow("GuiButton is not visible")
 end

@@ -128,9 +128,10 @@ pub fn control_hover(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `click(frame, button)`: the user's click on a visible frame:
-/// `OnMouseDown`, `OnMouseUp`, then a button's click scripts unless it is
-/// disabled.
+/// `click(frame, button)`: the user's click on a visible frame: the mouse
+/// over it (`OnEnter`), `GLOBAL_MOUSE_DOWN`, `OnMouseDown`,
+/// `GLOBAL_MOUSE_UP`, `OnMouseUp`, then a button's click scripts unless it
+/// is disabled.
 pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = widget_arg(vm, &c, 1, "mock.click")?;
     if !widgets::visible(engine(vm), id) {
@@ -141,8 +142,21 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Str(s) => Value::Str(s),
         _ => vm.str("LeftButton"),
     };
+    // The mouse is over what it clicks.
+    let old = engine(vm).world.input.mouse_focus;
+    if old != Some(id) {
+        engine_mut(vm).world.input.mouse_focus = Some(id);
+        if let Some(o) = old {
+            widgets::run_script(vm, o, "OnLeave", &[Value::Bool(true)]);
+        }
+        widgets::run_script(vm, id, "OnEnter", &[Value::Bool(true)]);
+    }
     as_user(vm, |vm| {
+        // Every click is also the global mouse events (Blizzard's menus close
+        // on one outside them). Unverified: their order against the scripts.
+        widgets::fire_event(vm, "GLOBAL_MOUSE_DOWN", &[button]);
         widgets::run_script(vm, id, "OnMouseDown", &[button]);
+        widgets::fire_event(vm, "GLOBAL_MOUSE_UP", &[button]);
         widgets::run_script(vm, id, "OnMouseUp", &[button, Value::Bool(true)]);
         let class = engine(vm).world.widgets[id.0].class.clone();
         let is = |vm: &Vm, kind: &str| {
@@ -210,8 +224,9 @@ pub fn control_type(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// A key the focused edit box takes (`ENTER`, `ESCAPE`, `TAB`, `SPACE`):
-/// whether it took it.
+/// A key the focused edit box takes, whether it took it: every key while
+/// it has the focus (unverified: typing into chat runs no binding),
+/// `ENTER`, `ESCAPE`, `TAB` and `SPACE` running its scripts.
 pub fn edit_box_key(vm: &mut Vm, key: &str) -> bool {
     let Some(id) = engine(vm).world.input.keyboard_focus else {
         return false;
@@ -221,10 +236,130 @@ pub fn edit_box_key(vm: &mut Vm, key: &str) -> bool {
         "ESCAPE" => "OnEscapePressed",
         "TAB" => "OnTabPressed",
         "SPACE" => "OnSpacePressed",
-        _ => return false,
+        _ => return true,
     };
     as_user(vm, |vm| widgets::run_script(vm, id, script, &[]));
     true
+}
+
+/// The shown frames taking keys (`EnableKeyboard`, or a key script),
+/// the top first: by strata, then level, then the later made. Edit boxes
+/// take keys by their focus alone (the chat's box, shown with a key
+/// script, keeps no key from the bindings).
+fn keyboard_frames(vm: &mut Vm) -> Vec<WidgetId> {
+    let mut frames: Vec<(usize, i64, usize)> = Vec::new();
+    for i in 0..engine(vm).world.widgets.len() {
+        let id = WidgetId(i);
+        let class = engine(vm).world.widgets[i].class.clone();
+        if widgets::is_a(engine(vm), &class, "EditBox") {
+            continue;
+        }
+        let props = engine(vm).world.widgets[i].props;
+        let on = widgets::stored_args(vm, props, "KeyboardEnabled")
+            .and_then(|v| v.first().copied())
+            .is_some_and(|v| v.truthy());
+        if on && widgets::visible(engine(vm), id) {
+            let rank = widgets::strata_rank(vm, id);
+            let level = widgets::frame_level(vm, id) as i64;
+            frames.push((rank, level, i));
+        }
+    }
+    frames.sort_by(|a, b| b.cmp(a));
+    frames.into_iter().map(|(_, _, i)| WidgetId(i)).collect()
+}
+
+/// Whether a frame has an `OnKeyDown` script or hook.
+fn has_key_handler(vm: &mut Vm, id: WidgetId) -> bool {
+    let (scripts, hooks) = {
+        let w = &engine(vm).world.widgets[id.0];
+        (w.scripts, w.hooks)
+    };
+    let key = vm.heap.intern(b"OnKeyDown");
+    !vm.heap.table(scripts).get_str(key).is_nil() || !vm.heap.table(hooks).get_str(key).is_nil()
+}
+
+fn propagates(vm: &mut Vm, id: WidgetId) -> bool {
+    let props = engine(vm).world.widgets[id.0].props;
+    widgets::stored_args(vm, props, "PropagateKeyboardInput")
+        .and_then(|v| v.first().copied())
+        .is_some_and(|v| v.truthy())
+}
+
+/// The modifier keys themselves (no chord of their own).
+const MODIFIER_KEYS: &[&str] = &[
+    "LSHIFT", "RSHIFT", "LCTRL", "RCTRL", "LALT", "RALT", "LMETA", "RMETA",
+];
+
+/// The key with the modifiers held, as bindings name it (`ALT-CTRL-SHIFT-`
+/// order, Blizzard's `CreateKeyChordStringUsingMetaKeyState`).
+fn chord(vm: &Vm, key: &str) -> String {
+    if MODIFIER_KEYS.contains(&key) {
+        return key.to_string();
+    }
+    let [shift, ctrl, alt] = engine(vm).world.input.modifiers;
+    let mut out = String::new();
+    for (held, name) in [(alt, "ALT-"), (ctrl, "CTRL-"), (shift, "SHIFT-")] {
+        if held {
+            out.push_str(name);
+        }
+    }
+    out.push_str(key);
+    out
+}
+
+/// A key pressed and released (as the user): the focused edit box takes
+/// it; else each keyboard frame, the top first, runs `OnKeyDown(key)`
+/// until one does not pass it on (it then has the key: its `OnKeyUp` alone
+/// runs, and no binding). A key no frame kept runs its chord's command
+/// (`chord`), down then up.
+///
+/// Verified (`/stdtest engine keys`, Forever 70425): the order, the frame
+/// that does not propagate keeping the key, its binding not run, the key's
+/// release to that frame alone. Unverified: the release when no frame kept
+/// the key (here: to every keyboard frame), a propagation turned off in the
+/// handler (here: it counts for this key), an unbound chord falling back
+/// to the bare key's command, a frame without a key handler passing keys.
+pub fn press_key(vm: &mut Vm, key: &str) {
+    if edit_box_key(vm, key) {
+        return;
+    }
+    let k = vm.str(key);
+    let frames = keyboard_frames(vm);
+    let mut kept = None;
+    let mut reached = Vec::new();
+    for id in frames {
+        // A frame without a key handler lets keys by (unverified:
+        // `KeybindListener` stays keyboard-enabled after it listened, and
+        // the client's keys keep working).
+        if !has_key_handler(vm, id) {
+            continue;
+        }
+        widgets::run_script(vm, id, "OnKeyDown", &[k]);
+        reached.push(id);
+        if !propagates(vm, id) {
+            kept = Some(id);
+            break;
+        }
+    }
+    if let Some(id) = kept {
+        widgets::run_script(vm, id, "OnKeyUp", &[k]);
+        return;
+    }
+    let chord = chord(vm, key);
+    let command = crate::bindings::action_for(vm, &chord).or_else(|| {
+        (chord != key)
+            .then(|| crate::bindings::action_for(vm, key))
+            .flatten()
+    });
+    if let Some(command) = &command {
+        crate::bindings::run_command(vm, command, "down");
+    }
+    for id in reached {
+        widgets::run_script(vm, id, "OnKeyUp", &[k]);
+    }
+    if let Some(command) = &command {
+        crate::bindings::run_command(vm, command, "up");
+    }
 }
 
 fn set_focus(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
@@ -300,6 +435,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("IsLeftAltKeyDown", is_alt_key_down),
         ("IsRightAltKeyDown", right_key_down),
         ("IsModifierKeyDown", is_modifier_key_down),
+        ("IsMetaKeyDown", right_key_down),
     ]
 }
 

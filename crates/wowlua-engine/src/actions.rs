@@ -116,6 +116,17 @@ fn not_for_slot(_vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// `IsAttackAction(slot)`: whether the slot holds Auto Attack (spell
+/// 6603; unverified for a filled slot: the recording's were empty).
+fn is_attack_action(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match slot(&c) {
+        Some(s) => vec![Value::Bool(action(vm, s).is_some_and(|a| {
+            a.kind == "spell" && matches!(a.id, Value::Num(n) if n == 6603.0)
+        }))],
+        None => vec![],
+    })
+}
+
 /// `IsAssistedCombatAction`: false, even for slot 0 (recorded).
 fn not_assisted(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false)])
@@ -255,6 +266,12 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_ActionBar.IsAutoRepeatAction", not_for_slot),
         ("C_ActionBar.IsEquippedAction", not_for_slot),
         ("C_ActionBar.UsesActionText", not_for_slot),
+        ("C_ActionBar.IsAttackAction", is_attack_action),
+        ("IsAttackAction", is_attack_action),
+        // No pet actions or outfits on the bars yet (recorded false).
+        ("C_ActionBar.IsAutoCastPetAction", not_for_slot),
+        ("C_ActionBar.IsEnabledAutoCastPetAction", not_for_slot),
+        ("C_ActionBar.IsEquippedGearOutfitAction", not_for_slot),
         ("C_ActionBar.IsAssistedCombatAction", not_assisted),
         ("C_ActionBar.GetActionCooldown", get_action_cooldown),
         ("C_ActionBar.GetActionCharges", get_action_charges),

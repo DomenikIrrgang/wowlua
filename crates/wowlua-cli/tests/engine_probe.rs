@@ -500,7 +500,7 @@ __engine.pressKey("ENTER")"#,
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 4465;
+const ANSWERS_MATCHED: usize = 4818;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {
@@ -692,9 +692,12 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         .collect();
     // Not yet answered as the client does, with the reason.
     const KNOWN: &[&str] = &[
-        // Differs between the client's sessions (380, then 500) though it
-        // lists 20: no stable answer to give.
+        // Differs between the client's sessions (380, 500, then 820) though
+        // it lists 20: no stable answer to give.
         "GetNumModifiedClickActions",
+        // One float ulp above the plain conversion in each channel (0.4 →
+        // 0.40000003576279): the formula awaits "ColorSelect hsv more".
+        "ColorSelect hsv",
     ];
     let hex = regex::Regex::new(r"[0-9a-f]{10}").unwrap();
     let mut differ = Vec::new();

@@ -8,6 +8,7 @@ pub mod animations;
 pub mod api;
 pub mod args;
 pub mod auras;
+pub mod bars;
 pub mod bindings;
 pub mod casting;
 pub mod channels;
@@ -17,6 +18,7 @@ pub mod clock;
 pub mod controls;
 pub mod cursor;
 pub mod curves;
+pub mod editmode;
 pub mod facts;
 pub mod framescript;
 pub mod gamedata;
@@ -198,6 +200,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(character::behaviours())
             .chain(stats::behaviours())
             .chain(actions::behaviours())
+            .chain(editmode::behaviours())
             .chain(channels::behaviours())
             .chain(macros::behaviours())
             .chain(cursor::behaviours())
@@ -225,6 +228,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(animations::methods())
             .chain(tooltip::methods())
             .chain(input::methods())
+            .chain(bars::methods())
             .collect(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),

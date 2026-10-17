@@ -258,6 +258,38 @@ const STATIC: &[&str] = &[
     "IsThreatWarningEnabled",
     "GetTutorialsEnabled",
     "IsTutorialFlagged",
+    "C_Spell.IsSpellPassive",
+    "C_Spell.IsAutoAttackSpell",
+    "C_Spell.IsRangedAutoAttackSpell",
+    "C_ClickBindings.CanSpellBeClickBound",
+    "C_KeyBindings.GetBindingContextForAction",
+    "C_LevelLink.IsSpellLocked",
+    "C_Minimap.IsFilteredOut",
+    // The machine (graphics, display).
+    "GetCurrentGraphicsAPI",
+    "GetGraphicsAPIs",
+    "IsGraphicsCVarValueSupported",
+    "GetGraphicsCVarValueForQualityLevel",
+    "GetMinRenderScale",
+    "GetMaxRenderScale",
+    "AntiAliasingSupported",
+    "C_VideoOptions.",
+    "C_UI.DoesAnyDisplayHaveNotch",
+    // The account's settings and state.
+    "C_CombatAudioAlert.",
+    "C_SocialRestrictions.",
+    "C_VoiceChat.IsSpeakForMeAllowed",
+    "C_VoiceChat.GetPushToTalkBinding",
+    "C_ClickBindings.GetProfileInfo",
+    "C_ClickBindings.GetTutorialShown",
+    "C_ClickBindings.GetBindingType",
+    "C_SplashScreen.CanViewSplashScreen",
+    "C_TransmogOutfitInfo.IsTransmogEnabled",
+    "GetAllowRecentAlliesSeeLocation",
+    "C_EditMode.GetEditModeDefaultLayout",
+    "C_EditMode.GetAccountSettings",
+    "GetAutoDeclineGuildInvites",
+    "GetCurrentBindingSet",
 ];
 
 /// Functions of systems the engine does not model yet, answered as the
@@ -403,6 +435,22 @@ const BASELINE: &[&str] = &[
     "ResurrectHasSickness",
     "ResurrectHasTimer",
     "ShouldDisplayRaidRolesInSocialFrame",
+    "C_LossOfControl.GetActiveLossOfControlDataByUnit",
+    "C_NamePlateManager.IsNamePlateUnitBehindCamera",
+    "C_PvP.IsPVPMap",
+    "C_SpecializationInfo.GetPvpTalentSlotInfo",
+    "C_SpecializationInfo.IsSpecSelectionEnabled",
+    "InCinematic",
+    "GetRaidTargetIndex",
+    "UnitClassification",
+    "UnitDetailedThreatSituation",
+    "UnitIsMinion",
+    "UnitIsTapDenied",
+    "UnitNameplateShowsWidgetsOnly",
+    "UnitPlayerControlled",
+    "UnitSelectionColor",
+    "UnitShouldDisplayName",
+    "UnitWidgetSet",
 ];
 
 /// Events of the player's session, not the client's startup: left out of
@@ -502,8 +550,19 @@ fn login_data(me: &Identity, version: &str, lines: &[String]) -> String {
             let _ = writeln!(out, "{time}\tCVAR_UPDATE\t{name}; $CVAR");
             continue;
         }
-        // A table's contents are not replayed (none of the startup's own
-        // events has one).
+        // Edit Mode's layouts: the test's world's (the account's own
+        // layouts, named by the player, are not kept).
+        if event == "EDIT_MODE_LAYOUTS_UPDATED" {
+            let reconcile = args.rsplit("; ").next().unwrap_or("boolean false");
+            let _ = writeln!(
+                out,
+                "{time}	EDIT_MODE_LAYOUTS_UPDATED	$EDIT_MODE_LAYOUTS; {reconcile}"
+            );
+            continue;
+        }
+        // Other tables' contents are not replayed (the startup's other
+        // events with one are the session's: group buffs, covenant
+        // callings).
         if args.contains('{') {
             continue;
         }
@@ -698,6 +757,23 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 &format!(
                     "WoW Forever {version}: /stdtest engine cursor, the cursor's steps and\n\
                      events in order (cargo xtask ingest)."
+                ),
+                &list,
+            )?;
+        }
+        // The keyboard (`/stdtest engine keys`): which frames each key
+        // reached, and the binding's clicks, in order.
+        if let Ok(log) = state.get::<mlua::Table>("engineKeys") {
+            let mut list = Vec::new();
+            for (i, line) in log.sequence_values::<String>().enumerate() {
+                let line = line.map_err(|e| anyhow!("{e}"))?;
+                list.push((format!("{:03}", i + 1), me.scrub(&line)));
+            }
+            write_table(
+                &client.join("forever-camelot-keys.lua"),
+                &format!(
+                    "WoW Forever {version}: /stdtest engine keys, the keyboard frames each\n\
+                     key reached and the binding's clicks, in order (cargo xtask ingest)."
                 ),
                 &list,
             )?;

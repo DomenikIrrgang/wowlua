@@ -25,6 +25,15 @@ pub struct Binding {
     pub run_on_up: bool,
 }
 
+/// An override binding: its owner, priority, key and command (`CLICK
+/// name:button`, `SPELL name`, `MACRO x`, `ITEM name` or a binding's).
+pub struct Override {
+    pub owner: Value,
+    pub priority: bool,
+    pub key: String,
+    pub command: String,
+}
+
 /// An addon a test defined.
 pub struct Addon {
     pub name: String,
@@ -38,6 +47,8 @@ pub struct Bindings {
     pub bindings: Vec<Binding>,
     /// Key → binding name (`SetBinding`).
     pub keys: Vec<(String, String)>,
+    /// Override bindings (`SetOverrideBinding*`), latest last.
+    pub overrides: Vec<Override>,
     pub addons: Vec<Addon>,
     /// The modified clicks (`<ModifiedClick action default>`): action,
     /// key (`SHIFT`, `ALT-CTRL`, `NONE`).
@@ -185,35 +196,84 @@ pub fn press_binding(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `pressKey(key)`: the key's binding, down then up.
+/// `pressKey(key)`: the key pressed and released as the user
+/// (`input::press_key`).
 pub fn press_key(vm: &mut Vm, c: NativeCall) -> Ret {
     let key = vm.check_str(&c, 1)?;
     let key = String::from_utf8_lossy(vm.str_bytes(key)).to_uppercase();
-    // A focused edit box takes its keys first.
-    if crate::input::edit_box_key(vm, &key) {
-        return Ok(vec![]);
-    }
-    let bound = engine(vm)
-        .world
-        .bindings
-        .keys
-        .iter()
-        .find(|(k, _)| *k == key)
-        .map(|(_, b)| b.clone());
-    if let Some(b) = bound {
-        crate::input::as_user(vm, |vm| {
-            run_binding(vm, &b, "down");
-            run_binding(vm, &b, "up");
-        });
-    }
+    crate::input::as_user(vm, |vm| crate::input::press_key(vm, &key));
     Ok(vec![])
 }
 
-/// `SetBinding(key [, command])`: true.
+/// The command a key runs: a priority override's, an override's, else the
+/// key's binding (`GetBindingAction(key, true)`; unverified: the latest of
+/// two owners' overrides wins).
+pub fn action_for(vm: &Vm, key: &str) -> Option<String> {
+    let b = &engine(vm).world.bindings;
+    for priority in [true, false] {
+        if let Some(o) = b
+            .overrides
+            .iter()
+            .rev()
+            .find(|o| o.priority == priority && o.key == key)
+        {
+            return Some(o.command.clone());
+        }
+    }
+    b.keys
+        .iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, command)| command.clone())
+}
+
+/// Runs a key's command, "down" or "up": a binding's code, or a `CLICK`
+/// binding's button (`OnClick(button, down)`; unverified: on the down and
+/// the up whatever the button registered).
+pub fn run_command(vm: &mut Vm, command: &str, keystate: &str) {
+    if let Some(target) = command.strip_prefix("CLICK ") {
+        let (name, button) = target.split_once(':').unwrap_or((target, "LeftButton"));
+        let frame = vm.get_global(name);
+        if let Some(id) = widgets::widget_of(vm, frame) {
+            let button = vm.str(button);
+            let down = Value::Bool(keystate == "down");
+            for script in ["PreClick", "OnClick", "PostClick"] {
+                widgets::run_script(vm, id, script, &[button, down]);
+            }
+        }
+        return;
+    }
+    run_binding(vm, command, keystate);
+}
+
+/// Whether a binding command exists: a binding's (`Bindings.xml`), or a
+/// `CLICK`, `SPELL`, `MACRO` or `ITEM` one (unverified).
+fn known_command(vm: &Vm, command: &str) -> bool {
+    ["CLICK ", "SPELL ", "MACRO ", "ITEM "]
+        .iter()
+        .any(|p| command.starts_with(p))
+        || engine(vm)
+            .world
+            .bindings
+            .bindings
+            .iter()
+            .any(|b| b.name == command)
+}
+
+/// `SetBinding(key [, command])`: whether it bound. A key in lower case or
+/// an unknown command binds nothing (false); the key is kept as written,
+/// its modifiers in the order given (`SHIFT-ALT-CTRL-F8` is not
+/// `CTRL-SHIFT-ALT-F8`: `/stdtest engine answers` "Binding set …").
 fn set_binding(vm: &mut Vm, c: NativeCall) -> Ret {
     let key = vm.check_str(&c, 1)?;
-    let key = String::from_utf8_lossy(vm.str_bytes(key)).to_uppercase();
+    let key = String::from_utf8_lossy(vm.str_bytes(key)).into_owned();
     let command = string(vm, c.arg(2));
+    if key != key.to_uppercase()
+        || command
+            .as_deref()
+            .is_some_and(|cmd| !known_command(vm, cmd))
+    {
+        return Ok(vec![Value::Bool(false)]);
+    }
     let keys = &mut engine_mut(vm).world.bindings.keys;
     keys.retain(|(k, _)| *k != key);
     if let Some(command) = command {
@@ -222,18 +282,115 @@ fn set_binding(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(true)])
 }
 
+/// `GetBindingAction(key [, checkOverride])`: the key's command, "" for
+/// none; overrides only when asked.
 fn get_binding_action(vm: &mut Vm, c: NativeCall) -> Ret {
     let key = vm.check_str(&c, 1)?;
     let key = String::from_utf8_lossy(vm.str_bytes(key)).to_uppercase();
-    let action = engine(vm)
+    let action = if c.arg(2).truthy() {
+        action_for(vm, &key)
+    } else {
+        engine(vm)
+            .world
+            .bindings
+            .keys
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, b)| b.clone())
+    };
+    Ok(vec![vm.str(&action.unwrap_or_default())])
+}
+
+/// `C_KeyBindings.GetBindingByKey(key)`: the command the key runs, nil
+/// for none (unverified: with overrides).
+fn get_binding_by_key(vm: &mut Vm, c: NativeCall) -> Ret {
+    let key = vm.check_str(&c, 1)?;
+    let key = String::from_utf8_lossy(vm.str_bytes(key)).to_uppercase();
+    Ok(vec![match action_for(vm, &key) {
+        Some(a) => vm.str(&a),
+        None => Value::Nil,
+    }])
+}
+
+/// Sets (or, without a command, removes) `owner`'s override of `key`.
+fn set_override(vm: &mut Vm, owner: Value, priority: bool, key: String, command: Option<String>) {
+    let list = &mut engine_mut(vm).world.bindings.overrides;
+    list.retain(|o| !(o.owner.raw_eq(owner) && o.key == key));
+    if let Some(command) = command {
+        list.push(Override {
+            owner,
+            priority,
+            key,
+            command,
+        });
+    }
+}
+
+/// The owner, priority and key of a `SetOverrideBinding*` call.
+fn override_args(
+    vm: &mut Vm,
+    c: &NativeCall,
+) -> Result<(Value, bool, String), wowlua_vm::LuaError> {
+    let key = vm.check_str(c, 3)?;
+    let key = String::from_utf8_lossy(vm.str_bytes(key)).to_uppercase();
+    Ok((c.arg(1), c.arg(2).truthy(), key))
+}
+
+/// `SetOverrideBinding(owner, isPriority, key [, command])`.
+fn set_override_binding(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (owner, priority, key) = override_args(vm, &c)?;
+    let command = string(vm, c.arg(4));
+    set_override(vm, owner, priority, key, command);
+    Ok(vec![])
+}
+
+/// `SetOverrideBindingClick(owner, isPriority, key, buttonName [,
+/// mouseButton])`: `CLICK buttonName:mouseButton` (`LeftButton` unless
+/// given).
+fn set_override_binding_click(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (owner, priority, key) = override_args(vm, &c)?;
+    let command = string(vm, c.arg(4)).map(|name| {
+        let button = string(vm, c.arg(5)).unwrap_or_else(|| "LeftButton".into());
+        format!("CLICK {name}:{button}")
+    });
+    set_override(vm, owner, priority, key, command);
+    Ok(vec![])
+}
+
+/// `SetOverrideBindingSpell` / `Macro` / `Item`: `SPELL name`, `MACRO x`,
+/// `ITEM name`.
+fn set_override_with(vm: &mut Vm, c: &NativeCall, kind: &str) -> Ret {
+    let (owner, priority, key) = override_args(vm, c)?;
+    let what = match c.arg(4) {
+        Value::Num(n) if n.fract() == 0.0 => Some(format!("{}", n as i64)),
+        v => string(vm, v),
+    };
+    let command = what.map(|w| format!("{kind} {w}"));
+    set_override(vm, owner, priority, key, command);
+    Ok(vec![])
+}
+
+fn set_override_binding_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    set_override_with(vm, &c, "SPELL")
+}
+
+fn set_override_binding_macro(vm: &mut Vm, c: NativeCall) -> Ret {
+    set_override_with(vm, &c, "MACRO")
+}
+
+fn set_override_binding_item(vm: &mut Vm, c: NativeCall) -> Ret {
+    set_override_with(vm, &c, "ITEM")
+}
+
+/// `ClearOverrideBindings(owner)`.
+fn clear_override_bindings(vm: &mut Vm, c: NativeCall) -> Ret {
+    let owner = c.arg(1);
+    engine_mut(vm)
         .world
         .bindings
-        .keys
-        .iter()
-        .find(|(k, _)| *k == key)
-        .map(|(_, b)| b.clone())
-        .unwrap_or_default();
-    Ok(vec![vm.str(&action)])
+        .overrides
+        .retain(|o| !o.owner.raw_eq(owner));
+    Ok(vec![])
 }
 
 fn keys_of(vm: &Vm, command: &str) -> Vec<String> {
@@ -505,6 +662,13 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetModifiedClickAction", get_modified_click_action),
         ("IsModifiedClick", is_modified_click),
         ("GetBindingAction", get_binding_action),
+        ("C_KeyBindings.GetBindingByKey", get_binding_by_key),
+        ("SetOverrideBinding", set_override_binding),
+        ("SetOverrideBindingClick", set_override_binding_click),
+        ("SetOverrideBindingSpell", set_override_binding_spell),
+        ("SetOverrideBindingMacro", set_override_binding_macro),
+        ("SetOverrideBindingItem", set_override_binding_item),
+        ("ClearOverrideBindings", clear_override_bindings),
         ("GetBindingKey", get_binding_key),
         ("GetNumBindings", get_num_bindings),
         ("GetBinding", get_binding),

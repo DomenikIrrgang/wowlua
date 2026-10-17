@@ -36,6 +36,13 @@ const TEXTURE_SLOTS: &[(&str, &str)] = &[
     ("DisabledCheckedTexture", "SetDisabledCheckedTexture"),
     ("ThumbTexture", "SetThumbTexture"),
     ("BarTexture", "SetStatusBarTexture"),
+    // A color select's.
+    ("ColorWheelTexture", "SetColorWheelTexture"),
+    ("ColorWheelThumbTexture", "SetColorWheelThumbTexture"),
+    ("ColorValueTexture", "SetColorValueTexture"),
+    ("ColorValueThumbTexture", "SetColorValueThumbTexture"),
+    ("ColorAlphaTexture", "SetColorAlphaTexture"),
+    ("ColorAlphaThumbTexture", "SetColorAlphaThumbTexture"),
 ];
 
 /// Font object slots (`<NormalFont style="GameFontNormal"/>`).
@@ -60,6 +67,10 @@ const FLAG_ATTRS: &[(&str, &str)] = &[
     ("multiLine", "SetMultiLine"),
     ("wordwrap", "SetWordWrap"),
     ("setToFinalAlpha", "SetToFinalAlpha"),
+    ("propagateKeyboardInput", "SetPropagateKeyboardInput"),
+    ("obeyStepOnDrag", "SetObeyStepOnDrag"),
+    ("reverseFill", "SetReverseFill"),
+    ("rotatesTexture", "SetRotatesTexture"),
 ];
 
 /// String and number attributes passed to a setter.
@@ -73,6 +84,9 @@ const VALUE_ATTRS: &[(&str, &str)] = &[
     ("letters", "SetMaxLetters"),
     ("alpha", "SetAlpha"),
     ("scale", "SetScale"),
+    ("orientation", "SetOrientation"),
+    ("valueStep", "SetValueStep"),
+    ("stepsPerPage", "SetStepsPerPage"),
     // Animations.
     ("duration", "SetDuration"),
     ("order", "SetOrder"),
@@ -508,6 +522,24 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
             call_method(vm, cx, el.line, frame, method, &[v]);
         }
     }
+    // A slider's or a status bar's range, then its value.
+    if el.attr("minValue").is_some() || el.attr("maxValue").is_some() {
+        let (min, max) = (
+            el.number("minValue").unwrap_or(0.0),
+            el.number("maxValue").unwrap_or(0.0),
+        );
+        call_method(
+            vm,
+            cx,
+            el.line,
+            frame,
+            "SetMinMaxValues",
+            &[Value::Num(min), Value::Num(max)],
+        );
+    }
+    if let Some(v) = el.number("defaultValue") {
+        call_method(vm, cx, el.line, frame, "SetValue", &[Value::Num(v)]);
+    }
     // `font`: a font object's name (`GameFontHighlightRight`), else a file.
     if let Some(font) = el.attr("font")
         && !el.tag.eq_ignore_ascii_case("Font")
@@ -701,6 +733,10 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
                 ],
             };
             call_method(vm, cx, child.line, frame, "SetShadowColor", &rgba);
+        }
+        "barcolor" => {
+            let rgba = super::xml_color(vm, child);
+            call_method(vm, cx, child.line, frame, "SetStatusBarColor", &rgba);
         }
         "scrollchild" => {
             for f in &child.children {
@@ -933,6 +969,7 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
         _ => handler,
     };
     vm.heap.table_mut(scripts).set_str(key, f);
+    crate::widgets::key_script_set(vm, id, name);
 }
 
 /// A handler running `a`, then `b`.

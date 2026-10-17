@@ -1,0 +1,305 @@
+//! Sliders and status bars: a value kept between a minimum and a maximum.
+//!
+//! Verified against the client (`/stdtest engine answers` CHECKS, Forever
+//! 70425): values are kept as single floats; a slider's value snaps to its
+//! step from the minimum (`min + round((v - min) / step) * step`, the step
+//! 0.001 until set, so 7.25 reads back 7.2500004768372), a bar's does not;
+//! both clamp to the range (0 to 0 until set). `OnValueChanged` runs at
+//! once, hidden or disabled, only when the value changes: a slider's with
+//! `(value, userInput)` (`SetValue`'s second argument), a bar's with the
+//! value alone. `SetMinMaxValues` runs `OnMinMaxChanged(min, max)` when the
+//! range changes, then clamps the value; a range whose maximum is below its
+//! minimum is an error; `SetValueStep` snaps the value again. A bar keeps
+//! its color in eight bits; a slider's orientation is `VERTICAL` until set,
+//! a bar's `HORIZONTAL`.
+
+use wowlua_vm::stdlib::Ret;
+use wowlua_vm::{NativeCall, Value, Vm};
+
+use crate::widgets::{self, MethodFn, WidgetId};
+use crate::{engine, engine_mut};
+
+/// A slider's or a status bar's range and value.
+#[derive(Clone, Copy)]
+pub struct Bar {
+    pub min: f64,
+    pub max: f64,
+    pub value: f64,
+    /// A slider's step (none for a bar).
+    pub step: Option<f64>,
+    /// Whether a range was set: the first one clamps the value without
+    /// `OnValueChanged` (a fresh slider given 1 to 10 runs none for its 0;
+    /// unverified: that the value is then the minimum).
+    pub ranged: bool,
+}
+
+/// A float as the client keeps it (a single float).
+fn single(v: f64) -> f64 {
+    f64::from(v as f32)
+}
+
+fn is_slider(vm: &Vm, id: WidgetId) -> bool {
+    let class = engine(vm).world.widgets[id.0].class.clone();
+    widgets::is_a(engine(vm), &class, "Slider")
+}
+
+fn bar(vm: &Vm, id: WidgetId) -> Bar {
+    engine(vm).world.bars.get(&id.0).copied().unwrap_or(Bar {
+        min: 0.0,
+        max: 0.0,
+        value: 0.0,
+        step: is_slider(vm, id).then_some(single(0.001)),
+        ranged: false,
+    })
+}
+
+/// `v` clamped to the range and snapped to the step.
+fn kept_value(b: &Bar, v: f64) -> f64 {
+    let mut x = v.clamp(b.min, b.max);
+    if let Some(step) = b.step
+        && step > 0.0
+    {
+        x = (b.min + ((x - b.min) / step).round() * step).clamp(b.min, b.max);
+    }
+    single(x)
+}
+
+/// Gives the bar value `v` as kept; `OnValueChanged` runs if it changed.
+fn change(vm: &mut Vm, id: WidgetId, v: f64, user: bool) {
+    let mut b = bar(vm, id);
+    let x = kept_value(&b, v);
+    let changed = x != b.value;
+    b.value = x;
+    engine_mut(vm).world.bars.insert(id.0, b);
+    if changed {
+        let args = if b.step.is_some() {
+            vec![Value::Num(x), Value::Bool(user)]
+        } else {
+            vec![Value::Num(x)]
+        };
+        widgets::run_script(vm, id, "OnValueChanged", &args);
+    }
+}
+
+fn number(vm: &Vm, v: Value) -> f64 {
+    vm.tonumber(v).unwrap_or(0.0)
+}
+
+/// `SetValue(value [, treatAsMouseEvent])` (a bar's second argument is
+/// its interpolation).
+fn set_value(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let v = number(vm, c.arg(2));
+    let user = is_slider(vm, id) && c.arg(3).truthy();
+    change(vm, id, v, user);
+    Ok(vec![])
+}
+
+fn get_value(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(bar(vm, id).value)])
+}
+
+/// `SetMinMaxValues(min, max)`.
+fn set_min_max_values(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let (min, max) = (single(number(vm, c.arg(2))), single(number(vm, c.arg(3))));
+    if max < min {
+        let class = engine(vm).world.widgets[id.0].class.clone();
+        let mut msg = format!("{class}:SetMinMaxValues(): max must be >= min");
+        // The client adds the taint of the addon code that called it.
+        if !crate::protection::blizzard_caller(vm) {
+            msg.push_str("\nLua Taint: *** ForceTaint_Strong ***");
+        }
+        let v = vm.str(&msg);
+        return Err(vm.raise(v));
+    }
+    let mut b = bar(vm, id);
+    if (b.min, b.max) == (min, max) {
+        return Ok(vec![]);
+    }
+    (b.min, b.max) = (min, max);
+    let first = !b.ranged;
+    b.ranged = true;
+    if first {
+        b.value = kept_value(&b, b.value);
+    }
+    engine_mut(vm).world.bars.insert(id.0, b);
+    widgets::run_script(
+        vm,
+        id,
+        "OnMinMaxChanged",
+        &[Value::Num(min), Value::Num(max)],
+    );
+    let value = bar(vm, id).value;
+    change(vm, id, value, false);
+    Ok(vec![])
+}
+
+fn get_min_max_values(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let b = bar(vm, id);
+    Ok(vec![Value::Num(b.min), Value::Num(b.max)])
+}
+
+/// `SetValueStep(step)`: the value snaps to it.
+fn set_value_step(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let mut b = bar(vm, id);
+    b.step = Some(single(number(vm, c.arg(2))));
+    engine_mut(vm).world.bars.insert(id.0, b);
+    change(vm, id, b.value, false);
+    Ok(vec![])
+}
+
+fn get_value_step(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(bar(vm, id).step.unwrap_or(0.0))])
+}
+
+/// What setter `stem` stored, else `default`.
+fn stored_or(vm: &mut Vm, id: WidgetId, stem: &str, default: Vec<Value>) -> Vec<Value> {
+    let props = engine(vm).world.widgets[id.0].props;
+    widgets::stored_args(vm, props, stem).unwrap_or(default)
+}
+
+fn get_steps_per_page(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(stored_or(vm, id, "StepsPerPage", vec![Value::Num(0.0)]))
+}
+
+fn get_obey_step_on_drag(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let on = stored_or(vm, id, "ObeyStepOnDrag", vec![])
+        .first()
+        .is_some_and(|v| v.truthy());
+    Ok(vec![Value::Bool(on)])
+}
+
+fn get_orientation(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let default = if is_slider(vm, id) {
+        "VERTICAL"
+    } else {
+        "HORIZONTAL"
+    };
+    let default = vec![vm.str(default)];
+    Ok(stored_or(vm, id, "Orientation", default))
+}
+
+fn get_fill_style(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(stored_or(vm, id, "FillStyle", vec![Value::Num(0.0)]))
+}
+
+fn flag(vm: &mut Vm, id: WidgetId, stem: &str) -> Ret {
+    let on = stored_or(vm, id, stem, vec![])
+        .first()
+        .is_some_and(|v| v.truthy());
+    Ok(vec![Value::Bool(on)])
+}
+
+fn get_reverse_fill(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    flag(vm, id, "ReverseFill")
+}
+
+fn get_rotates_texture(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    flag(vm, id, "RotatesTexture")
+}
+
+/// A texture given by a file or atlas becomes a texture of the frame
+/// (`SetStatusBarTexture("Interface\\...")`, `SetThumbTexture`); a
+/// texture object is used as it is.
+fn texture_slot(vm: &mut Vm, id: WidgetId, stem: &str, asset: Value) -> Value {
+    if widgets::widget_of(vm, asset).is_some() {
+        widgets::store(vm, id, stem, &[asset]);
+        return asset;
+    }
+    let tex = match stored_or(vm, id, stem, vec![]).first().copied() {
+        Some(t) if widgets::widget_of(vm, t).is_some() => t,
+        _ => {
+            let t = widgets::create(vm, "Texture", None, Some(id));
+            widgets::store(vm, id, stem, &[t]);
+            t
+        }
+    };
+    if let Some(t) = widgets::widget_of(vm, tex) {
+        widgets::store(vm, t, "Texture", &[asset]);
+    }
+    tex
+}
+
+/// `SetStatusBarTexture(asset)`: success.
+fn set_status_bar_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let tex = texture_slot(vm, id, "StatusBarTexture", c.arg(2));
+    // The bar's color is the texture's.
+    let [r, g, b, a] = status_bar_color(vm, id);
+    if let Some(t) = widgets::widget_of(vm, tex) {
+        widgets::store(vm, t, "VertexColor", &[r, g, b, a].map(Value::Num));
+    }
+    Ok(vec![Value::Bool(true)])
+}
+
+fn get_status_bar_texture(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![
+        stored_or(vm, id, "StatusBarTexture", vec![Value::Nil])[0],
+    ])
+}
+
+fn set_thumb_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    texture_slot(vm, id, "ThumbTexture", c.arg(2));
+    Ok(vec![])
+}
+
+fn get_thumb_texture(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![stored_or(vm, id, "ThumbTexture", vec![Value::Nil])[0]])
+}
+
+fn status_bar_color(vm: &mut Vm, id: WidgetId) -> [f64; 4] {
+    let stored = stored_or(vm, id, "StatusBarColor", vec![]);
+    let at = |i: usize, d: f64| match stored.get(i) {
+        Some(Value::Num(n)) => *n,
+        _ => d,
+    };
+    [at(0, 1.0), at(1, 1.0), at(2, 1.0), at(3, 1.0)]
+}
+
+/// `SetStatusBarColor(r, g, b [, a])`: kept in eight bits, the texture's
+/// color too.
+fn set_status_bar_color(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let rgba = [2, 3, 4, 5].map(|i| match c.arg(i) {
+        Value::Nil if i == 5 => 1.0,
+        v => widgets::byte_float(number(vm, v)),
+    });
+    widgets::store(vm, id, "StatusBarColor", &rgba.map(Value::Num));
+    let tex = stored_or(vm, id, "StatusBarTexture", vec![])
+        .first()
+        .copied();
+    if let Some(t) = tex.and_then(|t| widgets::widget_of(vm, t)) {
+        widgets::store(vm, t, "VertexColor", &rgba.map(Value::Num));
+    }
+    Ok(vec![])
+}
+
+fn get_status_bar_color(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(status_bar_color(vm, id).map(Value::Num).to_vec())
+}
+
+pub fn methods() -> Vec<(&'static str, MethodFn)> {
+    vec![
+        ("Slider:SetValue", set_value),
+        ("Slider:GetValue", get_value),
+        ("Slider:SetMinMaxValues", set_min_max_values),
+        ("Slider:GetMinMaxValues", get_min_max_values),
+        ("Slider:SetValueStep", set_value_step),
+        ("Slider:GetValueStep", get_value_step),
+        ("Slider:GetStepsPerPage", get_steps_per_page),
+        ("Slider:GetObeyStepOnDrag", get_obey_step_on_drag),
+        ("Slider:GetOrientation", get_orientation),
+        ("Slider:SetThumbTexture", set_thumb_texture),
+        ("Slider:GetThumbTexture", get_thumb_texture),
+        ("StatusBar:SetValue", set_value),
+        ("StatusBar:GetValue", get_value),
+        ("StatusBar:GetInterpolatedValue", get_value),
+        ("StatusBar:SetMinMaxValues", set_min_max_values),
+        ("StatusBar:GetMinMaxValues", get_min_max_values),
+        ("StatusBar:GetOrientation", get_orientation),
+        ("StatusBar:GetFillStyle", get_fill_style),
+        ("StatusBar:GetReverseFill", get_reverse_fill),
+        ("StatusBar:GetRotatesTexture", get_rotates_texture),
+        ("StatusBar:SetStatusBarTexture", set_status_bar_texture),
+        ("StatusBar:GetStatusBarTexture", get_status_bar_texture),
+        ("StatusBar:SetStatusBarColor", set_status_bar_color),
+        ("StatusBar:GetStatusBarColor", get_status_bar_color),
+    ]
+}

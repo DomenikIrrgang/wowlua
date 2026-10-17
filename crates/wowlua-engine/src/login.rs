@@ -107,6 +107,14 @@ pub fn login(vm: &mut Vm, addon: &str, has_bindings: bool, reload: bool) {
                 fire(vm, event, &[Value::Bool(!reload), Value::Bool(reload)]);
                 continue;
             }
+            // Edit Mode then reads the account's settings, not recorded yet:
+            // its layouts wait for them.
+            "EDIT_MODE_LAYOUTS_UPDATED"
+                if crate::recorded::lookup_text(vm, "C_EditMode.GetAccountSettings()")
+                    .is_none() =>
+            {
+                continue;
+            }
             _ => {}
         }
         let mut values = Vec::new();
@@ -115,6 +123,7 @@ pub fn login(vm: &mut Vm, addon: &str, has_bindings: bool, reload: bool) {
             let v = match arg {
                 "$ADDON" => vm.str(addon),
                 "$BINDINGS" => Value::Bool(has_bindings),
+                "$EDIT_MODE_LAYOUTS" => crate::editmode::layout_info(vm),
                 "$CVAR" => {
                     let value = framescript::cvar_get(vm, &last_string).unwrap_or_default();
                     vm.str(&value)

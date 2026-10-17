@@ -36,19 +36,22 @@ pub fn functions() -> Vec<&'static str> {
 
 /// A recorded value: `string text`, `number 1`, `boolean true`, `nil nil`,
 /// or a table `{key=value,…}` (a color, with `ColorMixin`'s methods, made
-/// with `CreateColor`).
+/// with `CreateColor`; a vector, with `GetXY`, made with `CreateVector2D`
+/// or `CreateVector3D`).
 fn parse_value(vm: &mut Vm, text: &str) -> Value {
     // Not trimmed at the end: `string ` is the empty string.
     let text = text.trim_start();
     if let Some(inner) = text.strip_prefix('{').and_then(|t| t.strip_suffix('}')) {
         let t = vm.new_table();
         let mut color = false;
+        let mut vector = false;
         for entry in split_top(inner, ',') {
             let Some((k, v)) = entry.split_once('=') else {
                 continue;
             };
             if v.starts_with("function") {
                 color |= k == "GetRGB";
+                vector |= k == "GetXY";
                 continue;
             }
             let key = match k.parse::<f64>() {
@@ -57,6 +60,25 @@ fn parse_value(vm: &mut Vm, text: &str) -> Value {
             };
             let value = parse_value(vm, v);
             let _ = vm.heap.table_mut(t).set(key, value);
+        }
+        if vector {
+            let get = |vm: &mut Vm, k: &str| {
+                let key = vm.str(k);
+                vm.heap.table(t).get(key)
+            };
+            let z = get(vm, "z");
+            let (create, args) = if z.is_nil() {
+                ("CreateVector2D", vec![get(vm, "x"), get(vm, "y")])
+            } else {
+                ("CreateVector3D", vec![get(vm, "x"), get(vm, "y"), z])
+            };
+            let create = vm.get_global(create);
+            if !create.is_nil()
+                && let Ok(r) = vm.call(create, &args)
+                && let Some(v @ Value::Table(_)) = r.first().copied()
+            {
+                return v;
+            }
         }
         if color {
             let get = |vm: &mut Vm, k: &str| {

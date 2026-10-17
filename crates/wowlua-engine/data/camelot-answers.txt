@@ -1,6 +1,7 @@
 # WoW Forever 1.60.1 (70425)'s answers to calls of functions that answer from the
 # client's own data (/stdtest engine answers), as the engine gives them:
 # the call, a tab, the answer (cargo xtask ingest).
+AntiAliasingSupported()	3: boolean true, boolean false, boolean true
 BNFeaturesEnabled()	1: boolean true
 C_AccountServices.GetPreferredDatacenterLocalities()	2: {1=number 1,2=number 2,3=number 5}, {1=string NA-West,2=string NA-East,3=string AU}
 C_AccountServices.GetPreferredLocales()	2: {1=number 1,2=number 12,3=number 14}, {1=string English,2=string LatAm Spanish,3=string Brazilian Portuguese}
@@ -53,6 +54,19 @@ C_ClassColor.GetClassColor("SHAMAN")	1: {GenerateHexColor=function function,Gene
 C_ClassColor.GetClassColor("TRAVELER")	0: 
 C_ClassColor.GetClassColor("WARLOCK")	1: {GenerateHexColor=function function,GenerateHexColorMarkup=function function,GenerateHexColorNoAlpha=function function,GetHSL=function function,GetRGB=function function,GetRGBA=function function,GetRGBAAsBytes=function function,GetRGBAsBytes=function function,IsEqualTo=function function,IsRGBEqualTo=function function,OnLoad=function function,SetRGB=function function,SetRGBA=function function,WrapTextInColorCode=function function,b=number 0.93333339691162,g=number 0.53333336114883,r=number 0.52941179275513}
 C_ClassColor.GetClassColor("WARRIOR")	1: {GenerateHexColor=function function,GenerateHexColorMarkup=function function,GenerateHexColorNoAlpha=function function,GetHSL=function function,GetRGB=function function,GetRGBA=function function,GetRGBAAsBytes=function function,GetRGBAsBytes=function function,IsEqualTo=function function,IsRGBEqualTo=function function,OnLoad=function function,SetRGB=function function,SetRGBA=function function,WrapTextInColorCode=function function,b=number 0.42745101451874,g=number 0.60784316062927,r=number 0.77647066116333}
+C_ClickBindings.CanSpellBeClickBound(107)	1: boolean false
+C_ClickBindings.CanSpellBeClickBound(1260189)	1: boolean false
+C_ClickBindings.CanSpellBeClickBound(1293657)	1: boolean false
+C_ClickBindings.CanSpellBeClickBound(1293712)	1: boolean false
+C_ClickBindings.CanSpellBeClickBound(20577)	1: boolean false
+C_ClickBindings.CanSpellBeClickBound(3127)	1: boolean false
+C_ClickBindings.CanSpellBeClickBound(5227)	1: boolean false
+C_ClickBindings.CanSpellBeClickBound(6603)	1: boolean false
+C_ClickBindings.CanSpellBeClickBound(7744)	1: boolean false
+C_ClickBindings.CanSpellBeClickBound(81)	1: boolean false
+C_ClickBindings.GetBindingType("LeftButton", 0)	1: number 3
+C_ClickBindings.GetProfileInfo()	1: {1={actionID=number 1,button=string LeftButton,modifiers=number 0,type=number 3},2={actionID=number 2,button=string RightButton,modifiers=number 0,type=number 3}}
+C_ClickBindings.GetTutorialShown()	1: boolean false
 C_ClientScene.IsSceneTypeActive(1)	1: boolean false
 C_Club.GetInvitationsForSelf()	1: {}
 C_Club.IsEnabled()	1: boolean true
@@ -65,6 +79,24 @@ C_ClubFinder.IsCommunityFinderEnabled()	1: boolean false
 C_ColorOverrides.GetColorOverrideInfo(1)	1: nil nil
 C_ColorOverrides.GetColorOverrideInfo(2)	1: nil nil
 C_ColorOverrides.GetColorOverrideInfo(3)	1: nil nil
+C_CombatAudioAlert.GetCategoryVolume(0)	1: number 100
+C_CombatAudioAlert.GetCategoryVolume(1)	1: number 100
+C_CombatAudioAlert.GetCategoryVolume(2)	1: number 100
+C_CombatAudioAlert.GetCategoryVolume(3)	1: number 100
+C_CombatAudioAlert.GetCategoryVolume(4)	1: number 100
+C_CombatAudioAlert.GetCategoryVolume(7)	1: number 100
+C_CombatAudioAlert.GetCategoryVolume(8)	1: number 100
+C_CombatAudioAlert.GetCategoryVolume(9)	1: number 100
+C_CombatAudioAlert.GetFormatSetting(0, 0)	1: number 1
+C_CombatAudioAlert.GetFormatSetting(0, 1)	1: number 4
+C_CombatAudioAlert.GetFormatSetting(1, 0)	1: number 3
+C_CombatAudioAlert.GetFormatSetting(1, 1)	1: number 0
+C_CombatAudioAlert.GetSpeakerSpeed()	1: number 0
+C_CombatAudioAlert.GetSpecSetting(0)	1: number 0
+C_CombatAudioAlert.GetSpecSetting(1)	1: number 1
+C_CombatAudioAlert.GetSpecSetting(2)	1: number 0
+C_CombatAudioAlert.GetSpecSetting(3)	1: number 100
+C_CombatAudioAlert.GetSpecSetting(8)	1: number 1
 C_CombatAudioAlert.GetThrottle(0)	1: number 1
 C_CombatAudioAlert.GetThrottle(1)	1: number 0
 C_CombatAudioAlert.GetThrottle(10)	1: number 10
@@ -147,6 +179,7 @@ C_FogOfWar.GetFogOfWarForMap(0)	1: nil nil
 C_FogOfWar.GetFogOfWarForMap(1412)	1: nil nil
 C_FrameManager.GetFrameVisibilityState(1)	1: boolean false
 C_GamePad.GetDeviceMappedState()	1: nil nil
+C_GameRules.AccountHasSDEnabled()	1: boolean false
 C_GameRules.GetForeverExperiencePreset()	1: number 0
 C_GameRules.GetGameRuleAsFloat(26)	1: number 0
 C_GameRules.GetGameRuleAsFloat(32, 2)	1: number 0
@@ -224,6 +257,7 @@ C_HeirloomInfo.IsUsingDefaultFilters()	1: boolean true
 C_Housing.GetTrackedHouseGuid()	1: nil nil
 C_Housing.IsHousingServiceEnabled()	1: boolean false
 C_Housing.IsInsideHouseOrPlot()	1: boolean false
+C_KeyBindings.GetBindingContextForAction("INTERACTTARGET")	1: number 0
 C_KeyBindings.GetBindingIndex("INTERACTTARGET")	1: number 183
 C_KeyBindings.GetCustomBindingType(1)	1: nil nil
 C_KeyBindings.GetCustomBindingType(10)	1: nil nil
@@ -981,13 +1015,58 @@ C_LFGList.GetActiveEntryInfo()	0:
 C_LFGList.GetAvailableRoles()	3: boolean true, boolean true, boolean true
 C_LFGList.GetFilteredSearchResults()	2: number 0, {}
 C_LFGList.HasActiveEntryInfo()	1: boolean false
+C_LevelLink.IsSpellLocked(1022)	1: boolean false
+C_LevelLink.IsSpellLocked(1044)	1: boolean false
+C_LevelLink.IsSpellLocked(107)	1: boolean false
+C_LevelLink.IsSpellLocked(1152)	1: boolean false
+C_LevelLink.IsSpellLocked(1260189)	1: boolean false
+C_LevelLink.IsSpellLocked(1293657)	1: boolean false
+C_LevelLink.IsSpellLocked(1293712)	1: boolean false
+C_LevelLink.IsSpellLocked(1311649)	1: boolean false
+C_LevelLink.IsSpellLocked(1311656)	1: boolean false
+C_LevelLink.IsSpellLocked(1866)	1: boolean false
+C_LevelLink.IsSpellLocked(19740)	1: boolean false
+C_LevelLink.IsSpellLocked(19742)	1: boolean false
+C_LevelLink.IsSpellLocked(19750)	1: boolean false
+C_LevelLink.IsSpellLocked(19834)	1: boolean false
+C_LevelLink.IsSpellLocked(20162)	1: boolean false
+C_LevelLink.IsSpellLocked(20217)	1: boolean false
+C_LevelLink.IsSpellLocked(20271)	1: boolean false
+C_LevelLink.IsSpellLocked(20287)	1: boolean false
+C_LevelLink.IsSpellLocked(20288)	1: boolean false
+C_LevelLink.IsSpellLocked(20577)	1: boolean false
+C_LevelLink.IsSpellLocked(21082)	1: boolean false
+C_LevelLink.IsSpellLocked(21084)	1: boolean false
+C_LevelLink.IsSpellLocked(25780)	1: boolean false
+C_LevelLink.IsSpellLocked(26573)	1: boolean false
+C_LevelLink.IsSpellLocked(3127)	1: boolean false
+C_LevelLink.IsSpellLocked(498)	1: boolean false
+C_LevelLink.IsSpellLocked(5227)	1: boolean false
+C_LevelLink.IsSpellLocked(5502)	1: boolean false
+C_LevelLink.IsSpellLocked(5573)	1: boolean false
+C_LevelLink.IsSpellLocked(633)	1: boolean false
+C_LevelLink.IsSpellLocked(635)	1: boolean false
+C_LevelLink.IsSpellLocked(639)	1: boolean false
+C_LevelLink.IsSpellLocked(643)	1: boolean false
+C_LevelLink.IsSpellLocked(647)	1: boolean false
+C_LevelLink.IsSpellLocked(6603)	1: boolean false
+C_LevelLink.IsSpellLocked(678)	1: boolean false
+C_LevelLink.IsSpellLocked(679)	1: boolean false
+C_LevelLink.IsSpellLocked(7294)	1: boolean false
+C_LevelLink.IsSpellLocked(7328)	1: boolean false
+C_LevelLink.IsSpellLocked(7744)	1: boolean false
+C_LevelLink.IsSpellLocked(81)	1: boolean false
+C_LevelLink.IsSpellLocked(853)	1: boolean false
+C_LevelLink.IsSpellLocked(879)	1: boolean false
 C_LobbyMatchmakerInfo.IsInQueue()	1: boolean false
+C_LossOfControl.GetActiveLossOfControlDataByUnit("player", 1)	1: nil nil
 C_Map.GetFallbackWorldMapID()	1: number 947
 C_Map.GetMapArtID(0)	0: 
 C_Map.GetMapArtLayers(0)	0: 
 C_Map.GetMapInfo(0)	0: 
 C_Map.GetMapInfo(1456)	1: {flags=number 0,mapID=number 1456,mapType=number 3,name=string Thunder Bluff,parentMapID=number 1414}
 C_Map.MapHasArt(1456)	1: boolean true
+C_Minimap.IsFilteredOut(1024)	1: boolean true
 C_MountJournal.GetDisplayedMountInfo(1)	0: 
 C_MountJournal.GetDynamicFlightModeSpellID()	1: number 436854
 C_MountJournal.GetNumDisplayedMounts()	1: number 0
@@ -996,6 +1075,7 @@ C_MountJournal.HasDisplayableMount()	1: boolean false
 C_MountJournal.IsDragonridingUnlocked()	1: boolean false
 C_MountJournal.MountEquipmentAvailable()	1: boolean false
 C_MythicPlus.IsMythicPlusActive()	1: boolean false
+C_NamePlateManager.IsNamePlateUnitBehindCamera("player")	1: boolean false
 C_NeighborhoodInitiative.GetTrackedInitiativeTasks()	1: {trackedIDs={}}
 C_PaperDollInfo.GetInventorySlotInfo("CookingGear0Slot")	3: number 27, number 4760248, boolean false
 C_PaperDollInfo.GetInventorySlotInfo("CookingToolSlot")	3: number 26, number 4760248, boolean false
@@ -1045,6 +1125,7 @@ C_PvP.GetOutdoorPvPWaitTime(1412)	1: nil nil
 C_PvP.GetOutdoorPvPWaitTime(1456)	1: nil nil
 C_PvP.GetOutdoorPvPWaitTime(947)	1: nil nil
 C_PvP.IsActiveBattlefield()	1: boolean false
+C_PvP.IsPVPMap()	1: boolean false
 C_PvP.IsWarModeDesired()	1: boolean false
 C_QuestLog.CanAbandonQuest(0)	1: boolean false
 C_QuestLog.GetBountiesForMapID(0)	1: nil nil
@@ -1091,7 +1172,10 @@ C_SocialQueue.GetAllGroups()	1: {}
 C_SocialQueue.GetAllGroups(false)	1: {}
 C_SocialQueue.GetAllGroups(true)	1: {}
 C_SocialQueue.IsSystemSupported()	1: boolean false
+C_SocialRestrictions.IsAgeVerificationRestricted()	1: boolean false
+C_SocialRestrictions.IsChatDisabled()	1: boolean false
 C_SocialRestrictions.IsFriendsDisabled()	1: boolean false
+C_SocialRestrictions.IsMuted()	1: boolean false
 C_SocialUI.IsSystemEnabled()	1: boolean true
 C_SpecializationInfo.GetNumSpecializationsForClassID(1)	1: number 1
 C_SpecializationInfo.GetNumSpecializationsForClassID(11)	1: number 1
@@ -1102,6 +1186,10 @@ C_SpecializationInfo.GetNumSpecializationsForClassID(5)	1: number 1
 C_SpecializationInfo.GetNumSpecializationsForClassID(7)	1: number 1
 C_SpecializationInfo.GetNumSpecializationsForClassID(8)	1: number 1
 C_SpecializationInfo.GetNumSpecializationsForClassID(9)	1: number 1
+C_SpecializationInfo.GetPvpTalentSlotInfo(1)	1: {availableTalentIDs={},enabled=boolean false,level=number 0}
+C_SpecializationInfo.GetPvpTalentSlotInfo(2)	1: {availableTalentIDs={},enabled=boolean false,level=number 0}
+C_SpecializationInfo.GetPvpTalentSlotInfo(3)	1: {availableTalentIDs={},enabled=boolean false,level=number 0}
+C_SpecializationInfo.IsSpecSelectionEnabled(2)	1: boolean false
 C_SpectatingUI.IsSpectating()	1: boolean false
 C_Spell.GetMawPowerRarityInfoBySpellID(25780)	0: 
 C_Spell.GetMawPowerRarityInfoBySpellID(643)	0: 
@@ -1111,6 +1199,115 @@ C_Spell.GetSpellInfo(1247917)	1: {castTime=number 0,iconID=number 7539422,maxRan
 C_Spell.GetSpellInfo(150544)	1: {castTime=number 1500,iconID=number 413588,maxRange=number 0,minRange=number 0,name=string Summon Random Favorite Mount,originalIconID=number 413588,spellID=number 150544}
 C_Spell.GetSpellInfo(243819)	1: {castTime=number 0,iconID=number 651491,maxRange=number 0,minRange=number 0,name=string Summon Random Favorite Pet,originalIconID=number 651491,spellID=number 243819}
 C_Spell.GetSpellTexture(6603)	3: number 133728, number 133728, nil nil
+C_Spell.IsAutoAttackSpell(1022)	1: boolean false
+C_Spell.IsAutoAttackSpell(1044)	1: boolean false
+C_Spell.IsAutoAttackSpell(1152)	1: boolean false
+C_Spell.IsAutoAttackSpell(1311649)	1: boolean false
+C_Spell.IsAutoAttackSpell(1311656)	1: boolean false
+C_Spell.IsAutoAttackSpell(1866)	1: boolean false
+C_Spell.IsAutoAttackSpell(19740)	1: boolean false
+C_Spell.IsAutoAttackSpell(19742)	1: boolean false
+C_Spell.IsAutoAttackSpell(19750)	1: boolean false
+C_Spell.IsAutoAttackSpell(19834)	1: boolean false
+C_Spell.IsAutoAttackSpell(20162)	1: boolean false
+C_Spell.IsAutoAttackSpell(20217)	1: boolean false
+C_Spell.IsAutoAttackSpell(20271)	1: boolean false
+C_Spell.IsAutoAttackSpell(20287)	1: boolean false
+C_Spell.IsAutoAttackSpell(20288)	1: boolean false
+C_Spell.IsAutoAttackSpell(20577)	1: boolean false
+C_Spell.IsAutoAttackSpell(21082)	1: boolean false
+C_Spell.IsAutoAttackSpell(21084)	1: boolean false
+C_Spell.IsAutoAttackSpell(25780)	1: boolean false
+C_Spell.IsAutoAttackSpell(26573)	1: boolean false
+C_Spell.IsAutoAttackSpell(498)	1: boolean false
+C_Spell.IsAutoAttackSpell(5502)	1: boolean false
+C_Spell.IsAutoAttackSpell(5573)	1: boolean false
+C_Spell.IsAutoAttackSpell(633)	1: boolean false
+C_Spell.IsAutoAttackSpell(635)	1: boolean false
+C_Spell.IsAutoAttackSpell(639)	1: boolean false
+C_Spell.IsAutoAttackSpell(643)	1: boolean false
+C_Spell.IsAutoAttackSpell(647)	1: boolean false
+C_Spell.IsAutoAttackSpell(6603)	1: boolean true
+C_Spell.IsAutoAttackSpell(678)	1: boolean false
+C_Spell.IsAutoAttackSpell(679)	1: boolean false
+C_Spell.IsAutoAttackSpell(7294)	1: boolean false
+C_Spell.IsAutoAttackSpell(7328)	1: boolean false
+C_Spell.IsAutoAttackSpell(7744)	1: boolean false
+C_Spell.IsAutoAttackSpell(853)	1: boolean false
+C_Spell.IsAutoAttackSpell(879)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(1022)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(1044)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(1152)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(1311649)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(1311656)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(1866)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(19740)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(19742)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(19750)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(19834)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(20162)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(20217)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(20271)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(20287)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(20288)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(20577)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(21082)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(21084)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(25780)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(26573)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(498)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(5502)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(5573)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(633)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(635)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(639)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(643)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(647)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(6603)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(678)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(679)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(7294)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(7328)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(7744)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(853)	1: boolean false
+C_Spell.IsRangedAutoAttackSpell(879)	1: boolean false
+C_Spell.IsSpellPassive(1022)	1: boolean false
+C_Spell.IsSpellPassive(1044)	1: boolean false
+C_Spell.IsSpellPassive(1152)	1: boolean false
+C_Spell.IsSpellPassive(1311649)	1: boolean false
+C_Spell.IsSpellPassive(1311656)	1: boolean false
+C_Spell.IsSpellPassive(1866)	1: boolean false
+C_Spell.IsSpellPassive(19740)	1: boolean false
+C_Spell.IsSpellPassive(19742)	1: boolean false
+C_Spell.IsSpellPassive(19750)	1: boolean false
+C_Spell.IsSpellPassive(19834)	1: boolean false
+C_Spell.IsSpellPassive(20162)	1: boolean false
+C_Spell.IsSpellPassive(20217)	1: boolean false
+C_Spell.IsSpellPassive(20271)	1: boolean false
+C_Spell.IsSpellPassive(20287)	1: boolean false
+C_Spell.IsSpellPassive(20288)	1: boolean false
+C_Spell.IsSpellPassive(20577)	1: boolean false
+C_Spell.IsSpellPassive(21082)	1: boolean false
+C_Spell.IsSpellPassive(21084)	1: boolean false
+C_Spell.IsSpellPassive(25780)	1: boolean false
+C_Spell.IsSpellPassive(26573)	1: boolean false
+C_Spell.IsSpellPassive(498)	1: boolean false
+C_Spell.IsSpellPassive(5502)	1: boolean false
+C_Spell.IsSpellPassive(5573)	1: boolean false
+C_Spell.IsSpellPassive(633)	1: boolean false
+C_Spell.IsSpellPassive(635)	1: boolean false
+C_Spell.IsSpellPassive(639)	1: boolean false
+C_Spell.IsSpellPassive(643)	1: boolean false
+C_Spell.IsSpellPassive(647)	1: boolean false
+C_Spell.IsSpellPassive(6603)	1: boolean false
+C_Spell.IsSpellPassive(678)	1: boolean false
+C_Spell.IsSpellPassive(679)	1: boolean false
+C_Spell.IsSpellPassive(7294)	1: boolean false
+C_Spell.IsSpellPassive(7328)	1: boolean false
+C_Spell.IsSpellPassive(7744)	1: boolean false
+C_Spell.IsSpellPassive(853)	1: boolean false
+C_Spell.IsSpellPassive(879)	1: boolean false
+C_SplashScreen.CanViewSplashScreen()	1: boolean false
 C_StableInfo.GetNextStableSlotCost()	1: number 500
 C_StableInfo.GetNumStableSlots()	1: number 0
 C_StableInfo.GetStablePetInfo(1)	1: nil nil
@@ -1193,6 +1390,8 @@ C_Traits.GetConfigIDByTreeID(1188)	1: number 77961
 C_TransmogCollection.GetLatestAppearance()	0: 
 C_TransmogCollection.IsSearchInProgress(1)	1: boolean false
 C_TransmogCollection.IsUsingDefaultFilters()	1: boolean true
+C_TransmogOutfitInfo.IsTransmogEnabled()	1: boolean true
+C_UI.DoesAnyDisplayHaveNotch()	1: boolean false
 C_UI.ShouldUIParentAvoidNotch()	1: boolean true
 C_UIWidgetManager.GetObjectiveTrackerWidgetSetID()	1: number 240
 C_UIWidgetManager.GetWidgetSetInfo(0)	0: 
@@ -1204,9 +1403,15 @@ C_UIWidgetManager.GetWidgetSetInfo(283)	1: {layoutDirection=number 0,verticalPad
 C_UIWidgetManager.GetWidgetSetInfo(514)	1: {layoutDirection=number 0,verticalPadding=number 0}
 C_UIWidgetManager.GetWidgetSetInfo(676)	0: 
 C_VideoOptions.AreHighResTexturesAvailable()	1: boolean false
+C_VideoOptions.GetCurrentGameWindowSize(0, true)	1: {Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1920,y=number 1080}
+C_VideoOptions.GetCurrentGameWindowSize(1, false)	1: {Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1920,y=number 1080}
 C_VideoOptions.GetCurrentGameWindowSize(1, true)	1: {Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1920,y=number 1080}
+C_VideoOptions.GetDefaultGameWindowSize(0)	1: {Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1920,y=number 1080}
 C_VideoOptions.GetDefaultGameWindowSize(1)	1: {Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1920,y=number 1080}
+C_VideoOptions.GetGameWindowSizes(0, true)	1: {1={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1920,y=number 1080},2={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1600,y=number 900},3={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1344,y=number 756},4={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1280,y=number 720},5={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1024,y=number 576},6={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 960,y=number 540}}
+C_VideoOptions.GetGameWindowSizes(1, false)	1: {1={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1920,y=number 1080},10={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1024,y=number 576},11={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 960,y=number 540},12={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 800,y=number 600},13={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 720,y=number 576},2={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1600,y=number 900},3={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1344,y=number 1008},4={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1344,y=number 756},5={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1280,y=number 1024},6={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1280,y=number 960},7={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1280,y=number 720},8={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1152,y=number 864},9={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1024,y=number 768}}
 C_VideoOptions.GetGameWindowSizes(1, true)	1: {1={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1920,y=number 1080},2={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1600,y=number 900},3={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1344,y=number 756},4={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1280,y=number 720},5={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 1024,y=number 576},6={Add=function function,Clone=function function,Cross=function function,DivideBy=function function,Dot=function function,GetLength=function function,GetLengthSquared=function function,GetXY=function function,IsEqualTo=function function,IsZero=function function,Normalize=function function,OnLoad=function function,RotateDirection=function function,ScaleBy=function function,SetXY=function function,Subtract=function function,x=number 960,y=number 540}}
+C_VideoOptions.GetGxAdapterInfo()	1: {1={isExternal=boolean false,isLowPower=boolean false,name=string Apple M4 Max}}
 C_VideoOptions.IsLinearEnabledOnStart()	1: boolean true
 C_VideoOptions.IsOutlineModeSupported()	1: boolean false
 C_VideoOptions.IsPBRWaterSupported()	1: boolean true
@@ -1214,9 +1419,11 @@ C_VideoOptions.IsSecondaryLightingSupported()	1: boolean true
 C_VideoOptions.IsSpellVisualDensitySystemSupported()	1: boolean true
 C_VoiceChat.GetActiveChannelType()	1: nil nil
 C_VoiceChat.GetActiveVoiceProviderID()	1: number 1
+C_VoiceChat.GetPushToTalkBinding()	1: {1=string LMETA}
 C_VoiceChat.IsEnabled()	1: boolean true
 C_VoiceChat.IsMuted()	1: boolean false
 C_VoiceChat.IsSpeakForMeActive()	1: boolean false
+C_VoiceChat.IsSpeakForMeAllowed()	1: boolean true
 C_WowTokenPublic.GetCommerceSystemStatus()	3: boolean false, number 300, boolean false
 CanAutoSetGamePadCursorControl(false)	1: boolean false
 CanAutoSetGamePadCursorControl(true)	1: boolean false
@@ -1224,11 +1431,13 @@ CanExitVehicle()	1: boolean false
 CanHearthAndResurrectFromArea()	1: boolean false
 CanShowAchievementUI()	1: boolean true
 GetActionBarToggles()	7: boolean true, boolean true, boolean true, boolean true, boolean false, boolean false, boolean false
+GetAllowRecentAlliesSeeLocation()	1: boolean true
 GetArenaOpponentSpec(1)	0: 
 GetArenaOpponentSpec(2)	0: 
 GetArenaOpponentSpec(3)	0: 
 GetArenaOpponentSpec(4)	0: 
 GetArenaOpponentSpec(5)	0: 
+GetAutoDeclineGuildInvites()	1: boolean false
 GetAvailableLocales()	10: string enUS, string koKR, string frFR, string deDE, string zhCN, string esES, string zhTW, string esMX, string ruRU, string ptBR
 GetBackgroundLoadingStatus()	1: number 0
 GetBindingText("-")	1: string -
@@ -1546,6 +1755,8 @@ GetChatWindowSavedPosition(9)	0:
 GetClassicExpansionLevel()	1: number 0
 GetCorpseRecoveryDelay()	1: number 0
 GetCurrentArenaSeason()	1: number 0
+GetCurrentBindingSet()	1: number 1
+GetCurrentGraphicsAPI()	1: string MTL
 GetGraphicsAPIs()	2: string MTL, string Auto
 GetInventorySlotInfo("CookingGear0Slot")	3: number 27, number 4760248, boolean false
 GetInventorySlotInfo("CookingToolSlot")	3: number 26, number 4760248, boolean false
@@ -1622,6 +1833,8 @@ GetPetExperience()	2: number 0, number 0
 GetPetIcon()	1: nil nil
 GetPossessInfo(1)	0: 
 GetPossessInfo(2)	0: 
+GetRaidTargetIndex("player")	1: nil nil
+GetRaidTargetIndex("target")	1: nil nil
 GetReadyCheckStatus("player")	0: 
 GetReleaseTimeRemaining()	1: number 0
 GetRestrictedAccountData()	3: number 0, number 0, number 0
@@ -1655,6 +1868,7 @@ GetTutorialsEnabled()	1: boolean false
 GetWorldElapsedTimers()	1: number 0
 HasArtifactEquipped()	1: boolean false
 HasPetUI()	2: boolean false, boolean false
+InCinematic()	1: boolean false
 IsAccountSecured()	1: boolean true
 IsActiveBattlefieldArena()	2: boolean false, boolean false
 IsBindingForGamePad("-")	1: boolean false
@@ -1671,6 +1885,14 @@ IsBindingForGamePad("9")	1: boolean false
 IsBindingForGamePad("=")	1: boolean false
 IsCpuBound()	1: nil nil
 IsEveryoneAssistant()	1: boolean false
+IsGraphicsCVarValueSupported("GxCompatAsyncShaderCompilation", 0)	1: number 0
+IsGraphicsCVarValueSupported("GxCompatAsyncShaderCompilation", 1)	1: number 0
+IsGraphicsCVarValueSupported("GxCompatCommandListMultiThreading", 0)	1: number 0
+IsGraphicsCVarValueSupported("GxCompatCommandListMultiThreading", 1)	1: number 0
+IsGraphicsCVarValueSupported("GxCompatOptionalGpuFeatures", 0)	1: number 0
+IsGraphicsCVarValueSupported("GxCompatOptionalGpuFeatures", 1)	1: number 0
+IsGraphicsCVarValueSupported("GxCompatWorkSubmitOptimizations", 0)	1: number 0
+IsGraphicsCVarValueSupported("GxCompatWorkSubmitOptimizations", 1)	1: number 0
 IsGraphicsCVarValueSupported("LowLatencyMode", 0)	1: number 0
 IsGraphicsCVarValueSupported("LowLatencyMode", 1)	1: number 0
 IsGraphicsCVarValueSupported("LowLatencyMode", 2)	1: number 0
@@ -1679,6 +1901,15 @@ IsGraphicsCVarValueSupported("LowLatencyMode", 4)	1: number 27
 IsGraphicsCVarValueSupported("LowLatencyMode", 5)	1: number 27
 IsGraphicsCVarValueSupported("msaaAlphaTest", 0)	1: number 0
 IsGraphicsCVarValueSupported("msaaAlphaTest", 1)	1: number 0
+IsGraphicsCVarValueSupported("textureFilteringMode", 0)	1: number 0
+IsGraphicsCVarValueSupported("textureFilteringMode", 1)	1: number 0
+IsGraphicsCVarValueSupported("textureFilteringMode", 2)	1: number 0
+IsGraphicsCVarValueSupported("textureFilteringMode", 3)	1: number 0
+IsGraphicsCVarValueSupported("textureFilteringMode", 4)	1: number 0
+IsGraphicsCVarValueSupported("textureFilteringMode", 5)	1: number 0
+IsGraphicsCVarValueSupported("vrsValar", 0)	1: number 0
+IsGraphicsCVarValueSupported("vrsValar", 1)	1: number 27
+IsGraphicsCVarValueSupported("vrsValar", 2)	1: number 27
 IsGraphicsSettingValueSupported("PROXY_RAID_TEXTURE_RESOLUTION", 0, nil)	1: number 42
 IsGraphicsSettingValueSupported("PROXY_RAID_TEXTURE_RESOLUTION", 1, nil)	1: number 42
 IsGraphicsSettingValueSupported("PROXY_RAID_TEXTURE_RESOLUTION", 2, nil)	1: number 42
@@ -1806,6 +2037,15 @@ Sound_GameSystem_GetOutputDriverNameByIndex(3)	1: string Steam Streaming Microph
 Sound_GameSystem_GetOutputDriverNameByIndex(4)	1: string Steam Streaming Speakers
 Sound_GameSystem_GetOutputDriverNameByIndex(5)	1: string None
 SupportsClipCursor()	1: boolean true
+UnitClassification("player")	1: string normal
+UnitDetailedThreatSituation("player", "player")	0: 
+UnitIsMinion("player")	1: boolean false
+UnitIsTapDenied("player")	1: boolean false
+UnitNameplateShowsWidgetsOnly("player")	1: boolean false
+UnitPlayerControlled("player")	1: boolean true
+UnitSelectionColor("player", true)	4: number 0.37647062540054, number 0.37647062540054, number 1, number 1
+UnitShouldDisplayName("player")	1: boolean false
+UnitWidgetSet("player")	0: 
 C_Map.CanSetUserWaypointOnMap(1411)	1: boolean true
 C_Map.CanSetUserWaypointOnMap(1412)	1: boolean true
 C_Map.CanSetUserWaypointOnMap(1413)	1: boolean true

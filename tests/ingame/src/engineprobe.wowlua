@@ -1126,7 +1126,8 @@ end
 
 --- `/stdtest engine input`: the scripts a user's input runs, in order: a
 --- button to hover and click (with and without Shift), an edit box to
---- click, type "ab" into and press Enter in; the log fills as you go, then
+--- click, type "ab" into and press Enter in, a slider to drag, click and
+--- wheel (the global mouse events among them); the log fills as you go, then
 --- /reload writes it (StdTestState.engineInput).
 local function inputProbe()
     const st = state() :: any
@@ -1171,12 +1172,33 @@ local function inputProbe()
             end
         end)
     end
+    -- A slider to drag and wheel: whether a drag is user input, and
+    -- whether it snaps to the step (0 to 10, step 2).
+    const sl = G.StdTestInputSlider or CreateFrame("Slider", "StdTestInputSlider", UIParent, "UISliderTemplate")
+    sl:SetSize(200, 17)
+    sl:SetPoint("CENTER", 0, -20)
+    sl:SetMinMaxValues(0, 10)
+    sl:SetValueStep(2)
+    sl:SetValue(0)
+    sl:EnableMouseWheel(true)
+    sl:Show()
+    for _, script in ipairs({ "OnMouseDown", "OnMouseUp", "OnValueChanged", "OnMouseWheel" }) do
+        sl:SetScript(script, function(self: any, ...: any)
+            const args: string[] = {}
+            for i = 1, select("#", ...) do
+                args[#args + 1] = tostring((select(i, ...)))
+            end
+            note(`slider {script}({table.concat(args, ", ")}) value={tostring(self:GetValue())} dragging={tostring(self:IsDraggingThumb())}`)
+        end)
+    end
     const m = CreateFrame("Frame")
     m:RegisterEvent("MODIFIER_STATE_CHANGED")
+    m:RegisterEvent("GLOBAL_MOUSE_DOWN")
+    m:RegisterEvent("GLOBAL_MOUSE_UP")
     m:SetScript("OnEvent", function(_: any, event: string, key: string, down: number)
         note(`{event}({key}, {tostring(down)})`)
     end)
-    say("engine input: hover the button, click it, Shift-click it, click the box, type ab, press Enter, then /reload")
+    say("engine input: hover the button, click it, Shift-click it, click the box, type ab, press Enter; drag the slider's thumb right and back, click the slider's bar, wheel over it up and down; then /reload")
 end
 
 local function stopRecording()
@@ -1497,6 +1519,115 @@ local function textChangeProbe()
     end)
 end
 
+--- `/stdtest engine keys`: which frames a key reaches and whether its
+--- binding still runs. Keyboard frames at two stratas, all passing keys on,
+--- and an override binding of J that clicks a button; you press J,
+--- Shift-J, J, J as asked (each step moves on 1.5 s after its J). In the
+--- third step the top frame keeps that one J (it stops propagation in its
+--- handler); in the fourth a keyboard frame without a key script, passing
+--- nothing on, is shown. Ends after the fourth J or in 60 seconds, the
+--- binding cleared.
+--- (A first version recorded a frame that keeps every key: key down goes
+--- to each keyboard frame, top first, until one that does not pass it on,
+--- its binding not run; key up only to that frame.) Into
+--- StdTestState.engineKeys.
+local function keysProbe()
+    const st = state() :: any
+    const log: string[] = {}
+    st.engineKeys = log
+    local phase = 1
+    local finished = false
+    local waiting = false
+    local function note(what: string)
+        if #log < 400 then
+            log[#log + 1] = `p{phase} {what}`
+        end
+    end
+    const owner = CreateFrame("Frame")
+    const target = G.StdTestKeyTarget or CreateFrame("Button", "StdTestKeyTarget", UIParent)
+    target:RegisterForClicks("AnyDown", "AnyUp")
+    target:SetScript("OnClick", function(_: any, button: string, down: any)
+        note(`binding click {button} down={tostring(down)}`)
+    end)
+    SetOverrideBindingClick(owner, true, "J", "StdTestKeyTarget")
+    const frames: any[] = {}
+    local function keyFrame(name: string, strata: FrameStrata, level: number): any
+        const f = CreateFrame("Frame", nil, UIParent)
+        f:SetFrameStrata(strata)
+        f:SetFrameLevel(level)
+        f:SetSize(10, 10)
+        f:SetPoint("TOPLEFT")
+        f:EnableKeyboard(true)
+        f:SetPropagateKeyboardInput(true)
+        f:SetScript("OnKeyDown", function(self: any, key: string)
+            if phase == 3 and name == "top" and key == "J" then
+                self:SetPropagateKeyboardInput(false)
+            end
+            note(`{name} down {key} shift={tostring(IsShiftKeyDown())} propagate={tostring(self:GetPropagateKeyboardInput())}`)
+        end)
+        f:SetScript("OnKeyUp", function(_: any, key: string)
+            note(`{name} up {key}`)
+        end)
+        frames[#frames + 1] = f
+        return f
+    end
+    const top = keyFrame("top", "DIALOG", 5)
+    keyFrame("high", "HIGH", 10)
+    -- A keyboard frame that keeps keys but has no key script (as
+    -- KeybindListener after it listened): shown for the fourth J only.
+    const bare = CreateFrame("Frame", nil, UIParent)
+    bare:SetFrameStrata("MEDIUM")
+    bare:SetSize(10, 10)
+    bare:SetPoint("TOPLEFT")
+    bare:SetScript("OnKeyDown", function() end)
+    bare:SetScript("OnKeyDown", nil)
+    bare:SetPropagateKeyboardInput(false)
+    bare:Hide()
+    frames[#frames + 1] = bare
+    const prompts = {
+        "press J once (every frame passes keys on)",
+        "press Shift-J once (only J is bound)",
+        "press J once more (the top frame keeps this J)",
+        "press J once more (a frame without a key script is shown)",
+    }
+    local function finish()
+        if finished then
+            return
+        end
+        finished = true
+        ClearOverrideBindings(owner)
+        for _, f in ipairs(frames) do
+            f:SetPropagateKeyboardInput(true)
+            f:EnableKeyboard(false)
+            f:Hide()
+        end
+        say("engine keys: recorded; type /reload so the file is written")
+    end
+    -- The top frame sees each key first: a J moves on, 1.5 s later.
+    top:HookScript("OnKeyDown", function(self: any, key: string)
+        if key ~= "J" or waiting or finished then
+            return
+        end
+        waiting = true
+        C_Timer.After(1.5, function()
+            waiting = false
+            self:SetPropagateKeyboardInput(true)
+            phase += 1
+            bare:SetShown(phase == 4)
+            if phase == 4 then
+                note(`bare keyboard {tostring(bare:IsKeyboardEnabled())} propagate {tostring(bare:GetPropagateKeyboardInput())}`)
+            end
+            if phase > #prompts then
+                finish()
+            else
+                say(`engine keys: {prompts[phase]}`)
+            end
+        end)
+    end)
+    C_Timer.After(60, finish)
+    say(`engine keys: {prompts[1]}`)
+end
+
 --- The cursor (`/stdtest engine cursor`, out of combat): a spell, a
 --- spellbook item, a macro, an action (taken and put back), a bag item and
 --- an equipped item (each taken and put back), each with `GetCursorInfo`
@@ -1617,6 +1748,9 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "textchange" then
         textChangeProbe()
+        return
+    elseif words[1] == "keys" then
+        keysProbe()
         return
     elseif words[1] == "cursor" then
         cursorProbe()
