@@ -53,7 +53,7 @@ impl Visitor for Old {
             .iter()
             .rposition(|&b| self.res.bindings[b].name == id.name);
         let Some(index) = found else {
-            self.res.globals.insert(id.name.clone());
+            self.res.globals.insert(id.name.to_string());
             self.res.occurrences.push(Ref::Global);
             return;
         };

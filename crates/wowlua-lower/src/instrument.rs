@@ -175,11 +175,13 @@ impl<'a> Lowerer<'a> {
                 }
                 (target, func, label)
             }
-            K::LocalFunction { name, func } => (name_expr(name.clone()), func, name.name.clone()),
+            K::LocalFunction { name, func } => {
+                (name_expr(name.clone()), func, name.name.to_string())
+            }
             K::Local { names, values } if names.len() == 1 && values.len() == 1 => {
                 match &values[0].kind {
                     ir::ExprKind::Function(f) => {
-                        (name_expr(names[0].clone()), &**f, names[0].name.clone())
+                        (name_expr(names[0].clone()), &**f, names[0].name.to_string())
                     }
                     _ => return Vec::new(),
                 }
@@ -257,7 +259,7 @@ impl<'a> Lowerer<'a> {
 /// plain path.
 fn path_label(e: &ir::Expr) -> Option<String> {
     match &e.kind {
-        ir::ExprKind::Name(n) => Some(n.name.clone()),
+        ir::ExprKind::Name(n) => Some(n.name.to_string()),
         ir::ExprKind::Field { obj, name } => Some(format!("{}.{}", path_label(obj)?, name.name)),
         _ => None,
     }

@@ -340,8 +340,8 @@ impl Visitor for Resolver {
             .iter()
             .rposition(|&b| self.res.bindings[b].name == id.name);
         let Some(index) = found else {
-            if !self.res.globals.contains(&id.name) {
-                self.res.globals.insert(id.name.clone());
+            if !self.res.globals.contains(id.name.as_str()) {
+                self.res.globals.insert(id.name.to_string());
             }
             self.res.occurrences.push(Ref::Global);
             return;
@@ -445,9 +445,10 @@ pub fn rename(
                 && *name != id.name
             {
                 if id.pos.is_some() && !id.generated {
-                    self.original.insert(id.pos, std::mem::take(&mut id.name));
+                    self.original
+                        .insert(id.pos, std::mem::take(&mut id.name).into());
                 }
-                id.name = name.clone();
+                id.name = name.as_str().into();
             }
             self.next += 1;
         }

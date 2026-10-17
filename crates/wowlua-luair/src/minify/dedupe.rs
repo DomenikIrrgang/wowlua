@@ -111,7 +111,7 @@ pub fn apply(chunk: &mut Chunk, short_names: bool) {
                 ExprKind::String(raw) => {
                     if let Some(name) = replaced(raw) {
                         e.kind = ExprKind::Name(Ident {
-                            name: name.clone(),
+                            name: name.as_str().into(),
                             generated: true,
                             pos: e.pos,
                         });
@@ -144,7 +144,7 @@ pub fn apply(chunk: &mut Chunk, short_names: bool) {
             names: chosen
                 .iter()
                 .map(|b| Ident {
-                    name: names[b].clone(),
+                    name: names[b].as_str().into(),
                     generated: true,
                     pos: Pos::NONE,
                 })

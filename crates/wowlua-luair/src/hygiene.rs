@@ -15,9 +15,9 @@ pub fn apply(chunk: &mut Chunk) {
     }
     visit_idents(&mut chunk.block, &mut |id: &mut Ident| {
         if id.generated
-            && let Some(new) = renames.get(&id.name)
+            && let Some(new) = renames.get(id.name.as_str())
         {
-            id.name = new.clone();
+            id.name = new.as_str().into();
         }
     });
 }
@@ -29,8 +29,8 @@ pub fn apply(chunk: &mut Chunk) {
 fn renames(chunk: &mut Chunk) -> BTreeMap<String, String> {
     let mut generated = BTreeSet::new();
     visit_idents(&mut chunk.block, &mut |id: &mut Ident| {
-        if id.generated && !generated.contains(&id.name) {
-            generated.insert(id.name.clone());
+        if id.generated && !generated.contains(id.name.as_str()) {
+            generated.insert(id.name.to_string());
         }
     });
     if generated.is_empty() {
@@ -52,9 +52,9 @@ fn renames(chunk: &mut Chunk) -> BTreeMap<String, String> {
         if !id.generated
             && id.name.starts_with(prefix)
             && may_collide(&id.name, &generated)
-            && !user.contains(&id.name)
+            && !user.contains(id.name.as_str())
         {
-            user.insert(id.name.clone());
+            user.insert(id.name.to_string());
         }
     });
     choose(&user, &generated)
@@ -93,9 +93,9 @@ fn renames_of_every_name(chunk: &mut Chunk) -> BTreeMap<String, String> {
     let mut generated = BTreeSet::new();
     visit_idents(&mut chunk.block, &mut |id: &mut Ident| {
         if id.generated {
-            generated.insert(id.name.clone());
+            generated.insert(id.name.to_string());
         } else {
-            user.insert(id.name.clone());
+            user.insert(id.name.to_string());
         }
     });
     choose(&user, &generated)
@@ -276,7 +276,7 @@ mod tests {
             .map(|(n, generated)| {
                 Expr::new(
                     ExprKind::Name(Ident {
-                        name: n.clone(),
+                        name: n.as_str().into(),
                         generated: *generated,
                         pos: Pos::NONE,
                     }),

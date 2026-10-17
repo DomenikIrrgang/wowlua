@@ -381,7 +381,7 @@ fn ident(name: &str, pos: Pos) -> ir::Ident {
 
 fn generated(name: &str, pos: Pos) -> ir::Ident {
     ir::Ident {
-        name: name.to_string(),
+        name: name.into(),
         generated: true,
         pos,
     }

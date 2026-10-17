@@ -181,7 +181,7 @@ impl Visitor for Census<'_> {
                 if let ExprKind::Field { obj, name } = &t.kind
                     && matches!(obj.kind, ExprKind::Name(_))
                 {
-                    self.target_field.insert(next, name.name.clone());
+                    self.target_field.insert(next, name.name.to_string());
                 }
                 next += match &mut t.kind {
                     ExprKind::Name(_) => 1,
@@ -192,14 +192,15 @@ impl Visitor for Census<'_> {
         if let StmtKind::Function { path, .. } = &s.kind
             && path.len() == 2
         {
-            self.target_field.insert(self.next, path[1].name.clone());
+            self.target_field
+                .insert(self.next, path[1].name.to_string());
         }
     }
     fn expr(&mut self, e: &mut Expr) {
         if let ExprKind::Field { obj, name } = &e.kind
             && matches!(obj.kind, ExprKind::Name(_))
         {
-            self.pending_field.insert(self.next, name.name.clone());
+            self.pending_field.insert(self.next, name.name.to_string());
         }
     }
     fn ident(&mut self, id: &mut Ident, use_: Use) {
@@ -210,18 +211,19 @@ impl Visitor for Census<'_> {
         }
         let function = *self.functions.last().expect("in a function");
         if let Some(field) = self.target_field.remove(&index) {
-            self.written.insert(Hoisted::Field(id.name.clone(), field));
+            self.written
+                .insert(Hoisted::Field(id.name.to_string(), field));
         }
         match use_ {
             Use::Write => {
-                self.written.insert(Hoisted::Global(id.name.clone()));
+                self.written.insert(Hoisted::Global(id.name.to_string()));
             }
             _ => {
                 let key = match self.pending_field.remove(&index) {
                     Some(field) if stable_field(&id.name, &field) => {
-                        Hoisted::Field(id.name.clone(), field)
+                        Hoisted::Field(id.name.to_string(), field)
                     }
-                    _ if stable_global(&id.name) => Hoisted::Global(id.name.clone()),
+                    _ if stable_global(&id.name) => Hoisted::Global(id.name.to_string()),
                     _ => return,
                 };
                 let entry = self.reads.entry(key).or_default();
@@ -328,13 +330,15 @@ pub fn cache_globals(chunk: &mut Chunk) {
                 if let ExprKind::Field { obj, name } = &e.kind
                     && let ExprKind::Name(lib) = &obj.kind
                     && matches!(self.res.occurrences.get(self.next), Some(Ref::Global))
-                    && let Some(local) = self.fields.get(&(lib.name.clone(), name.name.clone()))
+                    && let Some(local) = self
+                        .fields
+                        .get(&(lib.name.to_string(), name.name.to_string()))
                 {
                     let local = local.clone();
                     let pos = e.pos;
                     // The new name's occurrence stands in for `lib`'s.
                     e.kind = ExprKind::Name(Ident {
-                        name: local,
+                        name: local.into(),
                         generated: true,
                         pos,
                     });
@@ -360,7 +364,7 @@ pub fn cache_globals(chunk: &mut Chunk) {
             names: chosen
                 .iter()
                 .map(|h| Ident {
-                    name: name_of(h),
+                    name: name_of(h).into(),
                     generated: matches!(h, Hoisted::Field(..)),
                     pos: Pos::NONE,
                 })
@@ -771,7 +775,7 @@ fn inline_round(chunk: &mut Chunk) -> (bool, Vec<(Pos, NotInlined)>) {
                 struct Names<'a>(&'a mut Vec<String>);
                 impl Visitor for Names<'_> {
                     fn ident(&mut self, id: &mut Ident, _use: Use) {
-                        self.0.push(id.name.clone());
+                        self.0.push(id.name.to_string());
                     }
                 }
                 crate::scope::walk_expr(&mut probe, &mut Names(&mut body_names));
@@ -945,7 +949,7 @@ fn remove_functions(chunk: &mut Chunk, names: &BTreeSet<String>) {
     impl Visitor for Mark<'_> {
         fn stmt(&mut self, s: &mut Stmt) {
             if let StmtKind::LocalFunction { name, .. } = &s.kind
-                && self.names.contains(&name.name)
+                && self.names.contains(name.name.as_str())
                 && let Some(Ref::Local(b)) = self.res.occurrences.get(self.next)
                 && self.res.bindings[*b].uses == 0
                 && single_return(match &s.kind {

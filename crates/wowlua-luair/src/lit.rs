@@ -86,6 +86,141 @@ impl fmt::Display for Numeral {
     }
 }
 
+/// A name (an identifier) in the IR: text, inline when short. Reads,
+/// compares, hashes and prints like the `String` it replaced.
+#[derive(Clone)]
+pub struct Name(Bytes);
+
+impl Name {
+    pub fn as_str(&self) -> &str {
+        std::str::from_utf8(self.0.get()).expect("built from a str")
+    }
+}
+
+impl Deref for Name {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl std::borrow::Borrow<str> for Name {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsRef<str> for Name {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl From<&str> for Name {
+    fn from(text: &str) -> Self {
+        Name(Bytes::new(text.as_bytes()))
+    }
+}
+
+impl From<&String> for Name {
+    fn from(text: &String) -> Self {
+        Name::from(text.as_str())
+    }
+}
+
+impl From<String> for Name {
+    fn from(text: String) -> Self {
+        Name::from(text.as_str())
+    }
+}
+
+impl From<Name> for String {
+    fn from(name: Name) -> Self {
+        name.as_str().to_string()
+    }
+}
+
+impl Default for Name {
+    fn default() -> Self {
+        Name::from("")
+    }
+}
+
+// Compared, ordered and hashed by their bytes, without reading them as a
+// `str` first, as a `str` is: the minifier compares and hashes names all
+// the time.
+impl PartialEq<Name> for String {
+    fn eq(&self, other: &Name) -> bool {
+        self.as_bytes() == other.0.get()
+    }
+}
+
+impl PartialEq<Name> for str {
+    fn eq(&self, other: &Name) -> bool {
+        self.as_bytes() == other.0.get()
+    }
+}
+
+impl PartialEq for Name {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.get() == other.0.get()
+    }
+}
+
+impl Eq for Name {}
+
+impl PartialEq<str> for Name {
+    fn eq(&self, other: &str) -> bool {
+        self.0.get() == other.as_bytes()
+    }
+}
+
+impl PartialEq<&str> for Name {
+    fn eq(&self, other: &&str) -> bool {
+        self.0.get() == other.as_bytes()
+    }
+}
+
+impl PartialEq<String> for Name {
+    fn eq(&self, other: &String) -> bool {
+        self.0.get() == other.as_bytes()
+    }
+}
+
+impl PartialOrd for Name {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Name {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.get().cmp(other.0.get())
+    }
+}
+
+impl std::hash::Hash for Name {
+    // What `str` hashes (`Hasher::write_str`'s default), so a map of names
+    // finds a `str` key (`Borrow<str>`).
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write(self.0.get());
+        state.write_u8(0xff);
+    }
+}
+
+impl fmt::Debug for Name {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(self.as_str(), f)
+    }
+}
+
+impl fmt::Display for Name {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// A string literal as it is emitted, quotes or brackets included. Reads
 /// and prints like the `Vec<u8>` it replaced.
 #[derive(Clone)]
@@ -144,6 +279,13 @@ mod tests {
             assert_eq!(&*n, text);
             assert_eq!(n.to_string(), text);
             assert_eq!(format!("{n:?}"), format!("{:?}", String::from(text)));
+            let name = Name::from(text);
+            assert_eq!(name, *text);
+            assert_eq!(format!("{name:?}"), format!("{:?}", String::from(text)));
+            let state = std::collections::hash_map::RandomState::new();
+            use std::hash::BuildHasher;
+            let (a, b) = (state.hash_one(&name), state.hash_one(text));
+            assert_eq!(a, b, "hashes like the text, for maps of `str`");
             let s = StrLit::from(text.as_bytes().to_vec());
             assert_eq!(&*s, text.as_bytes());
             assert_eq!(format!("{s:?}"), format!("{:?}", text.as_bytes().to_vec()));
