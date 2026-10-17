@@ -118,6 +118,9 @@ pub struct World {
     pub bars: HashMap<usize, crate::bars::Bar>,
     /// The loot window.
     pub loot: crate::loot::Loot,
+    pub quests: crate::quests::Quests,
+    /// The levels a test defined (`levels.rs`).
+    pub levels: std::collections::BTreeMap<i64, wowlua_vm::TableRef>,
     /// The chat's last line number (each message's eleventh value).
     pub next_chat_line: u64,
     /// The time a request takes to come back from the server
@@ -2268,6 +2271,24 @@ fn get_text(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     }])
 }
 
+/// `fontString:SetAlphaGradient(start, length)`: whether the gradient's
+/// start is within the text, in characters (the quest text's fade ends
+/// when it is not; a frame's returns nothing, as documented).
+fn set_alpha_gradient(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    if engine(vm).world.widgets[id.0].class != "FontString" {
+        return Ok(vec![]);
+    }
+    let start = match vm.hidden(c.arg(2)) {
+        Value::Num(n) => n,
+        _ => 0.0,
+    };
+    let chars = match engine(vm).world.widgets[id.0].text {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).chars().count(),
+        _ => 0,
+    };
+    Ok(vec![Value::Bool(start < chars as f64)])
+}
+
 fn set_formatted_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let format = vm.get_global("string");
     let Value::Table(string) = format else {
@@ -3087,6 +3108,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("SetFontString", set_font_string),
         ("GetText", get_text),
         ("SetFormattedText", set_formatted_text),
+        ("SetAlphaGradient", set_alpha_gradient),
         ("SetAttribute", set_attribute),
         ("GetAttribute", get_attribute),
         ("IsProtected", is_protected),

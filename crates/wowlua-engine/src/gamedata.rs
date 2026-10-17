@@ -358,6 +358,19 @@ fn get_item_icon_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     }
 }
 
+/// `C_Item.DoesItemExistByID(item)`: a defined item (not `missing`),
+/// else as the client answered.
+fn does_item_exist_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    let defined = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => engine(vm).world.data.items.get(&(n as i64)).copied(),
+        _ => None,
+    };
+    match defined {
+        Some(t) => Ok(vec![Value::Bool(!field(vm, t, "missing").truthy())]),
+        None => Ok(crate::recorded::client_answer(vm, &c)),
+    }
+}
+
 fn is_item_data_cached(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(cached_item(vm, &c).is_some())])
 }
@@ -415,6 +428,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Item.GetItemNameByID", get_item_name_by_id),
         ("C_Item.GetItemIconByID", get_item_icon_by_id),
         ("C_Item.IsItemDataCachedByID", is_item_data_cached),
+        ("C_Item.DoesItemExistByID", does_item_exist_by_id),
         ("C_Item.RequestLoadItemDataByID", request_load_item_data),
     ]
 }

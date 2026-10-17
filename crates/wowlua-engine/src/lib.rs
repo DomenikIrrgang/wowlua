@@ -23,12 +23,14 @@ pub mod facts;
 pub mod framescript;
 pub mod gamedata;
 pub mod input;
+pub mod levels;
 pub mod login;
 pub mod loot;
 pub mod macros;
 pub mod merchant;
 pub mod protection;
 pub mod queries;
+pub mod quests;
 pub mod recorded;
 pub mod stats;
 pub mod tooltip;
@@ -211,6 +213,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(casting::behaviours())
             .chain(merchant::behaviours())
             .chain(loot::behaviours())
+            .chain(quests::behaviours())
             .chain(queries::behaviours())
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())

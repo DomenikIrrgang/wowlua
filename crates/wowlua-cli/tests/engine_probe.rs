@@ -988,7 +988,8 @@ fn scenario_line(line: &str) -> Option<String> {
 /// order; and those only in each.
 fn align(ours: &[String], theirs: &[String]) -> (usize, Vec<String>, Vec<String>) {
     let (n, m) = (ours.len(), theirs.len());
-    let mut table = vec![vec![0u32; m + 1]; n + 1];
+    // u16: a scenario's log stays below 65536 lines.
+    let mut table = vec![vec![0u16; m + 1]; n + 1];
     for i in (0..n).rev() {
         for j in (0..m).rev() {
             table[i][j] = if ours[i] == theirs[j] {
@@ -1019,12 +1020,32 @@ fn align(ours: &[String], theirs: &[String]) -> (usize, Vec<String>, Vec<String>
 
 /// How many of the combat scenario's lines the engine plays as the client
 /// did: only ever up.
-const COMBAT_MATCHED: usize = 719;
+const COMBAT_MATCHED: usize = 723;
 
 /// The combat scenario: a wolf targeted, fought, killed and looted.
 #[test]
 fn the_engine_plays_combat_as_the_client_did() {
-    let Some((ours, theirs, errors)) = play_scenario("combat") else {
+    plays_as_the_client_did("combat", COMBAT_MATCHED);
+}
+
+/// How many of the quest scenario's lines the engine plays as the client
+/// did: only ever up.
+const QUEST_MATCHED: usize = 4349;
+
+/// The quest scenario: a quest taken, eight wolves hunted for its item (a
+/// level gained), the quest turned in.
+#[test]
+fn the_engine_plays_quest_as_the_client_did() {
+    plays_as_the_client_did("quest", QUEST_MATCHED);
+}
+
+/// A scenario played: no error of Blizzard's, every UI check passed, the
+/// end as the client's, and at least `ratchet` of its lines as the
+/// client's (`WOWLUA_SCENARIO_LIMIT`: how many differences to print;
+/// `WOWLUA_SCENARIO_EVENTS`: the engine's events; `WOWLUA_SCENARIO_DUMP`:
+/// a directory for both logs).
+fn plays_as_the_client_did(name: &str, ratchet: usize) {
+    let Some((ours, theirs, errors)) = play_scenario(name) else {
         eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
         return;
     };
@@ -1050,6 +1071,12 @@ fn the_engine_plays_combat_as_the_client_did() {
             .collect::<Vec<_>>()
             .join("\n"),
     );
+    // Both logs as compared, for a diff (`WOWLUA_SCENARIO_DUMP=<dir>`).
+    if let Ok(dir) = std::env::var("WOWLUA_SCENARIO_DUMP") {
+        let dir = Path::new(&dir);
+        fs::write(dir.join(format!("{name}-engine.txt")), ours.join("\n")).expect("writes");
+        fs::write(dir.join(format!("{name}-client.txt")), theirs.join("\n")).expect("writes");
+    }
     if std::env::var("WOWLUA_SCENARIO_EVENTS").is_ok() {
         eprintln!(
             "the engine's events:\n{}",
@@ -1062,8 +1089,8 @@ fn the_engine_plays_combat_as_the_client_did() {
     }
     assert!(errors.is_empty(), "Blizzard's errors: {errors:#?}");
     assert!(
-        matched >= COMBAT_MATCHED,
-        "{matched} of the combat scenario's lines played as the client did (was {COMBAT_MATCHED})"
+        matched >= ratchet,
+        "{matched} of the {name} scenario's lines played as the client did (was {ratchet})"
     );
 }
 

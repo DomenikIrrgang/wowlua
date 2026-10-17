@@ -928,8 +928,8 @@ pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// The player's experience, gained `amount`: `UnitXP` grows,
-/// `PLAYER_XP_UPDATE` for each of the player's tokens. Unverified: a
-/// level's end reached.
+/// `PLAYER_XP_UPDATE` for each of the player's tokens; past the level's
+/// end, a defined level gained (`levels.rs`; unverified without one).
 pub fn gain_xp(vm: &mut Vm, amount: f64) {
     let now = match engine(vm).world.character.stats.get("xp") {
         Some(Entry::One(a)) => a.first().and_then(|a| match a {
@@ -939,6 +939,10 @@ pub fn gain_xp(vm: &mut Vm, amount: f64) {
         _ => None,
     }
     .unwrap_or(0.0);
+    if crate::levels::reaches(vm, now + amount) {
+        crate::levels::level_up(vm, now + amount);
+        return;
+    }
     engine_mut(vm)
         .world
         .character

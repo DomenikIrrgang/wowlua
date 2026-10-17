@@ -38,6 +38,9 @@ pub struct Held {
     pub quest_item: bool,
     pub quest_id: Option<f64>,
     pub quest_active: bool,
+    /// Pushed into a new slot, its data not arrived yet: the slot is
+    /// taken but reads empty (`loot.rs`; recorded).
+    pub arriving: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -146,6 +149,7 @@ fn held_of(vm: &mut Vm, v: Value) -> Option<Held> {
                 quest_item: field(vm, t, "questItem").truthy(),
                 quest_id: num(field(vm, t, "questID")),
                 quest_active: field(vm, t, "questActive").truthy(),
+                arriving: false,
             })
         }
         _ => None,
@@ -166,35 +170,112 @@ const QUALITY_COLORS: [&str; 8] = [
 /// An item's link: the test's, the item data's, or one made like the
 /// client's (`|cff…|Hitem:ID::::::::LEVEL:::::|h[Name]|h|r`).
 pub fn link_of(vm: &mut Vm, held: &Held) -> Option<Value> {
+    let level = engine(vm).units.list[units::PLAYER.0].level;
     if let Some(l) = &held.link {
-        return Some(vm.str(l));
+        let l = relevel(l, level);
+        return Some(vm.str(&l));
     }
     let data = item_data(vm, held.id)?;
     let given = field(vm, data, "link");
+    if let Some(l) = text(vm, given) {
+        let l = relevel(&l, level);
+        return Some(vm.str(&l));
+    }
     if !given.is_nil() {
         return Some(given);
     }
+    let link = made_link(vm, held.id, "", &[])?;
+    Some(vm.str(&link))
+}
+
+/// An item's link made like the client's: camelot's name the quality's
+/// color and carry the player's level and specialization
+/// (`|cnIQ1:|Hitem:6529::::::::21:1486:::::::::|h…`, recorded), the item's
+/// context and bonuses after them (a quest's: `::11:1:3524`).
+fn made_link(vm: &mut Vm, id: i64, context: &str, bonuses: &[i64]) -> Option<String> {
+    let data = item_data(vm, id)?;
     let name = field(vm, data, "name");
-    let name = text(vm, name).unwrap_or_else(|| format!("item:{}", held.id));
+    let name = text(vm, name).unwrap_or_else(|| format!("item:{id}"));
     let quality = num(field(vm, data, "quality")).unwrap_or(1.0) as usize;
     let color = QUALITY_COLORS
         .get(quality)
         .copied()
         .unwrap_or(QUALITY_COLORS[1]);
     let level = engine(vm).units.list[units::PLAYER.0].level;
-    // Camelot's links name the quality's color and carry the player's
-    // specialization (`|cnIQ1:|Hitem:6529::::::::21:1486:::::::::|h…`,
-    // recorded; the specialization unknown here: empty).
     if engine(vm).flavor == "camelot" {
-        return Some(vm.str(&format!(
-            "|cnIQ{quality}:|Hitem:{}::::::::{level}::::::::::|h[{name}]|h|r",
-            held.id
-        )));
+        let spec = link_specialization(vm).map_or(String::new(), |s| format!("{s}"));
+        // After the specialization: the upgrade, the context, the
+        // bonuses (their count, each), then six more.
+        let bonus = if bonuses.is_empty() {
+            String::new()
+        } else {
+            let list: Vec<String> = bonuses.iter().map(|b| b.to_string()).collect();
+            format!("{}:{}", bonuses.len(), list.join(":"))
+        };
+        return Some(format!(
+            "|cnIQ{quality}:|Hitem:{id}::::::::{level}:{spec}::{context}:{bonus}::::::|h[{name}]|h|r"
+        ));
     }
-    Some(vm.str(&format!(
-        "|c{color}|Hitem:{}::::::::{level}:::::|h[{name}]|h|r",
-        held.id
-    )))
+    Some(format!(
+        "|c{color}|Hitem:{id}::::::::{level}:::::|h[{name}]|h|r"
+    ))
+}
+
+/// An item's link in a context (a quest's dialog and reward: "11"), with
+/// bonuses.
+pub fn link_in_context(vm: &mut Vm, id: i64, context: &str, bonuses: &[i64]) -> Option<String> {
+    made_link(vm, id, context, bonuses)
+}
+
+/// The specialization an item link carries: the player's current one
+/// (`C_SpecializationInfo.GetSpecializationInfo(GetSpecialization())`'s
+/// ID, as the character's stats recorded it).
+fn link_specialization(vm: &Vm) -> Option<i64> {
+    use crate::stats::{Answer, Entry};
+    let stats = &engine(vm).world.character.stats;
+    let Some(Entry::One(current)) = stats.get("specialization") else {
+        return None;
+    };
+    let Some(Answer::Num(index)) = current.first() else {
+        return None;
+    };
+    let info = match stats.get("specializationInfo")? {
+        Entry::ByIndex(by) => by.get(&(*index as i64))?.first()?.clone(),
+        Entry::One(list) => match list.get((*index as usize).checked_sub(1)?)? {
+            Answer::Table(entries) => entries.first()?.1.clone(),
+            a => a.clone(),
+        },
+    };
+    match info {
+        Answer::Num(id) if id > 0.0 => Some(id as i64),
+        _ => None,
+    }
+}
+
+/// A link with the player's level in it: the client's links follow the
+/// player's level (recorded: the bags' links after a level up).
+fn relevel(link: &str, level: f64) -> String {
+    let Some(start) = link.find("|Hitem:") else {
+        return link.to_string();
+    };
+    let body = start + "|H".len();
+    let Some(len) = link[body..].find("|h") else {
+        return link.to_string();
+    };
+    let mut parts: Vec<String> = link[body..body + len]
+        .split(':')
+        .map(str::to_string)
+        .collect();
+    match parts.get_mut(9) {
+        Some(p) if !p.is_empty() => *p = format!("{level}"),
+        _ => return link.to_string(),
+    }
+    format!(
+        "{}{}{}",
+        &link[..body],
+        parts.join(":"),
+        &link[body + len..]
+    )
 }
 
 /// An item's link by its ID (made like the client's).
@@ -316,6 +397,7 @@ fn bag_slot(vm: &mut Vm, c: &NativeCall) -> Option<Held> {
         .get(&bag)?
         .items
         .get(&slot)
+        .filter(|h| !h.arriving)
         .cloned()
 }
 
@@ -490,6 +572,9 @@ pub fn add_to_bags(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, bool)> {
         Value::Num(n) if n >= 1.0 => n,
         _ => 1.0,
     };
+    // Bound when picked up: its `bindType` 1 (on pickup) or 4 (a quest's;
+    // recorded bound: a quest's item, a quest's reward).
+    let binds = matches!(item_field(vm, id, "bindType"), Value::Num(b) if b == 1.0 || b == 4.0);
     let bags = &mut engine_mut(vm).world.character.bags;
     for (bag, b) in bags.iter_mut() {
         for held in b.items.values_mut() {
@@ -506,6 +591,7 @@ pub fn add_to_bags(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, bool)> {
                 Held {
                     id,
                     count,
+                    bound: binds,
                     ..Held::default()
                 },
             );
@@ -513,6 +599,147 @@ pub fn add_to_bags(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, bool)> {
         }
     }
     None
+}
+
+/// `count` of item `id` into the bags as `add_to_bags`; a new slot's
+/// item arriving (its data a packet later: `arrived`). The bag and the
+/// new slot, if one.
+pub fn push_to_bags(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, Option<usize>)> {
+    let before: Vec<(i64, usize)> = engine(vm)
+        .world
+        .character
+        .bags
+        .iter()
+        .flat_map(|(b, bag)| bag.items.keys().map(move |s| (*b, *s)))
+        .collect();
+    let (bag, new_slot) = add_to_bags(vm, id, count)?;
+    if !new_slot {
+        return Some((bag, None));
+    }
+    let b = engine_mut(vm).world.character.bags.get_mut(&bag)?;
+    let slot = b
+        .items
+        .keys()
+        .copied()
+        .find(|s| !before.contains(&(bag, *s)))?;
+    if let Some(h) = b.items.get_mut(&slot) {
+        h.arriving = true;
+    }
+    Some((bag, Some(slot)))
+}
+
+/// A new slot's item data arrived: the slot reads it.
+pub fn arrived(vm: &mut Vm, bag: i64, slot: usize) {
+    if let Some(h) = engine_mut(vm)
+        .world
+        .character
+        .bags
+        .get_mut(&bag)
+        .and_then(|b| b.items.get_mut(&slot))
+    {
+        h.arriving = false;
+    }
+}
+
+/// The bag `count` of item `id` would go to (as `add_to_bags`).
+pub fn bag_for(vm: &mut Vm, id: i64, count: f64) -> Option<i64> {
+    let stack = match item_field(vm, id, "stackCount") {
+        Value::Num(n) if n >= 1.0 => n,
+        _ => 1.0,
+    };
+    let bags = &engine(vm).world.character.bags;
+    for (bag, b) in bags {
+        if b.items
+            .values()
+            .any(|h| h.id == id && h.count + count <= stack)
+        {
+            return Some(*bag);
+        }
+    }
+    bags.iter()
+        .find(|(_, b)| (1..=b.slots).any(|s| !b.items.contains_key(&s)))
+        .map(|(bag, _)| *bag)
+}
+
+/// `count` of item `id` taken from the bags (the last stacks first,
+/// unverified); the bags changed.
+pub fn take_from_bags(vm: &mut Vm, id: i64, count: f64) -> Vec<i64> {
+    let mut left = count;
+    let mut changed = Vec::new();
+    let bags = &mut engine_mut(vm).world.character.bags;
+    for (bag, b) in bags.iter_mut().rev() {
+        let slots: Vec<usize> = b
+            .items
+            .iter()
+            .rev()
+            .filter(|(_, h)| h.id == id)
+            .map(|(s, _)| *s)
+            .collect();
+        for slot in slots {
+            if left <= 0.0 {
+                break;
+            }
+            let held = b.items.get_mut(&slot).expect("a slot just found");
+            let taken = held.count.min(left);
+            held.count -= taken;
+            left -= taken;
+            if held.count <= 0.0 {
+                b.items.remove(&slot);
+            }
+            if !changed.contains(bag) {
+                changed.push(*bag);
+            }
+        }
+    }
+    changed
+}
+
+/// How many of item `id` the bags hold.
+pub fn count_in_bags(vm: &Vm, id: i64) -> f64 {
+    engine(vm)
+        .world
+        .character
+        .bags
+        .values()
+        .flat_map(|b| b.items.values())
+        .filter(|h| h.id == id)
+        .map(|h| h.count)
+        .sum()
+}
+
+/// The link of item `id` in `bag` made in a context (a quest reward's).
+pub fn set_context(vm: &mut Vm, bag: i64, id: i64, context: &str) {
+    let Some(link) = made_link(vm, id, context, &[]) else {
+        return;
+    };
+    if let Some(b) = engine_mut(vm).world.character.bags.get_mut(&bag) {
+        for held in b.items.values_mut() {
+            if held.id == id && held.link.is_none() {
+                held.link = Some(link.clone());
+            }
+        }
+    }
+}
+
+/// The inventory changed: `PLAYER_EQUIPED_SPELLS_CHANGED(slot)` for each
+/// main action bar slot holding a spell (recorded: the warrior's 1, 2, 10
+/// and 11; the paladin's 1 to 4 and 12).
+pub fn equipped_spells_changed(vm: &mut Vm) {
+    let slots: Vec<i64> = engine(vm)
+        .world
+        .character
+        .actions
+        .iter()
+        .filter(|(slot, a)| (1..=12).contains(*slot) && a.kind == "spell")
+        .map(|(slot, _)| *slot)
+        .collect();
+    for slot in slots {
+        widgets::fire_event(
+            vm,
+            "PLAYER_EQUIPED_SPELLS_CHANGED",
+            &[Value::Num(slot as f64)],
+        );
+    }
 }
 
 /// A bag's contents changed: `BAG_UPDATE(bag)` (the backpack's then

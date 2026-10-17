@@ -44,6 +44,8 @@ pub struct Unit {
     pub class_name: String,
     pub class_id: f64,
     pub race: String,
+    /// A creature's faction group (`UnitFactionGroup`), when it has one.
+    pub faction_group: Option<String>,
     /// 1 unknown, 2 male, 3 female (`UnitSex`).
     pub sex: f64,
     pub reaction: Reaction,
@@ -225,6 +227,7 @@ pub fn install(vm: &mut Vm) {
         class_name: "Warrior".into(),
         class_id: 1.0,
         race: "Human".into(),
+        faction_group: None,
         sex: 2.0,
         reaction: Reaction::Friendly,
         player: true,
@@ -280,6 +283,7 @@ fn base_token<'a>(u: &Units, t: &'a str) -> Option<(Option<UnitId>, &'a str)> {
         ("softfriend", u.soft[1]),
         ("softinteract", u.soft[2]),
         ("npc", u.npc),
+        ("questnpc", u.npc),
         ("none", None),
     ] {
         if let Some(rest) = t.strip_prefix(name) {
@@ -487,6 +491,7 @@ fn clone_unit(u: &Unit) -> Unit {
         class: u.class.clone(),
         class_name: u.class_name.clone(),
         race: u.race.clone(),
+        faction_group: u.faction_group.clone(),
         classification: u.classification.clone(),
         loot: u.loot.clone(),
         creature_type: u.creature_type.clone(),
@@ -563,15 +568,43 @@ fn unit_class(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
-/// `UnitRace`: a creature has none (`/stdtest engine scenario combat`).
+/// `UnitRace`: the race's name, file name and ID (recorded: "Undead",
+/// "Scourge", 5); a creature has none (`/stdtest engine scenario combat`).
 fn unit_race(vm: &mut Vm, c: NativeCall) -> Ret {
     with_unit(vm, &c, |vm, u| {
         if u.race.is_empty() {
-            vec![]
-        } else {
-            vec![vm.str(&u.race), vm.str(&u.race)]
+            return vec![];
         }
+        let (file, id) = race_file_and_id(&u.race);
+        vec![
+            vm.str(&u.race),
+            vm.str(&file),
+            id.map_or(Value::Nil, Value::Num),
+        ]
     })
+}
+
+/// A race's file name and ID (the client's races; only the Undead's
+/// recorded, the others unverified).
+fn race_file_and_id(race: &str) -> (String, Option<f64>) {
+    const RACES: &[(&str, &str, f64)] = &[
+        ("Human", "Human", 1.0),
+        ("Orc", "Orc", 2.0),
+        ("Dwarf", "Dwarf", 3.0),
+        ("Night Elf", "NightElf", 4.0),
+        ("Undead", "Scourge", 5.0),
+        ("Tauren", "Tauren", 6.0),
+        ("Gnome", "Gnome", 7.0),
+        ("Troll", "Troll", 8.0),
+        ("Goblin", "Goblin", 9.0),
+        ("Blood Elf", "BloodElf", 10.0),
+        ("Draenei", "Draenei", 11.0),
+        ("Worgen", "Worgen", 22.0),
+    ];
+    match RACES.iter().find(|(name, ..)| *name == race) {
+        Some((_, file, id)) => (file.to_string(), Some(*id)),
+        None => (race.replace(' ', ""), None),
+    }
 }
 
 // No such unit (a target cleared): level 0, "normal", not a player, not
@@ -998,6 +1031,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("stopAttack", control_stop_attack),
         ("swing", control_swing),
         ("loot", crate::loot::control_loot),
+        ("interact", crate::quests::control_interact),
         ("setThreat", control_set_threat),
         ("raiseSkill", control_raise_skill),
         ("leaveCombat", control_leave_combat),
@@ -1182,6 +1216,10 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         class,
         class_name,
         race: text(vm, "race", if player { "Human" } else { "" }),
+        faction_group: match get(vm, "factionGroup") {
+            Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+            _ => None,
+        },
         sex: num(vm, "sex", 1.0),
         reaction,
         player,
@@ -1755,6 +1793,14 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
             &[Value::Num(f64::from(speed)), Value::Num(0.0)],
         );
     }
+    let kill = match field(vm, "kill") {
+        k @ Value::Table(_) => Some(Kill::of(vm, k)?),
+        _ => None,
+    };
+    if let Some(k) = kill {
+        let power = field(vm, "power");
+        return swing_kill(vm, me, victim, k, power);
+    }
     for id in [me, victim] {
         if !engine(vm).units.list[id.0].in_combat {
             enter_combat(vm, id, false);
@@ -1777,6 +1823,46 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
     ];
     let text = vm.native_with("swingText", swing_text, upvals);
     crate::clock::after_engine(vm, COMBAT_TEXT_DELAY, text);
+    Ok(vec![])
+}
+
+/// An auto attack's killing swing, as the client recorded the player's
+/// (`/stdtest engine scenario quest`): after `PLAYER_SWING`, the kill
+/// (`PARTY_KILL`; no combat text, the target gone before it), the rage
+/// gained, the death (the target cleared), the experience's message, the
+/// usability; the experience itself a round trip later.
+fn swing_kill(vm: &mut Vm, me: UnitId, victim: UnitId, k: Kill, power: Value) -> Ret {
+    {
+        let u = &mut engine_mut(vm).units.list[victim.0];
+        u.health = 0.0;
+        u.dead = true;
+    }
+    if ours(&engine(vm).units, me) {
+        let killer = event_guid(vm, me);
+        let v = event_guid(vm, victim);
+        fire(vm, "PARTY_KILL", &[killer, v]);
+    }
+    if let Value::Num(p) = power {
+        set_power_quietly(vm, me, p);
+    }
+    engine_mut(vm).units.list[victim.0].loot = k.loot.clone();
+    died(vm, victim, k.lootable);
+    kill_xp(vm, victim, &k, true);
+    if crate::actions::usability_changed(vm) {
+        fire(vm, "ACTIONBAR_UPDATE_USABLE", &[]);
+    }
+    if let Some(xp) = k.xp {
+        let later = vm.native_with("killXp", kill_xp_later, vec![Value::Num(xp)]);
+        let delay = crate::clock::server_delay(vm);
+        crate::clock::after_engine(vm, delay, later);
+    }
+    Ok(vec![])
+}
+
+fn kill_xp_later(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Value::Num(xp) = c.upvals[0] {
+        crate::stats::gain_xp(vm, xp);
+    }
     Ok(vec![])
 }
 
@@ -2153,15 +2239,22 @@ fn faction(race: &str) -> Option<&'static str> {
     }
 }
 
-/// `UnitFactionGroup`: a race's faction; a creature none; no such unit
-/// two empty strings (recorded, scenario combat).
+/// `UnitFactionGroup`: a race's faction; a creature its own (a city's
+/// NPC: "Alliance", recorded) or none; no such unit two empty strings
+/// (recorded, scenario combat).
 fn unit_faction_group(vm: &mut Vm, c: NativeCall) -> Ret {
     if unit_arg(vm, &c, 1).is_none() {
         return Ok(vec![vm.str(""), vm.str("")]);
     }
-    with_unit(vm, &c, |vm, u| match faction(&u.race) {
-        Some(f) => vec![vm.str(f), vm.str(f)],
-        None => vec![],
+    with_unit(vm, &c, |vm, u| {
+        let f = u
+            .faction_group
+            .clone()
+            .or_else(|| faction(&race_file_and_id(&u.race).0).map(str::to_string));
+        match f {
+            Some(f) => vec![vm.str(&f), vm.str(&f)],
+            None => vec![],
+        }
     })
 }
 

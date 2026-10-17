@@ -1,22 +1,47 @@
 //! Looting a corpse, as the client recorded the player's with autoloot
-//! (`/stdtest engine scenario combat`, a ping near 0.3 s): `player:loot(
-//! corpse, { auto? })` opens it a round trip later (`LOOT_READY(auto)`,
-//! `LOOT_OPENED(auto, false)`, `LOOT_READY(auto)`), the slots answer
-//! (`GetNumLootItems`, `GetLootSlotInfo`, `GetLootSlotLink`,
-//! `GetLootSlotType`, `GetLootSourceInfo`); `LootSlot(i)` (autoloot asks
-//! every slot) is answered a round trip later: `LOOT_SLOT_CLEARED(i)`, the
-//! item's `ITEM_PUSH(bag, icon)` and "You receive loot". The last slot
-//! taken: the corpse untargeted, `LOOT_CLOSED()` twice, the bags' updates
-//! (`ITEM_COUNT_CHANGED` for a stack grown), the last item's push,
-//! `BAG_NEW_ITEMS_UPDATED()` for a new slot, `UNIT_LOOT(guid, false)`.
-//! Unverified: that interleaving beyond this recording's two items, money,
-//! a loot window closed before it is empty.
+//! (`/stdtest engine scenario combat` and `quest`, a ping near 0.3 s):
+//! `player:loot(corpse, { auto? })` opens it a round trip later
+//! (`UNIT_FLAGS`, `LOOT_READY(auto)`, `LOOT_OPENED(auto, false)`,
+//! `LOOT_READY(auto)`), the slots answer (`GetNumLootItems`,
+//! `GetLootSlotInfo`, `GetLootSlotLink`, `GetLootSlotType`,
+//! `GetLootSourceInfo`). `LootSlot(i)` (autoloot asks every slot, one
+//! after another) is answered by the server in three packets:
+//!
+//! - the item: `LOOT_SLOT_CLEARED(i)` twice, the item's `ITEM_PUSH(bag,
+//!   icon)` and "You receive loot", `BAG_NEW_ITEMS_UPDATED()` for a new
+//!   slot (a quest's item: `QUEST_WATCH_UPDATE` before, its count after);
+//!   the last slot clears once, the corpse is untargeted and
+//!   `LOOT_CLOSED()` fires twice, before the push;
+//! - the bags, a moment later (shared by the items pushed meanwhile): for
+//!   a stack grown the equipped spells' changes and its bag's update, for
+//!   a new slot its bag's update; the corpse emptied: `UNIT_LOOT(guid,
+//!   false)`; `BAG_UPDATE_DELAYED()`, `ITEM_COUNT_CHANGED` for each stack
+//!   grown;
+//! - a new slot's item data, later still (shared too): till then its slot
+//!   is taken but reads empty; then the equipped spells', the bag's and
+//!   the inventory's updates (`UNIT_INVENTORY_CHANGED`).
+//!
+//! `CloseLoot()` (the player walking off): `LOOT_CLOSED()` once; the slots
+//! asked for still arrive (no `LOOT_SLOT_CLEARED`), the corpse stays
+//! targeted.
+//!
+//! Unverified: the packets' spacing (recorded: the bags 0.06 to 0.25 s
+//! after the item, the item data 0.17 to 1.18 s; one value each), money,
+//! a slot left on a corpse closed early.
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
 
 use crate::units::{self, UnitId};
 use crate::{engine, engine_mut, widgets};
+
+/// The first slot's answer after the window opened, beyond a round trip,
+/// and the next ones' spacing (autoloot, recorded).
+const FIRST_SLOT_AFTER: f64 = 0.22;
+const NEXT_SLOT_AFTER: f64 = 0.15;
+/// The bags' packet after an item's, and the new items' data's.
+const BAGS_AFTER: f64 = 0.08;
+const ITEM_DATA_AFTER: f64 = 0.5;
 
 /// An item a corpse holds.
 #[derive(Clone, Debug)]
@@ -26,19 +51,41 @@ pub struct LootItem {
     pub taken: bool,
 }
 
+/// An item placed, its bags' packet waiting.
+#[derive(Clone, Debug)]
+pub struct Placed {
+    pub id: i64,
+    pub bag: i64,
+    /// Onto a stack (else a new slot).
+    pub stacked: bool,
+}
+
 /// The loot window.
 #[derive(Default)]
 pub struct Loot {
     /// The corpse looted, when the window is open.
     pub from: Option<UnitId>,
+    /// The corpse the slots come from (also once the window closed).
+    pub corpse: Option<UnitId>,
     pub auto: bool,
     pub items: Vec<LootItem>,
-    /// Items taken whose bag update waits for the window to close.
-    pub pushed: Vec<(i64, f64, i64, bool)>,
+    /// The bags' packet's items, and whether it is on its way.
+    pub bags: Vec<Placed>,
+    pub bags_due: bool,
+    /// The corpse emptied: its `UNIT_LOOT(guid, false)` with the bags.
+    pub emptied: Option<UnitId>,
+    /// New slots whose item data is on its way: bag, slot, item.
+    pub arriving: Vec<(i64, usize, i64)>,
+    pub arriving_due: bool,
 }
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
     widgets::fire_event(vm, e, args);
+}
+
+fn later(vm: &mut Vm, seconds: f64, name: &'static str, f: NativeFn, upvals: Vec<Value>) {
+    let native = vm.native_with(name, f, upvals);
+    crate::clock::after_engine(vm, seconds, native);
 }
 
 /// `player:loot(corpse, { auto? })`: the player loots a corpse.
@@ -58,12 +105,13 @@ pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
         _ => false,
     };
     let delay = crate::clock::server_delay(vm);
-    let later = vm.native_with(
+    later(
+        vm,
+        delay,
         "lootOpened",
-        opened as NativeFn,
+        opened,
         vec![Value::Num(corpse.0 as f64), Value::Bool(auto)],
     );
-    crate::clock::after_engine(vm, delay, later);
     Ok(vec![])
 }
 
@@ -85,9 +133,9 @@ fn opened(vm: &mut Vm, c: NativeCall) -> Ret {
     {
         let l = &mut engine_mut(vm).world.loot;
         l.from = Some(corpse);
+        l.corpse = Some(corpse);
         l.auto = auto;
         l.items = items;
-        l.pushed.clear();
     }
     // Looting: the player's flags change (recorded just before).
     units::fire_unit(vm, "UNIT_FLAGS", units::PLAYER, &[]);
@@ -96,8 +144,10 @@ fn opened(vm: &mut Vm, c: NativeCall) -> Ret {
     fire(vm, "LOOT_READY", &[Value::Bool(auto)]);
     if auto {
         let n = engine(vm).world.loot.items.len();
+        let delay = crate::clock::server_delay(vm);
         for i in 1..=n {
-            request(vm, i);
+            let after = delay + FIRST_SLOT_AFTER + NEXT_SLOT_AFTER * (i - 1) as f64;
+            later(vm, after, "lootTaken", taken, vec![Value::Num(i as f64)]);
         }
     }
     Ok(vec![])
@@ -106,16 +156,14 @@ fn opened(vm: &mut Vm, c: NativeCall) -> Ret {
 /// A slot asked for: the server answers a round trip later.
 fn request(vm: &mut Vm, slot: usize) {
     let delay = crate::clock::server_delay(vm);
-    let later = vm.native_with(
-        "lootTaken",
-        taken as NativeFn,
-        vec![Value::Num(slot as f64)],
-    );
-    crate::clock::after_engine(vm, delay, later);
+    later(vm, delay, "lootTaken", taken, vec![Value::Num(slot as f64)]);
 }
 
-/// The item's arrival told: `ITEM_PUSH(bag, icon)` and "You receive loot".
-fn push(vm: &mut Vm, id: i64, count: f64, bag: i64) {
+/// The item's arrival told: `ITEM_PUSH(bag, icon)` and "You receive loot",
+/// a new slot's `BAG_NEW_ITEMS_UPDATED()` (a quest's objective's:
+/// `QUEST_WATCH_UPDATE` before, its count after).
+fn push(vm: &mut Vm, id: i64, count: f64, bag: i64, new_slot: bool) {
+    crate::quests::before_item(vm, id);
     let icon = crate::character::item_field(vm, id, "icon");
     fire(vm, "ITEM_PUSH", &[Value::Num(bag as f64), icon]);
     let link = crate::character::link_of_id(vm, id)
@@ -136,17 +184,25 @@ fn push(vm: &mut Vm, id: i64, count: f64, bag: i64) {
     } else {
         format(vm, "LOOT_ITEM_SELF", "You receive loot: %s").replacen("%s", &link, 1)
     };
-    let sender = {
-        let p = &engine(vm).units.list[units::PLAYER.0];
-        match &p.last_name {
-            Some(last) => format!("{} {last}", p.name),
-            None => p.name.clone(),
-        }
-    };
+    let sender = player_sender(vm);
     crate::chat::game_message(vm, "CHAT_MSG_LOOT", &text, Some(&sender));
+    if new_slot {
+        fire(vm, "BAG_NEW_ITEMS_UPDATED", &[]);
+    }
+    crate::quests::after_item(vm, id);
 }
 
-/// The server took a slot: it clears; the item goes to the bags.
+/// The player as a loot message's sender: the full name.
+pub fn player_sender(vm: &Vm) -> String {
+    let p = &engine(vm).units.list[units::PLAYER.0];
+    match &p.last_name {
+        Some(last) => format!("{} {last}", p.name),
+        None => p.name.clone(),
+    }
+}
+
+/// The server took a slot: it clears (the window open); the item goes to
+/// the bags.
 fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Num(slot) = c.upvals[0] else {
         return Ok(vec![]);
@@ -155,57 +211,116 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(item) = engine(vm).world.loot.items.get(slot - 1).cloned() else {
         return Ok(vec![]);
     };
-    if item.taken || engine(vm).world.loot.from.is_none() {
+    if item.taken {
         return Ok(vec![]);
     }
     engine_mut(vm).world.loot.items[slot - 1].taken = true;
-    fire(vm, "LOOT_SLOT_CLEARED", &[Value::Num(slot as f64)]);
     let last = engine(vm).world.loot.items.iter().all(|i| i.taken);
-    if !last {
-        let placed = crate::character::add_to_bags(vm, item.id, item.count);
-        let (bag, new_slot) = placed.unwrap_or((0, false));
-        push(vm, item.id, item.count, bag);
+    let open = engine(vm).world.loot.from.is_some();
+    let corpse = engine(vm).world.loot.corpse;
+    if open && last {
+        // The last: the corpse emptied, the window closed.
+        fire(vm, "LOOT_SLOT_CLEARED", &[Value::Num(slot as f64)]);
+        engine_mut(vm).world.loot.from = None;
+        if corpse.is_some() && engine(vm).units.target == corpse {
+            units::clear_target(vm);
+        }
+        fire(vm, "LOOT_CLOSED", &[]);
+        fire(vm, "LOOT_CLOSED", &[]);
+    } else if open {
+        fire(vm, "LOOT_SLOT_CLEARED", &[Value::Num(slot as f64)]);
+        fire(vm, "LOOT_SLOT_CLEARED", &[Value::Num(slot as f64)]);
+    }
+    let placed = crate::character::push_to_bags(vm, item.id, item.count);
+    let (bag, new_slot) = placed.unwrap_or((0, None));
+    push(vm, item.id, item.count, bag, new_slot.is_some());
+    if last && let Some(corpse) = corpse {
+        engine_mut(vm).units.list[corpse.0].loot.clear();
+        engine_mut(vm).world.loot.emptied = Some(corpse);
+    }
+    {
+        let l = &mut engine_mut(vm).world.loot;
+        l.bags.push(Placed {
+            id: item.id,
+            bag,
+            stacked: new_slot.is_none(),
+        });
+    }
+    if !engine(vm).world.loot.bags_due {
+        engine_mut(vm).world.loot.bags_due = true;
+        later(vm, BAGS_AFTER, "lootBags", bags_told, vec![]);
+    }
+    if let Some(slot) = new_slot {
         engine_mut(vm)
             .world
             .loot
-            .pushed
-            .push((item.id, item.count, bag, new_slot));
-        return Ok(vec![]);
-    }
-    // The last: the corpse emptied, the window closed, the bags told.
-    let corpse = engine_mut(vm).world.loot.from.take();
-    if let Some(corpse) = corpse {
-        engine_mut(vm).units.list[corpse.0].loot.clear();
-        if engine(vm).units.target == Some(corpse) {
-            units::clear_target(vm);
+            .arriving
+            .push((bag, slot, item.id));
+        if !engine(vm).world.loot.arriving_due {
+            engine_mut(vm).world.loot.arriving_due = true;
+            later(
+                vm,
+                ITEM_DATA_AFTER,
+                "lootItemData",
+                item_data_arrived,
+                vec![],
+            );
         }
     }
-    fire(vm, "LOOT_CLOSED", &[]);
-    fire(vm, "LOOT_CLOSED", &[]);
-    // No longer looting: the flags a round trip later (recorded).
-    let delay = crate::clock::server_delay(vm);
-    let flags = vm.native("lootFlags", loot_flags as NativeFn);
-    crate::clock::after_engine(vm, delay, flags);
-    let pushed = std::mem::take(&mut engine_mut(vm).world.loot.pushed);
-    for (id, _, bag, _) in &pushed {
-        crate::character::bag_updated(vm, *bag);
-        fire(vm, "BAG_UPDATE_DELAYED", &[]);
-        fire(vm, "ITEM_COUNT_CHANGED", &[Value::Num(*id as f64)]);
+    Ok(vec![])
+}
+
+/// The bags' packet: each item's bag updated (a stack grown: the equipped
+/// spells' changes first, its count after), the corpse emptied.
+fn bags_told(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let placed = {
+        let l = &mut engine_mut(vm).world.loot;
+        l.bags_due = false;
+        std::mem::take(&mut l.bags)
+    };
+    for p in placed.iter().filter(|p| p.stacked) {
+        crate::character::equipped_spells_changed(vm);
+        crate::character::bag_updated(vm, p.bag);
     }
-    // The last item reaches the bags after the others' update (recorded).
-    let placed = crate::character::add_to_bags(vm, item.id, item.count);
-    let (bag, new_slot) = placed.unwrap_or((0, false));
-    crate::character::bag_updated(vm, bag);
-    push(vm, item.id, item.count, bag);
-    if new_slot {
-        fire(vm, "BAG_NEW_ITEMS_UPDATED", &[]);
+    for p in placed.iter().filter(|p| !p.stacked) {
+        crate::character::bag_updated(vm, p.bag);
     }
-    if let Some(corpse) = corpse {
+    if let Some(corpse) = engine_mut(vm).world.loot.emptied.take() {
         let g = engine(vm).units.list[corpse.0].guid.clone();
         let g = vm.str(&g);
         fire(vm, "UNIT_LOOT", &[g, Value::Bool(false)]);
+        // No longer looting: the flags a round trip later (recorded).
+        let delay = crate::clock::server_delay(vm);
+        later(vm, delay, "lootFlags", loot_flags, vec![]);
     }
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    for p in placed.iter().filter(|p| p.stacked) {
+        fire(vm, "ITEM_COUNT_CHANGED", &[Value::Num(p.id as f64)]);
+    }
+    Ok(vec![])
+}
+
+/// The new slots' item data: each slot reads its item; the equipped
+/// spells', the bag's and the inventory's updates (a quest's item: the
+/// log's update after).
+fn item_data_arrived(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let arriving = {
+        let l = &mut engine_mut(vm).world.loot;
+        l.arriving_due = false;
+        std::mem::take(&mut l.arriving)
+    };
+    let mut quest = false;
+    for (bag, slot, id) in arriving {
+        crate::character::arrived(vm, bag, slot);
+        crate::character::equipped_spells_changed(vm);
+        crate::character::bag_updated(vm, bag);
+        units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", units::PLAYER, &[]);
+        quest |= crate::quests::is_quest_item(vm, id);
+    }
+    fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    if quest {
+        fire(vm, "QUEST_LOG_UPDATE", &[]);
+    }
     Ok(vec![])
 }
 
@@ -231,7 +346,8 @@ fn get_num_loot_items(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `GetLootSlotInfo(slot)`: icon, name, quantity, currency, quality,
-/// locked, quest item, quest, active quest, coin (recorded for items).
+/// locked, quest item (an item a quest in the log asks for: recorded),
+/// quest, active quest, coin (recorded for items).
 fn get_loot_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(item) = open_item(vm, &c) else {
         return Ok(vec![]);
@@ -250,7 +366,7 @@ fn get_loot_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
             quality
         },
         Value::Bool(false),
-        Value::Bool(false),
+        Value::Bool(crate::quests::is_quest_item(vm, item.id)),
         Value::Nil,
         Value::Nil,
         Value::Bool(false),
@@ -303,7 +419,8 @@ fn loot_slot_has_item(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(open_item(vm, &c).is_some())])
 }
 
-/// `CloseLoot()`: the window closes (`LOOT_CLOSED`; unverified once).
+/// `CloseLoot()`: the window closes (`LOOT_CLOSED` once, recorded: the
+/// player walking off); the slots asked for still arrive.
 fn close_loot(vm: &mut Vm, _c: NativeCall) -> Ret {
     if engine_mut(vm).world.loot.from.take().is_some() {
         fire(vm, "LOOT_CLOSED", &[]);

@@ -37,7 +37,14 @@ export interface MockUnit
     --- The player's skill `name` up to `rank` ("Your skill in … has
     --- increased", the stats' events).
     function raiseSkill(name: string, rank: number)
-    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number }?)
+    --- `kill`: the swing kills (`PARTY_KILL`, the death, the experience's
+    --- message, its update a round trip later; `loot`: the corpse's items).
+    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, kill?: { xp?: number, loot?: table } }?)
+    --- The player talks to an NPC: a round trip later its quest dialog
+    --- opens (`QUEST_DETAIL` for a quest it offers, `QUEST_PROGRESS` for
+    --- one in the log); too far (`setDistance` above 5 yards): the
+    --- client's error.
+    function interact(npc: MockUnit)
     function showNameplate()
     function hideNameplate()
     function despawn()
@@ -674,6 +681,23 @@ end
 --- An item's data; `opts.cached = false` makes it load (`delay`).
 export function defineItem(id: number, data: table, opts: table?)
     engine().defineItem(id, data, opts)
+end
+
+--- A quest: `{ title, text, objective, progress, completion, giver, xp,
+--- money, choices, rewards, objectives = { { item, required, text } },
+--- header, level, reputation }` (`$N` in the texts: the player's name).
+--- Its giver offers it (`unit:interact`); `AcceptQuest()` takes it into
+--- the log; looting the items its objectives ask for advances it.
+export function defineQuest(id: number, data: table)
+    engine().defineQuest(id, data)
+end
+
+--- A level: `{ xpMax, health, power, talents, pvpTalentSlots, strength,
+--- agility, stamina, intellect, spirit }`. Experience past the current
+--- level's end gains it (`PLAYER_LEVEL_UP`, a round trip later
+--- `PLAYER_LEVEL_CHANGED`).
+export function defineLevel(level: number, data: table)
+    engine().defineLevel(level, data)
 end
 
 --- Shows a tooltip as the player hovering something would (Blizzard's UI

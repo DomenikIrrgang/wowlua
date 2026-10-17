@@ -289,6 +289,8 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("defineAddon", crate::bindings::define_addon),
         ("defineSpell", crate::gamedata::define_spell),
         ("defineItem", crate::gamedata::define_item),
+        ("defineQuest", crate::quests::control_define),
+        ("defineLevel", crate::levels::control_define),
         ("spend", spend),
         ("spawnUnit", units::spawn),
         ("setPlayer", units::set_player),

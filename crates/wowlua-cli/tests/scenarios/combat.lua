@@ -16,10 +16,10 @@ local wolf = e.spawnUnit({
     -- Its health: the damage it took (6, 5, 6, 16, 7, 17).
     health = 57, maxHealth = 57,
 })
--- What it drops (the recording's loot slots; Chipped Claw is not in the
--- warrior's bags yet).
+-- What it drops (the recording's loot slots; Chipped Claws stack to 5:
+-- the quest scenario's bags).
 e.defineItem(7074, {
-    name = "Chipped Claw", quality = 0, icon = 133723, stackCount = 10, classID = 15, subclassID = 0,
+    name = "Chipped Claw", quality = 0, icon = 133723, stackCount = 5, classID = 15, subclassID = 0,
     link = "|cnIQ0:|Hitem:7074::::::::1:1491:::::::::|h[Chipped Claw]|h|r",
 })
 -- Heroic Strike: on the next swing, its rage cost unverified (15; to
