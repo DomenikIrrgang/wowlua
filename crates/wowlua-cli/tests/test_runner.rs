@@ -1520,9 +1520,11 @@ end
     assert!(text.contains("2 passed, 0 failed"), "{text}");
 }
 
-/// Every button in every panel with Blizzard's UI, hovered and clicked
-/// (each tab's content too), scroll areas wheeled, as the fresh and the
-/// recorded character: not a single Blizzard error, nothing refused.
+/// Every control in every panel with Blizzard's UI, as the fresh and the
+/// recorded character: buttons hovered, left- and right-clicked (each tab's
+/// content too), the menus and dialogs they raise explored, edit boxes
+/// typed into, scroll areas wheeled; spells, actions, bag and equipped
+/// items dragged. Not a single Blizzard error, nothing refused.
 #[test]
 fn blizzard_ui_every_button_in_every_panel() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
@@ -1535,6 +1537,7 @@ fn blizzard_ui_every_button_in_every_panel() {
             r#"import test, expect, config from "wowlua:test"
 import * as mock from "wowlua:mock"
 {profile}
+
 const BINDINGS = {{
     "TOGGLEGAMEMENU", "TOGGLEBACKPACK", "OPENALLBAGS",
     "TOGGLECHARACTER0", "TOGGLECHARACTER2", "TOGGLECURRENCY", "TOGGLECHARACTER4", "TOGGLESPELLBOOK",
@@ -1547,15 +1550,22 @@ const BINDINGS = {{
 
 const G = _G :: any
 
---- The visible top-level frames under UIParent.
+--- The visible top-level frames (under UIParent; menus under WorldFrame).
 local function shown(): {{ [any]: boolean }}
     const out: {{ [any]: boolean }} = {{}}
-    for _, f in ipairs({{ G.UIParent:GetChildren() }}) do
-        if not f:IsForbidden() and f:IsVisible() then
-            out[f] = true
+    for _, parent in ipairs({{ G.UIParent, G.WorldFrame }}) do
+        for _, f in ipairs({{ parent:GetChildren() }}) do
+            if f ~= G.UIParent and not f:IsForbidden() and f:IsVisible() then
+                out[f] = true
+            end
         end
     end
     return out
+end
+
+--- A close button: used last, so the rest of its frame is explored.
+local function closes(name: string): boolean
+    return name:find("Close") ~= nil or name:find("Cancel") ~= nil
 end
 
 local function descendants(f: any, out: any[])
@@ -1567,24 +1577,60 @@ local function descendants(f: any, out: any[])
     end
 end
 
-local function closeNew(before: {{ [any]: boolean }}, keep: any[])
-    for f in pairs(shown()) do
-        local kept = false
-        for _, r in ipairs(keep) do
-            kept = kept or r == f
+local function label(f: any): string
+    const name = f:GetName()
+    if name then
+        return name
+    end
+    const parent = f:GetParent()
+    if parent == nil then
+        return "?"
+    end
+    for k, v in pairs(parent) do
+        if v == f and type(k) == "string" then
+            return `{{label(parent)}}.{{k}}`
         end
-        if not before[f] and not kept and f:IsVisible() then
-            G.HideUIPanel(f)
-            if f:IsVisible() then
-                f:Hide()
-            end
+    end
+    return `{{label(parent)}}.?`
+end
+
+local function isRoot(roots: any[], f: any): boolean
+    for _, r in ipairs(roots) do
+        if r == f then
+            return true
         end
+    end
+    return false
+end
+
+local function anyVisible(roots: any[]): boolean
+    for _, r in ipairs(roots) do
+        if r:IsVisible() then
+            return true
+        end
+    end
+    return false
+end
+
+local function hidePanel(f: any)
+    G.HideUIPanel(f)
+    if f:IsVisible() then
+        f:Hide()
     end
 end
 
-@test("every button in every panel, hovered and clicked")
-local function clicks()
+@test("every control in every panel: left and right clicks, menus, typing, wheels")
+local function deep()
     mock.nextFrame(60)
+    local report: string[] = {{}}
+    const failures: string[] = {{}}
+    local total = 0
+    local function check(what: string, n: number)
+        const errs = mock.errors()
+        if #errs > n then
+            failures[#failures + 1] = `{{what}}: {{tostring(errs[n + 1])}}`
+        end
+    end
     for _, binding in ipairs(BINDINGS) do
         const before = shown()
         mock.pressBinding(binding)
@@ -1595,11 +1641,10 @@ local function clicks()
                 roots[#roots + 1] = f
             end
         end
-        -- Each visible, enabled button not yet clicked, looking again after
-        -- every click (a tab shows its content); scroll areas wheeled.
         const done: {{ [any]: boolean }} = {{}}
-        local clicked = 0
-        while clicked < 400 do
+        local actions = 0
+        while actions < 500 and anyVisible(roots) do
+            -- The next control not yet used, in the panel as it is now.
             const frames: any[] = {{}}
             for _, r in ipairs(roots) do
                 if r:IsVisible() then
@@ -1609,19 +1654,9 @@ local function clicks()
             local next: any = nil
             for _, f in ipairs(frames) do
                 if not done[f] and f:IsVisible() then
-                    if f:IsObjectType("Button") and f:IsEnabled() then
-                        const name = f:GetName() ?? ""
-                        if name:find("Logout") or name:find("Quit") or name:find("ExitGame") then
-                            done[f] = true
-                        else
-                            next = f
-                            break
-                        end
-                    elseif f:IsObjectType("ScrollFrame") or f.GetScrollPercentage ~= nil then
-                        done[f] = true
-                        mock.wheel(f, -1)
-                        mock.wheel(f, 1)
-                        mock.nextFrame(1)
+                    if f:IsObjectType("Button") or f:IsObjectType("EditBox") or f:IsObjectType("ScrollFrame") or f.GetScrollPercentage ~= nil then
+                        next = f
+                        break
                     end
                 end
             end
@@ -1629,25 +1664,169 @@ local function clicks()
                 break
             end
             done[next] = true
-            mock.hover(next)
-            mock.click(next)
-            mock.nextFrame(2)
-            mock.hover(nil)
-            clicked += 1
-            local open = false
-            for _, r in ipairs(roots) do
-                open = open or r:IsVisible()
+            const name = label(next)
+            if name:find("Logout") or name:find("Quit") or name:find("ExitGame") then
+                continue
             end
-            if not open then
+            actions += 1
+            local n = #mock.errors()
+            if next:IsObjectType("EditBox") then
+                if next:IsEnabled() then
+                    mock.typeText(next, "ab")
+                    mock.nextFrame(1)
+                    mock.pressKey("ENTER")
+                    mock.nextFrame(1)
+                    if next:HasFocus() then
+                        mock.pressKey("ESCAPE")
+                        mock.nextFrame(1)
+                    end
+                    check(`{{binding}} / type {{name}}`, n)
+                end
+            elseif next:IsObjectType("Button") then
+                if next:IsEnabled() then
+                    const shownBefore = shown()
+                    mock.hover(next)
+                    mock.click(next)
+                    mock.nextFrame(2)
+                    check(`{{binding}} / {{name}}`, n)
+                    -- What the click raised (a menu, a dialog): its buttons
+                    -- clicked, then it is closed.
+                    for f in pairs(shown()) do
+                        if not shownBefore[f] and not isRoot(roots, f) and f:IsVisible() then
+                            local k = 0
+                            const usedInner: {{ [any]: boolean }} = {{}}
+                            -- Its controls, looking again after each (a tab,
+                            -- a category shows more); close buttons last.
+                            while k < 60 and f:IsVisible() do
+                                const inner: any[] = {{}}
+                                descendants(f, inner)
+                                local pick: any = nil
+                                local closer: any = nil
+                                for _, b in ipairs(inner) do
+                                    if not usedInner[b] and b:IsVisible() and b:IsObjectType("Button") and b:IsEnabled() then
+                                        if closes(label(b)) then
+                                            closer = closer ?? b
+                                        else
+                                            pick = b
+                                            break
+                                        end
+                                    end
+                                end
+                                pick = pick ?? closer
+                                if pick == nil then
+                                    break
+                                end
+                                usedInner[pick] = true
+                                k += 1
+                                actions += 1
+                                n = #mock.errors()
+                                mock.click(pick)
+                                mock.nextFrame(1)
+                                check(`{{binding}} / {{name}} -> {{label(pick)}}`, n)
+                            end
+                            if f:IsVisible() then
+                                hidePanel(f)
+                            end
+                        end
+                    end
+                    -- The right button, where the control still shows.
+                    if next:IsVisible() and next:IsEnabled() then
+                        n = #mock.errors()
+                        mock.click(next, "RightButton")
+                        mock.nextFrame(2)
+                        check(`{{binding}} / right {{name}}`, n)
+                        for f in pairs(shown()) do
+                            if not before[f] and not isRoot(roots, f) and f:IsVisible() then
+                                hidePanel(f)
+                            end
+                        end
+                    end
+                    mock.hover(nil)
+                end
+            else
+                mock.wheel(next, -1)
+                mock.wheel(next, 1)
+                mock.nextFrame(1)
+                check(`{{binding}} / wheel {{name}}`, n)
+            end
+            -- Back to the panel if the action closed it.
+            if not anyVisible(roots) then
                 mock.pressBinding(binding)
                 mock.nextFrame(3)
             end
-            closeNew(before, roots)
         end
+        total += actions
+        report[#report + 1] = `{{binding}}: {{actions}} actions`
+        const n = #mock.errors()
         mock.pressBinding(binding)
         mock.nextFrame(2)
-        closeNew(before, {{}})
+        for f in pairs(shown()) do
+            if not before[f] and f:IsVisible() then
+                hidePanel(f)
+            end
+        end
         mock.nextFrame(3)
+        check(`{{binding}} closing`, n)
+    end
+    -- Drags: spells onto the action bar, actions onto actions, bag items
+    -- between slots, equipped items onto their slots.
+    local drags = 0
+    local function dragged(what: string, from: any, to: any)
+        const n = #mock.errors()
+        mock.dragTo(from, to)
+        mock.nextFrame(1)
+        drags += 1
+        check(`drag {{what}}`, n)
+        G.ClearCursor()
+        mock.nextFrame(1)
+    end
+    local function withScript(root: any, script: string): any[]
+        const all: any[] = {{}}
+        descendants(root, all)
+        const out: any[] = {{}}
+        for _, f in ipairs(all) do
+            if f:IsVisible() and f:HasScript(script) and f:GetScript(script) ~= nil then
+                out[#out + 1] = f
+            end
+        end
+        return out
+    end
+    mock.pressBinding("TOGGLESPELLBOOK")
+    mock.nextFrame(5)
+    for i, b in ipairs(withScript(G.PlayerSpellsFrame, "OnDragStart")) do
+        if i <= 20 then
+            dragged(`spell {{label(b)}} -> ActionButton{{(i % 12) + 1}}`, b, G[`ActionButton{{(i % 12) + 1}}`])
+        end
+    end
+    mock.pressBinding("TOGGLESPELLBOOK")
+    mock.nextFrame(3)
+    for i = 1, 11 do
+        dragged(`ActionButton{{i}} -> ActionButton{{i + 1}}`, G[`ActionButton{{i}}`], G[`ActionButton{{i + 1}}`])
+    end
+    mock.pressBinding("OPENALLBAGS")
+    mock.nextFrame(5)
+    for _, root in ipairs({{ G.ContainerFrameCombinedBags, G.ContainerFrame1, G.ContainerFrame2 }}) do
+        if root and root:IsVisible() then
+            const slots = withScript(root, "OnDragStart")
+            for i, b in ipairs(slots) do
+                if i <= 20 then
+                    dragged(`bag {{label(b)}} -> {{label(slots[#slots - i + 1])}}`, b, slots[#slots - i + 1])
+                end
+            end
+        end
+    end
+    mock.pressBinding("OPENALLBAGS")
+    mock.nextFrame(3)
+    mock.pressBinding("TOGGLECHARACTER0")
+    mock.nextFrame(5)
+    for _, b in ipairs(withScript(G.PaperDollItemsFrame ?? G.CharacterFrame, "OnDragStart")) do
+        dragged(`equipped {{label(b)}} onto itself`, b, b)
+    end
+    mock.pressBinding("TOGGLECHARACTER0")
+    mock.nextFrame(3)
+    -- Not a single error; nothing refused.
+    if #failures > 0 then
+        error(table.concat(failures, "\n"), 0)
     end
     expect(#mock.refusals()).toBe(0)
 end

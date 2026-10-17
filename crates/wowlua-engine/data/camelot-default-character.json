@@ -465,7 +465,7 @@
     "farclip": "7000",
     "ffxAntiAliasingMode": "0",
     "flaggedTutorials": "v21###&###%###=###'",
-    "gameTip": "43",
+    "gameTip": "45",
     "giQuality": "3",
     "groundEffectDensity": "48",
     "groundEffectDist": "200",
@@ -729,6 +729,7 @@
       "type": "Miscellaneous"
     }
   },
+  "leaderBoards": {},
   "macros": {
     "account": [
       {
@@ -1016,6 +1017,1478 @@
         0
       ]
     ],
+    "cooldownViewerInfo": {
+      "199557": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199557,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            7384,
+            7887,
+            11584,
+            11585
+          ],
+          "overrideSpellID": 7384,
+          "selfAura": false,
+          "spellID": 7384
+        }
+      ],
+      "199558": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199558,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            694,
+            7400,
+            7402,
+            20559,
+            20560
+          ],
+          "overrideSpellID": 694,
+          "selfAura": false,
+          "spellID": 694
+        }
+      ],
+      "199559": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199559,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            6343,
+            8198,
+            8204,
+            8205,
+            11580,
+            11581
+          ],
+          "overrideSpellID": 6343,
+          "selfAura": false,
+          "spellID": 6343
+        }
+      ],
+      "199567": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199567,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            7402,
+            694,
+            7400,
+            20560,
+            20559
+          ],
+          "overrideSpellID": 694,
+          "selfAura": false,
+          "spellID": 694
+        }
+      ],
+      "199582": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199582,
+          "flags": 4,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            8198,
+            8204,
+            11580,
+            8205,
+            11581,
+            6343
+          ],
+          "overrideSpellID": 6343,
+          "selfAura": false,
+          "spellID": 6343
+        }
+      ],
+      "199583": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199583,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1310222
+          ],
+          "overrideSpellID": 1310222,
+          "selfAura": false,
+          "spellID": 1310222
+        }
+      ],
+      "199584": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199584,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            402927
+          ],
+          "overrideSpellID": 402927,
+          "selfAura": false,
+          "spellID": 402927
+        }
+      ],
+      "199585": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199585,
+          "flags": 5,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12294,
+            21551,
+            21552,
+            21553
+          ],
+          "overrideSpellID": 12294,
+          "selfAura": false,
+          "spellID": 12294
+        }
+      ],
+      "199592": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199592,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            21553,
+            21551,
+            12294,
+            21552
+          ],
+          "overrideSpellID": 12294,
+          "selfAura": false,
+          "spellID": 12294
+        }
+      ],
+      "199593": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199593,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1240193,
+            1464,
+            8820,
+            11604,
+            11605
+          ],
+          "overrideSpellID": 1240193,
+          "selfAura": false,
+          "spellID": 1240193
+        }
+      ],
+      "199598": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199598,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1680
+          ],
+          "overrideSpellID": 1680,
+          "selfAura": false,
+          "spellID": 1680
+        }
+      ],
+      "199599": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199599,
+          "flags": 5,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            23881,
+            23892,
+            23893,
+            23894
+          ],
+          "overrideSpellID": 23881,
+          "selfAura": true,
+          "spellID": 23881
+        }
+      ],
+      "199606": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199606,
+          "flags": 6,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            23892,
+            23893,
+            23881,
+            23894
+          ],
+          "overrideSpellID": 23881,
+          "selfAura": true,
+          "spellID": 23881
+        }
+      ],
+      "199607": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199607,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12328
+          ],
+          "overrideSpellID": 12328,
+          "selfAura": true,
+          "spellID": 12328
+        }
+      ],
+      "199608": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199608,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12328
+          ],
+          "overrideSpellID": 12328,
+          "selfAura": true,
+          "spellID": 12328
+        }
+      ],
+      "199609": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199609,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            20230
+          ],
+          "overrideSpellID": 20230,
+          "selfAura": true,
+          "spellID": 20230
+        }
+      ],
+      "199610": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199610,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            871
+          ],
+          "overrideSpellID": 871,
+          "selfAura": true,
+          "spellID": 871
+        }
+      ],
+      "199611": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199611,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1719
+          ],
+          "overrideSpellID": 1719,
+          "selfAura": true,
+          "spellID": 1719
+        }
+      ],
+      "199612": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199612,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            20230
+          ],
+          "overrideSpellID": 20230,
+          "selfAura": true,
+          "spellID": 20230
+        }
+      ],
+      "199613": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199613,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            871
+          ],
+          "overrideSpellID": 871,
+          "selfAura": true,
+          "spellID": 871
+        }
+      ],
+      "199614": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199614,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1719
+          ],
+          "overrideSpellID": 1719,
+          "selfAura": true,
+          "spellID": 1719
+        }
+      ],
+      "199615": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199615,
+          "flags": 6,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            6572,
+            6574,
+            7379,
+            11600,
+            11601,
+            25288
+          ],
+          "overrideSpellID": 6572,
+          "selfAura": false,
+          "spellID": 6572
+        }
+      ],
+      "199621": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199621,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            23922,
+            23923,
+            23924,
+            23925
+          ],
+          "overrideSpellID": 23922,
+          "selfAura": false,
+          "spellID": 23922
+        }
+      ],
+      "199625": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199625,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            100,
+            6178,
+            11578
+          ],
+          "overrideSpellID": 100,
+          "selfAura": false,
+          "spellID": 100
+        }
+      ],
+      "199630": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199630,
+          "flags": 6,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            6178,
+            11578,
+            100
+          ],
+          "overrideSpellID": 100,
+          "selfAura": false,
+          "spellID": 100
+        }
+      ],
+      "199631": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199631,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            18499
+          ],
+          "overrideSpellID": 18499,
+          "selfAura": true,
+          "spellID": 18499
+        }
+      ],
+      "199632": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199632,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            18499
+          ],
+          "overrideSpellID": 18499,
+          "selfAura": true,
+          "spellID": 18499
+        }
+      ],
+      "199633": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199633,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            20252,
+            20616,
+            20617
+          ],
+          "overrideSpellID": 20252,
+          "selfAura": false,
+          "spellID": 20252
+        }
+      ],
+      "199638": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199638,
+          "flags": 6,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            20252,
+            20617,
+            20616
+          ],
+          "overrideSpellID": 20252,
+          "selfAura": false,
+          "spellID": 20252
+        }
+      ],
+      "199639": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199639,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1161
+          ],
+          "overrideSpellID": 1161,
+          "selfAura": false,
+          "spellID": 1161
+        }
+      ],
+      "199640": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199640,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1161
+          ],
+          "overrideSpellID": 1161,
+          "selfAura": false,
+          "spellID": 1161
+        }
+      ],
+      "199641": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199641,
+          "flags": 0,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            5246
+          ],
+          "overrideSpellID": 5246,
+          "selfAura": false,
+          "spellID": 5246
+        }
+      ],
+      "199642": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199642,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            5246,
+            20511
+          ],
+          "overrideSpellID": 5246,
+          "selfAura": false,
+          "spellID": 5246
+        }
+      ],
+      "199643": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199643,
+          "flags": 6,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            6552,
+            6554
+          ],
+          "overrideSpellID": 6552,
+          "selfAura": false,
+          "spellID": 6552
+        }
+      ],
+      "199645": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199645,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12966
+          ],
+          "overrideSpellID": 12319,
+          "selfAura": true,
+          "spellID": 12319
+        }
+      ],
+      "199646": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199646,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12880
+          ],
+          "overrideSpellID": 12317,
+          "selfAura": true,
+          "spellID": 12317
+        }
+      ],
+      "199647": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199647,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            16488
+          ],
+          "overrideSpellID": 16487,
+          "selfAura": true,
+          "spellID": 16487
+        }
+      ],
+      "199648": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199648,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            29131
+          ],
+          "overrideSpellID": 2687,
+          "selfAura": true,
+          "spellID": 2687
+        }
+      ],
+      "199649": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199649,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            29131
+          ],
+          "overrideSpellID": 2687,
+          "selfAura": true,
+          "spellID": 2687
+        }
+      ],
+      "199650": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199650,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            72,
+            1671,
+            1672
+          ],
+          "overrideSpellID": 72,
+          "selfAura": false,
+          "spellID": 72
+        }
+      ],
+      "199653": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199653,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12976
+          ],
+          "overrideSpellID": 12975,
+          "selfAura": true,
+          "spellID": 12975
+        }
+      ],
+      "199654": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199654,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12976
+          ],
+          "overrideSpellID": 12975,
+          "selfAura": true,
+          "spellID": 12975
+        }
+      ],
+      "199656": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199656,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            772,
+            6546,
+            6547,
+            6548,
+            11572,
+            11573,
+            11574
+          ],
+          "overrideSpellID": 772,
+          "selfAura": false,
+          "spellID": 772
+        }
+      ],
+      "199663": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199663,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            412609
+          ],
+          "overrideSpellID": 12834,
+          "selfAura": true,
+          "spellID": 12834
+        }
+      ],
+      "199664": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199664,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1715,
+            7372,
+            7373
+          ],
+          "overrideSpellID": 1715,
+          "selfAura": false,
+          "spellID": 1715
+        }
+      ],
+      "199667": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199667,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1324558
+          ],
+          "overrideSpellID": 676,
+          "selfAura": true,
+          "spellID": 676
+        }
+      ],
+      "199668": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199668,
+          "flags": 0,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            676
+          ],
+          "overrideSpellID": 676,
+          "selfAura": false,
+          "spellID": 676
+        }
+      ],
+      "199669": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199669,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            23694
+          ],
+          "overrideSpellID": 12289,
+          "selfAura": false,
+          "spellID": 12289
+        }
+      ],
+      "199670": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199670,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12323
+          ],
+          "overrideSpellID": 12323,
+          "selfAura": false,
+          "spellID": 12323
+        }
+      ],
+      "199671": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199671,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1160,
+            6190,
+            11554,
+            11555,
+            11556
+          ],
+          "overrideSpellID": 1160,
+          "selfAura": false,
+          "spellID": 1160
+        }
+      ],
+      "199677": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199677,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1324551
+          ],
+          "overrideSpellID": 12311,
+          "selfAura": true,
+          "spellID": 12311
+        }
+      ],
+      "199678": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199678,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            7386,
+            7405,
+            8380,
+            11596,
+            11597
+          ],
+          "overrideSpellID": 7386,
+          "selfAura": false,
+          "spellID": 7386
+        }
+      ],
+      "199683": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199683,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            11596,
+            7386,
+            7405,
+            11597,
+            8380
+          ],
+          "overrideSpellID": 7386,
+          "selfAura": false,
+          "spellID": 7386
+        }
+      ],
+      "199688": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199688,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            6673,
+            5242,
+            6192,
+            11549,
+            11550,
+            11551,
+            25289
+          ],
+          "overrideSpellID": 6673,
+          "selfAura": false,
+          "spellID": 6673
+        }
+      ],
+      "199695": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199695,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1289681
+          ],
+          "overrideSpellID": 1289682,
+          "selfAura": true,
+          "spellID": 1289682
+        }
+      ],
+      "199696": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199696,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12292
+          ],
+          "overrideSpellID": 12292,
+          "selfAura": true,
+          "spellID": 12292
+        }
+      ],
+      "199697": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199697,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12292
+          ],
+          "overrideSpellID": 12292,
+          "selfAura": true,
+          "spellID": 12292
+        }
+      ],
+      "199698": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199698,
+          "flags": 0,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12809
+          ],
+          "overrideSpellID": 12809,
+          "selfAura": false,
+          "spellID": 12809
+        }
+      ],
+      "199699": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199699,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1324556
+          ],
+          "overrideSpellID": 12809,
+          "selfAura": true,
+          "spellID": 12809
+        }
+      ],
+      "199700": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199700,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": [
+            78,
+            284,
+            285,
+            1608,
+            11564,
+            11565,
+            11566,
+            11567,
+            25286
+          ],
+          "overrideSpellID": 78,
+          "selfAura": false,
+          "spellID": 78
+        }
+      ],
+      "199709": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199709,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            5308,
+            20658,
+            20660,
+            20661,
+            20662
+          ],
+          "overrideSpellID": 5308,
+          "selfAura": false,
+          "spellID": 5308
+        }
+      ],
+      "199714": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199714,
+          "flags": 0,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            355
+          ],
+          "overrideSpellID": 355,
+          "selfAura": false,
+          "spellID": 355
+        }
+      ],
+      "199715": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199715,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            355
+          ],
+          "overrideSpellID": 355,
+          "selfAura": false,
+          "spellID": 355
+        }
+      ],
+      "199716": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199716,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": [
+            2457,
+            71,
+            2458
+          ],
+          "overrideSpellID": 1319507,
+          "selfAura": true,
+          "spellID": 1319507
+        }
+      ],
+      "199859": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199859,
+          "flags": 4,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            6546,
+            6547,
+            772,
+            6548,
+            11573,
+            11574,
+            11572
+          ],
+          "overrideSpellID": 772,
+          "selfAura": false,
+          "spellID": 772
+        }
+      ],
+      "199861": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199861,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            2565
+          ],
+          "overrideSpellID": 2565,
+          "selfAura": true,
+          "spellID": 2565
+        }
+      ],
+      "199862": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199862,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            2565
+          ],
+          "overrideSpellID": 2565,
+          "selfAura": true,
+          "spellID": 2565
+        }
+      ],
+      "199867": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199867,
+          "flags": 6,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            7369,
+            20569,
+            845,
+            11609,
+            11608
+          ],
+          "overrideSpellID": 845,
+          "selfAura": false,
+          "spellID": 845
+        }
+      ],
+      "200185": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 200185,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": {},
+          "overrideSpellID": 20600,
+          "selfAura": true,
+          "spellID": 20600
+        }
+      ],
+      "200186": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 200186,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": {},
+          "overrideSpellID": 20600,
+          "selfAura": true,
+          "spellID": 20600
+        }
+      ],
+      "200187": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 200187,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": {},
+          "overrideSpellID": 1259718,
+          "selfAura": false,
+          "spellID": 1259718
+        }
+      ],
+      "200257": [
+        {
+          "buffSlot": 1,
+          "category": 7,
+          "charges": false,
+          "cooldownID": 200257,
+          "equipSlot": 13,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": true,
+          "isKnown": false,
+          "linkedSpellIDs": {},
+          "selfAura": false
+        }
+      ],
+      "200258": [
+        {
+          "buffSlot": 1,
+          "category": 7,
+          "charges": false,
+          "cooldownID": 200258,
+          "equipSlot": 14,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": true,
+          "isKnown": false,
+          "linkedSpellIDs": {},
+          "selfAura": false
+        }
+      ],
+      "200345": [
+        {
+          "buffSlot": 1,
+          "category": 5,
+          "charges": false,
+          "cooldownID": 200345,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": {},
+          "selfAura": false,
+          "spellCategoryID": 1153
+        }
+      ],
+      "200346": [
+        {
+          "buffSlot": 1,
+          "category": 5,
+          "charges": false,
+          "cooldownID": 200346,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": {},
+          "selfAura": false,
+          "spellCategoryID": 2466
+        }
+      ],
+      "200347": [
+        {
+          "buffSlot": 1,
+          "category": 5,
+          "charges": false,
+          "cooldownID": 200347,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": {},
+          "selfAura": false,
+          "spellCategoryID": 24
+        }
+      ],
+      "200436": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 200436,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": {},
+          "overrideSpellID": 402975,
+          "selfAura": true,
+          "spellID": 402975
+        }
+      ]
+    },
     "cooldownViewerSet": {
       "0": [
         [
@@ -1285,6 +2758,119 @@
         }
       ]
     ],
+    "factionAccountWide": {
+      "469": [
+        false
+      ],
+      "47": [
+        false
+      ],
+      "54": [
+        false
+      ],
+      "69": [
+        false
+      ],
+      "72": [
+        false
+      ]
+    },
+    "factionFriendship": {
+      "469": [
+        {
+          "friendshipFactionID": 0,
+          "maxRep": 0,
+          "reaction": "",
+          "reactionThreshold": 0,
+          "reversedColor": false,
+          "standing": 0,
+          "text": "",
+          "texture": 0
+        }
+      ],
+      "47": [
+        {
+          "friendshipFactionID": 0,
+          "maxRep": 0,
+          "reaction": "",
+          "reactionThreshold": 0,
+          "reversedColor": false,
+          "standing": 0,
+          "text": "",
+          "texture": 0
+        }
+      ],
+      "54": [
+        {
+          "friendshipFactionID": 0,
+          "maxRep": 0,
+          "reaction": "",
+          "reactionThreshold": 0,
+          "reversedColor": false,
+          "standing": 0,
+          "text": "",
+          "texture": 0
+        }
+      ],
+      "69": [
+        {
+          "friendshipFactionID": 0,
+          "maxRep": 0,
+          "reaction": "",
+          "reactionThreshold": 0,
+          "reversedColor": false,
+          "standing": 0,
+          "text": "",
+          "texture": 0
+        }
+      ],
+      "72": [
+        {
+          "friendshipFactionID": 0,
+          "maxRep": 0,
+          "reaction": "",
+          "reactionThreshold": 0,
+          "reversedColor": false,
+          "standing": 0,
+          "text": "",
+          "texture": 0
+        }
+      ]
+    },
+    "factionMajor": {
+      "469": [
+        false
+      ],
+      "47": [
+        false
+      ],
+      "54": [
+        false
+      ],
+      "69": [
+        false
+      ],
+      "72": [
+        false
+      ]
+    },
+    "factionParagon": {
+      "469": [
+        false
+      ],
+      "47": [
+        false
+      ],
+      "54": [
+        false
+      ],
+      "69": [
+        false
+      ],
+      "72": [
+        false
+      ]
+    },
     "factions": [
       5
     ],
@@ -1373,7 +2959,14 @@
       null,
       null
     ],
+    "questClassification": {},
     "questComplete": {},
+    "questContentDifficulty": {},
+    "questDifficulty": {},
+    "questDisabled": {},
+    "questElite": {},
+    "questFailed": {},
+    "questGroup": {},
     "questLogEntries": [
       0,
       0
@@ -1381,7 +2974,11 @@
     "questLogIndex": {},
     "questLogInfo": {},
     "questObjectives": {},
+    "questSequenced": {},
+    "questSpecialItem": {},
     "questTag": {},
+    "questTheme": {},
+    "questTimeAllowed": {},
     "questTitle": {},
     "questWatchID": {},
     "questWatchType": {},
@@ -2031,6 +3628,193 @@
           "skillLineIndex": 2,
           "subName": ""
         }
+      ]
+    ],
+    "spellBookItemAutoCast": [
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      []
+    ],
+    "spellBookItemCooldown": [
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      []
+    ],
+    "spellBookItemFlyoutMember": [
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        true
+      ],
+      [
+        false
+      ],
+      [
+        false
       ]
     ],
     "spellBookItemLevel": [

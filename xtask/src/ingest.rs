@@ -10,6 +10,7 @@
 //! - `/stdtest engine answers`: `…/forever-camelot-answers.lua` (its checks
 //!   `…/forever-camelot-checks.lua`);
 //! - `/stdtest engine maps`: `…/forever-camelot-maps.lua` (and the data);
+//! - `/stdtest engine cursor`: `…/forever-camelot-cursor.lua`;
 //! - `/stdtest engine collections`: `…/forever-camelot-collections.lua`
 //!   (and the data);
 //! - the default character (a fresh level 1 Human Warrior's `/stdtest
@@ -683,6 +684,23 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             if (listed(STATIC) || listed(BASELINE)) && !answer.starts_with("error") {
                 let _ = writeln!(data, "{call}\t{answer}");
             }
+        }
+        // The cursor (`/stdtest engine cursor`): each step's state and the
+        // events between.
+        if let Ok(log) = state.get::<mlua::Table>("engineCursor") {
+            let mut list = Vec::new();
+            for (i, line) in log.sequence_values::<String>().enumerate() {
+                let line = line.map_err(|e| anyhow!("{e}"))?;
+                list.push((format!("{:03}", i + 1), me.scrub(&line)));
+            }
+            write_table(
+                &client.join("forever-camelot-cursor.lua"),
+                &format!(
+                    "WoW Forever {version}: /stdtest engine cursor, the cursor's steps and\n\
+                     events in order (cargo xtask ingest)."
+                ),
+                &list,
+            )?;
         }
         // The checks of rules the call form cannot ask (`/stdtest engine
         // answers`' CHECKS), for the engine's tests.

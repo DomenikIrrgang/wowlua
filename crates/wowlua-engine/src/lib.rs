@@ -15,6 +15,7 @@ pub mod character;
 pub mod chat;
 pub mod clock;
 pub mod controls;
+pub mod cursor;
 pub mod curves;
 pub mod facts;
 pub mod framescript;
@@ -199,6 +200,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(actions::behaviours())
             .chain(channels::behaviours())
             .chain(macros::behaviours())
+            .chain(cursor::behaviours())
             .chain(input::behaviours())
             .chain(casting::behaviours())
             .chain(merchant::behaviours())

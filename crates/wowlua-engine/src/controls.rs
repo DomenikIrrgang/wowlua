@@ -159,6 +159,29 @@ fn drag(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `dragTo(source, target)`: the user drags `source` onto `target`: the
+/// source's `OnDragStart("LeftButton")` (picking something up), then on
+/// release its `OnDragStop` and, with something on the cursor, the
+/// target's `OnReceiveDrag`. Unverified: the release's order.
+fn drag_to(vm: &mut Vm, c: NativeCall) -> Ret {
+    let from = widget_arg(vm, &c, 1)?;
+    let to = widget_arg(vm, &c, 2)?;
+    crate::input::as_user(vm, |vm| {
+        let left = vm.str("LeftButton");
+        widgets::run_script(vm, from, "OnDragStart", &[left]);
+    });
+    crate::input::as_user(vm, |vm| {
+        widgets::run_script(vm, from, "OnDragStop", &[]);
+        if !matches!(
+            engine(vm).world.character.cursor,
+            crate::cursor::Cursor::Empty
+        ) {
+            widgets::run_script(vm, to, "OnReceiveDrag", &[]);
+        }
+    });
+    Ok(vec![])
+}
+
 /// `sizeBy(grip, dw, dh)`: drags a resize grip by (dw, dh) screen units.
 fn size_by(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = widget_arg(vm, &c, 1)?;
@@ -241,6 +264,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("frames", frames),
         ("script", script),
         ("drag", drag),
+        ("dragTo", drag_to),
         ("sizeBy", size_by),
         ("wheel", wheel),
         ("defineTemplate", define_template),

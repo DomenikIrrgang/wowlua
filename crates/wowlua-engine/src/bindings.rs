@@ -443,6 +443,9 @@ fn set_modified_click(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `GetNumModifiedClickActions()`: the bindings' modified clicks. The
+/// client's answer differs from session to session (380, then 500, while
+/// it lists 20: `GetModifiedClickAction(21)` and on are nil; recorded).
 fn get_num_modified_click_actions(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(
         engine(vm).world.bindings.modified_clicks.len() as f64,

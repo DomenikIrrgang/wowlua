@@ -75,6 +75,8 @@ pub struct Character {
     pub channels: crate::channels::Channels,
     /// The macros (`macros.rs`).
     pub macros: crate::macros::Macros,
+    /// What the cursor holds (`cursor.rs`).
+    pub cursor: crate::cursor::Cursor,
 }
 
 impl Default for Character {
@@ -96,6 +98,7 @@ impl Default for Character {
             actions: Default::default(),
             channels: Default::default(),
             macros: Default::default(),
+            cursor: Default::default(),
         }
     }
 }

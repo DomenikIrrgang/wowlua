@@ -354,3 +354,17 @@ mock.advanceFrames(10)",
         ]
     );
 }
+
+/// `CreateFrame`'s fifth argument is the frame's ID (`GetID`), set before
+/// the templates run (Blizzard's action buttons read it in `OnLoad`).
+#[test]
+fn create_frame_sets_the_id() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('CheckButton', nil, UIParent, nil, 7)
+local g = CreateFrame('Frame')
+return f:GetID(), g:GetID()",
+    );
+    assert_eq!(r, ["7", "0"]);
+}

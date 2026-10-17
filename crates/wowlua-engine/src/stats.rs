@@ -1029,7 +1029,7 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// The player's spellbook slot holding `spell` (the recorded items'
 /// `spellID`).
-fn spellbook_slot_of(vm: &Vm, spell: f64) -> Option<i64> {
+pub fn spellbook_slot_of(vm: &Vm, spell: f64) -> Option<i64> {
     let Some(Entry::ByIndex(items)) = engine(vm).world.character.stats.get("spellBookItem") else {
         return None;
     };
@@ -1050,6 +1050,15 @@ fn spellbook_slot_of(vm: &Vm, spell: f64) -> Option<i64> {
 /// The recorded spellbook item of `spell` (its `GetSpellBookItemInfo`).
 pub fn spellbook_item(vm: &mut Vm, spell: f64) -> Option<Value> {
     let slot = spellbook_slot_of(vm, spell)?;
+    let Some(Entry::ByIndex(items)) = engine(vm).world.character.stats.get("spellBookItem") else {
+        return None;
+    };
+    let answer = items.get(&slot)?.first()?.clone();
+    Some(value_of(vm, &answer))
+}
+
+/// The recorded spellbook item in the player's `slot`.
+pub fn spellbook_item_at(vm: &mut Vm, slot: i64) -> Option<Value> {
     let Some(Entry::ByIndex(items)) = engine(vm).world.character.stats.get("spellBookItem") else {
         return None;
     };

@@ -500,7 +500,7 @@ __engine.pressKey("ENTER")"#,
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 4038;
+const ANSWERS_MATCHED: usize = 4465;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {
@@ -692,7 +692,8 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         .collect();
     // Not yet answered as the client does, with the reason.
     const KNOWN: &[&str] = &[
-        // 380 on the client; the bindings define 20 (to be recorded).
+        // Differs between the client's sessions (380, then 500) though it
+        // lists 20: no stable answer to give.
         "GetNumModifiedClickActions",
     ];
     let hex = regex::Regex::new(r"[0-9a-f]{10}").unwrap();
@@ -766,4 +767,55 @@ return table.concat(out, '\\n')",
     let r = vm.call(f, &[]).expect("runs");
     let ours = text(&vm, r[0]);
     assert_eq!(ours.lines().collect::<Vec<_>>(), expected);
+}
+
+/// The cursor (`/stdtest engine cursor`): each step's state and the events
+/// between, as the client recorded them for the recorded character.
+#[test]
+fn the_cursor_moves_as_the_client_recorded() {
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let mut vm = client_in(vm, &out);
+    let controls = wowlua_engine::controls::table(&mut vm);
+    wowlua_test::profile::apply(
+        &mut vm,
+        controls,
+        &repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json"),
+    )
+    .expect("the character's profile");
+    addon(&mut vm, "StdTestEngineProbe('cursor')");
+    wowlua_engine::clock::advance_frames(&mut vm, 90, 1000.0 / 60.0);
+    let f = vm
+        .load(
+            b"return table.concat(StdTestState.engineCursor, '\\n')",
+            "=cursor",
+        )
+        .expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let ours = text(&vm, r[0]);
+    let src = fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-cursor.lua"))
+        .expect("the fixture");
+    let mut fixture_vm = Vm::new();
+    let f = fixture_vm.load(&src, "=fixture").expect("compiles");
+    let r = fixture_vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let mut lines: Vec<(String, String)> = fixture_vm
+        .heap
+        .table(t)
+        .entries()
+        .filter_map(|(k, v)| match (k, v) {
+            (Value::Str(k), Value::Str(v)) => Some((
+                String::from_utf8_lossy(fixture_vm.str_bytes(k)).into_owned(),
+                String::from_utf8_lossy(fixture_vm.str_bytes(v)).into_owned(),
+            )),
+            _ => None,
+        })
+        .collect();
+    lines.sort();
+    let theirs: Vec<String> = lines.into_iter().map(|(_, v)| v).collect();
+    assert_eq!(ours.lines().collect::<Vec<_>>(), theirs);
 }

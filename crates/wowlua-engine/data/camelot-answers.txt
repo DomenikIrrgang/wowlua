@@ -1574,6 +1574,9 @@ GetMaxPlayerLevel()	1: number 60
 GetMaxRenderScale()	1: number 2
 GetMinRenderScale()	1: number 0.33333334326744
 GetMonitorCount()	1: number 2
+GetMonitorName(1)	2: nil nil, boolean true
+GetMonitorName(2)	2: string DELL S2740L, boolean true
+GetMonitorName(3)	2: nil nil, boolean false
 GetNumArenaOpponentSpecs()	1: number 0
 GetNumSavedWorldBosses()	1: number 0
 GetPartyLFGID()	0: 
@@ -1788,6 +1791,20 @@ ResurrectGetOfferer()	1: nil nil
 ResurrectHasSickness()	1: boolean false
 ResurrectHasTimer()	1: boolean false
 ShouldDisplayRaidRolesInSocialFrame()	1: boolean false
+Sound_GameSystem_GetInputDriverNameByIndex(0)	1: string None
+Sound_GameSystem_GetInputDriverNameByIndex(1)	1: string None
+Sound_GameSystem_GetInputDriverNameByIndex(2)	1: string None
+Sound_GameSystem_GetInputDriverNameByIndex(3)	1: string None
+Sound_GameSystem_GetInputDriverNameByIndex(4)	1: string None
+Sound_GameSystem_GetInputDriverNameByIndex(5)	1: string None
+Sound_GameSystem_GetNumInputDrivers()	1: number 0
+Sound_GameSystem_GetNumOutputDrivers()	1: number 5
+Sound_GameSystem_GetOutputDriverNameByIndex(0)	1: string System Default
+Sound_GameSystem_GetOutputDriverNameByIndex(1)	1: string Mac Studio Speakers
+Sound_GameSystem_GetOutputDriverNameByIndex(2)	1: string DELL S2740L
+Sound_GameSystem_GetOutputDriverNameByIndex(3)	1: string Steam Streaming Microphone
+Sound_GameSystem_GetOutputDriverNameByIndex(4)	1: string Steam Streaming Speakers
+Sound_GameSystem_GetOutputDriverNameByIndex(5)	1: string None
 SupportsClipCursor()	1: boolean true
 C_Map.CanSetUserWaypointOnMap(1411)	1: boolean true
 C_Map.CanSetUserWaypointOnMap(1412)	1: boolean true

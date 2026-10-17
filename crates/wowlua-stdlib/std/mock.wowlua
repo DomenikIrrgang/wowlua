@@ -541,6 +541,13 @@ export function drag(frame: any, dx: number, dy: number)
     engine().drag(frame, dx, dy)
 end
 
+--- Drags `source` onto `target` as the user would: the source's
+--- `OnDragStart` (it picks something up), then its `OnDragStop` and, with
+--- something on the cursor, the target's `OnReceiveDrag`.
+export function dragTo(source: any, target: any)
+    engine().dragTo(source, target)
+end
+
 --- Drags a resize grip by `dw`, `dh`.
 export function sizeBy(grip: any, dw: number, dh: number)
     engine().sizeBy(grip, dw, dh)

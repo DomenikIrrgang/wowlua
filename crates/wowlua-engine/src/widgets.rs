@@ -536,6 +536,13 @@ pub fn create_frame(vm: &mut Vm, c: NativeCall) -> Ret {
                 .templates
                 .contains_key(&t.to_ascii_lowercase())
         });
+    // The ID before the templates and OnLoad (Blizzard's action buttons
+    // read it there for their slot).
+    if c.has(5) && !c.arg(5).is_nil() {
+        let id = vm.check_number(&c, 5)?;
+        let w = widget_of(vm, frame).expect("a widget");
+        store(vm, w, "ID", &[Value::Num(id)]);
+    }
     if let Some((_, el)) = intrinsic {
         crate::ui::build::apply_intrinsic(vm, frame, &el);
     }
@@ -545,13 +552,6 @@ pub fn create_frame(vm: &mut Vm, c: NativeCall) -> Ret {
     // Templates of the UI code run their OnLoad once applied.
     if from_xml && let Some(id) = widget_of(vm, frame) {
         run_script(vm, id, "OnLoad", &[]);
-    }
-    if c.has(5) && !c.arg(5).is_nil() {
-        let id = vm.check_number(&c, 5)?;
-        let key = vm.str("ID");
-        let w = widget_of(vm, frame).expect("a widget");
-        let props = engine(vm).world.widgets[w.0].props;
-        let _ = vm.heap.table_mut(props).set(key, Value::Num(id));
     }
     Ok(vec![frame])
 }
