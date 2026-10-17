@@ -28,6 +28,23 @@ pub struct Compiled {
     pub map: Option<Arc<wowlua_luair::sourcemap::EncodedMap>>,
     /// `code` has no byte order mark, and Lua 5.1 compiled exactly it.
     pub compiles: bool,
+    /// The code was dropped once checked (`BuildRequest::keep_code`):
+    /// `code` is empty, and this is the BLAKE3 hash of what it was.
+    pub dropped: Option<[u8; 32]>,
+}
+
+impl Compiled {
+    /// Whether the two hold the same code, also where it was dropped.
+    pub fn same_code(&self, other: &Compiled) -> bool {
+        let hash = |c: &Compiled| {
+            c.dropped
+                .unwrap_or_else(|| *blake3::hash(&c.code).as_bytes())
+        };
+        match (self.dropped, other.dropped) {
+            (None, None) => self.code == other.code,
+            _ => hash(self) == hash(other),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -1050,6 +1067,8 @@ pub fn compile_flavor(
     minify: &Minify,
     cache: &mut FlavorCache,
     store: bool,
+    // `Some(kept)`: drop the code of every file but `kept` once checked.
+    drop_code: Option<&BTreeSet<String>>,
     jobs: &crate::parallel::Jobs,
 ) -> CompileOutput {
     let mut options = minify.passes.emit_options(line_mode(profile));
@@ -1399,8 +1418,10 @@ pub fn compile_flavor(
                     &original,
                 ))
             });
+            let drop = drop_code.is_some_and(|kept| !kept.contains(&source.rel));
             Some(Compiled {
-                code: emitted.text,
+                dropped: drop.then(|| *blake3::hash(&emitted.text).as_bytes()),
+                code: if drop { Vec::new() } else { emitted.text },
                 map,
                 compiles: checked,
             })
@@ -2028,6 +2049,29 @@ fn context(
 #[cfg(test)]
 mod limit_tests {
     use super::*;
+
+    // Dropped code compares by its hash, with dropped and kept code alike.
+    #[test]
+    fn dropped_code_compares_by_its_hash() {
+        let kept = |code: &[u8]| Compiled {
+            code: code.to_vec(),
+            map: None,
+            compiles: true,
+            dropped: None,
+        };
+        let dropped = |code: &[u8]| Compiled {
+            code: Vec::new(),
+            map: None,
+            compiles: true,
+            dropped: Some(*blake3::hash(code).as_bytes()),
+        };
+        assert!(kept(b"x = 1").same_code(&kept(b"x = 1")));
+        assert!(!kept(b"x = 1").same_code(&kept(b"x = 2")));
+        assert!(dropped(b"x = 1").same_code(&dropped(b"x = 1")));
+        assert!(!dropped(b"x = 1").same_code(&dropped(b"x = 2")));
+        assert!(dropped(b"x = 1").same_code(&kept(b"x = 1")));
+        assert!(!kept(b"x = 2").same_code(&dropped(b"x = 1")));
+    }
 
     /// Emitted code that does not parse is an internal error, worded with
     /// the parser's first message.

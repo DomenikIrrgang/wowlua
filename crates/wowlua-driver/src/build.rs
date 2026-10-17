@@ -39,6 +39,10 @@ pub struct BuildRequest {
     pub only: Option<Only>,
     /// Worker threads and memory for per-file work (`--jobs`, #8).
     pub jobs: crate::parallel::Jobs,
+    /// `false` (`wowlua check`): nobody reads the compiled code, so a build
+    /// that writes nothing and bundles nothing keeps each file's only until
+    /// it is checked; [`BuildOutput::files`] then holds none of it.
+    pub keep_code: bool,
 }
 
 /// The files `wowlua compile` compiles.
@@ -64,6 +68,7 @@ impl BuildRequest {
             bundle: None,
             only: None,
             jobs: crate::parallel::Jobs::default(),
+            keep_code: true,
         }
     }
 }
@@ -1131,6 +1136,8 @@ fn build_inner(
             &minify,
             &mut flavor_cache,
             idx + 1 < compile_flavors.len(),
+            // Packager flavor blocks are applied to the compiled code.
+            (!request.keep_code && !request.write && !profile.bundle).then_some(&flavor_blocks),
             &request.jobs,
         );
         builds.push(FlavorBuild {
@@ -1196,6 +1203,7 @@ fn build_inner(
                     code: code.into_bytes(),
                     map: None,
                     compiles: false,
+                    dropped: None,
                 }),
             );
         }
@@ -1224,11 +1232,14 @@ fn build_inner(
     // (spec codegen §14.8.3).
     let mut per_flavor: BTreeSet<String> = BTreeSet::new();
     for (source, _) in &files {
-        let codes: Vec<Option<&Vec<u8>>> = builds
+        let codes: Vec<Option<&crate::compile::Compiled>> = builds
             .iter()
-            .map(|b| b.output.compiled.get(&source.rel).map(|c| &c.code))
+            .map(|b| b.output.compiled.get(&source.rel).map(|c| &**c))
             .collect();
-        if codes.windows(2).any(|w| w[0] != w[1]) {
+        if codes.windows(2).any(|w| match (w[0], w[1]) {
+            (Some(a), Some(b)) => !a.same_code(b),
+            (a, b) => a.is_some() != b.is_some(),
+        }) {
             per_flavor.insert(source.rel.clone());
         }
     }
