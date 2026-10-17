@@ -1,0 +1,5195 @@
+{
+  "actions": {
+    "1": {
+      "count": "",
+      "id": 6603,
+      "subType": "spell",
+      "texture": 135274,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "10": {
+      "count": "",
+      "id": 1259718,
+      "subType": "spell",
+      "texture": 136129,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "109": {
+      "count": "",
+      "id": 6603,
+      "subType": "spell",
+      "texture": 135274,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "11": {
+      "count": "",
+      "id": 20600,
+      "subType": "spell",
+      "texture": 136090,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "12": {
+      "count": "4",
+      "id": 117,
+      "texture": 133972,
+      "type": "item",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "181": {
+      "count": "",
+      "id": 20600,
+      "subType": "spell",
+      "texture": 136090,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "183": {
+      "count": "",
+      "id": 1259718,
+      "subType": "spell",
+      "texture": 136129,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "184": {
+      "count": "4",
+      "id": 117,
+      "texture": 133972,
+      "type": "item",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "2": {
+      "count": "",
+      "id": 78,
+      "subType": "spell",
+      "texture": 132282,
+      "type": "spell",
+      "usable": [
+        false,
+        true
+      ]
+    },
+    "200": {
+      "count": "",
+      "id": 78,
+      "subType": "spell",
+      "texture": 132282,
+      "type": "spell",
+      "usable": [
+        false,
+        true
+      ]
+    },
+    "272": {
+      "count": "",
+      "id": 78,
+      "subType": "spell",
+      "texture": 132282,
+      "type": "spell",
+      "usable": [
+        false,
+        true
+      ]
+    },
+    "73": {
+      "count": "",
+      "id": 6603,
+      "subType": "spell",
+      "texture": 135274,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "74": {
+      "count": "",
+      "id": 78,
+      "subType": "spell",
+      "texture": 132282,
+      "type": "spell",
+      "usable": [
+        false,
+        true
+      ]
+    },
+    "82": {
+      "count": "",
+      "id": 1259718,
+      "subType": "spell",
+      "texture": 136129,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "83": {
+      "count": "",
+      "id": 20600,
+      "subType": "spell",
+      "texture": 136090,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "84": {
+      "count": "4",
+      "id": 117,
+      "texture": 133972,
+      "type": "item",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "85": {
+      "count": "",
+      "id": 6603,
+      "subType": "spell",
+      "texture": 135274,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    },
+    "97": {
+      "count": "",
+      "id": 6603,
+      "subType": "spell",
+      "texture": 135274,
+      "type": "spell",
+      "usable": [
+        true,
+        false
+      ]
+    }
+  },
+  "auras": {},
+  "bags": {
+    "0": {
+      "items": [
+        {
+          "bound": false,
+          "count": 4,
+          "id": 117,
+          "link": "|cnIQ1:|Hitem:117::::::::2:1491:::::::::|h[Tough Jerky]|h|r"
+        },
+        {
+          "bound": true,
+          "count": 1,
+          "id": 6948,
+          "link": "|cnIQ1:|Hitem:6948::::::::2:1491::75:::::::|h[Hearthstone]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 4,
+          "id": 7073,
+          "link": "|cnIQ0:|Hitem:7073::::::::2:1491:::::::::|h[Broken Fang]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 5,
+          "id": 4865,
+          "link": "|cnIQ0:|Hitem:4865::::::::2:1491:::::::::|h[Ruined Pelt]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 5,
+          "id": 7074,
+          "link": "|cnIQ0:|Hitem:7074::::::::2:1491:::::::::|h[Chipped Claw]|h|r"
+        },
+        {
+          "bound": true,
+          "count": 1,
+          "id": 80,
+          "link": "|cnIQ1:|Hitem:80::::::::2:1491::11:::::::|h[Soft Fur-lined Shoes]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 1,
+          "id": 2652,
+          "link": "|cnIQ0:|Hitem:2652::::::::2:1491:::::::::|h[Flimsy Chain Cloak]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 1,
+          "id": 1368,
+          "link": "|cnIQ0:|Hitem:1368::::::::2:1491:::::::::|h[Ragged Leather Gloves]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 3,
+          "id": 2672,
+          "link": "|cnIQ1:|Hitem:2672::::::::2:1491:::::::::|h[Stringy Wolf Meat]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 1,
+          "id": 1372,
+          "link": "|cnIQ0:|Hitem:1372::::::::2:1491:::::::::|h[Ragged Cloak]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 1,
+          "id": 2654,
+          "link": "|cnIQ0:|Hitem:2654::::::::2:1491:::::::::|h[Flimsy Chain Pants]|h|r"
+        },
+        {
+          "bound": false,
+          "count": 1,
+          "id": 7074,
+          "link": "|cnIQ0:|Hitem:7074::::::::2:1491:::::::::|h[Chipped Claw]|h|r"
+        }
+      ],
+      "slots": 20
+    }
+  },
+  "bindings": {
+    "-": "ACTIONBUTTON11",
+    "/": "OPENCHATSLASH",
+    "0": "ACTIONBUTTON10",
+    "1": "ACTIONBUTTON1",
+    "2": "ACTIONBUTTON2",
+    "3": "ACTIONBUTTON3",
+    "4": "ACTIONBUTTON4",
+    "5": "ACTIONBUTTON5",
+    "6": "ACTIONBUTTON6",
+    "7": "ACTIONBUTTON7",
+    "8": "ACTIONBUTTON8",
+    "9": "ACTIONBUTTON9",
+    "=": "ACTIONBUTTON12",
+    "A": "STRAFELEFT",
+    "ALT-Z": "TOGGLEUI",
+    "B": "TOGGLEBACKPACK",
+    "BUTTON3": "MOVEANDSTEER",
+    "BUTTON4": "MULTIACTIONBAR3BUTTON12",
+    "BUTTON5": "MULTIACTIONBAR3BUTTON6",
+    "C": "TOGGLECHARACTER0",
+    "CTRL--": "MASTERVOLUMEDOWN",
+    "CTRL-0": "BONUSACTIONBUTTON10",
+    "CTRL-1": "BONUSACTIONBUTTON1",
+    "CTRL-2": "BONUSACTIONBUTTON2",
+    "CTRL-3": "BONUSACTIONBUTTON3",
+    "CTRL-4": "BONUSACTIONBUTTON4",
+    "CTRL-5": "BONUSACTIONBUTTON5",
+    "CTRL-6": "BONUSACTIONBUTTON6",
+    "CTRL-7": "BONUSACTIONBUTTON7",
+    "CTRL-8": "BONUSACTIONBUTTON8",
+    "CTRL-9": "BONUSACTIONBUTTON9",
+    "CTRL-=": "MASTERVOLUMEUP",
+    "CTRL-F1": "SHAPESHIFTBUTTON1",
+    "CTRL-F10": "SHAPESHIFTBUTTON10",
+    "CTRL-F2": "SHAPESHIFTBUTTON2",
+    "CTRL-F3": "SHAPESHIFTBUTTON3",
+    "CTRL-F4": "SHAPESHIFTBUTTON4",
+    "CTRL-F5": "SHAPESHIFTBUTTON5",
+    "CTRL-F6": "SHAPESHIFTBUTTON6",
+    "CTRL-F7": "SHAPESHIFTBUTTON7",
+    "CTRL-F8": "SHAPESHIFTBUTTON8",
+    "CTRL-F9": "SHAPESHIFTBUTTON9",
+    "CTRL-M": "TOGGLEMUSIC",
+    "CTRL-PAGEDOWN": "COMBATLOGPAGEDOWN",
+    "CTRL-PAGEUP": "COMBATLOGPAGEUP",
+    "CTRL-R": "TOGGLEFPS",
+    "CTRL-S": "TOGGLESOUND",
+    "CTRL-SHIFT-PAGEDOWN": "COMBATLOGBOTTOM",
+    "CTRL-SHIFT-TAB": "TARGETPREVIOUSFRIEND",
+    "CTRL-TAB": "TARGETNEARESTFRIEND",
+    "CTRL-V": "ALLNAMEPLATES",
+    "D": "STRAFERIGHT",
+    "DELETE": "PITCHDOWN",
+    "DOWN": "MOVEBACKWARD",
+    "E": "MULTIACTIONBAR1BUTTON7",
+    "END": "NEXTVIEW",
+    "ENTER": "OPENCHAT",
+    "ESCAPE": "TOGGLEGAMEMENU",
+    "F": "MULTIACTIONBAR1BUTTON4",
+    "F1": "RAIDTARGET8",
+    "F10": "TOGGLEBAG3",
+    "F11": "TOGGLEBAG4",
+    "F12": "TOGGLEBACKPACK",
+    "F2": "RAIDTARGET7",
+    "F3": "RAIDTARGET4",
+    "F4": "RAIDTARGET6",
+    "F5": "TOGGLEPINGLISTENER",
+    "F6": "Open Issue Report",
+    "F7": "INTERACTTARGET",
+    "F8": "TOGGLEBAG1",
+    "F9": "TOGGLEBAG2",
+    "G": "MULTIACTIONBAR1BUTTON5",
+    "H": "TOGGLECHARACTER4",
+    "HOME": "PREVVIEW",
+    "I": "TOGGLEGROUPFINDER",
+    "INSERT": "PITCHUP",
+    "J": "TOGGLEGUILDTAB",
+    "K": "TOGGLEPROFESSIONBOOK",
+    "L": "TOGGLEQUESTLOG",
+    "LEFT": "TURNLEFT",
+    "M": "TOGGLEWORLDMAP",
+    "META-1": "MULTIACTIONBAR3BUTTON7",
+    "META-2": "MULTIACTIONBAR3BUTTON8",
+    "META-3": "MULTIACTIONBAR3BUTTON9",
+    "META-4": "MULTIACTIONBAR3BUTTON10",
+    "META-5": "MULTIACTIONBAR3BUTTON11",
+    "META-E": "MULTIACTIONBAR1BUTTON9",
+    "META-F": "MULTIACTIONBAR2BUTTON10",
+    "META-G": "MULTIACTIONBAR2BUTTON11",
+    "META-Q": "MULTIACTIONBAR1BUTTON10",
+    "META-R": "MULTIACTIONBAR2BUTTON7",
+    "META-T": "MULTIACTIONBAR2BUTTON8",
+    "META-V": "MULTIACTIONBAR2BUTTON12",
+    "META-Y": "MULTIACTIONBAR2BUTTON9",
+    "MOUSEWHEELDOWN": "CAMERAZOOMOUT",
+    "MOUSEWHEELUP": "CAMERAZOOMIN",
+    "N": "TOGGLETALENTS",
+    "NUMPAD0": "JUMP",
+    "NUMPAD5": "VEHICLEEXIT",
+    "NUMPADDIVIDE": "TOGGLERUN",
+    "NUMPADMINUS": "MINIMAPZOOMOUT",
+    "NUMPADPLUS": "MINIMAPZOOMIN",
+    "O": "TOGGLESOCIAL",
+    "P": "TOGGLESPELLBOOK",
+    "PAGEDOWN": "CHATPAGEDOWN",
+    "PAGEUP": "CHATPAGEUP",
+    "PRINTSCREEN": "SCREENSHOT",
+    "Q": "MULTIACTIONBAR1BUTTON8",
+    "R": "MULTIACTIONBAR1BUTTON1",
+    "RIGHT": "TURNRIGHT",
+    "S": "MOVEBACKWARD",
+    "SHIFT-1": "MULTIACTIONBAR3BUTTON1",
+    "SHIFT-2": "MULTIACTIONBAR3BUTTON2",
+    "SHIFT-3": "MULTIACTIONBAR3BUTTON3",
+    "SHIFT-4": "MULTIACTIONBAR3BUTTON4",
+    "SHIFT-5": "MULTIACTIONBAR3BUTTON5",
+    "SHIFT-6": "ACTIONPAGE6",
+    "SHIFT-B": "OPENALLBAGS",
+    "SHIFT-C": "ITEMCOMPARISONCYCLING",
+    "SHIFT-DOWN": "NEXTACTIONPAGE",
+    "SHIFT-E": "MULTIACTIONBAR1BUTTON11",
+    "SHIFT-F": "MULTIACTIONBAR2BUTTON4",
+    "SHIFT-F1": "TARGETPET",
+    "SHIFT-F2": "TARGETPARTYPET1",
+    "SHIFT-F3": "TARGETPARTYPET2",
+    "SHIFT-F4": "TARGETPARTYPET3",
+    "SHIFT-F5": "TARGETPARTYPET4",
+    "SHIFT-G": "MULTIACTIONBAR2BUTTON5",
+    "SHIFT-I": "TOGGLEPETBOOK",
+    "SHIFT-M": "TOGGLEBATTLEFIELDMINIMAP",
+    "SHIFT-MOUSEWHEELDOWN": "NEXTACTIONPAGE",
+    "SHIFT-MOUSEWHEELUP": "PREVIOUSACTIONPAGE",
+    "SHIFT-P": "TOGGLECOLLECTIONS",
+    "SHIFT-PAGEDOWN": "CHATBOTTOM",
+    "SHIFT-Q": "MULTIACTIONBAR1BUTTON12",
+    "SHIFT-R": "MULTIACTIONBAR2BUTTON1",
+    "SHIFT-SPACE": "TOGGLEWORLDSTATESCORES",
+    "SHIFT-T": "MULTIACTIONBAR2BUTTON2",
+    "SHIFT-TAB": "TARGETPREVIOUSENEMY",
+    "SHIFT-UP": "PREVIOUSACTIONPAGE",
+    "SHIFT-V": "MULTIACTIONBAR2BUTTON6",
+    "SHIFT-Y": "MULTIACTIONBAR2BUTTON3",
+    "SPACE": "JUMP",
+    "T": "MULTIACTIONBAR1BUTTON2",
+    "TAB": "TARGETNEARESTENEMY",
+    "U": "TOGGLELEGACYSYSTEM",
+    "UP": "MOVEFORWARD",
+    "V": "MULTIACTIONBAR1BUTTON6",
+    "W": "MOVEFORWARD",
+    "X": "SITORSTAND",
+    "Y": "MULTIACTIONBAR1BUTTON3",
+    "Z": "TOGGLESHEATH",
+    "`": "TOGGLEAUTORUN"
+  },
+  "units": {},
+  "character": {
+    "class": "WARRIOR",
+    "faction": "Alliance",
+    "level": 2,
+    "maxHealth": 79,
+    "maxPower": 100,
+    "name": "Player",
+    "powerType": 1,
+    "race": "Human",
+    "realm": "Realm",
+    "sex": 2
+  },
+  "client": "1.60.1 (70450)",
+  "cvars": {
+    "Brightness": "50",
+    "Contrast": "50",
+    "EJLootClass": "1",
+    "GamepadDisableTooltips": "1",
+    "Gamma": "1.6000000238419",
+    "GxApi": "MTL",
+    "GxFullscreenResolution": "2560x1440",
+    "GxMonitor": "1",
+    "OutlineEngineMode": "2",
+    "RAIDOutlineEngineMode": "2",
+    "RAIDSSAO": "3",
+    "RAIDTerrainLodDiv": "512",
+    "RAIDWaterDetail": "2",
+    "RAIDentityShadowFadeScale": "25",
+    "RAIDfarclip": "7000",
+    "RAIDgiQuality": "3",
+    "RAIDgroundEffectDensity": "48",
+    "RAIDgroundEffectDist": "200",
+    "RAIDhorizonClip": "7000",
+    "RAIDhorizonStart": "1900",
+    "RAIDlodObjectCullSize": "18",
+    "RAIDlodObjectMinSize": "0",
+    "RAIDparticleDensity": "80",
+    "RAIDpbrLiquidDetail": "1",
+    "RAIDprojectedTextures": "1",
+    "RAIDreflectionMode": "2",
+    "RAIDrefraction": "2",
+    "RAIDrippleDetail": "1",
+    "RAIDshadowBlendCascades": "1",
+    "RAIDshadowMode": "3",
+    "RAIDshadowNumCascades": "3",
+    "RAIDshadowSoft": "1",
+    "RAIDshadowTextureSize": "2048",
+    "RAIDsunShafts": "2",
+    "RAIDterrainLodDist": "500",
+    "RAIDweatherDensity": "3",
+    "RAIDwmoLodDist": "400",
+    "SSAO": "3",
+    "ShakeStrengthCamera": "1",
+    "ShakeStrengthUI": "1",
+    "ShowAllSpellRanks": "1",
+    "SoftTargetInteract": "3",
+    "Sound_AmbienceVolume": "0",
+    "Sound_DialogVolume": "0",
+    "Sound_MasterVolume": "1",
+    "Sound_MusicVolume": "0",
+    "Sound_NumChannels": "128",
+    "Sound_OutputDriverName": "System Default",
+    "Sound_SFXVolume": "0",
+    "Sound_ZoneMusicNoDelay": "1",
+    "TerrainLodDiv": "512",
+    "UnitNameFriendlySpecialNPCName": "0",
+    "UnitNameHostleNPC": "0",
+    "UnitNameInteractiveNPC": "0",
+    "accessibilityScreenNarrationEnabled": "0",
+    "addFriendInfoShown": "1",
+    "agentUID": "wow_classic_beta",
+    "audioLocale": "enUS",
+    "autoLootDefault": "1",
+    "cameraDistanceMaxZoomFactor": "2",
+    "cameraSavedDistance": "30.000000",
+    "cameraSavedPitch": "25.023827",
+    "cameraSmoothStyle": "0",
+    "cameraView": "1",
+    "categorizeTrainerUI": "1",
+    "chatBubblesRaid": "1",
+    "collapsedCurrencyCategoryDefaults": "v21###$###&",
+    "countdownForCooldowns": "1",
+    "currencyCategoriesCollapsed": "v21###&###$",
+    "currentGameMode": "15",
+    "enableCollectionToasts": "0",
+    "enableLearnedRecipeToasts": "0",
+    "enableLootToasts": "0",
+    "engineSurvey": "8",
+    "engineSurveyPatch": "16001",
+    "entityShadowFadeScale": "25",
+    "farclip": "7000",
+    "ffxAntiAliasingMode": "0",
+    "flaggedTutorials": "v21###&###%###=###'",
+    "gameTip": "53",
+    "giQuality": "3",
+    "groundEffectDensity": "48",
+    "groundEffectDist": "200",
+    "hardTrackedQuests": "v21",
+    "hardTrackedWorldQuests": "v21",
+    "hasSelectedExperiencePreset": "1",
+    "horizonClip": "7000",
+    "horizonStart": "1900",
+    "hwDetect": "0",
+    "lodObjectCullSize": "18",
+    "lodObjectMinSize": "0",
+    "minimapShapeshiftTracking": "v21",
+    "mouseSpeed": "1.000000",
+    "nameplateNotSelectedAlpha": "1",
+    "nameplateShowEnemies": "1",
+    "nameplateShowFriendlyPlayers": "1",
+    "nameplateShowOnlyNameForFriendlyPlayerUnits": "1",
+    "nameplateSize": "3",
+    "nameplateStackingTypes": "\u0002A",
+    "nameplateUseClassColorForFriendlyPlayerUnitNames": "1",
+    "numCurrencyCategories": "5",
+    "numReputationHeaders": "3",
+    "particleDensity": "80",
+    "pbrLiquidDetail": "1",
+    "perksActivitiesPendingCompletion": "v21",
+    "petJournalFilterVersion": "1",
+    "petJournalTab": "5",
+    "playIntroMovie": "1",
+    "playerColorOverrides": "v21",
+    "projectedTextures": "1",
+    "questPOI": "0",
+    "reflectionMode": "2",
+    "refraction": "2",
+    "reputationsCollapsed": "v21",
+    "rippleDetail": "1",
+    "seenAlliedRaceUnlocks": "1",
+    "serviceTypeFilter": "7",
+    "shadowBlendCascades": "1",
+    "shadowMode": "3",
+    "shadowNumCascades": "3",
+    "shadowSoft": "1",
+    "shadowTextureSize": "2048",
+    "showPhotosensitivityWarning": "0",
+    "showScreenNarrationDialog": "0",
+    "showTargetOfTarget": "1",
+    "showTimestamps": "%I:%M ",
+    "showTutorials": "0",
+    "spellClutter": "2",
+    "spellVisualDensityFilterSetting": "2",
+    "sunShafts": "2",
+    "talentPointsSpent": "1",
+    "terrainLodDist": "500",
+    "textLocale": "enUS",
+    "timeMgrUseLocalTime": "1",
+    "timeMgrUseMilitaryTime": "1",
+    "toyBoxCollectedFilters": "\u0002B",
+    "trackedAchievements": "v21",
+    "trackedPerksActivities": "v21",
+    "trackedProfessionRecipes": "v21",
+    "trackedProfessionRecraftRecipes": "v21",
+    "trackedWorldQuests": "v21",
+    "uiScale": "0.6599999666214",
+    "videoOptionsVersion": "54",
+    "voiceProvider": "1",
+    "vsync": "0",
+    "waterDetail": "2",
+    "weatherDensity": "3",
+    "wmoLodDist": "400"
+  },
+  "equipment": {
+    "0": {
+      "id": 0
+    },
+    "16": {
+      "id": 25,
+      "link": "|cnIQ1:|Hitem:25::::::::2:1491::75:::::::|h[Worn Shortsword]|h|r"
+    },
+    "17": {
+      "id": 2362,
+      "link": "|cnIQ1:|Hitem:2362::::::::2:1491::75:::::::|h[Worn Wooden Shield]|h|r"
+    },
+    "4": {
+      "id": 38,
+      "link": "|cnIQ1:|Hitem:38::::::::2:1491::75:::::::|h[Recruit's Shirt]|h|r"
+    },
+    "7": {
+      "id": 39,
+      "link": "|cnIQ0:|Hitem:39::::::::2:1491::75:::::::|h[Recruit's Pants]|h|r"
+    },
+    "8": {
+      "id": 40,
+      "link": "|cnIQ1:|Hitem:40::::::::2:1491::75:::::::|h[Recruit's Boots]|h|r"
+    }
+  },
+  "channels": {
+    "joined": [
+      {
+        "name": "General",
+        "fullName": "General - Elwynn Forest",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": false,
+        "shortcut": "General",
+        "instanceID": 0,
+        "zoneChannelID": 1,
+        "channelType": 1,
+        "regional": false
+      },
+      {
+        "name": "Trade",
+        "fullName": "Trade",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": true,
+        "shortcut": "Trade",
+        "instanceID": 0,
+        "zoneChannelID": 2,
+        "channelType": 1,
+        "regional": false
+      },
+      {
+        "name": "LocalDefense",
+        "fullName": "LocalDefense - Elwynn Forest",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": false,
+        "shortcut": "LocalDefense",
+        "instanceID": 0,
+        "zoneChannelID": 22,
+        "channelType": 1,
+        "regional": false
+      },
+      {
+        "name": "Services",
+        "fullName": "Services",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": true,
+        "shortcut": "Services",
+        "instanceID": 0,
+        "zoneChannelID": 42,
+        "channelType": 1,
+        "regional": false
+      },
+      {
+        "name": "TradeLocal",
+        "fullName": "TradeLocal",
+        "category": "CHANNEL_CATEGORY_WORLD",
+        "disabled": true,
+        "shortcut": "TradeLocal",
+        "instanceID": 0,
+        "zoneChannelID": 46,
+        "channelType": 1,
+        "regional": false
+      }
+    ],
+    "groupChannels": 1,
+    "regionalService": true
+  },
+  "items": {
+    "0": {},
+    "117": {
+      "classID": 0,
+      "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
+      "icon": 133972,
+      "itemLevel": 5,
+      "link": "|cnIQ1:|Hitem:117::::::::2:1491:::::::::|h[Tough Jerky]|h|r",
+      "minLevel": 1,
+      "name": "Tough Jerky",
+      "quality": 1,
+      "sellPrice": 1,
+      "stackCount": 20,
+      "subType": "Food & Drink",
+      "subclassID": 5,
+      "type": "Consumable"
+    },
+    "1368": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_HAND",
+      "icon": 132952,
+      "itemLevel": 4,
+      "link": "|cnIQ0:|Hitem:1368::::::::2:1491:::::::::|h[Ragged Leather Gloves]|h|r",
+      "minLevel": 1,
+      "name": "Ragged Leather Gloves",
+      "quality": 0,
+      "sellPrice": 2,
+      "stackCount": 1,
+      "subType": "Leather",
+      "subclassID": 2,
+      "type": "Armor"
+    },
+    "1372": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_CLOAK",
+      "icon": 133762,
+      "itemLevel": 3,
+      "link": "|cnIQ0:|Hitem:1372::::::::2:1491:::::::::|h[Ragged Cloak]|h|r",
+      "minLevel": 1,
+      "name": "Ragged Cloak",
+      "quality": 0,
+      "sellPrice": 2,
+      "stackCount": 1,
+      "subType": "Cloth",
+      "subclassID": 1,
+      "type": "Armor"
+    },
+    "2362": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_SHIELD",
+      "icon": 134955,
+      "itemLevel": 1,
+      "link": "|cnIQ1:|Hitem:2362::::::::2:1491:::::::::|h[Worn Wooden Shield]|h|r",
+      "minLevel": 1,
+      "name": "Worn Wooden Shield",
+      "quality": 1,
+      "sellPrice": 1,
+      "stackCount": 1,
+      "subType": "Shields",
+      "subclassID": 6,
+      "type": "Armor"
+    },
+    "25": {
+      "classID": 2,
+      "equipLoc": "INVTYPE_WEAPONMAINHAND",
+      "icon": 135274,
+      "itemLevel": 2,
+      "link": "|cnIQ1:|Hitem:25::::::::2:1491:::::::::|h[Worn Shortsword]|h|r",
+      "minLevel": 1,
+      "name": "Worn Shortsword",
+      "quality": 1,
+      "sellPrice": 7,
+      "stackCount": 1,
+      "subType": "One-Handed Swords",
+      "subclassID": 7,
+      "type": "Weapon"
+    },
+    "2652": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_CLOAK",
+      "icon": 133754,
+      "itemLevel": 5,
+      "link": "|cnIQ0:|Hitem:2652::::::::2:1491:::::::::|h[Flimsy Chain Cloak]|h|r",
+      "minLevel": 1,
+      "name": "Flimsy Chain Cloak",
+      "quality": 0,
+      "sellPrice": 7,
+      "stackCount": 1,
+      "subType": "Cloth",
+      "subclassID": 1,
+      "type": "Armor"
+    },
+    "2654": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_LEGS",
+      "icon": 134583,
+      "itemLevel": 2,
+      "link": "|cnIQ0:|Hitem:2654::::::::2:1491:::::::::|h[Flimsy Chain Pants]|h|r",
+      "minLevel": 1,
+      "name": "Flimsy Chain Pants",
+      "quality": 0,
+      "sellPrice": 2,
+      "stackCount": 1,
+      "subType": "Mail",
+      "subclassID": 3,
+      "type": "Armor"
+    },
+    "2672": {
+      "classID": 7,
+      "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
+      "icon": 133970,
+      "itemLevel": 5,
+      "link": "|cnIQ1:|Hitem:2672::::::::2:1491:::::::::|h[Stringy Wolf Meat]|h|r",
+      "minLevel": 0,
+      "name": "Stringy Wolf Meat",
+      "quality": 1,
+      "sellPrice": 4,
+      "stackCount": 20,
+      "subType": "Cooking",
+      "subclassID": 8,
+      "type": "Trade Goods"
+    },
+    "38": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_BODY",
+      "icon": 135009,
+      "itemLevel": 1,
+      "link": "|cnIQ1:|Hitem:38::::::::2:1491:::::::::|h[Recruit's Shirt]|h|r",
+      "minLevel": 0,
+      "name": "Recruit's Shirt",
+      "quality": 1,
+      "sellPrice": 1,
+      "stackCount": 1,
+      "subType": "Miscellaneous",
+      "subclassID": 0,
+      "type": "Armor"
+    },
+    "39": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_LEGS",
+      "icon": 134582,
+      "itemLevel": 1,
+      "link": "|cnIQ0:|Hitem:39::::::::2:1491:::::::::|h[Recruit's Pants]|h|r",
+      "minLevel": 1,
+      "name": "Recruit's Pants",
+      "quality": 0,
+      "sellPrice": 1,
+      "stackCount": 1,
+      "subType": "Cloth",
+      "subclassID": 1,
+      "type": "Armor"
+    },
+    "40": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_FEET",
+      "icon": 132540,
+      "itemLevel": 1,
+      "link": "|cnIQ1:|Hitem:40::::::::2:1491:::::::::|h[Recruit's Boots]|h|r",
+      "minLevel": 0,
+      "name": "Recruit's Boots",
+      "quality": 1,
+      "sellPrice": 1,
+      "stackCount": 1,
+      "subType": "Cloth",
+      "subclassID": 1,
+      "type": "Armor"
+    },
+    "4865": {
+      "classID": 15,
+      "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
+      "icon": 134371,
+      "itemLevel": 1,
+      "link": "|cnIQ0:|Hitem:4865::::::::2:1491:::::::::|h[Ruined Pelt]|h|r",
+      "minLevel": 0,
+      "name": "Ruined Pelt",
+      "quality": 0,
+      "sellPrice": 5,
+      "stackCount": 5,
+      "subType": "Junk",
+      "subclassID": 0,
+      "type": "Miscellaneous"
+    },
+    "6948": {
+      "classID": 15,
+      "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
+      "icon": 134414,
+      "itemLevel": 1,
+      "link": "|cnIQ1:|Hitem:6948::::::::2:1491:::::::::|h[Hearthstone]|h|r",
+      "minLevel": 0,
+      "name": "Hearthstone",
+      "quality": 1,
+      "sellPrice": 0,
+      "stackCount": 1,
+      "subType": "Junk",
+      "subclassID": 0,
+      "type": "Miscellaneous"
+    },
+    "7073": {
+      "classID": 15,
+      "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
+      "icon": 133725,
+      "itemLevel": 1,
+      "link": "|cnIQ0:|Hitem:7073::::::::2:1491:::::::::|h[Broken Fang]|h|r",
+      "minLevel": 0,
+      "name": "Broken Fang",
+      "quality": 0,
+      "sellPrice": 6,
+      "stackCount": 5,
+      "subType": "Junk",
+      "subclassID": 0,
+      "type": "Miscellaneous"
+    },
+    "7074": {
+      "classID": 15,
+      "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
+      "icon": 133723,
+      "itemLevel": 1,
+      "link": "|cnIQ0:|Hitem:7074::::::::2:1491:::::::::|h[Chipped Claw]|h|r",
+      "minLevel": 0,
+      "name": "Chipped Claw",
+      "quality": 0,
+      "sellPrice": 4,
+      "stackCount": 5,
+      "subType": "Junk",
+      "subclassID": 0,
+      "type": "Miscellaneous"
+    },
+    "80": {
+      "classID": 4,
+      "equipLoc": "INVTYPE_FEET",
+      "icon": 132543,
+      "itemLevel": 5,
+      "link": "|cnIQ1:|Hitem:80::::::::2:1491:::::::::|h[Soft Fur-lined Shoes]|h|r",
+      "minLevel": 0,
+      "name": "Soft Fur-lined Shoes",
+      "quality": 1,
+      "sellPrice": 7,
+      "stackCount": 1,
+      "subType": "Cloth",
+      "subclassID": 1,
+      "type": "Armor"
+    }
+  },
+  "leaderBoards": {},
+  "macros": {
+    "account": [
+      {
+        "body": "/whisper Player Lastname hello\n",
+        "icon": 841219,
+        "name": "Test"
+      }
+    ],
+    "character": {},
+    "info": [
+      [
+        "Test",
+        841219,
+        "/whisper Player Lastname hello\n"
+      ]
+    ]
+  },
+  "money": 0,
+  "position": {
+    "mapID": 1429,
+    "subZone": "Northshire Valley",
+    "x": 0.4911428689956665,
+    "y": 0.3866390585899353,
+    "zone": "Elwynn Forest"
+  },
+  "stats": {
+    "activeSpecGroup": [
+      1
+    ],
+    "armor": [
+      0,
+      56,
+      56,
+      56
+    ],
+    "armorPenetration": [
+      0
+    ],
+    "attackPower": [
+      34,
+      0,
+      0
+    ],
+    "attackPowerBySpellPower": [
+      0
+    ],
+    "attackPowerForStat": [
+      [
+        48
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "attackSpeed": [
+      1.900000095367432,
+      null,
+      null
+    ],
+    "avoidance": [
+      0
+    ],
+    "backpackCurrency": [
+      [],
+      [],
+      []
+    ],
+    "block": [
+      4.840000152587891
+    ],
+    "classSkillLine": [
+      {
+        "iconID": 626008,
+        "isGuild": false,
+        "itemIndexOffset": 0,
+        "name": "Warrior",
+        "numSpellBookItems": 0,
+        "shouldHide": false
+      }
+    ],
+    "combatConfig": [
+      [
+        16273023
+      ],
+      [
+        null
+      ]
+    ],
+    "combatRating": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "combatRatingBonus": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "cooldownViewerInfo": {
+      "199557": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199557,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            7384,
+            7887,
+            11584,
+            11585
+          ],
+          "overrideSpellID": 7384,
+          "selfAura": false,
+          "spellID": 7384
+        }
+      ],
+      "199558": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199558,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            694,
+            7400,
+            7402,
+            20559,
+            20560
+          ],
+          "overrideSpellID": 694,
+          "selfAura": false,
+          "spellID": 694
+        }
+      ],
+      "199559": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199559,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            6343,
+            8198,
+            8204,
+            8205,
+            11580,
+            11581
+          ],
+          "overrideSpellID": 6343,
+          "selfAura": false,
+          "spellID": 6343
+        }
+      ],
+      "199567": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199567,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            7402,
+            694,
+            7400,
+            20560,
+            20559
+          ],
+          "overrideSpellID": 694,
+          "selfAura": false,
+          "spellID": 694
+        }
+      ],
+      "199582": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199582,
+          "flags": 4,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            8198,
+            8204,
+            11580,
+            8205,
+            11581,
+            6343
+          ],
+          "overrideSpellID": 6343,
+          "selfAura": false,
+          "spellID": 6343
+        }
+      ],
+      "199583": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199583,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1310222
+          ],
+          "overrideSpellID": 1310222,
+          "selfAura": false,
+          "spellID": 1310222
+        }
+      ],
+      "199584": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199584,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            402927
+          ],
+          "overrideSpellID": 402927,
+          "selfAura": false,
+          "spellID": 402927
+        }
+      ],
+      "199585": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199585,
+          "flags": 5,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12294,
+            21551,
+            21552,
+            21553
+          ],
+          "overrideSpellID": 12294,
+          "selfAura": false,
+          "spellID": 12294
+        }
+      ],
+      "199592": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199592,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            21553,
+            21551,
+            12294,
+            21552
+          ],
+          "overrideSpellID": 12294,
+          "selfAura": false,
+          "spellID": 12294
+        }
+      ],
+      "199593": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199593,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1240193,
+            1464,
+            8820,
+            11604,
+            11605
+          ],
+          "overrideSpellID": 1240193,
+          "selfAura": false,
+          "spellID": 1240193
+        }
+      ],
+      "199598": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199598,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1680
+          ],
+          "overrideSpellID": 1680,
+          "selfAura": false,
+          "spellID": 1680
+        }
+      ],
+      "199599": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199599,
+          "flags": 5,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            23881,
+            23892,
+            23893,
+            23894
+          ],
+          "overrideSpellID": 23881,
+          "selfAura": true,
+          "spellID": 23881
+        }
+      ],
+      "199606": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199606,
+          "flags": 6,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            23892,
+            23893,
+            23881,
+            23894
+          ],
+          "overrideSpellID": 23881,
+          "selfAura": true,
+          "spellID": 23881
+        }
+      ],
+      "199607": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199607,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12328
+          ],
+          "overrideSpellID": 12328,
+          "selfAura": true,
+          "spellID": 12328
+        }
+      ],
+      "199608": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199608,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12328
+          ],
+          "overrideSpellID": 12328,
+          "selfAura": true,
+          "spellID": 12328
+        }
+      ],
+      "199609": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199609,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            20230
+          ],
+          "overrideSpellID": 20230,
+          "selfAura": true,
+          "spellID": 20230
+        }
+      ],
+      "199610": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199610,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            871
+          ],
+          "overrideSpellID": 871,
+          "selfAura": true,
+          "spellID": 871
+        }
+      ],
+      "199611": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199611,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1719
+          ],
+          "overrideSpellID": 1719,
+          "selfAura": true,
+          "spellID": 1719
+        }
+      ],
+      "199612": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199612,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            20230
+          ],
+          "overrideSpellID": 20230,
+          "selfAura": true,
+          "spellID": 20230
+        }
+      ],
+      "199613": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199613,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            871
+          ],
+          "overrideSpellID": 871,
+          "selfAura": true,
+          "spellID": 871
+        }
+      ],
+      "199614": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199614,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1719
+          ],
+          "overrideSpellID": 1719,
+          "selfAura": true,
+          "spellID": 1719
+        }
+      ],
+      "199615": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199615,
+          "flags": 6,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            6572,
+            6574,
+            7379,
+            11600,
+            11601,
+            25288
+          ],
+          "overrideSpellID": 6572,
+          "selfAura": false,
+          "spellID": 6572
+        }
+      ],
+      "199621": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199621,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            23922,
+            23923,
+            23924,
+            23925
+          ],
+          "overrideSpellID": 23922,
+          "selfAura": false,
+          "spellID": 23922
+        }
+      ],
+      "199625": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199625,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            100,
+            6178,
+            11578
+          ],
+          "overrideSpellID": 100,
+          "selfAura": false,
+          "spellID": 100
+        }
+      ],
+      "199630": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199630,
+          "flags": 6,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            6178,
+            11578,
+            100
+          ],
+          "overrideSpellID": 100,
+          "selfAura": false,
+          "spellID": 100
+        }
+      ],
+      "199631": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199631,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            18499
+          ],
+          "overrideSpellID": 18499,
+          "selfAura": true,
+          "spellID": 18499
+        }
+      ],
+      "199632": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199632,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            18499
+          ],
+          "overrideSpellID": 18499,
+          "selfAura": true,
+          "spellID": 18499
+        }
+      ],
+      "199633": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199633,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            20252,
+            20616,
+            20617
+          ],
+          "overrideSpellID": 20252,
+          "selfAura": false,
+          "spellID": 20252
+        }
+      ],
+      "199638": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199638,
+          "flags": 6,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            20252,
+            20617,
+            20616
+          ],
+          "overrideSpellID": 20252,
+          "selfAura": false,
+          "spellID": 20252
+        }
+      ],
+      "199639": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199639,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1161
+          ],
+          "overrideSpellID": 1161,
+          "selfAura": false,
+          "spellID": 1161
+        }
+      ],
+      "199640": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199640,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1161
+          ],
+          "overrideSpellID": 1161,
+          "selfAura": false,
+          "spellID": 1161
+        }
+      ],
+      "199641": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199641,
+          "flags": 0,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            5246
+          ],
+          "overrideSpellID": 5246,
+          "selfAura": false,
+          "spellID": 5246
+        }
+      ],
+      "199642": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199642,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            5246,
+            20511
+          ],
+          "overrideSpellID": 5246,
+          "selfAura": false,
+          "spellID": 5246
+        }
+      ],
+      "199643": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199643,
+          "flags": 6,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            6552,
+            6554
+          ],
+          "overrideSpellID": 6552,
+          "selfAura": false,
+          "spellID": 6552
+        }
+      ],
+      "199645": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199645,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12966
+          ],
+          "overrideSpellID": 12319,
+          "selfAura": true,
+          "spellID": 12319
+        }
+      ],
+      "199646": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199646,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12880
+          ],
+          "overrideSpellID": 12317,
+          "selfAura": true,
+          "spellID": 12317
+        }
+      ],
+      "199647": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199647,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            16488
+          ],
+          "overrideSpellID": 16487,
+          "selfAura": true,
+          "spellID": 16487
+        }
+      ],
+      "199648": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199648,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            29131
+          ],
+          "overrideSpellID": 2687,
+          "selfAura": true,
+          "spellID": 2687
+        }
+      ],
+      "199649": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199649,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            29131
+          ],
+          "overrideSpellID": 2687,
+          "selfAura": true,
+          "spellID": 2687
+        }
+      ],
+      "199650": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199650,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            72,
+            1671,
+            1672
+          ],
+          "overrideSpellID": 72,
+          "selfAura": false,
+          "spellID": 72
+        }
+      ],
+      "199653": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199653,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12976
+          ],
+          "overrideSpellID": 12975,
+          "selfAura": true,
+          "spellID": 12975
+        }
+      ],
+      "199654": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199654,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12976
+          ],
+          "overrideSpellID": 12975,
+          "selfAura": true,
+          "spellID": 12975
+        }
+      ],
+      "199656": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199656,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            772,
+            6546,
+            6547,
+            6548,
+            11572,
+            11573,
+            11574
+          ],
+          "overrideSpellID": 772,
+          "selfAura": false,
+          "spellID": 772
+        }
+      ],
+      "199663": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199663,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            412609
+          ],
+          "overrideSpellID": 12834,
+          "selfAura": true,
+          "spellID": 12834
+        }
+      ],
+      "199664": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199664,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1715,
+            7372,
+            7373
+          ],
+          "overrideSpellID": 1715,
+          "selfAura": false,
+          "spellID": 1715
+        }
+      ],
+      "199667": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199667,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1324558
+          ],
+          "overrideSpellID": 676,
+          "selfAura": true,
+          "spellID": 676
+        }
+      ],
+      "199668": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199668,
+          "flags": 0,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            676
+          ],
+          "overrideSpellID": 676,
+          "selfAura": false,
+          "spellID": 676
+        }
+      ],
+      "199669": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199669,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            23694
+          ],
+          "overrideSpellID": 12289,
+          "selfAura": false,
+          "spellID": 12289
+        }
+      ],
+      "199670": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199670,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12323
+          ],
+          "overrideSpellID": 12323,
+          "selfAura": false,
+          "spellID": 12323
+        }
+      ],
+      "199671": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199671,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1160,
+            6190,
+            11554,
+            11555,
+            11556
+          ],
+          "overrideSpellID": 1160,
+          "selfAura": false,
+          "spellID": 1160
+        }
+      ],
+      "199677": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199677,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1324551
+          ],
+          "overrideSpellID": 12311,
+          "selfAura": true,
+          "spellID": 12311
+        }
+      ],
+      "199678": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199678,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            7386,
+            7405,
+            8380,
+            11596,
+            11597
+          ],
+          "overrideSpellID": 7386,
+          "selfAura": false,
+          "spellID": 7386
+        }
+      ],
+      "199683": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199683,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            11596,
+            7386,
+            7405,
+            11597,
+            8380
+          ],
+          "overrideSpellID": 7386,
+          "selfAura": false,
+          "spellID": 7386
+        }
+      ],
+      "199688": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199688,
+          "flags": 6,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            6673,
+            5242,
+            6192,
+            11549,
+            11550,
+            11551,
+            25289
+          ],
+          "overrideSpellID": 6673,
+          "selfAura": false,
+          "spellID": 6673
+        }
+      ],
+      "199695": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199695,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1289681
+          ],
+          "overrideSpellID": 1289682,
+          "selfAura": true,
+          "spellID": 1289682
+        }
+      ],
+      "199696": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199696,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12292
+          ],
+          "overrideSpellID": 12292,
+          "selfAura": true,
+          "spellID": 12292
+        }
+      ],
+      "199697": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199697,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12292
+          ],
+          "overrideSpellID": 12292,
+          "selfAura": true,
+          "spellID": 12292
+        }
+      ],
+      "199698": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199698,
+          "flags": 0,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            12809
+          ],
+          "overrideSpellID": 12809,
+          "selfAura": false,
+          "spellID": 12809
+        }
+      ],
+      "199699": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199699,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            1324556
+          ],
+          "overrideSpellID": 12809,
+          "selfAura": true,
+          "spellID": 12809
+        }
+      ],
+      "199700": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199700,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": [
+            78,
+            284,
+            285,
+            1608,
+            11564,
+            11565,
+            11566,
+            11567,
+            25286
+          ],
+          "overrideSpellID": 78,
+          "selfAura": false,
+          "spellID": 78
+        }
+      ],
+      "199709": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199709,
+          "flags": 4,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            5308,
+            20658,
+            20660,
+            20661,
+            20662
+          ],
+          "overrideSpellID": 5308,
+          "selfAura": false,
+          "spellID": 5308
+        }
+      ],
+      "199714": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199714,
+          "flags": 0,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            355
+          ],
+          "overrideSpellID": 355,
+          "selfAura": false,
+          "spellID": 355
+        }
+      ],
+      "199715": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199715,
+          "flags": 2,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            355
+          ],
+          "overrideSpellID": 355,
+          "selfAura": false,
+          "spellID": 355
+        }
+      ],
+      "199716": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199716,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": [
+            2457,
+            71,
+            2458
+          ],
+          "overrideSpellID": 1319507,
+          "selfAura": true,
+          "spellID": 1319507
+        }
+      ],
+      "199859": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199859,
+          "flags": 4,
+          "hasAura": true,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            6546,
+            6547,
+            772,
+            6548,
+            11573,
+            11574,
+            11572
+          ],
+          "overrideSpellID": 772,
+          "selfAura": false,
+          "spellID": 772
+        }
+      ],
+      "199861": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 199861,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            2565
+          ],
+          "overrideSpellID": 2565,
+          "selfAura": true,
+          "spellID": 2565
+        }
+      ],
+      "199862": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 199862,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            2565
+          ],
+          "overrideSpellID": 2565,
+          "selfAura": true,
+          "spellID": 2565
+        }
+      ],
+      "199867": [
+        {
+          "buffSlot": 1,
+          "category": 0,
+          "charges": false,
+          "cooldownID": 199867,
+          "flags": 6,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": [
+            7369,
+            20569,
+            845,
+            11609,
+            11608
+          ],
+          "overrideSpellID": 845,
+          "selfAura": false,
+          "spellID": 845
+        }
+      ],
+      "200185": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 200185,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": {},
+          "overrideSpellID": 20600,
+          "selfAura": true,
+          "spellID": 20600
+        }
+      ],
+      "200186": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 200186,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": {},
+          "overrideSpellID": 20600,
+          "selfAura": true,
+          "spellID": 20600
+        }
+      ],
+      "200187": [
+        {
+          "buffSlot": 1,
+          "category": 1,
+          "charges": false,
+          "cooldownID": 200187,
+          "flags": 2,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": {},
+          "overrideSpellID": 1259718,
+          "selfAura": false,
+          "spellID": 1259718
+        }
+      ],
+      "200257": [
+        {
+          "buffSlot": 1,
+          "category": 7,
+          "charges": false,
+          "cooldownID": 200257,
+          "equipSlot": 13,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": true,
+          "isKnown": false,
+          "linkedSpellIDs": {},
+          "selfAura": false
+        }
+      ],
+      "200258": [
+        {
+          "buffSlot": 1,
+          "category": 7,
+          "charges": false,
+          "cooldownID": 200258,
+          "equipSlot": 14,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": true,
+          "isKnown": false,
+          "linkedSpellIDs": {},
+          "selfAura": false
+        }
+      ],
+      "200345": [
+        {
+          "buffSlot": 1,
+          "category": 5,
+          "charges": false,
+          "cooldownID": 200345,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": {},
+          "selfAura": false,
+          "spellCategoryID": 1153
+        }
+      ],
+      "200346": [
+        {
+          "buffSlot": 1,
+          "category": 5,
+          "charges": false,
+          "cooldownID": 200346,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": {},
+          "selfAura": false,
+          "spellCategoryID": 2466
+        }
+      ],
+      "200347": [
+        {
+          "buffSlot": 1,
+          "category": 5,
+          "charges": false,
+          "cooldownID": 200347,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": true,
+          "linkedSpellIDs": {},
+          "selfAura": false,
+          "spellCategoryID": 24
+        }
+      ],
+      "200436": [
+        {
+          "buffSlot": 1,
+          "category": 2,
+          "charges": false,
+          "cooldownID": 200436,
+          "flags": 0,
+          "hasAura": false,
+          "isInvisible": false,
+          "isKnown": false,
+          "linkedSpellIDs": {},
+          "overrideSpellID": 402975,
+          "selfAura": true,
+          "spellID": 402975
+        }
+      ]
+    },
+    "cooldownViewerSet": {
+      "0": [
+        [
+          199859,
+          199700,
+          199867,
+          199709,
+          199557,
+          199615,
+          199582,
+          199585,
+          199599,
+          199621,
+          199683,
+          199598,
+          199593,
+          199583,
+          199696,
+          199607
+        ]
+      ],
+      "1": [
+        [
+          199625,
+          199633,
+          199643,
+          199650,
+          199861,
+          199698,
+          199668,
+          199641,
+          199714,
+          199558,
+          199639,
+          199584,
+          199631,
+          199649,
+          199653,
+          199609,
+          199610,
+          199611,
+          200185,
+          200187
+        ]
+      ],
+      "2": [
+        [
+          200436,
+          199663,
+          199695,
+          199697,
+          199669,
+          199632,
+          199640,
+          199642,
+          199670,
+          199647,
+          199646,
+          199645,
+          199608,
+          199715,
+          199862,
+          199648,
+          199667,
+          199654,
+          199699,
+          199677,
+          199612,
+          199614,
+          199613,
+          199630,
+          199656,
+          199664,
+          199559,
+          199567,
+          199592,
+          199671,
+          199638,
+          199606,
+          199678,
+          199688,
+          199716,
+          200186
+        ]
+      ],
+      "3": [
+        {}
+      ],
+      "4": [
+        {}
+      ],
+      "5": [
+        [
+          200345,
+          200346,
+          200347
+        ]
+      ],
+      "6": [
+        {}
+      ],
+      "7": [
+        [
+          200257,
+          200258
+        ]
+      ],
+      "8": [
+        {}
+      ]
+    },
+    "crit": [
+      6.880100250244141
+    ],
+    "critFromStat": [
+      [
+        0
+      ],
+      [
+        0.05000099912285805
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "currencyListInfo": {},
+    "currencyListSize": [
+      0
+    ],
+    "damage": [
+      5.614286422729492,
+      7.614286422729492,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "defense": [
+      6,
+      0
+    ],
+    "dodge": [
+      4.840100288391113
+    ],
+    "dodgeFromAttribute": [
+      0.05000100284814835
+    ],
+    "earnedTalentPoint": [
+      false
+    ],
+    "expertise": [
+      0,
+      0,
+      0
+    ],
+    "faction": [
+      [
+        {
+          "atWarWith": false,
+          "canSetInactive": false,
+          "canToggleAtWar": true,
+          "currentReactionThreshold": 3000,
+          "currentStanding": 3300,
+          "description": "",
+          "factionID": 469,
+          "hasBonusRepGain": false,
+          "isAccountWide": false,
+          "isChild": false,
+          "isCollapsed": false,
+          "isHeader": true,
+          "isHeaderWithRep": false,
+          "isWatched": false,
+          "name": "Alliance",
+          "nextReactionThreshold": 9000,
+          "reaction": 5
+        }
+      ],
+      [
+        {
+          "atWarWith": false,
+          "canSetInactive": true,
+          "canToggleAtWar": false,
+          "currentReactionThreshold": 3000,
+          "currentStanding": 3100,
+          "description": "The Alliance capital is populated by Night Elves and is located in the island of Teldrassil.  Ruled by the Priestess of the Moon, Tyrande Whisperwind.",
+          "factionID": 69,
+          "hasBonusRepGain": false,
+          "isAccountWide": false,
+          "isChild": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "isHeaderWithRep": false,
+          "isWatched": false,
+          "name": "Darnassus",
+          "nextReactionThreshold": 9000,
+          "reaction": 5
+        }
+      ],
+      [
+        {
+          "atWarWith": false,
+          "canSetInactive": true,
+          "canToggleAtWar": false,
+          "currentReactionThreshold": 3000,
+          "currentStanding": 3100,
+          "description": "The former denizens of Gnomeregan, now living in exile in Ironforge and in league with the Alliance.",
+          "factionID": 54,
+          "hasBonusRepGain": false,
+          "isAccountWide": false,
+          "isChild": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "isHeaderWithRep": false,
+          "isWatched": false,
+          "name": "Gnomeregan Exiles",
+          "nextReactionThreshold": 9000,
+          "reaction": 5
+        }
+      ],
+      [
+        {
+          "atWarWith": false,
+          "canSetInactive": true,
+          "canToggleAtWar": false,
+          "currentReactionThreshold": 3000,
+          "currentStanding": 3100,
+          "description": "This Alliance capital is the pride of the Dun Morogh dwarves.  Home to King Magni.",
+          "factionID": 47,
+          "hasBonusRepGain": false,
+          "isAccountWide": false,
+          "isChild": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "isHeaderWithRep": false,
+          "isWatched": false,
+          "name": "Ironforge",
+          "nextReactionThreshold": 9000,
+          "reaction": 5
+        }
+      ],
+      [
+        {
+          "atWarWith": false,
+          "canSetInactive": true,
+          "canToggleAtWar": false,
+          "currentReactionThreshold": 3000,
+          "currentStanding": 4100,
+          "description": "One of the last bastions of human power, this Alliance capital is ruled by the child king, Anduin Wrynn.",
+          "factionID": 72,
+          "hasBonusRepGain": false,
+          "isAccountWide": false,
+          "isChild": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "isHeaderWithRep": false,
+          "isWatched": false,
+          "name": "Stormwind",
+          "nextReactionThreshold": 9000,
+          "reaction": 5
+        }
+      ]
+    ],
+    "factionAccountWide": {
+      "469": [
+        false
+      ],
+      "47": [
+        false
+      ],
+      "54": [
+        false
+      ],
+      "69": [
+        false
+      ],
+      "72": [
+        false
+      ]
+    },
+    "factionFriendship": {
+      "469": [
+        {
+          "friendshipFactionID": 0,
+          "maxRep": 0,
+          "reaction": "",
+          "reactionThreshold": 0,
+          "reversedColor": false,
+          "standing": 0,
+          "text": "",
+          "texture": 0
+        }
+      ],
+      "47": [
+        {
+          "friendshipFactionID": 0,
+          "maxRep": 0,
+          "reaction": "",
+          "reactionThreshold": 0,
+          "reversedColor": false,
+          "standing": 0,
+          "text": "",
+          "texture": 0
+        }
+      ],
+      "54": [
+        {
+          "friendshipFactionID": 0,
+          "maxRep": 0,
+          "reaction": "",
+          "reactionThreshold": 0,
+          "reversedColor": false,
+          "standing": 0,
+          "text": "",
+          "texture": 0
+        }
+      ],
+      "69": [
+        {
+          "friendshipFactionID": 0,
+          "maxRep": 0,
+          "reaction": "",
+          "reactionThreshold": 0,
+          "reversedColor": false,
+          "standing": 0,
+          "text": "",
+          "texture": 0
+        }
+      ],
+      "72": [
+        {
+          "friendshipFactionID": 0,
+          "maxRep": 0,
+          "reaction": "",
+          "reactionThreshold": 0,
+          "reversedColor": false,
+          "standing": 0,
+          "text": "",
+          "texture": 0
+        }
+      ]
+    },
+    "factionMajor": {
+      "469": [
+        false
+      ],
+      "47": [
+        false
+      ],
+      "54": [
+        false
+      ],
+      "69": [
+        false
+      ],
+      "72": [
+        false
+      ]
+    },
+    "factionParagon": {
+      "469": [
+        false
+      ],
+      "47": [
+        false
+      ],
+      "54": [
+        false
+      ],
+      "69": [
+        false
+      ],
+      "72": [
+        false
+      ]
+    },
+    "factions": [
+      5
+    ],
+    "groupBuffs": [
+      [
+        {
+          "displaySpellID": 6673,
+          "flags": 0,
+          "iconID": 132333,
+          "isKnown": false,
+          "name": "Battle Shout",
+          "spellID": 6673
+        }
+      ]
+    ],
+    "hasPetSpells": [],
+    "healthRegen": [
+      2.292187452316284,
+      0
+    ],
+    "healthRegenFromSpirit": [
+      3.056249856948853,
+      0
+    ],
+    "hit": [
+      0
+    ],
+    "honor": [
+      0
+    ],
+    "honorLevel": [
+      1
+    ],
+    "honorMax": [
+      5500
+    ],
+    "hpPerStamina": [
+      10
+    ],
+    "itemLevel": [
+      0.3125,
+      0,
+      0.3125
+    ],
+    "lifesteal": [
+      0
+    ],
+    "manaRegen": [
+      0,
+      0
+    ],
+    "manaRegenFromSpirit": [
+      5,
+      0
+    ],
+    "mastery": [
+      0,
+      0
+    ],
+    "meleeHaste": [
+      0
+    ],
+    "movement": [
+      0,
+      7,
+      7,
+      4.722221851348877
+    ],
+    "offhandHit": [
+      0
+    ],
+    "parry": [
+      0
+    ],
+    "powerRegen": [
+      -12.49899959564209,
+      0.001000000047497451
+    ],
+    "professionInfo": {},
+    "professions": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "questClassification": {},
+    "questComplete": {},
+    "questContentDifficulty": {},
+    "questDifficulty": {},
+    "questDisabled": {},
+    "questElite": {},
+    "questFailed": {},
+    "questGroup": {},
+    "questLogEntries": [
+      0,
+      0
+    ],
+    "questLogIndex": {},
+    "questLogInfo": {},
+    "questObjectives": {},
+    "questSequenced": {},
+    "questSpecialItem": {},
+    "questTag": {},
+    "questTheme": {},
+    "questTimeAllowed": {},
+    "questTitle": {},
+    "questWatchID": {},
+    "questWatchType": {},
+    "questWatches": [
+      0
+    ],
+    "rangedAttackPower": [
+      24,
+      0,
+      0
+    ],
+    "rangedAttackPowerForStat": [
+      [
+        0
+      ],
+      [
+        42
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "rangedCrit": [
+      6.64009952545166
+    ],
+    "rangedDamage": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "rangedHaste": [
+      0,
+      0
+    ],
+    "rangedHit": [
+      0
+    ],
+    "resilience": [
+      0
+    ],
+    "resistance": {
+      "0": [
+        0,
+        56,
+        56,
+        56
+      ],
+      "1": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "2": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "3": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "4": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "5": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "6": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "restState": [
+      2,
+      "Normal",
+      1
+    ],
+    "restedXP": [
+      null
+    ],
+    "selectedFaction": [
+      0
+    ],
+    "selectedQuest": [
+      33
+    ],
+    "selectedSkill": [
+      0
+    ],
+    "shapeshiftForm": [
+      1
+    ],
+    "shapeshiftFormID": [
+      17
+    ],
+    "shapeshiftFormInfo": [
+      [
+        132349,
+        true,
+        true,
+        2457
+      ],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    "shapeshiftForms": [
+      1
+    ],
+    "shieldBlock": [
+      1
+    ],
+    "skillLine": [
+      [
+        {
+          "costType": 0,
+          "description": "",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": true,
+          "maxRank": 0,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Class Skills",
+          "parentSkillLineID": 0,
+          "rank": 0,
+          "rankCost": 0,
+          "skillID": 7,
+          "skillLineCategoryID": 0,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 1,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Arms",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 26,
+          "skillLineCategoryID": 7,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": true,
+          "maxRank": 0,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Weapon Skills",
+          "parentSkillLineID": 0,
+          "rank": 0,
+          "rankCost": 0,
+          "skillID": 6,
+          "skillLineCategoryID": 0,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Higher weapon skill increases your chance to hit.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 10,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Axes",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 44,
+          "skillLineCategoryID": 6,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Higher defense makes you harder to hit and makes monsters less likely to land a crushing blow.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 10,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Defense",
+          "parentSkillLineID": 0,
+          "rank": 6,
+          "rankCost": 0,
+          "skillID": 95,
+          "skillLineCategoryID": 6,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Higher weapon skill increases your chance to hit.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 10,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Maces",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 54,
+          "skillLineCategoryID": 6,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Higher weapon skill increases your chance to hit.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 10,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Swords",
+          "parentSkillLineID": 0,
+          "rank": 7,
+          "rankCost": 0,
+          "skillID": 43,
+          "skillLineCategoryID": 6,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Higher skill increases your chance to hit.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 10,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Unarmed",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 162,
+          "skillLineCategoryID": 6,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": true,
+          "maxRank": 0,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Armor Proficiencies",
+          "parentSkillLineID": 0,
+          "rank": 0,
+          "rankCost": 0,
+          "skillID": 8,
+          "skillLineCategoryID": 0,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Allows the wearing of cloth armor.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 1,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Cloth",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 415,
+          "skillLineCategoryID": 8,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Allows the wearing of leather armor.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 1,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Leather",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 414,
+          "skillLineCategoryID": 8,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Allows the wearing of mail armor.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 1,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Mail",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 413,
+          "skillLineCategoryID": 8,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "Allows the use of shields.",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 1,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Shield",
+          "parentSkillLineID": 0,
+          "rank": 1,
+          "rankCost": 0,
+          "skillID": 433,
+          "skillLineCategoryID": 8,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": true,
+          "maxRank": 0,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Languages",
+          "parentSkillLineID": 0,
+          "rank": 0,
+          "rankCost": 0,
+          "skillID": 10,
+          "skillLineCategoryID": 0,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ],
+      [
+        {
+          "costType": 0,
+          "description": "",
+          "isAbandonable": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "maxRank": 300,
+          "minLevel": 0,
+          "modifier": 0,
+          "name": "Language: Common",
+          "parentSkillLineID": 0,
+          "rank": 300,
+          "rankCost": 0,
+          "skillID": 98,
+          "skillLineCategoryID": 10,
+          "stepCost": 0,
+          "tempPoints": 0
+        }
+      ]
+    ],
+    "skillLines": [
+      15
+    ],
+    "specGroups": [
+      1
+    ],
+    "specialization": [
+      1
+    ],
+    "specializationInfo": [
+      [
+        1491,
+        "Warrior",
+        "",
+        626008,
+        "DAMAGER",
+        4,
+        0,
+        null,
+        0,
+        true
+      ],
+      [
+        0,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+        0,
+        true
+      ],
+      [
+        0,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+        0,
+        true
+      ],
+      [
+        0,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+        0,
+        true
+      ]
+    ],
+    "speed": [
+      0
+    ],
+    "spellBookItem": [
+      [
+        {
+          "actionID": 6603,
+          "iconID": 135274,
+          "isOffSpec": false,
+          "isPassive": false,
+          "itemType": 1,
+          "name": "Attack",
+          "spellID": 6603,
+          "subName": ""
+        }
+      ],
+      [
+        {
+          "actionID": 20600,
+          "iconID": 136090,
+          "isOffSpec": false,
+          "isPassive": false,
+          "itemType": 1,
+          "name": "Perception",
+          "spellID": 20600,
+          "subName": "Racial"
+        }
+      ],
+      [
+        {
+          "actionID": 1259718,
+          "iconID": 136129,
+          "isOffSpec": false,
+          "isPassive": false,
+          "itemType": 1,
+          "name": "Will to Survive",
+          "spellID": 1259718,
+          "subName": "Racial"
+        }
+      ],
+      [
+        {
+          "actionID": 1293712,
+          "iconID": 132740,
+          "isOffSpec": false,
+          "isPassive": true,
+          "itemType": 1,
+          "name": "Armor Proficiency",
+          "spellID": 1293712,
+          "subName": ""
+        }
+      ],
+      [
+        {
+          "actionID": 107,
+          "iconID": 132110,
+          "isOffSpec": false,
+          "isPassive": true,
+          "itemType": 1,
+          "name": "Block",
+          "spellID": 107,
+          "subName": "Passive"
+        }
+      ],
+      [
+        {
+          "actionID": 81,
+          "iconID": 136047,
+          "isOffSpec": false,
+          "isPassive": true,
+          "itemType": 1,
+          "name": "Dodge",
+          "spellID": 81,
+          "subName": "Passive"
+        }
+      ],
+      [
+        {
+          "actionID": 1293657,
+          "iconID": 134331,
+          "isOffSpec": false,
+          "isPassive": true,
+          "itemType": 1,
+          "name": "Languages",
+          "spellID": 1293657,
+          "subName": ""
+        }
+      ],
+      [
+        {
+          "actionID": 20597,
+          "iconID": 132292,
+          "isOffSpec": false,
+          "isPassive": true,
+          "itemType": 1,
+          "name": "Ruthless",
+          "spellID": 20597,
+          "subName": "Racial Passive"
+        }
+      ],
+      [
+        {
+          "actionID": 20598,
+          "iconID": 132874,
+          "isOffSpec": false,
+          "isPassive": true,
+          "itemType": 1,
+          "name": "The Human Spirit",
+          "spellID": 20598,
+          "subName": "Racial Passive"
+        }
+      ],
+      [
+        {
+          "actionID": 2457,
+          "iconID": 132349,
+          "isOffSpec": false,
+          "isPassive": false,
+          "itemType": 1,
+          "name": "Battle Stance",
+          "skillLineIndex": 2,
+          "spellID": 2457,
+          "subName": ""
+        }
+      ],
+      [
+        {
+          "actionID": 78,
+          "iconID": 132282,
+          "isOffSpec": false,
+          "isPassive": false,
+          "itemType": 1,
+          "name": "Heroic Strike",
+          "skillLineIndex": 2,
+          "spellID": 78,
+          "subName": "Rank 1"
+        }
+      ],
+      [
+        {
+          "actionID": 269,
+          "iconID": 132349,
+          "isOffSpec": false,
+          "isPassive": false,
+          "itemType": 4,
+          "name": "Stances",
+          "skillLineIndex": 2,
+          "subName": ""
+        }
+      ]
+    ],
+    "spellBookItemAutoCast": [
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      [
+        false,
+        false
+      ],
+      []
+    ],
+    "spellBookItemCooldown": [
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      [
+        {
+          "duration": 0,
+          "isActive": false,
+          "isEnabled": true,
+          "modRate": 1,
+          "startTime": 0
+        }
+      ],
+      []
+    ],
+    "spellBookItemFlyoutMember": [
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        true
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ]
+    ],
+    "spellBookItemLevel": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [
+        0
+      ]
+    ],
+    "spellBookItemLink": [
+      [
+        "|cff71d5ff|Hspell:6603:0|h[Attack]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:20600:0|h[Perception]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:1259718:0|h[Will to Survive]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:1293712:0|h[Armor Proficiency]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:107:0|h[Block]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:81:0|h[Dodge]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:1293657:0|h[Languages]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:20597:0|h[Ruthless]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:20598:0|h[The Human Spirit]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:2457:0|h[Battle Stance]|h|r"
+      ],
+      [
+        "|cff71d5ff|Hspell:78:0|h[Heroic Strike]|h|r"
+      ],
+      []
+    ],
+    "spellBookItemLowRank": [
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ]
+    ],
+    "spellBookItemName": [
+      [
+        "Attack",
+        ""
+      ],
+      [
+        "Perception",
+        "Racial"
+      ],
+      [
+        "Will to Survive",
+        "Racial"
+      ],
+      [
+        "Armor Proficiency",
+        ""
+      ],
+      [
+        "Block",
+        "Passive"
+      ],
+      [
+        "Dodge",
+        "Passive"
+      ],
+      [
+        "Languages",
+        ""
+      ],
+      [
+        "Ruthless",
+        "Racial Passive"
+      ],
+      [
+        "The Human Spirit",
+        "Racial Passive"
+      ],
+      [
+        "Battle Stance",
+        ""
+      ],
+      [
+        "Heroic Strike",
+        "Rank 1"
+      ],
+      [
+        "Stances",
+        ""
+      ]
+    ],
+    "spellBookItemPassive": [
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        true
+      ],
+      [
+        true
+      ],
+      [
+        true
+      ],
+      [
+        true
+      ],
+      [
+        true
+      ],
+      [
+        true
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ],
+      [
+        false
+      ]
+    ],
+    "spellBookItemTexture": [
+      [
+        135274
+      ],
+      [
+        136090
+      ],
+      [
+        136129
+      ],
+      [
+        132740
+      ],
+      [
+        132110
+      ],
+      [
+        136047
+      ],
+      [
+        134331
+      ],
+      [
+        132292
+      ],
+      [
+        132874
+      ],
+      [
+        132349
+      ],
+      [
+        132282
+      ],
+      [
+        132349
+      ]
+    ],
+    "spellBookItemType": [
+      [
+        1,
+        6603,
+        6603
+      ],
+      [
+        1,
+        20600,
+        20600
+      ],
+      [
+        1,
+        1259718,
+        1259718
+      ],
+      [
+        1,
+        1293712,
+        1293712
+      ],
+      [
+        1,
+        107,
+        107
+      ],
+      [
+        1,
+        81,
+        81
+      ],
+      [
+        1,
+        1293657,
+        1293657
+      ],
+      [
+        1,
+        20597,
+        20597
+      ],
+      [
+        1,
+        20598,
+        20598
+      ],
+      [
+        1,
+        2457,
+        2457
+      ],
+      [
+        1,
+        78,
+        78
+      ],
+      [
+        4,
+        269,
+        null
+      ]
+    ],
+    "spellBookSkillLine": [
+      [
+        {
+          "iconID": 136830,
+          "isGuild": false,
+          "itemIndexOffset": 0,
+          "name": "General",
+          "numSpellBookItems": 9,
+          "shouldHide": false
+        }
+      ],
+      [
+        {
+          "iconID": 132292,
+          "isGuild": false,
+          "itemIndexOffset": 9,
+          "name": "Arms",
+          "numSpellBookItems": 3,
+          "shouldHide": false
+        }
+      ],
+      [],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    "spellBookSkillLines": [
+      2
+    ],
+    "spellCrit": [
+      2
+    ],
+    "spellCritFromStat": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "spellDamage": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "spellHaste": [
+      0
+    ],
+    "spellHealing": [
+      0
+    ],
+    "spellHit": [
+      0
+    ],
+    "spellPenetration": [
+      0
+    ],
+    "spellPowerByAttackPower": [
+      0
+    ],
+    "stat": [
+      [
+        24,
+        24,
+        0,
+        0
+      ],
+      [
+        21,
+        21,
+        0,
+        0
+      ],
+      [
+        23,
+        23,
+        0,
+        0
+      ],
+      [
+        20,
+        20,
+        0,
+        0
+      ],
+      [
+        20,
+        20,
+        0,
+        0
+      ]
+    ],
+    "talentSpecUI": [
+      false,
+      "This feature becomes available at level 5."
+    ],
+    "talentUI": [
+      false,
+      "This feature becomes available at level 5."
+    ],
+    "transmogSlot": {
+      "100": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1000": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1001": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "101": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1010": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1011": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "110": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "111": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1500": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1501": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1510": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1511": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1600": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156039,
+          "baseVisualID": 63223,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 7,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1601": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156039,
+          "baseVisualID": 63223,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 7,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1610": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 7,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1611": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 7,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1700": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156774,
+          "baseVisualID": 63878,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 6,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1701": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156774,
+          "baseVisualID": 63878,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 6,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1710": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 6,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1711": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 6,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1800": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1801": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1810": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1811": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1900": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1901": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1910": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "1911": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "300": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "301": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "310": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "311": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "400": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156043,
+          "baseVisualID": 63227,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "401": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156043,
+          "baseVisualID": 63227,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "410": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "411": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "500": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "501": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "510": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "511": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "600": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "601": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "610": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "611": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "700": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156044,
+          "baseVisualID": 63228,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "701": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156044,
+          "baseVisualID": 63228,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "710": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "711": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "800": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156045,
+          "baseVisualID": 63229,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "801": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 156045,
+          "baseVisualID": 63229,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "810": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "811": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 1,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "900": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "901": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "910": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ],
+      "911": [
+        {
+          "appliedSourceID": 0,
+          "appliedVisualID": 0,
+          "baseSourceID": 0,
+          "baseVisualID": 0,
+          "hasUndo": false,
+          "isHideVisual": false,
+          "itemSubclass": 0,
+          "pendingSourceID": 0,
+          "pendingVisualID": 0
+        }
+      ]
+    },
+    "versatility": {
+      "29": [
+        0
+      ],
+      "31": [
+        0
+      ]
+    },
+    "watchedFaction": [
+      null
+    ],
+    "xp": [
+      293
+    ],
+    "xpDisabled": [
+      false
+    ],
+    "xpMax": [
+      900
+    ]
+  }
+}

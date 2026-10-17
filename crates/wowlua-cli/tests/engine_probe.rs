@@ -32,6 +32,8 @@ fn build() -> tempfile::TempDir {
         "maps.wowlua",
         "collections.wowlua",
         "startup.wowlua",
+        "scenario.wowlua",
+        "snapshot.wowlua",
     ] {
         fs::copy(repo().join("tests/ingame/src").join(file), src.join(file)).unwrap();
     }

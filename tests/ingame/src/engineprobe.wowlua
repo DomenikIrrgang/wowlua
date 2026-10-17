@@ -15,6 +15,10 @@
 --   /stdtest engine blocked  arms a probe of protected frames: enter combat,
 --                            it runs half a second later
 --   /stdtest engine input    the scripts hovering, clicking and typing run
+--   /stdtest engine scenario <name> / stop
+--                            a piece of gameplay: events, the answers
+--                            Blizzard's handlers ask for, the world before
+--                            and after (scenario.wowlua)
 --   /stdtest engine record <label> / stop
 --                            records every event (but the combat log) with
 --                            its payload, for a guided sequence of actions
@@ -25,6 +29,7 @@ import answersProbe from "/answers"
 import mapsProbe from "/maps"
 import collectionsProbe from "/collections"
 import armStartup from "/startup"
+import scenarioProbe from "/scenario"
 import say from "/harness"
 
 local G = _G :: any
@@ -1748,6 +1753,9 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "textchange" then
         textChangeProbe()
+        return
+    elseif words[1] == "scenario" then
+        scenarioProbe(words[2] ?? "unnamed")
         return
     elseif words[1] == "keys" then
         keysProbe()

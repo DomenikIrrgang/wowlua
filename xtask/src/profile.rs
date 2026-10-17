@@ -171,7 +171,17 @@ pub fn run(saved: &Path, out: &Path) -> Result<()> {
     let snapshot: mlua::Value = state
         .get("snapshot")
         .map_err(|_| anyhow!("no snapshot: run /stdtest snapshot, then /reload"))?;
-    let mut profile = to_json(&snapshot);
+    let (text, _) = profile_text(&state, &snapshot)?;
+    std::fs::write(out, text).with_context(|| out.display().to_string())?;
+    println!("wrote {}", out.display());
+    Ok(())
+}
+
+/// A snapshot (`/stdtest snapshot`'s) as a test profile's JSON, the
+/// character's name, realm and other players' names scrubbed; with the
+/// names it scrubbed (for other text recorded with it).
+pub fn profile_text(state: &mlua::Table, snapshot: &mlua::Value) -> Result<(String, Vec<String>)> {
+    let mut profile = to_json(snapshot);
     let obj = profile
         .as_object_mut()
         .ok_or_else(|| anyhow!("no snapshot: run /stdtest snapshot, then /reload"))?;
@@ -240,12 +250,10 @@ pub fn run(saved: &Path, out: &Path) -> Result<()> {
         }
         None => text,
     };
-    std::fs::write(out, text + "\n").with_context(|| out.display().to_string())?;
-    println!("wrote {}", out.display());
     if let Some(serde_json::Value::Array(e)) = errors
         && !e.is_empty()
     {
         println!("parts the client refused: {e:?}");
     }
-    Ok(())
+    Ok((text + "\n", secrets))
 }

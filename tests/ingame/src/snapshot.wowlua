@@ -614,7 +614,8 @@ local function bindings(): table
     return out
 end
 
-export function snapshot()
+--- The character's world now, as a test profile's data.
+export function takeSnapshot(): { [string]: any }
     const items: { [number]: table } = {}
     const parts: { [string]: () -> any } = {
         character = character,
@@ -645,6 +646,12 @@ export function snapshot()
     profile.items = items
     profile.client = `{(GetBuildInfo())} ({select(2, GetBuildInfo())})`
     profile.errors = failed
+    return profile
+end
+
+export function snapshot()
+    const profile = takeSnapshot()
+    const failed = profile.errors :: string[]
     const st = state() :: any
     st.snapshot = profile
     say(`snapshot: recorded{#failed > 0 and ` ({#failed} parts failed)` or ""}; type /reload so the file is written`)
