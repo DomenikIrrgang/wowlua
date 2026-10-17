@@ -527,7 +527,8 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
         let build = git(&["log", "-1", "--format=%s"], Some(&dir.join(&flavor)))?;
         let build = build.trim();
         let ui_sha = git(&["rev-parse", "HEAD"], Some(&dir.join(&flavor)))?;
-        let ui_commit = &ui_sha.trim()[..12.min(ui_sha.trim().len())];
+        // In full: the test runner fetches this commit (`test.blizzard-ui`).
+        let ui_commit = ui_sha.trim();
         flavors.push(wowlua_types_gen::FlavorDocs {
             id: flavor,
             source: format!("wow-ui-source {build}, commit {ui_commit}; global string and API names from Ketho's BlizzardInterfaceResources {branch} {commit}"),

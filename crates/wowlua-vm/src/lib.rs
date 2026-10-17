@@ -4,6 +4,7 @@
 //! builds run on it; WoW's own Lua semantics are layered on top.
 
 pub mod compiler;
+pub mod coverage;
 pub mod error;
 pub mod function;
 pub mod gc;

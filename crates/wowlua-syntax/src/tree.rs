@@ -588,6 +588,7 @@ pub(crate) enum DeclMemberData {
 pub(crate) struct ImportNode {
     pub clause: ImportClauseData,
     pub type_only: bool,
+    pub internal: bool,
     pub from: u32,
 }
 

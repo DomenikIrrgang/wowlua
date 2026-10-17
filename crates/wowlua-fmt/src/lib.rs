@@ -1,10 +1,10 @@
 //! The wowlua formatter (spec tooling §16.3): StyLua-like, idempotent,
-//! comment-preserving. Milestone M1 formats Lua 5.1 syntax; files using
-//! wowlua syntax are left unchanged with a note.
+//! comment-preserving, for Lua 5.1 and all of wowlua's syntax (M9 S6).
 
 mod canon;
 mod doc;
 mod format;
+mod wowlua;
 
 pub use format::QuoteStyle;
 use wowlua_diagnostics::Diagnostic;
@@ -47,15 +47,6 @@ pub fn format(src: &[u8], file: FileId, config: &Config) -> Result<Vec<u8>, Erro
     let mut parsed = wowlua_syntax::parse(src, file);
     if parsed.has_errors() {
         return Err(Error::Syntax(std::mem::take(&mut parsed.diagnostics)));
-    }
-    if let Some((feature, span)) = wowlua_syntax::features::features(parsed.view()).first() {
-        return Err(Error::Unsupported(
-            Diagnostic::note(format!(
-                "not formatted: this formatter version handles plain Lua; {} are formatted from a later milestone",
-                feature.describe()
-            ))
-            .with_label(*span, "wowlua syntax"),
-        ));
     }
     let mut formatter = format::Formatter::new(&parsed, src, config.quote);
     let doc = formatter.chunk(parsed.view());

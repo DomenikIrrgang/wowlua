@@ -1254,7 +1254,21 @@ impl<'p> Env<'p> {
                     None => Rest::Variadic(Types::ANY),
                 }
             }
-            VarargType::Expand(_) => Rest::Variadic(Types::ANY),
+            // `A...` of a pack parameter `A`.
+            VarargType::Expand(t) => match t.kind() {
+                TypeKind::Ref { path, args } if path.len() == 1 && args.is_empty() => {
+                    match scope
+                        .params
+                        .iter()
+                        .rev()
+                        .find(|(name, _)| name.as_ref() == path.at(0).text())
+                    {
+                        Some((_, id)) if self.params[id.0 as usize].pack => Rest::Pack(*id),
+                        _ => Rest::Variadic(Types::ANY),
+                    }
+                }
+                _ => Rest::Variadic(Types::ANY),
+            },
         }
     }
 

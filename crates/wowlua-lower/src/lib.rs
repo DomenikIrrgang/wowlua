@@ -61,6 +61,9 @@ pub struct Context {
     /// Runtime checks of annotated parameters, `...: T` and `::`, by span
     /// (from the type checker, spec §7.5).
     pub value_checks: HashMap<(u32, u32), wowlua_sema::check::runtime::ValueCheck>,
+    /// File-level locals test files read (`import internal`): registered
+    /// as module `<id>#internal` at the end of the file.
+    pub exposed: BTreeSet<String>,
 }
 
 /// The debugging settings of the build profile (spec chapter 7).
@@ -140,8 +143,10 @@ impl Context {
             tools,
             type_names,
             value_checks,
+            exposed,
         } = self;
         *module == other.module
+            && *exposed == other.exposed
             && *file == other.file
             && *debug == other.debug
             && *compiler_known == other.compiler_known
@@ -266,6 +271,7 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
     // decisions L24 and T76).
     let hoisted = lowerer.hoist();
     let mut stmts = lowerer.stmts(parse.view().block().stmts());
+    stmts.extend(lowerer.expose_internals());
     if !lowerer.errors.is_empty() {
         return Err(lowerer.errors);
     }
@@ -1243,6 +1249,45 @@ impl<'a> Lowerer<'a> {
         }
     }
 
+    /// `import internal` (spec Tooling §16.1.3.1): the file-level locals
+    /// test files read, registered as module `<id>#internal` once the file
+    /// has run (their values then).
+    fn expose_internals(&mut self) -> Vec<ir::Stmt> {
+        let Some(id) = self.ctx.module.clone() else {
+            return Vec::new();
+        };
+        if self.ctx.exposed.is_empty() {
+            return Vec::new();
+        }
+        self.uses_runtime = true;
+        let line = self.src.iter().filter(|&&b| b == b'\n').count() as u32 + 1;
+        let pos = Pos::new(line, 0);
+        let module = field(name_expr(generated("__wl", pos)), "module", pos);
+        let value = call(
+            module,
+            vec![lit(
+                ir::ExprKind::String(quote(format!("{id}#internal").as_bytes()).into()),
+                pos,
+            )],
+            pos,
+        );
+        let mut out = vec![local(generated("__wl_internal", pos), value, pos)];
+        for name in self.ctx.exposed.clone() {
+            let value = match self.lookup(&name).cloned() {
+                Some(Binding::Const(c)) => c.to_expr(pos),
+                Some(Binding::LazyImport { table, name: n }) => {
+                    field(name_expr(generated(&table, pos)), &n, pos)
+                }
+                // Types and removed declarations have no value.
+                Some(Binding::Removed(_) | Binding::DebugOnlyRemoved) | None => continue,
+                Some(_) => name_expr(ir::Ident::new(&*name, pos)),
+            };
+            let target = field(name_expr(generated("__wl_internal", pos)), &name, pos);
+            out.push(assign(target, value, pos));
+        }
+        out
+    }
+
     fn ident(&self, n: Name<'a>) -> ir::Ident {
         ir::Ident::new(n.text(), self.span_pos(n.span()))
     }
@@ -1605,6 +1650,13 @@ impl<'a> Lowerer<'a> {
             return Vec::new();
         };
         let (id, lazy, exports, attrs, intrinsics) = match target {
+            ImportContext::Module { id, lazy, .. } if import.internal() => (
+                format!("{id}#internal"),
+                lazy,
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+            ),
             ImportContext::Module {
                 id,
                 lazy,

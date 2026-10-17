@@ -228,6 +228,12 @@ fn compared(key: &str) -> bool {
         "probe.loadCalls.GetNetStats",
         "probe.loadCalls.GuildControlGetNumRanks",
         "probe.loadCalls.BNGetNumFriends",
+        "probe.loadCalls.C_Navigation.GetFrame",
+        "probe.loadCalls.C_SuperTrack.GetSuperTrackedQuestID",
+        "probe.loadCalls.GetSubZoneText",
+        "probe.loadCalls.C_DateAndTime.IsDayTime",
+        // The player's own setting (and where the server stores it).
+        "probe.cvarFlags.GetCVarInfo(SoftTargetEnemy)",
         // Blizzard's UI code makes these (not loaded here): the intrinsic
         // types and its secure store frame.
         "probe.widgets.EventFrame.",
@@ -249,6 +255,56 @@ fn compared(key: &str) -> bool {
     !SKIP.iter().any(|s| key.starts_with(s))
         && !key.ends_with(".GetDebugName")
         && !key.ends_with(".GetEffectiveScale")
+}
+
+/// A text's numbers, and the text between them.
+fn split_numbers(s: &str) -> (Vec<String>, Vec<f64>) {
+    let (mut text, mut numbers) = (Vec::new(), Vec::new());
+    let (mut cur, mut num) = (String::new(), String::new());
+    for ch in s.chars().chain(std::iter::once(' ')) {
+        if ch.is_ascii_digit() || (ch == '.' && !num.is_empty()) {
+            num.push(ch);
+            continue;
+        }
+        if !num.is_empty() {
+            numbers.push(num.parse().unwrap_or(f64::NAN));
+            text.push(std::mem::take(&mut cur));
+            num.clear();
+        }
+        cur.push(ch);
+    }
+    text.push(cur);
+    (text, numbers)
+}
+
+/// Whether a result matches the client's: exactly, but layout sizes (and
+/// the sizes `OnSizeChanged` gets) up to float precision (the client's last bits follow the session's screen and
+/// UI scale) and a list the client returns in its session's hash order as
+/// a set.
+fn same(key: &str, expected: &str, mine: &str) -> bool {
+    if expected == mine {
+        return true;
+    }
+    if key.starts_with("probe.layoutSizes.") || key == "probe.timers.sizeChanged" {
+        // The same text around numbers within a float's last bits.
+        let (ta, a) = split_numbers(expected);
+        let (tb, b) = split_numbers(mine);
+        return ta == tb
+            && a.len() == b.len()
+            && a.iter()
+                .zip(&b)
+                .all(|(x, y)| (x - y).abs() <= x.abs() * 1e-5);
+    }
+    if key == "probe.loadCalls.C_UnitAuras.GetHiddenGroupBuffs" {
+        let values = |s: &str| -> std::collections::BTreeSet<String> {
+            s.split(['{', ',', '}'])
+                .filter_map(|e| e.split_once('=').map(|(_, v)| v.to_string()))
+                .collect()
+        };
+        let count = |s: &str| s.matches('=').count();
+        return count(expected) == count(mine) && values(expected) == values(mine);
+    }
+    false
 }
 
 #[test]
@@ -282,12 +338,30 @@ fn the_engine_answers_the_probe_battery_as_the_client_did() {
     let ours = flatten(&mut vm);
     let theirs = fixture();
     let mut differences = Vec::new();
+    // The client's CVars without a default are not the engine's (as above):
+    // the flag lists leave them out.
+    let no_default = |name: &str| {
+        theirs
+            .get(&format!("probe.allCVars.{name}"))
+            .is_some_and(|v| v == "0: ")
+    };
     for (key, expected) in theirs
         .iter()
         .filter(|(k, v)| compared(k) && !(k.starts_with("probe.allCVars.") && v.as_str() == "0: "))
     {
+        let filtered;
+        let expected = if key.starts_with("probe.cvarFlags.") && !key.contains('(') {
+            filtered = expected
+                .split(' ')
+                .filter(|n| !no_default(n))
+                .collect::<Vec<_>>()
+                .join(" ");
+            &filtered
+        } else {
+            expected
+        };
         match ours.get(key) {
-            Some(mine) if mine == expected => {}
+            Some(mine) if same(key, expected, mine) => {}
             mine => differences.push(format!(
                 "{key}\n    client: {expected}\n    ours:   {}",
                 mine.map_or("<missing>", String::as_str)
@@ -319,4 +393,96 @@ fn the_engine_answers_the_probe_battery_as_the_client_did() {
         theirs.keys().filter(|k| compared(k)).count(),
         differences.join("\n")
     );
+}
+
+/// `/stdtest engine input` replayed with the engine's controls: the same
+/// scripts with the same arguments, in the client's order.
+#[test]
+fn the_engine_takes_input_as_the_client_did() {
+    let src = fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-input.lua"))
+        .expect("the fixture");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    wowlua_engine::controls::install(&mut vm, "__engine");
+    let f = vm.load(&src, "=fixture").expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let n = vm.heap.table(t).border();
+    let client: Vec<String> = (1..=n)
+        .map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+            // Without the time: "19.298 button OnClick(...)".
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s))
+                .split_once(' ')
+                .expect("a time")
+                .1
+                .to_string(),
+            _ => panic!("a string"),
+        })
+        .collect();
+    // The probe's frames and scripts (its templates' looks aside).
+    addon(
+        &mut vm,
+        r##"InputLog = {}
+local function note(what) InputLog[#InputLog + 1] = what end
+local b = CreateFrame("Button", "StdTestInputButton", UIParent)
+b:SetSize(160, 28)
+b:SetPoint("CENTER", 0, 60)
+b:RegisterForClicks("AnyUp")
+for _, script in ipairs({ "OnEnter", "OnLeave", "OnMouseDown", "OnMouseUp", "PreClick", "OnClick", "PostClick" }) do
+    b:SetScript(script, function(_, ...)
+        local args = {}
+        for i = 1, select("#", ...) do args[#args + 1] = tostring((select(i, ...))) end
+        note(("button %s(%s) shift=%s"):format(script, table.concat(args, ", "), tostring(IsShiftKeyDown())))
+    end)
+end
+local e = CreateFrame("EditBox", "StdTestInputBox", UIParent)
+e:SetSize(160, 24)
+e:SetPoint("CENTER", 0, 20)
+e:SetAutoFocus(false)
+e:SetText("")
+e:Show()
+for _, script in ipairs({ "OnEditFocusGained", "OnEditFocusLost", "OnChar", "OnTextChanged", "OnEnterPressed", "OnEscapePressed", "OnTabPressed" }) do
+    e:SetScript(script, function(self, ...)
+        local args = {}
+        for i = 1, select("#", ...) do args[#args + 1] = tostring((select(i, ...))) end
+        note(("box %s(%s) text=%s focus=%s"):format(script, table.concat(args, ", "), self:GetText(), tostring(self:HasFocus())))
+        if script == "OnEnterPressed" or script == "OnEscapePressed" then self:ClearFocus() end
+    end)
+end
+local m = CreateFrame("Frame")
+m:RegisterEvent("MODIFIER_STATE_CHANGED")
+m:SetScript("OnEvent", function(_, event, key, down) note(("%s(%s, %s)"):format(event, key, tostring(down))) end)"##,
+    );
+    wowlua_engine::clock::advance_frames(&mut vm, 1, 1000.0 / 60.0);
+    addon(
+        &mut vm,
+        r#"local b, e = StdTestInputButton, StdTestInputBox
+__engine.hover(b) __engine.hover(nil)
+__engine.hover(b) __engine.hover(nil)
+__engine.hover(b)
+__engine.click(b)
+__engine.setModifiers({ shift = true })
+__engine.click(b)
+__engine.setModifiers({})
+__engine.hover(nil)
+__engine.click(e)
+__engine.type(e, "ab")
+__engine.pressKey("ENTER")"#,
+    );
+    let ours: Vec<String> = {
+        let log = vm.get_global("InputLog");
+        let Value::Table(t) = log else {
+            panic!("a log")
+        };
+        let n = vm.heap.table(t).border();
+        (1..=n)
+            .map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+                Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+                _ => panic!("a string"),
+            })
+            .collect()
+    };
+    assert_eq!(ours, client);
 }

@@ -584,6 +584,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("IsGuildLeader", no),
         // Not a convention kiosk.
         ("Kiosk.IsEnabled", no),
+        // No money on the cursor, no trade: Blizzard's money frames
+        // subtract them from GetMoney() (without an error in the client).
+        ("GetCursorMoney", zero),
+        ("GetPlayerTradeMoney", zero),
+        ("GetTargetTradeMoney", zero),
     ]
 }
 

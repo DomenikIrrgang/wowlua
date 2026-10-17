@@ -58,6 +58,12 @@ pub struct Registry {
     /// Blizzard's errors as its handler logged them, stacks included
     /// (`C_Log.LogErrorMessage`).
     pub error_stacks: Vec<String>,
+    /// The addon whose UI code is loading (not Blizzard's): its Lua and
+    /// XML scripts compile as its code, carrying its taint.
+    pub code_of: Option<String>,
+    /// The addon each of its templates came from, by lower-case name: their
+    /// scripts are its code wherever they are applied.
+    pub template_addons: HashMap<String, String>,
     /// Every Blizzard addon of the UI code, by lower-case name: what
     /// `C_AddOns.LoadAddOn` can load later.
     available: HashMap<String, Addon>,
@@ -638,6 +644,55 @@ pub fn load_addon(vm: &mut Vm, name: &str) -> Option<bool> {
     Some(true)
 }
 
+/// Loads an addon of the user's from its folder as the client does: the
+/// files its TOC lists, in order, as the addon's code (its taint), with
+/// `table` as the addon table; `skip`: files (relative to `dir`) already
+/// loaded. Errors go to [`Registry::errors`]; `ADDON_LOADED` is not fired.
+pub fn load_user_addon(
+    vm: &mut Vm,
+    dir: &Path,
+    toc: &Path,
+    name: &str,
+    table: Value,
+    skip: &HashSet<String>,
+) {
+    let text = match std::fs::read_to_string(toc) {
+        Ok(t) => t,
+        Err(e) => {
+            engine_mut(vm)
+                .world
+                .ui
+                .errors
+                .push(format!("{}: {e}", toc.display()));
+            return;
+        }
+    };
+    let parsed = wowlua_toc::parse(&text);
+    let t = Target::new(&engine(vm).flavor.clone());
+    let saved = engine_mut(vm).world.ui.code_of.replace(name.to_string());
+    for file in &parsed.files {
+        if !t.allows(&file.conditions) {
+            continue;
+        }
+        let rel = t.path(&file.path);
+        if skip.contains(&rel) {
+            continue;
+        }
+        let path = resolve(dir, &rel);
+        load_file(vm, dir, &path, name, table);
+    }
+    engine_mut(vm).world.ui.code_of = saved;
+}
+
+/// One file of an addon of the user's (`rel`: relative to `dir`), as its
+/// code: see [`load_user_addon`].
+pub fn load_user_file(vm: &mut Vm, dir: &Path, rel: &str, name: &str, table: Value) {
+    let saved = engine_mut(vm).world.ui.code_of.replace(name.to_string());
+    let path = resolve(dir, rel);
+    load_file(vm, dir, &path, name, table);
+    engine_mut(vm).world.ui.code_of = saved;
+}
+
 /// Loads one UI file (`.lua` or `.xml`) of an addon.
 fn load_file(vm: &mut Vm, interface_root: &Path, path: &Path, addon: &str, addon_table: Value) {
     let shown = path
@@ -720,7 +775,7 @@ fn process_ui(
                     }
                 } else if !el.text.trim().is_empty() {
                     let src = format!("{}{}", "\n".repeat(el.line.saturating_sub(1)), el.text);
-                    match vm.load(src.as_bytes(), &format!("@{}", cx.file)) {
+                    match build::load_chunk(vm, src.as_bytes(), &format!("@{}", cx.file)) {
                         Ok(f) => {
                             if let Err(e) = vm.call(f, &[]) {
                                 let msg = match e.value {
@@ -763,6 +818,9 @@ fn process_ui(
                     ui.template_files
                         .insert(name.to_ascii_lowercase(), cx.file.to_string());
                     ui.template_envs.insert(name.to_ascii_lowercase(), globals);
+                    if let Some(addon) = ui.code_of.clone() {
+                        ui.template_addons.insert(name.to_ascii_lowercase(), addon);
+                    }
                 }
                 build::top_level(vm, cx, el);
             }

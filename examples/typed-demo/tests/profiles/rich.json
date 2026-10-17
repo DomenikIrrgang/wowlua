@@ -1,0 +1,4 @@
+{
+  "character": { "name": "Player", "class": "WARRIOR", "race": "Human", "level": 60 },
+  "money": 1234567
+}

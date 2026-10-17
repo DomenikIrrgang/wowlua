@@ -19,6 +19,7 @@ fn request() -> BuildRequest {
         only: None,
         jobs: wowlua_driver::parallel::Jobs::default(),
         keep_code: true,
+        tests: false,
     }
 }
 

@@ -283,7 +283,16 @@ fn apply_template_in(vm: &mut Vm, frame: Value, name: &str, phase: Phase) -> boo
     if let Some(env) = env {
         vm.globals = env;
     }
+    // A template's scripts are its addon's code (or Blizzard's).
+    let addon = engine(vm)
+        .world
+        .ui
+        .template_addons
+        .get(&name.to_ascii_lowercase())
+        .cloned();
+    let code_of = std::mem::replace(&mut engine_mut(vm).world.ui.code_of, addon);
     apply_in(vm, &cx, frame, id, &t, phase);
+    engine_mut(vm).world.ui.code_of = code_of;
     vm.globals = globals;
     true
 }
@@ -762,10 +771,21 @@ fn build_as(
     Some(region)
 }
 
+/// Compiles UI code: as the loading addon's ([`Registry::code_of`]), or
+/// as Blizzard's.
+///
+/// [`Registry::code_of`]: super::Registry::code_of
+pub(crate) fn load_chunk(vm: &mut Vm, src: &[u8], chunk: &str) -> Result<Value, String> {
+    match engine(vm).world.ui.code_of.clone() {
+        Some(addon) => vm.load_as(src, chunk, &addon),
+        None => vm.load(src, chunk),
+    }
+}
+
 /// Compiles Lua for a script handler; an error is the loader's.
 fn compile(vm: &mut Vm, cx: &Context, line: usize, src: &str) -> Option<Value> {
     let chunk = format!("@{}", cx.file);
-    match vm.load(src.as_bytes(), &chunk) {
+    match load_chunk(vm, src.as_bytes(), &chunk) {
         Ok(f) => match vm.call(f, &[]) {
             Ok(r) => r.first().copied(),
             Err(e) => {
@@ -875,7 +895,7 @@ pub fn run_lua(vm: &mut Vm, path: &Path, chunk: &str, addon: &str, addon_table: 
             return;
         }
     };
-    let f = match vm.load(&src, &format!("@{chunk}")) {
+    let f = match load_chunk(vm, &src, &format!("@{chunk}")) {
         Ok(f) => f,
         Err(e) => {
             engine_mut(vm).world.ui.errors.push(e);

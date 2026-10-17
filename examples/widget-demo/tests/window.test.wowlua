@@ -1,0 +1,60 @@
+-- The demo window as a user sees it, in the emulated client with
+-- Blizzard's UI (`test.blizzard-ui`).
+import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import DemoWindow from "/ui/window"
+
+local function window(): DemoWindow
+    return (_G.WidgetDemoWindow :: any) :: DemoWindow
+end
+
+-- The window's child whose text starts with `text`.
+local function child(text: string): any
+    for _, c in ipairs({ window():GetChildren() }) do
+        local t = c.GetText and c:GetText()
+        if type(t) == "string" and t:sub(1, #text) == text then
+            return c
+        end
+    end
+    error(`no child reads "{text}"`)
+end
+
+local function editBox(): EditBox
+    for _, c in ipairs({ window():GetChildren() }) do
+        if c:GetObjectType() == "EditBox" then
+            return c :: EditBox
+        end
+    end
+    error("no edit box")
+end
+
+@test("/wdemo opens and closes the window")
+local function toggles()
+    mock.slash("/wdemo")
+    expect(window()).toBeShown()
+    expect(window()).toHaveSize(300, 380)
+    expect(window()).toMatchSnapshot("open")
+    mock.slash("/wdemo")
+    expect(window()).never.toBeShown()
+end
+
+@test("clicking the counter counts and fills the bar")
+local function counts()
+    mock.slash("/wdemo")
+    local clicks = child("Clicks")
+    mock.click(clicks)
+    mock.click(clicks)
+    expect(clicks).toHaveText("Clicks: 2")
+    expect(window().status).toHaveText("|cff9d9d9dclicked 2 times|r")
+    expect(window().progress:GetValue()).toBe(2)
+end
+
+@test("typing and Enter add a row")
+local function addsRows()
+    local box = editBox()
+    mock.typeText(box, "hello")
+    mock.pressKey("ENTER")
+    expect(box).toHaveText("")
+    expect(window().entries).toEqual({ "hello" })
+    expect(window().status).toHaveText("|cff9d9d9d1 row|r")
+end

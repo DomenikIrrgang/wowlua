@@ -1918,6 +1918,7 @@ handle!(Import);
 debug_fields!(Import {
     clause,
     type_only,
+    internal,
     from
 });
 
@@ -1939,6 +1940,12 @@ impl<'t> Import<'t> {
 
     pub fn type_only(self) -> bool {
         self.node().type_only
+    }
+
+    /// `import internal a from "…"`: a module's file-level locals (test
+    /// files only, spec Tooling §16.1.3.1).
+    pub fn internal(self) -> bool {
+        self.node().internal
     }
 
     pub fn from(self) -> Str<'t> {

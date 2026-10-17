@@ -153,6 +153,10 @@
         "lua": false
       }
     },
+    "test": {
+      "$ref": "#/$defs/TestSettings",
+      "default": {}
+    },
     "compat": {
       "$ref": "#/$defs/Compat",
       "default": {
@@ -1674,6 +1678,90 @@
         "single",
         "preserve"
       ]
+    },
+    "TestSettings": {
+      "description": "`test` (spec §9.18): `wowlua test`'s settings.",
+      "type": "object",
+      "properties": {
+        "blizzard-ui": {
+          "description": "Load the flavor's Blizzard UI code as secure code before the addon\n(spec emulator §17.7).",
+          "type": "boolean"
+        },
+        "profile": {
+          "description": "The world profile (`tests/profiles/<name>.json`) of test files that\nname none (decision T213).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "coverage": {
+          "description": "Minimum coverage and files left out of it (spec Tooling §16.1.6).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reporters": {
+          "description": "Default reporters of `wowlua test` (`pretty`, `junit`, `tap`,\n`json`, `github`, `lcov`, `cobertura`, `coverage-json`, `html`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoverageSettings": {
+      "description": "`test.coverage`: minimum percentages per kind (a run below one fails),\nand glob patterns of files left out.",
+      "type": "object",
+      "properties": {
+        "lines": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "statements": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "branches": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "functions": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "conditions": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "Compat": {
       "type": "object",

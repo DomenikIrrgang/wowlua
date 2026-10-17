@@ -10,6 +10,34 @@ use super::types::{Field, Func, Types};
 use wowlua_span::Span;
 use wowlua_syntax::view::*;
 
+/// `wowlua:test`'s own matchers (and `never`): other names on an
+/// `expect(…)` are custom matchers.
+const BUILTIN_MATCHERS: &[&str] = &[
+    "toBe",
+    "toEqual",
+    "toBeNil",
+    "toBeTruthy",
+    "toBeFalsy",
+    "toBeInstanceOf",
+    "toContain",
+    "toHaveLength",
+    "toBeCloseTo",
+    "toThrow",
+    "toHaveBeenCalled",
+    "toHaveBeenCalledTimes",
+    "toHaveBeenCalledWith",
+    "toBeShown",
+    "toBeVisible",
+    "toHaveText",
+    "toHaveSize",
+    "toBeAnchoredTo",
+    "toHaveLines",
+    "toMatchSnapshot",
+    "toBeBlocked",
+    "toBeSecure",
+    "never",
+];
+
 /// What an expression gives: one value (without a heap allocation), or a
 /// pack (calls, `...`).
 pub(crate) enum Values {
@@ -205,6 +233,9 @@ impl Checker<'_, '_> {
                 let (o, chained) = self.chain_obj(obj);
                 let opt = matches!(e.kind(), ExprKind::OptField { .. });
                 let o = if opt { self.env.types.non_nil(o) } else { o };
+                if let Some(t) = self.custom_matcher(obj, o, name) {
+                    return single(t);
+                }
                 // A member the type lacks, in an existence test (`nil`) or
                 // in the region such a test guards (`any`).
                 let missing = (probed || guarded)
@@ -1788,6 +1819,162 @@ impl Checker<'_, '_> {
         subst::apply_func(&mut self.env.types, f, &s)
     }
 
+    /// `expect(x).name` for a custom matcher of `wowlua:test` (decision
+    /// T220): a function `name` in scope taking the value first (made with
+    /// `matcher("name", fn)`); the value is checked against its first
+    /// parameter (E8121) and the call takes the rest.
+    fn custom_matcher(&mut self, obj: Expr<'_>, o: TypeId, name: Name<'_>) -> Option<TypeId> {
+        let mut target = obj;
+        if let ExprKind::Field {
+            obj: inner,
+            name: n,
+        } = target.kind()
+            && n.text() == "never"
+        {
+            target = inner;
+        }
+        let ExprKind::Call {
+            callee: expect,
+            args: expect_args,
+        } = target.kind()
+        else {
+            return None;
+        };
+        if self.intrinsic_of(expect).as_deref() != Some("test.expect")
+            || BUILTIN_MATCHERS.contains(&name.text())
+        {
+            return None;
+        }
+        let _ = o;
+        let v = self.lookup_var(name.text())?;
+        let Ty::Func(f) = self.env.types.get(self.var_type(v)).clone() else {
+            return None;
+        };
+        let first = f.params.first()?;
+        if let Some(subject) = expect_args.exprs().first()
+            && let Some(&t) = self
+                .expr_types
+                .get(&(subject.span().start, subject.span().end))
+            && !self.env.assignable(t, first.ty, self.mode)
+        {
+            let msg = format!(
+                "`{}` takes `{}`; the value is `{}`",
+                name.text(),
+                self.env.display(first.ty),
+                self.env.display(t)
+            );
+            self.report("E8121", name.span(), msg);
+        }
+        let call = Func {
+            type_params: Vec::new(),
+            params: f.params[1..].to_vec(),
+            rest: f.rest.clone(),
+            ret: Pack::empty(),
+            predicate: None,
+            unannotated: false,
+        };
+        Some(self.env.types.func(call))
+    }
+
+    /// `expect(x).matcher(…)` of `wowlua:test` (decision T214): matchers
+    /// that need a kind of value check `x`'s type (E8121), and
+    /// `toHaveBeenCalledWith` takes the spied function's parameters.
+    fn matcher_call_type(&mut self, callee: Expr<'_>, c: TypeId) -> Option<TypeId> {
+        let ExprKind::Field { obj, name } = callee.kind() else {
+            return None;
+        };
+        let mut target = obj;
+        if let ExprKind::Field {
+            obj: inner,
+            name: n,
+        } = target.kind()
+            && n.text() == "never"
+        {
+            target = inner;
+        }
+        let ExprKind::Call {
+            callee: expect,
+            args: expect_args,
+        } = target.kind()
+        else {
+            return None;
+        };
+        if self.intrinsic_of(expect).as_deref() != Some("test.expect") {
+            return None;
+        }
+        let subject = expect_args.exprs().first()?;
+        let t = *self
+            .expr_types
+            .get(&(subject.span().start, subject.span().end))?;
+        let matcher = name.text();
+        let (fits, what): (fn(&Ty) -> bool, &str) = match matcher {
+            "toHaveLength" | "toContain" => (
+                |ty| {
+                    matches!(
+                        ty,
+                        Ty::String
+                            | Ty::Str(_)
+                            | Ty::Table
+                            | Ty::Array(_)
+                            | Ty::Map(..)
+                            | Ty::Record(_)
+                            | Ty::Named(..)
+                    )
+                },
+                "a string or a table",
+            ),
+            "toBeCloseTo" => (|ty| matches!(ty, Ty::Number | Ty::Num(_)), "a number"),
+            "toThrow"
+            | "toBeBlocked"
+            | "toHaveBeenCalled"
+            | "toHaveBeenCalledTimes"
+            | "toHaveBeenCalledWith" => (
+                |ty| matches!(ty, Ty::Function | Ty::Func(_) | Ty::Intersection(_)),
+                "a function",
+            ),
+            "toBeShown" | "toBeVisible" | "toHaveText" | "toHaveSize" | "toBeAnchoredTo"
+            | "toHaveLines" => (
+                |ty| matches!(ty, Ty::Table | Ty::Record(_) | Ty::Named(..) | Ty::Map(..)),
+                "a widget",
+            ),
+            _ => return None,
+        };
+        let members: Vec<TypeId> = match self.env.types.get(t) {
+            Ty::Union(m) => m.clone(),
+            _ => vec![t],
+        };
+        let ok = members.iter().all(|&m| {
+            let ty = self.env.types.get(m);
+            matches!(
+                ty,
+                Ty::Any | Ty::Unknown | Ty::Error | Ty::Param(_) | Ty::Nil
+            ) || fits(ty)
+        });
+        if !ok {
+            let msg = format!(
+                "`{matcher}` needs {what}; the value is `{}`",
+                self.env.display(t)
+            );
+            self.report("E8121", callee.span(), msg);
+            return Some(c);
+        }
+        let spied_type = self.env.types.non_nil(t);
+        if matcher == "toHaveBeenCalledWith"
+            && let Ty::Func(spied) = self.env.types.get(spied_type).clone()
+        {
+            let f = Func {
+                type_params: Vec::new(),
+                params: spied.params.clone(),
+                rest: spied.rest.clone(),
+                ret: Pack::empty(),
+                predicate: None,
+                unannotated: false,
+            };
+            return Some(self.env.types.func(f));
+        }
+        None
+    }
+
     /// `saved.bind(name, { defaults = … })` returns the data table: the
     /// type of the defaults (spec stdlib "saved").
     fn saved_bind_type(&mut self, callee: Expr<'_>, args: Args<'_>) -> Option<TypeId> {
@@ -1834,6 +2021,9 @@ impl Checker<'_, '_> {
         if id.starts_with("hooks.") {
             self.check_hook_target(&id, args.exprs(), false);
         }
+        if id == "mock.module" {
+            self.check_mock_module(args.exprs());
+        }
         if id == "settings.register"
             && let Some(def) = args.exprs().first()
         {
@@ -1864,6 +2054,39 @@ impl Checker<'_, '_> {
                         "the defaults of `saved.bind` contain a `Secret<…>` type{at}: secret values cannot be compared or saved"
                     );
                     self.report("E8104", value.span(), msg);
+                }
+            }
+        }
+    }
+
+    /// `mock.module(namespace, { name = value, … })` (decision T224): each
+    /// replacement is an export of the module (E8123) of its type.
+    fn check_mock_module(&mut self, args: Exprs<'_>) {
+        let (Some(ns), Some(repl)) = (args.first(), args.get(1)) else {
+            return;
+        };
+        let Some(&ns_type) = self.expr_types.get(&(ns.span().start, ns.span().end)) else {
+            return;
+        };
+        let Ty::Record(record) = self.env.types.get(ns_type).clone() else {
+            return;
+        };
+        let ExprKind::Table(fields) = repl.kind() else {
+            return;
+        };
+        for f in fields {
+            let TableField::Named { name, value, .. } = f else {
+                continue;
+            };
+            match record.fields.get(name.text()) {
+                None => {
+                    let msg = format!("the module has no export `{}`", name.text());
+                    self.report("E8123", name.span(), msg);
+                }
+                Some(field) => {
+                    if let Some(&t) = self.expr_types.get(&(value.span().start, value.span().end)) {
+                        self.check_assignable(value.span(), t, field.ty);
+                    }
                 }
             }
         }
@@ -2349,6 +2572,9 @@ impl Checker<'_, '_> {
     }
 
     fn stdlib_call_type(&mut self, callee: Expr<'_>, args: Args<'_>, c: TypeId) -> TypeId {
+        if let Some(t) = self.matcher_call_type(callee, c) {
+            return t;
+        }
         let Some(id) = self.intrinsic_of(callee) else {
             return c;
         };
@@ -2437,7 +2663,23 @@ impl Checker<'_, '_> {
                 }
             }
             for (i, e) in exprs.iter().enumerate() {
-                if matches!(e.kind(), ExprKind::Function(_)) {
+                if let ExprKind::Function(lit) = e.kind() {
+                    // A literal with every parameter annotated gives its
+                    // parameters' types (`spy(function(a: number) end)`);
+                    // its body is checked in the second pass.
+                    let annotated = lit.type_params().is_empty()
+                        && lit.params().iter().all(|p| p.ty().is_some())
+                        && lit.vararg().is_none_or(|v| v.ty.is_some());
+                    if annotated && let Some(p) = self.param_at(f, i) {
+                        let mut sig =
+                            self.env
+                                .func_sig(&FnSig::of(lit), &self.scope.clone(), false);
+                        if lit.ret().is_none() {
+                            sig.ret = Pack::any();
+                        }
+                        let t = self.env.types.func(sig);
+                        self.unify(p, t, &mut s);
+                    }
                     continue;
                 }
                 let fixed = self
@@ -2459,11 +2701,35 @@ impl Checker<'_, '_> {
             // The variadic tail binds a pack parameter. A function literal
             // (typed in the second pass) takes the type the pack was bound
             // to at its position by an earlier parameter, or `any`.
-            if let Some(Rest::Pack(p)) = &f.rest {
+            // A function of unknown signature (`function`, `any`) for a
+            // `(A...) -> …` parameter: `A` is anything.
+            let mut open_packs: Vec<ParamId> = Vec::new();
+            for (i, t) in arg_types.iter().enumerate() {
+                let (Some(t), Some(pt)) = (t, self.param_at(f, i)) else {
+                    continue;
+                };
+                if matches!(self.env.types.get(*t), Ty::Function | Ty::Any)
+                    && let Ty::Func(pf) = self.env.types.get(pt).clone()
+                    && let Some(Rest::Pack(p)) = &pf.rest
+                {
+                    open_packs.push(*p);
+                }
+            }
+            for p in &open_packs {
+                s.packs.insert(*p, Pack::any());
+            }
+            if let Some(Rest::Pack(p)) = &f.rest
+                && !open_packs.contains(p)
+            {
                 let fixed = f.params.len();
                 let bound = s.packs.get(p).cloned();
                 let mut pack = Pack::default();
                 for (k, t) in arg_types.iter().skip(fixed).enumerate() {
+                    // A final `...` or call passes any number of values.
+                    if fixed + k + 1 == exprs.len() && is_multi(exprs.at(fixed + k)) {
+                        pack.rest = Some(Rest::Variadic(t.unwrap_or(Types::ANY)));
+                        break;
+                    }
                     let from_bound = || bound.as_ref().and_then(|b| b.types.get(k).copied());
                     pack.types.push(t.or_else(from_bound).unwrap_or(Types::ANY));
                 }
@@ -2666,6 +2932,21 @@ impl Checker<'_, '_> {
             (Ty::Func(pf), Ty::Func(af)) => {
                 for (pp, ap) in pf.params.iter().zip(&af.params) {
                     self.unify(pp.ty, ap.ty, s);
+                }
+                // `(A...) -> …`: the pack is the remaining parameters.
+                if let Some(Rest::Pack(p)) = &pf.rest
+                    && !s.packs.contains_key(p)
+                {
+                    let rest = Pack {
+                        types: af
+                            .params
+                            .iter()
+                            .skip(pf.params.len())
+                            .map(|q| q.ty)
+                            .collect(),
+                        rest: af.rest.clone(),
+                    };
+                    s.packs.insert(*p, rest);
                 }
                 for (pr, ar) in pf.ret.types.iter().zip(&af.ret.types) {
                     self.unify(*pr, *ar, s);

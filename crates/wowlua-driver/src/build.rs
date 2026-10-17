@@ -43,6 +43,9 @@ pub struct BuildRequest {
     /// that writes nothing and bundles nothing keeps each file's only until
     /// it is checked; [`BuildOutput::files`] then holds none of it.
     pub keep_code: bool,
+    /// `wowlua test`: the test side (test files, mocks, helpers) is compiled
+    /// with the addon, outside its TOC ([`BuildOutput::tests`]).
+    pub tests: bool,
 }
 
 /// The files `wowlua compile` compiles.
@@ -69,8 +72,23 @@ impl BuildRequest {
             only: None,
             jobs: crate::parallel::Jobs::default(),
             keep_code: true,
+            tests: false,
         }
     }
+}
+
+/// A compiled file of the test side (spec Tooling §16.1.2).
+#[derive(Clone, Debug)]
+pub struct TestFile {
+    /// Path relative to the AddOn folder.
+    pub path: String,
+    /// Path relative to the package root (`<wowlua>/test.wowlua` for
+    /// standard-library modules).
+    pub rel: String,
+    pub role: crate::sources::TestRole,
+    /// Output paths of the files it imports (addon files too), which must
+    /// load first.
+    pub deps: Vec<String>,
 }
 
 /// Content of one output file.
@@ -93,6 +111,9 @@ pub struct BuildOutput {
     pub tocs: Vec<TocFile>,
     /// Output files by path relative to the AddOn folder.
     pub files: BTreeMap<String, Content>,
+    /// With [`BuildRequest::tests`]: the test side, in an order its imports
+    /// allow; none of it is in the TOCs.
+    pub tests: Vec<TestFile>,
 }
 
 /// The Lua files of a build in load order (the TOCs' order, then files
@@ -321,10 +342,19 @@ fn build_inner(
                 sources::given(session, &only.files, &root, &build_cfg.src);
             (sources, Some(declarations))
         }
-        None => (
-            sources::discover_sources(&root, &build_cfg.src, &build_cfg.out, &exclude),
-            None,
-        ),
+        None => {
+            let mut found =
+                sources::discover_sources(&root, &build_cfg.src, &build_cfg.out, &exclude);
+            if request.tests {
+                found.extend(sources::discover_tests(
+                    &root,
+                    &build_cfg.src,
+                    &build_cfg.out,
+                    &exclude,
+                ));
+            }
+            (found, None)
+        }
     };
     let mut assets = sources::discover_assets(
         &root,
@@ -1365,6 +1395,7 @@ fn build_inner(
     // Expansions for flavors this build does not target (`--flavor`): not
     // this build's files.
     let variants = variant_files(&build_cfg.variable_files, &files);
+    let test_side = test_side(&files, &edges);
     let mut toc_items: Vec<TocItem> = Vec::new();
     let mut emitted: Vec<&Source> = Vec::new();
     for (source, _) in &files {
@@ -1385,6 +1416,7 @@ fn build_inner(
         if !xml.loaded_by_xml.contains(&source.rel)
             && !loaded_by_variable.contains(&source.rel)
             && !shared.contains(&source.rel)
+            && !test_side.contains_key(&source.rel)
         {
             toc_items.push(TocItem {
                 rel: source.rel.clone(),
@@ -2406,6 +2438,7 @@ fn build_inner(
         return None;
     }
 
+    let tests = test_files(&files, &edges, &test_side, &out);
     Some(BuildOutput {
         addon_name,
         dir,
@@ -2415,7 +2448,99 @@ fn build_inner(
         build_id,
         tocs,
         files: out,
+        tests,
     })
+}
+
+/// The test side of a build (spec Tooling §16.1.1): test files, mocks and
+/// helpers, and the standard-library modules only they import.
+fn test_side(
+    files: &[(Source, FileId)],
+    edges: &[(String, String)],
+) -> HashMap<String, sources::TestRole> {
+    let mut side: HashMap<String, sources::TestRole> = files
+        .iter()
+        .filter_map(|(s, _)| Some((s.rel.clone(), sources::TestRole::of(&s.rel)?)))
+        .collect();
+    if side.is_empty() {
+        return side;
+    }
+    // What the addon's own files need, directly or not.
+    let mut needed: HashSet<&str> = files
+        .iter()
+        .map(|(s, _)| s.rel.as_str())
+        .filter(|rel| !side.contains_key(*rel) && !rel.starts_with("<wowlua>/"))
+        .collect();
+    loop {
+        let before = needed.len();
+        for (a, b) in edges {
+            if needed.contains(b.as_str()) {
+                needed.insert(a.as_str());
+            }
+        }
+        if needed.len() == before {
+            break;
+        }
+    }
+    for (s, _) in files {
+        if s.rel.starts_with("<wowlua>/") && !needed.contains(s.rel.as_str()) {
+            side.insert(s.rel.clone(), sources::TestRole::Std);
+        }
+    }
+    side
+}
+
+/// The test side's compiled files, each after the test-side files it
+/// imports (otherwise by path).
+fn test_files(
+    files: &[(Source, FileId)],
+    edges: &[(String, String)],
+    side: &HashMap<String, sources::TestRole>,
+    out: &BTreeMap<String, Content>,
+) -> Vec<TestFile> {
+    let output_of: HashMap<&str, String> = files
+        .iter()
+        .map(|(s, _)| (s.rel.as_str(), s.output_path()))
+        .collect();
+    let mut pending: Vec<&Source> = files
+        .iter()
+        .map(|(s, _)| s)
+        .filter(|s| side.contains_key(&s.rel) && out.contains_key(&s.output_path()))
+        .collect();
+    pending.sort_by(|a, b| a.rel.cmp(&b.rel));
+    let deps_of = |rel: &str| -> Vec<&str> {
+        edges
+            .iter()
+            .filter(|(_, b)| b == rel)
+            .map(|(a, _)| a.as_str())
+            .collect()
+    };
+    let mut ordered: Vec<TestFile> = Vec::new();
+    let mut placed: HashSet<String> = HashSet::new();
+    while !pending.is_empty() {
+        // The first whose test-side imports are placed; on a cycle, the
+        // first.
+        let next = pending
+            .iter()
+            .position(|s| {
+                deps_of(&s.rel)
+                    .iter()
+                    .all(|d| !side.contains_key(*d) || placed.contains(*d))
+            })
+            .unwrap_or(0);
+        let s = pending.remove(next);
+        placed.insert(s.rel.clone());
+        ordered.push(TestFile {
+            path: s.output_path(),
+            rel: s.rel.clone(),
+            role: side[&s.rel],
+            deps: deps_of(&s.rel)
+                .iter()
+                .filter_map(|d| output_of.get(d).cloned())
+                .collect(),
+        });
+    }
+    ordered
 }
 
 fn select_flavors(
@@ -4266,7 +4391,9 @@ fn validate_output(
     for path in out.keys() {
         let lower = path.to_ascii_lowercase();
         let is_code = lower.ends_with(".lua") || lower.ends_with(".xml");
-        let exempt = path == "Bindings.xml" || !path.starts_with("src/");
+        // Test files (`wowlua test`) load outside the TOC.
+        let exempt =
+            path == "Bindings.xml" || !path.starts_with("src/") || lower.ends_with(".test.lua");
         if is_code && !exempt && !reachable.contains(path) {
             session.push(Diagnostic::error(
                 "E5002",

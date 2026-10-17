@@ -63,6 +63,35 @@ impl GlobalArgs {
 }
 
 #[derive(Args, Debug, Clone)]
+pub struct TestArgs {
+    /// Only test files and tests whose path or name contains this
+    pub filter: Option<String>,
+    /// Restrict to these flavors
+    #[arg(long, value_delimiter = ',')]
+    pub flavor: Vec<String>,
+    /// Rewrite the snapshots that differ (and drop unused ones)
+    #[arg(short = 'u', long = "update-snapshots")]
+    pub update_snapshots: bool,
+    /// Measure coverage of the addon's files
+    #[arg(long)]
+    pub coverage: bool,
+    /// Coverage of each flavor on its own (default: merged)
+    #[arg(long)]
+    pub coverage_per_flavor: bool,
+    /// Reporters: pretty, junit, tap, json, github, lcov, cobertura,
+    /// coverage-json, html (default: the manifest's `test.reporters`, else
+    /// pretty)
+    #[arg(long, value_delimiter = ',')]
+    pub reporter: Vec<String>,
+    /// Where report files go (default: `<build.out>/test`)
+    #[arg(long)]
+    pub output: Option<PathBuf>,
+    /// Run again whenever a file of the package changes
+    #[arg(long)]
+    pub watch: bool,
+}
+
+#[derive(Args, Debug, Clone)]
 pub struct PublishArgs {
     /// Only these publish targets
     #[arg(long = "target", value_name = "NAME")]
@@ -220,6 +249,8 @@ enum Command {
         #[arg(long, value_delimiter = ',')]
         flavor: Vec<String>,
     },
+    /// Run the tests in the emulated client
+    Test(TestArgs),
     /// Compile files to Lua without making an AddOn folder
     Compile(CompileArgs),
     /// Format .wowlua files (and .lua files with `fmt.lua`)
@@ -550,6 +581,7 @@ fn run() -> ExitCode {
         Command::Check { profile, flavor } => {
             commands::check(&out, &cli.global, &profile.name("dev"), flavor)
         }
+        Command::Test(args) => commands::test(&out, &cli.global, &args),
         Command::Compile(args) => commands::compile(&out, &cli.global, &args),
         Command::Fmt { check, paths } => commands::fmt(&out, &cli.global, check, paths),
         Command::Dev {

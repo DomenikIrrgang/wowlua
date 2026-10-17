@@ -98,6 +98,11 @@ pub struct World {
     /// Widgets whose size changed since the last frame (`OnSizeChanged`
     /// runs with the next frame, not at `SetSize`).
     pub resized: Vec<WidgetId>,
+    /// Edit boxes Lua set the text of this frame: `OnTextChanged(false)`
+    /// runs once each after the frame's `OnUpdate`, not at `SetText`, with
+    /// the last text, also when it did not change, the last box set first
+    /// (`/stdtest engine`; unverified: by setting or making order).
+    pub text_set: Vec<WidgetId>,
     /// Warnings for gaps that would make every test fail if they were errors
     /// (templates without Blizzard's UI code).
     pub warnings: Vec<String>,
@@ -119,6 +124,11 @@ pub struct World {
     pub chat: crate::chat::Chat,
     /// Keybindings and the addons a test defined.
     pub bindings: crate::bindings::Bindings,
+    /// The player's money, equipment, bags and place.
+    pub character: crate::character::Character,
+    pub merchant: crate::merchant::Merchant,
+    /// The mouse's and the keyboard's focus.
+    pub input: crate::input::Input,
 }
 
 /// UIParent's size in screen units at scale 1: 1920 x 1080, as WoW Forever
@@ -163,7 +173,7 @@ pub fn widget_of(vm: &Vm, v: Value) -> Option<WidgetId> {
 }
 
 /// The class `name` and its bases, nearest first.
-fn lineage(e: &Engine, name: &str) -> Vec<String> {
+pub(crate) fn lineage(e: &Engine, name: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut todo = vec![name.to_string()];
     while let Some(c) = todo.pop() {
@@ -1533,8 +1543,9 @@ fn resize(vm: &mut Vm, id: WidgetId, w: Option<f64>, h: Option<f64>) {
     widget.width = w.unwrap_or(old.0);
     widget.height = h.unwrap_or(old.1);
     let new = (widget.width, widget.height);
-    // `OnSizeChanged` waits for the next frame (`/stdtest engine`: none at
-    // `SetSize`; that it runs then is unverified).
+    // `OnSizeChanged` waits: an anchored frame's runs before the next
+    // `OnUpdate` (also when resized in `OnUpdate`), a frame without points
+    // never gets one (`/stdtest engine`).
     let world = &mut engine_mut(vm).world;
     if new != old && !world.resized.contains(&id) {
         world.resized.push(id);
@@ -1546,22 +1557,51 @@ pub fn run_size_changes(vm: &mut Vm) {
     let resized = std::mem::take(&mut engine_mut(vm).world.resized);
     for id in resized {
         let w = &engine(vm).world.widgets[id.0];
+        if w.points.is_empty() {
+            continue;
+        }
         let size = [Value::Num(w.width), Value::Num(w.height)];
         run_script(vm, id, "OnSizeChanged", &size);
     }
 }
 
+/// The `OnTextChanged(false)` this frame's `SetText` owes.
+pub fn run_text_changes(vm: &mut Vm) {
+    let set = std::mem::take(&mut engine_mut(vm).world.text_set);
+    for id in set.into_iter().rev() {
+        run_script(vm, id, "OnTextChanged", &[Value::Bool(false)]);
+    }
+}
+
+/// A region's size: as laid out when its points give it one (two opposite
+/// points, `SetAllPoints`), else as set (unverified: recorded for fresh,
+/// unanchored widgets only).
+fn laid_out_size(vm: &mut Vm, id: WidgetId) -> (f64, f64) {
+    let (w, h, anchored) = {
+        let r = &engine(vm).world.widgets[id.0];
+        (r.width, r.height, !r.points.is_empty())
+    };
+    if !anchored {
+        return (w, h);
+    }
+    let s = effective_scale(engine(vm), id);
+    match bounds(vm, id, 0) {
+        Some(b) => (b.2 / s, b.3 / s),
+        None => (w, h),
+    }
+}
+
 fn get_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(engine(vm).world.widgets[id.0].width)])
+    Ok(vec![Value::Num(laid_out_size(vm, id).0)])
 }
 
 fn get_height(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(engine(vm).world.widgets[id.0].height)])
+    Ok(vec![Value::Num(laid_out_size(vm, id).1)])
 }
 
 fn get_size(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    let w = &engine(vm).world.widgets[id.0];
-    Ok(vec![Value::Num(w.width), Value::Num(w.height)])
+    let (w, h) = laid_out_size(vm, id);
+    Ok(vec![Value::Num(w), Value::Num(h)])
 }
 
 fn set_scale(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
@@ -1630,29 +1670,69 @@ fn anchor(point: &str) -> (f64, f64) {
     (x, y)
 }
 
-/// The widget's rectangle in screen units (left, bottom, width, height),
-/// from its first anchor; UIParent is the screen.
+/// The widget's rectangle in screen units (left, bottom, width, height);
+/// UIParent is the screen. Each edge comes from the points that set it (a
+/// `LEFT` and a `RIGHT` point give the width, a `TOP` and a `BOTTOM` the
+/// height); otherwise the size set, placed by the axis's first point.
 pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64)> {
     let e = engine(vm);
     let w = &e.world.widgets[id.0];
     if w.name.as_deref() == Some("UIParent") || depth > 64 {
         return Some((0.0, 0.0, SCREEN.0, SCREEN.1));
     }
-    let p = w.points.first()?;
-    let rel = match p.relative {
-        Some(v) => widget_of(vm, v),
-        None => w.parent,
-    };
-    let r = rel
-        .and_then(|r| bounds(vm, r, depth + 1))
-        .unwrap_or((0.0, 0.0, SCREEN.0, SCREEN.1));
+    w.points.first()?;
     let s = effective_scale(e, id);
-    let (rx, ry) = anchor(&p.relative_point);
-    let (px, py) = anchor(&p.point);
-    let ax = r.0 + rx * r.2 + p.x * s;
-    let ay = r.1 + ry * r.3 + p.y * s;
+    // Each point's place on the screen, and which edges it sets.
+    let mut left = None;
+    let mut right = None;
+    let mut center_x = None;
+    let mut bottom = None;
+    let mut top = None;
+    let mut center_y = None;
+    for p in &w.points {
+        let rel = match p.relative {
+            Some(v) => widget_of(vm, v),
+            None => w.parent,
+        };
+        let r = rel
+            .and_then(|r| bounds(vm, r, depth + 1))
+            .unwrap_or((0.0, 0.0, SCREEN.0, SCREEN.1));
+        let (rx, ry) = anchor(&p.relative_point);
+        let ax = r.0 + rx * r.2 + p.x * s;
+        let ay = r.1 + ry * r.3 + p.y * s;
+        let slot = if p.point.contains("LEFT") {
+            &mut left
+        } else if p.point.contains("RIGHT") {
+            &mut right
+        } else {
+            &mut center_x
+        };
+        slot.get_or_insert(ax);
+        let slot = if p.point.contains("BOTTOM") {
+            &mut bottom
+        } else if p.point.contains("TOP") {
+            &mut top
+        } else {
+            &mut center_y
+        };
+        slot.get_or_insert(ay);
+    }
     let (width, height) = (w.width * s, w.height * s);
-    Some((ax - px * width, ay - py * height, width, height))
+    let (x, width) = match (left, right, center_x) {
+        (Some(l), Some(r), _) => (l, r - l),
+        (Some(l), None, _) => (l, width),
+        (None, Some(r), _) => (r - width, width),
+        (None, None, Some(c)) => (c - width / 2.0, width),
+        (None, None, None) => (0.0, width),
+    };
+    let (y, height) = match (bottom, top, center_y) {
+        (Some(b), Some(t), _) => (b, t - b),
+        (Some(b), None, _) => (b, height),
+        (None, Some(t), _) => (t - height, height),
+        (None, None, Some(c)) => (c - height / 2.0, height),
+        (None, None, None) => (0.0, height),
+    };
+    Some((x, y, width, height))
 }
 
 fn edge(vm: &mut Vm, id: WidgetId, f: fn((f64, f64, f64, f64)) -> f64) -> Ret {
@@ -1692,7 +1772,7 @@ fn get_center(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 // --------------------------------------------------------------- text
 
 /// Whether a widget has a font: its own or a font object's.
-fn has_font(vm: &mut Vm, id: WidgetId) -> bool {
+pub(crate) fn has_font(vm: &mut Vm, id: WidgetId) -> bool {
     let props = engine(vm).world.widgets[id.0].props;
     stored_args(vm, props, "Font").is_some() || stored_args(vm, props, "FontObject").is_some()
 }
@@ -1819,6 +1899,9 @@ fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         v => Some(v),
     };
     engine_mut(vm).world.widgets[id.0].text = t;
+    if is_a(engine(vm), &class, "EditBox") && !engine(vm).world.text_set.contains(&id) {
+        engine_mut(vm).world.text_set.push(id);
+    }
     Ok(vec![])
 }
 
@@ -2284,7 +2367,7 @@ pub fn functions() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
 pub type MethodFn = fn(&mut Vm, WidgetId, NativeCall) -> Ret;
 
 /// Stores `args` as setter `stem`'s on a widget's properties.
-fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
+pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
     let props = engine(vm).world.widgets[id.0].props;
     let list = vm.new_table();
     for (k, v) in args.iter().enumerate() {

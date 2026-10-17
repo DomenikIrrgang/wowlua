@@ -8,6 +8,8 @@ pub mod api;
 pub mod args;
 pub mod auras;
 pub mod bindings;
+pub mod casting;
+pub mod character;
 pub mod chat;
 pub mod clock;
 pub mod controls;
@@ -15,7 +17,10 @@ pub mod curves;
 pub mod facts;
 pub mod framescript;
 pub mod gamedata;
+pub mod input;
+pub mod merchant;
 pub mod protection;
+pub mod tooltip;
 pub mod ui;
 pub mod units;
 pub mod widgetdata;
@@ -173,6 +178,11 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(widgets::functions())
             .chain(auras::behaviours())
             .chain(gamedata::behaviours())
+            .chain(character::behaviours())
+            .chain(input::behaviours())
+            .chain(casting::behaviours())
+            .chain(merchant::behaviours())
+            .chain(tooltip::behaviours())
             .chain(chat::behaviours())
             .chain(bindings::behaviours())
             .chain(facts::behaviours())
@@ -190,6 +200,8 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(curves::methods())
             .chain(framescript::methods())
             .chain(animations::methods())
+            .chain(tooltip::methods())
+            .chain(input::methods())
             .collect(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),
@@ -370,6 +382,22 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     // Undocumented C functions with behaviour.
     let create_frame = vm.native("CreateFrame", widgets::create_frame);
     vm.set_global("CreateFrame", create_frame);
+    // The client's project ID, and the project constants (WoW Forever has
+    // these, `/stdtest engine`; other flavors unverified). Blizzard's UI
+    // code sets its own again when it loads.
+    let project = wowlua_flavors::table()
+        .flavor(flavor)
+        .map_or(1, |f| f.project_id);
+    vm.set_global("WOW_PROJECT_ID", Value::Num(f64::from(project)));
+    vm.set_global("WOW_PROJECT_MAINLINE", Value::Num(1.0));
+    vm.set_global("WOW_PROJECT_CLASSIC", Value::Num(2.0));
+    if flavor == "camelot" {
+        vm.set_global("WOW_PROJECT_CAMELOT", Value::Num(18.0));
+    }
+    // Blizzard's slash command registry (its chat code makes it; addons
+    // and the engine's slash control use it without the UI code too).
+    let slash = vm.new_table();
+    vm.set_global("SlashCmdList", Value::Table(slash));
     // The frames the client starts with.
     let ui = widgets::create(vm, "Frame", Some("UIParent".into()), None);
     if let Some(id) = widgets::widget_of(vm, ui) {
@@ -561,6 +589,10 @@ pub(crate) fn undocumented_function(vm: &mut Vm, c: NativeCall) -> Ret {
         Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
         _ => "?".into(),
     };
+    // Some have behaviour (the engine's world answers them).
+    if let Some(f) = engine(vm).behaviours.get(name.as_str()).copied() {
+        return f(vm, c);
+    }
     if protection::blizzard_caller(vm) {
         return Ok(vec![]);
     }

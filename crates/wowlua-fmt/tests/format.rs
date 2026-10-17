@@ -93,3 +93,10 @@ fn show_passes() {
         }
     }
 }
+
+/// A returned function's body is indented once.
+#[test]
+fn returned_function_body() {
+    let src = "local function f()\n\treturn function()\n\t\tprint(1)\n\tend\nend\n";
+    assert_eq!(fmt(src), src);
+}

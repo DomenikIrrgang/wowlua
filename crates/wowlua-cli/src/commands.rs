@@ -156,6 +156,7 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
         only: None,
         jobs: global.jobs(),
         keep_code: true,
+        tests: false,
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -461,6 +462,7 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
         only: None,
         jobs: global.jobs(),
         keep_code: true,
+        tests: false,
     };
     let result = load_and_build(out, &mut session, global, &request, None);
     let ok = out.flush(&mut session);
@@ -496,6 +498,7 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
         only: None,
         jobs: global.jobs(),
         keep_code: false,
+        tests: false,
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -515,6 +518,469 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
         }
         _ => false,
     }
+}
+
+/// `wowlua test` (spec Tooling §16.1): each addon's test files, once per
+/// flavor, in the emulated client; reports and coverage (§16.1.5, §16.1.6);
+/// with `--watch`, again after every change.
+pub fn test(out: &Output, global: &GlobalArgs, args: &crate::TestArgs) -> bool {
+    let (ok, watched) = test_once(out, global, args);
+    if !args.watch {
+        return ok;
+    }
+    let Some((root, out_dir)) = watched else {
+        return ok;
+    };
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut debouncer = match new_debouncer(Duration::from_millis(300), tx) {
+        Ok(d) => d,
+        Err(error) => {
+            let mut session = Session::new();
+            session.push(Diagnostic::plain_error(format!(
+                "cannot watch files: {error}"
+            )));
+            out.flush(&mut session);
+            return false;
+        }
+    };
+    if let Err(error) = debouncer.watcher().watch(&root, RecursiveMode::Recursive) {
+        let mut session = Session::new();
+        session.push(Diagnostic::plain_error(format!(
+            "cannot watch `{}`: {error}",
+            root.display()
+        )));
+        out.flush(&mut session);
+        return false;
+    }
+    let shown = relative(&root);
+    out.status(
+        "Watching",
+        format!(
+            "{} for changes (Ctrl+C to stop)",
+            if shown.is_empty() { "." } else { &shown }
+        ),
+    );
+    let relevant = |result: &Result<Vec<DebouncedEvent>, _>| {
+        result.as_ref().is_ok_and(|events| {
+            events.iter().any(|event| {
+                let path = &event.path;
+                !path.starts_with(&out_dir)
+                    && !path.components().any(|c| c.as_os_str() == ".git")
+                    && !path.to_string_lossy().contains(".wowlua-tmp")
+            })
+        })
+    };
+    while let Ok(result) = rx.recv() {
+        let mut changed = relevant(&result);
+        // Changes during the last run: one run for all.
+        while let Ok(result) = rx.try_recv() {
+            changed |= relevant(&result);
+        }
+        if changed {
+            test_once(out, global, args);
+        }
+    }
+    true
+}
+
+/// One `wowlua test` run: whether it passed, and the package root and
+/// output folder to watch.
+fn test_once(
+    out: &Output,
+    global: &GlobalArgs,
+    args: &crate::TestArgs,
+) -> (bool, Option<(PathBuf, PathBuf)>) {
+    use termcolor::Color;
+    let started = Instant::now();
+    let filter = args.filter.as_deref();
+    let mut session = Session::new();
+    let Some(projects) = wowlua_driver::load_projects(&mut session, &load_options(out, global))
+    else {
+        out.flush(&mut session);
+        return (false, None);
+    };
+    let watched = projects
+        .first()
+        .map(|p| (p.root().to_path_buf(), p.manifest.out_dir()));
+    let wanted: Vec<String> = args
+        .flavor
+        .iter()
+        .filter_map(|f| wowlua_flavors::table().resolve(f).map(|f| f.id.clone()))
+        .collect();
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+    let mut ok = true;
+    let (mut passed, mut failed, mut skipped, mut files) = (0, 0, 0, 0);
+    let mut snaps = wowlua_test::SnapshotSummary::default();
+    let mut all: Vec<wowlua_test::FileResult> = Vec::new();
+    // Coverage by flavor ("" merged), the manifest's thresholds and
+    // exclusions, the report folder and the root.
+    let mut coverage: std::collections::BTreeMap<String, wowlua_test::coverage::Report> =
+        std::collections::BTreeMap::new();
+    let mut settings: Option<wowlua_manifest::model::CoverageSettings> = None;
+    let mut reporters: Vec<String> = args.reporter.clone();
+    let mut output: Option<PathBuf> = args.output.as_ref().map(|o| cwd().join(o));
+    let mut root = cwd();
+    let mut title = String::from("wowlua");
+    for project in projects {
+        if project.kind() != PackageKind::Addon {
+            continue;
+        }
+        let test_settings = project.manifest.manifest.test.clone();
+        if reporters.is_empty() {
+            reporters = test_settings.reporters.clone();
+        }
+        if settings.is_none() {
+            settings = test_settings.coverage.clone();
+        }
+        if output.is_none() {
+            output = Some(project.manifest.out_dir().join("test"));
+        }
+        root = project.root().to_path_buf();
+        title = project.addon_name();
+        let selected: Vec<String> = project
+            .manifest
+            .flavors
+            .iter()
+            .filter(|f| wanted.is_empty() || wanted.contains(f))
+            .cloned()
+            .collect();
+        // A shared-mode package is one build for all its flavors (its
+        // flavor guards need them all); split mode builds each.
+        let shared_mode = project.manifest.manifest.build.flavor_mode
+            == wowlua_manifest::model::FlavorMode::Shared;
+        let mut shared: Option<Option<BuildOutput>> = None;
+        for flavor in selected.clone() {
+            let owned: Option<BuildOutput>;
+            let build: &BuildOutput = if shared_mode {
+                if shared.is_none() {
+                    // All the package's flavors: shared code compiles for them all.
+                    let all = project.manifest.flavors.clone();
+                    shared = Some(test_build(
+                        out,
+                        global,
+                        &mut session,
+                        &project,
+                        all,
+                        "shared",
+                    ));
+                }
+                match shared.as_ref().and_then(Option::as_ref) {
+                    Some(b) => b,
+                    None => {
+                        ok = false;
+                        continue;
+                    }
+                }
+            } else {
+                owned = test_build(
+                    out,
+                    global,
+                    &mut session,
+                    &project,
+                    vec![flavor.clone()],
+                    &flavor,
+                );
+                match &owned {
+                    Some(b) => b,
+                    None => {
+                        ok = false;
+                        continue;
+                    }
+                }
+            };
+            let blizzard_ui = if test_settings.blizzard_ui {
+                match wowlua_test::ui_source(&flavor, &|what| out.status("Fetching", what)) {
+                    Ok(ui) => Some(ui),
+                    Err(e) => {
+                        out.colored(&[
+                            (Some(Color::Red), true, "error"),
+                            (None, false, &format!(": test.blizzard-ui: {e}\n")),
+                        ]);
+                        ok = false;
+                        continue;
+                    }
+                }
+            } else {
+                None
+            };
+            let suite = wowlua_test::Suite {
+                build,
+                flavor: flavor.clone(),
+                root: project.root().to_path_buf(),
+                src: project.manifest.manifest.build.src.clone(),
+                blizzard_ui,
+                profile: test_settings.profile.clone(),
+                update_snapshots: args.update_snapshots,
+                coverage: args.coverage,
+            };
+            let results = wowlua_test::run(&suite, filter, threads);
+            for result in &results {
+                if let Some(c) = &result.coverage {
+                    let key = if args.coverage_per_flavor {
+                        flavor.clone()
+                    } else {
+                        String::new()
+                    };
+                    coverage.entry(key).or_default().merge(c);
+                }
+            }
+            for result in results {
+                files += 1;
+                snaps.written += result.snapshots.written;
+                snaps.updated += result.snapshots.updated;
+                snaps.removed += result.snapshots.removed;
+                let bad = result.failed();
+                if bad {
+                    ok = false;
+                }
+                for t in &result.tests {
+                    match &t.outcome {
+                        wowlua_test::Outcome::Pass => passed += 1,
+                        wowlua_test::Outcome::Skip(_) => skipped += 1,
+                        wowlua_test::Outcome::Fail { .. } => failed += 1,
+                    }
+                }
+                if reporters.is_empty() || reporters.iter().any(|r| r == "pretty") {
+                    print_result(out, &result);
+                }
+                all.push(result);
+            }
+        }
+    }
+    let output = output.unwrap_or_else(|| cwd().join("dist").join("test"));
+    // Report files.
+    let write = |name: &str, text: &str| -> bool {
+        let path = output.join(name);
+        let written = path
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(&path, text));
+        match written {
+            Ok(()) => {
+                out.status("Wrote", path.display().to_string());
+                true
+            }
+            Err(e) => {
+                out.colored(&[
+                    (Some(Color::Red), true, "error"),
+                    (None, false, &format!(": writing {}: {e}\n", path.display())),
+                ]);
+                false
+            }
+        }
+    };
+    for r in &reporters {
+        let done = match r.as_str() {
+            "pretty" | "lcov" | "cobertura" | "coverage-json" | "html" => true,
+            "junit" => write("junit.xml", &wowlua_test::reports::junit(&all)),
+            "tap" => write("results.tap", &wowlua_test::reports::tap(&all)),
+            "json" => write("results.json", &wowlua_test::reports::tests_json(&all)),
+            "github" => {
+                print!("{}", wowlua_test::reports::github(&all));
+                true
+            }
+            other => {
+                out.colored(&[
+                    (Some(Color::Red), true, "error"),
+                    (None, false, &format!(": unknown reporter `{other}`\n")),
+                ]);
+                false
+            }
+        };
+        ok &= done;
+    }
+    // Coverage: its exclusions, reports and thresholds.
+    if args.coverage {
+        let exclude = wowlua_driver::glob_set(
+            &settings
+                .as_ref()
+                .map(|s| s.exclude.clone())
+                .unwrap_or_default(),
+        );
+        for (flavor, report) in &mut coverage {
+            report.files.retain(|path, _| !exclude.is_match(path));
+            let prefix = if flavor.is_empty() {
+                String::new()
+            } else {
+                format!("{flavor}/")
+            };
+            out.colored(&[(None, false, &wowlua_test::reports::summary(report))]);
+            for r in &reporters {
+                let done = match r.as_str() {
+                    "lcov" => write(
+                        &format!("{prefix}lcov.info"),
+                        &wowlua_test::reports::lcov(report),
+                    ),
+                    "cobertura" => write(
+                        &format!("{prefix}cobertura.xml"),
+                        &wowlua_test::reports::cobertura(report),
+                    ),
+                    "coverage-json" => write(
+                        &format!("{prefix}coverage.json"),
+                        &wowlua_test::reports::coverage_json(report),
+                    ),
+                    "html" => write(
+                        &format!("{prefix}coverage.html"),
+                        &wowlua_test::reports::html(report, &root, &title),
+                    ),
+                    _ => true,
+                };
+                ok &= done;
+            }
+            if let Some(s) = &settings {
+                let t = report.totals();
+                for (kind, min, got) in [
+                    ("lines", s.lines, t.lines),
+                    ("statements", s.statements, t.lines),
+                    ("branches", s.branches, t.branches),
+                    ("functions", s.functions, t.functions),
+                    ("conditions", s.conditions, t.conditions),
+                ] {
+                    let p = wowlua_test::coverage::percent(got);
+                    if let Some(min) = min
+                        && p < min
+                    {
+                        ok = false;
+                        out.colored(&[
+                            (Some(Color::Red), true, "error"),
+                            (
+                                None,
+                                false,
+                                &format!(": {kind} coverage {p:.1}% is below the minimum {min}%\n"),
+                            ),
+                        ]);
+                    }
+                }
+            }
+        }
+    }
+    let mut summary = format!(
+        "{passed} passed, {failed} failed, {skipped} skipped ({files} file{}) in {:.2}s",
+        if files == 1 { "" } else { "s" },
+        started.elapsed().as_secs_f64()
+    );
+    let parts: Vec<String> = [
+        (snaps.written, "written"),
+        (snaps.updated, "updated"),
+        (snaps.removed, "removed"),
+    ]
+    .iter()
+    .filter(|(n, _)| *n > 0)
+    .map(|(n, what)| format!("{n} {what}"))
+    .collect();
+    if !parts.is_empty() {
+        summary.push_str(&format!("; snapshots: {}", parts.join(", ")));
+    }
+    if ok {
+        out.status("Tested", summary);
+    } else {
+        out.colored(&[
+            (Some(Color::Red), true, "error"),
+            (None, false, &format!(": tests failed: {summary}\n")),
+        ]);
+    }
+    (ok, watched)
+}
+
+/// A test build of `project` for `flavors` in `<out>/.test/<dir>/<Name>`
+/// (its diagnostics shown); `None` when it fails.
+fn test_build(
+    out: &Output,
+    global: &GlobalArgs,
+    session: &mut Session,
+    project: &Project,
+    flavors: Vec<String>,
+    dir: &str,
+) -> Option<BuildOutput> {
+    let request = BuildRequest {
+        profile: "test".into(),
+        flavors: Some(flavors),
+        out_dir: Some(wowlua_test::build_dir(
+            &project.manifest.out_dir(),
+            dir,
+            &project.addon_name(),
+        )),
+        write: true,
+        nolib: false,
+        minify: None,
+        bundle: None,
+        only: None,
+        jobs: global.jobs(),
+        keep_code: true,
+        tests: true,
+    };
+    let build = wowlua_driver::build(session, project, &request);
+    apply_lints(session, project);
+    if !out.flush(session) {
+        return None;
+    }
+    build
+}
+
+/// One test file's results, as the `pretty` reporter shows them.
+fn print_result(out: &Output, result: &wowlua_test::FileResult) {
+    use termcolor::Color;
+    let bad = result.failed();
+    let (word, color) = if bad {
+        ("FAIL", Color::Red)
+    } else {
+        ("PASS", Color::Green)
+    };
+    out.colored(&[
+        (Some(color), true, &format!(" {word} ")),
+        (None, true, &result.file),
+        (
+            None,
+            false,
+            &format!(" ({}, {:.2}s)\n", result.flavor, result.seconds),
+        ),
+    ]);
+    if let Some(error) = &result.error {
+        out.colored(&[(Some(Color::Red), false, &indent(error, "     "))]);
+    }
+    for t in &result.tests {
+        match &t.outcome {
+            wowlua_test::Outcome::Pass => {
+                out.colored(&[
+                    (Some(Color::Green), false, "   ✓ "),
+                    (None, false, &format!("{}\n", t.name)),
+                ]);
+            }
+            wowlua_test::Outcome::Skip(reason) => {
+                let why = if reason.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({reason})")
+                };
+                out.colored(&[
+                    (Some(Color::Yellow), false, "   - "),
+                    (None, false, &format!("{}{why}\n", t.name)),
+                ]);
+            }
+            wowlua_test::Outcome::Fail { message, stack } => {
+                let (message, at) = wowlua_test::split_failure(message, stack);
+                out.colored(&[
+                    (Some(Color::Red), true, "   ✗ "),
+                    (None, true, &format!("{}\n", t.name)),
+                    (Some(Color::Red), false, &indent(&message, "       ")),
+                ]);
+                if let Some(at) = at {
+                    out.colored(&[(None, false, &format!("       at {at}\n"))]);
+                }
+            }
+        }
+    }
+    if bad && !result.printed.is_empty() {
+        out.colored(&[
+            (None, false, "     printed:\n"),
+            (None, false, &indent(result.printed.trim_end(), "       ")),
+        ]);
+    }
+}
+
+/// Every line of `text` indented, newline-terminated.
+fn indent(text: &str, by: &str) -> String {
+    text.lines().map(|l| format!("{by}{l}\n")).collect()
 }
 
 /// `wowlua compile <files…>`: the build of only these files, in the
@@ -565,6 +1031,7 @@ pub fn compile(out: &Output, global: &GlobalArgs, args: &crate::CompileArgs) -> 
         }),
         jobs: global.jobs(),
         keep_code: true,
+        tests: false,
     };
     let build = wowlua_driver::build(&mut session, &project, &request);
     apply_lints(&mut session, &project);
@@ -765,6 +1232,7 @@ pub fn install(out: &Output, global: &GlobalArgs, profile: &str, target: &Instal
         only: None,
         jobs: global.jobs(),
         keep_code: true,
+        tests: false,
     };
     let Some(built) = load_and_build_all(out, &mut session, global, &request) else {
         out.flush(&mut session);
@@ -1065,6 +1533,7 @@ pub fn dev(
         only: None,
         jobs: global.jobs(),
         keep_code: true,
+        tests: false,
     };
     let install = install_request(target, link);
     // What one build compiled, for the next ones.
@@ -1188,6 +1657,7 @@ fn apply_fixes(out: &Output, global: &GlobalArgs, lints_only: bool) -> Option<us
         only: None,
         jobs: global.jobs(),
         keep_code: true,
+        tests: false,
     };
     let mut total = 0;
     let mut files: std::collections::BTreeSet<PathBuf> = Default::default();
@@ -1247,6 +1717,7 @@ pub fn lint(out: &Output, global: &GlobalArgs, fix: bool) -> bool {
         only: None,
         jobs: global.jobs(),
         keep_code: true,
+        tests: false,
     };
     let Some(project) = wowlua_driver::load_project(&mut session, &load_options(out, global))
     else {
@@ -1310,6 +1781,7 @@ pub fn fix(out: &Output, global: &GlobalArgs, manifest: bool) -> bool {
         only: None,
         jobs: global.jobs(),
         keep_code: true,
+        tests: false,
     };
     let _ = load_and_build(out, &mut session, global, &request, None);
     out.flush(&mut session)

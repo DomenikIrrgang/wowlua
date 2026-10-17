@@ -1,0 +1,83 @@
+-- /stdtest sv: values for the client's SavedVariables writer. The values
+-- go into StdTestState.svProbe; /reload writes them, and the file shows how
+-- the client wrote each (the engine's mock.reloadUI copies its rules).
+-- `/stdtest sv risky` adds values that may make the file unloadable (NaN,
+-- infinities, a carriage return, a secret): back up the file first.
+import state from "/state"
+import say from "/harness"
+
+local function nested(depth: number): table
+    local t: { [string]: any } = { depth = depth }
+    if depth < 12 then
+        t.inner = nested(depth + 1)
+    end
+    return t
+end
+
+export function svProbe(arg: string?)
+    const st = state() :: any
+    const shared = { tag = "shared" }
+    const frame = CreateFrame("Frame")
+    ;(frame :: any).field = "on a frame"
+    const keys: { [any]: string } = {}
+    keys[1] = "one"
+    keys[2] = "two"
+    keys[4] = "four (after a hole)"
+    keys[1.5] = "float key"
+    keys[-1] = "negative key"
+    keys[0] = "zero key"
+    keys[true] = "true key"
+    keys[false] = "false key"
+    keys["1"] = "string one"
+    keys[2 ^ 40] = "big key"
+    keys[{}] = "table key"
+    st.svProbe = {
+        numbers = {
+            third = 1 / 3,
+            tenth = 0.1,
+            pi = math.pi,
+            big = 2 ^ 53,
+            bigger = 2 ^ 53 + 2,
+            huge = 1e300,
+            tiny = 1e-300,
+            negzero = -0.0,
+            int = 123456789012,
+            negative = -2.5,
+            seventeen = 0.12345678901234567,
+        },
+        strings = {
+            nul = "a\0b",
+            newline = "a\nb",
+            quote = 'say "hi"',
+            single = "it's",
+            backslash = "a\\b",
+            high = "\200\255",
+            controls = "\1\2\27\127",
+            tab = "a\tb",
+            long = string.rep("x", 5000),
+            empty = "",
+        },
+        keys = keys,
+        dropped = {
+            fn = print,
+            co = coroutine.create(function() end),
+            frame = frame,
+            kept = "kept",
+        },
+        shared = { a = shared, b = shared },
+        empty = {},
+        nested = nested(1),
+        booleans = { yes = true, no = false },
+    }
+    if arg == "risky" then
+        st.svProbe.risky = {
+            -- (WoW raises an error for 0 / 0.)
+            nan = math.huge - math.huge,
+            inf = math.huge,
+            ninf = -math.huge,
+            cr = "a\rb",
+            secret = (secretwrap :: any)("secret"),
+        }
+    end
+    say(`sv: values set{arg == "risky" and " (with the risky ones)" or ""}; type /reload so the file is written`)
+end

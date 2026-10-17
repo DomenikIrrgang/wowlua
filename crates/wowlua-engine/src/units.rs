@@ -21,7 +21,7 @@ use wowlua_vm::{NativeCall, TableRef, Value, Vm};
 use crate::widgets;
 use crate::{engine, engine_mut};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct UnitId(pub usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +59,8 @@ pub struct Unit {
     /// Whom the unit targets (`unittarget`).
     pub target: Option<UnitId>,
     pub alive_in_world: bool,
+    /// How far from the player, in yards (`None`: unknown).
+    pub distance: Option<f64>,
 }
 
 /// The addon restriction types (`Enum.AddOnRestrictionType`).
@@ -75,6 +77,10 @@ pub struct Units {
     pub target: Option<UnitId>,
     pub focus: Option<UnitId>,
     pub mouseover: Option<UnitId>,
+    /// The soft targets: the enemy, the friend, the interact unit.
+    pub soft: [Option<UnitId>; 3],
+    /// The NPC the player talks to (`npc`: a vendor).
+    pub npc: Option<UnitId>,
     pub nameplates: Vec<Option<UnitId>>,
     /// The group without the player, in order; a raid when `raid`.
     pub group: Vec<UnitId>,
@@ -89,6 +95,8 @@ pub struct Units {
     /// The test's unit handles' metatable.
     handle_meta: Option<TableRef>,
     next_guid: u64,
+    /// Spells units are casting.
+    pub casting: crate::casting::Casting,
 }
 
 pub const PLAYER: UnitId = UnitId(0);
@@ -171,6 +179,7 @@ pub fn install(vm: &mut Vm) {
         in_combat: false,
         target: None,
         alive_in_world: true,
+        distance: Some(0.0),
     };
     engine_mut(vm).units.list.push(player);
 }
@@ -204,6 +213,10 @@ fn base_token<'a>(u: &Units, t: &'a str) -> Option<(Option<UnitId>, &'a str)> {
         ("target", u.target),
         ("focus", u.focus),
         ("mouseover", u.mouseover),
+        ("softenemy", u.soft[0]),
+        ("softfriend", u.soft[1]),
+        ("softinteract", u.soft[2]),
+        ("npc", u.npc),
         ("none", None),
     ] {
         if let Some(rest) = t.strip_prefix(name) {
@@ -260,6 +273,16 @@ pub fn tokens_of(u: &Units, id: UnitId) -> Vec<String> {
     if u.target.is_some_and(|t| u.list[t.0].target == Some(id)) {
         out.push("targettarget".into());
     }
+    // After target (`/stdtest engine record combat`: UNIT_AURA for
+    // softenemy after target); the rest's order unverified.
+    for (i, name) in ["softenemy", "softfriend", "softinteract"]
+        .iter()
+        .enumerate()
+    {
+        if u.soft[i] == Some(id) {
+            out.push((*name).into());
+        }
+    }
     if u.focus == Some(id) {
         out.push("focus".into());
     }
@@ -287,7 +310,7 @@ pub fn tokens_of(u: &Units, id: UnitId) -> Vec<String> {
 }
 
 /// Fires a unit event once for each token the unit has.
-fn fire_unit(vm: &mut Vm, event: &str, id: UnitId, extra: &[Value]) {
+pub(crate) fn fire_unit(vm: &mut Vm, event: &str, id: UnitId, extra: &[Value]) {
     for token in tokens_of(&engine(vm).units, id) {
         let t = vm.str(&token);
         let mut args = vec![t];
@@ -371,7 +394,7 @@ pub fn secret_results(vm: &Vm, doc: &serde_json::Value, c: &NativeCall) -> bool 
 
 // --------------------------------------------------- the unit functions
 
-fn unit_arg(vm: &Vm, c: &NativeCall, n: usize) -> Option<UnitId> {
+pub(crate) fn unit_arg(vm: &Vm, c: &NativeCall, n: usize) -> Option<UnitId> {
     match vm.hidden(c.arg(n)) {
         Value::Str(s) => resolve(&engine(vm).units, &String::from_utf8_lossy(vm.str_bytes(s))),
         _ => None,
@@ -408,6 +431,21 @@ fn unit_exists(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn unit_guid(vm: &mut Vm, c: NativeCall) -> Ret {
     with_unit(vm, &c, |vm, u| vec![vm.str(&u.guid)])
+}
+
+/// `UnitTokenFromGUID(guid)`: a token naming the unit (the first in
+/// `tokens_of`'s order; unverified which the client prefers), or nil.
+fn unit_token_from_guid(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Str(g) = c.arg(1) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let guid = String::from_utf8_lossy(vm.str_bytes(g)).into_owned();
+    let u = &engine(vm).units;
+    let token = (0..u.list.len())
+        .map(UnitId)
+        .filter(|id| u.list[id.0].guid == guid)
+        .find_map(|id| tokens_of(u, id).into_iter().next());
+    Ok(vec![token.map_or(Value::Nil, |t| vm.str(&t))])
 }
 
 fn unit_name(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -713,6 +751,7 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
         ("UnitExists", unit_exists),
         ("UnitGUID", unit_guid),
+        ("UnitTokenFromGUID", unit_token_from_guid),
         ("UnitName", unit_name),
         ("UnitLevel", unit_level),
         ("UnitClass", unit_class),
@@ -779,6 +818,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
     let methods = vm.new_table();
     for (name, f) in [
         ("target", control_target as wowlua_vm::NativeFn),
+        ("softTarget", control_soft_target),
         ("focus", control_focus),
         ("mouseover", control_mouseover),
         ("damage", control_damage),
@@ -794,6 +834,11 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("setName", control_set_name),
         ("applyAura", crate::auras::control_apply),
         ("removeAura", crate::auras::control_remove),
+        ("castSpell", crate::casting::control_cast),
+        ("interruptCast", crate::casting::control_interrupt),
+        ("setDistance", crate::character::control_set_distance),
+        ("setMoney", crate::character::control_set_money),
+        ("equip", crate::character::control_equip),
     ] {
         let native = vm.native(name, f);
         let key = vm.heap.intern(name.as_bytes());
@@ -841,13 +886,55 @@ pub fn this(vm: &mut Vm, c: &NativeCall) -> Result<UnitId, wowlua_vm::LuaError> 
 }
 
 /// `mock.spawnUnit({ name, level, class, race, sex, reaction, player,
-/// health, maxHealth, power, maxPower, powerType, guid, npcID })`.
+/// health, maxHealth, power, maxPower, powerType, guid, npcID, distance
+/// })`.
 pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
     let data = match c.arg(1) {
         Value::Table(t) => Some(t),
         Value::Nil => None,
         _ => return Err(vm.error("mock.spawnUnit: a table of the unit's data expected")),
     };
+    let unit = unit_from(vm, data, None);
+    let units = &mut engine_mut(vm).units;
+    units.list.push(unit);
+    let id = UnitId(units.list.len() - 1);
+    Ok(vec![handle(vm, id)])
+}
+
+/// `mock.setPlayer({ name, realm, lastName, level, class, race, sex,
+/// health, maxHealth, power, maxPower, powerType, guid })`: the player's
+/// data (a world profile's character), firing no events.
+pub fn set_player(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Table(t) = c.arg(1) else {
+        return Err(vm.error("mock.setPlayer: a table of the player's data expected"));
+    };
+    let player = std::mem::take(&mut engine_mut(vm).units.list[PLAYER.0].guid);
+    let mut unit = unit_from(vm, Some(t), Some(player));
+    let old = &engine(vm).units.list[PLAYER.0];
+    unit.target = old.target;
+    unit.in_combat = old.in_combat;
+    unit.distance = Some(0.0);
+    engine_mut(vm).units.list[PLAYER.0] = unit;
+    Ok(vec![])
+}
+
+/// A unit from a test's data; `player_guid`: the player's (it keeps its
+/// GUID unless the data has one).
+/// A friendly NPC named `name`, spawned.
+pub fn spawn_named(vm: &mut Vm, name: &str) -> UnitId {
+    let data = vm.new_table();
+    for (k, v) in [("name", name), ("reaction", "friendly")] {
+        let key = vm.str(k);
+        let v = vm.str(v);
+        let _ = vm.heap.table_mut(data).set(key, v);
+    }
+    let unit = unit_from(vm, Some(data), None);
+    let units = &mut engine_mut(vm).units;
+    units.list.push(unit);
+    UnitId(units.list.len() - 1)
+}
+
+fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -> Unit {
     let get = |vm: &mut Vm, k: &str| -> Value {
         match data {
             Some(t) => {
@@ -867,8 +954,15 @@ pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(n) => n,
         _ => default,
     };
-    let player = get(vm, "player").truthy();
-    let reaction = match text(vm, "reaction", "hostile").as_str() {
+    let is_player = player_guid.is_some();
+    let player = is_player || get(vm, "player").truthy();
+    let reaction = match text(
+        vm,
+        "reaction",
+        if is_player { "friendly" } else { "hostile" },
+    )
+    .as_str()
+    {
         "friendly" => Reaction::Friendly,
         "neutral" => Reaction::Neutral,
         _ => Reaction::Hostile,
@@ -879,7 +973,9 @@ pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
         u.next_guid
     };
     let npc = num(vm, "npcID", 1000.0 + n as f64);
-    let default_guid = if player {
+    let default_guid = if let Some(g) = player_guid {
+        g
+    } else if player {
         format!("Player-4621-{n:08X}")
     } else {
         format!("Creature-0-4621-0-1-{npc}-{n:010X}")
@@ -894,7 +990,7 @@ pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let health = num(vm, "health", 100.0);
     let health_max = num(vm, "maxHealth", health);
-    let unit = Unit {
+    Unit {
         guid: text(vm, "guid", &default_guid),
         name: text(vm, "name", "Unit"),
         realm: match get(vm, "realm") {
@@ -922,17 +1018,24 @@ pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
         in_combat: false,
         target: None,
         alive_in_world: true,
-    };
-    let units = &mut engine_mut(vm).units;
-    units.list.push(unit);
-    let id = UnitId(units.list.len() - 1);
-    Ok(vec![handle(vm, id)])
+        distance: match get(vm, "distance") {
+            Value::Num(d) => Some(d),
+            _ => None,
+        },
+    }
 }
 
 fn target_arg(vm: &Vm, c: &NativeCall) -> Option<UnitId> {
     handle_of(vm, c.arg(2))
 }
 
+/// How long the server's `UNIT_TARGET("player")` takes after the player's
+/// `PLAYER_TARGET_CHANGED` (`/stdtest engine record target`: 0.4–0.6 s).
+pub const TARGET_ECHO: f64 = 0.4;
+
+/// `unit:target(other)`: the player's `PLAYER_TARGET_CHANGED()` at once and
+/// `UNIT_TARGET("player")` when the server's echo arrives; another unit's
+/// `UNIT_TARGET` at once (unverified).
 fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let new = target_arg(vm, &c);
@@ -940,10 +1043,67 @@ fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
         engine_mut(vm).units.target = new;
         engine_mut(vm).units.list[PLAYER.0].target = new;
         fire(vm, "PLAYER_TARGET_CHANGED", &[]);
+        let echo = vm.native("targetEcho", target_echo);
+        crate::clock::after_engine(vm, TARGET_ECHO, echo);
     } else {
         engine_mut(vm).units.list[me.0].target = new;
+        fire_unit(vm, "UNIT_TARGET", me, &[]);
     }
-    fire_unit(vm, "UNIT_TARGET", me, &[]);
+    Ok(vec![])
+}
+
+/// `unit:softTarget(other [, kind])` (the player): the soft target of
+/// `kind` ("enemy", "friend", "interact"; by default "enemy" for a hostile
+/// or neutral unit, else "friend"); nil clears it. `PLAYER_SOFT_ENEMY_CHANGED()` and
+/// `PLAYER_SOFT_FRIEND_CHANGED()` have no arguments,
+/// `PLAYER_SOFT_INTERACT_CHANGED(oldGUID, newGUID)` the GUIDs
+/// (`/stdtest engine record soft`, `softinteract`). Unverified: the soft
+/// targeting CVars are not consulted.
+fn control_soft_target(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = this(vm, &c)?;
+    if me != PLAYER {
+        return Err(vm.error("softTarget: the player's"));
+    }
+    let new = target_arg(vm, &c);
+    let kind = match c.arg(3) {
+        Value::Str(k) => String::from_utf8_lossy(vm.str_bytes(k)).into_owned(),
+        _ => match new {
+            Some(id) if engine(vm).units.list[id.0].reaction != Reaction::Friendly => {
+                "enemy".into()
+            }
+            Some(_) => "friend".into(),
+            None => return Err(vm.error("softTarget(nil, kind): which soft target to clear")),
+        },
+    };
+    let (i, event) = match kind.as_str() {
+        "enemy" => (0, "PLAYER_SOFT_ENEMY_CHANGED"),
+        "friend" => (1, "PLAYER_SOFT_FRIEND_CHANGED"),
+        "interact" => (2, "PLAYER_SOFT_INTERACT_CHANGED"),
+        _ => return Err(vm.error("softTarget: kind is \"enemy\", \"friend\" or \"interact\"")),
+    };
+    let old = engine(vm).units.soft[i];
+    if old == new {
+        return Ok(vec![]);
+    }
+    engine_mut(vm).units.soft[i] = new;
+    if i == 2 {
+        let guid = |vm: &mut Vm, id: Option<UnitId>| match id {
+            Some(id) => {
+                let g = engine(vm).units.list[id.0].guid.clone();
+                vm.str(&g)
+            }
+            None => Value::Nil,
+        };
+        let (o, n) = (guid(vm, old), guid(vm, new));
+        fire(vm, event, &[o, n]);
+    } else {
+        fire(vm, event, &[]);
+    }
+    Ok(vec![])
+}
+
+fn target_echo(vm: &mut Vm, _c: NativeCall) -> Ret {
+    fire_unit(vm, "UNIT_TARGET", PLAYER, &[]);
     Ok(vec![])
 }
 
@@ -999,10 +1159,81 @@ fn control_heal(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `unit:kill({ by?, lootable? })`, as the client recorded the player's
+/// kill (`/stdtest engine record combat`): `PARTY_KILL(killer, victim)` for
+/// a kill by the player or the group, the killing blow's
+/// `UNIT_COMBAT(unit, "WOUND", "", amount, 1)` when something killed it,
+/// `UNIT_LOOT(guid, true)` when lootable, `UNIT_DIED(guid)`, then for the
+/// player's target `PLAYER_TARGET_DIED()` and the target cleared
+/// (`PLAYER_TARGET_CHANGED()`), and `UNIT_HEALTH` last. GUIDs are secret in
+/// combat. Unverified: the killing blow's school (physical here).
 fn control_kill(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
-    let h = engine(vm).units.list[me.0].health;
-    change_health(vm, me, -h);
+    let opts = match c.arg(2) {
+        Value::Table(t) => Some(t),
+        _ => None,
+    };
+    let field = |vm: &mut Vm, k: &str| match opts {
+        Some(t) => {
+            let key = vm.str(k);
+            vm.heap.table(t).get(key)
+        }
+        None => Value::Nil,
+    };
+    let by_value = field(vm, "by");
+    let by = if by_value.is_nil() {
+        None
+    } else {
+        match handle_of(vm, by_value) {
+            Some(u) => Some(u),
+            None => return Err(vm.error("kill: `by` is a unit")),
+        }
+    };
+    let lootable = field(vm, "lootable").truthy();
+    let amount = engine(vm).units.list[me.0].health;
+    {
+        let u = &mut engine_mut(vm).units.list[me.0];
+        u.health = 0.0;
+        u.dead = true;
+    }
+    let in_combat = active(&engine(vm).units, &[COMBAT]);
+    let guid_of = |vm: &mut Vm, id: UnitId| {
+        let g = engine(vm).units.list[id.0].guid.clone();
+        let v = vm.str(&g);
+        if in_combat { vm.secret_wrap(v) } else { v }
+    };
+    if let Some(killer) = by {
+        if ours(&engine(vm).units, killer) {
+            let k = guid_of(vm, killer);
+            let v = guid_of(vm, me);
+            fire(vm, "PARTY_KILL", &[k, v]);
+        }
+        let wound = vm.str("WOUND");
+        let empty = vm.str("");
+        fire_unit(
+            vm,
+            "UNIT_COMBAT",
+            me,
+            &[wound, empty, Value::Num(amount), Value::Num(1.0)],
+        );
+    }
+    if lootable {
+        let g = engine(vm).units.list[me.0].guid.clone();
+        let g = vm.str(&g);
+        fire(vm, "UNIT_LOOT", &[g, Value::Bool(true)]);
+    }
+    let g = guid_of(vm, me);
+    fire(vm, "UNIT_DIED", &[g]);
+    if engine(vm).units.target == Some(me) {
+        fire(vm, "PLAYER_TARGET_DIED", &[]);
+        engine_mut(vm).units.target = None;
+        engine_mut(vm).units.list[PLAYER.0].target = None;
+        fire(vm, "PLAYER_TARGET_CHANGED", &[]);
+        // The server's `UNIT_TARGET("player")` (recorded 0.4 s after).
+        let echo = vm.native("targetEcho", target_echo);
+        crate::clock::after_engine(vm, TARGET_ECHO, echo);
+    }
+    fire_unit(vm, "UNIT_HEALTH", me, &[]);
     Ok(vec![])
 }
 
@@ -1264,10 +1495,6 @@ fn unit_is_ghost(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// Not casting or channeling: no values.
-fn not_casting(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![])
-}
-
 /// The roles a unit can take (tank, healer, damage): damage (unverified
 /// per class).
 fn available_roles(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1308,8 +1535,6 @@ pub fn more_behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("UnitFactionGroup", unit_faction_group),
         ("UnitPVPName", unit_pvp_name),
         ("UnitIsGhost", unit_is_ghost),
-        ("UnitCastingInfo", not_casting),
-        ("UnitChannelInfo", not_casting),
         ("UnitGetAvailableRoles", available_roles),
         ("UnitHealthPercent", unit_health_percent),
         ("UnitHealthMissing", unit_health_missing),

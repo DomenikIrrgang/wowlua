@@ -19,7 +19,8 @@ third-party library (decision T184).
 
 Test-only files are compiled with the `test` profile and never included in
 addon builds. Importing `wowlua:test` or `wowlua:mock` from a non-test file is
-error E8108.
+error E8108. In test files, `/x` names `build.src`'s `x` (the addon's
+modules), and `./x` a file next to the test file (helpers under `tests/`).
 
 ```wowlua
 -- tests/tracker.test.wowlua
@@ -62,10 +63,13 @@ end
 For each test file and flavor, the runner:
 
 1. creates a fresh VM and installs `wowlua:mock` for that flavor,
-2. loads the project mocks (`tests/mocks/`),
-3. loads the **whole addon** in its computed load order, compiled with the
-   `test` profile (exactly as the generated TOC would load it),
-4. loads the test file (its top-level code runs),
+2. loads the TOC's files up to the runtime (locale files, the runtime), then
+   the project mocks (`tests/mocks/`, with what they import),
+3. loads the rest of the **whole addon** in its computed load order,
+   compiled with the `test` profile (exactly as the generated TOC would load
+   it, XML included, as the addon's code),
+4. loads the test file after the helpers it imports (its top-level code
+   runs),
 5. unless the file opted out, fires the lifecycle: `ADDON_LOADED` for the addon,
    `PLAYER_LOGIN`, and `PLAYER_ENTERING_WORLD` (`isInitialLogin = true`),
 6. runs `@beforeAll`, then each test with its `@beforeEach` / `@afterEach`
@@ -74,18 +78,129 @@ For each test file and flavor, the runner:
 A test file opts out of step 5 with `config({ lifecycle = "manual" })` from
 `wowlua:test` at its top level, and then drives the lifecycle itself with
 `mock.login()`. Tests within one file share the VM. Each file starts fresh.
+An error while loading (a step above) fails the file, Blizzard's code's
+included (with `test.blizzard-ui`: it runs without an error in the client,
+so the engine must too). An error that reaches
+the error handler during a test (an event handler's, a timer's) fails that
+test, unless the test read it with `mock.errors()`. The addon's
+`Bindings.xml` is read before its files load, as the client does.
 
 ### 16.1.3 `wowlua:test`
 
 | Export | Purpose |
 |--------|---------|
-| `@test(name?)` | Marks a test function (top level) |
+| `@test(name?, opts?)` | Marks a test function (top level); the name defaults to the function's; `opts.timeout` (virtual seconds) for its waits |
 | `@beforeEach`, `@afterEach`, `@beforeAll`, `@afterAll` | Hooks, per file |
 | `@skip(reason?)`, `@only` | Test selection |
 | `@flavors("standard", …)` | Run only for these flavors |
-| `config({ lifecycle: "auto" \| "manual" })` | Per-file runner settings |
-| `describe(name, fn)` | Grouping for runtime-generated tests |
-| `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`. Negation with `expect(v).never.toBe(x)`. |
+| `config({ lifecycle: "auto" \| "manual", timeout?, profile? })` | Per-file runner settings (`profile`: the world profile, read before anything loads) |
+| `describe(name, fn)` | Grouping for runtime-generated tests (`test(name)(fn)` inside `fn`) |
+| `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`, `toMatchSnapshot`; for widgets `toBeShown`, `toBeVisible`, `toHaveText`, `toHaveSize`, `toBeAnchoredTo`. Negation with `expect(v).never.toBe(x)`. Type-checked (below). |
+| `@cases(list)` | Runs a test once per case, the case's values as its arguments (below) |
+| `@expectError(code, …)` | A compile-time test: the function must not compile, with these diagnostics (below) |
+| `matcher(name, fn)` | Defines a typed matcher (below) |
+| `@bench(name?)` | A benchmark, run by `wowlua bench` (M11), not by `wowlua test` |
+
+**Typed matchers** (decision T214). `expect` is generic: `expect(x)` has the
+type `Expect<T>` for the type `T` of `x`, and its matchers take `T`:
+`expect(count).toBe("3")` is a type error, as is a matcher on a kind of
+value it does not take (E8121: `toHaveLength` and `toContain` need a string
+or a table, `toBeCloseTo` a number, `toThrow` and the spy matchers a
+function). A spy keeps the type of the function it spies on, so
+`toHaveBeenCalledWith(...)` checks its arguments against that function's
+parameters. Matchers are called with a dot: `expect` returns a table of
+them.
+
+**Parametrized tests** (decision T215). `@cases` gives a test its cases;
+each runs and is reported on its own, named after the test and the case's
+values (`doubles [2, 4]`), and each is checked against the test function's
+parameters (E8120 when a case does not fit):
+
+```wowlua
+@test("doubles")
+@cases({ { 1, 2 }, { 2, 4 }, { -3, -6 } })
+local function doubles(n: number, expected: number)
+    expect(double(n)).toBe(expected)
+end
+```
+
+**Waiting** (decision T216). A test may wait for the world, written as
+straight-line code: `mock.waitFor(event, predicate?)` (the event's arguments
+are returned), `mock.waitFrames(n)`, `mock.waitSeconds(s)` and
+`mock.waitUntil(fn)`. A test runs as a coroutine; waiting advances the virtual
+clock and the frames (60 a second, each running `OnUpdate` and the due
+timers), so a test stays deterministic and runs instantly. A
+wait longer than `timeout` virtual seconds (default 10, `config({ timeout })`
+or `@test(name, { timeout })`) fails the test, naming what it waited for.
+
+```wowlua
+@test("loads the item first")
+local function itemLoads()
+    tooltip:showItem(19019)
+    local itemID = mock.waitFor("ITEM_DATA_LOAD_RESULT")
+    expect(itemID).toBe(19019)
+    expect(tooltip.frame).toHaveText("Thunderfury, Blessed Blade of the Windseeker")
+end
+```
+
+**Widget matchers** (decision T217): `toBeShown()` (`IsShown`),
+`toBeVisible()` (shown with every parent), `toHaveText(text)` (a font string,
+an edit box, a button's text, or a frame with one font string), `toHaveSize(w,
+h)`, `toBeAnchoredTo(other, point?, relativePoint?)`, and
+`expect(GameTooltip).toHaveLines({ … })` for a tooltip's left and right texts,
+line by line.
+
+**Snapshots** (decision T218). `expect(v).toMatchSnapshot(name?)` compares a
+value (serialized deterministically: keys sorted, numbers with at most two
+decimals, frames as their widget tree with shown state, size, points and
+text, then their regions and children) with the snapshot stored in
+`__snapshots__/<test file>.snap` next to the test, keyed by the test's name
+and `name` (else numbered); a missing snapshot is written, a different one
+fails the test with a line diff, and `wowlua test -u` rewrites them (and,
+when every test of the file ran, drops those no test matched). Snapshots
+are reviewed in version control: each is a `# <key>` line and its text,
+each line after `| `.
+
+**Compile-time tests** (decision T219). `@expectError` marks a function that
+must not compile: the test passes when the checker reports exactly these
+diagnostics in it (by code, optionally `{ code, message }`), and the function
+is never run. Libraries pin down what their types reject, the stdlib its own
+diagnostics:
+
+```wowlua
+@expectError("E2001")
+local function wrongArgument()
+    tracker:record("two")    -- record takes a number
+end
+```
+
+**Custom matchers** (decision T220). `matcher(name, fn)` adds a matcher to
+`expect`, typed by `fn`'s signature: `fn(actual: T, ...): (boolean, string)`
+returns whether it passed and the message; a library exports its matchers and
+a test file that imports it gets them, checked like the built-in ones.
+
+**Benchmarks and examples.** `@bench` functions in test files are run by
+`wowlua bench` (M11, decision T221); code examples in `---` doc comments run
+as tests with the language server's documentation work (M9 S8, decision
+T222).
+
+### 16.1.3.1 Module internals and mocked imports
+
+A test file may import what a module does not export (decision T223):
+`import internal parse, Cache from "/tracker"` binds the module's
+file-level locals and types by name, as if exported, typed as the module has
+them; only test files may (E8119 elsewhere). The module registers the
+locals test files read at its end (their values then), in test builds only:
+an addon build is unchanged.
+
+`mock.module(namespace, replacement)` replaces a module's exports for the
+rest of the test file (decision T224): `namespace` is the module's namespace
+import (`import * as clock from "/clock"`), `replacement` the exports to
+replace, checked against the module's export types (E8123 for one it does
+not have, a type error for a mistyped one); the others stay. In a test
+build the addon's files read their imports at each use, so every importer
+sees the replacement (a value an importer stored before keeps the old
+one).
 
 ### 16.1.4 `wowlua:mock`
 
@@ -118,16 +233,53 @@ end
 
 | Part | Controls |
 |------|----------|
-| Units | `mock.player`, `mock.spawnUnit(data)` returning a unit: name, GUID (generated unless given), level, class, race, sex, reaction (`"hostile"`, `"neutral"`, `"friendly"`), player or NPC, health and power, dead or alive. Unit methods act and fire events: `unit:damage(n)`, `unit:heal(n)`, `unit:kill()`, `unit:setPower(type, n)`, `unit:applyAura(data)`, `unit:removeAura(id)`, `unit:castSpell(id, opts?)`, `unit:interruptCast()`, `unit:despawn()`. |
-| Unit tokens | Follow from relationships, as in the client: `mock.player:target(unit)`, `:focus(unit)`, `:mouseover(unit)`, `unit:showNameplate()` (`nameplateN`), `mock.group:add(unit)` (`partyN`, `raidN`), bosses (`bossN`); compound tokens (`targettarget`) resolve through them. |
+| Units | `mock.player`, `mock.spawnUnit(data)` returning a unit: name, GUID (generated unless given), level, class, race, sex, reaction (`"hostile"`, `"neutral"`, `"friendly"`), player or NPC, health and power, dead or alive, distance from the player (yards). Unit methods act and fire events: `unit:damage(n)`, `unit:heal(n)`, `unit:kill()`, `unit:setPower(type, n)`, `unit:applyAura(data)`, `unit:removeAura(id)`, `unit:castSpell(id, opts?)` (`UnitCastingInfo` / `UnitChannelInfo`, `UNIT_SPELLCAST_START` then `SUCCEEDED` and `STOP`, or the channel's; `opts.castTime` in seconds, else the spell data's, else 1.5; the order unverified), `unit:interruptCast()`, `unit:setDistance(yards)` (`CheckInteractDistance`, `UnitInRange`, `UnitDistanceSquared`), `unit:despawn()`. `mock.setPlayer(data)` sets the player's data without events. |
+| The character | `mock.player:setMoney(copper)` (`PLAYER_MONEY`), `mock.player:equip(slot, item)` (`PLAYER_EQUIPMENT_CHANGED`, `UNIT_INVENTORY_CHANGED`; `GetInventoryItem…`), `mock.setBag(bag, { slots, items })` (`BAG_UPDATE`, `BAG_UPDATE_DELAYED`; `C_Container`, `C_Item.GetItemCount`), `mock.moveTo({ mapID, zone, subZone, x, y, world })` (`ZONE_CHANGED_NEW_AREA`, `ZONE_CHANGED`; `GetZoneText` and the other zone texts, `C_Map.GetBestMapForUnit`, `C_Map.GetPlayerMapPosition`, `UnitPosition`). An item is its ID or `{ id, count, link, bound, locked }`; links are the test's, the item data's, or made like the client's. The events and their order are the client's (`/stdtest engine record`); camelot's links have its form (`|cnIQ1:|Hitem:…`). |
+| Vendors | `mock.openMerchant({ name, items = { { id, price, stack, available, maxStack, usable } }, canRepair, repairCost })` (`MERCHANT_SHOW`, the interaction frame, then `MERCHANT_UPDATE`; the vendor is the `npc` unit), `mock.closeMerchant()`, `mock.sell(bag, slot)` (the user's right-click); buying, selling and buying back through the client's API (`BuyMerchantItem`, `BuybackItem`, `C_MerchantFrame`), answered by the server 0.4 s later with the recorded events |
+| Unit tokens | Follow from relationships, as in the client: `mock.player:target(unit)`, `:focus(unit)`, `:mouseover(unit)`, `mock.player:softTarget(unit, kind?)` (`softenemy`, `softfriend`, `softinteract`), `unit:showNameplate()` (`nameplateN`), `mock.group:add(unit)` (`partyN`, `raidN`), bosses (`bossN`); compound tokens (`targettarget`) resolve through them. |
 | Combat and restrictions | `mock.player:enterCombat()`, `:leaveCombat()`; `mock.enterInstance(kind)` (a restricted map), encounters, challenge modes, PvP matches, chat lockdown. The client's addon restrictions follow ([WoW client emulation §17.5](emulator.md#175-secret-values)): `ADDON_RESTRICTION_STATE_CHANGED`, secret API results, protected functions refused. |
-| Time | `GetTime` and `C_Timer` on a virtual clock: `mock.advanceTime(sec)`; `OnUpdate` per simulated frame: `mock.nextFrame()`, `mock.advanceFrames(n, ms?)` |
-| Lifecycle | `mock.login()` (`ADDON_LOADED`, `PLAYER_LOGIN`, `PLAYER_ENTERING_WORLD`), `mock.loadAddon(name)`, `mock.reloadUI()` (keeps only the SavedVariables) |
+| Time | `GetTime` and `C_Timer` on a virtual clock: `mock.advanceTime(sec)`; `OnUpdate` per simulated frame: `mock.nextFrame()`, `mock.advanceFrames(n, ms?)`; waiting in a test: `mock.waitFor`, `mock.waitFrames`, `mock.waitSeconds`, `mock.waitUntil` (§16.1.3) |
+| Lifecycle | `mock.login()` (`ADDON_LOADED`, `PLAYER_LOGIN`, `PLAYER_ENTERING_WORLD`), `mock.loadAddon(name)`, `mock.reloadUI()` (`/reload`: the pass ends; the test runs again from the top in a fresh VM that kept only the TOC's SavedVariables, as the client writes them, logged in as a reload; `mock.reloads()` counts the passes; the file's other tests stay in the first VM) |
 | Communication | `mock.receiveAddonMessage(prefix, message, chatType, sender)` (another player's), `mock.sentAddonMessages()`, `mock.joinGuild()`; the player hears their own group and guild messages and whispers to themselves on the next frame, for registered prefixes; WoW Forever's characters are addressed by first and last name (`unit:setName(name, lastName)`), as `/stdtest engine comm` recorded |
 | Addons | `mock.defineAddon(name, { metadata, loadOnDemand, load })`: an addon the client knows (`C_AddOns.GetAddOnMetadata`, `GetAddOnInfo`, `LoadAddOn`) |
-| Input | `mock.slash(line)`, `mock.defineBinding(name, action, { header, runOnUp })` (from `Bindings.xml`), `mock.pressBinding(name)`, `mock.pressKey(key)` (the key's binding, as `SetBinding` bound it), `mock.click(frame, button?)`, `mock.drag(frame, dx, dy)` (the frame, or an overlay's parent, moves if it starts moving), `mock.sizeBy(grip, dw, dh)` (a resize grip's frame), `mock.wheel(frame, delta)`, `mock.script(frame, name, ...)` (any other user action), `mock.setModifiers(...)` |
-| UI | tooltips (`mock.showTooltip(kind, data)`), menus and dialogs, Settings, the screen size, locale, CVars, other addons and libraries (`mock.provideLibrary`); `mock.frames()` (every frame, in creation order); stand-ins for Blizzard's UI code: `mock.defineTemplate(name, fn)` (`CreateFrame` with the template calls `fn(frame)`; an undefined template only warns) and `mock.defineFrameType(name, base, fn)` (an intrinsic frame type such as `EventFrame`) |
-| Output | `mock.printed()`, `mock.errors()` |
+| Input | `mock.slash(line)`, `mock.defineBinding(name, action, { header, runOnUp })` (from `Bindings.xml`), `mock.pressBinding(name)`, `mock.pressKey(key)` (the key's binding, as `SetBinding` bound it; `ENTER`, `ESCAPE`, `TAB` and `SPACE` go to the focused edit box first), `mock.click(frame, button?)` (a visible frame: `OnMouseDown`, `OnMouseUp`, then an enabled button's `PreClick`, `OnClick`, `PostClick`; the order unverified), `mock.hover(frame?)` (`OnLeave`, `OnEnter`; `GetMouseFoci`, `IsMouseOver`), `mock.typeText(editBox, text)` (keyboard focus, then `OnChar` and `OnTextChanged(true)` per character; `HasFocus`, `GetCurrentKeyBoardFocus`), `mock.drag(frame, dx, dy)` (the frame, or an overlay's parent, moves if it starts moving), `mock.sizeBy(grip, dw, dh)` (a resize grip's frame), `mock.wheel(frame, delta)`, `mock.script(frame, name, ...)` (any other user action), `mock.setModifiers(...)` |
+| UI | tooltips (`mock.showTooltip(kind, data, tip?)` with Blizzard's UI code: an item `{ id }`, `{ link }`, `{ bag, slot }` or equipped `{ slot }`, a spell `{ id }`, a unit `{ unit }`; the engine's `C_TooltipInfo` gives the data from the tests' game data, Blizzard's tooltip code shows it and runs the addons' hooks; returns the lines), menus and dialogs, Settings, the screen size, locale, CVars, other addons and libraries (`mock.provideLibrary`); `mock.frames()` (every frame, in creation order); stand-ins for Blizzard's UI code: `mock.defineTemplate(name, fn)` (`CreateFrame` with the template calls `fn(frame)`; an undefined template only warns) and `mock.defineFrameType(name, base, fn)` (an intrinsic frame type such as `EventFrame`) |
+| Output | `mock.printed()` (what the chat frame shows: `print`'s lines, and with Blizzard's UI everything `DEFAULT_CHAT_FRAME:AddMessage` gets), `mock.errors()` |
+
+**World profiles** (decision T213). A test file starts in the situation a
+profile describes: `config({ profile = "stormwind" })` (a literal, read
+before anything loads) or `test.profile` of the manifest names
+`tests/profiles/<name>.json`, applied through the controls above before the
+addon loads:
+
+```json
+{
+  "character": { "name": "Thrall", "realm": "Realm", "class": "SHAMAN", "race": "Orc", "level": 60 },
+  "money": 123456,
+  "items": { "19019": { "name": "Thunderfury, Blessed Blade of the Windseeker", "quality": 5 } },
+  "spells": { "403": { "name": "Lightning Bolt", "known": true } },
+  "equipment": { "MainHandSlot": 19019 },
+  "bags": { "0": { "slots": 16, "items": { "1": { "id": 159, "count": 5 } } } },
+  "position": { "mapID": 1453, "zone": "Stormwind City", "subZone": "Trade District", "x": 0.5, "y": 0.6 },
+  "auras": [ { "spellId": 546, "name": "Water Walking", "duration": 600 } ],
+  "units": [ { "name": "Hogger", "level": 11, "reaction": "hostile", "distance": 12, "target": true } ],
+  "cvars": { "nameplateShowEnemies": "1" },
+  "bindings": { "SHIFT-1": "ACTIONBUTTON1" },
+  "savedVariables": { "MyAddonDB": { "logins": 41 } }
+}
+```
+
+`/stdtest snapshot` records the character's world in the client (StdTest,
+then `/reload`), and `cargo xtask profile <SavedVariables/StdTest.lua>
+<out.json>` writes it as a profile with the character's name and realm, a
+player target's name and identifying CVars scrubbed. `character` is
+`mock.setPlayer`'s data; `items` and `spells` are
+`defineItem` and `defineSpell` data (items cached unless `cached` is
+`false`); equipment slots are IDs or the client's slot names
+(`GetInventorySlotInfo`); a unit's `target`, `focus`, `group` (`"party"`,
+`"raid"`) and `nameplate` relate it to the player, its `auras` are
+applied; object keys that are whole numbers become number keys. Every part
+stays drivable during the test.
 
 **Raw events.** `mock.fireEvent(name, ...)` and `mock.fireUnitEvent(name,
 unit, ...)` fire any event the flavor documents, the payload checked against
@@ -158,22 +310,32 @@ Mocking (decision T187):
 - **Scenario controls** set the game's state: combat, units, group, auras,
   spells, items, time, screen, locale, CVars, other addons and libraries.
 - **Taint in tests.** A protected action refused because of taint fails the
-  test with its taint chain ([WoW client emulation §17.4](emulator.md#174-taint-and-secure-execution));
-  `expect(fn).toBeBlocked()` asserts that it is refused, and
-  `expect(value).toBeSecure()` that a variable is untainted.
+  test with its taint chain ([WoW client emulation §17.4](emulator.md#174-taint-and-secure-execution)),
+  unless the test expected it: `expect(fn).toBeBlocked()` asserts that
+  calling `fn` is refused, and reading `mock.refusals()` marks the refusals
+  so far as expected. `expect("Name").toBeSecure()` asserts that a global
+  is untainted, `expect(t).toBeSecure(key)` a table's field
+  (`issecurevariable`).
 
 ### 16.1.5 Running
 
 ```
-wowlua test [filter] [--flavor <f>] [--watch] [--coverage] [--reporter <r>,…] [--output <dir>] [--game-data]
+wowlua test [filter] [--flavor <f>] [-u] [--watch] [--coverage] [--reporter <r>,…] [--output <dir>] [--game-data]
 ```
 
 - Each test file runs once **per manifest flavor** by default. `--flavor`
   restricts the run, and `@flavors` restricts individual tests.
 - Each file and flavor runs in a fresh VM. Files run in parallel.
-- Test reporters: `pretty` (the terminal default), `junit` (XML), `tap`,
-  `json`, `github` (annotations). Several may be given; files go to
-  `dist/test/` unless `--output` says otherwise.
+- `filter` keeps the test files and tests whose path or name contains it.
+- The test build of each flavor goes to `<build.out>/.test/<flavor>/<Name>`
+  (the AddOn folder as the client would load it, with the test side next to
+  it); error locations in reports are the sources' (the `test` profile keeps
+  lines).
+- Test reporters: `pretty` (the terminal default), `junit` (XML,
+  `junit.xml`), `tap` (`results.tap`), `json` (`results.json`), `github`
+  (annotations, on standard output). Several may be given (or
+  `test.reporters` names them); files go to `<build.out>/test/` unless
+  `--output` says otherwise.
 - Exit code 1 if any test fails, or if coverage is below a threshold
   (§16.1.6).
 
@@ -189,16 +351,24 @@ wowlua test [filter] [--flavor <f>] [--watch] [--coverage] [--reporter <r>,…] 
 | Functions | Each function, method and closure called |
 | Conditions | Each condition of a compound test (`a and b`, `a or b`) both true and false |
 
-The VM counts them; the compiled code is not changed. Code that `@if` removes
-for the flavor under test counts as not applicable, and coverage of all flavors
-is merged unless `--coverage-per-flavor` is given. `-- wowlua: coverage ignore`
-(next statement) and `-- wowlua: coverage ignore-file` exclude code, and
-`test.coverage.exclude` excludes files.
+The VM counts them; the compiled code is not changed. It counts the
+instructions that run and the outcomes of conditional jumps, mapped to the
+sources (the `test` profile keeps lines): a line is covered when code on it
+ran, statements count as lines, a branch is one outcome of a conditional
+jump, a condition one on a line with several (a compound test), and the
+compiler's runtime checks and generated functions are left out. Code that
+`@if` removes for the flavor under test counts as not applicable, and
+coverage of all flavors is merged unless `--coverage-per-flavor` is given
+(reports then in `<flavor>/`). `-- wowlua: coverage ignore` (the next line
+with code, or the line it ends) and `-- wowlua: coverage ignore-file`
+exclude code, and `test.coverage.exclude` excludes files.
 
-Reports, any combination: a terminal summary, `lcov` (with branch and function
-data), `cobertura` (XML), `json`, and `html`: a self-contained report in the
-wowlua design system (its fonts and tokens, dark and light), with every file's
-source, hit counts, branch markers and totals per file and folder.
+Reports, any combination: a terminal summary (always, with each file's lines
+that never ran), `lcov` (`lcov.info`, with branch and function data),
+`cobertura` (`cobertura.xml`), `coverage-json` (`coverage.json`), and `html`
+(`coverage.html`): a self-contained report in the wowlua design system (its
+fonts and tokens, dark and light), with every file's source, hit counts,
+branch markers and totals per file and folder.
 
 Thresholds in `test.coverage` ([Manifest §9.18](manifest.md#918-test)) set
 minimum percentages per kind; a run below one fails.
@@ -252,9 +422,19 @@ An opinionated formatter for `.wowlua` and `.d.wowlua`. It can optionally format
   except an empty function body (`function() end`); at most one blank line is
   kept; `;` is written only before a statement that starts with `(`.
   Trailing comments stay on their line, comments on their own line stay on
-  their own line.
+  their own line. wowlua's syntax (M9 S6): decorators each on their own
+  line; annotations as `name: T`, `name?: T` and `name: T = default`;
+  `function f<T extends X>(a: T, ...: U): R`; function types as
+  `(a: A, ...B) -> R` and a results list of one `...T` without
+  parentheses; table types like tables; long unions and intersections
+  break before `|` / `&`; class and interface members one per line with
+  their blank lines kept; enums like tables; `import`, `export`, `const`,
+  `continue`, compound assignment, destructuring, `?.`, `?:`, `??` and
+  `::` with single spaces; `declare` statements like the declarations they
+  declare (members one per line); interpolated strings keep their text.
 - Formatting never changes semantics. Every formatted file is verified to
-  produce the same AST.
+  produce the same AST (types, decorators and declarations included); an
+  idempotence suite formats every `.wowlua` file of the repository twice.
 
 ## 16.4 Trace decoder (`wowlua trace`)
 

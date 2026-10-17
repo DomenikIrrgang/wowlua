@@ -75,6 +75,16 @@ impl Output {
         }))
     }
 
+    /// Prints colored pieces to stdout (test reports).
+    pub fn colored(&self, parts: &[(Option<termcolor::Color>, bool, &str)]) {
+        let mut stream = StandardStream::stdout(self.color);
+        for (color, bold, text) in parts {
+            let _ = stream.set_color(ColorSpec::new().set_fg(*color).set_bold(*bold));
+            let _ = write!(stream, "{text}");
+            let _ = stream.reset();
+        }
+    }
+
     /// Prints a line to stdout (command results such as TOC text).
     pub fn print(&self, text: impl AsRef<str>) {
         print!("{}", text.as_ref());

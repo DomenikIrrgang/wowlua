@@ -156,4 +156,20 @@ interface WowluaRuntime
     locale?: { [string]: string }
     logs?: WowluaLogs
     logEmit?: (level: string, location: string?, ...any) -> ()
+
+    -- the test framework's (`wowlua test`, spec Tooling §16.1)
+    --- The engine's controls, which wowlua:mock drives.
+    mockEngine?: any
+    --- wowlua:test's registry, which the test runner reads.
+    tests?: any
+    --- Spies' calls, by spy (wowlua:mock).
+    spies?: { [any]: any[] }
+    --- What runs after every test (wowlua:mock: restoring stubs).
+    afterTest?: (() -> ())[]
+    --- What wowlua:mock's waits yield.
+    waitToken?: table
+    --- What ends a test's pass at `mock.reloadUI()`.
+    reloadSignal?: table
+    --- The reloads of the running test (set by the test runner).
+    reloads?: number
 end

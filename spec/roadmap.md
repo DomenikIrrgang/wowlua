@@ -416,15 +416,16 @@ The test framework runs on wowlua's own emulation of the WoW client
   documentation (existence, protection, secrets), the widget system and the
   behaviour tests need, "not mocked" errors for the rest; Blizzard's FrameXML
   as secure code, opt-in.
-  Built 2026-10-16, waiting for review and the in-game probe run: the engine
+  Built 2026-10-16; done 2026-10-17: Blizzard's UI on camelot (70425) loads,
+  logs in and runs without an error, as the client's does, and all 15,933
+  values of the `/stdtest engine` battery match. Built 2026-10-16: the engine
   crate with the documentation's API and argument checks (556 of 563
   recorded checks), camelot's undocumented C functions, frames, events,
   timers, units, auras, restrictions, protected actions, spells and items
   from the tests; the M8 mock's stdlib tests run on its frames, events and
   timers; Blizzard's UI code loads (191 addons on camelot), with which all
   819 recorded client cases and all eight recorded taint experiments give
-  the client's results. The probe battery (`/stdtest engine`) waits for an
-  in-game run.
+  the client's results.
 - S4 **Test framework**: `wowlua test`, `wowlua:test`, `wowlua:mock` (spies,
   stubs, fakes, scenario controls, taint assertions), per flavor, in parallel.
   World profiles (decision T213): the character (name, class, race, level,
@@ -433,16 +434,49 @@ The test framework runs on wowlua's own emulation of the WoW client
   before the addon; recorded from the client with `/stdtest snapshot`; every
   part drivable during a test, each change firing the client's events in its
   order. GUI tests act as the user (click, hover, drag, type, key bindings)
-  and assert what is shown. The groundwork for M12 to M14: the VM's debug
-  hooks (shared with S5's coverage) and the engine's file access behind an
-  interface (T212).
+  and assert what is shown. Writing tests (Tooling §16.1.3): typed matchers,
+  `@cases`, waiting in straight-line code, widget matchers, snapshots,
+  compile-time tests, custom matchers, `import internal` and `mock.module`
+  (T214 to T220, T223, T224); `@bench` (T221) and doc-comment examples
+  (T222) are specified here and built in M11 and S8. The groundwork for M12
+  to M14: the VM's debug hooks (shared with S5's coverage) and the engine's
+  file access behind an interface (T212).
+  Built 2026-10-17, waiting for review and an in-game run (`/stdtest
+  snapshot`, event-order recordings): `wowlua test` runs a package's test
+  files per flavor in the engine (the addon loaded from its TOC as the
+  client loads it; `test.blizzard-ui` loads Blizzard's UI first, fetched on
+  first use), with `wowlua:test` (tests, hooks, `@skip`, `@only`,
+  `@flavors`, `@cases`, `describe`, `config`, typed matchers, widget
+  matchers, snapshots, custom matchers, `@expectError`) and `wowlua:mock`
+  (the engine's controls, spies, stubs, fakes, waiting, printed output and
+  errors, `mock.module`, user input, casting, modifier keys, taint
+  assertions); world profiles with the character's money, gear, bags and
+  place; `import internal`; `--watch`; the three examples have tests.
+  Checked against the client's recordings (Forever 70425, 2026-10-17):
+  input, focus and text scripts; casts, equipment, bags, zones, targets,
+  combat, deaths and auras (their events, order and payloads); Blizzard's
+  UI runs through all of them without an error. `mock.reloadUI` reruns
+  the test in a fresh VM with the SavedVariables as the client writes them
+  (`/stdtest sv`). Kills (`PARTY_KILL`, `UNIT_LOOT`), the server's late
+  answers (`UNIT_TARGET`, an interrupt's), soft targets, vendors and
+  secure CVars as recorded. Not yet: `--game-data` (M13); the standard and
+  classic flavors' Blizzard UI code still errors in the engine (the focus
+  is camelot's, which runs without an error).
 - S5 **Coverage and reports**: lines, statements, branches, functions and
   conditions counted by the VM; terminal, JUnit, TAP, JSON, GitHub, lcov,
   Cobertura and an HTML report in the wowlua design system; thresholds.
+  Built 2026-10-17: the VM counts instructions and conditional jumps of the
+  addon's files (runtime checks and generated functions left out), every
+  report above, `test.coverage` minimums and exclusions, `--coverage-per-flavor`;
+  the HTML report names the design system's fonts (shipped with M11).
 - S6 `wowlua fmt` complete for all wowlua constructs, with an idempotence suite.
+  Built 2026-10-17: every construct (interpolated strings keep their text);
+  the AST check covers types, decorators and declarations; the suite formats
+  the repository's 148 `.wowlua` and `.d.wowlua` files twice.
 - S7 Persistent incremental cache (phase 2), shared with the LSP.
 - S8 `wowlua lsp` and the VS Code extension, with a test explorer, coverage in
-  the editor and "run test" code lenses.
+  the editor and "run test" code lenses; code examples in doc comments run as
+  tests (T222).
 
 **Exit:** the full edit, test, debug loop works without leaving the editor, and
 the in-game bugs found so far fail as tests the same way they failed in game
@@ -467,7 +501,8 @@ as they are, and secure-code paths keep their call structure (taint).
 
 - `wowlua bench`: benchmarks run on the embedded Lua 5.1 (WoW runs plain Lua
   5.1, not LuaJIT), comparing the optimized and the unoptimized build; every
-  optimization is measured before it is kept.
+  optimization is measured before it is kept. Benchmarks are `@bench`
+  functions in test files (T221).
 - Loop-invariant field reads hoisted out of loops (`self.frame.texture` read
   once).
 - Repeated field reads in one stretch of code read once into a local.

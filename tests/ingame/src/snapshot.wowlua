@@ -1,0 +1,222 @@
+-- `/stdtest snapshot`: the world the character is in, as a world profile
+-- for `wowlua test` (decision T213): the character, money, gear, bags,
+-- place, auras, the target, CVars that differ from their defaults and the
+-- key bindings. Saved in StdTestState.snapshot (after /reload);
+-- `cargo xtask profile <StdTest.lua> <out.json>` writes the profile with
+-- the player's name, realm and GUIDs scrubbed. Read-only calls only.
+import state from "/state"
+import say from "/harness"
+
+local G = _G :: any
+
+--- A value unless secret.
+local function plain(v: any): any
+    if issecretvalue(v) then
+        return nil
+    end
+    return v
+end
+
+local function character(): table
+    local _, class = UnitClass("player")
+    local _, race = UnitRace("player")
+    return {
+        name = plain(UnitName("player")),
+        realm = plain(GetRealmName()),
+        class = class,
+        race = race,
+        sex = UnitSex("player"),
+        level = UnitLevel("player"),
+        health = plain(UnitHealth("player")),
+        maxHealth = plain(UnitHealthMax("player")),
+        power = plain(UnitPower("player")),
+        maxPower = plain(UnitPowerMax("player")),
+        powerType = UnitPowerType("player"),
+        faction = UnitFactionGroup("player"),
+    }
+end
+
+-- Items seen, with the data `defineItem` takes.
+local function itemData(items: { [number]: table }, id: number?)
+    if id == nil or items[id] then
+        return
+    end
+    local name, link, quality, itemLevel, minLevel, kind, subType, stackCount, equipLoc, icon, sellPrice, classID, subclassID =
+        C_Item.GetItemInfo(id)
+    items[id] = {
+        name = name,
+        link = link,
+        quality = quality,
+        itemLevel = itemLevel,
+        minLevel = minLevel,
+        type = kind,
+        subType = subType,
+        stackCount = stackCount,
+        equipLoc = equipLoc,
+        icon = icon,
+        sellPrice = sellPrice,
+        classID = classID,
+        subclassID = subclassID,
+    }
+end
+
+local function equipment(items: { [number]: table }): table
+    const out: { [number]: table } = {}
+    for slot = 0, 19 do
+        const id = GetInventoryItemID("player", slot)
+        if id then
+            out[slot] = { id = id, link = GetInventoryItemLink("player", slot) }
+            itemData(items, id)
+        end
+    end
+    return out
+end
+
+local function bags(items: { [number]: table }): table
+    const out: { [number]: table } = {}
+    for bag = 0, 5 do
+        const slots = C_Container.GetContainerNumSlots(bag)
+        if slots and slots > 0 then
+            const contents: { [number]: table } = {}
+            for slot = 1, slots do
+                const info = C_Container.GetContainerItemInfo(bag, slot)
+                if info then
+                    contents[slot] = {
+                        id = info.itemID,
+                        count = info.stackCount,
+                        link = info.hyperlink,
+                        bound = info.isBound,
+                    }
+                    itemData(items, info.itemID)
+                end
+            end
+            out[bag] = { slots = slots, items = contents }
+        end
+    end
+    return out
+end
+
+local function position(): table
+    const map = C_Map.GetBestMapForUnit("player")
+    const out: { [string]: any } = {
+        mapID = map,
+        zone = GetZoneText(),
+        subZone = GetSubZoneText(),
+    }
+    if map then
+        local ok, pos = pcall(C_Map.GetPlayerMapPosition, map, "player")
+        if ok and pos then
+            local x, y = pos:GetXY()
+            out.x, out.y = plain(x), plain(y)
+        end
+    end
+    return out
+end
+
+local function auras(): table
+    const out: table[] = {}
+    for i = 1, 40 do
+        const a = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+        if issecretvalue(a) or a == nil then
+            break
+        end
+        out[#out + 1] = {
+            spellId = plain(a.spellId),
+            name = plain(a.name),
+            icon = plain(a.icon),
+            applications = plain(a.applications),
+            duration = plain(a.duration),
+            isHelpful = true,
+        }
+    end
+    return out
+end
+
+-- The target, with how far it is (the smallest of CheckInteractDistance's
+-- ranges it is in).
+local function units(): table
+    if not UnitExists("target") then
+        return {}
+    end
+    local _, class = UnitClass("target")
+    local distance: number? = nil
+    for _, r in ipairs({ { 3, 9.9 }, { 2, 11.11 }, { 1, 28 } }) do
+        if distance == nil and CheckInteractDistance("target", r[1]) then
+            distance = r[2]
+        end
+    end
+    const reaction = UnitReaction("target", "player")
+    return {
+        {
+            name = plain(UnitName("target")),
+            level = UnitLevel("target"),
+            class = class,
+            player = UnitIsPlayer("target"),
+            reaction = reaction and (reaction >= 5 and "friendly" or reaction == 4 and "neutral" or "hostile"),
+            health = plain(UnitHealth("target")),
+            maxHealth = plain(UnitHealthMax("target")),
+            distance = distance,
+            target = true,
+        },
+    }
+end
+
+local function cvars(): table
+    const out: { [string]: string } = {}
+    const list = G.ConsoleGetAllCommands and G.ConsoleGetAllCommands() or {}
+    for _, c in ipairs(list) do
+        if c.commandType == 0 then
+            const value = C_CVar.GetCVar(c.command)
+            const default = C_CVar.GetCVarDefault(c.command)
+            if value ~= nil and value ~= default then
+                out[c.command] = value
+            end
+        end
+    end
+    return out
+end
+
+local function bindings(): table
+    const out: { [string]: string } = {}
+    for i = 1, GetNumBindings() do
+        local command, _, key1, key2 = GetBinding(i)
+        if key1 then
+            out[key1] = command
+        end
+        if key2 then
+            out[key2] = command
+        end
+    end
+    return out
+end
+
+export function snapshot()
+    const items: { [number]: table } = {}
+    const parts: { [string]: () -> any } = {
+        character = character,
+        money = GetMoney,
+        equipment = function(): any return equipment(items) end,
+        bags = function(): any return bags(items) end,
+        position = position,
+        auras = auras,
+        units = units,
+        cvars = cvars,
+        bindings = bindings,
+    }
+    const profile: { [string]: any } = {}
+    const failed: string[] = {}
+    for name, part in pairs(parts) do
+        local ok, value = pcall(part)
+        if ok then
+            profile[name] = value
+        else
+            failed[#failed + 1] = `{name}: {value}`
+        end
+    end
+    profile.items = items
+    profile.client = `{(GetBuildInfo())} ({select(2, GetBuildInfo())})`
+    profile.errors = failed
+    const st = state() :: any
+    st.snapshot = profile
+    say(`snapshot: recorded{#failed > 0 and ` ({#failed} parts failed)` or ""}; type /reload so the file is written`)
+end

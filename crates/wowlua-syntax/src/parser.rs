@@ -2959,6 +2959,15 @@ impl<'a> Parser<'a> {
         if type_only {
             self.bump();
         }
+        // `import internal a from` reads a module's locals; `import
+        // internal from "x"` imports `internal`.
+        let internal = !type_only
+            && self.is_word("internal")
+            && self.kind_at(1) == T::Name
+            && !self.is_word_at(1, "from");
+        if internal {
+            self.advance();
+        }
         let clause = if self.eat(T::Star) {
             if !self.is_word("as") {
                 return Err(self.syntax_error("'as' expected"));
@@ -3004,6 +3013,7 @@ impl<'a> Parser<'a> {
             ImportNode {
                 clause,
                 type_only,
+                internal,
                 from,
             }
         ))

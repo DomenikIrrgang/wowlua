@@ -1,0 +1,27 @@
+[package]
+name = "wowlua-test"
+description = "The wowlua test runner: a build's test files run in the engine, each file in a fresh VM"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+regex.workspace = true
+serde_json.workspace = true
+wowlua-api.workspace = true
+wowlua-driver.workspace = true
+wowlua-engine.workspace = true
+wowlua-flavors.workspace = true
+wowlua-span.workspace = true
+wowlua-syntax.workspace = true
+wowlua-toc.workspace = true
+wowlua-vm.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

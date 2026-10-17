@@ -1,0 +1,97 @@
+//! World profiles (spec Tooling §16.1.4, decision T213): JSON files under
+//! `tests/profiles/` with the whole situation a test starts in, applied
+//! through the engine's controls before the addon loads. A test file names
+//! its profile with `config({ profile = "name" })` (read from its syntax,
+//! since the profile comes first), else `test.profile` of the manifest.
+
+use std::path::Path;
+use wowlua_syntax::view::*;
+use wowlua_vm::{TableRef, Value, Vm};
+
+/// The profile a test file's `config({ profile = "…" })` names.
+pub fn named_in(source: &[u8]) -> Option<String> {
+    let file = wowlua_span::SourceDb::new().add("", "");
+    let parse = wowlua_syntax::parse(source, file);
+    parse.view().block().stmts().iter().find_map(|s| {
+        let StmtKind::Call(call) = s.kind() else {
+            return None;
+        };
+        let ExprKind::Call { callee, args } = call.kind() else {
+            return None;
+        };
+        if !matches!(callee.kind(), ExprKind::Name(n) if n.text() == "config") {
+            return None;
+        }
+        let ExprKind::Table(fields) = args.exprs().first()?.kind() else {
+            return None;
+        };
+        fields.iter().find_map(|f| match f {
+            TableField::Named { name, value, .. } if name.text() == "profile" => {
+                match value.kind() {
+                    ExprKind::String(lit) => {
+                        Some(String::from_utf8_lossy(&lit.value()).into_owned())
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        })
+    })
+}
+
+/// A JSON value as Lua's: objects and arrays become tables (object keys
+/// that are whole numbers become number keys), `null` nil.
+fn to_lua(vm: &mut Vm, v: &serde_json::Value) -> Value {
+    match v {
+        serde_json::Value::Null => Value::Nil,
+        serde_json::Value::Bool(b) => Value::Bool(*b),
+        serde_json::Value::Number(n) => Value::Num(n.as_f64().unwrap_or(0.0)),
+        serde_json::Value::String(s) => vm.str(s),
+        serde_json::Value::Array(list) => {
+            let t = vm.new_table();
+            for (i, item) in list.iter().enumerate() {
+                let v = to_lua(vm, item);
+                let _ = vm.heap.table_mut(t).set(Value::Num(i as f64 + 1.0), v);
+            }
+            Value::Table(t)
+        }
+        serde_json::Value::Object(map) => {
+            let t = vm.new_table();
+            for (k, item) in map {
+                let key = match k.parse::<i64>() {
+                    Ok(n) => Value::Num(n as f64),
+                    Err(_) => vm.str(k),
+                };
+                let v = to_lua(vm, item);
+                let _ = vm.heap.table_mut(t).set(key, v);
+            }
+            Value::Table(t)
+        }
+    }
+}
+
+/// Applies the profile in `path` with the engine's `controls`.
+pub fn apply(vm: &mut Vm, controls: TableRef, path: &Path) -> Result<(), String> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| format!("the world profile {}: {e}", path.display()))?;
+    let json: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| format!("the world profile {}: {e}", path.display()))?;
+    if !json.is_object() {
+        return Err(format!(
+            "the world profile {} is not a JSON object",
+            path.display()
+        ));
+    }
+    let profile = to_lua(vm, &json);
+    crate::widgets_keep(vm, profile);
+    let f = vm.load(include_bytes!("profile.lua"), "=[world profile]")?;
+    vm.call(f, &[Value::Table(controls), profile])
+        .map(|_| ())
+        .map_err(|e| {
+            let msg = match e.value {
+                Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+                _ => "?".into(),
+            };
+            format!("the world profile {}: {msg}", path.display())
+        })
+}

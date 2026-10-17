@@ -1,0 +1,155 @@
+-- wowlua snapshots (wowlua test -u updates them)
+
+# /wdemo opens and closes the window › open
+| Frame WidgetDemoWindow
+|   shown
+|   size 300 x 380
+|   CENTER on UIParent CENTER (0, 0)
+|   Texture <Texture>
+|     shown
+|     size 300 x 380
+|     TOPLEFT on WidgetDemoWindow TOPLEFT (0, 0)
+|     BOTTOMRIGHT on WidgetDemoWindow BOTTOMRIGHT (0, 0)
+|   FontString <FontString>
+|     shown
+|     size 1 x 1
+|     TOP on WidgetDemoWindow TOP (0, -12)
+|     text "|cff33ff99wowlua|r widget demo"
+|   FontString <FontString>
+|     shown
+|     size 1 x 1
+|     LEFT on <EditBox> RIGHT (8, 0)
+|     text "Enter adds a row"
+|   FontString <FontString>
+|     shown
+|     size 1 x 1
+|     BOTTOM on WidgetDemoWindow BOTTOM (0, 12)
+|     text "|cff9d9d9dready|r"
+|   Button <Button>
+|     shown
+|     size 24 x 24
+|     TOPRIGHT on WidgetDemoWindow TOPRIGHT (-2, -2)
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
+|   StatusBar <StatusBar>
+|     shown
+|     size 260 x 14
+|     TOPLEFT on WidgetDemoWindow TOPLEFT (16, -48)
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
+|     Texture <Texture>
+|       shown
+|       size 260 x 14
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
+|   Button <Button>
+|     shown
+|     size 140 x 24
+|     TOPLEFT on WidgetDemoWindow TOPLEFT (16, -70)
+|     text "Clicks: 0"
+|     Texture <Texture>
+|       shown
+|       size 12 x 24
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMLEFT on $parent BOTTOMLEFT (0, 0)
+|     Texture <Texture>
+|       shown
+|       size 12 x 24
+|       TOPRIGHT on $parent TOPRIGHT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
+|     Texture <Texture>
+|       shown
+|       size 116 x 24
+|       TOPLEFT on <Texture> TOPRIGHT (0, 0)
+|       BOTTOMRIGHT on <Texture> BOTTOMLEFT (0, 0)
+|     FontString WidgetDemoWindowText
+|       shown
+|       size 1 x 1
+|       text "Clicks: 0"
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
+|   Button <Button>
+|     shown
+|     size 140 x 24
+|     LEFT on <Button> RIGHT (4, 0)
+|     text "Plain: 0"
+|     Texture <Texture>
+|       shown
+|       size 12 x 24
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMLEFT on $parent BOTTOMLEFT (0, 0)
+|     Texture <Texture>
+|       shown
+|       size 12 x 24
+|       TOPRIGHT on $parent TOPRIGHT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
+|     Texture <Texture>
+|       shown
+|       size 116 x 24
+|       TOPLEFT on <Texture> TOPRIGHT (0, 0)
+|       BOTTOMRIGHT on <Texture> BOTTOMLEFT (0, 0)
+|     FontString WidgetDemoWindowText
+|       shown
+|       size 1 x 1
+|       text "Plain: 0"
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
+|   CheckButton <CheckButton>
+|     shown
+|     size 32 x 32
+|     TOPLEFT on WidgetDemoWindow TOPLEFT (12, -100)
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
+|     FontString WidgetDemoWindowText
+|       shown
+|       size 1 x 1
+|       LEFT on $parent RIGHT (-2, 0)
+|       text "Show list"
+|   EditBox <EditBox>
+|     shown
+|     size 180 x 20
+|     TOPLEFT on WidgetDemoWindow TOPLEFT (22, -134)
+|     text ""
+|     Texture <Texture>
+|       shown
+|       size 8 x 20
+|       LEFT on $parent LEFT (-5, 0)
+|     Texture <Texture>
+|       shown
+|       size 8 x 20
+|       RIGHT on $parent RIGHT (0, 0)
+|     Texture <Texture>
+|       shown
+|       size 169 x 20
+|       LEFT on <Texture> RIGHT (0, 0)
+|       RIGHT on <Texture> LEFT (0, 0)
+|   Frame <Frame>
+|     shown
+|     size 260 x 160
+|     TOPLEFT on WidgetDemoWindow TOPLEFT (16, -164)

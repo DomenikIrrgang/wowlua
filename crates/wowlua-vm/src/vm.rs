@@ -198,6 +198,10 @@ pub struct Vm {
     pub(crate) errfunc: Option<Value>,
     in_errfunc: bool,
     output: Output,
+    /// Coverage counts, when on ([`Vm::enable_coverage`]).
+    pub coverage: Option<crate::coverage::Coverage>,
+    /// The counts' index of the running frame's function.
+    cov_frame: Option<usize>,
     /// Values kept alive outside the heap (host references).
     pub(crate) pinned: Vec<Value>,
     pub(crate) gc_threshold: usize,
@@ -273,6 +277,8 @@ impl Vm {
             cstack: Vec::new(),
             errfunc: None,
             in_errfunc: false,
+            coverage: None,
+            cov_frame: None,
             output: Box::new(|bytes| {
                 use std::io::Write;
                 let _ = std::io::stdout().write_all(bytes);
@@ -461,6 +467,9 @@ impl Vm {
         })?;
         // The constants take the taint of the code loading them.
         set_const_taint(&mut proto, self.cur.taint.write());
+        if let Some(c) = self.coverage.as_mut() {
+            c.register(&proto);
+        }
         let env = self.globals;
         let taint = self.cur.taint.alloc(true);
         Ok(Value::Func(self.heap.alloc_func(Function::Lua(
@@ -983,9 +992,17 @@ impl Vm {
     /// Runs frames until the entry frame returns.
     pub(crate) fn execute(&mut self) -> Result<(), LuaError> {
         self.run_depth += 1;
+        let cov = self.cov_frame;
         let r = self.run();
+        self.cov_frame = cov;
         self.run_depth -= 1;
         r
+    }
+
+    /// Counts what the chunks `filter` accepts (by chunk name) run from
+    /// now on ([`crate::coverage`]).
+    pub fn enable_coverage(&mut self, filter: crate::coverage::ChunkFilter) {
+        self.coverage = Some(crate::coverage::Coverage::new(filter));
     }
 
     fn run(&mut self) -> Result<(), LuaError> {
@@ -1002,11 +1019,20 @@ impl Vm {
             self.cur.taint.read(closure_taint);
             self.settle_origin();
             self.cur.taint.fixed = closure_taint;
+            self.cov_frame = match &self.coverage {
+                Some(c) => c.index_of(&proto),
+                None => None,
+            };
             let k = &proto.constants[..];
             loop {
                 let pc = self.cur.frames[fi].pc;
                 let op = proto.code[pc];
                 self.cur.frames[fi].pc = pc + 1;
+                if let Some(ci) = self.cov_frame
+                    && let Some(c) = self.coverage.as_mut()
+                {
+                    c.hit(ci, pc);
+                }
                 match op {
                     Op::Move { a, b } => {
                         let s = self.cur.stack[base + b as usize];
@@ -1376,6 +1402,11 @@ impl Vm {
     /// After a test: take the following jump if `taken`, else skip it.
     fn cond_jump(&mut self, fi: usize, proto: &Proto, taken: bool) {
         let pc = self.cur.frames[fi].pc;
+        if let Some(ci) = self.cov_frame
+            && let Some(c) = self.coverage.as_mut()
+        {
+            c.branch(ci, pc - 1, taken);
+        }
         if taken {
             let Op::Jmp { sbx } = proto.code[pc] else {
                 unreachable!("a test is followed by a jump")

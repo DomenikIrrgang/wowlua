@@ -596,6 +596,7 @@ fn package_native(
                         // a build flag.
                         jobs: crate::parallel::Jobs::resolve(None),
                         keep_code: true,
+                        tests: false,
                     };
                     let build = crate::build(session, project, &build_request)?;
                     // The package's own license files ship next to the AddOn.
@@ -784,6 +785,7 @@ fn package_like_the_packager(
                     only: None,
                     jobs: crate::parallel::Jobs::resolve(None),
                     keep_code: true,
+                    tests: false,
                 };
                 builds.push(crate::build(session, project, &build_request)?);
             }

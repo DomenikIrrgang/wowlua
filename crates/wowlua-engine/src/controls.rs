@@ -222,9 +222,14 @@ fn warnings(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
-/// Installs the controls as global `name` (the test runner's; `wowlua:mock`
-/// wraps them).
+/// Installs the controls as global `name` (tests of the engine itself).
 pub fn install(vm: &mut Vm, name: &str) {
+    let t = table(vm);
+    vm.set_global(name, Value::Table(t));
+}
+
+/// The controls as a table (the test runner gives it to `wowlua:mock`).
+pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
     let t = vm.new_table();
     for (key, f) in [
         ("fireEvent", fire_event as wowlua_vm::NativeFn),
@@ -254,6 +259,16 @@ pub fn install(vm: &mut Vm, name: &str) {
         ("defineItem", crate::gamedata::define_item),
         ("spend", spend),
         ("spawnUnit", units::spawn),
+        ("setPlayer", units::set_player),
+        ("setBag", crate::character::control_set_bag),
+        ("openMerchant", crate::merchant::control_open),
+        ("closeMerchant", crate::merchant::control_close),
+        ("sell", crate::merchant::control_sell),
+        ("moveTo", crate::character::control_move_to),
+        ("hover", crate::input::control_hover),
+        ("click", crate::input::control_click),
+        ("type", crate::input::control_type),
+        ("setModifiers", crate::input::control_set_modifiers),
         ("addToGroup", units::add_to_group),
         ("enterInstance", units::enter_instance),
         ("leaveInstance", units::leave_instance),
@@ -266,5 +281,5 @@ pub fn install(vm: &mut Vm, name: &str) {
     let player = units::handle(vm, units::PLAYER);
     let k = vm.heap.intern(b"player");
     vm.heap.table_mut(t).set_str(k, player);
-    vm.set_global(name, Value::Table(t));
+    t
 }

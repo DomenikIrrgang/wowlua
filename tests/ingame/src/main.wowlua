@@ -12,6 +12,8 @@
 --   /stdtest argcheck  how documented functions check their arguments (then /reload)
 --   /stdtest engine    what the client's engine does (also: order, protected, blocked,
 --                      record <label>, stop)
+--   /stdtest sv        how the client writes SavedVariables (risky: values that may
+--                      break the file; back it up first)
 import slash, router from "wowlua:slash"
 import onLogin from "wowlua:lifecycle"
 import after from "wowlua:timer"
@@ -25,6 +27,7 @@ import crashlimit from "/crashlimit"
 import restrictions from "/restrictions"
 import * as argcheck from "/argcheck"
 import engineProbe from "/engineprobe"
+import svProbe from "/svprobe"
 import _ from "/suites/errors"
 import _ from "/suites/events"
 import _ from "/suites/lifecycle"
@@ -58,6 +61,7 @@ import _ from "/suites/format"
 import _ from "/suites/version"
 import _ from "/suites/roster"
 import _ from "/suites/secure"
+import snapshot from "/snapshot"
 
 local function concat(a: TestRecord[], b: TestRecord[]): TestRecord[]
     local out: TestRecord[] = {}
@@ -123,8 +127,17 @@ local commands = router({
     },
     engine = {
         args = { "rest" },
-        help = "Record what the client's engine does: /stdtest engine [order | protected | blocked | record <label> | stop] (then /reload)",
+        help = "Record what the client's engine does: /stdtest engine [order | protected | blocked | input | merchant | soft | record <label> | stop] (then /reload)",
         run = function(arg: string?) engineProbe(arg) end,
+    },
+    sv = {
+        args = { "rest" },
+        help = "How the client writes SavedVariables: /stdtest sv [risky] (then /reload)",
+        run = function(arg: string?) svProbe(arg) end,
+    },
+    snapshot = {
+        help = "Record the world your character is in, as a world profile for wowlua test (then /reload)",
+        run = function() snapshot() end,
     },
     argcheck = {
         help = "Record how documented functions check their arguments (then /reload)",

@@ -2511,6 +2511,7 @@ dependencies = [
  "wowlua-flavors",
  "wowlua-manifest",
  "wowlua-pkg",
+ "wowlua-test",
  "wowlua-vm",
  "zip",
 ]
@@ -2587,6 +2588,7 @@ dependencies = [
 name = "wowlua-fmt"
 version = "0.9.0"
 dependencies = [
+ "regex",
  "stacker",
  "wowlua-diagnostics",
  "wowlua-span",
@@ -2696,6 +2698,23 @@ dependencies = [
  "stacker",
  "wowlua-diagnostics",
  "wowlua-span",
+]
+
+[[package]]
+name = "wowlua-test"
+version = "0.9.0"
+dependencies = [
+ "regex",
+ "serde_json",
+ "tempfile",
+ "wowlua-api",
+ "wowlua-driver",
+ "wowlua-engine",
+ "wowlua-flavors",
+ "wowlua-span",
+ "wowlua-syntax",
+ "wowlua-toc",
+ "wowlua-vm",
 ]
 
 [[package]]

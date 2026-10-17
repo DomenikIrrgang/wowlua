@@ -230,6 +230,13 @@ The WoW API the VM's code calls, per flavor.
   data), saved variables across reloads, slash commands, keybindings, addon
   messages, settings, tooltips, menus and dialogs. The M8 test mock is the
   starting point.
+- **Layout.** A region's rectangle comes from its points as the client
+  lays it out: each edge from the points that set it (a `LEFT` and a
+  `RIGHT` point give the width, a `TOP` and a `BOTTOM` the height),
+  otherwise its set size placed by the axis's first point; `GetSize`,
+  `GetWidth` and `GetHeight` give the laid-out size of an anchored region
+  (unverified beyond fresh widgets; `/stdtest engine` records
+  `layoutSizes`).
 - **Not mocked.** A generated function without behaviour raises
   "`<name>` is not mocked" when called, unless the project provides a mock
   (Tooling §16.1.4), so gaps are visible instead of silently returning nil.
@@ -248,8 +255,9 @@ Off by default: mock-only tests start faster (decision T186).
 
 The code comes from wow-ui-source at the flavor's client version and the
 global strings from the same dump the declarations use, downloaded on first
-use into a user cache keyed by version (decision T204; about 5 seconds and
-7 MB per flavor, once). The engine's loader (`wowlua_engine::ui::load`)
+use into a user cache keyed by version (decision T204; about 10 seconds and
+45 MB per flavor, once: `$WOWLUA_HOME/cache/blizzard-ui/`, at the commit the
+flavor's declarations name; `WOWLUA_UI_SOURCE` names a local copy instead). The engine's loader (`wowlua_engine::ui::load`)
 takes the flavor's `Interface` folder and its global strings:
 
 - **Startup set** (as `/stdtest engine` recorded: the 201 Blizzard addons
@@ -279,10 +287,12 @@ takes the flavor's `Interface` folder and its global strings:
   function gets its documented results' empty values (nil where nilable,
   false, 0, "", a table) and the engine lists the function; addon code still
   gets "not mocked". Secure code may register events and set scripts the
-  engine's lists lack. On camelot, the 201 addons load in under a second (a
-  release build) with 136 errors left, from enums, constants and namespaces
-  the documentation does not have (`Enum.GameMode`, `C_Widget`). The
-  CVars start at the client's defaults (the 248 the UI code reads that
+  engine's lists lack. On camelot (70425) the UI loads, logs in and runs
+  frames without a Lua error, as the client's does (its probe logged none):
+  enums, constants and namespaces the documentation lacks come from the
+  client's recording (`/stdtest engine`), secure addons run in the client's
+  secure environment, and Blizzard's errors are caught where ScriptErrors
+  reports them (`C_Log.LogErrorMessage`). The CVars start at the client's defaults (the 248 the UI code reads that
   have one, recorded by `/stdtest engine`).
 - **The client's cases.** With camelot's UI code loaded (and the addon's
   saved variables loaded as the addon's), all 819 cases `/stdtest probe`
