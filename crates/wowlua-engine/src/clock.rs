@@ -219,7 +219,8 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
 }
 
 /// `n` frames of `ms` milliseconds: each moves the clock, runs the
-/// `OnSizeChanged` the last frame's resizing owes, every visible widget's
+/// `OnSizeChanged` the last frame's resizing owes (before `OnUpdate`,
+/// `/stdtest engine`), every visible widget's
 /// `OnUpdate` (with the frame's seconds), the `OnTextChanged` the frame's
 /// `SetText` owes (those before it and in `OnUpdate`), then the due
 /// timers, those an `OnUpdate` just set included (`/stdtest engine`:

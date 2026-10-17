@@ -1542,9 +1542,9 @@ fn resize(vm: &mut Vm, id: WidgetId, w: Option<f64>, h: Option<f64>) {
     widget.width = w.unwrap_or(old.0);
     widget.height = h.unwrap_or(old.1);
     let new = (widget.width, widget.height);
-    // `OnSizeChanged` waits for the next frame (`/stdtest engine`: none at
-    // `SetSize`, none ever for a frame without points; that an anchored
-    // frame's runs then is unverified).
+    // `OnSizeChanged` waits: an anchored frame's runs before the next
+    // `OnUpdate` (also when resized in `OnUpdate`), a frame without points
+    // never gets one (`/stdtest engine`).
     let world = &mut engine_mut(vm).world;
     if new != old && !world.resized.contains(&id) {
         world.resized.push(id);

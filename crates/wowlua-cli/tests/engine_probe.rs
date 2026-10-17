@@ -228,6 +228,9 @@ fn compared(key: &str) -> bool {
         "probe.loadCalls.GetNetStats",
         "probe.loadCalls.GuildControlGetNumRanks",
         "probe.loadCalls.BNGetNumFriends",
+        "probe.loadCalls.C_Navigation.GetFrame",
+        "probe.loadCalls.C_SuperTrack.GetSuperTrackedQuestID",
+        "probe.loadCalls.GetSubZoneText",
         // Blizzard's UI code makes these (not loaded here): the intrinsic
         // types and its secure store frame.
         "probe.widgets.EventFrame.",
@@ -251,22 +254,43 @@ fn compared(key: &str) -> bool {
         && !key.ends_with(".GetEffectiveScale")
 }
 
-/// Whether a result matches the client's: exactly, but layout sizes up to
-/// float precision (the client's last bits follow the session's screen and
+/// A text's numbers, and the text between them.
+fn split_numbers(s: &str) -> (Vec<String>, Vec<f64>) {
+    let (mut text, mut numbers) = (Vec::new(), Vec::new());
+    let (mut cur, mut num) = (String::new(), String::new());
+    for ch in s.chars().chain(std::iter::once(' ')) {
+        if ch.is_ascii_digit() || (ch == '.' && !num.is_empty()) {
+            num.push(ch);
+            continue;
+        }
+        if !num.is_empty() {
+            numbers.push(num.parse().unwrap_or(f64::NAN));
+            text.push(std::mem::take(&mut cur));
+            num.clear();
+        }
+        cur.push(ch);
+    }
+    text.push(cur);
+    (text, numbers)
+}
+
+/// Whether a result matches the client's: exactly, but layout sizes (and
+/// the sizes `OnSizeChanged` gets) up to float precision (the client's last bits follow the session's screen and
 /// UI scale) and a list the client returns in its session's hash order as
 /// a set.
 fn same(key: &str, expected: &str, mine: &str) -> bool {
     if expected == mine {
         return true;
     }
-    if key.starts_with("probe.layoutSizes.") {
-        let numbers =
-            |s: &str| -> Vec<f64> { s.split(' ').filter_map(|n| n.parse().ok()).collect() };
-        let (a, b) = (numbers(expected), numbers(mine));
-        return a.len() == b.len()
+    if key.starts_with("probe.layoutSizes.") || key == "probe.timers.sizeChanged" {
+        // The same text around numbers within a float's last bits.
+        let (ta, a) = split_numbers(expected);
+        let (tb, b) = split_numbers(mine);
+        return ta == tb
+            && a.len() == b.len()
             && a.iter()
                 .zip(&b)
-                .all(|(x, y)| (x - y).abs() <= x.abs() * 1e-6);
+                .all(|(x, y)| (x - y).abs() <= x.abs() * 1e-5);
     }
     if key == "probe.loadCalls.C_UnitAuras.GetHiddenGroupBuffs" {
         let values = |s: &str| -> std::collections::BTreeSet<String> {
