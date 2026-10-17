@@ -34,6 +34,7 @@ pub mod queries;
 pub mod quests;
 pub mod recorded;
 pub mod stats;
+pub mod taxi;
 pub mod tooltip;
 pub mod trainer;
 pub mod ui;
@@ -218,6 +219,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(quests::behaviours())
             .chain(gossip::behaviours())
             .chain(trainer::behaviours())
+            .chain(taxi::behaviours())
             .chain(queries::behaviours())
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())

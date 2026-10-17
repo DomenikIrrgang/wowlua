@@ -218,8 +218,10 @@ fn chosen_option(vm: &mut Vm, c: NativeCall) -> Ret {
         Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(*s)).into_owned(),
         _ => String::new(),
     };
-    if opens == "trainer" {
-        crate::trainer::open(vm, npc);
+    match opens.as_str() {
+        "trainer" => crate::trainer::open(vm, npc),
+        "taxi" => crate::taxi::open(vm, npc),
+        _ => {}
     }
     Ok(vec![])
 }

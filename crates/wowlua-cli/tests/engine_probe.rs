@@ -1036,6 +1036,16 @@ fn the_engine_plays_combat_as_the_client_did() {
     plays_as_the_client_did("combat", COMBAT_MATCHED);
 }
 
+/// How many of the flight scenario's lines the engine plays as the client
+/// did: only ever up.
+const FLIGHT_MATCHED: usize = 213;
+
+/// The flight scenario: a flight master's gossip, the taxi map looked at.
+#[test]
+fn the_engine_plays_flight_as_the_client_did() {
+    plays_as_the_client_did("flight", FLIGHT_MATCHED);
+}
+
 /// How many of the trainer scenario's lines the engine plays as the client
 /// did: only ever up.
 const TRAINER_MATCHED: usize = 171;

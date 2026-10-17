@@ -37,6 +37,11 @@ pub struct Bar {
     /// fresh slider given 1 to 10, then 2 to 10, reads 0, no
     /// `OnValueChanged`).
     pub valued: bool,
+    /// Whether the range or the value was set from a secret: read back
+    /// secret (unverified: the documented secret aspects; a player
+    /// target's health bar).
+    pub secret_range: bool,
+    pub secret_value: bool,
 }
 
 /// A float as the client keeps it (a single float).
@@ -57,6 +62,8 @@ fn bar(vm: &Vm, id: WidgetId) -> Bar {
         step: is_slider(vm, id).then_some(single(0.001)),
         ranged: false,
         valued: false,
+        secret_range: false,
+        secret_value: false,
     })
 }
 
@@ -88,8 +95,22 @@ fn change(vm: &mut Vm, id: WidgetId, v: f64, user: bool) {
     }
 }
 
+/// A number given, a secret's hidden one too.
 fn number(vm: &Vm, v: Value) -> f64 {
-    vm.tonumber(v).unwrap_or(0.0)
+    vm.tonumber(vm.hidden(v)).unwrap_or(0.0)
+}
+
+fn is_secret(v: Value) -> bool {
+    matches!(v, Value::Secret(_))
+}
+
+/// A number read back, secret when it was set so.
+fn read(vm: &mut Vm, n: f64, secret: bool) -> Value {
+    if secret {
+        vm.secret_wrap(Value::Num(n))
+    } else {
+        Value::Num(n)
+    }
 }
 
 /// The user dragging a slider's thumb: to `to` (clamped, snapped only when
@@ -137,6 +158,7 @@ fn set_value(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let v = number(vm, c.arg(2));
     let mut b = bar(vm, id);
     b.valued = true;
+    b.secret_value = is_secret(c.arg(2));
     engine_mut(vm).world.bars.insert(id.0, b);
     let user = is_slider(vm, id) && c.arg(3).truthy();
     change(vm, id, v, user);
@@ -144,7 +166,8 @@ fn set_value(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 }
 
 fn get_value(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(bar(vm, id).value)])
+    let b = bar(vm, id);
+    Ok(vec![read(vm, b.value, b.secret_value)])
 }
 
 /// `SetMinMaxValues(min, max)`.
@@ -161,6 +184,11 @@ fn set_min_max_values(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         return Err(vm.raise(v));
     }
     let mut b = bar(vm, id);
+    let secret = is_secret(c.arg(2)) || is_secret(c.arg(3));
+    if b.secret_range != secret {
+        b.secret_range = secret;
+        engine_mut(vm).world.bars.insert(id.0, b);
+    }
     if (b.min, b.max) == (min, max) {
         return Ok(vec![]);
     }
@@ -186,7 +214,11 @@ fn set_min_max_values(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 
 fn get_min_max_values(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let b = bar(vm, id);
-    Ok(vec![Value::Num(b.min), Value::Num(b.max)])
+    let (min, max) = (b.min, b.max);
+    Ok(vec![
+        read(vm, min, b.secret_range),
+        read(vm, max, b.secret_range),
+    ])
 }
 
 /// `SetValueStep(step)`: a value set snaps to it.

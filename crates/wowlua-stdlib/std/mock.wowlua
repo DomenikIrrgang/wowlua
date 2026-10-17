@@ -709,6 +709,13 @@ export function defineTrainer(npc: MockUnit, data: table)
     engine().defineTrainer(npc, data)
 end
 
+--- A flight master's taxi map: `{ mapID, nodes = { { name, nodeID, x, y,
+--- state, cost, routes } }, mapNodes = { { name, nodeID, x, y, atlasName,
+--- faction, isUndiscovered } } }`, opened by its gossip (`opens = "taxi"`).
+export function defineTaxi(npc: MockUnit, data: table)
+    engine().defineTaxi(npc, data)
+end
+
 --- A level: `{ xpMax, health, power, talents, pvpTalentSlots, strength,
 --- agility, stamina, intellect, spirit }`. Experience past the current
 --- level's end gains it (`PLAYER_LEVEL_UP`, a round trip later

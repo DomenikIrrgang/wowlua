@@ -57,6 +57,8 @@ pub struct Unit {
     pub power_max: f64,
     pub power_type: f64,
     pub dead: bool,
+    /// Flagged for PvP (`UnitIsPVP`).
+    pub pvp: bool,
     pub in_combat: bool,
     /// Whom the unit targets (`unittarget`).
     pub target: Option<UnitId>,
@@ -237,6 +239,7 @@ pub fn install(vm: &mut Vm) {
         power_max: 100.0,
         power_type: 1.0,
         dead: false,
+        pvp: false,
         in_combat: false,
         target: None,
         alive_in_world: true,
@@ -436,9 +439,10 @@ pub fn secret_results(vm: &Vm, doc: &serde_json::Value, c: &NativeCall) -> bool 
         return flag("SecretWhenUnitHealthMaxRestricted")
             || flag("SecretWhenUnitSpellCastRestricted");
     };
-    let player_controlled = u.list[id.0].player;
+    // Another's maximum health and power: secret, another player's too
+    // (recorded, scenario flight); the player's and the group's not.
     if (flag("SecretWhenUnitHealthMaxRestricted") || flag("SecretWhenUnitPowerMaxRestricted"))
-        && !player_controlled
+        && !ours(u, id)
     {
         return true;
     }
@@ -662,10 +666,15 @@ fn unit_selection_color(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok([0.0, 0.0, 1.0, 1.0].map(Value::Num).to_vec());
     };
     if engine(vm).units.list[id.0].player {
-        return Ok(
-            crate::recorded::lookup_text(vm, "UnitSelectionColor(\"player\", true)")
-                .unwrap_or_else(|| [0.0, 0.0, 1.0, 1.0].map(Value::Num).to_vec()),
-        );
+        // A player: blue (recorded, another player targeted); with
+        // extended colors as recorded for the player.
+        if c.arg(2).truthy() {
+            return Ok(
+                crate::recorded::lookup_text(vm, "UnitSelectionColor(\"player\", true)")
+                    .unwrap_or_else(|| [0.0, 0.0, 1.0, 1.0].map(Value::Num).to_vec()),
+            );
+        }
+        return Ok([0.0, 0.0, 1.0, 1.0].map(Value::Num).to_vec());
     }
     let rgb = match engine(vm).units.list[id.0].reaction {
         Reaction::Hostile => [1.0, 0.0, 0.0],
@@ -678,6 +687,18 @@ fn unit_selection_color(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(rgb[2]),
         Value::Num(1.0),
     ])
+}
+
+/// `UnitPlayerControlled`: a player (recorded; pets unverified).
+fn unit_player_controlled(vm: &mut Vm, c: NativeCall) -> Ret {
+    with_unit_or(vm, &c, Value::Bool(false), |_, u| {
+        vec![Value::Bool(u.player)]
+    })
+}
+
+/// `UnitIsPVP`: flagged for PvP (another player's, recorded).
+fn unit_is_pvp(vm: &mut Vm, c: NativeCall) -> Ret {
+    with_unit_or(vm, &c, Value::Bool(false), |_, u| vec![Value::Bool(u.pvp)])
 }
 
 fn unit_sex(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -962,6 +983,8 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ),
         ("UnitThreatSituation", unit_threat_situation),
         ("UnitSex", unit_sex),
+        ("UnitPlayerControlled", unit_player_controlled),
+        ("UnitIsPVP", unit_is_pvp),
         ("UnitHealth", unit_health),
         ("UnitHealthMax", unit_health_max),
         ("UnitPower", unit_power),
@@ -1234,6 +1257,7 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         power_max: num(vm, "maxPower", 100.0),
         power_type: num(vm, "powerType", 0.0),
         dead: get(vm, "dead").truthy(),
+        pvp: get(vm, "pvp").truthy(),
         in_combat: false,
         target: None,
         alive_in_world: true,

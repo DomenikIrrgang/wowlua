@@ -433,7 +433,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("UnitInPartyIsAI", no),
         ("UnitIsGroupLeader", no),
         ("UnitIsGroupAssistant", no),
-        ("UnitIsPVP", no),
         ("UnitIsPVPFreeForAll", no),
         ("UnitPhaseReason", nil),
         // Standing on the ground (recorded).
