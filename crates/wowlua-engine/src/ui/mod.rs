@@ -980,6 +980,22 @@ pub fn load(vm: &mut Vm, interface: &Path, global_strings: Option<&Path>) -> Rep
     for addon in rest {
         load_addon_files(vm, &root, &t, addon, true);
     }
+    // Blizzard's key bindings, which the client reads at startup: the
+    // game's (`Bindings_Camelot.xml`), then each addon's `Bindings.xml`
+    // (by name; order unverified), Blizzard's code (secure).
+    let mut binding_files = vec![
+        interface
+            .join("AddOns/Blizzard_FrameXML")
+            .join(format!("Bindings_{}.xml", t.game)),
+    ];
+    let mut names: Vec<&String> = all.keys().collect();
+    names.sort();
+    binding_files.extend(names.into_iter().map(|n| all[n].dir.join("Bindings.xml")));
+    for path in binding_files.into_iter().filter(|p| p.exists()) {
+        if let Err(e) = crate::bindings::load_bindings_xml(vm, &path, None) {
+            engine_mut(vm).world.ui.errors.push(e);
+        }
+    }
     // Blizzard's code may have set its own handler meanwhile.
     if let (Value::Func(a), Value::Func(b)) = (vm.error_handler, recorder)
         && a == b

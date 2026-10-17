@@ -131,6 +131,13 @@ export function openMerchant(data: { name?: string, items?: MerchantItem[], canR
     engine().openMerchant(data)
 end
 
+--- The API calls Blizzard's code made that the engine had no answer for
+--- (they returned empty values), as `name(args)`, sorted: what the engine
+--- does not know of the client yet.
+export function unanswered(): string[]
+    return engine().defaultedCalls()
+end
+
 --- Closes the vendor's window (`MERCHANT_CLOSED`).
 export function closeMerchant()
     engine().closeMerchant()

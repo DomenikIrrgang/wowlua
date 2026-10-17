@@ -8,7 +8,7 @@
 mod blizzard;
 pub mod coverage;
 mod natives;
-mod profile;
+pub mod profile;
 pub mod reports;
 mod saved;
 mod snapshots;
@@ -354,7 +354,7 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     // The addon's key bindings, which the client reads at startup.
     let bindings = dir.join("Bindings.xml");
     if bindings.exists() {
-        wowlua_engine::bindings::load_bindings_xml(&mut vm, &bindings, &name)?;
+        wowlua_engine::bindings::load_bindings_xml(&mut vm, &bindings, Some(&name))?;
     }
     let toc = toc_path(build, &suite.flavor).ok_or("the build has no TOC file")?;
     let toc_text = std::fs::read_to_string(dir.join(&toc)).map_err(|e| e.to_string())?;

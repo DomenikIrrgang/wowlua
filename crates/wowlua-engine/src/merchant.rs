@@ -17,8 +17,13 @@
 //! Unverified: the server's delay (0.4 s, as its other answers), a
 //! purchase's price for stacks (the price per `stackCount`), which bag slot
 //! a purchase fills (a stack of the item, else the first free slot), the
-//! buyback list's order (the latest last) and size (12), repairs, and that
-//! the filter update fires for every item.
+//! buyback list's order (the latest last) and size (12), and that the
+//! filter update fires for every item. The client's answer to a purchase
+//! orders `PLAYER_MONEY` and the bag's update differently from one time to
+//! the next (the server's packets); the first recording's order is kept.
+//! Recorded too (`/stdtest engine record vendor2`): `ITEM_PUSH` with the
+//! bag's inventory slot, `CHAT_MSG_LOOT`, "Inventory is full." (3), a
+//! repair's `UPDATE_INVENTORY_DURABILITY` per item then `PLAYER_MONEY`.
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
@@ -60,6 +65,11 @@ pub struct Merchant {
     pub buyback: Vec<Sold>,
     pub can_repair: bool,
     pub repair_cost: f64,
+    /// The damaged items a repair mends (one `UPDATE_INVENTORY_DURABILITY`
+    /// each).
+    pub damaged: f64,
+    /// The chat's line IDs (`CHAT_MSG_LOOT`).
+    pub line: f64,
 }
 
 fn field(vm: &mut Vm, t: TableRef, key: &str) -> Value {
@@ -123,6 +133,8 @@ pub fn control_open(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let can_repair = field(vm, data, "canRepair").truthy();
     let repair_cost = num(field(vm, data, "repairCost")).unwrap_or(0.0);
+    let damaged =
+        num(field(vm, data, "damaged")).unwrap_or(if repair_cost > 0.0 { 1.0 } else { 0.0 });
     if merchant(vm).open {
         close(vm);
     }
@@ -134,6 +146,7 @@ pub fn control_open(vm: &mut Vm, c: NativeCall) -> Ret {
         m.items = items;
         m.can_repair = can_repair;
         m.repair_cost = repair_cost;
+        m.damaged = damaged;
     }
     fire(vm, "MERCHANT_SHOW", &[]);
     fire(
@@ -274,17 +287,23 @@ fn can_repair(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(m.open && m.can_repair)])
 }
 
+/// `GetRepairAllCost()`: at a vendor that repairs, the cost and whether
+/// anything needs it; elsewhere 0 alone (`/stdtest engine merchant`).
 fn repair_all_cost(vm: &mut Vm, _c: NativeCall) -> Ret {
     let m = merchant(vm);
-    let cost = if m.open && m.can_repair {
-        m.repair_cost
+    if m.open && m.can_repair {
+        Ok(vec![
+            Value::Num(m.repair_cost),
+            Value::Bool(m.repair_cost > 0.0),
+        ])
     } else {
-        0.0
-    };
-    Ok(vec![Value::Num(cost)])
+        Ok(vec![Value::Num(0.0)])
+    }
 }
 
-/// `RepairAllItems()`: the cost paid (`PLAYER_MONEY`; unverified).
+/// `RepairAllItems()`: `UPDATE_INVENTORY_DURABILITY` for each damaged item,
+/// then `PLAYER_MONEY` (`/stdtest engine record vendor2`; at once here,
+/// the server's delay unrecorded).
 fn repair_all(vm: &mut Vm, _c: NativeCall) -> Ret {
     let (open, can, cost) = {
         let m = merchant(vm);
@@ -294,7 +313,12 @@ fn repair_all(vm: &mut Vm, _c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     engine_mut(vm).world.character.money -= cost;
+    let damaged = merchant(vm).damaged;
     merchant_mut(vm).repair_cost = 0.0;
+    merchant_mut(vm).damaged = 0.0;
+    for _ in 0..damaged as usize {
+        fire(vm, "UPDATE_INVENTORY_DURABILITY", &[]);
+    }
     fire(vm, "PLAYER_MONEY", &[]);
     Ok(vec![])
 }
@@ -404,11 +428,17 @@ fn upval(c: &NativeCall, i: usize) -> f64 {
     }
 }
 
-/// Where `count` of item `id` go: a stack of it, else the first free slot.
-fn place(vm: &Vm, id: i64) -> Option<(i64, usize)> {
+/// Where `count` of item `id` go: a stack of it with room (the item's
+/// `stackCount`, else 1), else the first free slot.
+fn place(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, usize)> {
+    let max = num(character::item_field(vm, id, "stackCount")).unwrap_or(1.0);
     let bags = &engine(vm).world.character.bags;
     for (&bag, b) in bags {
-        if let Some((&slot, _)) = b.items.iter().find(|(_, h)| h.id == id) {
+        if let Some((&slot, _)) = b
+            .items
+            .iter()
+            .find(|(_, h)| h.id == id && h.count + count <= max)
+        {
             return Some((bag, slot));
         }
     }
@@ -431,7 +461,7 @@ fn bag_update(vm: &mut Vm, bag: i64) {
 /// merchant`).
 fn bought(vm: &mut Vm, c: NativeCall) -> Ret {
     let (id, quantity, cost) = (upval(&c, 0) as i64, upval(&c, 1), upval(&c, 2));
-    let Some((bag, slot)) = place(vm, id) else {
+    let Some((bag, slot)) = place(vm, id, quantity) else {
         let message = vm.str("Inventory is full.");
         fire(vm, "UI_ERROR_MESSAGE", &[Value::Num(3.0), message]);
         return Ok(vec![]);
@@ -458,7 +488,10 @@ fn bought(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     let icon = character::item_field(vm, id, "icon");
     fire(vm, "MERCHANT_UPDATE", &[]);
-    fire(vm, "ITEM_PUSH", &[Value::Num(bag as f64), icon]);
+    // The bag as its inventory slot: the backpack 0, bag 1 slot 31.
+    let slot_of_bag = if bag == 0 { 0.0 } else { (bag + 30) as f64 };
+    fire(vm, "ITEM_PUSH", &[Value::Num(slot_of_bag), icon]);
+    loot_message(vm, id, quantity);
     fire(vm, "BAG_NEW_ITEMS_UPDATED", &[]);
     bag_update(vm, bag);
     let player = vm.str("player");
@@ -468,6 +501,84 @@ fn bought(vm: &mut Vm, c: NativeCall) -> Ret {
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
     fire(vm, "ITEM_COUNT_CHANGED", &[Value::Num(id as f64)]);
     Ok(vec![])
+}
+
+/// `CHAT_MSG_LOOT("You receive item: <link>", …)` for the player, with the
+/// payload the client gave it (`/stdtest engine record vendor2`; a count
+/// above one unverified: "<link>x<n>").
+fn loot_message(vm: &mut Vm, id: i64, quantity: f64) {
+    let link = character::link_of_id(vm, id)
+        .map(|v| match v {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => String::new(),
+        })
+        .unwrap_or_default();
+    let count = if quantity > 1.0 {
+        format!("x{}", quantity as i64)
+    } else {
+        String::new()
+    };
+    let text = vm.str(&format!("You receive item: {link}{count}"));
+    let (name, guid) = {
+        let p = &engine(vm).units.list[units::PLAYER.0];
+        let name = match &p.last_name {
+            Some(last) => format!("{} {last}", p.name),
+            None => p.name.clone(),
+        };
+        (name, p.guid.clone())
+    };
+    let line = {
+        let m = merchant_mut(vm);
+        m.line += 1.0;
+        m.line
+    };
+    let name = vm.str(&name);
+    let empty = vm.str("");
+    let guid = vm.str(&guid);
+    let extra = vm.new_table();
+    for (k, v) in [
+        ("forwardedMessage", empty),
+        ("fromDiscord", Value::Bool(false)),
+        ("globalName", empty),
+        ("hasAttachment", Value::Bool(false)),
+        ("hasEmbed", Value::Bool(false)),
+        ("hasEmoji", Value::Bool(false)),
+        ("hasError", Value::Bool(false)),
+        ("hasForwardedMessage", Value::Bool(false)),
+        ("hasPoll", Value::Bool(false)),
+        ("hasSticker", Value::Bool(false)),
+        ("lastOnlineName", empty),
+        ("type", Value::Num(0.0)),
+        ("userID", Value::Num(0.0)),
+    ] {
+        let key = vm.str(k);
+        let _ = vm.heap.table_mut(extra).set(key, v);
+    }
+    let no = Value::Bool(false);
+    fire(
+        vm,
+        "CHAT_MSG_LOOT",
+        &[
+            text,
+            name,
+            empty,
+            empty,
+            name,
+            empty,
+            Value::Num(0.0),
+            Value::Num(0.0),
+            empty,
+            Value::Num(0.0),
+            Value::Num(line),
+            guid,
+            Value::Num(0.0),
+            no,
+            no,
+            no,
+            no,
+            Value::Table(extra),
+        ],
+    );
 }
 
 /// Sells the item in `bag`, `slot` to the open merchant: locked at once,
@@ -603,7 +714,7 @@ fn bought_back(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((bag, slot)) = (if free {
         Some((s.bag, s.slot))
     } else {
-        place(vm, s.held.id)
+        place(vm, s.held.id, s.held.count)
     }) else {
         merchant_mut(vm).buyback.insert(i - 1, s);
         return Ok(vec![]);

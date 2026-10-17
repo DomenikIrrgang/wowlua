@@ -26,11 +26,9 @@ fn build() -> tempfile::TempDir {
     fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
     let src = dir.path().join("src");
     fs::create_dir_all(&src).unwrap();
-    fs::copy(
-        repo().join("tests/ingame/src/engineprobe.wowlua"),
-        src.join("engineprobe.wowlua"),
-    )
-    .unwrap();
+    for file in ["engineprobe.wowlua", "answers.wowlua"] {
+        fs::copy(repo().join("tests/ingame/src").join(file), src.join(file)).unwrap();
+    }
     fs::write(
         src.join("state.wowlua"),
         "export function state(): table\n    if type(StdTestState) ~= \"table\" then StdTestState = {} end\n    return StdTestState\nend\n",
@@ -485,4 +483,95 @@ __engine.pressKey("ENTER")"#,
             .collect()
     };
     assert_eq!(ours, client);
+}
+
+/// How many of the client's answers (`/stdtest engine answers`) the engine
+/// gives as well: the calls Blizzard's UI made that the engine could not
+/// answer, asked again with the recorded character's world. Only ever
+/// raised (decision: the engine answers every call as the client does).
+const ANSWERS_MATCHED: usize = 6;
+
+#[test]
+fn the_engine_answers_blizzards_calls_as_the_client_did() {
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = client(&out);
+    let controls = wowlua_engine::controls::table(&mut vm);
+    wowlua_test::profile::apply(
+        &mut vm,
+        controls,
+        &repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json"),
+    )
+    .expect("the character's profile");
+    addon(&mut vm, "StdTestEngineProbe('answers')");
+    let f = vm
+        .load(
+            b"local out = {} for k, v in pairs(StdTestState.engineAnswers) do out[k] = v end return out",
+            "=answers",
+        )
+        .expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let ours: BTreeMap<String, String> = vm
+        .heap
+        .table(t)
+        .entries()
+        .filter_map(|(k, v)| match (k, v) {
+            (Value::Str(k), Value::Str(v)) => Some((
+                String::from_utf8_lossy(vm.str_bytes(k)).into_owned(),
+                String::from_utf8_lossy(vm.str_bytes(v)).into_owned(),
+            )),
+            _ => None,
+        })
+        .collect();
+    let src =
+        fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-answers.lua"))
+            .expect("the fixture");
+    let mut fixture_vm = Vm::new();
+    let f = fixture_vm.load(&src, "=fixture").expect("compiles");
+    let r = fixture_vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let theirs: BTreeMap<String, String> = fixture_vm
+        .heap
+        .table(t)
+        .entries()
+        .filter_map(|(k, v)| match (k, v) {
+            (Value::Str(k), Value::Str(v)) => Some((
+                String::from_utf8_lossy(fixture_vm.str_bytes(k)).into_owned(),
+                String::from_utf8_lossy(fixture_vm.str_bytes(v)).into_owned(),
+            )),
+            _ => None,
+        })
+        .collect();
+    let mut matched = 0;
+    let mut by_function: BTreeMap<String, usize> = BTreeMap::new();
+    for (call, answer) in &theirs {
+        if ours.get(call) == Some(answer) {
+            matched += 1;
+        } else {
+            let name = call.split('(').next().unwrap_or(call).to_string();
+            *by_function.entry(name).or_default() += 1;
+        }
+    }
+    let mut worst: Vec<_> = by_function.into_iter().collect();
+    worst.sort_by_key(|a| std::cmp::Reverse(a.1));
+    let summary: Vec<String> = worst
+        .iter()
+        .take(40)
+        .map(|(n, c)| format!("{c:5} {n}"))
+        .collect();
+    eprintln!(
+        "{matched} of {} answered as the client did; the most missed:\n{}",
+        theirs.len(),
+        summary.join("\n")
+    );
+    assert!(
+        matched >= ANSWERS_MATCHED,
+        "{matched} of {} answered as the client did (was {ANSWERS_MATCHED})",
+        theirs.len()
+    );
 }
