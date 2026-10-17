@@ -21,6 +21,7 @@
 -- Only harmless calls: getters on fresh frames, and arguments the client's
 -- checks refuse before any game code runs.
 import state from "/state"
+import answersProbe from "/answers"
 import say from "/harness"
 
 local G = _G :: any
@@ -1450,6 +1451,9 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "soft" then
         softProbe()
+        return
+    elseif words[1] == "answers" then
+        answersProbe()
         return
     end
     const probe: { [string]: any } = {

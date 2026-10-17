@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 
 mod corpus;
 mod fixture;
+mod ingest;
 mod lua51;
 mod packager_diff;
 mod profile;
@@ -34,6 +35,12 @@ fn main() -> Result<()> {
                 bail!("usage: cargo xtask fixture <SavedVariables/StdTest.lua> <name>");
             };
             fixture::run(&root, Path::new(&saved), &name)
+        }
+        "ingest" => {
+            let Some(saved) = std::env::args().nth(2) else {
+                bail!("usage: cargo xtask ingest <SavedVariables/StdTest.lua>");
+            };
+            ingest::run(&root, Path::new(&saved))
         }
         "profile" => {
             let (Some(saved), Some(out)) = (std::env::args().nth(2), std::env::args().nth(3))

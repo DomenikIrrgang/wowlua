@@ -8,7 +8,7 @@
 mod blizzard;
 pub mod coverage;
 mod natives;
-mod profile;
+pub mod profile;
 pub mod reports;
 mod saved;
 mod snapshots;
