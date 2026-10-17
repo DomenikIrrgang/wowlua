@@ -38,6 +38,13 @@ pub struct Timers {
 }
 
 /// Seconds since the session began (`GetTime`).
+/// The server's round trip: a request's answer comes this much later (the
+/// player's ping; 0.4 s unless a test sets it, near the recordings' ~0.3
+/// s on WoW Forever's US servers).
+pub fn server_delay(vm: &Vm) -> f64 {
+    engine(vm).world.latency.unwrap_or(0.4)
+}
+
 pub fn now(vm: &Vm) -> f64 {
     vm.clock.elapsed_ms / 1000.0
 }

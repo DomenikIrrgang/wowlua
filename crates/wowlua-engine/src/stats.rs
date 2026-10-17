@@ -914,16 +914,37 @@ pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
             events.push(e);
         }
     }
-    let player = vm.str("player");
     for event in events {
         let unit_event = event.starts_with("UNIT_") || event.ends_with("XP_UPDATE");
         if unit_event {
-            widgets::fire_event(vm, event, &[player]);
+            // For each token naming the player (`targettarget` too:
+            // `/stdtest engine scenario combat`).
+            units::fire_unit(vm, event, units::PLAYER, &[]);
         } else {
             widgets::fire_event(vm, event, &[]);
         }
     }
     Ok(vec![])
+}
+
+/// The player's experience, gained `amount`: `UnitXP` grows,
+/// `PLAYER_XP_UPDATE` for each of the player's tokens. Unverified: a
+/// level's end reached.
+pub fn gain_xp(vm: &mut Vm, amount: f64) {
+    let now = match engine(vm).world.character.stats.get("xp") {
+        Some(Entry::One(a)) => a.first().and_then(|a| match a {
+            Answer::Num(n) => Some(*n),
+            _ => None,
+        }),
+        _ => None,
+    }
+    .unwrap_or(0.0);
+    engine_mut(vm)
+        .world
+        .character
+        .stats
+        .insert("xp", Entry::One(vec![Answer::Num(now + amount)]));
+    units::fire_unit(vm, "PLAYER_XP_UPDATE", units::PLAYER, &[]);
 }
 
 fn num(v: Value) -> Option<f64> {

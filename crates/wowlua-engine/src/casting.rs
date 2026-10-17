@@ -44,6 +44,9 @@ pub struct Cast {
 pub struct Casting {
     pub casts: HashMap<UnitId, Cast>,
     pub next: u64,
+    /// The player's spell for the next swing (Heroic Strike), taken by the
+    /// server: its ID and cast GUID.
+    pub next_swing: Option<(f64, String)>,
 }
 
 fn field(vm: &mut Vm, t: TableRef, key: &str) -> Value {
@@ -75,9 +78,21 @@ fn sent(vm: &mut Vm, unit: UnitId, guid: Value, spell_id: f64) {
         })
     };
     let mut target = target.map_or(Value::Nil, |t| vm.str(&t));
-    // Secret in combat (`ConditionalSecret`; `/stdtest engine record
-    // combat`).
-    if !target.is_nil() && units::active(&engine(vm).units, &[units::COMBAT]) {
+    // Secret where units' identities are (`ConditionalSecret`): a
+    // paladin's Judgement in Ragefire Chasm (its cast GUIDs' map 389)
+    // secret, out of combat too (`/stdtest engine record combat`); a
+    // warrior's Heroic Strike in the open world plain, in combat (scenarios
+    // combat and quest). Unverified: which instance restrictions count.
+    let restricted = units::active(
+        &engine(vm).units,
+        &[
+            units::MAP,
+            units::ENCOUNTER,
+            units::CHALLENGE_MODE,
+            units::PVP_MATCH,
+        ],
+    );
+    if !target.is_nil() && restricted {
         target = vm.secret_wrap(target);
     }
     units::fire_unit(
@@ -208,6 +223,189 @@ pub fn control_cast(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// The global cooldown's category (`SPELL_UPDATE_COOLDOWN`'s fourth value
+/// for a spell on it: recorded 133).
+const GCD_CATEGORY: f64 = 133.0;
+
+/// A spell's data field (`defineSpell`'s, the profile's).
+fn spell_field(vm: &mut Vm, id: f64, key: &str) -> Value {
+    match engine(vm).world.data.spells.get(&(id as i64)).copied() {
+        Some(t) => field(vm, t, key),
+        None => Value::Nil,
+    }
+}
+
+/// The cooldown events after a spell's use: the action bars', the bags',
+/// `SPELL_UPDATE_COOLDOWN(id, nil, 0, category, nil)` (the global
+/// cooldown's category, or 0 off it), the stance bar's.
+fn cooldown_events(vm: &mut Vm, id: f64, category: f64, bags: bool) {
+    let fire = |vm: &mut Vm, e: &str, args: &[Value]| crate::widgets::fire_event(vm, e, args);
+    fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
+    fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    if bags {
+        fire(vm, "BAG_UPDATE_COOLDOWN", &[]);
+    }
+    fire(
+        vm,
+        "SPELL_UPDATE_COOLDOWN",
+        &[
+            Value::Num(id),
+            Value::Nil,
+            Value::Num(0.0),
+            Value::Num(category),
+            Value::Nil,
+        ],
+    );
+    fire(vm, "UPDATE_SHAPESHIFT_COOLDOWN", &[]);
+}
+
+/// `player:useSpell(spellID)`: the player pressing a spell, as recorded at a
+/// ping near 0.3 s (`/stdtest engine scenario combat`). Without the power
+/// its data's `powerCost` needs: `UNIT_SPELLCAST_FAILED` with a client
+/// cast GUID, `CURRENT_SPELL_CAST_CHANGED`, `ACTIONBAR_UPDATE_STATE`,
+/// `UI_ERROR_MESSAGE(359, "Not enough rage")`. A spell on the next swing
+/// (data `nextSwing`): `CURRENT_SPELL_CAST_CHANGED`,
+/// `ACTIONBAR_UPDATE_STATE`; a round trip later `SENT`, again both; the
+/// next swing lands it (`units::swing`). Else the global cooldown starts
+/// (`CURRENT_SPELL_CAST_CHANGED`, the cooldown events, category 133 unless
+/// data `offGCD`) and a round trip later the cast (`castSpell`), then the
+/// cooldown events again.
+pub fn control_use_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = units::this(vm, &c)?;
+    if me != units::PLAYER {
+        return Err(vm.error("useSpell: the player's"));
+    }
+    let id = vm.check_number(&c, 2)?;
+    let fire = |vm: &mut Vm, e: &str, args: &[Value]| crate::widgets::fire_event(vm, e, args);
+    if let Value::Num(cost) = spell_field(vm, id, "powerCost")
+        && engine(vm).units.list[units::PLAYER.0].power < cost
+    {
+        let n = {
+            let c = &mut engine_mut(vm).units.casting;
+            c.next += 1;
+            c.next
+        };
+        // The client's own cast GUID (`Cast-2-0-0-0-…`).
+        let g = vm.str(&format!("Cast-2-0-0-0-{}-{:010X}", id as i64, n));
+        units::fire_unit(
+            vm,
+            "UNIT_SPELLCAST_FAILED",
+            me,
+            &[g, Value::Num(id), Value::Nil],
+        );
+        cast_changed(vm, me);
+        fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+        let token = engine(vm).units.list[units::PLAYER.0].power_type;
+        let (code, text) = match token as i64 {
+            1 => (359.0, "Not enough rage"),
+            3 => (360.0, "Not enough energy"),
+            _ => (358.0, "Not enough mana"),
+        };
+        let text = vm.str(text);
+        fire(vm, "UI_ERROR_MESSAGE", &[Value::Num(code), text]);
+        return Ok(vec![]);
+    }
+    let delay = crate::clock::server_delay(vm);
+    if spell_field(vm, id, "nextSwing").truthy() {
+        cast_changed(vm, me);
+        fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+        let later = vm.native_with(
+            "nextSwingSent",
+            next_swing_sent as NativeFn,
+            vec![Value::Num(id)],
+        );
+        crate::clock::after_engine(vm, delay, later);
+        return Ok(vec![]);
+    }
+    let category = if spell_field(vm, id, "offGCD").truthy() {
+        0.0
+    } else {
+        GCD_CATEGORY
+    };
+    cast_changed(vm, me);
+    cooldown_events(vm, id, category, false);
+    let later = vm.native_with(
+        "spellUsed",
+        spell_used as NativeFn,
+        vec![Value::Num(id), Value::Num(category)],
+    );
+    crate::clock::after_engine(vm, delay, later);
+    Ok(vec![])
+}
+
+/// The server's answer to an instant spell: the cast, the cooldown events.
+fn spell_used(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Num(id), Value::Num(category)) = (c.upvals[0], c.upvals[1]) else {
+        return Ok(vec![]);
+    };
+    instant(vm, id);
+    cooldown_events(vm, id, category, true);
+    Ok(vec![])
+}
+
+/// An instant cast: `SENT`, `CURRENT_SPELL_CAST_CHANGED`, `SUCCEEDED`,
+/// `CURRENT_SPELL_CAST_CHANGED`.
+fn instant(vm: &mut Vm, id: f64) {
+    let me = units::PLAYER;
+    let g = new_guid(vm, id);
+    let g = vm.str(&g);
+    sent(vm, me, g, id);
+    cast_changed(vm, me);
+    fire_cast(
+        vm,
+        "UNIT_SPELLCAST_SUCCEEDED",
+        me,
+        &[g, Value::Num(id), Value::Nil],
+    );
+    cast_changed(vm, me);
+}
+
+/// A new cast GUID for the player's spell `id`.
+fn new_guid(vm: &mut Vm, id: f64) -> String {
+    let n = {
+        let c = &mut engine_mut(vm).units.casting;
+        c.next += 1;
+        c.next
+    };
+    format!("Cast-3-4621-0-1-{}-{:010X}", id as i64, n)
+}
+
+/// The server took a spell for the next swing: `SENT`,
+/// `CURRENT_SPELL_CAST_CHANGED`, `ACTIONBAR_UPDATE_STATE`; queued.
+fn next_swing_sent(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Num(id) = c.upvals[0] else {
+        return Ok(vec![]);
+    };
+    let g = new_guid(vm, id);
+    let gv = vm.str(&g);
+    sent(vm, units::PLAYER, gv, id);
+    cast_changed(vm, units::PLAYER);
+    crate::widgets::fire_event(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    engine_mut(vm).units.casting.next_swing = Some((id, g));
+    Ok(vec![])
+}
+
+/// The spell queued for the next swing, taken: its `SUCCEEDED` (and
+/// `CURRENT_SPELL_CAST_CHANGED`); its ID.
+pub fn land_next_swing(vm: &mut Vm) -> Option<f64> {
+    let (id, g) = engine_mut(vm).units.casting.next_swing.take()?;
+    let g = vm.str(&g);
+    fire_cast(
+        vm,
+        "UNIT_SPELLCAST_SUCCEEDED",
+        units::PLAYER,
+        &[g, Value::Num(id), Value::Nil],
+    );
+    cast_changed(vm, units::PLAYER);
+    Some(id)
+}
+
+/// After a spell on the next swing landed: the cooldown events (off the
+/// global cooldown).
+pub fn next_swing_cooldowns(vm: &mut Vm, id: f64) {
+    cooldown_events(vm, id, 0.0, true);
+}
+
 /// Ends `unit`'s cast: interrupted, or done.
 fn stop(vm: &mut Vm, unit: UnitId, interrupted: bool) {
     let Some(cast) = engine_mut(vm).units.casting.casts.remove(&unit) else {
@@ -258,9 +456,8 @@ fn cast_done(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// The server's late answer to the player's interrupted cast
-/// (`/stdtest engine record cast`, an interrupt by moving: 0.35–0.54 s).
-const INTERRUPT_ECHO: f64 = 0.4;
+// The server answers the player's interrupted cast a round trip later
+// (`/stdtest engine record cast`, an interrupt by moving: 0.35–0.54 s).
 
 /// `unit:interruptCast()`; the player's is answered by the server later:
 /// three `INTERRUPTED(unit, castGUID, spellID, nil, nil)`, each with
@@ -280,7 +477,8 @@ pub fn control_interrupt(vm: &mut Vm, c: NativeCall) -> Ret {
             interrupt_echo,
             vec![g, Value::Num(cast.spell_id)],
         );
-        crate::clock::after_engine(vm, INTERRUPT_ECHO, echo);
+        let delay = crate::clock::server_delay(vm);
+        crate::clock::after_engine(vm, delay, echo);
     }
     Ok(vec![])
 }

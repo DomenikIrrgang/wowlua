@@ -71,6 +71,8 @@ pub struct Character {
     pub stats: crate::stats::Stats,
     /// The action bars (`actions.rs`).
     pub actions: crate::actions::Actions,
+    /// The actions' usability last told (`ACTION_USABLE_CHANGED`).
+    pub usable_seen: std::collections::BTreeMap<i64, (bool, bool)>,
     /// The chat channels (`channels.rs`).
     pub channels: crate::channels::Channels,
     /// The macros (`macros.rs`).
@@ -96,6 +98,7 @@ impl Default for Character {
             position: Position::default(),
             stats: crate::stats::defaults(),
             actions: Default::default(),
+            usable_seen: Default::default(),
             channels: Default::default(),
             macros: Default::default(),
             cursor: Default::default(),

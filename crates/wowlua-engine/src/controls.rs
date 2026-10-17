@@ -192,6 +192,13 @@ fn size_by(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `wheel(frame, delta)`: turns the mouse wheel over a frame.
+/// `setLatency(seconds)`: the server's round trip from now on.
+fn set_latency(vm: &mut Vm, c: NativeCall) -> Ret {
+    let s = vm.check_number(&c, 1)?;
+    crate::engine_mut(vm).world.latency = Some(s.max(0.0));
+    Ok(vec![])
+}
+
 fn wheel(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = widget_arg(vm, &c, 1)?;
     let delta = vm.check_number(&c, 2)?;
@@ -258,6 +265,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("fireEvent", fire_event as wowlua_vm::NativeFn),
         ("fireUnitEvent", fire_unit_event),
         ("advanceTime", advance_time),
+        ("setLatency", set_latency),
         ("nextFrame", next_frame),
         ("advanceFrames", advance_frames),
         ("warnings", warnings),

@@ -219,6 +219,65 @@ fn send(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `receiveAddonMessage(prefix, message, chatType, sender)`: another
 /// player's message arrives.
+/// A message of the game's own (`CHAT_MSG_COMBAT_XP_GAIN`, `_SYSTEM`,
+/// `_LOOT`, …), its payload as recorded (`/stdtest engine scenario
+/// combat`): the text, five empty strings, 0, 0, "", 0, the line's number,
+/// no GUID, 0, four falses, the Discord fields; `sender` the player's full
+/// name for loot.
+pub fn game_message(vm: &mut Vm, event: &str, text: &str, sender: Option<&str>) {
+    let line = {
+        let e = crate::engine_mut(vm);
+        e.world.next_chat_line += 1;
+        e.world.next_chat_line
+    };
+    let s = |vm: &mut Vm, t: &str| vm.str(t);
+    let name = sender.unwrap_or("");
+    let discord = vm.new_table();
+    for k in ["forwardedMessage", "globalName", "lastOnlineName"] {
+        let key = vm.str(k);
+        let empty = vm.str("");
+        let _ = vm.heap.table_mut(discord).set(key, empty);
+    }
+    for k in [
+        "fromDiscord",
+        "hasAttachment",
+        "hasEmbed",
+        "hasEmoji",
+        "hasError",
+        "hasForwardedMessage",
+        "hasPoll",
+        "hasSticker",
+    ] {
+        let key = vm.str(k);
+        let _ = vm.heap.table_mut(discord).set(key, Value::Bool(false));
+    }
+    for k in ["type", "userID"] {
+        let key = vm.str(k);
+        let _ = vm.heap.table_mut(discord).set(key, Value::Num(0.0));
+    }
+    let args = vec![
+        s(vm, text),
+        s(vm, name),
+        s(vm, ""),
+        s(vm, ""),
+        s(vm, name),
+        s(vm, ""),
+        Value::Num(0.0),
+        Value::Num(0.0),
+        s(vm, ""),
+        Value::Num(0.0),
+        Value::Num(line as f64),
+        Value::Nil,
+        Value::Num(0.0),
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::Table(discord),
+    ];
+    crate::widgets::fire_event(vm, event, &args);
+}
+
 pub fn receive_control(vm: &mut Vm, c: NativeCall) -> Ret {
     let prefix = text(vm, c.arg(1)).unwrap_or_default();
     let message = match c.arg(2) {

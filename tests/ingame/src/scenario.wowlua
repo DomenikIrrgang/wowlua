@@ -418,6 +418,8 @@ export function scenarioProbe(name: string)
         if current and st.engineScenarios and st.engineScenarios[current] then
             const scenario = st.engineScenarios[current]
             scenario.after = takeSnapshot()
+            -- The ping: the server's answers come that much later.
+            scenario.latencyAfter = { GetNetStats() }
             -- What the combat log tab showed (addons get no combat log
             -- events; Blizzard's log reads it securely).
             const shown: string[] = {}
@@ -440,7 +442,7 @@ export function scenarioProbe(name: string)
     st.engineScenarios = st.engineScenarios ?? {}
     const log: string[] = {}
     const start = GetTime()
-    const scenario = { log = log, before = takeSnapshot(), client = `{(GetBuildInfo())} ({select(2, GetBuildInfo())})` }
+    const scenario = { log = log, before = takeSnapshot(), client = `{(GetBuildInfo())} ({select(2, GetBuildInfo())})`, latency = { GetNetStats() } }
     st.engineScenarios[name] = scenario
     st.engineScenarioRunning = name
     local function note(what: string)
@@ -455,13 +457,17 @@ export function scenarioProbe(name: string)
             note(`= {callText(fname, ...)} -> absent`)
             return nil
         end
-        const packed = { pcall(f, ...) }
+        -- Counted by `select("#")`: a table drops trailing nils.
+        local function pack(...: any): any[]
+            return { n = select("#", ...), ... }
+        end
+        const packed = pack(pcall(f, ...))
         local text: string
         if not packed[1] then
             text = `error: {issecretvalue(packed[2]) and "<secret>" or tostring(packed[2])}`
         else
             const out: string[] = {}
-            for i = 2, select("#", unpack(packed)) do
+            for i = 2, packed.n do
                 out[#out + 1] = describe(packed[i], 1, 3)
             end
             text = `{#out}: {table.concat(out, ", ")}`

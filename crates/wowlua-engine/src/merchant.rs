@@ -31,8 +31,8 @@ use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
 use crate::character::{self, Held};
 use crate::{engine, engine_mut, units, widgets};
 
-/// The server's answer to a purchase, sale or buyback.
-const SERVER_DELAY: f64 = 0.4;
+// The server answers a purchase, sale or buyback a round trip later
+// (`clock::server_delay`).
 
 /// The buyback list's length.
 const BUYBACK: usize = 12;
@@ -392,10 +392,11 @@ fn buyback_id(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // ---------------------------------------------------------- the server
 
-/// Runs `answer` when the server answers (`SERVER_DELAY`).
+/// Runs `answer` when the server answers (`clock::server_delay`).
 fn later(vm: &mut Vm, name: &'static str, answer: NativeFn, upvals: Vec<Value>) {
     let native = vm.native_with(name, answer, upvals);
-    crate::clock::after_engine(vm, SERVER_DELAY, native);
+    let delay = crate::clock::server_delay(vm);
+    crate::clock::after_engine(vm, delay, native);
 }
 
 /// `BuyMerchantItem(i [, quantity])`.

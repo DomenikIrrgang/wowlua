@@ -46,8 +46,8 @@ fn cvar_bitfield(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(set)])
 }
 
-/// `UnitIsConnected(unit)`, `UnitIsHumanPlayer(unit)`: a player unit that
-/// exists (an NPC or no unit: false).
+/// `UnitIsHumanPlayer(unit)`: a player unit that exists (an NPC or no
+/// unit: false). (`UnitIsConnected`: units.rs.)
 fn unit_is_player_online(vm: &mut Vm, c: NativeCall) -> Ret {
     let online = units::unit_arg(vm, &c, 1).is_some_and(|id| engine(vm).units.list[id.0].player);
     Ok(vec![Value::Bool(online)])
@@ -412,12 +412,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetTasksTable", empty_table),
         ("C_CombatLog.DoesObjectMatchFilter", combat_log_filter),
         ("C_CVar.GetCVarBitfield", cvar_bitfield),
-        ("UnitIsConnected", unit_is_player_online),
         ("UnitIsHumanPlayer", unit_is_player_online),
         ("UnitGetIncomingHeals", incoming_heals),
         ("UnitGetTotalAbsorbs", no_absorbs),
         ("UnitGetTotalHealAbsorbs", no_absorbs),
-        ("UnitThreatSituation", nil),
         ("UnitIsVisible", unit_exists),
         ("UnitIsInInteractRange", unit_exists),
         // Nothing of these for any unit yet (recorded for the player

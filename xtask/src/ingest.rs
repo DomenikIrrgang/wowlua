@@ -843,6 +843,18 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                     let line = line.map_err(|e| anyhow!("{e}"))?;
                     list.push((format!("{:05}", i + 1), scrub(&line)));
                 }
+                // The ping at the start and the end (`GetNetStats()`:
+                // bandwidth in, out, latency home, world, in ms).
+                for key in ["latency", "latencyAfter"] {
+                    if let Ok(stats) = scenario.get::<mlua::Table>(key) {
+                        let values: Vec<String> = stats
+                            .sequence_values::<f64>()
+                            .filter_map(|v| v.ok())
+                            .map(|v| format!("{v}"))
+                            .collect();
+                        list.push((key.to_string(), values.join(", ")));
+                    }
+                }
                 // The combat log tab's lines at the end.
                 if let Ok(shown) = scenario.get::<mlua::Table>("combatLog") {
                     for (i, line) in shown.sequence_values::<String>().enumerate() {

@@ -60,6 +60,9 @@ pub struct Widget {
     pub events: HashMap<String, Option<Vec<String>>>,
     /// When each event was registered (the dispatch order).
     pub event_order: HashMap<String, u64>,
+    /// `RegisterAllEvents`: when (every event comes, in that place of the
+    /// registration order; the combat log's not, restricted).
+    pub all_events: Option<u64>,
     /// `IsProtected`'s second result: protected by a secure template.
     pub explicitly_protected: bool,
     /// Made by Blizzard's secure code (`UseSecureEnvironment`): addon code
@@ -113,6 +116,11 @@ pub struct World {
     pub color_hsv: HashMap<usize, [f64; 3]>,
     /// A slider's or a status bar's range and value.
     pub bars: HashMap<usize, crate::bars::Bar>,
+    /// The chat's last line number (each message's eleventh value).
+    pub next_chat_line: u64,
+    /// The time a request takes to come back from the server
+    /// (`mock.setLatency`; `None`: 0.4 s).
+    pub latency: Option<f64>,
     /// The slider whose thumb the user drags.
     pub dragging_thumb: Option<WidgetId>,
     /// Edit Mode's saved layouts and active one.
@@ -369,6 +377,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         attributes,
         protected: false,
         event_order: HashMap::new(),
+        all_events: None,
         explicitly_protected: false,
         forbidden: false,
         intrinsic_scripts: false,
@@ -1084,10 +1093,26 @@ fn unregister_event(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `RegisterAllEvents()`: every event but the restricted ones.
+fn register_all_events(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let world = &mut engine_mut(vm).world;
+    world.next_registration += 1;
+    let seq = world.next_registration;
+    world.widgets[id.0].all_events = Some(seq);
+    Ok(vec![])
+}
+
+/// Events addons' frames are not given (the documentation's
+/// `HasRestrictions`: the combat log, read by Blizzard's code securely).
+fn restricted_event(event: &str) -> bool {
+    matches!(event, "COMBAT_LOG_EVENT" | "COMBAT_LOG_EVENT_UNFILTERED")
+}
+
 fn unregister_all_events(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.events.clear();
     w.event_order.clear();
+    w.all_events = None;
     Ok(vec![])
 }
 
@@ -1124,9 +1149,17 @@ pub fn fire_event(vm: &mut Vm, event: &str, args: &[Value]) {
         .filter(|(_, w)| match w.events.get(event) {
             Some(None) => true,
             Some(Some(units)) => unit.as_ref().is_some_and(|u| units.contains(u)),
-            None => false,
+            None => w.all_events.is_some() && !restricted_event(event),
         })
-        .map(|(i, w)| (w.event_order.get(event).copied().unwrap_or(0), WidgetId(i)))
+        .map(|(i, w)| {
+            let seq = w
+                .event_order
+                .get(event)
+                .copied()
+                .or(w.all_events)
+                .unwrap_or(0);
+            (seq, WidgetId(i))
+        })
         .collect();
     targets.sort_by_key(|(seq, _)| *seq);
     let targets: Vec<WidgetId> = targets.into_iter().map(|(_, id)| id).collect();
@@ -1144,7 +1177,8 @@ pub fn fire_event(vm: &mut Vm, event: &str, args: &[Value]) {
     call.extend_from_slice(args);
     for id in targets {
         // A handler may unregister others meanwhile.
-        if engine(vm).world.widgets[id.0].events.contains_key(event) {
+        let w = &engine(vm).world.widgets[id.0];
+        if w.events.contains_key(event) || w.all_events.is_some() {
             run_script(vm, id, "OnEvent", &call);
         }
     }
@@ -2982,6 +3016,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("RegisterUnitEvent", register_unit_event),
         ("UnregisterEvent", unregister_event),
         ("UnregisterAllEvents", unregister_all_events),
+        ("RegisterAllEvents", register_all_events),
         ("IsEventRegistered", is_event_registered),
         ("Show", show),
         ("Hide", hide),

@@ -80,7 +80,8 @@ return table.concat(seen, ' '), before, issecretvalue(UnitPower('target')), InCo
         r,
         [
             "PLAYER_REGEN_DISABLED:false ADDON_RESTRICTION_STATE_CHANGED(0,1):false",
-            "false",
+            // Another unit's power: secret out of combat too (scenarios).
+            "true",
             "true",
             "true",
             "true",
@@ -245,8 +246,9 @@ return tostring(zero), d:GetTotalDuration(), d:GetRemainingDuration(), d:GetElap
 }
 
 /// Another unit's cast GUID and spell ID are secret, its cast bar id not;
-/// the player's `SENT` target is secret in combat (`/stdtest engine
-/// record aura` and `combat`).
+/// the player's `SENT` target is secret in an instance, not in the open
+/// world's combat (`/stdtest engine record aura` and `combat` in Ragefire
+/// Chasm; scenario combat).
 #[test]
 fn cast_payload_secrecy() {
     let mut vm = vm();
@@ -270,12 +272,16 @@ mock.player:castSpell(647, { castTime = 1 })
 mock.player:interruptCast()
 mock.player:enterCombat()
 mock.player:castSpell(647, { castTime = 1 })
+mock.player:interruptCast()
+mock.enterInstance('party')
+mock.player:castSpell(647, { castTime = 1 })
 return table.concat(seen, ' | ')",
     );
     assert_eq!(
         r,
         [
-            "target true true false | sent false | player false false false | sent true | player false false false"
+            "target true true false | sent false | player false false false | sent false | player false false false \
+          | sent true | player false false false"
         ]
     );
 }
@@ -310,8 +316,11 @@ return tostring(refused), soft, C_CVar.GetCVar('autoLootDefault'), #r, r[1].even
     );
 }
 
-/// A kill as the client recorded the player's (`/stdtest engine record
-/// combat`), and the target's `UNIT_TARGET("player")` echo 0.4 s later.
+/// Kills as the client recorded the player's: in the open world (scenario
+/// combat: plain GUIDs, `UNIT_LOOT` last) and in an instance (`/stdtest
+/// engine record combat` in Ragefire Chasm: GUIDs secret, `UNIT_LOOT`
+/// before `UNIT_DIED`); the target's `UNIT_TARGET("player")` echo a round
+/// trip later.
 #[test]
 fn kills_and_the_target_echo() {
     let mut vm = vm();
@@ -329,19 +338,26 @@ f:SetScript('OnEvent', function(_, e, a, b)
 end)
 local hogger = mock.spawnUnit({ name = 'Hogger', level = 11, reaction = 'hostile', health = 70 })
 local wolf = mock.spawnUnit({ name = 'Wolf', level = 5, reaction = 'hostile', health = 30 })
+local boar = mock.spawnUnit({ name = 'Boar', level = 5, reaction = 'hostile', health = 30 })
 mock.player:target(hogger)
 Seen[#Seen + 1] = '|'
 mock.player:enterCombat()
 hogger:kill({ by = mock.player, lootable = true })
 Seen[#Seen + 1] = '|'
 wolf:kill()
+Seen[#Seen + 1] = '|'
+mock.enterInstance('party')
+mock.player:target(boar)
+boar:kill({ by = mock.player, lootable = true })
 return table.concat(Seen, ' ')",
     );
     assert_eq!(
         r,
         [
-            "PLAYER_TARGET_CHANGED(nil) | PARTY_KILL(secret, secret) UNIT_COMBAT(target, WOUND) UNIT_LOOT(guid, true) \
-          UNIT_DIED(secret) PLAYER_TARGET_DIED(nil) PLAYER_TARGET_CHANGED(nil) | UNIT_DIED(secret)"
+            "PLAYER_TARGET_CHANGED(nil) | PARTY_KILL(Player-4621-0A000001, guid) UNIT_COMBAT(target, WOUND) \
+          UNIT_DIED(guid) PLAYER_TARGET_DIED(nil) PLAYER_TARGET_CHANGED(nil) UNIT_LOOT(guid, true) | UNIT_DIED(guid) \
+          | PLAYER_TARGET_CHANGED(nil) PARTY_KILL(Player-4621-0A000001, secret) UNIT_COMBAT(target, WOUND) \
+          UNIT_LOOT(guid, true) UNIT_DIED(secret) PLAYER_TARGET_DIED(nil) PLAYER_TARGET_CHANGED(nil)"
         ]
     );
     wowlua_engine::clock::advance(&mut vm, 0.5);

@@ -741,11 +741,248 @@ __engine.pressKey("J")"#,
     assert_eq!(ours, client);
 }
 
+/// A scenario (`/stdtest engine scenario <name>`) played in the engine:
+/// Blizzard's UI loaded, the character's world as the recording began, the
+/// scenario's play script (`tests/scenarios/<name>.lua`) run with the
+/// engine's controls while StdTest's recorder runs as in the client. The
+/// recorder's log and the client's, each line's time aside, the noise of
+/// the world around (nameplates, the cursor, the mouse) and the
+/// recordings' own mistakes left out; with Blizzard's errors.
+fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> {
+    let ui = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot")?;
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    let controls = wowlua_engine::controls::table(&mut vm);
+    let fixtures = repo().join("crates/wowlua-engine/tests/client/scenarios");
+    wowlua_test::profile::apply(
+        &mut vm,
+        controls,
+        &fixtures.join(format!("{name}-before.json")),
+    )
+    .expect("the character's world");
+    let addon_name = vm.str("StdTest");
+    wowlua_engine::widgets::fire_event(&mut vm, "ADDON_LOADED", &[addon_name, Value::Bool(false)]);
+    wowlua_engine::widgets::fire_event(&mut vm, "PLAYER_LOGIN", &[]);
+    wowlua_engine::widgets::fire_event(
+        &mut vm,
+        "PLAYER_ENTERING_WORLD",
+        &[Value::Bool(true), Value::Bool(false)],
+    );
+    wowlua_engine::widgets::fire_event(&mut vm, "VARIABLES_LOADED", &[]);
+    wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
+    let errors_before = wowlua_engine::engine(&vm).world.ui.errors.len();
+    addon(&mut vm, &format!("StdTestEngineProbe('scenario {name}')"));
+    let script =
+        fs::read_to_string(repo().join(format!("crates/wowlua-cli/tests/scenarios/{name}.lua")))
+            .expect("the play script");
+    addon(&mut vm, &script);
+    addon(&mut vm, "StdTestEngineProbe('scenario stop')");
+    let f = vm
+        .load(
+            format!("local out = {{}} for i, v in ipairs(StdTestState.engineScenarios[{name:?}].log) do out[i] = v end return out").as_bytes(),
+            "=log",
+        )
+        .expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a log")
+    };
+    let n = vm.heap.table(t).border();
+    let ours: Vec<String> = (1..=n)
+        .map(|i| text(&vm, vm.heap.table(t).get(Value::Num(i as f64))))
+        .collect();
+    let src = fs::read(fixtures.join(format!("{name}.lua"))).expect("the recording");
+    let f = vm.load(&src, "=recording").expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let mut theirs: Vec<(String, String)> = vm
+        .heap
+        .table(t)
+        .entries()
+        .filter_map(|(k, v)| match (k, v) {
+            (Value::Str(k), Value::Str(_)) => Some((text(&vm, Value::Str(k)), text(&vm, v))),
+            _ => None,
+        })
+        .filter(|(k, _)| k.bytes().all(|b| b.is_ascii_digit()))
+        .collect();
+    theirs.sort();
+    let theirs: Vec<String> = theirs.into_iter().map(|(_, v)| v).collect();
+    let errors: Vec<String> = wowlua_engine::engine(&vm).world.ui.errors[errors_before..].to_vec();
+    let compared =
+        |log: &[String]| -> Vec<String> { log.iter().filter_map(|l| scenario_line(l)).collect() };
+    Some((compared(&ours), compared(&theirs), errors))
+}
+
+/// A scenario log's line as compared: without its time; none for the
+/// world's noise and the recordings' own mistakes.
+fn scenario_line(line: &str) -> Option<String> {
+    let body = line.split_once(' ').map_or(line, |(_, b)| b);
+    const NOISE: &[&str] = &[
+        "NAME_PLATE_",
+        "UNIT_POWER_FREQUENT",
+        "SPELL_UPDATE_USABLE",
+        "DAMAGE_METER_",
+        "WORLD_CURSOR_",
+        "CURSOR_CHANGED",
+        "UPDATE_MOUSEOVER_UNIT",
+        "GLOBAL_",
+        "MODIFIER_STATE_CHANGED",
+        "CONSOLE_MESSAGE",
+        "PLAYER_SOFT_",
+        "ACTION_RANGE_CHECK_UPDATE",
+        "CRITERIA_UPDATE",
+        "PLAYER_STARTED_",
+        "PLAYER_STOPPED_",
+        "ITEM_DATA_LOAD_RESULT",
+        "SPELL_DATA_LOAD_RESULT",
+        "QUEST_DATA_LOAD_RESULT",
+        "ADDON_ACTION_BLOCKED",
+        "SPELL_ACTIVATION_OVERLAY_HIDE",
+        "UNIT_HAPPINESS",
+    ];
+    if NOISE.iter().any(|n| body.starts_with(n))
+        || body.contains("nameplate")
+        || body.contains("softinteract")
+    {
+        return None;
+    }
+    // The recordings' mistaken asks (fixed in the recorder since), and the
+    // asks a protected call blocks in combat.
+    const MISTAKEN: &[&str] = &[
+        "= UnitIsEnemy(",
+        "= UnitIsFriend(",
+        "= UnitCanAttack(",
+        "= UnitCanAssist(",
+        "= UnitIsCivilian(",
+        "= GetSpellCooldown(",
+        "= C_Spell.GetSpellCooldown(",
+        "= GetLootMethod(",
+        "= C_PartyInfo.GetLootMethod(",
+        "= CheckInteractDistance(",
+    ];
+    if MISTAKEN.iter().any(|m| body.starts_with(m)) {
+        return None;
+    }
+    // Players' GUIDs as the recordings have them (scrubbed); a chat
+    // message's line number (the session's).
+    let guid = regex::Regex::new(r"Player-\d+-[0-9A-F]{8}").unwrap();
+    let line = regex::Regex::new(r"^(CHAT_MSG_.*; number )\d+(; nil nil; number 0;)").unwrap();
+    let body = guid.replace_all(body, "Player-0000-00000000");
+    let body = line.replace(&body, "${1}<line>${2}").into_owned();
+    // An answer's trailing nils dropped (the first recordings' recorder
+    // lost them).
+    if let Some((call, answer)) = body.split_once(" -> ")
+        && let Some((n, values)) = answer.split_once(": ")
+        && n.parse::<usize>().is_ok()
+    {
+        let mut list: Vec<&str> = if values.is_empty() {
+            vec![]
+        } else {
+            values.split(", ").collect()
+        };
+        while list.last() == Some(&"nil nil") {
+            list.pop();
+        }
+        return Some(format!("{call} -> {}: {}", list.len(), list.join(", ")));
+    }
+    Some(body)
+}
+
+/// The longest common subsequence of two logs: the lines in both, in
+/// order; and those only in each.
+fn align(ours: &[String], theirs: &[String]) -> (usize, Vec<String>, Vec<String>) {
+    let (n, m) = (ours.len(), theirs.len());
+    let mut table = vec![vec![0u32; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            table[i][j] = if ours[i] == theirs[j] {
+                table[i + 1][j + 1] + 1
+            } else {
+                table[i + 1][j].max(table[i][j + 1])
+            };
+        }
+    }
+    let (mut i, mut j) = (0, 0);
+    let (mut only_ours, mut only_theirs) = (Vec::new(), Vec::new());
+    while i < n && j < m {
+        if ours[i] == theirs[j] {
+            i += 1;
+            j += 1;
+        } else if table[i + 1][j] >= table[i][j + 1] {
+            only_ours.push(format!("{i:5} {}", ours[i]));
+            i += 1;
+        } else {
+            only_theirs.push(format!("{j:5} {}", theirs[j]));
+            j += 1;
+        }
+    }
+    only_ours.extend((i..n).map(|i| format!("{i:5} {}", ours[i])));
+    only_theirs.extend((j..m).map(|j| format!("{j:5} {}", theirs[j])));
+    (table[0][0] as usize, only_ours, only_theirs)
+}
+
+/// How many of the combat scenario's lines the engine plays as the client
+/// did: only ever up.
+const COMBAT_MATCHED: usize = 510;
+
+/// The combat scenario: a wolf targeted, fought, killed and looted.
+#[test]
+fn the_engine_plays_combat_as_the_client_did() {
+    let Some((ours, theirs, errors)) = play_scenario("combat") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let (matched, only_ours, only_theirs) = align(&ours, &theirs);
+    let limit: usize = std::env::var("WOWLUA_SCENARIO_LIMIT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(40);
+    eprintln!(
+        "{matched} of {} client lines matched ({} engine lines)\nonly the client's:\n{}\nonly the engine's:\n{}",
+        theirs.len(),
+        ours.len(),
+        only_theirs
+            .iter()
+            .take(limit)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n"),
+        only_ours
+            .iter()
+            .take(limit)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n"),
+    );
+    if std::env::var("WOWLUA_SCENARIO_EVENTS").is_ok() {
+        eprintln!(
+            "the engine's events:\n{}",
+            ours.iter()
+                .filter(|l| !l.starts_with("= "))
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+    assert!(errors.is_empty(), "Blizzard's errors: {errors:#?}");
+    assert!(
+        matched >= COMBAT_MATCHED,
+        "{matched} of the combat scenario's lines played as the client did (was {COMBAT_MATCHED})"
+    );
+}
+
 /// How many of the client's answers (`/stdtest engine answers`) the engine
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 5151;
+const ANSWERS_MATCHED: usize = 5152;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {

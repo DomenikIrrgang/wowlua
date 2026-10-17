@@ -25,6 +25,16 @@ export interface MockUnit
     function setPower(powerType: number, amount: number)
     function enterCombat()
     function leaveCombat()
+    --- The player's auto attack on (`PLAYER_ENTER_COMBAT`) and off
+    --- (`PLAYER_LEAVE_COMBAT`).
+    function startAttack()
+    function stopAttack()
+    --- A melee swing landing on `victim`: `PLAYER_SWING` for the player's,
+    --- both in combat, the attacker's then the victim's power (`power`,
+    --- `victimPower`: rage), the victim's health, and the combat text
+    --- (`UNIT_COMBAT`) a moment later. `kind`: `WOUND` (default), `PARRY`,
+    --- `DODGE`, `MISS`, `BLOCK`.
+    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number }?)
     function showNameplate()
     function hideNameplate()
     function despawn()
@@ -422,6 +432,13 @@ end
 -- ------------------------------------------------------------------ time
 
 --- Moves the virtual clock by `sec`, running the timers that come due.
+--- The server's round trip from now on (the player's ping; 0.4 s by
+--- default): its answers to requests (targeting, buying, interrupts) come
+--- that much later.
+export function setLatency(seconds: number)
+    engine().setLatency(seconds)
+end
+
 export function advanceTime(sec: number)
     engine().advanceTime(sec)
 end
