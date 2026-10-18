@@ -909,6 +909,16 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 .expect("a valid pattern");
         // Other players' crafts in the combat log ("<name> creates <item>.").
         let crafter = regex::Regex::new(r"^string (.+) creates ").expect("a valid pattern");
+        // Mail's players: an auction invoice's buyer or seller, the sender
+        // of a letter one can answer (`canReply`, the header's twelfth).
+        let invoice = regex::Regex::new(
+            r"GetInboxInvoiceInfo\(\d+\) -> \d+: string [a-z]+, string [^,]*, string ([^,]+),",
+        )
+        .expect("a valid pattern");
+        let letter = regex::Regex::new(
+            r"GetInboxHeaderInfo\(\d+\) -> \d+: [^,]+, [^,]+, string ([^,]+), (?:[^,]+, ){8}boolean true,",
+        )
+        .expect("a valid pattern");
         // First every recording's names (a name one recording shows
         // may be in another's chat), then each recording scrubbed of
         // them all.
@@ -940,6 +950,14 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             for line in log.sequence_values::<String>() {
                 let line = line.map_err(|e| anyhow!("{e}"))?;
                 let line = me.scrub(&line);
+                for re in [&invoice, &letter] {
+                    if let Some(c) = re.captures(&line) {
+                        let other = c[1].trim().to_string();
+                        if other.len() > 1 && other != "Player" && !secrets.contains(&other) {
+                            words.push((other, "Otherplayer"));
+                        }
+                    }
+                }
                 if let Some(c) = two_names.captures(&line) {
                     let (first, last) = (c[1].trim().to_string(), c[2].trim().to_string());
                     let own = first == "Player" || secrets.contains(&first);
