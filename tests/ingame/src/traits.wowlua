@@ -185,15 +185,92 @@ export function traitsProbe()
             addTree(tree)
         end
     end
-    -- Each tree in each config it belongs to (else its own config).
+    -- Each tree in each config it belongs to; another class's tree (in no
+    -- config of the character's) through the class config, which answers
+    -- its nodes as with nothing bought: every class's trees from one run.
     const currencies: { [number]: boolean } = {}
+    const spells: number[] = {}
+    const seenSpell: { [number]: boolean } = {}
     local nodes = 0
+    local function walk(config: number, tree: number)
+        const treeInfo = ask(`C_Traits.GetTreeInfo({config}, {tree})`, config, tree)
+        for _, gate in ipairs(type(treeInfo) == "table" and treeInfo.gates or {}) do
+            ask(`C_Traits.GetConditionInfo({config}, {gate.conditionID})`, config, gate.conditionID)
+        end
+        for _, staged in ipairs({ false, true }) do
+            const list = ask(
+                `C_Traits.GetTreeCurrencyInfo({config}, {tree}, {tostring(staged)})`,
+                config,
+                tree,
+                staged
+            )
+            for _, c in ipairs((type(list) == "table" and list or {}) :: any[]) do
+                currencies[c.traitCurrencyID] = true
+            end
+        end
+        const groups: number[] = {}
+        const seenGroup: { [number]: boolean } = {}
+        for _, node in ipairs(C_Traits.GetTreeNodes(tree) ?? {}) do
+            nodes = nodes + 1
+            const ni = ask(`C_Traits.GetNodeInfo({config}, {node})`, config, node)
+            ask(`C_Traits.GetNodeCost({config}, {node})`, config, node)
+            ask(`C_Traits.CanRefundRank({config}, {node})`, config, node)
+            if type(ni) == "table" then
+                for _, cond in ipairs(ni.conditionIDs ?? {}) do
+                    ask(`C_Traits.GetConditionInfo({config}, {cond})`, config, cond)
+                end
+                for _, g in ipairs(ni.groupIDs ?? {}) do
+                    if not seenGroup[g] then
+                        seenGroup[g] = true
+                        groups[#groups + 1] = g
+                    end
+                end
+                if ni.subTreeID and ni.subTreeID > 0 then
+                    ask(`C_Traits.GetSubTreeInfo({config}, {ni.subTreeID})`, config, ni.subTreeID)
+                end
+                for _, entry in ipairs(ni.entryIDs ?? {}) do
+                    ask(`C_Traits.CanPurchaseRank({config}, {node}, {entry})`, config, node, entry)
+                    ask(`C_Traits.GetIncreasedTraitData({node}, {entry})`, node, entry)
+                    const ei = ask(`C_Traits.GetEntryInfo({config}, {entry})`, config, entry)
+                    if type(ei) == "table" then
+                        if ei.definitionID then
+                            const di = ask(`C_Traits.GetDefinitionInfo({ei.definitionID})`, ei.definitionID)
+                            const spell = type(di) == "table" and (di.spellID or di.overriddenSpellID)
+                            if type(spell) == "number" and not seenSpell[spell] then
+                                seenSpell[spell] = true
+                                spells[#spells + 1] = spell
+                            end
+                        end
+                        for _, cond in ipairs(ei.conditionIDs ?? {}) do
+                            ask(`C_Traits.GetConditionInfo({config}, {cond})`, config, cond)
+                        end
+                        if ei.subTreeID and ei.subTreeID > 0 then
+                            ask(`C_Traits.GetSubTreeInfo({config}, {ei.subTreeID})`, config, ei.subTreeID)
+                        end
+                        for rank = 1, math.max(ei.maxRanks ?? 1, 1) do
+                            ask(`C_Traits.GetTraitDescription({entry}, {rank})`, entry, rank)
+                        end
+                    end
+                end
+            end
+        end
+        if #groups > 0 then
+            table.sort(groups)
+            ask(
+                `C_Traits.GetGroupCurrencyInfo({config}, \{{table.concat(groups, ", ")}\})`,
+                config,
+                groups
+            )
+        end
+    end
+    const classConfig = ((_G :: any).C_ClassTalents).GetActiveConfigID()
     for _, tree in ipairs(trees) do
         ask(`C_Traits.GetTreeNodes({tree})`, tree)
         ask(`C_Traits.GetTreeHash({tree})`, tree)
         ask(`C_Traits.GetSystemIDByTreeID({tree})`, tree)
         ask(`C_Traits.GetGroupDisplayInfoByTreeID({tree})`, tree)
         const own = C_Traits.GetConfigIDByTreeID(tree)
+        local held = false
         for _, config in ipairs(configs) do
             const info = C_Traits.GetConfigInfo(config)
             local holds = config == own
@@ -201,71 +278,12 @@ export function traitsProbe()
                 holds = holds or t == tree
             end
             if holds then
-                const treeInfo = ask(`C_Traits.GetTreeInfo({config}, {tree})`, config, tree)
-                for _, gate in ipairs(type(treeInfo) == "table" and treeInfo.gates or {}) do
-                    ask(`C_Traits.GetConditionInfo({config}, {gate.conditionID})`, config, gate.conditionID)
-                end
-                for _, staged in ipairs({ false, true }) do
-                    const list = ask(
-                        `C_Traits.GetTreeCurrencyInfo({config}, {tree}, {tostring(staged)})`,
-                        config,
-                        tree,
-                        staged
-                    )
-                    for _, c in ipairs((type(list) == "table" and list or {}) :: any[]) do
-                        currencies[c.traitCurrencyID] = true
-                    end
-                end
-                const groups: number[] = {}
-                const seenGroup: { [number]: boolean } = {}
-                for _, node in ipairs(C_Traits.GetTreeNodes(tree) ?? {}) do
-                    nodes = nodes + 1
-                    const ni = ask(`C_Traits.GetNodeInfo({config}, {node})`, config, node)
-                    ask(`C_Traits.GetNodeCost({config}, {node})`, config, node)
-                    ask(`C_Traits.CanRefundRank({config}, {node})`, config, node)
-                    if type(ni) == "table" then
-                        for _, cond in ipairs(ni.conditionIDs ?? {}) do
-                            ask(`C_Traits.GetConditionInfo({config}, {cond})`, config, cond)
-                        end
-                        for _, g in ipairs(ni.groupIDs ?? {}) do
-                            if not seenGroup[g] then
-                                seenGroup[g] = true
-                                groups[#groups + 1] = g
-                            end
-                        end
-                        if ni.subTreeID and ni.subTreeID > 0 then
-                            ask(`C_Traits.GetSubTreeInfo({config}, {ni.subTreeID})`, config, ni.subTreeID)
-                        end
-                        for _, entry in ipairs(ni.entryIDs ?? {}) do
-                            ask(`C_Traits.CanPurchaseRank({config}, {node}, {entry})`, config, node, entry)
-                            ask(`C_Traits.GetIncreasedTraitData({node}, {entry})`, node, entry)
-                            const ei = ask(`C_Traits.GetEntryInfo({config}, {entry})`, config, entry)
-                            if type(ei) == "table" then
-                                if ei.definitionID then
-                                    ask(`C_Traits.GetDefinitionInfo({ei.definitionID})`, ei.definitionID)
-                                end
-                                for _, cond in ipairs(ei.conditionIDs ?? {}) do
-                                    ask(`C_Traits.GetConditionInfo({config}, {cond})`, config, cond)
-                                end
-                                if ei.subTreeID and ei.subTreeID > 0 then
-                                    ask(`C_Traits.GetSubTreeInfo({config}, {ei.subTreeID})`, config, ei.subTreeID)
-                                end
-                                for rank = 1, math.max(ei.maxRanks ?? 1, 1) do
-                                    ask(`C_Traits.GetTraitDescription({entry}, {rank})`, entry, rank)
-                                end
-                            end
-                        end
-                    end
-                end
-                if #groups > 0 then
-                    table.sort(groups)
-                    ask(
-                        `C_Traits.GetGroupCurrencyInfo({config}, \{{table.concat(groups, ", ")}\})`,
-                        config,
-                        groups
-                    )
-                end
+                held = true
+                walk(config, tree)
             end
+        end
+        if not held and type(classConfig) == "number" then
+            walk(classConfig, tree)
         end
     end
     for currency in pairs(currencies) do
@@ -276,7 +294,19 @@ export function traitsProbe()
     local _, class = UnitClass("player")
     st.engineTraitAnswers = st.engineTraitAnswers ?? {}
     st.engineTraitAnswers[class] = out
-    say(
-        `engine traits: {#configs} configs, {#trees} trees, {nodes} nodes, {asked} calls recorded for {class}; type /reload so the file is written`
-    )
+    say(`engine traits: {#configs} configs, {#trees} trees, {nodes} nodes for {class}; the talents' spells in a moment`)
+    -- The talents' spells, once loaded: info, description, cost.
+    for _, spell in ipairs(spells) do
+        C_Spell.RequestLoadSpellData(spell)
+    end
+    C_Timer.After(2, function()
+        for _, spell in ipairs(spells) do
+            ask(`C_Spell.GetSpellInfo({spell})`, spell)
+            ask(`C_Spell.GetSpellDescription({spell})`, spell)
+            ask(`C_Spell.GetSpellPowerCost({spell})`, spell)
+            ask(`C_Spell.IsSpellPassive({spell})`, spell)
+            ask(`GetSpellBaseCooldown({spell})`, spell)
+        end
+        say(`engine traits: {#spells} spells, {asked} calls recorded for {class}; type /reload so the file is written`)
+    end)
 end

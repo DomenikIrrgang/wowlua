@@ -20,6 +20,8 @@
 //! - `/stdtest engine tradeskill`: each profession's
 //!   `…/forever-camelot-tradeskill-<profession>.lua` (all of them:
 //!   `crates/wowlua-engine/data/camelot-tradeskill.txt`);
+//! - `/stdtest engine trainer`: each trainer's `…/forever-camelot-trainer-<key>.lua`
+//!   (all of them: `crates/wowlua-engine/data/camelot-trainers.txt`);
 //! - the default character (a fresh level 1 Human Warrior's `/stdtest
 //!   snapshot`): `cargo xtask profile <its StdTest.lua>
 //!   crates/wowlua-engine/data/camelot-default-character.json`;
@@ -1168,6 +1170,52 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             )?;
         }
         write_tradeskill_data(root, &client, &version)?;
+    }
+    // The trainers (`/stdtest engine trainer`), each class's (or
+    // profession's) services as the character's level and spells
+    // answered them.
+    if let Ok(trainers) = state.get::<mlua::Table>("engineTrainerAnswers") {
+        for pair in trainers.pairs::<String, mlua::Table>() {
+            let (key, calls) = pair.map_err(|e| anyhow!("{e}"))?;
+            let mut list = Vec::new();
+            for pair in calls.pairs::<String, String>() {
+                let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
+                list.push((call, me.scrub(&answer)));
+            }
+            list.sort();
+            let file: String = key
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() {
+                        c.to_ascii_lowercase()
+                    } else {
+                        '-'
+                    }
+                })
+                .collect();
+            write_table(
+                &client.join(format!("forever-camelot-trainer-{file}.lua")),
+                &format!(
+                    "WoW Forever {version}: /stdtest engine trainer, the {key} trainer's services\n\
+                     (every one shown) and the spells they teach (cargo xtask ingest)."
+                ),
+                &list,
+            )?;
+        }
+        let (lines, keys) = fixtures_by(&client, "forever-camelot-trainer-")?;
+        let mut data = format!(
+            "# WoW Forever {version}'s trainers as a character answered them\n\
+             # (/stdtest engine trainer: {}): the trainer, the call, the answer,\n\
+             # a tab between (cargo xtask ingest). Each class's services by level\n\
+             # and cost, the spells they teach.\n",
+            keys.join(", ")
+        );
+        for ((key, call), answer) in &lines {
+            let _ = writeln!(data, "{key}\t{call}\t{answer}");
+        }
+        let path = root.join("crates/wowlua-engine/data/camelot-trainers.txt");
+        std::fs::write(&path, data)?;
+        println!("wrote {} ({} answers)", path.display(), lines.len());
     }
     // Gameplay (`/stdtest engine scenario <name>`): each scenario's
     // events and answers, and the character's world before and after

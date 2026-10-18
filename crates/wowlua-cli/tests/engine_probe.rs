@@ -34,6 +34,7 @@ fn build() -> tempfile::TempDir {
         "traits.wowlua",
         "tradeskill.wowlua",
         "achievements.wowlua",
+        "trainer.wowlua",
         "startup.wowlua",
         "scenario.wowlua",
         "snapshot.wowlua",

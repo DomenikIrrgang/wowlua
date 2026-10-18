@@ -1,0 +1,165 @@
+-- /stdtest engine trainer: the open trainer's services as Blizzard's
+-- trainer UI asks them, every service shown (the filters on, then put
+-- back): name, rank, state, cost, level and skill asked, the abilities
+-- needed, icon, description, the spell it teaches (its tooltip's) and,
+-- once loaded, the spells' info, description, cooldown and cost; into
+-- StdTestState.engineTrainerAnswers[key][call] (the class's for a class
+-- trainer, the profession's for another) in the answers probe's form
+-- (`cargo xtask ingest` writes each one's fixture). The services' states
+-- are the character's: its level, its spells.
+import state from "/state"
+import say from "/harness"
+
+local function pack(...: any): { n: number, [number]: any }
+    return { n = select("#", ...), ... }
+end
+
+--- A value in full: tables to depth 6, keys sorted, secrets marked.
+local function show(v: any, depth: number): string
+    if issecretvalue(v) then
+        return `secret {type(v)}`
+    end
+    if type(v) == "string" then
+        return `string {v}`
+    end
+    if type(v) ~= "table" then
+        return `{type(v)} {tostring(v)}`
+    end
+    if depth >= 6 then
+        return "table"
+    end
+    const keys: string[] = {}
+    const values: { [string]: any } = {}
+    for k, inner in pairs(v :: table) do
+        const key = tostring(k)
+        keys[#keys + 1] = key
+        values[key] = inner
+    end
+    table.sort(keys)
+    const parts: string[] = {}
+    for _, k in ipairs(keys) do
+        parts[#parts + 1] = `{k}={show(values[k], depth + 1)}`
+    end
+    return `\{{table.concat(parts, ",")}\}`
+end
+
+--- The trainer's functions asked without arguments.
+const PLAIN: string[] = {
+    "GetNumTrainerServices",
+    "GetTrainerGreetingText",
+    "GetTrainerSelectionIndex",
+    "IsTradeskillTrainer",
+    "GetTrainerTradeskillRankValues",
+    "C_Trainer.GetTrainerType",
+    "C_Trainer.GetCategorizeTrainerUI",
+}
+
+--- The functions asked of each service by its index alone.
+const BY_SERVICE: string[] = {
+    "GetTrainerServiceInfo",
+    "GetTrainerServiceCost",
+    "GetTrainerServiceDescription",
+    "GetTrainerServiceIcon",
+    "GetTrainerServiceLevelReq",
+    "GetTrainerServiceSkillLine",
+    "GetTrainerServiceSkillReq",
+    "GetTrainerServiceNumAbilityReq",
+    "GetTrainerServiceItemLink",
+    "C_TooltipInfo.GetTrainerService",
+}
+
+--- The functions asked of each spell taught.
+const BY_SPELL: string[] = {
+    "C_Spell.GetSpellInfo",
+    "C_Spell.GetSpellDescription",
+    "C_Spell.GetSpellSubtext",
+    "C_Spell.GetSpellPowerCost",
+    "C_Spell.GetSpellCharges",
+    "C_Spell.IsSpellPassive",
+    "GetSpellBaseCooldown",
+}
+
+export function trainerProbe()
+    const st = state() :: any
+    const G = _G :: any
+    if (G.GetNumTrainerServices() ?? 0) == 0 and not G.ClassTrainerFrame then
+        say("engine trainer: open a trainer's window first")
+        return
+    end
+    const out: { [string]: string } = {}
+    local asked = 0
+    local function ask(call: string, ...: any): ...any
+        local space, name = call:match("^([%w_]+)%.(%w+)")
+        local f: any
+        if space == nil then
+            f = G[(call:match("^(%w+)")) :: string]
+        else
+            const ns = G[space :: string]
+            f = ns and ns[name :: string]
+        end
+        if f == nil then
+            return
+        end
+        local ok, packed = pcall(function(...: any): any return pack(f(...)) end, ...)
+        asked = asked + 1
+        if not ok then
+            out[call] = `error: {tostring(packed)}`
+            return
+        end
+        const p = packed :: { n: number, [number]: any }
+        const parts: string[] = {}
+        for i = 1, p.n do
+            parts[#parts + 1] = show(p[i], 0)
+        end
+        out[call] = `{p.n}: {table.concat(parts, ", ")}`
+        return unpack(p, 1, p.n)
+    end
+    -- Every service shown, the filters as they were kept.
+    const filters = { "available", "unavailable", "used" }
+    const before: { [string]: boolean } = {}
+    for _, f in ipairs(filters) do
+        before[f] = ask(`GetTrainerServiceTypeFilter("{f}")`, f) and true or false
+        G.SetTrainerServiceTypeFilter(f, true)
+    end
+    for _, call in ipairs(PLAIN) do
+        ask(`{call}()`)
+    end
+    const spells: number[] = {}
+    const seenSpell: { [number]: boolean } = {}
+    const n = G.GetNumTrainerServices() ?? 0
+    for i = 1, n do
+        for _, name in ipairs(BY_SERVICE) do
+            ask(`{name}({i})`, i)
+        end
+        for j = 1, G.GetTrainerServiceNumAbilityReq(i) ?? 0 do
+            ask(`GetTrainerServiceAbilityReq({i}, {j})`, i, j)
+        end
+        const tip = G.C_TooltipInfo and G.C_TooltipInfo.GetTrainerService(i)
+        const id = type(tip) == "table" and tip.id
+        if type(id) == "number" and not seenSpell[id] then
+            seenSpell[id] = true
+            spells[#spells + 1] = id
+            C_Spell.RequestLoadSpellData(id)
+        end
+    end
+    for _, f in ipairs(filters) do
+        G.SetTrainerServiceTypeFilter(f, before[f])
+    end
+    -- A class trainer's services are the class's; another's its own.
+    local _, class = UnitClass("player")
+    local key = class
+    if G.IsTradeskillTrainer() then
+        key = `trade:{G.GetTrainerServiceSkillLine(1) or "unknown"}`
+    end
+    st.engineTrainerAnswers = st.engineTrainerAnswers ?? {}
+    st.engineTrainerAnswers[key] = out
+    say(`engine trainer: {key}: {n} services, {#spells} spells; their data in a moment`)
+    C_Timer.After(2, function()
+        for _, id in ipairs(spells) do
+            for _, name in ipairs(BY_SPELL) do
+                ask(`{name}({id})`, id)
+            end
+        end
+        say(`engine trainer: {key}: the spells' data recorded ({asked} calls); type /reload so the file is written`)
+    end)
+end
