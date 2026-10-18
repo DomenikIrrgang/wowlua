@@ -145,6 +145,8 @@ pub struct World {
     pub inspect: crate::inspect::Inspect,
     /// The trait configs' ranks (talents, the legacy trees) and renown.
     pub traits: crate::traits::Traits,
+    /// The achievement search's results.
+    pub achievements: crate::achievements::Achievements,
     /// The global cooldown running: its start (`GetTime`) and length.
     pub global_cooldown: Option<(f64, f64)>,
     /// Spells by trait (`setSpellTraits`: `offGlobalCooldown`,

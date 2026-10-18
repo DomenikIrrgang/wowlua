@@ -228,6 +228,8 @@ pub struct Traits {
 pub struct Model<'a> {
     class: String,
     state: &'a Traits,
+    /// Every rank 0 (a node asked through a config without it).
+    bare: bool,
 }
 
 impl<'a> Model<'a> {
@@ -235,6 +237,7 @@ impl<'a> Model<'a> {
         Model {
             class: class.to_uppercase(),
             state,
+            bare: false,
         }
     }
 
@@ -299,6 +302,9 @@ impl<'a> Model<'a> {
     }
 
     fn committed(&self, config: i64, node: i64) -> i64 {
+        if self.bare {
+            return 0;
+        }
         self.state
             .committed
             .get(&(config, node))
@@ -307,6 +313,9 @@ impl<'a> Model<'a> {
     }
 
     fn staged(&self, config: i64, node: i64) -> i64 {
+        if self.bare {
+            return 0;
+        }
         self.state.staged.get(&(config, node)).copied().unwrap_or(0)
     }
 
@@ -483,9 +492,37 @@ impl<'a> Model<'a> {
             .is_some_and(|t| t.flag("cannotRefund"))
     }
 
+    /// The config of the class recorded holding a node.
+    fn host(&self, node: i64) -> Option<i64> {
+        let suffix = format!(", {node})");
+        data().keys().find_map(|(class, call)| {
+            (*class == self.class)
+                .then(|| {
+                    call.strip_prefix("C_Traits.GetNodeInfo(")?
+                        .strip_suffix(&suffix)
+                })
+                .flatten()
+                .and_then(|c| c.parse().ok())
+        })
+    }
+
     /// `C_Traits.GetNodeInfo(config, node)`: the recording's, its ranks'
-    /// answers worked out.
+    /// answers worked out. Asked through a config without the node: the
+    /// node as with nothing of its tree bought, never to buy (recorded: the
+    /// druid's class config asked of its legacy nodes).
     pub fn node(&self, config: i64, node: i64) -> Option<Rv> {
+        if self.recorded_node(config, node).is_none() {
+            let host = self.host(node)?;
+            let bare = Model {
+                class: self.class.clone(),
+                state: self.state,
+                bare: true,
+            };
+            let mut info = bare.node(host, node)?;
+            info.set("canPurchaseRank", Rv::Bool(false));
+            info.set("canRefundRank", Rv::Bool(false));
+            return Some(info);
+        }
         let mut info = self.recorded_node(config, node)?;
         let rank = self.rank(config, node, true);
         let max = self.max_ranks(config, node);
@@ -536,7 +573,11 @@ impl<'a> Model<'a> {
             None => info.remove("nextEntry"),
         }
         let before = self.state.start.get(&(config, node)).copied();
-        let committed = before.unwrap_or_else(|| self.recorded_rank(config, node));
+        let committed = if self.bare {
+            0
+        } else {
+            before.unwrap_or_else(|| self.recorded_rank(config, node))
+        };
         let with = match at(committed).filter(|_| committed > 0) {
             Some((e, _)) => vec![Rv::Num(e as f64)],
             None => Vec::new(),

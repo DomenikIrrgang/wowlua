@@ -326,9 +326,26 @@ fn get_cvar_info(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `SetCVar(name, value)`: a secure CVar is refused to addons
 /// (`ADDON_ACTION_FORBIDDEN`, recorded for `SoftTargetEnemy` set from
-/// `/run`), a read-only one not changed (unverified: its result).
+/// `/run`), a read-only one not changed (unverified: its result), one the
+/// client does not have neither (recorded: Blizzard's talents frame sets
+/// `heroTalentsCollapse`, which camelot lacks, and no `CVAR_UPDATE` comes;
+/// unverified: the result).
 fn set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = string_arg(vm, &c, 1)?;
+    // Camelot's CVars are the client's (recorded); other flavors' unknown.
+    let world = &engine(vm).world;
+    let unknown = engine(vm).flavor == "camelot"
+        && !world
+            .cvars
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case(&name))
+        && !world
+            .cvar_defaults
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case(&name));
+    if unknown {
+        return Ok(vec![]);
+    }
     let (_, secure, read_only) = cvar_flags(vm, &name);
     if secure && crate::protection::tainted(vm) {
         let action = crate::protection::action_name(vm);

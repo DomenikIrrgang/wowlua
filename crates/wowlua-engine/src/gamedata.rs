@@ -409,6 +409,15 @@ fn request_load_item_data(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// The functions with behaviour here.
+/// `C_Spell.GetOverrideSpell(spell)`: the spell itself (unverified: no
+/// override modelled).
+fn get_override_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match vm.hidden(c.arg(1)) {
+        Value::Num(n) => vec![Value::Num(n)],
+        _ => vec![],
+    })
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("C_Spell.GetSpellInfo", get_spell_info),
@@ -418,6 +427,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Spell.GetSpellCharges", get_spell_charges),
         ("C_Spell.GetSpellCooldown", get_spell_cooldown),
         ("C_Spell.GetSpellLink", get_spell_link),
+        ("C_Spell.GetOverrideSpell", get_override_spell),
         ("C_Spell.IsSpellDataCached", is_spell_data_cached),
         ("C_Spell.DoesSpellExist", does_spell_exist),
         ("C_Spell.GetSpellSubtext", get_spell_subtext),

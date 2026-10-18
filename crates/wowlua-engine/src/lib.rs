@@ -3,6 +3,7 @@
 //! with behaviour where tests need it; a function without behaviour fails
 //! with "`<name>` is not mocked", so gaps are visible.
 
+pub mod achievements;
 pub mod actions;
 pub mod animations;
 pub mod api;
@@ -240,6 +241,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(party::behaviours())
             .chain(inspect::behaviours())
             .chain(traits::behaviours(flavor))
+            .chain(achievements::behaviours())
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())
             .chain(bindings::behaviours())

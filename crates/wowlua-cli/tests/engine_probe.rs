@@ -1265,6 +1265,17 @@ fn the_engine_plays_inspect_as_the_client_did() {
     plays_as_the_client_did("inspect", INSPECT_MATCHED);
 }
 
+/// How many of the legacy scenario's lines the engine plays as the client
+/// did: only ever up.
+const LEGACY_MATCHED: usize = 110;
+
+/// The legacy scenario: the legacy system's tree, five ranks bought and
+/// applied.
+#[test]
+fn the_engine_plays_legacy_as_the_client_did() {
+    plays_as_the_client_did("legacy", LEGACY_MATCHED);
+}
+
 /// How many of the items scenario's lines the engine plays as the client
 /// did: only ever up.
 const ITEMS_MATCHED: usize = 302;
