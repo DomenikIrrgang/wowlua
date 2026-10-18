@@ -71,6 +71,8 @@ pub struct Mail {
     pub money: f64,
     pub cod: f64,
     pub new_mail: bool,
+    /// Senders of mail on its way (an auction's: "Horde Auction House").
+    pub senders: Vec<String>,
 }
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
@@ -138,6 +140,15 @@ pub fn control_define(vm: &mut Vm, c: NativeCall) -> Ret {
     m.new_mail = new_mail;
     m.attached = vec![None; ATTACHMENTS];
     Ok(vec![])
+}
+
+/// Mail on its way from `sender` (`UPDATE_PENDING_MAIL` is the caller's).
+pub fn mail_coming(vm: &mut Vm, sender: &str) {
+    let m = mail_mut(vm);
+    m.new_mail = true;
+    if !m.senders.iter().any(|s| s == sender) {
+        m.senders.insert(0, sender.to_string());
+    }
 }
 
 pub fn has(vm: &Vm, unit: UnitId) -> bool {
@@ -241,6 +252,10 @@ fn has_new_mail(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// `GetLatestThreeSenders()`: the mailbox data's `senders`, else the
 /// unread letters' senders.
 fn get_latest_three_senders(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let pending = mail(vm).senders.clone();
+    if !pending.is_empty() {
+        return Ok(pending.iter().take(3).map(|s| vm.str(s)).collect());
+    }
     let boxes: Vec<TableRef> = mail(vm).boxes.values().copied().collect();
     for t in boxes {
         if let Value::Table(s) = field(vm, t, "senders") {

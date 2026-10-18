@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
 
-use crate::{engine, widgets};
+use crate::{engine, engine_mut, widgets};
 
 /// A recorded value: the probe's text of it.
 #[derive(Clone, Debug, PartialEq)]
@@ -275,6 +275,14 @@ fn game_time(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// No zone: no PvP type, not a PvP subzone, no faction.
+/// `C_Sound.PlaySound(kit, …)`: played, a handle (the engine plays no
+/// sound; unverified: the handles' numbers).
+fn play_sound(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let w = &mut engine_mut(vm).world;
+    w.sound_handles += 1.0;
+    Ok(vec![Value::Bool(true), Value::Num(w.sound_handles)])
+}
+
 /// The zone's PvP status (a city's: "friendly", false, its faction),
 /// else nothing (recorded: Durotar's).
 fn zone_pvp_info(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -551,6 +559,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetCursorPosition", zeros),
         ("GetFonts", fonts),
         ("GetGameTime", game_time),
+        ("C_Sound.PlaySound", play_sound),
         ("GetInstanceInfo", instance_info),
         ("GetPhysicalScreenSize", physical_screen_size),
         ("GetRealmName", realm_name),

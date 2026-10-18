@@ -7,6 +7,7 @@ pub mod actions;
 pub mod animations;
 pub mod api;
 pub mod args;
+pub mod auction;
 pub mod auras;
 pub mod bank;
 pub mod bars;
@@ -27,6 +28,8 @@ pub mod gamedata;
 pub mod gossip;
 pub mod input;
 pub mod inventory;
+pub mod itemclasses;
+pub mod itemlocation;
 pub mod levels;
 pub mod login;
 pub mod loot;
@@ -226,6 +229,9 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(taxi::behaviours())
             .chain(mail::behaviours())
             .chain(bank::behaviours())
+            .chain(auction::behaviours())
+            .chain(itemclasses::behaviours())
+            .chain(itemlocation::behaviours())
             .chain(death::behaviours())
             .chain(inventory::behaviours())
             .chain(queries::behaviours())

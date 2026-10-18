@@ -179,6 +179,16 @@ const STATIC: &[&str] = &[
     "GetSendMailPrice",
     "C_StableInfo.GetNextStableSlotCost",
     "C_Bank.FetchMaxNumBankTabs",
+    // The item classes' and inventory types' names; the auction house's
+    // subclasses, filters and settings.
+    "C_Item.GetItemClassInfo",
+    "C_Item.GetItemSubClassInfo",
+    "C_Item.GetItemInventorySlotInfo",
+    "C_AuctionHouse.GetAuctionItemSubClasses",
+    "C_AuctionHouse.GetFilterGroups",
+    "C_AuctionHouse.SupportsCopperValues",
+    "C_AuctionHouse.ShouldAutoPopulatePrice",
+    "C_WowTokenPublic.GetCurrentMarketPrice",
     // Key bindings' data.
     "C_KeyBindings.GetSearchTagsForAction",
     "C_KeyBindings.GetBindingIndex",

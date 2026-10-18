@@ -251,6 +251,10 @@ pub fn control_interact(vm: &mut Vm, c: NativeCall) -> Ret {
         crate::bank::interact(vm, npc);
         return Ok(vec![]);
     }
+    if crate::auction::has(vm, npc) {
+        crate::auction::interact(vm, npc);
+        return Ok(vec![]);
+    }
     let delay = crate::clock::server_delay(vm);
     let later = vm.native_with(
         "questDialog",

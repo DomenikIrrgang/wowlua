@@ -131,10 +131,14 @@ pub struct World {
     pub inventory_loading: bool,
     /// The player on a flight.
     pub on_taxi: bool,
+    /// The sounds played (`C_Sound.PlaySound`'s handles).
+    pub sound_handles: f64,
     /// The mailboxes, the inbox, the letter being written.
     pub mail: crate::mail::Mail,
     /// The bankers, the character's bank tabs.
     pub bank: crate::bank::Bank,
+    /// The auction houses, their searches, the player's auctions.
+    pub auction: crate::auction::AuctionHouse,
     /// The global cooldown running: its start (`GetTime`) and length.
     pub global_cooldown: Option<(f64, f64)>,
     /// Spells by trait (`setSpellTraits`: `offGlobalCooldown`,
@@ -2296,6 +2300,39 @@ fn get_text(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     }])
 }
 
+/// `editBox:SetNumber(n)`: its text the number's, as `SetText`'s
+/// (unverified: not recorded; the auction house's quantity box).
+fn set_number(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    if engine(vm).world.widgets[id.0].class != "EditBox" {
+        return Ok(vec![]);
+    }
+    let n = match vm.hidden(c.arg(2)) {
+        Value::Num(n) => n,
+        _ => 0.0,
+    };
+    let text = if n.fract() == 0.0 {
+        format!("{}", n as i64)
+    } else {
+        format!("{n}")
+    };
+    let t = vm.str(&text);
+    engine_mut(vm).world.widgets[id.0].text = Some(t);
+    if !engine(vm).world.text_set.contains(&id) {
+        engine_mut(vm).world.text_set.push(id);
+    }
+    Ok(vec![])
+}
+
+/// `editBox:GetNumber()`: its text as a number, 0 when it is none
+/// (unverified: not recorded).
+fn get_number(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let text = match engine(vm).world.widgets[id.0].text {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => String::new(),
+    };
+    Ok(vec![Value::Num(text.trim().parse::<f64>().unwrap_or(0.0))])
+}
+
 /// `fontString:SetAlphaGradient(start, length)`: whether the gradient's
 /// start is within the text, in characters (the quest text's fade ends
 /// when it is not; a frame's returns nothing, as documented).
@@ -3132,6 +3169,8 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("SetStatusBarTexture", set_status_bar_texture),
         ("SetFontString", set_font_string),
         ("GetText", get_text),
+        ("GetNumber", get_number),
+        ("SetNumber", set_number),
         ("SetFormattedText", set_formatted_text),
         ("SetAlphaGradient", set_alpha_gradient),
         ("SetAttribute", set_attribute),

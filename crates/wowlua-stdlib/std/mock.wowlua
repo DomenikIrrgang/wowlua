@@ -770,6 +770,15 @@ export function defineBank(banker: MockUnit, data: table)
     engine().defineBank(banker, data)
 end
 
+--- An auction house and what its searches find: `{ browse = { { itemKey,
+--- minPrice, totalQuantity, containsOwnerItem } }, infoReceived = { itemID,
+--- … }, commodities = { [itemID] = { { auctionID, quantity, unitPrice,
+--- timeLeftSeconds, owners, … } } }, items = { [itemID] = { … } }, deposit,
+--- nextAuctionID, mailSender }`; `player:interact(auctioneer)` opens it.
+export function defineAuctionHouse(auctioneer: MockUnit, data: table)
+    engine().defineAuctionHouse(auctioneer, data)
+end
+
 --- The user clicks the world: an item on the cursor is to be deleted
 --- (`DELETE_ITEM_CONFIRM`, Blizzard's popup; `DeleteCursorItem` deletes it).
 export function clickWorld()

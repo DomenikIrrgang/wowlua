@@ -1180,6 +1180,16 @@ fn the_engine_plays_bank_as_the_client_did() {
     plays_as_the_client_did("bank", BANK_MATCHED);
 }
 
+/// How many of the auction scenario's lines the engine plays as the
+/// client did: only ever up.
+const AUCTION_MATCHED: usize = 289;
+
+/// The auction scenario: browsing, buying a commodity, posting an item.
+#[test]
+fn the_engine_plays_auction_as_the_client_did() {
+    plays_as_the_client_did("auction", AUCTION_MATCHED);
+}
+
 /// How many of the items scenario's lines the engine plays as the client
 /// did: only ever up.
 const ITEMS_MATCHED: usize = 302;

@@ -295,6 +295,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("defineTaxi", crate::taxi::control_define),
         ("defineMailbox", crate::mail::control_define),
         ("defineBank", crate::bank::control_define),
+        ("defineAuctionHouse", crate::auction::control_define),
         ("nearCorpse", crate::death::control_near_corpse),
         ("gameError", game_error),
         ("clickWorld", crate::inventory::control_click_world),
