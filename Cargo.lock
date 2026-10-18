@@ -2743,6 +2743,7 @@ version = "0.9.0"
 dependencies = [
  "indexmap",
  "mlua",
+ "rustc-hash",
  "wowlua-span",
  "wowlua-syntax",
 ]

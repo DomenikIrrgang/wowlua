@@ -3,8 +3,9 @@
 //! handle to a freed slot is detected instead of reaching a new object.
 //! Strings are interned: equal byte strings share one handle.
 
-use std::collections::HashMap;
 use std::rc::Rc;
+
+use rustc_hash::FxHashMap;
 
 use crate::function::{Function, Upval};
 use crate::table::Table;
@@ -228,7 +229,8 @@ pub struct Userdata {
 #[derive(Default)]
 pub struct Heap {
     pub(crate) strings: Arena<LuaStr>,
-    intern: HashMap<Rc<[u8]>, StrRef>,
+    /// Looked up, never iterated: its hasher is not observable.
+    intern: FxHashMap<Rc<[u8]>, StrRef>,
     pub(crate) tables: Arena<Table>,
     pub(crate) funcs: Arena<Function>,
     pub(crate) upvals: Arena<Upval>,
