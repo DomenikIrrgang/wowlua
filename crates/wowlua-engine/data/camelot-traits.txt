@@ -1,5 +1,5 @@
 # WoW Forever 1.60.1 (70450)'s trait configs as characters answered them
-# (/stdtest engine traits: druid): the class, the call, the answer, a tab
+# (/stdtest engine traits: druid, shaman): the class, the call, the answer, a tab
 # between (cargo xtask ingest). The engine's trees, entries, conditions
 # and costs; the character's ranks and currencies as recorded.
 DRUID	C_ClassTalents.CanChangeTalents()	3: boolean true, boolean true, nil nil
@@ -985,3 +985,971 @@ DRUID	C_Traits.GetTreeNodes(1188)	1: {1=number 110296,2=number 110298,3=number 1
 DRUID	C_Traits.GetTreeNodes(1189)	1: {1=number 110309,2=number 110313,3=number 110314,4=number 110315,5=number 110316,6=number 110318,7=number 110319,8=number 113512,9=number 113513}
 DRUID	C_Traits.HasValidInspectData()	1: boolean false
 DRUID	C_Traits.IsReadyForCommit()	1: boolean true
+SHAMAN	C_ClassTalents.CanChangeTalents()	3: boolean true, boolean true, nil nil
+SHAMAN	C_ClassTalents.CanCreateNewConfig()	1: boolean true
+SHAMAN	C_ClassTalents.CanEditTalents()	2: boolean true, string 
+SHAMAN	C_ClassTalents.GetActiveConfigID()	1: number 5999541
+SHAMAN	C_ClassTalents.GetActiveHeroTalentSpec()	1: nil nil
+SHAMAN	C_ClassTalents.GetConfigIDsBySpecID()	1: {}
+SHAMAN	C_ClassTalents.GetConfigIDsBySpecID(1489)	1: {}
+SHAMAN	C_ClassTalents.GetHasStarterBuild()	1: boolean false
+SHAMAN	C_ClassTalents.GetHeroTalentSpecsForClassSpec()	0: 
+SHAMAN	C_ClassTalents.GetLastSelectedSavedConfigID(1489)	1: nil nil
+SHAMAN	C_ClassTalents.GetNextStarterBuildPurchase()	2: nil nil, nil nil
+SHAMAN	C_ClassTalents.GetStarterBuildActive()	1: boolean false
+SHAMAN	C_ClassTalents.GetTraitTreeForSpec(1489)	1: number 1082
+SHAMAN	C_ClassTalents.HasUnspentHeroTalentPoints()	2: boolean false, number 0
+SHAMAN	C_ClassTalents.HasUnspentTalentPoints()	3: boolean true, number 5, number 0
+SHAMAN	C_ClassTalents.IsConfigPopulated(5999541)	1: boolean true
+SHAMAN	C_ClassTalents.IsConfigPopulated(5999548)	1: boolean true
+SHAMAN	C_SpecializationInfo.CanPlayerUsePVPTalentUI()	2: boolean true, string 
+SHAMAN	C_SpecializationInfo.CanPlayerUseTalentSpecUI()	2: boolean true, string 
+SHAMAN	C_SpecializationInfo.CanPlayerUseTalentUI()	2: boolean true, string 
+SHAMAN	C_SpecializationInfo.GetActiveSpecGroup()	1: number 1
+SHAMAN	C_SpecializationInfo.GetAllSelectedPvpTalentIDs()	1: {}
+SHAMAN	C_SpecializationInfo.GetClassIDFromSpecID(1489)	1: number 7
+SHAMAN	C_SpecializationInfo.GetCombatConfigIDForSpecGroup(1)	1: number 5999541
+SHAMAN	C_SpecializationInfo.GetCombatConfigIDForSpecGroup(2)	1: nil nil
+SHAMAN	C_SpecializationInfo.GetNumSpecializationsForClassID(7)	1: number 1
+SHAMAN	C_SpecializationInfo.GetPvpTalentAlertStatus()	2: boolean false, boolean false
+SHAMAN	C_SpecializationInfo.GetPvpTalentSlotInfo(1)	1: {availableTalentIDs={},enabled=boolean false,level=number 0}
+SHAMAN	C_SpecializationInfo.GetPvpTalentSlotInfo(2)	1: {availableTalentIDs={},enabled=boolean false,level=number 0}
+SHAMAN	C_SpecializationInfo.GetPvpTalentSlotInfo(3)	1: {availableTalentIDs={},enabled=boolean false,level=number 0}
+SHAMAN	C_SpecializationInfo.GetPvpTalentSlotInfo(4)	1: nil nil
+SHAMAN	C_SpecializationInfo.GetPvpTalentSlotUnlockLevel(1)	1: nil nil
+SHAMAN	C_SpecializationInfo.GetPvpTalentSlotUnlockLevel(2)	1: nil nil
+SHAMAN	C_SpecializationInfo.GetPvpTalentSlotUnlockLevel(3)	1: nil nil
+SHAMAN	C_SpecializationInfo.GetPvpTalentSlotUnlockLevel(4)	1: nil nil
+SHAMAN	C_SpecializationInfo.GetSpecialization()	1: number 1
+SHAMAN	C_SpecializationInfo.GetSpecializationInfo(1)	10: number 1489, string Shaman, string , number 626006, string DAMAGER, number 4, number 0, nil nil, number 0, boolean true
+SHAMAN	C_SpecializationInfo.GetSpecializationMasterySpells(1)	1: {}
+SHAMAN	C_SpecializationInfo.GetSpellsDisplay(1489)	1: {}
+SHAMAN	C_SpecializationInfo.HasPlayerEarnedATalentPoint()	1: boolean true
+SHAMAN	C_SpecializationInfo.IsInitialized()	1: boolean true
+SHAMAN	C_SpecializationInfo.IsSpecSelectionEnabled(7)	1: boolean false
+SHAMAN	C_Traits.CanEditConfig(5999541)	2: boolean true, string 
+SHAMAN	C_Traits.CanEditConfig(5999548)	2: boolean true, string 
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104724, 129384)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104725, 129385)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104726, 129386)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104727, 129387)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104728, 129388)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104729, 129389)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104730, 129390)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104731, 129391)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104732, 129392)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104733, 129393)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104734, 129394)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104735, 129395)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104736, 129396)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104737, 129397)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104738, 129398)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104739, 129399)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104740, 129400)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104741, 129401)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104742, 129402)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104743, 129403)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104744, 129404)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104745, 129405)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104746, 129406)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104747, 129407)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104748, 129408)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104749, 129409)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104750, 129410)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104751, 129411)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104752, 129412)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104753, 129413)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104754, 129414)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104755, 129415)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104756, 129416)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104757, 129417)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104758, 129418)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104759, 129419)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104760, 129420)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104761, 129421)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104762, 129422)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104763, 129423)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104764, 129424)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104765, 129425)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104766, 129426)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104767, 129427)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104768, 129428)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104769, 129429)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104770, 129430)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104771, 129431)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104772, 129432)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999541, 104773, 129433)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110284, 136844)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110286, 136843)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110289, 136850)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110290, 136841)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110291, 136848)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110292, 136842)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110293, 136849)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110296, 136864)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110298, 136852)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110298, 137371)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110298, 137372)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110298, 137373)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110298, 137374)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110300, 136853)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110301, 136855)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110303, 136858)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110304, 136856)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110305, 136861)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110309, 136871)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110313, 136867)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110314, 136868)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110315, 136866)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110316, 136870)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110318, 136865)	1: boolean true
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 110319, 136869)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 113506, 140812)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 113508, 140814)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 113510, 140816)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 113511, 140817)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 113512, 140818)	1: boolean false
+SHAMAN	C_Traits.CanPurchaseRank(5999548, 113513, 140819)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104724)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104725)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104726)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104727)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104728)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104729)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104730)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104731)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104732)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104733)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104734)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104735)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104736)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104737)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104738)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104739)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104740)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104741)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104742)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104743)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104744)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104745)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104746)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104747)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104748)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104749)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104750)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104751)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104752)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104753)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104754)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104755)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104756)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104757)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104758)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104759)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104760)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104761)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104762)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104763)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104764)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104765)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104766)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104767)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104768)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104769)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104770)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104771)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104772)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999541, 104773)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110284)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110286)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110289)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110290)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110291)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110292)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110293)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110296)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110298)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110300)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110301)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110303)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110304)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110305)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110309)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110313)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110314)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110315)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110316)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110318)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 110319)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 113506)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 113508)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 113510)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 113511)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 113512)	1: boolean false
+SHAMAN	C_Traits.CanRefundRank(5999548, 113513)	1: boolean false
+SHAMAN	C_Traits.ConfigHasStagedChanges(5999541)	1: boolean false
+SHAMAN	C_Traits.ConfigHasStagedChanges(5999548)	1: boolean false
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42795)	1: {condID=number 42795,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 29,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 29 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42796)	1: {condID=number 42796,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 24,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 24 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42797)	1: {condID=number 42797,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 19,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 19 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42798)	1: {condID=number 42798,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 14,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 14 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42799)	1: {condID=number 42799,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 9,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 9 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42800)	1: {condID=number 42800,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 4,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 4 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42801)	1: {condID=number 42801,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 30,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 30 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42802)	1: {condID=number 42802,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 25,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 25 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42803)	1: {condID=number 42803,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 20,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 20 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42804)	1: {condID=number 42804,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 15,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 15 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42805)	1: {condID=number 42805,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 10,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 10 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42806)	1: {condID=number 42806,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 5,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 5 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42807)	1: {condID=number 42807,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 29,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 29 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42808)	1: {condID=number 42808,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 24,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 24 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42809)	1: {condID=number 42809,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 19,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 19 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42810)	1: {condID=number 42810,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 14,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 14 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42811)	1: {condID=number 42811,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 9,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 9 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999541, 42812)	1: {condID=number 42812,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 4,tooltipFormat=string Spend %d more |4point:points; in %s |4Talent:Talents;,tooltipText=string |cffff2020Spend 4 more |4point:points; in  |4Talent:Talents;|r,traitCurrencyID=number 3820,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999548, 49251)	1: {condID=number 49251,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 10,tooltipFormat=string Spend %d more |4point:points; in the %s Legacy Tree,tooltipText=string |cffff2020Spend 10 more |4point:points; in the  Legacy Tree|r,traitCurrencyID=number 4225,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999548, 49252)	1: {condID=number 49252,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 5,tooltipFormat=string Spend %d more |4point:points; in the %s Legacy Tree,tooltipText=string |cffff2020Spend 5 more |4point:points; in the  Legacy Tree|r,traitCurrencyID=number 4225,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999548, 49259)	1: {condID=number 49259,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean true,isSufficient=boolean false,spentAmountRequired=number 0,traitCurrencyID=number 4225,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999548, 49260)	1: {condID=number 49260,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean true,isSufficient=boolean false,spentAmountRequired=number 0,traitCurrencyID=number 4225,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999548, 49263)	1: {condID=number 49263,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 10,tooltipFormat=string Spend %d more |4point:points; in the %s Legacy Tree,tooltipText=string |cffff2020Spend 10 more |4point:points; in the  Legacy Tree|r,traitCurrencyID=number 4225,type=number 0}
+SHAMAN	C_Traits.GetConditionInfo(5999548, 49264)	1: {condID=number 49264,isAlwaysMet=boolean false,isGate=boolean false,isMet=boolean false,isSufficient=boolean false,spentAmountRequired=number 5,tooltipFormat=string Spend %d more |4point:points; in the %s Legacy Tree,tooltipText=string |cffff2020Spend 5 more |4point:points; in the  Legacy Tree|r,traitCurrencyID=number 4225,type=number 0}
+SHAMAN	C_Traits.GetConfigIDByTreeID(1058)	0: 
+SHAMAN	C_Traits.GetConfigIDByTreeID(1082)	0: 
+SHAMAN	C_Traits.GetConfigIDByTreeID(1089)	0: 
+SHAMAN	C_Traits.GetConfigIDByTreeID(1091)	0: 
+SHAMAN	C_Traits.GetConfigIDByTreeID(1100)	0: 
+SHAMAN	C_Traits.GetConfigIDByTreeID(110298)	0: 
+SHAMAN	C_Traits.GetConfigIDByTreeID(1111)	0: 
+SHAMAN	C_Traits.GetConfigIDByTreeID(1112)	0: 
+SHAMAN	C_Traits.GetConfigIDByTreeID(1114)	0: 
+SHAMAN	C_Traits.GetConfigIDByTreeID(1116)	0: 
+SHAMAN	C_Traits.GetConfigIDByTreeID(1117)	0: 
+SHAMAN	C_Traits.GetConfigIDByTreeID(1118)	1: number 5999548
+SHAMAN	C_Traits.GetConfigIDByTreeID(1187)	1: number 5999548
+SHAMAN	C_Traits.GetConfigIDByTreeID(1188)	1: number 5999548
+SHAMAN	C_Traits.GetConfigIDByTreeID(1189)	1: number 5999548
+SHAMAN	C_Traits.GetConfigInfo(5999541)	1: {ID=number 5999541,name=string Shaman,treeIDs={1=number 1082},type=number 4,usesSharedActionBars=boolean false}
+SHAMAN	C_Traits.GetConfigInfo(5999548)	1: {ID=number 5999548,name=string ,treeIDs={1=number 1118,2=number 1187,3=number 1188,4=number 1189},type=number 3,usesSharedActionBars=boolean false}
+SHAMAN	C_Traits.GetConfigsByType(0)	1: {}
+SHAMAN	C_Traits.GetConfigsByType(1)	1: {}
+SHAMAN	C_Traits.GetConfigsByType(2)	1: {}
+SHAMAN	C_Traits.GetConfigsByType(3)	1: {1=number 5999548}
+SHAMAN	C_Traits.GetConfigsByType(4)	1: {1=number 5999541}
+SHAMAN	C_Traits.GetDefinitionInfo(134185)	1: {spellID=number 408521}
+SHAMAN	C_Traits.GetDefinitionInfo(134186)	1: {spellID=number 16178}
+SHAMAN	C_Traits.GetDefinitionInfo(134187)	1: {spellID=number 16188}
+SHAMAN	C_Traits.GetDefinitionInfo(134188)	1: {spellID=number 29206}
+SHAMAN	C_Traits.GetDefinitionInfo(134189)	1: {spellID=number 16190}
+SHAMAN	C_Traits.GetDefinitionInfo(134190)	1: {spellID=number 16179}
+SHAMAN	C_Traits.GetDefinitionInfo(134191)	1: {spellID=number 16187}
+SHAMAN	C_Traits.GetDefinitionInfo(134192)	1: {spellID=number 16176}
+SHAMAN	C_Traits.GetDefinitionInfo(134193)	1: {spellID=number 408510}
+SHAMAN	C_Traits.GetDefinitionInfo(134194)	1: {spellID=number 16181}
+SHAMAN	C_Traits.GetDefinitionInfo(134195)	1: {spellID=number 1223033}
+SHAMAN	C_Traits.GetDefinitionInfo(134196)	1: {spellID=number 16173}
+SHAMAN	C_Traits.GetDefinitionInfo(134197)	1: {spellID=number 29187}
+SHAMAN	C_Traits.GetDefinitionInfo(134198)	1: {spellID=number 16184}
+SHAMAN	C_Traits.GetDefinitionInfo(134199)	1: {spellID=number 16194}
+SHAMAN	C_Traits.GetDefinitionInfo(134200)	1: {spellID=number 16182}
+SHAMAN	C_Traits.GetDefinitionInfo(134201)	1: {spellID=number 425336}
+SHAMAN	C_Traits.GetDefinitionInfo(134202)	1: {spellID=number 408498}
+SHAMAN	C_Traits.GetDefinitionInfo(134203)	1: {spellID=number 1223031}
+SHAMAN	C_Traits.GetDefinitionInfo(134204)	1: {spellID=number 17364}
+SHAMAN	C_Traits.GetDefinitionInfo(134205)	1: {spellID=number 30812}
+SHAMAN	C_Traits.GetDefinitionInfo(134206)	1: {spellID=number 16268}
+SHAMAN	C_Traits.GetDefinitionInfo(134207)	1: {spellID=number 16252}
+SHAMAN	C_Traits.GetDefinitionInfo(134208)	1: {spellID=number 16256}
+SHAMAN	C_Traits.GetDefinitionInfo(134209)	1: {spellID=number 16254}
+SHAMAN	C_Traits.GetDefinitionInfo(134210)	1: {spellID=number 1223030}
+SHAMAN	C_Traits.GetDefinitionInfo(134211)	1: {spellID=number 16266}
+SHAMAN	C_Traits.GetDefinitionInfo(134212)	1: {spellID=number 16261}
+SHAMAN	C_Traits.GetDefinitionInfo(134213)	1: {spellID=number 16262}
+SHAMAN	C_Traits.GetDefinitionInfo(134214)	1: {spellID=number 16255}
+SHAMAN	C_Traits.GetDefinitionInfo(134215)	1: {spellID=number 16258}
+SHAMAN	C_Traits.GetDefinitionInfo(134216)	1: {spellID=number 415140}
+SHAMAN	C_Traits.GetDefinitionInfo(134217)	1: {spellID=number 17485}
+SHAMAN	C_Traits.GetDefinitionInfo(134218)	1: {spellID=number 16043}
+SHAMAN	C_Traits.GetDefinitionInfo(134219)	1: {spellID=number 16166}
+SHAMAN	C_Traits.GetDefinitionInfo(134220)	1: {spellID=number 408438}
+SHAMAN	C_Traits.GetDefinitionInfo(134221)	1: {spellID=number 408490}
+SHAMAN	C_Traits.GetDefinitionInfo(134222)	1: {spellID=number 28999}
+SHAMAN	C_Traits.GetDefinitionInfo(134223)	1: {spellID=number 1222988}
+SHAMAN	C_Traits.GetDefinitionInfo(134224)	1: {spellID=number 29062}
+SHAMAN	C_Traits.GetDefinitionInfo(134225)	1: {spellID=number 16086}
+SHAMAN	C_Traits.GetDefinitionInfo(134226)	1: {spellID=number 28996}
+SHAMAN	C_Traits.GetDefinitionInfo(134227)	1: {spellID=number 16089}
+SHAMAN	C_Traits.GetDefinitionInfo(134228)	1: {spellID=number 16040}
+SHAMAN	C_Traits.GetDefinitionInfo(134229)	1: {spellID=number 16164}
+SHAMAN	C_Traits.GetDefinitionInfo(134230)	1: {spellID=number 30160}
+SHAMAN	C_Traits.GetDefinitionInfo(134231)	1: {spellID=number 16038}
+SHAMAN	C_Traits.GetDefinitionInfo(134232)	1: {spellID=number 16578}
+SHAMAN	C_Traits.GetDefinitionInfo(134233)	1: {spellID=number 16035}
+SHAMAN	C_Traits.GetDefinitionInfo(134234)	1: {spellID=number 16039}
+SHAMAN	C_Traits.GetDefinitionInfo(141604)	1: {spellID=number 1225451}
+SHAMAN	C_Traits.GetDefinitionInfo(141605)	1: {spellID=number 1225456}
+SHAMAN	C_Traits.GetDefinitionInfo(141606)	1: {spellID=number 1225459}
+SHAMAN	C_Traits.GetDefinitionInfo(141607)	1: {spellID=number 1225469}
+SHAMAN	C_Traits.GetDefinitionInfo(141611)	1: {spellID=number 1225435}
+SHAMAN	C_Traits.GetDefinitionInfo(141612)	1: {spellID=number 1225455}
+SHAMAN	C_Traits.GetDefinitionInfo(141613)	1: {spellID=number 1225457}
+SHAMAN	C_Traits.GetDefinitionInfo(141615)	1: {spellID=number 1225474}
+SHAMAN	C_Traits.GetDefinitionInfo(141616)	1: {spellID=number 1225490}
+SHAMAN	C_Traits.GetDefinitionInfo(141618)	1: {spellID=number 1225478}
+SHAMAN	C_Traits.GetDefinitionInfo(141619)	1: {spellID=number 1225479}
+SHAMAN	C_Traits.GetDefinitionInfo(141621)	1: {spellID=number 1225475}
+SHAMAN	C_Traits.GetDefinitionInfo(141624)	1: {spellID=number 1225477}
+SHAMAN	C_Traits.GetDefinitionInfo(141627)	1: {spellID=number 1225472}
+SHAMAN	C_Traits.GetDefinitionInfo(141628)	1: {spellID=number 1225497}
+SHAMAN	C_Traits.GetDefinitionInfo(141629)	1: {spellID=number 1225500}
+SHAMAN	C_Traits.GetDefinitionInfo(141630)	1: {spellID=number 1225499}
+SHAMAN	C_Traits.GetDefinitionInfo(141631)	1: {spellID=number 1225485}
+SHAMAN	C_Traits.GetDefinitionInfo(141632)	1: {spellID=number 1225501}
+SHAMAN	C_Traits.GetDefinitionInfo(141633)	1: {spellID=number 1225502}
+SHAMAN	C_Traits.GetDefinitionInfo(141634)	1: {spellID=number 1225503}
+SHAMAN	C_Traits.GetDefinitionInfo(142131)	1: {spellID=number 1225474}
+SHAMAN	C_Traits.GetDefinitionInfo(142132)	1: {spellID=number 1225474}
+SHAMAN	C_Traits.GetDefinitionInfo(142133)	1: {spellID=number 1225474}
+SHAMAN	C_Traits.GetDefinitionInfo(142134)	1: {spellID=number 1225474}
+SHAMAN	C_Traits.GetDefinitionInfo(145485)	1: {spellID=number 1317256}
+SHAMAN	C_Traits.GetDefinitionInfo(145487)	1: {spellID=number 1317256}
+SHAMAN	C_Traits.GetDefinitionInfo(145489)	1: {spellID=number 1317256}
+SHAMAN	C_Traits.GetDefinitionInfo(145490)	1: {spellID=number 1317256}
+SHAMAN	C_Traits.GetDefinitionInfo(145491)	1: {spellID=number 1317256}
+SHAMAN	C_Traits.GetDefinitionInfo(145492)	1: {spellID=number 1317256}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129384)	1: {conditionIDs={},definitionID=number 134185,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129385)	1: {conditionIDs={},definitionID=number 134186,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129386)	1: {conditionIDs={},definitionID=number 134187,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129387)	1: {conditionIDs={},definitionID=number 134188,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129388)	1: {conditionIDs={},definitionID=number 134189,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129389)	1: {conditionIDs={},definitionID=number 134190,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129390)	1: {conditionIDs={},definitionID=number 134191,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129391)	1: {conditionIDs={},definitionID=number 134192,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129392)	1: {conditionIDs={},definitionID=number 134193,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129393)	1: {conditionIDs={},definitionID=number 134194,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129394)	1: {conditionIDs={},definitionID=number 134195,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129395)	1: {conditionIDs={},definitionID=number 134196,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129396)	1: {conditionIDs={},definitionID=number 134197,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129397)	1: {conditionIDs={},definitionID=number 134198,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129398)	1: {conditionIDs={},definitionID=number 134199,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129399)	1: {conditionIDs={},definitionID=number 134200,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129400)	1: {conditionIDs={},definitionID=number 134201,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129401)	1: {conditionIDs={},definitionID=number 134202,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129402)	1: {conditionIDs={},definitionID=number 134203,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129403)	1: {conditionIDs={},definitionID=number 134204,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129404)	1: {conditionIDs={},definitionID=number 134205,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129405)	1: {conditionIDs={},definitionID=number 134206,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129406)	1: {conditionIDs={},definitionID=number 134207,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129407)	1: {conditionIDs={},definitionID=number 134208,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129408)	1: {conditionIDs={},definitionID=number 134209,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129409)	1: {conditionIDs={},definitionID=number 134210,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129410)	1: {conditionIDs={},definitionID=number 134211,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129411)	1: {conditionIDs={},definitionID=number 134212,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129412)	1: {conditionIDs={},definitionID=number 134213,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129413)	1: {conditionIDs={},definitionID=number 134214,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129414)	1: {conditionIDs={},definitionID=number 134215,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129415)	1: {conditionIDs={},definitionID=number 134216,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129416)	1: {conditionIDs={},definitionID=number 134217,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129417)	1: {conditionIDs={},definitionID=number 134218,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129418)	1: {conditionIDs={},definitionID=number 134219,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129419)	1: {conditionIDs={},definitionID=number 134220,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129420)	1: {conditionIDs={},definitionID=number 134221,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129421)	1: {conditionIDs={},definitionID=number 134222,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129422)	1: {conditionIDs={},definitionID=number 134223,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129423)	1: {conditionIDs={},definitionID=number 134224,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129424)	1: {conditionIDs={},definitionID=number 134225,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129425)	1: {conditionIDs={},definitionID=number 134226,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129426)	1: {conditionIDs={},definitionID=number 134227,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129427)	1: {conditionIDs={},definitionID=number 134228,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129428)	1: {conditionIDs={},definitionID=number 134229,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129429)	1: {conditionIDs={},definitionID=number 134230,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129430)	1: {conditionIDs={},definitionID=number 134231,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129431)	1: {conditionIDs={},definitionID=number 134232,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129432)	1: {conditionIDs={},definitionID=number 134233,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999541, 129433)	1: {conditionIDs={},definitionID=number 134234,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136841)	1: {conditionIDs={},definitionID=number 141604,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136842)	1: {conditionIDs={},definitionID=number 141605,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136843)	1: {conditionIDs={},definitionID=number 141606,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136844)	1: {conditionIDs={},definitionID=number 141607,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136848)	1: {conditionIDs={},definitionID=number 141611,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136849)	1: {conditionIDs={},definitionID=number 141612,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136850)	1: {conditionIDs={},definitionID=number 141613,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136852)	1: {conditionIDs={},definitionID=number 141615,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136853)	1: {conditionIDs={},definitionID=number 141616,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136855)	1: {conditionIDs={},definitionID=number 141618,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136856)	1: {conditionIDs={},definitionID=number 141619,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136858)	1: {conditionIDs={},definitionID=number 141621,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136861)	1: {conditionIDs={},definitionID=number 141624,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136864)	1: {conditionIDs={},definitionID=number 141627,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136865)	1: {conditionIDs={},definitionID=number 141628,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136866)	1: {conditionIDs={},definitionID=number 141629,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136867)	1: {conditionIDs={},definitionID=number 141630,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 3,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136868)	1: {conditionIDs={},definitionID=number 141631,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136869)	1: {conditionIDs={},definitionID=number 141632,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 5,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136870)	1: {conditionIDs={},definitionID=number 141633,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 2,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 136871)	1: {conditionIDs={},definitionID=number 141634,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 137371)	1: {conditionIDs={},definitionID=number 142131,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 137372)	1: {conditionIDs={},definitionID=number 142132,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 137373)	1: {conditionIDs={},definitionID=number 142133,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 137374)	1: {conditionIDs={},definitionID=number 142134,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 140812)	1: {conditionIDs={},definitionID=number 145485,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 140814)	1: {conditionIDs={},definitionID=number 145487,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 140816)	1: {conditionIDs={},definitionID=number 145489,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 140817)	1: {conditionIDs={},definitionID=number 145490,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 140818)	1: {conditionIDs={},definitionID=number 145491,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetEntryInfo(5999548, 140819)	1: {conditionIDs={},definitionID=number 145492,entryCost={},isAvailable=boolean true,isDisplayError=boolean false,maxRanks=number 1,type=number 1}
+SHAMAN	C_Traits.GetGroupCurrencyInfo(5999541, {11326, 11350, 11351, 11352, 11353, 11354, 11355, 11356, 11357, 11358, 11359, 11360, 11361, 11362, 11363, 11364, 11365, 11366, 11367, 11368, 11369, 12790, 12791, 12792, 12793, 12794, 12795, 12796, 12797, 12798, 12799, 12800, 12801, 12802, 12803, 12804})	1: {1={currencyInfos={1={maxQuantity=number 7,quantity=number 6,spent=number 1,traitCurrencyID=number 3820}},traitNodeGroupID=number 11363},10={currencyInfos={1={maxQuantity=number 7,quantity=number 6,spent=number 1,traitCurrencyID=number 3820}},traitNodeGroupID=number 12798},11={currencyInfos={1={maxQuantity=number 7,quantity=number 6,spent=number 1,traitCurrencyID=number 3820}},traitNodeGroupID=number 12803},12={currencyInfos={1={maxQuantity=number 7,quantity=number 6,spent=number 1,traitCurrencyID=number 3820}},traitNodeGroupID=number 12800},2={currencyInfos={1={maxQuantity=number 7,quantity=number 6,spent=number 1,traitCurrencyID=number 3820}},traitNodeGroupID=number 12797},3={currencyInfos={1={maxQuantity=number 7,quantity=number 6,spent=number 1,traitCurrencyID=number 3820}},traitNodeGroupID=number 12802},4={currencyInfos={1={maxQuantity=number 7,quantity=number 6,spent=number 1,traitCurrencyID=number 3820}},traitNodeGroupID=number 11362},5={currencyInfos={1={maxQuantity=number 7,quantity=number 6,spent=number 1,traitCurrencyID=number 3820}},traitNodeGroupID=number 12795},6={currencyInfos={1={maxQuantity=number 7,quantity=number 6,spent=number 1,traitCurrencyID=number 3820}},traitNodeGroupID=number 12804},7={currencyInfos={1={maxQuantity=number 7,quantity=number 6,spent=number 1,traitCurrencyID=number 3820}},traitNodeGroupID=number 12796},8={currencyInfos={1={maxQuantity=number 7,quantity=number 6,spent=number 1,traitCurrencyID=number 3820}},traitNodeGroupID=number 12799},9={currencyInfos={1={maxQuantity=number 7,quantity=number 6,spent=number 1,traitCurrencyID=number 3820}},traitNodeGroupID=number 12801}}
+SHAMAN	C_Traits.GetGroupCurrencyInfo(5999548, {12440, 12441, 12442})	1: {}
+SHAMAN	C_Traits.GetGroupCurrencyInfo(5999548, {12445, 12446, 12449})	1: {1={currencyInfos={1={maxQuantity=number 16,quantity=number 1,spent=number 15,traitCurrencyID=number 4225}},traitNodeGroupID=number 12449},2={currencyInfos={1={maxQuantity=number 16,quantity=number 11,spent=number 5,traitCurrencyID=number 4225}},traitNodeGroupID=number 12445}}
+SHAMAN	C_Traits.GetGroupCurrencyInfo(5999548, {12450, 12451, 12453})	1: {}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1058)	1: {}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1082)	1: {1={displayName=string Elemental Combat,groupID=number 11326,icon=number 136048,orderIndex=number 0,skillLineID=number 375,treeID=number 1082},2={displayName=string Enhancement,groupID=number 11363,icon=number 136051,orderIndex=number 1,skillLineID=number 373,treeID=number 1082},3={displayName=string Restoration,groupID=number 11362,icon=number 136052,orderIndex=number 2,skillLineID=number 374,treeID=number 1082}}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1089)	1: {1={displayName=string Balance,groupID=number 11328,icon=number 136096,orderIndex=number 0,skillLineID=number 574,treeID=number 1089},2={displayName=string Feral Combat,groupID=number 11347,icon=number 132276,orderIndex=number 1,skillLineID=number 134,treeID=number 1089},3={displayName=string Restoration,groupID=number 11340,icon=number 136041,orderIndex=number 2,skillLineID=number 573,treeID=number 1089}}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1091)	1: {1={displayName=string Beast Mastery,groupID=number 11372,icon=number 132164,orderIndex=number 0,skillLineID=number 50,treeID=number 1091},2={displayName=string Marksmanship,groupID=number 11371,icon=number 132222,orderIndex=number 1,skillLineID=number 163,treeID=number 1091},3={displayName=string Survival,groupID=number 11370,icon=number 132215,orderIndex=number 2,skillLineID=number 51,treeID=number 1091}}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1100)	1: {1={displayName=string Holy,groupID=number 11486,icon=number 135920,orderIndex=number 0,skillLineID=number 594,treeID=number 1100},2={displayName=string Protection,groupID=number 11541,icon=number 135893,orderIndex=number 1,skillLineID=number 267,treeID=number 1100},3={displayName=string Retribution,groupID=number 11559,icon=number 135873,orderIndex=number 2,skillLineID=number 184,treeID=number 1100}}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(110298)	1: {}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1111)	1: {1={displayName=string Assassination,groupID=number 11580,icon=number 132292,orderIndex=number 0,skillLineID=number 253,treeID=number 1111},2={displayName=string Combat,groupID=number 11573,icon=number 132090,orderIndex=number 1,skillLineID=number 38,treeID=number 1111},3={displayName=string Subtlety,groupID=number 11572,icon=number 132320,orderIndex=number 2,skillLineID=number 39,treeID=number 1111}}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1112)	1: {1={displayName=string Arcane,groupID=number 11582,icon=number 135932,orderIndex=number 0,skillLineID=number 237,treeID=number 1112},2={displayName=string Fire,groupID=number 11594,icon=number 135810,orderIndex=number 1,skillLineID=number 8,treeID=number 1112},3={displayName=string Frost,groupID=number 11601,icon=number 135846,orderIndex=number 2,skillLineID=number 6,treeID=number 1112}}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1114)	1: {1={displayName=string Discipline,groupID=number 11608,icon=number 135987,orderIndex=number 0,skillLineID=number 613,treeID=number 1114},2={displayName=string Holy,groupID=number 11615,icon=number 135920,orderIndex=number 1,skillLineID=number 56,treeID=number 1114},3={displayName=string Shadow Magic,groupID=number 11622,icon=number 136207,orderIndex=number 2,skillLineID=number 78,treeID=number 1114}}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1116)	1: {1={displayName=string Affliction,groupID=number 11629,icon=number 136145,orderIndex=number 0,skillLineID=number 355,treeID=number 1116},2={displayName=string Demonology,groupID=number 11636,icon=number 136172,orderIndex=number 1,skillLineID=number 354,treeID=number 1116},3={displayName=string Destruction,groupID=number 11637,icon=number 136186,orderIndex=number 2,skillLineID=number 593,treeID=number 1116}}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1117)	1: {1={displayName=string Arms,groupID=number 11650,icon=number 132292,orderIndex=number 0,skillLineID=number 26,treeID=number 1117},2={displayName=string Fury,groupID=number 11657,icon=number 132347,orderIndex=number 1,skillLineID=number 256,treeID=number 1117},3={displayName=string Protection,groupID=number 11670,icon=number 132341,orderIndex=number 2,skillLineID=number 257,treeID=number 1117}}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1118)	1: {}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1187)	1: {}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1188)	1: {}
+SHAMAN	C_Traits.GetGroupDisplayInfoByTreeID(1189)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104724, 129384)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104725, 129385)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104726, 129386)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104727, 129387)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104728, 129388)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104729, 129389)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104730, 129390)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104731, 129391)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104732, 129392)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104733, 129393)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104734, 129394)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104735, 129395)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104736, 129396)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104737, 129397)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104738, 129398)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104739, 129399)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104740, 129400)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104741, 129401)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104742, 129402)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104743, 129403)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104744, 129404)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104745, 129405)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104746, 129406)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104747, 129407)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104748, 129408)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104749, 129409)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104750, 129410)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104751, 129411)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104752, 129412)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104753, 129413)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104754, 129414)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104755, 129415)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104756, 129416)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104757, 129417)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104758, 129418)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104759, 129419)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104760, 129420)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104761, 129421)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104762, 129422)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104763, 129423)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104764, 129424)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104765, 129425)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104766, 129426)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104767, 129427)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104768, 129428)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104769, 129429)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104770, 129430)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104771, 129431)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104772, 129432)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(104773, 129433)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110284, 136844)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110286, 136843)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110289, 136850)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110290, 136841)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110291, 136848)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110292, 136842)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110293, 136849)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110296, 136864)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110298, 136852)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110298, 137371)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110298, 137372)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110298, 137373)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110298, 137374)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110300, 136853)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110301, 136855)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110303, 136858)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110304, 136856)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110305, 136861)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110309, 136871)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110313, 136867)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110314, 136868)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110315, 136866)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110316, 136870)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110318, 136865)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(110319, 136869)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(113506, 140812)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(113508, 140814)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(113510, 140816)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(113511, 140817)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(113512, 140818)	1: {}
+SHAMAN	C_Traits.GetIncreasedTraitData(113513, 140819)	1: {}
+SHAMAN	C_Traits.GetLoadoutSerializationVersion()	1: number 2
+SHAMAN	C_Traits.GetMaxAvailableTraitCurrency(3820, false)	1: number 56
+SHAMAN	C_Traits.GetMaxAvailableTraitCurrency(3820, true)	1: number 51
+SHAMAN	C_Traits.GetMaxAvailableTraitCurrency(4225, false)	1: number 81
+SHAMAN	C_Traits.GetMaxAvailableTraitCurrency(4225, true)	1: number 16
+SHAMAN	C_Traits.GetNodeCost(5999541, 104724)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104725)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104726)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104727)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104728)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104729)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104730)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104731)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104732)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104733)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104734)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104735)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104736)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104737)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104738)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104739)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104740)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104741)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104742)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104743)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104744)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104745)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104746)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104747)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104748)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104749)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104750)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104751)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104752)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104753)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104754)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104755)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104756)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104757)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104758)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104759)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104760)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104761)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104762)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104763)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104764)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104765)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104766)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104767)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104768)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104769)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104770)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104771)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104772)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999541, 104773)	1: {1={ID=number 3820,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110284)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110286)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110289)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110290)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110291)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110292)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110293)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110296)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110298)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110300)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110301)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110303)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110304)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110305)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110309)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110313)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110314)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110315)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110316)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110318)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 110319)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 113506)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 113508)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 113510)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 113511)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 113512)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeCost(5999548, 113513)	1: {1={ID=number 4225,amount=number 1}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104724)	1: {ID=number 104724,activeEntry={entryID=number 129384,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42807},currentRank=number 0,entryIDs={1=number 129384},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11364,2=number 11362},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 129384,rank=number 1},posX=number 9680,posY=number 5730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104725)	1: {ID=number 104725,activeEntry={entryID=number 129385,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42808},currentRank=number 0,entryIDs={1=number 129385},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11365,2=number 11362},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129385,rank=number 1},posX=number 10280,posY=number 5130,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104726)	1: {ID=number 104726,activeEntry={entryID=number 129386,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42809},currentRank=number 0,entryIDs={1=number 129386},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11366,2=number 11362,3=number 12800},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129386,rank=number 1},posX=number 10280,posY=number 4530,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104727)	1: {ID=number 104727,activeEntry={entryID=number 129387,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42809},currentRank=number 0,entryIDs={1=number 129387},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11366,2=number 11362,3=number 12800},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129387,rank=number 1},posX=number 9680,posY=number 4530,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 104724,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104728)	1: {ID=number 104728,activeEntry={entryID=number 129388,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42810},currentRank=number 0,entryIDs={1=number 129388},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11367,2=number 11362,3=number 12800,4=number 12801},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129388,rank=number 1},posX=number 10280,posY=number 3930,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104729)	1: {ID=number 104729,activeEntry={entryID=number 129389,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 129389},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 12800,2=number 12801,3=number 12802,4=number 12803,5=number 12804,6=number 11362},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129389,rank=number 1},posX=number 10280,posY=number 2130,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104730)	1: {ID=number 104730,activeEntry={entryID=number 129390,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42810},currentRank=number 0,entryIDs={1=number 129390},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11367,2=number 11362,3=number 12800,4=number 12801},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129390,rank=number 1},posX=number 9680,posY=number 3930,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104731)	1: {ID=number 104731,activeEntry={entryID=number 129391,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42811},currentRank=number 0,entryIDs={1=number 129391},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11368,2=number 12800,3=number 12801,4=number 12802,5=number 11362},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129391,rank=number 1},posX=number 9080,posY=number 3330,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104732)	1: {ID=number 104732,activeEntry={entryID=number 129392,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42811},currentRank=number 0,entryIDs={1=number 129392},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11368,2=number 11362,3=number 12800,4=number 12801,5=number 12802},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129392,rank=number 1},posX=number 10280,posY=number 3330,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104733)	1: {ID=number 104733,activeEntry={entryID=number 129393,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42811},currentRank=number 0,entryIDs={1=number 129393},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11368,2=number 11362,3=number 12800,4=number 12801,5=number 12802},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129393,rank=number 1},posX=number 9680,posY=number 3330,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104734)	1: {ID=number 104734,activeEntry={entryID=number 129394,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42812},currentRank=number 0,entryIDs={1=number 129394},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 12800,2=number 12801,3=number 12802,4=number 12803,5=number 11369,6=number 11362},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129394,rank=number 1},posX=number 9080,posY=number 2730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104735)	1: {ID=number 104735,activeEntry={entryID=number 129395,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42812},currentRank=number 0,entryIDs={1=number 129395},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11369,2=number 11362,3=number 12800,4=number 12801,5=number 12802,6=number 12803},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129395,rank=number 1},posX=number 10280,posY=number 2730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104736)	1: {ID=number 104736,activeEntry={entryID=number 129396,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42812},currentRank=number 0,entryIDs={1=number 129396},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11369,2=number 11362,3=number 12800,4=number 12801,5=number 12802,6=number 12803},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129396,rank=number 1},posX=number 9680,posY=number 2730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104737)	1: {ID=number 104737,activeEntry={entryID=number 129397,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42812},currentRank=number 0,entryIDs={1=number 129397},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11369,2=number 11362,3=number 12800,4=number 12801,5=number 12802,6=number 12803},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129397,rank=number 1},posX=number 10880,posY=number 2730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104738)	1: {ID=number 104738,activeEntry={entryID=number 129398,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42810},currentRank=number 0,entryIDs={1=number 129398},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11362,2=number 11367,3=number 12800,4=number 12801},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129398,rank=number 1},posX=number 9080,posY=number 3930,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104739)	1: {ID=number 104739,activeEntry={entryID=number 129399,rank=number 1},activeRank=number 1,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={},currentRank=number 1,entryIDs={1=number 129399},entryIDsWithCommittedRanks={1=number 129399},flags=number 0,groupIDs={1=number 11362,2=number 12800,3=number 12801,4=number 12802,5=number 12803,6=number 12804},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129399,rank=number 2},posX=number 9680,posY=number 2130,ranksIncreased=number 0,ranksPurchased=number 1,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104740)	1: {ID=number 104740,activeEntry={entryID=number 129400,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42795},currentRank=number 0,entryIDs={1=number 129400},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11350,2=number 11363},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 129400,rank=number 1},posX=number 5620,posY=number 5730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104741)	1: {ID=number 104741,activeEntry={entryID=number 129401,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42796},currentRank=number 0,entryIDs={1=number 129401},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11351,2=number 11363},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129401,rank=number 1},posX=number 6220,posY=number 5130,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104742)	1: {ID=number 104742,activeEntry={entryID=number 129402,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42797},currentRank=number 0,entryIDs={1=number 129402},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11352,2=number 11363,3=number 12795},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 129402,rank=number 1},posX=number 6220,posY=number 4530,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104743)	1: {ID=number 104743,activeEntry={entryID=number 129403,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42798},currentRank=number 0,entryIDs={1=number 129403},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11353,2=number 12795,3=number 12796,4=number 11363},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129403,rank=number 1},posX=number 6220,posY=number 3930,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 104742,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104744)	1: {ID=number 104744,activeEntry={entryID=number 129404,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42797},currentRank=number 0,entryIDs={1=number 129404},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11352,2=number 11363,3=number 12795},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129404,rank=number 1},posX=number 5620,posY=number 4530,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 104740,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104745)	1: {ID=number 104745,activeEntry={entryID=number 129405,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42797},currentRank=number 0,entryIDs={1=number 129405},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11352,2=number 11363,3=number 12795},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129405,rank=number 1},posX=number 5020,posY=number 4530,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104746)	1: {ID=number 104746,activeEntry={entryID=number 129406,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42798},currentRank=number 0,entryIDs={1=number 129406},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11353,2=number 12795,3=number 12796,4=number 11363},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129406,rank=number 1},posX=number 5020,posY=number 3930,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104747)	1: {ID=number 104747,activeEntry={entryID=number 129407,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42798},currentRank=number 0,entryIDs={1=number 129407},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11353,2=number 11363,3=number 12795,4=number 12796},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 129407,rank=number 1},posX=number 5620,posY=number 3930,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104748)	1: {ID=number 104748,activeEntry={entryID=number 129408,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42799},currentRank=number 0,entryIDs={1=number 129408},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11354,2=number 11363,3=number 12795,4=number 12796,5=number 12797},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129408,rank=number 1},posX=number 6820,posY=number 3330,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104749)	1: {ID=number 104749,activeEntry={entryID=number 129409,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42799},currentRank=number 0,entryIDs={1=number 129409},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11354,2=number 11363,3=number 12795,4=number 12796,5=number 12797},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129409,rank=number 1},posX=number 6220,posY=number 3330,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104750)	1: {ID=number 104750,activeEntry={entryID=number 129410,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42799},currentRank=number 0,entryIDs={1=number 129410},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11354,2=number 11363,3=number 12795,4=number 12796,5=number 12797},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129410,rank=number 1},posX=number 5020,posY=number 3330,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104751)	1: {ID=number 104751,activeEntry={entryID=number 129411,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42800},currentRank=number 0,entryIDs={1=number 129411},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11355,2=number 11363,3=number 12795,4=number 12796,5=number 12797,6=number 12798},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129411,rank=number 1},posX=number 6820,posY=number 2730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104752)	1: {ID=number 104752,activeEntry={entryID=number 129412,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42800},currentRank=number 0,entryIDs={1=number 129412},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11355,2=number 11363,3=number 12795,4=number 12796,5=number 12797,6=number 12798},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129412,rank=number 1},posX=number 6220,posY=number 2730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104753)	1: {ID=number 104753,activeEntry={entryID=number 129413,rank=number 1},activeRank=number 1,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={},currentRank=number 1,entryIDs={1=number 129413},entryIDsWithCommittedRanks={1=number 129413},flags=number 0,groupIDs={1=number 12795,2=number 12796,3=number 12797,4=number 12798,5=number 12799,6=number 11363},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129413,rank=number 2},posX=number 5620,posY=number 2130,ranksIncreased=number 0,ranksPurchased=number 1,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104754)	1: {ID=number 104754,activeEntry={entryID=number 129414,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42800},currentRank=number 0,entryIDs={1=number 129414},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11355,2=number 11363,3=number 12795,4=number 12796,5=number 12797,6=number 12798},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129414,rank=number 1},posX=number 5020,posY=number 2730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104755)	1: {ID=number 104755,activeEntry={entryID=number 129415,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42800},currentRank=number 0,entryIDs={1=number 129415},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11363,2=number 11355,3=number 12795,4=number 12796,5=number 12797,6=number 12798},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129415,rank=number 1},posX=number 5620,posY=number 2730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 104747,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104756)	1: {ID=number 104756,activeEntry={entryID=number 129416,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 129416},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11363,2=number 12795,3=number 12796,4=number 12797,5=number 12798,6=number 12799},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129416,rank=number 1},posX=number 6220,posY=number 2130,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104757)	1: {ID=number 104757,activeEntry={entryID=number 129417,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 129417},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11363,2=number 12795,3=number 12796,4=number 12797,5=number 12798,6=number 12799},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129417,rank=number 1},posX=number 5020,posY=number 2130,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104758)	1: {ID=number 104758,activeEntry={entryID=number 129418,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42801},currentRank=number 0,entryIDs={1=number 129418},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11356,2=number 11326},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 129418,rank=number 1},posX=number 1620,posY=number 5730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104759)	1: {ID=number 104759,activeEntry={entryID=number 129419,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42803},currentRank=number 0,entryIDs={1=number 129419},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11358,2=number 11326,3=number 12790},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 129419,rank=number 1},posX=number 2220,posY=number 4530,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 104766,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104760)	1: {ID=number 104760,activeEntry={entryID=number 129420,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42803},currentRank=number 0,entryIDs={1=number 129420},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11358,2=number 11326,3=number 12790},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129420,rank=number 1},posX=number 1620,posY=number 4530,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 104758,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104761)	1: {ID=number 104761,activeEntry={entryID=number 129421,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42803},currentRank=number 0,entryIDs={1=number 129421},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11358,2=number 11326,3=number 12790},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129421,rank=number 1},posX=number 1020,posY=number 4530,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104762)	1: {ID=number 104762,activeEntry={entryID=number 129422,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42804},currentRank=number 0,entryIDs={1=number 129422},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11359,2=number 11326,3=number 12790,4=number 12791},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129422,rank=number 1},posX=number 2820,posY=number 3930,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104763)	1: {ID=number 104763,activeEntry={entryID=number 129423,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42804},currentRank=number 0,entryIDs={1=number 129423},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11359,2=number 11326,3=number 12790,4=number 12791},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129423,rank=number 1},posX=number 1620,posY=number 3930,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104764)	1: {ID=number 104764,activeEntry={entryID=number 129424,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42804},currentRank=number 0,entryIDs={1=number 129424},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11359,2=number 11326,3=number 12790,4=number 12791},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129424,rank=number 1},posX=number 1020,posY=number 3930,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104765)	1: {ID=number 104765,activeEntry={entryID=number 129425,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42805},currentRank=number 0,entryIDs={1=number 129425},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11360,2=number 12792,3=number 12791,4=number 11326,5=number 12790},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129425,rank=number 1},posX=number 1620,posY=number 3330,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104766)	1: {ID=number 104766,activeEntry={entryID=number 129426,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42802},currentRank=number 0,entryIDs={1=number 129426},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11357,2=number 11326},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 129426,rank=number 1},posX=number 2220,posY=number 5130,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104767)	1: {ID=number 104767,activeEntry={entryID=number 129427,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42806},currentRank=number 0,entryIDs={1=number 129427},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11361,2=number 12790,3=number 12791,4=number 12792,5=number 12793,6=number 11326},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129427,rank=number 1},posX=number 1620,posY=number 2730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104768)	1: {ID=number 104768,activeEntry={entryID=number 129428,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42805},currentRank=number 0,entryIDs={1=number 129428},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11360,2=number 11326,3=number 12790,4=number 12791,5=number 12792},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129428,rank=number 1},posX=number 1020,posY=number 3330,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104769)	1: {ID=number 104769,activeEntry={entryID=number 129429,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42806},currentRank=number 0,entryIDs={1=number 129429},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11361,2=number 11326,3=number 12790,4=number 12791,5=number 12792,6=number 12793},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129429,rank=number 1},posX=number 1020,posY=number 2730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104770)	1: {ID=number 104770,activeEntry={entryID=number 129430,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42806},currentRank=number 0,entryIDs={1=number 129430},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11361,2=number 11326,3=number 12790,4=number 12791,5=number 12792,6=number 12793},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129430,rank=number 1},posX=number 2820,posY=number 2730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104771)	1: {ID=number 104771,activeEntry={entryID=number 129431,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 42806},currentRank=number 0,entryIDs={1=number 129431},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11361,2=number 11326,3=number 12790,4=number 12791,5=number 12792,6=number 12793},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129431,rank=number 1},posX=number 2220,posY=number 2730,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 104759,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104772)	1: {ID=number 104772,activeEntry={entryID=number 129432,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 129432},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11326,2=number 12790,3=number 12791,4=number 12792,5=number 12793,6=number 12794},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129432,rank=number 1},posX=number 2220,posY=number 2130,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999541, 104773)	1: {ID=number 104773,activeEntry={entryID=number 129433,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 129433},entryIDsWithCommittedRanks={},flags=number 0,groupIDs={1=number 11326,2=number 12790,3=number 12791,4=number 12792,5=number 12793,6=number 12794},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 129433,rank=number 1},posX=number 1620,posY=number 2130,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110284)	1: {ID=number 110284,activeEntry={entryID=number 136844,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 49251},currentRank=number 0,entryIDs={1=number 136844},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12442,2=number 12440},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 136844,rank=number 1},posX=number 4200,posY=number 1750,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110286)	1: {ID=number 110286,activeEntry={entryID=number 136843,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 49252},currentRank=number 0,entryIDs={1=number 136843},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12441,2=number 12440},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136843,rank=number 1},posX=number 3300,posY=number 1750,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 110284,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110289)	1: {ID=number 110289,activeEntry={entryID=number 136850,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 49252},currentRank=number 0,entryIDs={1=number 136850},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12441,2=number 12440},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136850,rank=number 1},posX=number 3300,posY=number 850,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110290)	1: {ID=number 110290,activeEntry={entryID=number 136841,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 136841},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12440},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136841,rank=number 1},posX=number 2400,posY=number 1750,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110291)	1: {ID=number 110291,activeEntry={entryID=number 136848,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 136848},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12440},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136848,rank=number 1},posX=number 2400,posY=number 2650,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 110292,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110292)	1: {ID=number 110292,activeEntry={entryID=number 136842,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 49252},currentRank=number 0,entryIDs={1=number 136842},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12441,2=number 12440},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 136842,rank=number 1},posX=number 3300,posY=number 2650,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110293)	1: {ID=number 110293,activeEntry={entryID=number 136849,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 49252},currentRank=number 0,entryIDs={1=number 136849},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12441,2=number 12440},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136849,rank=number 1},posX=number 3300,posY=number 3550,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110296)	1: {ID=number 110296,activeEntry={entryID=number 136864,rank=number 5},activeRank=number 5,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={},currentRank=number 5,entryIDs={1=number 136864},entryIDsWithCommittedRanks={1=number 136864},flags=number 8,groupIDs={1=number 12449},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,posX=number 2400,posY=number 2650,ranksIncreased=number 0,ranksPurchased=number 5,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110298)	1: {ID=number 110298,activeEntry={entryID=number 137371,rank=number 1},activeRank=number 5,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 49260},currentRank=number 5,entryIDToRanksIncreased={136852=number 0,137371=number 0,137372=number 0,137373=number 0,137374=number 0},entryIDs={1=number 136852,2=number 137374,3=number 137373,4=number 137372,5=number 137371},entryIDsWithCommittedRanks={1=number 137371},flags=number 8,groupIDs={1=number 12445,2=number 12449},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,posX=number 3300,posY=number 1750,ranksIncreased=number 0,ranksPurchased=number 5,totalMaxRanks=number 5,type=number 1,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110300)	1: {ID=number 110300,activeEntry={entryID=number 136853,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 49259},currentRank=number 0,entryIDs={1=number 136853},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12446,2=number 12449},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 136853,rank=number 1},posX=number 4200,posY=number 2650,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110301)	1: {ID=number 110301,activeEntry={entryID=number 136855,rank=number 5},activeRank=number 5,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={},currentRank=number 5,entryIDs={1=number 136855},entryIDsWithCommittedRanks={1=number 136855},flags=number 8,groupIDs={1=number 12449},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,posX=number 2400,posY=number 1750,ranksIncreased=number 0,ranksPurchased=number 5,totalMaxRanks=number 5,type=number 0,visibleEdges={1={isActive=boolean true,targetNode=number 110298,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110303)	1: {ID=number 110303,activeEntry={entryID=number 136858,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={1=number 49260},currentRank=number 0,entryIDs={1=number 136858},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12445,2=number 12449},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136858,rank=number 1},posX=number 3300,posY=number 3550,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110304)	1: {ID=number 110304,activeEntry={entryID=number 136856,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={1=number 49260},currentRank=number 0,entryIDs={1=number 136856},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12445,2=number 12449},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136856,rank=number 1},posX=number 3300,posY=number 2650,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 110300,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110305)	1: {ID=number 110305,activeEntry={entryID=number 136861,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={1=number 49260},currentRank=number 0,entryIDs={1=number 136861},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12445,2=number 12449},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136861,rank=number 1},posX=number 3300,posY=number 850,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110309)	1: {ID=number 110309,activeEntry={entryID=number 136871,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 49263},currentRank=number 0,entryIDs={1=number 136871},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12451,2=number 12450},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 136871,rank=number 1},posX=number 4200,posY=number 2650,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110313)	1: {ID=number 110313,activeEntry={entryID=number 136867,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 136867},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12450},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 3,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136867,rank=number 1},posX=number 2400,posY=number 1750,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 3,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 110316,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110314)	1: {ID=number 110314,activeEntry={entryID=number 136868,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 49264},currentRank=number 0,entryIDs={1=number 136868},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12453,2=number 12450},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136868,rank=number 1},posX=number 3300,posY=number 3550,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110315)	1: {ID=number 110315,activeEntry={entryID=number 136866,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 136866},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12450},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136866,rank=number 1},posX=number 2400,posY=number 2650,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 110309,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110316)	1: {ID=number 110316,activeEntry={entryID=number 136870,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 49264},currentRank=number 0,entryIDs={1=number 136870},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12453,2=number 12450},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 2,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 136870,rank=number 1},posX=number 3300,posY=number 1750,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 2,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110318)	1: {ID=number 110318,activeEntry={entryID=number 136865,rank=number 0},activeRank=number 0,canPurchaseRank=boolean true,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 136865},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12450},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136865,rank=number 1},posX=number 2400,posY=number 3550,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 110319)	1: {ID=number 110319,activeEntry={entryID=number 136869,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={1=number 49264},currentRank=number 0,entryIDs={1=number 136869},entryIDsWithCommittedRanks={},flags=number 8,groupIDs={1=number 12453,2=number 12450},isAvailable=boolean false,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 5,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 136869,rank=number 1},posX=number 3300,posY=number 850,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 5,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 113506)	1: {ID=number 113506,activeEntry={entryID=number 140812,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 140812},entryIDsWithCommittedRanks={},flags=number 10,groupIDs={},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 140812,rank=number 1},posX=number 5100,posY=number 2650,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 113508)	1: {ID=number 113508,activeEntry={entryID=number 140814,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 140814},entryIDsWithCommittedRanks={},flags=number 10,groupIDs={},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 140814,rank=number 1},posX=number 4200,posY=number 2650,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 113506,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 113510)	1: {ID=number 113510,activeEntry={entryID=number 140816,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 140816},entryIDsWithCommittedRanks={},flags=number 10,groupIDs={},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 140816,rank=number 1},posX=number 5100,posY=number 1750,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 113511)	1: {ID=number 113511,activeEntry={entryID=number 140817,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 140817},entryIDsWithCommittedRanks={},flags=number 10,groupIDs={},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 140817,rank=number 1},posX=number 4200,posY=number 1750,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 113510,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 113512)	1: {ID=number 113512,activeEntry={entryID=number 140818,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 140818},entryIDsWithCommittedRanks={},flags=number 10,groupIDs={},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean false,nextEntry={entryID=number 140818,rank=number 1},posX=number 5100,posY=number 1750,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={}}
+SHAMAN	C_Traits.GetNodeInfo(5999548, 113513)	1: {ID=number 113513,activeEntry={entryID=number 140819,rank=number 0},activeRank=number 0,canPurchaseRank=boolean false,canRefundRank=boolean false,conditionIDs={},currentRank=number 0,entryIDs={1=number 140819},entryIDsWithCommittedRanks={},flags=number 10,groupIDs={},isAvailable=boolean true,isCascadeRepurchasable=boolean false,isDisplayError=boolean false,isVisible=boolean true,maxRanks=number 1,meetsEdgeRequirements=boolean true,nextEntry={entryID=number 140819,rank=number 1},posX=number 4200,posY=number 1750,ranksIncreased=number 0,ranksPurchased=number 0,totalMaxRanks=number 1,type=number 0,visibleEdges={1={isActive=boolean false,targetNode=number 113512,type=number 2,visualStyle=number 1}}}
+SHAMAN	C_Traits.GetStagedChanges(5999541)	0: 
+SHAMAN	C_Traits.GetStagedChanges(5999548)	0: 
+SHAMAN	C_Traits.GetStagedChangesCost(5999541)	1: {}
+SHAMAN	C_Traits.GetStagedChangesCost(5999548)	1: {}
+SHAMAN	C_Traits.GetSystemIDByTreeID(1058)	1: number 0
+SHAMAN	C_Traits.GetSystemIDByTreeID(1082)	1: number 0
+SHAMAN	C_Traits.GetSystemIDByTreeID(1089)	1: number 0
+SHAMAN	C_Traits.GetSystemIDByTreeID(1091)	1: number 10
+SHAMAN	C_Traits.GetSystemIDByTreeID(1100)	1: number 10
+SHAMAN	C_Traits.GetSystemIDByTreeID(110298)	0: 
+SHAMAN	C_Traits.GetSystemIDByTreeID(1111)	1: number 10
+SHAMAN	C_Traits.GetSystemIDByTreeID(1112)	1: number 10
+SHAMAN	C_Traits.GetSystemIDByTreeID(1114)	1: number 10
+SHAMAN	C_Traits.GetSystemIDByTreeID(1116)	1: number 10
+SHAMAN	C_Traits.GetSystemIDByTreeID(1117)	1: number 10
+SHAMAN	C_Traits.GetSystemIDByTreeID(1118)	1: number 45
+SHAMAN	C_Traits.GetSystemIDByTreeID(1187)	1: number 45
+SHAMAN	C_Traits.GetSystemIDByTreeID(1188)	1: number 45
+SHAMAN	C_Traits.GetSystemIDByTreeID(1189)	1: number 45
+SHAMAN	C_Traits.GetTraitCurrencyInfo(3820)	4: number 4, number 2, nil nil, nil nil
+SHAMAN	C_Traits.GetTraitCurrencyInfo(4225)	4: number 0, number 2, nil nil, number 135884
+SHAMAN	C_Traits.GetTraitDescription(129384, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129385, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129385, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129385, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129385, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129385, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129386, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129387, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129387, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129387, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129388, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129389, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129389, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129389, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129389, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129389, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129390, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129390, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129390, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129390, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129390, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129391, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129391, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129391, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129392, 1)	1: string The caster is surrounded by 3 globes of water. When a spell, melee, or ranged attack hits the caster or when one of the caster's spells gets a critical result, 2% of maximum mana is restored to the caster, expending one water globe. Only one globe will activate every few seconds.  Lasts 10 min.
+
+Only one Elemental Shield can be active on the Shaman at any one time.
+SHAMAN	C_Traits.GetTraitDescription(129393, 1)	1: string Gives your healing spells a 23% chance to not lose casting time when you take damage.
+SHAMAN	C_Traits.GetTraitDescription(129393, 2)	1: string Gives your healing spells a 47% chance to not lose casting time when you take damage.
+SHAMAN	C_Traits.GetTraitDescription(129393, 3)	1: string Gives your healing spells a 70% chance to not lose casting time when you take damage.
+SHAMAN	C_Traits.GetTraitDescription(129394, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129394, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129394, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129395, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129395, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129395, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129395, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129395, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129396, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129396, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129396, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129397, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129397, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129398, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129398, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129398, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129398, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129398, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129399, 1)	1: string Reduces the casting time of your Healing Wave spell by 0.1 sec.
+SHAMAN	C_Traits.GetTraitDescription(129399, 2)	1: string Reduces the casting time of your Healing Wave spell by 0.2 sec.
+SHAMAN	C_Traits.GetTraitDescription(129399, 3)	1: string Reduces the casting time of your Healing Wave spell by 0.3 sec.
+SHAMAN	C_Traits.GetTraitDescription(129399, 4)	1: string Reduces the casting time of your Healing Wave spell by 0.4 sec.
+SHAMAN	C_Traits.GetTraitDescription(129399, 5)	1: string Reduces the casting time of your Healing Wave spell by 0.5 sec.
+SHAMAN	C_Traits.GetTraitDescription(129400, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129401, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129401, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129401, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129401, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129401, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129402, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129402, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129403, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129404, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129404, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129405, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129406, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129406, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129406, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129406, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129406, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129407, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129407, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129407, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129407, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129407, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129408, 1)	1: string Increases your chance to dodge by an additional 2%.
+SHAMAN	C_Traits.GetTraitDescription(129408, 2)	1: string Increases your chance to dodge by an additional 4%.
+SHAMAN	C_Traits.GetTraitDescription(129408, 3)	1: string Increases your chance to dodge by an additional 6%.
+SHAMAN	C_Traits.GetTraitDescription(129409, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129410, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129410, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129410, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129411, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129411, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129411, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129412, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129412, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129413, 1)	1: string Improves your chance to get a critical strike with all spells and attacks by 1%.
+SHAMAN	C_Traits.GetTraitDescription(129413, 2)	1: string Improves your chance to get a critical strike with all spells and attacks by 2%.
+SHAMAN	C_Traits.GetTraitDescription(129413, 3)	1: string Improves your chance to get a critical strike with all spells and attacks by 3%.
+SHAMAN	C_Traits.GetTraitDescription(129413, 4)	1: string Improves your chance to get a critical strike with all spells and attacks by 4%.
+SHAMAN	C_Traits.GetTraitDescription(129413, 5)	1: string Improves your chance to get a critical strike with all spells and attacks by 5%.
+SHAMAN	C_Traits.GetTraitDescription(129414, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129414, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129415, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129415, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129415, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129416, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129416, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129416, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129416, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129416, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129417, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129417, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129418, 1)	1: string Gain mastery over Fire and Lightning, reducing the cast time of Lightning Bolt and Lava Burst by 0.5 sec, and removing the cooldown from Chain Lightning. Lasts 15 sec.
+SHAMAN	C_Traits.GetTraitDescription(129419, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129419, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129419, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129420, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129421, 1)	1: string Increases the range of your Lightning Bolt, Chain Lightning, Fire Nova, and Lava Burst spells by 3 yards and reduces the cooldown of Totemic Projection by 10 sec.
+SHAMAN	C_Traits.GetTraitDescription(129421, 2)	1: string Increases the range of your Lightning Bolt, Chain Lightning, Fire Nova, and Lava Burst spells by 6 yards and reduces the cooldown of Totemic Projection by 20 sec.
+SHAMAN	C_Traits.GetTraitDescription(129422, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129423, 1)	1: string Gives your Lightning Bolt, Chain Lightning, and Lava Burst spells a 23% chance to not lose casting time when you take damage.
+SHAMAN	C_Traits.GetTraitDescription(129423, 2)	1: string Gives your Lightning Bolt, Chain Lightning, and Lava Burst spells a 47% chance to not lose casting time when you take damage.
+SHAMAN	C_Traits.GetTraitDescription(129423, 3)	1: string Gives your Lightning Bolt, Chain Lightning, and Lava Burst spells a 70% chance to not lose casting time when you take damage.
+SHAMAN	C_Traits.GetTraitDescription(129424, 1)	1: string Increases the damage done by your Fire Nova spell by 10% and reduces its cooldown by 2 sec, and increases the duration of your Magma Totem by 10 sec.
+SHAMAN	C_Traits.GetTraitDescription(129424, 2)	1: string Increases the damage done by your Fire Nova spell by 20% and reduces its cooldown by 4 sec, and increases the duration of your Magma Totem by 20 sec.
+SHAMAN	C_Traits.GetTraitDescription(129425, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129425, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129425, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129426, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129426, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129426, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129426, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129426, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129427, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129427, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129427, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129427, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129427, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129428, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129429, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129429, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129429, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129430, 1)	1: string Increases the damage done by your Fire Totems and by your Flame Shock, Fire Nova, and Lava Burst spells by 5%, as well as increases the duration of your Flame Shock spell by 3 sec.
+SHAMAN	C_Traits.GetTraitDescription(129430, 2)	1: string Increases the damage done by your Fire Totems and by your Flame Shock, Fire Nova, and Lava Burst spells by 10%, as well as increases the duration of your Flame Shock spell by 6 sec.
+SHAMAN	C_Traits.GetTraitDescription(129430, 3)	1: string Increases the damage done by your Fire Totems and by your Flame Shock, Fire Nova, and Lava Burst spells by 15%, as well as increases the duration of your Flame Shock spell by 9 sec.
+SHAMAN	C_Traits.GetTraitDescription(129431, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129431, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129431, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129432, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129432, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129432, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129432, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129432, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129433, 1)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129433, 2)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129433, 3)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129433, 4)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(129433, 5)	1: string 
+SHAMAN	C_Traits.GetTraitDescription(136841, 1)	1: string Increases your chance to gain a skill increase from using any primary, secondary, or class-based tradeskill by 4%.
+SHAMAN	C_Traits.GetTraitDescription(136841, 2)	1: string Increases your chance to gain a skill increase from using any primary, secondary, or class-based tradeskill by 8%.
+SHAMAN	C_Traits.GetTraitDescription(136841, 3)	1: string Increases your chance to gain a skill increase from using any primary, secondary, or class-based tradeskill by 12%.
+SHAMAN	C_Traits.GetTraitDescription(136841, 4)	1: string Increases your chance to gain a skill increase from using any primary, secondary, or class-based tradeskill by 16%.
+SHAMAN	C_Traits.GetTraitDescription(136841, 5)	1: string Increases your chance to gain a skill increase from using any primary, secondary, or class-based tradeskill by 20%.
+SHAMAN	C_Traits.GetTraitDescription(136842, 1)	1: string You have a 5% chance to receive 100% increased Merchant's Favor when you turn in a crate to the Azeroth Commerce Authority or Durotar Supply and Logistics.
+SHAMAN	C_Traits.GetTraitDescription(136842, 2)	1: string You have a 10% chance to receive 100% increased Merchant's Favor when you turn in a crate to the Azeroth Commerce Authority or Durotar Supply and Logistics.
+SHAMAN	C_Traits.GetTraitDescription(136842, 3)	1: string You have a 15% chance to receive 100% increased Merchant's Favor when you turn in a crate to the Azeroth Commerce Authority or Durotar Supply and Logistics.
+SHAMAN	C_Traits.GetTraitDescription(136843, 1)	1: string Reduces the gold price of items from all vendors by 5%.
+SHAMAN	C_Traits.GetTraitDescription(136843, 2)	1: string Reduces the gold price of items from all vendors by 10%.
+SHAMAN	C_Traits.GetTraitDescription(136844, 1)	1: string Increases your skill by 1 in your lowest tradeskill among your Primary and Secondary tradeskills. If you have already reached 300 skill in your two current Primary Tradeskills and all three Secondary Tradeskills, you will gain 2 to 4 of a random Elemental Essence.
+SHAMAN	C_Traits.GetTraitDescription(136848, 1)	1: string You are 20% more likely to discover Scarce materials from Mining, Herbalism, and Skinning.
+SHAMAN	C_Traits.GetTraitDescription(136848, 2)	1: string You are 40% more likely to discover Scarce materials from Mining, Herbalism, and Skinning.
+SHAMAN	C_Traits.GetTraitDescription(136848, 3)	1: string You are 60% more likely to discover Scarce materials from Mining, Herbalism, and Skinning.
+SHAMAN	C_Traits.GetTraitDescription(136848, 4)	1: string You are 80% more likely to discover Scarce materials from Mining, Herbalism, and Skinning.
+SHAMAN	C_Traits.GetTraitDescription(136848, 5)	1: string You are 100% more likely to discover Scarce materials from Mining, Herbalism, and Skinning.
+SHAMAN	C_Traits.GetTraitDescription(136849, 1)	1: string While fishing with a Lure active, you have a 25% chance to catch an extra fish.
+SHAMAN	C_Traits.GetTraitDescription(136849, 2)	1: string While fishing with a Lure active, you have a 50% chance to catch an extra fish.
+SHAMAN	C_Traits.GetTraitDescription(136850, 1)	1: string Your cooking recipes have a 10% chance to create an extra result.
+SHAMAN	C_Traits.GetTraitDescription(136850, 2)	1: string Your cooking recipes have a 20% chance to create an extra result.
+SHAMAN	C_Traits.GetTraitDescription(136850, 3)	1: string Your cooking recipes have a 30% chance to create an extra result.
+SHAMAN	C_Traits.GetTraitDescription(136850, 4)	1: string Your cooking recipes have a 40% chance to create an extra result.
+SHAMAN	C_Traits.GetTraitDescription(136850, 5)	1: string Your cooking recipes have a 50% chance to create an extra result.
+SHAMAN	C_Traits.GetTraitDescription(136852, 1)	1: string You gain talent points every level starting at level 9 instead of starting at level 10, but you still may not have more than 51 total talent points.
+SHAMAN	C_Traits.GetTraitDescription(136853, 1)	1: string You receive a 50% discount on all flight paths, and your flight path mount flies 20% faster.
+SHAMAN	C_Traits.GetTraitDescription(136855, 1)	1: string Your rested experience accumulates 4% faster and your rested experience cap is increased by 4%.
+SHAMAN	C_Traits.GetTraitDescription(136855, 2)	1: string Your rested experience accumulates 8% faster and your rested experience cap is increased by 8%.
+SHAMAN	C_Traits.GetTraitDescription(136855, 3)	1: string Your rested experience accumulates 12% faster and your rested experience cap is increased by 12%.
+SHAMAN	C_Traits.GetTraitDescription(136855, 4)	1: string Your rested experience accumulates 16% faster and your rested experience cap is increased by 16%.
+SHAMAN	C_Traits.GetTraitDescription(136855, 5)	1: string Your rested experience accumulates 20% faster and your rested experience cap is increased by 20%.
+SHAMAN	C_Traits.GetTraitDescription(136856, 1)	1: string Reduces your cooldown on adding Camp features by 8%
+SHAMAN	C_Traits.GetTraitDescription(136856, 2)	1: string Reduces your cooldown on adding Camp features by 17%
+SHAMAN	C_Traits.GetTraitDescription(136856, 3)	1: string Reduces your cooldown on adding Camp features by 25%
+SHAMAN	C_Traits.GetTraitDescription(136858, 1)	1: string Reduces the duration of the Recently Bandaged effect by 5 sec when you use a bandage. Ineffective in dungeons, raids, and battlegrounds.
+SHAMAN	C_Traits.GetTraitDescription(136858, 2)	1: string Reduces the duration of the Recently Bandaged effect by 10 sec when you use a bandage. Ineffective in dungeons, raids, and battlegrounds.
+SHAMAN	C_Traits.GetTraitDescription(136861, 1)	1: string Increases your ability to detect nearby targets with Stealth as if your level were increased by 1. Ineffective in Battlegrounds.
+SHAMAN	C_Traits.GetTraitDescription(136861, 2)	1: string Increases your ability to detect nearby targets with Stealth as if your level were increased by 2. Ineffective in Battlegrounds.
+SHAMAN	C_Traits.GetTraitDescription(136864, 1)	1: string You gain 1% of your maximum Health and Mana over 10 sec each time you deliver the killing blow to a non-trivial enemy. Ineffective in dungeons, raids, and battlegrounds.
+SHAMAN	C_Traits.GetTraitDescription(136864, 2)	1: string You gain 2% of your maximum Health and Mana over 10 sec each time you deliver the killing blow to a non-trivial enemy. Ineffective in dungeons, raids, and battlegrounds.
+SHAMAN	C_Traits.GetTraitDescription(136864, 3)	1: string You gain 3% of your maximum Health and Mana over 10 sec each time you deliver the killing blow to a non-trivial enemy. Ineffective in dungeons, raids, and battlegrounds.
+SHAMAN	C_Traits.GetTraitDescription(136864, 4)	1: string You gain 4% of your maximum Health and Mana over 10 sec each time you deliver the killing blow to a non-trivial enemy. Ineffective in dungeons, raids, and battlegrounds.
+SHAMAN	C_Traits.GetTraitDescription(136864, 5)	1: string You gain 5% of your maximum Health and Mana over 10 sec each time you deliver the killing blow to a non-trivial enemy. Ineffective in dungeons, raids, and battlegrounds.
+SHAMAN	C_Traits.GetTraitDescription(136865, 1)	1: string You take 8% less durability loss when you die.
+SHAMAN	C_Traits.GetTraitDescription(136865, 2)	1: string You take 16% less durability loss when you die.
+SHAMAN	C_Traits.GetTraitDescription(136865, 3)	1: string You take 24% less durability loss when you die.
+SHAMAN	C_Traits.GetTraitDescription(136865, 4)	1: string You take 32% less durability loss when you die.
+SHAMAN	C_Traits.GetTraitDescription(136865, 5)	1: string You take 40% less durability loss when you die.
+SHAMAN	C_Traits.GetTraitDescription(136866, 1)	1: string Increases movement speed while dead by 5% and your helpful spells and abilities cost no resources for 1 min after being resurrected or until you enter combat.
+SHAMAN	C_Traits.GetTraitDescription(136866, 2)	1: string Increases movement speed while dead by 10% and your helpful spells and abilities cost no resources for 2 min after being resurrected or until you enter combat.
+SHAMAN	C_Traits.GetTraitDescription(136867, 1)	1: string Increases the duration of beneficial effects from eating food by 33%.
+SHAMAN	C_Traits.GetTraitDescription(136867, 2)	1: string Increases the duration of beneficial effects from eating food by 67%.
+SHAMAN	C_Traits.GetTraitDescription(136867, 3)	1: string Increases the duration of beneficial effects from eating food by 100%.
+SHAMAN	C_Traits.GetTraitDescription(136868, 1)	1: string Increases your reputation gains by 2%.
+SHAMAN	C_Traits.GetTraitDescription(136868, 2)	1: string Increases your reputation gains by 4%.
+SHAMAN	C_Traits.GetTraitDescription(136868, 3)	1: string Increases your reputation gains by 6%.
+SHAMAN	C_Traits.GetTraitDescription(136868, 4)	1: string Increases your reputation gains by 8%.
+SHAMAN	C_Traits.GetTraitDescription(136868, 5)	1: string Increases your reputation gains by 10%.
+SHAMAN	C_Traits.GetTraitDescription(136869, 1)	1: string Increases Honor Points gained by 2%.
+SHAMAN	C_Traits.GetTraitDescription(136869, 2)	1: string Increases Honor Points gained by 4%.
+SHAMAN	C_Traits.GetTraitDescription(136869, 3)	1: string Increases Honor Points gained by 6%.
+SHAMAN	C_Traits.GetTraitDescription(136869, 4)	1: string Increases Honor Points gained by 8%.
+SHAMAN	C_Traits.GetTraitDescription(136869, 5)	1: string Increases Honor Points gained by 10%.
+SHAMAN	C_Traits.GetTraitDescription(136870, 1)	1: string Your class abilities which grant long-duration stat or attribute benefits to all party or raid members last 50% longer, and the benefits you gain from resting at a camp last 50% longer.
+SHAMAN	C_Traits.GetTraitDescription(136870, 2)	1: string Your class abilities which grant long-duration stat or attribute benefits to all party or raid members last 100% longer, and the benefits you gain from resting at a camp last 100% longer.
+SHAMAN	C_Traits.GetTraitDescription(136871, 1)	1: string Your class abilities no longer require reagents purchaseable from vendors.
+SHAMAN	C_Traits.GetTraitDescription(137371, 1)	1: string You gain talent points every level starting at level 5 instead of starting at level 10, but you still may not have more than 51 total talent points.
+SHAMAN	C_Traits.GetTraitDescription(137372, 1)	1: string You gain talent points every level starting at level 6 instead of starting at level 10, but you still may not have more than 51 total talent points.
+SHAMAN	C_Traits.GetTraitDescription(137373, 1)	1: string You gain talent points every level starting at level 7 instead of starting at level 10, but you still may not have more than 51 total talent points.
+SHAMAN	C_Traits.GetTraitDescription(137374, 1)	1: string You gain talent points every level starting at level 8 instead of starting at level 10, but you still may not have more than 51 total talent points.
+SHAMAN	C_Traits.GetTraitDescription(140812, 1)	1: string To be added in a future update.
+SHAMAN	C_Traits.GetTraitDescription(140814, 1)	1: string To be added in a future update.
+SHAMAN	C_Traits.GetTraitDescription(140816, 1)	1: string To be added in a future update.
+SHAMAN	C_Traits.GetTraitDescription(140817, 1)	1: string To be added in a future update.
+SHAMAN	C_Traits.GetTraitDescription(140818, 1)	1: string To be added in a future update.
+SHAMAN	C_Traits.GetTraitDescription(140819, 1)	1: string To be added in a future update.
+SHAMAN	C_Traits.GetTraitSystemFlags(5999541)	0: 
+SHAMAN	C_Traits.GetTraitSystemFlags(5999548)	1: number 0
+SHAMAN	C_Traits.GetTraitSystemWidgetSetID(5999541)	0: 
+SHAMAN	C_Traits.GetTraitSystemWidgetSetID(5999548)	0: 
+SHAMAN	C_Traits.GetTreeCurrencyInfo(5999541, 1082, false)	1: {1={maxQuantity=number 7,quantity=number 5,spent=number 2,spentInTree=number 2,traitCurrencyID=number 3820}}
+SHAMAN	C_Traits.GetTreeCurrencyInfo(5999541, 1082, true)	1: {1={maxQuantity=number 7,quantity=number 5,spent=number 2,spentInTree=number 2,traitCurrencyID=number 3820}}
+SHAMAN	C_Traits.GetTreeCurrencyInfo(5999548, 1118, false)	1: {}
+SHAMAN	C_Traits.GetTreeCurrencyInfo(5999548, 1118, true)	1: {}
+SHAMAN	C_Traits.GetTreeCurrencyInfo(5999548, 1187, false)	1: {1={maxQuantity=number 16,quantity=number 1,spent=number 15,spentInTree=number 0,traitCurrencyID=number 4225}}
+SHAMAN	C_Traits.GetTreeCurrencyInfo(5999548, 1187, true)	1: {1={maxQuantity=number 16,quantity=number 1,spent=number 15,spentInTree=number 0,traitCurrencyID=number 4225}}
+SHAMAN	C_Traits.GetTreeCurrencyInfo(5999548, 1188, false)	1: {1={maxQuantity=number 16,quantity=number 1,spent=number 15,spentInTree=number 15,traitCurrencyID=number 4225}}
+SHAMAN	C_Traits.GetTreeCurrencyInfo(5999548, 1188, true)	1: {1={maxQuantity=number 16,quantity=number 1,spent=number 15,spentInTree=number 15,traitCurrencyID=number 4225}}
+SHAMAN	C_Traits.GetTreeCurrencyInfo(5999548, 1189, false)	1: {1={maxQuantity=number 16,quantity=number 1,spent=number 15,spentInTree=number 0,traitCurrencyID=number 4225}}
+SHAMAN	C_Traits.GetTreeCurrencyInfo(5999548, 1189, true)	1: {1={maxQuantity=number 16,quantity=number 1,spent=number 15,spentInTree=number 0,traitCurrencyID=number 4225}}
+SHAMAN	C_Traits.GetTreeHash(1058)	1: {1=number 40,10=number 119,11=number 218,12=number 164,13=number 38,14=number 226,15=number 65,16=number 234,2=number 8,3=number 223,4=number 78,5=number 25,6=number 65,7=number 30,8=number 42,9=number 90}
+SHAMAN	C_Traits.GetTreeHash(1082)	1: {1=number 243,10=number 108,11=number 250,12=number 72,13=number 63,14=number 201,15=number 87,16=number 223,2=number 100,3=number 123,4=number 232,5=number 181,6=number 24,7=number 42,8=number 33,9=number 147}
+SHAMAN	C_Traits.GetTreeHash(1089)	1: {1=number 112,10=number 108,11=number 111,12=number 238,13=number 25,14=number 193,15=number 170,16=number 126,2=number 51,3=number 74,4=number 156,5=number 48,6=number 179,7=number 103,8=number 57,9=number 92}
+SHAMAN	C_Traits.GetTreeHash(1091)	1: {1=number 25,10=number 108,11=number 122,12=number 135,13=number 111,14=number 228,15=number 223,16=number 145,2=number 119,3=number 176,4=number 122,5=number 40,6=number 30,7=number 65,8=number 185,9=number 11}
+SHAMAN	C_Traits.GetTreeHash(1100)	1: {1=number 21,10=number 101,11=number 22,12=number 195,13=number 223,14=number 102,15=number 148,16=number 70,2=number 52,3=number 100,4=number 171,5=number 141,6=number 147,7=number 83,8=number 66,9=number 112}
+SHAMAN	C_Traits.GetTreeHash(110298)	1: {1=number 212,10=number 128,11=number 9,12=number 152,13=number 236,14=number 248,15=number 66,16=number 126,2=number 29,3=number 140,4=number 217,5=number 143,6=number 0,7=number 178,8=number 4,9=number 233}
+SHAMAN	C_Traits.GetTreeHash(1111)	1: {1=number 228,10=number 209,11=number 203,12=number 54,13=number 154,14=number 122,15=number 193,16=number 33,2=number 164,3=number 97,4=number 145,5=number 148,6=number 24,7=number 101,8=number 139,9=number 115}
+SHAMAN	C_Traits.GetTreeHash(1112)	1: {1=number 135,10=number 140,11=number 230,12=number 165,13=number 123,14=number 253,15=number 64,16=number 76,2=number 139,3=number 137,4=number 75,5=number 80,6=number 138,7=number 217,8=number 189,9=number 72}
+SHAMAN	C_Traits.GetTreeHash(1114)	1: {1=number 214,10=number 245,11=number 226,12=number 210,13=number 204,14=number 159,15=number 187,16=number 158,2=number 159,3=number 251,4=number 188,5=number 58,6=number 251,7=number 87,8=number 30,9=number 128}
+SHAMAN	C_Traits.GetTreeHash(1116)	1: {1=number 26,10=number 103,11=number 152,12=number 225,13=number 247,14=number 19,15=number 183,16=number 20,2=number 173,3=number 252,4=number 250,5=number 55,6=number 150,7=number 48,8=number 250,9=number 64}
+SHAMAN	C_Traits.GetTreeHash(1117)	1: {1=number 246,10=number 36,11=number 146,12=number 6,13=number 226,14=number 47,15=number 7,16=number 184,2=number 65,3=number 119,4=number 71,5=number 237,6=number 7,7=number 143,8=number 188,9=number 196}
+SHAMAN	C_Traits.GetTreeHash(1118)	1: {1=number 212,10=number 128,11=number 9,12=number 152,13=number 236,14=number 248,15=number 66,16=number 126,2=number 29,3=number 140,4=number 217,5=number 143,6=number 0,7=number 178,8=number 4,9=number 233}
+SHAMAN	C_Traits.GetTreeHash(1187)	1: {1=number 229,10=number 149,11=number 237,12=number 88,13=number 62,14=number 66,15=number 233,16=number 138,2=number 61,3=number 62,4=number 46,5=number 22,6=number 161,7=number 180,8=number 237,9=number 180}
+SHAMAN	C_Traits.GetTreeHash(1188)	1: {1=number 40,10=number 200,11=number 90,12=number 131,13=number 179,14=number 14,15=number 217,16=number 105,2=number 1,3=number 73,4=number 153,5=number 82,6=number 83,7=number 199,8=number 140,9=number 62}
+SHAMAN	C_Traits.GetTreeHash(1189)	1: {1=number 30,10=number 136,11=number 225,12=number 252,13=number 62,14=number 96,15=number 180,16=number 101,2=number 148,3=number 199,4=number 128,5=number 191,6=number 13,7=number 173,8=number 52,9=number 31}
+SHAMAN	C_Traits.GetTreeInfo(5999541, 1082)	1: {ID=number 1082,buttonSize=number 40,cannotRefund=boolean true,gates={},hideSingleRankNumbers=boolean false,maxZoom=number 1,minZoom=number 1}
+SHAMAN	C_Traits.GetTreeInfo(5999548, 1118)	1: {ID=number 1118,buttonSize=number 40,cannotRefund=boolean true,gates={},hideSingleRankNumbers=boolean false,maxZoom=number 1,minZoom=number 1}
+SHAMAN	C_Traits.GetTreeInfo(5999548, 1187)	1: {ID=number 1187,buttonSize=number 40,cannotRefund=boolean true,gates={},hideSingleRankNumbers=boolean false,maxZoom=number 1,minZoom=number 1}
+SHAMAN	C_Traits.GetTreeInfo(5999548, 1188)	1: {ID=number 1188,buttonSize=number 40,cannotRefund=boolean true,gates={},hideSingleRankNumbers=boolean false,maxZoom=number 1,minZoom=number 1}
+SHAMAN	C_Traits.GetTreeInfo(5999548, 1189)	1: {ID=number 1189,buttonSize=number 40,cannotRefund=boolean true,gates={},hideSingleRankNumbers=boolean false,maxZoom=number 1,minZoom=number 1}
+SHAMAN	C_Traits.GetTreeNodes(1058)	1: {1=number 103884,2=number 103885,3=number 103886,4=number 103887,5=number 103888,6=number 103889,7=number 103890,8=number 103891,9=number 103892}
+SHAMAN	C_Traits.GetTreeNodes(1082)	1: {1=number 104724,10=number 104733,11=number 104734,12=number 104735,13=number 104736,14=number 104737,15=number 104738,16=number 104739,17=number 104740,18=number 104741,19=number 104742,2=number 104725,20=number 104743,21=number 104744,22=number 104745,23=number 104746,24=number 104747,25=number 104748,26=number 104749,27=number 104750,28=number 104751,29=number 104752,3=number 104726,30=number 104753,31=number 104754,32=number 104755,33=number 104756,34=number 104757,35=number 104758,36=number 104759,37=number 104760,38=number 104761,39=number 104762,4=number 104727,40=number 104763,41=number 104764,42=number 104765,43=number 104766,44=number 104767,45=number 104768,46=number 104769,47=number 104770,48=number 104771,49=number 104772,5=number 104728,50=number 104773,6=number 104729,7=number 104730,8=number 104731,9=number 104732}
+SHAMAN	C_Traits.GetTreeNodes(1089)	1: {1=number 104909,10=number 104918,11=number 104919,12=number 104920,13=number 104921,14=number 104922,15=number 104923,16=number 104924,17=number 104925,18=number 104926,19=number 104927,2=number 104910,20=number 104928,21=number 104929,22=number 104930,23=number 104931,24=number 104932,25=number 104933,26=number 104934,27=number 104935,28=number 104936,29=number 104937,3=number 104911,30=number 104938,31=number 104939,32=number 104940,33=number 104941,34=number 104942,35=number 104943,36=number 104944,37=number 104945,38=number 104946,39=number 104947,4=number 104912,40=number 104948,41=number 104949,42=number 104950,43=number 104951,44=number 104952,45=number 104953,46=number 104954,47=number 104955,48=number 104956,49=number 104957,5=number 104913,50=number 104958,51=number 110844,52=number 113563,6=number 104914,7=number 104915,8=number 104916,9=number 104917}
+SHAMAN	C_Traits.GetTreeNodes(1091)	1: {1=number 104960,10=number 104969,11=number 104970,12=number 104972,13=number 104973,14=number 104974,15=number 104975,16=number 104976,17=number 104981,18=number 104982,19=number 104983,2=number 104961,20=number 104984,21=number 104985,22=number 104986,23=number 104987,24=number 104988,25=number 104989,26=number 104990,27=number 104991,28=number 104992,29=number 104993,3=number 104962,30=number 104994,31=number 104995,32=number 104996,33=number 104997,34=number 104998,35=number 104999,36=number 105000,37=number 105001,38=number 105002,39=number 105003,4=number 104963,40=number 105004,41=number 105005,42=number 105006,43=number 105007,44=number 105008,45=number 105009,46=number 105011,47=number 105012,48=number 105013,49=number 110859,5=number 104964,50=number 110860,51=number 110861,52=number 110870,6=number 104965,7=number 104966,8=number 104967,9=number 104968}
+SHAMAN	C_Traits.GetTreeNodes(1100)	1: {1=number 105320,10=number 105332,11=number 105333,12=number 105334,13=number 105335,14=number 105625,15=number 105626,16=number 105627,17=number 105628,18=number 105629,19=number 105630,2=number 105321,20=number 105632,21=number 105633,22=number 105634,23=number 105636,24=number 105637,25=number 105638,26=number 105639,27=number 105692,28=number 105693,29=number 105694,3=number 105323,30=number 105696,31=number 105697,32=number 105698,33=number 105699,34=number 105700,35=number 105701,36=number 105702,37=number 105703,38=number 105704,39=number 105705,4=number 105324,40=number 105706,41=number 105707,42=number 110871,43=number 110872,44=number 110873,45=number 110874,46=number 110875,47=number 110878,48=number 110879,49=number 110880,5=number 105325,50=number 110882,6=number 105327,7=number 105329,8=number 105330,9=number 105331}
+SHAMAN	C_Traits.GetTreeNodes(110298)	1: {}
+SHAMAN	C_Traits.GetTreeNodes(1111)	1: {1=number 105708,10=number 105717,11=number 105718,12=number 105719,13=number 105720,14=number 105721,15=number 105722,16=number 105723,17=number 105724,18=number 105726,19=number 105727,2=number 105709,20=number 105728,21=number 105730,22=number 105732,23=number 105733,24=number 105735,25=number 105736,26=number 105737,27=number 105738,28=number 105739,29=number 105740,3=number 105710,30=number 105741,31=number 105742,32=number 105743,33=number 105745,34=number 105746,35=number 105747,36=number 105748,37=number 105749,38=number 105750,39=number 105751,4=number 105711,40=number 105752,41=number 105753,42=number 105754,43=number 105755,44=number 105756,45=number 105757,46=number 105759,47=number 105760,48=number 105761,49=number 108100,5=number 105712,50=number 110866,51=number 110867,52=number 110868,53=number 113398,6=number 105713,7=number 105714,8=number 105715,9=number 105716}
+SHAMAN	C_Traits.GetTreeNodes(1112)	1: {1=number 105762,10=number 105771,11=number 105772,12=number 105773,13=number 105774,14=number 105775,15=number 105776,16=number 105777,17=number 105778,18=number 105779,19=number 105780,2=number 105763,20=number 105781,21=number 105782,22=number 105783,23=number 105784,24=number 105785,25=number 105786,26=number 105787,27=number 105788,28=number 105789,29=number 105790,3=number 105764,30=number 105791,31=number 105792,32=number 105793,33=number 105794,34=number 105795,35=number 105796,36=number 105797,37=number 105798,38=number 105799,39=number 105800,4=number 105765,40=number 105801,41=number 105802,42=number 105803,43=number 105804,44=number 105805,45=number 105806,46=number 105807,47=number 105808,48=number 105809,49=number 105810,5=number 105766,50=number 105811,51=number 105812,52=number 105813,53=number 105814,54=number 105815,55=number 113627,6=number 105767,7=number 105768,8=number 105769,9=number 105770}
+SHAMAN	C_Traits.GetTreeNodes(1114)	1: {1=number 105817,10=number 105828,11=number 105829,12=number 105830,13=number 105831,14=number 105832,15=number 105833,16=number 105834,17=number 105835,18=number 105836,19=number 105837,2=number 105818,20=number 105838,21=number 105839,22=number 105840,23=number 105841,24=number 105842,25=number 105843,26=number 105844,27=number 105845,28=number 105846,29=number 105848,3=number 105819,30=number 105849,31=number 105850,32=number 105851,33=number 105852,34=number 105853,35=number 105854,36=number 105855,37=number 105856,38=number 105857,39=number 105858,4=number 105820,40=number 105859,41=number 105860,42=number 105861,43=number 105862,44=number 105863,45=number 105864,46=number 105865,47=number 105866,48=number 105867,49=number 110851,5=number 105821,50=number 110852,51=number 110853,52=number 110854,53=number 110855,6=number 105823,7=number 105824,8=number 105825,9=number 105826}
+SHAMAN	C_Traits.GetTreeNodes(1116)	1: {1=number 105874,10=number 105883,11=number 105884,12=number 105885,13=number 105886,14=number 105887,15=number 105888,16=number 105889,17=number 105890,18=number 105891,19=number 105892,2=number 105875,20=number 105893,21=number 105894,22=number 105895,23=number 105896,24=number 105897,25=number 105898,26=number 105899,27=number 105900,28=number 105901,29=number 105902,3=number 105876,30=number 105903,31=number 105904,32=number 105905,33=number 105906,34=number 105907,35=number 105908,36=number 105909,37=number 105910,38=number 105911,39=number 105912,4=number 105877,40=number 105913,41=number 105914,42=number 105916,43=number 105917,44=number 105918,45=number 105919,46=number 105920,47=number 105921,48=number 105922,49=number 105923,5=number 105878,50=number 105924,51=number 105925,52=number 110876,6=number 105879,7=number 105880,8=number 105881,9=number 105882}
+SHAMAN	C_Traits.GetTreeNodes(1117)	1: {1=number 105926,10=number 105937,11=number 105938,12=number 105939,13=number 105941,14=number 105942,15=number 105944,16=number 105945,17=number 105947,18=number 105948,19=number 105949,2=number 105927,20=number 105950,21=number 105951,22=number 105952,23=number 105953,24=number 105954,25=number 105955,26=number 105956,27=number 105957,28=number 105958,29=number 105959,3=number 105928,30=number 105961,31=number 105962,32=number 105963,33=number 105964,34=number 105965,35=number 105966,36=number 105967,37=number 105968,38=number 105969,39=number 105970,4=number 105930,40=number 105971,41=number 105972,42=number 105974,43=number 105975,44=number 105976,45=number 105977,46=number 105978,47=number 110524,48=number 110856,49=number 110857,5=number 105931,50=number 110858,51=number 113569,52=number 113570,6=number 105932,7=number 105933,8=number 105934,9=number 105935}
+SHAMAN	C_Traits.GetTreeNodes(1118)	1: {}
+SHAMAN	C_Traits.GetTreeNodes(1187)	1: {1=number 110284,2=number 110286,3=number 110289,4=number 110290,5=number 110291,6=number 110292,7=number 110293,8=number 113506,9=number 113508}
+SHAMAN	C_Traits.GetTreeNodes(1188)	1: {1=number 110296,2=number 110298,3=number 110300,4=number 110301,5=number 110303,6=number 110304,7=number 110305,8=number 113510,9=number 113511}
+SHAMAN	C_Traits.GetTreeNodes(1189)	1: {1=number 110309,2=number 110313,3=number 110314,4=number 110315,5=number 110316,6=number 110318,7=number 110319,8=number 113512,9=number 113513}
+SHAMAN	C_Traits.HasValidInspectData()	1: boolean false
+SHAMAN	C_Traits.IsReadyForCommit()	1: boolean true

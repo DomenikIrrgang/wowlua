@@ -44,6 +44,8 @@ const COMMIT_AFTER: f64 = 0.499;
 const BUFFS_AFTER: f64 = 0.007;
 /// `Enum.TraitNodeFlag.NeverPurchasable`.
 const NEVER_PURCHASABLE: i64 = 2;
+/// `Enum.TraitNodeType.Tiered`.
+const TIERED: f64 = 1.0;
 /// `Enum.TraitConditionType.Available`.
 const AVAILABLE: f64 = 0.0;
 /// `Enum.TraitEdgeType`: one source suffices, every source is needed.
@@ -312,6 +314,12 @@ impl<'a> Model<'a> {
         self.committed(config, node) + if staged { self.staged(config, node) } else { 0 }
     }
 
+    fn entry_max_ranks(&self, config: i64, entry: i64) -> i64 {
+        self.first(&format!("C_Traits.GetEntryInfo({config}, {entry})"))
+            .and_then(|e| e.num("maxRanks"))
+            .unwrap_or(1.0) as i64
+    }
+
     fn max_ranks(&self, config: i64, node: i64) -> i64 {
         self.recorded_node(config, node)
             .and_then(|n| n.num("maxRanks"))
@@ -486,37 +494,54 @@ impl<'a> Model<'a> {
             .into_iter()
             .all(|c| self.condition_met(config, c));
         let meets = self.meets_edges(config, node);
-        let entry = info
+        let entries = info.nums("entryIDs");
+        let tiered = info.num("type") == Some(TIERED);
+        // A node's entry at a rank, and the rank within it: a tiered
+        // node's entries one after another (recorded: rank 5 of five
+        // one-rank entries is the fifth at 1; rank 0 the first at 0), else
+        // the node's entry (the one it shows).
+        let shown = info
             .get("activeEntry")
             .and_then(|e| e.num("entryID"))
-            .or_else(|| info.nums("entryIDs").first().map(|e| *e as f64));
+            .map(|e| e as i64)
+            .or_else(|| entries.first().copied());
+        let at = |r: i64| -> Option<(i64, i64)> {
+            if !tiered || r == 0 {
+                return shown.map(|e| (e, r));
+            }
+            let mut left = r;
+            for &e in &entries {
+                let m = self.entry_max_ranks(config, e);
+                if left <= m {
+                    return Some((e, left));
+                }
+                left -= m;
+            }
+            None
+        };
+        let pair = |(e, r): (i64, i64)| {
+            Rv::Table(vec![
+                ("entryID".into(), Rv::Num(e as f64)),
+                ("rank".into(), Rv::Num(r as f64)),
+            ])
+        };
         for key in ["activeRank", "currentRank", "ranksPurchased"] {
             info.set(key, Rv::Num(rank as f64));
         }
-        if let Some(entry) = entry {
-            let active = Rv::Table(vec![
-                ("entryID".into(), Rv::Num(entry)),
-                ("rank".into(), Rv::Num(rank as f64)),
-            ]);
-            info.set("activeEntry", active);
-            if rank < max {
-                let next = Rv::Table(vec![
-                    ("entryID".into(), Rv::Num(entry)),
-                    ("rank".into(), Rv::Num((rank + 1) as f64)),
-                ]);
-                info.set("nextEntry", next);
-            } else {
-                info.remove("nextEntry");
-            }
-            let before = self.state.start.get(&(config, node)).copied();
-            let committed = before.unwrap_or_else(|| self.recorded_rank(config, node));
-            let with = if committed > 0 {
-                vec![Rv::Num(entry)]
-            } else {
-                Vec::new()
-            };
-            info.set("entryIDsWithCommittedRanks", Rv::list_of(with));
+        if let Some(active) = at(rank) {
+            info.set("activeEntry", pair(active));
         }
+        match at(rank + 1).filter(|_| rank < max) {
+            Some(next) => info.set("nextEntry", pair(next)),
+            None => info.remove("nextEntry"),
+        }
+        let before = self.state.start.get(&(config, node)).copied();
+        let committed = before.unwrap_or_else(|| self.recorded_rank(config, node));
+        let with = match at(committed).filter(|_| committed > 0) {
+            Some((e, _)) => vec![Rv::Num(e as f64)],
+            None => Vec::new(),
+        };
+        info.set("entryIDsWithCommittedRanks", Rv::list_of(with));
         info.set("isAvailable", Rv::Bool(available));
         info.set("meetsEdgeRequirements", Rv::Bool(meets));
         // Whatever the points left (recorded: the druid's spent class
