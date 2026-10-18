@@ -239,6 +239,24 @@ pub fn usage(f: &Function) -> String {
     text
 }
 
+/// The arguments as the client checks them: the documentation's, or the
+/// client's own, relaxed; the same each call, so worked out once.
+fn checked_arguments(f: &Function) -> &[Json] {
+    f.checked_arguments.get_or_init(|| {
+        let mut args = match overridden_arguments(f.name) {
+            Some(Json::Array(a)) => a,
+            _ => f
+                .doc
+                .get("Arguments")
+                .and_then(Json::as_array)
+                .cloned()
+                .unwrap_or_default(),
+        };
+        relax(f, &mut args);
+        args
+    })
+}
+
 /// Checks a call's arguments as the client does.
 pub fn check(vm: &mut Vm, api: &Api, f: &Function, c: &NativeCall) -> Result<(), LuaError> {
     check_from(vm, api, f, c, 1)
@@ -254,16 +272,7 @@ pub fn check_from(
     c: &NativeCall,
     first: usize,
 ) -> Result<(), LuaError> {
-    let mut args = match overridden_arguments(f.name) {
-        Some(Json::Array(a)) => a,
-        _ => f
-            .doc
-            .get("Arguments")
-            .and_then(Json::as_array)
-            .cloned()
-            .unwrap_or_default(),
-    };
-    relax(f, &mut args);
+    let args = checked_arguments(f);
     // A method's arguments count `self` as the first (`/stdtest engine`).
     let method = first == 2;
     for (i, arg) in args.iter().enumerate() {

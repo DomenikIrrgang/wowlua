@@ -93,6 +93,13 @@ pub struct Widget {
 #[derive(Default)]
 pub struct World {
     pub widgets: Vec<Widget>,
+    /// The widgets given an `OnUpdate` (set, hooked or from XML) or an
+    /// intrinsic type's handlers, ever: the ones a frame looks at, each
+    /// checked as its turn comes (most of the UI's widgets never update).
+    pub updating: std::collections::BTreeSet<usize>,
+    /// The widgets that ever registered for events: the ones an event
+    /// looks at.
+    pub listening: std::collections::BTreeSet<usize>,
     classes: HashMap<String, TableRef>,
     /// Templates and frame types tests (or stand-ins for Blizzard's UI
     /// code) define: name → (base class, function applied to the frame),
@@ -462,12 +469,14 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
     Value::Table(table)
 }
 
-/// Addon code may not use a forbidden widget (unverified wording).
+/// Addon code may not use a forbidden widget (unverified wording). The
+/// error names the documented method's usage (made only for the error:
+/// every method call comes here).
 fn refuse_forbidden(
     vm: &mut Vm,
     id: WidgetId,
     short: &str,
-    usage: Option<String>,
+    documented: Option<&crate::api::Function>,
 ) -> Result<(), LuaError> {
     if engine(vm).world.widgets[id.0].forbidden
         && short != "IsForbidden"
@@ -476,7 +485,9 @@ fn refuse_forbidden(
         // `/stdtest engine`: "calling 'GetObjectType' on bad self (Attempt
         // to access forbidden object from code tainted by an AddOn - Usage:
         // local objectType = self:GetObjectType())".
-        let usage = usage.map(|u| format!(" - {u}")).unwrap_or_default();
+        let usage = documented
+            .map(|f| format!(" - {}", crate::args::usage(f)))
+            .unwrap_or_default();
         let msg = format!(
             "calling '{short}' on bad self (Attempt to access forbidden object from code tainted by an AddOn{usage})"
         );
@@ -686,7 +697,7 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
             return Err(vm.api_arg_error(1, &msg));
         }
     };
-    refuse_forbidden(vm, id, f.short, Some(crate::args::usage(f)))?;
+    refuse_forbidden(vm, id, f.short, Some(f))?;
     // The documented arguments first (`/stdtest engine blocked`: a bad
     // argument errors on a blocked frame), but where the client's method takes more
     // than the documentation lists (`SetPoint(point, x, y)`): its
@@ -999,10 +1010,19 @@ fn set_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let f = c.arg(3);
     vm.heap.table_mut(scripts).set_str(key, f);
     vm.heap.table_mut(hooks).set_str(key, Value::Nil);
+    script_stored(vm, id, &s);
     if !f.is_nil() {
         key_script_set(vm, id, &s);
     }
     Ok(vec![])
+}
+
+/// A script stored for a widget (set, hooked or from XML): an `OnUpdate`
+/// makes it one a frame looks at.
+pub fn script_stored(vm: &mut Vm, id: WidgetId, script: &str) {
+    if script == "OnUpdate" {
+        engine_mut(vm).world.updating.insert(id.0);
+    }
 }
 
 /// A key script given (set or hooked) turns the keyboard on; taking it
@@ -1044,6 +1064,7 @@ fn hook_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     };
     let n = vm.heap.table(list).border() as f64 + 1.0;
     let _ = vm.heap.table_mut(list).set(Value::Num(n), c.arg(3));
+    script_stored(vm, id, &s);
     key_script_set(vm, id, &s);
     Ok(vec![])
 }
@@ -1105,6 +1126,7 @@ fn register(vm: &mut Vm, id: WidgetId, event: String, units: Option<Vec<String>>
     let world = &mut engine_mut(vm).world;
     world.next_registration += 1;
     let seq = world.next_registration;
+    world.listening.insert(id.0);
     let w = &mut world.widgets[id.0];
     let fresh = !w.events.contains_key(&event);
     if fresh {
@@ -1146,6 +1168,7 @@ fn register_all_events(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let world = &mut engine_mut(vm).world;
     world.next_registration += 1;
     let seq = world.next_registration;
+    world.listening.insert(id.0);
     world.widgets[id.0].all_events = Some(seq);
     Ok(vec![])
 }
@@ -1188,12 +1211,13 @@ pub fn fire_event(vm: &mut Vm, event: &str, args: &[Value]) {
         Some(Value::Str(s)) => Some(String::from_utf8_lossy(vm.str_bytes(*s)).into_owned()),
         _ => None,
     };
-    // In registration order (`/stdtest engine order`).
-    let mut targets: Vec<(u64, WidgetId)> = engine(vm)
-        .world
-        .widgets
+    // In registration order (`/stdtest engine order`), among the widgets
+    // that ever registered (the others have no events), in creation order.
+    let world = &engine(vm).world;
+    let mut targets: Vec<(u64, WidgetId)> = world
+        .listening
         .iter()
-        .enumerate()
+        .map(|&i| (i, &world.widgets[i]))
         .filter(|(_, w)| match w.events.get(event) {
             Some(None) => true,
             Some(Some(units)) => unit.as_ref().is_some_and(|u| units.contains(u)),

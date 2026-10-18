@@ -956,6 +956,8 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
         let key = vm.str(&widgets::intrinsic_key(&order.to_ascii_lowercase(), name));
         let _ = vm.heap.table_mut(props).set(key, handler);
         engine_mut(vm).world.widgets[id.0].intrinsic_scripts = true;
+        // (Its handlers count for every script: `has_handler`.)
+        engine_mut(vm).world.updating.insert(id.0);
         return;
     }
     let order = s.attr("inherit").map(str::to_ascii_lowercase);
@@ -971,6 +973,7 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
         _ => handler,
     };
     vm.heap.table_mut(scripts).set_str(key, f);
+    crate::widgets::script_stored(vm, id, name);
     crate::widgets::key_script_set(vm, id, name);
 }
 

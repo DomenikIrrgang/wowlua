@@ -20,6 +20,9 @@ pub struct Function {
     pub system: &'static str,
     /// Its documentation entry: `Arguments`, `Returns` and the flags.
     pub doc: Json,
+    /// Its arguments as the client checks them (`crate::args`), worked out
+    /// on the first call.
+    pub checked_arguments: OnceLock<Vec<Json>>,
 }
 
 /// A widget class: its bases (from the annotations), its `CreateFrame`
@@ -241,6 +244,7 @@ fn parse(gz: &[u8]) -> Api {
                     namespace: Some(leak(&class)),
                     system: sname,
                     doc: f,
+                    checked_arguments: OnceLock::new(),
                 });
                 let index = api.methods.len() - 1;
                 api.classes
@@ -277,6 +281,7 @@ fn parse(gz: &[u8]) -> Api {
                     namespace: namespace.as_deref().map(leak),
                     system: sname,
                     doc: f,
+                    checked_arguments: OnceLock::new(),
                 });
             }
         }

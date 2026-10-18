@@ -264,10 +264,23 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
         widgets::run_size_changes(vm);
         let count = engine(vm).world.widgets.len();
         let elapsed = Value::Num(ms / 1000.0);
-        for i in 0..count {
+        // The widgets given an `OnUpdate`, in creation order (one given it
+        // during the frame too), not those made in it. The name interned as
+        // when each widget was looked at: before the first, and after each
+        // `OnUpdate` (a collection in it may have freed the string, and
+        // interning it again counts towards the next).
+        if count > 0 {
+            vm.heap.intern(b"OnUpdate");
+        }
+        let mut next = 0;
+        while let Some(&i) = engine(vm).world.updating.range(next..count).next() {
+            next = i + 1;
             let id = WidgetId(i);
             if widgets::has_handler(vm, id, "OnUpdate") && widgets::visible(engine(vm), id) {
                 widgets::run_script(vm, id, "OnUpdate", &[elapsed]);
+                if next < count {
+                    vm.heap.intern(b"OnUpdate");
+                }
             }
         }
         widgets::run_text_changes(vm);
