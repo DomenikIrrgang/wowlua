@@ -907,6 +907,8 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
         let two_names =
             regex::Regex::new(r#"UnitName\(\\?"[a-z]+\\?"\) -> 2: string ([^,]+), string (.+)$"#)
                 .expect("a valid pattern");
+        // Other players' crafts in the combat log ("<name> creates <item>.").
+        let crafter = regex::Regex::new(r"^string (.+) creates ").expect("a valid pattern");
         // First every recording's names (a name one recording shows
         // may be in another's chat), then each recording scrubbed of
         // them all.
@@ -1003,10 +1005,17 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                     list.push((key.to_string(), values.join(", ")));
                 }
             }
-            // The combat log tab's lines at the end.
+            // The session's clock as the recording began (`GetTime()`): the
+            // answers' times are the session's.
+            if let Ok(start) = scenario.get::<f64>("startTime") {
+                list.push(("startTime".to_string(), format!("{start}")));
+            }
+            // The combat log tab's lines at the end; other players' crafts
+            // without their names.
             if let Ok(shown) = scenario.get::<mlua::Table>("combatLog") {
                 for (i, line) in shown.sequence_values::<String>().enumerate() {
                     let line = line.map_err(|e| anyhow!("{e}"))?;
+                    let line = crafter.replace(&line, "string Someone creates ");
                     list.push((format!("log{:04}", i + 1), scrub(&line)));
                 }
             }

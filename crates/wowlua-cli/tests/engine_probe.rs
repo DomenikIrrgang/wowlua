@@ -741,6 +741,24 @@ __engine.pressKey("J")"#,
     assert_eq!(ours, client);
 }
 
+/// The session's clock (`GetTime()`) as the recording began: recorded
+/// (`startTime`), else the first global cooldown's start where it is read
+/// (the frame the cast began; recordings before `startTime`).
+fn session_start(recording: &str) -> Option<f64> {
+    let recorded = regex::Regex::new(r#"\["startTime"\] = "([0-9.]+)""#).unwrap();
+    if let Some(c) = recorded.captures(recording) {
+        return c[1].parse().ok();
+    }
+    let gcd = regex::Regex::new(
+        r#"= "([0-9.]+) = C_ActionBar\.GetActionCooldown\(\d+\) -> 1: \{activeCategory=number 133,[^}]*isOnGCD=boolean true,[^}]*startTime=number ([0-9.]+),"#,
+    )
+    .unwrap();
+    gcd.captures_iter(recording)
+        .filter_map(|c| Some((c[1].parse::<f64>().ok()?, c[2].parse::<f64>().ok()?)))
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(at, started)| started - at)
+}
+
 /// A scenario (`/stdtest engine scenario <name>`) played in the engine:
 /// Blizzard's UI loaded, the character's world as the recording began, the
 /// scenario's play script (`tests/scenarios/<name>.lua`) run with the
@@ -752,13 +770,22 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
     let ui = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot")?;
     let dir = build();
     let out = dir.path().join("dist/dev/StdTest");
+    let fixtures = repo().join("crates/wowlua-engine/tests/client/scenarios");
+    let recording = fs::read_to_string(fixtures.join(format!("{name}.lua"))).unwrap_or_default();
+    // The session's clock as the client's (its answers' times are the
+    // session's): begun as long before the recording as logging in and
+    // ten frames take.
+    let session_start = session_start(&recording);
     let mut vm = Vm::wow();
+    if let Some(start) = session_start {
+        let before = wowlua_engine::login::duration(false) + 10.0 / 60.0;
+        vm.clock.elapsed_ms = (start - before) * 1000.0;
+    }
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
     let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
     assert!(report.errors.is_empty(), "{:?}", report.errors);
     let mut vm = client_in(vm, &out);
     let controls = wowlua_engine::controls::table(&mut vm);
-    let fixtures = repo().join("crates/wowlua-engine/tests/client/scenarios");
     wowlua_test::profile::apply(
         &mut vm,
         controls,
@@ -769,6 +796,13 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
     // windows set up, …), as `wowlua test` does.
     wowlua_engine::login::login(&mut vm, "StdTest", true, false);
     wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
+    if let Some(start) = session_start {
+        let now = wowlua_engine::clock::now(&vm);
+        assert!(
+            (now - start).abs() < 1e-6,
+            "the session's clock at the recording's start: {now}, not {start}"
+        );
+    }
     let errors_before = wowlua_engine::engine(&vm).world.ui.errors.len();
     let refusals_before = wowlua_engine::engine(&vm).refusals.len();
     addon(&mut vm, &format!("StdTestEngineProbe('scenario {name}')"));
@@ -782,7 +816,6 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
     );
     // The recording's ping (`GetNetStats`' world latency, ms): the server's
     // answers come a round trip later; a play script may set its own.
-    let recording = fs::read_to_string(fixtures.join(format!("{name}.lua"))).unwrap_or_default();
     if let Some(ms) = regex::Regex::new(r#"\["latency"\] = "[^,]*, [^,]*, [0-9.]+, ([0-9.]+)""#)
         .unwrap()
         .captures(&recording)
@@ -993,6 +1026,9 @@ fn scenario_line(line: &str) -> Option<String> {
     // the session's).
     let cast = regex::Regex::new(r"Cast-(\d+)-\d+-\d+-\d+-(\d+)-[0-9A-F]+").unwrap();
     let body = cast.replace_all(&body, "Cast-$1-$2");
+    // A cast bar's ID, the session's.
+    let bar = regex::Regex::new(r"CastBar-[0-9A-F]+").unwrap();
+    let body = bar.replace_all(&body, "CastBar-<id>");
     let body = line.replace(&body, "${1}<line>${2}").into_owned();
     // An answer's trailing nils dropped (the first recordings' recorder
     // lost them).
@@ -1096,6 +1132,20 @@ const VENDOR_MATCHED: usize = 530;
 #[test]
 fn the_engine_plays_vendor_as_the_client_did() {
     plays_as_the_client_did("vendor", VENDOR_MATCHED);
+}
+
+/// How many of the hearth scenario's lines the engine plays as the client
+/// did: only ever up. Not yet: the inventory's packets after the loading
+/// screen (one per item, in the server's order: the items' GUIDs, not in
+/// the snapshot), `Blizzard_PlayerChoice` loading at the first loading
+/// screen, the active talent config, the account's Edit Mode layouts, the
+/// aura instance IDs (not in the snapshot).
+const HEARTH_MATCHED: usize = 1364;
+
+/// The hearth scenario: a Hearthstone cast, the loading screen.
+#[test]
+fn the_engine_plays_hearth_as_the_client_did() {
+    plays_as_the_client_did("hearth", HEARTH_MATCHED);
 }
 
 /// How many of the items scenario's lines the engine plays as the client

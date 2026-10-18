@@ -3798,6 +3798,6 @@ return {
     ["log0011"] = "string You create Bronze Bar.",
     ["log0012"] = "string You create Bronze Bar.",
     ["log0013"] = "string You create Bronze Bar.",
-    ["log0014"] = "string Burban Cow creates Mana Well.",
-    ["log0015"] = "string Burban Cow creates Mana Well.",
+    ["log0014"] = "string Someone creates Mana Well.",
+    ["log0015"] = "string Someone creates Mana Well.",
 }

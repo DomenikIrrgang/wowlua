@@ -229,6 +229,41 @@ pub fn control_cast(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// A cast of the player's another module runs (an item's): known to
+/// `UnitCastingInfo` until `end_cast`.
+pub fn begin_cast(
+    vm: &mut Vm,
+    spell_id: f64,
+    name: Value,
+    icon: Value,
+    seconds: f64,
+    guid: &str,
+    bar: &str,
+) {
+    let now = crate::clock::now(vm);
+    let cast = Cast {
+        spell_id,
+        name,
+        icon,
+        start: now,
+        end: now + seconds,
+        channel: false,
+        not_interruptible: false,
+        guid: guid.to_string(),
+        bar: bar.to_string(),
+    };
+    engine_mut(vm)
+        .units
+        .casting
+        .casts
+        .insert(units::PLAYER, cast);
+}
+
+/// The player's cast another module ran, over.
+pub fn end_cast(vm: &mut Vm) {
+    engine_mut(vm).units.casting.casts.remove(&units::PLAYER);
+}
+
 /// The global cooldown's category (`SPELL_UPDATE_COOLDOWN`'s fourth value
 /// for a spell on it: recorded 133).
 const GCD_CATEGORY: f64 = 133.0;
@@ -541,6 +576,12 @@ fn info(vm: &mut Vm, c: &NativeCall, channel: bool) -> Ret {
     }
     out.push(Value::Bool(cast.not_interruptible));
     out.push(Value::Num(cast.spell_id));
+    // The cast bar's ID and the delay (`castBarID`, `delayTimeMs`:
+    // recorded for an item's cast, its bar's and 0).
+    if !channel && !cast.bar.is_empty() {
+        out.push(vm.str(&cast.bar));
+        out.push(Value::Num(0.0));
+    }
     Ok(out)
 }
 

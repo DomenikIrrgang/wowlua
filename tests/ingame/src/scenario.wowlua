@@ -706,7 +706,7 @@ export function scenarioProbe(name: string)
     st.engineScenarios = st.engineScenarios ?? {}
     const log: string[] = {}
     const start = GetTime()
-    const scenario = { log = log, before = takeSnapshot(), client = `{(GetBuildInfo())} ({select(2, GetBuildInfo())})`, latency = { GetNetStats() } }
+    const scenario = { log = log, before = takeSnapshot(), client = `{(GetBuildInfo())} ({select(2, GetBuildInfo())})`, latency = { GetNetStats() }, startTime = start }
     st.engineScenarios[name] = scenario
     st.engineScenarioRunning = name
     local function note(what: string)

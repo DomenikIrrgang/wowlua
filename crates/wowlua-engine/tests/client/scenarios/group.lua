@@ -4409,7 +4409,7 @@ return {
     ["04404"] = "30.246 PLAYER_STOPPED_MOVING()",
     ["latency"] = "3.582900524139404, 0.2424004226922989, 269, 242",
     ["latencyAfter"] = "3.540996074676514, 0.2445048242807388, 270, 244",
-    ["log0001"] = "string Vamp Pyro creates Basic Campfire Kit.",
-    ["log0002"] = "string Yibawa Inyan creates Crispy Lizard Tail.",
-    ["log0003"] = "string Yibawa Inyan creates Crispy Lizard Tail.",
+    ["log0001"] = "string Someone creates Basic Campfire Kit.",
+    ["log0002"] = "string Someone creates Crispy Lizard Tail.",
+    ["log0003"] = "string Someone creates Crispy Lizard Tail.",
 }

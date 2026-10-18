@@ -301,6 +301,10 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
             crate::character::control_set_hidden_group_buffs,
         ),
         ("defineLevel", crate::levels::control_define),
+        (
+            "offGlobalCooldown",
+            crate::actions::control_off_global_cooldown,
+        ),
         ("spend", spend),
         ("spawnUnit", units::spawn),
         ("setPlayer", units::set_player),

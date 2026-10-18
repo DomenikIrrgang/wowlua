@@ -125,6 +125,16 @@ pub struct World {
     pub death: crate::death::Death,
     /// The class's hidden group buffs (`HIDDEN_GROUP_BUFFS_CHANGED`).
     pub hidden_group_buffs: Vec<f64>,
+    /// A loading screen up, the world not entered yet: no map.
+    pub loading_screen: bool,
+    /// A loading screen's inventory, not loaded yet.
+    pub inventory_loading: bool,
+    /// The player on a flight.
+    pub on_taxi: bool,
+    /// The global cooldown running: its start (`GetTime`) and length.
+    pub global_cooldown: Option<(f64, f64)>,
+    /// Spells the global cooldown leaves alone (`offGlobalCooldown`).
+    pub off_global_cooldown: std::collections::BTreeSet<i64>,
     /// The levels a test defined (`levels.rs`).
     pub levels: std::collections::BTreeMap<i64, wowlua_vm::TableRef>,
     /// The chat's last line number (each message's eleventh value).

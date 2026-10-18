@@ -159,13 +159,20 @@ fn fire_update(vm: &mut Vm, id: UnitId, added: Option<&Aura>, removed: Option<f6
 }
 
 /// `unit:applyAura({ spellId, name, icon, duration, applications, harmful,
-/// source, dispelName, stealable, boss, raid, points })`: the aura's
-/// instance ID.
+/// source, dispelName, stealable, boss, raid, points, auraInstanceID,
+/// sourceUnit, expirationTime })`: the aura's instance ID (`auraInstanceID`,
+/// `sourceUnit` and `expirationTime` as a snapshot has them).
 pub fn control_apply(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     let Value::Table(data) = c.arg(2) else {
         return Err(vm.error("applyAura: a table of the aura's data expected"));
     };
+    let instance = apply(vm, me, data);
+    Ok(vec![Value::Num(instance)])
+}
+
+/// An aura on `me` (`applyAura`'s table): its instance ID.
+pub fn apply(vm: &mut Vm, me: UnitId, data: TableRef) -> f64 {
     let num = |vm: &mut Vm, k: &str, d: f64| match field(vm, data, k) {
         Value::Num(n) => n,
         _ => d,
@@ -178,7 +185,13 @@ pub fn control_apply(vm: &mut Vm, c: NativeCall) -> Ret {
     let spell_id = num(vm, "spellId", 0.0);
     let duration = num(vm, "duration", 0.0);
     let source = match field(vm, data, "source") {
-        Value::Nil => None,
+        Value::Nil => match field(vm, data, "sourceUnit") {
+            Value::Str(s) => {
+                let token = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+                units::resolve(&engine(vm).units, &token)
+            }
+            _ => None,
+        },
         Value::Str(s) => {
             let token = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
             units::resolve(&engine(vm).units, &token)
@@ -195,10 +208,22 @@ pub fn control_apply(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     let now = crate::clock::now(vm);
-    let instance = {
-        let u = &mut engine_mut(vm).units;
-        u.next_aura += 1.0;
-        u.next_aura
+    let instance = match field(vm, data, "auraInstanceID") {
+        Value::Num(n) => {
+            let u = &mut engine_mut(vm).units;
+            u.next_aura = u.next_aura.max(n);
+            n
+        }
+        _ => {
+            let u = &mut engine_mut(vm).units;
+            u.next_aura += 1.0;
+            u.next_aura
+        }
+    };
+    let expiration = match field(vm, data, "expirationTime") {
+        Value::Num(n) => n,
+        _ if duration > 0.0 => now + duration,
+        _ => 0.0,
     };
     let aura = Aura {
         unit: me,
@@ -208,7 +233,7 @@ pub fn control_apply(vm: &mut Vm, c: NativeCall) -> Ret {
         icon: num(vm, "icon", 136243.0),
         applications: num(vm, "applications", 0.0),
         duration,
-        expiration: if duration > 0.0 { now + duration } else { 0.0 },
+        expiration,
         harmful: flag(vm, "harmful"),
         source,
         dispel_name: text(vm, "dispelName"),
@@ -219,19 +244,42 @@ pub fn control_apply(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     engine_mut(vm).units.auras.push(aura.clone());
     fire_update(vm, me, Some(&aura), None);
-    Ok(vec![Value::Num(instance)])
+    instance
+}
+
+/// Auras a place gives, gone as the player leaves it (recorded: Campfire
+/// Nearby, at a Hearthstone's loading screen).
+const PLACE_AURAS: &[f64] = &[1283391.0];
+
+/// The player left the place: its auras gone.
+pub fn left_place(vm: &mut Vm) {
+    let gone: Vec<f64> = engine(vm)
+        .units
+        .auras
+        .iter()
+        .filter(|a| a.unit == units::PLAYER && PLACE_AURAS.contains(&a.spell_id))
+        .map(|a| a.instance)
+        .collect();
+    for id in gone {
+        remove(vm, units::PLAYER, id);
+    }
+}
+
+/// An aura gone from `unit`.
+pub fn remove(vm: &mut Vm, unit: UnitId, id: f64) {
+    let auras = &mut engine_mut(vm).units.auras;
+    let before = auras.len();
+    auras.retain(|a| !(a.unit == unit && a.instance == id));
+    if auras.len() != before {
+        fire_update(vm, unit, None, Some(id));
+    }
 }
 
 /// `unit:removeAura(instanceID)`.
 pub fn control_remove(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     let id = vm.check_number(&c, 2)?;
-    let auras = &mut engine_mut(vm).units.auras;
-    let before = auras.len();
-    auras.retain(|a| !(a.unit == me && a.instance == id));
-    if auras.len() != before {
-        fire_update(vm, me, None, Some(id));
-    }
+    remove(vm, me, id);
     Ok(vec![])
 }
 

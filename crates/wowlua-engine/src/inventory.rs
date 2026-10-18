@@ -40,6 +40,8 @@ const PORTRAIT_AFTER: f64 = 0.042;
 const PORTRAITS_AFTER: f64 = 0.05;
 /// The item's count after its use (recorded).
 const USED_AFTER: f64 = 0.455;
+/// A cast item's effect after its success (recorded: the loading screen).
+const EFFECT_AFTER: f64 = 0.145;
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
     widgets::fire_event(vm, e, args);
@@ -371,10 +373,23 @@ fn deleted(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// A consumable used: the cast at once; the server's casts and cooldowns;
-/// one fewer a moment later.
+/// An item used: the cast at once (one with a cast time: its cooldown
+/// foretold); the server's casts and cooldowns; one fewer a moment later.
 fn use_item(vm: &mut Vm, bag: i64, slot: usize, id: i64) {
     fire(vm, "CURRENT_SPELL_CAST_CHANGED", &[Value::Bool(false)]);
+    if matches!(character::item_field(vm, id, "castTime"), Value::Num(_)) {
+        crate::actions::start_global_cooldown(vm);
+        cast_cooldown(vm, id, false);
+        let after = crate::clock::server_delay(vm);
+        later(
+            vm,
+            after,
+            "inventoryCastStart",
+            cast_started,
+            vec![Value::Num(id as f64)],
+        );
+        return;
+    }
     fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
     let after = server(vm);
     later(
@@ -388,6 +403,149 @@ fn use_item(vm: &mut Vm, bag: i64, slot: usize, id: i64) {
             Value::Num(id as f64),
         ],
     );
+}
+
+/// A cast's cooldown told: the bars', the spell's (its category, the
+/// global cooldown's 133; the item's at the end), the forms'.
+fn cast_cooldown(vm: &mut Vm, id: i64, done: bool) {
+    let spell = num(character::item_field(vm, id, "spell"));
+    let category = num(character::item_field(vm, id, "cooldownCategory"));
+    fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
+    fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    let cd = |item: Value| {
+        [
+            Value::Num(spell),
+            Value::Nil,
+            Value::Num(category),
+            Value::Num(crate::actions::GLOBAL_COOLDOWN),
+            item,
+        ]
+    };
+    if done {
+        fire(vm, "BAG_UPDATE_COOLDOWN", &[]);
+        for shared in spell_list(vm, id, "sharedCooldowns") {
+            fire(
+                vm,
+                "SPELL_UPDATE_COOLDOWN",
+                &[
+                    Value::Num(shared),
+                    Value::Nil,
+                    Value::Nil,
+                    Value::Nil,
+                    Value::Nil,
+                ],
+            );
+        }
+        fire(vm, "SPELL_UPDATE_COOLDOWN", &cd(Value::Num(id as f64)));
+    }
+    fire(vm, "SPELL_UPDATE_COOLDOWN", &cd(Value::Nil));
+    fire(vm, "UPDATE_SHAPESHIFT_COOLDOWN", &[]);
+}
+
+/// The server started the cast: `SENT`, `START` (its cast bar), the
+/// cooldown; done after its cast time.
+fn cast_started(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = num(c.upvals[0]) as i64;
+    let spell = num(character::item_field(vm, id, "spell"));
+    let cast_time = num(character::item_field(vm, id, "castTime"));
+    let guid = crate::casting::cast_guid(vm, 3, spell);
+    let n = engine(vm).units.casting.next;
+    let bar = format!("CastBar-{n:016X}");
+    let player = vm.str("player");
+    let g = vm.str(&guid);
+    fire(
+        vm,
+        "UNIT_SPELLCAST_SENT",
+        &[player, Value::Nil, g, Value::Num(spell)],
+    );
+    let name = character::item_field(vm, id, "name");
+    let icon = character::item_field(vm, id, "icon");
+    crate::casting::begin_cast(vm, spell, name, icon, cast_time, &guid, &bar);
+    let b = vm.str(&bar);
+    units::fire_unit(
+        vm,
+        "UNIT_SPELLCAST_START",
+        PLAYER,
+        &[g, Value::Num(spell), b],
+    );
+    fire(vm, "CURRENT_SPELL_CAST_CHANGED", &[Value::Bool(false)]);
+    cast_cooldown(vm, id, false);
+    later(
+        vm,
+        cast_time,
+        "inventoryCastDone",
+        cast_done,
+        vec![Value::Num(id as f64), g, b],
+    );
+    Ok(vec![])
+}
+
+/// The cast done: `SUCCEEDED`, `STOP`, the cooldowns (the shared ones',
+/// the item's); its effect a moment later (a Hearthstone's: the loading
+/// screen to `teleport`'s map).
+fn cast_done(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = num(c.upvals[0]) as i64;
+    let (g, b) = (c.upvals[1], c.upvals[2]);
+    let spell = num(character::item_field(vm, id, "spell"));
+    crate::casting::end_cast(vm);
+    units::fire_unit(
+        vm,
+        "UNIT_SPELLCAST_SUCCEEDED",
+        PLAYER,
+        &[g, Value::Num(spell), b],
+    );
+    units::fire_unit(
+        vm,
+        "UNIT_SPELLCAST_STOP",
+        PLAYER,
+        &[g, Value::Num(spell), b],
+    );
+    fire(vm, "CURRENT_SPELL_CAST_CHANGED", &[Value::Bool(false)]);
+    // The spell's aura on the player (the Hearthstone's Honorless Target,
+    // recorded).
+    if let Value::Table(aura) = character::item_field(vm, id, "aura") {
+        let source = vm.str("source");
+        let player = vm.str("player");
+        let _ = vm.heap.table_mut(aura).set(source, player);
+        crate::auras::apply(vm, PLAYER, aura);
+    }
+    cast_cooldown(vm, id, true);
+    let place = character::item_field(vm, id, "teleport");
+    if let Value::Table(_) = place {
+        later(
+            vm,
+            EFFECT_AFTER,
+            "inventoryTeleport",
+            teleported,
+            vec![place],
+        );
+    }
+    Ok(vec![])
+}
+
+/// The Hearthstone's place (`teleport`: moveTo's table and the continent's
+/// `map`): the loading screen.
+fn teleported(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Table(t) = c.upvals[0] else {
+        return Ok(vec![]);
+    };
+    let k = vm.str("map");
+    let map = num(vm.heap.table(t).get(k));
+    crate::login::teleport(vm, map, Some(t));
+    Ok(vec![])
+}
+
+fn spell_list(vm: &mut Vm, id: i64, key: &str) -> Vec<f64> {
+    let Value::Table(t) = character::item_field(vm, id, key) else {
+        return vec![];
+    };
+    let n = vm.heap.table(t).border();
+    (1..=n)
+        .filter_map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+            Value::Num(s) => Some(s),
+            _ => None,
+        })
+        .collect()
 }
 
 fn spells_of(vm: &mut Vm, id: i64) -> Vec<f64> {

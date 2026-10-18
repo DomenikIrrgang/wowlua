@@ -45,6 +45,33 @@ fn slot(c: &NativeCall) -> Option<i64> {
     num(c.arg(1)).filter(|n| *n >= 1.0).map(|n| n as i64)
 }
 
+/// The global cooldown's category (`Enum`-less: the spells' start
+/// recovery category, recorded).
+pub const GLOBAL_COOLDOWN: f64 = 133.0;
+/// The global cooldown's length (recorded: 1.5 s).
+pub const GLOBAL_COOLDOWN_LENGTH: f64 = 1.5;
+
+/// The global cooldown starts (a cast begun).
+pub fn start_global_cooldown(vm: &mut Vm) {
+    let now = crate::clock::now(vm);
+    engine_mut(vm).world.global_cooldown = Some((now, GLOBAL_COOLDOWN_LENGTH));
+}
+
+/// `offGlobalCooldown({ spellID, … })`: spells the global cooldown leaves
+/// alone (the paladin's Judgement, recorded).
+pub fn control_off_global_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Table(t) = c.arg(1) else {
+        return Err(vm.error("offGlobalCooldown: a list of spell IDs expected"));
+    };
+    let n = vm.heap.table(t).border();
+    for i in 1..=n {
+        if let Value::Num(id) = vm.heap.table(t).get(Value::Num(i as f64)) {
+            engine_mut(vm).world.off_global_cooldown.insert(id as i64);
+        }
+    }
+    Ok(vec![])
+}
+
 fn action(vm: &Vm, slot: i64) -> Option<Action> {
     engine(vm).world.character.actions.get(&slot).cloned()
 }
@@ -234,14 +261,48 @@ fn not_assisted(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false)])
 }
 
+/// `C_ActionBar.GetActionCooldown(slot)`: a spell's slot during the global
+/// cooldown (category 133, its start, length, what is left), none else;
+/// behind a loading screen no slot enabled (recorded).
 fn get_action_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(s) = slot(&c) else {
         return Ok(vec![]);
     };
-    let enabled = action(vm, s).is_some();
+    let a = action(vm, s);
+    let enabled = a.is_some() && !engine(vm).world.loading_screen;
     // An empty slot's cooldown is plain in combat too (recorded).
-    if !enabled {
+    if a.is_none() {
         engine_mut(vm).plain_results = true;
+    }
+    let now = crate::clock::now(vm);
+    let gcd = match (&a, engine(vm).world.global_cooldown) {
+        (Some(a), Some((start, length))) if a.kind == "spell" && start + length > now => {
+            let off = match a.id {
+                Value::Num(id) => engine(vm).world.off_global_cooldown.contains(&(id as i64)),
+                _ => false,
+            };
+            (!off).then_some((start, length))
+        }
+        _ => None,
+    };
+    if let Some((start, length)) = gcd {
+        let t = table(
+            vm,
+            &[
+                ("startTime", Value::Num(start)),
+                ("duration", Value::Num(length)),
+                ("isEnabled", Value::Bool(true)),
+                ("modRate", Value::Num(1.0)),
+                ("isActive", Value::Bool(true)),
+                ("isOnGCD", Value::Bool(true)),
+                ("activeCategory", Value::Num(GLOBAL_COOLDOWN)),
+                (
+                    "timeUntilEndOfStartRecovery",
+                    Value::Num(((start + length - now) * 1000.0).round() / 1000.0),
+                ),
+            ],
+        );
+        return Ok(vec![t]);
     }
     let t = table(
         vm,

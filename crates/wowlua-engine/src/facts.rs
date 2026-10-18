@@ -204,10 +204,6 @@ fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false)])
 }
 
-fn empty_string(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![vm.str("")])
-}
-
 fn empty_list(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(vm.new_table())])
 }
@@ -279,23 +275,33 @@ fn game_time(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// No zone: no PvP type, not a PvP subzone, no faction.
-fn zone_pvp_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Nil, Value::Bool(false), Value::Nil])
+/// The zone's PvP status (a city's: "friendly", false, its faction,
+/// recorded), else none.
+fn zone_pvp_info(vm: &mut Vm, _c: NativeCall) -> Ret {
+    match engine(vm).world.character.position.pvp.clone() {
+        Some((kind, ffa, faction)) => Ok(vec![vm.str(&kind), Value::Bool(ffa), vm.str(&faction)]),
+        None => Ok(vec![Value::Nil, Value::Bool(false), Value::Nil]),
+    }
 }
 
-/// Outside any instance and map: the client's 11 results, empty.
+/// The continent the player is on (its name and ID; recorded after a
+/// Hearthstone: "Kalimdor", 1), else outside any: the 11 results empty.
 fn instance_info(vm: &mut Vm, _c: NativeCall) -> Ret {
     let (empty, none) = (vm.str(""), vm.str("none"));
     let zero = Value::Num(0.0);
+    let (name, id) = match engine(vm).world.character.position.instance.clone() {
+        Some((n, id)) => (vm.str(&n), Value::Num(id)),
+        None => (empty, zero),
+    };
     Ok(vec![
-        empty,
+        name,
         none,
         zero,
         empty,
         zero,
         zero,
         Value::Bool(false),
-        zero,
+        id,
         zero,
         Value::Nil,
         Value::Bool(false),
@@ -546,7 +552,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetFonts", fonts),
         ("GetGameTime", game_time),
         ("GetInstanceInfo", instance_info),
-        ("GetMinimapZoneText", empty_string),
         ("GetPhysicalScreenSize", physical_screen_size),
         ("GetRealmName", realm_name),
         ("GetScreenHeight", screen_height),

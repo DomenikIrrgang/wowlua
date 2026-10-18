@@ -37,7 +37,6 @@ pub struct Timers {
     handle_meta: Option<TableRef>,
 }
 
-/// Seconds since the session began (`GetTime`).
 /// The server's round trip: a request's answer comes this much later (the
 /// player's ping; 0.4 s unless a test sets it, near the recordings' ~0.3
 /// s on WoW Forever's US servers).
@@ -45,8 +44,10 @@ pub fn server_delay(vm: &Vm) -> f64 {
     engine(vm).world.latency.unwrap_or(0.4)
 }
 
+/// Seconds since the session began (`GetTime`), in whole milliseconds as
+/// the client's (recorded: `GetTime()`'s three decimals).
 pub fn now(vm: &Vm) -> f64 {
-    vm.clock.elapsed_ms / 1000.0
+    vm.clock.elapsed_ms.round() / 1000.0
 }
 
 fn get_time(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -207,7 +208,10 @@ pub fn catch_up(vm: &mut Vm) {
 /// Advances the clock by `seconds`, running due timers in the order they
 /// come due (each at its time).
 pub fn advance(vm: &mut Vm, seconds: f64) {
-    let target = now(vm) + seconds.max(0.0);
+    // The clock's own milliseconds (`now` rounds them): timers due by
+    // the time read at the end.
+    let end_ms = vm.clock.elapsed_ms + seconds.max(0.0) * 1000.0;
+    let target = end_ms.round() / 1000.0;
     loop {
         let timers = &mut engine_mut(vm).timers;
         let list = &timers.list;
@@ -222,8 +226,8 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
             .min_by(|a, b| a.1.due.total_cmp(&b.1.due).then(a.0.cmp(&b.0)))
             .map(|(i, t)| (TimerId(i), t.due));
         let Some((id, due)) = next else { break };
-        if due > now(vm) {
-            tick(vm, (due - now(vm)) * 1000.0);
+        if due * 1000.0 > vm.clock.elapsed_ms {
+            tick(vm, due * 1000.0 - vm.clock.elapsed_ms);
         }
         {
             // A ticker without an interval fires once a frame (once this
@@ -238,8 +242,8 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
         }
         fire(vm, id);
     }
-    if target > now(vm) {
-        tick(vm, (target - now(vm)) * 1000.0);
+    if end_ms > vm.clock.elapsed_ms {
+        tick(vm, end_ms - vm.clock.elapsed_ms);
     }
 }
 

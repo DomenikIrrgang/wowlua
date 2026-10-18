@@ -62,6 +62,11 @@ pub struct Position {
     pub y: Option<f64>,
     /// `UnitPosition`'s world coordinates and instance ID, when given.
     pub world: Option<(f64, f64, f64, f64)>,
+    /// The continent or instance (`GetInstanceInfo`'s name and ID).
+    pub instance: Option<(String, f64)>,
+    /// `C_PvP.GetZonePVPInfo`: the zone's PvP type, whether free for all,
+    /// its faction.
+    pub pvp: Option<(String, bool, String)>,
 }
 
 pub struct Character {
@@ -433,6 +438,11 @@ fn get_inventory_item_durability(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(slot) = num(c.arg(1)) else {
         return Ok(vec![]);
     };
+    // Loading (a loading screen's, till the inventory's load): nothing
+    // (recorded).
+    if engine(vm).world.inventory_loading {
+        return Ok(vec![]);
+    }
     Ok(
         match engine(vm)
             .world
@@ -445,6 +455,12 @@ fn get_inventory_item_durability(vm: &mut Vm, c: NativeCall) -> Ret {
             None => vec![],
         },
     )
+}
+
+/// `UnitOnTaxi(unit)`: the player on a flight (`taxi.rs`).
+fn unit_on_taxi(vm: &mut Vm, c: NativeCall) -> Ret {
+    let on = units::unit_arg(vm, &c, 1) == Some(units::PLAYER) && engine(vm).world.on_taxi;
+    Ok(vec![Value::Bool(on)])
 }
 
 /// The worn items' durability restored (a repair): how many were damaged.
@@ -903,6 +919,10 @@ fn get_best_map_for_unit(vm: &mut Vm, c: NativeCall) -> Ret {
     if units::unit_arg(vm, &c, 1) != Some(units::PLAYER) {
         return Ok(vec![]);
     }
+    // Behind a loading screen: none (recorded).
+    if engine(vm).world.loading_screen {
+        return Ok(vec![Value::Nil]);
+    }
     Ok(engine(vm)
         .world
         .character
@@ -965,6 +985,27 @@ pub fn control_move_to(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(t) = c.arg(1) else {
         return Err(vm.error("mock.moveTo: a table of the place expected"));
     };
+    move_to(vm, t, true);
+    Ok(vec![])
+}
+
+fn instance_of(vm: &mut Vm, t: TableRef) -> Option<(String, f64)> {
+    let instance = field(vm, t, "instance");
+    let name = text(vm, instance)?;
+    Some((name, num(field(vm, t, "instanceID")).unwrap_or(0.0)))
+}
+
+/// The continent or instance of a place (`moveTo`'s table) entered, its
+/// zone not yet.
+pub fn enter_instance(vm: &mut Vm, t: TableRef) {
+    if let Some(i) = instance_of(vm, t) {
+        engine_mut(vm).world.character.position.instance = Some(i);
+    }
+}
+
+/// The player at a place (`moveTo`'s table: mapID, zone, subZone, x, y,
+/// world, instance, instanceID, pvp); its zone's events when `told`.
+pub fn move_to(vm: &mut Vm, t: TableRef, told: bool) {
     let old = engine(vm).world.character.position.clone();
     let mut p = old.clone();
     if let Some(m) = num(field(vm, t, "mapID")) {
@@ -994,15 +1035,29 @@ pub fn control_move_to(vm: &mut Vm, c: NativeCall) -> Ret {
             get(vm, "instanceID"),
         ));
     }
+    if let Some(i) = instance_of(vm, t) {
+        p.instance = Some(i);
+    }
+    if let Value::Table(pvp) = field(vm, t, "pvp") {
+        let kind = vm.heap.table(pvp).get(Value::Num(1.0));
+        let faction = vm.heap.table(pvp).get(Value::Num(3.0));
+        p.pvp = Some((
+            text(vm, kind).unwrap_or_default(),
+            vm.heap.table(pvp).get(Value::Num(2.0)).truthy(),
+            text(vm, faction).unwrap_or_default(),
+        ));
+    }
     let new_area = p.zone != old.zone || p.map_id != old.map_id;
     let new_sub = p.sub_zone != old.sub_zone;
     engine_mut(vm).world.character.position = p;
+    if !told {
+        return;
+    }
     if new_area {
         widgets::fire_event(vm, "ZONE_CHANGED_NEW_AREA", &[]);
     } else if new_sub {
         widgets::fire_event(vm, "ZONE_CHANGED", &[]);
     }
-    Ok(vec![])
 }
 
 // --------------------------------------------------------------- distance
@@ -1135,6 +1190,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetInventoryItemEquippedUnusable", inventory_item_no),
         ("GetInventoryItemID", get_inventory_item_id),
         ("GetInventoryItemDurability", get_inventory_item_durability),
+        ("UnitOnTaxi", unit_on_taxi),
         ("GetInventoryItemLink", get_inventory_item_link),
         ("GetInventoryItemTexture", get_inventory_item_texture),
         ("GetInventoryItemQuality", get_inventory_item_quality),

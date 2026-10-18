@@ -587,8 +587,9 @@ fn unit_race(vm: &mut Vm, c: NativeCall) -> Ret {
             return vec![];
         }
         let (file, id) = race_file_and_id(&u.race);
+        let name = race_name(&u.race);
         vec![
-            vm.str(&u.race),
+            vm.str(&name),
             vm.str(&file),
             id.map_or(Value::Nil, Value::Num),
         ]
@@ -612,10 +613,27 @@ fn race_file_and_id(race: &str) -> (String, Option<f64>) {
         ("Draenei", "Draenei", 11.0),
         ("Worgen", "Worgen", 22.0),
     ];
-    match RACES.iter().find(|(name, ..)| *name == race) {
+    match RACES
+        .iter()
+        .find(|(name, file, _)| *name == race || *file == race)
+    {
         Some((_, file, id)) => (file.to_string(), Some(*id)),
         None => (race.replace(' ', ""), None),
     }
+}
+
+/// A race's name as the client shows it (a snapshot may give its file
+/// name: "Scourge" is "Undead"; one the list lacks, as given).
+fn race_name(race: &str) -> String {
+    const NAMES: &[(&str, &str)] = &[
+        ("Scourge", "Undead"),
+        ("NightElf", "Night Elf"),
+        ("BloodElf", "Blood Elf"),
+    ];
+    NAMES
+        .iter()
+        .find(|(file, _)| *file == race)
+        .map_or_else(|| race.to_string(), |(_, name)| name.to_string())
 }
 
 // No such unit (a target cleared): level 0, "normal", not a player, not

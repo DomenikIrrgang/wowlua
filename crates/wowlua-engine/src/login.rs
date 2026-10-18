@@ -14,16 +14,19 @@
 
 use wowlua_vm::{Value, Vm};
 
-use crate::{engine, framescript, widgets};
+use crate::{engine, engine_mut, framescript, widgets};
 
 /// The login's events (a fresh login's or a /reload's): time, event,
 /// arguments.
 fn data(reload: bool) -> Vec<(f64, &'static str, &'static str)> {
-    let text = if reload {
+    parse(if reload {
         include_str!("../data/camelot-reload.txt")
     } else {
         include_str!("../data/camelot-login.txt")
-    };
+    })
+}
+
+fn parse(text: &'static str) -> Vec<(f64, &'static str, &'static str)> {
     text.lines()
         .filter(|l| !l.starts_with('#') && !l.is_empty())
         .filter_map(|l| {
@@ -59,12 +62,97 @@ fn inventory(vm: &mut Vm) {
     };
     let player = vm.str("player");
     for _ in 0..items {
-        for slot in [1.0, 2.0, 3.0, 4.0, 12.0] {
-            fire(vm, "PLAYER_EQUIPED_SPELLS_CHANGED", &[Value::Num(slot)]);
-        }
+        crate::character::equipped_spells_changed(vm);
         fire(vm, "BAG_UPDATE", &[Value::Num(0.0)]);
         fire(vm, "BAG_UPDATE", &[Value::Num(-1.0)]);
         fire(vm, "UNIT_INVENTORY_CHANGED", &[player]);
+    }
+}
+
+/// A loading screen (a world transfer: a Hearthstone's), as the client
+/// recorded it (`data/camelot-teleport.txt`): the client loading (the
+/// clock moving, nothing running) to `LOADING_SCREEN_DISABLED`, the world
+/// entered again (`PLAYER_ENTERING_WORLD(false, false)`), the inventory
+/// reloaded; `map` the continent's instance (`PLAYER_MAP_CHANGED(-1,
+/// map)`), `place` where the player arrives (`moveTo`'s table): no map
+/// till the world is entered, the continent's instance as the map
+/// changes, the old zone's map till the new area's event, the inventory
+/// (its durability) empty till it loads (recorded). Unverified: a
+/// transfer between continents, an instance.
+pub fn teleport(vm: &mut Vm, map: f64, place: Option<wowlua_vm::TableRef>) {
+    let mut now = None;
+    let mut loading = true;
+    engine_mut(vm).world.loading_screen = true;
+    engine_mut(vm).world.inventory_loading = true;
+    for (time, event, args) in parse(include_str!("../data/camelot-teleport.txt")) {
+        if let Some(prev) = now
+            && time > prev
+        {
+            if loading {
+                crate::clock::jump(vm, time - prev);
+            } else {
+                crate::clock::advance_frames(vm, 1, (time - prev) * 1000.0);
+            }
+        }
+        now = Some(time);
+        if event == "LOADING_SCREEN_DISABLED" {
+            fire(vm, event, &[]);
+            loading = false;
+            crate::clock::catch_up(vm);
+            continue;
+        }
+        // The place left: its auras gone (recorded right after the
+        // loading screen shows).
+        if event == "LOADING_SCREEN_ENABLED" {
+            fire(vm, event, &[]);
+            crate::auras::left_place(vm);
+            continue;
+        }
+        match event {
+            "$INVENTORY" => {
+                engine_mut(vm).world.inventory_loading = false;
+                inventory(vm);
+                continue;
+            }
+            "PLAYER_MAP_CHANGED" => {
+                if let Some(t) = place {
+                    crate::character::enter_instance(vm, t);
+                }
+            }
+            "PLAYER_ENTERING_WORLD" => engine_mut(vm).world.loading_screen = false,
+            "ZONE_CHANGED_NEW_AREA" => {
+                if let Some(t) = place {
+                    crate::character::move_to(vm, t, false);
+                }
+            }
+            // The class's group buffs, then their alerts (the line after).
+            "HIDDEN_GROUP_BUFFS_CHANGED" => {
+                crate::character::group_buffs_changed(vm);
+                continue;
+            }
+            "GROUP_BUFF_VISUAL_ALERTS_CHANGED" => continue,
+            _ => {}
+        }
+        let mut values = Vec::new();
+        for arg in args.split("; ").filter(|a| !a.is_empty()) {
+            values.push(match arg {
+                "$MAP_TO" => Value::Num(map),
+                "$EMPTY" => Value::Table(vm.new_table()),
+                "$EDIT_MODE_LAYOUTS" => crate::editmode::layout_info(vm),
+                other => value(vm, other),
+            });
+        }
+        fire(vm, event, &values);
+    }
+}
+
+/// How long logging in takes (`login`'s clock: the recorded login's span
+/// and the frame after its loading screen).
+pub fn duration(reload: bool) -> f64 {
+    let events = data(reload);
+    match (events.first(), events.last()) {
+        (Some(first), Some(last)) => last.0 - first.0 + 1.0 / 60.0,
+        _ => 0.0,
     }
 }
 

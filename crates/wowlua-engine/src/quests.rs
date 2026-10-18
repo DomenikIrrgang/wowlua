@@ -1176,13 +1176,10 @@ fn sync_log(vm: &mut Vm) {
     stats.insert("questWatchType", Entry::ByIndex(watch_types));
 }
 
-/// `C_QuestLog.GetNumQuestLogEntries()`: the engine's log once it keeps
-/// one; else empty, as at load (a recorded log's quests are not shown:
-/// their map data is not modelled).
+/// `C_QuestLog.GetNumQuestLogEntries()`: the log the character's stats
+/// tell (the recorded one, the engine's once it keeps one), else empty.
 fn num_quest_log_entries(vm: &mut Vm, _c: NativeCall) -> Ret {
-    if engine(vm).world.quests.kept
-        && let Some(Entry::One(a)) = engine(vm).world.character.stats.get("questLogEntries")
-    {
+    if let Some(Entry::One(a)) = engine(vm).world.character.stats.get("questLogEntries") {
         let (shown, quests) = match (a.first(), a.get(1)) {
             (Some(Answer::Num(s)), Some(Answer::Num(q))) => (*s, *q),
             _ => (0.0, 0.0),
@@ -1190,6 +1187,17 @@ fn num_quest_log_entries(vm: &mut Vm, _c: NativeCall) -> Ret {
         return Ok(vec![Value::Num(shown), Value::Num(quests)]);
     }
     Ok(vec![Value::Num(0.0), Value::Num(0.0)])
+}
+
+/// `GetQuestUiMapID(questID)`: the map a quest's place is on (`defineQuest`'s
+/// `uiMapID`), else 0, none (unverified: not recorded; a number, as
+/// Blizzard's quest log compares it with 0).
+fn get_quest_ui_map_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    let map = match vm.hidden(c.arg(1)) {
+        Value::Num(id) => data(vm, id as i64).and_then(|t| num(vm, t, "uiMapID")),
+        _ => None,
+    };
+    Ok(vec![Value::Num(map.unwrap_or(0.0))])
 }
 
 fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1217,6 +1225,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetRewardHonor", zero),
         ("GetQuestItemInfoLootType", zero),
         ("C_QuestLog.GetNumQuestLogEntries", num_quest_log_entries),
+        ("GetQuestUiMapID", get_quest_ui_map_id),
         ("GetTitleText", get_title_text),
         ("GetQuestText", get_quest_text),
         ("GetObjectiveText", get_objective_text),

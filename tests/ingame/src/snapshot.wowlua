@@ -559,6 +559,9 @@ local function auras(): table
             applications = plain(a.applications),
             duration = plain(a.duration),
             isHelpful = true,
+            auraInstanceID = plain(a.auraInstanceID),
+            sourceUnit = plain(a.sourceUnit),
+            expirationTime = plain(a.expirationTime),
         }
     end
     return out
