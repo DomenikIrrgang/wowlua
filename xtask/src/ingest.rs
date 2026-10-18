@@ -651,11 +651,21 @@ fn scrub_owners(line: &str) -> String {
     .into_owned()
 }
 
+/// A call or answer as a data file's field: one line, no tab (a line
+/// break, a tab, a carriage return as the symbols for them, ␤ ␉ ␍, which
+/// the client's texts do not hold; the engine reads them back).
+fn data_text(text: &str) -> String {
+    text.replace('\n', "\u{2424}")
+        .replace('\t', "\u{2409}")
+        .replace('\r', "\u{240D}")
+}
+
 /// The engine's trait data (`data/camelot-traits.txt`): every class's
 /// recorded trait answers (`forever-camelot-traits-<class>.lua`, from any
 /// account's ingest): the class, a tab, the call, a tab, the answer.
 fn write_traits_data(root: &Path, client: &Path, version: &str) -> Result<()> {
     let (lines, classes) = fixtures_by(client, "forever-camelot-traits-")?;
+    let lines = owned_traits(lines);
     let mut data = format!(
         "# WoW Forever {version}'s trait configs as characters answered them\n\
          # (/stdtest engine traits: {}): the class, the call, the answer, a tab\n\
@@ -664,12 +674,200 @@ fn write_traits_data(root: &Path, client: &Path, version: &str) -> Result<()> {
         classes.join(", ")
     );
     for ((class, call), answer) in &lines {
-        let _ = writeln!(data, "{class}\t{call}\t{answer}");
+        let _ = writeln!(data, "{class}\t{}\t{}", data_text(call), data_text(answer));
     }
     let path = root.join("crates/wowlua-engine/data/camelot-traits.txt");
     std::fs::write(&path, data)?;
     println!("wrote {} ({} answers)", path.display(), lines.len());
     Ok(())
+}
+
+/// The numbers of a list field of an answer (`treeIDs={1=number 1089}`).
+fn list_numbers(answer: &str, field: &str) -> Vec<i64> {
+    let Some(at) = answer.find(&format!("{field}={{")) else {
+        return Vec::new();
+    };
+    let rest = &answer[at + field.len() + 2..];
+    let mut depth = 1;
+    let end = rest
+        .char_indices()
+        .find(|(_, c)| {
+            match c {
+                '{' => depth += 1,
+                '}' => depth -= 1,
+                _ => {}
+            }
+            depth == 0
+        })
+        .map_or(rest.len(), |(i, _)| i);
+    static NUMBER: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    NUMBER
+        .get_or_init(|| regex::Regex::new(r"number (-?\d+)").expect("a valid pattern"))
+        .captures_iter(&rest[..end])
+        .filter_map(|c| c[1].parse().ok())
+        .collect()
+}
+
+/// A call's integer arguments (`C_Traits.GetNodeInfo(22147, 110301)`).
+fn call_args(call: &str) -> Vec<i64> {
+    call.split_once('(')
+        .map(|(_, a)| a.trim_end_matches(')'))
+        .unwrap_or("")
+        .split(", ")
+        .filter_map(|a| a.parse().ok())
+        .collect()
+}
+
+/// The trait answers the engine needs: each node's, entry's, definition's
+/// and spell's from the class whose config holds its tree (every class
+/// asks every class's trees; another's are worked out from the owner's,
+/// the fixtures keep them all), an answer every class gives alike once.
+fn owned_traits(
+    lines: std::collections::BTreeMap<(String, String), String>,
+) -> std::collections::BTreeMap<(String, String), String> {
+    use std::collections::{BTreeMap, BTreeSet};
+    let name = |call: &str| call.split('(').next().unwrap_or("").to_string();
+    let gate = regex::Regex::new(r"conditionID=number (\d+)").expect("a valid pattern");
+    let def = regex::Regex::new(r"definitionID=number (\d+)").expect("a valid pattern");
+    let spell =
+        regex::Regex::new(r"(?:spellID|overriddenSpellID)=number (\d+)").expect("a valid pattern");
+    // The trees of each class's configs; each tree's nodes.
+    let mut config_trees: BTreeMap<(String, i64), BTreeSet<i64>> = BTreeMap::new();
+    let mut tree_of: BTreeMap<i64, i64> = BTreeMap::new();
+    for ((class, call), answer) in &lines {
+        let args = call_args(call);
+        match name(call).as_str() {
+            "C_Traits.GetConfigInfo" if args.len() == 1 => {
+                let trees = list_numbers(answer, "treeIDs");
+                config_trees.insert((class.clone(), args[0]), trees.into_iter().collect());
+            }
+            "C_Traits.GetTreeNodes" if args.len() == 1 => {
+                let nodes = answer.split_once(": ").map_or("", |(_, a)| a);
+                for n in list_numbers(&format!("x={nodes}"), "x") {
+                    tree_of.insert(n, args[0]);
+                }
+            }
+            _ => {}
+        }
+    }
+    // A tree no class's config holds (one more class tree than classes):
+    // each node's answers kept from the first character that recorded it.
+    let held: BTreeSet<i64> = config_trees.values().flatten().copied().collect();
+    let mut first: BTreeMap<i64, String> = BTreeMap::new();
+    for (class, call) in lines.keys() {
+        let args = call_args(call);
+        if name(call) == "C_Traits.GetNodeInfo" && args.len() == 2 {
+            first.entry(args[1]).or_insert_with(|| class.clone());
+        }
+    }
+    let holds = |class: &str, config: i64, node: i64| {
+        tree_of.get(&node).is_some_and(|t| {
+            config_trees
+                .get(&(class.to_string(), config))
+                .is_some_and(|ts| ts.contains(t))
+                || (!held.contains(t) && first.get(&node).is_some_and(|c| c == class))
+        })
+    };
+    // What each class owns: its configs' nodes' entries and conditions,
+    // their definitions and spells.
+    let mut entries: BTreeSet<(String, i64)> = BTreeSet::new();
+    let mut conditions: BTreeSet<(String, i64, i64)> = BTreeSet::new();
+    for ((class, call), answer) in &lines {
+        let args = call_args(call);
+        if name(call) == "C_Traits.GetNodeInfo" && args.len() == 2 && holds(class, args[0], args[1])
+        {
+            for e in list_numbers(answer, "entryIDs") {
+                entries.insert((class.clone(), e));
+            }
+            for c in list_numbers(answer, "conditionIDs") {
+                conditions.insert((class.clone(), args[0], c));
+            }
+        }
+        if name(call) == "C_Traits.GetTreeInfo" && args.len() == 2 {
+            for c in gate.captures_iter(answer) {
+                if let Ok(c) = c[1].parse() {
+                    conditions.insert((class.clone(), args[0], c));
+                }
+            }
+        }
+    }
+    let mut definitions: BTreeSet<(String, i64)> = BTreeSet::new();
+    for ((class, call), answer) in &lines {
+        let args = call_args(call);
+        if name(call) == "C_Traits.GetEntryInfo"
+            && args.len() == 2
+            && entries.contains(&(class.clone(), args[1]))
+        {
+            if let Some(d) = def.captures(answer).and_then(|c| c[1].parse().ok()) {
+                definitions.insert((class.clone(), d));
+            }
+            for c in list_numbers(answer, "conditionIDs") {
+                conditions.insert((class.clone(), args[0], c));
+            }
+        }
+    }
+    let mut spells: BTreeSet<(String, i64)> = BTreeSet::new();
+    for ((class, call), answer) in &lines {
+        let args = call_args(call);
+        if name(call) == "C_Traits.GetDefinitionInfo"
+            && args.len() == 1
+            && definitions.contains(&(class.clone(), args[0]))
+        {
+            for c in spell.captures_iter(answer) {
+                if let Ok(id) = c[1].parse() {
+                    spells.insert((class.clone(), id));
+                }
+            }
+        }
+    }
+    let kept = lines.into_iter().filter(|((class, call), _)| {
+        let args = call_args(call);
+        let c = class.clone();
+        match name(call).as_str() {
+            "C_Traits.GetNodeInfo"
+            | "C_Traits.GetNodeCost"
+            | "C_Traits.CanRefundRank"
+            | "C_Traits.CanPurchaseRank"
+                if args.len() >= 2 =>
+            {
+                holds(class, args[0], args[1])
+            }
+            "C_Traits.GetEntryInfo" if args.len() == 2 => entries.contains(&(c, args[1])),
+            "C_Traits.GetConditionInfo" if args.len() == 2 => {
+                conditions.contains(&(c, args[0], args[1]))
+            }
+            "C_Traits.GetTreeInfo" | "C_Traits.GetTreeCurrencyInfo" if args.len() >= 2 => {
+                config_trees
+                    .get(&(c, args[0]))
+                    .is_some_and(|ts| ts.contains(&args[1]))
+            }
+            "C_Traits.GetTraitDescription" if !args.is_empty() => entries.contains(&(c, args[0])),
+            "C_Traits.GetIncreasedTraitData" if args.len() == 2 => entries.contains(&(c, args[1])),
+            "C_Traits.GetDefinitionInfo" if args.len() == 1 => definitions.contains(&(c, args[0])),
+            n if (n.starts_with("C_Spell.") || n == "GetSpellBaseCooldown") && args.len() == 1 => {
+                spells.contains(&(c, args[0]))
+            }
+            _ => true,
+        }
+    });
+    // An answer every class that has it gives alike: the first's only.
+    let mut by_call: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
+    for ((class, call), answer) in kept {
+        by_call.entry(call).or_default().push((class, answer));
+    }
+    let mut out = BTreeMap::new();
+    for (call, answers) in by_call {
+        let alike = answers.windows(2).all(|w| w[0].1 == w[1].1);
+        if alike && answers.len() > 1 {
+            let (class, answer) = answers.into_iter().next().expect("one");
+            out.insert((class, call), answer);
+        } else {
+            for (class, answer) in answers {
+                out.insert((class, call.clone()), answer);
+            }
+        }
+    }
+    out
 }
 
 /// The engine's professions' data (`data/camelot-tradeskill.txt`): every
@@ -685,7 +883,12 @@ fn write_tradeskill_data(root: &Path, client: &Path, version: &str) -> Result<()
         professions.join(", ")
     );
     for ((profession, call), answer) in &lines {
-        let _ = writeln!(data, "{profession}\t{call}\t{answer}");
+        let _ = writeln!(
+            data,
+            "{profession}\t{}\t{}",
+            data_text(call),
+            data_text(answer)
+        );
     }
     let path = root.join("crates/wowlua-engine/data/camelot-tradeskill.txt");
     std::fs::write(&path, data)?;
@@ -997,7 +1200,7 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                     .any(|p| name == *p || (p.ends_with('.') && name.starts_with(p)))
             };
             if (listed(STATIC) || listed(BASELINE)) && !answer.starts_with("error") {
-                let _ = writeln!(data, "{call}\t{answer}");
+                let _ = writeln!(data, "{}\t{}", data_text(call), data_text(answer));
             }
         }
         // The cursor (`/stdtest engine cursor`): each step's state and the
@@ -1086,7 +1289,7 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 map_entries.sort();
                 for (call, answer) in &map_entries {
                     if !answer.starts_with("error") && !entries.iter().any(|(c, _)| c == call) {
-                        let _ = writeln!(data, "{call}\t{answer}");
+                        let _ = writeln!(data, "{}\t{}", data_text(call), data_text(answer));
                     }
                 }
                 write_table(
@@ -1121,9 +1324,17 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 list.push((call, me.scrub(&answer)));
             }
             list.sort();
+            // A character of the class: its class config's ID names it (a
+            // class may have several characters recorded; no name kept).
+            let config = list
+                .iter()
+                .find(|(c, _)| c == "C_ClassTalents.GetActiveConfigID()")
+                .and_then(|(_, a)| a.strip_prefix("1: number "))
+                .unwrap_or("0")
+                .to_string();
             write_table(
                 &client.join(format!(
-                    "forever-camelot-traits-{}.lua",
+                    "forever-camelot-traits-{}-{config}.lua",
                     class.to_lowercase()
                 )),
                 &format!(
@@ -1211,7 +1422,7 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             keys.join(", ")
         );
         for ((key, call), answer) in &lines {
-            let _ = writeln!(data, "{key}\t{call}\t{answer}");
+            let _ = writeln!(data, "{key}\t{}\t{}", data_text(call), data_text(answer));
         }
         let path = root.join("crates/wowlua-engine/data/camelot-trainers.txt");
         std::fs::write(&path, data)?;

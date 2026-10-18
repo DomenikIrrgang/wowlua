@@ -1,11 +1,12 @@
 -- /stdtest engine scenario profession, played with the engine's controls:
 -- the level 21 paladin mines a copper vein four times (scenarios/
--- profession.lua). Each step at its recorded time (a click: a round trip
--- before the server's answer, ~0.35 s). Not yet: the professions' windows
--- and crafting (25 s on).
+-- profession.lua), opens Blacksmithing, makes a sharpening wheel, opens
+-- Smelting. Each step at its recorded time (a click: a round trip before
+-- the server's answer, ~0.35 s). Not yet: the filter's menu (29.8 s), a
+-- recipe picked (43.1 s), the smelting (167 s on).
 local e = __engine
 local player = e.player
-ScenarioPartial = "the professions' windows and crafting not played yet"
+ScenarioPartial = "the smelting (167 s on) not played yet"
 e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 } })
 -- The spell and the stone as the client named them (UnitCastingInfo, the
 -- loot's link and icon).
@@ -25,7 +26,7 @@ local function at(t)
     now = t
 end
 local function world(...) e.fireEvent(...) end
-e.setLatency(0.36)
+e.setLatency(0.345)
 -- The vein mined four times: a cast of 3.208 s, its ore autolooted (the
 -- third time with two rough stones).
 local ore = { { id = 2770 } }
@@ -37,4 +38,31 @@ at(14.495) player:gather(vein, { spell = 2576, castTime = 3.208, loot = { { id =
 at(19.363) player:gather(vein, { spell = 2576, castTime = 3.208, loot = ore, auto = true })
 at(24.2)
 check("the ore in the bag", C_Item.GetItemCount(2770) == 18)
-at(25.0)
+-- Blacksmithing's spell clicked on the bar: its window.
+at(25.395) player:openTradeSkill(3100, "Blacksmithing")
+at(25.561) world("PLAYER_STARTED_MOVING")
+at(26.201) world("PLAYER_STOPPED_MOVING")
+at(27.0)
+check("the window shown", ProfessionsFrame and ProfessionsFrame:IsShown())
+check("the wheel's recipe shown", ProfessionsFrame.CraftingPage.SchematicForm:GetRecipeInfo().recipeID == 1230171)
+local function press(frame, button)
+    if not frame then
+        check("clicked: no frame", false)
+        return
+    end
+    local ok, err = pcall(e.click, frame, button)
+    if not ok then check("clicked: " .. tostring(err), false) end
+end
+-- The wheel made: a cast of 10 s; the window closed meanwhile.
+at(27.640) press(ProfessionsFrame.CraftingPage.CreateButton)
+at(37.442) e.pressKey("ESCAPE")
+-- The spellbook, Blacksmithing again, Smelting.
+at(37.985) e.pressKey("P")
+at(39.0)
+check("the wheel made", C_Item.GetItemCount(279944) == 2)
+at(39.546) player:openTradeSkill(3100, "Blacksmithing")
+at(41.004) player:openTradeSkill(2656, "Mining")
+at(45.634) world("PLAYER_STARTED_TURNING")
+at(46.065) world("PLAYER_STARTED_MOVING")
+at(47.742) e.pressKey("ESCAPE")
+at(48.0)

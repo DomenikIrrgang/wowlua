@@ -306,6 +306,10 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("defineLevel", crate::levels::control_define),
         ("setSpellTraits", crate::actions::control_set_spell_traits),
         ("setTraitRanks", crate::traits::control_set_trait_ranks),
+        (
+            "setTraitCharacter",
+            crate::traits::control_set_trait_character,
+        ),
         ("setRenown", crate::traits::control_set_renown),
         ("newWmoChunk", crate::character::control_new_wmo_chunk),
         ("setResting", crate::character::control_set_resting),

@@ -72,12 +72,90 @@ pub fn define_item(vm: &mut Vm, c: NativeCall) -> Ret {
     define(vm, &c, true)
 }
 
+/// A spell the game data's probes recorded (a recipe's, a talent's, a
+/// trainer's): defined from its recorded info and description (cached,
+/// as the client had them), once.
+fn probed_spell(vm: &mut Vm, id: i64) -> Option<TableRef> {
+    let info = crate::recorded::probed(&format!("C_Spell.GetSpellInfo({id})"))?;
+    let info = crate::traits::Rv::answer(info).into_iter().next()?;
+    let t = vm.new_table();
+    for key in ["name", "iconID", "castTime", "minRange", "maxRange"] {
+        if let Some(v) = info.get(key) {
+            let v = v.to_value(vm);
+            set(vm, t, key, v);
+        }
+    }
+    if let Some(text) = crate::recorded::probed(&format!("C_Spell.GetSpellDescription({id})"))
+        && let Some(d) = crate::traits::Rv::answer(text).into_iter().next()
+    {
+        let d = d.to_value(vm);
+        set(vm, t, "description", d);
+    }
+    set(vm, t, "cached", Value::Bool(true));
+    widgets::keep(vm, Value::Table(t));
+    engine_mut(vm).world.data.spells.insert(id, t);
+    Some(t)
+}
+
+/// An item the game data's probes recorded (a recipe's reagent or
+/// product): defined from its recorded `C_Item.GetItemInfo` (cached, as
+/// the client had it), once.
+fn probed_item(vm: &mut Vm, id: i64) -> Option<TableRef> {
+    let info = crate::recorded::probed(&format!("C_Item.GetItemInfo({id})"))?;
+    let values = crate::traits::Rv::answer(info);
+    if values.is_empty() {
+        return None;
+    }
+    const FIELDS: &[&str] = &[
+        "name",
+        "link",
+        "quality",
+        "itemLevel",
+        "minLevel",
+        "type",
+        "subType",
+        "stackCount",
+        "equipLoc",
+        "icon",
+        "sellPrice",
+        "classID",
+        "subclassID",
+        "bindType",
+        "expansionID",
+    ];
+    let t = vm.new_table();
+    for (key, v) in FIELDS.iter().zip(values.iter()) {
+        let v = v.to_value(vm);
+        set(vm, t, key, v);
+    }
+    set(vm, t, "cached", Value::Bool(true));
+    widgets::keep(vm, Value::Table(t));
+    engine_mut(vm).world.data.items.insert(id, t);
+    Some(t)
+}
+
+/// An item's data: defined, else probed (`probed_item`).
+pub fn item_data(vm: &mut Vm, id: i64) -> Option<TableRef> {
+    match engine(vm).world.data.items.get(&id).copied() {
+        Some(t) => Some(t),
+        None => probed_item(vm, id),
+    }
+}
+
+/// A spell's data: defined, else probed (`probed_spell`).
+pub fn spell_data(vm: &mut Vm, id: i64) -> Option<TableRef> {
+    match engine(vm).world.data.spells.get(&id).copied() {
+        Some(t) => Some(t),
+        None => probed_spell(vm, id),
+    }
+}
+
 /// The spell a `spellIdentifier` names: an ID or a defined spell's name.
 fn spell(vm: &mut Vm, c: &NativeCall) -> Option<(i64, TableRef)> {
     match vm.hidden(c.arg(1)) {
         Value::Num(n) => {
             let id = n as i64;
-            engine(vm).world.data.spells.get(&id).map(|t| (id, *t))
+            spell_data(vm, id).map(|t| (id, t))
         }
         Value::Str(s) => {
             let name = s;
@@ -286,7 +364,7 @@ fn item_id(vm: &mut Vm, v: Value) -> Option<i64> {
 
 fn cached_item(vm: &mut Vm, c: &NativeCall) -> Option<TableRef> {
     let id = item_id(vm, c.arg(1))?;
-    let t = engine(vm).world.data.items.get(&id).copied()?;
+    let t = item_data(vm, id)?;
     field(vm, t, "cached").truthy().then_some(t)
 }
 
@@ -320,7 +398,7 @@ fn get_item_info_instant(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = item_id(vm, c.arg(1)) else {
         return Ok(vec![]);
     };
-    let Some(t) = engine(vm).world.data.items.get(&id).copied() else {
+    let Some(t) = item_data(vm, id) else {
         return Ok(vec![Value::Num(id as f64)]);
     };
     let mut out = vec![Value::Num(id as f64)];
@@ -348,11 +426,22 @@ fn get_item_name_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     item_field(vm, &c, "name")
 }
 
+/// `C_Item.GetItemQualityByID(itemInfo)`: its data's quality (the
+/// client's needs its data loaded: a cached item's).
+fn get_item_quality_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    item_field(vm, &c, "quality")
+}
+
+/// `C_Item.GetItemMaxStackSizeByID(itemInfo)`: its data's stack size.
+fn get_item_max_stack_size_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    item_field(vm, &c, "stackCount")
+}
+
 fn get_item_icon_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = item_id(vm, c.arg(1)) else {
         return Ok(vec![]);
     };
-    match engine(vm).world.data.items.get(&id).copied() {
+    match item_data(vm, id) {
         Some(t) => Ok(vec![field(vm, t, "icon")]),
         None => Ok(vec![]),
     }
@@ -362,7 +451,7 @@ fn get_item_icon_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
 /// else as the client answered.
 fn does_item_exist_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     let defined = match vm.hidden(c.arg(1)) {
-        Value::Num(n) => engine(vm).world.data.items.get(&(n as i64)).copied(),
+        Value::Num(n) => item_data(vm, n as i64),
         _ => None,
     };
     match defined {
@@ -378,7 +467,7 @@ fn is_item_data_cached(vm: &mut Vm, c: NativeCall) -> Ret {
 fn item_loaded(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = c.upvals.first().copied().unwrap_or(Value::Nil);
     let item = match id {
-        Value::Num(n) => engine(vm).world.data.items.get(&(n as i64)).copied(),
+        Value::Num(n) => item_data(vm, n as i64),
         _ => None,
     };
     let ok = match item {
@@ -397,7 +486,7 @@ fn request_load_item_data(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     engine_mut(vm).world.data.item_requests.push(id);
-    let delay = match engine(vm).world.data.items.get(&id).copied() {
+    let delay = match item_data(vm, id) {
         Some(t) => match field(vm, t, "delay") {
             Value::Num(d) => d,
             _ => 0.2,
@@ -437,6 +526,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Item.GetItemInfoInstant", get_item_info_instant),
         ("C_Item.GetItemNameByID", get_item_name_by_id),
         ("C_Item.GetItemIconByID", get_item_icon_by_id),
+        ("C_Item.GetItemQualityByID", get_item_quality_by_id),
+        (
+            "C_Item.GetItemMaxStackSizeByID",
+            get_item_max_stack_size_by_id,
+        ),
         ("C_Item.IsItemDataCachedByID", is_item_data_cached),
         ("C_Item.DoesItemExistByID", does_item_exist_by_id),
         ("C_Item.RequestLoadItemDataByID", request_load_item_data),

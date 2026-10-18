@@ -433,6 +433,12 @@ export function setTraitRanks(configID: number, ranks: { [number]: number })
     engine().setTraitRanks(configID, ranks)
 end
 
+--- The recorded character (named by its class config's ID) whose trait
+--- data is the player's: a class may have several recorded.
+export function setTraitCharacter(configID: number)
+    engine().setTraitCharacter(configID)
+end
+
 --- A major faction's renown (`C_MajorFactions.GetCurrentRenownLevel`: the
 --- legacy system opens at 1 or more).
 export function setRenown(factionID: number, level: number)

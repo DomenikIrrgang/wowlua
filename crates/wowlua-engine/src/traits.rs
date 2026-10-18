@@ -94,7 +94,7 @@ impl Rv {
     }
 
     /// An answer's values (`n: v1, v2`).
-    fn answer(text: &str) -> Vec<Rv> {
+    pub(crate) fn answer(text: &str) -> Vec<Rv> {
         let Some((count, rest)) = text.split_once(": ") else {
             return Vec::new();
         };
@@ -215,6 +215,10 @@ fn data() -> &'static HashMap<(&'static str, &'static str), &'static str> {
             .filter_map(|l| {
                 let (class, rest) = l.split_once('\t')?;
                 let (call, answer) = rest.split_once('\t')?;
+                let (call, answer) = (
+                    crate::recorded::unescape(call),
+                    crate::recorded::unescape(answer),
+                );
                 Some(((class, call), answer))
             })
             .collect()
@@ -232,10 +236,21 @@ pub struct Traits {
     pub start: BTreeMap<(i64, i64), i64>,
     /// Renown by major faction (`e.setRenown`).
     pub renown: BTreeMap<i64, f64>,
+    /// The recorded character playing (`e.setTraitCharacter`).
+    pub character: Option<String>,
+}
+
+/// Any class's answer to a call (data by call).
+pub(crate) fn owner_answer(call: &str) -> Option<&'static &'static str> {
+    static BY_CALL: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    BY_CALL
+        .get_or_init(|| data().iter().map(|((_, c), a)| (*c, *a)).collect())
+        .get(call)
 }
 
 /// A character's recorded trait data and the engine's ranks.
 pub struct Model<'a> {
+    /// The recorded character (`CLASS-configID`).
     class: String,
     state: &'a Traits,
     /// Every rank 0 (a node asked through a config without it).
@@ -256,9 +271,13 @@ impl<'a> Model<'a> {
         data().keys().any(|(c, _)| *c == self.class)
     }
 
+    /// The class's recorded answer, else the class's whose it is (each
+    /// node, entry and spell kept from the class owning its tree; an
+    /// answer every class gave alike kept once).
     fn recorded(&self, call: &str) -> Option<Vec<Rv>> {
         data()
             .get(&(self.class.as_str(), call))
+            .or_else(|| owner_answer(call))
             .map(|a| Rv::answer(a))
     }
 
@@ -529,17 +548,23 @@ impl<'a> Model<'a> {
             .is_some_and(|t| t.flag("cannotRefund"))
     }
 
-    /// The config of the class recorded holding a node.
-    fn host(&self, node: i64) -> Option<i64> {
+    /// The class and config recorded holding a node (the tree's owner's).
+    fn host(&self, node: i64) -> Option<(String, i64)> {
         let suffix = format!(", {node})");
-        data().keys().find_map(|(class, call)| {
-            (*class == self.class)
-                .then(|| {
-                    call.strip_prefix("C_Traits.GetNodeInfo(")?
-                        .strip_suffix(&suffix)
-                })
-                .flatten()
-                .and_then(|c| c.parse().ok())
+        let found = |call: &str| -> Option<i64> {
+            call.strip_prefix("C_Traits.GetNodeInfo(")?
+                .strip_suffix(&suffix)?
+                .parse()
+                .ok()
+        };
+        let mine = data()
+            .keys()
+            .filter(|(class, _)| *class == self.class)
+            .find_map(|(class, call)| found(call).map(|c| (class.to_string(), c)));
+        mine.or_else(|| {
+            data()
+                .keys()
+                .find_map(|(class, call)| found(call).map(|c| (class.to_string(), c)))
         })
     }
 
@@ -548,10 +573,14 @@ impl<'a> Model<'a> {
     /// node as with nothing of its tree bought, never to buy (recorded: the
     /// druid's class config asked of its legacy nodes).
     pub fn node(&self, config: i64, node: i64) -> Option<Rv> {
-        if self.recorded_node(config, node).is_none() {
-            let host = self.host(node)?;
+        // A node of a tree the config does not hold (recorded so, or not).
+        if !self.bare && self.tree_of(config, node).is_none() {
+            let (class, host) = match self.recorded_node(config, node) {
+                Some(_) => (self.class.clone(), config),
+                None => self.host(node)?,
+            };
             let bare = Model {
-                class: self.class.clone(),
+                class,
                 state: self.state,
                 bare: true,
             };
@@ -678,9 +707,27 @@ impl<'a> Model<'a> {
     }
 }
 
+/// The character whose recorded trait data is the player's: the test's
+/// (`e.setTraitCharacter`), else the class's first recorded one.
+fn character(vm: &Vm) -> String {
+    let traits = &engine(vm).world.traits;
+    if let Some(c) = &traits.character {
+        return c.clone();
+    }
+    let prefix = format!("{}-", engine(vm).units.list[PLAYER.0].class.to_uppercase());
+    let mut keys: Vec<&str> = data()
+        .keys()
+        .map(|(k, _)| *k)
+        .filter(|k| k.starts_with(&prefix))
+        .collect();
+    keys.sort_unstable();
+    keys.dedup();
+    keys.first().map_or(prefix, |k| k.to_string())
+}
+
 fn model(vm: &Vm) -> Model<'_> {
-    let class = &engine(vm).units.list[PLAYER.0].class;
-    Model::new(class, &engine(vm).world.traits)
+    let key = character(vm);
+    Model::new(&key, &engine(vm).world.traits)
 }
 
 fn traits_mut(vm: &mut Vm) -> &mut Traits {
@@ -1035,6 +1082,24 @@ pub fn control_set_trait_ranks(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `e.setTraitCharacter(configID)`: the recorded character (named by its
+/// class config's ID) whose trait data is the player's.
+pub fn control_set_trait_character(vm: &mut Vm, c: NativeCall) -> Ret {
+    let config = vm.check_number(&c, 1)? as i64;
+    let suffix = format!("-{config}");
+    let Some(key) = data()
+        .keys()
+        .map(|(k, _)| *k)
+        .find(|k| k.ends_with(&suffix))
+    else {
+        return Err(vm.error(&format!(
+            "setTraitCharacter: no character recorded with config {config}"
+        )));
+    };
+    traits_mut(vm).character = Some(key.to_string());
+    Ok(vec![])
+}
+
 /// `e.setRenown(faction, level)`: a major faction's renown.
 pub fn control_set_renown(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Value::Num(faction), Value::Num(level)) = (c.arg(1), c.arg(2)) else {
@@ -1115,6 +1180,85 @@ mod tests {
             }
         }
         out.join("; ")
+    }
+
+    /// A fixture's entries (`["call"] = "answer",`, Lua's escapes).
+    fn fixture(text: &str) -> Vec<(String, String)> {
+        fn lua(s: &str) -> String {
+            let mut out = Vec::new();
+            let b = s.as_bytes();
+            let mut i = 0;
+            while i < b.len() {
+                if b[i] == b'\\' && i + 1 < b.len() {
+                    i += 1;
+                    match b[i] {
+                        b'n' => out.push(b'\n'),
+                        b'r' => out.push(b'\r'),
+                        b'0'..=b'9' => {
+                            let end = (i + 3).min(b.len());
+                            let digits: String = s[i..end]
+                                .chars()
+                                .take_while(|c| c.is_ascii_digit())
+                                .collect();
+                            out.push(digits.parse::<u8>().unwrap_or(b'?'));
+                            i += digits.len() - 1;
+                        }
+                        c => out.push(c),
+                    }
+                } else {
+                    out.push(b[i]);
+                }
+                i += 1;
+            }
+            String::from_utf8_lossy(&out).into_owned()
+        }
+        text.lines()
+            .filter_map(|l| {
+                let l = l.trim().strip_prefix("[\"")?.strip_suffix("\",")?;
+                let (k, v) = l.split_once("\"] = \"")?;
+                Some((lua(k), lua(v)))
+            })
+            .collect()
+    }
+
+    /// Another class's node asked through the class config answers as with
+    /// nothing of its tree bought, never to buy: the druid's recording of
+    /// every other class's tree, worked out from their owners'.
+    #[test]
+    fn another_class_s_nodes_follow_from_their_owners() {
+        let state = Traits::default();
+        let m = Model::new("DRUID-2839888", &state);
+        let recorded = fixture(include_str!(
+            "../tests/client/forever-camelot-traits-druid-2839888.lua"
+        ));
+        let mut checked = 0;
+        let mut wrong = Vec::new();
+        for (call, answer) in &recorded {
+            let Some(inner) = call
+                .strip_prefix("C_Traits.GetNodeInfo(")
+                .and_then(|r| r.strip_suffix(')'))
+            else {
+                continue;
+            };
+            let args: Vec<i64> = inner.split(", ").filter_map(|a| a.parse().ok()).collect();
+            // Only nodes of trees the druid's configs do not hold.
+            if m.recorded_node(args[0], args[1]).is_some() {
+                continue;
+            }
+            let ours = m.node(args[0], args[1]);
+            let theirs = Rv::answer(answer).into_iter().next();
+            if ours != theirs {
+                wrong.push(format!("{call}: {}", differences(&ours, &theirs)));
+            }
+            checked += 1;
+        }
+        assert!(checked > 100, "{checked}");
+        assert!(
+            wrong.is_empty(),
+            "{} of {checked}:\n{}",
+            wrong.len(),
+            wrong.join("\n")
+        );
     }
 
     /// The recorded configs' answers again from the ranks: every node,

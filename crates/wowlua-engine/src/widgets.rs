@@ -149,6 +149,8 @@ pub struct World {
     pub traits: crate::traits::Traits,
     /// The achievement search's results.
     pub achievements: crate::achievements::Achievements,
+    /// The profession window open, the craft running.
+    pub tradeskill: crate::tradeskill::TradeSkill,
     /// The global cooldown running: its start (`GetTime`) and length.
     pub global_cooldown: Option<(f64, f64)>,
     /// Spells by trait (`setSpellTraits`: `offGlobalCooldown`,
@@ -2360,15 +2362,27 @@ fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         };
         if let Some(fid) = widget_of(vm, fs) {
             let t = kept_text(vm, c.arg(2));
-            engine_mut(vm).world.widgets[fid.0].text = t;
+            store_text(vm, fid, t);
         }
     }
     let t = kept_text(vm, c.arg(2));
-    engine_mut(vm).world.widgets[id.0].text = t;
+    store_text(vm, id, t);
     if is_a(engine(vm), &class, "EditBox") && !engine(vm).world.text_set.contains(&id) {
         engine_mut(vm).world.text_set.push(id);
     }
     Ok(vec![])
+}
+
+/// A widget's text set, kept alive while it is the widget's (its
+/// properties hold it: the collector sees them, not the widget).
+pub fn store_text(vm: &mut Vm, id: WidgetId, text: Option<Value>) {
+    let props = engine(vm).world.widgets[id.0].props;
+    let key = vm.str("\u{0}text");
+    let _ = vm
+        .heap
+        .table_mut(props)
+        .set(key, text.unwrap_or(Value::Nil));
+    engine_mut(vm).world.widgets[id.0].text = text;
 }
 
 /// A text as a widget keeps it: a number as its string (`SetText(1)` reads
@@ -2408,7 +2422,7 @@ fn set_number(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         format!("{n}")
     };
     let t = vm.str(&text);
-    engine_mut(vm).world.widgets[id.0].text = Some(t);
+    store_text(vm, id, Some(t));
     if !engine(vm).world.text_set.contains(&id) {
         engine_mut(vm).world.text_set.push(id);
     }
@@ -2452,7 +2466,7 @@ fn set_formatted_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let f = vm.heap.table(string).get(key);
     let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
     let r = vm.call(f, &args)?;
-    engine_mut(vm).world.widgets[id.0].text = r.first().copied();
+    store_text(vm, id, r.first().copied());
     Ok(vec![])
 }
 

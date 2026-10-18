@@ -579,7 +579,7 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
         } else {
             vm.str(text)
         };
-        engine_mut(vm).world.widgets[id.0].text = Some(v);
+        crate::widgets::store_text(vm, id, Some(v));
     }
     for child in el
         .children

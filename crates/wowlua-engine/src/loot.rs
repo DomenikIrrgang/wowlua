@@ -131,7 +131,7 @@ fn opt_field(vm: &mut Vm, opts: Option<wowlua_vm::TableRef>, key: &str) -> Value
 /// The cooldown events around a gathering cast: off the global cooldown
 /// (`SPELL_UPDATE_COOLDOWN(spell, nil, nil, nil, nil)`), the bags' at its
 /// end (recorded).
-fn gather_cooldowns(vm: &mut Vm, spell: f64, bags: bool) {
+pub(crate) fn gather_cooldowns(vm: &mut Vm, spell: f64, bags: bool) {
     fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
     fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
     if bags {

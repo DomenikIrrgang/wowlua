@@ -57,7 +57,7 @@ fn field(vm: &mut Vm, t: TableRef, key: &str) -> Value {
 }
 
 /// The player's `CURRENT_SPELL_CAST_CHANGED(false)`.
-fn cast_changed(vm: &mut Vm, unit: UnitId) {
+pub(crate) fn cast_changed(vm: &mut Vm, unit: UnitId) {
     if unit == units::PLAYER {
         crate::widgets::fire_event(vm, "CURRENT_SPELL_CAST_CHANGED", &[Value::Bool(false)]);
     }
@@ -221,8 +221,10 @@ pub fn cast_at(
         bar: bar.clone(),
         done,
     };
-    if let Some(f) = done {
-        crate::widgets::keep(vm, f);
+    // Its name and icon read later (`UnitCastingInfo`): kept alive (a
+    // made-up name is no data's).
+    for v in [name, icon].into_iter().chain(done) {
+        crate::widgets::keep(vm, v);
     }
     engine_mut(vm).units.casting.casts.insert(me, cast);
     let (start_event, _) = events(channel);

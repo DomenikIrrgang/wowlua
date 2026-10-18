@@ -298,7 +298,7 @@ fn tooltip_data(vm: &mut Vm, data_type: f64, key: (&str, Value), lines: Vec<Valu
 }
 
 fn item_tooltip(vm: &mut Vm, id: i64) -> Ret {
-    let Some(item) = engine(vm).world.data.items.get(&id).copied() else {
+    let Some(item) = crate::gamedata::item_data(vm, id) else {
         return Ok(vec![]);
     };
     let field = |vm: &mut Vm, k: &str| {

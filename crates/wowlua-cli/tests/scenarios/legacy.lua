@@ -24,6 +24,8 @@ for id, item in pairs({
 }) do
     e.defineItem(id, item, { cached = true })
 end
+-- The recorded character's trait data (its class config's ID).
+e.setTraitCharacter(22147)
 local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
 -- animations and OnUpdate code run), the rest of a step as one jump.

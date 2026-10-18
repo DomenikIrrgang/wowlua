@@ -45,6 +45,7 @@ pub mod recorded;
 pub mod stats;
 pub mod taxi;
 pub mod tooltip;
+pub mod tradeskill;
 pub mod trainer;
 pub mod traits;
 pub mod ui;
@@ -242,6 +243,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(inspect::behaviours())
             .chain(traits::behaviours(flavor))
             .chain(achievements::behaviours())
+            .chain(tradeskill::behaviours(flavor))
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())
             .chain(bindings::behaviours())
@@ -302,11 +304,14 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     }
     // Functions with behaviour the documentation lacks (`IsInGroup`): the
     // client has them (camelot's inventory; other flavors unverified).
-    let names: Vec<(&'static str, NativeFn)> = engine(vm)
+    // By name: the globals made in the same order every run (a map's
+    // order is random; `pairs(_G)` and the handles followed it).
+    let mut names: Vec<(&'static str, NativeFn)> = engine(vm)
         .behaviours
         .iter()
         .map(|(&n, &f)| (n, f))
         .collect();
+    names.sort_by_key(|(n, _)| *n);
     for (name, f) in names {
         let (ns, short) = match name.split_once('.') {
             Some((ns, short)) => (Some(ns), short),

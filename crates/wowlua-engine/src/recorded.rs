@@ -19,8 +19,50 @@ fn answers() -> &'static HashMap<&'static str, &'static str> {
             .lines()
             .filter(|l| !l.starts_with('#'))
             .filter_map(|l| l.split_once('\t'))
+            .map(|(c, a)| (unescape(c), unescape(a)))
             .collect()
     })
+}
+
+/// The trainers' recorded answers (`/stdtest engine trainer`,
+/// `data/camelot-trainers.txt`): by call, any trainer's.
+fn trainer_answer(call: &str) -> Option<&'static str> {
+    static BY_CALL: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    BY_CALL
+        .get_or_init(|| {
+            include_str!("../data/camelot-trainers.txt")
+                .lines()
+                .filter(|l| !l.starts_with('#'))
+                .filter_map(|l| {
+                    let (_, rest) = l.split_once('\t')?;
+                    let (call, answer) = rest.split_once('\t')?;
+                    Some((unescape(call), unescape(answer)))
+                })
+                .collect()
+        })
+        .get(call)
+        .copied()
+}
+
+/// A call the probes of game data recorded (a profession window's, a
+/// class's trees', a trainer's): its answer, any character's.
+pub fn probed(call: &str) -> Option<&'static str> {
+    crate::tradeskill::any_answer(call)
+        .or_else(|| crate::traits::owner_answer(call).copied())
+        .or_else(|| trainer_answer(call))
+}
+
+/// A data file's field as written (`cargo xtask ingest`): its line breaks,
+/// tabs and carriage returns kept as their symbols (␤ ␉ ␍) back.
+pub fn unescape(field: &'static str) -> &'static str {
+    if !field.contains(['\u{2424}', '\u{2409}', '\u{240D}']) {
+        return field;
+    }
+    let text = field
+        .replace('\u{2424}', "\n")
+        .replace('\u{2409}', "\t")
+        .replace('\u{240D}', "\r");
+    Box::leak(text.into_boxed_str())
 }
 
 /// The functions with recorded answers.
@@ -254,23 +296,29 @@ pub fn lookup_text(vm: &mut Vm, call: &str) -> Option<Vec<Value>> {
 /// and nils (Blizzard's code passes a transmog location or a nil
 /// variation that the probes leave out).
 pub fn lookup(vm: &mut Vm, name: &str, c: &NativeCall) -> Option<Vec<Value>> {
+    let answer = call_variants(vm, name, c)
+        .iter()
+        .find_map(|call| answers().get(call.as_str()))?;
+    Some(parse_answer(vm, answer))
+}
+
+/// A call as the engine writes it, then without its trailing tables and
+/// nils one by one: how a recording may hold it (Blizzard's code passes a
+/// transmog location, a nil recipe level, that the probes leave out).
+pub fn call_variants(vm: &Vm, name: &str, c: &NativeCall) -> Vec<String> {
     let call = crate::call_text(vm, name, c, 1);
-    if let Some(answer) = answers().get(call.as_str()) {
-        return Some(parse_answer(vm, answer));
-    }
-    let mut args: Vec<&str> = call
-        .strip_prefix(name)?
-        .strip_prefix('(')?
-        .strip_suffix(')')?
-        .split(", ")
-        .filter(|a| !a.is_empty())
-        .collect();
+    let mut out = vec![call.clone()];
+    let Some(inner) = call
+        .strip_prefix(name)
+        .and_then(|r| r.strip_prefix('('))
+        .and_then(|r| r.strip_suffix(')'))
+    else {
+        return out;
+    };
+    let mut args: Vec<&str> = inner.split(", ").filter(|a| !a.is_empty()).collect();
     while matches!(args.last(), Some(&"nil" | &"{}")) {
         args.pop();
-        let shorter = format!("{name}({})", args.join(", "));
-        if let Some(answer) = answers().get(shorter.as_str()) {
-            return Some(parse_answer(vm, answer));
-        }
+        out.push(format!("{name}({})", args.join(", ")));
     }
-    None
+    out
 }

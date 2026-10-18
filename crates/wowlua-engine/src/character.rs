@@ -172,9 +172,10 @@ fn held_of(vm: &mut Vm, v: Value) -> Option<Held> {
     }
 }
 
-/// The item data a test defined for `id` (`defineItem`).
-fn item_data(vm: &Vm, id: i64) -> Option<TableRef> {
-    engine(vm).world.data.items.get(&id).copied()
+/// The item data a test defined for `id` (`defineItem`), else the
+/// probes recorded.
+fn item_data(vm: &mut Vm, id: i64) -> Option<TableRef> {
+    crate::gamedata::item_data(vm, id)
 }
 
 /// The quality colors of the client's `ITEM_QUALITY_COLORS` (poor to

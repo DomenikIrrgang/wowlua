@@ -299,7 +299,7 @@ pub fn control_type(vm: &mut Vm, c: NativeCall) -> Ret {
             let mut text = text_of(vm, id);
             text.push(ch);
             let v = vm.str(&text);
-            engine_mut(vm).world.widgets[id.0].text = Some(v);
+            widgets::store_text(vm, id, Some(v));
             let ch = vm.str(&ch.to_string());
             widgets::run_script(vm, id, "OnChar", &[ch]);
             widgets::run_script(vm, id, "OnTextChanged", &[Value::Bool(true)]);

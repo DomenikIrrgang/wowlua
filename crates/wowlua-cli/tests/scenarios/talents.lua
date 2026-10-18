@@ -9,6 +9,8 @@ local e = __engine
 e.setHiddenGroupBuffs({ 8185, 10613, 10478, 10534, 10441, 15036, 10609, 8836, 15111, 8249, 1239242, 10491, 17354, 8076, 8162, 15107, 10537, 16176, 8160, 10535, 15112, 8184, 8163, 10538, 10614, 16191, 17355, 5677, 10526, 8835, 17360, 10494, 8515, 8182, 10497, 15109, 10496, 8512, 16190, 10493, 8181, 10626, 8230, 10479, 1239243, 25362, 10495, 8227, 15108, 15110, 408521, 1325257, 10627, 10477, 17359, 16387, 8075, 1325256, 10521, 25360, 10442, 25361, 10476, 5678, 10612, 8161, 25359, 8250 })
 -- Before: the node not bought yet (the probe's ranks are the end's: 1).
 e.setTraitRanks(5999541, { [104753] = 0 })
+-- The recorded character's trait data (its class config's ID).
+e.setTraitCharacter(5999541)
 local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
 -- animations and OnUpdate code run), the rest of a step as one jump.

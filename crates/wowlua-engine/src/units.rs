@@ -1098,6 +1098,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("swing", control_swing),
         ("loot", crate::loot::control_loot),
         ("gather", crate::loot::control_gather),
+        ("openTradeSkill", crate::tradeskill::control_open),
         ("interact", crate::quests::control_interact),
         ("die", crate::death::control_die),
         ("setThreat", control_set_threat),
