@@ -123,6 +123,8 @@ pub struct World {
     pub trainers: crate::trainer::Trainers,
     pub taxis: crate::taxi::Taxis,
     pub death: crate::death::Death,
+    /// The class's hidden group buffs (`HIDDEN_GROUP_BUFFS_CHANGED`).
+    pub hidden_group_buffs: Vec<f64>,
     /// The levels a test defined (`levels.rs`).
     pub levels: std::collections::BTreeMap<i64, wowlua_vm::TableRef>,
     /// The chat's last line number (each message's eleventh value).

@@ -724,6 +724,17 @@ export function defineTaxi(npc: MockUnit, data: table)
     engine().defineTaxi(npc, data)
 end
 
+--- The user clicks the world: an item on the cursor is to be deleted
+--- (`DELETE_ITEM_CONFIRM`, Blizzard's popup; `DeleteCursorItem` deletes it).
+export function clickWorld()
+    engine().clickWorld()
+end
+
+--- The class's hidden group buffs (`HIDDEN_GROUP_BUFFS_CHANGED`' list).
+export function setHiddenGroupBuffs(spellIDs: number[])
+    engine().setHiddenGroupBuffs(spellIDs)
+end
+
 --- The ghost reaches its corpse (`CORPSE_IN_RANGE`) or leaves it.
 export function nearCorpse(near: boolean)
     engine().nearCorpse(near)

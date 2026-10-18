@@ -117,6 +117,13 @@ fn set_locked(vm: &mut Vm, source: &Source, locked: bool) {
         Source::Equipped(slot) => [Value::Num(*slot as f64), Value::Nil],
     };
     fire(vm, "ITEM_LOCK_CHANGED", &args);
+    // Then which (recorded, scenario items).
+    let which = if locked {
+        "ITEM_LOCKED"
+    } else {
+        "ITEM_UNLOCKED"
+    };
+    fire(vm, which, &args);
 }
 
 fn clear_cursor(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -249,6 +256,12 @@ fn pickup_item_at(vm: &mut Vm, source: Source) {
         Cursor::Item(_, Some(from)) if from == source => {
             put_down(vm);
         }
+        Cursor::Item(_, Some(from))
+            if matches!(from, Source::Equipped(_)) || matches!(source, Source::Equipped(_)) =>
+        {
+            // To or from the gear: the server's (`inventory.rs`).
+            crate::inventory::cursor_move(vm, from, source);
+        }
         Cursor::Item(held, Some(from)) => {
             // A move to another (empty) slot.
             let ch = &engine(vm).world.character;
@@ -298,6 +311,52 @@ fn pickup_item_at(vm: &mut Vm, source: Source) {
         }
         _ => {}
     }
+}
+
+/// The item at `source` picked up and let go at once, staying locked for
+/// the server's answer (a right-click equip: recorded `SHOWGRID`, the
+/// lock, `HIDEGRID`).
+pub fn hold_for_server(vm: &mut Vm, source: Source) {
+    let ch = &engine(vm).world.character;
+    let held = match &source {
+        Source::Bag(b, s) => ch.bags.get(b).and_then(|bag| bag.items.get(s)).cloned(),
+        Source::Equipped(s) => ch.equipment.get(s).cloned(),
+    };
+    if let Some(held) = held {
+        pick_up(vm, Cursor::Item(held, Some(source.clone())));
+        set_locked(vm, &source, true);
+        release_keeping_lock(vm);
+    }
+}
+
+/// The cursor cleared, its item staying locked (the server answers the
+/// move): `ACTIONBAR_HIDEGRID`, `CURSOR_CHANGED`.
+pub fn release_keeping_lock(vm: &mut Vm) {
+    let old = std::mem::take(&mut engine_mut(vm).world.character.cursor);
+    fire(vm, "ACTIONBAR_HIDEGRID", &[]);
+    fire(
+        vm,
+        "CURSOR_CHANGED",
+        &[
+            Value::Bool(true),
+            Value::Num(0.0),
+            Value::Num(old.kind()),
+            Value::Num(0.0),
+        ],
+    );
+}
+
+/// What the cursor holds: an item and where it came from.
+pub fn held_item(vm: &Vm) -> Option<(Held, Source)> {
+    match &engine(vm).world.character.cursor {
+        Cursor::Item(h, Some(s)) => Some((h.clone(), s.clone())),
+        _ => None,
+    }
+}
+
+/// An item lock told: `ITEM_LOCK_CHANGED` and `ITEM_LOCKED`/`ITEM_UNLOCKED`.
+pub fn lock(vm: &mut Vm, source: &Source, locked: bool) {
+    set_locked(vm, source, locked);
 }
 
 fn pickup_container_item(vm: &mut Vm, c: NativeCall) -> Ret {

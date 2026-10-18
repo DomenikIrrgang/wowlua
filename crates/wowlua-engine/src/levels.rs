@@ -151,15 +151,9 @@ pub fn level_up(vm: &mut Vm, xp: f64) {
     crate::clock::after_engine(vm, LEVEL_AFTER, packet);
 }
 
-/// `HIDDEN_GROUP_BUFFS_CHANGED({})`, `GROUP_BUFF_VISUAL_ALERTS_CHANGED({})`.
+/// The group buffs' changes (`character::group_buffs_changed`).
 fn group_buffs(vm: &mut Vm) {
-    for e in [
-        "HIDDEN_GROUP_BUFFS_CHANGED",
-        "GROUP_BUFF_VISUAL_ALERTS_CHANGED",
-    ] {
-        let none = vm.new_table();
-        fire(vm, e, &[Value::Table(none)]);
-    }
+    crate::character::group_buffs_changed(vm);
 }
 
 fn buffs_again(vm: &mut Vm, _c: NativeCall) -> Ret {

@@ -366,6 +366,17 @@ fn instant(vm: &mut Vm, id: f64) {
     cast_changed(vm, me);
 }
 
+/// A new cast GUID of a kind (3 a spell, 4 an item's, 15 a triggered one,
+/// recorded) for the player's spell `id`.
+pub fn cast_guid(vm: &mut Vm, kind: u8, id: f64) -> String {
+    let n = {
+        let c = &mut engine_mut(vm).units.casting;
+        c.next += 1;
+        c.next
+    };
+    format!("Cast-{kind}-4621-0-1-{}-{:010X}", id as i64, n)
+}
+
 /// A new cast GUID for the player's spell `id`.
 fn new_guid(vm: &mut Vm, id: f64) -> String {
     let n = {

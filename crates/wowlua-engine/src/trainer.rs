@@ -351,13 +351,7 @@ fn taught(vm: &mut Vm, c: NativeCall) -> Ret {
         fire(vm, "TRAINER_UPDATE", &[]);
     }
     fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
-    for e in [
-        "HIDDEN_GROUP_BUFFS_CHANGED",
-        "GROUP_BUFF_VISUAL_ALERTS_CHANGED",
-    ] {
-        let none = vm.new_table();
-        fire(vm, e, &[Value::Table(none)]);
-    }
+    crate::character::group_buffs_changed(vm);
     fire(vm, "SPELLS_CHANGED", &[]);
     let later = vm.native_with("trainerPaid", paid as NativeFn, vec![Value::Num(s.cost)]);
     crate::clock::after_engine(vm, MONEY_AFTER, later);

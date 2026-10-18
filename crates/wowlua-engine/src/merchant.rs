@@ -710,6 +710,11 @@ fn use_container_item(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Some(bag), Some(slot)) = (num(c.arg(1)), num(c.arg(2))) else {
         return Ok(vec![]);
     };
+    // Away from a vendor: worn, or used (`inventory.rs`).
+    if !merchant(vm).open {
+        crate::inventory::use_container_item(vm, bag as i64, slot as usize);
+        return Ok(vec![]);
+    }
     sell(vm, bag as i64, slot as usize);
     Ok(vec![])
 }

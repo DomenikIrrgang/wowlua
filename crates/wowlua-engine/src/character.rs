@@ -804,6 +804,43 @@ pub fn set_context(vm: &mut Vm, bag: i64, id: i64, context: &str) {
     }
 }
 
+/// `HIDDEN_GROUP_BUFFS_CHANGED(list)` (the class's hidden group buffs,
+/// `e.setHiddenGroupBuffs`: a shaman's 68, a level 1 warrior's none,
+/// recorded) and `GROUP_BUFF_VISUAL_ALERTS_CHANGED({})`.
+pub fn group_buffs_changed(vm: &mut Vm) {
+    let list = vm.new_table();
+    let ids = engine(vm).world.hidden_group_buffs.clone();
+    for (i, id) in ids.into_iter().enumerate() {
+        let _ = vm
+            .heap
+            .table_mut(list)
+            .set(Value::Num((i + 1) as f64), Value::Num(id));
+    }
+    widgets::fire_event(vm, "HIDDEN_GROUP_BUFFS_CHANGED", &[Value::Table(list)]);
+    let none = vm.new_table();
+    widgets::fire_event(
+        vm,
+        "GROUP_BUFF_VISUAL_ALERTS_CHANGED",
+        &[Value::Table(none)],
+    );
+}
+
+/// `setHiddenGroupBuffs(list)`: the class's hidden group buffs' spells.
+pub fn control_set_hidden_group_buffs(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Table(t) = c.arg(1) else {
+        return Err(vm.error("setHiddenGroupBuffs: a list of spell IDs expected"));
+    };
+    let n = vm.heap.table(t).border();
+    let ids: Vec<f64> = (1..=n)
+        .filter_map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+            Value::Num(x) => Some(x),
+            _ => None,
+        })
+        .collect();
+    engine_mut(vm).world.hidden_group_buffs = ids;
+    Ok(vec![])
+}
+
 /// The inventory changed: `PLAYER_EQUIPED_SPELLS_CHANGED(slot)` for each
 /// main action bar slot holding a spell (recorded: the warrior's 1, 2, 10
 /// and 11; the paladin's 1 to 4 and 12).

@@ -295,6 +295,11 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("defineTaxi", crate::taxi::control_define),
         ("nearCorpse", crate::death::control_near_corpse),
         ("gameError", game_error),
+        ("clickWorld", crate::inventory::control_click_world),
+        (
+            "setHiddenGroupBuffs",
+            crate::character::control_set_hidden_group_buffs,
+        ),
         ("defineLevel", crate::levels::control_define),
         ("spend", spend),
         ("spawnUnit", units::spawn),

@@ -25,6 +25,7 @@ pub mod framescript;
 pub mod gamedata;
 pub mod gossip;
 pub mod input;
+pub mod inventory;
 pub mod levels;
 pub mod login;
 pub mod loot;
@@ -222,6 +223,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(trainer::behaviours())
             .chain(taxi::behaviours())
             .chain(death::behaviours())
+            .chain(inventory::behaviours())
             .chain(queries::behaviours())
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())

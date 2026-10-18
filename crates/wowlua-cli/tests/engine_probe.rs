@@ -780,6 +780,16 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
 function check(label, ok) if not ok then ScenarioFailures[#ScenarioFailures + 1] = label end end
 function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((select(i, ...))) end ScenarioNotes[#ScenarioNotes + 1] = table.concat(t, ' ') end",
     );
+    // The recording's ping (`GetNetStats`' world latency, ms): the server's
+    // answers come a round trip later; a play script may set its own.
+    let recording = fs::read_to_string(fixtures.join(format!("{name}.lua"))).unwrap_or_default();
+    if let Some(ms) = regex::Regex::new(r#"\["latency"\] = "[^,]*, [^,]*, [0-9.]+, ([0-9.]+)""#)
+        .unwrap()
+        .captures(&recording)
+        .and_then(|c| c[1].parse::<f64>().ok())
+    {
+        addon(&mut vm, &format!("__engine.setLatency({})", ms / 1000.0));
+    }
     let script =
         fs::read_to_string(repo().join(format!("crates/wowlua-cli/tests/scenarios/{name}.lua")))
             .expect("the play script");
@@ -841,6 +851,9 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
     for r in &wowlua_engine::engine(&vm).refusals[refusals_before..] {
         if r.event == "ADDON_ACTION_FORBIDDEN" {
             errors.push(format!("forbidden: {} {}", r.addon, r.action));
+            if std::env::var("WOWLUA_SCENARIO_TAINT").is_ok() {
+                eprintln!("forbidden {}:\n{}", r.action, r.report);
+            }
         }
     }
     errors.extend(end_state_differences(
@@ -978,7 +991,7 @@ fn scenario_line(line: &str) -> Option<String> {
     let body = guid.replace_all(body, "Player-0000-00000000");
     // A cast's GUID by its kind and spell (its server, map and number are
     // the session's).
-    let cast = regex::Regex::new(r"Cast-(\d)-\d+-\d+-\d+-(\d+)-[0-9A-F]+").unwrap();
+    let cast = regex::Regex::new(r"Cast-(\d+)-\d+-\d+-\d+-(\d+)-[0-9A-F]+").unwrap();
     let body = cast.replace_all(&body, "Cast-$1-$2");
     let body = line.replace(&body, "${1}<line>${2}").into_owned();
     // An answer's trailing nils dropped (the first recordings' recorder
@@ -1083,6 +1096,17 @@ const VENDOR_MATCHED: usize = 530;
 #[test]
 fn the_engine_plays_vendor_as_the_client_did() {
     plays_as_the_client_did("vendor", VENDOR_MATCHED);
+}
+
+/// How many of the items scenario's lines the engine plays as the client
+/// did: only ever up.
+const ITEMS_MATCHED: usize = 302;
+
+/// The items scenario: gear worn and taken off by right-click and drag,
+/// a two-handed weapon refused (bags full), food eaten, an item deleted.
+#[test]
+fn the_engine_plays_items_as_the_client_did() {
+    plays_as_the_client_did("items", ITEMS_MATCHED);
 }
 
 /// How many of the quest scenario's lines the engine plays as the client
