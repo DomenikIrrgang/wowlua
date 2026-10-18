@@ -614,6 +614,24 @@ fn identity_from_scenarios(state: &mlua::Table) -> Result<Identity> {
     })
 }
 
+/// An auction's owners (`owners={1=string <name>, …}`): other players'
+/// names, but the player's own ("player").
+fn scrub_owners(line: &str) -> String {
+    let list = regex::Regex::new(r"owners=\{([^}]*)\}").expect("a valid pattern");
+    let name = regex::Regex::new(r"(\d+=string )([^,}]+)").expect("a valid pattern");
+    list.replace_all(line, |c: &regex::Captures| {
+        let body = name.replace_all(&c[1], |n: &regex::Captures| {
+            if &n[2] == "player" {
+                n[0].to_string()
+            } else {
+                format!("{}Otherplayer", &n[1])
+            }
+        });
+        format!("owners={{{body}}}")
+    })
+    .into_owned()
+}
+
 /// A profile's character with its last name (`"lastName": "Lastname"`).
 fn with_last_name(profile: &str) -> String {
     match serde_json::from_str::<serde_json::Value>(profile) {
@@ -1065,7 +1083,7 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             let mut list = Vec::new();
             for (i, line) in log.sequence_values::<String>().enumerate() {
                 let line = line.map_err(|e| anyhow!("{e}"))?;
-                list.push((format!("{:05}", i + 1), scrub(&line)));
+                list.push((format!("{:05}", i + 1), scrub_owners(&scrub(&line))));
             }
             // The ping at the start and the end (`GetNetStats()`:
             // bandwidth in, out, latency home, world, in ms).
