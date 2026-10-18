@@ -133,8 +133,13 @@ pub struct World {
     pub on_taxi: bool,
     /// The global cooldown running: its start (`GetTime`) and length.
     pub global_cooldown: Option<(f64, f64)>,
-    /// Spells the global cooldown leaves alone (`offGlobalCooldown`).
-    pub off_global_cooldown: std::collections::BTreeSet<i64>,
+    /// Spells by trait (`setSpellTraits`: `offGlobalCooldown`,
+    /// `tracking`, `profession`).
+    pub spell_traits: std::collections::BTreeMap<String, std::collections::BTreeSet<i64>>,
+    /// A flight's stage: 0 none, 1 taking off (no control), 2 on the taxi.
+    pub taxi_stage: u8,
+    /// The player mounted (`IsMounted`; a taxi's mount).
+    pub mounted: bool,
     /// The levels a test defined (`levels.rs`).
     pub levels: std::collections::BTreeMap<i64, wowlua_vm::TableRef>,
     /// The chat's last line number (each message's eleventh value).

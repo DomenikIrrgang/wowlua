@@ -275,12 +275,12 @@ fn game_time(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// No zone: no PvP type, not a PvP subzone, no faction.
-/// The zone's PvP status (a city's: "friendly", false, its faction,
-/// recorded), else none.
+/// The zone's PvP status (a city's: "friendly", false, its faction),
+/// else nothing (recorded: Durotar's).
 fn zone_pvp_info(vm: &mut Vm, _c: NativeCall) -> Ret {
     match engine(vm).world.character.position.pvp.clone() {
         Some((kind, ffa, faction)) => Ok(vec![vm.str(&kind), Value::Bool(ffa), vm.str(&faction)]),
-        None => Ok(vec![Value::Nil, Value::Bool(false), Value::Nil]),
+        None => Ok(vec![]),
     }
 }
 

@@ -57,19 +57,43 @@ pub fn start_global_cooldown(vm: &mut Vm) {
     engine_mut(vm).world.global_cooldown = Some((now, GLOBAL_COOLDOWN_LENGTH));
 }
 
-/// `offGlobalCooldown({ spellID, … })`: spells the global cooldown leaves
-/// alone (the paladin's Judgement, recorded).
-pub fn control_off_global_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
+/// `setSpellTraits({ offGlobalCooldown = { id, … }, tracking = { … },
+/// profession = { … } })`: what the client knows of the character's spells
+/// and the engine does not (recorded: Judgement off the global cooldown,
+/// Find Minerals and Sense Undead tracking, the crafts professions).
+pub fn control_set_spell_traits(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(t) = c.arg(1) else {
-        return Err(vm.error("offGlobalCooldown: a list of spell IDs expected"));
+        return Err(vm.error("setSpellTraits: a table of trait lists expected"));
     };
-    let n = vm.heap.table(t).border();
-    for i in 1..=n {
-        if let Value::Num(id) = vm.heap.table(t).get(Value::Num(i as f64)) {
-            engine_mut(vm).world.off_global_cooldown.insert(id as i64);
+    let entries: Vec<(Value, Value)> = vm.heap.table(t).entries().collect();
+    for (k, v) in entries {
+        let (Value::Str(k), Value::Table(list)) = (k, v) else {
+            continue;
+        };
+        let trait_name = String::from_utf8_lossy(vm.str_bytes(k)).into_owned();
+        let n = vm.heap.table(list).border();
+        for i in 1..=n {
+            if let Value::Num(id) = vm.heap.table(list).get(Value::Num(i as f64)) {
+                engine_mut(vm)
+                    .world
+                    .spell_traits
+                    .entry(trait_name.clone())
+                    .or_default()
+                    .insert(id as i64);
+            }
         }
     }
     Ok(vec![])
+}
+
+/// Whether a spell has a trait (`setSpellTraits`).
+pub fn has_trait(vm: &Vm, spell: Value, trait_name: &str) -> bool {
+    let Value::Num(id) = spell else { return false };
+    engine(vm)
+        .world
+        .spell_traits
+        .get(trait_name)
+        .is_some_and(|s| s.contains(&(id as i64)))
 }
 
 fn action(vm: &Vm, slot: i64) -> Option<Action> {
@@ -158,6 +182,19 @@ fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
     let p = &engine(vm).units.list[crate::units::PLAYER.0];
     if p.dead || p.ghost {
         return (false, false);
+    }
+    // On a flight: no spell but the professions' (taking off), the
+    // tracking ones too once on the taxi; no macro, even one without a
+    // spell (recorded: a whisper's).
+    let stage = engine(vm).world.taxi_stage;
+    if stage > 0 && a.kind == "macro" {
+        return (false, false);
+    }
+    if stage > 0 && a.kind == "spell" && !has_trait(vm, a.id, "profession") {
+        let tracking = has_trait(vm, a.id, "tracking");
+        if stage == 1 || !tracking {
+            return (false, false);
+        }
     }
     let in_combat = engine(vm).units.list[crate::units::PLAYER.0].in_combat;
     if a.kind == "item" {
@@ -277,11 +314,7 @@ fn get_action_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
     let now = crate::clock::now(vm);
     let gcd = match (&a, engine(vm).world.global_cooldown) {
         (Some(a), Some((start, length))) if a.kind == "spell" && start + length > now => {
-            let off = match a.id {
-                Value::Num(id) => engine(vm).world.off_global_cooldown.contains(&(id as i64)),
-                _ => false,
-            };
-            (!off).then_some((start, length))
+            (!has_trait(vm, a.id, "offGlobalCooldown")).then_some((start, length))
         }
         _ => None,
     };

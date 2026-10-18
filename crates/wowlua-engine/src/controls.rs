@@ -301,10 +301,9 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
             crate::character::control_set_hidden_group_buffs,
         ),
         ("defineLevel", crate::levels::control_define),
-        (
-            "offGlobalCooldown",
-            crate::actions::control_off_global_cooldown,
-        ),
+        ("setSpellTraits", crate::actions::control_set_spell_traits),
+        ("newWmoChunk", crate::character::control_new_wmo_chunk),
+        ("areaChanged", crate::character::control_area_changed),
         ("spend", spend),
         ("spawnUnit", units::spawn),
         ("setPlayer", units::set_player),

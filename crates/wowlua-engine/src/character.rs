@@ -67,6 +67,8 @@ pub struct Position {
     /// `C_PvP.GetZonePVPInfo`: the zone's PvP type, whether free for all,
     /// its faction.
     pub pvp: Option<(String, bool, String)>,
+    /// Under a roof (`IsIndoors`).
+    pub indoors: bool,
 }
 
 pub struct Character {
@@ -455,6 +457,14 @@ fn get_inventory_item_durability(vm: &mut Vm, c: NativeCall) -> Ret {
             None => vec![],
         },
     )
+}
+
+/// `IsIndoors()`: the place's (`moveTo`'s `indoors`; recorded false in
+/// Orgrimmar's streets).
+fn is_indoors(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(
+        engine(vm).world.character.position.indoors,
+    )])
 }
 
 /// `UnitOnTaxi(unit)`: the player on a flight (`taxi.rs`).
@@ -1013,6 +1023,10 @@ pub fn move_to(vm: &mut Vm, t: TableRef, told: bool) {
     }
     let zone = field(vm, t, "zone");
     if let Some(z) = text(vm, zone) {
+        // Another zone: its own subzone and PvP status (none unless given).
+        if z != p.zone {
+            p.pvp = None;
+        }
         p.zone = z;
         p.sub_zone = String::new();
     }
@@ -1047,17 +1061,64 @@ pub fn move_to(vm: &mut Vm, t: TableRef, told: bool) {
             text(vm, faction).unwrap_or_default(),
         ));
     }
-    let new_area = p.zone != old.zone || p.map_id != old.map_id;
-    let new_sub = p.sub_zone != old.sub_zone;
+    // Another zone: a new area; another subzone or map: the zone changed
+    // (inside a world map object, a city's: indoors), recorded.
+    if let Value::Bool(b) = field(vm, t, "indoors") {
+        p.indoors = b;
+    }
+    let new_area = p.zone != old.zone;
+    let new_map = p.map_id != old.map_id;
+    let changed = new_area || new_map || p.sub_zone != old.sub_zone;
     engine_mut(vm).world.character.position = p;
-    if !told {
+    if !told || !changed {
         return;
     }
-    if new_area {
-        widgets::fire_event(vm, "ZONE_CHANGED_NEW_AREA", &[]);
-    } else if new_sub {
-        widgets::fire_event(vm, "ZONE_CHANGED", &[]);
+    let event = if new_area {
+        "ZONE_CHANGED_NEW_AREA"
+    } else if field(vm, t, "wmo").truthy() && !new_map {
+        "ZONE_CHANGED_INDOORS"
+    } else {
+        "ZONE_CHANGED"
+    };
+    area_changed(vm, event, new_map);
+}
+
+/// The world around changed (`event`): the mount journal's usability, a
+/// moment later the map's points of interest and fog, the quest watch with
+/// another map (recorded on a flight).
+fn area_changed(vm: &mut Vm, event: &str, new_map: bool) {
+    widgets::fire_event(vm, event, &[]);
+    widgets::fire_event(vm, "MOUNT_JOURNAL_USABILITY_CHANGED", &[]);
+    let native = vm.native_with("areaUpdated", area_updated, vec![Value::Bool(new_map)]);
+    crate::clock::after_engine(vm, AREA_AFTER, native);
+}
+
+/// The map's updates after the area's change (recorded: two frames).
+const AREA_AFTER: f64 = 0.033;
+
+fn area_updated(vm: &mut Vm, c: NativeCall) -> Ret {
+    widgets::fire_event(vm, "AREA_POIS_UPDATED", &[]);
+    widgets::fire_event(vm, "FOG_OF_WAR_UPDATED", &[]);
+    if c.upvals[0].truthy() {
+        widgets::fire_event(vm, "QUEST_WATCH_LIST_CHANGED", &[Value::Nil, Value::Nil]);
     }
+    Ok(vec![])
+}
+
+/// `newWmoChunk()`: the player in another part of a world map object (a
+/// city's walls): `NEW_WMO_CHUNK()` and the area's updates (recorded).
+pub fn control_new_wmo_chunk(vm: &mut Vm, _c: NativeCall) -> Ret {
+    area_changed(vm, "NEW_WMO_CHUNK", false);
+    Ok(vec![])
+}
+
+/// `areaChanged()`: the area's updates without a zone's event (recorded
+/// on a flight over the Barrens, its cause unknown).
+pub fn control_area_changed(vm: &mut Vm, _c: NativeCall) -> Ret {
+    widgets::fire_event(vm, "MOUNT_JOURNAL_USABILITY_CHANGED", &[]);
+    let native = vm.native_with("areaUpdated", area_updated, vec![Value::Bool(false)]);
+    crate::clock::after_engine(vm, AREA_AFTER, native);
+    Ok(vec![])
 }
 
 // --------------------------------------------------------------- distance
@@ -1191,6 +1252,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetInventoryItemID", get_inventory_item_id),
         ("GetInventoryItemDurability", get_inventory_item_durability),
         ("UnitOnTaxi", unit_on_taxi),
+        ("IsIndoors", is_indoors),
         ("GetInventoryItemLink", get_inventory_item_link),
         ("GetInventoryItemTexture", get_inventory_item_texture),
         ("GetInventoryItemQuality", get_inventory_item_quality),

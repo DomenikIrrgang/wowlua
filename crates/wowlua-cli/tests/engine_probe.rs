@@ -1148,6 +1148,16 @@ fn the_engine_plays_hearth_as_the_client_did() {
     plays_as_the_client_did("hearth", HEARTH_MATCHED);
 }
 
+/// How many of the taxi scenario's lines the engine plays as the client
+/// did: only ever up.
+const TAXI_MATCHED: usize = 1224;
+
+/// The taxi scenario: a flight from Orgrimmar to the Crossroads.
+#[test]
+fn the_engine_plays_taxi_as_the_client_did() {
+    plays_as_the_client_did("taxi", TAXI_MATCHED);
+}
+
 /// How many of the items scenario's lines the engine plays as the client
 /// did: only ever up.
 const ITEMS_MATCHED: usize = 302;

@@ -372,7 +372,10 @@ export function sell(bag: number, slot: number)
 end
 
 --- Where the player is: `ZONE_CHANGED_NEW_AREA` for a new zone,
---- `ZONE_CHANGED` for a new subzone.
+--- `ZONE_CHANGED` for a new subzone or map (`ZONE_CHANGED_INDOORS` for a
+--- subzone inside a world map object, a city's: `wmo`), then the map's
+--- updates. `instance`/`instanceID`: the continent (`GetInstanceInfo`);
+--- `pvp`: the zone's `C_PvP.GetZonePVPInfo` (kind, free for all, faction).
 export function moveTo(place: {
     mapID?: number,
     zone?: string,
@@ -380,8 +383,35 @@ export function moveTo(place: {
     x?: number,
     y?: number,
     world?: { y: number, x: number, z?: number, instanceID?: number },
+    instance?: string,
+    instanceID?: number,
+    pvp?: any[],
+    wmo?: boolean,
+    indoors?: boolean,
 })
     engine().moveTo(place)
+end
+
+--- The player in another part of a world map object (a city's walls):
+--- `NEW_WMO_CHUNK` and the map's updates.
+export function newWmoChunk()
+    engine().newWmoChunk()
+end
+
+--- The area's updates without a zone's event (the mount journal's
+--- usability, the map's points of interest and fog).
+export function areaChanged()
+    engine().areaChanged()
+end
+
+--- What the client knows of the character's spells: those off the global
+--- cooldown, the tracking ones, the professions'.
+export function setSpellTraits(traits: {
+    offGlobalCooldown?: number[],
+    tracking?: number[],
+    profession?: number[],
+})
+    engine().setSpellTraits(traits)
 end
 
 --- The player's group: `mock.group:add(unit)` (`partyN`, `raidN`).

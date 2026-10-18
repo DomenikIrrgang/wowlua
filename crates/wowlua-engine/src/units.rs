@@ -346,6 +346,11 @@ pub fn tokens_of(u: &Units, id: UnitId) -> Vec<String> {
     if u.target.is_some_and(|t| u.list[t.0].target == Some(id)) {
         out.push("targettarget".into());
     }
+    // The NPC talked to: after target, before softfriend (recorded: a
+    // flight master's `UNIT_TARGET`).
+    if u.npc == Some(id) {
+        out.push("npc".into());
+    }
     // After target (`/stdtest engine record combat`: UNIT_AURA for
     // softenemy after target); the rest's order unverified.
     for (i, name) in ["softenemy", "softfriend", "softinteract"]
@@ -1335,8 +1340,13 @@ fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
         // A creature turning on someone, as a wolf on the player
         // (`/stdtest engine scenario combat`): the new target's flags
         // (also by its new token, `targettarget`), the creature's target,
-        // its flags in combat. Unverified: for others than the player.
-        if let Some(t) = new {
+        // its flags in combat; a friendly one turning to face someone (a
+        // flight master, `taxi`): its target only. Unverified: for others
+        // than the player.
+        let friendly = engine(vm).units.list[me.0].reaction == Reaction::Friendly;
+        if let Some(t) = new
+            && !friendly
+        {
             fire_unit(vm, "UNIT_FLAGS", t, &[]);
         }
         fire_unit(vm, "UNIT_TARGET", me, &[]);
