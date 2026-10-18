@@ -571,6 +571,49 @@ fn login_data(me: &Identity, version: &str, lines: &[String]) -> String {
     out
 }
 
+/// The player of a file with scenarios only: the name its snapshots
+/// give, the last name its own loot messages' sender carries ("Name Last"),
+/// the GUID its logs show most (the player's own messages).
+fn identity_from_scenarios(state: &mlua::Table) -> Result<Identity> {
+    let scenarios: mlua::Table = state
+        .get("engineScenarios")
+        .map_err(|_| anyhow!("no /stdtest engine results or scenarios to name the player by"))?;
+    let mut name = None;
+    let mut logs = String::new();
+    for pair in scenarios.pairs::<String, mlua::Table>() {
+        let (_, scenario) = pair.map_err(|e| anyhow!("{e}"))?;
+        if name.is_none()
+            && let Ok(before) = scenario.get::<mlua::Table>("before")
+            && let Ok(character) = before.get::<mlua::Table>("character")
+            && let Ok(n) = character.get::<String>("name")
+        {
+            name = Some(n);
+        }
+        if let Ok(log) = scenario.get::<mlua::Table>("log") {
+            for line in log.sequence_values::<String>().flatten() {
+                logs.push_str(&line);
+                logs.push('\n');
+            }
+        }
+    }
+    let name = name.ok_or_else(|| anyhow!("no scenario snapshot names the player"))?;
+    let count = |re: &regex::Regex| {
+        let mut seen: std::collections::BTreeMap<String, usize> = Default::default();
+        for c in re.captures_iter(&logs) {
+            *seen.entry(c[1].to_string()).or_default() += 1;
+        }
+        seen.into_iter().max_by_key(|(_, n)| *n).map(|(k, _)| k)
+    };
+    let sender = regex::Regex::new(&format!(r"string {} ([^;\s]+);", regex::escape(&name)))
+        .expect("a valid pattern");
+    let guid = regex::Regex::new(r"(Player-\d+-[0-9A-F]{8})").expect("a valid pattern");
+    Ok(Identity {
+        last_name: count(&sender),
+        guid: count(&guid).unwrap_or_default(),
+        name,
+    })
+}
+
 pub fn run(root: &Path, saved: &Path) -> Result<()> {
     let src = std::fs::read(saved).with_context(|| saved.display().to_string())?;
     let lua = mlua::Lua::new();
@@ -596,16 +639,23 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             .map(|c| c[1].trim().to_string())
             .collect()
     };
-    let names = get("probe.units.UnitName(player)")
-        .map(|v| strings(&v))
-        .ok_or_else(|| anyhow!("no /stdtest engine results to name the player by"))?;
-    let guid = get("probe.units.UnitGUID(player)")
-        .and_then(|v| strings(&v).into_iter().next())
-        .ok_or_else(|| anyhow!("no player GUID in the /stdtest engine results"))?;
-    let me = Identity {
-        name: names.first().cloned().unwrap_or_default(),
-        last_name: names.get(1).cloned(),
-        guid,
+    // The player: from the /stdtest engine results; a file with
+    // scenarios only, from their snapshots and logs.
+    let has_battery = get("probe.units.UnitName(player)").is_some();
+    let me = if has_battery {
+        let names = get("probe.units.UnitName(player)")
+            .map(|v| strings(&v))
+            .unwrap_or_default();
+        let guid = get("probe.units.UnitGUID(player)")
+            .and_then(|v| strings(&v).into_iter().next())
+            .ok_or_else(|| anyhow!("no player GUID in the /stdtest engine results"))?;
+        Identity {
+            name: names.first().cloned().unwrap_or_default(),
+            last_name: names.get(1).cloned(),
+            guid,
+        }
+    } else {
+        identity_from_scenarios(&state)?
     };
     let version = get("probe.client").unwrap_or_else(|| "an unknown client".into());
 
@@ -613,15 +663,17 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
         .iter()
         .map(|(k, v)| (me.scrub(k), me.scrub(v)))
         .collect();
-    write_table(
-        &client.join("forever-camelot-engine.lua"),
-        &format!(
-            "WoW Forever {version}: /stdtest engine, order, protected and blocked\n\
+    if has_battery {
+        write_table(
+            &client.join("forever-camelot-engine.lua"),
+            &format!(
+                "WoW Forever {version}: /stdtest engine, order, protected and blocked\n\
              (tests/ingame/src/engineprobe.wowlua), flattened; the player's name, realm\n\
              and GUID replaced (cargo xtask ingest)."
-        ),
-        &scrubbed,
-    )?;
+            ),
+            &scrubbed,
+        )?;
+    }
 
     // The CVar flags, as the engine's data.
     let mut flags = String::from(&format!(
@@ -761,131 +813,6 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 &list,
             )?;
         }
-        // Gameplay (`/stdtest engine scenario <name>`): each scenario's
-        // events and answers, and the character's world before and after
-        // as test profiles, the character's names scrubbed.
-        if let Ok(scenarios) = state.get::<mlua::Table>("engineScenarios") {
-            let dir = client.join("scenarios");
-            std::fs::create_dir_all(&dir)?;
-            let two_names = regex::Regex::new(
-                r#"UnitName\(\\?"[a-z]+\\?"\) -> 2: string ([^,]+), string (.+)$"#,
-            )
-            .expect("a valid pattern");
-            // First every recording's names (a name one recording shows
-            // may be in another's chat), then each recording scrubbed of
-            // them all.
-            let mut all: Vec<(String, mlua::Table)> = Vec::new();
-            for pair in scenarios.pairs::<String, mlua::Table>() {
-                all.push(pair.map_err(|e| anyhow!("{e}"))?);
-            }
-            let mut secrets: Vec<String> = Vec::new();
-            let mut profiles_of: Vec<Vec<(&str, String)>> = Vec::new();
-            for (_, scenario) in &all {
-                let mut profiles = Vec::new();
-                for part in ["before", "after"] {
-                    let snapshot: mlua::Value = scenario.get(part).map_err(|e| anyhow!("{e}"))?;
-                    if snapshot.is_nil() {
-                        continue;
-                    }
-                    let (text, names) = crate::profile::profile_text(&state, &snapshot)?;
-                    secrets.extend(names);
-                    profiles.push((part, text));
-                }
-                profiles_of.push(profiles);
-            }
-            // Players' names: a player's `UnitName` answers with two names
-            // (first and last), an NPC's with one. The character's last
-            // name, and others' names, as whole words.
-            let mut words: Vec<(String, &str)> = Vec::new();
-            for (_, scenario) in &all {
-                let log: mlua::Table = scenario.get("log").map_err(|e| anyhow!("{e}"))?;
-                for line in log.sequence_values::<String>() {
-                    let line = line.map_err(|e| anyhow!("{e}"))?;
-                    let line = me.scrub(&line);
-                    if let Some(c) = two_names.captures(&line) {
-                        let (first, last) = (c[1].trim().to_string(), c[2].trim().to_string());
-                        let own = first == "Player" || secrets.contains(&first);
-                        if !own && first.len() > 1 {
-                            words.push((first, "Otherplayer"));
-                        }
-                        if last.len() > 1 {
-                            words.push((last, if own { "Lastname" } else { "Othername" }));
-                        }
-                    }
-                }
-            }
-            words.sort();
-            words.dedup();
-            for ((name, scenario), profiles) in all.iter().zip(profiles_of) {
-                let file: String = name
-                    .chars()
-                    .map(|c| {
-                        if c.is_ascii_alphanumeric() {
-                            c.to_ascii_lowercase()
-                        } else {
-                            '-'
-                        }
-                    })
-                    .collect();
-                let scrub = |text: &str| {
-                    let text = secrets
-                        .iter()
-                        .filter(|s| s.len() > 2)
-                        .fold(me.scrub(text), |t, s| t.replace(s.as_str(), "Player"));
-                    words.iter().fold(text, |t, (w, as_)| {
-                        // The character's last name may be a word of the
-                        // client's texts ("Lua Taint"): only as a name.
-                        let pattern = if *as_ == "Lastname" {
-                            format!(r"(Player |string ){}\b", regex::escape(w))
-                        } else {
-                            format!(r"()\b{}\b", regex::escape(w))
-                        };
-                        let re = regex::Regex::new(&pattern).expect("a valid pattern");
-                        re.replace_all(&t, format!("${{1}}{as_}")).into_owned()
-                    })
-                };
-                for (part, text) in profiles {
-                    let path = dir.join(format!("{file}-{part}.json"));
-                    std::fs::write(&path, scrub(&text))?;
-                    println!("wrote {}", path.display());
-                }
-                let log: mlua::Table = scenario.get("log").map_err(|e| anyhow!("{e}"))?;
-                let mut list = Vec::new();
-                for (i, line) in log.sequence_values::<String>().enumerate() {
-                    let line = line.map_err(|e| anyhow!("{e}"))?;
-                    list.push((format!("{:05}", i + 1), scrub(&line)));
-                }
-                // The ping at the start and the end (`GetNetStats()`:
-                // bandwidth in, out, latency home, world, in ms).
-                for key in ["latency", "latencyAfter"] {
-                    if let Ok(stats) = scenario.get::<mlua::Table>(key) {
-                        let values: Vec<String> = stats
-                            .sequence_values::<f64>()
-                            .filter_map(|v| v.ok())
-                            .map(|v| format!("{v}"))
-                            .collect();
-                        list.push((key.to_string(), values.join(", ")));
-                    }
-                }
-                // The combat log tab's lines at the end.
-                if let Ok(shown) = scenario.get::<mlua::Table>("combatLog") {
-                    for (i, line) in shown.sequence_values::<String>().enumerate() {
-                        let line = line.map_err(|e| anyhow!("{e}"))?;
-                        list.push((format!("log{:04}", i + 1), scrub(&line)));
-                    }
-                }
-                write_table(
-                    &dir.join(format!("{file}.lua")),
-                    &format!(
-                        "WoW Forever {version}: /stdtest engine scenario {file}: its events in\n\
-                         order, and after the events Blizzard's UI answers, `= call -> answer`\n\
-                         (cargo xtask ingest); the world before and after: {file}-before.json,\n\
-                         {file}-after.json."
-                    ),
-                    &list,
-                )?;
-            }
-        }
         // The keyboard (`/stdtest engine keys`): which frames each key
         // reached, and the binding's clicks, in order.
         if let Ok(log) = state.get::<mlua::Table>("engineKeys") {
@@ -970,6 +897,130 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             ),
             &entries,
         )?;
+    }
+    // Gameplay (`/stdtest engine scenario <name>`): each scenario's
+    // events and answers, and the character's world before and after
+    // as test profiles, the character's names scrubbed.
+    if let Ok(scenarios) = state.get::<mlua::Table>("engineScenarios") {
+        let dir = client.join("scenarios");
+        std::fs::create_dir_all(&dir)?;
+        let two_names =
+            regex::Regex::new(r#"UnitName\(\\?"[a-z]+\\?"\) -> 2: string ([^,]+), string (.+)$"#)
+                .expect("a valid pattern");
+        // First every recording's names (a name one recording shows
+        // may be in another's chat), then each recording scrubbed of
+        // them all.
+        let mut all: Vec<(String, mlua::Table)> = Vec::new();
+        for pair in scenarios.pairs::<String, mlua::Table>() {
+            all.push(pair.map_err(|e| anyhow!("{e}"))?);
+        }
+        let mut secrets: Vec<String> = Vec::new();
+        let mut profiles_of: Vec<Vec<(&str, String)>> = Vec::new();
+        for (_, scenario) in &all {
+            let mut profiles = Vec::new();
+            for part in ["before", "after"] {
+                let snapshot: mlua::Value = scenario.get(part).map_err(|e| anyhow!("{e}"))?;
+                if snapshot.is_nil() {
+                    continue;
+                }
+                let (text, names) = crate::profile::profile_text(&state, &snapshot)?;
+                secrets.extend(names);
+                profiles.push((part, text));
+            }
+            profiles_of.push(profiles);
+        }
+        // Players' names: a player's `UnitName` answers with two names
+        // (first and last), an NPC's with one. The character's last
+        // name, and others' names, as whole words.
+        let mut words: Vec<(String, &str)> = Vec::new();
+        for (_, scenario) in &all {
+            let log: mlua::Table = scenario.get("log").map_err(|e| anyhow!("{e}"))?;
+            for line in log.sequence_values::<String>() {
+                let line = line.map_err(|e| anyhow!("{e}"))?;
+                let line = me.scrub(&line);
+                if let Some(c) = two_names.captures(&line) {
+                    let (first, last) = (c[1].trim().to_string(), c[2].trim().to_string());
+                    let own = first == "Player" || secrets.contains(&first);
+                    if !own && first.len() > 1 {
+                        words.push((first, "Otherplayer"));
+                    }
+                    if last.len() > 1 {
+                        words.push((last, if own { "Lastname" } else { "Othername" }));
+                    }
+                }
+            }
+        }
+        words.sort();
+        words.dedup();
+        for ((name, scenario), profiles) in all.iter().zip(profiles_of) {
+            let file: String = name
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() {
+                        c.to_ascii_lowercase()
+                    } else {
+                        '-'
+                    }
+                })
+                .collect();
+            let scrub = |text: &str| {
+                let text = secrets
+                    .iter()
+                    .filter(|s| s.len() > 2)
+                    .fold(me.scrub(text), |t, s| t.replace(s.as_str(), "Player"));
+                words.iter().fold(text, |t, (w, as_)| {
+                    // The character's last name may be a word of the
+                    // client's texts ("Lua Taint"): only as a name.
+                    let pattern = if *as_ == "Lastname" {
+                        format!(r"(Player |string ){}\b", regex::escape(w))
+                    } else {
+                        format!(r"()\b{}\b", regex::escape(w))
+                    };
+                    let re = regex::Regex::new(&pattern).expect("a valid pattern");
+                    re.replace_all(&t, format!("${{1}}{as_}")).into_owned()
+                })
+            };
+            for (part, text) in profiles {
+                let path = dir.join(format!("{file}-{part}.json"));
+                std::fs::write(&path, scrub(&text))?;
+                println!("wrote {}", path.display());
+            }
+            let log: mlua::Table = scenario.get("log").map_err(|e| anyhow!("{e}"))?;
+            let mut list = Vec::new();
+            for (i, line) in log.sequence_values::<String>().enumerate() {
+                let line = line.map_err(|e| anyhow!("{e}"))?;
+                list.push((format!("{:05}", i + 1), scrub(&line)));
+            }
+            // The ping at the start and the end (`GetNetStats()`:
+            // bandwidth in, out, latency home, world, in ms).
+            for key in ["latency", "latencyAfter"] {
+                if let Ok(stats) = scenario.get::<mlua::Table>(key) {
+                    let values: Vec<String> = stats
+                        .sequence_values::<f64>()
+                        .filter_map(|v| v.ok())
+                        .map(|v| format!("{v}"))
+                        .collect();
+                    list.push((key.to_string(), values.join(", ")));
+                }
+            }
+            // The combat log tab's lines at the end.
+            if let Ok(shown) = scenario.get::<mlua::Table>("combatLog") {
+                for (i, line) in shown.sequence_values::<String>().enumerate() {
+                    let line = line.map_err(|e| anyhow!("{e}"))?;
+                    list.push((format!("log{:04}", i + 1), scrub(&line)));
+                }
+            }
+            write_table(
+                &dir.join(format!("{file}.lua")),
+                &format!(
+                    "WoW Forever {version}: /stdtest engine scenario {file}: its events in\n\
+                     order, and after the events Blizzard's UI answers, `= call -> answer`\n\
+                     (cargo xtask ingest); the world before and after: {file}-before.json,\n\
+                     {file}-after.json."
+                ),
+                &list,
+            )?;
+        }
     }
     Ok(())
 }
