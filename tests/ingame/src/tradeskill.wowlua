@@ -13,7 +13,8 @@ local function pack(...: any): { n: number, [number]: any }
     return { n = select("#", ...), ... }
 end
 
---- A value in full: tables to depth 4, keys sorted, secrets marked.
+--- A value in full: tables to depth 8 (a schematic's reagents are four
+--- deep), keys sorted, secrets marked.
 local function show(v: any, depth: number): string
     if issecretvalue(v) then
         return `secret {type(v)}`
@@ -24,7 +25,7 @@ local function show(v: any, depth: number): string
     if type(v) ~= "table" then
         return `{type(v)} {tostring(v)}`
     end
-    if depth >= 4 then
+    if depth >= 8 then
         return "table"
     end
     const keys: string[] = {}
@@ -237,6 +238,39 @@ export function tradeSkillProbe()
         end
         c = c + 1
     end
+    -- Each recipe's spell (its cast time), and the items its schematic
+    -- names (made, used): their data asked for, read once it came.
+    const items: number[] = {}
+    const seenItem: { [number]: boolean } = {}
+    local function addItem(id: any)
+        if type(id) == "number" and id > 0 and not seenItem[id] then
+            seenItem[id] = true
+            items[#items + 1] = id
+        end
+    end
+    for _, id in ipairs(recipes) do
+        ask(`C_Spell.GetSpellInfo({id})`, id)
+        const schematic = T.GetRecipeSchematic(id, false) :: any
+        if type(schematic) == "table" then
+            addItem(schematic.outputItemID)
+            for _, slot in ipairs((schematic.reagentSlotSchematics ?? {}) :: any[]) do
+                for _, reagent in ipairs((slot.reagents ?? {}) :: any[]) do
+                    addItem(reagent.itemID)
+                end
+            end
+        end
+    end
+    for _, id in ipairs(items) do
+        C_Item.RequestLoadItemDataByID(id)
+    end
+    C_Timer.After(2, function()
+        for _, id in ipairs(items) do
+            ask(`C_Item.GetItemInfo({id})`, id)
+            ask(`C_Item.GetItemInfoInstant({id})`, id)
+            ask(`C_Item.IsItemDataCachedByID({id})`, id)
+        end
+        say(`engine tradeskill: the {#items} items' data recorded; type /reload so the file is written`)
+    end)
     const base = T.GetBaseProfessionInfo() :: any
     st.engineTradeSkillAnswers = st.engineTradeSkillAnswers ?? {}
     st.engineTradeSkillAnswers[base and base.professionName or "unknown"] = out
