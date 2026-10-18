@@ -550,12 +550,14 @@ fn get_container_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
     // No vendor price: no value (a Hearthstone, recorded).
     let no_value = matches!(item_field(vm, h.id, "sellPrice"), Value::Num(p) if p == 0.0);
     let name = item_field(vm, h.id, "name");
+    // A book's pages (its data's `readable`, recorded).
+    let readable = item_field(vm, h.id, "readable").truthy();
     for (k, v) in [
         ("iconFileID", icon),
         ("stackCount", Value::Num(h.count)),
         ("isLocked", Value::Bool(h.locked)),
         ("quality", quality),
-        ("isReadable", Value::Bool(false)),
+        ("isReadable", Value::Bool(readable)),
         ("hasLoot", Value::Bool(false)),
         ("hyperlink", link),
         ("isFiltered", Value::Bool(false)),
@@ -886,6 +888,12 @@ pub fn equipped_spells_changed(vm: &mut Vm) {
             &[Value::Num(slot as f64)],
         );
     }
+}
+
+/// A bag as its inventory slot (`ITEM_PUSH`'s): the backpack 0, bag 1 31,
+/// bag 5 35 (recorded).
+pub fn bag_inventory_slot(bag: i64) -> f64 {
+    if bag == 0 { 0.0 } else { (bag + 30) as f64 }
 }
 
 /// A bag's contents changed: `BAG_UPDATE(bag)` (the backpack's then

@@ -402,6 +402,7 @@
   "character": {
     "class": "WARRIOR",
     "faction": "Alliance",
+    "lastName": "Lastname",
     "level": 1,
     "maxHealth": 60,
     "maxPower": 100,

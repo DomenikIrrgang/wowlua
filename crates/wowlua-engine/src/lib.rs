@@ -30,6 +30,7 @@ pub mod levels;
 pub mod login;
 pub mod loot;
 pub mod macros;
+pub mod mail;
 pub mod merchant;
 pub mod protection;
 pub mod queries;
@@ -222,6 +223,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(gossip::behaviours())
             .chain(trainer::behaviours())
             .chain(taxi::behaviours())
+            .chain(mail::behaviours())
             .chain(death::behaviours())
             .chain(inventory::behaviours())
             .chain(queries::behaviours())

@@ -825,6 +825,7 @@
   "character": {
     "class": "PALADIN",
     "faction": "Horde",
+    "lastName": "Lastname",
     "level": 21,
     "maxHealth": 776,
     "maxPower": 710,
@@ -1624,6 +1625,7 @@
       "minLevel": 0,
       "name": "Control Console Operating Manual",
       "quality": 1,
+      "readable": true,
       "sellPrice": 0,
       "stackCount": 1,
       "subType": "Quest",

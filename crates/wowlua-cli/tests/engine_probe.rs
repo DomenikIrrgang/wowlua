@@ -1020,7 +1020,9 @@ fn scenario_line(line: &str) -> Option<String> {
     // Players' GUIDs as the recordings have them (scrubbed); a chat
     // message's line number (the session's).
     let guid = regex::Regex::new(r"Player-\d+-[0-9A-F]{8}").unwrap();
-    let line = regex::Regex::new(r"^(CHAT_MSG_.*; number )\d+(; nil nil; number 0;)").unwrap();
+    let line =
+        regex::Regex::new(r"^(CHAT_MSG_.*; number )\d+(; (?:nil nil|string [^;]*); number 0;)")
+            .unwrap();
     let body = guid.replace_all(body, "Player-0000-00000000");
     // A cast's GUID by its kind and spell (its server, map and number are
     // the session's).
@@ -1085,7 +1087,7 @@ fn align(ours: &[String], theirs: &[String]) -> (usize, Vec<String>, Vec<String>
 
 /// How many of the combat scenario's lines the engine plays as the client
 /// did: only ever up.
-const COMBAT_MATCHED: usize = 724;
+const COMBAT_MATCHED: usize = 725;
 
 /// The combat scenario: a wolf targeted, fought, killed and looted.
 #[test]
@@ -1140,7 +1142,7 @@ fn the_engine_plays_vendor_as_the_client_did() {
 /// the snapshot), `Blizzard_PlayerChoice` loading at the first loading
 /// screen, the active talent config, the account's Edit Mode layouts, the
 /// aura instance IDs (not in the snapshot).
-const HEARTH_MATCHED: usize = 1364;
+const HEARTH_MATCHED: usize = 1395;
 
 /// The hearth scenario: a Hearthstone cast, the loading screen.
 #[test]
@@ -1158,6 +1160,16 @@ fn the_engine_plays_taxi_as_the_client_did() {
     plays_as_the_client_did("taxi", TAXI_MATCHED);
 }
 
+/// How many of the mail scenario's lines the engine plays as the client
+/// did: only ever up.
+const MAIL_MATCHED: usize = 369;
+
+/// The mail scenario: the inbox, an item taken, a letter sent.
+#[test]
+fn the_engine_plays_mail_as_the_client_did() {
+    plays_as_the_client_did("mail", MAIL_MATCHED);
+}
+
 /// How many of the items scenario's lines the engine plays as the client
 /// did: only ever up.
 const ITEMS_MATCHED: usize = 302;
@@ -1171,7 +1183,7 @@ fn the_engine_plays_items_as_the_client_did() {
 
 /// How many of the quest scenario's lines the engine plays as the client
 /// did: only ever up.
-const QUEST_MATCHED: usize = 4556;
+const QUEST_MATCHED: usize = 4573;
 
 /// The quest scenario: a quest taken, eight wolves hunted for its item (a
 /// level gained), the quest turned in.

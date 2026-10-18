@@ -754,6 +754,15 @@ export function defineTaxi(npc: MockUnit, data: table)
     engine().defineTaxi(npc, data)
 end
 
+--- A mailbox and its inbox: `{ letters = { { packageIcon, stationeryIcon,
+--- sender, subject, money, cod, daysLeft, wasRead, wasReturned,
+--- textCreated, canReply, isGM, text, items = { { id, count } }, invoice =
+--- { type, itemName, playerName, … }, auction } }, newMail, senders }`;
+--- `player:interact(mailbox)` opens it.
+export function defineMailbox(mailbox: MockUnit, data: table)
+    engine().defineMailbox(mailbox, data)
+end
+
 --- The user clicks the world: an item on the cursor is to be deleted
 --- (`DELETE_ITEM_CONFIRM`, Blizzard's popup; `DeleteCursorItem` deletes it).
 export function clickWorld()

@@ -243,6 +243,10 @@ pub fn control_interact(vm: &mut Vm, c: NativeCall) -> Ret {
         crate::gossip::interact(vm, npc);
         return Ok(vec![]);
     }
+    if crate::mail::has(vm, npc) {
+        crate::mail::interact(vm, npc);
+        return Ok(vec![]);
+    }
     let delay = crate::clock::server_delay(vm);
     let later = vm.native_with(
         "questDialog",
@@ -773,7 +777,11 @@ fn rewarded(vm: &mut Vm, c: NativeCall) -> Ret {
     for (item, count) in &given {
         let bag = crate::character::bag_for(vm, *item, *count).unwrap_or(0);
         let icon = crate::character::item_field(vm, *item, "icon");
-        fire(vm, "ITEM_PUSH", &[Value::Num(bag as f64), icon]);
+        fire(
+            vm,
+            "ITEM_PUSH",
+            &[Value::Num(crate::character::bag_inventory_slot(bag)), icon],
+        );
         let link = crate::character::link_in_context(vm, *item, "11", &[]).unwrap_or_default();
         let format = global(vm, "LOOT_ITEM_PUSHED_SELF", "You receive item: %s");
         let sender = crate::loot::player_sender(vm);

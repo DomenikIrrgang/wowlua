@@ -165,7 +165,11 @@ fn request(vm: &mut Vm, slot: usize) {
 fn push(vm: &mut Vm, id: i64, count: f64, bag: i64, new_slot: bool) {
     crate::quests::before_item(vm, id);
     let icon = crate::character::item_field(vm, id, "icon");
-    fire(vm, "ITEM_PUSH", &[Value::Num(bag as f64), icon]);
+    fire(
+        vm,
+        "ITEM_PUSH",
+        &[Value::Num(crate::character::bag_inventory_slot(bag)), icon],
+    );
     let link = crate::character::link_of_id(vm, id)
         .map(|v| match v {
             Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),

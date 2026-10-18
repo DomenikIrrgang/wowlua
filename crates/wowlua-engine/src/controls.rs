@@ -293,6 +293,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("defineGossip", crate::gossip::control_define),
         ("defineTrainer", crate::trainer::control_define),
         ("defineTaxi", crate::taxi::control_define),
+        ("defineMailbox", crate::mail::control_define),
         ("nearCorpse", crate::death::control_near_corpse),
         ("gameError", game_error),
         ("clickWorld", crate::inventory::control_click_world),

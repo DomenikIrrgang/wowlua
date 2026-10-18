@@ -101,6 +101,9 @@ local function bags(items: { [number]: table }): table
                         questActive = quest and quest.isActive or nil,
                     }
                     itemData(items, info.itemID)
+                    if info.isReadable then
+                        items[info.itemID].readable = true
+                    end
                 end
             end
             out[bag] = { slots = slots, items = contents }

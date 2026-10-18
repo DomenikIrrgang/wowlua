@@ -614,6 +614,36 @@ fn identity_from_scenarios(state: &mlua::Table) -> Result<Identity> {
     })
 }
 
+/// A profile's character with its last name (`"lastName": "Lastname"`).
+fn with_last_name(profile: &str) -> String {
+    match serde_json::from_str::<serde_json::Value>(profile) {
+        Ok(mut v) => {
+            if let Some(c) = v.get_mut("character").and_then(|c| c.as_object_mut()) {
+                c.insert("lastName".into(), "Lastname".into());
+            }
+            serde_json::to_string_pretty(&v).unwrap_or_else(|_| profile.to_string())
+        }
+        Err(_) => profile.to_string(),
+    }
+}
+
+/// A profile's items marked readable (`"readable": true`).
+fn with_books(profile: &str, books: &std::collections::BTreeSet<String>) -> String {
+    match serde_json::from_str::<serde_json::Value>(profile) {
+        Ok(mut v) => {
+            if let Some(items) = v.get_mut("items").and_then(|i| i.as_object_mut()) {
+                for id in books {
+                    if let Some(item) = items.get_mut(id).and_then(|i| i.as_object_mut()) {
+                        item.insert("readable".into(), true.into());
+                    }
+                }
+            }
+            serde_json::to_string_pretty(&v).unwrap_or_else(|_| profile.to_string())
+        }
+        Err(_) => profile.to_string(),
+    }
+}
+
 pub fn run(root: &Path, saved: &Path) -> Result<()> {
     let src = std::fs::read(saved).with_context(|| saved.display().to_string())?;
     let lua = mlua::Lua::new();
@@ -907,6 +937,8 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
         let two_names =
             regex::Regex::new(r#"UnitName\(\\?"[a-z]+\\?"\) -> 2: string ([^,]+), string (.+)$"#)
                 .expect("a valid pattern");
+        let book = regex::Regex::new(r"isReadable=boolean true,[^}]*?itemID=number (\d+)")
+            .expect("a valid pattern");
         // Other players' crafts in the combat log ("<name> creates <item>.").
         let crafter = regex::Regex::new(r"^string (.+) creates ").expect("a valid pattern");
         // Mail's players: an auction invoice's buyer or seller, the sender
@@ -1000,12 +1032,36 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                     re.replace_all(&t, format!("${{1}}{as_}")).into_owned()
                 })
             };
+            // The character's last name, as its chat shows it (the
+            // snapshot has none to read).
+            let log: mlua::Table = scenario.get("log").map_err(|e| anyhow!("{e}"))?;
+            let last_name = log
+                .sequence_values::<String>()
+                .flatten()
+                .any(|line| scrub(&line).contains("string Player Lastname;"));
+            // Books (a bag item's `isReadable`), for snapshots before they
+            // recorded it.
+            let books: std::collections::BTreeSet<String> = log
+                .sequence_values::<String>()
+                .flatten()
+                .flat_map(|line| {
+                    book.captures_iter(&line)
+                        .map(|c| c[1].to_string())
+                        .collect::<Vec<_>>()
+                })
+                .collect();
             for (part, text) in profiles {
                 let path = dir.join(format!("{file}-{part}.json"));
-                std::fs::write(&path, scrub(&text))?;
+                let mut text = scrub(&text);
+                if last_name {
+                    text = with_last_name(&text);
+                }
+                if !books.is_empty() {
+                    text = with_books(&text, &books);
+                }
+                std::fs::write(&path, text)?;
                 println!("wrote {}", path.display());
             }
-            let log: mlua::Table = scenario.get("log").map_err(|e| anyhow!("{e}"))?;
             let mut list = Vec::new();
             for (i, line) in log.sequence_values::<String>().enumerate() {
                 let line = line.map_err(|e| anyhow!("{e}"))?;

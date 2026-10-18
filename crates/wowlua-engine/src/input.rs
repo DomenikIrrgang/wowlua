@@ -202,6 +202,15 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
             set_keyboard_focus(vm, Some(id));
         }
         widgets::run_script(vm, id, "OnMouseUp", &[button, Value::Bool(true)]);
+        // A check button's state toggles before its scripts run (as the
+        // mail's inbox reads it in `OnClick`).
+        if is(vm, "CheckButton") && enabled {
+            let props = engine(vm).world.widgets[id.0].props;
+            let checked = widgets::stored_args(vm, props, "Checked")
+                .and_then(|v| v.first().copied())
+                .is_some_and(|v| v.truthy());
+            widgets::store(vm, id, "Checked", &[Value::Bool(!checked)]);
+        }
         if is(vm, "Button") && enabled {
             for script in ["PreClick", "OnClick", "PostClick"] {
                 widgets::run_script(vm, id, script, &[button, Value::Bool(false)]);

@@ -131,6 +131,8 @@ pub struct World {
     pub inventory_loading: bool,
     /// The player on a flight.
     pub on_taxi: bool,
+    /// The mailboxes, the inbox, the letter being written.
+    pub mail: crate::mail::Mail,
     /// The global cooldown running: its start (`GetTime`) and length.
     pub global_cooldown: Option<(f64, f64)>,
     /// Spells by trait (`setSpellTraits`: `offGlobalCooldown`,

@@ -523,10 +523,12 @@ fn bought(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     let icon = character::item_field(vm, id, "icon");
     fire(vm, "MERCHANT_UPDATE", &[]);
-    // The bag as its inventory slot: the backpack 0, bag 1 slot 31.
-    let slot_of_bag = if bag == 0 { 0.0 } else { (bag + 30) as f64 };
-    fire(vm, "ITEM_PUSH", &[Value::Num(slot_of_bag), icon]);
-    loot_message(vm, id, quantity);
+    fire(
+        vm,
+        "ITEM_PUSH",
+        &[Value::Num(character::bag_inventory_slot(bag)), icon],
+    );
+    loot_message(vm, id, quantity, "14");
     fire(vm, "BAG_NEW_ITEMS_UPDATED", &[]);
     bag_update(vm, bag);
     let player = vm.str("player");
@@ -540,9 +542,10 @@ fn bought(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `CHAT_MSG_LOOT("You receive item: <link>", …)` for the player, with the
 /// payload the client gave it (`/stdtest engine record vendor2`; a count
-/// above one unverified: "<link>x<n>").
-fn loot_message(vm: &mut Vm, id: i64, quantity: f64) {
-    let link = character::link_in_context(vm, id, "14", &[]).unwrap_or_default();
+/// above one unverified: "<link>x<n>"); the link in its `context` (a
+/// vendor's "14", mail's none).
+pub fn loot_message(vm: &mut Vm, id: i64, quantity: f64, context: &str) {
+    let link = character::link_in_context(vm, id, context, &[]).unwrap_or_default();
     let count = if quantity > 1.0 {
         format!("x{}", quantity as i64)
     } else {
@@ -710,6 +713,11 @@ fn use_container_item(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Some(bag), Some(slot)) = (num(c.arg(1)), num(c.arg(2))) else {
         return Ok(vec![]);
     };
+    // Writing a letter: attached (`mail.rs`).
+    if crate::mail::writing(vm) {
+        crate::mail::attach(vm, bag as i64, slot as usize);
+        return Ok(vec![]);
+    }
     // Away from a vendor: worn, or used (`inventory.rs`).
     if !merchant(vm).open {
         crate::inventory::use_container_item(vm, bag as i64, slot as usize);
