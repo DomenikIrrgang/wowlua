@@ -61,6 +61,9 @@ export interface MockUnit
     --- Starts casting (`UNIT_SPELLCAST_START`, or `CHANNEL_START`); it ends
     --- `castTime` seconds later (the spell data's, else 1.5).
     function castSpell(spellID: number, opts: { castTime?: number, channel?: boolean, notInterruptible?: boolean }?)
+    --- The player gathers a world object (a vein, a herb): `spell` cast on
+    --- it, at its success its `loot` in the window (`auto`: autoloot).
+    function gather(object: MockUnit, opts: { spell: number, castTime?: number, loot?: { id: number, count?: number }[], auto?: boolean })
     --- Interrupts the cast (`UNIT_SPELLCAST_INTERRUPTED`); the player's is
     --- answered by the server 0.4 s later.
     function interruptCast()

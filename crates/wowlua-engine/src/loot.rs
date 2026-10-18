@@ -115,12 +115,168 @@ pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// A gathered object's window after its loot is ready (recorded).
+const GATHERED_OPEN_AFTER: f64 = 0.267;
+
+fn opt_field(vm: &mut Vm, opts: Option<wowlua_vm::TableRef>, key: &str) -> Value {
+    match opts {
+        Some(t) => {
+            let k = vm.str(key);
+            vm.heap.table(t).get(k)
+        }
+        None => Value::Nil,
+    }
+}
+
+/// The cooldown events around a gathering cast: off the global cooldown
+/// (`SPELL_UPDATE_COOLDOWN(spell, nil, nil, nil, nil)`), the bags' at its
+/// end (recorded).
+fn gather_cooldowns(vm: &mut Vm, spell: f64, bags: bool) {
+    fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
+    fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    if bags {
+        fire(vm, "BAG_UPDATE_COOLDOWN", &[]);
+    }
+    let nils = [
+        Value::Num(spell),
+        Value::Nil,
+        Value::Nil,
+        Value::Nil,
+        Value::Nil,
+    ];
+    fire(vm, "SPELL_UPDATE_COOLDOWN", &nils);
+    fire(vm, "UPDATE_SHAPESHIFT_COOLDOWN", &[]);
+}
+
+/// `player:gather(object, { spell, castTime?, loot = { { id, count? } },
+/// auto? })`: the player gathers a world object (a vein, a herb), as the
+/// client recorded the paladin mining copper: the click asks
+/// (`CURRENT_SPELL_CAST_CHANGED(false)`, `ACTIONBAR_UPDATE_STATE()`), a round
+/// trip later the gathering spell is cast on it (`SENT` names it) with its
+/// cooldowns' events; at its success the
+/// object's loot ready (`LOOT_READY(auto)`), the player's `UNIT_FLAGS`, the
+/// cooldowns' events again (the bags' too); the window a moment later
+/// (`LOOT_OPENED`, `LOOT_READY`), its slots as a corpse's.
+pub fn control_gather(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = units::this(vm, &c)?;
+    if me != units::PLAYER {
+        return Err(vm.error("gather: the player's"));
+    }
+    let Some(object) = units::handle_of(vm, c.arg(2)) else {
+        return Err(vm.error("gather: an object to gather expected"));
+    };
+    let opts = match c.arg(3) {
+        Value::Table(t) => Some(t),
+        _ => None,
+    };
+    let Value::Num(spell) = opt_field(vm, opts, "spell") else {
+        return Err(vm.error("gather: a spell expected"));
+    };
+    let seconds = match opt_field(vm, opts, "castTime") {
+        Value::Num(s) => Some(s),
+        _ => None,
+    };
+    let auto = opt_field(vm, opts, "auto").truthy();
+    let mut items = Vec::new();
+    if let Value::Table(list) = opt_field(vm, opts, "loot") {
+        let n = vm.heap.table(list).border();
+        for i in 1..=n {
+            if let Value::Table(item) = vm.heap.table(list).get(Value::Num(i as f64)) {
+                let id = opt_field(vm, Some(item), "id");
+                let count = opt_field(vm, Some(item), "count");
+                if let Value::Num(id) = id {
+                    let count = if let Value::Num(n) = count { n } else { 1.0 };
+                    items.push((id as i64, count));
+                }
+            }
+        }
+    }
+    engine_mut(vm).units.list[object.0].loot = items;
+    fire(vm, "CURRENT_SPELL_CAST_CHANGED", &[Value::Bool(false)]);
+    fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    let delay = crate::clock::server_delay(vm);
+    later(
+        vm,
+        delay,
+        "gatherCast",
+        gather_cast,
+        vec![
+            Value::Num(object.0 as f64),
+            Value::Bool(auto),
+            Value::Num(spell),
+            seconds.map_or(Value::Nil, Value::Num),
+        ],
+    );
+    Ok(vec![])
+}
+
+/// The server casts the gathering spell.
+fn gather_cast(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Num(object), Value::Num(spell)) = (c.upvals[0], c.upvals[2]) else {
+        return Ok(vec![]);
+    };
+    let seconds = match c.upvals[3] {
+        Value::Num(s) => Some(s),
+        _ => None,
+    };
+    let done = vm.native_with("gathered", gathered as NativeFn, c.upvals[..3].to_vec());
+    let look = crate::casting::spell_look(vm, spell, seconds);
+    let object = UnitId(object as usize);
+    crate::casting::cast_at(
+        vm,
+        units::PLAYER,
+        spell,
+        look,
+        false,
+        false,
+        Some(object),
+        Some(done),
+    )?;
+    gather_cooldowns(vm, spell, false);
+    Ok(vec![])
+}
+
+/// The gathering cast succeeded: the object's loot ready, its window soon.
+fn gathered(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Num(object), Value::Bool(auto), Value::Num(spell)) =
+        (c.upvals[0], c.upvals[1], c.upvals[2])
+    else {
+        return Ok(vec![]);
+    };
+    // Its items countable at once (recorded: `GetNumLootItems` answers).
+    fill(vm, UnitId(object as usize), auto);
+    fire(vm, "LOOT_READY", &[Value::Bool(auto)]);
+    units::fire_unit(vm, "UNIT_FLAGS", units::PLAYER, &[]);
+    gather_cooldowns(vm, spell, true);
+    later(
+        vm,
+        GATHERED_OPEN_AFTER,
+        "gatheredOpened",
+        gathered_opened,
+        c.upvals[..2].to_vec(),
+    );
+    Ok(vec![])
+}
+
+fn gathered_opened(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Num(id), Value::Bool(auto)) = (c.upvals[0], c.upvals[1]) else {
+        return Ok(vec![]);
+    };
+    open_window(vm, UnitId(id as usize), auto, false);
+    Ok(vec![])
+}
+
 /// The server opens the loot: the corpse's items in the window.
 fn opened(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Value::Num(id), Value::Bool(auto)) = (c.upvals[0], c.upvals[1]) else {
         return Ok(vec![]);
     };
-    let corpse = UnitId(id as usize);
+    open_window(vm, UnitId(id as usize), auto, true);
+    Ok(vec![])
+}
+
+/// The loot's items: the corpse's or object's.
+fn fill(vm: &mut Vm, corpse: UnitId, auto: bool) {
     let items: Vec<LootItem> = engine(vm).units.list[corpse.0]
         .loot
         .iter()
@@ -130,16 +286,22 @@ fn opened(vm: &mut Vm, c: NativeCall) -> Ret {
             taken: false,
         })
         .collect();
-    {
-        let l = &mut engine_mut(vm).world.loot;
-        l.from = Some(corpse);
-        l.corpse = Some(corpse);
-        l.auto = auto;
-        l.items = items;
-    }
+    let l = &mut engine_mut(vm).world.loot;
+    l.from = Some(corpse);
+    l.corpse = Some(corpse);
+    l.auto = auto;
+    l.items = items;
+}
+
+/// The loot window open on a corpse's or an object's items (a corpse's
+/// told by `UNIT_FLAGS` and `LOOT_READY` first; an object's were).
+fn open_window(vm: &mut Vm, corpse: UnitId, auto: bool, corpse_flags: bool) {
+    fill(vm, corpse, auto);
     // Looting: the player's flags change (recorded just before).
-    units::fire_unit(vm, "UNIT_FLAGS", units::PLAYER, &[]);
-    fire(vm, "LOOT_READY", &[Value::Bool(auto)]);
+    if corpse_flags {
+        units::fire_unit(vm, "UNIT_FLAGS", units::PLAYER, &[]);
+        fire(vm, "LOOT_READY", &[Value::Bool(auto)]);
+    }
     fire(vm, "LOOT_OPENED", &[Value::Bool(auto), Value::Bool(false)]);
     fire(vm, "LOOT_READY", &[Value::Bool(auto)]);
     if auto {
@@ -150,7 +312,6 @@ fn opened(vm: &mut Vm, c: NativeCall) -> Ret {
             later(vm, after, "lootTaken", taken, vec![Value::Num(i as f64)]);
         }
     }
-    Ok(vec![])
 }
 
 /// A slot asked for: the server answers a round trip later.
@@ -285,14 +446,22 @@ fn bags_told(vm: &mut Vm, _c: NativeCall) -> Ret {
     for p in placed.iter().filter(|p| p.stacked) {
         crate::character::equipped_spells_changed(vm);
         crate::character::bag_updated(vm, p.bag);
+        // A stack grown in the reagent bag: the inventory's update too
+        // (recorded: mined ore; the backpack's stacks without).
+        if p.bag == crate::character::REAGENT_BAG {
+            units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", units::PLAYER, &[]);
+        }
     }
     for p in placed.iter().filter(|p| !p.stacked) {
         crate::character::bag_updated(vm, p.bag);
     }
     if let Some(corpse) = engine_mut(vm).world.loot.emptied.take() {
+        // A unit's corpse emptied is told; a world object is no unit.
         let g = engine(vm).units.list[corpse.0].guid.clone();
-        let g = vm.str(&g);
-        fire(vm, "UNIT_LOOT", &[g, Value::Bool(false)]);
+        if !g.starts_with("GameObject-") {
+            let g = vm.str(&g);
+            fire(vm, "UNIT_LOOT", &[g, Value::Bool(false)]);
+        }
         // No longer looting: the flags a round trip later (recorded).
         let delay = crate::clock::server_delay(vm);
         later(vm, delay, "lootFlags", loot_flags, vec![]);

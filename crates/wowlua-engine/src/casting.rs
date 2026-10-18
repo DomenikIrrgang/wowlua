@@ -38,6 +38,8 @@ pub struct Cast {
     pub not_interruptible: bool,
     pub guid: String,
     pub bar: String,
+    /// What follows its success (a gathered object's loot).
+    pub done: Option<Value>,
 }
 
 #[derive(Default)]
@@ -63,7 +65,7 @@ fn cast_changed(vm: &mut Vm, unit: UnitId) {
 
 /// The player's `UNIT_SPELLCAST_SENT(unit, target name, castGUID, spellID)`:
 /// the target's full name (with a last name), or nil.
-fn sent(vm: &mut Vm, unit: UnitId, guid: Value, spell_id: f64) {
+fn sent(vm: &mut Vm, unit: UnitId, guid: Value, spell_id: f64, on: Option<UnitId>) {
     if unit != units::PLAYER {
         return;
     }
@@ -72,7 +74,7 @@ fn sent(vm: &mut Vm, unit: UnitId, guid: Value, spell_id: f64) {
     let untargeted = matches!(spell_field(vm, spell_id, "targeted"), Value::Bool(false));
     let target = {
         let u = &engine(vm).units;
-        u.target.map(|t| {
+        on.or(u.target).map(|t| {
             let t = &u.list[t.0];
             match &t.last_name {
                 Some(last) => format!("{} {last}", t.name),
@@ -144,34 +146,39 @@ pub fn control_cast(vm: &mut Vm, c: NativeCall) -> Ret {
         _ => None,
     };
     let opt = |vm: &mut Vm, k: &str| opts.map(|t| field(vm, t, k)).unwrap_or(Value::Nil);
-    let data = engine(vm)
-        .world
-        .data
-        .spells
-        .get(&(spell_id as i64))
-        .copied();
-    let (name, icon, data_time) = match data {
-        Some(t) => (
-            field(vm, t, "name"),
-            field(vm, t, "iconID"),
-            match field(vm, t, "castTime") {
-                // `castTime` in spell data is in milliseconds.
-                Value::Num(ms) => Some(ms / 1000.0),
-                _ => None,
-            },
-        ),
-        None => (
-            vm.str(&format!("Spell {spell_id}")),
-            Value::Num(136243.0),
-            None,
-        ),
-    };
     let seconds = match opt(vm, "castTime") {
-        Value::Num(s) => s,
-        _ => data_time.unwrap_or(1.5),
+        Value::Num(s) => Some(s),
+        _ => None,
     };
+    let look = spell_look(vm, spell_id, seconds);
     let channel = opt(vm, "channel").truthy();
     let not_interruptible = opt(vm, "notInterruptible").truthy();
+    cast_at(
+        vm,
+        me,
+        spell_id,
+        look,
+        channel,
+        not_interruptible,
+        None,
+        None,
+    )
+}
+
+/// A unit's cast of `spell_id` (its name, icon and seconds): on another
+/// unit or object (`on`: the player's `SENT` names it), `done` called at
+/// its success.
+#[allow(clippy::too_many_arguments)]
+pub fn cast_at(
+    vm: &mut Vm,
+    me: UnitId,
+    spell_id: f64,
+    (name, icon, seconds): (Value, Value, f64),
+    channel: bool,
+    not_interruptible: bool,
+    on: Option<UnitId>,
+    done: Option<Value>,
+) -> Ret {
     let now = crate::clock::now(vm);
     let n = {
         let c = &mut engine_mut(vm).units.casting;
@@ -185,7 +192,7 @@ pub fn control_cast(vm: &mut Vm, c: NativeCall) -> Ret {
     if engine(vm).units.casting.casts.contains_key(&me) {
         if me == units::PLAYER {
             // The player's running cast stays; the new one fails.
-            sent(vm, me, g, spell_id);
+            sent(vm, me, g, spell_id, on);
             fire_cast(vm, "UNIT_SPELLCAST_FAILED_QUIET", me, &[g, id, Value::Nil]);
             cast_changed(vm, me);
             let message = vm.str("Another action is in progress");
@@ -195,7 +202,7 @@ pub fn control_cast(vm: &mut Vm, c: NativeCall) -> Ret {
         // Another unit's new cast replaces the one running (unverified).
         stop(vm, me, true);
     }
-    sent(vm, me, g, spell_id);
+    sent(vm, me, g, spell_id, on);
     if seconds <= 0.0 && !channel {
         cast_changed(vm, me);
         fire_cast(vm, "UNIT_SPELLCAST_SUCCEEDED", me, &[g, id, Value::Nil]);
@@ -212,7 +219,11 @@ pub fn control_cast(vm: &mut Vm, c: NativeCall) -> Ret {
         not_interruptible,
         guid: guid.clone(),
         bar: bar.clone(),
+        done,
     };
+    if let Some(f) = done {
+        crate::widgets::keep(vm, f);
+    }
     engine_mut(vm).units.casting.casts.insert(me, cast);
     let (start_event, _) = events(channel);
     let b = vm.str(&bar);
@@ -251,12 +262,41 @@ pub fn begin_cast(
         not_interruptible: false,
         guid: guid.to_string(),
         bar: bar.to_string(),
+        done: None,
     };
     engine_mut(vm)
         .units
         .casting
         .casts
         .insert(units::PLAYER, cast);
+}
+
+/// A spell's name, icon and cast seconds as its data has them (else
+/// "Spell <id>", the default icon, `seconds`).
+pub fn spell_look(vm: &mut Vm, spell_id: f64, seconds: Option<f64>) -> (Value, Value, f64) {
+    let data = engine(vm)
+        .world
+        .data
+        .spells
+        .get(&(spell_id as i64))
+        .copied();
+    let (name, icon, data_time) = match data {
+        Some(t) => (
+            field(vm, t, "name"),
+            field(vm, t, "iconID"),
+            // In milliseconds.
+            match field(vm, t, "castTime") {
+                Value::Num(ms) => Some(ms / 1000.0),
+                _ => None,
+            },
+        ),
+        None => (
+            vm.str(&format!("Spell {spell_id}")),
+            Value::Num(136243.0),
+            None,
+        ),
+    };
+    (name, icon, seconds.or(data_time).unwrap_or(1.5))
 }
 
 /// The player's cast another module ran, over.
@@ -390,7 +430,7 @@ fn instant(vm: &mut Vm, id: f64) {
     let me = units::PLAYER;
     let g = new_guid(vm, id);
     let g = vm.str(&g);
-    sent(vm, me, g, id);
+    sent(vm, me, g, id, None);
     cast_changed(vm, me);
     fire_cast(
         vm,
@@ -430,7 +470,7 @@ fn next_swing_sent(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let g = new_guid(vm, id);
     let gv = vm.str(&g);
-    sent(vm, units::PLAYER, gv, id);
+    sent(vm, units::PLAYER, gv, id, None);
     cast_changed(vm, units::PLAYER);
     crate::widgets::fire_event(vm, "ACTIONBAR_UPDATE_STATE", &[]);
     engine_mut(vm).units.casting.next_swing = Some((id, g));
@@ -486,7 +526,14 @@ fn stop(vm: &mut Vm, unit: UnitId, interrupted: bool) {
     } else {
         fire_cast(vm, stop_event, unit, &[g, id, b]);
     }
-    cast_changed(vm, unit);
+    // A gathering's end tells no change of the current cast (recorded:
+    // mining's success, its loot at once).
+    match cast.done {
+        Some(f) if !interrupted => {
+            let _ = vm.call(f, &[]);
+        }
+        _ => cast_changed(vm, unit),
+    }
 }
 
 /// The cast's end, if it is still the unit's cast.

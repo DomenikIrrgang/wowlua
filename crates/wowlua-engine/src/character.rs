@@ -698,10 +698,37 @@ pub fn carried(bag: i64) -> bool {
     (0..=5).contains(&bag)
 }
 
+/// The reagent bag (`Enum.BagIndex.ReagentBag`).
+pub const REAGENT_BAG: i64 = 5;
+
+/// The bags a new slot of item `id` may take, in order: a trade good's
+/// (`classID` 7) the reagent bag first (recorded: rough stone mined and
+/// copper bars made with a slot free in the backpack), any other item's
+/// never the reagent bag (unverified: the client's flag for reagents).
+fn new_slot_bags(vm: &mut Vm, id: i64) -> Vec<i64> {
+    let reagent = matches!(item_field(vm, id, "classID"), Value::Num(c) if c == 7.0);
+    let bags: Vec<i64> = engine(vm)
+        .world
+        .character
+        .bags
+        .keys()
+        .copied()
+        .filter(|b| carried(*b))
+        .collect();
+    let mut out: Vec<i64> = Vec::new();
+    if reagent && bags.contains(&REAGENT_BAG) {
+        out.push(REAGENT_BAG);
+    }
+    out.extend(bags.into_iter().filter(|b| *b != REAGENT_BAG));
+    out
+}
+
 /// `count` of item `id` into the bags: onto a stack of it with room (its
-/// data's `stackCount`), else into the first free slot; the bag, and
-/// whether the item took a new slot. None when the bags are full.
+/// data's `stackCount`), else into the first free slot (`new_slot_bags`);
+/// the bag, and whether the item took a new slot. None when the bags are
+/// full.
 pub fn add_to_bags(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, bool)> {
+    let order = new_slot_bags(vm, id);
     let stack = match item_field(vm, id, "stackCount") {
         Value::Num(n) if n >= 1.0 => n,
         _ => 1.0,
@@ -718,7 +745,10 @@ pub fn add_to_bags(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, bool)> {
             }
         }
     }
-    for (bag, b) in bags.iter_mut().filter(|(b, _)| carried(**b)) {
+    for bag in order {
+        let Some(b) = bags.get_mut(&bag) else {
+            continue;
+        };
         if let Some(slot) = (1..=b.slots).find(|s| !b.items.contains_key(s)) {
             b.items.insert(
                 slot,
@@ -729,7 +759,7 @@ pub fn add_to_bags(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, bool)> {
                     ..Held::default()
                 },
             );
-            return Some((*bag, true));
+            return Some((bag, true));
         }
     }
     None
@@ -790,10 +820,19 @@ pub fn bag_for(vm: &mut Vm, id: i64, count: f64) -> Option<i64> {
             return Some(*bag);
         }
     }
-    bags.iter()
-        .filter(|(b, _)| carried(**b))
-        .find(|(_, b)| (1..=b.slots).any(|s| !b.items.contains_key(&s)))
-        .map(|(bag, _)| *bag)
+    let free = |b: &i64| {
+        bags.get(b)
+            .is_some_and(|b| (1..=b.slots).any(|s| !b.items.contains_key(&s)))
+    };
+    let free: Vec<i64> = engine(vm)
+        .world
+        .character
+        .bags
+        .keys()
+        .copied()
+        .filter(free)
+        .collect();
+    new_slot_bags(vm, id).into_iter().find(|b| free.contains(b))
 }
 
 /// `count` of item `id` taken from the bags (the last stacks first,

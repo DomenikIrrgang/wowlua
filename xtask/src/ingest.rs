@@ -18,7 +18,8 @@
 //! - `/stdtest engine traits`: each class's `…/forever-camelot-traits-<class>.lua`
 //!   (all of them: `crates/wowlua-engine/data/camelot-traits.txt`);
 //! - `/stdtest engine tradeskill`: each profession's
-//!   `…/forever-camelot-tradeskill-<profession>.lua`;
+//!   `…/forever-camelot-tradeskill-<profession>.lua` (all of them:
+//!   `crates/wowlua-engine/data/camelot-tradeskill.txt`);
 //! - the default character (a fresh level 1 Human Warrior's `/stdtest
 //!   snapshot`): `cargo xtask profile <its StdTest.lua>
 //!   crates/wowlua-engine/data/camelot-default-character.json`;
@@ -652,13 +653,61 @@ fn scrub_owners(line: &str) -> String {
 /// recorded trait answers (`forever-camelot-traits-<class>.lua`, from any
 /// account's ingest): the class, a tab, the call, a tab, the answer.
 fn write_traits_data(root: &Path, client: &Path, version: &str) -> Result<()> {
+    let (lines, classes) = fixtures_by(client, "forever-camelot-traits-")?;
+    let mut data = format!(
+        "# WoW Forever {version}'s trait configs as characters answered them\n\
+         # (/stdtest engine traits: {}): the class, the call, the answer, a tab\n\
+         # between (cargo xtask ingest). The engine's trees, entries, conditions\n\
+         # and costs; the character's ranks and currencies as recorded.\n",
+        classes.join(", ")
+    );
+    for ((class, call), answer) in &lines {
+        let _ = writeln!(data, "{class}\t{call}\t{answer}");
+    }
+    let path = root.join("crates/wowlua-engine/data/camelot-traits.txt");
+    std::fs::write(&path, data)?;
+    println!("wrote {} ({} answers)", path.display(), lines.len());
+    Ok(())
+}
+
+/// The engine's professions' data (`data/camelot-tradeskill.txt`): every
+/// profession window's recorded answers (`forever-camelot-tradeskill-<p>.lua`,
+/// from any account's ingest): the profession, the call, the answer.
+fn write_tradeskill_data(root: &Path, client: &Path, version: &str) -> Result<()> {
+    let (lines, professions) = fixtures_by(client, "forever-camelot-tradeskill-")?;
+    let mut data = format!(
+        "# WoW Forever {version}'s profession windows as a character answered them\n\
+         # (/stdtest engine tradeskill: {}): the profession, the call, the answer,\n\
+         # a tab between (cargo xtask ingest). The engine's recipes; the skill and\n\
+         # the bags' counts as recorded.\n",
+        professions.join(", ")
+    );
+    for ((profession, call), answer) in &lines {
+        let _ = writeln!(data, "{profession}\t{call}\t{answer}");
+    }
+    let path = root.join("crates/wowlua-engine/data/camelot-tradeskill.txt");
+    std::fs::write(&path, data)?;
+    println!("wrote {} ({} answers)", path.display(), lines.len());
+    Ok(())
+}
+
+/// The answers of the fixtures named `<prefix><key>.lua`: by (KEY, call),
+/// errors left out; the keys.
+#[allow(clippy::type_complexity)]
+fn fixtures_by(
+    client: &Path,
+    prefix: &str,
+) -> Result<(
+    std::collections::BTreeMap<(String, String), String>,
+    Vec<String>,
+)> {
     let mut lines = std::collections::BTreeMap::new();
     let mut classes = Vec::new();
     for entry in std::fs::read_dir(client)? {
         let path = entry?.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         let Some(class) = name
-            .strip_prefix("forever-camelot-traits-")
+            .strip_prefix(prefix)
             .and_then(|n| n.strip_suffix(".lua"))
         else {
             continue;
@@ -677,20 +726,7 @@ fn write_traits_data(root: &Path, client: &Path, version: &str) -> Result<()> {
         }
     }
     classes.sort();
-    let mut data = format!(
-        "# WoW Forever {version}'s trait configs as characters answered them\n\
-         # (/stdtest engine traits: {}): the class, the call, the answer, a tab\n\
-         # between (cargo xtask ingest). The engine's trees, entries, conditions\n\
-         # and costs; the character's ranks and currencies as recorded.\n",
-        classes.join(", ")
-    );
-    for ((class, call), answer) in &lines {
-        let _ = writeln!(data, "{class}\t{call}\t{answer}");
-    }
-    let path = root.join("crates/wowlua-engine/data/camelot-traits.txt");
-    std::fs::write(&path, data)?;
-    println!("wrote {} ({} answers)", path.display(), lines.len());
-    Ok(())
+    Ok((lines, classes))
 }
 
 /// An answer's values (`n: v1, v2, …`): where each starts (after a
@@ -1131,6 +1167,7 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 &list,
             )?;
         }
+        write_tradeskill_data(root, &client, &version)?;
     }
     // Gameplay (`/stdtest engine scenario <name>`): each scenario's
     // events and answers, and the character's world before and after

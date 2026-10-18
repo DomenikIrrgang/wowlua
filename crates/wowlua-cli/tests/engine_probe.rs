@@ -901,10 +901,18 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
             }
         }
     }
-    errors.extend(end_state_differences(
-        &vm,
-        &fixtures.join(format!("{name}-after.json")),
-    ));
+    // A script that plays only part of its recording (`ScenarioPartial =
+    // "why"`) cannot end as the client did: its end's differences are notes.
+    let end = end_state_differences(&vm, &fixtures.join(format!("{name}-after.json")));
+    match vm.get_global("ScenarioPartial") {
+        Value::Str(why) => {
+            let why = text(&vm, Value::Str(why));
+            for d in end {
+                eprintln!("note: {d} (partial: {why})");
+            }
+        }
+        _ => errors.extend(end),
+    }
     // The calls the engine answered with defaults (`WOWLUA_SCENARIO_UNANSWERED`,
     // optionally a name's start): what to model next.
     if let Ok(prefix) = std::env::var("WOWLUA_SCENARIO_UNANSWERED") {
@@ -1274,6 +1282,16 @@ const TALENTS_MATCHED: usize = 69;
 #[test]
 fn the_engine_plays_talents_as_the_client_did() {
     plays_as_the_client_did("talents", TALENTS_MATCHED);
+}
+
+/// How many of the profession scenario's lines the engine plays as the
+/// client did: only ever up.
+const PROFESSION_MATCHED: usize = 358;
+
+/// The profession scenario: a vein mined, a profession's window, crafts.
+#[test]
+fn the_engine_plays_profession_as_the_client_did() {
+    plays_as_the_client_did("profession", PROFESSION_MATCHED);
 }
 
 /// How many of the legacy scenario's lines the engine plays as the client
