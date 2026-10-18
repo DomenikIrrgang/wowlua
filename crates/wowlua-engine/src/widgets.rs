@@ -139,6 +139,8 @@ pub struct World {
     pub bank: crate::bank::Bank,
     /// The auction houses, their searches, the player's auctions.
     pub auction: crate::auction::AuctionHouse,
+    /// The player's party, a trade.
+    pub party: crate::party::Party,
     /// The global cooldown running: its start (`GetTime`) and length.
     pub global_cooldown: Option<(f64, f64)>,
     /// Spells by trait (`setSpellTraits`: `offGlobalCooldown`,
@@ -686,6 +688,8 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
         "SetAllPoints",
         "GetAttribute",
         "SetAttribute",
+        // Its arguments are any values (a unit menu passes the frame).
+        "ExecuteAttribute",
         "SetFontObject",
         "RegisterUnitEvent",
         "CreateFontString",
@@ -2402,6 +2406,21 @@ fn attribute(vm: &mut Vm, id: WidgetId, name: &str) -> Value {
 /// `GetAttribute(name)`, or `GetAttribute(prefix, name, suffix)`: the first
 /// set of `prefix..name..suffix`, `*..name..suffix`, `prefix..name..*`,
 /// `*..name..*` and `name` (unverified order).
+/// `frame:ExecuteAttribute(name, ...)`: the attribute's function called
+/// with the arguments: true and its results; false without a function.
+fn execute_attribute(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let name = vm.check_str(&c, 2)?;
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    let f = attribute(vm, id, &name);
+    if !matches!(f, Value::Func(_)) {
+        return Ok(vec![Value::Bool(false)]);
+    }
+    let args: Vec<Value> = c.args.iter().skip(2).copied().collect();
+    let mut out = vec![Value::Bool(true)];
+    out.extend(vm.call(f, &args)?);
+    Ok(out)
+}
+
 fn get_attribute(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let first = vm.check_str(&c, 2)?;
     let first = String::from_utf8_lossy(vm.str_bytes(first)).into_owned();
@@ -3175,6 +3194,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("SetAlphaGradient", set_alpha_gradient),
         ("SetAttribute", set_attribute),
         ("GetAttribute", get_attribute),
+        ("ExecuteAttribute", execute_attribute),
         ("IsProtected", is_protected),
         ("Click", click),
         ("IsForbidden", is_forbidden),

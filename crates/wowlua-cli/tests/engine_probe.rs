@@ -893,8 +893,7 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
         &vm,
         &fixtures.join(format!("{name}-after.json")),
     ));
-    let compared =
-        |log: &[String]| -> Vec<String> { log.iter().filter_map(|l| scenario_line(l)).collect() };
+    let compared = |log: &[String]| -> Vec<String> { scenario_lines(log) };
     Some((compared(&ours), compared(&theirs), errors))
 }
 
@@ -969,6 +968,29 @@ fn end_state_differences(vm: &Vm, after: &Path) -> Vec<String> {
 
 /// A scenario log's line as compared: without its time; none for the
 /// world's noise and the recordings' own mistakes.
+/// A log's lines as compared: each `scenario_line`'s, the answers to the
+/// player's moving left out with it (`UnitOnTaxi` after
+/// `PLAYER_STARTED_MOVING`, every frame while following).
+fn scenario_lines(log: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut after_moving = false;
+    for l in log {
+        let body = l.split_once(' ').map_or(l.as_str(), |(_, b)| b);
+        if body.starts_with("= ") {
+            if after_moving {
+                continue;
+            }
+        } else {
+            after_moving = body.starts_with("PLAYER_STARTED_MOVING")
+                || body.starts_with("PLAYER_STOPPED_MOVING");
+        }
+        if let Some(line) = scenario_line(l) {
+            out.push(line);
+        }
+    }
+    out
+}
+
 fn scenario_line(line: &str) -> Option<String> {
     let body = line.split_once(' ').map_or(line, |(_, b)| b);
     const NOISE: &[&str] = &[
@@ -1028,6 +1050,9 @@ fn scenario_line(line: &str) -> Option<String> {
     // the session's).
     let cast = regex::Regex::new(r"Cast-(\d+)-\d+-\d+-\d+-(\d+)-[0-9A-F]+").unwrap();
     let body = cast.replace_all(&body, "Cast-$1-$2");
+    // A party's ID, the session's.
+    let party = regex::Regex::new(r"Party-\d+-\d+-[0-9A-F]+").unwrap();
+    let body = party.replace_all(&body, "Party-<id>");
     // A cast bar's ID, the session's.
     let bar = regex::Regex::new(r"CastBar-[0-9A-F]+").unwrap();
     let body = bar.replace_all(&body, "CastBar-<id>");
@@ -1188,6 +1213,16 @@ const AUCTION_MATCHED: usize = 289;
 #[test]
 fn the_engine_plays_auction_as_the_client_did() {
     plays_as_the_client_did("auction", AUCTION_MATCHED);
+}
+
+/// How many of the group scenario's lines the engine plays as the client
+/// did: only ever up.
+const GROUP_MATCHED: usize = 231;
+
+/// The group scenario: an invitation, a party, following, a trade.
+#[test]
+fn the_engine_plays_group_as_the_client_did() {
+    plays_as_the_client_did("group", GROUP_MATCHED);
 }
 
 /// How many of the items scenario's lines the engine plays as the client

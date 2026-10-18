@@ -36,6 +36,7 @@ pub mod loot;
 pub mod macros;
 pub mod mail;
 pub mod merchant;
+pub mod party;
 pub mod protection;
 pub mod queries;
 pub mod quests;
@@ -235,6 +236,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(death::behaviours())
             .chain(inventory::behaviours())
             .chain(queries::behaviours())
+            .chain(party::behaviours())
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())
             .chain(bindings::behaviours())

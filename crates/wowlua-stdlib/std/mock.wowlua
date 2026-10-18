@@ -398,6 +398,10 @@ export function newWmoChunk()
     engine().newWmoChunk()
 end
 
+--- Units' controls for a party (`unit:joinGroup()`: an invited player
+--- joins; `unit:openTrade()`: the other side of a trade accepts) are the
+--- unit's methods.
+
 --- The area's updates without a zone's event (the mount journal's
 --- usability, the map's points of interest and fog).
 export function areaChanged()

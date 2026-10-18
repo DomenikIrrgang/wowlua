@@ -883,7 +883,7 @@ fn unit_in_raid(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn is_in_group(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(!engine(vm).units.group.is_empty())])
+    Ok(vec![Value::Bool(crate::party::grouped(vm))])
 }
 
 fn is_in_raid(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -893,7 +893,8 @@ fn is_in_raid(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 fn get_num_group_members(vm: &mut Vm, _c: NativeCall) -> Ret {
     let n = engine(vm).units.group.len();
-    Ok(vec![Value::Num(if n == 0 { 0.0 } else { n as f64 + 1.0 })])
+    let grouped = crate::party::grouped(vm);
+    Ok(vec![Value::Num(if grouped { n as f64 + 1.0 } else { 0.0 })])
 }
 
 /// `GetNumSubgroupMembers()`: the others in the player's party (raid
@@ -1019,6 +1020,8 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("UnitIsDead", unit_is_dead),
         ("UnitIsDeadOrGhost", unit_is_dead_or_ghost),
         ("UnitIsPlayer", unit_is_player),
+        ("UnitCanCooperate", unit_can_cooperate),
+        ("UnitIsHumanPlayer", unit_is_human_player),
         ("UnitAffectingCombat", unit_affecting_combat),
         ("UnitIsUnit", unit_is_unit),
         ("UnitReaction", unit_reaction),
@@ -1029,6 +1032,13 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("UnitInParty", unit_in_party),
         ("UnitInRaid", unit_in_raid),
         ("IsInGroup", is_in_group),
+        ("TargetUnit", target_unit),
+        (
+            "C_ClickBindings.GetEffectiveInteractionButton",
+            effective_interaction_button,
+        ),
+        ("C_ClickBindings.GetBindingType", click_binding_type),
+        ("ClearTarget", clear_target_call),
         ("IsInRaid", is_in_raid),
         ("GetNumGroupMembers", get_num_group_members),
         ("GetNumSubgroupMembers", get_num_subgroup_members),
@@ -1073,6 +1083,8 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
     for (name, f) in [
         ("target", control_target as wowlua_vm::NativeFn),
         ("softTarget", control_soft_target),
+        ("joinGroup", crate::party::control_join_group),
+        ("openTrade", crate::party::control_open_trade),
         ("focus", control_focus),
         ("mouseover", control_mouseover),
         ("damage", control_damage),
@@ -1329,12 +1341,7 @@ fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let new = target_arg(vm, &c);
     if me == PLAYER {
-        engine_mut(vm).units.target = new;
-        engine_mut(vm).units.list[PLAYER.0].target = new;
-        fire(vm, "PLAYER_TARGET_CHANGED", &[]);
-        let echo = vm.native("targetEcho", target_echo);
-        let delay = crate::clock::server_delay(vm);
-        crate::clock::after_engine(vm, delay, echo);
+        set_player_target(vm, new);
     } else {
         engine_mut(vm).units.list[me.0].target = new;
         // A creature turning on someone, as a wolf on the player
@@ -1467,6 +1474,61 @@ fn control_soft_target(vm: &mut Vm, c: NativeCall) -> Ret {
         fire(vm, event, &[o, n]);
     } else {
         fire(vm, event, &[]);
+    }
+    Ok(vec![])
+}
+
+/// The player's target now `new`: `PLAYER_TARGET_CHANGED`, the server's
+/// echo (`UNIT_TARGET("player")`) a round trip later.
+fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
+    engine_mut(vm).units.target = new;
+    engine_mut(vm).units.list[PLAYER.0].target = new;
+    fire(vm, "PLAYER_TARGET_CHANGED", &[]);
+    let echo = vm.native("targetEcho", target_echo);
+    let delay = crate::clock::server_delay(vm);
+    crate::clock::after_engine(vm, delay, echo);
+}
+
+/// `C_ClickBindings.GetEffectiveInteractionButton(button, modifiers)`: the
+/// default interaction bindings' (a unit frame's left click targets, its
+/// right click opens the menu): the button itself (unverified: not
+/// recorded; `GetBindingType("LeftButton", 0)` recorded an interaction).
+fn effective_interaction_button(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(r) =
+        crate::recorded::lookup(vm, "C_ClickBindings.GetEffectiveInteractionButton", &c)
+    {
+        return Ok(r);
+    }
+    Ok(vec![c.arg(1)])
+}
+
+/// `C_ClickBindings.GetBindingType(button, modifiers)`: the recorded
+/// answer (the left button unmodified: an interaction), else the right
+/// button unmodified an interaction too (its default: the unit's menu;
+/// unverified), else none.
+fn click_binding_type(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(r) = crate::recorded::lookup(vm, "C_ClickBindings.GetBindingType", &c) {
+        return Ok(r);
+    }
+    let button = match vm.hidden(c.arg(1)) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => String::new(),
+    };
+    let plain = matches!(vm.hidden(c.arg(2)), Value::Num(0.0) | Value::Nil);
+    let interaction = plain && (button == "LeftButton" || button == "RightButton");
+    Ok(vec![Value::Num(if interaction { 3.0 } else { 0.0 })])
+}
+
+/// `TargetUnit(unit)` (protected: a unit frame's click), `ClearTarget()`.
+fn target_unit(vm: &mut Vm, c: NativeCall) -> Ret {
+    let new = unit_arg(vm, &c, 1);
+    set_player_target(vm, new);
+    Ok(vec![])
+}
+
+fn clear_target_call(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if engine(vm).units.target.is_some() {
+        clear_target(vm);
     }
     Ok(vec![])
 }
@@ -1678,12 +1740,7 @@ pub(crate) fn kill_xp(vm: &mut Vm, me: UnitId, opts: &Kill, first: bool) {
 /// emptied): `PLAYER_TARGET_CHANGED()`, and the server's
 /// `UNIT_TARGET("player")` a round trip later.
 pub(crate) fn clear_target(vm: &mut Vm) {
-    engine_mut(vm).units.target = None;
-    engine_mut(vm).units.list[PLAYER.0].target = None;
-    fire(vm, "PLAYER_TARGET_CHANGED", &[]);
-    let echo = vm.native("targetEcho", target_echo);
-    let delay = crate::clock::server_delay(vm);
-    crate::clock::after_engine(vm, delay, echo);
+    set_player_target(vm, None);
 }
 
 /// The death's events. In the open world (`/stdtest engine scenario
@@ -2375,6 +2432,33 @@ fn unit_faction_group(vm: &mut Vm, c: NativeCall) -> Ret {
             None => vec![],
         }
     })
+}
+
+/// A unit's faction (its own, else its race's).
+fn faction_of(u: &Unit) -> Option<String> {
+    u.faction_group
+        .clone()
+        .or_else(|| faction(&race_file_and_id(&u.race).0).map(str::to_string))
+}
+
+/// `UnitCanCooperate(a, b)`: two players of one faction (unverified: not
+/// recorded; Blizzard's unit menu shows Trade and Follow by it).
+fn unit_can_cooperate(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Some(a), Some(b)) = (unit_arg(vm, &c, 1), unit_arg(vm, &c, 2)) else {
+        return Ok(vec![Value::Bool(false)]);
+    };
+    let u = &engine(vm).units.list;
+    let ok = u[a.0].player
+        && u[b.0].player
+        && faction_of(&u[a.0]).is_some()
+        && faction_of(&u[a.0]) == faction_of(&u[b.0]);
+    Ok(vec![Value::Bool(ok)])
+}
+
+/// `UnitIsHumanPlayer(unit)`: a player's character (unverified: as
+/// `UnitIsPlayer`).
+fn unit_is_human_player(vm: &mut Vm, c: NativeCall) -> Ret {
+    unit_is_player(vm, c)
 }
 
 fn unit_pvp_name(vm: &mut Vm, c: NativeCall) -> Ret {
