@@ -111,6 +111,19 @@ fn exec(vm: &mut Vm, code: &[u8], name: &str, args: &[Value]) -> Result<(), Stri
     vm.call(f, args).map(|_| ()).map_err(|e| message(vm, &e))
 }
 
+/// [`exec`] as addon `addon`'s code (`luaL_loadbufferas`): running it taints
+/// execution, so secrets refuse what the client refuses addons.
+fn exec_as(
+    vm: &mut Vm,
+    code: &[u8],
+    name: &str,
+    addon: &str,
+    args: &[Value],
+) -> Result<(), String> {
+    let f = vm.load_as(code, name, addon)?;
+    vm.call(f, args).map(|_| ()).map_err(|e| message(vm, &e))
+}
+
 /// Runs a snippet in `vm` (its runtime first, if any), with an addon table
 /// of its own, as the client runs an addon's files.
 fn exec_snippet(vm: &mut Vm, source: &str, name: &str) -> Result<(), String> {
@@ -231,7 +244,7 @@ fn client(out: &Path, name: &str, toc: &str, label: &str, setup: &str) -> Vm {
             continue;
         }
         let code = fs::read(out.join(&path)).unwrap();
-        exec(&mut vm, &code, &format!("@{path}"), &[addon, ns])
+        exec_as(&mut vm, &code, &format!("@{path}"), name, &[addon, ns])
             .unwrap_or_else(|e| panic!("{label}{path}: {e}"));
     }
     // The client reads Bindings.xml from the AddOn root: each body runs
@@ -404,6 +417,44 @@ print("count", StdCount())
     );
     assert_eq!(has("Std: unlimited"), 2, "{reported:?}");
     assert!(out.contains(&"count 11".to_string()), "{out:?}");
+}
+
+/// A secret error message cannot be read: it is reported as "<secret>",
+/// also from an error handler and when a `__tostring` gives the secret.
+#[test]
+fn errors_secret_messages_are_reported_safely() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as errors from "wowlua:errors"
+local C = Mock.check
+const wrap: (v: any) -> any = (_G :: any).secretwrap
+
+errors.configure({ rateLimit = 0 })
+errors.onError(function(msg: string) print("heard", msg) end)
+errors.report("unit " .. wrap("Sua"))
+local obj = setmetatable({}, { __tostring = function(): any return wrap("Sua") end })
+errors.report(obj)
+C(errors.call(function() error(obj) end) == false, "call fails")
+C(errors.call(function() error(wrap(true)) end) == false, "call fails")
+print("count", errors.count())
+"#,
+        )],
+        "",
+        "",
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "heard Std: <secret>",
+            "heard Std: <secret>",
+            "heard Std: <secret>",
+            "heard Std: <secret>",
+            "count 4"
+        ],
+        "{out:?}"
+    );
+    assert_eq!(errors(&out), ["Std: <secret>"; 4], "{out:?}");
 }
 
 // ----------------------------------------------------------------- events --
@@ -641,6 +692,57 @@ Mock.fire("BAG_UPDATE", 2)
     assert_eq!(
         plain(&out),
         ["static login", "bag 1 1", "bag 1 1", "bag 2 2"],
+        "{out:?}"
+    );
+}
+
+/// Secret payloads reach every kind of handler unchanged; the module reads
+/// none of them.
+#[test]
+fn events_pass_secret_payloads_on() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import event, unitEvent, on, once, send from "wowlua:events"
+
+@unitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+local function cast(unit: string, guid: any, spell: any)
+    print("unit", unit, issecretvalue(guid), issecretvalue(spell))
+end
+
+@event("UNIT_SPELLCAST_SUCCEEDED", "UNIT_HEALTH")
+local function both(name: string, unit: any, guid: any, spell: any)
+    print("both", name, issecretvalue(unit), issecretvalue(guid), issecretvalue(spell))
+end
+
+on("UNIT_HEALTH", function(unit: any) print("on", issecretvalue(unit)) end)
+once("UNIT_HEALTH", function(unit: any) print("once", issecretvalue(unit)) end)
+
+declare message STD_SECRET(a: any, b: any)
+on("STD_SECRET", function(a: any, b: any) print("message", issecretvalue(a), issecretvalue(b)) end)
+_G.StdSend = function(a: any, b: any) send("STD_SECRET", a, b) end
+"#,
+        )],
+        "",
+        r#"const wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.fire("UNIT_SPELLCAST_SUCCEEDED", "player", wrap("Cast-1"), wrap(133))
+Mock.fire("UNIT_HEALTH", wrap("target"))
+Mock.fire("UNIT_HEALTH", wrap("target"))
+StdSend(wrap(true), wrap(1))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "unit player true true",
+            "both UNIT_SPELLCAST_SUCCEEDED false true true",
+            "both UNIT_HEALTH true false false",
+            "on true",
+            "once true",
+            "both UNIT_HEALTH true false false",
+            "on true",
+            "message true true",
+        ],
         "{out:?}"
     );
 }
@@ -924,6 +1026,48 @@ StdT.u1:update(3)
     assert!(reported[3].contains("ticker failed 2"), "{out:?}");
 }
 
+/// Wrapped functions carry secret arguments to the call unchanged.
+#[test]
+fn timers_pass_secret_arguments_on() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import throttle, debounce, nextFrame from "wowlua:timer"
+
+@throttle(1)
+local function throttled(v: any) print("throttle", issecretvalue(v)) end
+
+@debounce(0.5)
+local function debounced(v: any) print("debounce", issecretvalue(v)) end
+
+class Panel
+    @nextFrame
+    function refresh(v: any) print("nextFrame", issecretvalue(v)) end
+end
+
+_G.StdT = { throttled = throttled, debounced = debounced, panel = Panel.new() }
+"#,
+        )],
+        "",
+        r#"const wrap: (v: any) -> any = (_G :: any).secretwrap
+StdT.throttled(wrap(1)); StdT.throttled(wrap("x"))
+StdT.debounced(wrap(true))
+StdT.panel:refresh(wrap(2))
+Mock.advance(2)
+"#,
+    );
+    assert_eq!(
+        out,
+        [
+            "throttle true",
+            "nextFrame true",
+            "debounce true",
+            "throttle true"
+        ],
+        "{out:?}"
+    );
+}
+
 // ----------------------------------------------------------------- combat --
 
 #[test]
@@ -1040,6 +1184,37 @@ Mock.fire("PLAYER_REGEN_ENABLED")
     assert!(reported[0].contains("queued failure"), "{out:?}");
 }
 
+/// Queued calls keep secret arguments until combat ends.
+#[test]
+fn combat_queues_secret_arguments() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import outOfCombat from "wowlua:combat"
+
+@outOfCombat
+local function apply(a: any, b: any) print("apply", issecretvalue(a), issecretvalue(b)) end
+
+class Bar
+    @outOfCombat
+    function layout(v: any) print("layout", issecretvalue(v)) end
+end
+
+_G.StdC = { apply = apply, bar = Bar.new() }
+"#,
+        )],
+        "",
+        r#"const wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.fire("PLAYER_REGEN_DISABLED")
+StdC.apply(wrap(true), 1)
+StdC.apply(wrap(1), wrap("x"))
+StdC.bar:layout(wrap(false))
+Mock.fire("PLAYER_REGEN_ENABLED")
+"#,
+    );
+    assert_eq!(out, ["apply true true", "layout true"], "{out:?}");
+}
+
 // ------------------------------------------------------------------ hooks --
 
 #[test]
@@ -1141,6 +1316,35 @@ Mock.loadAddon("Blizzard_Never")
     assert!(reported[0].contains("hook failed"), "{out:?}");
     assert!(
         reported[1].contains("hook: `NeverFrame` does not exist"),
+        "{out:?}"
+    );
+}
+
+/// Post-hooks get the hooked call's arguments, secrets included, unchanged.
+#[test]
+fn hooks_pass_secret_arguments_on() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import hook, hookScript from "wowlua:hooks"
+
+@hook("StdShow")
+local function afterShow(a: any, b: any) print("hook", issecretvalue(a), issecretvalue(b)) end
+
+@hookScript("PlayerFrame", "OnEvent")
+local function onEvent(frame: any, name: string, unit: any) print("hookScript", name, issecretvalue(unit)) end
+"#,
+        )],
+        "_G.StdShow = function(a: any, b: any) end\nPlayerFrame:RegisterEvent(\"UNIT_HEALTH\")\n",
+        r#"const wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+StdShow(wrap("x"), wrap(true))
+Mock.fire("UNIT_HEALTH", wrap("target"))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        ["hook true true", "hookScript UNIT_HEALTH true"],
         "{out:?}"
     );
 }
@@ -1416,6 +1620,54 @@ print("saved", rawget(StdDB, "secret"), rawget(StdDB, "opts"), StdDB.free.secret
     }
 }
 
+/// Profiles carry secrets and tables addons may not index as they are
+/// (copies, defaults); at logout secrets are dropped, such tables kept.
+#[test]
+fn saved_profiles_carry_secrets() {
+    let dir = project(&[(
+        "src/main.wowlua",
+        r#"import * as saved from "wowlua:saved"
+import onLoad from "wowlua:lifecycle"
+
+local db = saved.bind("StdDB", { version = 1, defaults = { bars = { n = 1 } }, profiles = true })
+local profiles = assert(saved.handle(db).profiles)
+
+@onLoad
+local function init()
+    db.bars = Mock.secret()
+    db.locked = (_G :: any).StdLocked
+    profiles:use("Healer")
+    profiles:copy("Default")
+    print("copied", issecretvalue(db.bars), db.locked == (_G :: any).StdLocked)
+    profiles:use("Default")
+end
+"#,
+    )]);
+    let setup =
+        "(_G :: any).StdLocked = { 1 }\n(_G :: any).settablesecurity((_G :: any).StdLocked, 0)";
+    let script = r#"Mock.loadAddon("Std")
+Mock.fire("PLAYER_LOGOUT")
+local p = StdDB.profiles
+print("saved", rawget(p.Default, "bars"), rawget(p.Healer, "bars"), p.Default.locked == (_G :: any).StdLocked, p.Healer.locked == (_G :: any).StdLocked)
+"#;
+    for mode in MODES {
+        build(dir.path(), mode);
+        let out = run(dir.path(), mode, setup, script);
+        assert_eq!(
+            plain(&out),
+            ["copied true true", "saved nil nil true true"],
+            "{mode}: {out:?}"
+        );
+        let reported = errors(&out);
+        let expected: &[&str] = if *mode == "dev" {
+            &["Std: StdDB: secret values were not saved"]
+        } else {
+            &[]
+        };
+        assert_eq!(reported, expected, "{mode}: {out:?}");
+    }
+}
+
 #[test]
 fn saved_variables_loaded_first() {
     let dir = project(&[(
@@ -1685,6 +1937,25 @@ fn slash_router_help() {
     assert_eq!(out[0..9], out[9..18], "{out:?}");
 }
 
+/// A secret message (forwarded chat text) cannot be read: the router runs
+/// nothing.
+#[test]
+fn slash_router_ignores_secret_messages() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import router from "wowlua:slash"
+const wrap: (v: any) -> any = (_G :: any).secretwrap
+local commands = router({ show = { run = function() print("show") end } })
+print("dispatched", commands:dispatch(wrap("show")), commands:dispatch("show"))
+"#,
+        )],
+        "",
+        "",
+    );
+    assert_eq!(out, ["show", "dispatched false true"], "{out:?}");
+}
+
 // -------------------------------------------------------------- callbacks --
 
 #[test]
@@ -1783,6 +2054,39 @@ print("compat", plainRegistry.RegisterCallback == nil)
     let reported = errors(&out);
     assert_eq!(reported.len(), 1, "{out:?}");
     assert!(reported[0].contains("handler failed"), "{out:?}");
+}
+
+/// `fire` carries secret arguments to every kind of handler unchanged.
+#[test]
+fn callback_registries_pass_secrets_on() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as callbacks from "wowlua:callbacks"
+const wrap: (v: any) -> any = (_G :: any).secretwrap
+
+local events = callbacks.registry({ compat = "CallbackHandler" })
+events:on("Hit", function(v: any) print("on", issecretvalue(v)) end)
+events:once("Hit", function(v: any) print("once", issecretvalue(v)) end)
+events.RegisterCallback("Owner", "Hit", function(name: string, v: any) print("compat", name, issecretvalue(v)) end)
+events:fire("Hit", wrap(5))
+events:fire("Hit", wrap(true))
+"#,
+        )],
+        "",
+        "",
+    );
+    assert_eq!(
+        out,
+        [
+            "on true",
+            "once true",
+            "compat Hit true",
+            "on true",
+            "compat Hit true"
+        ],
+        "{out:?}"
+    );
 }
 
 // ---------------------------------------------------------- compile checks --
@@ -2727,6 +3031,18 @@ fn locales_unused_without_the_module() {
     assert!(!dir.path().join("dist/dev/Std/wowlua/locales").exists());
 }
 
+/// A secret placeholder value makes a secret string.
+#[test]
+fn locale_placeholders_take_secrets() {
+    let mut files = LOCALE_FILES.to_vec();
+    files.push((
+        "src/main.wowlua",
+        "import L from \"wowlua:locale\"\nconst wrap: (v: any) -> any = (_G :: any).secretwrap\nlocal s: any = L.WELCOME({ name = wrap(\"Sua\") })\nprint(issecretvalue(s), type(s))\n",
+    ));
+    let out = modes(&files, "", "");
+    assert_eq!(out, ["true string"], "{out:?}");
+}
+
 // ------------------------------------------------------------------- pool --
 
 #[test]
@@ -2818,7 +3134,8 @@ print("after combat", StdPool.pool:count())
     );
 }
 
-/// Releasing twice or a foreign object is an error in debug builds only.
+/// Releasing twice, a foreign object or a secret is an error in debug
+/// builds only.
 #[test]
 fn pool_misuse_raises_in_debug_builds() {
     let dir = project(&[(
@@ -2829,6 +3146,8 @@ local t = tables:acquire()
 tables:release(t)
 print("twice", pcall(tables.release, tables, t))
 print("foreign", pcall(tables.release, tables, {}))
+-- A secret cannot be a key: foreign too.
+print("secret", pcall(tables.release, tables, (_G :: any).secretwrap({})))
 "#,
     )]);
     for mode in MODES {
@@ -2841,6 +3160,10 @@ print("foreign", pcall(tables.release, tables, {}))
         );
         assert!(
             out[1].starts_with(&format!("foreign {expected}")),
+            "{mode}: {out:?}"
+        );
+        assert!(
+            out[2].starts_with(&format!("secret {expected}")),
             "{mode}: {out:?}"
         );
     }
@@ -3089,6 +3412,66 @@ fn tooltip_kinds_are_checked_per_flavor() {
     assert!(!out.contains("E83"), "{out}");
 }
 
+/// `wowlua:tooltip` with secrets in what the client shows: `id`, `link`
+/// and `unit` are nil, `guid` passes through, and data addons may not
+/// index gives only the kind.
+#[test]
+fn tooltip_data_with_secrets() {
+    let source = r#"import * as tooltip from "wowlua:tooltip"
+import type TooltipData from "wowlua:tooltip"
+import * as secret from "wowlua:secret"
+local function show(tip: GameTooltip, data: TooltipData)
+    const guid = secret.isSecret(data.guid) and "<secret>" or tostring(data.guid)
+    tip:AddLine(`{data.kind} {data.id} {data.link} {data.unit} {guid} {data.raw ~= nil}`)
+end
+tooltip.hook("Item", show)
+tooltip.hook("Spell", show)
+tooltip.hook("Unit", show)
+"#;
+    let script = r#"const wrap: (v: any) -> any = (_G :: any).secretwrap
+const lock: (t: table, option: number) -> () = (_G :: any).settablesecurity
+Mock.loadAddon("Std")
+local function show(kind, data)
+    print(table.concat(Mock.showTooltip(kind, data), " | "))
+end
+show("Item", { id = wrap(19019), name = "Thunderfury", link = wrap("|Hitem:19019::|h[Thunderfury]|h") })
+show("Spell", { id = wrap(133), name = "Fireball" })
+show("Unit", { unit = wrap("target"), name = "Hogger", guid = wrap("GUID-target") })
+-- Tooltip data addons may not index (DisallowTaintedAccess).
+local locked = { type = 0, id = 19019, hyperlink = "|Hitem:19019::|h[Thunderfury]|h" }
+lock(locked, 0)
+local tip = GameTooltip :: any
+tip.lines = {}
+for _, fn in ipairs((Mock :: any).tooltipCalls[0] or {}) do fn(tip, locked) end
+print("locked", table.concat(tip.lines, " | "))
+"#;
+    let out = modes(&[("src/main.wowlua", source)], "", script);
+    assert_eq!(
+        plain(&out),
+        [
+            "Item nil nil nil nil true",
+            "Spell nil nil nil nil true",
+            "Unit nil nil nil <secret> true",
+            "locked Item nil nil nil nil false",
+        ]
+    );
+    // Read from the tooltip itself.
+    let out = modes(
+        &[("src/main.wowlua", source)],
+        "TooltipDataProcessor = nil",
+        script,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "Item nil nil nil nil false",
+            "Spell nil nil nil nil false",
+            "Unit nil nil nil nil false",
+            "locked ",
+        ]
+    );
+}
+
 // ----------------------------------------------------------------- frames --
 
 const FRAMES: &str = r#"import * as frames from "wowlua:frames"
@@ -3330,6 +3713,84 @@ print("locked again", at(box))
     );
 }
 
+/// `wowlua:frames` with secrets: a position, size or scale that reads as
+/// secret (a frame anchored to a restricted one) is neither saved nor
+/// applied; a stored position that cannot be read is ignored; a secret
+/// `lock` is ignored.
+#[test]
+fn frames_skip_secret_positions() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as frames from "wowlua:frames"
+import type FramePosition from "wowlua:frames"
+const wrap: (v: any) -> any = (_G :: any).secretwrap
+const store: { [string]: any } = {}
+local window = CreateFrame("Frame", "StdWindow", UIParent)
+window:SetSize(300, 200)
+window:SetPoint("CENTER")
+-- Its size and scale read as secret while it is set up.
+const w = window :: any
+w.GetSize = function() return wrap(300), wrap(200) end
+w.GetScale = function() return wrap(1) end
+_G.StdMove = frames.movable(window, {
+    store = store,
+    key = "window",
+    resize = {},
+    scaleWheel = "CTRL",
+    onChange = function(pos: FramePosition?) print("changed", pos ~= nil) end,
+})
+w.GetSize, w.GetScale = nil, nil
+_G.StdFrames = { store = store }
+"#,
+        )],
+        "",
+        r#"local wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local store = StdFrames.store
+local w = StdWindow :: any
+-- Anchored to a restricted frame: its edges read as secret.
+w.GetLeft = function() return wrap(10) end
+Mock.drag(StdWindow, 100, 0)
+Mock.modifiers.CTRL = true
+Mock.wheel(StdWindow, 2)
+Mock.modifiers.CTRL = nil
+StdMove:save()
+print("secret edges", store.window, StdWindow:GetScale())
+w.GetLeft = nil
+StdMove:save()
+-- Stored values that cannot be read are not applied.
+StdWindow:SetSize(250, 150)
+store.window = { point = "CENTER", relativePoint = "CENTER", x = wrap(5), y = 0, scale = wrap(2), width = wrap(10), height = 10 }
+StdMove:restore()
+local point, _, _, x = StdWindow:GetPoint(1)
+print("secret stored", point, x, StdWindow:GetScale(), StdWindow:GetWidth())
+store.window = wrap({})
+StdMove:restore()
+StdMove:save()
+print("replaced", issecretvalue(store.window), store.window.point)
+StdMove:lock(wrap(true))
+print("locked", StdMove:isLocked())
+-- Back to the original anchor; the secret size and scale were not kept.
+StdMove:reset()
+print("reset", (StdWindow:GetPoint(1)), StdWindow:GetWidth(), StdWindow:GetScale())
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "secret edges nil 1",
+            "changed true",
+            "secret stored BOTTOMLEFT 910 1 250",
+            "changed true",
+            "replaced false CENTER",
+            "locked false",
+            "changed false",
+            "reset CENTER 250 1",
+        ]
+    );
+}
+
 // ----------------------------------------------------------------- secret --
 
 /// `wowlua:secret`: helpers that test for secrecy before anything else.
@@ -3348,7 +3809,7 @@ local secret = StdSecret
 local s = Mock.secret()
 print(secret.isSecret(s), secret.isSecret(1), secret.known(s, 5), secret.known(nil, 6), secret.known(7, 0))
 print(secret.flag(s), secret.flag(true), secret.flag(nil), secret.flag(false))
-print(secret.amount(s) == s, secret.amount(nil), secret.amount(3))
+print(issecretvalue(secret.amount(s)), secret.amount(nil), secret.amount(3))
 "#,
     );
     assert_eq!(
@@ -3438,6 +3899,30 @@ UnitHealthPercent = function(u, predicted, curve) print("native", u, curve) retu
         "Mock.loadAddon(\"Std\")\nprint(issecretvalue(StdUnit.healthPercent(\"player\")))\n",
     );
     assert_eq!(plain(&out), ["native player scale", "true"]);
+}
+
+/// `wowlua:unit` with secrets the caller hands in: secret group options
+/// count as no, a secret GUID (combat log GUIDs can be) finds no member.
+#[test]
+fn unit_secret_options_and_guids() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as unit from \"wowlua:unit\"\n_G.StdUnit = unit\n",
+        )],
+        r#"Mock.group = "party"
+Mock.units.party1 = { name = "Ally", guid = "Player-2-1", class = "Warrior", classFile = "WARRIOR", level = 60, health = 1, healthMax = 1, power = 0, powerMax = 1, isPlayer = true, connected = true }
+Mock.units.partypet1 = { name = "Wolf", guid = "Pet-1", class = "", classFile = "", level = 1, health = 1, healthMax = 1, power = 0, powerMax = 0, isPlayer = false, connected = true }"#,
+        r#"const wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local unit = StdUnit
+local tokens = {}
+for token in unit.group({ includePlayer = wrap(true), includePets = wrap(true) }) do tokens[#tokens + 1] = token end
+print(table.concat(tokens, " "))
+print(unit.roster.byGuid("Player-2-1").unit, unit.roster.byGuid(wrap("Player-2-1")))
+"#,
+    );
+    assert_eq!(plain(&out), ["party1", "party1 nil"]);
 }
 
 // ------------------------------------------------------------------- aura --
@@ -3606,6 +4091,46 @@ print("again", engine.unit, engine:IsShown())
     );
 }
 
+/// `wowlua:aura` with what addons may not read: an aura table addons may
+/// not index ends the reads, a secret answer does not stop `forEach`, and
+/// secret spell IDs in a container's list are skipped.
+#[test]
+fn aura_reads_and_containers_with_secrets() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as aura from "wowlua:aura"
+const wrap: (v: any) -> any = (_G :: any).secretwrap
+_G.StdAura = aura
+_G.StdWrap = wrap
+_G.StdContainer = aura.container(UIParent, {
+    unit = "player",
+    groups = { { key = "tracked", filter = "HELPFUL", spells = { 467, wrap(1459) } } },
+})
+"#,
+        )],
+        AURA_SETUP,
+        r#"const lock: (t: table, option: number) -> () = (_G :: any).settablesecurity
+Mock.loadAddon("Std")
+local aura = StdAura
+local n = 0
+aura.forEach("player", "HELPFUL", function(a) n = n + 1 return StdWrap(true) end)
+print("secret answer", n)
+print("tracked", table.concat(StdContainer.frame.showing.tracked, " "))
+-- An aura table addons may not index (DisallowTaintedAccess).
+local locked: any = { name = "Thorns", spellId = 467, auraInstanceID = 9 }
+lock(locked, 0)
+C_UnitAuras.GetAuraDataByIndex = function() return locked end
+C_UnitAuras.GetAuraDataByAuraInstanceID = function() return locked end
+print(aura.readable("player"), aura.each("player", "HELPFUL")(), aura.find("player", 467, "HELPFUL"), aura.findByName("player", "Thorns", "HELPFUL"), aura.byInstanceId("player", 9))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        ["secret answer 3", "tracked 467", "false nil nil nil nil"]
+    );
+}
+
 // ------------------------------------------------------------------ spell --
 
 /// `wowlua:spell`: spell data, cooldowns with secret times (still telling
@@ -3641,6 +4166,26 @@ print(spell.charges(133).currentCharges)
         "Mock.loadAddon(\"Std\")\nlocal cd = StdSpell.cooldown(133)\nprint(cd.startTime, cd.duration, cd.isEnabled, cd.isActive, cd.modRate, StdSpell.onCooldown(1))\n",
     );
     assert_eq!(plain(&out), ["100 8 true true 1 false"]);
+}
+
+/// `spell.cooldown` when the client hands back a cooldown addons may not
+/// index, or a secret one: nil, and not cooling down.
+#[test]
+fn spell_cooldowns_addons_may_not_read() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as spell from \"wowlua:spell\"\n_G.StdSpell = spell\n",
+        )],
+        r#"const lock: (t: table, option: number) -> () = (_G :: any).settablesecurity
+const wrap: (v: any) -> any = (_G :: any).secretwrap
+local locked = { startTime = 0, duration = 8, modRate = 1, isEnabled = true, isActive = true }
+lock(locked, 0)
+Mock.spells[133].cooldown = locked
+Mock.spells[6603].cooldown = wrap(Mock.spells[6603].cooldown)"#,
+        "Mock.loadAddon(\"Std\")\nprint(StdSpell.cooldown(133), StdSpell.onCooldown(133), StdSpell.cooldown(6603))\n",
+    );
+    assert_eq!(plain(&out), ["nil false nil"]);
 }
 
 // ------------------------------------------------------------------- item --
@@ -3756,6 +4301,32 @@ media.register("sound", "Std Ping", 567)
             "registered font Other Font",
             "registered sound Std Ping",
         ]
+    );
+}
+
+/// `wowlua:media`: a secret name cannot be a key, so it is not registered
+/// and fetches the kind's default.
+#[test]
+fn media_secret_names_are_unknown() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as media from \"wowlua:media\"\n_G.StdMedia = media\n",
+        )],
+        "STANDARD_TEXT_FONT = \"Fonts\\\\FRIZQT__.TTF\"",
+        r#"local wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local media = StdMedia
+media.register("font", wrap("Std Bold"), "bold.ttf")
+print(#media.list("font"), media.fetch("font", wrap("Std Bold")), media.fetch("font", wrap("Std Bold"), { noDefault = true }))
+Mock.provideLibrary("LibSharedMedia-3.0", Mock.sharedMedia())
+Mock.fire("ADDON_LOADED", "Other", false)
+print(media.fetch("font", wrap("Std Bold")))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        ["0 Fonts\\FRIZQT__.TTF nil", "lsm-default-font"]
     );
 }
 
@@ -3890,6 +4461,45 @@ end
     );
 }
 
+/// Secret payloads and results pass through jobs unchanged; a secret error
+/// is reported with the job's name.
+#[test]
+fn jobs_carry_secrets() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as jobs from \"wowlua:jobs\"\n_G.StdJobs = jobs\n",
+        )],
+        "",
+        r#"const wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local jobs = StdJobs
+local w = jobs.start(function(ctx)
+    local unit = ctx:waitFor("UNIT_HEALTH")
+    print("payload", issecretvalue(unit))
+    return wrap(5), wrap(true)
+end, { onDone = function(a, b) print("done", issecretvalue(a), issecretvalue(b)) end })
+Mock.advanceFrames(1)
+Mock.fire("UNIT_HEALTH", wrap("target"))
+Mock.advanceFrames(2)
+print("result", issecretvalue((w:result())))
+jobs.start(function(ctx) error(wrap("Sua")) end, { name = "scan", onError = function(e) print("onError", issecretvalue(e)) end })
+Mock.advanceFrames(1)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "payload true",
+            "done true true",
+            "result true",
+            "onError true"
+        ],
+        "{out:?}"
+    );
+    assert_eq!(errors(&out), ["Std: job scan: <secret>"], "{out:?}");
+}
+
 // ----------------------------------------------------------------- dialog --
 
 /// `wowlua:dialog`: confirm, prompt (validated), export (read-only),
@@ -3959,6 +4569,53 @@ print("closed", Mock.dialog())
     );
 }
 
+/// `wowlua:dialog` with secrets: texts and titles show as they are (font
+/// strings take secrets); buttons and edit boxes refuse them, so secret
+/// labels, defaults and export values are replaced; a secret `validate`
+/// answer counts as no.
+#[test]
+fn dialogs_show_secret_texts() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as dialog from \"wowlua:dialog\"\n_G.StdDialog = dialog\n",
+        )],
+        "ACCEPT, CANCEL, CLOSE, BACKDROP_DIALOG_32_32 = \"Accept\", \"Cancel\", \"Close\", {}",
+        r#"local wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local dialog = StdDialog
+dialog.confirm({ text = wrap("Kick Bob?"), accept = wrap("Kick"), onAccept = function() print("kicked") end })
+local d = Mock.dialog()
+print(issecretvalue(d.text:GetText()), d.accept:GetText(), d.cancel:GetText())
+Mock.dialogAccept()
+dialog.prompt({ text = wrap("A note on Bob"), default = wrap("Bob"), validate = function(v) return wrap(true) end, onAccept = function(v) print("noted", v) end })
+d = Mock.dialog()
+print(#d.edit:GetText(), d.accept:IsEnabled())
+Mock.dialogAccept("x")
+print("still open", Mock.dialog() ~= nil)
+dialog.export({ title = wrap("Bob's log"), value = wrap("log") })
+d = Mock.dialog()
+print(issecretvalue(d.text:GetText()), #d.edit:GetText())
+dialog.import({ title = wrap("Import for Bob"), onImport = function(text) return wrap("bad: " .. text) end })
+Mock.dialogAccept("abc")
+d = Mock.dialog()
+print(issecretvalue(d.text:GetText()), issecretvalue(d.error:GetText()))
+dialog.close()
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "true Accept Cancel",
+            "kicked",
+            "0 false",
+            "still open true",
+            "true 0",
+            "true true",
+        ]
+    );
+}
+
 // ------------------------------------------------------------------- menu --
 
 /// `wowlua:menu`: menus built through MenuUtil each time they open, with
@@ -4019,6 +4676,38 @@ print(Mock.lastMenu())
         errors(&out).iter().filter(|e| e.contains("boom")).count(),
         1,
         "{out:?}"
+    );
+}
+
+/// `wowlua:menu` with secrets: MenuUtil measures entry text, so secret
+/// text shows as UNKNOWN; a secret check state reads as unchecked.
+#[test]
+fn menus_show_secret_text_as_unknown() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as menu from "wowlua:menu"
+import type MenuBuilder from "wowlua:menu"
+const wrap: (v: any) -> any = (_G :: any).secretwrap
+const row = CreateFrame("Button", "StdRow", UIParent)
+menu.attach(row, function(m: MenuBuilder)
+    m:title(wrap("Bob"))
+        :button(wrap("Whisper"), function() print("whispered") end)
+        :checkbox("Focus", function() return wrap(true) end, function() end)
+        :radio(wrap("Skull"), function() return wrap(false) end, function() end)
+        :submenu(wrap("More"), function(sub: MenuBuilder) sub:disabled(wrap("Invite")) end)
+end)
+"#,
+        )],
+        "UNKNOWN = \"Unknown\"",
+        r#"Mock.loadAddon("Std")
+Mock.script(StdRow, "OnMouseUp", "RightButton")
+print(Mock.lastMenu())
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        ["Unknown\nUnknown\n[ ] Focus\n( ) Unknown\nUnknown\n  Unknown (disabled)"]
     );
 }
 
@@ -4088,6 +4777,64 @@ print(l.stats())
             "entry 9 20",
             "5 10 16 17 18 19 20",
             "5 10 16 17 18 19 20",
+        ]
+    );
+}
+
+/// `wowlua:list` with secrets: secret entries reach `init` and `onSelect`
+/// as they are, a secret list shows empty, a secret index does not scroll.
+#[test]
+fn lists_hand_secret_entries_on() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as list from "wowlua:list"
+class RowButton extends Button
+    readonly label: FontString
+    constructor(parent: Frame)
+        super(nil, parent)
+        self.label = self:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    end
+end
+local view = list.create(UIParent, {
+    rowHeight = 20,
+    row = RowButton,
+    init = function(row: RowButton, entry: string | Secret<string>, index: number)
+        row.label:SetText(entry)
+        print("row", index, issecretvalue(entry))
+    end,
+})
+view:onSelect(function(entry: string | Secret<string>, index: number) print("selected", index, issecretvalue(entry)) end)
+_G.StdList = view
+"#,
+        )],
+        "",
+        r#"local wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local view = StdList
+view:setData({ "Anna", wrap("Bob"), "Cleo" })
+for _, f in ipairs(Mock.frames()) do
+    if f.label and issecretvalue(f.label:GetText()) then Mock.script(f, "OnMouseUp", "LeftButton") end
+end
+print("chosen", issecretvalue(view:selected()))
+view:scrollTo(wrap(3))
+view:refresh()
+view:setData(wrap({ "Dora" }))
+print("secret list", issecretvalue(view:data()))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "row 1 false",
+            "row 2 true",
+            "row 3 false",
+            "selected 2 true",
+            "chosen true",
+            "row 1 false",
+            "row 2 true",
+            "row 3 false",
+            "secret list true",
         ]
     );
 }
@@ -4187,6 +4934,286 @@ print(table.concat(doubled, ","), table.concat(odd, ","), found, at, tbl.contain
     );
 }
 
+/// `wowlua:table` with values the addon may not read: secrets and tables
+/// whose security keeps addons out are carried as they are, never walked,
+/// compared or found.
+#[test]
+fn table_helpers_leave_secrets_alone() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as tbl from \"wowlua:table\"\n_G.StdTable = tbl\n",
+        )],
+        "",
+        r#"local wrap: (v: any) -> any = (_G :: any).secretwrap
+local locked: any = { x = 1 }
+settablesecurity(locked, 0)
+Mock.loadAddon("Std")
+local tbl = StdTable
+local s: any = Mock.secret()
+local src = { a = s, nested = { b = wrap(2) }, locked = locked }
+local c = tbl.copy(src)
+print(issecretvalue(c.a), c.nested ~= src.nested, issecretvalue(c.nested.b), c.locked == locked, issecretvalue(tbl.copy(s)))
+local target = { keep = s, guarded = locked }
+tbl.merge(target, { keep = { x = 1 }, guarded = { y = 2 } })
+print(issecretvalue(target.keep), target.keep.x, target.guarded.y)
+tbl.merge(target, s)
+tbl.defaults(target, { more = s, keep = { z = 3 } })
+print(issecretvalue(target.more), target.keep.z)
+print(tbl.equal(s, s), tbl.equal({ s }, { s }), tbl.equal(locked, { x = 1 }), tbl.equal(locked, locked))
+print(tbl.contains({ s, 1 }, 1), tbl.contains({ 1 }, wrap(1)), tbl.contains({ s }, s))
+print(tbl.count(s), tbl.isEmpty(locked), #tbl.keys(s), #tbl.values(locked), tbl.shallowCopy(locked) == locked)
+print(#tbl.map(s, function(v) return v end), #tbl.filter(locked, function() return true end), tbl.find(s, function() return true end))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "true true true true true",
+            "false 1 2",
+            "true 3",
+            "false false false true",
+            "true false false",
+            "0 true 0 0 true",
+            "0 0 nil nil",
+        ]
+    );
+}
+
+/// `wowlua:table`: a stable sort that never errors on an inconsistent
+/// order, orders by key, and puts secret elements and keys last in their
+/// order; sorted inserts and searches.
+#[test]
+fn table_sort_is_stable_and_secret_safe() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as tbl from \"wowlua:table\"\n_G.StdTable = tbl\n",
+        )],
+        "",
+        r#"local wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local tbl = StdTable
+local function names(list: any[]): string
+    local out = {}
+    for i, r in ipairs(list) do out[i] = r.n end
+    return table.concat(out, " ")
+end
+local rows = { { n = "a", k = 2 }, { n = "b", k = 1 }, { n = "c", k = 2 }, { n = "d", k = 1 } }
+tbl.sort(rows, tbl.by(function(r: any) return r.k end))
+print(names(rows))
+tbl.sort(rows, tbl.by(function(r: any) return r.k end, true))
+print(names(rows))
+local auras = { { n = "x", t = wrap(9) }, { n = "y", t = 5 }, { n = "z" }, { n = "w", t = 1 }, { n = "v", t = 5 } }
+tbl.sort(auras, tbl.by(function(a: any) return a.t end))
+print(names(auras))
+local list = { 3, wrap(1), "b", 1, wrap(2), 2, "a" }
+tbl.sort(list)
+print(list[1], list[2], list[3], list[4], list[5], issecretvalue(list[6]), issecretvalue(list[7]))
+tbl.sort(list, function(a: any, b: any) return type(a) == "string" and type(b) == "number" end)
+print(list[1], list[2], list[3], list[4], list[5])
+-- Long lists merge; the order stays stable.
+local long = {}
+for i = 1, 200 do long[i] = { n = tostring(i), k = (i * 37) % 7 } end
+tbl.sort(long, tbl.by(function(r: any) return r.k end))
+local ok = true
+for i = 2, 200 do
+    local a, b = long[i - 1], long[i]
+    if a.k > b.k or (a.k == b.k and tonumber(a.n) > tonumber(b.n)) then ok = false end
+end
+print("long", ok)
+local nums = {}
+for i = 1, 100 do nums[i] = (i * 53) % 101 end
+nums[50] = wrap(0)
+tbl.sort(nums)
+local sorted = true
+for i = 2, 99 do if nums[i - 1] > nums[i] then sorted = false end end
+print("nums", sorted, issecretvalue(nums[100]))
+tbl.sort(long, function(_a: any, _b: any) return true end)
+tbl.sort(long, function(a: any, b: any) return a.k <= b.k end)
+print("inconsistent", #long)
+local s = { 1, 3, 5 }
+print(tbl.insertSorted(s, 4), tbl.insertSorted(s, wrap(0)), tbl.insertSorted(s, 6), tbl.insertSorted(s, 3), #s)
+print(tbl.searchSorted(s, 3), tbl.searchSorted(s, 4), tbl.searchSorted(s, 2), tbl.searchSorted(s, wrap(4)), issecretvalue(s[7]))
+local o = tbl.order()
+print(o(1, 2), o(wrap(1), 2), o(2, wrap(1)), o("a", 1))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "b d a c",
+            "a c b d",
+            "w y v x z",
+            "1 2 3 a b true true",
+            "a b 1 2 3",
+            "long true",
+            "nums true true",
+            "inconsistent 200",
+            "3 5 5 3 7",
+            "2 4 nil nil true",
+            "true false true false",
+        ]
+    );
+}
+
+/// `wowlua:collections`: a ring buffer, a heap and an LRU cache, with
+/// secret values stored as they are.
+#[test]
+fn collections_hold_values_and_secrets() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as collections from \"wowlua:collections\"\nimport * as tbl from \"wowlua:table\"\n_G.StdCollections = collections\n_G.StdTable = tbl\n",
+        )],
+        "",
+        r#"local wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local c = StdCollections
+local ring = c.RingBuffer.new(3)
+print(ring:push(1), ring:push(2), ring:push(3), ring:push(4), ring:size(), ring:isFull())
+print(ring:at(1), ring:at(-1), ring:at(4), table.concat(ring:toList(), ","))
+local seen = {}
+for v in ring:each() do seen[#seen + 1] = v end
+print(table.concat(seen, ","), ring:shift(), ring:pop(), ring:size())
+ring:push(wrap(7))
+ring:push(8)
+print(ring:at(1), issecretvalue(ring:at(2)), ring:at(3), ring:size())
+ring:clear()
+print(ring:size(), ring:at(1), ring:shift())
+local heap = c.Heap.new()
+for _, v in ipairs({ 5, 1, wrap(0), 4, 2, 3 }) do heap:push(v) end
+local out = {}
+while heap:size() > 1 do out[#out + 1] = heap:pop() end
+print(table.concat(out, ","), issecretvalue(heap:peek()), issecretvalue(heap:pop()), heap:pop())
+local timers = c.Heap.new(StdTable.by(function(t: any) return t.at end))
+local a, b, x = { at = 3 }, { at = 1 }, { at = wrap(2) }
+timers:push(a)
+timers:push(x)
+timers:push(b)
+timers:push({ at = 2 })
+print(timers:remove(b), timers:remove(b), timers:remove(wrap(1)), timers:peek().at, timers:size())
+print(timers:pop().at, timers:pop().at, timers:pop() == x, timers:size())
+local cache = c.LruCache.new(2)
+cache:set("a", 1)
+cache:set("b", wrap(2))
+print(cache:get("a"), issecretvalue(cache:get("b")), cache:size())
+cache:set("c", 3)
+print(cache:has("a"), cache:has("b"), cache:get("c"), cache:size())
+cache:get("a")
+cache:set(wrap("d"), 4)
+print(cache:get(wrap("a")), cache:has(wrap("c")), cache:delete(wrap("c")), cache:size())
+cache:set("a", nil)
+print(cache:has("a"), cache:delete("c"), cache:delete("c"), cache:size())
+cache:set("e", 5)
+cache:clear()
+print(cache:size(), cache:get("e"))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "nil nil nil 1 3 true",
+            "2 4 nil 2,3,4",
+            "2,3,4 2 4 1",
+            "3 true 8 3",
+            "0 nil nil",
+            "1,2,3,4,5 true true nil",
+            "true false false 2 3",
+            "2 3 true 0",
+            "1 true 2",
+            "false true 3 2",
+            "nil false false 2",
+            "false true false 1",
+            "0 nil",
+        ]
+    );
+}
+
+/// `wowlua:utf8`: characters, not bytes; invalid bytes count as one
+/// character each; a secret passes `truncate` whole and reads as empty
+/// elsewhere.
+#[test]
+fn utf8_counts_characters() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as utf8 from \"wowlua:utf8\"\n_G.StdUtf8 = utf8\n",
+        )],
+        "",
+        r#"local wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local u = StdUtf8
+local name = "Jäger"
+local hangul = "\237\149\156\234\181\173\236\150\180"
+print(u.len(name), #name, u.len(hangul), u.len(""), u.len("a\255b\195"))
+print(u.sub(name, 2, 3), u.sub(name, -3), u.sub(name, 2), u.sub(name, 0, -4), u.sub(name, 4, 2), u.sub(name, 9), u.sub(hangul, 2, 2))
+print(u.truncate(name, 3), u.truncate(name, 5), u.truncate(name, 4, "..."), u.truncate("Ünterwäsche", 4, "…"), u.truncate(name, 2, "..."))
+local chars = {}
+for ch in u.chars("aä한\255") do chars[#chars + 1] = #ch end
+print(table.concat(chars, ","))
+local s = wrap("Jäger")
+print(issecretvalue(u.truncate(s, 2)), u.len(s), u.sub(s, 1, 2), u.chars(s)())
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "5 6 3 0 4",
+            "äg ger äger Jä   \u{ad6d}",
+            "Jäg Jäger J... Ünt… ..",
+            "1,2,3,1",
+            "true 0  nil",
+        ]
+    );
+}
+
+/// `wowlua:table`'s ordering, `wowlua:collections` and `wowlua:utf8` are
+/// typed for their users in a strict project, secrets included.
+#[test]
+fn ordering_collections_and_utf8_are_typed() {
+    let dir = project(&[(
+        "src/main.wowlua",
+        r#"--!strict
+import * as tbl from "wowlua:table"
+import RingBuffer, Heap, LruCache from "wowlua:collections"
+import * as utf8 from "wowlua:utf8"
+
+type Aura = { name: string, expirationTime: number | Secret<number> }
+const byExpiration = tbl.by(function(a: Aura) return a.expirationTime end)
+const auras: Aura[] = {}
+const sorted: Aura[] = tbl.sort(auras, byExpiration)
+const at: number = tbl.insertSorted(auras, { name = "x", expirationTime = 1 }, byExpiration)
+const found: number? = tbl.searchSorted({ 1, 2, 3 }, 2)
+const damage: RingBuffer<number | Secret<number>> = RingBuffer.new(30)
+damage:push(UnitHealth("player"))
+const last: (number | Secret<number>)? = damage:at(-1)
+const expiring: Heap<Aura> = Heap.new(byExpiration)
+expiring:push({ name = "y", expirationTime = 2 })
+const soonest: Aura? = expiring:peek()
+const items: LruCache<number, string> = LruCache.new(200)
+items:set(6948, "Hearthstone")
+const item: string? = items:get(6948)
+const shown: string | Secret<string> = utf8.truncate(UnitName("target"), 10)
+const n: number = utf8.len("Jäger")
+const initial: string = utf8.sub("Jäger", 1, 1)
+for ch in utf8.chars("abc") do
+    const c: string = ch
+    print(c)
+end
+print(sorted, at, found, last, soonest, item, shown, n, initial)
+"#,
+    )]);
+    let manifest = fs::read_to_string(dir.path().join("wowlua.json")).unwrap();
+    let manifest = manifest.replacen('{', "{ \"check\": { \"mode\": \"strict\" },", 1);
+    fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
+    let stderr = build(dir.path(), "dev");
+    assert!(
+        !stderr.contains("error") && !stderr.contains("warning"),
+        "{stderr}"
+    );
+}
+
 /// `wowlua:format`: the client's localized formats (the mock's are
 /// English), secret numbers stay secret.
 #[test]
@@ -4217,6 +5244,26 @@ print(type(format.date()))
             "string",
         ]
     );
+}
+
+/// `wowlua:format` with secrets: secret options count as unset, secret
+/// numbers give secret strings.
+#[test]
+fn format_with_secrets() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as format from \"wowlua:format\"\n_G.StdFormat = format\n",
+        )],
+        "",
+        r#"const wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local format = StdFormat
+print(format.duration(3725, { long = wrap(true), noSeconds = wrap(true), units = wrap(3) }), format.money(123456, { text = wrap(true), separate = wrap(true) }))
+print(issecretvalue(format.number(wrap(1234567))), issecretvalue(format.abbreviate(wrap(8500))))
+"#,
+    );
+    assert_eq!(plain(&out), ["1 Hr 2 Min 12g 34s 56c", "true true"]);
 }
 
 // ---------------------------------------------------------------- version --
@@ -4270,6 +5317,29 @@ version.onNewer(function(newest) print("late", newest) end)
             "late 9.0.0",
         ]
     );
+}
+
+/// A secret sender still tells of a newer version (handed on as it is), but
+/// is neither recorded among the peers nor answered.
+#[test]
+fn versions_from_secret_senders() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as version from \"wowlua:version\"\n_G.StdVersion = version\n",
+        )],
+        "Mock.group = \"party\"",
+        r#"Mock.loadAddon("Std")
+local version = StdVersion
+local hidden = (_G :: any).secretwrap("Friend-MockRealm")
+version.onNewer(function(newest, sender) print("newer", newest, issecretvalue(sender)) end)
+Mock.addonMessage("WowluaVersion", "\0011:Std:9.0.0", "PARTY", hidden)
+Mock.addonMessage("WowluaVersion", "\0011:Std:0.0.1", "PARTY", hidden)
+Mock.advance(1)
+print(version.newest(), next(version.peers()), #Mock.sent)
+"#,
+    );
+    assert_eq!(plain(&out), ["newer 9.0.0 true", "9.0.0 nil 0"], "{out:?}");
 }
 
 // ----------------------------------------------------------- alert, links --
@@ -4339,6 +5409,41 @@ print(pcall(links.link, "x", "a|b"))
             "second log:42",
             "second again",
             "false links.link: the data may not contain `|`",
+        ]
+    );
+}
+
+/// `wowlua:alert` and `wowlua:links` with secrets: a secret sound does not
+/// play, a secret text is shown unthrottled, secret options read as their
+/// defaults; a secret link text gives a secret link, secret data no link.
+#[test]
+fn alerts_and_links_take_secrets() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as alert from \"wowlua:alert\"\nimport * as links from \"wowlua:links\"\n_G.StdAlert = { alert = alert, links = links }\n",
+        )],
+        "",
+        r#"local wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local alert, links = StdAlert.alert, StdAlert.links
+print(alert.sound(wrap(8959)), alert.sound(8959, wrap("SFX")), alert.sound(wrap("Std Ping")))
+alert.warn(wrap("Bob pulled"), { flash = wrap(true), throttle = wrap(5) })
+alert.warn(wrap("Bob pulled"))
+alert.warn("Adds", { throttle = wrap(5) })
+alert.warn("Adds")
+print(#Mock.warnings, issecretvalue(Mock.warnings[1]), issecretvalue(Mock.warnings[2]), Mock.warnings[3], Mock.flashes)
+print(table.concat(Mock.sounds, " | "))
+print(issecretvalue(links.link(wrap("Bob"), "player:Bob")), links.link("Bob", wrap("player:Bob")))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "false true false",
+            "3 true true Adds (1.00 0.28 0.00) 0",
+            "kit 8959 Master",
+            "true |cff71d5ff[Bob]|r",
         ]
     );
 }
@@ -4668,6 +5773,37 @@ print(pcall(color.hex, "nope"))
     );
 }
 
+/// `wowlua:color` with colors the client derives from secrets (secret
+/// components, or a secret color): white hex, the client's escape, the
+/// nearer color when interpolating.
+#[test]
+fn colors_with_secret_components() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as color from \"wowlua:color\"\n_G.StdColor = color\n",
+        )],
+        "",
+        r#"const wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local color = StdColor
+local curve = CreateColor(wrap(1), wrap(0.5), 0, 1)
+local red = color.hex("ff0000")
+print(color.toHex(curve), color.toHex(curve, true))
+print(color.wrap("Hi", curve), color.wrap("Hi", wrap(red)), color.wrap("Hi", red))
+print(color.lerp(curve, red, 0.25) == curve, color.lerp(red, curve, 0.75) == curve)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "ffffff ffffffff",
+            "|cff000000Hi|r Hi |cffff0000Hi|r",
+            "true true",
+        ]
+    );
+}
+
 // --------------------------------------------------------------- settings --
 
 #[test]
@@ -4788,6 +5924,60 @@ print("opened", #Mock.settings.opened)
             "opened 2",
         ],
         "{out:?}"
+    );
+}
+
+/// `wowlua:settings` with secrets: a secret store value reads as the
+/// control's default; a color's secret components read as 1, and a color
+/// that cannot be read is replaced when the player picks one.
+#[test]
+fn settings_read_secret_store_values_as_defaults() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as settings from "wowlua:settings"
+import * as saved from "wowlua:saved"
+
+interface Options
+    showMinimap: boolean
+    tint: { r: number, g: number, b: number, a: number? }
+end
+
+local db = saved.bind("StdDB", {
+    version = 1,
+    defaults = { showMinimap = true, tint = { r = 1, g = 0, b = 0 } } :: Options,
+})
+settings.register({
+    title = "Std",
+    store = db,
+    controls = { settings.checkbox("showMinimap", { label = "Minimap" }), settings.color("tint", { label = "Tint" }) },
+})
+_G.StdSettings = { db = db }
+"#,
+        )],
+        "",
+        r#"local wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+local db = StdSettings.db
+local vars = Mock.settings.variables
+db.showMinimap = wrap(false)
+print("checkbox", vars.WOWLUA_STD_showMinimap:GetValue())
+db.tint = { r = wrap(0), g = 0, b = 0 }
+print("tint", vars.WOWLUA_STD_tint:GetValue())
+db.tint = wrap({})
+print("tint", vars.WOWLUA_STD_tint:GetValue())
+vars.WOWLUA_STD_tint:SetValue("ff00ff00")
+print("tint now", issecretvalue(db.tint), db.tint.r, db.tint.g)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "checkbox true",
+            "tint ffff0000",
+            "tint ffffffff",
+            "tint now false 0 1",
+        ]
     );
 }
 
@@ -4914,6 +6104,58 @@ StdLauncher.launcher.refresh()
             "dbicon hide Std"
         ],
         "{out:?}"
+    );
+}
+
+/// `wowlua:launcher` with secrets: secret icons, labels and texts are not
+/// published (the previous value stays), a secret `showMinimap` changes
+/// nothing, and a stored position or visibility that is secret reads as
+/// the default.
+#[test]
+fn launcher_ignores_secret_values() {
+    let out = modes(
+        &[("src/main.wowlua", LAUNCHER_MAIN)],
+        r#"local objects = {}
+local ldb = { NewDataObject = function(_, name, obj) objects[name] = obj; return obj end }
+function LibStub(name, silent)
+    return ({ ["LibDataBroker-1.1"] = ldb })[name]
+end
+Mock.ldb = { objects = objects }"#,
+        r#"local wrap: (v: any) -> any = (_G :: any).secretwrap
+Mock.loadAddon("Std")
+Mock.fire("PLAYER_LOGIN")
+local l = StdLauncher.launcher
+local b = StdMinimapButton
+local entry = AddonCompartmentFrame.registeredAddons[1]
+l.setIcon(wrap("icon-x"))
+l.setLabel(wrap("Bob"))
+l.showMinimap(wrap(false))
+print(b.icon:GetTexture(), entry.text, entry.icon, Mock.ldb.objects.Std.label, b:IsShown(), StdLauncher.db.minimap.hide)
+StdLauncher.db.minimap.minimapPos = wrap(90)
+StdLauncher.db.minimap.hide = wrap(true)
+l.refresh()
+local _, _, _, x, y = b:GetPoint()
+print(math.floor(x + 0.5), math.floor(y + 0.5), b:IsShown())
+local source = l.dataSource("Std Target", { text = wrap("Bob"), label = wrap("Target"), icon = wrap("icon-t") })
+local o = Mock.ldb.objects["Std Target"]
+print(#o.text, o.label, o.icon)
+source:setText(wrap("Cleo"))
+source:setLabel(wrap("Focus"))
+source:setIcon(wrap("icon-f"))
+print(#o.text, o.label, o.icon)
+source:setText("Dan")
+print(o.text)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "icon-1 Std icon-1 Std true false",
+            "-57 -57 true",
+            "0 Std Target nil",
+            "0 Std Target nil",
+            "Dan",
+        ]
     );
 }
 
@@ -5081,7 +6323,7 @@ local cyclic: any = {}
 cyclic.self = cyclic
 C(not pcall(serialize.encode, cyclic), "a cycle")
 C(not pcall(serialize.encode, { f = print }), "a function")
-C(not pcall(serialize.encode, Mock.secret()), "a secret value")
+C(serialize.encode(Mock.secret()) == serialize.encode(nil), "a secret value: nil")
 local deep: any = {}
 local node = deep
 for _ = 1, 150 do node.child = {}; node = node.child end
@@ -5136,6 +6378,46 @@ print("garbage", serialize.importString("hello"))
         "{out:?}"
     );
     assert_eq!(out[2], "garbage false not an export string", "{out:?}");
+}
+
+/// Secrets, and tables addons may not index, cannot be read: they encode
+/// as nil (a table leaves the key out); a secret string decodes to false.
+#[test]
+fn serialize_skips_secrets() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as serialize from "wowlua:serialize"
+const secretwrap = (_G :: any).secretwrap
+const locked = (_G :: any).StdLocked
+local ok, back = serialize.decode(serialize.encode({
+    1, secretwrap(2), 3, name = secretwrap("Name"), flag = secretwrap(true), t = Mock.secret(), locked = locked, keep = "k",
+}))
+print(ok, back[1], back[2], back[3], back.name, back.flag, back.t, back.locked, back.keep)
+print(serialize.encode({ a = 1, s = secretwrap(1) }) == serialize.encode({ a = 1 }))
+print(serialize.decode(serialize.encode(secretwrap(5))))
+print(serialize.decode(secretwrap("x")))
+print(serialize.importString(secretwrap("x")))
+print(serialize.fromPrintable(secretwrap("x")))
+local okExport, value = serialize.importString(serialize.exportString({ secretwrap(1), 2 }, { version = 1 }))
+print(okExport, value[1], value[2])
+"#,
+        )],
+        "(_G :: any).StdLocked = { 1 }\n(_G :: any).settablesecurity((_G :: any).StdLocked, 0)",
+        "",
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "true 1 nil 3 nil nil nil nil k",
+            "true",
+            "true nil",
+            "false a secret string cannot be read",
+            "false a secret string cannot be read",
+            "nil",
+            "true nil 2",
+        ]
+    );
 }
 
 // ------------------------------------------------------------------- comm --
@@ -5288,4 +6570,107 @@ print(table.concat(S.got, " | "))
         ],
         "{out:?}"
     );
+}
+
+/// Secrets: a secret message or target is dropped unsent; a secret prefix
+/// or text is ignored on receipt; a secret sender is handed on, for
+/// single-chunk messages only; a secret lockdown answer counts as locked.
+#[test]
+fn comm_secret_values() {
+    let out = modes(
+        &[("src/main.wowlua", COMM_MAIN)],
+        r#"Mock.group = "party""#,
+        r#"local S = StdComm
+local secretwrap = (_G :: any).secretwrap
+print(S.ch:send(secretwrap("hello"), "PARTY"), S.ch:send("hi", "WHISPER", secretwrap("Other-MockRealm")), #Mock.sent)
+local hidden = secretwrap("Hidden-MockRealm")
+Mock.addonMessage(secretwrap("StdComm"), "\001lost", "PARTY", "Other-MockRealm")
+Mock.addonMessage("StdComm", secretwrap("\001lost"), "PARTY", "Other-MockRealm")
+Mock.addonMessage("StdComm", "\001whole", "PARTY", hidden)
+Mock.addonMessage("StdComm", "\002first", "PARTY", hidden)
+Mock.addonMessage("StdComm", "\004last", "PARTY", hidden)
+Mock.addonMessage("StdAce", "\004whole", "PARTY", hidden)
+Mock.addonMessage("StdAce", "\001first", "PARTY", hidden)
+Mock.addonMessage("StdAce", "\003last", "PARTY", hidden)
+print(#S.got, issecretvalue(S.got[1]), issecretvalue(S.got[2]), StdLast)
+Mock.lockdown = secretwrap(false)
+print(S.comm.inLockdown(), S.ch:send("later", "PARTY"))
+Mock.lockdown = false
+Mock.advance(2)
+print(#Mock.sent, StdLast)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "dropped dropped 0",
+            "2 true true whole",
+            "true queued",
+            "1 whole"
+        ],
+        "{out:?}"
+    );
+}
+
+// ---------------------------------------------------- debug, log, reflect --
+
+/// Secrets are logged as `<secret>`; reflection finds no class, metadata or
+/// enum member for one.
+#[test]
+fn log_and_reflect_secrets() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as reflect from "wowlua:reflect"
+import * as log from "wowlua:log"
+const secretwrap = (_G :: any).secretwrap
+
+@reflect
+class Dog
+end
+enum Direction { Up = 1, Down = 2 }
+
+local s = Mock.secret()
+log.warn("value", secretwrap(5), secretwrap(true), s)
+print(reflect.isInstance(s, Dog), reflect.classOf(s), reflect.className(s), reflect.superclass(s), reflect.isSubclass(s, Dog), reflect.isSubclass(Dog, s))
+print(reflect.enumName(Direction, secretwrap(2)), reflect.enumFrom(Direction, secretwrap(2)), #reflect.enumEntries(s), reflect.enumName(Direction, 2))
+print(reflect.fields(s), reflect.decorators(s), reflect.functionInfo(secretwrap(print)), reflect.fields(Dog) ~= nil)
+"#,
+        )],
+        "",
+        "",
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "|cff33ff99Std|r |cffffb23f[warn]|r value <secret> <secret> <secret>",
+            "false nil nil nil false false",
+            "nil nil 0 Down",
+            "nil nil nil true",
+        ]
+    );
+}
+
+/// `dump` shows secrets as `<secret>`, in tables too; `assert` cannot test
+/// a secret condition, so it passes.
+#[test]
+fn debug_dump_and_assert_secrets() {
+    let dir = project(&[(
+        "src/main.wowlua",
+        r#"import * as debug from "wowlua:debug"
+const secretwrap = (_G :: any).secretwrap
+debug.dump(secretwrap(5), { a = secretwrap("x") })
+debug.assert(secretwrap(false), "a secret condition")
+print("asserted")
+"#,
+    )]);
+    build(dir.path(), "dev");
+    let out = plain(&run(dir.path(), "dev", "", ""));
+    assert_eq!(out.len(), 3, "{out:?}");
+    assert!(out[0].ends_with(" secretwrap(5) = <secret>"), "{out:?}");
+    assert!(
+        out[1].ends_with(" { a = secretwrap(\"x\") } = { a = <secret> }"),
+        "{out:?}"
+    );
+    assert_eq!(out[2], "asserted", "{out:?}");
 }

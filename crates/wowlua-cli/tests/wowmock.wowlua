@@ -567,7 +567,11 @@ UnitGUID = (function(unit: string): any
     return mockUnit(unit)?.guid ?? `GUID-{unit}`
 end) :: any
 
-UnitTokenFromGUID = (function(guid: string): string?
+UnitTokenFromGUID = (function(guid: any): any
+    -- A secret GUID: the unit's identity is restricted, its token secret.
+    if issecretvalue(guid) then
+        return (secretwrap :: any)("target")
+    end
     return guid:match("^GUID%-(.+)$")
 end) :: any
 
@@ -935,7 +939,9 @@ const AURA_CONTAINER: { [string]: any } = {
     SetAuraGroupCandidateFilters = function(self: any, key: string, filters: table)
         auraGroup(self, key).options.candidateFilters = filters
     end,
-    -- The engine reads auras itself: restricted reads do not stop it.
+    -- The engine reads auras itself: restricted reads do not stop it. (The
+    -- mock's secret spell IDs hide no number, so they match no spell list;
+    -- and the mock runs with the addon's taint, so it must not read them.)
     UpdateAllAuras = function(self: any)
         for _, g in ipairs(self.groups) do
             const ids: number[] = {}
@@ -944,7 +950,8 @@ const AURA_CONTAINER: { [string]: any } = {
                 const spells = filters.includeSpellIDs
                 const types = filters.includeDispelTypes
                 if auraMatches(a, g.filter) and #ids < (g.options.maxFrameCount ?? 16)
-                    and (not spells or spells[a.spellId]) and (not types or types[a.dispelName ?? ""]) then
+                    and (not spells or (not issecretvalue(a.spellId) and spells[a.spellId]))
+                    and (not types or types[a.dispelName ?? ""]) then
                     ids[#ids + 1] = a.spellId
                     if not g.buttons[#ids] then
                         const button = mixin(CreateFrame("Frame", nil, self), AURA_BUTTON)
@@ -1392,7 +1399,11 @@ end
 function GetMoneyString(copper: number, _: boolean?): string
     return `{math.floor(copper / 10000)}g {math.floor(copper / 100) % 100}s {copper % 100}c`
 end
-BreakUpLargeNumbers = (function(n: number): string
+BreakUpLargeNumbers = (function(n: any): any
+    -- The client's takes secrets: a secret string back.
+    if issecretvalue(n) then
+        return tostring(n)
+    end
     local text = tostring(math.floor(n))
     local k = 0
     repeat

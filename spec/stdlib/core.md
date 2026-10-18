@@ -89,6 +89,8 @@ end
   isolated, so an error is reported through `geterrorhandler()` and the
   remaining handlers still run (see the error policy in
   [`wowlua:errors`](infrastructure.md#errors)).
+- **Secret values.** Payloads are passed on unchanged, secrets included; the
+  module reads none of them except a bucket's first argument (below).
 - **Changes during dispatch.** Registering or unregistering inside a handler
   takes effect after the current dispatch.
 - **Static methods.** `@event` on a static class method registers at class
@@ -230,6 +232,7 @@ end
 | Calling `run` | Positional values in order, then the flags table **last** if `flags` is declared. The compiler checks `run`'s parameter types against `args` and `flags` (intrinsic check, E8112 for a mismatch or an invalid `ArgSpec`). |
 | Errors | A conversion or arity error prints `Usage: /<cmd> <command> <args>` for that command and returns `true`. |
 | Help | `help` and an empty message print one line per command, sorted by name: `/<cmd> <command> <args> - <help>`. Output goes through `print` from `wowlua:log`. An unknown command prints the help and `dispatch` returns `false`. |
+| Secrets | Slash input is never secret. A secret `msg` (chat text handed to `dispatch`) cannot be read: nothing runs, nothing is printed, and `dispatch` returns `false`. |
 
 ## saved
 
@@ -332,7 +335,9 @@ end
   defaults are removed **recursively**: scalars are compared with `==`, nested
   tables are stripped key by key, and tables that end up empty and have a table
   default are removed. Values for which `issecretvalue(v)` is true are dropped
-  (they cannot be saved) and reported once in debug builds.
+  (they cannot be saved) and reported once in debug builds. Tables addons may
+  not index (`canaccesstable`) are kept unstripped; profile copies and lazy
+  defaults carry secrets and such tables as they are.
 - `stripDefaults = false` keeps every value.
 
 ### Migrations
@@ -396,6 +401,7 @@ local function saveSearch(text: string) … end
 | `@debounce(sec)` | Runs `sec` seconds after the last call, with the latest arguments. |
 
 Decorated methods keep **per-instance state** in a weak-keyed table indexed by
-`self`, so each object has its own throttle. Functions decorated with
+`self`, so each object has its own throttle. Arguments are only stored and
+passed on, so secrets reach the call unchanged. Functions decorated with
 `@throttle`, `@debounce` or `@nextFrame` must return nothing (E8030), because
 calls may be deferred.

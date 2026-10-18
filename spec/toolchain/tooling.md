@@ -95,7 +95,7 @@ test, unless the test read it with `mock.errors()`. The addon's
 | `@flavors("standard", …)` | Run only for these flavors |
 | `config({ lifecycle: "auto" \| "manual", timeout?, profile? })` | Per-file runner settings (`profile`: the world profile, read before anything loads) |
 | `describe(name, fn)` | Grouping for runtime-generated tests (`test(name)(fn)` inside `fn`) |
-| `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`, `toMatchSnapshot`; for widgets `toBeShown`, `toBeVisible`, `toHaveText`, `toHaveSize`, `toBeAnchoredTo`. Negation with `expect(v).never.toBe(x)`. Type-checked (below). |
+| `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`, `toMatchSnapshot`, `toBeSecret`; for widgets `toBeShown`, `toBeVisible`, `toHaveText`, `toHaveSize`, `toBeAnchoredTo`. Negation with `expect(v).never.toBe(x)`. Type-checked (below). |
 | `@cases(list)` | Runs a test once per case, the case's values as its arguments (below) |
 | `@expectError(code, …)` | A compile-time test: the function must not compile, with these diagnostics (below) |
 | `matcher(name, fn)` | Defines a typed matcher (below) |
@@ -110,6 +110,20 @@ function). A spy keeps the type of the function it spies on, so
 `toHaveBeenCalledWith(...)` checks its arguments against that function's
 parameters. Matchers are called with a dot: `expect` returns a table of
 them.
+
+**Secret values.** Tests run tainted, like the addon, so `wowlua:test`
+never reads a secret: messages, test names and snapshots show one as
+`<secret>` (a table addons may not index as `<inaccessible table>`), and
+`toBeSecret()` asserts one (`issecretvalue`). A matcher whose answer needs
+a secret's value (or such a table's contents) fails, negated or not,
+saying so: `toBe`, `toEqual`,
+`toContain`, `toHaveBeenCalledWith` and `toHaveText` tell a secret from a
+value of another type (a secret number is not `"x"`) and otherwise
+cannot; `toBeTruthy` and `toBeFalsy` take a secret that is not a boolean;
+`toBeNil`, `toBeSecret` and `toMatchSnapshot` take any; the other
+matchers fail on a secret value or argument. Custom matchers get secrets
+as they are (an answer that is secret fails). A `@cases` case may be or
+hold secrets, and a test that raises a secret fails saying so.
 
 **Parametrized tests** (decision T215). `@cases` gives a test its cases;
 each runs and is reported on its own, named after the test and the case's
@@ -300,7 +314,10 @@ distributed with wowlua), and `wowlua test --game-data` loads it. Off by
 default, so tests in CI run with test data only.
 
 **Secret values.** `mock.secret(v)` makes a secret; the restrictions above
-make the API return secrets where the client does.
+make the API return secrets where the client does. Spies record secret
+arguments as they are, and `mock.waitFor` returns a secret payload as it
+is; a `waitUntil` condition or `waitFor` predicate that gives a secret
+boolean fails the test (§16.1.3).
 
 Mocking (decision T187):
 

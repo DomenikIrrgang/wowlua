@@ -126,9 +126,10 @@ function wl.abstract(cls, name)
 		error("abstract method " .. tostring(cls.__name) .. ":" .. tostring(name) .. " is not implemented", 2)
 	end)
 end
--- The class of a value (widget instances carry `__class`).
+-- The class of a value (widget instances carry `__class`); none for a
+-- secret or a table the addon may not index (reading it would error).
 local function classOf(v)
-	if type(v) ~= "table" then
+	if type(v) ~= "table" or issecretvalue and issecretvalue(v) or canaccesstable and not (canaccesstable)(v) then
 		return nil
 	end
 	local c = rawget(v, "__class")

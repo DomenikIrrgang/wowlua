@@ -1240,6 +1240,165 @@ end
     assert!(out.contains("2 passed, 1 failed"), "{out}");
 }
 
+/// Secret values in tests (spec Tooling §16.1.3): tests run tainted, so
+/// the framework never reads a secret. What needs no value passes or fails
+/// as it should; secrets show as `<secret>` in names, messages and
+/// snapshots.
+#[test]
+fn secret_values_in_matchers_spies_snapshots_and_waits() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[(
+            "tests/secret.test.wowlua",
+            r#"import test, expect, cases, describe from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local n: any = mock.secret(5)
+local s: any = mock.secret("Hogger")
+
+@test("matchers that need no value")
+local function noValue()
+    expect(n).toBeSecret()
+    expect(5).never.toBeSecret()
+    expect(n).never.toBeNil()
+    expect(s).toBeTruthy()
+    expect(n).never.toBe("x")
+    expect({ hp = n }).never.toEqual({ hp = "x" })
+    expect({ n, 1 }).toContain(1)
+    expect(function() error(s) end).toThrow()
+end
+
+@test("spies record secrets")
+local function spies()
+    local spy = mock.spy()
+    spy(n, 1)
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).never.toHaveBeenCalledWith(n, 2)
+end
+
+@test("snapshots")
+local function snapshots()
+    local f = CreateFrame("Frame", "SecretFrame", UIParent)
+    f:SetSize(10, 10)
+    local label = f:CreateFontString(nil, "OVERLAY")
+    label:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+    label:SetText(s)
+    -- A table whose security keeps addons out is not looked into either.
+    local guarded = { 1 }
+    local client: any = _G
+    client.settablesecurity(guarded, 0)
+    expect({ hp = n, frame = f, guarded = guarded }).toMatchSnapshot()
+end
+
+@test("waits")
+local function waits()
+    C_Timer.After(0.1, function() mock.fireEvent("UNIT_HEALTH", mock.secret("target")) end)
+    expect(mock.waitFor("UNIT_HEALTH")).toBeSecret()
+    expect(mock.waitUntil(function() return s end)).toBeSecret()
+end
+
+@test("cases")
+@cases({ { mock.secret(1), 1 }, mock.secret({ 2 }) })
+local function secretCases(a: any, b: any)
+    expect(a).toBeSecret()
+end
+
+describe(s, function()
+    test("inside")(function() expect(1).toBe(1) end)
+end)
+"#,
+        )],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    for line in [
+        "✓ matchers that need no value",
+        "✓ spies record secrets",
+        "✓ cases [<secret>, 1]",
+        "✓ cases <secret>",
+        "✓ <secret> › inside",
+        "7 passed, 0 failed",
+    ] {
+        assert!(out.contains(line), "missing {line:?} in:\n{out}");
+    }
+    let snap = fs::read_to_string(
+        dir.path()
+            .join("tests/__snapshots__/secret.test.wowlua.snap"),
+    )
+    .unwrap();
+    for line in [
+        "|   hp = <secret>,",
+        "|     text <secret>",
+        "|   guarded = <inaccessible table>,",
+    ] {
+        assert!(snap.contains(line), "missing {line:?} in:\n{snap}");
+    }
+    // What needs a secret's value fails, negated or not, and says so.
+    fs::write(
+        dir.path().join("tests/secret.test.wowlua"),
+        r#"import test, expect, matcher from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local n: any = mock.secret(5)
+local s: any = mock.secret("Hogger")
+local b: any = mock.secret(true)
+
+const toBeFive = matcher("toBeFive", function(v: any): (boolean, string) return v, "not five" end)
+
+@test local function toBe() expect(n).toBe(5) end
+@test local function notToBe() expect(n).never.toBe(5) end
+@test local function truthy() expect(b).toBeTruthy() end
+@test local function equal() expect({ hp = n }).toEqual({ hp = 5 }) end
+@test local function contain() expect(s).toContain("Hog") end
+@test local function length() expect({ 1 }).toHaveLength(n) end
+@test local function called()
+    local spy = mock.spy()
+    spy(n)
+    expect(spy).toHaveBeenCalledWith(5)
+end
+@test local function text()
+    local label = UIParent:CreateFontString(nil, "OVERLAY")
+    label:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+    label:SetText(s)
+    expect(label).toHaveText("Hogger")
+end
+@test local function raised() error(s) end
+@test local function throws() expect(function() error(s) end).toThrow("Hog") end
+@test local function custom() expect(b).toBeFive() end
+@test local function waitsUntil() mock.waitUntil(function() return b end) end
+@test local function waitsFor()
+    C_Timer.After(0.1, function() mock.player:setMoney(5) end)
+    mock.waitFor("PLAYER_MONEY", function() return b end)
+end
+"#,
+    )
+    .unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("0 passed, 13 failed"), "{out}");
+    let tell = ": cannot tell with a secret value (tests run tainted, like the addon)";
+    for line in [
+        format!("expected <secret> to be 5{tell}"),
+        format!("expected <secret> not to be 5{tell}"),
+        format!("expected <secret> to be truthy{tell}"),
+        format!("expected {{ hp = <secret> }} to equal {{ hp = 5 }}{tell}"),
+        "toContain: received a secret value, which it cannot read".into(),
+        "toHaveLength: an argument is a secret value, which it cannot read".into(),
+        format!("expected a call with (5); its calls: (<secret>){tell}"),
+        format!("expected the text \"Hogger\", got <secret>{tell}"),
+        "the test raised a secret value as its error".into(),
+        format!("expected an error containing \"Hog\"; it raised <secret>{tell}"),
+        "the matcher toBeFive answered with a secret value".into(),
+        "mock.waitUntil: the condition is a secret boolean".into(),
+        "mock.waitFor: the predicate for PLAYER_MONEY returned a secret boolean".into(),
+        "at tests/secret.test.wowlua:10".into(),
+    ] {
+        assert!(out.contains(&line), "missing {line:?} in:\n{out}");
+    }
+    // The framework itself never errors on a secret.
+    assert!(!out.contains("attempt to"), "{out}");
+}
+
 /// Casting, modifier keys, load-on-demand addons and libraries.
 #[test]
 fn casting_modifiers_addons_libraries() {

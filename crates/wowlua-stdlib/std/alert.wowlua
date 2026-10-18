@@ -1,8 +1,10 @@
 -- wowlua:alert (spec stdlib "alert"): getting the player's attention:
 -- sounds (sound kits, files or wowlua:media names), raid-warning text,
 -- flashing the client's taskbar icon, or all at once with `warn`. Repeated
--- identical alerts within `throttle` seconds play once.
+-- identical alerts within `throttle` seconds play once. A secret text is
+-- shown but not throttled (it cannot be a key); a secret sound does not play.
 import * as media from "wowlua:media"
+import * as secret from "wowlua:secret"
 import type Color from "wowlua:color"
 
 --- The channel a sound plays on.
@@ -24,7 +26,11 @@ export type WarnOptions = {
 
 --- Plays a sound; returns whether it plays.
 export function sound(ref: SoundRef, channel: SoundChannel?): boolean
-    const on = channel ?? "Master"
+    -- The client refuses secret sounds and channels.
+    if secret.isSecret(ref) then
+        return false
+    end
+    const on = secret.known(channel, "Master")
     if type(ref) == "number" and ref < 1000000 then
         -- Sound kits have small IDs; file IDs are large.
         local willPlay = PlaySound(ref, on)
@@ -46,7 +52,7 @@ end
 local lastShown: { [string]: number } = {}
 
 --- Raid-warning text in the middle of the screen.
-export function raidWarning(text: string, color: Color?)
+export function raidWarning(text: string | Secret<string>, color: Color?)
     local r, g, b = 1, 0.28, 0
     if color then
         r, g, b = color:GetRGB()
@@ -56,17 +62,19 @@ end
 
 --- Raid-warning text with an optional sound and flash, once per
 --- `throttle` seconds per text.
-export function warn(text: string, opts: WarnOptions?)
-    const now = GetTime()
-    if now - (lastShown[text] ?? -math.huge) < (opts?.throttle ?? 1) then
-        return
+export function warn(text: string | Secret<string>, opts: WarnOptions?)
+    if not secret.isSecret(text) then
+        const now = GetTime()
+        if now - (lastShown[text] ?? -math.huge) < secret.known(opts?.throttle, 1) then
+            return
+        end
+        lastShown[text] = now
     end
-    lastShown[text] = now
     raidWarning(text, opts?.color)
     if opts?.sound then
         sound(opts.sound, opts.channel)
     end
-    if opts?.flash then
+    if secret.flag(opts?.flash) then
         flash()
     end
 end

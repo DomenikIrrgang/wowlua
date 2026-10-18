@@ -7,6 +7,7 @@ import callIn from "wowlua:errors"
 import type Subscription from "wowlua:events"
 import * as color from "wowlua:color"
 import type Color from "wowlua:color"
+import * as secret from "wowlua:secret"
 
 local addonName = ...
 
@@ -15,16 +16,21 @@ const PREFIX = `addon:{addonName}:`
 const LINK_COLOR = "ff71d5ff"
 
 --- A clickable link showing `[text]`; `data` comes back to `onClick`
---- (it may not contain `|`).
-export function link(text: string, data: string, linkColor: Color?): string
-    if data:find("|", 1, true) then
-        error("links.link: the data may not contain `|`", 2)
-    end
+--- (it may not contain `|`). A secret text gives a secret link (the result
+--- is secret exactly when `text` is); secret data cannot be checked, so it
+--- gives `[text]` without a link.
+export function link<S extends string | Secret<string>>(text: S, data: string | Secret<string>, linkColor: Color?): S
     local hex = LINK_COLOR
     if linkColor then
         hex = color.toHex(linkColor, true)
     end
-    return `|c{hex}|H{PREFIX}{data}|h[{text}]|h|r`
+    if secret.isSecret(data) then
+        return `|c{hex}[{text}]|r` :: any
+    end
+    if data:find("|", 1, true) then
+        error("links.link: the data may not contain `|`", 2)
+    end
+    return `|c{hex}|H{PREFIX}{data}|h[{text}]|h|r` :: any
 end
 
 class Handler implements Subscription

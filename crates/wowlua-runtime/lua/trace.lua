@@ -9,6 +9,9 @@ local function show(v)
 	if t == "string" then
 		return string.format("%q", #v > 40 and v:sub(1, 40) .. "..." or v)
 	elseif t == "table" then
+		if canaccesstable and not (canaccesstable)(v) then
+			return "table(?)"
+		end
 		local n = 0
 		for _ in pairs(v) do
 			n = n + 1

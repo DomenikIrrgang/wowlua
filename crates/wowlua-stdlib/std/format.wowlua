@@ -13,9 +13,10 @@ export type DurationOptions = {
     units?: number,
 }
 
---- "1 Hr 5 Min" (the client's words and abbreviations).
+--- "1 Hr 5 Min" (the client's words and abbreviations; secret options
+--- count as unset).
 export function duration(seconds: number, opts: DurationOptions?): string
-    return SecondsToTime(math.max(0, seconds), opts?.noSeconds, opts?.long, opts?.units ?? 2)
+    return SecondsToTime(math.max(0, seconds), secret.flag(opts?.noSeconds), secret.flag(opts?.long), secret.known(opts?.units, 2))
 end
 
 --- The single largest unit, the way the client shows aura and cooldown
@@ -38,10 +39,11 @@ export function date(at: number?): string
 end
 
 --- Money from copper: with coin icons ("12[g] 5[s] 3[c]"), or with `text`
---- the client's words ("12 Gold 5 Silver 3 Copper").
+--- the client's words ("12 Gold 5 Silver 3 Copper"); secret options count
+--- as unset.
 export function money(copper: number, opts: { text?: boolean, separate?: boolean }?): string
-    if not opts?.text then
-        return GetMoneyString(copper, opts?.separate)
+    if not secret.flag(opts?.text) then
+        return GetMoneyString(copper, secret.flag(opts?.separate))
     end
     const gold = math.floor(copper / (COPPER_PER_SILVER * SILVER_PER_GOLD))
     const silver = math.floor(copper / COPPER_PER_SILVER) % SILVER_PER_GOLD

@@ -1,0 +1,131 @@
+-- wowlua:utf8 (spec stdlib "utf8"): characters, not bytes. WoW's Lua 5.1
+-- has no utf8 library, and `string.sub` cuts names with umlauts, Cyrillic or
+-- Hangul in the middle of a character. A byte that starts no valid sequence
+-- counts as one character, so any string works. A secret string cannot be
+-- read: `truncate` passes it through whole (widgets show it as it is), the
+-- other functions read it as empty.
+import * as secret from "wowlua:secret"
+
+-- The byte after the character that starts at byte `i` of `s` (`n` bytes).
+local function step(s: string, i: number, n: number): number
+    const b = string.byte(s, i) ?? 0
+    local width = 1
+    if b >= 0xC2 and b <= 0xDF then
+        width = 2
+    elseif b >= 0xE0 and b <= 0xEF then
+        width = 3
+    elseif b >= 0xF0 and b <= 0xF4 then
+        width = 4
+    end
+    if i + width - 1 > n then
+        return i + 1
+    end
+    for j = i + 1, i + width - 1 do
+        const c = string.byte(s, j) ?? 0
+        if c < 0x80 or c > 0xBF then
+            return i + 1
+        end
+    end
+    return i + width
+end
+
+-- `s`, or "" for a secret.
+local function text(s: unknown): string
+    if type(s) ~= "string" or secret.isSecret(s) then
+        return ""
+    end
+    return s :: string
+end
+
+--- How many characters `s` has (0 for a secret).
+export function len(s: string): number
+    const t = text(s)
+    const n = #t
+    local count, i = 0, 1
+    while i <= n do
+        i = step(t, i, n)
+        count += 1
+    end
+    return count
+end
+
+-- The byte where character `c` (1-based) of `t` starts, or `n + 1`.
+local function offset(t: string, c: number, n: number): number
+    local i = 1
+    for _ = 2, c do
+        if i > n then
+            break
+        end
+        i = step(t, i, n)
+    end
+    return i
+end
+
+--- Characters `i` to `j` of `s` (default: to the end), counted like
+--- `string.sub`: negative positions from the end. "" for a secret.
+export function sub(s: string, i: number, j: number?): string
+    const t = text(s)
+    const n = #t
+    local first, last = i, j ?? -1
+    if first < 0 or last < 0 then
+        const count = len(t)
+        if first < 0 then
+            first = count + first + 1
+        end
+        if last < 0 then
+            last = count + last + 1
+        end
+    end
+    if first < 1 then
+        first = 1
+    end
+    if last < first then
+        return ""
+    end
+    const from = offset(t, first, n)
+    if from > n then
+        return ""
+    end
+    -- The end of character `last`: the start of the next one.
+    local to = from
+    for _ = first, last do
+        if to > n then
+            break
+        end
+        to = step(t, to, n)
+    end
+    return string.sub(t, from, to - 1)
+end
+
+--- `s` cut to at most `max` characters, `ellipsis` (default none)
+--- included when it is cut. A secret is returned whole: show it in a
+--- FontString that cuts it (`SetWidth`, `SetWordWrap(false)`).
+export function truncate(s: string | Secret<string>, max: number, ellipsis: string?): string | Secret<string>
+    if secret.isSecret(s) then
+        return s
+    end
+    if len(s) <= max then
+        return s
+    end
+    const tail = ellipsis ?? ""
+    const keep = max - len(tail)
+    if keep <= 0 then
+        return sub(tail, 1, max)
+    end
+    return sub(s, 1, keep) .. tail
+end
+
+--- An iterator over the characters of `s` (none for a secret).
+export function chars(s: string): () -> string?
+    const t = text(s)
+    const n = #t
+    local i = 1
+    return function(): string?
+        if i > n then
+            return nil
+        end
+        const from = i
+        i = step(t, i, n)
+        return string.sub(t, from, i - 1)
+    end
+end

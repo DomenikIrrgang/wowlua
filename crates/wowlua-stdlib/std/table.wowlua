@@ -1,12 +1,14 @@
 -- wowlua:table (spec stdlib "table"): the table helpers addons keep
 -- rewriting: deep copies, merging defaults, deep equality, keys and values,
--- and list helpers. Secret values are copied as they are and never equal
--- anything (comparing them would error).
+-- list helpers, and a stable sort with sorted-list helpers. Values the
+-- addon may not read (secrets, tables whose security keeps addons out) are
+-- copied as they are, never equal anything, and sort after everything
+-- else: nothing here compares, indexes or walks them (that would error).
 import * as secret from "wowlua:secret"
 
 -- A deep copy that keeps shared and cyclic references shared.
 local function deep(v: any, seen: { [table]: table }): any
-    if type(v) ~= "table" or secret.isSecret(v) then
+    if type(v) ~= "table" or not secret.readable(v) then
         return v
     end
     const known = seen[v]
@@ -21,6 +23,11 @@ local function deep(v: any, seen: { [table]: table }): any
     return out
 end
 
+-- A table the addon may walk.
+local function walkable(v: unknown): boolean
+    return type(v) == "table" and secret.readable(v)
+end
+
 --- A deep copy (nested tables copied, cycles kept, metatables dropped).
 export function copy<T>(t: T): T
     return deep(t, {})
@@ -28,6 +35,9 @@ end
 
 --- A copy of the top level only.
 export function shallowCopy<T extends table>(t: T): T
+    if not secret.readable(t) then
+        return t
+    end
     const out: table = {}
     for k, v in pairs(t) do
         out[k] = v
@@ -38,11 +48,14 @@ end
 --- Copies `source` into `target` (nested tables merged, other values
 --- replaced); returns `target`.
 export function merge<T extends table>(target: T, source: table): T
+    if not walkable(target) or not walkable(source) then
+        return target
+    end
     const into: table = target
     for k, v in pairs(source) do
-        if type(v) == "table" and type(into[k]) == "table" then
+        if walkable(v) and walkable(into[k]) then
             merge(into[k], v)
-        elseif type(v) == "table" then
+        elseif walkable(v) then
             into[k] = copy(v)
         else
             into[k] = v
@@ -54,11 +67,14 @@ end
 --- Fills in what `target` lacks from `defaults` (nested too); returns
 --- `target`.
 export function defaults<T extends table>(target: T, from: table): T
+    if not walkable(target) or not walkable(from) then
+        return target
+    end
     const into: table = target
     for k, v in pairs(from) do
         if into[k] == nil then
             into[k] = copy(v)
-        elseif type(v) == "table" and type(into[k]) == "table" then
+        elseif walkable(v) and walkable(into[k]) then
             defaults(into[k], v)
         end
     end
@@ -73,7 +89,7 @@ export function equal(a: any, b: any): boolean
     if a == b then
         return true
     end
-    if type(a) ~= "table" or type(b) ~= "table" then
+    if not walkable(a) or not walkable(b) then
         return false
     end
     for k, v in pairs(a) do
@@ -92,6 +108,9 @@ end
 --- The keys, sorted when they are all numbers or all strings.
 export function keys<K, V>(t: { [K]: V }): K[]
     const out: K[] = {}
+    if not secret.readable(t) then
+        return out
+    end
     for k in pairs(t) do
         out[#out + 1] = k
     end
@@ -110,6 +129,9 @@ end
 
 export function values<K, V>(t: { [K]: V }): V[]
     const out: V[] = {}
+    if not secret.readable(t) then
+        return out
+    end
     for _, v in pairs(t) do
         out[#out + 1] = v
     end
@@ -118,6 +140,9 @@ end
 
 --- How many entries (pairs, not just the array part).
 export function count(t: table): number
+    if not secret.readable(t) then
+        return 0
+    end
     local n = 0
     for _ in pairs(t) do
         n += 1
@@ -126,11 +151,14 @@ export function count(t: table): number
 end
 
 export function isEmpty(t: table): boolean
-    return next(t) == nil
+    return not secret.readable(t) or next(t) == nil
 end
 
 export function filter<T>(list: T[], keep: (v: T, i: number) -> boolean): T[]
     const out: T[] = {}
+    if not secret.readable(list) then
+        return out
+    end
     for i, v in ipairs(list) do
         if keep(v, i) then
             out[#out + 1] = v
@@ -141,6 +169,9 @@ end
 
 export function map<T, U>(list: T[], fn: (v: T, i: number) -> U): U[]
     const out: U[] = {}
+    if not secret.readable(list) then
+        return out
+    end
     for i, v in ipairs(list) do
         out[i] = fn(v, i)
     end
@@ -149,6 +180,9 @@ end
 
 --- The first element `pred` accepts, and its index.
 export function find<T>(list: T[], pred: (v: T, i: number) -> boolean): (T?, number?)
+    if not secret.readable(list) then
+        return nil, nil
+    end
     for i, v in ipairs(list) do
         if pred(v, i) then
             return v, i
@@ -157,11 +191,179 @@ export function find<T>(list: T[], pred: (v: T, i: number) -> boolean): (T?, num
     return nil, nil
 end
 
+--- Whether `list` holds `value` (secrets are never found).
 export function contains<T>(list: T[], value: T): boolean
+    if secret.isSecret(value) or not secret.readable(list) then
+        return false
+    end
     for _, v in ipairs(list) do
-        if v == value then
+        if not secret.isSecret(v) and v == value then
             return true
         end
     end
     return false
+end
+
+-- Ordering ------------------------------------------------------------------
+
+export type Less<T> = (a: T, b: T) -> boolean
+
+-- The default order: numbers and strings by `<`, values of different types
+-- by their type's name, anything else as equal (kept in its order).
+local function natural(a: any, b: any): boolean
+    local ta, tb = type(a), type(b)
+    if ta ~= tb then
+        return ta < tb
+    end
+    if ta == "number" or ta == "string" then
+        return a < b
+    end
+    return false
+end
+
+--- `less` (default: numbers and strings ascending, other values in their
+--- order) behind a guard: a value the addon may not read never reaches it
+--- and comes after every other value. The order `sort`, `insertSorted`,
+--- `searchSorted` and `wowlua:collections`' `Heap` use.
+export function order<T>(less: Less<T>?): Less<T>
+    const cmp: Less<T> = less ?? natural
+    return function(a: T, b: T): boolean
+        if not secret.readable(a) then
+            return false
+        end
+        if not secret.readable(b) then
+            return true
+        end
+        return cmp(a, b)
+    end
+end
+
+--- An order by `key(v)`, for `sort` and the other ordered helpers: numbers
+--- and strings ascending (`descending` reverses), and values whose key is
+--- nil or secret after all others, in their order.
+export function by<T>(key: (v: T) -> unknown, descending: boolean?): Less<T>
+    return function(a: T, b: T): boolean
+        local ka, kb = key(a), key(b)
+        if ka == nil or secret.isSecret(ka) then
+            return false
+        end
+        if kb == nil or secret.isSecret(kb) then
+            return true
+        end
+        if descending then
+            return natural(kb, ka)
+        end
+        return natural(ka, kb)
+    end
+end
+
+-- Sorts list[lo..hi] by insertion: stable, no garbage.
+local function insertion<T>(list: T[], lo: number, hi: number, less: Less<T>)
+    for i = lo + 1, hi do
+        const v = list[i]
+        local j = i - 1
+        while j >= lo and less(v, list[j]) do
+            list[j + 1] = list[j]
+            j -= 1
+        end
+        list[j + 1] = v
+    end
+end
+
+-- Sorts list[lo..hi] by merging (stable), short runs by insertion.
+local function mergeSort<T>(list: T[], tmp: T[], lo: number, hi: number, less: Less<T>)
+    if hi - lo < 12 then
+        insertion(list, lo, hi, less)
+        return
+    end
+    const mid = floor((lo + hi) / 2)
+    mergeSort(list, tmp, lo, mid, less)
+    mergeSort(list, tmp, mid + 1, hi, less)
+    if not less(list[mid + 1], list[mid]) then
+        return
+    end
+    for i = lo, mid do
+        tmp[i] = list[i]
+    end
+    local i, j, k = lo, mid + 1, lo
+    while i <= mid and j <= hi do
+        if less(list[j], tmp[i]) then
+            list[k] = list[j]
+            j += 1
+        else
+            list[k] = tmp[i]
+            i += 1
+        end
+        k += 1
+    end
+    while i <= mid do
+        list[k] = tmp[i]
+        i += 1
+        k += 1
+    end
+end
+
+--- Sorts `list` in place by `less` (default: numbers and strings
+--- ascending) and returns it. Stable: equal elements keep their order. An
+--- inconsistent `less` gives some order, never an error. Secret elements
+--- never reach `less`; they go last, in their order (by `by`, secret keys
+--- too).
+export function sort<T>(list: T[], less: Less<T>?): T[]
+    if not secret.readable(list) then
+        return list
+    end
+    const n = #list
+    if n > 12 then
+        mergeSort(list, {}, 1, n, order(less))
+    elseif n > 1 then
+        insertion(list, 1, n, order(less))
+    end
+    return list
+end
+
+-- Where `value` belongs in `list` (sorted by `less`): before the elements
+-- equal to it, or with `after`, behind them.
+local function bound<T>(list: T[], value: T, less: Less<T>, after: boolean): number
+    local lo, hi = 1, #list + 1
+    while lo < hi do
+        const mid = floor((lo + hi) / 2)
+        local before: boolean
+        if after then
+            before = not less(value, list[mid])
+        else
+            before = less(list[mid], value)
+        end
+        if before then
+            lo = mid + 1
+        else
+            hi = mid
+        end
+    end
+    return lo
+end
+
+--- Inserts `value` into `list`, sorted by `less`, after the elements equal
+--- to it; returns its position (0 when the addon may not read `list`). A
+--- secret goes last.
+export function insertSorted<T>(list: T[], value: T, less: Less<T>?): number
+    if not secret.readable(list) then
+        return 0
+    end
+    const at = bound(list, value, order(less), true)
+    table.insert(list, at, value)
+    return at
+end
+
+--- The position of the first element of `list` (sorted by `less`) equal to
+--- `value` (neither before nor after it), or nil. Secrets are never found.
+export function searchSorted<T>(list: T[], value: T, less: Less<T>?): number?
+    if not secret.readable(value) or not secret.readable(list) then
+        return nil
+    end
+    const order = order(less)
+    const at = bound(list, value, order, false)
+    if at <= #list and not order(value, list[at]) then
+        return at
+    end
+    return nil
 end

@@ -6,6 +6,7 @@
 import on, once from "wowlua:events"
 import type Subscription from "wowlua:events"
 import report, callIn from "wowlua:errors"
+import * as secret from "wowlua:secret"
 
 export type Priority = "high" | "normal" | "low"
 export type Status = "pending" | "running" | "paused" | "done" | "failed" | "cancelled"
@@ -94,7 +95,8 @@ class Task implements Job
         if not packed[1] then
             self.state = "failed"
             const err = tostring(packed[2])
-            report(`job {self.opts.name ?? "?"}: {err}`)
+            -- A secret message keeps the job's name in the report.
+            report(`job {self.opts.name ?? "?"}: {secret.isSecret(err) and "<secret>" or err}`)
             if self.opts.onError then
                 callIn({ component = "jobs: onError" }, self.opts.onError, err)
             end

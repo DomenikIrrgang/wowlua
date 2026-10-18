@@ -18,6 +18,7 @@ const BUILTIN_MATCHERS: &[&str] = &[
     "toBeNil",
     "toBeTruthy",
     "toBeFalsy",
+    "toBeSecret",
     "toBeInstanceOf",
     "toContain",
     "toHaveLength",

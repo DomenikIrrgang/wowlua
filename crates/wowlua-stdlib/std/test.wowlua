@@ -1,7 +1,12 @@
 -- wowlua:test (spec Tooling §16.1.3): tests, hooks and matchers. A test
 -- file registers its tests while it loads; the test runner (`wowlua test`)
 -- runs them through `ns.__wowlua.tests`, each in a coroutine so that a test
--- can wait for the game (wowlua:mock's `wait…`).
+-- can wait for the game (wowlua:mock's `wait…`). Tests run tainted, like
+-- the addon: nothing here compares, indexes or walks a value tests may not
+-- read (a secret, a table whose security keeps addons out); a matcher that
+-- needs one fails instead (spec Tooling §16.1.3).
+import * as secret from "wowlua:secret"
+
 local addonName, ns = ...
 local wl = ns.__wowlua
 
@@ -49,9 +54,10 @@ local current: Entry? = nil
 local currentName = ""
 local snapshotCount = 0
 
--- A value as messages show it: strings quoted, tables one level deep.
+-- A value as messages show it: strings quoted, tables one level deep,
+-- secrets as `<secret>`.
 local function show(v: any, depth: number?): string
-    if issecretvalue and issecretvalue(v) then
+    if secret.isSecret(v) then
         return "<secret>"
     end
     local t = type(v)
@@ -59,6 +65,9 @@ local function show(v: any, depth: number?): string
         return string.format("%q", v)
     elseif t ~= "table" then
         return tostring(v)
+    end
+    if not secret.readable(v) then
+        return "<inaccessible table>"
     end
     if (depth ?? 0) >= 2 then
         return "{…}"
@@ -85,6 +94,11 @@ local function show(v: any, depth: number?): string
         return "{}"
     end
     return "{ " .. table.concat(parts, ", ") .. " }"
+end
+
+-- A name or reason given to the runner: a secret one reads as `<secret>`.
+local function label(v: any): any
+    return secret.isSecret(v) and "<secret>" or v
 end
 
 local function entry(fn: Fn, ctx: DecoratorContext?): Entry
@@ -127,7 +141,7 @@ export function test(name: any?, opts: any?): any
         e.test = true
         if type(name) == "string" then
             local prefix = #groups > 0 and table.concat(groups, " › ") .. " › " or ""
-            e.name = prefix .. name
+            e.name = prefix .. label(name)
         end
         if type(opts) == "table" and type(opts.timeout) == "number" then
             e.timeout = opts.timeout
@@ -142,7 +156,7 @@ end
 
 --- `@skip(reason?)`: the test is reported as skipped.
 export const skip: any = decorator(function(e: Entry, reason: any)
-    e.skip = type(reason) == "string" and reason or ""
+    e.skip = type(reason) == "string" and label(reason) or ""
 end)
 
 --- `@only`: in a file with `@only` tests, only they run.
@@ -159,8 +173,12 @@ export function flavors(...: string): any
 end
 
 --- `@cases(list)`: the test runs once per case, the case's values as its
---- arguments (decision T215).
+--- arguments (decision T215). A case may be or hold secrets (passed on as
+--- they are); the list itself may not.
 export function cases(list: any[]): any
+    if not secret.readable(list) then
+        error("@cases: the list of cases is a secret value", 2)
+    end
     return function(fn: Fn, ctx: DecoratorContext?)
         entry(fn, ctx).cases = list
     end
@@ -207,7 +225,7 @@ end
 
 --- Groups the tests `fn` defines at run time (`test(name)(fn)` inside it).
 export function describe(name: string, fn: () -> ())
-    groups[#groups + 1] = name
+    groups[#groups + 1] = label(name)
     local ok, err = pcall(fn)
     table.remove(groups)
     if not ok then
@@ -218,6 +236,10 @@ end
 -- -------------------------------------------------------------- matchers
 
 local function fail(message: string, level: number?)
+    -- A message made from a secret is secret: the runner could not show it.
+    if secret.isSecret(message) then
+        message = "the expectation failed; its message is a secret value"
+    end
     local failure: Failure = {
         __wowluaFailure = true,
         message = message,
@@ -226,7 +248,33 @@ local function fail(message: string, level: number?)
     error(failure, 0)
 end
 
-local function deepEqual(a: any, b: any, seen: { [any]: any }): boolean
+-- `a == b` where a secret may be involved: as tainted code may tell, values
+-- of different types differ and two nils are equal; otherwise nil (unknown).
+local function same(a: any, b: any): boolean?
+    if secret.isSecret(a) or secret.isSecret(b) then
+        local t = type(a)
+        if t ~= type(b) then
+            return false
+        end
+        return t == "nil" or nil
+    end
+    return a == b
+end
+
+-- Both checks passed: false when one failed, else nil when one is unknown.
+local function both(a: boolean?, b: boolean?): boolean?
+    if a == false or b == false then
+        return false
+    end
+    return a and b
+end
+
+-- Deep equality; nil (unknown) when it turns on a value tests may not read
+-- (a secret of the other's type, a table addons may not index).
+local function deepEqual(a: any, b: any, seen: { [any]: any }): boolean?
+    if secret.isSecret(a) or secret.isSecret(b) then
+        return same(a, b)
+    end
     if a == b then
         return true
     end
@@ -234,12 +282,17 @@ local function deepEqual(a: any, b: any, seen: { [any]: any }): boolean
         -- NaN equals NaN in expectations.
         return type(a) == "number" and type(b) == "number" and a ~= a and b ~= b
     end
+    if not secret.readable(a) or not secret.readable(b) then
+        return nil
+    end
     if seen[a] == b then
         return true
     end
     seen[a] = b
+    local result: boolean? = true
     for k, v in pairs(a) do
-        if not deepEqual(v, rawget(b, k), seen) then
+        result = both(result, deepEqual(v, rawget(b, k), seen))
+        if result == false then
             return false
         end
     end
@@ -248,7 +301,7 @@ local function deepEqual(a: any, b: any, seen: { [any]: any }): boolean
             return false
         end
     end
-    return true
+    return result
 end
 
 local function lengthOf(v: any): number?
@@ -278,16 +331,15 @@ local function callsOf(v: any): any[]?
     return spies and spies[v]
 end
 
-local function sameArgs(call: any, args: any): boolean
+local function sameArgs(call: any, args: any): boolean?
     if call.n ~= args.n then
         return false
     end
+    local result: boolean? = true
     for i = 1, args.n do
-        if not deepEqual(call[i], args[i], {}) then
-            return false
-        end
+        result = both(result, deepEqual(call[i], args[i], {}))
     end
-    return true
+    return result
 end
 
 local function showArgs(args: any): string
@@ -299,7 +351,11 @@ local function showArgs(args: any): string
 end
 
 --- What `expect(value)` checks (decision T214): matchers are called with a
---- dot (`expect(x).toBe(y)`); `never` holds the negated ones.
+--- dot (`expect(x).toBe(y)`); `never` holds the negated ones. Tests run
+--- tainted, like the addon: a matcher whose answer needs a secret's value
+--- fails, negated or not, saying so (a secret differs from a value of
+--- another type; `toBeNil`, `toBeSecret`, snapshots and the truth of a
+--- secret that is not a boolean need no value).
 export type Expect<T> = {
     --- The same value (`==`).
     toBe: (expected: T) -> (),
@@ -348,6 +404,8 @@ export type Expect<T> = {
     --- The value's text matches the stored snapshot (decision T218);
     --- `name` tells several of a test apart (else they are numbered).
     toMatchSnapshot: (name: string?) -> (),
+    --- A secret value (`issecretvalue`).
+    toBeSecret: () -> (),
     --- The negated matchers: `expect(x).never.toBe(y)`.
     never: Expect<T>,
 }
@@ -373,6 +431,9 @@ end
 
 -- A number as snapshots show it: at most two decimals.
 local function shortNumber(n: number): string
+    if secret.isSecret(n) then
+        return "<secret>"
+    end
     if n == math.floor(n) and math.abs(n) < 1e15 then
         return string.format("%d", n)
     end
@@ -381,7 +442,7 @@ local function shortNumber(n: number): string
 end
 
 local function isWidget(v: any): boolean
-    return type(v) == "table" and type(v.GetObjectType) == "function"
+    return type(v) == "table" and secret.readable(v) and type(v.GetObjectType) == "function"
 end
 
 -- A widget's name in a snapshot.
@@ -400,9 +461,10 @@ local function widgetLabel(w: any, from: any): string
 end
 
 -- A value's text for snapshots: tables with their keys sorted, widgets as
--- their tree (shown, size, points, text, then regions and children).
+-- their tree (shown, size, points, text, then regions and children);
+-- secrets as `<secret>`.
 local function serialize(v: any, indent: string, seen: { [any]: boolean }): string
-    if issecretvalue and issecretvalue(v) then
+    if secret.isSecret(v) then
         return "<secret>"
     end
     local t = type(v)
@@ -412,6 +474,9 @@ local function serialize(v: any, indent: string, seen: { [any]: boolean }): stri
         return shortNumber(v)
     elseif t ~= "table" then
         return t == "function" and "<function>" or tostring(v)
+    end
+    if not secret.readable(v) then
+        return "<inaccessible table>"
     end
     if seen[v] then
         return "<cycle>"
@@ -502,23 +567,32 @@ local function tooltipLines(tip: any): { left: string?, right: string? }[]
     return lines
 end
 
+-- The matchers that take a secret value, and those that take secret
+-- arguments; the others fail on one (they would need its value).
+local secretValues = { toBe = true, toEqual = true, toBeNil = true, toBeTruthy = true, toBeFalsy = true, toBeSecret = true, toMatchSnapshot = true }
+local secretArgs = { toBe = true, toEqual = true, toContain = true, toHaveBeenCalledWith = true }
+const tainted = " (tests run tainted, like the addon)"
+
 -- The matchers on a value: `negated` flips each check.
 local function matchers(value: any, negated: boolean): any
-    local function check(pass: boolean, message: string, opposite: string)
-        if pass == negated then
-            fail(negated and opposite or message, 2)
+    -- `pass` nil: the answer needs a secret's value, so it fails either way.
+    local function check(pass: boolean?, message: string, opposite: string)
+        if pass == nil then
+            fail(`{negated and opposite or message}: cannot tell with a secret value{tainted}`, 3)
+        elseif pass == negated then
+            fail(negated and opposite or message, 3)
         end
     end
     local function calls(): any[]
         local list = callsOf(value)
         if list == nil then
-            fail(`expected a spy (mock.spy), got {show(value)}`, 3)
+            fail(`expected a spy (mock.spy), got {show(value)}`, 4)
         end
         return list :: any[]
     end
     local m: any = {}
     function m.toBe(expected: any)
-        check(value == expected, `expected {show(value)} to be {show(expected)}`, `expected {show(value)} not to be {show(expected)}`)
+        check(same(value, expected), `expected {show(value)} to be {show(expected)}`, `expected {show(value)} not to be {show(expected)}`)
     end
     function m.toEqual(expected: any)
         check(deepEqual(value, expected, {}), `expected {show(value)} to equal {show(expected)}`, `expected {show(value)} not to equal {show(expected)}`)
@@ -526,35 +600,66 @@ local function matchers(value: any, negated: boolean): any
     function m.toBeNil()
         check(value == nil, `expected {show(value)} to be nil`, "expected a value, got nil")
     end
+    -- A secret boolean's truth is its value; other secrets are truthy.
+    local function truthy(): boolean?
+        if secret.isSecret(value) and type(value) == "boolean" then
+            return nil
+        end
+        return not not value
+    end
     function m.toBeTruthy()
-        check(not not value, `expected {show(value)} to be truthy`, `expected {show(value)} to be falsy`)
+        check(truthy(), `expected {show(value)} to be truthy`, `expected {show(value)} to be falsy`)
     end
     function m.toBeFalsy()
-        check(not value, `expected {show(value)} to be falsy`, `expected {show(value)} to be truthy`)
+        local t = truthy()
+        local falsy: boolean? = nil
+        if t ~= nil then
+            falsy = not t
+        end
+        check(falsy, `expected {show(value)} to be falsy`, `expected {show(value)} to be truthy`)
+    end
+    function m.toBeSecret()
+        check(secret.isSecret(value), `expected {show(value)} to be a secret value`, "expected a value that is not secret, got <secret>")
     end
     function m.toBeInstanceOf(cls: any)
         check(isInstance(value, cls), `expected {show(value)} to be an instance of the class`, `expected {show(value)} not to be an instance of the class`)
     end
     function m.toContain(item: any)
-        local found = false
+        local found: boolean? = false
         if type(value) == "string" then
-            found = type(item) == "string" and value:find(item, 1, true) ~= nil
+            if type(item) ~= "string" then
+                found = false
+            elseif secret.isSecret(item) then
+                found = nil
+            else
+                found = value:find(item, 1, true) ~= nil
+            end
         elseif type(value) == "table" then
-            for _, x in pairs(value) do
-                if deepEqual(x, item, {}) then
-                    found = true
-                    break
+            if not secret.readable(value) then
+                found = nil
+            else
+                for _, x in pairs(value) do
+                    local eq = deepEqual(x, item, {})
+                    if eq then
+                        found = true
+                        break
+                    elseif eq == nil then
+                        found = nil
+                    end
                 end
             end
         else
-            fail(`toContain needs a string or a table, got {show(value)}`, 1)
+            fail(`toContain needs a string or a table, got {show(value)}`, 2)
         end
         check(found, `expected {show(value)} to contain {show(item)}`, `expected {show(value)} not to contain {show(item)}`)
     end
     function m.toHaveLength(n: number)
+        if type(value) == "table" and not secret.readable(value) then
+            check(nil, `expected length {n}, got {show(value)}`, `expected a length other than {n}`)
+        end
         local len = lengthOf(value)
         if len == nil then
-            fail(`toHaveLength needs a string or a table, got {show(value)}`, 1)
+            fail(`toHaveLength needs a string or a table, got {show(value)}`, 2)
         end
         check(len == n, `expected length {n}, got {show(len)}`, `expected a length other than {n}`)
     end
@@ -565,13 +670,24 @@ local function matchers(value: any, negated: boolean): any
     end
     function m.toThrow(text: string?)
         if type(value) ~= "function" then
-            fail(`toThrow needs a function, got {show(value)}`, 1)
+            fail(`toThrow needs a function, got {show(value)}`, 2)
         end
         local ok, err = pcall(value)
-        local message = type(err) == "table" and err.__wowluaFailure and err.message or tostring(err)
-        local pass = not ok and (text == nil or message:find(text, 1, true) ~= nil)
+        local message: any = nil
+        if not secret.isSecret(err) then
+            message = type(err) == "table" and secret.readable(err) and err.__wowluaFailure and err.message or tostring(err)
+        end
+        local pass: boolean? = not ok
+        if not ok and text ~= nil then
+            -- A secret error's text cannot be searched.
+            if message == nil or secret.isSecret(message) then
+                pass = nil
+            else
+                pass = message:find(text, 1, true) ~= nil
+            end
+        end
         local wanted = text and ` containing {show(text)}` or ""
-        local got = ok and "it did not" or `it raised {show(message)}`
+        local got = ok and "it did not" or `it raised {show(message ?? err)}`
         check(pass, `expected an error{wanted}; {got}`, `expected no error{wanted}; {got}`)
     end
     function m.toHaveBeenCalled()
@@ -590,12 +706,15 @@ local function matchers(value: any, negated: boolean): any
     end
     function m.toHaveText(text: string)
         local got = widgetText(value)
-        check(got == text, `expected the text {show(text)}, got {show(got)}`, `expected a text other than {show(text)}`)
+        check(same(got, text), `expected the text {show(text)}, got {show(got)}`, `expected a text other than {show(text)}`)
     end
     function m.toHaveSize(width: number, height: number)
         local w, h = value:GetSize()
-        local pass = math.abs(w - width) < 0.01 and math.abs(h - height) < 0.01
-        check(pass, `expected the size {width} x {height}, got {w} x {h}`, `expected a size other than {width} x {height}`)
+        local pass: boolean? = nil
+        if not secret.isSecret(w) and not secret.isSecret(h) then
+            pass = math.abs(w - width) < 0.01 and math.abs(h - height) < 0.01
+        end
+        check(pass, `expected the size {width} x {height}, got {show(w)} x {show(h)}`, `expected a size other than {width} x {height}`)
     end
     function m.toBeAnchoredTo(other: any, point: string?, relativePoint: string?)
         local found = false
@@ -613,13 +732,15 @@ local function matchers(value: any, negated: boolean): any
     end
     function m.toHaveLines(lines: any[])
         local got = tooltipLines(value)
-        local pass = #got == #lines
+        local pass: boolean? = #got == #lines
         for i, want in ipairs(lines) do
             local line = got[i]
-            if type(want) == "table" then
-                pass = pass and line ~= nil and line.left == want[1] and line.right == want[2]
+            if line == nil then
+                pass = false
+            elseif type(want) == "table" then
+                pass = both(pass, both(same(line.left, want[1]), same(line.right, want[2])))
             else
-                pass = pass and line ~= nil and line.left == want
+                pass = both(pass, same(line.left, want))
             end
         end
         local shown: string[] = {}
@@ -632,7 +753,7 @@ local function matchers(value: any, negated: boolean): any
     function m.toBeBlocked()
         local engine = wl.mockEngine
         if engine == nil then
-            fail("toBeBlocked needs `wowlua test`", 1)
+            fail("toBeBlocked needs `wowlua test`", 2)
         end
         local before = #engine.refusals()
         pcall(value)
@@ -656,11 +777,11 @@ local function matchers(value: any, negated: boolean): any
     end
     function m.toMatchSnapshot(name: string?)
         if negated then
-            fail("toMatchSnapshot cannot be negated", 1)
+            fail("toMatchSnapshot cannot be negated", 2)
         end
         local engine = wl.mockEngine
         if engine == nil then
-            fail("snapshots need `wowlua test`", 1)
+            fail("snapshots need `wowlua test`", 2)
         end
         snapshotCount = snapshotCount + 1
         -- A pass after `mock.reloadUI` has its own snapshots.
@@ -668,23 +789,29 @@ local function matchers(value: any, negated: boolean): any
         local key = currentName .. pass .. " › " .. (name ?? tostring(snapshotCount))
         local same, diff = engine.snapshot(key, serialize(value, "", {}))
         if not same then
-            fail(`the snapshot "{key}" differs (- stored, + now; wowlua test -u updates it):\n{diff}`, 1)
+            fail(`the snapshot "{key}" differs (- stored, + now; wowlua test -u updates it):\n{diff}`, 2)
         end
     end
     for name, fn in pairs(custom) do
         m[name] = function(...: any)
             local pass, message, opposite = fn(value, ...)
+            if secret.isSecret(pass) then
+                fail(`the matcher {name} answered with a secret value`, 2)
+            end
             check(pass == true, message ?? `expected {show(value)} to pass {name}`, opposite ?? `expected {show(value)} not to pass {name}`)
         end
     end
     function m.toHaveBeenCalledWith(...: any)
         local list = calls()
         local args = { n = select("#", ...), ... }
-        local found = false
+        local found: boolean? = false
         for _, call in ipairs(list) do
-            if sameArgs(call, args) then
+            local eq = sameArgs(call, args)
+            if eq then
                 found = true
                 break
+            elseif eq == nil then
+                found = nil
             end
         end
         local seen: string[] = {}
@@ -693,6 +820,27 @@ local function matchers(value: any, negated: boolean): any
         end
         local got = #seen > 0 and "its calls: " .. table.concat(seen, ", ") or "it was not called"
         check(found, `expected a call with {showArgs(args)}; {got}`, `expected no call with {showArgs(args)}`)
+    end
+    -- The value or an argument is a secret a built-in matcher cannot take:
+    -- it fails (custom matchers get secrets as they are). Every matcher is
+    -- wrapped, so the failures' levels above count this call.
+    for name, fn in pairs(m) do
+        m[name] = function(...: any)
+            local why: string? = nil
+            if custom[name] == nil and not secretValues[name] and secret.isSecret(value) then
+                why = "received a secret value"
+            elseif custom[name] == nil and not secretArgs[name] then
+                for i = 1, select("#", ...) do
+                    if secret.isSecret((select(i, ...))) then
+                        why = "an argument is a secret value"
+                    end
+                end
+            end
+            if why then
+                fail(`{name}: {why}, which it cannot read{tainted}`, 1)
+            end
+            return fn(...)
+        end
     end
     return m
 end
@@ -731,11 +879,20 @@ local function selected(e: Entry, flavor: string): boolean
 end
 
 local function failureOf(err: any, co: thread): { message: string, stack: string }
-    if type(err) == "table" and err.__wowluaFailure then
+    if type(err) == "table" and secret.readable(err) and err.__wowluaFailure then
         return { message = err.message, stack = err.stack }
     end
     local stack = debugstack and debugstack(co, 0, 12, 0) or ""
-    return { message = tostring(err), stack = stack }
+    local message = tostring(err)
+    if secret.isSecret(message) then
+        message = "the test raised a secret value as its error"
+    end
+    return { message = message, stack = stack }
+end
+
+-- Whether a resumed test raised or yielded `token` (a secret is no token).
+local function isToken(v: any, token: any): boolean
+    return not secret.isSecret(v) and v ~= nil and v == token
 end
 
 local function hookPhases(kind: string): Fn[]
@@ -782,7 +939,8 @@ wl.tests = {
                 n = n + 1
                 if n == i then
                     local case: any = (e.cases :: any[])[c]
-                    return e.name .. " " .. (type(case) == "table" and show(case):gsub("^{ ", "["):gsub(" }$", "]") or show(case))
+                    local list = type(case) == "table" and secret.readable(case)
+                    return e.name .. " " .. (list and show(case):gsub("^{ ", "["):gsub(" }$", "]") or show(case))
                 end
             end
         end
@@ -828,7 +986,8 @@ wl.tests = {
                 return
             end
             local case: any = c and (e.cases :: any[])[c]
-            if type(case) == "table" then
+            -- A secret case (or one tests may not read) is one argument.
+            if type(case) == "table" and secret.readable(case) then
                 local list = case :: any[]
                 e.fn(unpack(list, 1, (case :: any).n or #list))
             elseif c then
@@ -861,7 +1020,7 @@ wl.tests = {
             end
             local co = job.co :: thread
             local ok, a, b, c = coroutine.resume(co)
-            if not ok and a ~= nil and a == wl.reloadSignal then
+            if not ok and isToken(a, wl.reloadSignal) then
                 -- `mock.reloadUI`: the pass ended; the teardown still runs.
                 job.co = nil
                 job.i = job.i + 1
@@ -872,7 +1031,7 @@ wl.tests = {
             elseif coroutine.status(co) == "dead" then
                 job.co = nil
                 job.i = job.i + 1
-            elseif a ~= nil and a == wl.waitToken then
+            elseif isToken(a, wl.waitToken) then
                 return "wait", b, c
             else
                 job.failure = job.failure ?? { message = "the test yielded outside mock.wait…", stack = "" }

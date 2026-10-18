@@ -5,6 +5,7 @@
 import isLoaded from "wowlua:lifecycle"
 import Subscription from "wowlua:events"
 import report, callIn from "wowlua:errors"
+import * as secret from "wowlua:secret"
 
 local addonName, ns = ...
 local wl = ns.__wowlua
@@ -59,8 +60,9 @@ type Binding = {
 local bindings: Binding[] = {}
 local handles: { [table]: SavedHandle } = setmetatable({}, { __mode = "k" })
 
+-- (A secret or a table addons may not index is carried as it is.)
 local function copy(value: any): any
-    if type(value) ~= "table" then
+    if type(value) ~= "table" or not secret.readable(value) then
         return value
     end
     local out = {}
@@ -78,7 +80,7 @@ local function attach(data: table, defaults: any): table
     end
     for k, d in pairs(defaults) do
         local v = rawget(data, k)
-        if type(d) == "table" and type(v) == "table" then
+        if type(d) == "table" and type(v) == "table" and secret.readable(v) then
             attach(v, d)
         end
     end
@@ -97,10 +99,11 @@ end
 
 -- Removes values equal to their defaults, recursively, and secret values
 -- (they cannot be saved) anywhere; returns whether a secret was dropped.
--- Empty tables go only where their default is a table.
+-- Empty tables go only where their default is a table; a table addons may
+-- not index is kept as it is.
 local function strip(data: table, defaults: any, seen: { [table]: boolean }?): boolean
     seen = seen or {}
-    if seen[data] then
+    if not secret.readable(data) or seen[data] then
         return false
     end
     seen[data] = true
@@ -110,7 +113,7 @@ local function strip(data: table, defaults: any, seen: { [table]: boolean }?): b
         if type(defaults) == "table" then
             d = defaults[k]
         end
-        if issecretvalue and issecretvalue(v) then
+        if secret.isSecret(v) then
             data[k] = nil
             secrets = true
         elseif type(v) == "table" then
@@ -118,7 +121,7 @@ local function strip(data: table, defaults: any, seen: { [table]: boolean }?): b
             if strip(v, nested, seen) then
                 secrets = true
             end
-            if nested and next(v) == nil then
+            if nested and secret.readable(v) and next(v) == nil then
                 data[k] = nil
             end
         elseif d ~= nil and v == d then

@@ -3,6 +3,7 @@
 -- WOWLUA_<ADDON>_<N> in WoW's SlashCmdList, unique across addons.
 import callIn from "wowlua:errors"
 import print as say from "wowlua:log"
+import * as secret from "wowlua:secret"
 
 local addonName, ns = ...
 
@@ -186,6 +187,11 @@ class SlashRouter implements Router
     end
 
     function dispatch(msg: string): boolean
+        -- Slash input is never secret, forwarded chat text may be: it
+        -- cannot be read, so nothing runs.
+        if secret.isSecret(msg) then
+            return false
+        end
         local tokens, starts = tokenize(msg)
         if #tokens == 0 or tokens[1]:lower() == "help" then
             self:printHelp()

@@ -149,7 +149,8 @@ end
   through `wowlua:combat` and the object stays active until combat ends.
 - `TablePool:release` wipes the table. `opts.max` caps the inactive tables kept.
 - In debug builds, releasing an object twice or releasing a foreign object raises
-  an error.
+  an error. A secret is foreign (it cannot be a key, and a pool never hands one
+  out).
 
 ## settings
 
@@ -212,8 +213,11 @@ settings.open()                                -- Settings.OpenToCategory for th
   getter and setter read and write the store, so defaults apply and profile
   switches are reflected; the store's defaults are the settings' defaults.
   A color is a hex string to the Settings API and `{ r, g, b, a? }` in the
-  store. Every current flavor's client has the same Settings API (checked
-  against Blizzard's UI source), so no per-flavor adapter is needed yet.
+  store. The controls compare and measure values, so a secret store value
+  reads as the control's default, and a color's secret components as 1 (a
+  color that cannot be read is replaced when the player picks one). Every
+  current flavor's client has the same Settings API (checked against
+  Blizzard's UI source), so no per-flavor adapter is needed yet.
 - **Store type.** `saved.bind` returns its defaults' type, so the keys are
   checked against that.
 - **Timing.** `register` may be called at top level. The category is created at
@@ -279,6 +283,11 @@ launcher.register({
   a runtime error.
 - `launcher.setIcon`, `setLabel`, `showMinimap(bool)` and `refresh()` update
   the surfaces at runtime.
+- **Secrets** are not published: LibDataBroker compares values and the
+  compartment's menu measures them. A secret `icon` or `label` in `register`
+  becomes the question-mark icon or the addon's name, the setters and
+  `showMinimap` ignore secrets (the previous value stays), and a secret
+  stored `minimapPos` or `hide` reads as the default (225, shown).
 - **Shapes.** The built-in button follows `GetMinimapShape()` (defined by
   minimap addons; round without one): along the circle in round quadrants,
   along the square's edge in square ones (`CORNER-*`, `SIDE-*`,
@@ -313,7 +322,7 @@ local function money() gold:setText(format.money(GetMoney())) end
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `dataSource` | `(name: string, opts: { text: string, label?: string, icon?: string, onClick?, tooltip? }) -> DataSource` | `label` defaults to `name` |
-| `DataSource:setText`, `setIcon`, `setLabel` | `(value: string)` | Updates the LDB object, or the values it will be created with |
+| `DataSource:setText`, `setIcon`, `setLabel` | `(value: string)` | Updates the LDB object, or the values it will be created with. A secret is ignored (the previous value stays); one in `opts` is published as `""`, `name` or no icon. |
 | `DataSource.object` | `LibDataBrokerObject?` | nil until LibDataBroker is found |
 
 - **Waiting for the library** (decision S34). LibDataBroker is embedded by

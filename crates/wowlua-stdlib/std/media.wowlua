@@ -7,6 +7,7 @@
 import on from "wowlua:events"
 import type Subscription from "wowlua:events"
 import callIn from "wowlua:errors"
+import * as secret from "wowlua:secret"
 
 --- The kinds of media (unknown literal kinds are E8400).
 export type MediaType = "font" | "statusbar" | "border" | "background" | "sound"
@@ -86,8 +87,12 @@ find()
 lookups[#lookups + 1] = on("PLAYER_LOGIN", find)
 lookups[#lookups + 1] = on("ADDON_LOADED", find)
 
---- Registers media under a name (with LibSharedMedia for every addon).
+--- Registers media under a name (with LibSharedMedia for every addon); a
+--- secret name cannot be a key and is not registered.
 export function register(kind: MediaType, name: string, path: MediaPath)
+    if secret.isSecret(name) then
+        return
+    end
     own[kind][name] = path
     if shared then
         shared:Register(kind, name, path)
@@ -98,8 +103,12 @@ export function register(kind: MediaType, name: string, path: MediaPath)
 end
 
 --- The media's path; for unknown names the kind's default (the client's
---- standard font, bar, border or background) unless `noDefault`.
+--- standard font, bar, border or background) unless `noDefault`. A secret
+--- name is unknown.
 export function fetch(kind: MediaType, name: string?, opts: { noDefault?: boolean }?): MediaPath?
+    if secret.isSecret(name) then
+        name = nil
+    end
     if shared then
         return shared:Fetch(kind, name, opts?.noDefault)
     end

@@ -33,6 +33,7 @@ if not secret.isSecret(hp) then print(hp + 1) end     -- narrows like issecretva
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `isSecret` | `(v: unknown) -> v is Secret<unknown>` | `issecretvalue`, or `false` where the client has none |
+| `readable` | `(v: unknown) -> boolean` | Not a secret, and a table only when addons may index it (`canaccesstable` where the client has it). For code that walks tables it is handed. |
 | `known` | `<T>(v: T \| Secret<T> \| nil, fallback: T) -> T` | `fallback` when `v` is secret or nil |
 | `flag` | `(b: boolean \| Secret<boolean> \| nil) -> boolean` | For conditions: secret and nil read as `false` |
 | `amount` | `(v: number \| Secret<number> \| nil) -> number \| Secret<number>` | For widgets that take secrets: nil becomes 0 |
@@ -74,7 +75,7 @@ end
 | `healthPercent` | `(unit: UnitToken) -> (number \| Secret<number>)?` | 0 to 100. The client's `UnitHealthPercent` (with `CurveConstants.ScaleTo100`) where it has one, which may return a secret. Otherwise computed from `health` only when both values are accessible, else `nil`. |
 | `power` | `(unit: UnitToken, powerType?: number) -> (number \| Secret<number>, number \| Secret<number>)` | |
 | `classColor` | `(unit: UnitToken) -> ColorMixin?` | From `wowlua:color` (honors `CUSTOM_CLASS_COLORS`); `nil` when the class is secret |
-| `group` | `(opts?: { includePlayer: boolean?, includePets: boolean? }) -> (() -> UnitToken?)` | Iterates `raid1..raidN` in a raid (the player's own raid token only with `includePlayer`), `party1..party4` (plus `player` when requested) in a party, and only `player` when solo. Pets follow their owner with `includePets`. A secret answer to "in a raid/group" or "is it me" counts as no. |
+| `group` | `(opts?: { includePlayer: boolean?, includePets: boolean? }) -> (() -> UnitToken?)` | Iterates `raid1..raidN` in a raid (the player's own raid token only with `includePlayer`), `party1..party4` (plus `player` when requested) in a party, and only `player` when solo. Pets follow their owner with `includePets`. A secret answer to "in a raid/group" or "is it me" counts as no, as do secret options. |
 | `groupSize` | `() -> number` | `GetNumGroupMembers()`, with 1 when solo |
 
 The client's newer APIs (`UnitHealthPercent`, `GetUnitName`) are detected at
@@ -96,7 +97,7 @@ end)
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `roster.byGuid` | `(guid: string) -> RosterMember?` | |
+| `roster.byGuid` | `(guid: string \| Secret<string>) -> RosterMember?` | `nil` for a secret GUID (combat log GUIDs can be) |
 | `roster.byUnit` | `(unit: UnitToken) -> RosterMember?` | The member behind a group token |
 | `roster.members` | `() -> RosterMember[]` | The player first, then by group index |
 | `roster.onChange` | `(fn: (joined: RosterMember[], left: RosterMember[]) -> ()) -> Subscription` | After each change |
@@ -155,15 +156,15 @@ local box = aura.container(frame, {
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `readable` | `(unit: UnitToken) -> boolean` | Whether the unit's auras can be read right now (false in combat on clients with secret auras) |
-| `each` | `(unit: UnitToken, filter: AuraFilter) -> (() -> AuraData?)` | Every aura; nothing when they cannot be read. Auras the client hands back as a secret table end the iteration. |
-| `forEach` | `(unit: UnitToken, filter: AuraFilter, fn: (a: AuraData) -> boolean?)` | Allocation-free variant. Returning `true` stops iteration. |
+| `each` | `(unit: UnitToken, filter: AuraFilter) -> (() -> AuraData?)` | Every aura; nothing when they cannot be read. Auras the client hands back as a secret table, or one addons may not index (`canaccesstable`), end the iteration. |
+| `forEach` | `(unit: UnitToken, filter: AuraFilter, fn: (a: AuraData) -> boolean?)` | Allocation-free variant. Returning `true` stops iteration (a secret `true` does not). |
 | `find` | `(unit: UnitToken, spellId: number, filter: AuraFilter) -> AuraData?` | Auras whose `spellId` is secret are **skipped** |
 | `findByName` | `(unit: UnitToken, name: string, filter: AuraFilter) -> AuraData?` | Same skipping rule |
-| `byInstanceId` | `(unit: UnitToken, id: number) -> AuraData?` | `nil` when the client refuses |
+| `byInstanceId` | `(unit: UnitToken, id: number) -> AuraData?` | `nil` when the client refuses or hands back what `each` stops at |
 | `onChange` | `(unit: UnitToken, fn: (unit: UnitToken, changes: UnitAuraUpdateInfo?) -> ()) -> Subscription` | `UNIT_AURA` filtered to `unit` (a unit-filtered event frame, [Core: events](core.md#events)). `changes` is the client's update info; `nil` or `isFullUpdate` means rescan. |
 | `container` | `(parent: Frame, opts: ContainerOptions) -> AuraContainer` | The engine's container (`CreateFrame("AuraContainer", …, "CustomAuraContainerTemplate")`, loading `Blizzard_AuraContainer`). E8300 on flavors without aura containers. |
 | `ContainerOptions` | `{ unit, groups: AuraGroup[], size?, spacing?, anchor?, growth?, lineWidth? }` | `size` 30 and `spacing` 2 by default; `anchor` the corner icons start from (`"TOPLEFT"`), `growth` `{ "RIGHT", "DOWN" }` by default; `lineWidth` before icons wrap |
-| `AuraGroup` | `{ key, filter, max?, spells?, dispelTypes?, size?, initialize? }` | `max` 16 by default; `spells`/`dispelTypes` become the engine's candidate filters (matched in combat too; spell IDs only where the client permits matching); `initialize(button: AuraButton)` builds each button once |
+| `AuraGroup` | `{ key, filter, max?, spells?, dispelTypes?, size?, initialize? }` | `max` 16 by default; `spells`/`dispelTypes` become the engine's candidate filters (matched in combat too; spell IDs only where the client permits matching; secret IDs in `spells` are skipped); `initialize(button: AuraButton)` builds each button once |
 | `AuraContainer` | `frame`, `setUnit(unit)`, `refresh()`, `setGroupMax(key, n)`, `setGroupSpells(key, ids?)`, `setFlow(anchor, growth?)`, `setLineWidth(width?)`, `release()` | Containers rescan when their token points at someone new (`PLAYER_TARGET_CHANGED`, `PLAYER_FOCUS_CHANGED`, boss and group changes). Engine containers cannot be freed: `release` parks one (no unit, hidden) until the next `setUnit`. |
 | `AuraButton` | `Button & AuraButtonApi` | The engine's button: `SetIcon`, `SetApplicationCount`, `SetDurationText`, `SetDurationBar`, `SetDurationCooldown`, `AddDispelTypeTexture`, `SetSpellName`, `SetCasterName`, `SetCancelAuraButtons`, `SetHideTooltipInCombat`, `SetTooltipAnchorPoint`. Register regions only in `initialize`; the engine then drives them. |
 
@@ -204,7 +205,7 @@ local cd = spell.cooldown(133)       -- SpellCooldownInfo?
 | `name`, `icon` | `(spell) -> string?`, `(spell) -> number?` | |
 | `link` | `(spell) -> string?` | |
 | `description` | `(spell: number) -> string?` | May be empty until the spell data is loaded. Use `wowlua:item`'s `loadSpell` first. |
-| `cooldown` | `(spell) -> CooldownInfo?` | `startTime`, `duration`, `modRate` (each `number \| Secret<number>`: secret in combat on restricted clients), `isEnabled`, `isActive` (readable there), `isOnGCD?`. Falls back to the global `GetSpellCooldown` where `C_Spell.GetSpellCooldown` is missing. |
+| `cooldown` | `(spell) -> CooldownInfo?` | `startTime`, `duration`, `modRate` (each `number \| Secret<number>`: secret in combat on restricted clients), `isEnabled`, `isActive` (readable there), `isOnGCD?`. `nil` when the client hands back a secret table or one addons may not index. Falls back to the global `GetSpellCooldown` where `C_Spell.GetSpellCooldown` is missing. |
 | `onCooldown` | `(spell) -> boolean` | Whether it is cooling down: `isActive`, readable in combat too |
 | `cooldownDuration` | `(spell, ignoreGCD?: boolean) -> LuaDurationObject?` | For secret-safe display with `Cooldown:SetCooldownFromDurationObject`; `nil` where the client has no duration objects |
 | `charges` | `(spell) -> SpellChargeInfo?` | |
@@ -282,7 +283,7 @@ tooltip.attach(MyAddonTooltip)       -- also apply hooks to a custom tooltip (fa
 | `TooltipHook` | `enable()`, `disable()`, `isEnabled()` | |
 | `attach` | `(tip: GameTooltip)` | Fallback clients only: applies all hooks to an additional tooltip frame. A no-op on clients with the tooltip data system, which covers all tooltips. |
 | `TooltipKind` | `string`: an `Enum.TooltipDataType` name (`"Item"`, `"Spell"`, `"Unit"`, `"Mount"`, …) | Checked per targeted flavor from its API declarations (decision S22): a name in no flavor's `Enum.TooltipDataType` is E8330; a kind a targeted flavor lacks is E8300 for it. A flavor has the tooltip data system when its declarations include `C_TooltipInfo`; fallback flavors have only `"Item"`, `"Spell"` and `"Unit"`. A hook under `@if` is checked only for the flavors that keep it. At run time, `hook` errors for a kind the client lacks. |
-| `TooltipData` | record | Normalized: `kind`, `id?`, `guid?` (`string \| Secret<string>`), `unit?`, `link?`, `raw?` (the client's tooltip data where available). |
+| `TooltipData` | record | Normalized: `kind`, `id?`, `guid?` (`string \| Secret<string>`), `unit?`, `link?`, `raw?` (the client's tooltip data where available). `id`, `unit` and `link` are nil when the client's are secret; `guid` passes through. Client data addons may not index (`canaccesstable`) gives only `kind`. |
 
 - Fallback clients hook `GameTooltip`, `ItemRefTooltip` and the shopping
   tooltips with `HookScript`, reading the item, spell or unit with the

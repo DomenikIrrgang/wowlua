@@ -16,10 +16,10 @@ export type AuraFilter = string
 -- Reads ------------------------------------------------------------------------
 
 -- One aura, or nil when there is none, the client refuses (secret auras in
--- combat) or hands back a secret table.
+-- combat) or hands back a secret table or one addons may not index.
 local function read(unit: UnitToken, index: number, filter: AuraFilter): AuraData?
     local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, filter)
-    if not ok or secret.isSecret(a) then
+    if not ok or secret.isSecret(a) or not secret.readable(a) then
         return nil
     end
     return a
@@ -29,7 +29,7 @@ end
 --- clients with secret auras).
 export function readable(unit: UnitToken): boolean
     local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, unit, 1, "HELPFUL")
-    return ok and not secret.isSecret(a)
+    return ok and secret.readable(a)
 end
 
 --- Every aura matching `filter`; nothing when they cannot be read.
@@ -41,12 +41,13 @@ export function each(unit: UnitToken, filter: AuraFilter): () -> AuraData?
     end
 end
 
---- `fn` for each aura until it returns true (no iterator allocated).
+--- `fn` for each aura until it returns true (no iterator allocated; a
+--- secret answer does not stop).
 export function forEach(unit: UnitToken, filter: AuraFilter, fn: (a: AuraData) -> boolean?)
     local i = 1
     while true do
         const a = read(unit, i, filter)
-        if not a or fn(a) == true then
+        if not a or secret.flag(fn(a)) then
             return
         end
         i += 1
@@ -88,7 +89,7 @@ end
 --- An aura by its instance ID (from `UNIT_AURA`'s changes).
 export function byInstanceId(unit: UnitToken, id: number): AuraData?
     local ok, a = pcall(C_UnitAuras.GetAuraDataByAuraInstanceID, unit, id)
-    if not ok or secret.isSecret(a) then
+    if not ok or secret.isSecret(a) or not secret.readable(a) then
         return nil
     end
     return a
@@ -218,7 +219,10 @@ local function set(list: any[]?): { [any]: boolean }?
     end
     const out: { [any]: boolean } = {}
     for _, v in ipairs(list) do
-        out[v] = true
+        -- A secret cannot be a key (nor matched by the engine): skipped.
+        if not secret.isSecret(v) then
+            out[v] = true
+        end
     end
     return out
 end

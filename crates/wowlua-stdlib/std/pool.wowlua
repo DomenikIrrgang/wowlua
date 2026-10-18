@@ -3,6 +3,7 @@
 -- points and gets `onRelease()` if it has one; a protected frame released
 -- in combat stays active until combat ends (wowlua:combat).
 import defer from "wowlua:combat"
+import * as secret from "wowlua:secret"
 
 local _, ns = ...
 local wl = ns.__wowlua
@@ -82,7 +83,8 @@ class ObjectPool<T> implements Pool<T>
     end
 
     function release(obj: T)
-        if not self.acquired[obj] then
+        -- A secret cannot be a key, and the pool never hands one out.
+        if secret.isSecret(obj) or not self.acquired[obj] then
             self:misuse("released an object that is not acquired from this pool (released twice?)")
             return
         end

@@ -59,6 +59,11 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
     ),
     ("callbacks", include_str!("../std/callbacks.wowlua"), None),
     (
+        "collections",
+        include_str!("../std/collections.wowlua"),
+        None,
+    ),
+    (
         "color",
         include_str!("../std/color.wowlua"),
         Some(include_str!("../std/color.d.wowlua")),
@@ -185,6 +190,7 @@ const MODULES: &[(&str, &str, Option<&str>)] = &[
         Some(include_str!("../std/tooltip.d.wowlua")),
     ),
     ("unit", include_str!("../std/unit.wowlua"), None),
+    ("utf8", include_str!("../std/utf8.wowlua"), None),
     ("version", include_str!("../std/version.wowlua"), None),
 ];
 

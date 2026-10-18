@@ -1,9 +1,24 @@
 -- wowlua:color (spec stdlib "color"): colors, class and item quality
 -- colors, and chat color escapes. `hex` with a literal is checked and folded
--- by the compiler (E8390).
+-- by the compiler (E8390). Colors the client derives from secrets (curves,
+-- dispel colors) may be secret or have secret components: nothing here
+-- reads those.
+import * as secret from "wowlua:secret"
 
 --- A color: what the client's `CreateColor` returns (a `ColorMixin`).
 export type Color = colorRGBA
+
+-- The client's escape for any color, secret ones included.
+const wrapInColor = (_G.C_ColorUtil :: { WrapTextInColor?: any }?)?.WrapTextInColor :: ((text: string | Secret<string>, c: Color | Secret<Color>) -> string | Secret<string>)?
+
+-- Whether the color's components can be read.
+local function readable(c: Color): boolean
+    if not secret.readable(c) then
+        return false
+    end
+    local r, g, b, a = c:GetRGBA()
+    return not (secret.isSecret(r) or secret.isSecret(g) or secret.isSecret(b) or secret.isSecret(a))
+end
 
 -- One component from two hex digits.
 local function component(digits: string, at: number): number
@@ -33,8 +48,12 @@ local function byte(v: number): string
     return ("%02x"):format(math.floor(math.max(0, math.min(1, v)) * 255 + 0.5))
 end
 
---- `"rrggbb"`, or `"aarrggbb"` with `withAlpha`.
+--- `"rrggbb"`, or `"aarrggbb"` with `withAlpha`; white for a color with
+--- secret components.
 export function toHex(c: Color, withAlpha: boolean?): string
+    if not readable(c) then
+        return withAlpha and "ffffffff" or "ffffff"
+    end
     local r, g, b, a = c:GetRGBA()
     const digits = byte(r) .. byte(g) .. byte(b)
     if withAlpha then
@@ -64,8 +83,13 @@ export function quality(q: number): Color?
 end
 
 --- `text` in a color escape. Only concatenation, so a secret string stays
---- a (secret) string.
-export function wrap(text: string | Secret<string>, c: Color): string | Secret<string>
+--- a (secret) string. A secret color, or one with secret components, is
+--- left to the client's `C_ColorUtil.WrapTextInColor` (the text uncolored
+--- without it).
+export function wrap(text: string | Secret<string>, c: Color | Secret<Color>): string | Secret<string>
+    if secret.isSecret(c) or not readable(c) then
+        return wrapInColor and wrapInColor(text, c) or text
+    end
     return "|c" .. toHex(c, true) .. text .. "|r"
 end
 
@@ -80,8 +104,12 @@ export function strip(text: string): string
     return out
 end
 
---- The color `t` (0 to 1) of the way from `a` to `b`.
+--- The color `t` (0 to 1) of the way from `a` to `b`; the nearer of the two
+--- when one has secret components.
 export function lerp(a: Color, b: Color, t: number): Color
+    if not readable(a) or not readable(b) then
+        return t < 0.5 and a or b
+    end
     local ar, ag, ab, aa = a:GetRGBA()
     local br, bg, bb, ba = b:GetRGBA()
     const mix = function(x: number, y: number): number return x + (y - x) * t end

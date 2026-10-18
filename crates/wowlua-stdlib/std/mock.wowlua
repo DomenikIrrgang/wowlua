@@ -1,7 +1,10 @@
 -- wowlua:mock (spec Tooling §16.1.4): drives the emulated client in tests.
 -- The test runner (`wowlua test`) gives the runtime the engine's controls
 -- (`ns.__wowlua.mockEngine`); this module types them and adds spies, stubs,
--- fakes and waiting.
+-- fakes and waiting. Spies keep the values they are handed, secrets too,
+-- and nothing here compares them (tests run tainted, like the addon).
+import isSecret from "wowlua:secret"
+
 local addonName, ns = ...
 local wl = ns.__wowlua
 
@@ -558,12 +561,21 @@ local function timeout(): number
     return tests and tests.timeout() or 10
 end
 
+-- A wait's condition: a secret boolean cannot be tested (other secrets are
+-- truthy).
+local function truthy(v: any, what: string): boolean
+    if isSecret(v) and type(v) == "boolean" then
+        error(`{what} is a secret boolean, which tests cannot test (they run tainted, like the addon)`, 3)
+    end
+    return not not v
+end
+
 --- Lets frames pass until `fn` returns a truthy value, and returns it; the
---- test fails after its timeout.
+--- test fails after its timeout, or when `fn` returns a secret boolean.
 export function waitUntil<T>(fn: () -> T?, what: string?): T
     local deadline = GetTime() + timeout()
     local v = fn()
-    while not v do
+    while not truthy(v, "mock.waitUntil: the condition") do
         if GetTime() >= deadline then
             error(`timed out after {timeout()} s waiting for {what ?? "the condition"}`, 2)
         end
@@ -574,23 +586,34 @@ export function waitUntil<T>(fn: () -> T?, what: string?): T
 end
 
 --- Lets frames pass until `event` fires (with a payload `predicate`
---- accepts), and returns its payload; the test fails after its timeout.
+--- accepts), and returns its payload (secrets as they are); the test fails
+--- after its timeout, or when `predicate` returns a secret boolean.
 export function waitFor(event: string, predicate: ((...any) -> boolean)?): ...any
     local got: any = nil
+    local refused: string? = nil
     local listener = CreateFrame("Frame")
     listener:RegisterEvent(event)
     listener:SetScript("OnEvent", function(_: Frame, _: string, ...: any)
-        if got == nil and (predicate == nil or predicate(...)) then
+        if got ~= nil or refused ~= nil then
+            return
+        end
+        local accepted = predicate == nil or predicate(...)
+        if isSecret(accepted) and type(accepted) == "boolean" then
+            refused = `mock.waitFor: the predicate for {event} returned a secret boolean, which tests cannot test (they run tainted, like the addon)`
+        elseif accepted then
             got = { n = select("#", ...), ... }
         end
     end)
     -- Waits yield, so no pcall (Lua 5.1 cannot yield across it).
     local deadline = GetTime() + timeout()
-    while got == nil and GetTime() < deadline do
+    while got == nil and refused == nil and GetTime() < deadline do
         wait("frames", 1)
     end
     listener:UnregisterAllEvents()
     listener:SetScript("OnEvent", nil)
+    if refused ~= nil then
+        error(refused, 2)
+    end
     if got == nil then
         error(`timed out after {timeout()} s waiting for {event}`, 2)
     end

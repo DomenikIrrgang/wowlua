@@ -21,9 +21,13 @@ Code extension and the milestones after M9 are planned; see the
 - `import internal` reaches a module's private declarations from tests (S4)
 - Coverage and reports: `wowlua test --coverage` (lines, statements, branches, functions, conditions), `test.coverage` minimums, and the `junit`, `tap`, `json`, `github`, `lcov`, `cobertura`, `coverage-json` and `html` reporters (S5)
 - The three examples have tests
-- The standard library's tests run in the VM, on the engine
+- The standard library's tests run in the VM, on the engine, with the addon's code tainted as the client runs it, so secret values refuse there what they refuse in game
 - `-j, --jobs` (`WOWLUA_JOBS`, `build.jobs`) and `build.jobs-memory`: the worker threads of a build and the memory they may take
 - Lua compile results are kept between runs in the cache (`build.compile-cache`, `build.compile-cache-size`, `WOWLUA_NO_COMPILE_CACHE`)
+- `wowlua:table`: a stable `sort` that never raises "invalid order function", `by` (order by a key), `order`, and the binary-search helpers `insertSorted` and `searchSorted`; secret elements and keys never reach a comparator and sort last
+- `wowlua:collections`: `RingBuffer`, `Heap` and `LruCache`, which store secret values without reading them
+- `wowlua:utf8`: `len`, `sub`, `truncate` and `chars` by characters, not bytes; a secret string passes `truncate` whole
+- `wowlua:secret.readable`: whether a value may be looked into (not a secret, and not a table whose security keeps addons out)
 
 ### Changed
 
@@ -42,6 +46,16 @@ Code extension and the milestones after M9 are planned; see the
 - `check.lints` accepts the warning forms of name and type errors (`"W2001": "allow"`)
 - `wowlua dev` ignores the output folder `build.out` names, not only `dist/`
 - Field assignments of an annotated variable are checked against its declared type
+- The standard library is safe with secret values throughout: no module compares, indexes, measures or truth-tests a value the client may hand back as a secret, or a table whose security keeps addons out. Values only carried pass through unchanged; where an operation needs the value, it is skipped or read as unknown, as each module's chapter now says. Among the paths that raised in game before:
+  - `wowlua:table`: `merge` and `defaults` walked secret tables; `contains` compared secrets
+  - `wowlua:saved`: profile copies and migrations walked secret tables
+  - `wowlua:serialize`: `encode` refused any value holding a secret (now encoded as nil); `decode` and `fromPrintable` of a secret string
+  - `wowlua:comm` and `wowlua:version`: a secret message, target, prefix or sender
+  - `wowlua:errors`: an error whose `tostring` is secret ended in "error in error handling" and was never reported
+  - `wowlua:aura`: aura tables addons may not index reached `find`; a secret spell ID in a container's `spells`
+  - `wowlua:unit`, `wowlua:format`, `wowlua:menu`, `wowlua:dialog`, `wowlua:launcher`, `wowlua:alert`: secret booleans in options and answers
+  - `wowlua:tooltip`, `wowlua:color`, `wowlua:links`, `wowlua:media`, `wowlua:pool`, `wowlua:list`, `wowlua:frames`, `wowlua:settings`, `wowlua:slash`, `wowlua:reflect`, `wowlua:debug`: secret links, colors, names, keys, indexes, positions and conditions
+- `wowlua:test` and `wowlua:mock`: a matcher, spy, snapshot or wait given a secret fails with a message saying so instead of raising inside the framework; new matcher `toBeSecret`
 
 ## [0.9.0] - 2026-10-15
 

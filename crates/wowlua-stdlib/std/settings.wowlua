@@ -3,12 +3,14 @@
 -- proxy setting whose getter and setter read and write the store, so
 -- defaults apply and profile switches show. The category is created once
 -- the store has loaded; the compiler checks the controls' keys against the
--- store's type (E8113, E8070, E8107).
+-- store's type (E8113, E8070, E8107). A secret store value reads as the
+-- control's default (the controls compare it).
 import isLoaded from "wowlua:lifecycle"
 import handle from "wowlua:saved"
 import defer from "wowlua:combat"
 import callIn from "wowlua:errors"
 import print as say from "wowlua:log"
+import * as secret from "wowlua:secret"
 
 local addonName, ns = ...
 local wl = ns.__wowlua
@@ -147,7 +149,10 @@ type Color = { r: number, g: number, b: number, a?: number }
 
 local function colorHex(c: Color?): string
     local value = c or { r = 1, g = 1, b = 1 }
-    return CreateColor(value.r or 1, value.g or 1, value.b or 1, value.a or 1):GenerateHexColor()
+    if type(value) ~= "table" or not secret.readable(value) then
+        value = { r = 1, g = 1, b = 1 }
+    end
+    return CreateColor(secret.known(value.r, 1), secret.known(value.g, 1), secret.known(value.b, 1), secret.known(value.a, 1)):GenerateHexColor()
 end
 
 type PageDef = {
@@ -179,8 +184,17 @@ local function addControls(def: PageDef, store: table, category: SettingsCategor
         if value == nil then
             value = store[key]
         end
+        -- The controls compare and measure values: a secret reads as the
+        -- default (none when the store's value is the default).
+        if secret.isSecret(value) then
+            value = nil
+        end
         return proxy(key, varType, label, value, function(): any
-            return store[key]
+            const current = store[key]
+            if secret.isSecret(current) then
+                return value
+            end
+            return current
         end, function(value: any)
             store[key] = value
             changed(key, value)
@@ -230,6 +244,10 @@ local function addControls(def: PageDef, store: table, category: SettingsCategor
             end, function(hex: string)
                 local picked = CreateColorFromHexString(hex)
                 local value = store[key]
+                if type(value) ~= "table" or not secret.readable(value) then
+                    value = {}
+                    store[key] = value
+                end
                 value.r, value.g, value.b = picked.r, picked.g, picked.b
                 if alpha then
                     value.a = picked.a

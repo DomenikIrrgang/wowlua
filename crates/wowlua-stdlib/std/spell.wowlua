@@ -42,12 +42,13 @@ end
 
 const legacyCooldown = _G.GetSpellCooldown :: ((spell: SpellRef) -> (number, number, number, number?))?
 
---- The spell's cooldown (secret times on restricted clients).
+--- The spell's cooldown (secret times on restricted clients); nil when
+--- the client hands back a secret table or one addons may not index.
 export function cooldown(spell: SpellRef): CooldownInfo?
     const modern = (C_Spell :: table).GetSpellCooldown :: ((spell: SpellRef) -> any)?
     if modern then
         const c = modern(spell)
-        if c == nil or secret.isSecret(c) then
+        if c == nil or not secret.readable(c) then
             return nil
         end
         return {
