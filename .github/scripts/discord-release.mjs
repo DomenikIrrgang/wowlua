@@ -42,13 +42,13 @@ const list = (title, entries) => `**${title}**\n${entries.map((e) => `• ${shor
 const added = sections.Added ?? [];
 const changed = sections.Changed ?? [];
 const fixed = sections.Fixed ?? [];
-const link = `[All release notes](${releaseUrl})`;
+const link = `[release notes ↗](${releaseUrl})`; // links are lowercase and end in ↗, as on wowlua.dev
 
-// A minor release lists what's new and counts the rest; a patch release, with nothing new, lists what it changes.
+// A minor release lists what it adds and counts the rest; a patch release, with nothing new, lists what it changes.
 const parts = [];
 if (intro.length) parts.push(intro.join(" "));
 if (added.length) {
-  parts.push(list("New", added));
+  parts.push(list("Added", added));
   const more = [changed.length && plural(changed.length, "change"), fixed.length && plural(fixed.length, "fix").replace("fixs", "fixes")].filter(Boolean);
   parts.push(more.length ? `**Also** ${more.join(" and ")}. ${link}` : link);
 } else {
@@ -64,18 +64,18 @@ if (description.length > 4000) {
 
 const role = DISCORD_RELEASE_ROLE_ID;
 const message = {
-  content: `${role ? `<@&${role}> ` : ""}**wowlua ${version}** is out.`,
+  content: `${role ? `<@&${role}> ` : ""}**wowlua v${version}** is out.`,
   allowed_mentions: { roles: role ? [role] : [] },
   embeds: [{
-    title: `wowlua ${version}`,
+    title: `wowlua v${version}`,
     url: releaseUrl,
     description,
-    color: 0xffb547, // amber
+    color: 0xffb547, // amber: a new version is the one thing here to act on
     fields: [{
       name: "Update",
-      value: `Run the [installer](https://wowlua.dev/docs/install#update-or-pin-a-version) again, or download it from [GitHub](${releaseUrl}).`,
+      value: `Run the installer again ([install ↗](https://wowlua.dev/docs/install#update-or-pin-a-version)), or download it from [github ↗](${releaseUrl}).`,
     }],
-    footer: { text: prerelease ? "Pre-release: things can still change" : "Release" },
+    footer: { text: prerelease ? "[wl] Pre-release: things can still change." : "[wl] Release." },
     timestamp: new Date().toISOString(),
   }],
 };
