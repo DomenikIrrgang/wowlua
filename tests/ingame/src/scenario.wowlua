@@ -452,6 +452,22 @@ const QUERIES: { [string]: (ask: (name: string, ...any) -> any, ...any) -> () } 
     PLAYER_MOUNT_DISPLAY_CHANGED = function(ask)
         ask("IsMounted")
     end,
+    -- A flight's start and end (the player's flags change with them).
+    UNIT_FLAGS = function(ask, unit)
+        if unit == "player" then
+            ask("UnitOnTaxi", "player")
+            ask("UnitAffectingCombat", "player")
+            ask("IsFlying")
+            ask("IsMounted")
+        end
+    end,
+    TAXIMAP_CLOSED = function(ask)
+        ask("UnitOnTaxi", "player")
+        ask("C_Map.GetBestMapForUnit", "player")
+    end,
+    PLAYER_STARTED_MOVING = function(ask)
+        ask("UnitOnTaxi", "player")
+    end,
     -- The auction house (C_AuctionHouse).
     AUCTION_HOUSE_SHOW = function(ask)
         ask("C_AuctionHouse.IsThrottledMessageSystemReady")
@@ -577,11 +593,78 @@ const QUERIES: { [string]: (ask: (name: string, ...any) -> any, ...any) -> () } 
             ask("UnitGUID", "party" .. i)
         end
     end,
-    -- Professions.
+    -- Professions: the window, its recipes, a recipe learned, the skill
+    -- lines (and their ups: CHAT_MSG_SKILL).
     TRADE_SKILL_SHOW = function(ask)
         ask("C_TradeSkillUI.GetBaseProfessionInfo")
         ask("C_TradeSkillUI.GetChildProfessionInfo")
         ask("C_TradeSkillUI.GetAllRecipeIDs")
+        ask("C_TradeSkillUI.IsTradeSkillReady")
+    end,
+    TRADE_SKILL_LIST_UPDATE = function(ask)
+        ask("C_TradeSkillUI.IsTradeSkillReady")
+        ask("C_TradeSkillUI.GetChildProfessionInfo")
+    end,
+    NEW_RECIPE_LEARNED = function(ask, recipeID)
+        ask("C_TradeSkillUI.GetRecipeInfo", recipeID)
+    end,
+    TRADE_SKILL_ITEM_CRAFTED_RESULT = function(ask)
+        ask("C_TradeSkillUI.GetChildProfessionInfo")
+    end,
+    SKILL_LINES_CHANGED = function(ask)
+        const professions = { ask("GetProfessions") }
+        for _, index in ipairs(professions) do
+            if type(index) == "number" then
+                ask("GetProfessionInfo", index)
+            end
+        end
+    end,
+    -- Talents and the legacy tree (C_Traits; the class's config, the
+    -- tree's currency, a node changed).
+    PLAYER_TALENT_UPDATE = function(ask)
+        ask("C_ClassTalents.GetActiveConfigID")
+        ask("C_SpecializationInfo.GetSpecialization")
+    end,
+    TRAIT_CONFIG_UPDATED = function(ask, configID)
+        const info = ask("C_Traits.GetConfigInfo", configID)
+        if type(info) == "table" and type(info.treeIDs) == "table" then
+            for _, treeID in ipairs(info.treeIDs) do
+                ask("C_Traits.GetTreeCurrencyInfo", configID, treeID, false)
+            end
+        end
+        ask("C_Traits.ConfigHasStagedChanges", configID)
+    end,
+    TRAIT_CONFIG_LIST_UPDATED = function(ask)
+        ask("C_ClassTalents.GetActiveConfigID")
+    end,
+    TRAIT_TREE_CURRENCY_INFO_UPDATED = function(ask, treeID)
+        const configID = ask("C_Traits.GetConfigIDByTreeID", treeID) or ask("C_ClassTalents.GetActiveConfigID")
+        if configID then
+            ask("C_Traits.GetTreeCurrencyInfo", configID, treeID, false)
+        end
+    end,
+    TRAIT_NODE_CHANGED = function(ask, nodeID)
+        const configID = ask("C_ClassTalents.GetActiveConfigID")
+        if configID then
+            ask("C_Traits.GetNodeInfo", configID, nodeID)
+        end
+    end,
+    ACTIVE_COMBAT_CONFIG_CHANGED = function(ask, configID)
+        ask("C_Traits.GetConfigInfo", configID)
+    end,
+    -- Inspecting another player (the target).
+    INSPECT_READY = function(ask, _guid)
+        ask("UnitGUID", "target")
+        ask("GetInspectSpecialization", "target")
+        ask("C_PaperDollInfo.GetInspectItemLevel", "target")
+        for slot = 1, 19 do
+            ask("GetInventoryItemLink", "target", slot)
+        end
+        ask("C_Traits.GetConfigInfo", -1)
+    end,
+    -- Achievements.
+    ACHIEVEMENT_EARNED = function(ask, id)
+        ask("GetAchievementInfo", id)
     end,
 }
 
