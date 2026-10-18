@@ -141,6 +141,8 @@ pub struct World {
     pub auction: crate::auction::AuctionHouse,
     /// The player's party, a trade.
     pub party: crate::party::Party,
+    /// What inspecting other players found.
+    pub inspect: crate::inspect::Inspect,
     /// The global cooldown running: its start (`GetTime`) and length.
     pub global_cooldown: Option<(f64, f64)>,
     /// Spells by trait (`setSpellTraits`: `offGlobalCooldown`,

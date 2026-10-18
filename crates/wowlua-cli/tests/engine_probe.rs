@@ -1225,6 +1225,16 @@ fn the_engine_plays_group_as_the_client_did() {
     plays_as_the_client_did("group", GROUP_MATCHED);
 }
 
+/// How many of the inspect scenario's lines the engine plays as the
+/// client did: only ever up.
+const INSPECT_MATCHED: usize = 236;
+
+/// The inspect scenario: another player's gear and talents.
+#[test]
+fn the_engine_plays_inspect_as_the_client_did() {
+    plays_as_the_client_did("inspect", INSPECT_MATCHED);
+}
+
 /// How many of the items scenario's lines the engine plays as the client
 /// did: only ever up.
 const ITEMS_MATCHED: usize = 302;

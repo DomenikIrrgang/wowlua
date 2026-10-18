@@ -352,6 +352,10 @@ fn get_inventory_item_id(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn get_inventory_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
+    // Another player's, as inspected (`inspect.rs`).
+    if let Some(r) = crate::inspect::item_link(vm, &c) {
+        return Ok(r);
+    }
     Ok(equipped(vm, &c)
         .and_then(|h| link_of(vm, &h))
         .map(|l| vec![l])

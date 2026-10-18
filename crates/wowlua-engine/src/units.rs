@@ -1085,6 +1085,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("softTarget", control_soft_target),
         ("joinGroup", crate::party::control_join_group),
         ("openTrade", crate::party::control_open_trade),
+        ("setInspect", crate::inspect::control_set_inspect),
         ("focus", control_focus),
         ("mouseover", control_mouseover),
         ("damage", control_damage),

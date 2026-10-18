@@ -27,6 +27,7 @@ pub mod framescript;
 pub mod gamedata;
 pub mod gossip;
 pub mod input;
+pub mod inspect;
 pub mod inventory;
 pub mod itemclasses;
 pub mod itemlocation;
@@ -237,6 +238,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(inventory::behaviours())
             .chain(queries::behaviours())
             .chain(party::behaviours())
+            .chain(inspect::behaviours())
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())
             .chain(bindings::behaviours())
