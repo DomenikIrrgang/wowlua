@@ -14,7 +14,8 @@
 //! - `/stdtest engine collections`: `…/forever-camelot-collections.lua`
 //!   (and the data);
 //! - `/stdtest engine traits`: each class's `…/forever-camelot-traits-<class>.lua`;
-//! - `/stdtest engine tradeskill`: `…/forever-camelot-tradeskill.lua`;
+//! - `/stdtest engine tradeskill`: each profession's
+//!   `…/forever-camelot-tradeskill-<profession>.lua`;
 //! - the default character (a fresh level 1 Human Warrior's `/stdtest
 //!   snapshot`): `cargo xtask profile <its StdTest.lua>
 //!   crates/wowlua-engine/data/camelot-default-character.json`;
@@ -990,23 +991,40 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             )?;
         }
     }
-    // The professions' windows (`/stdtest engine tradeskill`): their
+    // The professions' windows (`/stdtest engine tradeskill`), each one's
     // recipes as the character's skill and bags answered them.
-    if let Ok(calls) = state.get::<mlua::Table>("engineTradeSkillAnswers") {
-        let mut list = Vec::new();
-        for pair in calls.pairs::<String, String>() {
-            let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
-            list.push((call, me.scrub(&answer)));
+    if let Ok(windows) = state.get::<mlua::Table>("engineTradeSkillAnswers") {
+        for pair in windows.pairs::<String, mlua::Value>() {
+            let (profession, calls) = pair.map_err(|e| anyhow!("{e}"))?;
+            // A run before the windows were kept apart: a call's answer.
+            let mlua::Value::Table(calls) = calls else {
+                continue;
+            };
+            let mut list = Vec::new();
+            for pair in calls.pairs::<String, String>() {
+                let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
+                list.push((call, me.scrub(&answer)));
+            }
+            list.sort();
+            let file: String = profession
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() {
+                        c.to_ascii_lowercase()
+                    } else {
+                        '-'
+                    }
+                })
+                .collect();
+            write_table(
+                &client.join(format!("forever-camelot-tradeskill-{file}.lua")),
+                &format!(
+                    "WoW Forever {version}: /stdtest engine tradeskill, the {profession} window\n\
+                     (its recipes, categories, schematics) as Blizzard's UI asks it (cargo xtask ingest)."
+                ),
+                &list,
+            )?;
         }
-        list.sort();
-        write_table(
-            &client.join("forever-camelot-tradeskill.lua"),
-            &format!(
-                "WoW Forever {version}: /stdtest engine tradeskill, the professions' windows\n\
-                 (their recipes, categories, schematics) as Blizzard's UI asks them (cargo xtask ingest)."
-            ),
-            &list,
-        )?;
     }
     // Gameplay (`/stdtest engine scenario <name>`): each scenario's
     // events and answers, and the character's world before and after

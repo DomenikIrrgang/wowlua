@@ -1,9 +1,10 @@
 -- /stdtest engine tradeskill: the open profession window's data (its
 -- professions, categories and every recipe: info, schematic, output,
 -- requirements, cooldown, source) as Blizzard's professions UI asks it,
--- into StdTestState.engineTradeSkillAnswers[call] in the answers probe's
--- form, each run adding to the ones before (open one profession, run it,
--- open the next, run it again; `cargo xtask ingest` writes the fixture).
+-- into StdTestState.engineTradeSkillAnswers[profession][call] in the
+-- answers probe's form, each window its own (open one profession, run it,
+-- open the next, run it again; `cargo xtask ingest` writes each one's
+-- fixture).
 -- The answers are the character's: its skill, its recipes, its bags.
 import state from "/state"
 import say from "/harness"
@@ -106,7 +107,7 @@ export function tradeSkillProbe()
         say("engine tradeskill: open a profession's window first")
         return
     end
-    const out: { [string]: string } = st.engineTradeSkillAnswers ?? {}
+    const out: { [string]: string } = {}
     local asked = 0
     local function ask(call: string, ...: any): ...any
         local space, name = call:match("^([%w_]+)%.(%w+)")
@@ -236,8 +237,9 @@ export function tradeSkillProbe()
         end
         c = c + 1
     end
-    st.engineTradeSkillAnswers = out
     const base = T.GetBaseProfessionInfo() :: any
+    st.engineTradeSkillAnswers = st.engineTradeSkillAnswers ?? {}
+    st.engineTradeSkillAnswers[base and base.professionName or "unknown"] = out
     say(
         `engine tradeskill: {base and base.professionName or "?"}: {#recipes} recipes, {#categories} categories, {asked} calls recorded; type /reload so the file is written`
     )
