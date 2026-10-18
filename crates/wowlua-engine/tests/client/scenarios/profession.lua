@@ -1140,7 +1140,7 @@ return {
     ["01135"] = "89.038 SPELL_ACTIVATION_OVERLAY_HIDE(nil nil)",
     ["01136"] = "89.716 MODIFIER_STATE_CHANGED(string LMETA; number 1)",
     ["01137"] = "89.836 MODIFIER_STATE_CHANGED(string LMETA; number 0)",
-    ["01138"] = "91.244 CHAT_MSG_SYSTEM(string Playertina Lastname has gone offline.; string ; string ; string ; string ; string ; number 0; number 0; string ; number 0; number 178; nil nil; number 0; boolean false; boolean false; boolean false; boolean false; {forwardedMessage=string ,fromDiscord=boolean false,globalName=string ,hasAttachment=boolean false,hasEmbed=boolean false,hasEmoji=boolean false,hasError=boolean false,hasForwardedMessage=boolean false,hasPoll=boolean false,hasSticker=boolean false,lastOnlineName=string ,type=number 0,userID=number 0})",
+    ["01138"] = "91.244 CHAT_MSG_SYSTEM(string Otherplayer has gone offline.; string ; string ; string ; string ; string ; number 0; number 0; string ; number 0; number 178; nil nil; number 0; boolean false; boolean false; boolean false; boolean false; {forwardedMessage=string ,fromDiscord=boolean false,globalName=string ,hasAttachment=boolean false,hasEmbed=boolean false,hasEmoji=boolean false,hasError=boolean false,hasForwardedMessage=boolean false,hasPoll=boolean false,hasSticker=boolean false,lastOnlineName=string ,type=number 0,userID=number 0})",
     ["01139"] = "95.177 SPELL_ACTIVATION_OVERLAY_HIDE(nil nil)",
     ["01140"] = "95.177 SPELL_ACTIVATION_OVERLAY_HIDE(nil nil)",
     ["01141"] = "97.293 GLOBAL_MOUSE_DOWN(string RightButton)",

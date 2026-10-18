@@ -1,0 +1,282 @@
+-- /stdtest engine traits: the character's trait configs (class talents,
+-- the legacy trees, every config the client lists) as Blizzard's talent
+-- and legacy UI asks them, every tree down to its nodes, entries,
+-- definitions, conditions, sub-trees and currencies, into
+-- StdTestState.engineTraitAnswers[class][call] in the answers probe's form
+-- (`cargo xtask ingest` writes each class's fixture). The answers are the
+-- character's: its ranks, its currencies, its level's conditions.
+import state from "/state"
+import say from "/harness"
+
+local function pack(...: any): { n: number, [number]: any }
+    return { n = select("#", ...), ... }
+end
+
+--- A value in full: tables to depth 4, keys sorted, secrets marked.
+local function show(v: any, depth: number): string
+    if issecretvalue(v) then
+        return `secret {type(v)}`
+    end
+    if type(v) == "string" then
+        return `string {v}`
+    end
+    if type(v) ~= "table" then
+        return `{type(v)} {tostring(v)}`
+    end
+    if depth >= 4 then
+        return "table"
+    end
+    const keys: string[] = {}
+    const values: { [string]: any } = {}
+    for k, inner in pairs(v :: table) do
+        const key = tostring(k)
+        keys[#keys + 1] = key
+        values[key] = inner
+    end
+    table.sort(keys)
+    const parts: string[] = {}
+    for _, k in ipairs(keys) do
+        parts[#parts + 1] = `{k}={show(values[k], depth + 1)}`
+    end
+    return `\{{table.concat(parts, ",")}\}`
+end
+
+--- The trees the recorded scenarios touched (talents: the shaman's
+--- currencies' trees; legacy: the druid's), asked whatever the config.
+const SCENARIO_TREES: number[] = {
+    1058, 1082, 1089, 1091, 1100, 1111, 1112, 1114, 1116, 1117, 1118, 1187, 1188, 1189,
+}
+
+--- The functions asked without arguments.
+const PLAIN: string[] = {
+    "C_ClassTalents.GetActiveConfigID",
+    "C_ClassTalents.GetActiveHeroTalentSpec",
+    "C_ClassTalents.CanChangeTalents",
+    "C_ClassTalents.CanCreateNewConfig",
+    "C_ClassTalents.CanEditTalents",
+    "C_ClassTalents.GetHasStarterBuild",
+    "C_ClassTalents.GetNextStarterBuildPurchase",
+    "C_ClassTalents.GetStarterBuildActive",
+    "C_ClassTalents.HasUnspentHeroTalentPoints",
+    "C_ClassTalents.HasUnspentTalentPoints",
+    "C_ClassTalents.GetConfigIDsBySpecID",
+    "C_ClassTalents.GetHeroTalentSpecsForClassSpec",
+    "C_Traits.GetLoadoutSerializationVersion",
+    "C_Traits.HasValidInspectData",
+    "C_Traits.IsReadyForCommit",
+    "C_SpecializationInfo.CanPlayerUsePVPTalentUI",
+    "C_SpecializationInfo.CanPlayerUseTalentSpecUI",
+    "C_SpecializationInfo.CanPlayerUseTalentUI",
+    "C_SpecializationInfo.GetActiveSpecGroup",
+    "C_SpecializationInfo.GetAllSelectedPvpTalentIDs",
+    "C_SpecializationInfo.GetPvpTalentAlertStatus",
+    "C_SpecializationInfo.GetSpecialization",
+    "C_SpecializationInfo.HasPlayerEarnedATalentPoint",
+    "C_SpecializationInfo.IsInitialized",
+}
+
+--- The functions asked of each config by its ID alone.
+const BY_CONFIG: string[] = {
+    "GetConfigInfo",
+    "CanEditConfig",
+    "ConfigHasStagedChanges",
+    "GetStagedChanges",
+    "GetStagedChangesCost",
+    "GetTraitSystemFlags",
+    "GetTraitSystemWidgetSetID",
+}
+
+export function traitsProbe()
+    const st = state() :: any
+    const out: { [string]: string } = {}
+    local asked = 0
+    local function ask(call: string, ...: any): ...any
+        local space, name = call:match("^([%w_]+)%.(%w+)")
+        const ns = (_G :: any)[space :: string]
+        const f = ns and ns[name :: string]
+        if f == nil then
+            return
+        end
+        local ok, packed = pcall(function(...: any): any return pack(f(...)) end, ...)
+        asked = asked + 1
+        if not ok then
+            out[call] = `error: {tostring(packed)}`
+            return
+        end
+        const p = packed :: { n: number, [number]: any }
+        const parts: string[] = {}
+        for i = 1, p.n do
+            parts[#parts + 1] = show(p[i], 0)
+        end
+        out[call] = `{p.n}: {table.concat(parts, ", ")}`
+        return unpack(p, 1, p.n)
+    end
+    for _, call in ipairs(PLAIN) do
+        ask(`{call}()`)
+    end
+    -- The specializations and their trees.
+    local _, _, classID = UnitClass("player")
+    ask(`C_SpecializationInfo.IsSpecSelectionEnabled({classID})`, classID)
+    ask(`C_SpecializationInfo.GetNumSpecializationsForClassID({classID})`, classID)
+    const specs = C_SpecializationInfo.GetNumSpecializationsForClassID(classID :: any) ?? 0
+    for i = 1, math.max(specs, 1) do
+        const specID = ask(`C_SpecializationInfo.GetSpecializationInfo({i})`, i)
+        if type(specID) == "number" and specID > 0 then
+            ask(`C_ClassTalents.GetConfigIDsBySpecID({specID})`, specID)
+            ask(`C_ClassTalents.GetLastSelectedSavedConfigID({specID})`, specID)
+            ask(`C_ClassTalents.GetTraitTreeForSpec({specID})`, specID)
+            ask(`C_SpecializationInfo.GetSpellsDisplay({specID})`, specID)
+            ask(`C_SpecializationInfo.GetClassIDFromSpecID({specID})`, specID)
+        end
+        ask(`C_SpecializationInfo.GetSpecializationMasterySpells({i})`, i)
+    end
+    for group = 1, 2 do
+        ask(`C_SpecializationInfo.GetCombatConfigIDForSpecGroup({group})`, group)
+    end
+    for slot = 1, 4 do
+        ask(`C_SpecializationInfo.GetPvpTalentSlotInfo({slot})`, slot)
+        ask(`C_SpecializationInfo.GetPvpTalentSlotUnlockLevel({slot})`, slot)
+    end
+    -- Every config: the active one, each type's, each scenario tree's.
+    const configs: number[] = {}
+    const seenConfig: { [number]: boolean } = {}
+    local function addConfig(id: any)
+        if type(id) == "number" and id > 0 and not seenConfig[id] then
+            seenConfig[id] = true
+            configs[#configs + 1] = id
+        end
+    end
+    addConfig(((_G :: any).C_ClassTalents).GetActiveConfigID())
+    for _, t in pairs(Enum.TraitConfigType :: any) do
+        const ids = ask(`C_Traits.GetConfigsByType({t})`, t)
+        for _, id in ipairs((type(ids) == "table" and ids or {}) :: any[]) do
+            addConfig(id)
+        end
+    end
+    const trees: number[] = {}
+    const seenTree: { [number]: boolean } = {}
+    local function addTree(id: any)
+        if type(id) == "number" and id > 0 and not seenTree[id] then
+            seenTree[id] = true
+            trees[#trees + 1] = id
+        end
+    end
+    for _, tree in ipairs(SCENARIO_TREES) do
+        addTree(tree)
+    end
+    const legacy = (Constants :: any).LegacyConsts
+    if legacy then
+        for key, value in pairs(legacy) do
+            if type(key) == "string" and key:match("^LEGACY_TREE_.*_ID$") then
+                addTree(value)
+            end
+        end
+    end
+    for _, tree in ipairs(trees) do
+        addConfig(ask(`C_Traits.GetConfigIDByTreeID({tree})`, tree))
+    end
+    for _, config in ipairs(configs) do
+        for _, name in ipairs(BY_CONFIG) do
+            ask(`C_Traits.{name}({config})`, config)
+        end
+        ask(`C_ClassTalents.IsConfigPopulated({config})`, config)
+        const info = C_Traits.GetConfigInfo(config)
+        for _, tree in ipairs(info and info.treeIDs or {}) do
+            addTree(tree)
+        end
+    end
+    -- Each tree in each config it belongs to (else its own config).
+    const currencies: { [number]: boolean } = {}
+    local nodes = 0
+    for _, tree in ipairs(trees) do
+        ask(`C_Traits.GetTreeNodes({tree})`, tree)
+        ask(`C_Traits.GetTreeHash({tree})`, tree)
+        ask(`C_Traits.GetSystemIDByTreeID({tree})`, tree)
+        ask(`C_Traits.GetGroupDisplayInfoByTreeID({tree})`, tree)
+        const own = C_Traits.GetConfigIDByTreeID(tree)
+        for _, config in ipairs(configs) do
+            const info = C_Traits.GetConfigInfo(config)
+            local holds = config == own
+            for _, t in ipairs(info and info.treeIDs or {}) do
+                holds = holds or t == tree
+            end
+            if holds then
+                const treeInfo = ask(`C_Traits.GetTreeInfo({config}, {tree})`, config, tree)
+                for _, gate in ipairs(type(treeInfo) == "table" and treeInfo.gates or {}) do
+                    ask(`C_Traits.GetConditionInfo({config}, {gate.conditionID})`, config, gate.conditionID)
+                end
+                for _, staged in ipairs({ false, true }) do
+                    const list = ask(
+                        `C_Traits.GetTreeCurrencyInfo({config}, {tree}, {tostring(staged)})`,
+                        config,
+                        tree,
+                        staged
+                    )
+                    for _, c in ipairs((type(list) == "table" and list or {}) :: any[]) do
+                        currencies[c.traitCurrencyID] = true
+                    end
+                end
+                const groups: number[] = {}
+                const seenGroup: { [number]: boolean } = {}
+                for _, node in ipairs(C_Traits.GetTreeNodes(tree) ?? {}) do
+                    nodes = nodes + 1
+                    const ni = ask(`C_Traits.GetNodeInfo({config}, {node})`, config, node)
+                    ask(`C_Traits.GetNodeCost({config}, {node})`, config, node)
+                    ask(`C_Traits.CanRefundRank({config}, {node})`, config, node)
+                    if type(ni) == "table" then
+                        for _, cond in ipairs(ni.conditionIDs ?? {}) do
+                            ask(`C_Traits.GetConditionInfo({config}, {cond})`, config, cond)
+                        end
+                        for _, g in ipairs(ni.groupIDs ?? {}) do
+                            if not seenGroup[g] then
+                                seenGroup[g] = true
+                                groups[#groups + 1] = g
+                            end
+                        end
+                        if ni.subTreeID and ni.subTreeID > 0 then
+                            ask(`C_Traits.GetSubTreeInfo({config}, {ni.subTreeID})`, config, ni.subTreeID)
+                        end
+                        for _, entry in ipairs(ni.entryIDs ?? {}) do
+                            ask(`C_Traits.CanPurchaseRank({config}, {node}, {entry})`, config, node, entry)
+                            ask(`C_Traits.GetIncreasedTraitData({node}, {entry})`, node, entry)
+                            const ei = ask(`C_Traits.GetEntryInfo({config}, {entry})`, config, entry)
+                            if type(ei) == "table" then
+                                if ei.definitionID then
+                                    ask(`C_Traits.GetDefinitionInfo({ei.definitionID})`, ei.definitionID)
+                                end
+                                for _, cond in ipairs(ei.conditionIDs ?? {}) do
+                                    ask(`C_Traits.GetConditionInfo({config}, {cond})`, config, cond)
+                                end
+                                if ei.subTreeID and ei.subTreeID > 0 then
+                                    ask(`C_Traits.GetSubTreeInfo({config}, {ei.subTreeID})`, config, ei.subTreeID)
+                                end
+                                for rank = 1, math.max(ei.maxRanks ?? 1, 1) do
+                                    ask(`C_Traits.GetTraitDescription({entry}, {rank})`, entry, rank)
+                                end
+                            end
+                        end
+                    end
+                end
+                if #groups > 0 then
+                    table.sort(groups)
+                    ask(
+                        `C_Traits.GetGroupCurrencyInfo({config}, \{{table.concat(groups, ", ")}\})`,
+                        config,
+                        groups
+                    )
+                end
+            end
+        end
+    end
+    for currency in pairs(currencies) do
+        ask(`C_Traits.GetTraitCurrencyInfo({currency})`, currency)
+        ask(`C_Traits.GetMaxAvailableTraitCurrency({currency}, false)`, currency, false)
+        ask(`C_Traits.GetMaxAvailableTraitCurrency({currency}, true)`, currency, true)
+    end
+    local _, class = UnitClass("player")
+    st.engineTraitAnswers = st.engineTraitAnswers ?? {}
+    st.engineTraitAnswers[class] = out
+    say(
+        `engine traits: {#configs} configs, {#trees} trees, {nodes} nodes, {asked} calls recorded for {class}; type /reload so the file is written`
+    )
+end

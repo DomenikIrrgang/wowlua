@@ -13,6 +13,7 @@
 //! - `/stdtest engine cursor`: `…/forever-camelot-cursor.lua`;
 //! - `/stdtest engine collections`: `…/forever-camelot-collections.lua`
 //!   (and the data);
+//! - `/stdtest engine traits`: each class's `…/forever-camelot-traits-<class>.lua`;
 //! - the default character (a fresh level 1 Human Warrior's `/stdtest
 //!   snapshot`): `cargo xtask profile <its StdTest.lua>
 //!   crates/wowlua-engine/data/camelot-default-character.json`;
@@ -642,14 +643,21 @@ fn scrub_owners(line: &str) -> String {
     .into_owned()
 }
 
+/// A profile as `cargo xtask profile` writes it: pretty, keys in order,
+/// a line break at the end.
+fn pretty(v: &serde_json::Value) -> Option<String> {
+    serde_json::to_string_pretty(v).ok().map(|t| t + "\n")
+}
+
 /// A profile's character with its last name (`"lastName": "Lastname"`).
 fn with_last_name(profile: &str) -> String {
     match serde_json::from_str::<serde_json::Value>(profile) {
         Ok(mut v) => {
             if let Some(c) = v.get_mut("character").and_then(|c| c.as_object_mut()) {
                 c.insert("lastName".into(), "Lastname".into());
+                c.sort_keys();
             }
-            serde_json::to_string_pretty(&v).unwrap_or_else(|_| profile.to_string())
+            pretty(&v).unwrap_or_else(|| profile.to_string())
         }
         Err(_) => profile.to_string(),
     }
@@ -663,10 +671,11 @@ fn with_books(profile: &str, books: &std::collections::BTreeSet<String>) -> Stri
                 for id in books {
                     if let Some(item) = items.get_mut(id).and_then(|i| i.as_object_mut()) {
                         item.insert("readable".into(), true.into());
+                        item.sort_keys();
                     }
                 }
             }
-            serde_json::to_string_pretty(&v).unwrap_or_else(|_| profile.to_string())
+            pretty(&v).unwrap_or_else(|| profile.to_string())
         }
         Err(_) => profile.to_string(),
     }
@@ -956,6 +965,30 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             &entries,
         )?;
     }
+    // The trait configs (`/stdtest engine traits`), each class's as its
+    // character answered them: its ranks, currencies and conditions.
+    if let Ok(classes) = state.get::<mlua::Table>("engineTraitAnswers") {
+        for pair in classes.pairs::<String, mlua::Table>() {
+            let (class, calls) = pair.map_err(|e| anyhow!("{e}"))?;
+            let mut list = Vec::new();
+            for pair in calls.pairs::<String, String>() {
+                let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
+                list.push((call, me.scrub(&answer)));
+            }
+            list.sort();
+            write_table(
+                &client.join(format!(
+                    "forever-camelot-traits-{}.lua",
+                    class.to_lowercase()
+                )),
+                &format!(
+                    "WoW Forever {version}: /stdtest engine traits, a {class}'s trait configs\n\
+                     (class talents, legacy trees) as Blizzard's UI asks them (cargo xtask ingest)."
+                ),
+                &list,
+            )?;
+        }
+    }
     // Gameplay (`/stdtest engine scenario <name>`): each scenario's
     // events and answers, and the character's world before and after
     // as test profiles, the character's names scrubbed.
@@ -977,6 +1010,12 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
         .expect("a valid pattern");
         let letter = regex::Regex::new(
             r"GetInboxHeaderInfo\(\d+\) -> \d+: [^,]+, [^,]+, string ([^,]+), (?:[^,]+, ){8}boolean true,",
+        )
+        .expect("a valid pattern");
+        // A friend's coming online or going offline names them (as a link
+        // or plain).
+        let friend = regex::Regex::new(
+            r"string (?:\|Hplayer:[^|]*\|h\[)?([^\[\]|;]+?)(?:\]\|h)? has (?:gone offline|come online)\.",
         )
         .expect("a valid pattern");
         // First every recording's names (a name one recording shows
@@ -1005,6 +1044,25 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
         // (first and last), an NPC's with one. The character's last
         // name, and others' names, as whole words.
         let mut words: Vec<(String, &str)> = Vec::new();
+        // Friends, from the lines as recorded: their names may hold the
+        // character's ("<name>tina"), which the scrub would cut apart.
+        let mut friends: Vec<String> = Vec::new();
+        for (_, scenario) in &all {
+            let log: mlua::Table = scenario.get("log").map_err(|e| anyhow!("{e}"))?;
+            for line in log.sequence_values::<String>() {
+                let line = line.map_err(|e| anyhow!("{e}"))?;
+                if let Some(c) = friend.captures(&line) {
+                    let other = c[1].trim().to_string();
+                    let first = other.split(' ').next().unwrap_or("");
+                    let own = first == me.name || secrets.iter().any(|s| s == first);
+                    if !own && other.len() > 1 && !friends.contains(&other) {
+                        friends.push(other);
+                    }
+                }
+            }
+        }
+        // Longest first: a name inside another's goes after it.
+        friends.sort_by_key(|f| std::cmp::Reverse(f.len()));
         for (_, scenario) in &all {
             let log: mlua::Table = scenario.get("log").map_err(|e| anyhow!("{e}"))?;
             for line in log.sequence_values::<String>() {
@@ -1044,10 +1102,15 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 })
                 .collect();
             let scrub = |text: &str| {
+                let text = friends.iter().fold(text.to_string(), |t, f| {
+                    let re = regex::Regex::new(&format!(r"\b{}\b", regex::escape(f)))
+                        .expect("a valid pattern");
+                    re.replace_all(&t, "Otherplayer").into_owned()
+                });
                 let text = secrets
                     .iter()
                     .filter(|s| s.len() > 2)
-                    .fold(me.scrub(text), |t, s| t.replace(s.as_str(), "Player"));
+                    .fold(me.scrub(&text), |t, s| t.replace(s.as_str(), "Player"));
                 words.iter().fold(text, |t, (w, as_)| {
                     // The character's last name may be a word of the
                     // client's texts ("Lua Taint"): only as a name.

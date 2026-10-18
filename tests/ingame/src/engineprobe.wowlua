@@ -28,6 +28,7 @@ import state from "/state"
 import answersProbe from "/answers"
 import mapsProbe from "/maps"
 import collectionsProbe from "/collections"
+import traitsProbe from "/traits"
 import armStartup from "/startup"
 import scenarioProbe from "/scenario"
 import say from "/harness"
@@ -1771,6 +1772,9 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "collections" then
         collectionsProbe()
+        return
+    elseif words[1] == "traits" then
+        traitsProbe()
         return
     elseif words[1] == "startup" then
         armStartup()
