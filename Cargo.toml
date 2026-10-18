@@ -91,3 +91,20 @@ opt-level = 2
 
 [profile.dev.package.wowlua-engine]
 opt-level = 2
+
+# What loading Blizzard's UI code spends its time in besides: the parser
+# (its Lua), and the engine's API documentation and lookups.
+[profile.dev.package.wowlua-syntax]
+opt-level = 2
+
+[profile.dev.package.serde_json]
+opt-level = 2
+
+[profile.dev.package.indexmap]
+opt-level = 2
+
+[profile.dev.package.hashbrown]
+opt-level = 2
+
+[profile.dev.package.quick-xml]
+opt-level = 2
