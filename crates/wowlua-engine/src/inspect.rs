@@ -12,8 +12,12 @@
 //! GetInspectItemLevel`, the unit's `GetInventoryItemLink`,
 //! `C_Traits.GetConfigInfo(-1)` (the inspected's talent config).
 //!
-//! Unverified: inspecting out of range, `ClearInspectPlayer`, the talents'
-//! nodes of an inspected config.
+//! The inspected config's nodes (`-1`): the recorded character's the test
+//! names (`traitCharacter`), else the tree's owner's with nothing bought
+//! (`traits.rs`).
+//!
+//! Unverified: inspecting out of range, `ClearInspectPlayer`, the inspected
+//! nodes' ranks (the recorded character's at its probe).
 
 use std::collections::BTreeMap;
 
@@ -185,6 +189,17 @@ pub fn config_info(vm: &mut Vm, c: &NativeCall) -> Option<Vec<Value>> {
         return Some(vec![widgets::answer_copy(vm, Value::Table(config))]);
     }
     None
+}
+
+/// The recorded character the inspected unit is (`setInspect`'s
+/// `traitCharacter`: its class config's ID), if the test said.
+pub fn trait_character(vm: &mut Vm) -> Option<i64> {
+    let id = inspect(vm).last?;
+    let t = inspect(vm).data.get(&id.0).copied()?;
+    match field(vm, t, "traitCharacter") {
+        Value::Num(n) => Some(n as i64),
+        _ => None,
+    }
 }
 
 fn can_inspect(vm: &mut Vm, c: NativeCall) -> Ret {

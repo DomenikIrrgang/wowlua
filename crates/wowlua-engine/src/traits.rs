@@ -730,6 +730,32 @@ fn model(vm: &Vm) -> Model<'_> {
     Model::new(&key, &engine(vm).world.traits)
 }
 
+/// The inspected config (`-1`): the recorded character the test named
+/// and its class config.
+fn inspected(vm: &mut Vm) -> Option<(String, i64)> {
+    let config = crate::inspect::trait_character(vm)?;
+    let suffix = format!("-{config}");
+    let key = data()
+        .keys()
+        .map(|(k, _)| *k)
+        .find(|k| k.ends_with(&suffix))?;
+    Some((key.to_string(), config))
+}
+
+/// A config asked of: the inspected's (`-1`) as its recorded character's
+/// own, else the player's (whether it is the inspected's).
+fn resolve(vm: &mut Vm, config: i64) -> (String, i64, bool) {
+    if config == INSPECT
+        && let Some((key, real)) = inspected(vm)
+    {
+        return (key, real, true);
+    }
+    (character(vm), config, false)
+}
+
+/// The inspected config's ID.
+const INSPECT: i64 = -1;
+
 fn traits_mut(vm: &mut Vm) -> &mut Traits {
     &mut engine_mut(vm).world.traits
 }
@@ -755,8 +781,16 @@ fn recorded(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(name) = crate::recorded::called_name(vm, &c) else {
         return Ok(vec![]);
     };
-    let call = crate::call_text(vm, &name, &c, 1);
-    let m = model(vm);
+    let mut call = crate::call_text(vm, &name, &c, 1);
+    let mut key = character(vm);
+    // The inspected config's calls: its recorded character's own.
+    if call.contains("(-1")
+        && let Some((k, real)) = inspected(vm)
+    {
+        call = call.replacen("(-1", &format!("({real}"), 1);
+        key = k;
+    }
+    let m = Model::new(&key, &engine(vm).world.traits);
     if m.known()
         && let Some(values) = m.recorded(&call)
     {
@@ -780,7 +814,13 @@ fn get_node_info(vm: &mut Vm, c: NativeCall) -> Ret {
         let (Some(config), Some(node)) = (int(vm, &c, 1), int(vm, &c, 2)) else {
             return Ok(vec![]);
         };
-        let rv = model(vm).node(config, node);
+        let (key, config, viewed) = resolve(vm, config);
+        let mut rv = Model::new(&key, &engine(vm).world.traits).node(config, node);
+        // Another's talents viewed: nothing to buy or take back.
+        if viewed && let Some(info) = rv.as_mut() {
+            info.set("canPurchaseRank", Rv::Bool(false));
+            info.set("canRefundRank", Rv::Bool(false));
+        }
         Ok(answer(vm, rv))
     })
 }
@@ -790,7 +830,8 @@ fn get_condition_info(vm: &mut Vm, c: NativeCall) -> Ret {
         let (Some(config), Some(cond)) = (int(vm, &c, 1), int(vm, &c, 2)) else {
             return Ok(vec![]);
         };
-        let rv = model(vm).condition(config, cond);
+        let (key, config, _) = resolve(vm, config);
+        let rv = Model::new(&key, &engine(vm).world.traits).condition(config, cond);
         Ok(answer(vm, rv))
     })
 }
@@ -801,7 +842,8 @@ fn get_tree_currency_info(vm: &mut Vm, c: NativeCall) -> Ret {
             return Ok(vec![]);
         };
         let exclude = vm.hidden(c.arg(3)).truthy();
-        let rv = model(vm).tree_currency(config, tree, exclude);
+        let (key, config, _) = resolve(vm, config);
+        let rv = Model::new(&key, &engine(vm).world.traits).tree_currency(config, tree, exclude);
         Ok(answer(vm, rv))
     })
 }

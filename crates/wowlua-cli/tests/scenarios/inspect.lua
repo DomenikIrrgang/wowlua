@@ -1,7 +1,7 @@
 -- /stdtest engine scenario inspect, played with the engine's controls:
 -- the level 21 paladin targets a hunter (another of the user's characters),
--- inspects it from the target's menu (scenarios/inspect.lua; viewing its
--- talents after: not yet). Each step at its recorded time (a click:
+-- inspects it from the target's menu, then views its talents
+-- (scenarios/inspect.lua). Each step at its recorded time (a click:
 -- a round trip before the server's answer, ~0.5 s).
 local e = __engine
 local player = e.player
@@ -33,6 +33,8 @@ hunter:setInspect({
     },
     received = { 3287, 252425, 3184, 7281, 4246, 5107, 5957 },
     config = { ID = -1, name = "Hunter", treeIDs = { 1091 }, type = 4, usesSharedActionBars = false },
+    -- Its talents: the recorded hunter's (its class config's ID).
+    traitCharacter = 4226427,
 })
 local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
@@ -72,7 +74,9 @@ at(5.192) press(menuEntry("Inspect"))
 at(6.0)
 check("the inspect frame shown", InspectFrame and InspectFrame:IsShown())
 check("its gloves shown", GetInventoryItemLink("target", 10) ~= nil)
--- Not yet: viewing its talents from the menu (9.827, 10.651): the
--- inspected config's tree (C_Traits) is not modelled, and the talents
--- frame opened from INSPECT_READY runs tainted in the engine.
-at(9.5)
+-- Its talents from the menu.
+at(9.742) press(TargetFrame, "RightButton")
+at(10.581) press(menuEntry("View Talents"))
+at(11.5)
+check("its talents shown", PlayerSpellsFrame and PlayerSpellsFrame:IsShown())
+at(12.0)
