@@ -182,7 +182,7 @@ pub fn config_info(vm: &mut Vm, c: &NativeCall) -> Option<Vec<Value>> {
         && let Some(t) = inspect(vm).data.get(&id.0).copied()
         && let Value::Table(config) = field(vm, t, "config")
     {
-        return Some(vec![Value::Table(config)]);
+        return Some(vec![widgets::answer_copy(vm, Value::Table(config))]);
     }
     None
 }
@@ -196,6 +196,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("NotifyInspect", notify_inspect),
         ("GetInspectSpecialization", get_inspect_specialization),
+        // What the global becomes once Blizzard_PlayerSpells loads.
+        (
+            "C_SpecializationInfo.GetInspectSpecialization",
+            get_inspect_specialization,
+        ),
         (
             "C_PaperDollInfo.GetInspectItemLevel",
             get_inspect_item_level,

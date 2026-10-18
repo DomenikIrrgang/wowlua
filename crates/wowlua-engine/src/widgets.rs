@@ -1491,6 +1491,39 @@ fn create_region(vm: &mut Vm, id: WidgetId, c: NativeCall, class: &str) -> Ret {
     Ok(vec![region])
 }
 
+/// A table of the test's as the client's answer: a fresh copy, every
+/// table in it too (what the test wrote carries its taint; the client's
+/// answers are made by C, secure).
+pub fn answer_copy(vm: &mut Vm, v: Value) -> Value {
+    fn copy(
+        vm: &mut Vm,
+        v: Value,
+        done: &mut std::collections::HashMap<TableRef, TableRef>,
+    ) -> Value {
+        let Value::Table(t) = v else {
+            return v;
+        };
+        if let Some(c) = done.get(&t) {
+            return Value::Table(*c);
+        }
+        let out = vm.new_table();
+        done.insert(t, out);
+        let mut pairs = Vec::new();
+        let mut key = Value::Nil;
+        while let Ok(Some((k, val))) = vm.heap.table(t).next(key) {
+            pairs.push((k, val));
+            key = k;
+        }
+        for (k, val) in pairs {
+            let k = copy(vm, k, done);
+            let val = copy(vm, val, done);
+            let _ = vm.heap.table_mut(out).set(k, val);
+        }
+        Value::Table(out)
+    }
+    copy(vm, v, &mut std::collections::HashMap::new())
+}
+
 /// A model scene's actors, in the order made.
 fn actors(vm: &mut Vm, id: WidgetId) -> TableRef {
     let props = engine(vm).world.widgets[id.0].props;
