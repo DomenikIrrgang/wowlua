@@ -19,7 +19,8 @@
 //! purchase completed, the won notification, the money, the results
 //! refreshed); selling (an item put up: locked, its search; `PostItem`:
 //! the auction created, the item gone, the deposit paid, the item's search
-//! again); `CloseAuctionHouse`.
+//! again); `CloseAuctionHouse`. The house's settings (filters, copper
+//! values, auto-populated prices) are the client's recorded answers.
 //!
 //! Unverified: bids and buying items (not commodities), cancelling,
 //! favorites, more than one page of results, the deposit's formula (the
@@ -931,15 +932,6 @@ fn close_auction_house(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// The client's recorded answer when there is one (`/stdtest engine
-/// answers`), else `f`'s.
-fn recorded_or(vm: &mut Vm, name: &str, c: &NativeCall, f: fn(&mut Vm) -> Vec<Value>) -> Ret {
-    if let Some(r) = crate::recorded::lookup(vm, name, c) {
-        return Ok(r);
-    }
-    Ok(f(vm))
-}
-
 fn enum_value(vm: &mut Vm, table: &str, key: &str) -> Value {
     let Value::Table(e) = vm.get_global("Enum") else {
         return Value::Nil;
@@ -949,66 +941,6 @@ fn enum_value(vm: &mut Vm, table: &str, key: &str) -> Value {
         return Value::Nil;
     };
     field(vm, t, key)
-}
-
-/// `C_AuctionHouse.GetFilterGroups()`: the classic house's filters, as
-/// Blizzard's classic code names them (unverified: not recorded):
-/// uncollected and usable only, then the rarities.
-fn get_filter_groups(vm: &mut Vm, c: NativeCall) -> Ret {
-    recorded_or(vm, "C_AuctionHouse.GetFilterGroups", &c, |vm| {
-        let groups = vm.new_table();
-        let sets: [(&str, &[&str]); 2] = [
-            ("Uncategorized", &["UncollectedOnly", "UsableOnly"]),
-            (
-                "Rarity",
-                &[
-                    "PoorQuality",
-                    "CommonQuality",
-                    "UncommonQuality",
-                    "RareQuality",
-                    "EpicQuality",
-                    "LegendaryQuality",
-                ],
-            ),
-        ];
-        for (i, (category, filters)) in sets.iter().enumerate() {
-            let g = vm.new_table();
-            let cat = enum_value(vm, "AuctionHouseFilterCategory", category);
-            set(vm, g, "category", cat);
-            let list = vm.new_table();
-            for (j, f) in filters.iter().enumerate() {
-                let v = enum_value(vm, "AuctionHouseFilter", f);
-                let _ = vm.heap.table_mut(list).set(Value::Num((j + 1) as f64), v);
-            }
-            set(vm, g, "filters", Value::Table(list));
-            let _ = vm
-                .heap
-                .table_mut(groups)
-                .set(Value::Num((i + 1) as f64), Value::Table(g));
-        }
-        vec![Value::Table(groups)]
-    })
-}
-
-/// `C_AuctionHouse.SupportsCopperValues()`: true (recorded prices in
-/// copper: 42, 44; the call itself unverified).
-fn supports_copper_values(vm: &mut Vm, c: NativeCall) -> Ret {
-    recorded_or(vm, "C_AuctionHouse.SupportsCopperValues", &c, |_| {
-        vec![Value::Bool(true)]
-    })
-}
-
-/// `C_AuctionHouse.ShouldAutoPopulatePrice()`: true (unverified).
-fn should_auto_populate_price(vm: &mut Vm, c: NativeCall) -> Ret {
-    recorded_or(vm, "C_AuctionHouse.ShouldAutoPopulatePrice", &c, |_| {
-        vec![Value::Bool(true)]
-    })
-}
-
-/// `C_WowTokenPublic.GetCurrentMarketPrice()`: none in this client
-/// (unverified).
-fn get_current_market_price(vm: &mut Vm, c: NativeCall) -> Ret {
-    recorded_or(vm, "C_WowTokenPublic.GetCurrentMarketPrice", &c, |_| vec![])
 }
 
 /// `C_AuctionHouse.GetItemKeyInfo(itemKey)`: the item's name, quality,
@@ -1138,19 +1070,6 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
-        ("C_AuctionHouse.GetFilterGroups", get_filter_groups),
-        (
-            "C_AuctionHouse.SupportsCopperValues",
-            supports_copper_values,
-        ),
-        (
-            "C_AuctionHouse.ShouldAutoPopulatePrice",
-            should_auto_populate_price,
-        ),
-        (
-            "C_WowTokenPublic.GetCurrentMarketPrice",
-            get_current_market_price,
-        ),
         ("C_AuctionHouse.GetItemKeyInfo", get_item_key_info),
         ("C_AuctionHouse.MakeItemKey", make_item_key),
         (

@@ -29,7 +29,6 @@ pub mod gossip;
 pub mod input;
 pub mod inspect;
 pub mod inventory;
-pub mod itemclasses;
 pub mod itemlocation;
 pub mod levels;
 pub mod login;
@@ -232,7 +231,6 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(mail::behaviours())
             .chain(bank::behaviours())
             .chain(auction::behaviours())
-            .chain(itemclasses::behaviours())
             .chain(itemlocation::behaviours())
             .chain(death::behaviours())
             .chain(inventory::behaviours())
