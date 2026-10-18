@@ -13,8 +13,16 @@
 //! - `GetCursorInfo`: `spell, spellbook slot, "spell", spellID`; `macro,
 //!   index`; `item, itemID, link`.
 //!
-//! Unverified: picking up while holding something (swaps), moving an item
-//! to another slot, placing on a filled action slot, money.
+//! An item put into another (empty) bag slot: the cursor let go at once,
+//! the item still locked; the server's answer a round trip later moves it
+//! (`/stdtest engine scenario bank`): for each bag, the bank's first, the
+//! spells' update, the lock gone where it arrived, the bag's update; the
+//! count's change when it crossed into or out of the bags. A bag item used
+//! at the bank goes into the bank (or out of it) the same way, locked at
+//! once. Trade goods do not show the action bars' grid.
+//!
+//! Unverified: picking up while holding something (swaps), moving within
+//! one bag, placing on a filled action slot, money.
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
@@ -62,11 +70,31 @@ fn fire(vm: &mut Vm, event: &str, args: &[Value]) {
     widgets::fire_event(vm, event, args);
 }
 
+/// Whether holding it shows the action bars' grid: a spell, a macro, an
+/// item but a trade good (recorded: Copper Ore without the grid, the
+/// Hearthstone and a weapon with it; other classes unverified).
+fn shows_grid(vm: &mut Vm, cursor: &Cursor) -> bool {
+    match cursor {
+        Cursor::Item(held, _) => {
+            // `Enum.ItemClass.Tradegoods`.
+            !matches!(
+                crate::character::item_field(vm, held.id, "classID"),
+                Value::Num(7.0)
+            )
+        }
+        Cursor::Empty => false,
+        _ => true,
+    }
+}
+
 /// Holds `new` (from empty): the grid shows, the cursor changes.
 fn pick_up(vm: &mut Vm, new: Cursor) {
     let kind = new.kind();
+    let grid = shows_grid(vm, &new);
     engine_mut(vm).world.character.cursor = new;
-    fire(vm, "ACTIONBAR_SHOWGRID", &[]);
+    if grid {
+        fire(vm, "ACTIONBAR_SHOWGRID", &[]);
+    }
     fire(
         vm,
         "CURSOR_CHANGED",
@@ -89,7 +117,9 @@ fn put_down(vm: &mut Vm) {
     if let Cursor::Item(_, Some(source)) = &old {
         set_locked(vm, source, false);
     }
-    fire(vm, "ACTIONBAR_HIDEGRID", &[]);
+    if shows_grid(vm, &old) {
+        fire(vm, "ACTIONBAR_HIDEGRID", &[]);
+    }
     fire(
         vm,
         "CURSOR_CHANGED",
@@ -262,40 +292,20 @@ fn pickup_item_at(vm: &mut Vm, source: Source) {
             // To or from the gear: the server's (`inventory.rs`).
             crate::inventory::cursor_move(vm, from, source);
         }
-        Cursor::Item(held, Some(from)) => {
-            // A move to another (empty) slot.
-            let ch = &engine(vm).world.character;
-            let target_empty = match &source {
-                Source::Bag(b, s) => ch.bags.get(b).is_some_and(|bag| !bag.items.contains_key(s)),
-                Source::Equipped(s) => !ch.equipment.contains_key(s),
+        Cursor::Item(_, Some(Source::Bag(fb, fs))) => {
+            // A move to another (empty) bag slot: the cursor let go, the
+            // item locked till the server's answer a round trip later.
+            let Source::Bag(tb, ts) = source else {
+                return;
             };
-            if target_empty {
-                put_down(vm);
-                let ch = &mut engine_mut(vm).world.character;
-                match &from {
-                    Source::Bag(b, s) => {
-                        ch.bags.get_mut(b).map(|bag| bag.items.remove(s));
-                    }
-                    Source::Equipped(s) => {
-                        ch.equipment.remove(s);
-                    }
-                }
-                let mut held = held;
-                held.locked = false;
-                match &source {
-                    Source::Bag(b, s) => {
-                        ch.bags.get_mut(b).map(|bag| bag.items.insert(*s, held));
-                    }
-                    Source::Equipped(s) => {
-                        ch.equipment.insert(*s, held);
-                    }
-                }
-                for bag in [&from, &source] {
-                    if let Source::Bag(b, _) = bag {
-                        fire(vm, "BAG_UPDATE", &[Value::Num(*b as f64)]);
-                    }
-                }
-                fire(vm, "BAG_UPDATE_DELAYED", &[]);
+            let ch = &engine(vm).world.character;
+            if ch
+                .bags
+                .get(&tb)
+                .is_some_and(|bag| !bag.items.contains_key(&ts))
+            {
+                release_keeping_lock(vm);
+                move_later(vm, (fb, fs), (tb, ts));
             }
         }
         Cursor::Empty => {
@@ -333,7 +343,9 @@ pub fn hold_for_server(vm: &mut Vm, source: Source) {
 /// move): `ACTIONBAR_HIDEGRID`, `CURSOR_CHANGED`.
 pub fn release_keeping_lock(vm: &mut Vm) {
     let old = std::mem::take(&mut engine_mut(vm).world.character.cursor);
-    fire(vm, "ACTIONBAR_HIDEGRID", &[]);
+    if shows_grid(vm, &old) {
+        fire(vm, "ACTIONBAR_HIDEGRID", &[]);
+    }
     fire(
         vm,
         "CURSOR_CHANGED",
@@ -344,6 +356,102 @@ pub fn release_keeping_lock(vm: &mut Vm) {
             Value::Num(0.0),
         ],
     );
+}
+
+/// A bag item used at the bank: a carried one into the bank's first free
+/// slot, a bank one into the bags; locked at once, moved a round trip
+/// later (recorded).
+pub fn use_at_bank(vm: &mut Vm, bag: i64, slot: usize) {
+    let ch = &engine(vm).world.character;
+    let Some(held) = ch.bags.get(&bag).and_then(|b| b.items.get(&slot)).cloned() else {
+        return;
+    };
+    if held.locked {
+        return;
+    }
+    let to = if crate::character::carried(bag) {
+        crate::bank::free_slot(vm)
+    } else {
+        free_carried_slot(vm)
+    };
+    let Some(to) = to else {
+        return;
+    };
+    set_locked(vm, &Source::Bag(bag, slot), true);
+    move_later(vm, (bag, slot), to);
+}
+
+/// The bags' first free slot (the backpack first).
+fn free_carried_slot(vm: &Vm) -> Option<(i64, usize)> {
+    let ch = &engine(vm).world.character;
+    ch.bags
+        .iter()
+        .filter(|(b, _)| crate::character::carried(**b))
+        .find_map(|(b, bag)| {
+            (1..=bag.slots)
+                .find(|s| !bag.items.contains_key(s))
+                .map(|s| (*b, s))
+        })
+}
+
+fn move_later(vm: &mut Vm, from: (i64, usize), to: (i64, usize)) {
+    let delay = crate::clock::server_delay(vm);
+    let native = vm.native_with(
+        "itemMoved",
+        moved,
+        vec![
+            Value::Num(from.0 as f64),
+            Value::Num(from.1 as f64),
+            Value::Num(to.0 as f64),
+            Value::Num(to.1 as f64),
+        ],
+    );
+    crate::clock::after_engine(vm, delay, native);
+}
+
+/// The server moved the item: for each bag, the bank's first (recorded:
+/// a bank tab before the backpack), the spells' update, the item's lock
+/// gone where it arrived, the bag's update; the count's change when it
+/// crossed into or out of the bags.
+fn moved(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = |i: usize| num(c.upvals[i]).unwrap_or(0.0);
+    let (fb, fs, tb, ts) = (n(0) as i64, n(1) as usize, n(2) as i64, n(3) as usize);
+    let id = match engine(vm)
+        .world
+        .character
+        .bags
+        .get(&fb)
+        .and_then(|b| b.items.get(&fs))
+    {
+        Some(h) => h.id,
+        None => return Ok(vec![]),
+    };
+    let before = crate::character::count_in_bags(vm, id);
+    let held = {
+        let ch = &mut engine_mut(vm).world.character;
+        ch.bags.get_mut(&fb).and_then(|b| b.items.remove(&fs))
+    };
+    let Some(held) = held else {
+        return Ok(vec![]);
+    };
+    if let Some(b) = engine_mut(vm).world.character.bags.get_mut(&tb) {
+        b.items.insert(ts, held);
+    }
+    let mut bags = vec![fb, tb];
+    bags.sort_unstable_by(|a, b| b.cmp(a));
+    bags.dedup();
+    for bag in bags {
+        crate::character::equipped_spells_changed(vm);
+        if bag == tb {
+            set_locked(vm, &Source::Bag(tb, ts), false);
+        }
+        crate::character::bag_updated(vm, bag);
+    }
+    fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    if crate::character::count_in_bags(vm, id) != before {
+        fire(vm, "ITEM_COUNT_CHANGED", &[Value::Num(id as f64)]);
+    }
+    Ok(vec![])
 }
 
 /// What the cursor holds: an item and where it came from.

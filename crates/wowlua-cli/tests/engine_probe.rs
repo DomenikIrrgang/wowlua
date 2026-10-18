@@ -1170,6 +1170,16 @@ fn the_engine_plays_mail_as_the_client_did() {
     plays_as_the_client_did("mail", MAIL_MATCHED);
 }
 
+/// How many of the bank scenario's lines the engine plays as the client
+/// did: only ever up.
+const BANK_MATCHED: usize = 537;
+
+/// The bank scenario: items moved in and out, a tab bought.
+#[test]
+fn the_engine_plays_bank_as_the_client_did() {
+    plays_as_the_client_did("bank", BANK_MATCHED);
+}
+
 /// How many of the items scenario's lines the engine plays as the client
 /// did: only ever up.
 const ITEMS_MATCHED: usize = 302;

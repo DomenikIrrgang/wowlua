@@ -133,6 +133,8 @@ pub struct World {
     pub on_taxi: bool,
     /// The mailboxes, the inbox, the letter being written.
     pub mail: crate::mail::Mail,
+    /// The bankers, the character's bank tabs.
+    pub bank: crate::bank::Bank,
     /// The global cooldown running: its start (`GetTime`) and length.
     pub global_cooldown: Option<(f64, f64)>,
     /// Spells by trait (`setSpellTraits`: `offGlobalCooldown`,

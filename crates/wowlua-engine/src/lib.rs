@@ -8,6 +8,7 @@ pub mod animations;
 pub mod api;
 pub mod args;
 pub mod auras;
+pub mod bank;
 pub mod bars;
 pub mod bindings;
 pub mod casting;
@@ -224,6 +225,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(trainer::behaviours())
             .chain(taxi::behaviours())
             .chain(mail::behaviours())
+            .chain(bank::behaviours())
             .chain(death::behaviours())
             .chain(inventory::behaviours())
             .chain(queries::behaviours())

@@ -763,6 +763,13 @@ export function defineMailbox(mailbox: MockUnit, data: table)
     engine().defineMailbox(mailbox, data)
 end
 
+--- A banker and the character's bank tabs: `{ tabs = { { name, icon,
+--- depositFlags, slots, items } }, nextTabCost, tabSlots }` (the tabs'
+--- bags 6 on); `player:interact(banker)` opens the bank.
+export function defineBank(banker: MockUnit, data: table)
+    engine().defineBank(banker, data)
+end
+
 --- The user clicks the world: an item on the cursor is to be deleted
 --- (`DELETE_ITEM_CONFIRM`, Blizzard's popup; `DeleteCursorItem` deletes it).
 export function clickWorld()

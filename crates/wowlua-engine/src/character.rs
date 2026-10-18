@@ -612,6 +612,26 @@ fn bag_counts(vm: &Vm) -> BTreeMap<i64, f64> {
 /// `BAG_CONTAINER_UPDATE()` for a bag put in or taken away,
 /// `BAG_UPDATE_DELAYED()`, then `ITEM_COUNT_CHANGED(itemID)` per item whose
 /// count changed.
+/// A bag of `slots` from a test's table of items (`{ [slot] = item }`),
+/// put in place without telling (a bank tab's, there before the bank
+/// opens).
+pub fn place_bag(vm: &mut Vm, bag: i64, slots: usize, items: Option<TableRef>) {
+    let mut held = BTreeMap::new();
+    if let Some(list) = items {
+        for slot in 1..=slots {
+            let v = vm.heap.table(list).get(Value::Num(slot as f64));
+            if let Some(h) = held_of(vm, v) {
+                held.insert(slot, h);
+            }
+        }
+    }
+    engine_mut(vm)
+        .world
+        .character
+        .bags
+        .insert(bag, Bag { slots, items: held });
+}
+
 pub fn control_set_bag(vm: &mut Vm, c: NativeCall) -> Ret {
     let bag = vm.check_int(&c, 1)?;
     let contents = match c.arg(2) {
@@ -805,14 +825,15 @@ pub fn take_from_bags(vm: &mut Vm, id: i64, count: f64) -> Vec<i64> {
     changed
 }
 
-/// How many of item `id` the bags hold.
+/// How many of item `id` the bags hold (not the bank's).
 pub fn count_in_bags(vm: &Vm, id: i64) -> f64 {
     engine(vm)
         .world
         .character
         .bags
-        .values()
-        .flat_map(|b| b.items.values())
+        .iter()
+        .filter(|(b, _)| carried(**b))
+        .flat_map(|(_, b)| b.items.values())
         .filter(|h| h.id == id)
         .map(|h| h.count)
         .sum()

@@ -247,6 +247,10 @@ pub fn control_interact(vm: &mut Vm, c: NativeCall) -> Ret {
         crate::mail::interact(vm, npc);
         return Ok(vec![]);
     }
+    if crate::bank::has(vm, npc) {
+        crate::bank::interact(vm, npc);
+        return Ok(vec![]);
+    }
     let delay = crate::clock::server_delay(vm);
     let later = vm.native_with(
         "questDialog",

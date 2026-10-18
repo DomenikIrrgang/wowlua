@@ -718,6 +718,12 @@ fn use_container_item(vm: &mut Vm, c: NativeCall) -> Ret {
         crate::mail::attach(vm, bag as i64, slot as usize);
         return Ok(vec![]);
     }
+    // At the bank: a carried item into its first free slot, a bank item
+    // into the bags (`cursor.rs`).
+    if crate::bank::is_open(vm) {
+        crate::cursor::use_at_bank(vm, bag as i64, slot as usize);
+        return Ok(vec![]);
+    }
     // Away from a vendor: worn, or used (`inventory.rs`).
     if !merchant(vm).open {
         crate::inventory::use_container_item(vm, bag as i64, slot as usize);
