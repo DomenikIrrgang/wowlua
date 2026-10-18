@@ -1081,6 +1081,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("setStats", crate::stats::control_set_stats),
         ("equip", crate::character::control_equip),
         ("setDurability", crate::character::control_set_durability),
+        ("wear", crate::character::control_wear),
     ] {
         let native = vm.native(name, f);
         let key = vm.heap.intern(name.as_bytes());
@@ -1863,6 +1864,9 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
     if lands && amount > 0.0 {
         change_health(vm, victim, -amount);
     }
+    if victim == PLAYER && matches!(kind.as_str(), "DODGE" | "PARRY" | "BLOCK") {
+        avoided(vm);
+    }
     let upvals = vec![
         Value::Num(victim.0 as f64),
         vm.str(&kind),
@@ -1871,6 +1875,41 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
     let text = vm.native_with("swingText", swing_text, upvals);
     crate::clock::after_engine(vm, COMBAT_TEXT_DELAY, text);
     Ok(vec![])
+}
+
+/// The player dodged, parried or blocked: a spell that procs on it (the
+/// warrior's Defensive State, 5302: `procOnAvoid`) tells its cooldown
+/// (`ACTIONBAR_UPDATE_COOLDOWN`, `BAG_UPDATE_COOLDOWN`,
+/// `SPELL_UPDATE_COOLDOWN(spell)`, `UPDATE_SHAPESHIFT_COOLDOWN`; recorded
+/// at each of the quest scenario's).
+fn avoided(vm: &mut Vm) {
+    let spells: Vec<(i64, wowlua_vm::TableRef)> = engine(vm)
+        .world
+        .data
+        .spells
+        .iter()
+        .map(|(k, v)| (*k, *v))
+        .collect();
+    for (id, t) in spells {
+        let k = vm.str("procOnAvoid");
+        if !vm.heap.table(t).get(k).truthy() {
+            continue;
+        }
+        fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
+        fire(vm, "BAG_UPDATE_COOLDOWN", &[]);
+        fire(
+            vm,
+            "SPELL_UPDATE_COOLDOWN",
+            &[
+                Value::Num(id as f64),
+                Value::Nil,
+                Value::Nil,
+                Value::Nil,
+                Value::Nil,
+            ],
+        );
+        fire(vm, "UPDATE_SHAPESHIFT_COOLDOWN", &[]);
+    }
 }
 
 /// An auto attack's killing swing, as the client recorded the player's

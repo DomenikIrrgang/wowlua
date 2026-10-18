@@ -66,7 +66,13 @@ local function equipment(items: { [number]: table }): table
     for _, slot in ipairs({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 31, 32, 33, 34, 35 }) do
         const id = GetInventoryItemID("player", slot)
         if id then
-            out[slot] = { id = id, link = GetInventoryItemLink("player", slot) }
+            local durability, maxDurability = GetInventoryItemDurability(slot)
+            out[slot] = {
+                id = id,
+                link = GetInventoryItemLink("player", slot),
+                durability = durability,
+                maxDurability = maxDurability,
+            }
             itemData(items, id)
         end
     end
@@ -75,7 +81,9 @@ end
 
 local function bags(items: { [number]: table }): table
     const out: { [number]: table } = {}
-    for bag = 0, 5 do
+    -- The bags, then the bank's tabs (6 to 11) and the account's (12 to
+    -- 16): read while the bank is open.
+    for bag = 0, 16 do
         const slots = C_Container.GetContainerNumSlots(bag)
         if slots and slots > 0 then
             const contents: { [number]: table } = {}

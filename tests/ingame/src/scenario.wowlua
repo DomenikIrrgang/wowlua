@@ -197,7 +197,7 @@ const QUERIES: { [string]: (ask: (name: string, ...any) -> any, ...any) -> () } 
         ask("GetMoney")
     end,
     BAG_UPDATE = function(ask, bag)
-        if type(bag) == "number" and bag >= 0 and bag <= 4 then
+        if type(bag) == "number" and bag >= 0 then
             const n = ask("C_Container.GetContainerNumSlots", bag) or 0
             for slot = 1, n do
                 ask("C_Container.GetContainerItemInfo", bag, slot)
@@ -345,6 +345,7 @@ const QUERIES: { [string]: (ask: (name: string, ...any) -> any, ...any) -> () } 
         const n = ask("GetMerchantNumItems") or 0
         for i = 1, n do
             ask("GetMerchantItemInfo", i)
+            ask("C_MerchantFrame.GetItemInfo", i)
             ask("GetMerchantItemLink", i)
             ask("GetMerchantItemCostInfo", i)
             ask("GetMerchantItemMaxStack", i)
@@ -385,7 +386,12 @@ const QUERIES: { [string]: (ask: (name: string, ...any) -> any, ...any) -> () } 
         const n = ask("GetNumTrainerServices") or 0
         for i = 1, n do
             ask("GetTrainerServiceInfo", i)
+            ask("GetTrainerServiceCost", i)
+            ask("GetTrainerServiceLevelReq", i)
+            ask("GetTrainerServiceSkillReq", i)
+            ask("GetTrainerServiceNumAbilityReq", i)
         end
+        ask("GetTrainerSelectionIndex")
     end,
     TAXIMAP_OPENED = function(ask)
         const map = ask("GetTaxiMapID")
@@ -399,8 +405,183 @@ const QUERIES: { [string]: (ask: (name: string, ...any) -> any, ...any) -> () } 
             ask("TaxiNodeGetType", i)
             ask("TaxiNodeCost", i)
             ask("TaxiNodePosition", i)
-            ask("GetNumRoutes", i)
+            const routes = ask("GetNumRoutes", i) or 0
+            for r = 1, routes do
+                ask("TaxiGetSrcX", i, r)
+                ask("TaxiGetSrcY", i, r)
+                ask("TaxiGetDestX", i, r)
+                ask("TaxiGetDestY", i, r)
+            end
         end
+    end,
+    -- Flying, and where the player is.
+    PLAYER_CONTROL_LOST = function(ask)
+        for _, f in ipairs({ "HasFullControl", "IsFlying", "IsMounted" }) do
+            ask(f)
+        end
+        ask("UnitOnTaxi", "player")
+    end,
+    PLAYER_CONTROL_GAINED = function(ask)
+        for _, f in ipairs({ "HasFullControl", "IsFlying", "IsMounted" }) do
+            ask(f)
+        end
+        ask("UnitOnTaxi", "player")
+    end,
+    ZONE_CHANGED = function(ask)
+        for _, f in ipairs({ "GetZoneText", "GetSubZoneText", "GetRealZoneText", "GetMinimapZoneText" }) do
+            ask(f)
+        end
+        ask("C_Map.GetBestMapForUnit", "player")
+    end,
+    ZONE_CHANGED_NEW_AREA = function(ask)
+        for _, f in ipairs({ "GetZoneText", "GetSubZoneText", "GetRealZoneText", "GetMinimapZoneText" }) do
+            ask(f)
+        end
+        ask("C_Map.GetBestMapForUnit", "player")
+        ask("C_PvP.GetZonePVPInfo")
+    end,
+    ZONE_CHANGED_INDOORS = function(ask)
+        ask("GetSubZoneText")
+        ask("GetMinimapZoneText")
+        ask("IsIndoors")
+    end,
+    PLAYER_ENTERING_WORLD = function(ask)
+        ask("GetInstanceInfo")
+        ask("C_Map.GetBestMapForUnit", "player")
+    end,
+    PLAYER_MOUNT_DISPLAY_CHANGED = function(ask)
+        ask("IsMounted")
+    end,
+    -- The auction house (C_AuctionHouse).
+    AUCTION_HOUSE_SHOW = function(ask)
+        ask("C_AuctionHouse.IsThrottledMessageSystemReady")
+        ask("C_AuctionHouse.HasFavorites")
+        ask("C_AuctionHouse.GetNumOwnedAuctions")
+        ask("C_AuctionHouse.GetNumBids")
+        ask("UnitName", "npc")
+    end,
+    AUCTION_HOUSE_BROWSE_RESULTS_UPDATED = function(ask)
+        ask("C_AuctionHouse.GetNumBrowseResults")
+        ask("C_AuctionHouse.HasFullBrowseResults")
+        ask("C_AuctionHouse.GetBrowseResults")
+    end,
+    AUCTION_HOUSE_BROWSE_RESULTS_ADDED = function(ask)
+        ask("C_AuctionHouse.GetNumBrowseResults")
+        ask("C_AuctionHouse.HasFullBrowseResults")
+    end,
+    COMMODITY_SEARCH_RESULTS_UPDATED = function(ask, itemID)
+        const n = ask("C_AuctionHouse.GetNumCommoditySearchResults", itemID) or 0
+        for i = 1, math.min(n, 10) do
+            ask("C_AuctionHouse.GetCommoditySearchResultInfo", itemID, i)
+        end
+        ask("C_AuctionHouse.HasFullCommoditySearchResults", itemID)
+        ask("C_AuctionHouse.GetCommoditySearchResultsQuantity", itemID)
+    end,
+    ITEM_SEARCH_RESULTS_UPDATED = function(ask, itemKey)
+        const n = ask("C_AuctionHouse.GetNumItemSearchResults", itemKey) or 0
+        for i = 1, math.min(n, 10) do
+            ask("C_AuctionHouse.GetItemSearchResultInfo", itemKey, i)
+        end
+        ask("C_AuctionHouse.HasFullItemSearchResults", itemKey)
+    end,
+    OWNED_AUCTIONS_UPDATED = function(ask)
+        const n = ask("C_AuctionHouse.GetNumOwnedAuctions") or 0
+        for i = 1, n do
+            ask("C_AuctionHouse.GetOwnedAuctionInfo", i)
+        end
+    end,
+    BIDS_UPDATED = function(ask)
+        const n = ask("C_AuctionHouse.GetNumBids") or 0
+        for i = 1, n do
+            ask("C_AuctionHouse.GetBidInfo", i)
+        end
+    end,
+    AUCTION_HOUSE_AUCTION_CREATED = function(ask)
+        ask("C_AuctionHouse.GetNumOwnedAuctions")
+        ask("GetMoney")
+    end,
+    -- Mail (no call that reads a mail: GetInboxText marks it read).
+    MAIL_SHOW = function(ask)
+        ask("GetInboxNumItems")
+        ask("HasNewMail")
+        ask("UnitName", "npc")
+    end,
+    MAIL_INBOX_UPDATE = function(ask)
+        const shown = ask("GetInboxNumItems") or 0
+        for i = 1, shown do
+            ask("GetInboxHeaderInfo", i)
+            ask("GetInboxInvoiceInfo", i)
+            for j = 1, 16 do
+                if ask("GetInboxItem", i, j) == nil then
+                    break
+                end
+            end
+        end
+    end,
+    MAIL_SEND_INFO_UPDATE = function(ask)
+        for i = 1, 12 do
+            ask("GetSendMailItem", i)
+        end
+        ask("GetSendMailPrice")
+        ask("GetSendMailMoney")
+        ask("GetSendMailCOD")
+    end,
+    UPDATE_PENDING_MAIL = function(ask)
+        ask("HasNewMail")
+        ask("GetLatestThreeSenders")
+    end,
+    -- The bank (its tabs: C_Bank; the character's 0, the account's 2).
+    BANKFRAME_OPENED = function(ask)
+        for _, bankType in ipairs({ 0, 2 }) do
+            for _, f in ipairs({ "C_Bank.CanUseBank", "C_Bank.CanViewBank", "C_Bank.FetchNumPurchasedBankTabs",
+                "C_Bank.FetchPurchasedBankTabData", "C_Bank.FetchNextPurchasableBankTabData", "C_Bank.CanPurchaseBankTab",
+                "C_Bank.HasMaxBankTabs", "C_Bank.FetchBankLockedReason", "C_Bank.CanDepositMoney", "C_Bank.CanWithdrawMoney" }) do
+                ask(f, bankType)
+            end
+        end
+        ask("C_Bank.AreAnyBankTypesViewable")
+        ask("UnitName", "npc")
+    end,
+    BANK_TABS_CHANGED = function(ask, bankType)
+        ask("C_Bank.FetchPurchasedBankTabData", bankType)
+    end,
+    PLAYERBANKSLOTS_CHANGED = function(ask, slot)
+        ask("C_Container.GetContainerItemInfo", -1, slot)
+    end,
+    -- Trade with another player.
+    TRADE_SHOW = function(ask)
+        ask("UnitName", "npc")
+        ask("GetPlayerTradeMoney")
+        ask("GetTargetTradeMoney")
+    end,
+    TRADE_PLAYER_ITEM_CHANGED = function(ask, slot)
+        ask("GetTradePlayerItemInfo", slot)
+        ask("GetTradePlayerItemLink", slot)
+    end,
+    TRADE_TARGET_ITEM_CHANGED = function(ask, slot)
+        ask("GetTradeTargetItemInfo", slot)
+        ask("GetTradeTargetItemLink", slot)
+    end,
+    TRADE_MONEY_CHANGED = function(ask)
+        ask("GetPlayerTradeMoney")
+        ask("GetTargetTradeMoney")
+    end,
+    -- The group.
+    GROUP_ROSTER_UPDATE = function(ask)
+        for _, f in ipairs({ "GetNumGroupMembers", "IsInGroup", "IsInRaid" }) do
+            ask(f)
+        end
+        ask("UnitIsGroupLeader", "player")
+        for i = 1, 4 do
+            ask("UnitName", "party" .. i)
+            ask("UnitGUID", "party" .. i)
+        end
+    end,
+    -- Professions.
+    TRADE_SKILL_SHOW = function(ask)
+        ask("C_TradeSkillUI.GetBaseProfessionInfo")
+        ask("C_TradeSkillUI.GetChildProfessionInfo")
+        ask("C_TradeSkillUI.GetAllRecipeIDs")
     end,
 }
 

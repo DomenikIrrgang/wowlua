@@ -5,16 +5,18 @@
 -- click: a moment before the server's answer), the ping as recorded
 -- (~0.3 s). The fight's steps were read off the recording; every hit on
 -- the player is given to its target of the moment (several creatures hit
--- it). The worn items' durability before the death is unrecorded (full);
--- after it, as the client answered.
+-- it). The worn items' durability as the quest scenario left it.
 local e = __engine
 local player = e.player
 e.setLatency(0.3)
 -- The warrior's names as the recording has them, scrubbed.
 player:setName("Player", "Lastname")
-player:setDurability(7, 25, 25)
+-- The warrior's Defensive State: its cooldown told when the warrior dodges,
+-- parries or blocks (recorded).
+e.defineSpell(5302, { name = "Defensive State", procOnAvoid = true })
+player:setDurability(7, 24, 25)
 player:setDurability(8, 16, 16)
-player:setDurability(16, 20, 20)
+player:setDurability(16, 19, 20)
 player:setDurability(17, 20, 20)
 local u_69_cd4e8eb2c4 = e.spawnUnit({ name = "Timber Wolf", guid = "Creature-0-6782-0-7-69-CD4E8EB2C4", npcID = 69, level = 2, reaction = "neutral", sex = 1, class = "WARRIOR", classID = 1, powerType = 1, creatureType = "Beast", creatureTypeID = 1, creatureFamily = "Wolf", creatureFamilyID = 1, health = 1, maxHealth = 1 })
 local u_299_cd4e8eb2c4 = e.spawnUnit({ name = "Young Wolf", guid = "Creature-0-6782-0-7-299-CD4E8EB2C4", npcID = 299, level = 1, reaction = "neutral", sex = 1, class = "WARRIOR", classID = 1, powerType = 1, creatureType = "Beast", creatureTypeID = 1, creatureFamily = "Wolf", creatureFamilyID = 1, health = 6, maxHealth = 6 })
@@ -29,6 +31,7 @@ local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
 -- animations and OnUpdate code run), the rest of a step as one jump.
 local function at(t)
+    if t < now then error(("at(%s): before %s"):format(t, now), 2) end
     local frames = math.floor((t - now) * 60)
     if frames > 0 then
         e.advanceFrames(frames, 1000 / 60)
@@ -146,14 +149,16 @@ at(25.279) player:setPower(5)
 at(25.974) u_6_65112a2818:swing(player, 2, { victimPower = 5 })
 at(26.166) e.gameError("BADATTACKFACING")
 at(26.327) u_6_65112a2818:swing(player, 2, { victimPower = 5 })
--- Dead: the durability lost, the ghost's hidden aura to come (57).
-at(26.440) player:die({ durability = { [7] = 22, [8] = 15, [16] = 17, [17] = 18 }, ghostAura = 57 })
+-- Dead: a tenth of each item's durability lost, the ghost's hidden aura
+-- to come (57).
+at(26.440) player:die({ ghostAura = 57 })
 at(26.6)
 check("dead: the death popup", StaticPopup1 and StaticPopup1:IsShown() and StaticPopup1.which == "DEATH")
 check("chat: you died", chatHas(ChatFrame1, "|cff71d5ff|Hdeath:1|h[You died.]|h"))
 at(29.150) press(StaticPopup1Button1)
 at(29.6)
 check("a ghost", UnitIsGhost("player"))
+at(43.106) player:wear()
 at(44.277) bystander("Creature-0-6782-0-7-257-1DCD5746D5", 257, "Kobold Worker")
 at(49.158) bystander("Creature-0-6782-0-7-257-DE4AC94919", 257, "Kobold Worker")
 at(49.366) e.nearCorpse(true)

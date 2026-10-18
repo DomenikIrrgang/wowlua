@@ -7,6 +7,10 @@
 local e = __engine
 local player = e.player
 e.setLatency(0.3)
+-- The worn gear's durability (the recording's answers).
+for slot, d in pairs({ [5] = { 50, 60 }, [6] = { 17, 20 }, [7] = { 38, 45 }, [8] = { 16, 20 }, [9] = { 16, 20 }, [10] = { 17, 20 }, [16] = { 68, 75 } }) do
+    player:setDurability(slot, d[1], d[2])
+end
 local other = e.spawnUnit({
     name = "Otherplayer", lastName = "Othername", guid = "Player-0000-00000000", player = true,
     level = 17, reaction = "friendly", class = "HUNTER", classID = 3, sex = 2, powerType = 0,
@@ -92,6 +96,7 @@ local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
 -- animations and OnUpdate code run), the rest of a step as one jump.
 local function at(t)
+    if t < now then error(("at(%s): before %s"):format(t, now), 2) end
     local frames = math.floor((t - now) * 60)
     if frames > 0 then
         e.advanceFrames(frames, 1000 / 60)
@@ -129,7 +134,9 @@ check("the gossip's option shown", option ~= nil)
 at(5.676) if option then press(option) end
 at(6.5)
 check("the taxi map shown", TaxiFrame and TaxiFrame:IsShown())
+at(11.995) player:wear()
 at(13.557) if TaxiFrame then HideUIPanel(TaxiFrame) end
 at(14)
 check("the taxi map closed", TaxiFrame and not TaxiFrame:IsShown())
+at(16.198) player:wear()
 at(16.5)

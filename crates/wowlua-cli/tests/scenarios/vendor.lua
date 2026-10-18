@@ -46,6 +46,7 @@ local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
 -- animations and OnUpdate code run), the rest of a step as one jump.
 local function at(t)
+    if t < now then error(("at(%s): before %s"):format(t, now), 2) end
     local frames = math.floor((t - now) * 60)
     if frames > 0 then
         e.advanceFrames(frames, 1000 / 60)
@@ -82,6 +83,7 @@ player:heal(1)
 at(5.975) player:setPower(2)
 -- Sold: a Small Shield, the fangs.
 at(6.032) e.sell(0, 5)
+at(6.904) player:wear()
 at(7.965) player:setPower(1)
 at(8.834) e.sell(0, 6)
 at(10.051) player:setPower(0)
@@ -92,11 +94,15 @@ at(12.748) bystander("Creature-0-6782-0-7-299-7852634FCE")
 at(14.249) e.sell(0, 7)
 -- The claw bought back.
 at(15.262) press(MerchantBuyBackItemItemButton, "RightButton")
+at(16.680) player:wear()
 at(17.413) bystander("Creature-0-6782-0-7-299-44D9865248")
 -- Another shield: not enough money.
+at(17.980) player:wear()
+at(18.520) player:wear()
 at(23.102) press(MerchantItem7ItemButton, "RightButton")
 at(26.334) e.sell(0, 9)
 -- Everything repaired.
+at(27.583) player:wear()
 at(29.517) press(MerchantRepairAllButton)
 at(30.534) e.closeMerchant()
 at(31)

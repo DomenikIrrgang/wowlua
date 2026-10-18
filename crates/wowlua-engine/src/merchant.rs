@@ -467,7 +467,7 @@ fn upval(c: &NativeCall, i: usize) -> f64 {
 fn place(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, usize)> {
     let max = num(character::item_field(vm, id, "stackCount")).unwrap_or(1.0);
     let bags = &engine(vm).world.character.bags;
-    for (&bag, b) in bags {
+    for (&bag, b) in bags.iter().filter(|(b, _)| character::carried(**b)) {
         if let Some((&slot, _)) = b
             .items
             .iter()
@@ -476,7 +476,7 @@ fn place(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, usize)> {
             return Some((bag, slot));
         }
     }
-    for (&bag, b) in bags {
+    for (&bag, b) in bags.iter().filter(|(b, _)| character::carried(**b)) {
         if let Some(slot) = (1..=b.slots).find(|s| !b.items.contains_key(s)) {
             return Some((bag, slot));
         }

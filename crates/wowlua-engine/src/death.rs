@@ -3,8 +3,8 @@
 //! })`, the server's death: "Your equipped items suffer a 10% durability
 //! loss.", auto attack off, the mirror timers stopped, the rage gone, the
 //! target cleared, "You died." (a death link), `UNIT_DIED(guid)`,
-//! `PLAYER_DEAD()`, out of combat, each worn item's durability
-//! (`UPDATE_INVENTORY_DURABILITY`), every action unusable. Blizzard's UI
+//! `PLAYER_DEAD()`, out of combat, each worn item's durability a tenth
+//! of its maximum lower (`UPDATE_INVENTORY_DURABILITY`), every action unusable. Blizzard's UI
 //! shows its death popup; its Release (`RepopMe()`): a round trip later the
 //! ghost (`PLAYER_ALIVE()`, the flags, the faction, the ghost's spell's
 //! cooldown, the corpse tracked). `e.nearCorpse(near)`:
@@ -12,8 +12,7 @@
 //! offers the corpse); `RetrieveCorpse()`: a round trip later alive
 //! (`PLAYER_UNGHOST()`, the ghost's hidden aura removed: `UNIT_AURA`).
 //!
-//! Unverified: the durability lost (the test gives what is left; the
-//! recording has only that), where the ghost appears, the health on
+//! Unverified: where the ghost appears, the health on
 //! resurrection (half), the release timer counting down, spirit healers,
 //! a soulstone, dying in an instance.
 
@@ -60,12 +59,25 @@ pub fn control_die(vm: &mut Vm, c: NativeCall) -> Ret {
     if units::this(vm, &c)? != PLAYER {
         return Err(vm.error("die: the player's"));
     }
-    let mut durability: Vec<(i64, f64)> = Vec::new();
+    // Each worn item loses a tenth of its maximum, rounded down (recorded:
+    // 24, 16, 19, 20 of 25, 16, 20, 20 left 22, 15, 17, 18); the test may
+    // give what is left instead.
+    let mut durability: Vec<(i64, f64)> = engine(vm)
+        .world
+        .character
+        .equipment
+        .iter()
+        .filter_map(|(slot, h)| {
+            h.durability
+                .map(|(d, m)| (*slot, (d - (m * DURABILITY_LOSS / 100.0).floor()).max(0.0)))
+        })
+        .collect();
     let mut ghost_aura = 0.0;
     if let Value::Table(opts) = c.arg(2) {
         let k = vm.str("durability");
         if let Value::Table(d) = vm.heap.table(opts).get(k) {
             let entries: Vec<(Value, Value)> = vm.heap.table(d).entries().collect();
+            durability.clear();
             for (slot, cur) in entries {
                 if let (Value::Num(s), Value::Num(v)) = (slot, cur) {
                     durability.push((s as i64, v));

@@ -33,6 +33,7 @@ local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
 -- animations and OnUpdate code run), the rest of a step as one jump.
 local function at(t)
+    if t < now then error(("at(%s): before %s"):format(t, now), 2) end
     local frames = math.floor((t - now) * 60)
     if frames > 0 then
         e.advanceFrames(frames, 1000 / 60)

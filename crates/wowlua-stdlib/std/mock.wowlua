@@ -69,6 +69,9 @@ export interface MockUnit
     --- A worn item's durability (the player; `GetInventoryItemDurability`,
     --- a repair restores it).
     function setDurability(slot: number, current: number, max: number)
+    --- The server's durability update (`UPDATE_INVENTORY_DURABILITY`): the
+    --- item in `slot` a point lower, or nothing visible.
+    function wear(slot: number?)
     --- The player's money, in copper (`PLAYER_MONEY`).
     function setMoney(copper: number)
     --- The player's stats given (the others stay), each change told by its

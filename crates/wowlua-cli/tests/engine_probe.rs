@@ -1046,7 +1046,7 @@ fn the_engine_plays_combat_as_the_client_did() {
 
 /// How many of the death scenario's lines the engine plays as the client
 /// did: only ever up.
-const DEATH_MATCHED: usize = 1340;
+const DEATH_MATCHED: usize = 1373;
 
 /// The death scenario: a fight lost, the spirit released, the corpse taken.
 #[test]
@@ -1056,7 +1056,7 @@ fn the_engine_plays_death_as_the_client_did() {
 
 /// How many of the flight scenario's lines the engine plays as the client
 /// did: only ever up.
-const FLIGHT_MATCHED: usize = 213;
+const FLIGHT_MATCHED: usize = 255;
 
 /// The flight scenario: a flight master's gossip, the taxi map looked at.
 #[test]
@@ -1076,7 +1076,7 @@ fn the_engine_plays_trainer_as_the_client_did() {
 
 /// How many of the vendor scenario's lines the engine plays as the client
 /// did: only ever up.
-const VENDOR_MATCHED: usize = 425;
+const VENDOR_MATCHED: usize = 530;
 
 /// The vendor scenario: goods sold, bought, bought back; too little money;
 /// a repair.
@@ -1087,7 +1087,7 @@ fn the_engine_plays_vendor_as_the_client_did() {
 
 /// How many of the quest scenario's lines the engine plays as the client
 /// did: only ever up.
-const QUEST_MATCHED: usize = 4355;
+const QUEST_MATCHED: usize = 4556;
 
 /// The quest scenario: a quest taken, eight wolves hunted for its item (a
 /// level gained), the quest turned in.

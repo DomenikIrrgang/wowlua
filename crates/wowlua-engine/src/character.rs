@@ -408,6 +408,25 @@ pub fn control_set_durability(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `unit:wear(slot?)` (the player): the worn item in `slot` loses a point
+/// of durability (none: the server's update without a visible change);
+/// `UPDATE_INVENTORY_DURABILITY()` (recorded in fights, now and then).
+pub fn control_wear(vm: &mut Vm, c: NativeCall) -> Ret {
+    player_only(vm, &c, "wear")?;
+    if let Value::Num(slot) = c.arg(2)
+        && let Some(h) = engine_mut(vm)
+            .world
+            .character
+            .equipment
+            .get_mut(&(slot as i64))
+        && let Some((d, m)) = h.durability
+    {
+        h.durability = Some(((d - 1.0).max(0.0), m));
+    }
+    widgets::fire_event(vm, "UPDATE_INVENTORY_DURABILITY", &[]);
+    Ok(vec![])
+}
+
 /// `GetInventoryItemDurability(slot)`: a worn item's durability; nothing
 /// for an empty slot or an item without (recorded).
 fn get_inventory_item_durability(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -621,6 +640,12 @@ pub fn control_set_bag(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// A bag the player carries (the backpack, the bags, the reagent bag; not
+/// the bank's tabs, 6 and up).
+pub fn carried(bag: i64) -> bool {
+    (0..=5).contains(&bag)
+}
+
 /// `count` of item `id` into the bags: onto a stack of it with room (its
 /// data's `stackCount`), else into the first free slot; the bag, and
 /// whether the item took a new slot. None when the bags are full.
@@ -633,7 +658,7 @@ pub fn add_to_bags(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, bool)> {
     // recorded bound: a quest's item, a quest's reward).
     let binds = matches!(item_field(vm, id, "bindType"), Value::Num(b) if b == 1.0 || b == 4.0);
     let bags = &mut engine_mut(vm).world.character.bags;
-    for (bag, b) in bags.iter_mut() {
+    for (bag, b) in bags.iter_mut().filter(|(b, _)| carried(**b)) {
         for held in b.items.values_mut() {
             if held.id == id && held.count + count <= stack {
                 held.count += count;
@@ -641,7 +666,7 @@ pub fn add_to_bags(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, bool)> {
             }
         }
     }
-    for (bag, b) in bags.iter_mut() {
+    for (bag, b) in bags.iter_mut().filter(|(b, _)| carried(**b)) {
         if let Some(slot) = (1..=b.slots).find(|s| !b.items.contains_key(s)) {
             b.items.insert(
                 slot,
@@ -705,7 +730,7 @@ pub fn bag_for(vm: &mut Vm, id: i64, count: f64) -> Option<i64> {
         _ => 1.0,
     };
     let bags = &engine(vm).world.character.bags;
-    for (bag, b) in bags {
+    for (bag, b) in bags.iter().filter(|(b, _)| carried(**b)) {
         if b.items
             .values()
             .any(|h| h.id == id && h.count + count <= stack)
@@ -714,6 +739,7 @@ pub fn bag_for(vm: &mut Vm, id: i64, count: f64) -> Option<i64> {
         }
     }
     bags.iter()
+        .filter(|(b, _)| carried(**b))
         .find(|(_, b)| (1..=b.slots).any(|s| !b.items.contains_key(&s)))
         .map(|(bag, _)| *bag)
 }
@@ -724,7 +750,7 @@ pub fn take_from_bags(vm: &mut Vm, id: i64, count: f64) -> Vec<i64> {
     let mut left = count;
     let mut changed = Vec::new();
     let bags = &mut engine_mut(vm).world.character.bags;
-    for (bag, b) in bags.iter_mut().rev() {
+    for (bag, b) in bags.iter_mut().rev().filter(|(b, _)| carried(**b)) {
         let slots: Vec<usize> = b
             .items
             .iter()
