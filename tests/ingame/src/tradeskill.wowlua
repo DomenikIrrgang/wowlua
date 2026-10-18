@@ -1,0 +1,244 @@
+-- /stdtest engine tradeskill: the open profession window's data (its
+-- professions, categories and every recipe: info, schematic, output,
+-- requirements, cooldown, source) as Blizzard's professions UI asks it,
+-- into StdTestState.engineTradeSkillAnswers[call] in the answers probe's
+-- form, each run adding to the ones before (open one profession, run it,
+-- open the next, run it again; `cargo xtask ingest` writes the fixture).
+-- The answers are the character's: its skill, its recipes, its bags.
+import state from "/state"
+import say from "/harness"
+
+local function pack(...: any): { n: number, [number]: any }
+    return { n = select("#", ...), ... }
+end
+
+--- A value in full: tables to depth 4, keys sorted, secrets marked.
+local function show(v: any, depth: number): string
+    if issecretvalue(v) then
+        return `secret {type(v)}`
+    end
+    if type(v) == "string" then
+        return `string {v}`
+    end
+    if type(v) ~= "table" then
+        return `{type(v)} {tostring(v)}`
+    end
+    if depth >= 4 then
+        return "table"
+    end
+    const keys: string[] = {}
+    const values: { [string]: any } = {}
+    for k, inner in pairs(v :: table) do
+        const key = tostring(k)
+        keys[#keys + 1] = key
+        values[key] = inner
+    end
+    table.sort(keys)
+    const parts: string[] = {}
+    for _, k in ipairs(keys) do
+        parts[#parts + 1] = `{k}={show(values[k], depth + 1)}`
+    end
+    return `\{{table.concat(parts, ",")}\}`
+end
+
+--- The window's functions asked without arguments.
+const PLAIN: string[] = {
+    "C_TradeSkillUI.GetBaseProfessionInfo",
+    "C_TradeSkillUI.GetChildProfessionInfo",
+    "C_TradeSkillUI.GetChildProfessionInfos",
+    "C_TradeSkillUI.GetProfessionChildSkillLineID",
+    "C_TradeSkillUI.GetAllProfessionTradeSkillLines",
+    "C_TradeSkillUI.IsTradeSkillReady",
+    "C_TradeSkillUI.IsDataSourceChanging",
+    "C_TradeSkillUI.IsTradeSkillGuild",
+    "C_TradeSkillUI.IsTradeSkillLinked",
+    "C_TradeSkillUI.IsTradeSkillGuildMember",
+    "C_TradeSkillUI.IsNPCCrafting",
+    "C_TradeSkillUI.IsRuneforging",
+    "C_TradeSkillUI.CanTradeSkillListLink",
+    "C_TradeSkillUI.GetTradeSkillListLink",
+    "C_TradeSkillUI.GetShowLearned",
+    "C_TradeSkillUI.GetShowUnlearned",
+    "C_TradeSkillUI.GetOnlyShowMakeableRecipes",
+    "C_TradeSkillUI.GetOnlyShowSkillUpRecipes",
+    "C_TradeSkillUI.GetOnlyShowFirstCraftRecipes",
+    "C_TradeSkillUI.GetRecipeItemNameFilter",
+    "C_TradeSkillUI.GetSourceTypeFilter",
+    "C_TradeSkillUI.AnyRecipeCategoriesFiltered",
+    "C_TradeSkillUI.AreAnyInventorySlotsFiltered",
+    "C_TradeSkillUI.GetAllFilterableInventorySlotsCount",
+    "C_TradeSkillUI.GetCategories",
+    "C_TradeSkillUI.GetAllRecipeIDs",
+    "C_TradeSkillUI.GetFilteredRecipeIDs",
+    "C_TradeSkillUI.GetRemainingRecasts",
+    "C_TradeSkillUI.HasFavoriteOrderRecipes",
+    "C_TradeSkillUI.IsGuildTradeSkillsEnabled",
+    "C_TradeSkillUI.GetProfessionInventorySlots",
+    "C_CraftingOrders.ShouldShowCraftingOrderTab",
+    "GetProfessions",
+}
+
+--- The functions asked of each recipe by its ID alone.
+const BY_RECIPE: string[] = {
+    "GetRecipeInfo",
+    "GetRecipeOutputItemData",
+    "GetRecipeRequirements",
+    "GetRecipeLink",
+    "GetRecipeCooldown",
+    "GetRecipeSourceText",
+    "IsRecipeFavorite",
+    "GetCraftableCount",
+    "GetQualitiesForRecipe",
+    "GetRecipeQualityItemIDs",
+    "IsRecipeFirstCraft",
+    "GetProfessionInfoByRecipeID",
+    "GetHideUnownedFlags",
+    "GetFactionSpecificOutputItem",
+    "GetGatheringOperationInfo",
+    "IsRecipeInBaseSkillLine",
+    "IsRecipeProfessionLearned",
+}
+
+export function tradeSkillProbe()
+    const st = state() :: any
+    const T = (_G :: any).C_TradeSkillUI
+    if not T.IsTradeSkillReady() then
+        say("engine tradeskill: open a profession's window first")
+        return
+    end
+    const out: { [string]: string } = st.engineTradeSkillAnswers ?? {}
+    local asked = 0
+    local function ask(call: string, ...: any): ...any
+        local space, name = call:match("^([%w_]+)%.(%w+)")
+        local f: any
+        if space == nil then
+            f = (_G :: any)[(call:match("^(%w+)")) :: string]
+        else
+            const ns = (_G :: any)[space :: string]
+            f = ns and ns[name :: string]
+        end
+        if f == nil then
+            return
+        end
+        local ok, packed = pcall(function(...: any): any return pack(f(...)) end, ...)
+        asked = asked + 1
+        if not ok then
+            out[call] = `error: {tostring(packed)}`
+            return
+        end
+        const p = packed :: { n: number, [number]: any }
+        const parts: string[] = {}
+        for i = 1, p.n do
+            parts[#parts + 1] = show(p[i], 0)
+        end
+        out[call] = `{p.n}: {table.concat(parts, ", ")}`
+        return unpack(p, 1, p.n)
+    end
+    for _, call in ipairs(PLAIN) do
+        ask(`{call}()`)
+    end
+    -- The character's professions (the spellbook's indices).
+    for _, index in ipairs({ GetProfessions() }) do
+        if type(index) == "number" then
+            ask(`GetProfessionInfo({index})`, index)
+        end
+    end
+    -- The filters' rows.
+    const slots = T.GetAllFilterableInventorySlotsCount() ?? 0
+    for i = 1, slots do
+        ask(`C_TradeSkillUI.GetFilterableInventorySlotName({i})`, i)
+        ask(`C_TradeSkillUI.IsInventorySlotFiltered({i})`, i)
+    end
+    for i = 1, 12 do
+        ask(`C_TradeSkillUI.IsAnyRecipeFromSource({i})`, i)
+        ask(`C_TradeSkillUI.IsRecipeSourceTypeFiltered({i})`, i)
+    end
+    -- Each skill line: the base profession's, its children's.
+    const lines: number[] = {}
+    const seenLine: { [number]: boolean } = {}
+    local function addLine(info: any)
+        if type(info) == "table" and type(info.professionID) == "number" and not seenLine[info.professionID] then
+            seenLine[info.professionID] = true
+            lines[#lines + 1] = info.professionID
+        end
+    end
+    addLine(T.GetBaseProfessionInfo())
+    addLine(T.GetChildProfessionInfo())
+    for _, info in ipairs((T.GetChildProfessionInfos() ?? {}) :: any[]) do
+        addLine(info)
+    end
+    const professions: { [number]: boolean } = {}
+    for _, line in ipairs(lines) do
+        const info = ask(`C_TradeSkillUI.GetProfessionInfoBySkillLineID({line})`, line)
+        ask(`C_TradeSkillUI.GetTradeSkillDisplayName({line})`, line)
+        ask(`C_TradeSkillUI.GetConcentrationCurrencyID({line})`, line)
+        ask(`C_TradeSkillUI.GetTradeSkillTexture({line})`, line)
+        ask(`C_ProfSpecs.SkillLineHasSpecialization({line})`, line)
+        ask(`C_ProfSpecs.ShouldShowPointsReminderForSkillLine({line})`, line)
+        ask(`C_ProfSpecs.GetConfigIDForSkillLine({line})`, line)
+        ask(`C_CraftingOrders.SkillLineHasOrders({line})`, line)
+        if type(info) == "table" and type(info.profession) == "number" then
+            professions[info.profession] = true
+        end
+    end
+    for profession in pairs(professions) do
+        ask(`C_TradeSkillUI.GetProfessionSlots({profession})`, profession)
+        ask(`C_TradeSkillUI.IsNearProfessionSpellFocus({profession})`, profession)
+        ask(`C_TradeSkillUI.GetProfessionSkillLineID({profession})`, profession)
+    end
+    -- The categories, up through their parents.
+    const categories: number[] = {}
+    const seenCategory: { [number]: boolean } = {}
+    local function addCategory(id: any)
+        if type(id) == "number" and id > 0 and not seenCategory[id] then
+            seenCategory[id] = true
+            categories[#categories + 1] = id
+        end
+    end
+    for _, id in ipairs({ T.GetCategories() }) do
+        addCategory(id)
+    end
+    -- Every recipe, and the ranks before and after it.
+    const recipes: number[] = {}
+    const seenRecipe: { [number]: boolean } = {}
+    local function addRecipe(id: any)
+        if type(id) == "number" and id > 0 and not seenRecipe[id] then
+            seenRecipe[id] = true
+            recipes[#recipes + 1] = id
+        end
+    end
+    for _, id in ipairs((T.GetAllRecipeIDs() ?? {}) :: any[]) do
+        addRecipe(id)
+    end
+    local i = 1
+    while i <= #recipes do
+        const id = recipes[i]
+        for _, name in ipairs(BY_RECIPE) do
+            ask(`C_TradeSkillUI.{name}({id})`, id)
+        end
+        ask(`C_TradeSkillUI.GetRecipeSchematic({id}, false)`, id, false)
+        ask(`C_TradeSkillUI.GetRecipeDescription({id}, \{\})`, id, {})
+        ask(`C_TradeSkillUI.IsRecipeTracked({id}, false)`, id, false)
+        ask(`C_TradeSkillUI.GetCraftingOperationInfo({id}, \{\}, nil, false)`, id, {}, nil, false)
+        const info = T.GetRecipeInfo(id) :: any
+        if type(info) == "table" then
+            addCategory(info.categoryID)
+            addRecipe(info.previousRecipeID)
+            addRecipe(info.nextRecipeID)
+        end
+        i = i + 1
+    end
+    local c = 1
+    while c <= #categories do
+        const info = ask(`C_TradeSkillUI.GetCategoryInfo({categories[c]})`, categories[c])
+        if type(info) == "table" then
+            addCategory(info.parentCategoryID)
+        end
+        c = c + 1
+    end
+    st.engineTradeSkillAnswers = out
+    const base = T.GetBaseProfessionInfo() :: any
+    say(
+        `engine tradeskill: {base and base.professionName or "?"}: {#recipes} recipes, {#categories} categories, {asked} calls recorded; type /reload so the file is written`
+    )
+end
