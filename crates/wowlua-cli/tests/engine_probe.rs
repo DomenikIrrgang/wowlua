@@ -865,10 +865,11 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
     let theirs: Vec<String> = theirs.into_iter().map(|(_, v)| v).collect();
     let mut errors: Vec<String> =
         wowlua_engine::engine(&vm).world.ui.errors[errors_before..].to_vec();
-    // The stacks of errors from tainted code (`WOWLUA_SCENARIO_TAINT`).
-    if std::env::var("WOWLUA_SCENARIO_TAINT").is_ok() {
+    // The stacks of errors from tainted code (`WOWLUA_SCENARIO_TAINT`;
+    // `=all`: every error's).
+    if let Ok(which) = std::env::var("WOWLUA_SCENARIO_TAINT") {
         for stack in &wowlua_engine::engine(&vm).world.ui.error_stacks {
-            if stack.contains("tainted") {
+            if which == "all" || stack.contains("tainted") {
                 eprintln!("tainted error:\n{stack}");
             }
         }
@@ -1263,6 +1264,16 @@ const INSPECT_MATCHED: usize = 236;
 #[test]
 fn the_engine_plays_inspect_as_the_client_did() {
     plays_as_the_client_did("inspect", INSPECT_MATCHED);
+}
+
+/// How many of the talents scenario's lines the engine plays as the client
+/// did: only ever up.
+const TALENTS_MATCHED: usize = 69;
+
+/// The talents scenario: a class talent bought and applied.
+#[test]
+fn the_engine_plays_talents_as_the_client_did() {
+    plays_as_the_client_did("talents", TALENTS_MATCHED);
 }
 
 /// How many of the legacy scenario's lines the engine plays as the client

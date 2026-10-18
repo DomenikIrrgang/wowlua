@@ -38,8 +38,18 @@ use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
 use crate::units::PLAYER;
 use crate::{engine, engine_mut, widgets};
 
-/// A commit's second stage after its first (the legacy recording).
-const COMMIT_AFTER: f64 = 0.499;
+/// A commit's second stage after its first, by the config's type: the
+/// legacy trees' (`Generic`, 0.499 s recorded), the class talents' (0.068 s
+/// recorded); unverified: why they differ.
+const COMMIT_AFTER_GENERIC: f64 = 0.499;
+const COMMIT_AFTER: f64 = 0.068;
+/// `Enum.TraitConfigType.Generic`.
+const GENERIC: f64 = 3.0;
+/// Each class's talent tree, in the client's order, all paying in the
+/// class talents' currency (recorded: a shaman's rank bought fired
+/// `TRAIT_TREE_CURRENCY_INFO_UPDATED` for these, each answering it).
+const CLASS_TREES: &[i64] = &[1058, 1089, 1082, 1091, 1100, 1111, 1112, 1114, 1116, 1117];
+const CLASS_CURRENCY: i64 = 3820;
 /// The group buffs again after a commit (recorded).
 const BUFFS_AFTER: f64 = 0.007;
 /// `Enum.TraitNodeFlag.NeverPurchasable`.
@@ -312,6 +322,18 @@ impl<'a> Model<'a> {
             .unwrap_or_else(|| self.recorded_rank(config, node))
     }
 
+    /// The ranks committed as the session began.
+    fn start_rank(&self, config: i64, node: i64) -> i64 {
+        if self.bare {
+            return 0;
+        }
+        self.state
+            .start
+            .get(&(config, node))
+            .copied()
+            .unwrap_or_else(|| self.recorded_rank(config, node))
+    }
+
     fn staged(&self, config: i64, node: i64) -> i64 {
         if self.bare {
             return 0;
@@ -378,9 +400,24 @@ impl<'a> Model<'a> {
 
     /// `C_Traits.GetTreeCurrencyInfo(config, tree, excludeStagedChanges)`.
     pub fn tree_currency(&self, config: i64, tree: i64, exclude_staged: bool) -> Option<Rv> {
-        let list = self.first(&format!(
-            "C_Traits.GetTreeCurrencyInfo({config}, {tree}, false)"
-        ))?;
+        // Another class's tree: the config's class currency (recorded).
+        let own = |t: i64| {
+            self.first(&format!(
+                "C_Traits.GetTreeCurrencyInfo({config}, {t}, false)"
+            ))
+        };
+        let list = own(tree).or_else(|| {
+            if !CLASS_TREES.contains(&tree) {
+                return None;
+            }
+            self.trees(config).into_iter().find_map(|t| {
+                own(t).filter(|l| {
+                    l.list()
+                        .iter()
+                        .any(|c| c.num("traitCurrencyID") == Some(CLASS_CURRENCY as f64))
+                })
+            })
+        })?;
         let items = list
             .list()
             .into_iter()
@@ -572,12 +609,7 @@ impl<'a> Model<'a> {
             Some(next) => info.set("nextEntry", pair(next)),
             None => info.remove("nextEntry"),
         }
-        let before = self.state.start.get(&(config, node)).copied();
-        let committed = if self.bare {
-            0
-        } else {
-            before.unwrap_or_else(|| self.recorded_rank(config, node))
-        };
+        let committed = self.start_rank(config, node);
         let with = match at(committed).filter(|_| committed > 0) {
             Some((e, _)) => vec![Rv::Num(e as f64)],
             None => Vec::new(),
@@ -592,8 +624,11 @@ impl<'a> Model<'a> {
             "canPurchaseRank",
             Rv::Bool(available && meets && rank < max && !never),
         );
-        let staged = self.staged(config, node) > 0;
-        let refund = staged || (rank > 0 && !self.cannot_refund(config, node));
+        // A rank bought this session can be taken back, whatever the tree
+        // (recorded: the shaman's, its tree `cannotRefund`, staged and just
+        // applied; the next session not).
+        let refund =
+            rank > self.start_rank(config, node) || (rank > 0 && !self.cannot_refund(config, node));
         info.set("canRefundRank", Rv::Bool(refund));
         let active = self.satisfies(config, node);
         if let Some(Rv::Table(edges)) = info.get("visibleEdges").cloned() {
@@ -611,6 +646,9 @@ impl<'a> Model<'a> {
 
     /// The trees of the config paying in a currency, in its order.
     fn trees_paying(&self, config: i64, currency: i64) -> Vec<i64> {
+        if currency == CLASS_CURRENCY {
+            return CLASS_TREES.to_vec();
+        }
         self.trees(config)
             .into_iter()
             .filter(|t| {
@@ -854,25 +892,56 @@ fn commit_config(vm: &mut Vm, c: NativeCall) -> Ret {
         let Some(config) = int(vm, &c, 1) else {
             return Ok(vec![Value::Bool(false)]);
         };
-        if staged_nodes(vm, config).is_empty() {
-            return Ok(vec![Value::Bool(false)]);
-        }
-        let delay = crate::clock::server_delay(vm);
-        let native = vm.native_with(
-            "traitsCommitted",
-            committed as NativeFn,
-            vec![Value::Num(config as f64)],
-        );
-        crate::clock::after_engine(vm, delay, native);
-        Ok(vec![Value::Bool(true)])
+        commit(vm, config)
     })
+}
+
+/// `C_ClassTalents.CommitConfig(savedConfigID)`: the active config's
+/// staged ranks applied (the loadout saved: unverified).
+fn commit_class_config(vm: &mut Vm, c: NativeCall) -> Ret {
+    modelled!(vm, c, {
+        let Some(config) = model(vm)
+            .first("C_ClassTalents.GetActiveConfigID()")
+            .and_then(|v| match v {
+                Rv::Num(n) => Some(n as i64),
+                _ => None,
+            })
+        else {
+            return Ok(vec![Value::Bool(false)]);
+        };
+        commit(vm, config)
+    })
+}
+
+/// A config's staged ranks sent to the server.
+fn commit(vm: &mut Vm, config: i64) -> Ret {
+    if staged_nodes(vm, config).is_empty() {
+        return Ok(vec![Value::Bool(false)]);
+    }
+    let delay = crate::clock::server_delay(vm);
+    let native = vm.native_with(
+        "traitsCommitted",
+        committed as NativeFn,
+        vec![Value::Num(config as f64)],
+    );
+    crate::clock::after_engine(vm, delay, native);
+    Ok(vec![Value::Bool(true)])
 }
 
 fn committed(vm: &mut Vm, c: NativeCall) -> Ret {
     crate::character::group_buffs_changed(vm);
     fire(vm, "SPELLS_CHANGED", &[]);
+    let generic = model(vm)
+        .first(&format!("C_Traits.GetConfigInfo({})", config_of(&c)))
+        .and_then(|i| i.num("type"))
+        == Some(GENERIC);
+    let after = if generic {
+        COMMIT_AFTER_GENERIC
+    } else {
+        COMMIT_AFTER
+    };
     let native = vm.native_with("traitsApplied", applied as NativeFn, c.upvals.to_vec());
-    crate::clock::after_engine(vm, COMMIT_AFTER, native);
+    crate::clock::after_engine(vm, after, native);
     Ok(vec![])
 }
 
@@ -1013,6 +1082,7 @@ pub fn behaviours(flavor: &str) -> Vec<(&'static str, NativeFn)> {
         ("C_Traits.GetStagedChanges", get_staged_changes),
         ("C_Traits.PurchaseRank", purchase_rank),
         ("C_Traits.CommitConfig", commit_config),
+        ("C_ClassTalents.CommitConfig", commit_class_config),
         ("C_Traits.RollbackConfig", rollback_config),
         ("C_Traits.GetConfigInfo", get_config_info),
         (

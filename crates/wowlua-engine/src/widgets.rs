@@ -125,6 +125,8 @@ pub struct World {
     pub death: crate::death::Death,
     /// The class's hidden group buffs (`HIDDEN_GROUP_BUFFS_CHANGED`).
     pub hidden_group_buffs: Vec<f64>,
+    /// The player rests (an inn, a city: `setResting`).
+    pub resting: bool,
     /// A loading screen up, the world not entered yet: no map.
     pub loading_screen: bool,
     /// A loading screen's inventory, not loaded yet.
@@ -1487,6 +1489,53 @@ fn create_region(vm: &mut Vm, id: WidgetId, c: NativeCall, class: &str) -> Ret {
         }
     }
     Ok(vec![region])
+}
+
+/// A model scene's actors, in the order made.
+fn actors(vm: &mut Vm, id: WidgetId) -> TableRef {
+    let props = engine(vm).world.widgets[id.0].props;
+    let key = vm.str("actors");
+    if let Value::Table(t) = vm.heap.table(props).get(key) {
+        return t;
+    }
+    let t = vm.new_table();
+    let _ = vm.heap.table_mut(props).set(key, Value::Table(t));
+    t
+}
+
+/// `CreateActor(name, template)`: a model scene's actor (its parent, not
+/// among its children: `GetNumActors`, `GetActorAtIndex`), its template
+/// applied (unverified: the client's actors beyond their methods).
+fn create_actor(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let name = vm
+        .opt_str(&c, 2)?
+        .map(|s| String::from_utf8_lossy(vm.str_bytes(s)).into_owned());
+    let actor = create(vm, "ModelSceneFrameActor", name, Some(id));
+    if let Some(t) = vm.opt_str(&c, 3)? {
+        let t = String::from_utf8_lossy(vm.str_bytes(t)).into_owned();
+        apply_template(vm, actor, &t)?;
+    }
+    let list = actors(vm, id);
+    let n = vm.heap.table(list).border();
+    let _ = vm
+        .heap
+        .table_mut(list)
+        .set(Value::Num((n + 1) as f64), actor);
+    Ok(vec![actor])
+}
+
+fn get_num_actors(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let list = actors(vm, id);
+    Ok(vec![Value::Num(vm.heap.table(list).border() as f64)])
+}
+
+fn get_actor_at_index(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let list = actors(vm, id);
+    let i = c.arg(2);
+    Ok(match vm.heap.table(list).get(i) {
+        Value::Nil => vec![],
+        a => vec![a],
+    })
 }
 
 // --------------------------------------------------------- color selects
@@ -3159,6 +3208,9 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("ResetMessageFadeByID", reset_message_fade),
         ("Clear", clear_messages),
         ("CreateTexture", texture),
+        ("CreateActor", create_actor),
+        ("GetNumActors", get_num_actors),
+        ("GetActorAtIndex", get_actor_at_index),
         ("CreateMaskTexture", mask),
         ("CreateLine", line),
         ("SetPoint", set_point),

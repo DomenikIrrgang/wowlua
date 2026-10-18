@@ -1138,6 +1138,25 @@ fn area_updated(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `setResting(resting)`: the player enters or leaves a resting place:
+/// `PLAYER_FLAGS_CHANGED("player")`, `PLAYER_UPDATE_RESTING()` (recorded:
+/// a shaman walking into a town); `IsResting()` says so.
+pub fn control_set_resting(vm: &mut Vm, c: NativeCall) -> Ret {
+    let resting = c.arg(1).truthy();
+    if engine(vm).world.resting == resting {
+        return Ok(vec![]);
+    }
+    engine_mut(vm).world.resting = resting;
+    let player = vm.str("player");
+    widgets::fire_event(vm, "PLAYER_FLAGS_CHANGED", &[player]);
+    widgets::fire_event(vm, "PLAYER_UPDATE_RESTING", &[]);
+    Ok(vec![])
+}
+
+fn is_resting(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(engine(vm).world.resting)])
+}
+
 /// `newWmoChunk()`: the player in another part of a world map object (a
 /// city's walls): `NEW_WMO_CHUNK()` and the area's updates (recorded).
 pub fn control_new_wmo_chunk(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1273,6 +1292,7 @@ fn inventory_item_no(_vm: &mut Vm, _c: NativeCall) -> Ret {
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("GetMoney", get_money),
+        ("IsResting", is_resting),
         (
             "C_Container.GetContainerItemQuestInfo",
             container_item_quest_info,

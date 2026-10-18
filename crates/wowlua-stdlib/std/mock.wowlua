@@ -402,6 +402,12 @@ end
 --- joins; `unit:openTrade()`: the other side of a trade accepts) are the
 --- unit's methods.
 
+--- The player enters or leaves a resting place (`IsResting`,
+--- `PLAYER_UPDATE_RESTING`).
+export function setResting(resting: boolean)
+    engine().setResting(resting)
+end
+
 --- The area's updates without a zone's event (the mount journal's
 --- usability, the map's points of interest and fog).
 export function areaChanged()

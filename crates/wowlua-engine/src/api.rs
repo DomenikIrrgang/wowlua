@@ -137,6 +137,18 @@ pub fn api(flavor: &str) -> Option<&'static Api> {
             class.widget = Some(name.to_string());
         }
     }
+    // A model scene's actor has its base's methods (`ClearModel`, `Show`)
+    // and an object's (`GetParent`: its scene); the documentation gives
+    // neither base.
+    for (class, base) in [
+        ("ModelSceneFrameActor", "ModelSceneFrameActorBase"),
+        ("ModelSceneFrameActorBase", "Object"),
+    ] {
+        let c = parsed.classes.entry(class.to_string()).or_default();
+        if c.bases.is_empty() {
+            c.bases.push(base.to_string());
+        }
+    }
     let api: &'static Api = Box::leak(Box::new(parsed));
     cache.insert(flavor.to_string(), api);
     Some(api)

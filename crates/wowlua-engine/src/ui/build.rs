@@ -24,6 +24,8 @@ const REGIONS: &[(&str, &str)] = &[
     ("FontString", "FontString"),
     ("MaskTexture", "MaskTexture"),
     ("Line", "Line"),
+    // A model scene's actor template (`<Actor virtual="true">`).
+    ("Actor", "ModelSceneFrameActor"),
 ];
 
 /// Child elements that are a texture the widget uses, and its setter.
