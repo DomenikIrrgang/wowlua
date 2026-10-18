@@ -418,6 +418,18 @@ export function setSpellTraits(traits: {
     engine().setSpellTraits(traits)
 end
 
+--- A trait config's ranks as the session begins (class talents, the
+--- legacy trees: `C_Traits`), by node: the recorded character's otherwise.
+export function setTraitRanks(configID: number, ranks: { [number]: number })
+    engine().setTraitRanks(configID, ranks)
+end
+
+--- A major faction's renown (`C_MajorFactions.GetCurrentRenownLevel`: the
+--- legacy system opens at 1 or more).
+export function setRenown(factionID: number, level: number)
+    engine().setRenown(factionID, level)
+end
+
 --- The player's group: `mock.group:add(unit)` (`partyN`, `raidN`).
 export const group = {
     add = function(_: any, unit: MockUnit)

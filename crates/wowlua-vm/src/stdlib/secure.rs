@@ -263,6 +263,20 @@ impl Vm {
 }
 
 impl Vm {
+    /// Calls `f` as its own secure execution (the client loading a file:
+    /// each one a call from C), the caller's taint state restored after,
+    /// an error returned: what one file did cannot taint the next.
+    pub fn call_secure(&mut self, f: Value, args: &[Value]) -> Result<Vec<Value>, LuaError> {
+        let saved = self.taint().saved();
+        self.taint_mut().stack = Taint::SECURE;
+        let args: Vec<Slot> = args.iter().map(|&v| Slot::secure(v)).collect();
+        let r = self.call_slots(Slot::secure(f), &args);
+        self.taint_mut().restore(saved);
+        r.map(|results| results.into_iter().map(|s| s.v).collect())
+    }
+}
+
+impl Vm {
     /// The function errors reach the error handler through (elune's
     /// `f_errorhandler`): non-string errors become "UNKNOWN ERROR", and a
     /// `*:` source names the frame of the function that failed.

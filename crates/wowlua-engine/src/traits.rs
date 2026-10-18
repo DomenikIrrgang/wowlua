@@ -1,0 +1,1028 @@
+//! Trait configs: the class talents' and the legacy system's trees, as the
+//! client answered a character's (`/stdtest engine traits`,
+//! `data/camelot-traits.txt` by class) and as their ranks change: a rank
+//! bought is staged at once, applied (`CommitConfig`) on the server's word.
+//!
+//! The trees' structure is the recording's (nodes, entries, definitions,
+//! edges, conditions, costs, currencies' maxima); the ranks are the
+//! engine's (the recording's unless the test sets them,
+//! `e.setTraitRanks(config, { [node] = rank })`), and every answer that
+//! follows from them is worked out: a node's ranks and next entry, whether
+//! it is available, meets its edges, can be bought; a tree's currency; a
+//! condition's points still to spend.
+//!
+//! Recorded (the legacy druid, the talents shaman): a staged rank counts in
+//! `activeRank`, `currentRank`, `ranksPurchased` at once;
+//! `entryIDsWithCommittedRanks` holds what was committed before the
+//! session, a commit's ranks not even at its answer; a condition's
+//! `spentAmountRequired` is what is still to spend (met: 0, without its
+//! tooltip); buying fires `TRAIT_NODE_CHANGED` for the node, the nodes it
+//! unlocks, its edges' targets, then `TRAIT_TREE_CURRENCY_INFO_UPDATED` for
+//! each of the config's trees paying in its currency; applying: a round
+//! trip, `SPELLS_CHANGED`, then the committed nodes, every tree's currency,
+//! `TRAIT_CONFIG_UPDATED`, `PLAYER_TALENT_UPDATE`.
+//!
+//! Unverified: an edge is met by its source at its last rank (the classic
+//! rule; recorded only met at 5 of 5); the unlocked nodes' order (the
+//! recording's 110303, 110305, 110304: here the tree's); a met condition's
+//! points (the probe's spent points: at most); refunds, rollbacks,
+//! selection nodes; the second stage of a commit (0.5 s after the first in
+//! the legacy recording, 0.07 s in the talents one).
+
+use std::collections::{BTreeMap, HashMap};
+use std::sync::OnceLock;
+
+use wowlua_vm::stdlib::Ret;
+use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
+
+use crate::units::PLAYER;
+use crate::{engine, engine_mut, widgets};
+
+/// A commit's second stage after its first (the legacy recording).
+const COMMIT_AFTER: f64 = 0.499;
+/// The group buffs again after a commit (recorded).
+const BUFFS_AFTER: f64 = 0.007;
+/// `Enum.TraitNodeFlag.NeverPurchasable`.
+const NEVER_PURCHASABLE: i64 = 2;
+/// `Enum.TraitConditionType.Available`.
+const AVAILABLE: f64 = 0.0;
+/// `Enum.TraitEdgeType`: one source suffices, every source is needed.
+const SUFFICIENT: f64 = 2.0;
+const REQUIRED: f64 = 3.0;
+
+/// A recorded value (`string x`, `number 1`, `boolean true`, `nil nil`,
+/// `{k=v,…}`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Rv {
+    Nil,
+    Bool(bool),
+    Num(f64),
+    Str(String),
+    Table(Vec<(String, Rv)>),
+}
+
+impl Rv {
+    fn parse(text: &str) -> Rv {
+        let text = text.trim_start();
+        if let Some(inner) = text.strip_prefix('{').and_then(|t| t.strip_suffix('}')) {
+            let mut fields = Vec::new();
+            for entry in crate::recorded::split_top(inner, ',') {
+                if let Some((k, v)) = entry.split_once('=') {
+                    fields.push((k.to_string(), Rv::parse(v)));
+                }
+            }
+            return Rv::Table(fields);
+        }
+        match text.split_once(' ') {
+            Some(("string", s)) => Rv::Str(s.to_string()),
+            Some(("number", n)) => n.parse().map_or(Rv::Nil, Rv::Num),
+            Some(("boolean", b)) => Rv::Bool(b == "true"),
+            _ => Rv::Nil,
+        }
+    }
+
+    /// An answer's values (`n: v1, v2`).
+    fn answer(text: &str) -> Vec<Rv> {
+        let Some((count, rest)) = text.split_once(": ") else {
+            return Vec::new();
+        };
+        if count == "0" {
+            return Vec::new();
+        }
+        let starts = crate::recorded::regex_starts(rest);
+        (0..starts.len())
+            .map(|i| {
+                let end = starts.get(i + 1).map_or(rest.len(), |&e| e - 2);
+                Rv::parse(&rest[starts[i]..end])
+            })
+            .collect()
+    }
+
+    pub fn get(&self, key: &str) -> Option<&Rv> {
+        match self {
+            Rv::Table(fields) => fields.iter().find(|(k, _)| k == key).map(|(_, v)| v),
+            _ => None,
+        }
+    }
+
+    fn num(&self, key: &str) -> Option<f64> {
+        match self.get(key) {
+            Some(Rv::Num(n)) => Some(*n),
+            _ => None,
+        }
+    }
+
+    fn flag(&self, key: &str) -> bool {
+        matches!(self.get(key), Some(Rv::Bool(true)))
+    }
+
+    /// A list's values in order (`{1=…,2=…}`, keys as numbers).
+    fn list(&self) -> Vec<&Rv> {
+        let Rv::Table(fields) = self else {
+            return Vec::new();
+        };
+        let mut items: Vec<(f64, &Rv)> = fields
+            .iter()
+            .filter_map(|(k, v)| k.parse::<f64>().ok().map(|i| (i, v)))
+            .collect();
+        items.sort_by(|a, b| a.0.total_cmp(&b.0));
+        items.into_iter().map(|(_, v)| v).collect()
+    }
+
+    fn nums(&self, key: &str) -> Vec<i64> {
+        self.get(key)
+            .map(|l| {
+                l.list()
+                    .into_iter()
+                    .filter_map(|v| match v {
+                        Rv::Num(n) => Some(*n as i64),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn set(&mut self, key: &str, value: Rv) {
+        if let Rv::Table(fields) = self {
+            match fields.iter_mut().find(|(k, _)| k == key) {
+                Some(slot) => slot.1 = value,
+                None => {
+                    fields.push((key.to_string(), value));
+                    fields.sort_by(|a, b| a.0.cmp(&b.0));
+                }
+            }
+        }
+    }
+
+    fn remove(&mut self, key: &str) {
+        if let Rv::Table(fields) = self {
+            fields.retain(|(k, _)| k != key);
+        }
+    }
+
+    fn list_of(items: Vec<Rv>) -> Rv {
+        Rv::Table(
+            items
+                .into_iter()
+                .enumerate()
+                .map(|(i, v)| ((i + 1).to_string(), v))
+                .collect(),
+        )
+    }
+
+    pub fn to_value(&self, vm: &mut Vm) -> Value {
+        match self {
+            Rv::Nil => Value::Nil,
+            Rv::Bool(b) => Value::Bool(*b),
+            Rv::Num(n) => Value::Num(*n),
+            Rv::Str(s) => vm.str(s),
+            Rv::Table(fields) => {
+                let t = vm.new_table();
+                for (k, v) in fields {
+                    let key = match k.parse::<f64>() {
+                        Ok(n) => Value::Num(n),
+                        Err(_) => vm.str(k),
+                    };
+                    let value = v.to_value(vm);
+                    let _ = vm.heap.table_mut(t).set(key, value);
+                }
+                Value::Table(t)
+            }
+        }
+    }
+}
+
+/// The recorded answers: (class, call) → answer.
+fn data() -> &'static HashMap<(&'static str, &'static str), &'static str> {
+    static DATA: OnceLock<HashMap<(&'static str, &'static str), &'static str>> = OnceLock::new();
+    DATA.get_or_init(|| {
+        include_str!("../data/camelot-traits.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| {
+                let (class, rest) = l.split_once('\t')?;
+                let (call, answer) = rest.split_once('\t')?;
+                Some(((class, call), answer))
+            })
+            .collect()
+    })
+}
+
+/// The ranks the engine keeps: by (config, node).
+#[derive(Default)]
+pub struct Traits {
+    /// Committed ranks set by the test or a commit (else the recording's).
+    pub committed: BTreeMap<(i64, i64), i64>,
+    /// Ranks bought and not applied yet.
+    pub staged: BTreeMap<(i64, i64), i64>,
+    /// The ranks committed when the session began (set by the test).
+    pub start: BTreeMap<(i64, i64), i64>,
+    /// Renown by major faction (`e.setRenown`).
+    pub renown: BTreeMap<i64, f64>,
+}
+
+/// A character's recorded trait data and the engine's ranks.
+pub struct Model<'a> {
+    class: String,
+    state: &'a Traits,
+}
+
+impl<'a> Model<'a> {
+    pub fn new(class: &str, state: &'a Traits) -> Model<'a> {
+        Model {
+            class: class.to_uppercase(),
+            state,
+        }
+    }
+
+    /// Whether the class's configs were recorded.
+    fn known(&self) -> bool {
+        data().keys().any(|(c, _)| *c == self.class)
+    }
+
+    fn recorded(&self, call: &str) -> Option<Vec<Rv>> {
+        data()
+            .get(&(self.class.as_str(), call))
+            .map(|a| Rv::answer(a))
+    }
+
+    fn first(&self, call: &str) -> Option<Rv> {
+        self.recorded(call)?.into_iter().next()
+    }
+
+    fn recorded_node(&self, config: i64, node: i64) -> Option<Rv> {
+        self.first(&format!("C_Traits.GetNodeInfo({config}, {node})"))
+    }
+
+    pub fn trees(&self, config: i64) -> Vec<i64> {
+        self.first(&format!("C_Traits.GetConfigInfo({config})"))
+            .map(|c| c.nums("treeIDs"))
+            .unwrap_or_default()
+    }
+
+    fn tree_nodes(&self, tree: i64) -> Vec<i64> {
+        self.first(&format!("C_Traits.GetTreeNodes({tree})"))
+            .map(|l| {
+                l.list()
+                    .into_iter()
+                    .filter_map(|v| match v {
+                        Rv::Num(n) => Some(*n as i64),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// The config's nodes, tree by tree, each with its tree.
+    fn nodes(&self, config: i64) -> Vec<(i64, i64)> {
+        self.trees(config)
+            .into_iter()
+            .flat_map(|t| self.tree_nodes(t).into_iter().map(move |n| (t, n)))
+            .collect()
+    }
+
+    fn tree_of(&self, config: i64, node: i64) -> Option<i64> {
+        self.nodes(config)
+            .into_iter()
+            .find(|(_, n)| *n == node)
+            .map(|(t, _)| t)
+    }
+
+    fn recorded_rank(&self, config: i64, node: i64) -> i64 {
+        self.recorded_node(config, node)
+            .and_then(|n| n.num("ranksPurchased"))
+            .unwrap_or(0.0) as i64
+    }
+
+    fn committed(&self, config: i64, node: i64) -> i64 {
+        self.state
+            .committed
+            .get(&(config, node))
+            .copied()
+            .unwrap_or_else(|| self.recorded_rank(config, node))
+    }
+
+    fn staged(&self, config: i64, node: i64) -> i64 {
+        self.state.staged.get(&(config, node)).copied().unwrap_or(0)
+    }
+
+    fn rank(&self, config: i64, node: i64, staged: bool) -> i64 {
+        self.committed(config, node) + if staged { self.staged(config, node) } else { 0 }
+    }
+
+    fn max_ranks(&self, config: i64, node: i64) -> i64 {
+        self.recorded_node(config, node)
+            .and_then(|n| n.num("maxRanks"))
+            .unwrap_or(1.0) as i64
+    }
+
+    /// A node's cost: (currency, amount) a rank.
+    fn cost(&self, config: i64, node: i64) -> Vec<(i64, i64)> {
+        self.first(&format!("C_Traits.GetNodeCost({config}, {node})"))
+            .map(|l| {
+                l.list()
+                    .into_iter()
+                    .filter_map(|c| Some((c.num("ID")? as i64, c.num("amount")? as i64)))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Points of a currency spent in the config (or one tree of it).
+    fn spent(
+        &self,
+        config: i64,
+        currency: i64,
+        tree: Option<i64>,
+        staged: bool,
+        recorded: bool,
+    ) -> i64 {
+        self.nodes(config)
+            .into_iter()
+            .filter(|(t, _)| tree.is_none_or(|x| x == *t))
+            .map(|(_, n)| {
+                let rank = if recorded {
+                    self.recorded_rank(config, n)
+                } else {
+                    self.rank(config, n, staged)
+                };
+                let per: i64 = self
+                    .cost(config, n)
+                    .into_iter()
+                    .filter(|(c, _)| *c == currency)
+                    .map(|(_, a)| a)
+                    .sum();
+                rank * per
+            })
+            .sum()
+    }
+
+    /// `C_Traits.GetTreeCurrencyInfo(config, tree, excludeStagedChanges)`.
+    pub fn tree_currency(&self, config: i64, tree: i64, exclude_staged: bool) -> Option<Rv> {
+        let list = self.first(&format!(
+            "C_Traits.GetTreeCurrencyInfo({config}, {tree}, false)"
+        ))?;
+        let items = list
+            .list()
+            .into_iter()
+            .map(|c| {
+                let mut c = c.clone();
+                if let Some(currency) = c.num("traitCurrencyID") {
+                    let currency = currency as i64;
+                    let max = c.num("maxQuantity").unwrap_or(0.0) as i64;
+                    let spent = self.spent(config, currency, None, !exclude_staged, false);
+                    let in_tree = self.spent(config, currency, Some(tree), !exclude_staged, false);
+                    c.set("quantity", Rv::Num((max - spent) as f64));
+                    c.set("spent", Rv::Num(spent as f64));
+                    c.set("spentInTree", Rv::Num(in_tree as f64));
+                }
+                c
+            })
+            .collect();
+        Some(Rv::list_of(items))
+    }
+
+    /// The tree a condition gates: its first node's in the config.
+    fn condition_tree(&self, config: i64, cond: i64) -> Option<i64> {
+        self.nodes(config).into_iter().find_map(|(t, n)| {
+            let node = self.recorded_node(config, n)?;
+            node.nums("conditionIDs").contains(&cond).then_some(t)
+        })
+    }
+
+    /// `C_Traits.GetConditionInfo(config, cond)`: a spending condition's
+    /// points still to spend in its tree (its points: what the recording
+    /// still lacked and had spent).
+    pub fn condition(&self, config: i64, cond: i64) -> Option<Rv> {
+        let mut info = self.first(&format!("C_Traits.GetConditionInfo({config}, {cond})"))?;
+        let (Some(currency), Some(remaining)) =
+            (info.num("traitCurrencyID"), info.num("spentAmountRequired"))
+        else {
+            return Some(info);
+        };
+        let Some(tree) = self.condition_tree(config, cond) else {
+            return Some(info);
+        };
+        let currency = currency as i64;
+        let needed = remaining as i64 + self.spent(config, currency, Some(tree), false, true);
+        let now = self.spent(config, currency, Some(tree), true, false);
+        let left = (needed - now).max(0);
+        info.set("isMet", Rv::Bool(left == 0));
+        info.set("spentAmountRequired", Rv::Num(left as f64));
+        if left == 0 {
+            info.remove("tooltipFormat");
+            info.remove("tooltipText");
+        } else if let Some(Rv::Str(format)) = info.get("tooltipFormat").cloned() {
+            let text = format
+                .replacen("%d", &left.to_string(), 1)
+                .replacen("%s", "", 1);
+            info.set("tooltipText", Rv::Str(format!("|cffff2020{text}|r")));
+        }
+        Some(info)
+    }
+
+    fn condition_met(&self, config: i64, cond: i64) -> bool {
+        self.condition(config, cond).is_some_and(|c| {
+            c.num("type") != Some(AVAILABLE) || c.flag("isMet") || c.flag("isAlwaysMet")
+        })
+    }
+
+    /// An edge's source at its last rank.
+    fn satisfies(&self, config: i64, node: i64) -> bool {
+        self.rank(config, node, true) >= self.max_ranks(config, node)
+    }
+
+    /// The edges into a node: (source, type).
+    fn edges_into(&self, config: i64, node: i64) -> Vec<(i64, f64)> {
+        let mut out = Vec::new();
+        for (_, source) in self.nodes(config) {
+            let Some(info) = self.recorded_node(config, source) else {
+                continue;
+            };
+            for edge in info
+                .get("visibleEdges")
+                .map(|e| e.list())
+                .unwrap_or_default()
+            {
+                if edge.num("targetNode") == Some(node as f64) {
+                    out.push((source, edge.num("type").unwrap_or(0.0)));
+                }
+            }
+        }
+        out
+    }
+
+    fn meets_edges(&self, config: i64, node: i64) -> bool {
+        let edges = self.edges_into(config, node);
+        let sufficient: Vec<i64> = edges
+            .iter()
+            .filter(|(_, t)| *t == SUFFICIENT)
+            .map(|(s, _)| *s)
+            .collect();
+        let required = edges
+            .iter()
+            .filter(|(_, t)| *t == REQUIRED)
+            .map(|(s, _)| *s);
+        (sufficient.is_empty() || sufficient.iter().any(|s| self.satisfies(config, *s)))
+            && required.into_iter().all(|s| self.satisfies(config, s))
+    }
+
+    fn cannot_refund(&self, config: i64, node: i64) -> bool {
+        self.tree_of(config, node)
+            .and_then(|t| self.first(&format!("C_Traits.GetTreeInfo({config}, {t})")))
+            .is_some_and(|t| t.flag("cannotRefund"))
+    }
+
+    /// `C_Traits.GetNodeInfo(config, node)`: the recording's, its ranks'
+    /// answers worked out.
+    pub fn node(&self, config: i64, node: i64) -> Option<Rv> {
+        let mut info = self.recorded_node(config, node)?;
+        let rank = self.rank(config, node, true);
+        let max = self.max_ranks(config, node);
+        let available = info
+            .nums("conditionIDs")
+            .into_iter()
+            .all(|c| self.condition_met(config, c));
+        let meets = self.meets_edges(config, node);
+        let entry = info
+            .get("activeEntry")
+            .and_then(|e| e.num("entryID"))
+            .or_else(|| info.nums("entryIDs").first().map(|e| *e as f64));
+        for key in ["activeRank", "currentRank", "ranksPurchased"] {
+            info.set(key, Rv::Num(rank as f64));
+        }
+        if let Some(entry) = entry {
+            let active = Rv::Table(vec![
+                ("entryID".into(), Rv::Num(entry)),
+                ("rank".into(), Rv::Num(rank as f64)),
+            ]);
+            info.set("activeEntry", active);
+            if rank < max {
+                let next = Rv::Table(vec![
+                    ("entryID".into(), Rv::Num(entry)),
+                    ("rank".into(), Rv::Num((rank + 1) as f64)),
+                ]);
+                info.set("nextEntry", next);
+            } else {
+                info.remove("nextEntry");
+            }
+            let before = self.state.start.get(&(config, node)).copied();
+            let committed = before.unwrap_or_else(|| self.recorded_rank(config, node));
+            let with = if committed > 0 {
+                vec![Rv::Num(entry)]
+            } else {
+                Vec::new()
+            };
+            info.set("entryIDsWithCommittedRanks", Rv::list_of(with));
+        }
+        info.set("isAvailable", Rv::Bool(available));
+        info.set("meetsEdgeRequirements", Rv::Bool(meets));
+        // Whatever the points left (recorded: the druid's spent class
+        // tree's nodes can be bought); never a node flagged so.
+        let never = info.num("flags").unwrap_or(0.0) as i64 & NEVER_PURCHASABLE != 0;
+        info.set(
+            "canPurchaseRank",
+            Rv::Bool(available && meets && rank < max && !never),
+        );
+        let staged = self.staged(config, node) > 0;
+        let refund = staged || (rank > 0 && !self.cannot_refund(config, node));
+        info.set("canRefundRank", Rv::Bool(refund));
+        let active = self.satisfies(config, node);
+        if let Some(Rv::Table(edges)) = info.get("visibleEdges").cloned() {
+            let edges = edges
+                .into_iter()
+                .map(|(k, mut e)| {
+                    e.set("isActive", Rv::Bool(active));
+                    (k, e)
+                })
+                .collect();
+            info.set("visibleEdges", Rv::Table(edges));
+        }
+        Some(info)
+    }
+
+    /// The trees of the config paying in a currency, in its order.
+    fn trees_paying(&self, config: i64, currency: i64) -> Vec<i64> {
+        self.trees(config)
+            .into_iter()
+            .filter(|t| {
+                self.first(&format!(
+                    "C_Traits.GetTreeCurrencyInfo({config}, {t}, false)"
+                ))
+                .is_some_and(|l| {
+                    l.list()
+                        .iter()
+                        .any(|c| c.num("traitCurrencyID") == Some(currency as f64))
+                })
+            })
+            .collect()
+    }
+
+    /// The edges' targets of a node.
+    fn targets(&self, config: i64, node: i64) -> Vec<i64> {
+        self.recorded_node(config, node)
+            .and_then(|i| i.get("visibleEdges").cloned())
+            .map(|e| {
+                e.list()
+                    .iter()
+                    .filter_map(|e| e.num("targetNode").map(|n| n as i64))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+}
+
+fn model(vm: &Vm) -> Model<'_> {
+    let class = &engine(vm).units.list[PLAYER.0].class;
+    Model::new(class, &engine(vm).world.traits)
+}
+
+fn traits_mut(vm: &mut Vm) -> &mut Traits {
+    &mut engine_mut(vm).world.traits
+}
+
+fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
+    widgets::fire_event(vm, e, args);
+}
+
+fn int(vm: &mut Vm, c: &NativeCall, i: usize) -> Option<i64> {
+    match vm.hidden(c.arg(i)) {
+        Value::Num(n) => Some(n as i64),
+        _ => None,
+    }
+}
+
+fn answer(vm: &mut Vm, rv: Option<Rv>) -> Vec<Value> {
+    rv.map(|v| vec![v.to_value(vm)]).unwrap_or_default()
+}
+
+/// Any other call of a recorded class: its recorded answer; a class
+/// never recorded: the general answers.
+fn recorded(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(name) = crate::recorded::called_name(vm, &c) else {
+        return Ok(vec![]);
+    };
+    let call = crate::call_text(vm, &name, &c, 1);
+    let m = model(vm);
+    if m.known()
+        && let Some(values) = m.recorded(&call)
+    {
+        return Ok(values.iter().map(|v| v.to_value(vm)).collect());
+    }
+    crate::recorded::recorded(vm, c)
+}
+
+/// A behaviour of the model for a recorded class, else the general one.
+macro_rules! modelled {
+    ($vm:ident, $c:ident, $body:expr) => {{
+        if !model($vm).known() {
+            return crate::recorded::recorded($vm, $c);
+        }
+        $body
+    }};
+}
+
+fn get_node_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    modelled!(vm, c, {
+        let (Some(config), Some(node)) = (int(vm, &c, 1), int(vm, &c, 2)) else {
+            return Ok(vec![]);
+        };
+        let rv = model(vm).node(config, node);
+        Ok(answer(vm, rv))
+    })
+}
+
+fn get_condition_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    modelled!(vm, c, {
+        let (Some(config), Some(cond)) = (int(vm, &c, 1), int(vm, &c, 2)) else {
+            return Ok(vec![]);
+        };
+        let rv = model(vm).condition(config, cond);
+        Ok(answer(vm, rv))
+    })
+}
+
+fn get_tree_currency_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    modelled!(vm, c, {
+        let (Some(config), Some(tree)) = (int(vm, &c, 1), int(vm, &c, 2)) else {
+            return Ok(vec![]);
+        };
+        let exclude = vm.hidden(c.arg(3)).truthy();
+        let rv = model(vm).tree_currency(config, tree, exclude);
+        Ok(answer(vm, rv))
+    })
+}
+
+fn can_purchase_rank(vm: &mut Vm, c: NativeCall) -> Ret {
+    modelled!(vm, c, {
+        let (Some(config), Some(node)) = (int(vm, &c, 1), int(vm, &c, 2)) else {
+            return Ok(vec![Value::Bool(false)]);
+        };
+        let can = model(vm)
+            .node(config, node)
+            .is_some_and(|n| n.flag("canPurchaseRank"));
+        Ok(vec![Value::Bool(can)])
+    })
+}
+
+fn can_refund_rank(vm: &mut Vm, c: NativeCall) -> Ret {
+    modelled!(vm, c, {
+        let (Some(config), Some(node)) = (int(vm, &c, 1), int(vm, &c, 2)) else {
+            return Ok(vec![Value::Bool(false)]);
+        };
+        let can = model(vm)
+            .node(config, node)
+            .is_some_and(|n| n.flag("canRefundRank"));
+        Ok(vec![Value::Bool(can)])
+    })
+}
+
+fn staged_nodes(vm: &Vm, config: i64) -> Vec<i64> {
+    let m = model(vm);
+    m.nodes(config)
+        .into_iter()
+        .map(|(_, n)| n)
+        .filter(|n| m.staged(config, *n) > 0)
+        .collect()
+}
+
+fn config_has_staged_changes(vm: &mut Vm, c: NativeCall) -> Ret {
+    modelled!(vm, c, {
+        let Some(config) = int(vm, &c, 1) else {
+            return Ok(vec![Value::Bool(false)]);
+        };
+        let staged = !staged_nodes(vm, config).is_empty();
+        Ok(vec![Value::Bool(staged)])
+    })
+}
+
+/// `C_Traits.GetStagedChanges(config)`: the nodes with ranks bought,
+/// refunded, swapped (none recorded staged: as documented).
+fn get_staged_changes(vm: &mut Vm, c: NativeCall) -> Ret {
+    modelled!(vm, c, {
+        let Some(config) = int(vm, &c, 1) else {
+            return Ok(vec![]);
+        };
+        let nodes = staged_nodes(vm, config);
+        if nodes.is_empty() {
+            return Ok(vec![]);
+        }
+        let list = Rv::list_of(nodes.into_iter().map(|n| Rv::Num(n as f64)).collect());
+        let purchases = list.to_value(vm);
+        let refunds = Value::Table(vm.new_table());
+        let swaps = Value::Table(vm.new_table());
+        Ok(vec![purchases, refunds, swaps])
+    })
+}
+
+/// The nodes' answers of a config, to tell which a change touched.
+fn snapshot(vm: &Vm, config: i64) -> Vec<(i64, Option<Rv>)> {
+    let m = model(vm);
+    m.nodes(config)
+        .into_iter()
+        .map(|(_, n)| (n, m.node(config, n)))
+        .collect()
+}
+
+/// `C_Traits.PurchaseRank(config, node)`: staged at once, its events.
+fn purchase_rank(vm: &mut Vm, c: NativeCall) -> Ret {
+    modelled!(vm, c, {
+        let (Some(config), Some(node)) = (int(vm, &c, 1), int(vm, &c, 2)) else {
+            return Ok(vec![Value::Bool(false)]);
+        };
+        let can = model(vm)
+            .node(config, node)
+            .is_some_and(|n| n.flag("canPurchaseRank"));
+        if !can {
+            return Ok(vec![Value::Bool(false)]);
+        }
+        let before = snapshot(vm, config);
+        *traits_mut(vm).staged.entry((config, node)).or_insert(0) += 1;
+        let after = snapshot(vm, config);
+        let (targets, currencies) = {
+            let m = model(vm);
+            let currencies: Vec<i64> = m
+                .cost(config, node)
+                .into_iter()
+                .flat_map(|(cur, _)| m.trees_paying(config, cur))
+                .collect();
+            (m.targets(config, node), currencies)
+        };
+        fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(node as f64)]);
+        for ((n, a), (_, b)) in before.iter().zip(after.iter()) {
+            if *n != node && !targets.contains(n) && a != b {
+                fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(*n as f64)]);
+            }
+        }
+        for t in targets {
+            fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(t as f64)]);
+        }
+        let mut seen = Vec::new();
+        for tree in currencies {
+            if !seen.contains(&tree) {
+                seen.push(tree);
+                fire(
+                    vm,
+                    "TRAIT_TREE_CURRENCY_INFO_UPDATED",
+                    &[Value::Num(tree as f64)],
+                );
+            }
+        }
+        Ok(vec![Value::Bool(true)])
+    })
+}
+
+fn config_of(c: &NativeCall) -> i64 {
+    match c.upvals.first() {
+        Some(Value::Num(n)) => *n as i64,
+        _ => 0,
+    }
+}
+
+/// `C_Traits.CommitConfig(config)`: the server's word a round trip later
+/// (`SPELLS_CHANGED`), the ranks applied after.
+fn commit_config(vm: &mut Vm, c: NativeCall) -> Ret {
+    modelled!(vm, c, {
+        let Some(config) = int(vm, &c, 1) else {
+            return Ok(vec![Value::Bool(false)]);
+        };
+        if staged_nodes(vm, config).is_empty() {
+            return Ok(vec![Value::Bool(false)]);
+        }
+        let delay = crate::clock::server_delay(vm);
+        let native = vm.native_with(
+            "traitsCommitted",
+            committed as NativeFn,
+            vec![Value::Num(config as f64)],
+        );
+        crate::clock::after_engine(vm, delay, native);
+        Ok(vec![Value::Bool(true)])
+    })
+}
+
+fn committed(vm: &mut Vm, c: NativeCall) -> Ret {
+    crate::character::group_buffs_changed(vm);
+    fire(vm, "SPELLS_CHANGED", &[]);
+    let native = vm.native_with("traitsApplied", applied as NativeFn, c.upvals.to_vec());
+    crate::clock::after_engine(vm, COMMIT_AFTER, native);
+    Ok(vec![])
+}
+
+fn applied(vm: &mut Vm, c: NativeCall) -> Ret {
+    let config = config_of(&c);
+    let nodes = staged_nodes(vm, config);
+    for n in &nodes {
+        let rank = model(vm).rank(config, *n, true);
+        let t = traits_mut(vm);
+        t.staged.remove(&(config, *n));
+        t.committed.insert((config, *n), rank);
+    }
+    for n in nodes {
+        fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(n as f64)]);
+    }
+    for tree in model(vm).trees(config) {
+        fire(
+            vm,
+            "TRAIT_TREE_CURRENCY_INFO_UPDATED",
+            &[Value::Num(tree as f64)],
+        );
+    }
+    fire(vm, "TRAIT_CONFIG_UPDATED", &[Value::Num(config as f64)]);
+    fire(vm, "PLAYER_TALENT_UPDATE", &[]);
+    let native = vm.native_with("traitsBuffs", buffs as NativeFn, vec![]);
+    crate::clock::after_engine(vm, BUFFS_AFTER, native);
+    Ok(vec![])
+}
+
+fn buffs(vm: &mut Vm, _c: NativeCall) -> Ret {
+    crate::character::group_buffs_changed(vm);
+    Ok(vec![])
+}
+
+/// `C_Traits.RollbackConfig(config)`: the staged ranks dropped
+/// (unverified: its events).
+fn rollback_config(vm: &mut Vm, c: NativeCall) -> Ret {
+    modelled!(vm, c, {
+        let Some(config) = int(vm, &c, 1) else {
+            return Ok(vec![Value::Bool(false)]);
+        };
+        let nodes = staged_nodes(vm, config);
+        for n in &nodes {
+            traits_mut(vm).staged.remove(&(config, *n));
+        }
+        for n in nodes {
+            fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(n as f64)]);
+        }
+        Ok(vec![Value::Bool(true)])
+    })
+}
+
+/// `C_Traits.GetConfigInfo(config)`: the inspected's (-1), else the class's.
+fn get_config_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(r) = crate::inspect::config_info(vm, &c) {
+        return Ok(r);
+    }
+    recorded(vm, c)
+}
+
+/// `C_MajorFactions.GetCurrentRenownLevel(faction)`: the test's
+/// (`e.setRenown`), else the recorded answers.
+fn get_current_renown_level(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(faction) = int(vm, &c, 1)
+        && let Some(level) = engine(vm).world.traits.renown.get(&faction).copied()
+    {
+        return Ok(vec![Value::Num(level)]);
+    }
+    crate::recorded::recorded(vm, c)
+}
+
+/// `e.setTraitRanks(config, { [node] = rank })`: the ranks committed as
+/// the session begins.
+pub fn control_set_trait_ranks(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Num(config), Value::Table(t)) = (c.arg(1), c.arg(2)) else {
+        return Err(vm.error("setTraitRanks: a config and a table of ranks by node expected"));
+    };
+    let mut ranks = Vec::new();
+    let mut key = Value::Nil;
+    while let Ok(Some((k, v))) = vm.heap.table(t).next(key) {
+        if let (Value::Num(node), Value::Num(rank)) = (k, v) {
+            ranks.push((node as i64, rank as i64));
+        }
+        key = k;
+    }
+    let state = traits_mut(vm);
+    for (node, rank) in ranks {
+        state.committed.insert((config as i64, node), rank);
+        state.start.insert((config as i64, node), rank);
+    }
+    Ok(vec![])
+}
+
+/// `e.setRenown(faction, level)`: a major faction's renown.
+pub fn control_set_renown(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Num(faction), Value::Num(level)) = (c.arg(1), c.arg(2)) else {
+        return Err(vm.error("setRenown: a faction ID and a level expected"));
+    };
+    traits_mut(vm).renown.insert(faction as i64, level);
+    Ok(vec![])
+}
+
+/// The functions every recorded class answers as recorded.
+fn recorded_names() -> Vec<&'static str> {
+    let mut names: Vec<&'static str> = data()
+        .keys()
+        .filter_map(|(_, call)| call.split('(').next())
+        .collect();
+    names.sort_unstable();
+    names.dedup();
+    names
+}
+
+/// The recorded classes' answers to the functions their configs were asked
+/// (before the engine's own behaviours: those keep their place); camelot's.
+pub fn recorded_behaviours(flavor: &str) -> Vec<(&'static str, NativeFn)> {
+    if flavor != "camelot" {
+        return Vec::new();
+    }
+    recorded_names()
+        .into_iter()
+        .map(|name| (name, recorded as NativeFn))
+        .collect()
+}
+
+/// The modelled functions (camelot's data).
+pub fn behaviours(flavor: &str) -> Vec<(&'static str, NativeFn)> {
+    if flavor != "camelot" {
+        return Vec::new();
+    }
+    vec![
+        ("C_Traits.GetNodeInfo", get_node_info),
+        ("C_Traits.GetConditionInfo", get_condition_info),
+        ("C_Traits.GetTreeCurrencyInfo", get_tree_currency_info),
+        ("C_Traits.CanPurchaseRank", can_purchase_rank),
+        ("C_Traits.CanRefundRank", can_refund_rank),
+        ("C_Traits.ConfigHasStagedChanges", config_has_staged_changes),
+        ("C_Traits.GetStagedChanges", get_staged_changes),
+        ("C_Traits.PurchaseRank", purchase_rank),
+        ("C_Traits.CommitConfig", commit_config),
+        ("C_Traits.RollbackConfig", rollback_config),
+        ("C_Traits.GetConfigInfo", get_config_info),
+        (
+            "C_MajorFactions.GetCurrentRenownLevel",
+            get_current_renown_level,
+        ),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The fields two answers differ in: ours, theirs.
+    fn differences(ours: &Option<Rv>, theirs: &Option<Rv>) -> String {
+        let (Some(Rv::Table(a)), Some(Rv::Table(b))) = (ours, theirs) else {
+            return format!("{ours:?} / {theirs:?}");
+        };
+        let mut out = Vec::new();
+        for (k, v) in a {
+            match b.iter().find(|(kb, _)| kb == k) {
+                Some((_, w)) if w == v => {}
+                Some((_, w)) => out.push(format!("{k}: {v:?} / {w:?}")),
+                None => out.push(format!("{k}: {v:?} / -")),
+            }
+        }
+        for (k, w) in b {
+            if !a.iter().any(|(ka, _)| ka == k) {
+                out.push(format!("{k}: - / {w:?}"));
+            }
+        }
+        out.join("; ")
+    }
+
+    /// The recorded configs' answers again from the ranks: every node,
+    /// condition and tree currency of every recorded class as recorded.
+    #[test]
+    fn the_recorded_answers_follow_from_the_ranks() {
+        let state = Traits::default();
+        let mut checked = 0;
+        let mut wrong = Vec::new();
+        for ((class, call), answer) in data() {
+            let m = Model::new(class, &state);
+            let args = |prefix: &str| -> Option<Vec<i64>> {
+                let inner = call.strip_prefix(prefix)?.strip_suffix(')')?;
+                inner.split(", ").map(|a| a.parse().ok()).collect()
+            };
+            let ours = if let Some(a) = args("C_Traits.GetNodeInfo(") {
+                m.node(a[0], a[1])
+            } else if let Some(a) = args("C_Traits.GetConditionInfo(") {
+                m.condition(a[0], a[1])
+            } else if let Some(rest) = call.strip_prefix("C_Traits.GetTreeCurrencyInfo(") {
+                let parts: Vec<&str> = rest.trim_end_matches(')').split(", ").collect();
+                let (Ok(config), Ok(tree)) = (parts[0].parse(), parts[1].parse()) else {
+                    continue;
+                };
+                // Only the configs the model knows the trees of.
+                if !m.trees(config).contains(&tree) {
+                    continue;
+                }
+                m.tree_currency(config, tree, parts[2] == "true")
+            } else {
+                continue;
+            };
+            let theirs = Rv::answer(answer).into_iter().next();
+            if ours != theirs {
+                wrong.push(format!("{class} {call}: {}", differences(&ours, &theirs)));
+            }
+            checked += 1;
+        }
+        assert!(checked > 0);
+        assert!(
+            wrong.is_empty(),
+            "{} of {checked}:\n{}",
+            wrong.len(),
+            wrong.join("\n")
+        );
+    }
+}

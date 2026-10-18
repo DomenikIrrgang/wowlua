@@ -45,6 +45,7 @@ pub mod stats;
 pub mod taxi;
 pub mod tooltip;
 pub mod trainer;
+pub mod traits;
 pub mod ui;
 pub mod units;
 pub mod widgetdata;
@@ -206,6 +207,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         // takes their place.
         behaviours: recorded::behaviours(flavor)
             .into_iter()
+            .chain(traits::recorded_behaviours(flavor))
             .chain(clock::behaviours())
             .chain(units::behaviours())
             .chain(units::more_behaviours())
@@ -237,6 +239,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(queries::behaviours())
             .chain(party::behaviours())
             .chain(inspect::behaviours())
+            .chain(traits::behaviours(flavor))
             .chain(tooltip::behaviours())
             .chain(chat::behaviours())
             .chain(bindings::behaviours())

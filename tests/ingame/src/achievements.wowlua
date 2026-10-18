@@ -1,0 +1,183 @@
+-- /stdtest engine achievements: the achievements as Blizzard's achievement
+-- UI and the legacy system ask them (every category of the three lists,
+-- every achievement in them and its chain, its criteria, its legacy
+-- points; the legacy reward track's faction), into
+-- StdTestState.engineAchievementAnswers[call] in the answers probe's form
+-- (`cargo xtask ingest` merges them). The answers are the account's and the
+-- character's: what is earned, by whom (the ingest blanks the names).
+import state from "/state"
+import say from "/harness"
+
+local function pack(...: any): { n: number, [number]: any }
+    return { n = select("#", ...), ... }
+end
+
+--- A value in full: tables to depth 4, keys sorted, secrets marked.
+local function show(v: any, depth: number): string
+    if issecretvalue(v) then
+        return `secret {type(v)}`
+    end
+    if type(v) == "string" then
+        return `string {v}`
+    end
+    if type(v) ~= "table" then
+        return `{type(v)} {tostring(v)}`
+    end
+    if depth >= 4 then
+        return "table"
+    end
+    const keys: string[] = {}
+    const values: { [string]: any } = {}
+    for k, inner in pairs(v :: table) do
+        const key = tostring(k)
+        keys[#keys + 1] = key
+        values[key] = inner
+    end
+    table.sort(keys)
+    const parts: string[] = {}
+    for _, k in ipairs(keys) do
+        parts[#parts + 1] = `{k}={show(values[k], depth + 1)}`
+    end
+    return `\{{table.concat(parts, ",")}\}`
+end
+
+--- The functions asked without arguments, and with `true`.
+const PLAIN: string[] = {
+    "GetCategoryList",
+    "GetGuildCategoryList",
+    "GetStatisticsCategoryList",
+    "GetTotalAchievementPoints",
+    "GetNumCompletedAchievements",
+    "GetLatestCompletedAchievements",
+    "GetTrackedAchievements",
+    "GetNumTrackedAchievements",
+}
+
+--- The functions asked of each achievement by its ID alone.
+const BY_ACHIEVEMENT: string[] = {
+    "GetAchievementInfo",
+    "GetAchievementNumCriteria",
+    "GetAchievementLink",
+    "GetPreviousAchievement",
+    "GetNextAchievement",
+    "GetAchievementCategory",
+    "C_AchievementInfo.IsValidAchievement",
+    "C_AchievementInfo.IsGuildAchievement",
+}
+
+export function achievementsProbe()
+    const st = state() :: any
+    const G = _G :: any
+    const out: { [string]: string } = {}
+    local asked = 0
+    local function ask(call: string, ...: any): ...any
+        local space, name = call:match("^([%w_]+)%.(%w+)")
+        local f: any
+        if space == nil then
+            f = G[(call:match("^(%w+)")) :: string]
+        else
+            const ns = G[space :: string]
+            f = ns and ns[name :: string]
+        end
+        if f == nil then
+            return
+        end
+        local ok, packed = pcall(function(...: any): any return pack(f(...)) end, ...)
+        asked = asked + 1
+        if not ok then
+            out[call] = `error: {tostring(packed)}`
+            return
+        end
+        const p = packed :: { n: number, [number]: any }
+        const parts: string[] = {}
+        for i = 1, p.n do
+            parts[#parts + 1] = show(p[i], 0)
+        end
+        out[call] = `{p.n}: {table.concat(parts, ", ")}`
+        return unpack(p, 1, p.n)
+    end
+    for _, name in ipairs(PLAIN) do
+        ask(`{name}()`)
+        ask(`{name}(true)`, true)
+    end
+    const tracking = G.Enum.ContentTrackingType and G.Enum.ContentTrackingType.Achievement
+    if tracking then
+        ask(`C_ContentTracking.GetTrackedIDs({tracking})`, tracking)
+    end
+    for _, rule in ipairs({ "AchievementsPanelDisabled", "TrackAchievementsDisabled" }) do
+        const id = G.Enum.GameRule[rule]
+        if id then
+            ask(`C_GameRules.IsGameRuleActive({id})`, id)
+        end
+    end
+    -- Every category of the three lists, up through their parents.
+    const categories: number[] = {}
+    const seenCategory: { [number]: boolean } = {}
+    local function addCategory(id: any)
+        if type(id) == "number" and id > 0 and not seenCategory[id] then
+            seenCategory[id] = true
+            categories[#categories + 1] = id
+        end
+    end
+    for _, list in ipairs({ "GetCategoryList", "GetGuildCategoryList", "GetStatisticsCategoryList" }) do
+        for _, id in ipairs((G[list]() ?? {}) :: any[]) do
+            addCategory(id)
+        end
+    end
+    -- Every achievement of every category, and their chains.
+    const achievements: number[] = {}
+    const seenAchievement: { [number]: boolean } = {}
+    local function addAchievement(id: any)
+        if type(id) == "number" and id > 0 and not seenAchievement[id] then
+            seenAchievement[id] = true
+            achievements[#achievements + 1] = id
+        end
+    end
+    local c = 1
+    while c <= #categories do
+        const id = categories[c]
+        local _, parent = ask(`GetCategoryInfo({id})`, id)
+        addCategory(parent)
+        ask(`GetCategoryNumAchievements({id})`, id)
+        ask(`GetCategoryNumAchievements({id}, false)`, id, false)
+        const total = ask(`GetCategoryNumAchievements({id}, true)`, id, true)
+        for i = 1, type(total) == "number" and total or 0 do
+            addAchievement(ask(`GetAchievementInfo({id}, {i})`, id, i))
+        end
+        c = c + 1
+    end
+    const legacy = (G.Constants :: any).LegacyConsts
+    const points = legacy and legacy.LEGACY_POINTS_TRAIT_CURRENCY_ID
+    local a = 1
+    while a <= #achievements do
+        const id = achievements[a]
+        for _, name in ipairs(BY_ACHIEVEMENT) do
+            ask(`{name}({id})`, id)
+        end
+        const criteria = G.GetAchievementNumCriteria(id) ?? 0
+        for j = 1, criteria do
+            ask(`GetAchievementCriteriaInfo({id}, {j})`, id, j)
+        end
+        if points then
+            ask(`C_Traits.GetTraitCurrencyForAchievement({points}, {id})`, points, id)
+        end
+        addAchievement(G.GetPreviousAchievement(id))
+        addAchievement(G.GetNextAchievement(id))
+        a = a + 1
+    end
+    -- The legacy reward track's faction.
+    const faction = legacy and legacy.LEGACY_REWARD_TRACK_FACTION_ID
+    if faction then
+        ask(`C_MajorFactions.GetMajorFactionData({faction})`, faction)
+        ask(`C_MajorFactions.GetCurrentRenownLevel({faction})`, faction)
+        ask(`C_MajorFactions.IsMajorFactionHiddenFromExpansionPage({faction})`, faction)
+        const levels = ask(`C_MajorFactions.GetRenownLevels({faction})`, faction)
+        for _, level in ipairs((type(levels) == "table" and levels or {}) :: any[]) do
+            ask(`C_MajorFactions.GetRenownRewardsForLevel({faction}, {level.level})`, faction, level.level)
+        end
+    end
+    st.engineAchievementAnswers = out
+    say(
+        `engine achievements: {#categories} categories, {#achievements} achievements, {asked} calls recorded; type /reload so the file is written`
+    )
+end

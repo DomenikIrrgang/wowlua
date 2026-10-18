@@ -143,6 +143,8 @@ pub struct World {
     pub party: crate::party::Party,
     /// What inspecting other players found.
     pub inspect: crate::inspect::Inspect,
+    /// The trait configs' ranks (talents, the legacy trees) and renown.
+    pub traits: crate::traits::Traits,
     /// The global cooldown running: its start (`GetTime`) and length.
     pub global_cooldown: Option<(f64, f64)>,
     /// Spells by trait (`setSpellTraits`: `offGlobalCooldown`,

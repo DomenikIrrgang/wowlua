@@ -787,7 +787,7 @@ fn process_ui(
                     let src = format!("{}{}", "\n".repeat(el.line.saturating_sub(1)), el.text);
                     match build::load_chunk(vm, src.as_bytes(), &format!("@{}", cx.file)) {
                         Ok(f) => {
-                            if let Err(e) = vm.call(f, &[]) {
+                            if let Err(e) = vm.call_secure(f, &[]) {
                                 let msg = match e.value {
                                     Value::Str(s) => {
                                         String::from_utf8_lossy(vm.str_bytes(s)).into_owned()

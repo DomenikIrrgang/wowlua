@@ -1012,7 +1012,7 @@ pub fn run_lua(vm: &mut Vm, path: &Path, chunk: &str, addon: &str, addon_table: 
         }
     };
     let name = vm.str(addon);
-    match vm.call(f, &[name, addon_table]) {
+    match vm.call_secure(f, &[name, addon_table]) {
         // A file's result is its module (`import(".Name")`).
         Ok(results) => {
             if let Some(&v) = results.first()

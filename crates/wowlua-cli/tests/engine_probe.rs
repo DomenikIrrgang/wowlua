@@ -33,6 +33,7 @@ fn build() -> tempfile::TempDir {
         "collections.wowlua",
         "traits.wowlua",
         "tradeskill.wowlua",
+        "achievements.wowlua",
         "startup.wowlua",
         "scenario.wowlua",
         "snapshot.wowlua",
@@ -864,6 +865,14 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
     let theirs: Vec<String> = theirs.into_iter().map(|(_, v)| v).collect();
     let mut errors: Vec<String> =
         wowlua_engine::engine(&vm).world.ui.errors[errors_before..].to_vec();
+    // The stacks of errors from tainted code (`WOWLUA_SCENARIO_TAINT`).
+    if std::env::var("WOWLUA_SCENARIO_TAINT").is_ok() {
+        for stack in &wowlua_engine::engine(&vm).world.ui.error_stacks {
+            if stack.contains("tainted") {
+                eprintln!("tainted error:\n{stack}");
+            }
+        }
+    }
     for (global, label) in [
         ("ScenarioNotes", "note"),
         ("ScenarioFailures", "UI check failed"),
@@ -895,6 +904,25 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
         &vm,
         &fixtures.join(format!("{name}-after.json")),
     ));
+    // The calls the engine answered with defaults (`WOWLUA_SCENARIO_UNANSWERED`,
+    // optionally a name's start): what to model next.
+    if let Ok(prefix) = std::env::var("WOWLUA_SCENARIO_UNANSWERED") {
+        let mut calls: Vec<&String> = wowlua_engine::engine(&vm)
+            .defaulted_calls
+            .iter()
+            .filter(|c| c.starts_with(&prefix))
+            .collect();
+        calls.sort();
+        eprintln!(
+            "unanswered ({}):\n{}",
+            calls.len(),
+            calls
+                .iter()
+                .map(|c| c.as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
     let compared = |log: &[String]| -> Vec<String> { scenario_lines(log) };
     Some((compared(&ours), compared(&theirs), errors))
 }

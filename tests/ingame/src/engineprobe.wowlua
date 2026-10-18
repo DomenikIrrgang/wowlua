@@ -30,6 +30,7 @@ import mapsProbe from "/maps"
 import collectionsProbe from "/collections"
 import traitsProbe from "/traits"
 import tradeSkillProbe from "/tradeskill"
+import achievementsProbe from "/achievements"
 import armStartup from "/startup"
 import scenarioProbe from "/scenario"
 import say from "/harness"
@@ -1779,6 +1780,9 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "tradeskill" then
         tradeSkillProbe()
+        return
+    elseif words[1] == "achievements" then
+        achievementsProbe()
         return
     elseif words[1] == "startup" then
         armStartup()

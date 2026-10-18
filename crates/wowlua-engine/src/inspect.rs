@@ -173,18 +173,18 @@ pub fn item_link(vm: &mut Vm, c: &NativeCall) -> Option<Vec<Value>> {
     Some(vec![field(vm, item, "link")])
 }
 
-/// `C_Traits.GetConfigInfo(-1)`: the inspected's config; else the
-/// recorded answers.
-fn get_config_info(vm: &mut Vm, c: NativeCall) -> Ret {
+/// `C_Traits.GetConfigInfo(-1)`: the inspected's config (the traits'
+/// behaviour asks).
+pub fn config_info(vm: &mut Vm, c: &NativeCall) -> Option<Vec<Value>> {
     if let Value::Num(n) = vm.hidden(c.arg(1))
         && n == INSPECT_CONFIG
         && let Some(id) = inspect(vm).last
         && let Some(t) = inspect(vm).data.get(&id.0).copied()
         && let Value::Table(config) = field(vm, t, "config")
     {
-        return Ok(vec![Value::Table(config)]);
+        return Some(vec![Value::Table(config)]);
     }
-    Ok(crate::recorded::lookup(vm, "C_Traits.GetConfigInfo", &c).unwrap_or_default())
+    None
 }
 
 fn can_inspect(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -200,7 +200,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_PaperDollInfo.GetInspectItemLevel",
             get_inspect_item_level,
         ),
-        ("C_Traits.GetConfigInfo", get_config_info),
         ("CanInspect", can_inspect),
     ]
 }

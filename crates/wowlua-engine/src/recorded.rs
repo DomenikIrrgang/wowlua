@@ -111,7 +111,7 @@ fn parse_value(vm: &mut Vm, text: &str) -> Value {
 }
 
 /// `text` split at `sep` outside braces.
-fn split_top(text: &str, sep: char) -> Vec<&str> {
+pub(crate) fn split_top(text: &str, sep: char) -> Vec<&str> {
     let mut out = Vec::new();
     let (mut depth, mut start) = (0i32, 0);
     for (i, ch) in text.char_indices() {
@@ -151,7 +151,7 @@ fn parse_answer(vm: &mut Vm, answer: &str) -> Vec<Value> {
 
 /// Where the values of an answer start: at 0 and after each top-level
 /// ", " followed by a type (or a table).
-fn regex_starts(text: &str) -> Vec<usize> {
+pub(crate) fn regex_starts(text: &str) -> Vec<usize> {
     const TYPES: &[&str] = &["string ", "number ", "boolean ", "nil ", "secret ", "{"];
     let mut out = vec![0];
     let mut depth = 0i32;

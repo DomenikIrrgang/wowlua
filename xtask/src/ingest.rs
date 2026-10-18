@@ -13,7 +13,10 @@
 //! - `/stdtest engine cursor`: `…/forever-camelot-cursor.lua`;
 //! - `/stdtest engine collections`: `…/forever-camelot-collections.lua`
 //!   (and the data);
-//! - `/stdtest engine traits`: each class's `…/forever-camelot-traits-<class>.lua`;
+//! - `/stdtest engine achievements`: `…/forever-camelot-achievements.lua`
+//!   (and the data);
+//! - `/stdtest engine traits`: each class's `…/forever-camelot-traits-<class>.lua`
+//!   (all of them: `crates/wowlua-engine/data/camelot-traits.txt`);
 //! - `/stdtest engine tradeskill`: each profession's
 //!   `…/forever-camelot-tradeskill-<profession>.lua`;
 //! - the default character (a fresh level 1 Human Warrior's `/stdtest
@@ -645,6 +648,100 @@ fn scrub_owners(line: &str) -> String {
     .into_owned()
 }
 
+/// The engine's trait data (`data/camelot-traits.txt`): every class's
+/// recorded trait answers (`forever-camelot-traits-<class>.lua`, from any
+/// account's ingest): the class, a tab, the call, a tab, the answer.
+fn write_traits_data(root: &Path, client: &Path, version: &str) -> Result<()> {
+    let mut lines = std::collections::BTreeMap::new();
+    let mut classes = Vec::new();
+    for entry in std::fs::read_dir(client)? {
+        let path = entry?.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let Some(class) = name
+            .strip_prefix("forever-camelot-traits-")
+            .and_then(|n| n.strip_suffix(".lua"))
+        else {
+            continue;
+        };
+        classes.push(class.to_string());
+        let lua = mlua::Lua::new();
+        let table: mlua::Table = lua
+            .load(std::fs::read(&path)?)
+            .eval()
+            .map_err(|e| anyhow!("{}: {e}", path.display()))?;
+        for pair in table.pairs::<String, String>() {
+            let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
+            if !answer.starts_with("error") {
+                lines.insert((class.to_uppercase(), call), answer);
+            }
+        }
+    }
+    classes.sort();
+    let mut data = format!(
+        "# WoW Forever {version}'s trait configs as characters answered them\n\
+         # (/stdtest engine traits: {}): the class, the call, the answer, a tab\n\
+         # between (cargo xtask ingest). The engine's trees, entries, conditions\n\
+         # and costs; the character's ranks and currencies as recorded.\n",
+        classes.join(", ")
+    );
+    for ((class, call), answer) in &lines {
+        let _ = writeln!(data, "{class}\t{call}\t{answer}");
+    }
+    let path = root.join("crates/wowlua-engine/data/camelot-traits.txt");
+    std::fs::write(&path, data)?;
+    println!("wrote {} ({} answers)", path.display(), lines.len());
+    Ok(())
+}
+
+/// An answer's values (`n: v1, v2, …`): where each starts (after a
+/// top-level ", " followed by a type or a table).
+fn answer_values(answer: &str) -> Option<(&str, Vec<&str>)> {
+    const TYPES: &[&str] = &["string ", "number ", "boolean ", "nil ", "secret ", "{"];
+    let (count, rest) = answer.split_once(": ")?;
+    let bytes = rest.as_bytes();
+    let (mut depth, mut start) = (0i32, 0);
+    let mut values = Vec::new();
+    for i in 0..bytes.len() {
+        match bytes[i] {
+            b'{' => depth += 1,
+            b'}' => depth -= 1,
+            b',' if depth == 0
+                && bytes.get(i + 1) == Some(&b' ')
+                && TYPES.iter().any(|t| rest[i + 2..].starts_with(t)) =>
+            {
+                values.push(&rest[start..i]);
+                start = i + 2;
+            }
+            _ => {}
+        }
+    }
+    values.push(&rest[start..]);
+    Some((count, values))
+}
+
+/// The characters who earned achievements and criteria, in their answers:
+/// `GetAchievementInfo`'s `earnedBy` (14th), `GetAchievementCriteriaInfo`'s
+/// `charName` (6th), "Player" when a name.
+fn scrub_earners(call: &str, answer: &str) -> String {
+    let at = if call.starts_with("GetAchievementInfo(") {
+        13
+    } else if call.starts_with("GetAchievementCriteriaInfo(") {
+        5
+    } else {
+        return answer.to_string();
+    };
+    let Some((count, mut values)) = answer_values(answer) else {
+        return answer.to_string();
+    };
+    if values
+        .get(at)
+        .is_some_and(|v| v.starts_with("string ") && v.len() > 7)
+    {
+        values[at] = "string Player";
+    }
+    format!("{count}: {}", values.join(", "))
+}
+
 /// A profile as `cargo xtask profile` writes it: pretty, keys in order,
 /// a line break at the end.
 fn pretty(v: &serde_json::Value) -> Option<String> {
@@ -933,11 +1030,19 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 "/stdtest engine collections, the account's collections\n\
                  (transmog appearances by category; mounts, pets, toys, heirlooms)",
             ),
+            (
+                "engineAchievementAnswers",
+                "forever-camelot-achievements.lua",
+                "/stdtest engine achievements, the achievements (every category,\n\
+                 achievement, criterion, legacy points; the legacy reward track) as\n\
+                 Blizzard's UI asks them, who earned them scrubbed",
+            ),
         ] {
             if let Ok(maps) = state.get::<mlua::Table>(key) {
                 let mut map_entries = Vec::new();
                 for pair in maps.pairs::<String, String>() {
                     let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
+                    let answer = scrub_earners(&call, &me.scrub(&answer));
                     map_entries.push((call, answer));
                 }
                 map_entries.sort();
@@ -990,6 +1095,7 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 &list,
             )?;
         }
+        write_traits_data(root, &client, &version)?;
     }
     // The professions' windows (`/stdtest engine tradeskill`), each one's
     // recipes as the character's skill and bags answered them.
@@ -1234,4 +1340,25 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn who_earned_an_achievement_is_scrubbed() {
+        let info = "15: number 6, string Level 10, number 10, boolean true, number 10, \
+                    number 18, number 26, string Reach level 10, number 0, number 236376, \
+                    string , boolean false, boolean false, string Tamsin, boolean false";
+        let scrubbed = scrub_earners("GetAchievementInfo(6)", info);
+        assert!(scrubbed.ends_with("boolean false, string Player, boolean false"));
+        assert!(!scrubbed.contains("Tamsin"));
+        let criterion = "11: string Reach level 10, number 0, boolean true, number 10, \
+                         number 10, string Tamsin, number 0, number 0, string 10, number 1, boolean true";
+        assert!(!scrub_earners("GetAchievementCriteriaInfo(6, 1)", criterion).contains("Tamsin"));
+        // Not earned: no name to scrub.
+        let open = info.replace("string Tamsin", "string ");
+        assert_eq!(scrub_earners("GetAchievementInfo(6)", &open), open);
+    }
 }

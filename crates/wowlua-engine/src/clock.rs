@@ -35,6 +35,8 @@ pub struct Timers {
     /// list keeps every timer for its handle).
     pub active: Vec<usize>,
     handle_meta: Option<TableRef>,
+    /// The last frame's seconds (`GetTickTime`), none before the first.
+    pub tick_time: f64,
 }
 
 /// The server's round trip: a request's answer comes this much later (the
@@ -258,6 +260,7 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
 pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
     for _ in 0..n {
         tick(vm, ms);
+        engine_mut(vm).timers.tick_time = ms / 1000.0;
         widgets::run_size_changes(vm);
         let count = engine(vm).world.widgets.len();
         let elapsed = Value::Num(ms / 1000.0);
@@ -273,10 +276,17 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
     }
 }
 
+/// `GetTickTime()`: the frame's seconds, as its `OnUpdate` got them
+/// (unverified: before the first frame, 0).
+fn get_tick_time(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(engine(vm).timers.tick_time)])
+}
+
 /// The documented functions this module gives behaviour.
 pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
         ("GetTime", get_time),
+        ("GetTickTime", get_tick_time),
         ("GetTimePreciseSec", get_time),
         ("C_Timer.After", after),
         ("C_Timer.NewTimer", new_timer),
