@@ -75,6 +75,8 @@ pub struct Widget {
     pub height: f64,
     pub scale: f64,
     pub alpha: f64,
+    /// Set from a secret (its alpha aspect secret: `GetAlpha` too).
+    pub secret_alpha: bool,
     pub text: Option<Value>,
     pub attributes: TableRef,
     pub protected: bool,
@@ -481,6 +483,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         height: 0.0,
         scale: 1.0,
         alpha: 1.0,
+        secret_alpha: false,
         text: None,
         attributes,
         protected: false,
@@ -1444,6 +1447,13 @@ fn get_debug_name(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![vm.str(&name)])
 }
 
+/// `GetObjectTable()`: the object's own table (Blizzard's aura containers
+/// hand it to an addon's button initializer, which builds on it as on the
+/// frame; unverified: a forbidden object's).
+fn get_object_table(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Table(engine(vm).world.widgets[id.0].table)])
+}
+
 fn get_object_type(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let class = engine(vm).world.widgets[id.0].class.clone();
     // As the client names them (`/stdtest engine`).
@@ -2133,7 +2143,7 @@ pub fn run_text_changes(vm: &mut Vm) {
 /// A region's size: as laid out when its points give it one (two opposite
 /// points, `SetAllPoints`), else as set (unverified: recorded for fresh,
 /// unanchored widgets only).
-fn laid_out_size(vm: &mut Vm, id: WidgetId) -> (f64, f64) {
+pub(crate) fn laid_out_size(vm: &mut Vm, id: WidgetId) -> (f64, f64) {
     let (w, h, anchored) = {
         let r = &engine(vm).world.widgets[id.0];
         (r.width, r.height, !r.points.is_empty())
@@ -2195,17 +2205,28 @@ fn get_effective_scale(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(effective_scale(engine(vm), id))])
 }
 
+/// `SetAlpha(alpha)`: a secret too, even from tainted code (the API
+/// documentation: `AllowedWhenTainted`, adding the alpha aspect); the
+/// region's alpha then reads back secret.
 fn set_alpha(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
-    let a = number_arg(vm, &c, 2)?;
+    let secret = matches!(c.arg(2), Value::Secret(_));
+    let a = match vm.hidden(c.arg(2)) {
+        Value::Num(n) if secret => n,
+        _ => number_arg(vm, &c, 2)?,
+    };
     // Kept in eight bits, read back as a float: 0.5 is 128/255
     // (`/stdtest engine`).
     let a = byte_float(a);
-    engine_mut(vm).world.widgets[id.0].alpha = a;
+    let w = &mut engine_mut(vm).world.widgets[id.0];
+    w.alpha = a;
+    w.secret_alpha = secret;
     Ok(vec![])
 }
 
 fn get_alpha(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(engine(vm).world.widgets[id.0].alpha)])
+    let w = &engine(vm).world.widgets[id.0];
+    let (a, secret) = (Value::Num(w.alpha), w.secret_alpha);
+    Ok(vec![if secret { vm.secret_wrap(a) } else { a }])
 }
 
 /// Where an anchor point sits along a width and height (0 to 1).
@@ -2795,7 +2816,7 @@ fn set_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 }
 
 /// `GetFont()`: the widget's own font, else its font object's.
-fn get_font(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+pub(crate) fn get_font(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let mut cur = id;
     for _ in 0..32 {
         let props = engine(vm).world.widgets[cur.0].props;
@@ -3351,6 +3372,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("IsVisible", is_visible),
         ("GetName", get_name),
         ("GetDebugName", get_debug_name),
+        ("GetObjectTable", get_object_table),
         ("GetObjectType", get_object_type),
         ("IsObjectType", is_object_type),
         ("GetParent", get_parent),

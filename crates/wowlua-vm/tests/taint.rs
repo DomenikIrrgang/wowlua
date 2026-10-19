@@ -21,10 +21,7 @@ end
 return results";
 
 /// Cases for what the client does not have.
-const EXCLUDED: &[(&str, &str)] = &[(
-    "loadstring_untainted: does not taint caller",
-    "elune's own function; the client has no loadstring_untainted",
-)];
+const EXCLUDED: &[(&str, &str)] = &[];
 
 #[test]
 fn elune_script_cases() {

@@ -13,6 +13,7 @@ pub mod auras;
 pub mod bank;
 pub mod bars;
 pub mod bindings;
+pub mod buttons;
 pub mod casting;
 pub mod channels;
 pub mod character;
@@ -38,7 +39,9 @@ pub mod loot;
 pub mod macros;
 pub mod mail;
 pub mod maps;
+pub mod measures;
 pub mod merchant;
+pub mod misc;
 pub mod party;
 pub mod pets;
 pub mod protection;
@@ -240,6 +243,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(trainer::behaviours())
             .chain(taxi::behaviours())
             .chain(maps::behaviours())
+            .chain(misc::behaviours())
             .chain(mail::behaviours())
             .chain(bank::behaviours())
             .chain(auction::behaviours())
@@ -275,6 +279,8 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(tooltip::methods())
             .chain(input::methods())
             .chain(bars::methods())
+            .chain(buttons::methods())
+            .chain(measures::methods())
             .collect(),
         lineages: Default::default(),
         world: widgets::World::default(),

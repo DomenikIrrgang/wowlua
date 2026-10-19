@@ -176,7 +176,7 @@ fn class_ranks(class: &str) -> &'static HashMap<i64, String> {
 /// The level a class's spell is learned at (`C_Spell.GetSpellLevelLearned`,
 /// any of its trainers' recordings), else its service's in SuuUI's trainer
 /// data (`data/camelot-trainer-levels.txt`).
-fn learned_level(class: &str, spell: i64) -> Option<f64> {
+pub(crate) fn learned_level(class: &str, spell: i64) -> Option<f64> {
     let call = format!("C_Spell.GetSpellLevelLearned({spell})");
     data()
         .iter()
