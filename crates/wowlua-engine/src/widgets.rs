@@ -250,6 +250,23 @@ pub fn keep(vm: &mut Vm, v: Value) {
     let _ = vm.heap.table_mut(list).set(Value::Num(n), v);
 }
 
+/// Keeps `v` alive as `name`'s, in place of what was kept as it before (a
+/// value the engine replaces: Edit Mode's saved layouts).
+pub fn keep_as(vm: &mut Vm, name: &str, v: Value) {
+    let registry = vm.registry;
+    let key = vm.heap.intern(b"wowlua.engine.named");
+    let named = match vm.heap.table(registry).get_str(key) {
+        Value::Table(t) => t,
+        _ => {
+            let t = vm.new_table();
+            vm.heap.table_mut(registry).set_str(key, Value::Table(t));
+            t
+        }
+    };
+    let k = vm.str(name);
+    let _ = vm.heap.table_mut(named).set(k, v);
+}
+
 /// An error the client's C code raises: no position, and with `taint_line`
 /// a "Lua Taint: <addon>" line while execution is tainted (as recorded by
 /// `/stdtest engine`).

@@ -838,6 +838,23 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
     let script =
         fs::read_to_string(repo().join(format!("crates/wowlua-cli/tests/scenarios/{name}.lua")))
             .expect("the play script");
+    // A full collection every N frames and before each other step of time
+    // (`WOWLUA_SCENARIO_GC=N`, 1 by default): what the engine holds
+    // unrooted goes stale.
+    if let Ok(every) = std::env::var("WOWLUA_SCENARIO_GC") {
+        let every: usize = every.parse().unwrap_or(1).max(1);
+        addon(
+            &mut vm,
+            &format!(
+                "local e = __engine local frames, time = e.advanceFrames, e.advanceTime \
+                 e.advanceFrames = function(n, ms) \
+                     local i = 0 \
+                     while i < n do collectgarbage('collect') \
+                         local k = math.min({every}, n - i) frames(k, ms) i = i + k end end \
+                 e.advanceTime = function(...) collectgarbage('collect') return time(...) end"
+            ),
+        );
+    }
     addon(&mut vm, &script);
     addon(&mut vm, "StdTestEngineProbe('scenario stop')");
     let f = vm
@@ -1115,7 +1132,8 @@ fn scenario_line(line: &str) -> Option<String> {
     let bar = &*BAR;
     let body = bar.replace_all(&body, "CastBar-<id>");
     // An item's GUID, the server's (a made item's: the session's).
-    let item = regex::Regex::new(r"Item-\d+-0-[0-9A-F]{16}").unwrap();
+    static ITEM: Pattern = Pattern::new(|| regex::Regex::new(r"Item-\d+-0-[0-9A-F]{16}").unwrap());
+    let item = &*ITEM;
     let body = item.replace_all(&body, "Item-<id>");
     let body = line.replace(&body, "${1}<line>${2}").into_owned();
     // An answer's trailing nils dropped (the first recordings' recorder
