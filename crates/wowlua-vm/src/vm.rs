@@ -209,6 +209,11 @@ pub struct Vm {
     pub(crate) secret_reveal: bool,
     pub(crate) cstack: Vec<CEntry>,
     pub(crate) errfunc: Option<Value>,
+    /// The error handler proxy (`error_handler_proxy`), made once and kept
+    /// alive: a handler saved while a nested call from the engine or a
+    /// `pcall` runs is held only by Rust, and the collector freed a fresh
+    /// one under AtlasLoot's login (a stale handle when it was restored).
+    pub(crate) errfunc_proxy: Option<Value>,
     in_errfunc: bool,
     output: Output,
     /// Coverage counts, when on ([`Vm::enable_coverage`]).
@@ -318,6 +323,7 @@ impl Vm {
             secret_reveal: false,
             cstack: Vec::new(),
             errfunc: None,
+            errfunc_proxy: None,
             in_errfunc: false,
             on_dropped_error: None,
             coverage: None,

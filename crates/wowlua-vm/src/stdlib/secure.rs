@@ -334,7 +334,12 @@ impl Vm {
     /// `f_errorhandler`): non-string errors become "UNKNOWN ERROR", and a
     /// `*:` source names the frame of the function that failed.
     pub fn error_handler_proxy(&mut self) -> Value {
-        self.native("errorhandler", error_handler_proxy)
+        if let Some(f) = self.errfunc_proxy {
+            return f;
+        }
+        let f = self.native("errorhandler", error_handler_proxy);
+        self.errfunc_proxy = Some(f);
+        f
     }
 }
 

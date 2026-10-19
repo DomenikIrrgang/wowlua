@@ -336,8 +336,12 @@ fn get_item_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     }
 }
 
+/// A spell's tooltip data: a defined spell's name and description, else
+/// the client's spell table's spell's name (`gamedata::scanned_spell`;
+/// unverified: its other lines, which the scan did not read).
 fn spell_tooltip(vm: &mut Vm, id: i64) -> Ret {
-    let Some(spell) = engine(vm).world.data.spells.get(&id).copied() else {
+    let defined = engine(vm).world.data.spells.get(&id).copied();
+    let Some(spell) = defined.or_else(|| crate::gamedata::scanned_spell(vm, id)) else {
         return Ok(vec![]);
     };
     let field = |vm: &mut Vm, k: &str| {
