@@ -210,8 +210,9 @@ const CAMELOT_CLASSES: &[f64] = &[1.0, 2.0, 3.0, 4.0, 5.0, 7.0, 8.0, 9.0, 11.0];
 /// classID }` for camelot's classes; nil for another (recorded for 0;
 /// unverified for the rest, probes queued).
 fn creature_class_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    // Truncated (the full probe, 1.60.1: 1.5 named the warriors).
     let id = match vm.hidden(c.arg(1)) {
-        Value::Num(n) => n,
+        Value::Num(n) => n.trunc(),
         _ => return Ok(vec![Value::Nil]),
     };
     let Some((i, file, name)) = CLASS_INFO

@@ -1229,6 +1229,11 @@ const PROBED_CONSTANT: &[(&str, &str)] = &[
         "C_LFGInfo.CanPlayerUseScenarioFinder",
         "2: boolean true, string ",
     ),
+    // Assisted combat not available.
+    (
+        "C_AssistedCombat.IsAvailable",
+        "2: boolean false, string WRONG_WORLD_STATE_EXPRESSION",
+    ),
     // Trait configs: no variation (every config probed).
     ("C_Traits.GetConfigVariationID", "1: number 0"),
     // Clubs: every type allowed.
@@ -1402,6 +1407,95 @@ fn default_tracking_value(vm: &mut Vm, c: NativeCall) -> Ret {
         f as i64,
         0 | 8 | 32 | 65536 | 2097152
     ))])
+}
+
+/// `C_AccountStore.GetCategoryInfo(id)`, `GetCurrencyInfo(id)`: the ID
+/// (truncated) with an empty name, a category of type 2, a currency of
+/// none (the full probe, 1.60.1: every ID probed, -1 to 2147483647;
+/// unverified: the store's own categories).
+fn account_store_category(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = arg_num(vm, &c, 1).unwrap_or(0.0).trunc();
+    let t = vm.new_table();
+    set(vm, t, "id", Value::Num(id));
+    let name = vm.str("");
+    set(vm, t, "name", name);
+    set(vm, t, "type", Value::Num(2.0));
+    Ok(vec![Value::Table(t)])
+}
+
+fn account_store_currency(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = arg_num(vm, &c, 1).unwrap_or(0.0).trunc();
+    let t = vm.new_table();
+    set(vm, t, "id", Value::Num(id));
+    let name = vm.str("");
+    set(vm, t, "name", name);
+    set(vm, t, "amount", Value::Num(0.0));
+    Ok(vec![Value::Table(t)])
+}
+
+/// `C_Heirloom.GetHeirloomLink(itemID)`: an item link at the player's
+/// level and specialization, the ID empty for 0 (the full probe, 1.60.1:
+/// `|cnIQ1:|Hitem:1::::::::21:1486:::::::::|h[]|h|r` for 1, a level 21
+/// paladin; unverified: an heirloom's own name and quality).
+fn heirloom_link(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = arg_num(vm, &c, 1).unwrap_or(0.0).trunc() as i64;
+    let id = if id == 0 {
+        String::new()
+    } else {
+        id.to_string()
+    };
+    let level = player_level(vm) as i64;
+    let spec_index = ask(vm, "C_SpecializationInfo.GetSpecialization", &[]);
+    let spec = match spec_index.first().copied() {
+        Some(i @ Value::Num(_)) => ask(vm, "C_SpecializationInfo.GetSpecializationInfo", &[i])
+            .first()
+            .copied()
+            .and_then(num)
+            .unwrap_or(0.0),
+        _ => 0.0,
+    } as i64;
+    Ok(vec![vm.str(&format!(
+        "|cnIQ1:|Hitem:{id}::::::::{level}:{spec}:::::::::|h[]|h|r"
+    ))])
+}
+
+/// `C_ZoneAbility.GetZoneAbilityIcon(spellID)`: the spell's icon, 0 for
+/// none (the full probe, 1.60.1: spell 1's 136235, 0, -1 and 2147483647
+/// 0).
+fn zone_ability_icon(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = arg_num(vm, &c, 1).unwrap_or(0.0).trunc();
+    let icon = if id > 0.0 {
+        ask(vm, "C_Spell.GetSpellTexture", &[Value::Num(id)])
+            .first()
+            .copied()
+            .and_then(num)
+    } else {
+        None
+    };
+    Ok(vec![Value::Num(icon.unwrap_or(0.0))])
+}
+
+/// `C_PvP.GetBrawlRewards(brawlType)`: no rewards for a brawl type from 1,
+/// nothing for 0 (the full probe, 1.60.1: types 1 to 5; 0 and a string
+/// nothing).
+fn brawl_rewards(vm: &mut Vm, c: NativeCall) -> Ret {
+    if arg_num(vm, &c, 1).unwrap_or(0.0) < 1.0 {
+        return Ok(vec![]);
+    }
+    Ok(vec![
+        Value::Num(0.0),
+        Value::Num(0.0),
+        Value::Nil,
+        Value::Nil,
+        Value::Nil,
+        Value::Bool(false),
+    ])
+}
+
+/// `C_PvP.GetArenaCrowdControlDuration(unit)`: a zero duration outside an
+/// arena (the full probe, 1.60.1: every unit token and the player's GUID).
+fn arena_crowd_control_duration(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(ask(vm, "C_DurationUtil.CreateDuration", &[]))
 }
 
 /// `C_EncounterWarnings.GetSoundKitForSeverity(severity)`: the sound kits
@@ -1775,6 +1869,15 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             warning_sound_kit,
         ),
         ("C_Minimap.GetPOITextureCoords", poi_texture_coords),
+        ("C_AccountStore.GetCategoryInfo", account_store_category),
+        ("C_AccountStore.GetCurrencyInfo", account_store_currency),
+        ("C_Heirloom.GetHeirloomLink", heirloom_link),
+        ("C_ZoneAbility.GetZoneAbilityIcon", zone_ability_icon),
+        ("C_PvP.GetBrawlRewards", brawl_rewards),
+        (
+            "C_PvP.GetArenaCrowdControlDuration",
+            arena_crowd_control_duration,
+        ),
         ("C_ChatInfo.IsValidChatLine", is_valid_chat_line),
         ("C_ChatInfo.GetChatLineSenderGUID", chat_line_sender_guid),
         (

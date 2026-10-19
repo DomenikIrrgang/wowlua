@@ -1013,8 +1013,10 @@ const RACES: &[Race] = &[
     (96.0, "Windshaper Skyborne", "Skyborne", None),
 ];
 
+/// The race an ID argument names, the ID truncated (the full probe,
+/// 1.60.1: 1.5 named the humans).
 fn race(vm: &Vm, c: &NativeCall) -> Option<&'static Race> {
-    let id = arg_num(vm, c, 1)?;
+    let id = arg_num(vm, c, 1)?.trunc();
     RACES.iter().find(|r| r.0 == id)
 }
 

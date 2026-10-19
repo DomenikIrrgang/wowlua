@@ -1350,8 +1350,14 @@ pub fn spellbook_item_at(vm: &mut Vm, slot: i64) -> Option<Value> {
 
 /// `C_SpellBook.FindSpellBookSlotForSpell(spellID, …)`: its slot and bank
 /// (the player's); nothing for a spell not in the book.
+///
+/// A spell's name finds its spell (the full probe, 1.60.1: "Attack" slot 1).
 fn find_spellbook_slot(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(match num(c.arg(1)).and_then(|s| spellbook_slot_of(vm, s)) {
+    let spell = match c.arg(1) {
+        v @ Value::Str(_) => crate::spellinfo::spell_of(vm, v),
+        v => num(v),
+    };
+    Ok(match spell.and_then(|s| spellbook_slot_of(vm, s)) {
         Some(slot) => vec![Value::Num(slot as f64), Value::Num(0.0)],
         None => vec![],
     })
