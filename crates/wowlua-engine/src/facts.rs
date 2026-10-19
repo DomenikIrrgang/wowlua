@@ -329,8 +329,7 @@ fn screen_height(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `SetPortraitTexture(texture, unit [, disableMasking])`,
-/// `C_NamePlate.SetNamePlateSize(width, height)`,
-/// `C_NamePlateManager.SetNamePlateHitTestInsets(...)`: what the client draws,
+/// `C_NamePlate.SetNamePlateSize(width, height)`: what the client draws,
 /// which the engine does not (nothing to read back: unverified that the
 /// portrait leaves the texture's file as it was).
 fn not_drawn(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -605,7 +604,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetScreenWidth", screen_width),
         ("SetPortraitTexture", not_drawn),
         ("C_NamePlate.SetNamePlateSize", not_drawn),
-        ("C_NamePlateManager.SetNamePlateHitTestInsets", not_drawn),
         ("GetSpecializationRole", specialization_role),
         // The neutral world: no follower dungeon, keystone, house editor,
         // garrison, friend online or warband bank gold.

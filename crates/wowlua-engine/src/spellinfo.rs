@@ -1282,14 +1282,15 @@ fn purchase_all_ranks(vm: &mut Vm, c: NativeCall) -> Ret {
 const LAYOUT_KEY: &str = "spellinfo.cooldownViewerLayout";
 
 /// `C_CooldownViewer.GetLayoutData()`: what `SetLayoutData` saved, else
-/// nothing. The client answers the account's saved layout (recorded
-/// `"1|a2Fd…"`), which
-/// Blizzard's code decodes with `C_EncodingUtil`; the engine decodes no
-/// such data yet, so it answers as before any layout was saved.
+/// an empty string, the documented string's empty value Blizzard's code
+/// read before (its serializer takes "" as no layouts saved). The client
+/// answers the account's saved layout (recorded `"1|a2Fd…"`), which
+/// Blizzard's code decodes with `C_EncodingUtil`; unverified that the
+/// engine's decoding reads it as the client does, so it is not answered.
 fn get_layout_data(vm: &mut Vm, _c: NativeCall) -> Ret {
     match named(vm, LAYOUT_KEY) {
         v @ Value::Str(_) => Ok(vec![v]),
-        _ => Ok(vec![]),
+        _ => Ok(vec![vm.str("")]),
     }
 }
 

@@ -74,7 +74,7 @@ fn the_cooldown_viewer_keeps_its_layout() {
         &mut vm,
         "local before = C_CooldownViewer.GetLayoutData()
 C_CooldownViewer.SetLayoutData('1|x')
-return before ~= '', C_CooldownViewer.GetLayoutData()",
+return before == '', C_CooldownViewer.GetLayoutData()",
     );
     assert_eq!(r, ["true", "1|x"]);
 }

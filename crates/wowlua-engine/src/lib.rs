@@ -234,10 +234,12 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         Vec::new()
     };
     // The engine's own behaviours, the recorded answers first: any
-    // behaviour of the engine's own takes their place.
+    // behaviour of the engine's own takes their place (and a fill-in's that
+    // a setter of its changes, `OVER_RECORDED`).
     let own: HashMap<&'static str, NativeFn> = recorded::behaviours(flavor)
         .into_iter()
         .chain(traits::recorded_behaviours(flavor))
+        .filter(|(name, _)| !OVER_RECORDED.contains(name))
         .chain(clock::behaviours())
         .chain(units::behaviours())
         .chain(units::more_behaviours())
@@ -411,7 +413,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         if !vm.heap.table(table).get_str(key).is_nil() {
             // A recorded answer takes a fill-in's place.
             let engine = engine_mut(vm);
-            if engine.fill_ins.contains(name) {
+            if engine.fill_ins.contains(name) && !OVER_RECORDED.contains(&name) {
                 engine.behaviours.insert(name, facts::recorded_call);
             } else {
                 engine
@@ -828,6 +830,24 @@ pub(crate) fn call_text(vm: &Vm, name: &str, c: &NativeCall, first: usize) -> St
         .collect();
     format!("{name}({})", args.join(", "))
 }
+
+/// Fill-ins whose answer a setter of theirs changes: they take the place
+/// of the recorded answer, which they give until set (the dungeon
+/// difficulty recorded 1, the heirloom and wardrobe filters recorded
+/// checked, nothing super-tracked).
+const OVER_RECORDED: &[&str] = &[
+    "GetDungeonDifficultyID",
+    "C_Heirloom.GetCollectedHeirloomFilter",
+    "C_Heirloom.GetUncollectedHeirloomFilter",
+    "C_Heirloom.GetClassAndSpecFilters",
+    "C_HeirloomInfo.IsUsingDefaultFilters",
+    "C_HeirloomInfo.SetDefaultFilters",
+    "C_TransmogCollection.IsUsingDefaultFilters",
+    "C_SuperTrack.GetSuperTrackedQuestID",
+    "C_SuperTrack.GetSuperTrackedMapPin",
+    "C_SuperTrack.GetSuperTrackedContent",
+    "C_SuperTrack.GetSuperTrackedVignette",
+];
 
 /// The fill-in modules' behaviours: answers for functions no recording
 /// or model of the engine answers, from Blizzard's documentation and UI
