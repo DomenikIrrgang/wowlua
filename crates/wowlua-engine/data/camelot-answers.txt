@@ -636,6 +636,13 @@ C_ActionBar.HasOverrideActionBar()	1: boolean false
 C_ActionBar.HasTempShapeshiftActionBar()	1: boolean false
 C_ActionBar.HasVehicleActionBar()	1: boolean false
 C_AdventureJournal.CanBeShown()	1: boolean true
+C_AreaPoiInfo.GetAreaPOIForMap(1412)	1: {}
+C_AreaPoiInfo.GetAreaPOIForMap(947)	1: {1=number 8,2=number 16,3=number 18,4=number 29,5=number 33,6=number 38}
+C_AreaPoiInfo.GetDelvesForMap(1412)	1: {}
+C_AreaPoiInfo.GetDelvesForMap(947)	1: {}
+C_AreaPoiInfo.GetEventsForMap(1412)	1: {}
+C_AreaPoiInfo.GetEventsForMap(947)	1: {}
+C_AreaPoiInfo.GetQuestHubsForMap(1412)	1: {}
 C_ArtifactUI.IsAtForge()	1: boolean false
 C_AssistedCombat.GetActionSpell()	1: nil nil
 C_AssistedCombat.GetRotationSpells()	1: {}
@@ -800,6 +807,8 @@ C_ContentTracking.IsTracking(0, 298574)	1: boolean false
 C_ContentTracking.IsTracking(0, 299176)	1: boolean false
 C_ContentTracking.IsTracking(0, 299186)	1: boolean false
 C_ContentTracking.IsTracking(0, 299188)	1: boolean false
+C_ContributionCollector.GetContributionCollectorsForMap(1412)	1: {}
+C_ContributionCollector.GetContributionCollectorsForMap(947)	1: {}
 C_CreatureInfo.GetClassInfo(0)	1: nil nil
 C_CreatureInfo.GetClassInfo(1)	1: {classFile=string WARRIOR,classID=number 1,className=string Warrior}
 C_CreatureInfo.GetClassInfo(10)	1: nil nil
@@ -815,6 +824,10 @@ C_CreatureInfo.GetClassInfo(7)	1: {classFile=string SHAMAN,classID=number 7,clas
 C_CreatureInfo.GetClassInfo(8)	1: {classFile=string MAGE,classID=number 8,className=string Mage}
 C_CreatureInfo.GetClassInfo(9)	1: {classFile=string WARLOCK,classID=number 9,className=string Warlock}
 C_CurrencyInfo.DoesCurrentFilterRequireAccountCurrencyData()	1: boolean false
+C_DeathInfo.GetCorpseMapPosition(1412)	1: nil nil
+C_DeathInfo.GetCorpseMapPosition(947)	1: nil nil
+C_DeathInfo.GetGraveyardsForMap(1412)	1: {}
+C_DeathInfo.GetGraveyardsForMap(947)	1: {}
 C_DeathInfo.GetSelfResurrectOptions()	0: 
 C_DelvesUI.GetCurioNodeForCompanion(0, nil)	1: number 0
 C_DelvesUI.GetCurioNodeForCompanion(1, nil)	1: number 0
@@ -824,6 +837,8 @@ C_DelvesUI.GetTraitTreeForCompanion(nil)	1: number 0
 C_Discord.IsVoiceEnabled()	1: boolean true
 C_EditMode.GetAccountSettings()	1: {1={setting=number 0,value=number 0},10={setting=number 9,value=number 1},11={setting=number 10,value=number 1},12={setting=number 11,value=number 0},13={setting=number 12,value=number 1},14={setting=number 13,value=number 1},15={setting=number 14,value=number 0},16={setting=number 15,value=number 0},17={setting=number 16,value=number 1},18={setting=number 17,value=number 0},19={setting=number 18,value=number 0},2={setting=number 1,value=number 100},20={setting=number 19,value=number 0},21={setting=number 20,value=number 0},22={setting=number 21,value=number 0},23={setting=number 22,value=number 1},24={setting=number 23,value=number 1},25={setting=number 24,value=number 1},26={setting=number 25,value=number 0},27={setting=number 26,value=number 0},28={setting=number 27,value=number 0},29={setting=number 28,value=number 1},3={setting=number 2,value=number 1},30={setting=number 29,value=number 0},31={setting=number 30,value=number 1},32={setting=number 31,value=number 1},33={setting=number 32,value=number 1},34={setting=number 33,value=number 0},35={setting=number 34,value=number 0},36={setting=number 35,value=number 0},37={setting=number 36,value=number 0},38={setting=number 37,value=number 0},4={setting=number 3,value=number 1},5={setting=number 4,value=number 0},6={setting=number 5,value=number 0},7={setting=number 6,value=number 1},8={setting=number 7,value=number 1},9={setting=number 8,value=number 1}}
 C_EditMode.GetEditModeDefaultLayout()	1: number 0
+C_EncounterJournal.GetDungeonEntrancesForMap(1412)	1: {}
+C_EncounterJournal.GetDungeonEntrancesForMap(947)	1: {}
 C_EventScheduler.CanShowEvents()	1: boolean false
 C_EventScheduler.HasSavedReminders()	1: boolean false
 C_ExternalEventURL.CanShow()	1: boolean false
@@ -892,6 +907,10 @@ C_GameRules.IsSDHDToggleEnabled()	1: boolean true
 C_GameRules.IsStandard()	1: boolean true
 C_GamepadUI.GetFirstGamepadActionStorageSlotIndex()	1: number 181
 C_GamepadUI.GetFirstGamepadPetActionStorageSlotIndex()	1: number 11
+C_Garrison.GetGarrisonPlotsInstancesForMap(1412)	1: {}
+C_Garrison.GetGarrisonPlotsInstancesForMap(947)	1: {}
+C_GossipInfo.GetPoiForUiMapID(1412)	1: nil nil
+C_GossipInfo.GetPoiForUiMapID(947)	1: nil nil
 C_Heirloom.GetClassAndSpecFilters()	2: number 0, number 0
 C_Heirloom.GetCollectedHeirloomFilter(nil)	1: boolean true
 C_Heirloom.GetNumHeirlooms()	1: number 0
@@ -914,6 +933,8 @@ C_HeirloomInfo.IsUsingDefaultFilters()	1: boolean true
 C_Housing.GetTrackedHouseGuid()	1: nil nil
 C_Housing.IsHousingServiceEnabled()	1: boolean false
 C_Housing.IsInsideHouseOrPlot()	1: boolean false
+C_InvasionInfo.GetInvasionForUiMapID(1412)	1: nil nil
+C_InvasionInfo.GetInvasionForUiMapID(947)	1: nil nil
 C_Item.GetItemClassInfo(0)	1: string Consumable
 C_Item.GetItemClassInfo(1)	1: string Container
 C_Item.GetItemClassInfo(10)	1: string Money(OBSOLETE)
@@ -3159,6 +3180,8 @@ C_Map.MapHasArt(2548)	1: boolean true
 C_Map.MapHasArt(2652)	1: boolean true
 C_Map.MapHasArt(946)	1: boolean false
 C_Map.MapHasArt(947)	1: boolean true
+C_MapExplorationInfo.GetExploredMapTextures(1412)	1: {1={fileDataIDs={1=number 7938945},hitRect={bottom=number 445,left=number 434,right=number 507,top=number 388},isDrawOnTopLayer=boolean false,isShownByMouseOver=boolean false,offsetX=number 357,offsetY=number 328,textureHeight=number 206,textureWidth=number 238},2={fileDataIDs={1=number 7938947},hitRect={bottom=number 372,left=number 497,right=number 546,top=number 331},isDrawOnTopLayer=boolean false,isShownByMouseOver=boolean false,offsetX=number 451,offsetY=number 289,textureHeight=number 139,textureWidth=number 143},3={fileDataIDs={1=number 7938953},hitRect={bottom=number 329,left=number 457,right=number 534,top=number 203},isDrawOnTopLayer=boolean false,isShownByMouseOver=boolean false,offsetX=number 419,offsetY=number 170,textureHeight=number 214,textureWidth=number 220},4={fileDataIDs={1=number 7938958},hitRect={bottom=number 356,left=number 417,right=number 473,top=number 312},isDrawOnTopLayer=boolean false,isShownByMouseOver=boolean false,offsetX=number 369,offsetY=number 266,textureHeight=number 158,textureWidth=number 151},5={fileDataIDs={1=number 7938956,2=number 7938957},hitRect={bottom=number 289,left=number 323,right=number 467,top=number 195},isDrawOnTopLayer=boolean false,isShownByMouseOver=boolean false,offsetX=number 250,offsetY=number 131,textureHeight=number 204,textureWidth=number 284}}
+C_MapExplorationInfo.GetExploredMapTextures(947)	0: 
 C_Minimap.IsFilteredOut(1024)	1: boolean true
 C_MountJournal.GetDisplayedMountInfo(1)	0: 
 C_MountJournal.GetDynamicFlightModeSpellID()	1: number 436854
@@ -3169,6 +3192,8 @@ C_MountJournal.IsDragonridingUnlocked()	1: boolean false
 C_MountJournal.MountEquipmentAvailable()	1: boolean false
 C_MythicPlus.IsMythicPlusActive()	1: boolean false
 C_NamePlateManager.IsNamePlateUnitBehindCamera("player")	1: boolean false
+C_Navigation.GetNextWaypointForMap(1412)	0: 
+C_Navigation.GetNextWaypointForMap(947)	0: 
 C_NeighborhoodInitiative.GetTrackedInitiativeTasks()	1: {trackedIDs={}}
 C_PaperDollInfo.GetInventorySlotInfo("CookingGear0Slot")	3: number 27, number 4760248, boolean false
 C_PaperDollInfo.GetInventorySlotInfo("CookingToolSlot")	3: number 26, number 4760248, boolean false
@@ -3267,6 +3292,8 @@ C_RecentAllies.IsSystemSupported()	1: boolean true
 C_RecruitAFriend.GetRAFInfo()	1: {claimInProgress=boolean false,recruits={},versions={1={monthCount={availableMonths=number 0,lifetimeMonths=number 0,spentMonths=number 0},numAffordableRewards=number 0,numRecruits=number 0,rafVersion=number 3,rewards={}}}}
 C_RecruitAFriend.GetRAFSystemInfo()	1: {daysInCycle=number 0,maxRecruitMonths=number 0,maxRecruitmentUses=number 0,maxRecruits=number 0}
 C_RecruitAFriend.IsSystemSupported()	1: boolean false
+C_ResearchInfo.GetDigSitesForMap(1412)	1: {}
+C_ResearchInfo.GetDigSitesForMap(947)	1: {}
 C_Scenario.GetStepInfo()	12: nil nil, nil nil, number 0, boolean false, boolean false, boolean false, boolean false, number 0, nil nil, nil nil, nil nil, nil nil
 C_Scenario.IsInScenario()	1: boolean false
 C_Scenario.ShouldShowCriteria()	1: boolean true
@@ -3451,10 +3478,14 @@ C_TTSSettings.GetSetting(1)	1: boolean true
 C_TTSSettings.GetSetting(2)	1: boolean true
 C_TTSSettings.GetSetting(3)	1: boolean true
 C_TTSSettings.GetSetting(4)	1: boolean false
+C_TaskQuest.DoesMapShowTaskQuestObjectives(1412)	1: boolean false
+C_TaskQuest.DoesMapShowTaskQuestObjectives(947)	1: boolean false
 C_TaskQuest.GetQuestsOnMap(0)	0: 
 C_TaskQuest.GetQuestsOnMap(1412)	1: {}
 C_TaskQuest.GetQuestsOnMap(1456)	1: {}
 C_TaskQuest.GetQuestsOnMap(947)	1: {}
+C_TaxiMap.ShouldMapShowTaxiNodes(1412)	1: boolean false
+C_TaxiMap.ShouldMapShowTaxiNodes(947)	1: boolean false
 C_ToyBox.GetNumFilteredToys()	1: number 0
 C_ToyBox.GetNumToys()	1: number 21
 C_ToyBox.HasFavorites()	1: boolean false
