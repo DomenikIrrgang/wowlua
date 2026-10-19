@@ -1,12 +1,15 @@
 -- /stdtest engine scenario profession, played with the engine's controls:
 -- the level 21 paladin mines a copper vein four times (scenarios/
 -- profession.lua), opens Blacksmithing, makes a sharpening wheel, opens
--- Smelting. Each step at its recorded time (a click: a round trip before
--- the server's answer, ~0.35 s). Not yet: the filter's menu (29.8 s), a
--- recipe picked (43.1 s), the smelting (167 s on).
+-- Smelting; walks to a forge (not played: 48-167 s), smelts copper bars,
+-- clicks tin's Create again and again while they're made, smelts tin bars
+-- (moving stops it) and bronze bars (three skill-ups). Each step at its
+-- recorded time (a click: a round trip before the server's answer,
+-- ~0.35 s). Not yet: the filter's menu (29.8 s), a recipe picked (43.1 s),
+-- the walk; the Create clicks the client ignored (no
+-- TRADE_SKILL_CRAFT_BEGIN: a request still unanswered) are left out.
 local e = __engine
 local player = e.player
-ScenarioPartial = "the smelting (167 s on) not played yet"
 e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 } })
 -- The spell and the stone as the client named them (UnitCastingInfo, the
 -- loot's link and icon).
@@ -66,3 +69,38 @@ at(45.634) world("PLAYER_STARTED_TURNING")
 at(46.065) world("PLAYER_STARTED_MOVING")
 at(47.742) e.pressKey("ESCAPE")
 at(48.0)
+-- At the forge: Smelting again; bronze and copper picked.
+player:setSpellFocus({ "Forge" })
+local function pick(recipe)
+    local list = ProfessionsFrame.CraftingPage.RecipeList
+    press(list.ScrollBox:FindFrameByPredicate(function(_, node)
+        local data = node:GetData()
+        return data.recipeInfo ~= nil and data.recipeInfo.recipeID == recipe
+    end))
+end
+local page = ProfessionsFrame and ProfessionsFrame.CraftingPage
+at(167.288) player:openTradeSkill(2656, "Mining")
+at(170.091) pick(2659)
+at(171.114) pick(2657)
+check("copper picked", page.SchematicForm:GetRecipeInfo().recipeID == 2657)
+-- Every copper bar: casts of 3 s, one after another (each next cast
+-- ~0.3 s after the last one's success: the ping there).
+e.setLatency(0.3)
+at(188.866) press(page.CreateAllButton)
+-- Tin picked; its Create clicked while copper is made: refused ("Another
+-- action is in progress"), the last ones queued, one made.
+at(196.218) pick(3304)
+for _, t in ipairs({ 198.878, 200.080, 200.511, 201.009, 201.578, 201.732, 202.032, 202.208 }) do
+    at(t) press(page.CreateButton)
+end
+at(208.993) press(page.CreateAllButton)
+-- Bronze picked while tin is made; moving stops the tin.
+at(210.715) pick(2659)
+player:craftSkillUps(2659, { false, true, true, true })
+at(219.122) world("PLAYER_STARTED_MOVING") player:interruptCast()
+at(219.249) world("PLAYER_STOPPED_MOVING")
+at(219.590) press(page.CreateAllButton)
+at(234.0)
+check("the bronze made", C_Item.GetItemCount(2841) == 8)
+at(235.277) e.pressKey("ESCAPE")
+at(236.0)

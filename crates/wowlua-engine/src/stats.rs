@@ -951,6 +951,55 @@ pub fn gain_xp(vm: &mut Vm, amount: f64) {
     units::fire_unit(vm, "PLAYER_XP_UPDATE", units::PLAYER, &[]);
 }
 
+/// A skill line's rank (`C_SkillInfo.GetSkillLineInfo`'s entry with that
+/// `skillID`).
+pub fn skill_rank(vm: &Vm, skill: i64) -> Option<f64> {
+    let Some(Entry::ByIndex(lines)) = engine(vm).world.character.stats.get("skillLine") else {
+        return None;
+    };
+    lines.values().flatten().find_map(|a| match a {
+        Answer::Table(fields) if table_num(fields, "skillID") == Some(skill as f64) => {
+            table_num(fields, "rank")
+        }
+        _ => None,
+    })
+}
+
+fn table_num(fields: &[(Answer, Answer)], key: &str) -> Option<f64> {
+    fields.iter().find_map(|(k, v)| match (k, v) {
+        (Answer::Str(k), Answer::Num(n)) if k == key => Some(*n),
+        _ => None,
+    })
+}
+
+/// Skill lines raised to `rank`: their entries, and a profession's
+/// (`GetProfessionInfo`'s rank, third, for its line, seventh).
+pub fn raise_skill_lines(vm: &mut Vm, skills: &[i64], rank: f64) {
+    let stats = &mut engine_mut(vm).world.character.stats;
+    if let Some(Entry::ByIndex(lines)) = stats.get_mut("skillLine") {
+        for a in lines.values_mut().flatten() {
+            if let Answer::Table(fields) = a
+                && table_num(fields, "skillID").is_some_and(|id| skills.contains(&(id as i64)))
+            {
+                for (k, v) in fields.iter_mut() {
+                    if matches!(k, Answer::Str(k) if k == "rank") {
+                        *v = Answer::Num(rank);
+                    }
+                }
+            }
+        }
+    }
+    if let Some(Entry::ByIndex(professions)) = stats.get_mut("professionInfo") {
+        for info in professions.values_mut() {
+            if matches!(info.get(6), Some(Answer::Num(id)) if skills.contains(&(*id as i64)))
+                && info.len() > 2
+            {
+                info[2] = Answer::Num(rank);
+            }
+        }
+    }
+}
+
 fn num(v: Value) -> Option<f64> {
     match v {
         Value::Num(n) => Some(n),

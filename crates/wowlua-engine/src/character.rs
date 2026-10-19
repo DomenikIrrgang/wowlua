@@ -590,13 +590,13 @@ fn get_item_count(vm: &mut Vm, c: NativeCall) -> Ret {
         .flat_map(|b| b.items.values())
         .filter(|h| h.id == id)
         .map(|h| h.count)
-        .sum();
+        .fold(0.0, |a, b| a + b);
     let worn: f64 = ch
         .equipment
         .values()
         .filter(|h| h.id == id)
         .map(|h| h.count)
-        .sum();
+        .fold(0.0, |a, b| a + b);
     Ok(vec![Value::Num(in_bags + worn)])
 }
 
@@ -880,7 +880,8 @@ pub fn count_in_bags(vm: &Vm, id: i64) -> f64 {
         .flat_map(|(_, b)| b.items.values())
         .filter(|h| h.id == id)
         .map(|h| h.count)
-        .sum()
+        // Not `sum`: nothing held is 0, not its -0.
+        .fold(0.0, |a, b| a + b)
 }
 
 /// The link of item `id` in `bag` made in a context (a quest reward's).

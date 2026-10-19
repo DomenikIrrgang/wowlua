@@ -19,17 +19,43 @@
 //! bar's state; a round trip later the recipe's cast (no target named),
 //! the cooldowns' events. At its success the item made (`ITEM_PUSH`, "You
 //! create: …", `BAG_NEW_ITEMS_UPDATED` (stacked or not),
-//! `TRADE_SKILL_ITEM_CRAFTED_RESULT`), the cooldowns again; the reagents
-//! taken and the bags' packet a moment later (each bag's equipped spells
-//! and update, the reagent bag's inventory update; the counts of the items
-//! still held). A count left: the next `TRADE_SKILL_CRAFT_BEGIN` at once,
-//! the item a moment later, the next cast a round trip after.
+//! `TRADE_SKILL_ITEM_CRAFTED_RESULT`; a new slot in the reagent bag told
+//! at once, read empty until the bags' packet), the cooldowns again; the
+//! reagents taken and the bags' packet a moment later (the equipped
+//! spells' change before each bag's first update and each of the reagent
+//! bag's, its inventory's after; a skill-up after the reagents; the counts
+//! of the items held before and still); the window's list after each. A
+//! count left: the next `TRADE_SKILL_CRAFT_BEGIN` at once, the item a
+//! moment later, the next cast a round trip after; the last of several:
+//! `UPDATE_TRADESKILL_CAST_STOPPED(false)`.
 //!
-//! Unverified: the delays (one recording each), the queue beyond a count,
-//! a craft asked while casting, skill-ups and the recipes' colours, the
-//! made items' GUIDs (made up).
+//! A craft asked while casting (or with the next cast asked): the server
+//! refuses it a round trip later (`SENT`, `FAILED_QUIET`, "Another action
+//! is in progress", the window's cast stopped if it was the craft begun
+//! last), or holds it if the cast ends within the queue window
+//! (`SpellQueueWindow`, 400 ms) and starts it at the success, refusing the
+//! craft's own next cast. Asked within the window with one already asked
+//! or held, the client holds it (its own cast GUID) and lets it go when
+//! the server holds the other (`FAILED_QUIET`, the current cast cancelled)
+//! or the craft goes on ("Another action is in progress"). The player
+//! moving while the next cast is asked (`player:interruptCast()`): the
+//! client gives it up (`INTERRUPTED`, its own GUID); the server starts it
+//! anyway (no `SENT`) and stops it a round trip after the move (the
+//! interrupt's events, "Interrupted", the window's cast stopped).
+//!
+//! `player:craftSkillUps(recipe, { … })` says which crafts raise the
+//! profession (the line and its parent a point up: "Your skill in …",
+//! the stats', `CONSOLE_MESSAGE`s); the windows' `skillLevel` is the
+//! character's. `player:setSpellFocus({ "Forge" })`: the spell focuses near
+//! the player (the recorded windows were away from any).
+//!
+//! Unverified: the delays (one recording each), the clicks the client
+//! ignored (a request unanswered: no `CRAFT_BEGIN`; not modelled), a held
+//! craft after the last cast, a reagent's stack emptied (its packet
+//! differs), the recipes' colours at another rank, the made items' GUIDs
+//! (made up).
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::OnceLock;
 
 use wowlua_vm::stdlib::Ret;
@@ -43,10 +69,17 @@ use crate::{engine, engine_mut, widgets};
 /// (recorded: 0.029 and 0.012 s, 0.006 and 0.005 s; unverified).
 const DATA_AFTER: f64 = 0.012;
 const LIST_AGAIN: f64 = 0.012;
-/// A craft's bags' packet after its success (recorded).
+/// A craft's bags' packet after its item (recorded: the wheel's).
 const BAGS_AFTER: f64 = 0.421;
+/// After a success with its item later, the bags' packet after the
+/// success (recorded: 0.18-0.43 s, mostly just after the next cast's
+/// start).
+const BAGS_AFTER_SUCCESS: f64 = 0.38;
 /// A queued craft's item after its success (recorded).
 const QUEUED_ITEM_AFTER: f64 = 0.068;
+/// The window's list updated after a bag's change (recorded 0.005-0.014
+/// s after the item's push, after the bags' packet).
+const LIST_AFTER_BAGS: f64 = 0.008;
 
 /// The recorded answers: (PROFESSION, call) → answer.
 fn data() -> &'static HashMap<(&'static str, &'static str), &'static str> {
@@ -85,11 +118,12 @@ fn first(key: &str, call: &str) -> Option<Rv> {
     recorded(key, call)?.into_iter().next()
 }
 
-/// A craft asked for: the recipe, the casts left.
+/// A craft asked for: the recipe, the casts left, how many were asked.
 #[derive(Clone)]
 pub struct Craft {
     pub recipe: i64,
     pub left: i64,
+    pub count: i64,
 }
 
 #[derive(Default)]
@@ -102,6 +136,23 @@ pub struct TradeSkill {
     pub last: Option<String>,
     /// The craft running.
     pub craft: Option<Craft>,
+    /// The recipe the client began last, or the server started (a refusal
+    /// of it stops the window's cast).
+    pub current: Option<i64>,
+    /// The craft's next cast, asked of the server: its recipe.
+    pub next: Option<i64>,
+    /// Given up meanwhile (the player moved): when.
+    pub given_up: Option<f64>,
+    /// A craft asked while casting, unanswered: recipe, count.
+    pub asked: Option<(i64, i64)>,
+    /// One the server holds until the cast ends.
+    pub held: Option<(i64, i64)>,
+    /// One the client holds, with its own cast GUID.
+    pub queued: Option<(i64, i64, String)>,
+    /// The spell focuses near the player (a forge, an anvil).
+    pub focus: Vec<String>,
+    /// Whether each craft to come raises the skill, by recipe.
+    pub skill_ups: HashMap<i64, VecDeque<bool>>,
     /// Items made so far (their GUIDs' counter).
     pub made: u64,
 }
@@ -236,9 +287,94 @@ fn window(vm: &mut Vm, c: NativeCall) -> Ret {
         open
     };
     match calls.iter().find_map(|call| recorded(&key, call)) {
-        Some(values) => Ok(values.iter().map(|v| v.to_value(vm)).collect()),
+        Some(values) => Ok(values
+            .into_iter()
+            .map(|v| {
+                let v = with_rank(vm, v);
+                let v = if name == "C_TradeSkillUI.GetRecipeRequirements" {
+                    with_focus(vm, v)
+                } else {
+                    v
+                };
+                v.to_value(vm)
+            })
+            .collect()),
         None => crate::recorded::recorded(vm, c),
     }
+}
+
+/// A recipe's requirements where the player is: a spell focus's (type 0)
+/// met near one (the windows were recorded away from any).
+fn with_focus(vm: &Vm, v: Rv) -> Rv {
+    let Rv::Table(list) = v else {
+        return v;
+    };
+    let focus = &state(vm).focus;
+    let list = list
+        .into_iter()
+        .map(|(i, r)| match r {
+            Rv::Table(mut fields) => {
+                let named = fields.iter().find_map(|(k, v)| match v {
+                    Rv::Str(s) if k == "name" => Some(s.clone()),
+                    _ => None,
+                });
+                let spell_focus = fields
+                    .iter()
+                    .any(|(k, v)| k == "type" && matches!(v, Rv::Num(t) if *t == 0.0));
+                if spell_focus && let Some(named) = named {
+                    for (k, v) in fields.iter_mut() {
+                        if k == "met" {
+                            *v = Rv::Bool(focus.contains(&named));
+                        }
+                    }
+                }
+                (i, Rv::Table(fields))
+            }
+            other => (i, other),
+        })
+        .collect();
+    Rv::Table(list)
+}
+
+/// `player:setSpellFocus({ "Forge", … })`: the spell focuses near the
+/// player (a recipe needing one can be made).
+pub fn control_spell_focus(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = units::this(vm, &c)?;
+    if me != PLAYER {
+        return Err(vm.error("setSpellFocus: the player's"));
+    }
+    let Value::Table(t) = c.arg(2) else {
+        return Err(vm.error("setSpellFocus: a list of names expected"));
+    };
+    let n = vm.heap.table(t).border();
+    let names: Vec<String> = (1..=n)
+        .filter_map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+            Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+            _ => None,
+        })
+        .collect();
+    state_mut(vm).focus = names;
+    Ok(vec![])
+}
+
+/// A profession's info at the character's rank (the windows were recorded
+/// at another): `skillLevel` its line's.
+fn with_rank(vm: &Vm, v: Rv) -> Rv {
+    let Rv::Table(mut fields) = v else {
+        return v;
+    };
+    let line = fields.iter().find_map(|(k, v)| match v {
+        Rv::Num(n) if k == "professionID" => Some(*n as i64),
+        _ => None,
+    });
+    if let Some(rank) = line.and_then(|l| crate::stats::skill_rank(vm, l)) {
+        for (k, v) in fields.iter_mut() {
+            if k == "skillLevel" {
+                *v = Rv::Num(rank);
+            }
+        }
+    }
+    Rv::Table(fields)
 }
 
 /// `C_TradeSkillUI.IsDataSourceChanging()`: from the window's
@@ -292,9 +428,12 @@ fn close_trade_skill(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// A recipe's schematic in the open window: its item made, and each
-/// reagent's item and count.
-fn schematic(vm: &Vm, recipe: i64) -> Option<(i64, Vec<(i64, f64)>)> {
+/// Items by ID and count.
+type Items = Vec<(i64, f64)>;
+
+/// A recipe's schematic in the open window: its item made and how many
+/// (`quantityMin`), each reagent's item and count.
+fn schematic(vm: &Vm, recipe: i64) -> Option<(i64, f64, Items)> {
     let key = state(vm).open.clone().or_else(|| state(vm).last.clone())?;
     let s = first(
         &key,
@@ -303,6 +442,10 @@ fn schematic(vm: &Vm, recipe: i64) -> Option<(i64, Vec<(i64, f64)>)> {
     let output = match s.get("outputItemID") {
         Some(Rv::Num(n)) => *n as i64,
         _ => return None,
+    };
+    let quantity = match s.get("quantityMin") {
+        Some(Rv::Num(n)) if *n >= 1.0 => *n,
+        _ => 1.0,
     };
     let mut reagents = Vec::new();
     if let Some(Rv::Table(slots)) = s.get("reagentSlotSchematics") {
@@ -319,7 +462,7 @@ fn schematic(vm: &Vm, recipe: i64) -> Option<(i64, Vec<(i64, f64)>)> {
             }
         }
     }
-    Some((output, reagents))
+    Some((output, quantity, reagents))
 }
 
 /// `C_TradeSkillUI.GetCraftableCount(recipe)`: as many as the bags'
@@ -328,7 +471,7 @@ fn get_craftable_count(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(recipe) = int(vm, c.arg(1)) else {
         return Ok(vec![Value::Num(0.0)]);
     };
-    let Some((_, reagents)) = schematic(vm, recipe) else {
+    let Some((_, _, reagents)) = schematic(vm, recipe) else {
         return window(vm, c);
     };
     let n = reagents
@@ -338,28 +481,144 @@ fn get_craftable_count(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(if n.is_finite() { n } else { 0.0 })])
 }
 
-/// `C_TradeSkillUI.CraftRecipe(recipe, count)`: the craft asked for.
+/// How close to a cast's end a craft asked for is queued, not refused
+/// (`SpellQueueWindow`, recorded 400 ms).
+const QUEUE_WINDOW: f64 = 0.4;
+
+fn begin(vm: &mut Vm, recipe: i64) {
+    state_mut(vm).current = Some(recipe);
+    fire(vm, "TRADE_SKILL_CRAFT_BEGIN", &[Value::Num(recipe as f64)]);
+}
+
+fn stopped(vm: &mut Vm) {
+    fire(vm, "UPDATE_TRADESKILL_CAST_STOPPED", &[Value::Bool(false)]);
+}
+
+fn another_action(vm: &mut Vm) {
+    let message = vm.str("Another action is in progress");
+    fire(vm, "UI_ERROR_MESSAGE", &[Value::Num(280.0), message]);
+}
+
+/// A cast GUID of the client's own (no server's yet).
+fn client_guid(vm: &mut Vm, spell: i64) -> String {
+    let n = {
+        let c = &mut engine_mut(vm).units.casting;
+        c.next += 1;
+        c.next
+    };
+    format!("Cast-2-0-0-0-{spell}-{n:010X}")
+}
+
+/// The end of the player's cast, if one runs.
+fn cast_end(vm: &Vm) -> Option<f64> {
+    engine(vm).units.casting.casts.get(&PLAYER).map(|c| c.end)
+}
+
+/// `C_TradeSkillUI.CraftRecipe(recipe, count)`: the craft asked for (the
+/// module's doc). The player casting, or its next cast asked: the server
+/// answers a round trip later (`craft_answer`), or near the cast's end,
+/// with one already asked or held, the client holds it.
 fn craft_recipe(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(recipe) = int(vm, c.arg(1)) else {
         return Ok(vec![]);
     };
     let count = int(vm, c.arg(2)).unwrap_or(1).max(1);
-    state_mut(vm).craft = Some(Craft {
-        recipe,
-        left: count,
-    });
+    let end = cast_end(vm);
+    let busy = end.is_some() || state(vm).next.is_some();
     fire(vm, "CURRENT_SPELL_CAST_CHANGED", &[Value::Bool(false)]);
-    fire(vm, "TRADE_SKILL_CRAFT_BEGIN", &[Value::Num(recipe as f64)]);
+    begin(vm, recipe);
     fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
     let delay = crate::clock::server_delay(vm);
-    later(
-        vm,
-        delay,
-        "craftCast",
-        craft_cast,
-        vec![Value::Num(recipe as f64)],
-    );
+    let (r, n) = (Value::Num(recipe as f64), Value::Num(count as f64));
+    if !busy {
+        let s = state_mut(vm);
+        s.craft = Some(Craft {
+            recipe,
+            left: count,
+            count,
+        });
+        s.next = Some(recipe);
+        later(vm, delay, "craftCast", craft_cast, vec![r]);
+        return Ok(vec![]);
+    }
+    let now = crate::clock::now(vm);
+    let near_end = end.is_some_and(|end| end - now <= QUEUE_WINDOW);
+    let waiting = state(vm).asked.is_some() || state(vm).held.is_some();
+    if near_end && waiting {
+        let guid = client_guid(vm, recipe);
+        state_mut(vm).queued = Some((recipe, count, guid));
+    } else {
+        state_mut(vm).asked = Some((recipe, count));
+        later(vm, delay, "craftAnswer", craft_answer, vec![r, n]);
+    }
     Ok(vec![])
+}
+
+/// The server's answer to a craft asked while casting: near the cast's
+/// end it holds it (the client lets its own held one go), else refuses it
+/// ("Another action is in progress"; the window's cast stopped if it was
+/// the craft begun last); no cast: it starts.
+fn craft_answer(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Some(Value::Num(recipe)), Some(Value::Num(count))) =
+        (c.upvals.first().copied(), c.upvals.get(1).copied())
+    else {
+        return Ok(vec![]);
+    };
+    let (recipe, count) = (recipe as i64, count as i64);
+    state_mut(vm).asked = None;
+    let now = crate::clock::now(vm);
+    match cast_end(vm) {
+        Some(end) if end - now <= QUEUE_WINDOW => {
+            state_mut(vm).held = Some((recipe, count));
+            if let Some((r, _, g)) = state_mut(vm).queued.take() {
+                let_go(vm, r, &g, true);
+                fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+                stopped(vm);
+            }
+        }
+        Some(_) => {
+            let g = crate::casting::cast_guid(vm, 3, recipe as f64);
+            let g = vm.str(&g);
+            let id = Value::Num(recipe as f64);
+            units::fire_unit(vm, "UNIT_SPELLCAST_SENT", PLAYER, &[Value::Nil, g, id]);
+            units::fire_unit(
+                vm,
+                "UNIT_SPELLCAST_FAILED_QUIET",
+                PLAYER,
+                &[g, id, Value::Nil],
+            );
+            crate::casting::cast_changed(vm, PLAYER);
+            fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+            another_action(vm);
+            if state(vm).current == Some(recipe) {
+                stopped(vm);
+            }
+        }
+        None => {
+            let s = state_mut(vm);
+            s.craft = Some(Craft {
+                recipe,
+                left: count,
+                count,
+            });
+            s.next = None;
+            start_craft(vm, recipe, true)?;
+        }
+    }
+    Ok(vec![])
+}
+
+/// The client lets a craft it held go: `FAILED_QUIET` with its own GUID
+/// (`cancelled`: the current cast's change says so).
+fn let_go(vm: &mut Vm, recipe: i64, guid: &str, cancelled: bool) {
+    let g = vm.str(guid);
+    units::fire_unit(
+        vm,
+        "UNIT_SPELLCAST_FAILED_QUIET",
+        PLAYER,
+        &[g, Value::Num(recipe as f64), Value::Nil],
+    );
+    fire(vm, "CURRENT_SPELL_CAST_CHANGED", &[Value::Bool(cancelled)]);
 }
 
 /// The recipe's spell as the window knows it: name, icon, seconds.
@@ -381,89 +640,230 @@ fn recipe_spell(vm: &mut Vm, recipe: i64) -> (Value, Value, f64) {
     (name, icon, seconds)
 }
 
-/// The server casts the recipe (no target named: its data says so).
+/// The server casts the craft's next (no target named: its data says so);
+/// given up meanwhile (`give_up_asked`), without `SENT`, and stopped a
+/// round trip after the giving up.
 fn craft_cast(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(Value::Num(recipe)) = c.upvals.first().copied() else {
         return Ok(vec![]);
     };
-    let look = recipe_spell(vm, recipe as i64);
-    let t = match crate::gamedata::spell_data(vm, recipe as i64) {
+    if state(vm).next != Some(recipe as i64) {
+        return Ok(vec![]);
+    }
+    state_mut(vm).next = None;
+    let given_up = state_mut(vm).given_up.take();
+    start_craft(vm, recipe as i64, given_up.is_none())?;
+    if let Some(at) = given_up
+        && let Some(cast) = engine(vm).units.casting.casts.get(&PLAYER)
+    {
+        let g = cast.guid.clone();
+        let g = vm.str(&g);
+        let after = (at + crate::clock::server_delay(vm) - crate::clock::now(vm)).max(0.0);
+        later(vm, after, "craftInterrupted", craft_interrupted, vec![g]);
+    }
+    Ok(vec![])
+}
+
+/// The recipe's cast started: its `SENT` (`announce`), `START`, the
+/// cooldowns' events.
+fn start_craft(vm: &mut Vm, recipe: i64, announce: bool) -> Ret {
+    state_mut(vm).current = Some(recipe);
+    let look = recipe_spell(vm, recipe);
+    let t = match crate::gamedata::spell_data(vm, recipe) {
         Some(t) => t,
         None => {
             let t = vm.new_table();
             widgets::keep(vm, Value::Table(t));
-            engine_mut(vm).world.data.spells.insert(recipe as i64, t);
+            engine_mut(vm).world.data.spells.insert(recipe, t);
             t
         }
     };
     let k = vm.str("targeted");
     let _ = vm.heap.table_mut(t).set(k, Value::Bool(false));
-    let done = vm.native_with("crafted", crafted as NativeFn, vec![Value::Num(recipe)]);
-    crate::casting::cast_at(vm, PLAYER, recipe, look, false, false, None, Some(done))?;
-    crate::loot::gather_cooldowns(vm, recipe, false);
+    let id = recipe as f64;
+    let done = vm.native_with("crafted", crafted as NativeFn, vec![Value::Num(id)]);
+    if announce {
+        crate::casting::cast_at(vm, PLAYER, id, look, false, false, None, Some(done))?;
+    } else {
+        crate::casting::cast_unsent(vm, id, look, Some(done))?;
+    }
+    crate::loot::gather_cooldowns(vm, id, false);
     Ok(vec![])
 }
 
-/// The cast succeeded: the item made (at once, or a moment later when
-/// another cast follows), the next one asked.
+/// The server starts the craft it held; the craft's next cast, asked
+/// meanwhile, refused.
+fn held_start(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Some(Value::Num(recipe)), Some(Value::Num(count))) =
+        (c.upvals.first().copied(), c.upvals.get(1).copied())
+    else {
+        return Ok(vec![]);
+    };
+    let (recipe, count) = (recipe as i64, count as i64);
+    let refused = {
+        let s = state_mut(vm);
+        s.craft = Some(Craft {
+            recipe,
+            left: count,
+            count,
+        });
+        s.next.take()
+    };
+    state_mut(vm).current = Some(recipe);
+    let look = recipe_spell(vm, recipe);
+    let id = recipe as f64;
+    let done = vm.native_with("crafted", crafted as NativeFn, vec![Value::Num(id)]);
+    crate::casting::cast_at(vm, PLAYER, id, look, false, false, None, Some(done))?;
+    if let Some(old) = refused {
+        let g = crate::casting::cast_guid(vm, 3, old as f64);
+        let g = vm.str(&g);
+        let old = Value::Num(old as f64);
+        units::fire_unit(vm, "UNIT_SPELLCAST_SENT", PLAYER, &[Value::Nil, g, old]);
+        units::fire_unit(
+            vm,
+            "UNIT_SPELLCAST_FAILED_QUIET",
+            PLAYER,
+            &[g, old, Value::Nil],
+        );
+        crate::casting::cast_changed(vm, PLAYER);
+    }
+    crate::loot::gather_cooldowns(vm, id, false);
+    if refused.is_some() {
+        another_action(vm);
+    }
+    Ok(vec![])
+}
+
+/// The player moved while the craft's next cast was asked: the client
+/// gives it up (`INTERRUPTED` with its own GUID); the server's cast, if it
+/// starts, is stopped a round trip later.
+pub fn give_up_asked(vm: &mut Vm) {
+    let Some(recipe) = state(vm).next else {
+        return;
+    };
+    let g = client_guid(vm, recipe);
+    let g = vm.str(&g);
+    units::fire_unit(
+        vm,
+        "UNIT_SPELLCAST_INTERRUPTED",
+        PLAYER,
+        &[g, Value::Num(recipe as f64), Value::Nil, Value::Nil],
+    );
+    crate::casting::cast_changed(vm, PLAYER);
+    fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    let now = crate::clock::now(vm);
+    state_mut(vm).given_up = Some(now);
+}
+
+/// The server stops the cast the client gave up: `INTERRUPTED` and `STOP`,
+/// `INTERRUPTED` twice more, "Interrupted", the window's cast stopped; the
+/// craft over.
+fn craft_interrupted(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(Value::Str(g)) = c.upvals.first().copied() else {
+        return Ok(vec![]);
+    };
+    let guid = String::from_utf8_lossy(vm.str_bytes(g)).into_owned();
+    let Some(cast) = engine(vm).units.casting.casts.get(&PLAYER).cloned() else {
+        return Ok(vec![]);
+    };
+    if cast.guid != guid {
+        return Ok(vec![]);
+    }
+    crate::casting::stop(vm, PLAYER, true);
+    let id = Value::Num(cast.spell_id);
+    for _ in 0..2 {
+        units::fire_unit(
+            vm,
+            "UNIT_SPELLCAST_INTERRUPTED",
+            PLAYER,
+            &[Value::Str(g), id, Value::Nil, Value::Nil],
+        );
+        crate::casting::cast_changed(vm, PLAYER);
+    }
+    fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    let message = vm.str("Interrupted");
+    fire(vm, "UI_ERROR_MESSAGE", &[Value::Num(57.0), message]);
+    stopped(vm);
+    state_mut(vm).craft = None;
+    Ok(vec![])
+}
+
+/// The cast succeeded. Casts left: the next begun (a craft the client held
+/// let go), its item a moment later, the next cast asked (after the one
+/// the server held, if any). The last: the item (a moment later after
+/// several, the window's cast stopped); one held starts.
 fn crafted(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(Value::Num(recipe)) = c.upvals.first().copied() else {
         return Ok(vec![]);
     };
     crate::casting::cast_changed(vm, PLAYER);
-    let left = {
+    let (left, count) = {
         let s = state_mut(vm);
         match s.craft.as_mut() {
             Some(cr) if cr.recipe == recipe as i64 => {
                 cr.left -= 1;
-                cr.left
+                (cr.left, cr.count)
             }
-            _ => 0,
+            _ => (0, 1),
         }
     };
+    let held = state_mut(vm).held.take();
+    let delay = crate::clock::server_delay(vm);
+    let r = Value::Num(recipe);
     if left > 0 {
-        fire(vm, "TRADE_SKILL_CRAFT_BEGIN", &[Value::Num(recipe)]);
+        begin(vm, recipe as i64);
         crate::casting::cast_changed(vm, PLAYER);
-        let bag_cd = |vm: &mut Vm| {
-            fire(vm, "BAG_UPDATE_COOLDOWN", &[]);
-            let nils = [
-                Value::Num(recipe),
-                Value::Nil,
-                Value::Nil,
-                Value::Nil,
-                Value::Nil,
-            ];
-            fire(vm, "SPELL_UPDATE_COOLDOWN", &nils);
-        };
-        bag_cd(vm);
-        later(
-            vm,
-            QUEUED_ITEM_AFTER,
-            "craftedItem",
-            made,
-            vec![Value::Num(recipe)],
-        );
-        let delay = crate::clock::server_delay(vm);
-        later(vm, delay, "craftCast", craft_cast, vec![Value::Num(recipe)]);
-    } else {
-        state_mut(vm).craft = None;
-        make(vm, recipe as i64);
+        let dropped = state_mut(vm).queued.take();
+        if let Some((q, _, g)) = &dropped {
+            let_go(vm, *q, g, false);
+        }
         crate::loot::gather_cooldowns(vm, recipe, true);
+        if dropped.is_some() {
+            another_action(vm);
+            stopped(vm);
+        }
+        later(vm, QUEUED_ITEM_AFTER, "craftedItem", made, vec![r]);
+        if let Some((h, n)) = held {
+            let upvals = vec![Value::Num(h as f64), Value::Num(n as f64)];
+            later(vm, delay, "craftHeld", held_start, upvals);
+        }
+        state_mut(vm).next = Some(recipe as i64);
+        later(vm, delay, "craftCast", craft_cast, vec![r]);
+        return Ok(vec![]);
+    }
+    state_mut(vm).craft = None;
+    if count > 1 {
+        crate::loot::gather_cooldowns(vm, recipe, true);
+        stopped(vm);
+        later(vm, QUEUED_ITEM_AFTER, "craftedItem", made, vec![r]);
+    } else {
+        make(vm, recipe as i64, BAGS_AFTER);
+        crate::loot::gather_cooldowns(vm, recipe, true);
+    }
+    // Unverified: what follows the last cast, one held.
+    if let Some((h, n)) = held {
+        let upvals = vec![Value::Num(h as f64), Value::Num(n as f64)];
+        later(vm, delay, "craftHeld", held_start, upvals);
+    } else if let Some((q, n, _)) = state_mut(vm).queued.take() {
+        state_mut(vm).asked = Some((q, n));
+        let upvals = vec![Value::Num(q as f64), Value::Num(n as f64)];
+        later(vm, delay, "craftAnswer", craft_answer, upvals);
     }
     Ok(vec![])
 }
 
 fn made(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(Value::Num(recipe)) = c.upvals.first().copied() {
-        make(vm, recipe as i64);
+        make(vm, recipe as i64, BAGS_AFTER_SUCCESS - QUEUED_ITEM_AFTER);
     }
     Ok(vec![])
 }
 
-/// The item made: pushed and told; the reagents taken; the bags' packet
-/// later.
-fn make(vm: &mut Vm, recipe: i64) {
-    let Some((output, reagents)) = schematic(vm, recipe) else {
+/// The item made: pushed and told (its new slot's bag updated); the
+/// reagents taken; the bags' packet `bags_after` later (a skill-up in
+/// it); the window's list after each.
+fn make(vm: &mut Vm, recipe: i64, bags_after: f64) {
+    let Some((output, quantity, reagents)) = schematic(vm, recipe) else {
         return;
     };
     let before: BTreeMap<i64, f64> = reagents
@@ -472,7 +872,7 @@ fn make(vm: &mut Vm, recipe: i64) {
         .chain([output])
         .map(|id| (id, crate::character::count_in_bags(vm, id)))
         .collect();
-    let placed = crate::character::push_to_bags(vm, output, 1.0);
+    let placed = crate::character::push_to_bags(vm, output, quantity);
     let (bag, new_slot) = placed.unwrap_or((0, None));
     let icon = crate::character::item_field(vm, output, "icon");
     fire(
@@ -486,16 +886,21 @@ fn make(vm: &mut Vm, recipe: i64) {
             _ => String::new(),
         })
         .unwrap_or_default();
-    let format = match vm.get_global("LOOT_ITEM_CREATED_SELF") {
+    let global = |vm: &mut Vm, name: &str, default: &str| match vm.get_global(name) {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
-        _ => "You create: %s.".to_string(),
+        _ => default.to_string(),
     };
-    let text = format.replacen("%s", &link, 1);
+    let text = if quantity > 1.0 {
+        global(vm, "LOOT_ITEM_CREATED_SELF_MULTIPLE", "You create: %sx%d.")
+            .replacen("%s", &link, 1)
+            .replacen("%d", &format!("{quantity}"), 1)
+    } else {
+        global(vm, "LOOT_ITEM_CREATED_SELF", "You create: %s.").replacen("%s", &link, 1)
+    };
     let sender = crate::loot::player_sender(vm);
     crate::chat::game_message(vm, "CHAT_MSG_LOOT", &text, Some(&sender));
     // Made, it is new whether a slot or a stack took it (recorded: every
     // wheel and bar made).
-    let _ = new_slot;
     fire(vm, "BAG_NEW_ITEMS_UPDATED", &[]);
     let n = {
         let s = state_mut(vm);
@@ -521,71 +926,146 @@ fn make(vm: &mut Vm, recipe: i64) {
         ("multicraft".into(), Rv::Num(0.0)),
         ("operationID".into(), Rv::Num(0.0)),
         ("qualityProgress".into(), Rv::Num(0.0)),
-        ("quantity".into(), Rv::Num(1.0)),
+        ("quantity".into(), Rv::Num(quantity)),
         ("recraftable".into(), Rv::Bool(false)),
     ]);
     let v = result.to_value(vm);
     fire(vm, "TRADE_SKILL_ITEM_CRAFTED_RESULT", &[v]);
+    later(vm, LIST_AFTER_BAGS, "tradeSkillList", list_again, vec![]);
+    // A new slot's bag told at once (recorded: the first copper and bronze
+    // bars; unverified: the wheel's in the backpack, told later only).
+    if new_slot.is_some() && bag == crate::character::REAGENT_BAG {
+        crate::character::bag_updated(vm, bag);
+        fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    }
     // The reagents taken; the bags changed, in order (a bag once per slot
-    // changed).
+    // changed), the item's last.
     let mut changes: Vec<i64> = Vec::new();
     for (id, count) in &reagents {
         changes.extend(crate::character::take_from_bags(vm, *id, *count));
     }
+    let taken = changes.len();
     changes.push(bag);
-    let mut upvals: Vec<Value> = changes.iter().map(|b| Value::Num(*b as f64)).collect();
-    upvals.insert(0, Value::Num(changes.len() as f64));
+    let skill_up = state_mut(vm)
+        .skill_ups
+        .get_mut(&recipe)
+        .and_then(|q| q.pop_front())
+        .unwrap_or(false);
+    let mut upvals = vec![
+        Value::Num(changes.len() as f64),
+        Value::Num(taken as f64),
+        Value::Num(if skill_up { recipe as f64 } else { 0.0 }),
+        Value::Num(bag as f64),
+        Value::Num(new_slot.map_or(-1.0, |s| s as f64)),
+    ];
+    upvals.extend(changes.iter().map(|b| Value::Num(*b as f64)));
     for (id, n) in before {
         upvals.push(Value::Num(id as f64));
         upvals.push(Value::Num(n));
     }
-    later(vm, BAGS_AFTER, "craftBags", craft_bags, upvals);
+    later(vm, bags_after, "craftBags", craft_bags, upvals);
 }
 
-/// The craft's bags' packet: each bag's equipped spells and its updates
-/// (the reagent bag's inventory update), the counts of the items changed
-/// and still held.
+/// The craft's bags' packet: the item's new slot read, each change's bag
+/// updated (the equipped
+/// spells' change before each of the reagent bag's, its inventory's after,
+/// before another bag's first), a skill-up after the reagents taken; the
+/// counts of the items held before and changed.
 fn craft_bags(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some(Value::Num(n)) = c.upvals.first().copied() else {
-        return Ok(vec![]);
+    let num = |i: usize| match c.upvals.get(i) {
+        Some(Value::Num(n)) => *n,
+        _ => 0.0,
     };
-    let n = n as usize;
-    let changes: Vec<i64> = c.upvals[1..=n]
-        .iter()
-        .filter_map(|v| match v {
-            Value::Num(b) => Some(*b as i64),
-            _ => None,
-        })
-        .collect();
-    // Each bag in its first change's order, as often as it changed.
-    let mut bags: Vec<(i64, usize)> = Vec::new();
-    for b in changes {
-        match bags.iter_mut().find(|(x, _)| *x == b) {
-            Some((_, k)) => *k += 1,
-            None => bags.push((b, 1)),
-        }
+    let (n, taken, skill_recipe) = (num(0) as usize, num(1) as usize, num(2) as i64);
+    // The item's new slot read with it.
+    if num(4) >= 0.0 {
+        crate::character::arrived(vm, num(3) as i64, num(4) as usize);
     }
-    // The reagent bag first (recorded).
-    bags.sort_by_key(|(b, _)| *b != crate::character::REAGENT_BAG);
-    for (bag, times) in bags {
-        crate::character::equipped_spells_changed(vm);
-        for _ in 0..times {
-            crate::character::bag_updated(vm, bag);
-            if bag == crate::character::REAGENT_BAG {
-                units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", PLAYER, &[]);
-            }
+    const HEAD: usize = 5;
+    let changes: Vec<i64> = (0..n).map(|i| num(HEAD + i) as i64).collect();
+    let mut skill = None;
+    let mut previous = None;
+    for (i, bag) in changes.into_iter().enumerate() {
+        if i == taken && skill_recipe != 0 {
+            skill = skill_up(vm, skill_recipe);
+        }
+        let reagent_bag = bag == crate::character::REAGENT_BAG;
+        if reagent_bag || previous != Some(bag) {
+            crate::character::equipped_spells_changed(vm);
+        }
+        previous = Some(bag);
+        crate::character::bag_updated(vm, bag);
+        if reagent_bag {
+            units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", PLAYER, &[]);
         }
     }
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
-    let counts = &c.upvals[1 + n..];
-    for pair in counts.chunks(2) {
+    for pair in c.upvals[HEAD + n..].chunks(2) {
         if let [Value::Num(id), Value::Num(before)] = pair {
             let now = crate::character::count_in_bags(vm, *id as i64);
-            if now != *before && now > 0.0 {
+            if now != *before && now > 0.0 && *before > 0.0 {
                 fire(vm, "ITEM_COUNT_CHANGED", &[Value::Num(*id)]);
             }
         }
     }
+    if let Some((lines, from, to)) = skill {
+        fire(vm, "SPELL_UPDATE_USABLE", &[]);
+        for line in lines {
+            let text = vm.str(&format!("Skill {line} increased from {from} to {to}"));
+            fire(vm, "CONSOLE_MESSAGE", &[text, Value::Num(0.0)]);
+        }
+    }
+    later(vm, LIST_AFTER_BAGS, "tradeSkillList", list_again, vec![]);
+    Ok(vec![])
+}
+
+/// The recipe's profession a point up (its recorded
+/// `GetProfessionInfoByRecipeID`: the line and its parent's, the
+/// character's rank): told; its lines and the ranks.
+fn skill_up(vm: &mut Vm, recipe: i64) -> Option<(Vec<i64>, f64, f64)> {
+    let key = state(vm).open.clone().or_else(|| state(vm).last.clone())?;
+    let info = first(
+        &key,
+        &format!("C_TradeSkillUI.GetProfessionInfoByRecipeID({recipe})"),
+    )?;
+    let line = |k: &str| match info.get(k) {
+        Some(Rv::Num(n)) if *n > 0.0 => Some(*n as i64),
+        _ => None,
+    };
+    let lines: Vec<i64> = [line("parentProfessionID"), line("professionID")]
+        .into_iter()
+        .flatten()
+        .collect();
+    let from = crate::stats::skill_rank(vm, *lines.first()?)?;
+    let name = match info
+        .get("parentProfessionName")
+        .or(info.get("professionName"))
+    {
+        Some(Rv::Str(s)) => s.clone(),
+        _ => key.clone(),
+    };
+    crate::stats::raise_skill_lines(vm, &lines, from + 1.0);
+    crate::units::skill_raised(vm, &name, from + 1.0, 0);
+    Some((lines, from, from + 1.0))
+}
+
+/// `player:craftSkillUps(recipe, { true, false, … })`: whether each craft
+/// of the recipe to come raises the profession's skill (the server's
+/// chance; the script says).
+pub fn control_skill_ups(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = units::this(vm, &c)?;
+    if me != PLAYER {
+        return Err(vm.error("craftSkillUps: the player's"));
+    }
+    let recipe = vm.check_number(&c, 2)? as i64;
+    let Value::Table(t) = c.arg(3) else {
+        return Err(vm.error("craftSkillUps: a list of booleans expected"));
+    };
+    let n = vm.heap.table(t).border();
+    let ups: VecDeque<bool> = (1..=n)
+        .map(|i| vm.heap.table(t).get(Value::Num(i as f64)).truthy())
+        .collect();
+    state_mut(vm).skill_ups.insert(recipe, ups);
     Ok(vec![])
 }
 

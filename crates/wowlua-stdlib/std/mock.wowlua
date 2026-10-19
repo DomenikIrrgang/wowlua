@@ -64,9 +64,19 @@ export interface MockUnit
     --- The player gathers a world object (a vein, a herb): `spell` cast on
     --- it, at its success its `loot` in the window (`auto`: autoloot).
     function gather(object: MockUnit, opts: { spell: number, castTime?: number, loot?: { id: number, count?: number }[], auto?: boolean })
+    --- The player clicks a profession's spell: its window open, as the
+    --- client recorded `profession`'s (`"Blacksmithing"`, `"Mining"`).
+    function openTradeSkill(spell: number, profession: string)
     --- Interrupts the cast (`UNIT_SPELLCAST_INTERRUPTED`); the player's is
-    --- answered by the server 0.4 s later.
+    --- answered by the server 0.4 s later. The player's with no cast yet:
+    --- a craft's next cast, asked of the server, given up.
     function interruptCast()
+    --- Which crafts of `recipe` to come raise the profession's skill, in
+    --- order (the server's chance).
+    function craftSkillUps(recipe: number, ups: boolean[])
+    --- The spell focuses near the player (`{ "Forge" }`): a recipe needing
+    --- one can be made.
+    function setSpellFocus(names: string[])
     --- How far from the player, in yards (`nil`: unknown).
     function setDistance(yards: number?)
     --- A worn item's durability (the player; `GetInventoryItemDurability`,

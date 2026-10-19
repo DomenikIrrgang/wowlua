@@ -747,7 +747,8 @@ __engine.pressKey("J")"#,
 
 /// The session's clock (`GetTime()`) as the recording began: recorded
 /// (`startTime`), else the first global cooldown's start where it is read
-/// (the frame the cast began; recordings before `startTime`).
+/// (the frame the cast began; recordings before `startTime`), else the
+/// player's first cast's start as its `UNIT_SPELLCAST_START` reads it.
 fn session_start(recording: &str) -> Option<f64> {
     let recorded = regex::Regex::new(r#"\["startTime"\] = "([0-9.]+)""#).unwrap();
     if let Some(c) = recorded.captures(recording) {
@@ -757,10 +758,17 @@ fn session_start(recording: &str) -> Option<f64> {
         r#"= "([0-9.]+) = C_ActionBar\.GetActionCooldown\(\d+\) -> 1: \{activeCategory=number 133,[^}]*isOnGCD=boolean true,[^}]*startTime=number ([0-9.]+),"#,
     )
     .unwrap();
-    gcd.captures_iter(recording)
-        .filter_map(|c| Some((c[1].parse::<f64>().ok()?, c[2].parse::<f64>().ok()?)))
-        .min_by(|a, b| a.0.total_cmp(&b.0))
-        .map(|(at, started)| started - at)
+    let cast = regex::Regex::new(
+        r#"= "([0-9.]+) = UnitCastingInfo\(\\"player\\"\) -> 11: string [^,]*, string [^,]*, number [0-9]+, number ([0-9]+),"#,
+    )
+    .unwrap();
+    let first = |re: &regex::Regex, scale: f64| {
+        re.captures_iter(recording)
+            .filter_map(|c| Some((c[1].parse::<f64>().ok()?, c[2].parse::<f64>().ok()?)))
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(at, started)| started / scale - at)
+    };
+    first(&gcd, 1.0).or_else(|| first(&cast, 1000.0))
 }
 
 /// A scenario (`/stdtest engine scenario <name>`) played in the engine:
@@ -1096,6 +1104,9 @@ fn scenario_line(line: &str) -> Option<String> {
     // A cast bar's ID, the session's.
     let bar = regex::Regex::new(r"CastBar-[0-9A-F]+").unwrap();
     let body = bar.replace_all(&body, "CastBar-<id>");
+    // An item's GUID, the server's (a made item's: the session's).
+    let item = regex::Regex::new(r"Item-\d+-0-[0-9A-F]{16}").unwrap();
+    let body = item.replace_all(&body, "Item-<id>");
     let body = line.replace(&body, "${1}<line>${2}").into_owned();
     // An answer's trailing nils dropped (the first recordings' recorder
     // lost them).
@@ -1287,7 +1298,7 @@ fn the_engine_plays_talents_as_the_client_did() {
 
 /// How many of the profession scenario's lines the engine plays as the
 /// client did: only ever up.
-const PROFESSION_MATCHED: usize = 530;
+const PROFESSION_MATCHED: usize = 1683;
 
 /// The profession scenario: a vein mined, a profession's window, crafts.
 #[test]

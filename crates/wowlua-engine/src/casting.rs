@@ -179,6 +179,49 @@ pub fn cast_at(
     on: Option<UnitId>,
     done: Option<Value>,
 ) -> Ret {
+    start(
+        vm,
+        me,
+        spell_id,
+        (name, icon, seconds),
+        (channel, not_interruptible),
+        on,
+        done,
+        true,
+    )
+}
+
+/// The player's cast the server started after the client had given it up
+/// (moved meanwhile): no `SENT` (recorded: a smelting's next cast).
+pub fn cast_unsent(
+    vm: &mut Vm,
+    spell_id: f64,
+    look: (Value, Value, f64),
+    done: Option<Value>,
+) -> Ret {
+    start(
+        vm,
+        units::PLAYER,
+        spell_id,
+        look,
+        (false, false),
+        None,
+        done,
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn start(
+    vm: &mut Vm,
+    me: UnitId,
+    spell_id: f64,
+    (name, icon, seconds): (Value, Value, f64),
+    (channel, not_interruptible): (bool, bool),
+    on: Option<UnitId>,
+    done: Option<Value>,
+    announce: bool,
+) -> Ret {
     let now = crate::clock::now(vm);
     let n = {
         let c = &mut engine_mut(vm).units.casting;
@@ -202,7 +245,9 @@ pub fn cast_at(
         // Another unit's new cast replaces the one running (unverified).
         stop(vm, me, true);
     }
-    sent(vm, me, g, spell_id, on);
+    if announce {
+        sent(vm, me, g, spell_id, on);
+    }
     if seconds <= 0.0 && !channel {
         cast_changed(vm, me);
         fire_cast(vm, "UNIT_SPELLCAST_SUCCEEDED", me, &[g, id, Value::Nil]);
@@ -501,7 +546,7 @@ pub fn next_swing_cooldowns(vm: &mut Vm, id: f64) {
 }
 
 /// Ends `unit`'s cast: interrupted, or done.
-fn stop(vm: &mut Vm, unit: UnitId, interrupted: bool) {
+pub(crate) fn stop(vm: &mut Vm, unit: UnitId, interrupted: bool) {
     let Some(cast) = engine_mut(vm).units.casting.casts.remove(&unit) else {
         return;
     };
@@ -563,10 +608,16 @@ fn cast_done(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `unit:interruptCast()`; the player's is answered by the server later:
 /// three `INTERRUPTED(unit, castGUID, spellID, nil, nil)`, each with
 /// `CURRENT_SPELL_CAST_CHANGED(false)`, then `UI_ERROR_MESSAGE(57,
-/// "Interrupted")`.
+/// "Interrupted")`. The player's with no cast: a craft's next cast asked,
+/// given up (`tradeskill.rs`).
 pub fn control_interrupt(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     let cast = engine(vm).units.casting.casts.get(&me).cloned();
+    // No cast yet: a craft's next cast asked of the server, given up.
+    if me == units::PLAYER && cast.is_none() {
+        crate::tradeskill::give_up_asked(vm);
+        return Ok(vec![]);
+    }
     stop(vm, me, true);
     if me == units::PLAYER
         && let Some(cast) = cast

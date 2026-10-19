@@ -62,7 +62,8 @@ fn group_duration(vm: &mut Vm, group: WidgetId) -> f64 {
         let slot = by_order.entry(order).or_insert(0.0);
         *slot = slot.max(length);
     }
-    by_order.values().sum()
+    // Not `sum`: no animations last 0, not -0.
+    by_order.values().fold(0.0, |a, b| a + b)
 }
 
 fn play(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {

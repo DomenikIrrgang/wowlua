@@ -1099,6 +1099,8 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("loot", crate::loot::control_loot),
         ("gather", crate::loot::control_gather),
         ("openTradeSkill", crate::tradeskill::control_open),
+        ("craftSkillUps", crate::tradeskill::control_skill_ups),
+        ("setSpellFocus", crate::tradeskill::control_spell_focus),
         ("interact", crate::quests::control_interact),
         ("die", crate::death::control_die),
         ("setThreat", control_set_threat),
@@ -1856,12 +1858,21 @@ fn control_raise_skill(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = vm.check_str(&c, 2)?;
     let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
     let rank = vm.check_number(&c, 3)?;
+    let times = if name == "Defense" { 2 } else { 1 };
+    skill_raised(vm, &name, rank, times);
+    Ok(vec![])
+}
+
+/// A skill up to `rank` told: "Your skill in … has increased", the stats'
+/// events, the damage's mods `mods` times (a weapon's once, Defense twice,
+/// a profession's none).
+pub fn skill_raised(vm: &mut Vm, name: &str, rank: f64, mods: usize) {
     let format = match vm.get_global("ERR_SKILL_UP_SI") {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
         _ => "Your skill in %s has increased to %d.".into(),
     };
     let text = format
-        .replacen("%s", &name, 1)
+        .replacen("%s", name, 1)
         .replacen("%d", &format!("{rank}"), 1);
     crate::chat::game_message(vm, "CHAT_MSG_SKILL", &text, None);
     for e in ["UNIT_ATTACK", "UNIT_DEFENSE", "UNIT_RANGED_ATTACK_POWER"] {
@@ -1869,11 +1880,9 @@ fn control_raise_skill(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     fire(vm, "SKILL_LINES_CHANGED", &[]);
     fire(vm, "MOUNT_JOURNAL_USABILITY_CHANGED", &[]);
-    let times = if name == "Defense" { 2 } else { 1 };
-    for _ in 0..times {
+    for _ in 0..mods {
         fire_unit(vm, "PLAYER_DAMAGE_DONE_MODS", PLAYER, &[]);
     }
-    Ok(vec![])
 }
 
 /// The combat text's delay after a hit lands (`/stdtest engine scenario
