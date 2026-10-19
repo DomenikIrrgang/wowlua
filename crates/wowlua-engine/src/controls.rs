@@ -283,6 +283,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("receiveAddonMessage", crate::chat::receive_control),
         ("sentAddonMessages", crate::chat::sent_control),
         ("joinGuild", crate::chat::join_guild_control),
+        ("systemMessage", crate::chat::system_message_control),
         ("defineBinding", crate::bindings::define_binding),
         ("pressBinding", crate::bindings::press_binding),
         ("pressKey", crate::bindings::press_key),

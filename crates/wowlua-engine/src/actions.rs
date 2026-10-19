@@ -253,18 +253,23 @@ fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
     // A spell on the player or a group member in reach only (trait
     // `partyOrSelf`; probed: Blessing of Protection usable targeting the
     // player, not with no target, an NPC, or a member in another zone;
-    // recorded: usable on a member nearby).
+    // recorded: usable on a member nearby). With no target, the soft
+    // friend decides (recorded, `profession`: unusable once a friendly
+    // NPC was soft targeted on the road); with neither, as the profile
+    // recorded it (usable on the open road there, through six target
+    // changes; unusable in town in `bank`, `auction`, `hearth`: a soft
+    // friend near, unverified, as the probe's "no target" may have had).
     if a.kind == "spell" && has_trait(vm, a.id, "partyOrSelf") {
         let e = engine(vm);
         let u = &e.units;
-        let ok = match u.target {
+        let ok = match u.target.or(u.soft[1]) {
+            None => a.usable.0,
             Some(crate::units::PLAYER) => true,
             Some(t) => {
                 let m = &u.list[t.0];
                 let here = &e.world.character.position.zone;
                 u.group.contains(&t) && m.online && m.zone.as_ref().is_none_or(|z| z == here)
             }
-            None => false,
         };
         return (ok, false);
     }

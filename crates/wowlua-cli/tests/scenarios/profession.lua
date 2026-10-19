@@ -1,13 +1,14 @@
 -- /stdtest engine scenario profession, played with the engine's controls:
 -- the level 21 paladin mines a copper vein four times (scenarios/
 -- profession.lua), opens Blacksmithing, makes a sharpening wheel, opens
--- Smelting; walks to a forge (not played: 48-167 s), smelts copper bars,
--- clicks tin's Create again and again while they're made, smelts tin bars
--- (moving stops it) and bronze bars (three skill-ups). Each step at its
--- recorded time (a click: a round trip before the server's answer,
--- ~0.35 s). Not yet: the filter's menu (29.8 s: which entry, unrecorded),
--- the walk; the Create clicks the client ignored (no
--- TRADE_SKILL_CRAFT_BEGIN: a request still unanswered) are left out.
+-- Smelting; walks to a forge in the Crossroads (48-167 s: the quest log's
+-- updates, mobs soft targeted, Holy Light pressed while moving, NPCs
+-- soft targeted), smelts copper bars, clicks tin's Create again and again
+-- while they're made, smelts tin bars (moving stops it) and bronze bars
+-- (three skill-ups). Each step at its recorded time (a click: a round
+-- trip before the server's answer, ~0.35 s). Not yet: the filter's menu
+-- (29.8 s: which entry, unrecorded); the Create clicks the client ignored
+-- (no TRADE_SKILL_CRAFT_BEGIN: a request still unanswered) are left out.
 local e = __engine
 local player = e.player
 e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 }, partyOrSelf = { 1022 } })
@@ -43,8 +44,8 @@ at(24.2)
 check("the ore in the bag", C_Item.GetItemCount(2770) == 18)
 -- Blacksmithing's spell clicked on the bar: its window.
 at(25.395) player:openTradeSkill(3100, "Blacksmithing")
-at(25.561) world("PLAYER_STARTED_MOVING")
-at(26.201) world("PLAYER_STOPPED_MOVING")
+at(25.561) player:setMoving(true)
+at(26.201) player:setMoving(false)
 at(27.0)
 check("the window shown", ProfessionsFrame and ProfessionsFrame:IsShown())
 check("the wheel's recipe shown", ProfessionsFrame.CraftingPage.SchematicForm:GetRecipeInfo().recipeID == 1230171)
@@ -74,19 +75,79 @@ at(39.546) player:openTradeSkill(3100, "Blacksmithing")
 at(41.004) player:openTradeSkill(2656, "Mining")
 at(43.197) pick(2657)
 at(45.634) world("PLAYER_STARTED_TURNING")
-at(46.065) world("PLAYER_STARTED_MOVING")
+at(46.065) player:setMoving(true)
 at(47.742) e.pressKey("ESCAPE")
-at(48.0)
+-- The walk to the forge (48-167 s), the world's own as recorded: the
+-- server's quest log updates (the log the character's, recorded before),
+-- its quest lines'.
+local function questLog() world("QUEST_LOG_UPDATE") end
+-- Mobs near the road soft-targeted and lost again, with no target of the
+-- player's: the server told of each (`UNIT_TARGET("player")` alone ~0.5 s
+-- after the soft target, as on the taxi flight); each lost one a
+-- `PLAYER_TARGET_CHANGED` with no target, the server's echo a round trip
+-- later (recorded; unverified why: the soft targeting itself not modelled).
+local function servers() world("UNIT_TARGET", "player") end
+local function lost() player:target(nil) end
+at(48.311) questLog()
+at(48.664) world("QUESTLINE_UPDATE", false)
+at(51.697) servers()
+at(51.933) lost()
+at(52.948) servers()
+at(55.348) lost()
+at(59.725) lost()
+at(59.857) servers()
+at(73.409) questLog()
+at(87.050) questLog()
+at(87.465) world("QUESTLINE_UPDATE", false)
+-- Friends going offline and coming online (the server's messages).
+at(91.244) e.systemMessage("Otherplayer has gone offline.")
+at(97.828) questLog()
+at(101.034) e.systemMessage("|Hplayer:Player Lastname|h[Player Lastname]|h has come online.")
+at(109.202) servers()
+at(111.582) lost()
+-- Holy Light pressed on the way (its key, Cmd-2): refused, moving.
+at(117.918) player:useSpell(647)
+at(124.942) servers()
+at(131.308) lost()
+at(133.875) servers()
+at(135.708) lost()
+-- On the Gold Road, into the Crossroads (the recording's zone texts).
+at(138.575) e.moveTo({ zone = "The Barrens", subZone = "Gold Road", mapID = 1413 })
+-- The quest watch list told after the area's updates (recorded, in their
+-- frame; why unverified).
+at(138.625) world("QUEST_WATCH_LIST_CHANGED", nil, nil)
+at(142.908) e.moveTo({ zone = "The Barrens", subZone = "The Crossroads", mapID = 1413 })
+-- The Crossroads' NPCs soft targeted (who, unrecorded: the soft friend's
+-- events alone tell): one, then a caster spending mana (its spell and
+-- power secret or unasked: any), then others.
+local npc = e.spawnUnit({ name = "Crossroads Grunt", reaction = "friendly" })
+local caster = e.spawnUnit({ name = "Crossroads Caster", reaction = "friendly", powerType = 0, power = 1000, maxPower = 1000 })
+local other = e.spawnUnit({ name = "Crossroads Peon", reaction = "friendly" })
+at(145.408) player:softTarget(npc, "friend")
+at(156.708) player:softTarget(caster, "friend")
+at(157.375) caster:setPower(990)
+at(159.308) caster:setPower(1000)
+at(161.159) caster:castSpell(8004, { castTime = 2.5 }) caster:setPower(950)
+at(161.373) caster:setPower(960)
+at(161.993) player:softTarget(other, "friend")
 -- At the forge: Smelting again; bronze and copper picked.
 player:setSpellFocus({ "Forge" })
 local page = ProfessionsFrame and ProfessionsFrame.CraftingPage
 at(167.288) player:openTradeSkill(2656, "Mining")
+-- Another caster soft targeted, spending mana.
+local caster2 = e.spawnUnit({ name = "Crossroads Caster", reaction = "friendly", powerType = 0, power = 1000, maxPower = 1000 })
+at(169.145) player:softTarget(caster2, "friend")
 at(170.091) pick(2659)
+at(170.693) caster2:setPower(990)
 at(171.114) pick(2657)
 check("copper picked", page.SchematicForm:GetRecipeInfo().recipeID == 2657)
 -- Every copper bar: casts of 3 s, one after another (each next cast
 -- ~0.3 s after the last one's success: the ping there).
 e.setLatency(0.3)
+-- The area's updates without a zone's event (recorded, as on the taxi
+-- flight; their cause unknown).
+at(187.105) e.areaChanged()
+at(188.714) player:setMoving(false)
 at(188.866) press(page.CreateAllButton)
 -- Tin picked; its Create clicked while copper is made: refused ("Another
 -- action is in progress"), the last ones queued, one made.
@@ -98,8 +159,8 @@ at(208.993) press(page.CreateAllButton)
 -- Bronze picked while tin is made; moving stops the tin.
 at(210.715) pick(2659)
 player:craftSkillUps(2659, { false, true, true, true })
-at(219.122) world("PLAYER_STARTED_MOVING") player:interruptCast()
-at(219.249) world("PLAYER_STOPPED_MOVING")
+at(219.122) player:setMoving(true) player:interruptCast()
+at(219.249) player:setMoving(false)
 at(219.590) press(page.CreateAllButton)
 at(234.0)
 check("the bronze made", C_Item.GetItemCount(2841) == 8)

@@ -155,6 +155,8 @@ pub struct TradeSkill {
     pub skill_ups: HashMap<i64, VecDeque<bool>>,
     /// Items made so far (their GUIDs' counter).
     pub made: u64,
+    /// The windows shown this session.
+    pub shown: u32,
 }
 
 fn state(vm: &Vm) -> &TradeSkill {
@@ -201,6 +203,7 @@ pub fn control_open(vm: &mut Vm, c: NativeCall) -> Ret {
         let s = state_mut(vm);
         s.open = Some(key);
         s.ready = false;
+        s.shown += 1;
     }
     fire(vm, "TRADE_SKILL_SHOW", &[]);
     // The spell's instant success, the client's own (no `SENT`).
@@ -291,10 +294,10 @@ fn window(vm: &mut Vm, c: NativeCall) -> Ret {
             .into_iter()
             .map(|v| {
                 let v = with_rank(vm, v);
-                let v = if name == "C_TradeSkillUI.GetRecipeRequirements" {
-                    with_focus(vm, v)
-                } else {
-                    v
+                let v = match name.as_str() {
+                    "C_TradeSkillUI.GetRecipeRequirements" => with_focus(vm, v),
+                    "C_TradeSkillUI.GetBaseProfessionInfo" => with_counter(vm, v),
+                    _ => v,
                 };
                 v.to_value(vm)
             })
@@ -372,6 +375,22 @@ fn with_rank(vm: &Vm, v: Rv) -> Rv {
             if k == "skillLevel" {
                 *v = Rv::Num(rank);
             }
+        }
+    }
+    Rv::Table(fields)
+}
+
+/// A profession's info with the session's count of windows shown before
+/// this one (`sourceCounter`; recorded: 0, 1, 2, 3 at the scenario's four
+/// windows, the probes' 6 and 7 later in theirs).
+fn with_counter(vm: &Vm, v: Rv) -> Rv {
+    let Rv::Table(mut fields) = v else {
+        return v;
+    };
+    let before = state(vm).shown.saturating_sub(1);
+    for (k, v) in fields.iter_mut() {
+        if k == "sourceCounter" {
+            *v = Rv::Num(f64::from(before));
         }
     }
     Rv::Table(fields)

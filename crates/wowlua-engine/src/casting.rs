@@ -55,6 +55,8 @@ pub struct Casting {
     /// The player's presses the server has not answered yet, in order:
     /// the spell and the client's cast GUID for it.
     pub pending: Vec<(f64, String)>,
+    /// Whether the player is moving (`player:setMoving`).
+    pub moving: bool,
 }
 
 fn field(vm: &mut Vm, t: TableRef, key: &str) -> Value {
@@ -424,6 +426,13 @@ pub fn control_use_spell(vm: &mut Vm, c: NativeCall) -> Ret {
         refuse(vm, id, 61.0, "Spell is not ready yet.");
         return Ok(vec![]);
     }
+    // Moving: a spell with a cast time refused (recorded, `profession`:
+    // Holy Light, 2.5 s, pressed on the walk; unverified: before a power
+    // check).
+    if engine(vm).units.casting.moving && cast_time(vm, id) > 0.0 {
+        refuse(vm, id, 57.0, "Can't do that while moving");
+        return Ok(vec![]);
+    }
     if let Value::Num(cost) = spell_field(vm, id, "powerCost")
         && engine(vm).units.list[units::PLAYER.0].power < cost
     {
@@ -476,6 +485,41 @@ pub fn control_use_spell(vm: &mut Vm, c: NativeCall) -> Ret {
         vec![Value::Num(id), Value::Num(category), g],
     );
     crate::clock::after_engine(vm, delay, later);
+    Ok(vec![])
+}
+
+/// A spell's cast time in ms (its data's, else the probed spell info's), 0
+/// for an instant one.
+fn cast_time(vm: &mut Vm, id: f64) -> f64 {
+    let Some(t) = crate::gamedata::spell_data(vm, id as i64) else {
+        return 0.0;
+    };
+    match field(vm, t, "castTime") {
+        Value::Num(ms) => ms,
+        _ => 0.0,
+    }
+}
+
+/// `player:setMoving(moving)`: the player starts or stops moving
+/// (`PLAYER_STARTED_MOVING`, `PLAYER_STOPPED_MOVING`, recorded); spells
+/// with a cast time are refused meanwhile. Unverified: a running cast is
+/// left to `interruptCast`.
+pub fn control_set_moving(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = units::this(vm, &c)?;
+    if me != units::PLAYER {
+        return Err(vm.error("setMoving: the player's"));
+    }
+    let moving = c.arg(2).truthy();
+    if engine(vm).units.casting.moving == moving {
+        return Ok(vec![]);
+    }
+    engine_mut(vm).units.casting.moving = moving;
+    let event = if moving {
+        "PLAYER_STARTED_MOVING"
+    } else {
+        "PLAYER_STOPPED_MOVING"
+    };
+    crate::widgets::fire_event(vm, event, &[]);
     Ok(vec![])
 }
 

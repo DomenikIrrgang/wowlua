@@ -325,6 +325,17 @@ pub fn sent_control(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(out)])
 }
 
+/// `systemMessage(text)`: a message of the server's own, as a friend's
+/// coming online (`CHAT_MSG_SYSTEM`, the game's message payload; recorded,
+/// `profession`: "… has gone offline.", "|Hplayer:…|h[…]|h has come
+/// online.").
+pub fn system_message_control(vm: &mut Vm, c: NativeCall) -> Ret {
+    let line = vm.check_str(&c, 1)?;
+    let line = String::from_utf8_lossy(vm.str_bytes(line)).into_owned();
+    game_message(vm, "CHAT_MSG_SYSTEM", &line, None);
+    Ok(vec![])
+}
+
 /// `joinGuild([on])`: the player is in a guild (or not).
 pub fn join_guild_control(vm: &mut Vm, c: NativeCall) -> Ret {
     let on = !c.has(1) || c.arg(1).truthy();
