@@ -612,7 +612,7 @@ impl Checked {
 
 /// Documented `number` arguments the client takes otherwise than as a
 /// signed 32-bit integer (`data/camelot-number-args.txt`): by function and
-/// argument number, `u32`, `float` or `finite`.
+/// argument number, `u32`, `float`, `finite` or `plain`.
 fn number_kind(function: &str, n: usize) -> Option<&'static str> {
     static KINDS: std::sync::OnceLock<
         std::collections::HashMap<(&'static str, usize), &'static str>,
@@ -678,6 +678,7 @@ fn checked(api: &Api, f: &Function, arg: Json, n: usize, method: bool) -> Checke
             }
             Some("float") => family = Family::Float,
             Some("finite") => family = Family::Finite,
+            Some("plain") => family = Family::Number,
             _ => {}
         }
     }
@@ -1316,6 +1317,9 @@ enum Usage {
     Index,
     /// A number of 0 or above.
     NonNegative,
+    /// A number but 0 (`GetShapeshiftFormInfo(0)` refused, `(-1)` taken:
+    /// an unsigned index counted from 1).
+    NonZero,
     /// A string or a number (`lua_isstring`).
     String,
     /// A string.
@@ -1372,6 +1376,7 @@ fn usage_checks() -> &'static std::collections::HashMap<&'static str, Vec<UsageC
                         "number" => Usage::Number,
                         "index" => Usage::Index,
                         "nonneg" => Usage::NonNegative,
+                        "nonzero" => Usage::NonZero,
                         "string" => Usage::String,
                         "strictstr" => Usage::StrictString,
                         "table" => Usage::Table,
@@ -1477,6 +1482,7 @@ fn usage_check(vm: &mut Vm, checks: &UsageChecks, c: &NativeCall) -> Result<(), 
             (Usage::Number, v) => vm.tonumber(v).is_some(),
             (Usage::Index, v) => vm.tonumber(v).is_some_and(|n| n > 0.0),
             (Usage::NonNegative, v) => vm.tonumber(v).is_some_and(|n| n >= 0.0),
+            (Usage::NonZero, v) => vm.tonumber(v).is_some_and(|n| n != 0.0),
             (Usage::String, v) => matches!(v, Value::Str(_) | Value::Num(_)),
             (Usage::StrictString, v) => matches!(v, Value::Str(_)),
             (Usage::Table, v) => matches!(v, Value::Table(_)),

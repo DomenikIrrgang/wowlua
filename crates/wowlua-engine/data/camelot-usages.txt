@@ -4,13 +4,13 @@
 # `name<TAB>checks<TAB>message`: a call whose arguments a check refuses
 # raises the message (Lua's `luaL_error`: the caller's position first).
 # Checks by argument: number (a number or a numeric string), index (one
-# above 0), nonneg (0 or above), string (a string or a number), strictstr
-# (a string), table, required (any value but nil), guid (a GUID or 0),
-# any; `?` lets it be nil or left out; never (every value the probe tried
-# refused); companion ("CRITTER" or "MOUNT", unverified); optnumber (a
-# number or none, refused with Lua's own "number expected": message `-`);
-# questitem ("required", "choice" or "reward"); taxislot (refused while no
-# flight map is open).
+# above 0), nonneg (0 or above), nonzero (any number but 0), string (a
+# string or a number), strictstr (a string), table, required (any value
+# but nil), guid (a GUID or 0), any; `?` lets it be nil or left out;
+# never (every value the probe tried refused); companion ("CRITTER" or
+# "MOUNT", unverified); optnumber (a number or none, refused with Lua's own
+# "number expected": message `-`); questitem ("required", "choice" or
+# "reward"); taxislot (refused while no flight map is open).
 # Each check is the loosest that explains every answer, a usage's named
 # arguments preferring any value but nil: untried values are unverified.
 # A function's further lines check after its first's, with their own
@@ -302,6 +302,7 @@ GetPersonalRatedInfo	number	Usage: GetPersonalRatedInfo(bracketIndex)
 GetPetActionCooldown	number	Usage: GetPetActionCooldown(index)
 GetPetActionInfo	number	Usage: GetPetActionInfo(index)
 GetPetActionSlotUsable	number	Usage: GetPetActionSlotsUsable(index)
+GetPossessInfo	nonzero	Usage: GetPossessInfo(index)
 GetPrevCompleatedTutorial	number	Usage: GetPrevCompleatedTutorial("tutorial")
 GetPreviousAchievement	number	Usage: GetPreviousAchievement(achievementID)
 GetProfessionInfo	number	Usage: GetProfessionInfo(index)
@@ -353,6 +354,8 @@ GetSavedWorldBossInfo	number	Usage: GetSavedWorldBossInfo(index)
 GetScenariosChoiceOrder	table?	Usage: GetScenariosChoiceOrder([table])
 GetSendMailItem	number	Usage: GetSendMailItem(sendMailIndex)
 GetSendMailItemLink	number	Usage: GetSendMailItemLink(sendMailIndex)
+GetShapeshiftFormCooldown	nonzero	Usage: GetShapeshiftFormCooldown(index)
+GetShapeshiftFormInfo	nonzero	Usage: GetShapeshiftFormInfo(index)
 GetSoundEntryCount	number	Usage: GetSoundEntryCount(soundKitID)
 GetSpecializationInfoByID	number	Usage: GetSpecializationInfoByID(specID[, sex])
 GetSpecializationRole	number	Usage: GetSpecializationRole(specIndex[, isInspect[, isPet]])
