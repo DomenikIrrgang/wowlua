@@ -396,6 +396,7 @@ export type FullProbe = {
     segment: { from: number, to: number }?,
     careful: { to: number, size: number }[],
     deferred: { from: number, to: number }[]?,
+    planVersion: string?,
     deferredTo: number?,
     segmentSize: number,
     endKind: string?,
@@ -594,7 +595,10 @@ local function runSegment(run: FullProbe)
         while run.cursor < to and n < PER_FRAME and debugprofilestop() - t0 < BUDGET_MS do
             const e = list[run.cursor]
             n = n + 1
-            if e.missing ~= nil then
+            if out[e.text] ~= nil then
+                -- Answered already (a run started on an earlier plan).
+                n = n - 1
+            elseif e.missing ~= nil then
                 out[e.text] = `unresolved: \{{e.missing}\}`
             elseif run.crashedFunctions[e.fn] ~= nil then
                 out[e.text] = `skipped: {e.fn} crashed the client on {run.crashedFunctions[e.fn]}`
@@ -678,6 +682,32 @@ local function crashed(run: FullProbe)
     end
 end
 
+--- A run started on another plan (StdTest updated mid-run): it goes on at
+--- its first call without an answer; the stretches put off by a crash are
+--- found again the same way.
+local function rebase(run: FullProbe)
+    const version = (plan() :: any).version
+    if run.planVersion == version then
+        return
+    end
+    run.planVersion = version
+    run.deferred = {}
+    run.deferredTo = nil
+    run.careful = {}
+    run.segment = nil
+    const list = entries(run.values)
+    const out = results()
+    run.total = #list
+    run.cursor = #list + 1
+    for i, e in ipairs(list) do
+        if out[e.text] == nil and run.crashedFunctions[e.fn] == nil then
+            run.cursor = i
+            break
+        end
+    end
+    say(`fullprobe: StdTest's plan changed; going on at call {run.cursor} (the first without an answer)`)
+end
+
 @onEnterWorld
 local function resume(isInitialLogin: boolean, isReloadingUi: boolean)
     if not isInitialLogin and not isReloadingUi then
@@ -720,6 +750,7 @@ local function resume(isInitialLogin: boolean, isReloadingUi: boolean)
             run.reloadSeconds = run.reloadSeconds + math.max(0, time() - run.reloadAt)
         end
         run.reloadAt = nil
+        rebase(run)
         C_Timer.After(1, function() runSegment(run) end)
         return
     end
@@ -729,6 +760,7 @@ local function resume(isInitialLogin: boolean, isReloadingUi: boolean)
     else
         say("fullprobe: going on after a reload")
     end
+    rebase(run)
     C_Timer.After(1, function() planReload(run) end)
 end
 
@@ -768,6 +800,7 @@ local function start()
         total = 0,
         careful = {},
         deferred = {},
+        planVersion = (plan() :: any).version,
         segmentSize = plan().segmentSize ?? SEGMENT,
         crashed = {},
         crashedFunctions = {},

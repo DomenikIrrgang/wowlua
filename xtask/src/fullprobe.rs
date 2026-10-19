@@ -1518,6 +1518,38 @@ pub struct Plan {
 /// Functions with their calls' argument lists.
 pub type Calls = Vec<(String, Vec<String>)>;
 
+/// Namespaces of retail systems WoW Forever lacks (the user's first run
+/// crashed the client in C_Housing and C_HouseExterior): probed last.
+const RETAIL_ONLY: &[&str] = &[
+    "C_Housing",
+    "C_House",
+    "C_Neighborhood",
+    "C_PlayerHousing",
+    "C_DyeColor",
+    "C_Garrison",
+    "C_CatalogShop",
+    "C_PerksProgram",
+    "C_WoWLabs",
+    "C_ArtifactUI",
+    "C_Azerite",
+    "C_Soulbinds",
+    "C_Covenant",
+    "C_DelvesUI",
+    "C_Commentator",
+    "C_MythicPlus",
+    "C_ChallengeMode",
+    "C_WeeklyRewards",
+    "C_LegendaryCrafting",
+    "C_AdventureJournal",
+    "C_ScrappingMachineUI",
+    "C_ItemUpgrade",
+    "C_RemixArtifactUI",
+    "C_Professions",
+    "C_CraftingOrders",
+    "C_ProfSpecs",
+    "C_MajorFactions",
+];
+
 impl Plan {
     pub fn build(root: &Path) -> Result<Plan> {
         let docs = Docs::load(root)?;
@@ -1577,6 +1609,12 @@ impl Plan {
             .expect("a valid pattern");
         let (mut safe, mut checked, mut risky) = (Vec::new(), Vec::new(), Vec::new());
         for (name, list) in &self.calls {
+            // Systems Forever lacks: their functions crash the client (the
+            // first run: C_Housing, C_HouseExterior), all of them last.
+            if RETAIL_ONLY.iter().any(|p| name.starts_with(p)) {
+                risky.push((name.clone(), list.clone()));
+                continue;
+            }
             let documented = !self.undocumented.contains(name);
             let (mut a, mut b, mut c) = (Vec::new(), Vec::new(), Vec::new());
             for (i, args) in list.iter().enumerate() {
@@ -1682,8 +1720,15 @@ impl Plan {
         for (name, why) in &self.skipped {
             let _ = writeln!(out, "    {{ {}, {} }},", lua_string(name), lua_string(why));
         }
-        out.push_str(
-            "}\n\nns.__wowlua.define(\"fullprobeplan\", { calls = calls, risky = risky, setters = setters, skipped = skipped })\n",
+        // The plan's version: a run started on another plan goes on at its
+        // first call without an answer.
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+        for b in out.bytes() {
+            hash = (hash ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+        }
+        let _ = write!(
+            out,
+            "}}\n\nns.__wowlua.define(\"fullprobeplan\", {{ calls = calls, risky = risky, setters = setters, skipped = skipped, version = \"{hash:016x}\" }})\n"
         );
         out
     }
