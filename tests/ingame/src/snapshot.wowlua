@@ -255,6 +255,8 @@ const STATS: { key: string, fn: string, ask: string }[] = {
     { key = "spellBookItemCooldown", fn = "C_SpellBook.GetSpellBookItemCooldown", ask = "slot" },
     { key = "spellBookItemAutoCast", fn = "C_SpellBook.GetSpellBookItemAutoCast", ask = "slot" },
     { key = "spellBookItemFlyoutMember", fn = "C_SpellBook.IsSpellBookItemLooseFlyoutMember", ask = "slot" },
+    { key = "flyoutInfo", fn = "GetFlyoutInfo", ask = "index" },
+    { key = "flyoutSlot", fn = "GetFlyoutSlotInfo", ask = "flyoutSlot" },
     { key = "questFailed", fn = "C_QuestLog.IsFailed", ask = "index" },
     { key = "questElite", fn = "C_QuestLog.IsEliteQuest", ask = "index" },
     { key = "questDifficulty", fn = "C_QuestLog.GetQuestDifficultyLevel", ask = "index" },
@@ -294,6 +296,27 @@ const INDICES: { [string]: number[] } = {
     cooldownViewerSet = { 0, 1, 2, 3, 4, 5, 6, 7, 8 },
     spellBookSkillLine = { 1, 2, 3, 4, 5, 6, 7, 8 },
 }
+
+--- The spellbook's flyouts: their IDs (`actionID` of the items of type
+--- Flyout).
+local function flyoutIDs(): number[]
+    const book = C_SpellBook :: any
+    const out: number[] = {}
+    local last = 0
+    for line = 1, book.GetNumSpellBookSkillLines() do
+        const info = book.GetSpellBookSkillLineInfo(line)
+        if info then
+            last = math.max(last, info.itemIndexOffset + info.numSpellBookItems)
+        end
+    end
+    for slot = 1, last do
+        const item = book.GetSpellBookItemInfo(slot, 0)
+        if item and item.itemType == Enum.SpellBookItemType.Flyout and item.actionID then
+            out[#out + 1] = item.actionID
+        end
+    end
+    return out
+end
 
 --- The indices the client's own counts give (a stat not in `INDICES` and
 --- not here: the 31 combat ratings).
@@ -364,6 +387,10 @@ local function counted(key: string): number[]?
             end
         end
         return out
+    end
+    -- The spellbook's flyouts, by ID.
+    if key == "flyoutInfo" then
+        return flyoutIDs()
     end
     return nil
 end
@@ -441,6 +468,17 @@ local function stats(): table
                             if ok and r.n > 0 then
                                 byIndex[slot * 100 + kind * 10 + modification] = r
                             end
+                        end
+                    end
+                end
+            elseif ask == "flyoutSlot" then
+                -- Each flyout's slots, by `id * 100 + slot`.
+                for _, id in ipairs(flyoutIDs()) do
+                    local _, _, n = (_G :: any).GetFlyoutInfo(id)
+                    for j = 1, n ?? 0 do
+                        local ok, r = pcall(function(): table return results(f(id, j)) end)
+                        if ok then
+                            byIndex[id * 100 + j] = r
                         end
                     end
                 end

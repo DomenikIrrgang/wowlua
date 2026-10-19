@@ -647,7 +647,12 @@ pub fn defaults(vm: &mut Vm, api: &api::Api, doc: &serde_json::Value) -> Vec<Val
 
 /// A documented value's empty value: a structure with its fields' (to a
 /// depth), a number 0, a string "", false, an empty table.
-fn default_value(vm: &mut Vm, api: &api::Api, r: &serde_json::Value, depth: usize) -> Value {
+pub(crate) fn default_value(
+    vm: &mut Vm,
+    api: &api::Api,
+    r: &serde_json::Value,
+    depth: usize,
+) -> Value {
     let nilable = r.get("Nilable").and_then(serde_json::Value::as_bool) == Some(true);
     let ty = r
         .get("Type")

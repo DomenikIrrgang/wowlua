@@ -108,6 +108,7 @@ fn the_snapshot_records_every_stat() {
         wowlua_engine::stats::Ask::ForStat => "forStat",
         wowlua_engine::stats::Ask::Location => "location",
         wowlua_engine::stats::Ask::Slot => "slot",
+        wowlua_engine::stats::Ask::FlyoutSlot => "flyoutSlot",
     };
     let rows: Vec<&str> = snapshot
         .lines()

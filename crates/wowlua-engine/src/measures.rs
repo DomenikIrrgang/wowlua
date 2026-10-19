@@ -1,7 +1,8 @@
 //! What regions measure and hold beyond their setters: a font string's
 //! lines and height (on the engine's text model: 6 units a character,
 //! wrapped at the string's laid out width), a scroll frame's ranges, a
-//! texture's atlas, the minimap's zoom. Unverified: the text model's
+//! texture's atlas, the minimap's zoom, a scroll frame's offsets, a
+//! button's font string. Unverified: the text model's
 //! metrics against the client's fonts.
 
 use wowlua_vm::stdlib::Ret;
@@ -115,6 +116,35 @@ fn get_zoom(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     ])
 }
 
+/// `GetVerticalScroll()` / `GetHorizontalScroll()`: the offset set, 0 at
+/// first.
+fn scroll_offset(vm: &mut Vm, id: WidgetId, stem: &str) -> Ret {
+    let props = engine(vm).world.widgets[id.0].props;
+    let v = widgets::stored_args(vm, props, stem).and_then(|v| v.first().copied());
+    Ok(vec![
+        v.filter(|v| matches!(v, Value::Num(_)))
+            .unwrap_or(Value::Num(0.0)),
+    ])
+}
+
+fn get_vertical_scroll(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    scroll_offset(vm, id, "VerticalScroll")
+}
+
+fn get_horizontal_scroll(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    scroll_offset(vm, id, "HorizontalScroll")
+}
+
+/// `Button:GetFontString()`: the font string set (`SetFontString`, a
+/// template's `<ButtonText>`), else nil.
+fn get_font_string(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let props = engine(vm).world.widgets[id.0].props;
+    let fs = widgets::stored_args(vm, props, "FontString")
+        .and_then(|v| v.first().copied())
+        .filter(|v| widgets::widget_of(vm, *v).is_some());
+    Ok(vec![fs.unwrap_or(Value::Nil)])
+}
+
 pub fn methods() -> Vec<(&'static str, MethodFn)> {
     vec![
         ("GetNumLines", get_num_lines),
@@ -123,5 +153,8 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("GetHorizontalScrollRange", get_horizontal_scroll_range),
         ("GetAtlas", get_atlas),
         ("GetZoom", get_zoom),
+        ("GetVerticalScroll", get_vertical_scroll),
+        ("GetHorizontalScroll", get_horizontal_scroll),
+        ("GetFontString", get_font_string),
     ]
 }

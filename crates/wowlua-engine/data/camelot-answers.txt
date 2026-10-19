@@ -17038,6 +17038,7 @@ C_TransmogCollection.GetValidAppearanceSourcesForClass(94153, 2, 15)	1: {1={canD
 C_TransmogCollection.HasAnyAppearance()	1: boolean true
 C_TransmogCollection.IsSearchInProgress(1)	1: boolean false
 C_TransmogCollection.IsUsingDefaultFilters()	1: boolean true
+C_TransmogOutfitInfo.GetOutfitsInfo()	1: {1={icon=number 134400,isDisabled=boolean false,isEventOutfit=boolean false,name=string Outfit 1,outfitID=number 2,playerFacingOutfitIndex=number 1,situationCategories={}},2={icon=number 134400,isDisabled=boolean false,isEventOutfit=boolean false,name=string Outfit 2,outfitID=number 3,playerFacingOutfitIndex=number 2,situationCategories={}}}
 C_TransmogOutfitInfo.IsTransmogEnabled()	1: boolean true
 C_TransmogSets.GetAllSets()	1: {1={classMask=number 0,collected=boolean false,description=string Green,expansionID=number 9,favorite=boolean false,grantAsPrecedingVariant=boolean false,hiddenUntilCollected=boolean true,label=string Snugglefin Murloc Romper,limitedTimeSet=boolean false,name=string Green Snugglefin Murloc Romper,patchID=number 100207,setID=number 3634,uiOrder=number 1640,validForCharacter=boolean true}}
 C_UI.DoesAnyDisplayHaveNotch()	1: boolean false

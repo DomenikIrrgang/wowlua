@@ -39,6 +39,8 @@ pub enum Ask {
     /// `f(slot, bank)`: by the player's spellbook slot (the pet's bank:
     /// nothing recorded yet).
     Slot,
+    /// `f(flyoutID, slot)`: by `flyoutID * 100 + slot`.
+    FlyoutSlot,
 }
 
 /// A stat: its key in a profile, the function that reports it, how it is
@@ -595,6 +597,16 @@ pub const STATS: &[Stat] = &[
         Slot,
         Some("SPELLS_CHANGED"),
     ),
+    // The spellbook's flyouts: each one's name, description, slot count and
+    // whether it is known; each slot's spell, its override, known, name,
+    // slot spell (`/stdtest engine snapshot`).
+    stat("flyoutInfo", "GetFlyoutInfo", Index, Some("SPELLS_CHANGED")),
+    stat(
+        "flyoutSlot",
+        "GetFlyoutSlotInfo",
+        FlyoutSlot,
+        Some("SPELLS_CHANGED"),
+    ),
     // Each logged quest's details (by quest ID; the special item by log
     // index).
     stat(
@@ -915,7 +927,7 @@ pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
             return Err(vm.error(&format!("unit:setStats: {key} is the player's")));
         }
         let entry = match (stat.ask, v) {
-            (UnitIndex | Index | ForStat | Location | Slot, Value::Table(inner)) => {
+            (UnitIndex | Index | ForStat | Location | Slot | FlyoutSlot, Value::Table(inner)) => {
                 let mut map = match stats_of(vm, pet).get(stat.key) {
                     Some(Entry::ByIndex(m)) => m.clone(),
                     _ => BTreeMap::new(),
@@ -923,7 +935,7 @@ pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
                 map.extend(by_index(vm, inner));
                 Entry::ByIndex(map)
             }
-            (UnitIndex | Index | ForStat | Location | Slot, _) => {
+            (UnitIndex | Index | ForStat | Location | Slot | FlyoutSlot, _) => {
                 return Err(vm.error(&format!("unit:setStats: {key} is by index ({{ [1] = … }})")));
             }
             (_, v) => Entry::One(answers_of(vm, v)),
@@ -1076,6 +1088,31 @@ fn empty(vm: &mut Vm, name: &str) -> Vec<Value> {
     }
 }
 
+/// A flyout's name, from the spellbook item that holds it (its
+/// `actionID`).
+fn flyout_name(vm: &Vm, id: f64) -> Option<String> {
+    let Some(Entry::ByIndex(items)) = engine(vm).world.character.stats.get("spellBookItem") else {
+        return None;
+    };
+    items.values().find_map(|answer| match answer.first() {
+        Some(Answer::Table(fields)) => {
+            let field = |name: &str| {
+                fields.iter().find_map(|(k, v)| match k {
+                    Answer::Str(k) if k == name => Some(v),
+                    _ => None,
+                })
+            };
+            let flyout = matches!(field("itemType"), Some(Answer::Num(t)) if *t == 4.0)
+                && matches!(field("actionID"), Some(Answer::Num(a)) if *a == id);
+            match field("name") {
+                Some(Answer::Str(n)) if flyout => Some(n.clone()),
+                _ => None,
+            }
+        }
+        _ => None,
+    })
+}
+
 /// A stat's function: the player's recorded answer.
 fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
     // The function called: its index in the API, or (undocumented) name.
@@ -1105,6 +1142,7 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
         UnitIndex => num(c.arg(2)),
         Index | ForStat => num(c.arg(1)),
         Location => location_key(vm, c.arg(1)),
+        FlyoutSlot => num(c.arg(1)).zip(num(c.arg(2))).map(|(f, i)| f * 100.0 + i),
         // The player's bank (0) only.
         Slot if matches!(c.arg(2), Value::Num(b) if b == 0.0) => num(c.arg(1)),
         _ => None,
@@ -1151,6 +1189,17 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
                     None => Vec::new(),
                 },
             )
+        }
+        // A flyout not recorded: its spellbook item's name, no slots
+        // (unverified; the snapshot records flyouts since this).
+        None if stat.key == "flyoutInfo" && player => {
+            let id = num(c.arg(1));
+            let name = id.and_then(|id| flyout_name(vm, id));
+            crate::note_default(vm, stat.function, &c, 1);
+            Ok(match name {
+                Some(n) => vec![vm.str(&n), vm.str(""), Value::Num(0.0), Value::Bool(true)],
+                None => vec![],
+            })
         }
         None => Ok(empty(vm, stat.function)),
     }

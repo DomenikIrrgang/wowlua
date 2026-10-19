@@ -512,6 +512,8 @@ const STATIC: &[&str] = &[
     "C_ClickBindings.GetBindingType",
     "C_SplashScreen.CanViewSplashScreen",
     "C_TransmogOutfitInfo.IsTransmogEnabled",
+    // The account's outfits (Blizzard's spellbook counts them).
+    "C_TransmogOutfitInfo.GetOutfitsInfo",
     "GetAllowRecentAlliesSeeLocation",
     "C_EditMode.GetEditModeDefaultLayout",
     "C_EditMode.GetAccountSettings",
