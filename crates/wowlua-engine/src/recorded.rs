@@ -347,10 +347,15 @@ pub fn call_variants(vm: &Vm, name: &str, c: &NativeCall) -> Vec<String> {
     // A number with a fraction as its whole part, as the client takes an
     // integer (the full probe: `GetCombatRating(1.5)`,
     // `C_SpellBook.GetSpellBookItemInfo(1.5, 0)` answered as with 1).
+    // An enumeration's non-number as 0, as the client reads it (the full
+    // probe: `C_Item.GetWeaponEnchantInfo("x")` answered as with 0).
+    let enums = enum_arguments(vm, name);
     let whole: Vec<String> = args
         .iter()
-        .map(|a| match a.parse::<f64>() {
+        .enumerate()
+        .map(|(i, a)| match a.parse::<f64>() {
             Ok(n) if n.fract() != 0.0 && n.is_finite() => format!("{}", n.trunc() as i64),
+            Err(_) if *a != "nil" && enums.get(i) == Some(&true) => "0".to_string(),
             _ => (*a).to_string(),
         })
         .collect();
@@ -358,6 +363,41 @@ pub fn call_variants(vm: &Vm, name: &str, c: &NativeCall) -> Vec<String> {
         out.push(format!("{name}({})", whole.join(", ")));
     }
     out
+}
+
+/// Which of a camelot function's documented arguments are enumerations.
+fn enum_arguments(vm: &Vm, name: &str) -> Vec<bool> {
+    static ENUMS: OnceLock<HashMap<&'static str, Vec<bool>>> = OnceLock::new();
+    let Some(engine) = crate::Engine::of(vm) else {
+        return Vec::new();
+    };
+    if engine.flavor != "camelot" {
+        return Vec::new();
+    }
+    let api = engine.api;
+    let enums = ENUMS.get_or_init(|| {
+        api.functions
+            .iter()
+            .map(|f| {
+                let args = f
+                    .doc
+                    .get("Arguments")
+                    .and_then(serde_json::Value::as_array)
+                    .map(|a| {
+                        a.iter()
+                            .map(|arg| {
+                                arg.get("Type")
+                                    .and_then(serde_json::Value::as_str)
+                                    .is_some_and(|t| api.enum_names.contains(t))
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                (f.name, args)
+            })
+            .collect()
+    });
+    enums.get(name).cloned().unwrap_or_default()
 }
 
 /// How many arguments a function with recorded answers takes: its

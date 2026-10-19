@@ -144,6 +144,13 @@ fn state(vm: &mut Vm) -> TableRef {
         _ => {
             let t = vm.new_table();
             vm.heap.table_mut(registry).set_str(key, Value::Table(t));
+            // The recorded character's own toy box settings, away from
+            // the defaults: uncollected toys hidden, unusable ones shown
+            // (the full probe, 1.60.1: `GetUncollectedShown` false,
+            // `GetUnusableShown` true, `C_ToyBoxInfo.IsUsingDefaultFilters`
+            // false).
+            set_field(vm, t, "toy.filter.uncollected", Value::Bool(false));
+            set_field(vm, t, "toy.filter.unusable", Value::Bool(true));
             t
         }
     }
@@ -249,48 +256,104 @@ filters! {
 /// Whether an indexed filter has that index (the full probe, 1.60.1: the
 /// mount journal's collected filters 1 to 3 and types its own, 0 and
 /// 2147483647 reading false and keeping no setting, its sources none, as
-/// `IsValidSourceFilter` answered; the pet journal's from 1, 99 kept; the
-/// toy box's expansions from 0; unverified: the others, taken from 1).
+/// `IsValidSourceFilter` answered; the pet journal's from 0, 99 kept; the
+/// toy box's expansions 0 and 1, its sources from 1, 0 and 99 refused;
+/// the heirlooms' sources from 1, 0 and 99 refused; the wardrobe's source
+/// types its six, 99 and 2147483647 reading false and keeping nothing;
+/// unverified: the others, taken from 1, and the toy box's and heirlooms'
+/// last sources, taken as the 12 `IsHeirloomSourceValid` was recorded for).
 fn valid_filter_index(key: &str, i: i64) -> bool {
     match key {
         "mount.filter.source." => false,
         "mount.filter.collected." => (1..=3).contains(&i),
         "mount.filter.type." => (1..=MOUNT_TYPES).contains(&i),
-        "toy.filter.expansion." => i >= 0,
+        "pet.filter.flag." | "pet.filter.source." | "pet.filter.type." => i >= 0,
+        "toy.filter.expansion." => (0..TOY_EXPANSIONS).contains(&i),
+        "toy.filter.source." => (1..=TOY_SOURCES).contains(&i),
+        "heirloom.filter.source." => (1..=HEIRLOOM_SOURCES).contains(&i),
+        "transmog.filter.source." => (1..=TRANSMOG_SOURCES).contains(&i),
         _ => i >= 1,
     }
 }
 
+/// An indexed filter's default where it is not its system's (the full
+/// probe, 1.60.1, its journals using their default filters: the pet
+/// journal's filter flags 0 and 2 (not collected), its source and type 0
+/// unchecked, flag 99 checked; the mount journal's not collected filter
+/// (2) unchecked).
+fn default_at(key: &str, i: i64, default: bool) -> bool {
+    match key {
+        "pet.filter.flag." => default && i != 0 && i != 2,
+        "pet.filter.source." | "pet.filter.type." => default && i != 0,
+        "mount.filter.collected." => default && i != 2,
+        _ => default,
+    }
+}
+
+/// An indexed filter's refusal of an index it does not have, as the
+/// client raises it (the full probe, 1.60.1: the toy box's and heirlooms'
+/// usages; the mount journal's type setter names the index from 0, with
+/// the calling addon's taint, and its getter answers false).
+fn refused_index(vm: &mut Vm, key: &str, i: i64, setter: bool) -> Option<wowlua_vm::LuaError> {
+    if valid_filter_index(key, i) {
+        return None;
+    }
+    let usage = match (key, setter) {
+        ("toy.filter.expansion.", false) => "Usage: IsExpansionTypeFilterChecked(expansionIndex)",
+        ("toy.filter.expansion.", true) => "Usage: SetExpansionTypeFilter(expansionIndex, checked)",
+        ("toy.filter.source.", false) => "Usage: IsSourceTypeFilterChecked(sourceIndex)",
+        ("toy.filter.source.", true) => "Usage: SetSourceTypeFilter(sourceIndex, checked)",
+        ("heirloom.filter.source.", false) => "Usage: GetHeirloomFilter(source)",
+        ("heirloom.filter.source.", true) => "Usage: SetHeirloomFilter(source, value)",
+        ("mount.filter.type.", true) => {
+            let mut msg = format!("SetTypeFilter(): Invalid mount type filter set: {}", i - 1);
+            if !crate::protection::blizzard_caller(vm) {
+                msg.push_str("\nLua Taint: *** ForceTaint_Strong ***");
+            }
+            let v = vm.str(&msg);
+            return Some(vm.raise(v));
+        }
+        _ => return None,
+    };
+    Some(vm.error(usage))
+}
+
 /// A boolean filter's getter and setter, by an index argument (`$indexed`)
-/// or none, with its default.
+/// or none, with its default. The toy box's first expansion keeps no
+/// setting (the full probe, 1.60.1: `SetExpansionTypeFilter(0, false)`
+/// read back true; unverified why).
 macro_rules! flag_filters {
     ($($get:ident, $set:ident: $key:literal, $default:literal, $indexed:literal;)*) => {
         $(
             fn $get(vm: &mut Vm, c: NativeCall) -> Ret {
-                let key = if $indexed {
+                let (key, default) = if $indexed {
                     let i = num(vm, &c, 1).unwrap_or(0.0) as i64;
+                    if let Some(e) = refused_index(vm, $key, i, false) {
+                        return Err(e);
+                    }
                     if !valid_filter_index($key, i) {
                         return Ok(vec![Value::Bool(false)]);
                     }
-                    format!("{}{}", $key, i)
+                    (format!("{}{}", $key, i), default_at($key, i, $default))
                 } else {
-                    $key.to_string()
+                    ($key.to_string(), $default)
                 };
-                Ok(vec![Value::Bool(flag(vm, &key, $default))])
+                Ok(vec![Value::Bool(flag(vm, &key, default))])
             }
             fn $set(vm: &mut Vm, c: NativeCall) -> Ret {
-                if $indexed && !valid_filter_index($key, num(vm, &c, 1).unwrap_or(0.0) as i64) {
-                    return Ok(vec![]);
-                }
-                let (key, on) = if $indexed {
-                    (
-                        format!("{}{}", $key, num(vm, &c, 1).unwrap_or(0.0) as i64),
-                        truthy(vm, &c, 2),
-                    )
+                let (key, on, default) = if $indexed {
+                    let i = num(vm, &c, 1).unwrap_or(0.0) as i64;
+                    if let Some(e) = refused_index(vm, $key, i, true) {
+                        return Err(e);
+                    }
+                    if !valid_filter_index($key, i) || ($key == "toy.filter.expansion." && i == 0) {
+                        return Ok(vec![]);
+                    }
+                    (format!("{}{}", $key, i), truthy(vm, &c, 2), default_at($key, i, $default))
                 } else {
-                    ($key.to_string(), truthy(vm, &c, 1))
+                    ($key.to_string(), truthy(vm, &c, 1), $default)
                 };
-                set_flag(vm, &key, on, $default);
+                set_flag(vm, &key, on, default);
                 Ok(vec![])
             }
         )*
@@ -318,10 +381,12 @@ flag_filters! {
     heirloom_collected_shown, set_heirloom_collected_shown: "heirloom.filter.collected", true, false;
     heirloom_uncollected_shown, set_heirloom_uncollected_shown: "heirloom.filter.uncollected", true, false;
     heirloom_source_filter, set_heirloom_source_filter: "heirloom.filter.source.", true, true;
-    // The wardrobe's: collected and not collected shown, every source type,
-    // other factions' and races' appearances hidden.
+    // The wardrobe's: collected shown, not collected hidden (the full
+    // probe, 1.60.1: `GetUncollectedShown` false, the wardrobe using its
+    // default filters), every source type, other factions' and races'
+    // appearances hidden.
     transmog_collected_shown, set_transmog_collected_shown: "transmog.filter.collected", true, false;
-    transmog_uncollected_shown, set_transmog_uncollected_shown: "transmog.filter.uncollected", true, false;
+    transmog_uncollected_shown, set_transmog_uncollected_shown: "transmog.filter.uncollected", false, false;
     transmog_source_checked, set_transmog_source_filter: "transmog.filter.source.", true, true;
     transmog_factions_shown, set_transmog_factions_shown: "transmog.filter.factions", false, false;
     transmog_races_shown, set_transmog_races_shown: "transmog.filter.races", false, false;
@@ -350,9 +415,13 @@ const MOUNT_TYPES: i64 = 6;
 /// and types (`C_PetJournal.GetNumPetTypes`).
 const PET_SOURCES: i64 = 12;
 const PET_TYPES: i64 = 10;
-/// The toy box's sources and expansions (unverified counts).
+/// The toy box's sources and expansions (unverified source count; the full
+/// probe, 1.60.1: expansions 0 and 1).
 const TOY_SOURCES: i64 = 12;
-const TOY_EXPANSIONS: i64 = 12;
+const TOY_EXPANSIONS: i64 = 2;
+/// The heirlooms' sources (recorded `C_HeirloomInfo.IsHeirloomSourceValid`
+/// asked for 1 to 12; unverified as the filter's count).
+const HEIRLOOM_SOURCES: i64 = 12;
 /// The wardrobe's source types (recorded
 /// `C_TransmogCollection.GetNumTransmogSources`: 6).
 const TRANSMOG_SOURCES: i64 = 6;
@@ -383,7 +452,8 @@ fn set_all_toy_sources(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn set_all_toy_expansions(vm: &mut Vm, c: NativeCall) -> Ret {
-    set_all(vm, &c, "toy.filter.expansion.", TOY_EXPANSIONS);
+    // The first expansion keeps no setting (`valid_filter_index`).
+    set_all(vm, &c, "toy.filter.expansion.", TOY_EXPANSIONS - 1);
     Ok(vec![])
 }
 
@@ -401,10 +471,12 @@ fn all_transmog_sources_checked(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `C_TransmogCollection.SetAllCollectionTypeFilters(checked)` and
-/// `AreAllCollectionTypeFiltersChecked()`: one switch for every category.
+/// `AreAllCollectionTypeFiltersChecked()`: one switch for every category,
+/// off until set (the full probe, 1.60.1: false, the wardrobe using its
+/// default filters).
 fn set_all_collection_types(vm: &mut Vm, c: NativeCall) -> Ret {
     let on = truthy(vm, &c, 1);
-    set_flag(vm, "transmog.filter.categories", on, true);
+    set_flag(vm, "transmog.filter.categories", on, false);
     Ok(vec![])
 }
 
@@ -412,7 +484,7 @@ fn all_collection_types_checked(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(flag(
         vm,
         "transmog.filter.categories",
-        true,
+        false,
     ))])
 }
 
@@ -497,31 +569,135 @@ const MOUNT_IDS: [u32; 139] = [
     28, 55, 2954, 3129, 87, 65, 64, 25, 100, 67, 116, 58, 3130, 75, 121, 3127, 3167, 2995, 77,
 ];
 
+/// The journal's first mount's data as the full probe (1.60.1) recorded
+/// it: `GetMountInfoByID(3126)` and `GetMountInfoExtraByID(3126)`.
+const PROBED_MOUNTS: &[(&str, &str)] = &[
+    (
+        "C_MountJournal.GetMountInfoByID(3126)",
+        "13: string Black Druid Moose Mount, number 1309377, number 7949967, boolean false, boolean false, number 0, boolean false, boolean false, nil nil, boolean true, boolean false, number 3126, boolean false",
+    ),
+    (
+        "C_MountJournal.GetMountInfoExtraByID(3126)",
+        "9: number 146832, string , string , boolean false, number 454, number 4, number 1776, number 198947, boolean false",
+    ),
+];
+
+/// A mount's recorded answer: the answers battery's, else the full
+/// probe's (`PROBED_MOUNTS`).
+fn mount_answer(call: &str) -> Option<&'static str> {
+    crate::recorded::answers().get(call).copied().or_else(|| {
+        PROBED_MOUNTS
+            .iter()
+            .find(|(c, _)| *c == call)
+            .map(|(_, a)| *a)
+    })
+}
+
+/// A mount's recorded answer to `name(id)` as values.
+fn mount_values(vm: &mut Vm, name: &str, id: i64) -> Option<Vec<Value>> {
+    let answer = mount_answer(&format!("{name}({id})"))?;
+    Some(crate::recorded::parse_answer(vm, answer))
+}
+
 /// Only the mounts whose info was recorded: addons read each listed
 /// mount's info and index by its spell (ElvUI's `E.MountIDs[spellID]`), so
-/// a mount listed without info breaks them (none recorded yet: empty, as
-/// Blizzard's code read before).
+/// a mount listed without info breaks them.
 fn get_mount_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let answers = crate::recorded::answers();
     let ids: Vec<Value> = MOUNT_IDS
         .iter()
-        .filter(|id| {
-            answers.contains_key(format!("C_MountJournal.GetMountInfoByID({id})").as_str())
-        })
+        .filter(|id| mount_answer(&format!("C_MountJournal.GetMountInfoByID({id})")).is_some())
         .map(|id| Value::Num(f64::from(*id)))
         .collect();
     Ok(vec![list(vm, ids)])
+}
+
+/// Whether a journal mount with recorded info casts the spell.
+pub(crate) fn is_mount_spell(vm: &mut Vm, spell: f64) -> bool {
+    MOUNT_IDS.iter().any(|id| {
+        mount_values(vm, "C_MountJournal.GetMountInfoByID", i64::from(*id))
+            .and_then(|v| v.get(1).copied())
+            .is_some_and(|v| matches!(v, Value::Num(n) if n == spell))
+    })
 }
 
 /// `C_MountJournal.GetMountInfoByID(mountID)` and `GetMountInfoExtraByID`:
 /// as the client answered, else nothing, noted (the mounts' data is not
 /// recorded; none is displayed, so none is collected here).
 fn get_mount_info_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = num(vm, &c, 1).unwrap_or(0.0) as i64;
+    if let Some(v) = mount_values(vm, "C_MountJournal.GetMountInfoByID", id) {
+        return Ok(v);
+    }
     Ok(recorded_or_noted(vm, "C_MountJournal.GetMountInfoByID", &c).unwrap_or_default())
 }
 
 fn get_mount_info_extra_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = num(vm, &c, 1).unwrap_or(0.0) as i64;
+    if let Some(v) = mount_values(vm, "C_MountJournal.GetMountInfoExtraByID", id) {
+        return Ok(v);
+    }
     Ok(recorded_or_noted(vm, "C_MountJournal.GetMountInfoExtraByID", &c).unwrap_or_default())
+}
+
+/// A mount's creature display: its extra info's first value.
+fn mount_display(vm: &mut Vm, id: i64) -> Option<Value> {
+    mount_values(vm, "C_MountJournal.GetMountInfoExtraByID", id)?
+        .first()
+        .copied()
+        .filter(|v| !v.is_nil())
+}
+
+/// `C_MountJournal.GetMountAllCreatureDisplayInfoByID(mountID)`: its one
+/// display, visible; nothing for a mount without data, and
+/// `GetAllCreatureDisplayIDsForMountID(mountID)` its display's ID, none
+/// without (the full probe, 1.60.1: mount 3126's 146832, the IDs -1 to
+/// 2147483647 nothing and none; unverified: a mount with several
+/// displays).
+fn mount_all_display_info(vm: &mut Vm, id: i64) -> Option<Value> {
+    let display = mount_display(vm, id)?;
+    let entry = vm.new_table();
+    set_field(vm, entry, "creatureDisplayID", display);
+    set_field(vm, entry, "isVisible", Value::Bool(true));
+    Some(list(vm, [Value::Table(entry)]))
+}
+
+fn get_mount_all_display_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = num(vm, &c, 1).unwrap_or(0.0) as i64;
+    Ok(mount_all_display_info(vm, id).into_iter().collect())
+}
+
+fn get_all_display_ids_for_mount(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = num(vm, &c, 1).unwrap_or(0.0) as i64;
+    let ids: Vec<Value> = mount_display(vm, id).into_iter().collect();
+    Ok(vec![list(vm, ids)])
+}
+
+/// The journal's mount at a displayed index, counted in the journal's
+/// whole list: `GetDisplayedMountInfoExtra(1)` and
+/// `GetDisplayedMountAllCreatureDisplayInfo(1)` answered for mount 3126,
+/// the list's first, though no mount is displayed
+/// (`GetNumDisplayedMounts` 0, `GetDisplayedMountInfo(1)` and
+/// `GetDisplayedMountID` nothing and 0; the full probe, 1.60.1; 0 and
+/// 2147483647 nothing).
+fn displayed_mount(vm: &Vm, c: &NativeCall) -> Option<i64> {
+    let i = num(vm, c, 1)? as i64;
+    (i >= 1)
+        .then(|| MOUNT_IDS.get(i as usize - 1).map(|id| i64::from(*id)))
+        .flatten()
+}
+
+fn get_displayed_mount_info_extra(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(id) = displayed_mount(vm, &c) else {
+        return Ok(vec![]);
+    };
+    Ok(mount_values(vm, "C_MountJournal.GetMountInfoExtraByID", id).unwrap_or_default())
+}
+
+fn get_displayed_mount_all_display_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(id) = displayed_mount(vm, &c) else {
+        return Ok(vec![]);
+    };
+    Ok(mount_all_display_info(vm, id).into_iter().collect())
 }
 
 /// `C_MountJournal.GetMountFromSpell(spellID)`, `GetMountFromItem(itemID)`:
@@ -540,12 +716,13 @@ fn get_mount_from_item(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_MountJournal.GetMountUsabilityByID(mountID, checkIndoors)`: not
-/// usable, none being collected (unverified), nothing for an ID not in the
-/// journal.
+/// usable, none being collected, with the client's reason (the full probe,
+/// 1.60.1: mount 3126 either way), nothing for an ID not in the journal.
 fn get_mount_usability(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = num(vm, &c, 1).unwrap_or(0.0);
     if MOUNT_IDS.iter().any(|m| f64::from(*m) == id) {
-        return Ok(vec![Value::Bool(false), Value::Nil]);
+        let why = vm.str("You have not collected this mount.");
+        return Ok(vec![Value::Bool(false), why]);
     }
     Ok(vec![])
 }
@@ -658,6 +835,37 @@ fn get_pet_loadout_info(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(0.0),
         Value::Bool(true),
     ])
+}
+
+/// `C_PetJournal.GetPetInfoBySpeciesID(speciesID)` of a species the
+/// client has no pet of: the top two values of its Lua stack, the function
+/// itself and the species with one argument, the last two arguments with
+/// more (the full probe, 1.60.1: -1 to 2 the function and the ID, `(1, 1)`
+/// 1 and 1; the account has no battle pets; unverified: a species the
+/// account has).
+fn get_pet_info_by_species(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = c.args.len();
+    if n >= 2 {
+        return Ok(vec![c.args[n - 2], c.args[n - 1]]);
+    }
+    let journal = vm.get_global("C_PetJournal");
+    let f = match journal {
+        Value::Table(t) => {
+            let k = vm.str("GetPetInfoBySpeciesID");
+            vm.heap.table(t).get(k)
+        }
+        _ => Value::Nil,
+    };
+    Ok(vec![f, c.arg(1)])
+}
+
+/// `C_PetJournal.PetIsSlotted(petGUID)`: the GUID 0, which names no pet,
+/// slotted (the full probe, 1.60.1: `PetIsSlotted(0)` true; the account has
+/// no battle pets, so no GUID names one).
+fn pet_is_slotted(vm: &mut Vm, c: NativeCall) -> Ret {
+    let none = matches!(vm.hidden(c.arg(1)), Value::Num(n) if n == 0.0)
+        || matches!(vm.hidden(c.arg(1)), Value::Str(s) if vm.str_bytes(s) == b"0");
+    Ok(vec![Value::Bool(none)])
 }
 
 /// `C_PetJournal.GetPetSummonInfo(guid)`: not summonable, no error
@@ -1076,6 +1284,14 @@ fn item_sources(item: i64, modifier: Option<i64>) -> Vec<&'static str> {
         .unwrap_or_default()
 }
 
+/// An item's own appearance source (its recorded source without a
+/// modifier), for `C_Item`'s transmog answers.
+pub(crate) fn item_source_id(item: i64) -> Option<f64> {
+    item_sources(item, Some(0))
+        .first()
+        .and_then(|e| field_num(e, "sourceID"))
+}
+
 /// `C_TransmogCollection.GetItemInfo(itemInfo)`: the item's appearance and
 /// source, as recorded (its first source; unverified for an item with
 /// several).
@@ -1171,6 +1387,37 @@ fn extract_transmog_ids(vm: &mut Vm, c: NativeCall) -> Ret {
         .map(Value::Num)
         .collect();
     Ok(vec![list(vm, ids)])
+}
+
+/// `C_TransmogCollection.SetClassFilter(classID)`: a class kept for
+/// `GetClassFilter`, another ID not (the full probe, 1.60.1: 1 read back
+/// 1, 0 and 99 the class before; unverified: the last class, taken as
+/// `Enum`'s 13).
+fn set_transmog_class_filter(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(class) = num(vm, &c, 1).filter(|n| (1.0..14.0).contains(n)) {
+        let t = state(vm);
+        set_field(vm, t, "transmog.class", Value::Num(class.trunc()));
+    }
+    Ok(vec![])
+}
+
+/// The wardrobe's class filter as set (`SetClassFilter`), none until then.
+pub(crate) fn transmog_class_filter(vm: &mut Vm) -> Option<f64> {
+    let t = state(vm);
+    let k = vm.str("transmog.class");
+    num_of(vm.heap.table(t).get(k))
+}
+
+/// Whether the wardrobe's recorded appearances hold the appearance.
+pub(crate) fn appearance_known(visual: i64) -> bool {
+    appearances().contains_key(&visual) || appearance_sources().contains_key(&visual)
+}
+
+/// `C_TransmogCollection.IsValidTransmogSource(source)`: every
+/// `Enum.TransmogSource` but the last, 10 (the full probe, 1.60.1: 0 to 9
+/// and a string true, 10 false).
+fn is_valid_transmog_source(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(num(vm, &c, 1).unwrap_or(0.0) != 10.0)])
 }
 
 /// `C_TransmogCollection.SetSearch(type, text)`, `ClearSearch(type)`:
@@ -1455,8 +1702,10 @@ fn get_outfit_by_name(vm: &mut Vm, c: NativeCall) -> Ret {
     outfit_where(vm, |e| field_str(e, "name") == Some(name.as_str()))
 }
 
+/// By its player-facing index, a fraction taken whole (the full probe,
+/// 1.60.1: 1.5 the first outfit).
 fn get_outfit_by_index(vm: &mut Vm, c: NativeCall) -> Ret {
-    let i = num(vm, &c, 1);
+    let i = num(vm, &c, 1).map(f64::trunc);
     outfit_where(vm, |e| {
         i.is_some() && field_num(e, "playerFacingOutfitIndex") == i
     })
@@ -1478,6 +1727,131 @@ fn noted_zero(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(v);
     }
     Ok(vec![Value::Num(0.0)])
+}
+
+/// The armor options an outfit's armor slot offers the player: cloth up to
+/// the best armor the class wears at its level (the full probe, 1.60.1: a
+/// level 21 paladin's cloth, leather and mail; unverified: the other
+/// classes and plate from level 40, as Classic's armor training).
+fn armor_options(vm: &mut Vm) -> Vec<(&'static str, f64)> {
+    let player = &engine(vm).units.list[units::PLAYER.0];
+    let (class, level) = (player.class.clone(), player.level);
+    let best = match class.as_str() {
+        "WARRIOR" | "PALADIN" if level >= 40.0 => 15.0,
+        "WARRIOR" | "PALADIN" => 14.0,
+        "HUNTER" | "SHAMAN" if level >= 40.0 => 14.0,
+        "HUNTER" | "SHAMAN" | "ROGUE" | "DRUID" => 13.0,
+        "DEATHKNIGHT" => 15.0,
+        _ => 12.0,
+    };
+    [
+        ("Cloth", 12.0),
+        ("Leather", 13.0),
+        ("Mail", 14.0),
+        ("Plate", 15.0),
+    ]
+    .into_iter()
+    .filter(|(_, t)| *t <= best)
+    .collect()
+}
+
+/// `C_TransmogOutfitInfo.GetOptionsForSlot(slot)` (and
+/// `GetWeaponOptionsForSlot`, the same function: its usage names
+/// `GetOptionsForSlot`): the slot's options, enabled, and no artifact
+/// options; nothing for the cloak, tabard, shirt and ranged slots, which
+/// have none (the full probe, 1.60.1, a paladin: the armor slots' armor
+/// types, the main hand's one- and two-handed weapons, the off hand's
+/// shield and held item; a string as slot 0; unverified: a class without
+/// shields).
+fn get_options_for_slot(vm: &mut Vm, c: NativeCall) -> Ret {
+    let slot = num(vm, &c, 1).unwrap_or(0.0).trunc() as i64;
+    let options: Vec<(&'static str, f64)> = match slot {
+        3 | 5 | 6 | 14 => return Ok(vec![]),
+        12 => vec![("One Handed Weapon", 1.0), ("Two Handed Weapon", 2.0)],
+        13 => vec![("Shield", 5.0), ("Off Hand", 4.0)],
+        0..=11 => armor_options(vm),
+        _ => return Ok(vec![]),
+    };
+    let entries: Vec<Value> = options
+        .into_iter()
+        .map(|(name, t)| {
+            let e = vm.new_table();
+            set_field(vm, e, "enabled", Value::Bool(true));
+            let name = vm.str(name);
+            set_field(vm, e, "name", name);
+            set_field(vm, e, "type", Value::Num(t));
+            Value::Table(e)
+        })
+        .collect();
+    Ok(vec![list(vm, entries), Value::Nil])
+}
+
+/// `C_TransmogOutfitInfo.GetCollectionInfoForSlotAndOption(slot, option,
+/// collectionType)`: the collection type's name, whether it is a weapon's,
+/// no illusions; nothing for a type the player cannot collect (the full
+/// probe, 1.60.1, a paladin, slot 0 and option 0: the armor slots 1 to 11,
+/// one-handed swords and maces, shields and held items named; wands,
+/// axes, daggers, fist weapons and two-handed axes, 12, 13, 16, 17 and 20,
+/// and type 0 nothing, whatever the slot and option; unverified: the
+/// types past 20 and other classes).
+fn get_collection_info_for_slot_and_option(vm: &mut Vm, c: NativeCall) -> Ret {
+    const TYPES: [(&str, bool); 20] = [
+        ("Head", false),
+        ("Shoulder", false),
+        ("Back", false),
+        ("Chest", false),
+        ("Shirt", false),
+        ("Tabard", false),
+        ("Wrist", false),
+        ("Hands", false),
+        ("Waist", false),
+        ("Legs", false),
+        ("Feet", false),
+        ("", true),
+        ("", true),
+        ("One-Handed Swords", true),
+        ("One-Handed Maces", true),
+        ("", true),
+        ("", true),
+        ("Shields", true),
+        ("Held In Off-hand", true),
+        ("", true),
+    ];
+    let t = num(vm, &c, 3).unwrap_or(0.0).trunc() as i64;
+    let Some((name, weapon)) = (t >= 1).then(|| TYPES.get(t as usize - 1)).flatten() else {
+        return Ok(vec![]);
+    };
+    if name.is_empty() {
+        return Ok(vec![]);
+    }
+    let e = vm.new_table();
+    set_field(vm, e, "canHaveIllusions", Value::Bool(false));
+    set_field(vm, e, "isWeapon", Value::Bool(*weapon));
+    let name = vm.str(name);
+    set_field(vm, e, "name", name);
+    Ok(vec![Value::Table(e)])
+}
+
+/// `C_TransmogOutfitInfo.GetTransmogOutfitSlotForInventoryType(type)`: -1,
+/// no outfit slot, for an inventory type; nothing for none (the full probe,
+/// 1.60.1: 1 and 1.5 -1, 0 and 2147483647 nothing; unverified: the other
+/// types, taken as the head's, up to `Enum.InventoryType`'s last).
+fn outfit_slot_for_inventory_type(vm: &mut Vm, c: NativeCall) -> Ret {
+    let t = num(vm, &c, 1).unwrap_or(0.0).trunc();
+    Ok(if (1.0..=28.0).contains(&t) {
+        vec![Value::Num(-1.0)]
+    } else {
+        vec![]
+    })
+}
+
+/// `C_TransmogOutfitInfo.GetNumberOfOutfitsUnlockedForSource(source)`: the
+/// recorded account's two outfits of source 1, none of the others (the
+/// full probe, 1.60.1: 0 to 2, a string as 0; unverified: how outfits
+/// unlock).
+fn outfits_unlocked_for_source(vm: &mut Vm, c: NativeCall) -> Ret {
+    let source = num(vm, &c, 1).unwrap_or(0.0).trunc();
+    Ok(vec![Value::Num(if source == 1.0 { 2.0 } else { 0.0 })])
 }
 
 /// `C_TransmogOutfitInfo.IsSlotWeaponSlot(slot)`: the weapons'
@@ -1682,17 +2056,25 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_MountJournal.NeedsFanfare", no),
         ("C_MountJournal.ClearFanfare", nothing),
         ("C_MountJournal.ClearRecentFanfares", nothing),
-        // No mount displayed (recorded `GetNumDisplayedMounts`: 0).
-        ("C_MountJournal.GetDisplayedMountID", nothing),
-        ("C_MountJournal.GetDisplayedMountInfoExtra", nothing),
+        // No mount displayed (recorded `GetNumDisplayedMounts`: 0): every
+        // displayed index's mount 0 (the full probe, 1.60.1), its extra
+        // info the journal's (`displayed_mount`).
+        ("C_MountJournal.GetDisplayedMountID", zero),
+        (
+            "C_MountJournal.GetDisplayedMountInfoExtra",
+            get_displayed_mount_info_extra,
+        ),
         (
             "C_MountJournal.GetDisplayedMountAllCreatureDisplayInfo",
-            nothing,
+            get_displayed_mount_all_display_info,
         ),
-        ("C_MountJournal.GetMountAllCreatureDisplayInfoByID", nothing),
+        (
+            "C_MountJournal.GetMountAllCreatureDisplayInfoByID",
+            get_mount_all_display_info,
+        ),
         (
             "C_MountJournal.GetAllCreatureDisplayIDsForMountID",
-            empty_table,
+            get_all_display_ids_for_mount,
         ),
         ("C_MountJournal.GetMountLink", nil),
         ("C_MountJournal.GetCollectedDragonridingMounts", empty_table),
@@ -1784,7 +2166,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_PetJournal.GetOwnedPetIDs", empty_table),
         ("C_PetJournal.GetPetInfoByPetID", nothing),
         ("C_PetJournal.GetPetInfoTableByPetID", nothing),
-        ("C_PetJournal.GetPetInfoBySpeciesID", nothing),
+        (
+            "C_PetJournal.GetPetInfoBySpeciesID",
+            get_pet_info_by_species,
+        ),
         ("C_PetJournal.GetPetInfoTableBySpeciesID", nothing),
         ("C_PetJournal.GetPetInfoByItemID", nothing),
         ("C_PetJournal.GetPetStats", nothing),
@@ -1816,7 +2201,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_PetJournal.PetIsSummonable", no),
         ("C_PetJournal.IsCurrentlySummoned", no),
         ("C_PetJournal.PetIsRevoked", no),
-        ("C_PetJournal.PetIsSlotted", no),
+        ("C_PetJournal.PetIsSlotted", pet_is_slotted),
         ("C_PetJournal.PetIsLockedForConvert", no),
         ("C_PetJournal.PetCanBeReleased", no),
         ("C_PetJournal.PetIsHurt", no),
@@ -2031,7 +2416,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             no,
         ),
         ("C_TransmogCollection.GetFallbackWeaponAppearance", nil),
-        ("C_TransmogCollection.IsValidTransmogSource", yes),
+        (
+            "C_TransmogCollection.IsValidTransmogSource",
+            is_valid_transmog_source,
+        ),
         ("C_TransmogCollection.ClearNewAppearance", nothing),
         ("C_TransmogCollection.UpdateUsableAppearances", nothing),
         // The wardrobe's search: complete at once.
@@ -2099,8 +2487,12 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_TransmogCollection.SetAllRacesShown",
             set_transmog_races_shown,
         ),
-        // The class filter's getter is the player's class (queries.rs).
-        ("C_TransmogCollection.SetClassFilter", nothing),
+        // The class filter's getter is the player's class until set
+        // (queries.rs).
+        (
+            "C_TransmogCollection.SetClassFilter",
+            set_transmog_class_filter,
+        ),
         (
             "C_TransmogCollection.IsUsingDefaultFilters",
             transmog_default_filters,
@@ -2247,18 +2639,24 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         (
             "C_TransmogOutfitInfo.GetNumberOfOutfitsUnlockedForSource",
-            noted_zero,
+            outfits_unlocked_for_source,
         ),
         ("C_TransmogOutfitInfo.IsSlotWeaponSlot", is_weapon_slot),
         ("C_TransmogOutfitInfo.IsValidTransmogOutfitName", valid_name),
         ("C_TransmogOutfitInfo.GetViewedOutfitSlotInfo", nothing),
         (
             "C_TransmogOutfitInfo.GetCollectionInfoForSlotAndOption",
-            nothing,
+            get_collection_info_for_slot_and_option,
         ),
         ("C_TransmogOutfitInfo.GetPendingTransmogCost", nothing),
-        ("C_TransmogOutfitInfo.GetOptionsForSlot", nothing),
-        ("C_TransmogOutfitInfo.GetWeaponOptionsForSlot", nothing),
+        (
+            "C_TransmogOutfitInfo.GetOptionsForSlot",
+            get_options_for_slot,
+        ),
+        (
+            "C_TransmogOutfitInfo.GetWeaponOptionsForSlot",
+            get_options_for_slot,
+        ),
         (
             "C_TransmogOutfitInfo.GetIllusionDefaultIMAIDForCollectionType",
             nothing,
@@ -2271,7 +2669,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_TransmogOutfitInfo.GetEquippedSlotOptionFromTransmogSlot",
             nothing,
         ),
-        ("C_TransmogOutfitInfo.GetSlotGroupInfo", nothing),
         ("C_TransmogOutfitInfo.GetSourceIDsForSlot", nothing),
         ("C_TransmogOutfitInfo.GetSetSourcesForSlot", nothing),
         (
@@ -2285,7 +2682,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         (
             "C_TransmogOutfitInfo.GetTransmogOutfitSlotForInventoryType",
-            nothing,
+            outfit_slot_for_inventory_type,
         ),
         ("C_TransmogOutfitInfo.InTransmogEvent", no),
         ("C_TransmogOutfitInfo.TransmogEventActive", no),

@@ -909,6 +909,10 @@ const OVER_RECORDED: &[&str] = &[
     "C_SuperTrack.GetSuperTrackedContent",
     "C_SuperTrack.GetSuperTrackedVignette",
     "C_Map.GetUserWaypointPositionForMap",
+    // The journal's mounts: the recorded ones' info and the full probe's
+    // (`collections.rs`).
+    "C_MountJournal.GetMountInfoByID",
+    "C_MountJournal.GetMountInfoExtraByID",
 ];
 
 /// The fill-in modules' behaviours: answers for functions no recording

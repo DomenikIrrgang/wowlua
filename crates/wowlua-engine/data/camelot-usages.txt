@@ -6,7 +6,7 @@
 # Checks by argument: number (a number or a numeric string), index (one
 # above 0), nonneg (0 or above), nonzero (any number but 0), string (a
 # string or a number), strictstr (a string), table, required (any value
-# but nil), guid (a GUID or 0), any; `?` lets it be nil or left out;
+# but nil), guid (a GUID or 0), boolean, any; `?` lets it be nil or left out;
 # never (every value the probe tried refused); companion ("CRITTER" or
 # "MOUNT", unverified); optnumber (a number or none, refused with Lua's own
 # "number expected": message `-`); questitem ("required", "choice" or
@@ -112,11 +112,16 @@ C_Garrison.GetRecruiterAbilityList	never	Usage: GetRecruiterAbilityList(traits)
 C_Heirloom.CanHeirloomUpgradeFromPending	number	Usage: CanHeirloomUpgradeFromPending(heirloomItemID)
 C_Heirloom.GetHeirloomInfo	number	Usage: GetHeirloomInfo(itemID)
 C_Heirloom.GetHeirloomItemIDFromDisplayedIndex	number	Usage: GetHeirloomItemIDFromDisplayedIndex(heirloomIndex)
+C_Heirloom.GetHeirloomItemIDFromDisplayedIndex	never	Usage: GetHeirloomItemIDFromDisplayedIndex(heirloomIndex): Index out of range.
 C_Heirloom.GetHeirloomLink	number	Usage: GetHeirloomLink(itemID)
 C_Heirloom.GetHeirloomMaxUpgradeLevel	number	Usage: GetHeirloomMaxUpgradeLevel(itemID)
 C_Heirloom.GetHeirloomSourceFilter	index	Usage: GetHeirloomFilter(source)
 C_Heirloom.IsItemHeirloom	number	Usage: IsItemHeirloom(itemID)
 C_Heirloom.PlayerHasHeirloom	number	Usage: PlayerHasHeirloom(itemID)
+C_Heirloom.SetClassAndSpecFilters	number	Usage: SetClassAndSpecFilters(classID, specID)
+C_Heirloom.SetCollectedHeirloomFilter	boolean	Usage: SetCollectedHeirloomFilter(value)
+C_Heirloom.SetHeirloomSourceFilter	index	Usage: SetHeirloomFilter(source, value)
+C_Heirloom.SetUncollectedHeirloomFilter	boolean	Usage: SetUncollectedHeirloomFilter(value)
 C_PetBattles.CanPetSwapIn	number	Usage: CanPetSwapIn(petSlotIndex)
 C_PetBattles.GetAbilityEffectInfo	required,required,required,required	Usage: GetAbilityEffectInfo(abilityID, turnIndex, effectIndex, paramName)
 C_PetBattles.GetAbilityInfoByID	number	Usage: GetAbilityInfoByID(abilityID)
@@ -147,13 +152,20 @@ C_PetJournal.PetIsRevoked	guid	Usage: PetIsRevoked(petGUID)
 C_PetJournal.PetIsSlotted	guid	Usage: PetIsSlotted(petGUID)
 C_PetJournal.PetIsTradable	guid	Usage: PetIsTradable(petGUID)
 C_PetJournal.PetIsUsable	guid	Usage: PetIsUsable(ID)
+C_PetJournal.SetPetSortParameter	number	Usage:SetPetSortParameter(parameterID)
 C_Scenario.GetBonusStepRewardQuestID	number	Usage: GetBonusStepRewardQuestID(stepIndex
 C_ToyBox.GetIsFavorite	number	Usage: GetIsFavorite(itemID)
 C_ToyBox.GetToyFromIndex	number	Usage: GetToyFromIndex(itemIndex)
 C_ToyBox.GetToyInfo	number	Usage: GetToyInfo(itemID)
 C_ToyBox.GetToyLink	number	Usage: GetToyLink(itemID)
+C_ToyBox.IsExpansionTypeFilterChecked	number	Usage: IsExpansionTypeFilterChecked(expansionIndex)
 C_ToyBox.IsSourceTypeFilterChecked	index	Usage: IsSourceTypeFilterChecked(sourceIndex)
 C_ToyBox.IsToyUsable	number	Usage: IsToyUsable(itemID)
+C_ToyBox.SetCollectedShown	boolean	Usage: SetCollectedShown(checked)
+C_ToyBox.SetExpansionTypeFilter	number	Usage: SetExpansionTypeFilter(expansionIndex, checked)
+C_ToyBox.SetSourceTypeFilter	index	Usage: SetSourceTypeFilter(sourceIndex, checked)
+C_ToyBox.SetUncollectedShown	boolean	Usage: SetUncollectedShown(checked)
+C_ToyBox.SetUnusableShown	boolean	Usage: SetUsableShown(checked)
 C_TradeSkillUI.GetCategoryInfo	number	Usage: GetCategoryInfo(categoryID [,tableToUse])
 C_TradeSkillUI.GetFilterableInventorySlotName	number	Usage: GetFilterableInventorySlotName(index)
 C_TradeSkillUI.GetRecipeCooldown	number	Usage: GetRecipeCooldown(recipeID)

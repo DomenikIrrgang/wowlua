@@ -1318,6 +1318,18 @@ fn fail(vm: &mut Vm, api: &Api, f: &Function, n: usize, why: Option<Refusal>) ->
     vm.raise(v)
 }
 
+/// A documented function's refusal of its argument `n` with its usage
+/// alone, as the client's bindings raise it, for a rule a behaviour checks
+/// (`C_TransmogOutfitInfo.GetTransmogOutfitSlotFromInventorySlot`'s slot
+/// past a 32-bit integer).
+pub(crate) fn refuse(vm: &mut Vm, name: &str, n: usize) -> LuaError {
+    let api = crate::engine(vm).api;
+    match api.functions.iter().find(|f| f.name == name) {
+        Some(f) => fail(vm, api, f, n, None),
+        None => vm.error(&format!("bad argument #{n} to '{name}'")),
+    }
+}
+
 /// An undocumented function's own check of one argument
 /// (`data/camelot-usages.txt`).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1352,6 +1364,9 @@ enum Usage {
     /// (`C_PetJournal.PetIsHurt(0)` answers, `1` and `"x"` are refused;
     /// a GUID of the right kind unverified: the probe passed none).
     Guid,
+    /// A boolean (`C_ToyBox.SetCollectedShown(0)` and `("x")` refused,
+    /// `(false)` taken: the full probe).
+    Boolean,
     Any,
 }
 
@@ -1398,6 +1413,7 @@ fn usage_checks() -> &'static std::collections::HashMap<&'static str, Vec<UsageC
                         "questitem" => Usage::QuestItem,
                         "taxislot" => Usage::TaxiSlot,
                         "guid" => Usage::Guid,
+                        "boolean" => Usage::Boolean,
                         _ => Usage::Any,
                     };
                     (usage, optional)
@@ -1490,6 +1506,7 @@ fn usage_check(vm: &mut Vm, checks: &UsageChecks, c: &NativeCall) -> Result<(), 
                 b == b"0" || (prefix > 0 && b.get(prefix) == Some(&b'-'))
             }
             (Usage::Guid, _) => false,
+            (Usage::Boolean, v) => matches!(v, Value::Bool(_)),
             (Usage::Number, v) => vm.tonumber(v).is_some(),
             (Usage::Index, v) => vm.tonumber(v).is_some_and(|n| n > 0.0),
             (Usage::NonNegative, v) => vm.tonumber(v).is_some_and(|n| n >= 0.0),

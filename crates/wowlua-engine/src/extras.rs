@@ -796,11 +796,12 @@ fn tooltip_toy(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_TooltipInfo.GetMountBySpellID(spellID)`: the spell's, as a mount's
-/// data.
+/// data; nothing for a spell no mount of the journal casts (the full
+/// probe, 1.60.1: Attack and Seal of Righteousness nothing).
 fn tooltip_mount(vm: &mut Vm, c: NativeCall) -> Ret {
     let data = match arg_num(vm, &c, 1) {
-        Some(id) => spell_tooltip(vm, id),
-        None => vec![],
+        Some(id) if crate::collections::is_mount_spell(vm, id) => spell_tooltip(vm, id),
+        _ => vec![],
     };
     Ok(retyped(vm, data, TOOLTIP_MOUNT))
 }
@@ -898,12 +899,19 @@ fn aura_tooltip(vm: &mut Vm, aura: Option<Value>) -> Ret {
 }
 
 /// `C_TooltipInfo.GetUnitAura(unit, index [, filter])`: the aura there
-/// (`C_UnitAuras.GetAuraDataByIndex`).
+/// (`C_UnitAuras.GetAuraDataByIndex`), no filter matching none, as an
+/// empty one (the full probe, 1.60.1: the player's first aura by
+/// `GetAuraDataByIndex("player", 1)` and `("player", 1, nil)`, nothing by
+/// the tooltip's `GetUnitAura("player", 1)`, `(…, nil)` and `(…, "")`).
 fn tooltip_unit_aura(vm: &mut Vm, c: NativeCall) -> Ret {
+    let filter = match vm.hidden(c.arg(3)) {
+        Value::Nil => vm.str(""),
+        _ => c.arg(3),
+    };
     let aura = ask(
         vm,
         "C_UnitAuras.GetAuraDataByIndex",
-        &[c.arg(1), c.arg(2), c.arg(3)],
+        &[c.arg(1), c.arg(2), filter],
     );
     aura_tooltip(vm, aura.first().copied())
 }
@@ -1231,7 +1239,9 @@ fn get_time_left_band_info(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_AuctionHouse.GetItemKeySampleLink(itemKey)`: the key's item's link
-/// (`C_Item.GetItemInfo`'s second answer), nil when unknown.
+/// (`C_Item.GetItemInfo`'s second answer), nil when unknown or for an item
+/// that binds on pickup or is a quest's, which no auction sells (the full
+/// probe, 1.60.1: a quest crate's key nil; unverified: other bound items).
 fn get_item_key_sample_link(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(key) = vm.hidden(c.arg(1)) else {
         return Ok(vec![Value::Nil]);
@@ -1240,6 +1250,9 @@ fn get_item_key_sample_link(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![Value::Nil]);
     };
     let info = ask(vm, "C_Item.GetItemInfo", &[Value::Num(id)]);
+    if matches!(info.get(13).copied(), Some(Value::Num(b)) if b == 1.0 || b == 4.0) {
+        return Ok(vec![Value::Nil]);
+    }
     Ok(vec![match info.get(1).copied() {
         Some(v @ Value::Str(_)) => v,
         _ => Value::Nil,

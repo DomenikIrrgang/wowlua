@@ -105,6 +105,7 @@ C_TooltipInfo.GetOutfit	1	u32
 C_TooltipInfo.GetUnitAuraByAuraInstanceID	2	u32
 C_TooltipInfo.GetUnitBuffByAuraInstanceID	2	u32
 C_TooltipInfo.GetUnitDebuffByAuraInstanceID	2	u32
+C_TransmogCollection.SetClassFilter	1	u32
 C_TransmogOutfitInfo.GetOutfitInfo	1	u32
 C_TransmogOutfitInfo.GetOutfitInfoByPlayerFacingIndex	1	u32
 C_TransmogOutfitInfo.IsLockedOutfit	1	u32

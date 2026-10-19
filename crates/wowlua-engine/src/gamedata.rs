@@ -108,34 +108,48 @@ fn probed_spell(vm: &mut Vm, id: i64) -> Option<TableRef> {
     Some(t)
 }
 
+/// Items the full probe (1.60.1) asked about that no other recording
+/// holds: its `C_Item.GetItemInfo` answers (the crate its character
+/// carried).
+const PROBED_ITEMS: &[(i64, &str)] = &[(
+    6462,
+    "18: string Secure Crate, string |cnIQ1:|Hitem:6462::::::::21:1486:::::::::|h[Secure Crate]|h|r, number 1, number 1, number 0, string Quest, string Quest, number 1, string INVTYPE_NON_EQUIP_IGNORE, number 132761, number 0, number 12, number 0, number 4, number 0, nil nil, boolean false, string ",
+)];
+
+/// The fields of `C_Item.GetItemInfo`'s answer, in order.
+const ITEM_INFO_FIELDS: &[&str] = &[
+    "name",
+    "link",
+    "quality",
+    "itemLevel",
+    "minLevel",
+    "type",
+    "subType",
+    "stackCount",
+    "equipLoc",
+    "icon",
+    "sellPrice",
+    "classID",
+    "subclassID",
+    "bindType",
+    "expansionID",
+    "setID",
+    "isCraftingReagent",
+    "description",
+];
+
 /// An item the game data's probes recorded (a recipe's reagent or
-/// product): defined from its recorded `C_Item.GetItemInfo` (cached, as
-/// the client had it), once.
+/// product, the full probe's `PROBED_ITEMS`): defined from its recorded
+/// `C_Item.GetItemInfo` (cached, as the client had it), once.
 fn probed_item(vm: &mut Vm, id: i64) -> Option<TableRef> {
-    let info = crate::recorded::probed(&format!("C_Item.GetItemInfo({id})"))?;
+    let info = crate::recorded::probed(&format!("C_Item.GetItemInfo({id})"))
+        .or_else(|| PROBED_ITEMS.iter().find(|(i, _)| *i == id).map(|(_, a)| *a))?;
     let values = crate::traits::Rv::answer(info);
     if values.is_empty() {
         return None;
     }
-    const FIELDS: &[&str] = &[
-        "name",
-        "link",
-        "quality",
-        "itemLevel",
-        "minLevel",
-        "type",
-        "subType",
-        "stackCount",
-        "equipLoc",
-        "icon",
-        "sellPrice",
-        "classID",
-        "subclassID",
-        "bindType",
-        "expansionID",
-    ];
     let t = vm.new_table();
-    for (key, v) in FIELDS.iter().zip(values.iter()) {
+    for (key, v) in ITEM_INFO_FIELDS.iter().zip(values.iter()) {
         let v = v.to_value(vm);
         set(vm, t, key, v);
     }
@@ -529,15 +543,15 @@ fn is_equippable_item(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_Item.GetItemSpell(item)`: the spell its use casts (a defined
-/// item's `spell`): its name and ID; nothing for an item without one.
+/// item's `spell`, else the one the client named for it,
+/// `iteminfo::use_spell`: the full probe, 1.60.1, the Hearthstone's 8690
+/// by its `item:` string): its name and ID; nothing for an item without
+/// one.
 fn get_item_spell(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = item_id(vm, c.arg(1)) else {
         return Ok(vec![]);
     };
-    let Some(t) = item_data(vm, id) else {
-        return Ok(vec![]);
-    };
-    let Value::Num(spell) = field(vm, t, "spell") else {
+    let Some(spell) = crate::iteminfo::use_spell(vm, id) else {
         return Ok(vec![]);
     };
     let name = spell_name(vm, spell as i64);
@@ -782,30 +796,20 @@ fn get_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         return Ok(vec![]);
     };
-    let mut out: Vec<Value> = [
-        "name",
-        "link",
-        "quality",
-        "itemLevel",
-        "minLevel",
-        "type",
-        "subType",
-        "stackCount",
-        "equipLoc",
-        "icon",
-        "sellPrice",
-        "classID",
-        "subclassID",
-        "bindType",
-        "expansionID",
-    ]
-    .iter()
-    .map(|k| field(vm, t, k))
-    .collect();
+    let mut out: Vec<Value> = ITEM_INFO_FIELDS.iter().map(|k| field(vm, t, k)).collect();
     // The expansion 0 where the data has none (recorded: all 609 of the
-    // client's GetItemInfo answers in the probes, Forever's items).
+    // client's GetItemInfo answers in the probes, Forever's items), and
+    // eighteen values: no set, not a crafting reagent, no description where
+    // the data has none (recorded: the full probe's and the profession
+    // probes' answers, 1.60.1, all eighteen).
     if out[14].is_nil() {
         out[14] = Value::Num(0.0);
+    }
+    if out[16].is_nil() {
+        out[16] = Value::Bool(false);
+    }
+    if out[17].is_nil() {
+        out[17] = vm.str("");
     }
     Ok(out)
 }
