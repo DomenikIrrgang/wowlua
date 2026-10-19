@@ -28,8 +28,9 @@
 //! Unverified: a profession trainer, the filters' list kept until the
 //! window reopens, a spell bought without room on the bar (none pushed?),
 //! the spellbook's new entry (not kept), the money packet's delay beyond
-//! this recording, the class's spellbook tabs (Classic's), the recorded
-//! services the probing character knew (their level 0: unknown).
+//! this recording, the class's spellbook tabs (Classic's), the levels of
+//! services the probing character knew (their level 0: the spell's learn
+//! level, else SuuUI's, else estimated from the spell's other ranks).
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -225,7 +226,7 @@ fn listed(key: &'static str) -> &'static [Listed] {
             Some(Rv::Str(s)) => Some(s.clone()),
             _ => None,
         };
-        let list: Vec<Listed> = (1..=n)
+        let mut list: Vec<Listed> = (1..=n)
             .map(|i| {
                 let info = recorded(key, &format!("GetTrainerServiceInfo({i})"));
                 let tip = recorded(key, &format!("C_TooltipInfo.GetTrainerService({i})"));
@@ -273,8 +274,44 @@ fn listed(key: &'static str) -> &'static [Listed] {
                 }
             })
             .collect();
+        estimate_levels(&mut list);
         Box::leak(list.into_boxed_slice())
     })
+}
+
+/// A rank no data gives a level (its service reads 0, no learn level
+/// recorded, not in SuuUI's data): estimated between the spell's nearest
+/// ranks with one, rounded down to an even level (every recorded trainer
+/// level is even, or 1). Unverified: Thorns rank 2 (14), Rejuvenation
+/// rank 2 (10).
+fn estimate_levels(list: &mut [Listed]) {
+    let rank = |l: &Listed| {
+        l.rank
+            .as_deref()
+            .and_then(|r| r.strip_prefix("Rank "))
+            .and_then(|n| n.parse::<f64>().ok())
+    };
+    let known: Vec<(String, f64, f64)> = list
+        .iter()
+        .filter(|l| l.level > 0.0)
+        .filter_map(|l| Some((l.name.clone(), rank(l)?, l.level)))
+        .collect();
+    for l in list.iter_mut().filter(|l| l.level == 0.0) {
+        let Some(mine) = rank(l) else {
+            continue;
+        };
+        let near = |above: bool| {
+            known
+                .iter()
+                .filter(|(n, r, _)| *n == l.name && (*r > mine) == above && *r != mine)
+                .min_by(|a, b| (a.1 - mine).abs().total_cmp(&(b.1 - mine).abs()))
+                .map(|(_, r, lv)| (*r, *lv))
+        };
+        if let (Some((r1, l1)), Some((r2, l2))) = (near(false), near(true)) {
+            let level = l1 + (l2 - l1) * (mine - r1) / (r2 - r1);
+            l.level = ((level / 2.0).floor() * 2.0).max(1.0);
+        }
+    }
 }
 
 /// The data's key for a class trainer: the NPC's own list, else the
@@ -1117,5 +1154,19 @@ mod tests {
         }
         assert!(checked > 1000, "{checked}");
         assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    }
+
+    /// The two ranks no data gives a level: estimated between their
+    /// spells' other ranks (Rejuvenation 4, ?, 16; Thorns 6, ?, 24).
+    #[test]
+    fn a_rank_without_a_level_is_estimated() {
+        let level = |key: &'static str, spell: i64| {
+            listed(key)
+                .iter()
+                .find(|l| l.spell == spell)
+                .map(|l| l.level)
+        };
+        assert_eq!(level("DRUID-3033", 1058), Some(10.0));
+        assert_eq!(level("DRUID-3033", 782), Some(14.0));
     }
 }
