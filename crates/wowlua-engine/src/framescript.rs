@@ -187,7 +187,7 @@ pub(crate) fn cvar_get(vm: &mut Vm, name: &str) -> Option<String> {
         .map(|(_, v)| v.clone())
 }
 
-fn cvar_set(vm: &mut Vm, name: &str, value: String) {
+pub(crate) fn cvar_set(vm: &mut Vm, name: &str, value: String) {
     let cvars = &mut engine_mut(vm).world.cvars;
     match cvars.iter_mut().find(|(k, _)| k.eq_ignore_ascii_case(name)) {
         Some(slot) => slot.1 = value,
