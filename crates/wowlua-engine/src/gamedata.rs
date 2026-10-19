@@ -643,7 +643,7 @@ fn get_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         return Ok(vec![]);
     };
-    Ok([
+    let mut out: Vec<Value> = [
         "name",
         "link",
         "quality",
@@ -662,7 +662,13 @@ fn get_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
     ]
     .iter()
     .map(|k| field(vm, t, k))
-    .collect())
+    .collect();
+    // The expansion 0 where the data has none (recorded: all 609 of the
+    // client's GetItemInfo answers in the probes, Forever's items).
+    if out[14].is_nil() {
+        out[14] = Value::Num(0.0);
+    }
+    Ok(out)
 }
 
 fn get_item_info_instant(vm: &mut Vm, c: NativeCall) -> Ret {

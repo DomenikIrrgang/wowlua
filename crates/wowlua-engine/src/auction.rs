@@ -22,9 +22,12 @@
 //! again); `CloseAuctionHouse`. The house's settings (filters, copper
 //! values, auto-populated prices) are the client's recorded answers.
 //!
-//! Unverified: bids and buying items (not commodities), cancelling,
-//! favorites, more than one page of results, the deposit's formula (the
-//! data's `deposit`), item keys beyond their item ID.
+//! Unverified: bids and buying items (not commodities), favorites, more
+//! than one page of results, the deposit's formula (the data's
+//! `deposit`), item keys beyond their item ID; a browse search by name
+//! (the data's rows whose item's name holds it), the player's auctions
+//! told (`QueryOwnedAuctions`) and cancelled (`CancelAuction`), as
+//! Auctionator's shopping and cancelling tabs use them.
 
 use std::collections::{BTreeMap, VecDeque};
 
@@ -61,6 +64,9 @@ const POSTED_BAG_AFTER: f64 = 0.324;
 enum Query {
     Bids,
     Browse,
+    MoreBrowse,
+    Owned,
+    Cancel(f64),
     Commodity(i64),
     Item(i64),
     Price(i64, f64),
@@ -77,6 +83,13 @@ pub struct AuctionHouse {
     queue: VecDeque<Query>,
     /// The browse results shown (after a browse search).
     browsed: bool,
+    /// The browse query's search string (lower case; none: everything).
+    browse_filter: Option<String>,
+    /// The browse results all told (`HasFullBrowseResults`).
+    browse_full: bool,
+    /// The player's auctions as the last owned auctions query told them
+    /// (`GetNumOwnedAuctions`: none before one).
+    owned_told: Option<Vec<Owned>>,
     /// Commodities searched: the results' answer (`GetTime`) and owners
     /// known; how many were bought.
     searched: BTreeMap<i64, (f64, bool)>,
@@ -258,6 +271,9 @@ fn encode(q: Query) -> Vec<Value> {
         Query::Price(id, n) => (4.0, id as f64, n, 0.0),
         Query::Purchase(id, n) => (5.0, id as f64, n, 0.0),
         Query::Post(bag, slot, id) => (6.0, bag as f64, slot as f64, id as f64),
+        Query::MoreBrowse => (7.0, 0.0, 0.0, 0.0),
+        Query::Owned => (8.0, 0.0, 0.0, 0.0),
+        Query::Cancel(auction) => (9.0, auction, 0.0, 0.0),
     };
     vec![
         Value::Num(kind),
@@ -276,6 +292,9 @@ fn decode(c: &NativeCall) -> Query {
         3 => Query::Item(n(1) as i64),
         4 => Query::Price(n(1) as i64, n(2)),
         5 => Query::Purchase(n(1) as i64, n(2)),
+        7 => Query::MoreBrowse,
+        8 => Query::Owned,
+        9 => Query::Cancel(n(1)),
         _ => Query::Post(n(1) as i64, n(2) as usize, n(3) as i64),
     }
 }
@@ -378,6 +397,46 @@ fn answered(vm: &mut Vm, c: NativeCall) -> Ret {
             later(vm, INFO_AFTER, "auctionInfos", infos, vec![]);
             done(vm);
         }
+        Query::MoreBrowse => {
+            // Nothing more in the data: none added, all told (unverified).
+            ah_mut(vm).browse_full = true;
+            fire(vm, "AUCTION_HOUSE_THROTTLED_MESSAGE_RESPONSE_RECEIVED", &[]);
+            let none = vm.new_table();
+            fire(
+                vm,
+                "AUCTION_HOUSE_BROWSE_RESULTS_ADDED",
+                &[Value::Table(none)],
+            );
+            done(vm);
+        }
+        Query::Owned => {
+            let owned = ah(vm).owned.clone();
+            ah_mut(vm).owned_told = Some(owned);
+            fire(vm, "AUCTION_HOUSE_THROTTLED_MESSAGE_RESPONSE_RECEIVED", &[]);
+            fire(vm, "OWNED_AUCTIONS_UPDATED", &[]);
+            done(vm);
+        }
+        Query::Cancel(auction) => {
+            let item = ah(vm)
+                .owned
+                .iter()
+                .find(|o| o.auction == auction)
+                .map(|o| o.item);
+            ah_mut(vm).owned.retain(|o| o.auction != auction);
+            if let Some(told) = ah_mut(vm).owned_told.as_mut() {
+                told.retain(|o| o.auction != auction);
+            }
+            fire(vm, "AUCTION_HOUSE_THROTTLED_MESSAGE_RESPONSE_RECEIVED", &[]);
+            fire(vm, "AUCTION_CANCELED", &[Value::Num(auction)]);
+            // The item back by the house's mail (unverified).
+            if item.is_some() {
+                let sender = house_sender(vm);
+                crate::mail::mail_coming(vm, &sender);
+                fire(vm, "UPDATE_PENDING_MAIL", &[]);
+            }
+            fire(vm, "OWNED_AUCTIONS_UPDATED", &[]);
+            done(vm);
+        }
         Query::Commodity(id) => {
             // Searched again after a purchase: the browse list's quantity
             // changed too (recorded).
@@ -409,13 +468,7 @@ fn answered(vm: &mut Vm, c: NativeCall) -> Ret {
             fire(vm, "AUCTION_HOUSE_PURCHASE_COMPLETED", &[Value::Num(0.0)]);
             fire(vm, "AUCTION_CANCELED", &[Value::Num(0.0)]);
             // The won item comes by mail (recorded: the house's sender).
-            let sender = match data(vm) {
-                Some(t) => match field(vm, t, "mailSender") {
-                    Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
-                    _ => "Horde Auction House".to_string(),
-                },
-                None => "Horde Auction House".to_string(),
-            };
+            let sender = house_sender(vm);
             crate::mail::mail_coming(vm, &sender);
             fire(vm, "UPDATE_PENDING_MAIL", &[]);
             later(
@@ -468,6 +521,18 @@ fn answered(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     Ok(vec![])
+}
+
+/// The house's mail sender (the data's `mailSender`; recorded: "Horde
+/// Auction House").
+fn house_sender(vm: &mut Vm) -> String {
+    match data(vm) {
+        Some(t) => match field(vm, t, "mailSender") {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => "Horde Auction House".to_string(),
+        },
+        None => "Horde Auction House".to_string(),
+    }
 }
 
 fn send_queued(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -678,9 +743,134 @@ fn is_ready(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(ah(vm).open.is_some() && ah(vm).ready)])
 }
 
-fn send_browse_query(vm: &mut Vm, _c: NativeCall) -> Ret {
+/// `C_AuctionHouse.SendBrowseQuery(query)`: everything (as recorded:
+/// the data's rows, more on the server), or the rows whose item's name
+/// holds the query's `searchString` (any case; all of them told at once,
+/// unverified: the data is all the house the engine knows).
+fn send_browse_query(vm: &mut Vm, c: NativeCall) -> Ret {
     if ah(vm).open.is_some() {
+        let filter = match c.arg(1) {
+            Value::Table(q) => match field(vm, q, "searchString") {
+                Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).to_lowercase()),
+                _ => None,
+            },
+            _ => None,
+        }
+        .filter(|s| !s.trim().is_empty());
+        let a = ah_mut(vm);
+        a.browse_full = filter.is_some();
+        a.browse_filter = filter;
         send(vm, Query::Browse);
+    }
+    Ok(vec![])
+}
+
+/// `C_AuctionHouse.RequestMoreBrowseResults()`: the next page asked for;
+/// the data has none, so its answer adds nothing and the results are all
+/// told (unverified).
+fn request_more_browse_results(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if ah(vm).open.is_some() && ah(vm).browsed && !ah(vm).browse_full {
+        send(vm, Query::MoreBrowse);
+    }
+    Ok(vec![])
+}
+
+fn has_full_browse_results(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(ah(vm).browsed && ah(vm).browse_full)])
+}
+
+/// `C_AuctionHouse.QueryOwnedAuctions(sorts)`: the player's auctions
+/// asked for, answered by `OWNED_AUCTIONS_UPDATED` (unverified). Asked
+/// while a message is under way (Blizzard's house as it opens): nothing
+/// (recorded: no message, no answer, `GetNumOwnedAuctions` 0 after a post).
+fn query_owned_auctions(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if ah(vm).open.is_some() && ah(vm).ready {
+        send(vm, Query::Owned);
+    }
+    Ok(vec![])
+}
+
+/// The player's auctions told, as `OwnedAuctionInfo`s.
+fn owned_infos(vm: &mut Vm) -> Vec<TableRef> {
+    let told = ah(vm).owned_told.clone().unwrap_or_default();
+    let now = crate::clock::now(vm);
+    told.iter()
+        .map(|o| {
+            let r = vm.new_table();
+            set(vm, r, "auctionID", Value::Num(o.auction));
+            let key = item_key(vm, o.item);
+            set(vm, r, "itemKey", key);
+            let link = match &o.link {
+                Some(l) => Some(vm.str(l)),
+                None => character::link_of_id(vm, o.item),
+            };
+            if let Some(l) = link {
+                set(vm, r, "itemLink", l);
+            }
+            // `Enum.AuctionStatus.Active`.
+            set(vm, r, "status", Value::Num(0.0));
+            set(vm, r, "quantity", Value::Num(1.0));
+            let left = (o.ends - now).floor().max(0.0);
+            set(vm, r, "timeLeftSeconds", Value::Num(left));
+            set(vm, r, "timeLeft", Value::Num(time_left_band(left)));
+            set(vm, r, "buyoutAmount", Value::Num(o.buyout));
+            r
+        })
+        .collect()
+}
+
+fn get_num_owned_auctions(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let n = ah(vm).owned_told.as_ref().map_or(0, Vec::len);
+    Ok(vec![Value::Num(n as f64)])
+}
+
+fn get_owned_auction_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let i = num(c.arg(1)).unwrap_or(0.0) as usize;
+    let rows = owned_infos(vm);
+    Ok(vec![match i.checked_sub(1).and_then(|i| rows.get(i)) {
+        Some(r) => Value::Table(*r),
+        None => Value::Nil,
+    }])
+}
+
+fn get_owned_auctions(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let out = vm.new_table();
+    for (i, r) in owned_infos(vm).into_iter().enumerate() {
+        let _ = vm
+            .heap
+            .table_mut(out)
+            .set(Value::Num((i + 1) as f64), Value::Table(r));
+    }
+    Ok(vec![Value::Table(out)])
+}
+
+fn has_full_owned_auction_results(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(ah(vm).owned_told.is_some())])
+}
+
+/// `C_AuctionHouse.CanCancelAuction(auctionID)`: one of the player's
+/// (unverified: no bid on it, the engine has none).
+fn can_cancel_auction(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = num(c.arg(1));
+    let mine = ah(vm).owned.iter().any(|o| Some(o.auction) == id);
+    Ok(vec![Value::Bool(mine)])
+}
+
+/// `C_AuctionHouse.GetCancelCost(auctionID)`: nothing without a bid
+/// (unverified: the deposit is what a cancel loses, paid at the post).
+fn get_cancel_cost(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0)])
+}
+
+/// `C_AuctionHouse.CancelAuction(auctionID)`: one of the player's sent;
+/// its answer `AUCTION_CANCELED(auctionID)`, the item back by mail, the
+/// auctions told again (unverified: the client's order).
+fn cancel_auction(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(id) = num(c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    if ah(vm).open.is_some() && ah(vm).owned.iter().any(|o| o.auction == id) {
+        send(vm, Query::Cancel(id));
     }
     Ok(vec![])
 }
@@ -731,10 +921,30 @@ fn browse_rows(vm: &mut Vm) -> Vec<TableRef> {
     let Some(t) = data(vm) else {
         return vec![];
     };
-    match field(vm, t, "browse") {
+    let rows = match field(vm, t, "browse") {
         Value::Table(b) => list(vm, b),
         _ => vec![],
-    }
+    };
+    let Some(filter) = ah(vm).browse_filter.clone() else {
+        return rows;
+    };
+    // The rows whose item's name (its data's) holds the search string.
+    rows.into_iter()
+        .filter(|row| {
+            let Value::Table(k) = field(vm, *row, "itemKey") else {
+                return false;
+            };
+            let Some(id) = num(field(vm, k, "itemID")) else {
+                return false;
+            };
+            match character::item_field(vm, id as i64, "name") {
+                Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s))
+                    .to_lowercase()
+                    .contains(&filter),
+                _ => false,
+            }
+        })
+        .collect()
 }
 
 /// `C_AuctionHouse.GetBrowseResults()`: the rows (a bought commodity's
@@ -1196,16 +1406,29 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_WowTokenPublic.IsAuctionableWowToken", no),
         ("C_AuctionHouse.QueryBids", nothing),
         ("C_AuctionHouse.IsFavoriteItem", no),
-        ("C_AuctionHouse.QueryOwnedAuctions", nothing),
+        ("C_AuctionHouse.QueryOwnedAuctions", query_owned_auctions),
         ("C_AuctionHouse.GetNumOwnedAuctionTypes", zero),
         ("C_AuctionHouse.GetNumBidTypes", zero),
         ("C_AuctionHouse.IsThrottledMessageSystemReady", is_ready),
         ("C_AuctionHouse.HasFavorites", no),
         // The player's auctions not asked for (`QueryOwnedAuctions`): none
         // told, even after a post (recorded).
-        ("C_AuctionHouse.GetNumOwnedAuctions", zero),
+        ("C_AuctionHouse.GetNumOwnedAuctions", get_num_owned_auctions),
+        ("C_AuctionHouse.GetOwnedAuctionInfo", get_owned_auction_info),
+        ("C_AuctionHouse.GetOwnedAuctions", get_owned_auctions),
+        (
+            "C_AuctionHouse.HasFullOwnedAuctionResults",
+            has_full_owned_auction_results,
+        ),
+        ("C_AuctionHouse.CanCancelAuction", can_cancel_auction),
+        ("C_AuctionHouse.GetCancelCost", get_cancel_cost),
+        ("C_AuctionHouse.CancelAuction", cancel_auction),
         ("C_AuctionHouse.GetNumBids", zero),
         ("C_AuctionHouse.SendBrowseQuery", send_browse_query),
+        (
+            "C_AuctionHouse.RequestMoreBrowseResults",
+            request_more_browse_results,
+        ),
         ("C_AuctionHouse.SendSearchQuery", send_search_query),
         ("C_AuctionHouse.SendSellSearchQuery", send_sell_search_query),
         (
@@ -1217,7 +1440,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             refresh_item_search_results,
         ),
         ("C_AuctionHouse.GetBrowseResults", get_browse_results),
-        ("C_AuctionHouse.HasFullBrowseResults", no),
+        (
+            "C_AuctionHouse.HasFullBrowseResults",
+            has_full_browse_results,
+        ),
         (
             "C_AuctionHouse.GetNumCommoditySearchResults",
             get_num_commodity_search_results,

@@ -238,10 +238,19 @@ fn pickup_macro(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `PickupAction(slot)`: the action onto the cursor, the slot emptied.
+/// With something on the cursor, it goes into the slot and the slot's
+/// action (if any) onto the cursor, as `PlaceAction` (unverified:
+/// warcraft.wiki.gg's API_PickupAction, "the slot is filled with whatever
+/// action was currently being drag-and-dropped"; LibActionButton's
+/// buttons take a drop onto an empty slot so, through Blizzard's
+/// `PickupAny`).
 fn pickup_action(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(slot) = num(c.arg(1)).map(|s| s as i64) else {
         return Ok(vec![]);
     };
+    if !matches!(engine(vm).world.character.cursor, Cursor::Empty) {
+        return place_action(vm, c);
+    }
     let Some(action) = engine_mut(vm).world.character.actions.remove(&slot) else {
         return Ok(vec![]);
     };

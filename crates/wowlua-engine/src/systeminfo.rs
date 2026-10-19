@@ -785,7 +785,8 @@ fn is_addon_default_enabled(vm: &mut Vm, c: NativeCall) -> Ret {
 // ----------------------------------------------------------- bindings
 
 /// Binds `key` to `command` as `SetBinding` does: a key in lower case
-/// binds nothing (false).
+/// binds nothing (false); a binding set tells `UPDATE_BINDINGS`
+/// (unverified, as `SetBinding`'s).
 fn bind(vm: &mut Vm, key: Option<String>, command: Option<String>) -> Ret {
     let Some(key) = key else {
         return Ok(vec![Value::Bool(false)]);
@@ -798,6 +799,7 @@ fn bind(vm: &mut Vm, key: Option<String>, command: Option<String>) -> Ret {
     if let Some(command) = command {
         keys.push((key, command));
     }
+    widgets::fire_event(vm, "UPDATE_BINDINGS", &[]);
     Ok(vec![Value::Bool(true)])
 }
 
@@ -835,6 +837,13 @@ fn set_binding_macro(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `LoadBindings(set)`: the saved bindings back, `UPDATE_BINDINGS` (the
 /// engine keeps one set; unverified).
 fn load_bindings(vm: &mut Vm, _c: NativeCall) -> Ret {
+    widgets::fire_event(vm, "UPDATE_BINDINGS", &[]);
+    Ok(vec![])
+}
+
+/// `SaveBindings(set)`: kept (the engine keeps one set), `UPDATE_BINDINGS`
+/// (unverified: warcraft.wiki.gg's UPDATE_BINDINGS names SaveBindings).
+fn save_bindings(vm: &mut Vm, _c: NativeCall) -> Ret {
     widgets::fire_event(vm, "UPDATE_BINDINGS", &[]);
     Ok(vec![])
 }
@@ -2640,7 +2649,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_AddOns.DoesAddOnHaveLoadError", no),
         ("C_AddOns.GetAddOnLocalTable", nil),
         // Bindings.
-        ("SaveBindings", nothing),
+        ("SaveBindings", save_bindings),
         ("LoadBindings", load_bindings),
         ("SetBindingClick", set_binding_click),
         ("SetBindingSpell", set_binding_spell),

@@ -180,6 +180,20 @@ fn get_action_info(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// `UseAction(slot, unit, button, isKeyPress)` (an action button's click,
+/// Blizzard's `SecureActionButton_OnClick`): a spell action pressed as
+/// the player presses a spell (`casting::use_spell`, recorded). Other
+/// actions (items, macros) do nothing yet (unverified).
+fn use_action(vm: &mut Vm, c: NativeCall) -> Ret {
+    match slot(&c).and_then(|s| action(vm, s)) {
+        Some(a) if a.kind == "spell" => match num(a.id) {
+            Some(id) => crate::casting::use_spell(vm, id),
+            None => Ok(vec![]),
+        },
+        _ => Ok(vec![]),
+    }
+}
+
 /// `C_ActionBar.GetSpell(slot)`: a spell action's spell; 0 for another
 /// slot (documented never nil; unverified: a macro's spell).
 fn get_spell(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -671,6 +685,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         ("HasAction", has_action),
         ("GetActionInfo", get_action_info),
+        ("UseAction", use_action),
         ("C_ActionBar.GetSpell", get_spell),
         ("C_ActionBar.GetActionTexture", get_action_texture),
         ("GetActionTexture", get_action_texture),

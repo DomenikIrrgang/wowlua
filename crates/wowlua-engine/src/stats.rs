@@ -1203,6 +1203,9 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
                 None => vec![vm.str(""), vm.str(""), Value::Num(0.0), Value::Bool(false)],
             })
         }
+        // No forms without a snapshot's (the function is undocumented, so
+        // without a documented empty answer).
+        None if stat.key == "shapeshiftForms" => Ok(vec![Value::Num(0.0)]),
         None => Ok(empty(vm, stat.function)),
     }
 }

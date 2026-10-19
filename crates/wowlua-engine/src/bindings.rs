@@ -287,7 +287,11 @@ fn known_command(vm: &Vm, command: &str) -> bool {
 /// `SetBinding(key [, command])`: whether it bound. A key in lower case or
 /// an unknown command binds nothing (false); the key is kept as written,
 /// its modifiers in the order given (`SHIFT-ALT-CTRL-F8` is not
-/// `CTRL-SHIFT-ALT-F8`: `/stdtest engine answers` "Binding set …").
+/// `CTRL-SHIFT-ALT-F8`: `/stdtest engine answers` "Binding set …"). A
+/// binding set tells `UPDATE_BINDINGS` at once (unverified:
+/// warcraft.wiki.gg's UPDATE_BINDINGS, "fired after completion of
+/// LoadBindings, SaveBindings, and SetBinding (and its derivatives)";
+/// Bartender4 guards its handler against the SetBinding it calls there).
 fn set_binding(vm: &mut Vm, c: NativeCall) -> Ret {
     let key = vm.check_str(&c, 1)?;
     let key = String::from_utf8_lossy(vm.str_bytes(key)).into_owned();
@@ -304,6 +308,7 @@ fn set_binding(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(command) = command {
         keys.push((key, command));
     }
+    widgets::fire_event(vm, "UPDATE_BINDINGS", &[]);
     Ok(vec![Value::Bool(true)])
 }
 
