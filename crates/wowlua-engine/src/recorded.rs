@@ -152,7 +152,9 @@ fn parse_value(vm: &mut Vm, text: &str) -> Value {
     }
 }
 
-/// `text` split at `sep` outside braces.
+/// `text` (a table's entries, `key=value`) split at `sep` outside braces
+/// where the next entry's key follows: a string value may hold the
+/// separator ("Sentinel Hill, Westfall", a flight point's name).
 pub(crate) fn split_top(text: &str, sep: char) -> Vec<&str> {
     let mut out = Vec::new();
     let (mut depth, mut start) = (0i32, 0);
@@ -160,7 +162,7 @@ pub(crate) fn split_top(text: &str, sep: char) -> Vec<&str> {
         match ch {
             '{' => depth += 1,
             '}' => depth -= 1,
-            c if c == sep && depth == 0 => {
+            c if c == sep && depth == 0 && key_follows(&text[i + c.len_utf8()..]) => {
                 out.push(&text[start..i]);
                 start = i + 1;
             }
@@ -171,6 +173,14 @@ pub(crate) fn split_top(text: &str, sep: char) -> Vec<&str> {
         out.push(&text[start..]);
     }
     out
+}
+
+/// Whether `text` starts with a table key and its `=` (a name or a number).
+fn key_follows(text: &str) -> bool {
+    let key = text
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-'))
+        .unwrap_or(text.len());
+    key > 0 && text[key..].starts_with('=')
 }
 
 /// An answer's values: `n: v1, v2, …` (a string may hold ", ": values
