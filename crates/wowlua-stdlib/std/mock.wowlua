@@ -245,6 +245,9 @@ export type UnitData = {
     race?: string,
     sex?: number,
     reaction?: "hostile" | "neutral" | "friendly",
+    --- The player's reaction toward it, when not the unit's own (a faction
+    --- NPC's by the player's standing).
+    playerReaction?: "hostile" | "neutral" | "friendly",
     player?: boolean,
     health?: number,
     healthMax?: number,

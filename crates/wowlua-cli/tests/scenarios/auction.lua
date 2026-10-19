@@ -9,9 +9,12 @@ local player = e.player
 e.setHiddenGroupBuffs({ 10300, 19740, 1022, 1038, 19979, 25290, 5599, 19834, 10292, 19876, 25898, 19977, 10293, 7294, 19898, 19978, 19888, 20729, 19837, 10298, 465, 10278, 25782, 19850, 10290, 6940, 10301, 10299, 25916, 19896, 19899, 1044, 25890, 19838, 25895, 25291, 1032, 19854, 25918, 19836, 19742, 19900, 19746, 25894, 19853, 19895, 19897, 19852, 10291, 19835, 19891, 20217, 643 })
 e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 } })
 e.defineItem(8067, { name = "Crafted Light Shot", quality = 1, icon = 132384, stackCount = 200, classID = 6, subclassID = 3, link = "|cnIQ1:|Hitem:8067::::::::21:1486:::::::::|h[Crafted Light Shot]|h|r" }, { cached = true })
+-- The WoW Token's info (an item the client has, not sold on Forever), not
+-- cached: fetched as the house's UI asks it. Its info's fields unrecorded.
+e.defineItem(122284, {}, { cached = false, delay = 0.034 })
 local stampi = e.spawnUnit({
     name = "Auctioneer Stampi", guid = "Creature-0-4615-1-6-8674-2B5E93E430", npcID = 8674, level = 50,
-    reaction = "neutral", class = "WARRIOR", classID = 1, sex = 2, powerType = 1,
+    reaction = "neutral", playerReaction = "friendly", class = "WARRIOR", classID = 1, sex = 2, powerType = 1,
     creatureType = "Humanoid", creatureTypeID = 7, factionGroup = "Horde", pvp = true,
 })
 -- What the house's searches found (the recording's answers): the browse

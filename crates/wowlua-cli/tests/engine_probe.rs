@@ -1291,7 +1291,7 @@ fn the_engine_plays_bank_as_the_client_did() {
 
 /// How many of the auction scenario's lines the engine plays as the
 /// client did: only ever up.
-const AUCTION_MATCHED: usize = 349;
+const AUCTION_MATCHED: usize = 365;
 
 /// The auction scenario: browsing, buying a commodity, posting an item.
 #[test]

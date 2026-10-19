@@ -337,7 +337,10 @@ fn answered(vm: &mut Vm, c: NativeCall) -> Ret {
             done(vm);
         }
         Query::Commodity(id) => {
-            commodity_results(vm, id, true);
+            // Searched again after a purchase: the browse list's quantity
+            // changed too (recorded).
+            let browse = ah(vm).browsed && ah(vm).bought.contains_key(&id);
+            commodity_results(vm, id, true, browse);
             done(vm);
         }
         Query::Item(id) => {
@@ -443,14 +446,18 @@ fn infos(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// A commodity's results told (their owners' names a moment later).
-fn commodity_results(vm: &mut Vm, id: i64, answer: bool) {
+/// A commodity's results told (with the browse results' update after a
+/// purchase; their owners' names a moment later).
+fn commodity_results(vm: &mut Vm, id: i64, answer: bool, browse: bool) {
     let now = crate::clock::now(vm);
     ah_mut(vm).searched.insert(id, (now, false));
     let key = key_of(vm, id);
     fire(vm, "AUCTION_HOUSE_NEW_RESULTS_RECEIVED", &[key]);
     if answer {
         fire(vm, "AUCTION_HOUSE_THROTTLED_MESSAGE_RESPONSE_RECEIVED", &[]);
+    }
+    if browse {
+        fire(vm, "AUCTION_HOUSE_BROWSE_RESULTS_UPDATED", &[]);
     }
     fire(vm, "COMMODITY_SEARCH_RESULTS_RECEIVED", &[]);
     fire(
@@ -884,7 +891,8 @@ fn unlock_item(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_AuctionHouse.PostItem(location, duration, quantity, bid, buyout)`:
-/// sent; the browse results' update; its answer the auction created.
+/// sent; the browse results' update, the item unlocked, its search again;
+/// its answer the auction created.
 fn post_item(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((bag, slot)) = location(vm, c.arg(1)) else {
         return Ok(vec![]);
@@ -897,9 +905,14 @@ fn post_item(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     ah_mut(vm).posting = num(vm.hidden(c.arg(5))).unwrap_or(0.0);
     send(vm, Query::Post(bag, slot, id));
-    // Recorded right after the message: the browse results' update.
+    // Recorded right after the message: the browse results' update, the
+    // item's lock let go, its search again (queued).
     fire(vm, "AUCTION_HOUSE_BROWSE_RESULTS_UPDATED", &[]);
-    Ok(vec![Value::Bool(true)])
+    crate::cursor::lock(vm, &Source::Bag(bag, slot), false);
+    send(vm, Query::Item(id));
+    // No confirmation needed (`needsConfirmation`; recorded: none asked,
+    // Blizzard's sell frame cleared its item).
+    Ok(vec![Value::Bool(false)])
 }
 
 /// `C_AuctionHouse.CalculateItemDeposit(location, duration, quantity)`:

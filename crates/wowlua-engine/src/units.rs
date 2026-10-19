@@ -49,6 +49,11 @@ pub struct Unit {
     /// 1 unknown, 2 male, 3 female (`UnitSex`).
     pub sex: f64,
     pub reaction: Reaction,
+    /// The player's side's reaction toward it (`UnitReaction(player,
+    /// unit)`), when not its own: a faction NPC's by the player's standing
+    /// (recorded: an Orgrimmar auctioneer neutral to the player, the player
+    /// friendly to it).
+    pub player_reaction: Option<Reaction>,
     /// A player character (not an NPC).
     pub player: bool,
     pub health: f64,
@@ -234,6 +239,7 @@ pub fn install(vm: &mut Vm) {
         faction_group: None,
         sex: 2.0,
         reaction: Reaction::Friendly,
+        player_reaction: None,
         player: true,
         health: 100.0,
         health_max: 100.0,
@@ -866,9 +872,11 @@ fn unit_reaction(vm: &mut Vm, c: NativeCall) -> Ret {
 fn reaction_of(vm: &Vm, c: &NativeCall) -> Option<Reaction> {
     let (a, b) = (unit_arg(vm, c, 1)?, unit_arg(vm, c, 2)?);
     let u = &engine(vm).units;
-    // Between the player's side and a unit: that unit's reaction.
+    // Between the player's side and a unit: the player's toward it, else
+    // that unit's reaction.
     Some(if ours(u, a) {
-        u.list[b.0].reaction
+        let b = &u.list[b.0];
+        b.player_reaction.unwrap_or(b.reaction)
     } else {
         u.list[a.0].reaction
     })
@@ -1290,6 +1298,14 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         "neutral" => Reaction::Neutral,
         _ => Reaction::Hostile,
     };
+    let player_reaction = match get(vm, "playerReaction") {
+        Value::Str(r) => Some(match vm.str_bytes(r) {
+            b"friendly" => Reaction::Friendly,
+            b"neutral" => Reaction::Neutral,
+            _ => Reaction::Hostile,
+        }),
+        _ => None,
+    };
     let n = {
         let u = &mut engine_mut(vm).units;
         u.next_guid += 1;
@@ -1335,6 +1351,7 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         },
         sex: num(vm, "sex", 1.0),
         reaction,
+        player_reaction,
         player,
         health: num(vm, "health", health_max),
         health_max,

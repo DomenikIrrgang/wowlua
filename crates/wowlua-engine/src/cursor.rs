@@ -462,8 +462,18 @@ pub fn held_item(vm: &Vm) -> Option<(Held, Source)> {
     }
 }
 
-/// An item lock told: `ITEM_LOCK_CHANGED` and `ITEM_LOCKED`/`ITEM_UNLOCKED`.
+/// An item lock told: `ITEM_LOCK_CHANGED` and `ITEM_LOCKED`/`ITEM_UNLOCKED`;
+/// nothing if it is already so (recorded: a posted auction's item unlocked
+/// once, though Blizzard's sell frame unlocks it again).
 pub fn lock(vm: &mut Vm, source: &Source, locked: bool) {
+    let ch = &engine(vm).world.character;
+    let held = match source {
+        Source::Bag(bag, slot) => ch.bags.get(bag).and_then(|b| b.items.get(slot)),
+        Source::Equipped(slot) => ch.equipment.get(slot),
+    };
+    if held.is_some_and(|h| h.locked == locked) {
+        return;
+    }
     set_locked(vm, source, locked);
 }
 

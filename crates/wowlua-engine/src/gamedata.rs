@@ -8,7 +8,8 @@
 //! As the M8 mock had them (unverified details): spell data is cached once
 //! defined unless `cached = false`; an item arrives `delay` seconds (0.2)
 //! after `RequestLoadItemDataByID` unless `cached`, firing
-//! `ITEM_DATA_LOAD_RESULT`; `GetItemInfo` gives nothing until then.
+//! `ITEM_DATA_LOAD_RESULT`; `GetItemInfo` gives nothing until then and
+//! fetches it itself (`GET_ITEM_INFO_RECEIVED`).
 
 use std::collections::HashMap;
 
@@ -368,8 +369,27 @@ fn cached_item(vm: &mut Vm, c: &NativeCall) -> Option<TableRef> {
     field(vm, t, "cached").truthy().then_some(t)
 }
 
+/// `C_Item.GetItemInfo(item)`: a cached item's info; one not cached yet,
+/// nothing, and one defined `cached = false` (its data's load not asked)
+/// is fetched (`GET_ITEM_INFO_RECEIVED(id, true)` its `delay` later,
+/// cached from then; recorded: the WoW Token's as the auction house
+/// opened, 0.034 s; unverified: an item whose load is asked too).
 fn get_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(t) = cached_item(vm, &c) else {
+        if let Some(id) = item_id(vm, c.arg(1))
+            && !engine(vm).world.data.item_requests.contains(&id)
+            && let Some(t) = item_data(vm, id)
+            && matches!(field(vm, t, "cached"), Value::Bool(false))
+            && !field(vm, t, "fetching").truthy()
+            && !field(vm, t, "missing").truthy()
+        {
+            set(vm, t, "fetching", Value::Bool(true));
+            let delay = match field(vm, t, "delay") {
+                Value::Num(d) => d,
+                _ => 0.2,
+            };
+            after(vm, delay, item_info_received, vec![Value::Num(id as f64)]);
+        }
         return Ok(vec![]);
     };
     Ok([
@@ -462,6 +482,17 @@ fn does_item_exist_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn is_item_data_cached(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(cached_item(vm, &c).is_some())])
+}
+
+fn item_info_received(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = c.upvals.first().copied().unwrap_or(Value::Nil);
+    if let Value::Num(n) = id
+        && let Some(t) = item_data(vm, n as i64)
+    {
+        set(vm, t, "cached", Value::Bool(true));
+        widgets::fire_event(vm, "GET_ITEM_INFO_RECEIVED", &[id, Value::Bool(true)]);
+    }
+    Ok(vec![])
 }
 
 fn item_loaded(vm: &mut Vm, c: NativeCall) -> Ret {
