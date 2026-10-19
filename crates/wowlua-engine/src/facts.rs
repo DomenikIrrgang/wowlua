@@ -521,11 +521,22 @@ fn rec_field<'a>(fields: &'a [(String, Rec)], key: &str) -> Option<&'a Rec> {
 /// (0-based inventory slot): the primary transmog slot of that inventory
 /// slot's name, else nothing. The client checks no argument (`/stdtest
 /// argcheck`: a number for `'x'`, `{}`): a non-number counts as 0.
+///
+/// The slot taken from 1 past a 32-bit integer is refused with the usage
+/// (the full probe, 1.60.1: 2147483647 refused, -1 nothing; unverified
+/// why).
 fn outfit_slot_from_inventory_slot(vm: &mut Vm, c: NativeCall) -> Ret {
     let inv = match vm.hidden(c.arg(1)) {
         Value::Num(n) => n.trunc(),
         _ => 0.0,
     } + 1.0;
+    if inv > 2_147_483_647.0 {
+        return Err(crate::args::refuse(
+            vm,
+            "C_TransmogOutfitInfo.GetTransmogOutfitSlotFromInventorySlot",
+            1,
+        ));
+    }
     let Some((name, ..)) = INVENTORY_SLOTS.iter().find(|(_, id, ..)| *id == inv) else {
         return Ok(vec![]);
     };
@@ -544,17 +555,27 @@ fn outfit_slot_from_inventory_slot(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_TransmogOutfitInfo.GetLinkedSlotInfo(slot)`: a slot with a secondary
 /// of the same name (shoulders): `{primarySlotInfo, secondarySlotInfo}`,
-/// else nothing.
+/// the same for either of the two, else nothing (the full probe, 1.60.1:
+/// slots 1 and 2 alike; a string as slot 0, nothing).
 fn linked_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
-    let slot = vm.check_int(&c, 1)? as f64;
+    let slot = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => n.trunc(),
+        _ => 0.0,
+    };
     let locs = slot_locations();
-    let Some(primary) = locs
+    let Some(at) = locs
         .iter()
         .find(|l| matches!(rec_field(l, "slot"), Some(Rec::Num(n)) if *n == slot))
     else {
         return Ok(vec![]);
     };
-    let name = rec_field(primary, "slotName").cloned();
+    let name = rec_field(at, "slotName").cloned();
+    let Some(primary) = locs.iter().find(|l| {
+        rec_field(l, "slotName").cloned() == name
+            && matches!(rec_field(l, "isSecondary"), Some(Rec::Bool(false)))
+    }) else {
+        return Ok(vec![]);
+    };
     let Some(secondary) = locs.iter().find(|l| {
         rec_field(l, "slotName").cloned() == name
             && matches!(rec_field(l, "isSecondary"), Some(Rec::Bool(true)))
@@ -566,6 +587,49 @@ fn linked_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
         ("secondarySlotInfo".into(), Rec::Table((*secondary).clone())),
     ]);
     Ok(vec![build(vm, &info)])
+}
+
+/// `C_TransmogOutfitInfo.GetSlotGroupInfo()`: the transmogrifier's three
+/// columns of slots, each its primary slots' locations in slot order (the
+/// head to the wrists, the hands to the feet, the weapons) and no illusion
+/// slots (the full probe, 1.60.1).
+fn slot_group_info(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let mut locs: Vec<(f64, &'static Vec<(String, Rec)>)> = slot_locations()
+        .into_iter()
+        .filter(|l| matches!(rec_field(l, "isSecondary"), Some(Rec::Bool(false))))
+        .filter_map(|l| match rec_field(l, "slot") {
+            Some(Rec::Num(n)) => Some((*n, l)),
+            _ => None,
+        })
+        .collect();
+    locs.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut groups: Vec<Rec> = Vec::new();
+    for position in 0..3 {
+        let in_group = |slot: f64| match position {
+            0 => slot <= 7.0,
+            1 => (8.0..=11.0).contains(&slot),
+            _ => slot >= 12.0,
+        };
+        let slots: Vec<(String, Rec)> = locs
+            .iter()
+            .filter(|(slot, _)| in_group(*slot))
+            .enumerate()
+            .map(|(i, (_, l))| ((i + 1).to_string(), Rec::Table((*l).clone())))
+            .collect();
+        groups.push(Rec::Table(vec![
+            ("appearanceSlotInfo".into(), Rec::Table(slots)),
+            ("illusionSlotInfo".into(), Rec::Table(Vec::new())),
+            ("position".into(), Rec::Num(f64::from(position))),
+        ]));
+    }
+    let list = Rec::Table(
+        groups
+            .into_iter()
+            .enumerate()
+            .map(|(i, g)| ((i + 1).to_string(), g))
+            .collect(),
+    );
+    Ok(vec![build(vm, &list)])
 }
 
 /// `C_Log.LogErrorMessage(message)`: the client's log of Lua errors
@@ -595,6 +659,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             outfit_slot_from_inventory_slot,
         ),
         ("C_TransmogOutfitInfo.GetLinkedSlotInfo", linked_slot_info),
+        ("C_TransmogOutfitInfo.GetSlotGroupInfo", slot_group_info),
         ("C_PaperDollInfo.GetInventorySlotInfo", inventory_slot_info),
         ("GetInventorySlotInfo", inventory_slot_info),
         ("GetGlobalEnvironment", global_environment),

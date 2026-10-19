@@ -378,16 +378,19 @@ fn category_appearances(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_TransmogCollection.GetClassFilter()`: the player's class (recorded
-/// for a paladin: 2).
+/// for a paladin: 2) until `SetClassFilter` sets one.
 fn transmog_class_filter(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(
-        engine(vm).units.list[units::PLAYER.0].class_id,
-    )])
+    let set = crate::collections::transmog_class_filter(vm);
+    Ok(vec![Value::Num(set.unwrap_or_else(|| {
+        engine(vm).units.list[units::PLAYER.0].class_id
+    }))])
 }
 
 /// `C_TransmogCollection.GetValidAppearanceSourcesForClass(appearance,
 /// class, category, location)`: as recorded for the class; for a class not
-/// recorded, all the appearance's sources (unverified); else none.
+/// recorded, all the appearance's sources (unverified); else none, and
+/// nothing for an appearance the recordings do not hold (the full probe,
+/// 1.60.1: appearance 1 nothing).
 fn class_appearance_sources(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Some(visual), Some(class)) = (num(c.arg(1)), num(c.arg(2))) else {
         return Ok(vec![]);
@@ -401,9 +404,15 @@ fn class_appearance_sources(vm: &mut Vm, c: NativeCall) -> Ret {
         "C_TransmogCollection.GetValidAppearanceSourcesForClass({visual}, {class}{category})"
     );
     let all = format!("C_TransmogCollection.GetAppearanceSources({visual}{category})");
-    Ok(crate::recorded::lookup_text(vm, &exact)
-        .or_else(|| crate::recorded::lookup_text(vm, &all))
-        .unwrap_or_else(|| vec![Value::Table(vm.new_table())]))
+    if let Some(v) =
+        crate::recorded::lookup_text(vm, &exact).or_else(|| crate::recorded::lookup_text(vm, &all))
+    {
+        return Ok(v);
+    }
+    if !crate::collections::appearance_known(visual) {
+        return Ok(vec![]);
+    }
+    Ok(vec![Value::Table(vm.new_table())])
 }
 
 /// A color's code: `ff` and its red, green and blue as hex, rounded (as

@@ -38,11 +38,12 @@ return #C_MountJournal.GetMountIDs(), source.itemID, source.visualID,
     C_TransmogCollection.GetSourceItemID(21598), statID, GetNumTitles(), GetCurrentTitle(),
     HasCompletedAnyAchievement(), PlayerHasToy(1), pcall(C_ToyBox.GetToyInfo)",
     );
-    // The two mounts whose info was recorded are listed.
+    // The three mounts whose info was recorded (the answers battery's two,
+    // the full probe's first of the journal) are listed.
     assert_eq!(
         &r[..9],
         [
-            "2", "44803", "11257", "44803", "60", "111", "-1", "true", "false"
+            "3", "44803", "11257", "44803", "60", "111", "-1", "true", "false"
         ]
     );
     assert_eq!(r[9], "false");
@@ -62,5 +63,7 @@ C_PetJournal.SetSearchFilter('cat')
 return before, shown, changed, C_ToyBox.GetCollectedShown(), C_PetJournal.GetSearchFilter(),
     C_PetBattles.GetAttackModifier(1, 2), C_TransmogOutfitInfo.IsSlotWeaponSlot(12)",
     );
-    assert_eq!(r, ["true", "false", "false", "true", "cat", "1.5", "true"]);
+    // The recorded character's toy box starts away from the defaults (the
+    // full probe, 1.60.1: unusable toys shown).
+    assert_eq!(r, ["false", "false", "false", "true", "cat", "1.5", "true"]);
 }

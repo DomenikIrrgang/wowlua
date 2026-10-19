@@ -395,7 +395,7 @@ const KNOWN_USE_SPELLS: &[(i64, f64)] = &[(6948, 8690.0)];
 /// An item's use spell: its data's `spell` (as `inventory.rs` casts it),
 /// else one the client named (`KNOWN_USE_SPELLS`, answered by the info
 /// functions only, not cast).
-fn use_spell(vm: &mut Vm, id: i64) -> Option<f64> {
+pub(crate) fn use_spell(vm: &mut Vm, id: i64) -> Option<f64> {
     data_num(vm, id, "spell").or_else(|| {
         crate::gamedata::item_data(vm, id)?;
         KNOWN_USE_SPELLS
@@ -795,6 +795,74 @@ fn is_bound_to_account_until_equip(vm: &mut Vm, c: NativeCall) -> Ret {
         None => false,
     };
     Ok(vec![Value::Bool(yes)])
+}
+
+/// An `ItemTransmogInfo` (Blizzard's `ItemUtil.CreateItemTransmogInfo`
+/// when loaded, its methods copied in, else the plain fields).
+fn transmog_info(vm: &mut Vm, appearance: f64) -> Result<Value, wowlua_vm::LuaError> {
+    let args = [Value::Num(appearance), Value::Num(0.0), Value::Num(0.0)];
+    if let Value::Table(util) = vm.get_global("ItemUtil") {
+        let f = field(vm, util, "CreateItemTransmogInfo");
+        if !f.is_nil() {
+            return Ok(vm.call(f, &args)?.first().copied().unwrap_or(Value::Nil));
+        }
+    }
+    let t = vm.new_table();
+    for (k, v) in ["appearanceID", "secondaryAppearanceID", "illusionID"]
+        .iter()
+        .zip(args)
+    {
+        set(vm, t, k, v);
+    }
+    Ok(Value::Table(t))
+}
+
+/// `C_Item.GetBaseItemTransmogInfo(location)` and
+/// `GetCurrentItemTransmogInfo`: the item's own appearance (its recorded
+/// source, 0 for an item without one), no secondary, no illusion; nil for
+/// an empty place (unverified). The full probe, 1.60.1: the worn Rough
+/// Bronze Shoulders' 157337, a crate's 0.
+fn get_base_item_transmog_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some((_, h)) = held_at(vm, c.arg(1)) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let source = crate::collections::item_source_id(h.id).unwrap_or(0.0);
+    Ok(vec![transmog_info(vm, source)?])
+}
+
+/// `C_Item.GetAppliedItemTransmogInfo(location)`: nothing transmogrified
+/// (appearance 0; the full probe, 1.60.1: the worn shoulders and a crate);
+/// nil for an empty place (unverified).
+fn get_applied_item_transmog_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if held_at(vm, c.arg(1)).is_none() {
+        return Ok(vec![Value::Nil]);
+    }
+    Ok(vec![transmog_info(vm, 0.0)?])
+}
+
+/// `C_Item.CanItemTransmogAppearance(location)`: an item with an
+/// appearance source can, error 0; one without cannot, error 5 (the full
+/// probe, 1.60.1: the worn shoulders, a crate); the documentation's empty
+/// answer for an empty place (unverified).
+fn can_item_transmog_appearance(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some((_, h)) = held_at(vm, c.arg(1)) else {
+        return documented(vm, c);
+    };
+    Ok(match crate::collections::item_source_id(h.id) {
+        Some(_) => vec![Value::Bool(true), Value::Num(0.0)],
+        None => vec![Value::Bool(false), Value::Num(5.0)],
+    })
+}
+
+/// `C_Item.CanScrapItem(location)`: an item that can be worn (the full
+/// probe, 1.60.1: the worn shoulders yes, a crate no; unverified: the
+/// scrapper's other conditions).
+fn can_scrap_item(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some((_, h)) = held_at(vm, c.arg(1)) else {
+        return Ok(vec![Value::Bool(false)]);
+    };
+    let wearable = crate::inventory::slot_for(vm, h.id).is_some();
+    Ok(vec![Value::Bool(wearable)])
 }
 
 /// `C_Item.GetItemGUID(location)`: the engine's GUID of the item there
@@ -1368,7 +1436,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Item.RequestLoadItemData", request_load_item_data),
         ("C_Item.CanBeRefunded", no),
         ("C_Item.CanViewItemPowers", no),
-        ("C_Item.CanScrapItem", no),
+        ("C_Item.CanScrapItem", can_scrap_item),
         ("C_Item.IsItemConduit", no),
         ("C_Item.IsItemCorrupted", no),
         ("C_Item.IsItemCorruptionRelated", no),
@@ -1379,10 +1447,22 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Item.DoesItemMatchSpellItemCondition", no),
         ("C_Item.DoesItemMatchTrackJump", no),
         ("C_Item.GetItemConversionOutputIcon", nil),
-        ("C_Item.GetAppliedItemTransmogInfo", nil),
-        ("C_Item.GetCurrentItemTransmogInfo", nil),
-        ("C_Item.GetBaseItemTransmogInfo", nil),
-        ("C_Item.CanItemTransmogAppearance", documented),
+        (
+            "C_Item.GetAppliedItemTransmogInfo",
+            get_applied_item_transmog_info,
+        ),
+        (
+            "C_Item.GetCurrentItemTransmogInfo",
+            get_base_item_transmog_info,
+        ),
+        (
+            "C_Item.GetBaseItemTransmogInfo",
+            get_base_item_transmog_info,
+        ),
+        (
+            "C_Item.CanItemTransmogAppearance",
+            can_item_transmog_appearance,
+        ),
         // C_Item by GUID.
         ("C_Item.GetItemLinkByGUID", get_item_link_by_guid),
         ("C_Item.GetItemLocation", get_item_location),
@@ -1406,8 +1486,12 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Item.ReplaceTradeskillEnchant", accept),
         // C_Container.
         ("C_Container.SetItemSearch", accept),
+        // The recorded character sorts right to left, and a setting made
+        // does not read back at once (the full probe, 1.60.1: true before
+        // and after `SetSortBagsRightToLeft(false)`; unverified: when it
+        // takes).
         ("C_Container.SetSortBagsRightToLeft", accept),
-        ("C_Container.GetSortBagsRightToLeft", no),
+        ("C_Container.GetSortBagsRightToLeft", yes),
         ("C_Container.SetInsertItemsLeftToRight", accept),
         ("C_Container.GetInsertItemsLeftToRight", no),
         ("C_Container.SetBackpackAutosortDisabled", accept),
