@@ -150,7 +150,7 @@ return f:GetLeft(), f:GetTop(), f:GetFrameStrata(), fs:GetText(), fs:GetObjectTy
             "HIGH",
             "hi",
             "FontString",
-            "Frame:GetBoundsRect is not mocked",
+            "10",
             "1",
             "FontString:SetText(): Font not set\nLua Taint: MyAddon"
         ]
