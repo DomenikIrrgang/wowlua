@@ -1494,7 +1494,7 @@ fn plays_as_the_client_did(name: &str, ratchet: usize) {
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 5914;
+const ANSWERS_MATCHED: usize = 5924;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {
@@ -1705,6 +1705,91 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
     assert!(
         matched >= ANSWERS_MATCHED,
         "{matched} of {} answered as the client did (was {ANSWERS_MATCHED})",
+        theirs.len()
+    );
+}
+
+/// How many of the client's map answers (`/stdtest engine maps`: each
+/// map's data and what it holds) the engine gives as well, the probe run
+/// in the engine with the recorded character's world. Only ever raised.
+const MAPS_MATCHED: usize = 1272;
+
+#[test]
+fn the_engine_answers_the_maps_as_the_client_did() {
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = client(&out);
+    let controls = wowlua_engine::controls::table(&mut vm);
+    wowlua_test::profile::apply(
+        &mut vm,
+        controls,
+        &repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json"),
+    )
+    .expect("the character's profile");
+    addon(&mut vm, "StdTestEngineProbe('maps')");
+    let f = vm
+        .load(
+            b"local out = {} for k, v in pairs(StdTestState.engineMapAnswers) do out[k] = v end return out",
+            "=maps",
+        )
+        .expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let ours: BTreeMap<String, String> = vm
+        .heap
+        .table(t)
+        .entries()
+        .filter_map(|(k, v)| match (k, v) {
+            (Value::Str(k), Value::Str(v)) => {
+                Some((text(&vm, Value::Str(k)), text(&vm, Value::Str(v))))
+            }
+            _ => None,
+        })
+        .collect();
+    let src = fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-maps.lua"))
+        .expect("the fixture");
+    let mut fixture_vm = Vm::new();
+    let f = fixture_vm.load(&src, "=fixture").expect("compiles");
+    let r = fixture_vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let theirs: Vec<(String, String)> = fixture_vm
+        .heap
+        .table(t)
+        .entries()
+        .filter_map(|(k, v)| match (k, v) {
+            (Value::Str(k), Value::Str(v)) => Some((
+                text(&fixture_vm, Value::Str(k)),
+                text(&fixture_vm, Value::Str(v)),
+            )),
+            _ => None,
+        })
+        .collect();
+    let missed: Vec<String> = theirs
+        .iter()
+        .filter(|(call, answer)| ours.get(call) != Some(answer))
+        .map(|(call, answer)| {
+            let mine = ours.get(call).map_or("<not asked>", String::as_str);
+            format!("{call}\n    client: {answer}\n    ours:   {mine}")
+        })
+        .collect();
+    let matched = theirs.len() - missed.len();
+    eprintln!(
+        "{matched} of {} map answers as the client gave them; missed:\n{}",
+        theirs.len(),
+        missed
+            .iter()
+            .take(20)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert!(
+        matched >= MAPS_MATCHED,
+        "{matched} of {} map answers as the client gave them (was {MAPS_MATCHED})",
         theirs.len()
     );
 }

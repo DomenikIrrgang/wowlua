@@ -169,8 +169,11 @@ fn find_spell_action_buttons(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Table(list)])
 }
 
+/// `GetActionInfo(slot)`: the action's type, ID and sub type; an item's
+/// type and ID alone (recorded: slots 181 and 184).
 fn get_action_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(match slot(&c).and_then(|s| action(vm, s)) {
+        Some(a) if a.kind == "item" => vec![vm.str(&a.kind), a.id],
         Some(a) => vec![vm.str(&a.kind), a.id, a.sub_type],
         None => vec![],
     })
