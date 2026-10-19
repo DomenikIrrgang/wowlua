@@ -399,6 +399,36 @@ fn get_area_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.str("")])
 }
 
+/// `ClassicExpansionAtLeast(level)`: the classic expansion level (recorded
+/// `GetClassicExpansionLevel()`: 0) at least `level`.
+fn classic_expansion_at_least(vm: &mut Vm, c: NativeCall) -> Ret {
+    let level = vm.check_number(&c, 1)?;
+    Ok(vec![Value::Bool(0.0 >= level)])
+}
+
+/// `ClassicExpansionAtMost(level)`: the classic expansion level (recorded
+/// 0) at most `level`.
+fn classic_expansion_at_most(vm: &mut Vm, c: NativeCall) -> Ret {
+    let level = vm.check_number(&c, 1)?;
+    Ok(vec![Value::Bool(0.0 <= level)])
+}
+
+/// `GetThreatStatusColor(status)`: grey, yellow, orange, red for 0 to 3,
+/// magenta above, white at 4294967295, as single-precision floats
+/// (warcraft.wiki.gg's values; unverified on the client).
+fn get_threat_status_color(vm: &mut Vm, c: NativeCall) -> Ret {
+    let status = vm.check_number(&c, 1)?;
+    let rgb: [f32; 3] = match status as i64 {
+        0 => [0.69, 0.69, 0.69],
+        1 => [1.0, 1.0, 0.47],
+        2 => [1.0, 0.6, 0.0],
+        3 => [1.0, 0.0, 0.0],
+        4294967295 => [1.0, 1.0, 1.0],
+        _ => [1.0, 0.0, 1.0],
+    };
+    Ok(rgb.iter().map(|v| Value::Num(f64::from(*v))).collect())
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         (
@@ -407,6 +437,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         ("IsPlayerInWorld", is_player_in_world),
         ("GetLocale", get_locale),
+        ("ClassicExpansionAtLeast", classic_expansion_at_least),
+        ("ClassicExpansionAtMost", classic_expansion_at_most),
+        ("GetThreatStatusColor", get_threat_status_color),
         ("GetCurrentRegion", get_current_region),
         ("GetCurrentRegionName", get_current_region_name),
         (

@@ -674,6 +674,13 @@ fn unit_class(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// `UnitClassBase`: the class's file name and ID (recorded: "PALADIN", 2).
+fn unit_class_base(vm: &mut Vm, c: NativeCall) -> Ret {
+    with_unit(vm, &c, |vm, u| {
+        vec![vm.str(&u.class), Value::Num(u.class_id)]
+    })
+}
+
 /// `UnitRace`: the race's name, file name and ID (recorded: "Undead",
 /// "Scourge", 5); a creature has none (`/stdtest engine scenario combat`).
 fn unit_race(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -1195,6 +1202,7 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("UnitNameUnmodified", unit_name),
         ("UnitLevel", unit_level),
         ("UnitClass", unit_class),
+        ("UnitClassBase", unit_class_base),
         ("UnitRace", unit_race),
         ("UnitEffectiveLevel", unit_effective_level),
         ("UnitClassification", unit_classification),

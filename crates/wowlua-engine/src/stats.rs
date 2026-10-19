@@ -1196,9 +1196,11 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
             let id = num(c.arg(1));
             let name = id.and_then(|id| flyout_name(vm, id));
             crate::note_default(vm, stat.function, &c, 1);
+            // One the spellbook lacks: no name, no slots, unknown (the
+            // client knows every flyout; unverified).
             Ok(match name {
                 Some(n) => vec![vm.str(&n), vm.str(""), Value::Num(0.0), Value::Bool(true)],
-                None => vec![],
+                None => vec![vm.str(""), vm.str(""), Value::Num(0.0), Value::Bool(false)],
             })
         }
         None => Ok(empty(vm, stat.function)),
