@@ -94,8 +94,9 @@ at(12.380) press(_G["MailItem1Button"])
 at(14.013) tried("3881CB0F9A")
 e.setLatency(0.348)
 at(14.729) press(OpenMailFrame.OpenMailAttachments[1])
--- Another player's death nearby.
-at(16.286) world("UNIT_DIED", "Player-0000-00000000")
+-- Another player's death nearby, among the shot's bags' packet's events
+-- (recorded: before their BAG_UPDATE_DELAYED).
+at(16.2) e.beforeEvent("BAG_UPDATE_DELAYED", function() world("UNIT_DIED", "Player-0000-00000000") end)
 at(17)
 check("the shot taken, the letter gone", GetInboxNumItems() == 2 and C_Container.GetContainerItemID(0, 17) == 8067)
 at(19.024) tried("C8F635ACA8")

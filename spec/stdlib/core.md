@@ -85,10 +85,12 @@ end
   an internal pool. Two registrations with the same event and the same unit set
   share a frame. Unit filters never interfere with each other or with plain
   `@event` handlers.
-- **Order and isolation.** Handlers run in registration order. Each handler runs
-  isolated, so an error is reported through `geterrorhandler()` and the
-  remaining handlers still run (see the error policy in
-  [`wowlua:errors`](infrastructure.md#errors)).
+- **Order and isolation.** Handlers of one frame run in registration order;
+  the game gives an event to frames in the order each first registered an
+  event (so the plain handlers' shared frame, registered first, before a unit
+  registration's frame). Each handler runs isolated, so an error is reported
+  through `geterrorhandler()` and the remaining handlers still run (see the
+  error policy in [`wowlua:errors`](infrastructure.md#errors)).
 - **Changes during dispatch.** Registering or unregistering inside a handler
   takes effect after the current dispatch.
 - **Static methods.** `@event` on a static class method registers at class

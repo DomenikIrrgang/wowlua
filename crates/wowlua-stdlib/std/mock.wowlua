@@ -1212,6 +1212,12 @@ export function gameError(name: string)
     engine().gameError(name)
 end
 
+--- `fn` runs once just before the engine next fires event `name`: a
+--- world event among a server packet's events.
+export function beforeEvent(name: string, fn: () -> ())
+    engine().beforeEvent(name, fn)
+end
+
 --- The server's update owing an aura state change (a blow's
 --- `statesAfter`) comes now, after the moment's other packets.
 export function tellAuraStates()

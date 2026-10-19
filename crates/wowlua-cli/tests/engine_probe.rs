@@ -1462,7 +1462,7 @@ fn the_engine_plays_group_as_the_client_did() {
 
 /// How many of the inspect scenario's lines the engine plays as the
 /// client did: only ever up.
-const INSPECT_MATCHED: usize = 285;
+const INSPECT_MATCHED: usize = 286;
 
 /// The inspect scenario: another player's gear and talents.
 #[test]
@@ -1493,7 +1493,7 @@ fn the_engine_plays_profession_as_the_client_did() {
 
 /// How many of the legacy scenario's lines the engine plays as the client
 /// did: only ever up.
-const LEGACY_MATCHED: usize = 120;
+const LEGACY_MATCHED: usize = 123;
 
 /// The legacy scenario: the legacy system's tree, five ranks bought and
 /// applied.
@@ -1538,7 +1538,7 @@ fn the_engine_plays_lfg_as_the_client_did() {
 /// How many of the mail2 scenario's lines the engine plays as the client
 /// did: only ever up. Not yet: another player's death (the world's), told
 /// inside the taken item's packet.
-const MAIL2_MATCHED: usize = 218;
+const MAIL2_MATCHED: usize = 219;
 
 /// The mail2 scenario: the inbox's first fetch of a session, a sold
 /// auction's money and a won auction's item taken.
