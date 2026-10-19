@@ -17,6 +17,9 @@ local e = __engine
 -- As in the client's frames, some events wait for the frame's end, each
 -- once, in their names' order (`setFrameBatching`).
 e.setFrameBatching(true)
+-- The snapshot was taken as the recording began: its cooldowns' time
+-- left counts from now.
+e.snapshotTaken()
 local player = e.player
 e.setLatency(0.3)
 -- The warrior's names as the recording has them, scrubbed.

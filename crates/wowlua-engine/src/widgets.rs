@@ -187,6 +187,9 @@ pub struct World {
     /// The time a request takes to come back from the server
     /// (`mock.setLatency`; `None`: 0.4 s).
     pub latency: Option<f64>,
+    /// When the profile's snapshot was taken on the engine's clock
+    /// (`snapshotTaken`): its cooldowns' time left counts from then.
+    pub snapshot_at: Option<f64>,
     /// The slider whose thumb the user drags.
     pub dragging_thumb: Option<WidgetId>,
     /// Edit Mode's saved layouts and active one.

@@ -648,6 +648,12 @@ export function setLatency(seconds: number)
     engine().setLatency(seconds)
 end
 
+--- The profile's snapshot was taken now: the cooldowns it recorded end
+--- their recorded time left from here.
+export function snapshotTaken()
+    engine().snapshotTaken()
+end
+
 export function advanceTime(sec: number)
     engine().advanceTime(sec)
 end
