@@ -838,6 +838,54 @@ fn session_start(recording: &str) -> Option<f64> {
 /// recorder's log and the client's, each line's time aside, the noise of
 /// the world around (nameplates, the cursor, the mouse) and the
 /// recordings' own mistakes left out; with Blizzard's errors.
+/// The group finder's server, for the play scripts (test-only: no mock
+/// control yet): `ScenarioLfg.listings(activityID, n)` makes the server's
+/// other listings `n` one-player groups of that activity;
+/// `ScenarioLfg.update(searchResultID)` is the server's word that one of
+/// the last search's results changed (false when not one of them).
+fn lfg_hooks(vm: &mut Vm) {
+    fn listings(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+        let (Value::Num(activity), Value::Num(n)) = (c.arg(1), c.arg(2)) else {
+            return Ok(vec![]);
+        };
+        wowlua_engine::engine_mut(vm).world.lfg.listings.clear();
+        for _ in 0..n as usize {
+            let listing = wowlua_engine::lfg::SearchResult {
+                activity_ids: vec![activity],
+                members: vec![wowlua_engine::lfg::Member {
+                    name: "Otherplayer".into(),
+                    class_name: "Warrior".into(),
+                    class_filename: "WARRIOR".into(),
+                    level: 20.0,
+                    assigned_role: "NONE".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            wowlua_engine::lfg::add_listing(vm, listing);
+        }
+        Ok(vec![])
+    }
+    fn update(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+        let Value::Num(id) = c.arg(1) else {
+            return Ok(vec![Value::Bool(false)]);
+        };
+        Ok(vec![Value::Bool(wowlua_engine::lfg::result_updated(
+            vm, id,
+        ))])
+    }
+    let t = vm.new_table();
+    for (name, f) in [
+        ("listings", listings as wowlua_vm::NativeFn),
+        ("update", update),
+    ] {
+        let k = vm.str(name);
+        let f = vm.native(name, f);
+        let _ = vm.heap.table_mut(t).set(k, f);
+    }
+    vm.set_global("ScenarioLfg", Value::Table(t));
+}
+
 fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> {
     let ui = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot")?;
     let dir = build();
@@ -889,6 +937,7 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
 function check(label, ok) if not ok then ScenarioFailures[#ScenarioFailures + 1] = label end end
 function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((select(i, ...))) end ScenarioNotes[#ScenarioNotes + 1] = table.concat(t, ' ') end",
     );
+    lfg_hooks(&mut vm);
     // The recording's ping (`GetNetStats`' world latency, ms): the server's
     // answers come a round trip later; a play script may set its own.
     if let Some(ms) = regex::Regex::new(r#"\["latency"\] = "[^,]*, [^,]*, [0-9.]+, ([0-9.]+)""#)
@@ -1514,6 +1563,17 @@ const QUEST_MATCHED: usize = 5430;
 #[test]
 fn the_engine_plays_quest_as_the_client_did() {
     plays_as_the_client_did("quest", QUEST_MATCHED);
+}
+
+/// How many of the lfg scenario's lines the engine plays as the client
+/// did: only ever up.
+const LFG_MATCHED: usize = 100;
+
+/// The lfg scenario: the group finder opened, four listings posted from
+/// Blizzard's listing panel and delisted from the browse tab's results.
+#[test]
+fn the_engine_plays_lfg_as_the_client_did() {
+    plays_as_the_client_did("lfg", LFG_MATCHED);
 }
 
 /// A scenario played: no error of Blizzard's, every UI check passed, the

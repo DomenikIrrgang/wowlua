@@ -1534,7 +1534,7 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
         // the engine's tests.
         if let Ok(checks) = state.get::<mlua::Table>("engineChecks") {
             let mut list = Vec::new();
-            for pair in checks.pairs::<String, mlua::String>() {
+            for pair in checks.pairs::<String, mlua::LuaString>() {
                 let (label, answer) = pair.map_err(|e| anyhow!("{e}"))?;
                 list.push((label, me.scrub(&escaped_bytes(&answer.as_bytes()))));
             }
@@ -1885,6 +1885,10 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             r"string (?:\|Hplayer:[^|]*\|h\[)?([^\[\]|;]+?)(?:\]\|h)? has (?:gone offline|come online)\.",
         )
         .expect("a valid pattern");
+        // Another player's invitation names them (its chat line too, as a
+        // link).
+        let inviter = regex::Regex::new(r"^[0-9.]+ PARTY_INVITE_REQUEST\(string ([^;]+);")
+            .expect("a valid pattern");
         // First every recording's names (a name one recording shows
         // may be in another's chat), then each recording scrubbed of
         // them all.
@@ -1918,7 +1922,7 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             let log: mlua::Table = scenario.get("log").map_err(|e| anyhow!("{e}"))?;
             for line in log.sequence_values::<String>() {
                 let line = line.map_err(|e| anyhow!("{e}"))?;
-                if let Some(c) = friend.captures(&line) {
+                if let Some(c) = friend.captures(&line).or_else(|| inviter.captures(&line)) {
                     let other = c[1].trim().to_string();
                     let first = other.split(' ').next().unwrap_or("");
                     let own = first == me.name || secrets.iter().any(|s| s == first);
@@ -2072,6 +2076,22 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
     Ok(())
 }
 
+/// A recorded answer as text: UTF-8 as it is, any other byte (a binary
+/// answer, `C_EncodingUtil.SerializeCBOR`'s) as `\xNN`.
+fn escaped_bytes(bytes: &[u8]) -> String {
+    if let Ok(s) = std::str::from_utf8(bytes) {
+        return s.to_string();
+    }
+    let mut out = String::new();
+    for chunk in bytes.utf8_chunks() {
+        out.push_str(chunk.valid());
+        for b in chunk.invalid() {
+            out.push_str(&format!("\\x{b:02x}"));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2176,20 +2196,4 @@ mod tests {
         let open = info.replace("string Tamsin", "string ");
         assert_eq!(scrub_earners("GetAchievementInfo(6)", &open), open);
     }
-}
-
-/// A recorded answer as text: UTF-8 as it is, any other byte (a binary
-/// answer, `C_EncodingUtil.SerializeCBOR`'s) as `\xNN`.
-fn escaped_bytes(bytes: &[u8]) -> String {
-    if let Ok(s) = std::str::from_utf8(bytes) {
-        return s.to_string();
-    }
-    let mut out = String::new();
-    for chunk in bytes.utf8_chunks() {
-        out.push_str(chunk.valid());
-        for b in chunk.invalid() {
-            out.push_str(&format!("\\x{b:02x}"));
-        }
-    }
-    out
 }

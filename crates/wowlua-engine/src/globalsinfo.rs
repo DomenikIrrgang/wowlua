@@ -808,7 +808,6 @@ const NOTHING: &[&str] = &[
     "PlaceRaidMarker",
     "ClearRaidMarker",
     "RemoveRaidTargets",
-    "RequestRaidInfo",
     "RespondInstanceLock",
     "SetSavedInstanceExtend",
     // The client window, the camera, the console, profiling.
