@@ -709,7 +709,9 @@ fn get_monitor_aspect_ratio(vm: &mut Vm, _c: NativeCall) -> Ret {
     let size = ask(vm, "GetPhysicalScreenSize", &[]);
     let w = size.first().copied().and_then(num).unwrap_or(1920.0);
     let h = size.get(1).copied().and_then(num).unwrap_or(1080.0);
-    Ok(vec![Value::Num(if h > 0.0 { w / h } else { 16.0 / 9.0 })])
+    let ratio = if h > 0.0 { w / h } else { 16.0 / 9.0 };
+    // A single-precision float (the full probe: 1.7777777910233).
+    Ok(vec![Value::Num(f64::from(ratio as f32))])
 }
 
 /// `GetCurrentScaledResolution()`: the UI's width and height
@@ -829,7 +831,8 @@ fn get_glancing_blow_chance(vm: &mut Vm, c: NativeCall) -> Ret {
     let skill = capped_skill(vm, &c);
     let defense = arg_num(vm, &c, 2).unwrap_or(skill);
     let chance = (0.1 + (defense - skill) * 0.02).clamp(0.0, 1.0);
-    Ok(vec![Value::Num(chance)])
+    // A single-precision float (the full probe: 0.10000000149012).
+    Ok(vec![Value::Num(f64::from(chance as f32))])
 }
 
 /// `GetGlancingBlowPenalty(playerWeaponSkill, targetDefenseSkill)`: the
@@ -844,7 +847,9 @@ fn get_glancing_blow_penalty(vm: &mut Vm, c: NativeCall) -> Ret {
     let diff = defense - skill;
     let low = (1.3 - 0.05 * diff).clamp(0.01, 0.91);
     let high = (1.2 - 0.03 * diff).clamp(0.2, 0.99);
-    Ok(vec![Value::Num(1.0 - (low + high) / 2.0)])
+    // Worked in single precision (the full probe: 0.049999952316284).
+    let (low, high) = (low as f32, high as f32);
+    Ok(vec![Value::Num(f64::from(1.0 - (low + high) / 2.0))])
 }
 
 /// `ResistancePercent(resistance, casterLevel)`: the share of damage the

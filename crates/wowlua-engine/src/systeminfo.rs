@@ -2977,6 +2977,16 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("CombatLogClearEntries", nothing),
         ("CombatLogGetRetentionTime", combat_log_get_retention_time),
         ("CombatLogSetRetentionTime", combat_log_set_retention_time),
+        // Their twins, which Blizzard's deprecation file makes the globals
+        // (the full probe: 300 both).
+        (
+            "C_CombatLog.GetEntryRetentionTime",
+            combat_log_get_retention_time,
+        ),
+        (
+            "C_CombatLog.SetEntryRetentionTime",
+            combat_log_set_retention_time,
+        ),
         ("CombatLog_Object_IsA", combat_log_object_is_a),
         ("CombatTextSetActiveUnit", nothing),
         // Secrets.

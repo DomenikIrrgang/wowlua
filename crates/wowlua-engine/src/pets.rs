@@ -290,10 +290,6 @@ fn pet_has_action_bar(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(pet(vm).is_some())])
 }
 
-fn yes(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(true)])
-}
-
 /// `GetPetActionInfo(slot)`: name, texture, isToken, isActive,
 /// autoCastAllowed, autoCastEnabled, spellID, checksRange, inRange.
 fn get_pet_action_info(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -325,6 +321,10 @@ fn get_pet_action_cooldown(_vm: &mut Vm, _c: NativeCall) -> Ret {
 fn get_pet_action_slot_usable(vm: &mut Vm, c: NativeCall) -> Ret {
     let usable = action(vm, &c).is_some() && pet_alive(vm);
     Ok(vec![Value::Bool(usable)])
+}
+
+fn pet_uses_pet_frame(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(pet(vm).is_some())])
 }
 
 fn pet_alive(vm: &Vm) -> bool {
@@ -481,7 +481,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("HasPetUI", has_pet_ui),
         ("PetHasActionBar", pet_has_action_bar),
-        ("PetUsesPetFrame", yes),
+        // With a pet (the full probe: false without one).
+        ("PetUsesPetFrame", pet_uses_pet_frame),
         ("GetPetActionInfo", get_pet_action_info),
         ("GetPetActionCooldown", get_pet_action_cooldown),
         ("GetPetActionSlotUsable", get_pet_action_slot_usable),

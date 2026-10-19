@@ -1166,6 +1166,40 @@ fn get_specialization_info_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     ])
 }
 
+/// `GetSpecializationInfoForClassID(classID, specIndex [, sex])`: the class's
+/// one specialization at index 1, as recorded; class 0 the pets' (the full
+/// probe: 1493 "Default", "I'm a pet!"); numbers taken whole, the sex
+/// ignored, any other index or class nothing (the full probe).
+fn get_specialization_info_for_class_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    let whole = |v: Value| num(v).map(f64::trunc);
+    let (Some(class), Some(index)) = (whole(vm.hidden(c.arg(1))), whole(vm.hidden(c.arg(2))))
+    else {
+        return Ok(vec![]);
+    };
+    if index != 1.0 {
+        return Ok(vec![]);
+    }
+    let (id, name, about, icon) = if class == 0.0 {
+        (1493.0, "Default", "I'm a pet!", 6642732.0)
+    } else {
+        match SPECS.iter().find(|s| s.1 == class) {
+            Some(&(id, _, _, name, icon)) => (id, name, "", icon),
+            None => return Ok(vec![]),
+        }
+    };
+    Ok(vec![
+        Value::Num(id),
+        vm.str(name),
+        vm.str(about),
+        Value::Num(icon),
+        vm.str(ROLE),
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::Nil,
+        Value::Nil,
+    ])
+}
+
 /// `GetSpecializationInfoForSpecID(specID [, sex])`: as
 /// `GetSpecializationInfoForClassID` recorded it (id, name, "", icon,
 /// role, not recommended, not for boosts, no mastery spells).
@@ -1196,10 +1230,21 @@ fn get_specialization_name_for_spec_id(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `GetSpecializationRoleByID(specID)`.
 fn get_specialization_role_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(vec![match spec(vm, &c) {
-        Some(_) => vm.str(ROLE),
-        None => Value::Nil,
-    }])
+    // Another ID: nothing (the full probe).
+    Ok(match spec(vm, &c) {
+        Some(_) => vec![vm.str(ROLE)],
+        None => vec![],
+    })
+}
+
+/// `GetPrimarySpecialization()`: the player's class's one specialization
+/// (the full probe: the paladin's 1486).
+fn get_primary_specialization(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let class = engine(vm).units.list[crate::units::PLAYER.0].class.clone();
+    Ok(match SPECS.iter().find(|s| s.2 == class) {
+        Some(s) => vec![Value::Num(s.0)],
+        None => vec![Value::Nil],
+    })
 }
 
 /// `GetSpecializationRoleEnumByID(specID)`: `Enum.LFGRole.Damage`, 2
@@ -1550,6 +1595,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             get_specialization_name_for_spec_id,
         ),
         ("GetSpecializationRoleByID", get_specialization_role_by_id),
+        ("GetPrimarySpecialization", get_primary_specialization),
+        (
+            "GetSpecializationInfoForClassID",
+            get_specialization_info_for_class_id,
+        ),
         (
             "GetSpecializationRoleEnumByID",
             get_specialization_role_enum_by_id,

@@ -1081,6 +1081,10 @@ fn location_key(vm: &mut Vm, v: Value) -> Option<f64> {
 
 /// The documented empty values of `name` (no stat for this call).
 fn empty(vm: &mut Vm, name: &str) -> Vec<Value> {
+    // The client's answer with nothing there, if the full probe settled it.
+    if let Some(answer) = crate::blanks::answer(name) {
+        return crate::recorded::parse_answer(vm, answer);
+    }
     let api = engine(vm).api;
     match api.functions.iter().find(|f| f.name == name) {
         Some(f) => crate::defaults(vm, api, &f.doc),
@@ -1156,8 +1160,11 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
         };
         match (stats.get(stat.key), index) {
             (Some(Entry::One(v)), None) => Some(v.clone()),
-            (Some(Entry::ByIndex(m)), Some(i)) if i.fract() == 0.0 => {
-                let v = m.get(&(i as i64)).cloned();
+            // An index with a fraction as its whole part (the full probe:
+            // `GetCombatRating(1.5)`, `C_SpellBook.GetSpellBookItemInfo(1.5,
+            // 0)` answered as with 1).
+            (Some(Entry::ByIndex(m)), Some(i)) => {
+                let v = m.get(&(i.trunc() as i64)).cloned();
                 // For the attribute's effective value only (as the sheet
                 // asks it); unverified for others.
                 if stat.ask == ForStat {

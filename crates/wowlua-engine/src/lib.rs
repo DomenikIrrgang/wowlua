@@ -15,6 +15,7 @@ pub mod bank;
 pub mod bars;
 pub mod batch;
 pub mod bindings;
+pub mod blanks;
 pub mod buttons;
 pub mod casting;
 pub mod channels;
@@ -872,6 +873,9 @@ pub(crate) fn call_text(vm: &Vm, name: &str, c: &NativeCall, first: usize) -> St
 /// difficulty recorded 1, the action bar toggles, the heirloom and wardrobe filters recorded
 /// checked, nothing super-tracked, no map pin).
 const OVER_RECORDED: &[&str] = &[
+    // A rule over the recorded calls (the full probe: any sex, numbers
+    // taken whole, the pets' class 0).
+    "GetSpecializationInfoForClassID",
     "GetDungeonDifficultyID",
     "GetActionBarToggles",
     "C_Heirloom.GetCollectedHeirloomFilter",
@@ -904,6 +908,9 @@ fn fill_ins() -> Vec<(&'static str, NativeFn)> {
         .chain(systeminfo::behaviours())
         .chain(actions2::behaviours())
         .chain(leftovers2::behaviours())
+        // Last: what the client answers with nothing there (the full
+        // probe) takes the place of the guesses above.
+        .chain(blanks::behaviours())
         .collect()
 }
 

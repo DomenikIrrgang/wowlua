@@ -1668,7 +1668,13 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
         crate::profile::run(saved, tmp.path())?;
         let text = std::fs::read_to_string(tmp.path())?;
         let path = client.join("forever-camelot-character.json");
-        write_file(&path, &me.scrub(&text))?;
+        // The character's last name, which the snapshot lacks (the full
+        // probe's `UnitName("player")` gives one).
+        let mut text = me.scrub(&text);
+        if me.last_name.is_some() {
+            text = with_last_name(&text);
+        }
+        write_file(&path, &text)?;
     }
 
     // The answers to the calls the engine could not answer (`/stdtest

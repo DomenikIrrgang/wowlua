@@ -77,14 +77,14 @@ fn get(vm: &mut Vm, key: &str) -> Value {
     vm.heap.table(t).get(k)
 }
 
-fn put(vm: &mut Vm, key: &str, v: Value) {
+pub(crate) fn put(vm: &mut Vm, key: &str, v: Value) {
     let t = state(vm);
     let k = vm.str(key);
     let _ = vm.heap.table_mut(t).set(k, v);
 }
 
 /// A kept setting, or `default` before any setter ran.
-fn get_or(vm: &mut Vm, key: &str, default: Value) -> Value {
+pub(crate) fn get_or(vm: &mut Vm, key: &str, default: Value) -> Value {
     match get(vm, key) {
         Value::Nil => default,
         v => v,
@@ -322,6 +322,58 @@ fn get_default_language(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![vm.str(name), Value::Num(id)])
 }
 
+/// The player's languages: its faction's, then its race's own (the full
+/// probe: the Undead's "Orcish", 1 and "Gutterspeak", 33; the other
+/// races' unverified, the client's language IDs).
+fn languages(vm: &Vm) -> Vec<(&'static str, f64)> {
+    let race = engine(vm).units.list[units::PLAYER.0].race.clone();
+    let (file, _) = units::race_file_and_id(&race);
+    let own: Option<(&str, f64)> = match file.as_str() {
+        "Scourge" => Some(("Gutterspeak", 33.0)),
+        "Tauren" => Some(("Taurahe", 3.0)),
+        "Troll" => Some(("Zandali", 14.0)),
+        "BloodElf" => Some(("Thalassian", 10.0)),
+        "Goblin" => Some(("Goblin", 40.0)),
+        "Dwarf" => Some(("Dwarvish", 6.0)),
+        "NightElf" => Some(("Darnassian", 2.0)),
+        "Gnome" => Some(("Gnomish", 13.0)),
+        "Draenei" => Some(("Draenei", 35.0)),
+        "Worgen" => Some(("Gilnean", 39.0)),
+        _ => None,
+    };
+    let alliance = matches!(
+        file.as_str(),
+        "Human" | "Dwarf" | "NightElf" | "Gnome" | "Draenei" | "Worgen"
+    );
+    let mut out = vec![if alliance {
+        ("Common", 7.0)
+    } else {
+        ("Orcish", 1.0)
+    }];
+    out.extend(own);
+    out
+}
+
+/// `GetNumLanguages()`: how many the player speaks.
+pub(crate) fn get_num_languages(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(languages(vm).len() as f64)])
+}
+
+/// `GetLanguageByIndex(index)`: a language's name and ID; nothing past
+/// them (the full probe).
+fn get_language_by_index(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Num(i) = vm.hidden(c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    let list = languages(vm);
+    Ok(
+        match (i as usize).checked_sub(1).and_then(|i| list.get(i)) {
+            Some((name, id)) if i >= 1.0 => vec![vm.str(name), Value::Num(*id)],
+            _ => vec![],
+        },
+    )
+}
+
 /// `SelectedRealmName()`: the realm the player is on, as `GetRealmName`
 /// answers (from the name; unverified).
 fn selected_realm_name(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -338,6 +390,44 @@ fn get_local_game_time(vm: &mut Vm, _c: NativeCall) -> Ret {
     let hour = t.first().copied().unwrap_or(Value::Num(0.0));
     let minute = t.get(1).copied().unwrap_or(Value::Num(0.0));
     Ok(vec![hour, minute])
+}
+
+/// `GetResSicknessDuration()`: how long resurrection sickness lasts at the
+/// player's level, unformatted: classic's minute a level above 10, ten
+/// at most (the full probe: "10 |4minute:minutes;" at level 21; the
+/// other levels unverified), none below level 11.
+fn get_res_sickness_duration(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let level = engine(vm).units.list[units::PLAYER.0].level;
+    let minutes = (level - 10.0).min(10.0).floor();
+    if minutes < 1.0 {
+        return Ok(vec![Value::Nil]);
+    }
+    Ok(vec![vm.str(&format!("{minutes} |4minute:minutes;"))])
+}
+
+/// `GetMouseButtonName(button)`: a mouse button's own name; another
+/// "UNKNOWN" (the full probe: the five buttons, "x"; Button6 and above
+/// unverified).
+fn get_mouse_button_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = match vm.hidden(c.arg(1)) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => String::new(),
+    };
+    let known = matches!(name.as_str(), "LeftButton" | "RightButton" | "MiddleButton")
+        || name
+            .strip_prefix("Button")
+            .and_then(|n| n.parse::<u32>().ok())
+            .is_some_and(|n| (4..=31).contains(&n));
+    Ok(vec![vm.str(if known { &name } else { "UNKNOWN" })])
+}
+
+/// `GetCameraZoom()`: the camera's distance, as the `cameraSavedDistance`
+/// CVar keeps it (the full probe: 30 with it "30.000000").
+fn get_camera_zoom(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let d = crate::framescript::cvar_get(vm, "cameraSavedDistance")
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(0.0);
+    Ok(vec![Value::Num(d)])
 }
 
 /// `GetDefaultScale()`: the UI scale that makes the screen 768 units high
@@ -641,6 +731,31 @@ macro_rules! setting {
             Ok(vec![])
         }
     };
+    // A flag: the setter keeps its argument's truth (the full probe:
+    // `SetOptOutOfLoot("x")` and `(0)` read back true, `()` false).
+    (truth $getter:ident, $setter:ident, $key:literal, $default:expr) => {
+        fn $getter(vm: &mut Vm, _c: NativeCall) -> Ret {
+            Ok(vec![get_or(vm, $key, $default)])
+        }
+
+        fn $setter(vm: &mut Vm, c: NativeCall) -> Ret {
+            let v = Value::Bool(vm.hidden(c.arg(1)).truthy());
+            put(vm, $key, v);
+            Ok(vec![])
+        }
+    };
+    // A setting the server keeps: the setter asks it, the getter reads
+    // the same until it answers (the full probe: read back unchanged right
+    // after; unverified when the change lands).
+    (server $getter:ident, $setter:ident, $key:literal, $default:expr) => {
+        fn $getter(vm: &mut Vm, _c: NativeCall) -> Ret {
+            Ok(vec![get_or(vm, $key, $default)])
+        }
+
+        fn $setter(_vm: &mut Vm, _c: NativeCall) -> Ret {
+            Ok(vec![])
+        }
+    };
 }
 
 // The guild bank's open tab, the first (warcraft.wiki.gg).
@@ -658,21 +773,23 @@ setting!(
     "ejTier",
     Value::Num(0.0)
 );
-// The encounter journal's difficulty, normal dungeons (1).
+// The encounter journal's difficulty: none chosen, 0 (the full probe; the
+// newest answer, over normal dungeons' 1).
 setting!(
     ej_get_difficulty,
     ej_set_difficulty,
     "ejDifficulty",
-    Value::Num(1.0)
+    Value::Num(0.0)
 );
 setting!(
-    get_opt_out_of_loot,
+    truth get_opt_out_of_loot,
     set_opt_out_of_loot,
     "optOutOfLoot",
     Value::Bool(false)
 );
+// Unchanged right after `SetAllowLowLevelRaid(true)` (the full probe).
 setting!(
-    get_allow_low_level_raid,
+    server get_allow_low_level_raid,
     set_allow_low_level_raid,
     "allowLowLevelRaid",
     Value::Bool(false)
@@ -695,11 +812,13 @@ setting!(
     "errorCallstackHeight",
     Value::Nil
 );
+// Allowed: the account's (the full probe; an account that never allowed
+// them answers false, unverified).
 setting!(
     are_dangerous_scripts_allowed,
     set_allow_dangerous_scripts,
     "dangerousScripts",
-    Value::Bool(false)
+    Value::Bool(true)
 );
 setting!(
     get_selected_display_channel,
@@ -707,20 +826,44 @@ setting!(
     "displayChannel",
     Value::Nil
 );
+// The guild roster shows offline members: at first (the full probe).
+setting!(
+    truth get_guild_roster_show_offline,
+    set_guild_roster_show_offline,
+    "guildRosterShowOffline",
+    Value::Bool(true)
+);
+// None selected: 0 (the full probe).
 setting!(
     get_selected_war_game_type,
     set_selected_war_game_type,
     "warGameType",
-    Value::Nil
+    Value::Num(0.0)
 );
-// The helmet and the cloak shown, as a new character has them.
-setting!(showing_helm, show_helm, "showHelm", Value::Bool(true));
-setting!(showing_cloak, show_cloak, "showCloak", Value::Bool(true));
+// The helmet and the cloak: not shown, and unchanged right after
+// `ShowHelm(true)` (the full probe; unverified whether another character
+// shows them).
+setting!(
+    server showing_helm,
+    show_helm,
+    "showHelm",
+    Value::Bool(false)
+);
+setting!(
+    server showing_cloak,
+    show_cloak,
+    "showCloak",
+    Value::Bool(false)
+);
 
 /// `EJ_GetLootFilter()`: the class and specialization the journal's loot
-/// is filtered by, none (0, 0) until `EJ_SetLootFilter` (unverified).
+/// is filtered by: the class the `EJLootClass` CVar keeps (the full probe:
+/// 2, 0 with it "2"), until `EJ_SetLootFilter`.
 fn ej_get_loot_filter(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let class = get_or(vm, "ejLootClass", Value::Num(0.0));
+    let saved = crate::framescript::cvar_get(vm, "EJLootClass")
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(0.0);
+    let class = get_or(vm, "ejLootClass", Value::Num(saved));
     let spec = get_or(vm, "ejLootSpec", Value::Num(0.0));
     Ok(vec![class, spec])
 }
@@ -1344,19 +1487,16 @@ const NIL: &[&str] = &[
     "GetMirrorTimerProgress",
     "GetSoundEntryCount",
     "GetCurrentCombatTextEventInfo",
-    "GetResSicknessDuration",
     "ItemTextGetItem",
     "ItemTextGetText",
     "ItemTextGetCreator",
     "ItemTextGetMaterial",
     "GMSurveyQuestion",
-    // No languages (`GetNumLanguages` answers 0), no world map action
-    // button, no garrison followers, no specializations.
-    "GetLanguageByIndex",
+    // No world map action button, no garrison followers, no
+    // specializations.
     "GetWorldMapActionButtonSpellInfo",
     "GetFollowerTypeIDFromSpell",
     "GetJournalInfoForSpellConfirmation",
-    "GetPrimarySpecialization",
     "EJ_GetInstanceByIndex",
     "EJ_GetInstanceInfo",
     "EJ_GetEncounterInfo",
@@ -1448,9 +1588,15 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("PetCanBeDismissed", has_pet),
         ("CanLootUnit", can_loot_unit),
         ("GetDefaultLanguage", get_default_language),
+        ("GetLanguageByIndex", get_language_by_index),
         ("GetAlternativeDefaultLanguage", get_default_language),
         ("SelectedRealmName", selected_realm_name),
         ("GetLocalGameTime", get_local_game_time),
+        ("GetResSicknessDuration", get_res_sickness_duration),
+        ("GetCameraZoom", get_camera_zoom),
+        ("GetGuildRosterShowOffline", get_guild_roster_show_offline),
+        ("SetGuildRosterShowOffline", set_guild_roster_show_offline),
+        ("GetMouseButtonName", get_mouse_button_name),
         ("GetDefaultScale", get_default_scale),
         ("GetSchoolString", get_school_string),
         ("IsOutlineModeSupported", is_outline_mode_supported),

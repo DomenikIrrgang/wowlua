@@ -648,7 +648,8 @@ fn get_loot_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn get_loot_slot_link(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(item) = open_item(vm, &c) else {
-        return Ok(vec![]);
+        // No such slot: nil (the full probe, no loot open).
+        return Ok(vec![Value::Nil]);
     };
     Ok(vec![
         crate::character::link_of_id(vm, item.id).unwrap_or(Value::Nil),

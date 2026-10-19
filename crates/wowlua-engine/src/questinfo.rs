@@ -341,7 +341,14 @@ fn listed_item(vm: &mut Vm, c: &NativeCall, key: &str) -> Option<(i64, f64)> {
 fn get_quest_log_reward_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(match listed_item(vm, &c, "rewards") {
         Some((id, count)) => reward_info(vm, id, count),
-        None => vec![],
+        // No such reward: its six values empty, 1 of quality 0 (the full
+        // probe).
+        None => {
+            let mut out = vec![Value::Nil; 6];
+            out[2] = Value::Num(1.0);
+            out[3] = Value::Num(0.0);
+            out
+        }
     })
 }
 
@@ -349,7 +356,13 @@ fn get_quest_log_reward_info(vm: &mut Vm, c: NativeCall) -> Ret {
 fn get_quest_log_choice_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(match listed_item(vm, &c, "choices") {
         Some((id, count)) => reward_info(vm, id, count),
-        None => vec![],
+        // No such choice: eight values, as a reward's (the full probe).
+        None => {
+            let mut out = vec![Value::Nil; 8];
+            out[2] = Value::Num(1.0);
+            out[3] = Value::Num(0.0);
+            out
+        }
     })
 }
 
@@ -391,7 +404,8 @@ fn get_quest_log_quest_text(vm: &mut Vm, c: NativeCall) -> Ret {
         None => selected(vm),
     };
     let Some(quest) = quest else {
-        return Ok(vec![]);
+        // No such quest: two nils (the full probe).
+        return Ok(vec![Value::Nil, Value::Nil]);
     };
     let text = defined_text(vm, quest, "text").unwrap_or_default();
     let objective = defined_text(vm, quest, "objective").unwrap_or_default();
@@ -442,11 +456,13 @@ fn get_quest_objective_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// (`|cffffff00|Hquest:ID:LEVEL|h[Title]|h|r`), else nil (warcraft.wiki.gg:
 /// nil for a quest not in the log; the link's colour and fields unverified).
 fn get_quest_link(vm: &mut Vm, c: NativeCall) -> Ret {
+    // A quest not in the log: nothing (the full probe; the newest answer,
+    // over nil).
     let Some(quest) = num_of(vm, c.arg(1)).map(|n| n as i64) else {
-        return Ok(vec![Value::Nil]);
+        return Ok(vec![]);
     };
     let Some(index) = log_index(vm, quest) else {
-        return Ok(vec![Value::Nil]);
+        return Ok(vec![]);
     };
     let info = stat_at(vm, "questLogInfo", index).and_then(|a| a.first().cloned());
     let level = info
@@ -481,6 +497,23 @@ fn get_bind_location(vm: &mut Vm, c: NativeCall) -> Ret {
 fn no_portrait(vm: &mut Vm, _c: NativeCall) -> Ret {
     let empty = vm.str("");
     Ok(vec![Value::Num(0.0), empty, empty, Value::Num(0.0)])
+}
+
+/// `GetQuestLogPortraitTurnIn([index])`: no portrait for a quest of the log
+/// (0, "", ""), nothing for an index naming none (the full probe).
+fn log_portrait_turn_in(vm: &mut Vm, c: NativeCall) -> Ret {
+    let quest = match num_of(vm, c.arg(1)) {
+        Some(i) => log_entries(vm)
+            .into_iter()
+            .find(|e| e.index == i as i64 && !e.header)
+            .map(|e| e.quest),
+        None => selected(vm),
+    };
+    if quest.is_none() {
+        return Ok(vec![]);
+    }
+    let empty = vm.str("");
+    Ok(vec![Value::Num(0.0), empty, empty])
 }
 
 // ------------------------------------------------------------- C_QuestLog
@@ -1600,7 +1633,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetQuestLink", get_quest_link),
         ("GetBindLocation", get_bind_location),
         ("C_QuestLog.GetQuestLogPortraitGiver", no_portrait),
-        ("GetQuestLogPortraitTurnIn", no_portrait),
+        ("GetQuestLogPortraitTurnIn", log_portrait_turn_in),
         // What no quest in the engine's world rewards or has (as the
         // dialog's own answers, `quests.rs`; unverified): no artifact
         // power, honor, skill points, title, criteria spell, timer,
@@ -1621,7 +1654,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetQuestLogChoiceInfoLootType", zero),
         ("GetQuestProgressBarPercent", zero),
         ("GetQuestPOIBlobCount", zero),
-        ("GetQuestFactionGroup", none),
+        // A quest not in the log: nothing (the full probe; a quest's own
+        // faction unverified, the probe's second quest answered 2).
+        ("GetQuestFactionGroup", nothing),
         ("GetQuestExpansion", zero),
         ("GetQuestLogQuestType", none),
         ("QuestLogShouldShowPortrait", no),

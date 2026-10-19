@@ -211,7 +211,11 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// No group: no members of any role.
 fn group_member_counts(vm: &mut Vm, _c: NativeCall) -> Ret {
     let t = vm.new_table();
-    for role in ["TANK", "HEALER", "DAMAGER", "NOROLE"] {
+    // By role and by class, the client's nine classes (the full probe).
+    for role in [
+        "TANK", "HEALER", "DAMAGER", "NOROLE", "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST",
+        "SHAMAN", "MAGE", "WARLOCK", "DRUID",
+    ] {
         let k = vm.str(role);
         let _ = vm.heap.table_mut(t).set(k, Value::Num(0.0));
     }
@@ -238,18 +242,13 @@ fn net_stats(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `GetMirrorTimerInfo(index)`: no timer runs (`"UNKNOWN"`, which
-/// Blizzard's MirrorTimer.lua skips; the other values unverified).
+/// Blizzard's MirrorTimer.lua skips): seven values, the pause a number
+/// (the full probe: "UNKNOWN", 0, 0, 0, 0, "", 0).
 fn mirror_timer_info(vm: &mut Vm, _c: NativeCall) -> Ret {
     let unknown = vm.str("UNKNOWN");
     let empty = vm.str("");
-    Ok(vec![
-        unknown,
-        Value::Num(0.0),
-        Value::Num(0.0),
-        Value::Num(0.0),
-        Value::Bool(false),
-        empty,
-    ])
+    let zero = Value::Num(0.0);
+    Ok(vec![unknown, zero, zero, zero, zero, empty, zero])
 }
 
 fn zeros(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -293,7 +292,19 @@ fn instance_info(vm: &mut Vm, _c: NativeCall) -> Ret {
     }
     let (empty, none) = (vm.str(""), vm.str("none"));
     let zero = Value::Num(0.0);
-    let (name, id) = match engine(vm).world.character.position.instance.clone() {
+    // Outside an instance: the continent the map lies on (the full probe:
+    // "Kalimdor", instance 1, in the Barrens; Eastern Kingdoms' 0
+    // unverified).
+    let position = engine(vm).world.character.position.clone();
+    let continent = position
+        .map_id
+        .and_then(|m| crate::maps::world_rect(vm, m as i64))
+        .and_then(|(instance, ..)| match instance as i64 {
+            0 => Some(("Eastern Kingdoms".to_string(), 0.0)),
+            1 => Some(("Kalimdor".to_string(), 1.0)),
+            _ => None,
+        });
+    let (name, id) = match position.instance.or(continent) {
         Some((n, id)) => (vm.str(&n), Value::Num(id)),
         None => (empty, zero),
     };
@@ -645,7 +656,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetMirrorTimerInfo", mirror_timer_info),
         // The probed character's (`loadCalls`); the neutral world's 0.
         ("GetMaxBattlefieldID", zero),
-        ("GetNumLanguages", zero),
+        ("GetNumLanguages", crate::globalsinfo::get_num_languages),
         // The shapeshift forms are the character's stats (`stats.rs`,
         // `shapeshiftForms`: the paladin's two auras, as the client's
         // `probe.loadCalls` answered), none without a snapshot.
