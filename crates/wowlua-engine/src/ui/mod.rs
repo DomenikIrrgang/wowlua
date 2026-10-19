@@ -70,6 +70,11 @@ pub struct Registry {
     pub untainted_creation: HashSet<String>,
     /// Inside such a modifier while the UI code loads.
     in_untainted_creation: bool,
+    /// Inside a `<ScopedModifier forbidden="true">` (or `fullLockdown`)
+    /// while the UI code loads.
+    pub in_forbidden: bool,
+    /// Building a file's own (not virtual) elements as the UI code loads.
+    pub building_file: u32,
     /// The secure delegates `<Mixin secureDelegates="true">` made, by the
     /// function they call: every frame shares them (each kept, so the
     /// function it holds is never collected).
@@ -989,10 +994,14 @@ fn process_ui(
                 // addon's XML would make its own code secure; unverified).
                 let ui = &mut engine_mut(vm).world.ui;
                 let outer = ui.in_untainted_creation;
+                let outer_forbidden = ui.in_forbidden;
                 ui.in_untainted_creation |=
                     el.flag("allowUntaintedCreation") && ui.code_of.is_none();
+                ui.in_forbidden |= el.flag("forbidden") || el.flag("fullLockdown");
                 process_ui(vm, interface_root, dir, cx, el, addon, addon_table);
-                engine_mut(vm).world.ui.in_untainted_creation = outer;
+                let ui = &mut engine_mut(vm).world.ui;
+                ui.in_untainted_creation = outer;
+                ui.in_forbidden = outer_forbidden;
             }
             _ => {
                 if (el.flag("virtual") || el.flag("intrinsic"))

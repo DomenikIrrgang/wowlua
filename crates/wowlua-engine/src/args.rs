@@ -138,8 +138,10 @@ fn relax(f: &Function, args: &mut [Json]) {
         // `SetFont(GetFont())` with no font yet (the developer console).
         (true, "SetFont") => set(0, "Nilable", Json::Bool(true)),
         // A texture alone (gamepad action bars; an edge's: Ellesmere UI's
-        // cooldowns, which the client runs without an error).
-        (true, "SetSwipeTexture" | "SetEdgeTexture") => {
+        // cooldowns, which the client runs without an error; a bling's:
+        // ElvUI's action bar cooldowns at every login, which the user saw
+        // error-free in the client, unverified by a probe).
+        (true, "SetSwipeTexture" | "SetEdgeTexture" | "SetBlingTexture") => {
             for i in 1..5 {
                 set(i, "Nilable", Json::Bool(true));
             }

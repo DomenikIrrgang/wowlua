@@ -196,7 +196,27 @@ pub fn top_level(vm: &mut Vm, cx: &Context, el: &Rc<Element>) {
         let g = vm.get_global(p);
         widgets::widget_of(vm, g)
     });
+    engine_mut(vm).world.ui.building_file += 1;
     build(vm, cx, el, parent);
+    engine_mut(vm).world.ui.building_file -= 1;
+}
+
+/// A widget a secure addon's file builds as it loads is forbidden only
+/// within a `<ScopedModifier forbidden="true">` (or under a forbidden
+/// parent): Blizzard wraps the store's, the ping system's, the token's
+/// and the checkout's frames in one, and leaves the catalog shop's out,
+/// which ElvUI skins (`CatalogShopFrame:StripTextures()`) at every login,
+/// error-free in the client as far as known. Unverified by a probe;
+/// frames secure code makes at run time stay forbidden.
+fn unforbid_file_widget(vm: &mut Vm, id: WidgetId, parent: Option<WidgetId>) {
+    let e = engine(vm);
+    if e.world.ui.building_file == 0 || !e.world.widgets[id.0].forbidden {
+        return;
+    }
+    let parent_forbidden = parent.is_some_and(|p| e.world.widgets[p.0].forbidden);
+    if !e.world.ui.in_forbidden && !parent_forbidden {
+        engine_mut(vm).world.widgets[id.0].forbidden = false;
+    }
 }
 
 /// The name an element gives its widget, `$parent` replaced by the nearest
@@ -239,6 +259,9 @@ pub fn build(
         None => widgets::create(vm, &class, name, parent),
     };
     let id = widgets::widget_of(vm, frame)?;
+    if existing.is_none() {
+        unforbid_file_widget(vm, id, parent);
+    }
     engine_mut(vm).world.widgets[id.0].frame = true;
     // An intrinsic type's own element comes first.
     let intrinsic = engine(vm)
@@ -538,8 +561,16 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
     if el.flag("hidden") {
         engine_mut(vm).world.widgets[id.0].shown = false;
     }
+    // Explicitly protected, as frames from a secure template are
+    // (`IsProtected` true, true; `/stdtest engine`): Blizzard's restricted
+    // environment hands out managed environments to those alone, and runs
+    // a group header's configuration on children of an addon's templates
+    // that inherit SecureFrameTemplate (oUF's headers, error-free in the
+    // client).
     if el.flag("protected") {
-        engine_mut(vm).world.widgets[id.0].protected = true;
+        let w = &mut engine_mut(vm).world.widgets[id.0];
+        w.protected = true;
+        w.explicitly_protected = true;
     }
     if let Some(n) = el.number("id") {
         call_method(vm, cx, el.line, frame, "SetID", &[Value::Num(n)]);
@@ -914,6 +945,7 @@ fn build_as(
     let name = el.attr("name").map(|n| resolve_name(vm, n, parent));
     let region = widgets::create(vm, class, name, parent);
     let id = widgets::widget_of(vm, region)?;
+    unforbid_file_widget(vm, id, parent);
     apply(vm, cx, region, id, el);
     Some(region)
 }

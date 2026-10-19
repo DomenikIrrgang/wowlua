@@ -969,6 +969,23 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
                 }
                 return v;
             }
+            // A curve's color stays a readable color, its channels secret
+            // (`UnitHealthPercent(unit, true, colorCurve)`: ElvUI's oUF
+            // health bars call `GetRGB` on it, error-free in the client;
+            // unverified by a probe).
+            if ty == Some("LuaCurveEvaluatedResult")
+                && let Value::Table(t) = v
+            {
+                for name in ["r", "g", "b", "a"] {
+                    let k = vm.str(name);
+                    let fv = vm.heap.table(t).get(k);
+                    if !fv.is_nil() {
+                        let w = vm.secret_wrap(fv);
+                        let _ = vm.heap.table_mut(t).set(k, w);
+                    }
+                }
+                return v;
+            }
             vm.secret_wrap(v)
         })
         .collect())
