@@ -7,8 +7,9 @@
 //! between subgroups (`party.rs`, `units.rs`); the inspected player
 //! forgotten (`inspect.rs`).
 //!
-//! None of these was recorded: each says where its rule comes from, and
-//! all are unverified. Protected functions (`SetPartyAssignment`,
+//! Most of these were not recorded: each says where its rule comes from,
+//! and is unverified unless it names its recording (`mail2`'s money taken,
+//! `repair`'s repair cursor, `questlog`'s headers). Protected functions (`SetPartyAssignment`,
 //! warcraft.wiki.gg's `protected` tag) and the cursor's money (the
 //! documentation's `HasRestrictions`) are not here.
 
@@ -214,7 +215,7 @@ fn set_repair_cursor(vm: &mut Vm, on: bool) {
 }
 
 /// `ShowRepairCursor()`: the repair cursor on (Blizzard's repair button
-/// toggles it by `InRepairMode`; no event, unverified).
+/// toggles it by `InRepairMode`; no event: recorded, `repair`).
 fn show_repair_cursor(vm: &mut Vm, _c: NativeCall) -> Ret {
     set_repair_cursor(vm, true);
     Ok(vec![])
@@ -226,16 +227,26 @@ fn hide_repair_cursor(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `InRepairMode()` as `ShowRepairCursor` and `HideRepairCursor` leave it:
-/// on while a vendor that repairs is open (unverified). `merchant.rs`
-/// answers `InRepairMode` false; this is the answer to use in its place.
-pub fn in_repair_mode(vm: &mut Vm, _c: NativeCall) -> Ret {
+/// The repair cursor gone (the vendor's window closed).
+pub fn end_repair_mode(vm: &mut Vm) {
+    set_repair_cursor(vm, false);
+}
+
+/// Whether the repair cursor is on: `ShowRepairCursor` and
+/// `HideRepairCursor` leave it so, while a vendor that repairs is open.
+pub fn repairing(vm: &Vm) -> bool {
     let on = matches!(
         engine(vm).lua_helpers.get(REPAIR_CURSOR),
         Some(Value::Bool(true))
     );
     let m = &engine(vm).world.merchant;
-    Ok(vec![Value::Bool(on && m.open && m.can_repair)])
+    on && m.open && m.can_repair
+}
+
+/// `InRepairMode()` (`repairing`; recorded only through its effects: the
+/// repair cursor's click on a worn item mends it, `repair`).
+pub fn in_repair_mode(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(repairing(vm))])
 }
 
 // ------------------------------------------------------------------ mail
@@ -333,9 +344,11 @@ fn take_inbox_money(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// The server gave the money: as an item taken (`mail.rs`'s `taken`: an
-/// auction's letter emptied closed, the inbox's update, `MAIL_SUCCESS`),
-/// the money the player's (`PLAYER_MONEY`); the emptied auction letter
-/// gone after.
+/// auction's letter emptied closed, the inbox's update, `MAIL_SUCCESS`);
+/// the emptied auction letter gone after, the money the player's with it
+/// (`PLAYER_MONEY` after the going's `MAIL_SUCCESS`: recorded once,
+/// `mail2`'s sold auction). A letter that stays: the money at once
+/// (unverified).
 fn money_taken(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(t) = letter_of(&c) else {
         return Ok(vec![]);
@@ -354,17 +367,27 @@ fn money_taken(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     fire(vm, "MAIL_INBOX_UPDATE", &[]);
     fire(vm, "MAIL_SUCCESS", &[Value::Nil]);
-    engine_mut(vm).world.character.money += money;
-    fire(vm, "PLAYER_MONEY", &[]);
     if goes {
         later(
             vm,
-            crate::mail::GONE_AFTER,
+            crate::mail::timing(vm).gone,
             "mailMoneyLetterGone",
-            gone,
-            vec![Value::Table(t)],
+            gone_with_money,
+            vec![Value::Table(t), Value::Num(money)],
         );
+    } else {
+        engine_mut(vm).world.character.money += money;
+        fire(vm, "PLAYER_MONEY", &[]);
     }
+    Ok(vec![])
+}
+
+/// The emptied letter gone (`gone`), then its money the player's.
+fn gone_with_money(vm: &mut Vm, c: NativeCall) -> Ret {
+    let money = c.upvals.get(1).copied().and_then(num).unwrap_or(0.0);
+    gone(vm, c)?;
+    engine_mut(vm).world.character.money += money;
+    fire(vm, "PLAYER_MONEY", &[]);
     Ok(vec![])
 }
 
@@ -453,7 +476,7 @@ fn text_taken(vm: &mut Vm, c: NativeCall) -> Ret {
     fire(vm, "BAG_NEW_ITEMS_UPDATED", &[]);
     later(
         vm,
-        crate::mail::BAG_AFTER,
+        crate::mail::timing(vm).bag,
         "mailTextBag",
         crate::mail::bag_packet,
         vec![
@@ -506,18 +529,27 @@ fn clear_send_mail(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// The quest log's headers collapsed or expanded: the header at `index`
 /// (0: every header, as Blizzard's classic quest log asks) and the quests
-/// under it (the recorded log reads `isCollapsed` alike on a header and
-/// its quest), told by `QUEST_LOG_UPDATE` at once when anything changed
-/// (Blizzard's quest map ignores the updates while it calls these:
-/// `ignoreQuestLogUpdate`). Unverified; the engine's own log, when it
-/// changes, is told collapsed again (`quests::sync_log`).
+/// under it (recorded in `questlog`: the log reads `isCollapsed` alike on
+/// a header and its quests), told by `QUEST_LOG_UPDATE` in the same frame
+/// when anything changed (recorded: each of seven header clicks; Blizzard's
+/// quest map ignores the updates while it calls these:
+/// `ignoreQuestLogUpdate`). The quest map's own calls (`isAuto`, its
+/// filters' reset on every map change: on-map headers expanded, the rest
+/// collapsed) leave a header the player collapsed or expanded as it is
+/// (recorded: none of them changed one in `questlog`, the client's log
+/// unchanged by them through four map changes; the untouched headers'
+/// part unverified: all of those were as the reset leaves them). The
+/// engine's own log, when it changes, is told collapsed again
+/// (`quests::sync_log`).
 fn set_collapsed(vm: &mut Vm, c: &NativeCall, collapsed: bool) {
     let Some(index) = num_arg(vm, c, 1).map(|n| n as i64) else {
         return;
     };
+    let auto = c.arg(2).truthy();
     let changed = {
-        let stats = &mut engine_mut(vm).world.character.stats;
-        let Some(Entry::ByIndex(log)) = stats.get_mut("questLogInfo") else {
+        let e = engine_mut(vm);
+        let manual = &mut e.world.quests.manual_headers;
+        let Some(Entry::ByIndex(log)) = e.world.character.stats.get_mut("questLogInfo") else {
             return;
         };
         let mut changed = false;
@@ -531,6 +563,18 @@ fn set_collapsed(vm: &mut Vm, c: &NativeCall, collapsed: bool) {
             });
             if header {
                 chosen = index == 0 || i == index;
+                let title = fields
+                    .iter()
+                    .find_map(|(k, v)| match (k, v) {
+                        (Answer::Str(k), Answer::Str(t)) if k == "title" => Some(t.clone()),
+                        _ => None,
+                    })
+                    .unwrap_or_default();
+                if chosen && auto && manual.contains(&title) {
+                    chosen = false;
+                } else if chosen && !auto {
+                    manual.insert(title);
+                }
             }
             if !chosen {
                 continue;

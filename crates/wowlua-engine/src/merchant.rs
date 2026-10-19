@@ -77,6 +77,9 @@ pub struct Merchant {
     pub damaged: f64,
     /// A repair's money told after this many items' durability.
     pub repair_money_after: Option<usize>,
+    /// What mending each worn slot's item costs while it is damaged (the
+    /// vendor's `repairCosts`; the server's prices, by the item).
+    pub repair_costs: std::collections::BTreeMap<i64, f64>,
     /// The chat's line IDs (`CHAT_MSG_LOOT`).
     pub line: f64,
 }
@@ -153,6 +156,14 @@ pub fn open(vm: &mut Vm, data: TableRef, npc: Option<units::UnitId>) -> Result<(
     let damaged =
         num(field(vm, data, "damaged")).unwrap_or(if repair_cost > 0.0 { 1.0 } else { 0.0 });
     let money_after = num(field(vm, data, "repairMoneyAfter")).map(|n| n.max(0.0) as usize);
+    let mut repair_costs = std::collections::BTreeMap::new();
+    if let Value::Table(costs) = field(vm, data, "repairCosts") {
+        for (k, v) in vm.heap.table(costs).entries() {
+            if let (Value::Num(slot), Value::Num(cost)) = (k, v) {
+                repair_costs.insert(slot as i64, cost);
+            }
+        }
+    }
     if merchant(vm).open {
         close(vm);
     }
@@ -169,6 +180,7 @@ pub fn open(vm: &mut Vm, data: TableRef, npc: Option<units::UnitId>) -> Result<(
         m.repair_cost = repair_cost;
         m.damaged = damaged;
         m.repair_money_after = money_after;
+        m.repair_costs = repair_costs;
     }
     fire(vm, "MERCHANT_SHOW", &[]);
     fire(
@@ -222,6 +234,9 @@ fn close(vm: &mut Vm) {
     }
     merchant_mut(vm).open = false;
     engine_mut(vm).units.npc = None;
+    // The repair cursor gone with the window (the next visit's opens out
+    // of repair mode: `repair`, unverified beyond its sample).
+    crate::actions2::end_repair_mode(vm);
     fire(vm, "MERCHANT_CLOSED", &[]);
     fire(
         vm,
@@ -343,18 +358,87 @@ fn can_repair(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(m.open && m.can_repair)])
 }
 
+/// The worn slots whose items are damaged, with what mending each costs
+/// (the vendor's `repairCosts`).
+fn priced_damage(vm: &Vm) -> Vec<(i64, f64)> {
+    let e = engine(vm);
+    e.world
+        .merchant
+        .repair_costs
+        .iter()
+        .filter(|(slot, _)| {
+            e.world
+                .character
+                .equipment
+                .get(slot)
+                .and_then(|h| h.durability)
+                .is_some_and(|(d, m)| d < m)
+        })
+        .map(|(s, c)| (*s, *c))
+        .collect()
+}
+
+/// What mending everything costs now: the damaged items' prices when the
+/// vendor names them (`repair`: 254 at the first visit, 228 after the
+/// boots' 26), else the vendor's `repairCost`.
+fn repair_cost_now(vm: &Vm) -> f64 {
+    if merchant(vm).repair_costs.is_empty() {
+        return merchant(vm).repair_cost;
+    }
+    priced_damage(vm).iter().map(|(_, c)| c).sum()
+}
+
 /// `GetRepairAllCost()`: at a vendor that repairs, the cost and whether
 /// anything needs it; elsewhere 0 alone (`/stdtest engine merchant`).
 fn repair_all_cost(vm: &mut Vm, _c: NativeCall) -> Ret {
     let m = merchant(vm);
     if m.open && m.can_repair {
-        Ok(vec![
-            Value::Num(m.repair_cost),
-            Value::Bool(m.repair_cost > 0.0),
-        ])
+        let cost = repair_cost_now(vm);
+        Ok(vec![Value::Num(cost), Value::Bool(cost > 0.0)])
     } else {
         Ok(vec![Value::Num(0.0)])
     }
+}
+
+/// An item mended with the repair cursor (`PickupInventoryItem(slot)` in
+/// repair mode): a round trip later its durability full,
+/// `UPDATE_INVENTORY_DURABILITY` then `PLAYER_MONEY` (recorded once:
+/// `repair`'s boots, 26 copper, 0.353 s); nothing for an item not damaged,
+/// unpriced or too dear (unverified: the client's errors not told).
+pub fn repair_slot(vm: &mut Vm, slot: i64) {
+    let Some((_, cost)) = priced_damage(vm).into_iter().find(|(s, _)| *s == slot) else {
+        return;
+    };
+    if engine(vm).world.character.money < cost {
+        return;
+    }
+    later(
+        vm,
+        "merchantSlotRepaired",
+        slot_repaired,
+        vec![Value::Num(slot as f64), Value::Num(cost)],
+    );
+}
+
+fn slot_repaired(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (slot, cost) = (upval(&c, 0) as i64, upval(&c, 1));
+    if !merchant(vm).open || engine(vm).world.character.money < cost {
+        return Ok(vec![]);
+    }
+    let Some(h) = engine_mut(vm).world.character.equipment.get_mut(&slot) else {
+        return Ok(vec![]);
+    };
+    let Some((d, m)) = h.durability else {
+        return Ok(vec![]);
+    };
+    if d >= m {
+        return Ok(vec![]);
+    }
+    h.durability = Some((m, m));
+    engine_mut(vm).world.character.money -= cost;
+    fire(vm, "UPDATE_INVENTORY_DURABILITY", &[]);
+    fire(vm, "PLAYER_MONEY", &[]);
+    Ok(vec![])
 }
 
 /// `RepairAllItems()`: a round trip later (recorded: `vendor`), every item
@@ -366,7 +450,7 @@ fn repair_all_cost(vm: &mut Vm, _c: NativeCall) -> Ret {
 fn repair_all(vm: &mut Vm, _c: NativeCall) -> Ret {
     let (open, can, cost) = {
         let m = merchant(vm);
-        (m.open, m.can_repair, m.repair_cost)
+        (m.open, m.can_repair, repair_cost_now(vm))
     };
     if !open || !can || cost <= 0.0 || engine(vm).world.character.money < cost {
         return Ok(vec![]);
@@ -378,7 +462,7 @@ fn repair_all(vm: &mut Vm, _c: NativeCall) -> Ret {
 fn repaired(vm: &mut Vm, _c: NativeCall) -> Ret {
     let (open, cost) = {
         let m = merchant(vm);
-        (m.open, m.repair_cost)
+        (m.open, repair_cost_now(vm))
     };
     if !open || cost <= 0.0 || engine(vm).world.character.money < cost {
         return Ok(vec![]);
@@ -646,7 +730,7 @@ fn bought(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// A bought item's data come: its slot reads it; the equipped spells',
 /// the bag's and the inventory's updates (recorded, as a looted item's).
-fn item_data_arrived(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn item_data_arrived(vm: &mut Vm, c: NativeCall) -> Ret {
     let (bag, slot) = (upval(&c, 0) as i64, upval(&c, 1) as usize);
     character::arrived(vm, bag, slot);
     character::equipped_spells_changed(vm);

@@ -61,15 +61,17 @@ mock.defineMailbox(box, { letters = {
 mock.player:setMoney(100)
 TakeInboxMoney(1)",
     );
+    // The money the player's as the emptied letter goes (recorded:
+    // `mail2`), not with the take's answer.
     wowlua_engine::clock::advance(&mut vm, 0.5);
     let r = run(&mut vm, "return GetMoney(), (GetInboxNumItems())");
-    assert_eq!(r, ["600", "2"]);
+    assert_eq!(r, ["100", "2"]);
     wowlua_engine::clock::advance(&mut vm, 0.5);
     let r = run(
         &mut vm,
-        "local n = GetInboxNumItems() DeleteInboxItem(1) return n",
+        "local n = GetInboxNumItems() DeleteInboxItem(1) return GetMoney(), n",
     );
-    assert_eq!(r, ["1"]);
+    assert_eq!(r, ["600", "1"]);
     wowlua_engine::clock::advance(&mut vm, 0.5);
     let r = run(&mut vm, "return (GetInboxNumItems())");
     assert_eq!(r, ["0"]);
