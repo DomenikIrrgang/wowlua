@@ -18,7 +18,9 @@
 //! false, `GetFilteredSearchResults()` 0 and an empty list).
 //!
 //! The server's other listings are the engine's list (`Lfg::listings`),
-//! empty: a search finds nothing until a test adds some ([`add_listing`]).
+//! empty: a search finds nothing until a test adds some ([`add_listing`];
+//! the mock's `defineLFGListing`, `updateLFGListing`, `removeLFGListing`,
+//! `lfgSearchResultID` and `failLFGSearch`).
 //!
 //! Recorded too (the lfg scenario: four listings posted from Blizzard's
 //! listing panel, each delisted from its own entry among the browse tab's
@@ -334,6 +336,9 @@ pub struct Member {
 #[derive(Clone, Debug, Default)]
 pub struct SearchResult {
     pub id: f64,
+    /// The server's listing it is (`add_listing`'s handle; 0 the
+    /// player's own).
+    pub handle: u32,
     /// The player's own listing (`hasSelf`).
     pub has_self: bool,
     pub activity_ids: Vec<f64>,
@@ -369,6 +374,10 @@ pub struct Lfg {
     results: Vec<SearchResult>,
     /// The last result's number (each search's after the last's).
     next_result: f64,
+    /// The last listing's handle (`add_listing`'s).
+    next_handle: u32,
+    /// The next search fails (`fail_next_search`), with its reason.
+    fail_search: Option<Option<String>>,
     /// Requests awaiting their answer, by number.
     pending: BTreeMap<u32, Answer>,
     next_request: u32,
@@ -389,9 +398,81 @@ fn lfg_mut(vm: &mut Vm) -> &mut Lfg {
 }
 
 /// Adds another group's or player's listing to the server's, for the
-/// searches to find (each search numbers what it finds).
-pub fn add_listing(vm: &mut Vm, listing: SearchResult) {
-    lfg_mut(vm).listings.push(listing);
+/// searches to find (each search numbers what it finds). Returns its
+/// handle, for [`change_listing`], [`delist_listing`] and
+/// [`search_result_id`].
+pub fn add_listing(vm: &mut Vm, mut listing: SearchResult) -> u32 {
+    let l = lfg_mut(vm);
+    l.next_handle += 1;
+    listing.handle = l.next_handle;
+    l.listings.push(listing);
+    l.next_handle
+}
+
+/// A server's listing's `searchResultID` among the last search's results;
+/// none when that search did not find it (each search numbers its results
+/// anew: recorded, lfg).
+pub fn search_result_id(vm: &Vm, handle: u32) -> Option<f64> {
+    lfg(vm)
+        .results
+        .iter()
+        .find(|r| r.handle == handle && !r.has_self)
+        .map(|r| r.id)
+}
+
+/// A server's listing changed by `change`: later searches find it so, and
+/// when the last search found it, its result changes too and the server
+/// tells it (`LFG_LIST_SEARCH_RESULT_UPDATED(searchResultID)`). `None` for
+/// an unknown handle, else whether it was told.
+pub fn change_listing(
+    vm: &mut Vm,
+    handle: u32,
+    change: impl FnOnce(&mut SearchResult),
+) -> Option<bool> {
+    let l = lfg_mut(vm);
+    let listing = l.listings.iter_mut().find(|r| r.handle == handle)?;
+    change(listing);
+    listing.handle = handle;
+    let changed = listing.clone();
+    let Some(r) = l
+        .results
+        .iter_mut()
+        .find(|r| r.handle == handle && !r.has_self)
+    else {
+        return Some(false);
+    };
+    let id = r.id;
+    *r = SearchResult { id, ..changed };
+    Some(result_updated(vm, id))
+}
+
+/// A server's listing delisted: later searches do not find it, and when
+/// the last search found it, its result is told delisted (`isDelisted`,
+/// `LFG_LIST_SEARCH_RESULT_UPDATED(searchResultID)`; unverified: the
+/// recording's updates do not say which were delistings). `None` for an
+/// unknown handle, else whether it was told.
+pub fn delist_listing(vm: &mut Vm, handle: u32) -> Option<bool> {
+    let l = lfg_mut(vm);
+    let at = l.listings.iter().position(|r| r.handle == handle)?;
+    l.listings.remove(at);
+    let Some(r) = l
+        .results
+        .iter_mut()
+        .find(|r| r.handle == handle && !r.has_self)
+    else {
+        return Some(false);
+    };
+    r.delisted = true;
+    let id = r.id;
+    Some(result_updated(vm, id))
+}
+
+/// The next search's answer a failure: `LFG_LIST_SEARCH_FAILED(reason)`,
+/// the results none (Blizzard's browse tab shows `LFG_LIST_SEARCH_FAILED`
+/// only when it has no results: `Blizzard_LFGVanilla_Browse.lua`;
+/// unverified, never recorded).
+pub fn fail_next_search(vm: &mut Vm, reason: Option<String>) {
+    lfg_mut(vm).fail_search = Some(reason);
 }
 
 /// The server tells that a listing among the last search's results
@@ -507,6 +588,12 @@ fn answered(vm: &mut Vm, c: NativeCall) -> Ret {
             category,
             activities,
         } => {
+            if let Some(reason) = lfg_mut(vm).fail_search.take() {
+                lfg_mut(vm).results.clear();
+                let reason = reason.map_or(Value::Nil, |r| vm.str(&r));
+                widgets::fire_event(vm, "LFG_LIST_SEARCH_FAILED", &[reason]);
+                return Ok(vec![]);
+            }
             let cat = catalogue(vm);
             let wanted = |r: &SearchResult| {
                 let first = r.activity_ids.first().and_then(|a| cat.activity(*a));
@@ -1198,6 +1285,196 @@ fn get_search_result_player_info(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     let m = r.members[index as usize - 1].clone();
     Ok(vec![player_info(vm, &m, index == 1.0)])
+}
+
+// ----------------------------------------------------------- controls
+
+/// A string of the control's table.
+fn str_field(vm: &mut Vm, t: TableRef, key: &str) -> Option<String> {
+    match field(vm, t, key) {
+        Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+        _ => None,
+    }
+}
+
+fn num_field(vm: &mut Vm, t: TableRef, key: &str) -> Option<f64> {
+    match field(vm, t, key) {
+        Value::Num(n) => Some(n),
+        _ => None,
+    }
+}
+
+fn bool_field(vm: &mut Vm, t: TableRef, key: &str) -> Option<bool> {
+    match field(vm, t, key) {
+        Value::Bool(b) => Some(b),
+        _ => None,
+    }
+}
+
+/// A member as the controls give it: `{ name, class, className?, level?,
+/// area?, role?, roles? }` (the class its file, `WARRIOR`; its name the
+/// class's by default; the roles it would take its assigned one's by
+/// default).
+fn member_of(vm: &mut Vm, t: TableRef) -> Result<Member, String> {
+    let name = str_field(vm, t, "name").ok_or("a member's name expected")?;
+    let class = str_field(vm, t, "class").ok_or("a member's class expected")?;
+    let class_name = str_field(vm, t, "className")
+        .or_else(|| crate::units::class_name_of(&class).map(str::to_string))
+        .ok_or_else(|| format!("no class {class}: its className expected"))?;
+    let role = str_field(vm, t, "role").unwrap_or_else(|| "NONE".into());
+    if !matches!(role.as_str(), "TANK" | "HEALER" | "DAMAGER" | "NONE") {
+        return Err(format!(
+            "role {role}: TANK, HEALER, DAMAGER or NONE expected"
+        ));
+    }
+    let (mut tank, mut healer, mut dps) = (role == "TANK", role == "HEALER", role == "DAMAGER");
+    if let Value::Table(r) = field(vm, t, "roles") {
+        tank = bool_field(vm, r, "tank").unwrap_or(false);
+        healer = bool_field(vm, r, "healer").unwrap_or(false);
+        dps = bool_field(vm, r, "dps").unwrap_or(false);
+    }
+    Ok(Member {
+        name,
+        class_name,
+        class_filename: class,
+        level: num_field(vm, t, "level").unwrap_or(1.0),
+        area_name: str_field(vm, t, "area").unwrap_or_default(),
+        assigned_role: role,
+        tank,
+        healer,
+        dps,
+    })
+}
+
+/// A listing's fields the control's table gives, onto `r` (the others
+/// kept).
+fn apply_fields(vm: &mut Vm, t: TableRef, r: &mut SearchResult) -> Result<(), String> {
+    let activities = field(vm, t, "activities");
+    if !activities.is_nil() {
+        let ids = numbers_of(vm, activities);
+        if ids.is_empty() {
+            return Err("activities: a list of activity IDs expected".into());
+        }
+        r.activity_ids = ids;
+    }
+    if let Some(v) = str_field(vm, t, "comment") {
+        r.comment = v;
+    }
+    if let Some(v) = str_field(vm, t, "name") {
+        r.name = v;
+    }
+    if let Some(v) = num_field(vm, t, "age") {
+        r.age = v;
+    }
+    if let Some(v) = num_field(vm, t, "playstyle") {
+        r.general_playstyle = v;
+    }
+    if let Some(v) = bool_field(vm, t, "newPlayerFriendly") {
+        r.new_player_friendly = v;
+    }
+    if let Some(v) = num_field(vm, t, "voiceMode") {
+        r.voice_mode = v;
+    }
+    if let Some(v) = bool_field(vm, t, "autoAccept") {
+        r.auto_accept = v;
+    }
+    if let Value::Table(m) = field(vm, t, "members") {
+        let mut members = Vec::new();
+        for i in 1.. {
+            let Value::Table(one) = vm.heap.table(m).get(Value::Num(f64::from(i))) else {
+                break;
+            };
+            members.push(member_of(vm, one)?);
+        }
+        if members.is_empty() {
+            return Err("members: at least the leader expected".into());
+        }
+        r.members = members;
+    }
+    Ok(())
+}
+
+fn handle_arg(vm: &mut Vm, c: &NativeCall, control: &str) -> Result<u32, wowlua_vm::LuaError> {
+    match c.arg(1) {
+        Value::Num(n) if n >= 1.0 && n.fract() == 0.0 => Ok(n as u32),
+        _ => Err(vm.error(&format!("{control}: a listing's handle expected"))),
+    }
+}
+
+/// `defineLFGListing({ activities, comment?, name?, age?, playstyle?,
+/// newPlayerFriendly?, voiceMode?, autoAccept?, members })`: another
+/// group's or player's listing on the server, for the searches to find;
+/// its handle.
+pub fn control_define(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Table(t) = c.arg(1) else {
+        return Err(vm.error("defineLFGListing: a table expected"));
+    };
+    let mut r = SearchResult::default();
+    let given = apply_fields(vm, t, &mut r).and_then(|()| {
+        if r.activity_ids.is_empty() {
+            Err("activities expected".to_string())
+        } else if r.members.is_empty() {
+            Err("members expected".to_string())
+        } else {
+            Ok(())
+        }
+    });
+    if let Err(e) = given {
+        return Err(vm.error(&format!("defineLFGListing: {e}")));
+    }
+    let handle = add_listing(vm, r);
+    Ok(vec![Value::Num(f64::from(handle))])
+}
+
+/// `updateLFGListing(handle, fields)`: the listing changed
+/// (`change_listing`); whether the client was told.
+pub fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
+    let handle = handle_arg(vm, &c, "updateLFGListing")?;
+    let Value::Table(t) = c.arg(2) else {
+        return Err(vm.error("updateLFGListing: a table of fields expected"));
+    };
+    let Some(mut r) = lfg(vm)
+        .listings
+        .iter()
+        .find(|r| r.handle == handle)
+        .cloned()
+    else {
+        return Err(vm.error(&format!("updateLFGListing: no listing {handle}")));
+    };
+    if let Err(e) = apply_fields(vm, t, &mut r) {
+        return Err(vm.error(&format!("updateLFGListing: {e}")));
+    }
+    let told = change_listing(vm, handle, |l| *l = r).unwrap_or(false);
+    Ok(vec![Value::Bool(told)])
+}
+
+/// `removeLFGListing(handle)`: the listing delisted (`delist_listing`);
+/// whether the client was told.
+pub fn control_remove(vm: &mut Vm, c: NativeCall) -> Ret {
+    let handle = handle_arg(vm, &c, "removeLFGListing")?;
+    match delist_listing(vm, handle) {
+        Some(told) => Ok(vec![Value::Bool(told)]),
+        None => Err(vm.error(&format!("removeLFGListing: no listing {handle}"))),
+    }
+}
+
+/// `lfgSearchResultID(handle)`: its `searchResultID` among the last
+/// search's results, or nil.
+pub fn control_search_result_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    let handle = handle_arg(vm, &c, "lfgSearchResultID")?;
+    Ok(vec![
+        search_result_id(vm, handle).map_or(Value::Nil, Value::Num),
+    ])
+}
+
+/// `failLFGSearch(reason?)`: the next search fails (`fail_next_search`).
+pub fn control_fail_search(vm: &mut Vm, c: NativeCall) -> Ret {
+    let reason = match c.arg(1) {
+        Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+        _ => None,
+    };
+    fail_next_search(vm, reason);
+    Ok(vec![])
 }
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {

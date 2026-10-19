@@ -662,3 +662,154 @@ return table.concat(first, ','), tostring(own.hasSelf), own.numMembers, own.lead
     let r = run(&mut vm, "return table.concat(Updated, ',')");
     assert_eq!((stale, latest, r[0].as_str()), (false, true, "4"));
 }
+
+/// The mock's listings (`mock.defineLFGListing`): a search finds them with
+/// their fields; a change of one the last search found is told for its
+/// result of that search, its delisting too (`isDelisted`), each search
+/// numbering them anew; one the last search did not find is not told.
+#[test]
+fn the_mocks_listings_are_found_changed_and_delisted() {
+    let mut vm = vm();
+    run(&mut vm, WATCH);
+    run(
+        &mut vm,
+        &button("C_LFGList.Search(2, 0, 0, nil, false, nil, { 799 })"),
+    );
+    let r = run(
+        &mut vm,
+        "Updated = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('LFG_LIST_SEARCH_RESULT_UPDATED')
+f:SetScript('OnEvent', function(_, _, id) Updated[#Updated + 1] = id end)
+Group = mock.defineLFGListing({ activities = { 799 }, comment = 'LF healer', name = 'Deadmines run', age = 40,
+    playstyle = 2, newPlayerFriendly = true, voiceMode = 1, autoAccept = true, members = {
+        { name = 'Tamsin Ashford', class = 'WARRIOR', level = 18, area = 'Westfall', role = 'TANK' },
+        { name = 'Otherplayer', class = 'MAGE', level = 17, role = 'DAMAGER', roles = { dps = true, healer = true } },
+    } })
+Elsewhere = mock.defineLFGListing({ activities = { 867 }, members = { { name = 'Otherplayer', class = 'DRUID' } } })
+local before = tostring(mock.lfgSearchResultID(Group))
+mock.click(TheButton)
+mock.advanceTime(1)
+local id = mock.lfgSearchResultID(Group)
+local info = C_LFGList.GetSearchResultInfo(id)
+local leader = C_LFGList.GetSearchResultLeaderInfo(id)
+local second = C_LFGList.GetSearchResultPlayerInfo(id, 2)
+return before, id, tostring(mock.lfgSearchResultID(Elsewhere)), info.comment, info.name, info.age,
+    info.generalPlaystyle, tostring(info.newPlayerFriendly), info.voiceMode, tostring(info.autoAccept),
+    info.numMembers, info.leaderName, leader.className, leader.areaName, leader.assignedRole,
+    tostring(leader.lfgRoles.tank), second.className, tostring(second.lfgRoles.healer),
+    tostring(second.lfgRoles.tank)",
+    );
+    assert_eq!(
+        r,
+        [
+            "nil",
+            "1",
+            "nil",
+            "LF healer",
+            "Deadmines run",
+            "40",
+            "2",
+            "true",
+            "1",
+            "true",
+            "2",
+            "Tamsin Ashford",
+            "Warrior",
+            "Westfall",
+            "TANK",
+            "true",
+            "Mage",
+            "true",
+            "false"
+        ]
+    );
+    let r = run(
+        &mut vm,
+        "local told = mock.updateLFGListing(Group, { comment = 'LF tank', age = 55 })
+local quiet = mock.updateLFGListing(Elsewhere, { comment = 'anyone' })
+local info = C_LFGList.GetSearchResultInfo(1)
+mock.click(TheButton)
+mock.advanceTime(1)
+local again = mock.lfgSearchResultID(Group)
+local gone = mock.removeLFGListing(Group)
+local delisted = C_LFGList.GetSearchResultInfo(again)
+mock.click(TheButton)
+mock.advanceTime(1)
+local count = C_LFGList.GetSearchResults()
+return tostring(told), tostring(quiet), info.comment, info.age, again, tostring(gone), tostring(delisted.isDelisted),
+    table.concat(Updated, ','), count, tostring(mock.lfgSearchResultID(Group))",
+    );
+    assert_eq!(
+        r,
+        [
+            "true", "false", "LF tank", "55", "2", "true", "true", "1,2", "0", "nil"
+        ]
+    );
+}
+
+/// `mock.failLFGSearch`: the next search's answer is
+/// `LFG_LIST_SEARCH_FAILED(reason)` with no results; the one after finds
+/// the listings again.
+#[test]
+fn a_mocked_search_failure() {
+    let mut vm = vm();
+    run(&mut vm, WATCH);
+    run(
+        &mut vm,
+        &button("C_LFGList.Search(2, 0, 0, nil, false, nil, { 799 })"),
+    );
+    let r = run(
+        &mut vm,
+        "mock.defineLFGListing({ activities = { 799 }, members = { { name = 'Otherplayer', class = 'PRIEST', role = 'HEALER' } } })
+mock.click(TheButton)
+mock.advanceTime(1)
+local first = select(1, C_LFGList.GetSearchResults())
+SeenText()
+mock.failLFGSearch('throttled')
+mock.click(TheButton)
+mock.advanceTime(1)
+local failed, count = SeenText(), select(1, C_LFGList.GetSearchResults())
+mock.click(TheButton)
+mock.advanceTime(1)
+return first, failed, count, SeenText(), (C_LFGList.GetSearchResults())",
+    );
+    assert_eq!(
+        r,
+        [
+            "1",
+            "LFG_LIST_SEARCH_FAILED(throttled)",
+            "0",
+            "LFG_LIST_SEARCH_RESULTS_RECEIVED()",
+            "1"
+        ]
+    );
+}
+
+/// The controls refuse what is no listing: no activities or members, an
+/// unknown class without its name, an unknown role or handle.
+#[test]
+fn the_mocks_listing_controls_check_their_arguments() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local function err(f, ...) local ok, e = pcall(f, ...) return ok and 'ok' or tostring(e) end
+return err(mock.defineLFGListing, { members = { { name = 'Otherplayer', class = 'MAGE' } } }),
+    err(mock.defineLFGListing, { activities = { 799 } }),
+    err(mock.defineLFGListing, { activities = { 799 }, members = { { name = 'Otherplayer', class = 'BARD' } } }),
+    err(mock.defineLFGListing, { activities = { 799 }, members = { { name = 'Otherplayer', class = 'MAGE', role = 'HEALS' } } }),
+    err(mock.updateLFGListing, 7, {}),
+    err(mock.removeLFGListing, 7)",
+    );
+    assert_eq!(
+        r,
+        [
+            "defineLFGListing: activities expected",
+            "defineLFGListing: members expected",
+            "defineLFGListing: no class BARD: its className expected",
+            "defineLFGListing: role HEALS: TANK, HEALER, DAMAGER or NONE expected",
+            "updateLFGListing: no listing 7",
+            "removeLFGListing: no listing 7"
+        ]
+    );
+}

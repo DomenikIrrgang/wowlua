@@ -956,6 +956,80 @@ mock.module(clock, { now = function(): string return "x" end, later = 1 })
     assert!(out.contains("is not assignable to `() -> number`"), "{out}");
 }
 
+/// The group finder's other listings (`mock.defineLFGListing`): an addon's
+/// search from a click finds them; their changes and delistings come as
+/// `LFG_LIST_SEARCH_RESULT_UPDATED` for the last search's results; a failed
+/// search as `LFG_LIST_SEARCH_FAILED`.
+#[test]
+fn group_finder_listings() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                r#"-- Searches the dungeons' listings from its button; tells what it hears.
+export const heard: string[] = {}
+export const button = CreateFrame("Button", "DemoSearchButton", UIParent)
+button:SetSize(100, 20)
+button:SetPoint("CENTER")
+button:SetScript("OnClick", function()
+    C_LFGList.Search(2, 0, 0, nil, false, nil, { 799 })
+end)
+local f = CreateFrame("Frame")
+f:RegisterEvent("LFG_LIST_SEARCH_RESULTS_RECEIVED")
+f:RegisterEvent("LFG_LIST_SEARCH_RESULT_UPDATED")
+f:RegisterEvent("LFG_LIST_SEARCH_FAILED")
+f:SetScript("OnEvent", function(_: Frame, event: string, arg: any)
+    if event == "LFG_LIST_SEARCH_RESULTS_RECEIVED" then
+        local _, results = C_LFGList.GetSearchResults()
+        for _, id in ipairs(results) do
+            local info = C_LFGList.GetSearchResultInfo(id)
+            heard[#heard + 1] = `{info.leaderName}: {info.comment}`
+        end
+    elseif event == "LFG_LIST_SEARCH_RESULT_UPDATED" then
+        local info = C_LFGList.GetSearchResultInfo(arg)
+        heard[#heard + 1] = `{info.leaderName} {info.isDelisted and "delisted" or info.comment}`
+    else
+        heard[#heard + 1] = `failed: {arg}`
+    end
+end)
+"#,
+            ),
+            (
+                "tests/lfg.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import heard, button from "/main"
+
+@test("other groups' listings")
+local function listings()
+    local group = mock.defineLFGListing({ activities = { 799 }, comment = "LF healer", members = {
+        { name = "Tamsin Ashford", class = "WARRIOR", level = 18, role = "TANK" },
+        { name = "Otherplayer", class = "MAGE", level = 17, role = "DAMAGER" },
+    } })
+    expect(mock.lfgSearchResultID(group)).toBe(nil)
+    mock.click(button)
+    mock.waitSeconds(1)
+    expect(heard).toEqual({ "Tamsin Ashford: LF healer" })
+    expect(mock.lfgSearchResultID(group)).toBe(1)
+    expect(mock.updateLFGListing(group, { comment = "LF tank" })).toBe(true)
+    expect(mock.removeLFGListing(group)).toBe(true)
+    expect(heard).toEqual({ "Tamsin Ashford: LF healer", "Tamsin Ashford LF tank", "Tamsin Ashford delisted" })
+    mock.failLFGSearch("throttled")
+    mock.click(button)
+    mock.waitSeconds(1)
+    expect(heard[4]).toBe("failed: throttled")
+    expect(mock.lfgSearchResultID(group)).toBe(nil)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("1 passed, 0 failed"), "{out}");
+}
+
 /// `test.addons`: other addon folders load before the addon, each with
 /// its name, its own addon table, its SavedVariables and its
 /// `ADDON_LOADED` (the addon's last); an addon's dependencies first; the

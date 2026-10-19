@@ -460,6 +460,84 @@ export function setMacros(macros: { account?: MacroData[], character?: MacroData
     engine().setMacros(macros)
 end
 
+--- A player of another group's group finder listing: its class by file
+--- (`WARRIOR`; `className` the class's name by default), its level (1 by
+--- default), its zone (`area`), its assigned role (`NONE` by default) and
+--- the roles it would take (its assigned one's by default).
+export type LFGMember = {
+    name: string,
+    class: string,
+    className?: string,
+    level?: number,
+    area?: string,
+    role?: "TANK" | "HEALER" | "DAMAGER" | "NONE",
+    roles?: { tank?: boolean, healer?: boolean, dps?: boolean },
+}
+
+--- Another group's or player's listing in the group finder: its activities
+--- (`C_LFGList`'s activity IDs), its title (`name`) and description
+--- (`comment`), seconds listed (`age`), the playstyle
+--- (`Enum.LFGEntryGeneralPlaystyle`), the voice chat (`voiceMode`), whether
+--- it takes new players and accepts at once; its members, the leader first.
+export type LFGListingData = {
+    activities: number[],
+    comment?: string,
+    name?: string,
+    age?: number,
+    playstyle?: number,
+    newPlayerFriendly?: boolean,
+    voiceMode?: number,
+    autoAccept?: boolean,
+    members: LFGMember[],
+}
+
+--- A listing's changes (`updateLFGListing`): the fields given replace its
+--- own (`members` the whole list).
+export type LFGListingChanges = {
+    activities?: number[],
+    comment?: string,
+    name?: string,
+    age?: number,
+    playstyle?: number,
+    newPlayerFriendly?: boolean,
+    voiceMode?: number,
+    autoAccept?: boolean,
+    members?: LFGMember[],
+}
+
+--- Another group's or player's listing on the group finder's server: the
+--- searches (`C_LFGList.Search`) of its category and activities find it,
+--- each numbering its results anew (`lfgSearchResultID`). Its handle.
+export function defineLFGListing(data: LFGListingData): number
+    return engine().defineLFGListing(data)
+end
+
+--- The listing changed: later searches find it so; when the last search
+--- found it, its result changes and the server tells it
+--- (`LFG_LIST_SEARCH_RESULT_UPDATED(searchResultID)`). Whether it was told.
+export function updateLFGListing(handle: number, changes: LFGListingChanges): boolean
+    return engine().updateLFGListing(handle, changes)
+end
+
+--- The listing delisted: later searches do not find it; when the last
+--- search found it, its result is told delisted (`isDelisted`,
+--- `LFG_LIST_SEARCH_RESULT_UPDATED`). Whether it was told.
+export function removeLFGListing(handle: number): boolean
+    return engine().removeLFGListing(handle)
+end
+
+--- The listing's `searchResultID` among the last search's results; nil
+--- when that search did not find it.
+export function lfgSearchResultID(handle: number): number?
+    return engine().lfgSearchResultID(handle)
+end
+
+--- The next search fails: `LFG_LIST_SEARCH_FAILED(reason)` for its answer,
+--- no results.
+export function failLFGSearch(reason: string?)
+    engine().failLFGSearch(reason)
+end
+
 --- The API calls Blizzard's code made that the engine had no answer for
 --- (they returned empty values), as `name(args)`, sorted: what the engine
 --- does not know of the client yet.

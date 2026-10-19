@@ -94,19 +94,52 @@ end
 hooksecurefunc(C_LFGList, "RemoveListing", nextDelay)
 hooksecurefunc(C_LFGList, "Search", nextDelay)
 hooksecurefunc(C_LFGList, "CreateListing", nextDelay)
--- The server's word that results of the last search changed (recorded).
+-- The server's other listings, by activity: one-player groups (who and
+-- what they are unrecorded; these stand in), as many as `n`.
+local others = {}
+local function listings(activity, n)
+    local list = others[activity] or {}
+    others[activity] = list
+    while #list < n do
+        list[#list + 1] = e.defineLFGListing({ activities = { activity },
+            members = { { name = "Otherplayer", class = "WARRIOR", level = 20 } } })
+    end
+end
+-- The listing a result of the last search is.
+local function listingOf(id)
+    for _, list in pairs(others) do
+        for i, handle in ipairs(list) do
+            if e.lfgSearchResultID(handle) == id then return handle, list, i end
+        end
+    end
+end
+-- The server's word that results of the last search changed (recorded);
+-- those `leaving` delisted (gone from later searches).
+local leaving = {}
 local function updated(...)
     for i = 1, select("#", ...) do
         local id = select(i, ...)
-        check("result " .. id .. " updated at " .. now, ScenarioLfg.update(id))
+        local handle, list, at = listingOf(id)
+        local told = false
+        if handle and leaving[id] then
+            table.remove(list, at)
+            told = e.removeLFGListing(handle)
+        elseif handle then
+            told = e.updateLFGListing(handle, {})
+        end
+        check("result " .. id .. " updated at " .. now, told)
     end
 end
 -- How many other listings each search found: as many as number the
 -- results the server's updates named (recorded: 2 to 34 after the first
 -- search, 41 and 42 after the second, 69 after the fifth, 70 after the
--- sixth, 82 to 107 after the seventh, 129 to 142 after the eighth); how
--- they split between searches that named none is a fit.
+-- sixth, 82 to 107 after the seventh, 129 to 142 after the eighth), the
+-- player's own listing first and never named; how they split between
+-- searches that named none is a fit, and so is which of the first
+-- search's 33 delisted before the second found 20: thirteen of those the
+-- server's first updates named and none after.
 local WAILING_CAVERNS, HILLSBRAD, CUSTOM, SHADOWFANG_KEEP = 796, 867, 1064, 800
+for _, id in ipairs({ 14, 15, 16, 18, 20, 22, 23, 24, 26, 27, 28, 30, 32 }) do leaving[id] = true end
 
 -- Opened with its key: the listing tab asks for the saved instances
 -- (answered 3.660).
@@ -124,7 +157,7 @@ at(5.943) player:softTarget(e.spawnUnit({ name = "Crossroads Grunt", reaction = 
 at(8.294) press(activityRow("Wailing Caverns") and activityRow("Wailing Caverns").CheckButton)
 at(8.759) press(listing.ActivityView.PlayStyleDropdown)
 at(9.168) press(menuEntry(GetGeneralPlaystyleString(Enum.LFGEntryGeneralPlaystyle.Learning)))
-ScenarioLfg.listings(WAILING_CAVERNS, 33)
+listings(WAILING_CAVERNS, 33)
 answers(0.481, 0.780)
 at(9.911) press(listing.PostButton)
 at(10.6)
@@ -135,7 +168,7 @@ at(14.547) updated(29, 29)
 at(15.153) updated(8, 8, 8, 31, 31, 34, 34, 34)
 -- Delisted from its entry: the listing gone 0.417 s later, the saved
 -- instances told first; the search's results 0.609 s later.
-ScenarioLfg.listings(WAILING_CAVERNS, 20)
+listings(WAILING_CAVERNS, 20)
 answers(0.417, 0.609, 0.416)
 at(16.900) press(delistButton())
 at(17.4)
@@ -146,14 +179,14 @@ at(18.425) press(listing.BackButton)
 at(19.042) press(category(116))
 at(21.567) updated(42, 41)
 at(22.256) press(activityRow("Hillsbrad Foothills") and activityRow("Hillsbrad Foothills").CheckButton)
-ScenarioLfg.listings(HILLSBRAD, 3)
+listings(HILLSBRAD, 3)
 answers(0.519, 0.518)
 at(23.016) press(listing.PostButton)
 at(23.6)
 check("listed again", C_LFGList.HasActiveEntryInfo())
 -- Delisted: the listing gone and the saved instances told 0.474 s later,
 -- the search's results in the same frame after them.
-ScenarioLfg.listings(HILLSBRAD, 3)
+listings(HILLSBRAD, 3)
 answers(0.474, 0.475, 0.474)
 at(29.089) press(delistButton())
 
@@ -165,7 +198,7 @@ at(31.398) press(category(2))
 at(32.022) press(listing.BackButton)
 at(32.505) press(category(120))
 at(33.4) e.type(listing.ActivityView.Comment.EditBox, "Questing in the Barrens")
-ScenarioLfg.listings(CUSTOM, 7)
+listings(CUSTOM, 7)
 answers(0.491, 0.533)
 at(34.439) press(listing.PostButton)
 at(35.0)
@@ -174,7 +207,7 @@ check("listed with its description", C_LFGList.HasActiveEntryInfo()
 at(35.986) updated(69)
 -- Delisted: gone 0.597 s later, the saved instances told then too, the
 -- search's results 8 ms later.
-ScenarioLfg.listings(CUSTOM, 12)
+listings(CUSTOM, 11)
 answers(0.597, 0.605, 0.597)
 at(37.318) press(delistButton())
 
@@ -188,7 +221,7 @@ at(40.784) press(menuEntry(GetGeneralPlaystyleString(Enum.LFGEntryGeneralPlaysty
 at(42.860) press(listing.ActivityView.VoiceChatDropdown)
 at(43.494) updated(70)
 at(44.986) press(menuEntry(VOICE_CHAT_MODE_NONE))
-ScenarioLfg.listings(SHADOWFANG_KEEP, 30)
+listings(SHADOWFANG_KEEP, 30)
 answers(0.540, 0.536)
 at(45.237) press(listing.PostButton)
 at(45.9)
@@ -207,7 +240,7 @@ at(64.736) press(shown(function(f)
 end))
 -- Delisted: gone and the saved instances told 0.354 s later, the
 -- search's results 0.580 s after the click.
-ScenarioLfg.listings(SHADOWFANG_KEEP, 30)
+listings(SHADOWFANG_KEEP, 31)
 answers(0.354, 0.580, 0.354)
 at(67.221) press(delistButton())
 at(68.046) updated(138, 142, 129, 137)

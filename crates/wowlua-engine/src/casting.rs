@@ -293,6 +293,12 @@ fn start(
     done: Option<Value>,
     announce: bool,
 ) -> Ret {
+    // Its name and icon read later (`UnitCastingInfo`) and what its end
+    // does: kept alive from the start (a made-up name is no data's; the
+    // events told before the cast is stored run scripts that may collect).
+    for v in [name, icon].into_iter().chain(done) {
+        crate::widgets::keep(vm, v);
+    }
     let craft = std::mem::take(&mut engine_mut(vm).units.casting.crafting);
     let now = crate::clock::now(vm);
     let n = {
@@ -345,11 +351,6 @@ fn start(
         bar: bar.clone(),
         done,
     };
-    // Its name and icon read later (`UnitCastingInfo`): kept alive (a
-    // made-up name is no data's).
-    for v in [name, icon].into_iter().chain(done) {
-        crate::widgets::keep(vm, v);
-    }
     engine_mut(vm).units.casting.casts.insert(me, cast);
     let (start_event, _) = events(channel);
     let b = vm.str(&bar);

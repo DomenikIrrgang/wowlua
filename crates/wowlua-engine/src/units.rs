@@ -189,6 +189,11 @@ const CLASS_INFO: &[(f64, &str, &str)] = &[
     (13.0, "EVOKER", "Evoker"),
 ];
 
+/// A class's name by its file (`WARRIOR`: `Warrior`).
+pub(crate) fn class_name_of(file: &str) -> Option<&'static str> {
+    CLASS_INFO.iter().find(|c| c.1 == file).map(|c| c.2)
+}
+
 /// `GetClassInfo(classID)`: the class's name, file and ID.
 fn get_class_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = match vm.hidden(c.arg(1)) {
