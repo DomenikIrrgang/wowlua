@@ -3417,7 +3417,10 @@ pub fn add_to_group(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = handle_of(vm, c.arg(1)) else {
         return Err(vm.error("mock.addToGroup: a unit expected"));
     };
-    let (raid, subgroup) = match c.arg(2) {
+    // `quiet`: in the group already as the test begins (no update told;
+    // recorded: `hearth`'s party, its roster told first after the loading
+    // screen, Blizzard_RaidUI loading then).
+    let (raid, subgroup, quiet) = match c.arg(2) {
         Value::Table(t) => {
             let raid = vm.str("raid");
             let raid = vm.heap.table(t).get(raid).truthy();
@@ -3426,9 +3429,11 @@ pub fn add_to_group(vm: &mut Vm, c: NativeCall) -> Ret {
                 Value::Num(n) => Some(n),
                 _ => None,
             };
-            (raid, subgroup)
+            let key = vm.str("quiet");
+            let quiet = vm.heap.table(t).get(key).truthy();
+            (raid, subgroup, quiet)
         }
-        v => (v.truthy(), None),
+        v => (v.truthy(), None, false),
     };
     let forming = !crate::party::grouped(vm);
     {
@@ -3444,7 +3449,9 @@ pub fn add_to_group(vm: &mut Vm, c: NativeCall) -> Ret {
     if forming {
         crate::party::lead(vm);
     }
-    fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    if !quiet {
+        fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    }
     Ok(vec![])
 }
 

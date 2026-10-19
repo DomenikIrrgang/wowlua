@@ -417,6 +417,33 @@ pub fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `UNIT_AURA` telling all the unit's auras anew (`isFullUpdate`), for
+/// each of its tokens: the server sending them again (recorded, `hearth`:
+/// the player's after the inventory's reload, a party member's after its
+/// area, past the loading screen).
+pub(crate) fn fire_full_update(vm: &mut Vm, id: UnitId) {
+    let restricted = units::active(
+        &engine(vm).units,
+        &[
+            units::COMBAT,
+            units::ENCOUNTER,
+            units::CHALLENGE_MODE,
+            units::PVP_MATCH,
+        ],
+    );
+    for token in units::tokens_of(&engine(vm).units, id) {
+        let info = vm.new_table();
+        let full = if restricted {
+            vm.secret_wrap(Value::Bool(true))
+        } else {
+            Value::Bool(true)
+        };
+        set(vm, info, "isFullUpdate", full);
+        let t = vm.str(&token);
+        widgets::fire_event(vm, "UNIT_AURA", &[t, Value::Table(info)]);
+    }
+}
+
 /// `UNIT_AURA` telling one aura updated, for each of the unit's tokens.
 pub(crate) fn fire_updated(vm: &mut Vm, id: UnitId, instance: f64) {
     let restricted = units::active(

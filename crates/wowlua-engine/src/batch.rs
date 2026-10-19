@@ -319,6 +319,17 @@ pub fn control_set(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::
     Ok(vec![])
 }
 
+/// `tellTurns()`: the creatures' turns owed told now, their packet before
+/// the moment's later ones (per instance, recorded: `quest` 48.121 and
+/// 86.599, a wolf's turn between the swing's power and its own blow's;
+/// `death` 12.318, after the player's rage told twice).
+pub fn control_tell_turns(vm: &mut Vm, _c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    for unit in std::mem::take(&mut engine_mut(vm).batch.turns) {
+        crate::units::told_turn(vm, crate::units::UnitId(unit));
+    }
+    Ok(vec![])
+}
+
 /// `beforeEvent(name, fn)`: `fn` runs once just before the engine next
 /// fires event `name`: a world event inside a server packet's (recorded:
 /// `mail2` 16.286, another player's death between a taken item's bag

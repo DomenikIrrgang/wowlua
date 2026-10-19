@@ -324,6 +324,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("nearCorpse", crate::death::control_near_corpse),
         ("gameError", game_error),
         ("tellAuraStates", crate::aurastates::control_tell),
+        ("tellTurns", crate::batch::control_tell_turns),
         ("beforeEvent", crate::batch::control_before_event),
         ("setCVar", crate::framescript::control_set_cvar),
         ("clickWorld", crate::inventory::control_click_world),

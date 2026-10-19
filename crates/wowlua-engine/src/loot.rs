@@ -87,6 +87,9 @@ pub struct Loot {
     /// order (a corpse's or a gathering's).
     pub bags_after: Vec<f64>,
     pub data_after: Vec<f64>,
+    /// A recording's delays of the quest log's word (`logAfter`) after the
+    /// wanted item that owes it, in order; without one, with the bags.
+    pub log_after: Vec<f64>,
 }
 
 /// A table's numbers in order (`{ 0.08, 0.12 }`).
@@ -119,12 +122,15 @@ fn later(vm: &mut Vm, seconds: f64, name: &'static str, f: NativeFn, upvals: Vec
 }
 
 /// `player:loot(corpse, { auto?, opensAfter?, slotsAfter?, bagsAfter?,
-/// dataAfter? })`: the player loots a corpse; the window opens a round trip
-/// later (`opensAfter` seconds: a recording's), autoloot's slots answer at
-/// the usual spacing (`slotsAfter`: a recording's times after the window
-/// opened, one per slot); the bags' packets and the new items' data the
-/// usual while after the item that sets each off (`bagsAfter`,
-/// `dataAfter`: a recording's, in order).
+/// dataAfter?, logAfter? })`: the player loots a corpse; the window opens a
+/// round trip later (`opensAfter` seconds: a recording's), autoloot's
+/// slots answer at the usual spacing (`slotsAfter`: a recording's times
+/// after the window opened, one per slot); the bags' packets and the new
+/// items' data the usual while after the item that sets each off
+/// (`bagsAfter`, `dataAfter`: a recording's, in order); a quest's log's
+/// word (`UNIT_QUEST_LOG_CHANGED`) with the bags' packet, or `logAfter`
+/// seconds after the wanted item (a recording's, in order: `quest`
+/// 103.043, with the next item's push).
 pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     if me != units::PLAYER {
@@ -147,6 +153,8 @@ pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
     engine_mut(vm).world.loot.bags_after = numbers(vm, bags);
     let data = opt_field(vm, opts, "dataAfter");
     engine_mut(vm).world.loot.data_after = numbers(vm, data);
+    let log = opt_field(vm, opts, "logAfter");
+    engine_mut(vm).world.loot.log_after = numbers(vm, log);
     later(
         vm,
         delay,
@@ -488,6 +496,10 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
     let placed = crate::character::push_to_bags(vm, item.id, item.count);
     let (bag, new_slot) = placed.unwrap_or((0, None));
     push(vm, item.id, item.count, bag, new_slot.is_some());
+    if engine(vm).world.quests.log_owed && !engine(vm).world.loot.log_after.is_empty() {
+        let after = engine_mut(vm).world.loot.log_after.remove(0);
+        later(vm, after, "lootLog", log_told, vec![]);
+    }
     if last && let Some(corpse) = corpse {
         engine_mut(vm).units.list[corpse.0].loot.clear();
         engine_mut(vm).world.loot.emptied = Some(corpse);
@@ -533,6 +545,12 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
             later(vm, after, "lootItemData", item_data_arrived, vec![]);
         }
     }
+    Ok(vec![])
+}
+
+/// The quest log's word, apart from the bags' packet (`logAfter`).
+fn log_told(vm: &mut Vm, _c: NativeCall) -> Ret {
+    crate::quests::tell_log(vm);
     Ok(vec![])
 }
 

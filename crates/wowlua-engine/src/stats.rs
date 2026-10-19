@@ -1009,6 +1009,27 @@ pub fn spellbook_has_named(vm: &Vm, ability: &str) -> bool {
 
 /// A skill line's rank (`C_SkillInfo.GetSkillLineInfo`'s entry with that
 /// `skillID`).
+/// The active spec group's combat config
+/// (`C_SpecializationInfo.GetCombatConfigIDForSpecGroup`), if the
+/// character's stats have it.
+pub fn active_combat_config(vm: &Vm) -> Option<f64> {
+    let stats = &engine(vm).world.character.stats;
+    let group = match stats.get("activeSpecGroup") {
+        Some(Entry::One(v)) => match v.first() {
+            Some(Answer::Num(n)) => *n as i64,
+            _ => 1,
+        },
+        _ => 1,
+    };
+    match stats.get("combatConfig") {
+        Some(Entry::ByIndex(by)) => match by.get(&group).and_then(|v| v.first()) {
+            Some(Answer::Num(n)) => Some(*n),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 pub fn skill_rank(vm: &Vm, skill: i64) -> Option<f64> {
     let Some(Entry::ByIndex(lines)) = engine(vm).world.character.stats.get("skillLine") else {
         return None;

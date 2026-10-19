@@ -674,6 +674,7 @@ fn on_map(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     sync_log(vm);
     fire(vm, "QUEST_POI_UPDATE", &[]);
+    crate::questinfo::quest_poi_arrived(vm, id)?;
     Ok(vec![])
 }
 

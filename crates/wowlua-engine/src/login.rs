@@ -237,6 +237,20 @@ pub fn teleport(vm: &mut Vm, map: f64, place: Option<wowlua_vm::TableRef>) {
         if event == "ACTIONBAR_SLOT_CHANGED" && args == "number 0" {
             crate::actions::bars_reloaded(vm);
         }
+        // The auras sent again (recorded once, `hearth`: the player's after
+        // its flags with the inventory's reload, 21.750; a party member's
+        // after its area, 22.392; unverified: the new instance IDs the
+        // client gave them, not modelled).
+        if event == "PLAYER_FLAGS_CHANGED" && args == "string player" {
+            crate::auras::fire_full_update(vm, crate::units::PLAYER);
+        }
+        if event == "UNIT_AREA_CHANGED"
+            && let Some(token) = args.strip_prefix("string ")
+            && token.starts_with("party")
+            && let Some(id) = crate::units::resolve(&engine(vm).units, token)
+        {
+            crate::auras::fire_full_update(vm, id);
+        }
     }
 }
 

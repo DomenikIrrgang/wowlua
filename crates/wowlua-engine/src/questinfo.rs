@@ -983,6 +983,15 @@ fn super_track(vm: &mut Vm, sets: &[(&str, Value)]) {
     }
 }
 
+/// A quest's POI came: the navigation frame made if it is the quest
+/// super-tracked (`navigation_frame`).
+pub(crate) fn quest_poi_arrived(vm: &mut Vm, quest: i64) -> Result<(), wowlua_vm::LuaError> {
+    if super_quest(vm) == Some(quest) {
+        navigation_frame(vm)?;
+    }
+    Ok(())
+}
+
 fn super_quest(vm: &mut Vm) -> Option<i64> {
     match get(vm, "quest") {
         Value::Num(n) if n > 0.0 => Some(n as i64),
@@ -1032,8 +1041,12 @@ fn set_super_tracked_user_waypoint(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// The navigation frame made once (see `set_super_tracked_user_waypoint`).
-fn navigation_frame(vm: &mut Vm) -> Result<(), wowlua_vm::LuaError> {
+/// The navigation frame made once (see `set_super_tracked_user_waypoint`):
+/// when the place super-tracked first has a position. A user's pin has
+/// one at once (`mapnav`); a quest once its POI comes (`quest` 5.690: with
+/// `QUEST_POI_UPDATE`, 0.46 s after `SUPER_TRACKING_CHANGED`); the
+/// corpse a moment after the release (`death` 29.621, `death::released`).
+pub(crate) fn navigation_frame(vm: &mut Vm) -> Result<(), wowlua_vm::LuaError> {
     if !get(vm, "navFrame").is_nil() {
         return Ok(());
     }

@@ -58,6 +58,18 @@ local function press(frame, button)
     local ok, err = pcall(e.click, frame, button)
     if not ok then check("clicked: " .. tostring(err), false) end
 end
+-- The target change's echo with the auto attack's start (recorded at
+-- 6.927 and 10.321: UNIT_TARGET("player") right after
+-- PLAYER_ENTER_COMBAT, not a round trip after the target change).
+local function echo()
+    e.fireUnitEvent("UNIT_TARGET", "player")
+end
+-- The player's flags told for the hidden aura (recorded at 20.571 and
+-- 24.356, by the target's target too; the flag unknown).
+local function flagsTold()
+    e.fireUnitEvent("UNIT_FLAGS", "player")
+    e.fireUnitEvent("UNIT_FLAGS", "targettarget")
+end
 local function chatHas(frame, text)
     for i = 1, frame:GetNumMessages() do
         if (frame:GetMessageInfo(i)) == text then return true end
@@ -90,12 +102,13 @@ at(4.934) u_299_cd4e8eb2c4:swing(player, 0, { kind = "DODGE", textAfter = 0.333,
 at(5.036) player:raiseSkill("Defense", 7, "Swords", 8)
 at(5.036) u_299_cd4e8eb2c4:swing(player, 1, { victimPower = 5, textAfter = 0.332 })
 at(6.270) u_299_cd4e8eb2c4:setThreat(6)
-at(6.589) player:target(u_6_9adbb50a8f)
+at(6.589) player:target(u_6_9adbb50a8f, { echo = false })
 at(6.589) bystander("Creature-0-6782-0-7-69-49CA867F07", 69, "Timber Wolf")
 at(6.810) e.gameError("BADATTACKFACING")
 -- The attack turned to the new target: off, then on (recorded).
 at(6.927) player:stopAttack()
 at(6.927) player:startAttack()
+at(6.927) echo()
 at(6.927) u_6_9adbb50a8f:swing(player, 2, { victimPower = 15, textAfter = 0.397 })
 at(7.873) player:swing(u_6_9adbb50a8f, 6, { power = 15, textAfter = 0.396 })
 at(7.873) u_6_9adbb50a8f:target(player)
@@ -105,10 +118,15 @@ at(7.988) player:setPower(15)
 at(9.055) u_6_9adbb50a8f:setThreat(6)
 at(9.854) e.gameError("BADATTACKFACING")
 at(9.930) u_6_9adbb50a8f:swing(player, 2, { victimPower = 15, textAfter = 0.375 })
-at(10.045) player:target(u_6_f4dca45d75)
+at(10.045) player:target(u_6_f4dca45d75, { echo = false })
 at(10.321) player:stopAttack()
+-- The attack's start and the echo after the swing, before its rage
+-- (recorded).
+at(10.321) e.beforeEvent("UNIT_POWER_UPDATE", function()
+    player:startAttack()
+    echo()
+end)
 at(10.321) player:swing(u_6_f4dca45d75, 7, { power = 15, textAfter = 0.387 })
-at(10.321) player:startAttack()
 at(10.321) u_6_f4dca45d75:setThreat(6)
 at(10.414) u_6_f4dca45d75:target(player)
 at(10.414) u_6_f4dca45d75:swing(player, 2, { victimPower = 15, textAfter = 0.274 })
@@ -119,8 +137,12 @@ at(11.781) player:stopAttack()
 at(11.781) player:startAttack()
 at(11.884) u_6_65112a2818:swing(player, 3, { textAfter = 0.297, statesAfter = 0.104 })
 at(11.988) player:setPower(15)
+-- The swing's rage told twice, then the kobold's turn, then its blow
+-- (recorded in that order).
 at(12.318) player:swing(u_6_65112a2818, 5, { power = 15, textAfter = 0.397 })
+at(12.318) player:setPower(15)
 at(12.318) u_6_65112a2818:target(player)
+at(12.318) e.tellTurns()
 at(12.318) u_6_65112a2818:swing(player, 1, { victimPower = 15, textAfter = 0.3 })
 at(12.318) u_6_65112a2818:setThreat(4)
 at(12.419) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.296 })
@@ -156,8 +178,9 @@ at(18.287) player:raiseSkill("Defense", 9)
 at(18.462) u_6_65112a2818:swing(player, 3, { victimPower = 15, textAfter = 0.367 })
 at(18.988) u_6_65112a2818:swing(player, 2, { textAfter = 0.33 })
 at(19.055) player:setPower(15)
-at(19.179) bystander("Creature-0-6782-0-7-257-9FB7AE1D64", 257, "Kobold Worker")
+-- The blow's rage before the bystander's death (recorded).
 at(19.179) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.396 })
+at(19.179) bystander("Creature-0-6782-0-7-257-9FB7AE1D64", 257, "Kobold Worker")
 at(20.037) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.334 })
 at(20.271) bystander("Creature-0-6782-0-7-257-93E6A8BB49", 257, "Kobold Worker")
 at(20.271) u_6_65112a2818:swing(player, 2, { textAfter = 0.333 })
@@ -166,6 +189,7 @@ at(20.371) player:setPower(15)
 -- is unknown; its coming and going as recorded.
 at(20.371) local hidden = player:applyAura({ spellId = 0, name = "Unknown", harmful = true })
 at(20.371) u_6_65112a2818:swing(player, 2, { textAfter = 0.333 })
+at(20.571) flagsTold()
 at(20.571) player:setPower(15)
 at(21.104) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.333 })
 at(21.137) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.334 })
@@ -178,6 +202,7 @@ at(23.187) u_6_65112a2818:swing(player, 1, { victimPower = 15, textAfter = 0.334
 at(23.908) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.297 })
 at(24.257) u_6_65112a2818:swing(player, 1, { textAfter = 0.297 })
 at(24.356) player:setPower(15)
+at(24.356) flagsTold()
 at(24.356) player:setPower(15)
 at(24.356) player:removeAura(hidden)
 at(24.356) u_6_65112a2818:swing(player, 1, { textAfter = 0.297 })
@@ -190,10 +215,19 @@ at(26.166) e.gameError("BADATTACKFACING")
 at(26.327) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.295 })
 -- Dead: a tenth of each item's durability lost, the ghost's hidden aura
 -- to come (57).
+-- The target's clearing echoed 0.492 s on (recorded), with the player's
+-- threat situation; the creatures' lists left at 27.377 (their
+-- nameplates', the situation again).
+at(26.440) e.setLatency(0.492)
 at(26.440) player:die({ ghostAura = 57 })
+at(26.440) e.setLatency(0.3)
 at(26.6)
 check("dead: the death popup", StaticPopup1 and StaticPopup1:IsShown() and StaticPopup1.which == "DEATH")
 check("chat: you died", chatHas(ChatFrame1, "|cff71d5ff|Hdeath:1|h[You died.]|h"))
+-- The killing blow's text, after the death (recorded: 2 damage).
+at(26.736) e.fireUnitEvent("UNIT_COMBAT", "player", "WOUND", "", 2, 1)
+at(26.932) e.fireUnitEvent("UNIT_THREAT_SITUATION_UPDATE", "player")
+at(27.377) for _, u in ipairs({ u_69_cd4e8eb2c4, u_299_cd4e8eb2c4, u_6_9adbb50a8f, u_6_f4dca45d75, u_6_65112a2818 }) do u:setThreat(nil) end
 at(29.150) press(StaticPopup1Button1)
 at(29.6)
 check("a ghost", UnitIsGhost("player"))
@@ -211,7 +245,11 @@ check("the corpse offered", StaticPopup1:IsShown() and StaticPopup1.which == "RE
 at(50.355) e.setLatency(0.411)
 at(50.355) press(StaticPopup1Button1)
 at(50.355) e.setLatency(0.3)
-at(50.766) bystander("Creature-0-6782-0-7-299-289E593BC2", 299, "Young Wolf")
+-- A bystander's death in the resurrection's moment, before its usability
+-- (recorded).
+at(50.355) e.beforeEvent("ACTION_USABLE_CHANGED", function()
+    bystander("Creature-0-6782-0-7-299-289E593BC2", 299, "Young Wolf")
+end)
 at(51.0)
 check("alive again", not UnitIsDeadOrGhost("player"))
 -- Health comes back (values unrecorded).

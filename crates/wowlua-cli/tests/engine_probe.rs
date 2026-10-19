@@ -1338,7 +1338,7 @@ fn the_engine_plays_combat_as_the_client_did() {
 
 /// How many of the death scenario's lines the engine plays as the client
 /// did: only ever up.
-const DEATH_MATCHED: usize = 1628;
+const DEATH_MATCHED: usize = 1647;
 
 /// The death scenario: a fight lost, the spirit released, the corpse taken.
 #[test]
@@ -1405,7 +1405,7 @@ fn the_engine_plays_vendor_as_the_client_did() {
 /// and its new mail (not in the snapshot), Blessing of Protection told
 /// unusable at a usability check after an NPC was soft targeted in Thunder
 /// Bluff (the soft friend's change during the loading screen's replay).
-const HEARTH_MATCHED: usize = 1595;
+const HEARTH_MATCHED: usize = 1610;
 
 /// The hearth scenario: a Hearthstone cast, the loading screen.
 #[test]
@@ -1518,7 +1518,7 @@ fn the_engine_plays_items_as_the_client_did() {
 
 /// How many of the quest scenario's lines the engine plays as the client
 /// did: only ever up.
-const QUEST_MATCHED: usize = 5609;
+const QUEST_MATCHED: usize = 5635;
 
 /// The quest scenario: a quest taken, eight wolves hunted for its item (a
 /// level gained), the quest turned in.
