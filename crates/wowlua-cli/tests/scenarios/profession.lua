@@ -10,7 +10,7 @@
 -- TRADE_SKILL_CRAFT_BEGIN: a request still unanswered) are left out.
 local e = __engine
 local player = e.player
-e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 } })
+e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 }, partyOrSelf = { 1022 } })
 -- The spell and the stone as the client named them (UnitCastingInfo, the
 -- loot's link and icon).
 e.defineSpell(2576, { name = "Mining", iconID = 136248 })

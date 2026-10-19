@@ -8,6 +8,9 @@ local e = __engine
 local player = e.player
 -- The option's answer 0.283 s after the click (recorded).
 e.setLatency(0.283)
+-- Blessing of Protection (slots 42, 50): on the player or a group
+-- member only (probed).
+e.setSpellTraits({ partyOrSelf = { 1022 } })
 local jahan = e.spawnUnit({
     name = "Jahan Hawkwing", guid = "Creature-0-4621-1-21-3483-F2E0F46302", npcID = 3483, level = 21,
     reaction = "friendly", class = "WARRIOR", classID = 1, sex = 2, powerType = 1, pvp = true,

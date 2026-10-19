@@ -167,6 +167,8 @@ fn formed(vm: &mut Vm, c: NativeCall) -> Ret {
     system(vm, &threshold.replacen("%s", &uncommon, 1));
     let guid = party_guid(vm);
     fire(vm, "GROUP_JOINED", &[Value::Num(1.0), guid]);
+    // The actions on a group (recorded: Blessing of Protection's re-told).
+    crate::actions::update_usability(vm);
     fire(vm, "CHANNEL_UI_UPDATE", &[]);
     fire(vm, "PLAYER_DIFFICULTY_CHANGED", &[]);
     fire(vm, "CHANNEL_UI_UPDATE", &[]);

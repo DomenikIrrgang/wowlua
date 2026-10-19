@@ -11,7 +11,7 @@ e.setHiddenGroupBuffs({ 10300, 19740, 1022, 1038, 19979, 25290, 5599, 19834, 102
 -- Judgement off the global cooldown; Find Minerals and Sense Undead
 -- tracking (usable on the taxi); Blacksmithing and Smelting professions
 -- (usable all the flight): as recorded.
-e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 } })
+e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 }, partyOrSelf = { 1022 } })
 local doras = e.spawnUnit({
     name = "Doras", guid = "Creature-0-6782-1-4-3310-54D6D229C9", npcID = 3310, level = 55, classification = "elite",
     reaction = "friendly", class = "WARRIOR", classID = 1, sex = 2, powerType = 1,

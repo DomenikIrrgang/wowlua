@@ -1278,7 +1278,7 @@ fn the_engine_plays_auradeath_as_the_client_did() {
 
 /// How many of the gossip2 scenario's lines the engine plays as the client
 /// did: only ever up.
-const GOSSIP2_MATCHED: usize = 152;
+const GOSSIP2_MATCHED: usize = 166;
 
 /// The gossip2 scenario: a merchant's gossip, his goods browsed, his gossip
 /// again, closed with Escape.
@@ -1364,7 +1364,7 @@ fn the_engine_plays_auction_as_the_client_did() {
 
 /// How many of the group scenario's lines the engine plays as the client
 /// did: only ever up.
-const GROUP_MATCHED: usize = 237;
+const GROUP_MATCHED: usize = 251;
 
 /// The group scenario: an invitation, a party, following, a trade.
 #[test]
@@ -1374,7 +1374,7 @@ fn the_engine_plays_group_as_the_client_did() {
 
 /// How many of the inspect scenario's lines the engine plays as the
 /// client did: only ever up.
-const INSPECT_MATCHED: usize = 269;
+const INSPECT_MATCHED: usize = 283;
 
 /// The inspect scenario: another player's gear and talents.
 #[test]

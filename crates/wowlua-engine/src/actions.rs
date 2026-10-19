@@ -61,9 +61,11 @@ pub fn start_global_cooldown(vm: &mut Vm) {
 }
 
 /// `setSpellTraits({ offGlobalCooldown = { id, … }, tracking = { … },
-/// profession = { … } })`: what the client knows of the character's spells
-/// and the engine does not (recorded: Judgement off the global cooldown,
-/// Find Minerals and Sense Undead tracking, the crafts professions).
+/// profession = { … }, partyOrSelf = { … } })`: what the client knows of
+/// the character's spells and the engine does not (recorded: Judgement off
+/// the global cooldown, Find Minerals and Sense Undead tracking, the crafts
+/// professions; probed: Blessing of Protection on the player or a member
+/// in reach only).
 pub fn control_set_spell_traits(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(t) = c.arg(1) else {
         return Err(vm.error("setSpellTraits: a table of trait lists expected"));
@@ -248,6 +250,24 @@ fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
         }
     }
     let in_combat = engine(vm).units.list[crate::units::PLAYER.0].in_combat;
+    // A spell on the player or a group member in reach only (trait
+    // `partyOrSelf`; probed: Blessing of Protection usable targeting the
+    // player, not with no target, an NPC, or a member in another zone;
+    // recorded: usable on a member nearby).
+    if a.kind == "spell" && has_trait(vm, a.id, "partyOrSelf") {
+        let e = engine(vm);
+        let u = &e.units;
+        let ok = match u.target {
+            Some(crate::units::PLAYER) => true,
+            Some(t) => {
+                let m = &u.list[t.0];
+                let here = &e.world.character.position.zone;
+                u.group.contains(&t) && m.online && m.zone.as_ref().is_none_or(|z| z == here)
+            }
+            None => false,
+        };
+        return (ok, false);
+    }
     if a.kind == "item" {
         let class = data_field(vm, true, a.id, "classID");
         let sub = data_field(vm, true, a.id, "subclassID");
@@ -284,11 +304,27 @@ pub fn update_usability(vm: &mut Vm) {
 /// whether any did (the bars' `ACTIONBAR_UPDATE_USABLE` is the caller's:
 /// after a spell's swing it comes after the cooldowns, recorded).
 pub fn usability_changed(vm: &mut Vm) -> bool {
+    usability_changed_of(vm, &|_, _| true)
+}
+
+/// After the player's target changed: the actions on a target's kind
+/// alone (`partyOrSelf`), others' changes left for their own moment
+/// (recorded: a warrior's rage-bound spell told after a kill's loot).
+pub fn update_target_usability(vm: &mut Vm) {
+    let target_bound =
+        |vm: &Vm, a: &Action| a.kind == "spell" && has_trait(vm, a.id, "partyOrSelf");
+    if usability_changed_of(vm, &target_bound) {
+        widgets::fire_event(vm, "ACTIONBAR_UPDATE_USABLE", &[]);
+    }
+}
+
+fn usability_changed_of(vm: &mut Vm, which: &dyn Fn(&Vm, &Action) -> bool) -> bool {
     let actions: Vec<(i64, Action)> = engine(vm)
         .world
         .character
         .actions
         .iter()
+        .filter(|(_, a)| which(vm, a))
         .map(|(k, a)| (*k, a.clone()))
         .collect();
     let mut changed = Vec::new();

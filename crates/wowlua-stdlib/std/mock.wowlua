@@ -465,11 +465,14 @@ export function areaChanged()
 end
 
 --- What the client knows of the character's spells: those off the global
---- cooldown, the tracking ones, the professions'.
+--- cooldown, the tracking ones, the professions', those usable on the
+--- player or a group member in reach only (`partyOrSelf`: Blessing of
+--- Protection; re-told as the target changes).
 export function setSpellTraits(traits: {
     offGlobalCooldown?: number[],
     tracking?: number[],
     profession?: number[],
+    partyOrSelf?: number[],
 })
     engine().setSpellTraits(traits)
 end

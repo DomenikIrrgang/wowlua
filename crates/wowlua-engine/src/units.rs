@@ -1705,6 +1705,9 @@ fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
     engine_mut(vm).units.target = new;
     engine_mut(vm).units.list[PLAYER.0].target = new;
     fire(vm, "PLAYER_TARGET_CHANGED", &[]);
+    // The actions on a target's kind (recorded: Blessing of Protection's
+    // after targeting an NPC, then a party member).
+    crate::actions::update_target_usability(vm);
     let echo = vm.native("targetEcho", target_echo);
     let delay = crate::clock::server_delay(vm);
     crate::clock::after_engine(vm, delay, echo);
