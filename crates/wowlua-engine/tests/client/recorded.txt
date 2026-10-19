@@ -1,0 +1,3 @@
+# Each part's recording the repository's fixtures and data hold: the
+# part, when StdTest recorded it, the client (cargo xtask ingest takes a
+# part only when a SavedVariables file has it recorded later).

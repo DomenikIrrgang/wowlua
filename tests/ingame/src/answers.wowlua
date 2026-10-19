@@ -4,6 +4,7 @@
 -- from the sweep; each call's results packed inside the protected call
 -- (Forever crashes when pcall returns very many values).
 import state from "/state"
+import stamp from "/state"
 import say from "/harness"
 
 const CALLS: string[] = {
@@ -6193,6 +6194,7 @@ export function answersProbe()
         end
     end
     st.engineAnswers = out
+    stamp("answers")
     const checks: { [string]: string } = {}
     for _, check in ipairs(CHECKS) do
         const f = loadstring("return " .. check.code)

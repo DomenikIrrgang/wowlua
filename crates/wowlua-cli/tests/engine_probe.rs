@@ -43,7 +43,8 @@ fn build() -> tempfile::TempDir {
     }
     fs::write(
         src.join("state.wowlua"),
-        "export function state(): table\n    if type(StdTestState) ~= \"table\" then StdTestState = {} end\n    return StdTestState\nend\n",
+        "export function state(): table\n    if type(StdTestState) ~= \"table\" then StdTestState = {} end\n    return StdTestState\nend\n\
+         export function stamp(part: string)\n    local st = state() :: any\n    st.engineStamps = st.engineStamps or {}\n    st.engineStamps[part] = { at = date(\"%Y-%m-%d %H:%M:%S\") }\nend\n",
     )
     .unwrap();
     fs::write(

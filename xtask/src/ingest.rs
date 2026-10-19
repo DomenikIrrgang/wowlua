@@ -1,4 +1,4 @@
-//! `cargo xtask ingest <SavedVariables/StdTest.lua>`: a client's StdTest
+//! `cargo xtask ingest [<SavedVariables/StdTest.lua>...]`: a client's StdTest
 //! recordings into the repository's fixtures and data, scrubbed of the
 //! player (name, last name and GUID; any player's GUID; the social systems'
 //! texts), so a new client is checked by running the tests and reading the
@@ -32,7 +32,13 @@
 //! - the static functions' answers: `crates/wowlua-engine/data/camelot-answers.txt`;
 //! - the login: `crates/wowlua-engine/data/camelot-login.txt` (and reload).
 //!
-//! Each part is written only when the file has it.
+//! Each part is written only when the file has it, and only when StdTest
+//! stamped it later than the repository's (`tests/client/recorded.txt`;
+//! results recorded before stamps only with `--unstamped`): a leftover in
+//! a SavedVariables file never overwrites a newer recording. Answers merge
+//! (one account's run never drops another's), the engine battery's parts
+//! by their prefix; a file whose content is unchanged keeps its header.
+//! Without a path, every account's SavedVariables in the WoW installation.
 
 use anyhow::{Context, Result, anyhow};
 use std::fmt::Write;
@@ -141,9 +147,140 @@ fn write_table(path: &Path, header: &str, entries: &[(String, String)]) -> Resul
         let _ = writeln!(out, "    [{}] = {},", quote(k), quote(v));
     }
     out.push_str("}\n");
-    std::fs::write(path, out).with_context(|| path.display().to_string())?;
-    println!("wrote {} ({} entries)", path.display(), entries.len());
+    write_file(path, &out)
+}
+
+/// A text without its header (its leading comment lines, `--` or `#`).
+fn body(text: &str) -> &str {
+    let mut rest = text;
+    while rest.starts_with("--") || rest.starts_with('#') {
+        rest = rest.split_once('\n').map_or("", |(_, r)| r);
+    }
+    rest
+}
+
+/// Writes `text` to `path` unless only its header would change (the
+/// client's version on the same recording: no churn).
+fn write_file(path: &Path, text: &str) -> Result<()> {
+    if let Ok(old) = std::fs::read_to_string(path)
+        && body(&old) == body(text)
+    {
+        println!("unchanged {}", path.display());
+        return Ok(());
+    }
+    std::fs::write(path, text).with_context(|| path.display().to_string())?;
+    println!("wrote {}", path.display());
     Ok(())
+}
+
+/// A fixture table's entries (`write_table`'s), to merge into.
+fn read_table(path: &Path) -> Vec<(String, String)> {
+    let Ok(src) = std::fs::read(path) else {
+        return Vec::new();
+    };
+    let lua = mlua::Lua::new();
+    let Ok(t) = lua.load(&src[..]).eval::<mlua::Table>() else {
+        return Vec::new();
+    };
+    let mut out: Vec<(String, String)> = t.pairs::<String, String>().flatten().collect();
+    out.sort();
+    out
+}
+
+/// The entries of `old` and `new`, `new`'s winning: a run's answers added
+/// to the repository's, none lost (an account's run may lack another's).
+fn merged(old: Vec<(String, String)>, new: &[(String, String)]) -> Vec<(String, String)> {
+    let mut all: std::collections::BTreeMap<String, String> = old.into_iter().collect();
+    for (k, v) in new {
+        all.insert(k.clone(), v.clone());
+    }
+    all.into_iter().collect()
+}
+
+/// What the repository's fixtures and data hold: each part's recording
+/// (when, on which client), `tests/client/recorded.txt`. A file's part is
+/// taken only when StdTest stamped it later (`engineStamps`); one without
+/// a stamp (recorded before stamps) only with `--unstamped`.
+pub struct Gate {
+    path: std::path::PathBuf,
+    recorded: std::collections::BTreeMap<String, (String, String)>,
+    unstamped: bool,
+}
+
+/// The time an unstamped part is recorded as: before any stamp.
+const UNSTAMPED: &str = "0000-00-00 00:00:00";
+
+impl Gate {
+    pub fn load(root: &Path, unstamped: bool) -> Result<Gate> {
+        let path = root.join("crates/wowlua-engine/tests/client/recorded.txt");
+        let mut recorded = std::collections::BTreeMap::new();
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            for line in text.lines().filter(|l| !l.starts_with('#')) {
+                let mut parts = line.splitn(3, '\t');
+                if let (Some(part), Some(at), Some(client)) =
+                    (parts.next(), parts.next(), parts.next())
+                {
+                    recorded.insert(part.to_string(), (at.to_string(), client.to_string()));
+                }
+            }
+        }
+        Ok(Gate {
+            path,
+            recorded,
+            unstamped,
+        })
+    }
+
+    /// Whether to take `part` of a file with these stamps: its client if so
+    /// (recorded as the repository's from now on).
+    fn take(&mut self, stamps: &Stamps, part: &str, fallback: &str) -> Option<String> {
+        let (at, client) = match stamps.get(part) {
+            Some(s) => s.clone(),
+            None if self.unstamped => (UNSTAMPED.to_string(), fallback.to_string()),
+            None => {
+                println!(
+                    "skipped {part}: not stamped (recorded before stamps; --unstamped takes it)"
+                );
+                return None;
+            }
+        };
+        if let Some((have, _)) = self.recorded.get(part)
+            && *have >= at
+        {
+            println!("skipped {part}: the repository's is as new ({have})");
+            return None;
+        }
+        self.recorded.insert(part.to_string(), (at, client.clone()));
+        Some(client)
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let mut out = String::from(
+            "# Each part's recording the repository's fixtures and data hold: the\n\
+             # part, when StdTest recorded it, the client (cargo xtask ingest takes a\n\
+             # part only when a SavedVariables file has it recorded later).\n",
+        );
+        for (part, (at, client)) in &self.recorded {
+            let _ = writeln!(out, "{part}\t{at}\t{client}");
+        }
+        write_file(&self.path, &out)
+    }
+}
+
+/// A file's stamps: part -> (when, client).
+type Stamps = std::collections::HashMap<String, (String, String)>;
+
+fn stamps_of(state: &mlua::Table) -> Stamps {
+    let mut out = Stamps::new();
+    if let Ok(t) = state.get::<mlua::Table>("engineStamps") {
+        for (part, stamp) in t.pairs::<String, mlua::Table>().flatten() {
+            if let (Ok(at), Ok(client)) = (stamp.get::<String>("at"), stamp.get::<String>("client"))
+            {
+                out.insert(part, (at, client));
+            }
+        }
+    }
+    out
 }
 
 /// Functions that answer from the client's own data or the account's
@@ -677,8 +814,7 @@ fn write_traits_data(root: &Path, client: &Path, version: &str) -> Result<()> {
         let _ = writeln!(data, "{class}\t{}\t{}", data_text(call), data_text(answer));
     }
     let path = root.join("crates/wowlua-engine/data/camelot-traits.txt");
-    std::fs::write(&path, data)?;
-    println!("wrote {} ({} answers)", path.display(), lines.len());
+    write_file(&path, &data)?;
     Ok(())
 }
 
@@ -891,8 +1027,7 @@ fn write_tradeskill_data(root: &Path, client: &Path, version: &str) -> Result<()
         );
     }
     let path = root.join("crates/wowlua-engine/data/camelot-tradeskill.txt");
-    std::fs::write(&path, data)?;
-    println!("wrote {} ({} answers)", path.display(), lines.len());
+    write_file(&path, &data)?;
     Ok(())
 }
 
@@ -1021,7 +1156,66 @@ fn with_books(profile: &str, books: &std::collections::BTreeSet<String>) -> Stri
     }
 }
 
-pub fn run(root: &Path, saved: &Path) -> Result<()> {
+/// `cargo xtask ingest [--unstamped] [--client <folder>] [<StdTest.lua>...]`:
+/// each SavedVariables file's parts newer than the repository's; without
+/// files, every account's in the WoW installation (`wowlua install`'s:
+/// `--wow`'s environment `WOWLUA_WOW_PATH`, the config, Battle.net's
+/// default folder on macOS, Windows and under Wine on Linux) client
+/// folder (`_classic_beta_` unless `--client`).
+pub fn run_all(root: &Path, args: &[String]) -> Result<()> {
+    let mut unstamped = false;
+    let mut client = "_classic_beta_".to_string();
+    let mut paths: Vec<std::path::PathBuf> = Vec::new();
+    let mut it = args.iter();
+    while let Some(arg) = it.next() {
+        match arg.as_str() {
+            "--unstamped" => unstamped = true,
+            "--client" => {
+                client = it
+                    .next()
+                    .ok_or_else(|| anyhow!("--client needs a client folder (_classic_beta_)"))?
+                    .clone();
+            }
+            other if other.starts_with("--") => {
+                return Err(anyhow!(
+                    "usage: cargo xtask ingest [--unstamped] [--client <folder>] [<StdTest.lua>...]"
+                ));
+            }
+            path => paths.push(path.into()),
+        }
+    }
+    if paths.is_empty() {
+        let wow = wowlua_driver::install::find_wow(None).map_err(|d| anyhow!("{}", d.message))?;
+        paths = saved_variables(&wow.join(&client));
+        if paths.is_empty() {
+            return Err(anyhow!(
+                "no StdTest SavedVariables under {}",
+                wow.join(&client).display()
+            ));
+        }
+    }
+    let mut gate = Gate::load(root, unstamped)?;
+    for path in &paths {
+        println!("ingesting {}", path.display());
+        run(root, path, &mut gate)?;
+    }
+    gate.save()
+}
+
+/// Every account's StdTest SavedVariables in a client folder.
+fn saved_variables(client: &Path) -> Vec<std::path::PathBuf> {
+    let mut out: Vec<std::path::PathBuf> = std::fs::read_dir(client.join("WTF").join("Account"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|account| account.path().join("SavedVariables").join("StdTest.lua"))
+        .filter(|p| p.is_file())
+        .collect();
+    out.sort();
+    out
+}
+
+pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
     let src = std::fs::read(saved).with_context(|| saved.display().to_string())?;
     let lua = mlua::Lua::new();
     lua.load(&src[..])
@@ -1065,22 +1259,41 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
         identity_from_scenarios(&state)?
     };
     let version = get("probe.client").unwrap_or_else(|| "an unknown client".into());
+    let stamps = stamps_of(&state);
 
     let scrubbed: Vec<(String, String)> = battery
         .iter()
         .map(|(k, v)| (me.scrub(k), me.scrub(v)))
         .collect();
-    if has_battery {
+    // The battery's parts taken, each merged in by its prefix.
+    let of = |part: &str, key: &str| key.starts_with(&format!("{part}."));
+    let mut battery_parts: Vec<&str> = Vec::new();
+    for part in ["probe", "order", "protected", "blocked"] {
+        if battery.iter().any(|(k, _)| of(part, k)) && gate.take(&stamps, part, &version).is_some()
+        {
+            battery_parts.push(part);
+        }
+    }
+    if !battery_parts.is_empty() {
+        let path = client.join("forever-camelot-engine.lua");
+        let ours = |k: &str| battery_parts.iter().any(|p| of(p, k));
+        let mut entries: Vec<(String, String)> = read_table(&path)
+            .into_iter()
+            .filter(|(k, _)| !ours(k))
+            .collect();
+        entries.extend(scrubbed.iter().filter(|(k, _)| ours(k)).cloned());
+        entries.sort();
         write_table(
-            &client.join("forever-camelot-engine.lua"),
+            &path,
             &format!(
                 "WoW Forever {version}: /stdtest engine, order, protected and blocked\n\
              (tests/ingame/src/engineprobe.wowlua), flattened; the player's name, realm\n\
              and GUID replaced (cargo xtask ingest)."
             ),
-            &scrubbed,
+            &entries,
         )?;
     }
+    let probed = battery_parts.contains(&"probe");
 
     // The CVar flags, as the engine's data.
     let mut flags = String::from(&format!(
@@ -1090,6 +1303,9 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
     ));
     let mut any_flags = false;
     for kind in ["secure", "readOnly", "locked"] {
+        if !probed {
+            break;
+        }
         if let Some(list) = get(&format!("probe.cvarFlags.{kind}")) {
             any_flags = true;
             for name in list.split_whitespace() {
@@ -1099,12 +1315,11 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
     }
     if any_flags {
         let path = root.join("crates/wowlua-engine/data/camelot-cvar-flags.txt");
-        std::fs::write(&path, flags)?;
-        println!("wrote {}", path.display());
+        write_file(&path, &flags)?;
     }
 
     // The heights fonts keep after SetFont (the same for every file).
-    if let Some(list) = get("probe.fontHeights.Fonts\\FRIZQT__.TTF") {
+    if let Some(list) = get("probe.fontHeights.Fonts\\FRIZQT__.TTF").filter(|_| probed) {
         let mut out = format!(
             "# The heights a font keeps after SetFont on WoW Forever {version}, the same\n\
              # for every font file (/stdtest engine, probe.fontHeights; GetFont's\n\
@@ -1117,18 +1332,20 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             }
         }
         let path = root.join("crates/wowlua-engine/data/camelot-font-heights.txt");
-        std::fs::write(&path, out)?;
-        println!("wrote {}", path.display());
+        write_file(&path, &out)?;
     }
 
     // The client's login, as engine data (`/stdtest engine startup`).
-    for (key, file) in [
-        ("engineStartupLogin", "camelot-login.txt"),
-        ("engineStartup", "camelot-reload.txt"),
+    for (key, file, part) in [
+        ("engineStartupLogin", "camelot-login.txt", "login"),
+        ("engineStartup", "camelot-reload.txt", "reload"),
     ] {
         let Ok(list) = state.get::<mlua::Table>(key) else {
             continue;
         };
+        if gate.take(&stamps, part, &version).is_none() {
+            continue;
+        }
         let lines: Vec<String> = list
             .sequence_values::<String>()
             .collect::<Result<_, _>>()
@@ -1143,12 +1360,13 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
         }
         let text = login_data(&me, &version, &lines);
         let path = root.join("crates/wowlua-engine/data").join(file);
-        std::fs::write(&path, text)?;
-        println!("wrote {}", path.display());
+        write_file(&path, &text)?;
     }
 
     // The input recording, in order.
-    if let Ok(input) = state.get::<mlua::Table>("engineInput") {
+    if let Ok(input) = state.get::<mlua::Table>("engineInput")
+        && gate.take(&stamps, "input", &version).is_some()
+    {
         let mut out = format!(
             "-- WoW Forever {version}: /stdtest engine input\n\
              -- (tests/ingame/src/engineprobe.wowlua): hover the button, click it,\n\
@@ -1160,22 +1378,29 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
         }
         out.push_str("}\n");
         let path = client.join("forever-camelot-input.lua");
-        std::fs::write(&path, out)?;
-        println!("wrote {}", path.display());
+        write_file(&path, &out)?;
     }
 
     // The character's world, as a test profile (`/stdtest snapshot`).
-    if state.get::<mlua::Table>("snapshot").is_ok() {
+    if state.get::<mlua::Table>("snapshot").is_ok()
+        && gate.take(&stamps, "snapshot", &version).is_some()
+    {
         let tmp = tempfile::NamedTempFile::new()?;
         crate::profile::run(saved, tmp.path())?;
         let text = std::fs::read_to_string(tmp.path())?;
         let path = client.join("forever-camelot-character.json");
-        std::fs::write(&path, me.scrub(&text))?;
-        println!("wrote {}", path.display());
+        write_file(&path, &me.scrub(&text))?;
     }
 
-    // The answers to the calls the engine could not answer.
-    if let Ok(answers) = state.get::<mlua::Table>("engineAnswers") {
+    // The answers to the calls the engine could not answer (`/stdtest
+    // engine answers`, its checks with them), the cursor's and keyboard's
+    // steps, the map data, the account's collections and achievements;
+    // the static functions' answers merged into the engine's data.
+    let mut data_entries: Vec<(String, String)> = Vec::new();
+    let mut answered: Vec<String> = Vec::new();
+    if let Ok(answers) = state.get::<mlua::Table>("engineAnswers")
+        && gate.take(&stamps, "answers", &version).is_some()
+    {
         let mut entries = Vec::new();
         for pair in answers.pairs::<String, String>() {
             let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
@@ -1187,12 +1412,6 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
             entries.push((me.scrub(&call), me.scrub(&answer)));
         }
         entries.sort();
-        // The static functions' answers, as engine data.
-        let mut data = format!(
-            "# WoW Forever {version}'s answers to calls of functions that answer from the\n\
-             # client's own data (/stdtest engine answers), as the engine gives them:\n\
-             # the call, a tab, the answer (cargo xtask ingest).\n"
-        );
         for (call, answer) in &entries {
             let name = call.split('(').next().unwrap_or("");
             let listed = |list: &[&str]| {
@@ -1200,45 +1419,24 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                     .any(|p| name == *p || (p.ends_with('.') && name.starts_with(p)))
             };
             if (listed(STATIC) || listed(BASELINE)) && !answer.starts_with("error") {
-                let _ = writeln!(data, "{}\t{}", data_text(call), data_text(answer));
+                data_entries.push((call.clone(), answer.clone()));
             }
         }
-        // The cursor (`/stdtest engine cursor`): each step's state and the
-        // events between.
-        if let Ok(log) = state.get::<mlua::Table>("engineCursor") {
-            let mut list = Vec::new();
-            for (i, line) in log.sequence_values::<String>().enumerate() {
-                let line = line.map_err(|e| anyhow!("{e}"))?;
-                list.push((format!("{:03}", i + 1), me.scrub(&line)));
-            }
-            write_table(
-                &client.join("forever-camelot-cursor.lua"),
-                &format!(
-                    "WoW Forever {version}: /stdtest engine cursor, the cursor's steps and\n\
-                     events in order (cargo xtask ingest)."
-                ),
-                &list,
-            )?;
-        }
-        // The keyboard (`/stdtest engine keys`): which frames each key
-        // reached, and the binding's clicks, in order.
-        if let Ok(log) = state.get::<mlua::Table>("engineKeys") {
-            let mut list = Vec::new();
-            for (i, line) in log.sequence_values::<String>().enumerate() {
-                let line = line.map_err(|e| anyhow!("{e}"))?;
-                list.push((format!("{:03}", i + 1), me.scrub(&line)));
-            }
-            write_table(
-                &client.join("forever-camelot-keys.lua"),
-                &format!(
-                    "WoW Forever {version}: /stdtest engine keys, the keyboard frames each\n\
-                     key reached and the binding's clicks, in order (cargo xtask ingest)."
-                ),
-                &list,
-            )?;
-        }
-        // The checks of rules the call form cannot ask (`/stdtest engine
-        // answers`' CHECKS), for the engine's tests.
+        answered = entries.iter().map(|(c, _)| c.clone()).collect();
+        let path = client.join("forever-camelot-answers.lua");
+        let all = merged(read_table(&path), &entries);
+        write_table(
+            &path,
+            &format!(
+                "WoW Forever {version}: /stdtest engine answers, the client's answers to the\n\
+                 calls Blizzard's UI made in the engine's sweep that the engine could not\n\
+                 answer (tests/ingame/src/answers.wowlua); the player scrubbed, the social\n\
+                 systems' texts blanked (cargo xtask ingest)."
+            ),
+            &all,
+        )?;
+        // The checks of rules the call form cannot ask (its CHECKS), for
+        // the engine's tests.
         if let Ok(checks) = state.get::<mlua::Table>("engineChecks") {
             let mut list = Vec::new();
             for pair in checks.pairs::<String, String>() {
@@ -1255,69 +1453,125 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 &list,
             )?;
         }
-        // The map data (`/stdtest engine maps`, all static) and the
-        // account's collections (`/stdtest engine collections`, the default
-        // world's).
-        for (key, fixture, about) in [
-            (
-                "engineMapAnswers",
-                "forever-camelot-maps.lua",
-                "/stdtest engine maps, the client's map data (every map from\n\
-                 the world map and the player's map down) as Blizzard's UI asks it",
-            ),
-            (
-                "engineCollectionAnswers",
-                "forever-camelot-collections.lua",
-                "/stdtest engine collections, the account's collections\n\
-                 (transmog appearances by category; mounts, pets, toys, heirlooms)",
-            ),
-            (
-                "engineAchievementAnswers",
-                "forever-camelot-achievements.lua",
-                "/stdtest engine achievements, the achievements (every category,\n\
-                 achievement, criterion, legacy points; the legacy reward track) as\n\
-                 Blizzard's UI asks them, who earned them scrubbed",
-            ),
-        ] {
-            if let Ok(maps) = state.get::<mlua::Table>(key) {
-                let mut map_entries = Vec::new();
-                for pair in maps.pairs::<String, String>() {
-                    let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
-                    let answer = scrub_earners(&call, &me.scrub(&answer));
-                    map_entries.push((call, answer));
-                }
-                map_entries.sort();
-                for (call, answer) in &map_entries {
-                    if !answer.starts_with("error") && !entries.iter().any(|(c, _)| c == call) {
-                        let _ = writeln!(data, "{}\t{}", data_text(call), data_text(answer));
-                    }
-                }
-                write_table(
-                    &client.join(fixture),
-                    &format!("WoW Forever {version}: {about} (cargo xtask ingest)."),
-                    &map_entries,
-                )?;
+    }
+    // The cursor (`/stdtest engine cursor`): each step's state and the
+    // events between; the keyboard (`/stdtest engine keys`): which frames
+    // each key reached, and the binding's clicks; in order.
+    for (key, part, fixture, about) in [
+        (
+            "engineCursor",
+            "cursor",
+            "forever-camelot-cursor.lua",
+            "/stdtest engine cursor, the cursor's steps and\nevents in order",
+        ),
+        (
+            "engineKeys",
+            "keys",
+            "forever-camelot-keys.lua",
+            "/stdtest engine keys, the keyboard frames each\nkey reached and the binding's clicks, in order",
+        ),
+    ] {
+        if let Ok(log) = state.get::<mlua::Table>(key)
+            && gate.take(&stamps, part, &version).is_some()
+        {
+            let mut list = Vec::new();
+            for (i, line) in log.sequence_values::<String>().enumerate() {
+                let line = line.map_err(|e| anyhow!("{e}"))?;
+                list.push((format!("{:03}", i + 1), me.scrub(&line)));
             }
+            write_table(
+                &client.join(fixture),
+                &format!("WoW Forever {version}: {about} (cargo xtask ingest)."),
+                &list,
+            )?;
         }
+    }
+    // The map data (`/stdtest engine maps`, all static) and the account's
+    // collections (`/stdtest engine collections`, the default world's)
+    // and achievements.
+    for (key, part, fixture, about) in [
+        (
+            "engineMapAnswers",
+            "maps",
+            "forever-camelot-maps.lua",
+            "/stdtest engine maps, the client's map data (every map from\n\
+             the world map and the player's map down) as Blizzard's UI asks it",
+        ),
+        (
+            "engineCollectionAnswers",
+            "collections",
+            "forever-camelot-collections.lua",
+            "/stdtest engine collections, the account's collections\n\
+             (transmog appearances by category; mounts, pets, toys, heirlooms)",
+        ),
+        (
+            "engineAchievementAnswers",
+            "achievements",
+            "forever-camelot-achievements.lua",
+            "/stdtest engine achievements, the achievements (every category,\n\
+             achievement, criterion, legacy points; the legacy reward track) as\n\
+             Blizzard's UI asks them, who earned them scrubbed",
+        ),
+    ] {
+        if let Ok(maps) = state.get::<mlua::Table>(key)
+            && gate.take(&stamps, part, &version).is_some()
+        {
+            let mut map_entries = Vec::new();
+            for pair in maps.pairs::<String, String>() {
+                let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
+                let answer = scrub_earners(&call, &me.scrub(&answer));
+                map_entries.push((call, answer));
+            }
+            map_entries.sort();
+            for (call, answer) in &map_entries {
+                if !answer.starts_with("error") && !answered.contains(call) {
+                    data_entries.push((call.clone(), answer.clone()));
+                }
+            }
+            write_table(
+                &client.join(fixture),
+                &format!("WoW Forever {version}: {about} (cargo xtask ingest)."),
+                &map_entries,
+            )?;
+        }
+    }
+    // The engine's data: the repository's static answers, these added (a
+    // run's answers win).
+    if !data_entries.is_empty() {
         let path = root.join("crates/wowlua-engine/data/camelot-answers.txt");
-        std::fs::write(&path, data)?;
-        println!("wrote {}", path.display());
-        write_table(
-            &client.join("forever-camelot-answers.lua"),
-            &format!(
-                "WoW Forever {version}: /stdtest engine answers, the client's answers to the\n\
-                 calls Blizzard's UI made in the engine's sweep that the engine could not\n\
-                 answer (tests/ingame/src/answers.wowlua); the player scrubbed, the social\n\
-                 systems' texts blanked (cargo xtask ingest)."
-            ),
-            &entries,
-        )?;
+        let mut all: std::collections::BTreeMap<String, String> = std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| l.split_once('\t'))
+            .map(|(c, a)| (c.to_string(), a.to_string()))
+            .collect();
+        for (call, answer) in &data_entries {
+            all.insert(data_text(call), data_text(answer));
+        }
+        let mut data = format!(
+            "# WoW Forever {version}'s answers to calls of functions that answer from the\n\
+             # client's own data (/stdtest engine answers), as the engine gives them:\n\
+             # the call, a tab, the answer (cargo xtask ingest).\n"
+        );
+        for (call, answer) in &all {
+            let _ = writeln!(data, "{call}\t{answer}");
+        }
+        write_file(&path, &data)?;
     }
     // The trait configs (`/stdtest engine traits`), each class's as its
     // character answered them: its ranks, currencies and conditions.
     if let Ok(classes) = state.get::<mlua::Table>("engineTraitAnswers") {
+        let mut any = false;
         for pair in classes.pairs::<String, mlua::Table>() {
             let (class, calls) = pair.map_err(|e| anyhow!("{e}"))?;
+            if gate
+                .take(&stamps, &format!("traits:{class}"), &version)
+                .is_none()
+            {
+                continue;
+            }
+            any = true;
             let mut list = Vec::new();
             for pair in calls.pairs::<String, String>() {
                 let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
@@ -1344,17 +1598,27 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 &list,
             )?;
         }
-        write_traits_data(root, &client, &version)?;
+        if any {
+            write_traits_data(root, &client, &version)?;
+        }
     }
     // The professions' windows (`/stdtest engine tradeskill`), each one's
     // recipes as the character's skill and bags answered them.
     if let Ok(windows) = state.get::<mlua::Table>("engineTradeSkillAnswers") {
+        let mut any = false;
         for pair in windows.pairs::<String, mlua::Value>() {
             let (profession, calls) = pair.map_err(|e| anyhow!("{e}"))?;
             // A run before the windows were kept apart: a call's answer.
             let mlua::Value::Table(calls) = calls else {
                 continue;
             };
+            if gate
+                .take(&stamps, &format!("tradeskill:{profession}"), &version)
+                .is_none()
+            {
+                continue;
+            }
+            any = true;
             let mut list = Vec::new();
             for pair in calls.pairs::<String, String>() {
                 let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
@@ -1380,14 +1644,24 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 &list,
             )?;
         }
-        write_tradeskill_data(root, &client, &version)?;
+        if any {
+            write_tradeskill_data(root, &client, &version)?;
+        }
     }
     // The trainers (`/stdtest engine trainer`), each class's (or
     // profession's) services as the character's level and spells
     // answered them.
     if let Ok(trainers) = state.get::<mlua::Table>("engineTrainerAnswers") {
+        let mut any = false;
         for pair in trainers.pairs::<String, mlua::Table>() {
             let (key, calls) = pair.map_err(|e| anyhow!("{e}"))?;
+            if gate
+                .take(&stamps, &format!("trainer:{key}"), &version)
+                .is_none()
+            {
+                continue;
+            }
+            any = true;
             let mut list = Vec::new();
             for pair in calls.pairs::<String, String>() {
                 let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
@@ -1413,20 +1687,21 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 &list,
             )?;
         }
-        let (lines, keys) = fixtures_by(&client, "forever-camelot-trainer-")?;
-        let mut data = format!(
-            "# WoW Forever {version}'s trainers as a character answered them\n\
-             # (/stdtest engine trainer: {}): the trainer, the call, the answer,\n\
-             # a tab between (cargo xtask ingest). Each class's services by level\n\
-             # and cost, the spells they teach.\n",
-            keys.join(", ")
-        );
-        for ((key, call), answer) in &lines {
-            let _ = writeln!(data, "{key}\t{}\t{}", data_text(call), data_text(answer));
+        if any {
+            let (lines, keys) = fixtures_by(&client, "forever-camelot-trainer-")?;
+            let mut data = format!(
+                "# WoW Forever {version}'s trainers as a character answered them\n\
+                 # (/stdtest engine trainer: {}): the trainer, the call, the answer,\n\
+                 # a tab between (cargo xtask ingest). Each class's services by level\n\
+                 # and cost, the spells they teach.\n",
+                keys.join(", ")
+            );
+            for ((key, call), answer) in &lines {
+                let _ = writeln!(data, "{key}\t{}\t{}", data_text(call), data_text(answer));
+            }
+            let path = root.join("crates/wowlua-engine/data/camelot-trainers.txt");
+            write_file(&path, &data)?;
         }
-        let path = root.join("crates/wowlua-engine/data/camelot-trainers.txt");
-        std::fs::write(&path, data)?;
-        println!("wrote {} ({} answers)", path.display(), lines.len());
     }
     // Gameplay (`/stdtest engine scenario <name>`): each scenario's
     // events and answers, and the character's world before and after
@@ -1530,6 +1805,13 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
         words.sort();
         words.dedup();
         for ((name, scenario), profiles) in all.iter().zip(profiles_of) {
+            // Every recording's names gathered; the ones taken written.
+            if gate
+                .take(&stamps, &format!("scenario:{name}"), &version)
+                .is_none()
+            {
+                continue;
+            }
             let file: String = name
                 .chars()
                 .map(|c| {
@@ -1589,8 +1871,7 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
                 if !books.is_empty() {
                     text = with_books(&text, &books);
                 }
-                std::fs::write(&path, text)?;
-                println!("wrote {}", path.display());
+                write_file(&path, &text)?;
             }
             let mut list = Vec::new();
             for (i, line) in log.sequence_values::<String>().enumerate() {
@@ -1641,6 +1922,68 @@ pub fn run(root: &Path, saved: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn gate(dir: &Path, unstamped: bool) -> Gate {
+        std::fs::create_dir_all(dir.join("crates/wowlua-engine/tests/client")).unwrap();
+        Gate::load(dir, unstamped).unwrap()
+    }
+
+    /// A part is taken only when stamped later than the repository's; an
+    /// unstamped one only with `--unstamped`, and any stamp beats it.
+    #[test]
+    fn a_part_is_taken_only_when_newer() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut g = gate(dir.path(), false);
+        let at = |t: &str| -> Stamps {
+            [(
+                "answers".to_string(),
+                (t.to_string(), "1.60.1 (70450)".to_string()),
+            )]
+            .into_iter()
+            .collect()
+        };
+        assert!(g.take(&Stamps::new(), "answers", "v").is_none());
+        assert!(g.take(&at("2026-10-19 12:00:00"), "answers", "v").is_some());
+        assert!(g.take(&at("2026-10-19 12:00:00"), "answers", "v").is_none());
+        assert!(g.take(&at("2026-10-19 11:00:00"), "answers", "v").is_none());
+        assert!(g.take(&at("2026-10-19 13:00:00"), "answers", "v").is_some());
+        g.save().unwrap();
+        // Saved and loaded again; an unstamped part with the flag, then
+        // beaten by any stamp.
+        let mut g = gate(dir.path(), true);
+        assert!(g.take(&at("2026-10-19 13:00:00"), "answers", "v").is_none());
+        assert!(g.take(&Stamps::new(), "maps", "v").is_some());
+        let maps: Stamps = [(
+            "maps".to_string(),
+            ("2026-01-01 00:00:00".to_string(), "c".to_string()),
+        )]
+        .into_iter()
+        .collect();
+        assert!(g.take(&maps, "maps", "v").is_some());
+    }
+
+    /// A file whose content is the same keeps its header; answers merge,
+    /// none lost, the run's winning.
+    #[test]
+    fn writes_keep_unchanged_files_and_merge_answers() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("f.lua");
+        write_table(&path, "WoW Forever old", &[("a".into(), "1".into())]).unwrap();
+        write_table(&path, "WoW Forever new", &[("a".into(), "1".into())]).unwrap();
+        assert!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .starts_with("-- WoW Forever old")
+        );
+        let all = merged(
+            read_table(&path),
+            &[("b".into(), "2".into()), ("a".into(), "3".into())],
+        );
+        assert_eq!(
+            all,
+            vec![("a".into(), "3".into()), ("b".into(), "2".into())]
+        );
+    }
 
     #[test]
     fn who_earned_an_achievement_is_scrubbed() {

@@ -14,6 +14,10 @@
 //!   file below a directory hold, and the heap they take (#19).
 //! - `cargo xtask trainer-levels <SuuUI>/src/Data/Trainer`: the recorded
 //!   class trainer services' levels from SuuUI's trainer data.
+//! - `cargo xtask ingest [--unstamped] [--client <folder>] [<StdTest.lua>...]`:
+//!   StdTest's recordings into the fixtures and data, each part only when
+//!   newer than the repository's; without files, every account's in the
+//!   WoW installation.
 
 use anyhow::{Context, Result, bail};
 use std::fs;
@@ -53,10 +57,8 @@ fn main() -> Result<()> {
             trainer_levels::run(&root, Path::new(&dir))
         }
         "ingest" => {
-            let Some(saved) = std::env::args().nth(2) else {
-                bail!("usage: cargo xtask ingest <SavedVariables/StdTest.lua>");
-            };
-            ingest::run(&root, Path::new(&saved))
+            let args: Vec<String> = std::env::args().skip(2).collect();
+            ingest::run_all(&root, &args)
         }
         "profile" => {
             let (Some(saved), Some(out)) = (std::env::args().nth(2), std::env::args().nth(3))

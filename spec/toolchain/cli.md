@@ -106,7 +106,9 @@ indentation and line endings are preserved, and only the affected entries change
 `wowlua dev`, `install` and `uninstall` need the WoW install directory. It is
 determined from, in order: the `--wow` option, the `WOWLUA_WOW_PATH`
 environment variable, the global config, and auto-detection of default install
-locations (Battle.net default paths on Windows and macOS).
+locations (Battle.net default paths on Windows and macOS; on Linux, the
+`drive_c/Program Files (x86)/World of Warcraft` of a Wine prefix: Lutris's
+`~/Games/battlenet` or `~/Games/battle-net`, then `~/.wine`).
 
 **Clients.** Each flavor maps to client folders inside the installation (e.g.
 `standard` → `_retail_`, `_ptr_`, `_xptr_`), from the flavor table

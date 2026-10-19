@@ -7,6 +7,7 @@
 -- fixture).
 -- The answers are the character's: its skill, its recipes, its bags.
 import state from "/state"
+import stamp from "/state"
 import say from "/harness"
 
 local function pack(...: any): { n: number, [number]: any }
@@ -274,6 +275,7 @@ export function tradeSkillProbe()
     const base = T.GetBaseProfessionInfo() :: any
     st.engineTradeSkillAnswers = st.engineTradeSkillAnswers ?? {}
     st.engineTradeSkillAnswers[base and base.professionName or "unknown"] = out
+    stamp(`tradeskill:{base and base.professionName or "unknown"}`)
     say(
         `engine tradeskill: {base and base.professionName or "?"}: {#recipes} recipes, {#categories} categories, {asked} calls recorded; type /reload so the file is written`
     )

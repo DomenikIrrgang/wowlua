@@ -8,6 +8,7 @@
 --- at the start and the end (`/stdtest snapshot`'s). Into
 --- StdTestState.engineScenarios[name]. Only reading calls.
 import state from "/state"
+import stamp from "/state"
 import takeSnapshot from "/snapshot"
 import say from "/harness"
 
@@ -709,6 +710,7 @@ export function scenarioProbe(name: string)
     const scenario = { log = log, before = takeSnapshot(), client = `{(GetBuildInfo())} ({select(2, GetBuildInfo())})`, latency = { GetNetStats() }, startTime = start }
     st.engineScenarios[name] = scenario
     st.engineScenarioRunning = name
+    stamp(`scenario:{name}`)
     local function note(what: string)
         if #log < 20000 then
             log[#log + 1] = `{string.format("%.3f", GetTime() - start)} {what}`

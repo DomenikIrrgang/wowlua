@@ -85,8 +85,9 @@ result.
 
 - It finds the installation from `--wow <path>`, the `WOWLUA_WOW_PATH`
   environment variable, `wow.path` in `~/.wowlua/config.json`, or the
-  Battle.net default folder on macOS and Windows. On Linux, set one of the
-  first three.
+  Battle.net default folder: on macOS and Windows, and on Linux in a Wine
+  prefix (Lutris's `~/Games/battlenet`, or `~/.wine`). Elsewhere, set one
+  of the first three.
 - It never overwrites an AddOn folder it did not install, such as the same
   addon from an addon manager. That is error E4331, unless you pass `--force`.
 - A failed build leaves the installed AddOn alone, so the last working version

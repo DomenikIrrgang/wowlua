@@ -5,6 +5,7 @@
 -- Unarmed, the recorder stops at that ADDON_LOADED (the saved variables say
 -- whether it is armed only then).
 import state from "/state"
+import stamp from "/state"
 import say from "/harness"
 
 --- A payload value in full: tables to depth 3 (keys sorted), else type
@@ -83,8 +84,10 @@ recorder:SetScript("OnEvent", function(_: any, event: string, ...: any)
             const st = state() :: any
             if initial then
                 st.engineStartupLogin = list
+                stamp("login")
             else
                 st.engineStartup = list
+                stamp("reload")
             end
             st.armStartup = nil
             recorder:UnregisterAllEvents()

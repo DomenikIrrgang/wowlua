@@ -4,6 +4,7 @@
 -- in the answers probe's form (`cargo xtask ingest` merges them). Static
 -- data only: no positions, exploration or quests.
 import state from "/state"
+import stamp from "/state"
 import say from "/harness"
 
 local function pack(...: any): { n: number, [number]: any }
@@ -131,5 +132,6 @@ export function mapsProbe()
         end
     end
     st.engineMapAnswers = out
+    stamp("maps")
     say(`engine maps: {#ids} maps, {asked} calls recorded; type /reload so the file is written`)
 end

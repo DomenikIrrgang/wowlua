@@ -25,6 +25,7 @@
 -- Only harmless calls: getters on fresh frames, and arguments the client's
 -- checks refuse before any game code runs.
 import state from "/state"
+import stamp from "/state"
 import answersProbe from "/answers"
 import mapsProbe from "/maps"
 import collectionsProbe from "/collections"
@@ -1073,6 +1074,7 @@ local function dispatchOrder()
             seen[#seen + 1] = name
             if #seen == 4 then
                 st.engineOrder = { registered = "C A D B", made = "A B C D", reached = table.concat(seen, " ") }
+                stamp("order")
                 for _, f in pairs(made) do
                     f:UnregisterAllEvents()
                 end
@@ -1142,6 +1144,7 @@ local function inputProbe()
     const st = state() :: any
     const log: string[] = {}
     st.engineInput = log
+    stamp("input")
     const start = GetTime()
     local function note(what: string)
         if #log < 500 then
@@ -1264,6 +1267,7 @@ local function protectedProbe()
         out["focus after"] = tostring(UnitExists("focus"))
     end)
     st.engineProtected = { calls = out, events = log }
+    stamp("protected")
     C_Timer.After(0.6, function()
         say(`engine protected: {#log} events; type /reload so the file is written`)
     end)
@@ -1310,6 +1314,7 @@ local function blockedProbe()
                 out["plain shown after"] = tostring(plain:IsShown())
             end)
             st.engineBlocked = { calls = out, events = log }
+            stamp("blocked")
             C_Timer.After(0.6, function()
                 say(`engine blocked: {#log} events; leave combat and type /reload`)
             end)
@@ -1544,6 +1549,7 @@ local function keysProbe()
     const st = state() :: any
     const log: string[] = {}
     st.engineKeys = log
+    stamp("keys")
     local phase = 1
     local finished = false
     local waiting = false
@@ -1718,6 +1724,7 @@ local function cursorProbe()
         events:UnregisterAllEvents()
         note("after a second")
         st.engineCursor = log
+        stamp("cursor")
         say("engine cursor: recorded; type /reload so the file is written")
     end)
 end
@@ -1819,6 +1826,7 @@ export function engineProbe(arg: string?)
         getTime = show(GetTime()),
     }
     st.engineProbe = probe
+    stamp("probe")
     timers(function(r: { [string]: string })
         probe.timers = r
         say("engine: recorded; type /reload so the file is written")

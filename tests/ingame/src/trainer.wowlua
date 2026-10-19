@@ -10,6 +10,7 @@
 -- one's fixture). The services' states are the character's: its level
 -- (recorded), its spells (each taught one's known or not, recorded).
 import state from "/state"
+import stamp from "/state"
 import say from "/harness"
 
 local function pack(...: any): { n: number, [number]: any }
@@ -162,6 +163,7 @@ export function trainerProbe()
     end
     st.engineTrainerAnswers = st.engineTrainerAnswers ?? {}
     st.engineTrainerAnswers[key] = out
+    stamp(`trainer:{key}`)
     say(`engine trainer: {key}: {n} services, {#spells} spells; their data in a moment`)
     C_Timer.After(2, function()
         for _, id in ipairs(spells) do

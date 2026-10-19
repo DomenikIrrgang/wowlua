@@ -5,6 +5,7 @@
 -- `cargo xtask profile <StdTest.lua> <out.json>` writes the profile with
 -- the player's name, realm and GUIDs scrubbed. Read-only calls only.
 import state from "/state"
+import stamp from "/state"
 import say from "/harness"
 
 local G = _G :: any
@@ -668,5 +669,6 @@ export function snapshot()
     const failed = profile.errors :: string[]
     const st = state() :: any
     st.snapshot = profile
+    stamp("snapshot")
     say(`snapshot: recorded{#failed > 0 and ` ({#failed} parts failed)` or ""}; type /reload so the file is written`)
 end

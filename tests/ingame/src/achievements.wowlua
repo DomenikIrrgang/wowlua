@@ -6,6 +6,7 @@
 -- (`cargo xtask ingest` merges them). The answers are the account's and the
 -- character's: what is earned, by whom (the ingest blanks the names).
 import state from "/state"
+import stamp from "/state"
 import say from "/harness"
 
 local function pack(...: any): { n: number, [number]: any }
@@ -177,6 +178,7 @@ export function achievementsProbe()
         end
     end
     st.engineAchievementAnswers = out
+    stamp("achievements")
     say(
         `engine achievements: {#categories} categories, {#achievements} achievements, {asked} calls recorded; type /reload so the file is written`
     )
