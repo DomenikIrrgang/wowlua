@@ -580,17 +580,21 @@ fn get_container_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
-/// `C_Item.GetItemCount(item)`: in the bags (and equipped).
+/// `C_Item.GetItemCount(item, includeBank)`: in the bags (and equipped);
+/// the bank's tabs (bags 6 on) with `includeBank` only (the documentation's
+/// argument, false by default; unverified: not recorded).
 fn get_item_count(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = match vm.hidden(c.arg(1)) {
         Value::Num(n) => n as i64,
         _ => return Ok(vec![Value::Num(0.0)]),
     };
+    let bank = vm.hidden(c.arg(2)).truthy();
     let ch = &engine(vm).world.character;
     let in_bags: f64 = ch
         .bags
-        .values()
-        .flat_map(|b| b.items.values())
+        .iter()
+        .filter(|(b, _)| bank || carried(**b))
+        .flat_map(|(_, b)| b.items.values())
         .filter(|h| h.id == id)
         .map(|h| h.count)
         .fold(0.0, |a, b| a + b);

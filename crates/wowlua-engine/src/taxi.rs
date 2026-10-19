@@ -197,6 +197,14 @@ fn hops(vm: &mut Vm, c: &NativeCall) -> Vec<usize> {
     }
 }
 
+/// `TaxiIsDirectFlight(slot)`: a node one hop away (its path from the
+/// current node two slots long: `GetNumRoutes` 1). Unverified (no
+/// recording): Blizzard's classic taxi frame draws a line to each node it
+/// calls direct and closes the map when none is (`DrawOneHopLines`).
+fn taxi_is_direct_flight(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(hops(vm, &c).len() == 2)])
+}
+
 /// A route's (`TaxiGetNodeSlot(node, route, source)`) end's slot.
 fn route_end(vm: &mut Vm, c: &NativeCall, source: bool) -> Option<usize> {
     let Value::Num(route) = vm.hidden(c.arg(2)) else {
@@ -463,6 +471,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("CloseTaxiMap", close_taxi_map),
         ("TakeTaxiNode", take_taxi_node),
         ("TaxiGetNodeSlot", taxi_get_node_slot),
+        ("TaxiIsDirectFlight", taxi_is_direct_flight),
         ("TaxiGetSrcX", taxi_get_src_x),
         ("TaxiGetSrcY", taxi_get_src_y),
         ("TaxiGetDestX", taxi_get_dest_x),

@@ -1699,6 +1699,563 @@ end
     blizzard_ui_test("tests/raid.test.wowlua", &test, "1 passed, 0 failed");
 }
 
+/// A dungeon's boss fight with Blizzard's UI, without an error: a party of
+/// five in an instance (`IsInInstance`, `GetInstanceInfo`), the boss
+/// engaged (`boss1`, Blizzard's boss frame, its cast bar), debuffs on the
+/// party, hits and heals, a member's death and resurrection, the encounter
+/// won (the boss frame gone), the boss's loot window, the player's death
+/// and a priest's resurrection taken through Blizzard's popup. (No
+/// recording: the instance, the encounter and the resurrection are
+/// modelled, unverified.)
+#[test]
+fn blizzard_ui_through_a_dungeon_boss() {
+    blizzard_ui_test(
+        "tests/dungeon.test.wowlua",
+        r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local function member(name: string, class: string, classID: number, powerType: number, role: "TANK" | "HEALER" | "DAMAGER"): any
+    local u = mock.spawnUnit({
+        name = name, class = class, classID = classID, level = 20, reaction = "friendly", player = true,
+        health = 900, maxHealth = 1000, powerType = powerType, power = 500, maxPower = 1000,
+    })
+    mock.group:add(u)
+    u:setRole(role)
+    return u
+end
+
+@test("a dungeon's boss")
+local function dungeon()
+    mock.nextFrame(60)
+    local p = mock.player :: any
+    p:setRole("TANK")
+    local group = {
+        member("Arnhild", "PRIEST", 5, 0, "HEALER"),
+        member("Brenna", "MAGE", 8, 0, "DAMAGER"),
+        member("Corvin", "ROGUE", 4, 3, "DAMAGER"),
+        member("Dalla", "HUNTER", 3, 0, "DAMAGER"),
+    }
+    mock.nextFrame(30)
+    expect(GetNumGroupMembers()).toBe(5)
+    -- Into the dungeon.
+    mock.enterInstance("party", { name = "The Deadmines", instanceID = 36, difficultyID = 1, maxPlayers = 5 })
+    mock.nextFrame(30)
+    local inInstance, kind = IsInInstance()
+    expect(inInstance).toBe(true)
+    expect(kind).toBe("party")
+    local name, instanceType, difficultyID, _, maxPlayers = GetInstanceInfo()
+    expect(name).toBe("The Deadmines")
+    expect(instanceType).toBe("party")
+    expect(difficultyID).toBe(1)
+    expect(maxPlayers).toBe(5)
+    -- The boss, engaged.
+    local boss = mock.spawnUnit({ name = "Edwin VanCleef", level = 21, reaction = "hostile", health = 5000,
+        maxHealth = 5000, classification = "elite", powerType = 0, power = 1000, maxPower = 1000 })
+    boss:showNameplate()
+    mock.startEncounter({ id = 2973, name = "Edwin VanCleef", difficultyID = 1, groupSize = 5, bosses = { boss } })
+    mock.nextFrame(10)
+    -- (On a restricted map, the boss's name is secret to the test's code.)
+    expect(UnitExists("boss1")).toBe(true)
+    expect(issecretvalue(UnitName("boss1"))).toBe(true)
+    expect(C_InstanceEncounter.IsEncounterInProgress()).toBe(true)
+    local bossFrame = (_G :: any).Boss1TargetFrame
+    expect(bossFrame).toBeShown()
+    expect(bossFrame.unit).toBe("boss1")
+    p:target(boss)
+    p:enterCombat()
+    for _, u in ipairs(group) do u:enterCombat() end
+    boss:enterCombat()
+    p:startAttack()
+    mock.nextFrame(10)
+    -- Its cast, shown on the boss frame's bar.
+    boss:castSpell(5165, { castTime = 2 })
+    mock.nextFrame(10)
+    expect(bossFrame.spellbar).toBeShown()
+    mock.waitSeconds(4)
+    expect(bossFrame.spellbar).never.toBeShown()
+    -- Its debuffs on the party, one cured.
+    local curses = {}
+    for i, u in ipairs(group) do
+        curses[i] = u:applyAura({ spellId = 6136, name = "Chilled", duration = 10, harmful = true,
+            dispelName = "Magic", source = boss })
+    end
+    mock.nextFrame(5)
+    group[2]:removeAura(curses[2])
+    mock.nextFrame(5)
+    -- The fight: swings, hits and heals.
+    for _ = 1, 3 do
+        p:swing(boss, 120, { power = 10 })
+        boss:swing(p, 80, { victimPower = 5 })
+        for _, u in ipairs(group) do
+            u:hit(boss, 200, { school = 4 })
+            u:damage(150)
+        end
+        mock.nextFrame(10)
+        for _, u in ipairs(group) do u:heal(100) end
+        mock.advanceTime(1)
+        mock.nextFrame(10)
+    end
+    -- A member's death and resurrection.
+    group[3]:kill()
+    mock.nextFrame(10)
+    expect(UnitIsDead("party3")).toBe(true)
+    group[1]:castSpell(2006, { castTime = 2 })
+    mock.advanceTime(2.5)
+    group[1]:resurrect(group[3], { health = 350 })
+    mock.nextFrame(10)
+    expect(UnitIsDead("party3")).toBe(false)
+    -- The boss dies: the encounter won, the frames gone, the loot.
+    mock.defineItem(5191, { name = "Cruel Barb", icon = 135321, quality = 3, classID = 2, subclassID = 7 })
+    boss:kill({ by = p, loot = { { id = 5191 } } })
+    mock.nextFrame(5)
+    mock.endEncounter(true)
+    mock.nextFrame(10)
+    expect(C_InstanceEncounter.IsEncounterInProgress()).toBe(false)
+    expect(UnitExists("boss1")).toBe(false)
+    expect(bossFrame).never.toBeShown()
+    p:leaveCombat()
+    for _, u in ipairs(group) do u:leaveCombat() end
+    mock.nextFrame(30)
+    p:loot(boss)
+    mock.waitSeconds(1)
+    expect((_G :: any).LootFrame).toBeShown()
+    expect(GetNumLootItems()).toBe(1)
+    mock.waitSeconds(1)
+    CloseLoot()
+    mock.waitSeconds(1)
+    expect((_G :: any).LootFrame).never.toBeShown()
+    -- The player dies in the next pull and takes a resurrection.
+    local add = mock.spawnUnit({ name = "Defias Pirate", level = 20, reaction = "hostile", health = 800, maxHealth = 800 })
+    p:target(add)
+    p:enterCombat()
+    add:swing(p, 50)
+    mock.nextFrame(5)
+    p:die()
+    mock.nextFrame(10)
+    expect(UnitIsDead("player")).toBe(true)
+    local G = _G :: any
+    expect(G.StaticPopup_Visible("DEATH") ~= nil).toBe(true)
+    -- The priest's offer: Blizzard's popup, accepted.
+    group[1]:resurrect(p)
+    mock.waitSeconds(0.5)
+    expect(ResurrectGetOfferer()).toBe("Arnhild")
+    local popup = G.StaticPopup_FindVisible("RESURRECT_NO_TIMER")
+    expect(popup ~= nil).toBe(true)
+    mock.waitSeconds(5)
+    mock.click(popup:GetButton1())
+    mock.waitSeconds(1)
+    expect(UnitIsDead("player")).toBe(false)
+    expect(G.StaticPopup_Visible("DEATH")).toBe(nil)
+    expect(G.StaticPopup_Visible("RESURRECT_NO_TIMER")).toBe(nil)
+    mock.leaveInstance()
+    mock.nextFrame(30)
+    expect(IsInInstance()).toBe(false)
+end
+"#,
+        "1 passed, 0 failed",
+    );
+}
+
+/// A hunter's pet with Blizzard's UI, without an error: the pet frame, its
+/// happiness, the pet bar (a spell, the commands), the pet sent to attack
+/// and called back, hits, a buff on it, its happiness and experience
+/// changing, dismissed. (No recording: the pet is modelled, unverified.)
+#[test]
+fn blizzard_ui_through_a_hunters_pet() {
+    blizzard_ui_test(
+        "tests/hunter.test.wowlua",
+        r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("a hunter's pet in a fight")
+local function hunter()
+    mock.setPlayer({ name = "Tamsin", level = 20, class = "HUNTER", race = "Dwarf", health = 500, maxHealth = 500,
+        powerType = 0, power = 600, maxPower = 600 })
+    mock.nextFrame(60)
+    local p = mock.player :: any
+    local G = _G :: any
+    expect(G.PetFrame).never.toBeShown()
+    expect(G.PetActionBar).never.toBeShown()
+    -- The wolf tamed: its frame, its bar, its happiness.
+    local wolf = mock.spawnUnit({ name = "Fang", level = 19, reaction = "friendly", health = 400, maxHealth = 400,
+        powerType = 2, power = 100, maxPower = 100, creatureType = "Beast", creatureTypeID = 1,
+        creatureFamily = "Wolf", creatureFamilyID = 1 })
+    mock.defineSpell(17253, { name = "Bite", icon = 132278 })
+    mock.setPet(wolf, { happiness = 3, loyalty = "Loyalty Level 2", xp = 300, xpMax = 1200,
+        actions = { [4] = { spell = 17253, name = "Bite", icon = 132278, autocast = true } } })
+    mock.nextFrame(10)
+    expect(UnitExists("pet")).toBe(true)
+    expect(UnitName("pet")).toBe("Fang")
+    expect(UnitIsUnit("pet", "pet")).toBe(true)
+    expect(G.PetFrame).toBeShown()
+    expect(G.PetName:GetText()).toBe("Fang")
+    expect(G.PetFrameHappiness).toBeShown()
+    expect(G.PetFrameHappiness.Texture:GetAtlas()).toBe("UI-PetHappiness")
+    expect(G.PetActionBar).toBeShown()
+    expect(G.PetActionButton1.tooltipName).toBe(G.PET_ACTION_ATTACK)
+    expect(G.PetActionButton2:GetChecked()).toBe(true)
+    expect(G.PetActionButton4.tooltipName).toBe("Bite")
+    -- The fight: the pet sent in, hits taken and dealt, a buff on it.
+    local boar = mock.spawnUnit({ name = "Rockhide Boar", level = 18, reaction = "hostile", health = 450,
+        maxHealth = 450 })
+    boar:showNameplate()
+    p:target(boar)
+    p:enterCombat()
+    wolf:enterCombat()
+    mock.click(G.PetActionButton1)
+    mock.nextFrame(5)
+    expect(IsPetAttackActive()).toBe(true)
+    expect(G.PetAttackModeTexture).toBeShown()
+    for _ = 1, 3 do
+        wolf:swing(boar, 40, { power = 5 })
+        wolf:hit(boar, 30, { school = 1 })
+        boar:swing(wolf, 25)
+        p:hit(boar, 60, { school = 1 })
+        mock.nextFrame(10)
+        mock.advanceTime(1)
+    end
+    local mend = wolf:applyAura({ spellId = 136, name = "Mend Pet", duration = 15, source = p })
+    mock.nextFrame(5)
+    -- Unhappy now: its indicator follows.
+    mock.setPet(wolf, { happiness = 1 })
+    mock.nextFrame(5)
+    expect(select(1, C_PetInfo.GetPetHappiness())).toBe(1)
+    expect(G.PetFrameHappiness).toBeShown()
+    expect(G.PetFrameHappiness.Texture:GetAtlas()).toBe("UI-PetMad")
+    boar:kill({ by = p })
+    mock.nextFrame(5)
+    mock.click(G.PetActionButton2)
+    mock.nextFrame(5)
+    expect(IsPetAttackActive()).toBe(false)
+    expect(G.PetAttackModeTexture).never.toBeShown()
+    wolf:removeAura(mend)
+    wolf:leaveCombat()
+    p:leaveCombat()
+    -- Its experience grows.
+    mock.setPet(wolf, { xp = 900 })
+    mock.nextFrame(10)
+    expect(select(1, GetPetExperience())).toBe(900)
+    -- Dismissed: the frame and the bar gone.
+    mock.setPet(nil)
+    mock.nextFrame(10)
+    expect(UnitExists("pet")).toBe(false)
+    expect(G.PetFrame).never.toBeShown()
+    expect(G.PetActionBar).never.toBeShown()
+end
+"#,
+        "1 passed, 0 failed",
+    );
+}
+
+/// A town session with Blizzard's UI, without an error: a vendor (bought,
+/// sold, bought back, repaired), the bank, the mailbox (a letter read, its
+/// item taken), the auction house (a search), a class trainer and a flight
+/// master's map through their gossip.
+#[test]
+fn blizzard_ui_through_a_town_session() {
+    blizzard_ui_test(
+        "tests/town.test.wowlua",
+        r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+-- A frame's descendant button showing `text` (a gossip option, a row).
+local function button(root: any, text: string, depth: number?): any
+    local d = depth or 0
+    if d > 12 or not root:IsVisible() then return nil end
+    for _, r in ipairs({ root:GetRegions() }) do
+        if r:IsObjectType("FontString") and r:GetText() == text then return root end
+    end
+    for _, c in ipairs({ root:GetChildren() }) do
+        local found = button(c, text, d + 1)
+        if found then return found end
+    end
+    return nil
+end
+
+@test("a town session")
+local function town()
+    mock.nextFrame(60)
+    local p = mock.player :: any
+    local G = _G :: any
+    p:setMoney(500000)
+    mock.defineItem(6256, { name = "Fishing Pole", icon = 132932, quality = 1, sellPrice = 5 })
+    mock.defineItem(6529, { name = "Shiny Bauble", icon = 134335, quality = 1, sellPrice = 12, stackCount = 20 })
+    mock.defineItem(2770, { name = "Copper Ore", icon = 134566, quality = 1, sellPrice = 5, stackCount = 20 })
+    mock.setBag(0, { slots = 16, items = { [1] = { id = 6529, count = 5 }, [2] = { id = 2770, count = 4 } } })
+    mock.defineItem(2488, { name = "Gladius", icon = 135321, quality = 1, classID = 2, subclassID = 7, sellPrice = 9 })
+    p:equip(16, { id = 2488 })
+    p:setDurability(16, 20, 40)
+
+    -- The vendor: bought, sold, bought back, repaired.
+    mock.openMerchant({ name = "Harn Longcast", canRepair = true, repairCost = 250,
+        items = { { id = 6256, price = 23 }, { id = 6529, price = 50 } } })
+    mock.waitSeconds(0.5)
+    expect(G.MerchantFrame).toBeShown()
+    expect(G.MerchantItem1Name:GetText()).toBe("Fishing Pole")
+    BuyMerchantItem(1, 1)
+    mock.waitSeconds(0.5)
+    mock.sell(0, 1)
+    mock.waitSeconds(0.5)
+    expect(C_Container.GetContainerItemID(0, 1)).toBe(nil)
+    expect(GetMoney()).toBe(500000 - 23 + 60)
+    BuybackItem(1)
+    mock.waitSeconds(0.5)
+    -- The pole bought (23 copper), the baubles sold and bought back.
+    expect(GetMoney()).toBe(500000 - 23)
+    expect(C_Container.GetContainerItemID(0, 1)).toBe(6529)
+    expect(C_Container.GetContainerItemID(0, 3)).toBe(6256)
+    expect(GetRepairAllCost()).toBe(250)
+    expect(G.MerchantRepairAllButton).toBeShown()
+    mock.click(G.MerchantRepairAllButton)
+    mock.waitSeconds(0.5)
+    expect(GetMoney()).toBe(500000 - 23 - 250)
+    expect(select(1, GetInventoryItemDurability(16))).toBe(40)
+    mock.closeMerchant()
+    mock.waitSeconds(0.5)
+    expect(G.MerchantFrame).never.toBeShown()
+
+    -- The bank.
+    local banker = mock.spawnUnit({ name = "Olstan Ironsworn", level = 45, reaction = "friendly" })
+    mock.defineBank(banker, { nextTabCost = 10000, tabs = {
+        { name = "Tab 1", icon = 134400, slots = 48, items = { [1] = { id = 2770, count = 6 } } },
+    } })
+    banker:setDistance(3)
+    p:target(banker)
+    p:interact(banker)
+    mock.waitSeconds(1)
+    expect(G.BankFrame).toBeShown()
+    expect(C_Container.GetContainerItemID(6, 1)).toBe(2770)
+    expect(C_Container.GetContainerNumSlots(6)).toBe(48)
+    HideUIPanel(G.BankFrame)
+    mock.waitSeconds(0.5)
+    expect(G.BankFrame).never.toBeShown()
+    p:target(nil)
+
+    -- The mailbox: a letter read, its item taken.
+    local mailbox = mock.spawnUnit({ name = "Mailbox", level = 1, reaction = "friendly" })
+    mock.defineMailbox(mailbox, { newMail = true, senders = { "Eldra Hollowtree" }, letters = {
+        { stationeryIcon = 134939, sender = "Eldra Hollowtree", subject = "Ore for you",
+          daysLeft = 29, textCreated = true, text = "Use it well.", items = { { id = 2770, count = 2 } } },
+    } })
+    mailbox:setDistance(2)
+    p:interact(mailbox)
+    mock.waitSeconds(1)
+    expect(G.MailFrame).toBeShown()
+    expect(GetInboxNumItems()).toBe(1)
+    mock.click(G.MailItem1Button)
+    mock.waitSeconds(1)
+    expect(G.OpenMailFrame).toBeShown()
+    expect(G.OpenMailSubject:GetText()).toBe("Ore for you")
+    expect(G.OpenMailSender.Name:GetText()).toBe("Eldra Hollowtree")
+    mock.click(G.OpenMailFrame.OpenMailAttachments[1])
+    mock.waitSeconds(1.5)
+    -- The ore taken: four in the bag before, six now; the letter kept (its text).
+    expect(C_Item.GetItemCount(2770)).toBe(6)
+    expect(GetInboxNumItems()).toBe(1)
+    HideUIPanel(G.MailFrame)
+    mock.waitSeconds(0.5)
+    expect(G.MailFrame).never.toBeShown()
+
+    -- The auction house: a search, closed with Escape.
+    local auctioneer = mock.spawnUnit({ name = "Auctioneer Fitch", level = 55, reaction = "friendly" })
+    mock.defineAuctionHouse(auctioneer, {
+        browse = { { itemKey = { battlePetSpeciesID = 0, itemID = 2770, itemLevel = 10, itemSuffix = 0 },
+            minPrice = 30, totalQuantity = 40, containsOwnerItem = false } },
+        commodities = {}, items = {}, deposit = 100, nextAuctionID = 1000,
+    })
+    auctioneer:setDistance(3)
+    p:target(auctioneer)
+    p:interact(auctioneer)
+    mock.waitSeconds(1)
+    local ah = G.AuctionHouseFrame
+    expect(ah).toBeShown()
+    mock.click(ah.SearchBar.SearchButton)
+    mock.waitSeconds(1)
+    expect(ah.BrowseResultsFrame.ItemList.ScrollBox:GetDataProviderSize()).toBe(1)
+    mock.pressKey("ESCAPE")
+    mock.waitSeconds(0.5)
+    expect(ah).never.toBeShown()
+    p:target(nil)
+
+    -- The class trainer, through its gossip.
+    local trainer = mock.spawnUnit({ name = "Wilhelm Fairbanks", level = 40, reaction = "friendly",
+        class = "WARRIOR", classID = 1 })
+    mock.defineGossip(trainer, { text = "Strength and honour.", options = {
+        { name = "I require warrior training.", icon = 132058, gossipOptionID = 96654, opens = "trainer" },
+    } })
+    mock.defineTrainer(trainer, { class = "WARRIOR", greeting = "Ready to train?" })
+    trainer:setDistance(3)
+    p:target(trainer)
+    p:interact(trainer)
+    mock.waitSeconds(1)
+    local gossip = G.GossipFrame
+    expect(gossip).toBeShown()
+    local option = button(gossip, "I require warrior training.")
+    expect(option ~= nil).toBe(true)
+    mock.click(option)
+    mock.waitSeconds(1)
+    local classTrainer = G.ClassTrainerFrame
+    expect(classTrainer).toBeShown()
+    expect(GetNumTrainerServices() > 0).toBe(true)
+    HideUIPanel(classTrainer)
+    mock.waitSeconds(0.5)
+    expect(classTrainer).never.toBeShown()
+    p:target(nil)
+
+    -- The flight master's map.
+    local flight = mock.spawnUnit({ name = "Gryth Skyfeather", level = 55, reaction = "friendly" })
+    mock.defineGossip(flight, { text = "Where to?", options = {
+        { name = "I need a ride.", icon = 132057, gossipOptionID = 30000, opens = "taxi" },
+    } })
+    mock.defineTaxi(flight, { mapID = 1415, nodes = {
+        { name = "Stormwind, Elwynn", nodeID = 2, x = 0.4, y = 0.7, state = 0, cost = 0 },
+        { name = "Ironforge, Dun Morogh", nodeID = 6, x = 0.45, y = 0.5, state = 1, cost = 500, routes = 1, hops = { 1, 2 } },
+    } })
+    flight:setDistance(3)
+    p:target(flight)
+    p:interact(flight)
+    mock.waitSeconds(1)
+    local option2 = button(G.GossipFrame, "I need a ride.")
+    expect(option2 ~= nil).toBe(true)
+    mock.click(option2)
+    mock.waitSeconds(1)
+    local taxi = G.TaxiFrame
+    expect(taxi).toBeShown()
+    expect(NumTaxiNodes()).toBe(2)
+    expect(G.TaxiButton2).toBeShown()
+    HideUIPanel(taxi)
+    mock.waitSeconds(0.5)
+    expect(taxi).never.toBeShown()
+    p:target(nil)
+    mock.waitSeconds(1)
+end
+"#,
+        "1 passed, 0 failed",
+    );
+}
+
+/// Levels gained with Blizzard's UI, without an error: a level 1 warrior
+/// hunts wolves to level 4 (the player frame's level, the experience bar,
+/// the chat's level and stat lines), then learns the new level's spell at
+/// the trainer.
+#[test]
+fn blizzard_ui_through_level_ups() {
+    blizzard_ui_test(
+        "tests/levels.test.wowlua",
+        r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local function chatHas(text: string): boolean
+    local frame = (_G :: any).ChatFrame1
+    for i = 1, frame:GetNumMessages() do
+        local line = frame:GetMessageInfo(i)
+        if type(line) == "string" and line:find(text, 1, true) then return true end
+    end
+    return false
+end
+
+-- Blizzard's experience bar (the status tracking bars' one shown).
+local function expBar(): any
+    for _, f in ipairs(mock.frames()) do
+        local frame = f :: any
+        if frame.GetLevelData == (_G :: any).ExpBarMixin.GetLevelData and frame:IsVisible() then return frame end
+    end
+    return nil
+end
+
+@test("levels gained")
+local function levels()
+    mock.setPlayer({ name = "Brannoc", level = 1, class = "WARRIOR", race = "Human", health = 60, maxHealth = 60,
+        powerType = 1, power = 0, maxPower = 100 })
+    mock.nextFrame(60)
+    local p = mock.player :: any
+    p:setStats({ xp = 0, xpMax = 400 })
+    mock.defineLevel(2, { xpMax = 900, health = 19, power = 0, talents = 0, pvpTalentSlots = 0,
+        strength = 1, agility = 1, stamina = 1, intellect = 0, spirit = 0 })
+    mock.defineLevel(3, { xpMax = 1400, health = 20, power = 0, talents = 0, pvpTalentSlots = 0,
+        strength = 1, agility = 1, stamina = 2, intellect = 0, spirit = 1 })
+    mock.defineLevel(4, { xpMax = 2100, health = 21, power = 0, talents = 0, pvpTalentSlots = 0,
+        strength = 2, agility = 1, stamina = 1, intellect = 0, spirit = 0 })
+    mock.nextFrame(10)
+    expect(UnitLevel("player")).toBe(1)
+    expect((_G :: any).PlayerLevelText:GetText()).toBe("1")
+    local bar = expBar()
+    expect(bar ~= nil).toBe(true)
+    -- Wolves hunted: each kill's experience; every third a level.
+    local level = 1
+    for i = 1, 9 do
+        local wolf = mock.spawnUnit({ name = `Young Wolf {i}`, level = 1, reaction = "hostile", health = 40, maxHealth = 40,
+            creatureType = "Beast", creatureTypeID = 1 })
+        wolf:showNameplate()
+        p:target(wolf)
+        p:startAttack()
+        mock.waitSeconds(0.5)
+        p:swing(wolf, 15, { power = 5 })
+        wolf:swing(p, 3)
+        mock.waitSeconds(1.5)
+        local xp = ({ [1] = 400, [2] = 900, [3] = 1400 })[level] / 3
+        p:swing(wolf, 25, { power = 5, kill = { xp = math.ceil(xp) } })
+        mock.waitSeconds(1)
+        p:stopAttack()
+        p:leaveCombat()
+        wolf:hideNameplate()
+        mock.waitSeconds(1)
+        if i % 3 == 0 then
+            level = level + 1
+            expect(UnitLevel("player")).toBe(level)
+            expect((_G :: any).PlayerLevelText:GetText()).toBe(tostring(level))
+            expect(chatHas(`[Level {level}]`)).toBe(true)
+        end
+        -- The bar shows the experience of the level.
+        expect(bar.StatusBar:GetValue()).toBe(UnitXP("player"))
+        expect(select(2, bar.StatusBar:GetMinMaxValues())).toBe(UnitXPMax("player"))
+    end
+    expect(UnitLevel("player")).toBe(4)
+    expect(UnitXPMax("player")).toBe(2100)
+    expect(UnitHealthMax("player")).toBe(60 + 19 + 20 + 21)
+    -- At the trainer: a spell the new level opened, learned.
+    p:setMoney(10000)
+    local trainer = mock.spawnUnit({ name = "Wilhelm Fairbanks", level = 40, reaction = "friendly", class = "WARRIOR", classID = 1 })
+    mock.defineGossip(trainer, { text = "Strength and honour.", options = {
+        { name = "I require warrior training.", icon = 132058, gossipOptionID = 96654, opens = "trainer" },
+    } })
+    mock.defineTrainer(trainer, { class = "WARRIOR", greeting = "Ready to train?" })
+    trainer:setDistance(3)
+    p:target(trainer)
+    p:interact(trainer)
+    mock.waitSeconds(1)
+    C_GossipInfo.SelectOptionByIndex(0)
+    mock.waitSeconds(1)
+    expect((_G :: any).ClassTrainerFrame).toBeShown()
+    -- Charge (level 4) available now, learned.
+    local charge = 0
+    for i = 1, GetNumTrainerServices() do
+        local name, rank = GetTrainerServiceInfo(i)
+        if name == "Charge" and rank == "available" then charge = i end
+    end
+    expect(GetTrainerServiceLevelReq(charge)).toBe(4)
+    local row = (_G :: any).ClassTrainerFrame.ScrollBox:FindFrameByPredicate(function(_, d: any): boolean
+        local data = d and (d.data or d)
+        return data ~= nil and data.skillIndex == charge
+    end)
+    expect(row ~= nil).toBe(true)
+    mock.click(row)
+    mock.waitSeconds(0.2)
+    expect((_G :: any).ClassTrainerTrainButton:IsEnabled()).toBe(true)
+    mock.click((_G :: any).ClassTrainerTrainButton)
+    mock.waitSeconds(1)
+    expect(chatHas("You have learned a new ability: ")).toBe(true)
+    expect(chatHas("[Charge]")).toBe(true)
+    expect(select(2, GetTrainerServiceInfo(charge))).toBe("used")
+    HideUIPanel((_G :: any).ClassTrainerFrame)
+    mock.waitSeconds(0.5)
+    expect((_G :: any).ClassTrainerFrame).never.toBeShown()
+end
+"#,
+        "1 passed, 0 failed",
+    );
+}
+
 /// Every panel's key binding with Blizzard's UI, opened and closed, as the
 /// fresh character (the default) and as the recorded one (its profile):
 /// not a single Blizzard error, nothing refused.

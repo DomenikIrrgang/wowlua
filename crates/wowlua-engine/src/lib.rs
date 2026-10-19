@@ -23,6 +23,7 @@ pub mod cursor;
 pub mod curves;
 pub mod death;
 pub mod editmode;
+pub mod encounters;
 pub mod facts;
 pub mod framescript;
 pub mod gamedata;
@@ -38,6 +39,7 @@ pub mod macros;
 pub mod mail;
 pub mod merchant;
 pub mod party;
+pub mod pets;
 pub mod protection;
 pub mod queries;
 pub mod quests;
@@ -252,6 +254,8 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(chat::behaviours())
             .chain(bindings::behaviours())
             .chain(facts::behaviours())
+            .chain(encounters::behaviours())
+            .chain(pets::behaviours())
             .chain([
                 ("import", ui::build::import as NativeFn),
                 (

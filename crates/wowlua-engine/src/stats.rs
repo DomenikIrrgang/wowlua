@@ -773,6 +773,15 @@ pub enum Entry {
 /// The player's stats, by key.
 pub type Stats = BTreeMap<&'static str, Entry>;
 
+/// The player's stats, or its pet's.
+fn stats_of(vm: &Vm, pet: bool) -> &Stats {
+    if pet {
+        &engine(vm).world.pets.stats
+    } else {
+        &engine(vm).world.character.stats
+    }
+}
+
 /// The default character's (stand-ins, see the module's note).
 pub fn defaults() -> Stats {
     let mut s = Stats::new();
@@ -881,10 +890,13 @@ fn by_index(vm: &mut Vm, t: TableRef) -> BTreeMap<i64, Vec<Answer>> {
 
 /// `mock.player:setStats(stats)`: sets the stats given (by key; a value
 /// or the function's answer as a list; indexed stats by index), each
-/// change told by its event (unverified).
+/// change told by its event (unverified). The player's pet's too
+/// (`mock.setPet`): the unit's own stats only (unverified).
 pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
-    if units::this(vm, &c)? != units::PLAYER {
-        return Err(vm.error("unit:setStats: only the player has that"));
+    let me = units::this(vm, &c)?;
+    let pet = me != units::PLAYER;
+    if pet && engine(vm).units.pet != Some(me) {
+        return Err(vm.error("unit:setStats: only the player and its pet have that"));
     }
     let Value::Table(t) = c.arg(2) else {
         return Err(vm.error("unit:setStats: a table of stats expected"));
@@ -899,9 +911,12 @@ pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
         let Some(stat) = STATS.iter().find(|s| s.key == key) else {
             return Err(vm.error(&format!("unit:setStats: no stat {key:?}")));
         };
+        if pet && !matches!(stat.ask, Unit | UnitIndex) {
+            return Err(vm.error(&format!("unit:setStats: {key} is the player's")));
+        }
         let entry = match (stat.ask, v) {
             (UnitIndex | Index | ForStat | Location | Slot, Value::Table(inner)) => {
-                let mut map = match engine(vm).world.character.stats.get(stat.key) {
+                let mut map = match stats_of(vm, pet).get(stat.key) {
                     Some(Entry::ByIndex(m)) => m.clone(),
                     _ => BTreeMap::new(),
                 };
@@ -913,7 +928,11 @@ pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
             }
             (_, v) => Entry::One(answers_of(vm, v)),
         };
-        engine_mut(vm).world.character.stats.insert(stat.key, entry);
+        if pet {
+            engine_mut(vm).world.pets.stats.insert(stat.key, entry);
+        } else {
+            engine_mut(vm).world.character.stats.insert(stat.key, entry);
+        }
         if let Some(e) = stat.event
             && !events.contains(&e)
         {
@@ -924,8 +943,8 @@ pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
         let unit_event = event.starts_with("UNIT_") || event.ends_with("XP_UPDATE");
         if unit_event {
             // For each token naming the player (`targettarget` too:
-            // `/stdtest engine scenario combat`).
-            units::fire_unit(vm, event, units::PLAYER, &[]);
+            // `/stdtest engine scenario combat`), or the pet.
+            units::fire_unit(vm, event, me, &[]);
         } else {
             widgets::fire_event(vm, event, &[]);
         }
@@ -1072,8 +1091,14 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(stat) = name.and_then(|n| STATS.iter().find(|s| s.function == n)) else {
         return Ok(vec![]);
     };
+    // The unit asked about: the player, or its pet (its own stats).
+    let asked = units::unit_arg(vm, &c, 1);
+    let pet = matches!(stat.ask, Unit | UnitIndex)
+        && asked.is_some()
+        && asked == engine(vm).units.pet
+        && asked != Some(units::PLAYER);
     let player = match stat.ask {
-        Unit | UnitIndex => units::unit_arg(vm, &c, 1) == Some(units::PLAYER),
+        Unit | UnitIndex => asked == Some(units::PLAYER) || pet,
         _ => true,
     };
     let index = match stat.ask {
@@ -1086,7 +1111,12 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let found = if player {
         let ch = &engine(vm).world.character;
-        match (ch.stats.get(stat.key), index) {
+        let stats = if pet {
+            &engine(vm).world.pets.stats
+        } else {
+            &ch.stats
+        };
+        match (stats.get(stat.key), index) {
             (Some(Entry::One(v)), None) => Some(v.clone()),
             (Some(Entry::ByIndex(m)), Some(i)) if i.fract() == 0.0 => {
                 let v = m.get(&(i as i64)).cloned();
