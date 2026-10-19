@@ -3,9 +3,9 @@
 -- Shield, two Broken Fangs and a Chipped Claw, buys a Small Shield, buys
 -- the claw back, cannot afford a second shield, sells three Stringy Wolf
 -- Meat and repairs everything (scenarios/vendor.lua). Each step at its
--- recorded time (a click: a moment before the server's answer), the ping
--- as recorded (~0.3 s). The goods' prices other than the shield's (34)
--- are unrecorded: 0.
+-- recorded time (a click's release), each answer's round trip as recorded
+-- (0.26 to 0.67 s). The goods' prices other than the shield's (34) are
+-- unrecorded: 0.
 local e = __engine
 local player = e.player
 e.setLatency(0.3)
@@ -64,12 +64,17 @@ local function chatHas(frame, text)
     end
     return false
 end
+-- The target's echo (UNIT_TARGET) 0.477 s later.
+e.setLatency(0.477)
 at(1.491) player:target(godric)
+-- The goods known (no item's data loaded: a visit before); the bought
+-- shield's data 1.201 s after the purchase's answer; the repair's money
+-- told after the first item's durability (the server's packets).
 at(1.800) e.openMerchant({
-    name = "Godric Rothgar", canRepair = true, repairCost = 7,
+    name = "Godric Rothgar", canRepair = true, repairCost = 7, cached = true, repairMoneyAfter = 1,
     items = {
         { id = 2379 }, { id = 2381 }, { id = 2380 }, { id = 2383 },
-        { id = 2384 }, { id = 2385 }, { id = 17184, price = 34 }, { id = 2129 },
+        { id = 2384 }, { id = 2385 }, { id = 17184, price = 34, itemAfter = 1.201 }, { id = 2129 },
     },
 })
 at(1.9)
@@ -82,28 +87,36 @@ at(3.901) player:setPower(3)
 player:heal(1)
 at(5.975) player:setPower(2)
 -- Sold: a Small Shield, the fangs.
+e.setLatency(0.351)
 at(6.032) e.sell(0, 5)
 at(6.904) player:wear()
 at(7.965) player:setPower(1)
+e.setLatency(0.392)
 at(8.834) e.sell(0, 6)
 at(10.051) player:setPower(0)
 at(10.725) bystander("Creature-0-6782-0-7-299-B913903ABE")
 -- Bought: a Small Shield.
-at(11.691) press(MerchantItem7ItemButton, "RightButton")
+e.setLatency(0.301)
+at(11.690) press(MerchantItem7ItemButton, "RightButton")
 at(12.748) bystander("Creature-0-6782-0-7-299-7852634FCE")
+e.setLatency(0.310)
 at(14.249) e.sell(0, 7)
 -- The claw bought back.
-at(15.262) press(MerchantBuyBackItemItemButton, "RightButton")
+e.setLatency(0.262)
+at(15.300) press(MerchantBuyBackItemItemButton, "RightButton")
 at(16.680) player:wear()
 at(17.413) bystander("Creature-0-6782-0-7-299-44D9865248")
 -- Another shield: not enough money.
 at(17.980) player:wear()
 at(18.520) player:wear()
-at(23.102) press(MerchantItem7ItemButton, "RightButton")
+e.setLatency(0.315)
+at(23.087) press(MerchantItem7ItemButton, "RightButton")
+e.setLatency(0.357)
 at(26.334) e.sell(0, 9)
 -- Everything repaired.
 at(27.583) player:wear()
-at(29.517) press(MerchantRepairAllButton)
+e.setLatency(0.668)
+at(29.149) press(MerchantRepairAllButton)
 at(30.534) e.closeMerchant()
 at(31)
 -- What Blizzard's UI shows at the end.

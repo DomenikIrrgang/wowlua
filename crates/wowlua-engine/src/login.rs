@@ -76,8 +76,14 @@ fn inventory(vm: &mut Vm) {
         ch.equipment.len() + ch.bags.values().map(|b| b.items.len()).sum::<usize>()
     };
     let player = vm.str("player");
-    for _ in 0..items {
+    for i in 0..items {
         crate::character::equipped_spells_changed(vm);
+        // The actions the inventory makes usable (a weapon's strike) told
+        // with the first item, alone (recorded: after its equipped spells'
+        // changes, before its inventory's; which item, unrecorded).
+        if i == 0 {
+            crate::actions::usability_changed(vm);
+        }
         fire(vm, "BAG_UPDATE", &[Value::Num(0.0)]);
         fire(vm, "BAG_UPDATE", &[Value::Num(-1.0)]);
         fire(vm, "UNIT_INVENTORY_CHANGED", &[player]);
@@ -118,10 +124,20 @@ pub fn teleport(vm: &mut Vm, map: f64, place: Option<wowlua_vm::TableRef>) {
         }
         // The place left: its auras gone (recorded right after the
         // loading screen shows).
+        // The soft friend dropped too (recorded: its change 0.032 s after;
+        // its spells' usability untold while loading).
         if event == "LOADING_SCREEN_ENABLED" {
             fire(vm, event, &[]);
             crate::auras::left_place(vm);
+            if engine_mut(vm).units.soft[1].take().is_some() {
+                fire(vm, "PLAYER_SOFT_FRIEND_CHANGED", &[]);
+            }
             continue;
+        }
+        // The usability's check: the actions' changes told first (the
+        // recording's `ACTION_USABLE_CHANGED`, the test's world's).
+        if event == "ACTIONBAR_UPDATE_USABLE" {
+            crate::actions::usability_changed(vm);
         }
         match event {
             "$INVENTORY" => {
@@ -158,6 +174,10 @@ pub fn teleport(vm: &mut Vm, map: f64, place: Option<wowlua_vm::TableRef>) {
             });
         }
         fire(vm, event, &values);
+        // Every bar slot changed: the actions' usability as it is now.
+        if event == "ACTIONBAR_SLOT_CHANGED" && args == "number 0" {
+            crate::actions::bars_reloaded(vm);
+        }
     }
 }
 

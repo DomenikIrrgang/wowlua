@@ -77,19 +77,61 @@ pub struct AuctionHouse {
     queue: VecDeque<Query>,
     /// The browse results shown (after a browse search).
     browsed: bool,
-    /// Commodities searched: the results' ends (`GetTime`) and owners
+    /// Commodities searched: the results' answer (`GetTime`) and owners
     /// known; how many were bought.
     searched: BTreeMap<i64, (f64, bool)>,
+    /// Commodities ever searched: the first search's answer (`GetTime`),
+    /// whether their owners' names came.
+    first_searched: BTreeMap<i64, (f64, bool)>,
     bought: BTreeMap<i64, f64>,
     /// Items searched (their results told).
     item_searched: BTreeMap<i64, bool>,
-    /// The player's auctions: (auction ID, item ID, buyout).
-    owned: Vec<(f64, i64, f64)>,
+    /// The player's auctions.
+    owned: Vec<Owned>,
     next_auction: f64,
-    /// The buyout of the item being posted.
-    posting: f64,
+    /// The item being posted: its buyout, its duration (seconds), its
+    /// link.
+    posting: (f64, f64, Option<String>),
     /// A purchase's quote's end (`GetTime`).
     quote_until: f64,
+}
+
+/// An auction of the player's: its ID, item, buyout, the item's link (the
+/// bag's, as posted), its end (`GetTime`).
+#[derive(Clone, Debug)]
+struct Owned {
+    auction: f64,
+    item: i64,
+    buyout: f64,
+    link: Option<String>,
+    ends: f64,
+}
+
+/// A posting's duration (`PostItem`'s `duration`, 1 to 3) in seconds: the
+/// sell frame's choices, `AUCTION_DURATION_ONE` to `_THREE` (2, 8 and 24
+/// hours; recorded: the second's auction with 28799 s left 0.427 s after
+/// its creation).
+fn duration_seconds(index: f64) -> f64 {
+    match index as i64 {
+        1 => 2.0 * 3600.0,
+        3 => 24.0 * 3600.0,
+        _ => 8.0 * 3600.0,
+    }
+}
+
+/// `Enum.AuctionHouseTimeLeftBand` of the seconds left: Short under 30
+/// minutes, Medium to 2 hours, Long to 12, VeryLong beyond
+/// (`AUCTION_TIME_LEFT1_DETAIL` to `4`; recorded: Long with 8 hours left).
+fn time_left_band(left: f64) -> f64 {
+    if left < 1800.0 {
+        0.0
+    } else if left < 7200.0 {
+        1.0
+    } else if left < 43200.0 {
+        2.0
+    } else {
+        3.0
+    }
 }
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
@@ -389,7 +431,8 @@ fn answered(vm: &mut Vm, c: NativeCall) -> Ret {
             ah_mut(vm).next_auction += 1.0;
             fire(vm, "AUCTION_HOUSE_THROTTLED_MESSAGE_RESPONSE_RECEIVED", &[]);
             fire(vm, "AUCTION_HOUSE_AUCTION_CREATED", &[Value::Num(auction)]);
-            let buyout = ah(vm).posting;
+            // Its time counted from its creation.
+            let ends = crate::clock::now(vm) + ah(vm).posting.1;
             later(
                 vm,
                 POSTED_INVENTORY_AFTER,
@@ -407,7 +450,7 @@ fn answered(vm: &mut Vm, c: NativeCall) -> Ret {
                     Value::Num(slot as f64),
                     Value::Num(id as f64),
                     Value::Num(auction),
-                    Value::Num(buyout),
+                    Value::Num(ends),
                 ],
             );
             if let Some(q) = ah_mut(vm).queue.pop_front() {
@@ -447,10 +490,18 @@ fn infos(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// A commodity's results told (with the browse results' update after a
-/// purchase; their owners' names a moment later).
+/// purchase; their owners' names a moment later, unless the client has
+/// them from a search before: recorded, the Light Shot's searched again
+/// after its purchase, its owners there at once and no update after;
+/// unverified: one sample).
 fn commodity_results(vm: &mut Vm, id: i64, answer: bool, browse: bool) {
     let now = crate::clock::now(vm);
-    ah_mut(vm).searched.insert(id, (now, false));
+    let owners = ah_mut(vm)
+        .first_searched
+        .entry(id)
+        .or_insert((now, false))
+        .1;
+    ah_mut(vm).searched.insert(id, (now, owners));
     let key = key_of(vm, id);
     fire(vm, "AUCTION_HOUSE_NEW_RESULTS_RECEIVED", &[key]);
     if answer {
@@ -465,13 +516,15 @@ fn commodity_results(vm: &mut Vm, id: i64, answer: bool, browse: bool) {
         "COMMODITY_SEARCH_RESULTS_UPDATED",
         &[Value::Num(id as f64)],
     );
-    later(
-        vm,
-        OWNERS_AFTER,
-        "auctionOwners",
-        owners_known,
-        vec![Value::Num(id as f64)],
-    );
+    if !owners {
+        later(
+            vm,
+            OWNERS_AFTER,
+            "auctionOwners",
+            owners_known,
+            vec![Value::Num(id as f64)],
+        );
+    }
 }
 
 fn owners_known(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -483,6 +536,9 @@ fn owners_known(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     entry.1 = true;
+    if let Some(first) = ah_mut(vm).first_searched.get_mut(&id) {
+        first.1 = true;
+    }
     fire(
         vm,
         "COMMODITY_SEARCH_RESULTS_UPDATED",
@@ -547,7 +603,14 @@ fn posted_bag(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(b) = engine_mut(vm).world.character.bags.get_mut(&bag) {
         b.items.remove(&slot);
     }
-    ah_mut(vm).owned.push((n(3), id, n(4)));
+    let (buyout, _, link) = ah(vm).posting.clone();
+    ah_mut(vm).owned.push(Owned {
+        auction: n(3),
+        item: id,
+        buyout,
+        link,
+        ends: n(4),
+    });
     {
         let money = &mut engine_mut(vm).world.character.money;
         *money = (*money - deposit).max(0.0);
@@ -730,8 +793,9 @@ fn has_full_commodity_search_results(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_AuctionHouse.GetCommoditySearchResultInfo(itemID, i)`: the data's
-/// row, its time left from the search, its owners once known, the first
-/// row less what was bought.
+/// row, its time left as of the search's answer (the data's at the first
+/// search; recorded: the same 0.5 s later, 3 s less at a search 2.7 s
+/// after), its owners once known, the first row less what was bought.
 fn get_commodity_search_result_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let (id, rows) = commodity_results_of(vm, &c);
     let Some(i) = num(vm.hidden(c.arg(2))) else {
@@ -742,13 +806,13 @@ fn get_commodity_search_result_info(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let r = copy(vm, row);
     let (since, owners) = ah(vm).searched.get(&id).copied().unwrap_or((0.0, false));
-    let now = crate::clock::now(vm);
+    let first = ah(vm).first_searched.get(&id).map_or(since, |f| f.0);
     if let Some(left) = num(field(vm, row, "timeLeftSeconds")) {
         set(
             vm,
             r,
             "timeLeftSeconds",
-            Value::Num((left - (now - since)).floor().max(0.0)),
+            Value::Num((left - (since - first)).floor().max(0.0)),
         );
     }
     if !owners {
@@ -786,24 +850,47 @@ fn item_results(vm: &mut Vm, c: &NativeCall) -> Vec<TableRef> {
         return vec![];
     }
     let mut rows = item_data(vm, id);
-    let owned: Vec<(f64, i64, f64)> = ah(vm).owned.iter().filter(|o| o.1 == id).copied().collect();
-    for (auction, item, buyout) in owned {
+    let owned: Vec<Owned> = ah(vm)
+        .owned
+        .iter()
+        .filter(|o| o.item == id)
+        .cloned()
+        .collect();
+    let now = crate::clock::now(vm);
+    for o in owned {
         let r = vm.new_table();
-        set(vm, r, "auctionID", Value::Num(auction));
-        let key = key_of(vm, item);
-        set(vm, r, "itemKey", key);
-        set(vm, r, "buyoutAmount", Value::Num(buyout));
+        set(vm, r, "auctionID", Value::Num(o.auction));
+        // Its key with the item's level (recorded: 10 for the gloves, the
+        // search's own key 0).
+        let key = vm.new_table();
+        set(vm, key, "itemID", Value::Num(o.item as f64));
+        let level = match character::item_field(vm, o.item, "itemLevel") {
+            Value::Num(l) => l,
+            _ => 0.0,
+        };
+        set(vm, key, "itemLevel", Value::Num(level));
+        set(vm, key, "itemSuffix", Value::Num(0.0));
+        set(vm, key, "battlePetSpeciesID", Value::Num(0.0));
+        set(vm, r, "itemKey", Value::Table(key));
+        set(vm, r, "buyoutAmount", Value::Num(o.buyout));
         set(vm, r, "quantity", Value::Num(1.0));
         set(vm, r, "containsOwnerItem", Value::Bool(true));
         set(vm, r, "containsAccountItem", Value::Bool(true));
         set(vm, r, "containsSocketedItem", Value::Bool(false));
-        set(vm, r, "timeLeft", Value::Num(1.0));
+        let left = (o.ends - now).floor().max(0.0);
+        set(vm, r, "timeLeft", Value::Num(time_left_band(left)));
+        set(vm, r, "timeLeftSeconds", Value::Num(left));
         let owners = vm.new_table();
         let me = vm.str("player");
         let _ = vm.heap.table_mut(owners).set(Value::Num(1.0), me);
         set(vm, r, "owners", Value::Table(owners));
         set(vm, r, "totalNumberOfOwners", Value::Num(1.0));
-        if let Some(l) = character::link_of_id(vm, item) {
+        // The item's link as it was in the bag (recorded).
+        let link = match &o.link {
+            Some(l) => Some(vm.str(l)),
+            None => character::link_of_id(vm, o.item),
+        };
+        if let Some(l) = link {
             set(vm, r, "itemLink", l);
         }
         rows.push(r);
@@ -903,7 +990,12 @@ fn post_item(vm: &mut Vm, c: NativeCall) -> Ret {
     if ah(vm).open.is_none() {
         return Ok(vec![]);
     }
-    ah_mut(vm).posting = num(vm.hidden(c.arg(5))).unwrap_or(0.0);
+    let buyout = num(vm.hidden(c.arg(5))).unwrap_or(0.0);
+    let duration = duration_seconds(num(vm.hidden(c.arg(2))).unwrap_or(2.0));
+    let link = engine(vm).world.character.bags[&bag].items[&slot]
+        .link
+        .clone();
+    ah_mut(vm).posting = (buyout, duration, link);
     send(vm, Query::Post(bag, slot, id));
     // Recorded right after the message: the browse results' update, the
     // item's lock let go, its search again (queued).

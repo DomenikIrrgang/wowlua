@@ -61,12 +61,12 @@ pub fn start_global_cooldown(vm: &mut Vm) {
 }
 
 /// `setSpellTraits({ offGlobalCooldown = { id, … }, tracking = { … },
-/// profession = { … }, partyOrSelf = { … }, interruptible = { … } })`:
-/// what the client knows of the character's spells and the engine does not
-/// (recorded: Judgement off the global cooldown, Find Minerals and Sense
-/// Undead tracking, the crafts professions, the Sharpening Wheel's craft
-/// interruptible; probed: Blessing of Protection on the player or a member
-/// in reach only).
+/// profession = { … }, partyOrSelf = { … }, interruptible = { … },
+/// weapon = { … } })`: what the client knows of the character's spells and
+/// the engine does not (recorded: Judgement off the global cooldown, Find
+/// Minerals and Sense Undead tracking, the crafts professions, the
+/// Sharpening Wheel's craft interruptible, Holy Strike a weapon's; probed:
+/// Blessing of Protection on the player or a member in reach only).
 pub fn control_set_spell_traits(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(t) = c.arg(1) else {
         return Err(vm.error("setSpellTraits: a table of trait lists expected"));
@@ -253,6 +253,15 @@ fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
             return (false, false);
         }
     }
+    // A weapon's strike (trait `weapon`): unusable with no main hand, or
+    // while the inventory loads (recorded: Holy Strike told usable once it
+    // loaded after a loading screen; unverified: unarmed).
+    if a.kind == "spell" && has_trait(vm, a.id, "weapon") {
+        let w = &engine(vm).world;
+        if w.inventory_loading || !w.character.equipment.contains_key(&16) {
+            return (false, false);
+        }
+    }
     let in_combat = engine(vm).units.list[crate::units::PLAYER.0].in_combat;
     // A spell on the player or a group member in reach only (trait
     // `partyOrSelf`; probed: Blessing of Protection usable targeting the
@@ -322,6 +331,25 @@ pub fn update_target_usability(vm: &mut Vm) {
         |vm: &Vm, a: &Action| a.kind == "spell" && has_trait(vm, a.id, "partyOrSelf");
     if usability_changed_of(vm, &target_bound) {
         widgets::fire_event(vm, "ACTIONBAR_UPDATE_USABLE", &[]);
+    }
+}
+
+/// The bars reloaded (a loading screen's `ACTIONBAR_SLOT_CHANGED(0)`): each
+/// action's usability as it is now, untold (recorded, `hearth`: Holy
+/// Strike told usable once the inventory loaded, never told unusable;
+/// Blessing of Protection told unusable after the load, the soft friend
+/// dropped at the loading screen never told).
+pub fn bars_reloaded(vm: &mut Vm) {
+    let actions: Vec<(i64, Action)> = engine(vm)
+        .world
+        .character
+        .actions
+        .iter()
+        .map(|(k, a)| (*k, a.clone()))
+        .collect();
+    for (slot, a) in actions {
+        let now = usability(vm, &a);
+        engine_mut(vm).world.character.usable_seen.insert(slot, now);
     }
 }
 

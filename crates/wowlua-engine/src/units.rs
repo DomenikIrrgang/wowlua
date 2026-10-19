@@ -1388,6 +1388,17 @@ pub fn this(vm: &mut Vm, c: &NativeCall) -> Result<UnitId, wowlua_vm::LuaError> 
         .ok_or_else(|| vm.error("a unit method called without its unit (use ':')"))
 }
 
+/// `mock.unitOf(token)`: the unit a token names (a world profile's target,
+/// say), nil when none.
+pub fn control_unit_of(vm: &mut Vm, c: NativeCall) -> Ret {
+    let token = vm.check_bytes(&c, 1)?;
+    let token = String::from_utf8_lossy(&token).into_owned();
+    Ok(vec![match resolve(&engine(vm).units, &token) {
+        Some(id) => handle(vm, id),
+        None => Value::Nil,
+    }])
+}
+
 /// `mock.spawnUnit({ name, level, class, race, sex, reaction, player,
 /// health, maxHealth, power, maxPower, powerType, guid, npcID, distance
 /// })`.
