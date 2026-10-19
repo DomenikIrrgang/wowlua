@@ -1513,6 +1513,9 @@ pub struct Plan {
     pub skipped: Vec<(String, String)>,
     /// The probed functions the documentation lacks (no argument checks).
     pub undocumented: BTreeSet<String>,
+    /// Calls in stretches that crashed the client in a run
+    /// (`tests/ingame/src/fullprobe-suspects.txt`): probed after all else.
+    pub suspects: HashSet<(String, String)>,
 }
 
 /// Functions with their calls' argument lists.
@@ -1557,7 +1560,16 @@ impl Plan {
         let mut protected: HashSet<String> = HashSet::new();
         protected.extend(engine_list(root, "protection.rs", "PROTECTED")?);
         protected.extend(engine_list(root, "protection.rs", "HARDWARE")?);
-        Ok(Plan::from_parts(&docs, &functions, &protected))
+        let mut plan = Plan::from_parts(&docs, &functions, &protected);
+        let suspects = root.join("tests/ingame/src/fullprobe-suspects.txt");
+        if let Ok(text) = std::fs::read_to_string(&suspects) {
+            for line in text.lines().filter(|l| !l.starts_with('#')) {
+                if let Some((f, args)) = line.split_once('\t') {
+                    plan.suspects.insert((f.to_string(), args.to_string()));
+                }
+            }
+        }
+        Ok(plan)
     }
 
     pub fn from_parts(docs: &Docs, functions: &[String], protected: &HashSet<String>) -> Plan {
@@ -1568,6 +1580,13 @@ impl Plan {
         let mut undocumented = BTreeSet::new();
         let unique: BTreeSet<&String> = functions.iter().collect();
         for name in unique {
+            if RETAIL_ONLY.iter().any(|p| name.starts_with(p)) {
+                skipped.push((
+                    name.clone(),
+                    "a retail system Forever lacks (its functions crashed the client)".to_string(),
+                ));
+                continue;
+            }
             let doc = docs.functions.get(name.as_str());
             if doc.is_none() {
                 undocumented.insert(name.clone());
@@ -1596,6 +1615,7 @@ impl Plan {
             setters,
             skipped,
             undocumented,
+            suspects: HashSet::new(),
         }
     }
 
@@ -1604,21 +1624,18 @@ impl Plan {
     /// of documented functions without a boundary number; and the rest
     /// (boundary numbers, out of range values of undocumented functions,
     /// every call of an undocumented function past its first).
-    pub fn passes(&self) -> (Calls, Calls, Calls) {
+    pub fn passes(&self) -> (Calls, Calls, Calls, Calls) {
         let boundary = regex::Regex::new(r"(^|[^0-9.\w])(-1|2147483647|1\.5)($|[^0-9.])")
             .expect("a valid pattern");
-        let (mut safe, mut checked, mut risky) = (Vec::new(), Vec::new(), Vec::new());
+        let (mut safe, mut checked, mut risky, mut suspect) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         for (name, list) in &self.calls {
-            // Systems Forever lacks: their functions crash the client (the
-            // first run: C_Housing, C_HouseExterior), all of them last.
-            if RETAIL_ONLY.iter().any(|p| name.starts_with(p)) {
-                risky.push((name.clone(), list.clone()));
-                continue;
-            }
             let documented = !self.undocumented.contains(name);
-            let (mut a, mut b, mut c) = (Vec::new(), Vec::new(), Vec::new());
+            let (mut a, mut b, mut c, mut d) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
             for (i, args) in list.iter().enumerate() {
-                if documented && i < 2 || !documented && i == 0 {
+                if self.suspects.contains(&(name.clone(), args.clone())) {
+                    d.push(args.clone());
+                } else if documented && i < 2 || !documented && i == 0 {
                     a.push(args.clone());
                 } else if documented && !boundary.is_match(args) {
                     b.push(args.clone());
@@ -1626,13 +1643,18 @@ impl Plan {
                     c.push(args.clone());
                 }
             }
-            for (pass, part) in [(&mut safe, a), (&mut checked, b), (&mut risky, c)] {
+            for (pass, part) in [
+                (&mut safe, a),
+                (&mut checked, b),
+                (&mut risky, c),
+                (&mut suspect, d),
+            ] {
                 if !part.is_empty() {
                     pass.push((name.clone(), part));
                 }
             }
         }
-        (safe, checked, risky)
+        (safe, checked, risky, suspect)
     }
 
     pub fn call_count(&self) -> usize {
@@ -1680,7 +1702,7 @@ impl Plan {
         // argument checks answer; the calls most likely to crash the client
         // (boundary numbers, undocumented functions, which have no argument
         // checks) come last, after the settings (`risky`).
-        let (safe, checked, risky) = self.passes();
+        let (safe, checked, risky, suspect) = self.passes();
         for pass in [&safe, &checked] {
             for (name, list) in pass {
                 let _ = write!(out, "    {{ {}", lua_string(name));
@@ -1692,6 +1714,14 @@ impl Plan {
         }
         out.push_str("}\n\nlocal risky = {\n");
         for (name, list) in &risky {
+            let _ = write!(out, "    {{ {}", lua_string(name));
+            for args in list {
+                let _ = write!(out, ", {}", lua_string(args));
+            }
+            out.push_str(" },\n");
+        }
+        out.push_str("}\n\nlocal suspect = {\n");
+        for (name, list) in &suspect {
             let _ = write!(out, "    {{ {}", lua_string(name));
             for args in list {
                 let _ = write!(out, ", {}", lua_string(args));
@@ -1728,7 +1758,7 @@ impl Plan {
         }
         let _ = write!(
             out,
-            "}}\n\nns.__wowlua.define(\"fullprobeplan\", {{ calls = calls, risky = risky, setters = setters, skipped = skipped, version = \"{hash:016x}\" }})\n"
+            "}}\n\nns.__wowlua.define(\"fullprobeplan\", {{ calls = calls, risky = risky, suspect = suspect, setters = setters, skipped = skipped, version = \"{hash:016x}\" }})\n"
         );
         out
     }

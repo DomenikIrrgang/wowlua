@@ -1,0 +1,1202 @@
+# Calls in the stretches that crashed the client in the first /stdtest engine fullprobe run
+# (2026-10-20, plan 1ca716c8f2d368a9): probed last. function<TAB>arguments
+C_Item.GetItemIcon	
+C_Item.GetItemIcon	{ITEMLOC}
+C_Item.GetItemIconByID	
+C_Item.GetItemIconByID	{ITEM1}
+C_Item.GetItemInfo	
+C_Item.GetItemInfo	{ITEM1}
+C_Item.GetItemInfoInstant	
+C_Item.GetItemInfoInstant	{ITEM1}
+C_Item.GetItemInventorySlotInfo	
+C_Item.GetItemInventorySlotInfo	{EQUIPSLOT}
+C_Item.GetItemInventorySlotKey	
+C_Item.GetItemInventorySlotKey	{EQUIPSLOT}
+C_Item.GetItemInventoryType	
+C_Item.GetItemInventoryType	{ITEMLOC}
+C_Item.GetItemInventoryTypeByID	
+C_Item.GetItemInventoryTypeByID	{ITEM1}
+C_Item.GetItemLearnTransmogSet	
+C_Item.GetItemLearnTransmogSet	{ITEM1}
+C_Item.GetItemLink	
+C_Item.GetItemLink	{ITEMLOC}
+C_Item.GetItemLinkByGUID	
+C_Item.GetItemLinkByGUID	UnitGUID("player")
+C_Item.GetItemLocation	
+C_Item.GetItemLocation	UnitGUID("player")
+C_Item.GetItemMaxStackSize	
+C_Item.GetItemMaxStackSize	{ITEMLOC}
+C_Item.GetItemMaxStackSizeByID	
+C_Item.GetItemMaxStackSizeByID	{ITEM1}
+C_Item.GetItemName	
+C_Item.GetItemName	{ITEMLOC}
+C_Item.GetItemNameByID	
+C_Item.GetItemNameByID	{ITEM1}
+C_Item.GetItemNumAddedSockets	
+C_Item.GetItemNumAddedSockets	{ITEM1}
+C_Item.GetItemNumSockets	
+C_Item.GetItemNumSockets	{ITEM1}
+C_Item.GetItemQuality	
+C_Item.GetItemQuality	{ITEMLOC}
+C_Item.GetItemQualityByID	
+C_Item.GetItemQualityByID	{ITEM1}
+C_Item.GetItemQualityColor	
+C_Item.GetItemQualityColor	0
+C_Item.GetItemSetInfo	
+C_Item.GetItemSetInfo	1
+C_Item.GetItemSpecInfo	
+C_Item.GetItemSpecInfo	{ITEM1}
+C_Item.GetItemSpell	
+C_Item.GetItemSpell	{ITEM1}
+C_Item.GetItemStatDelta	
+C_Item.GetItemStatDelta	{ITEMLINK1}, {ITEMLINK1}
+C_Item.GetItemStats	
+C_Item.GetItemStats	{ITEMLINK1}
+C_Item.GetItemSubClassInfo	
+C_Item.GetItemSubClassInfo	1, 1
+C_Item.GetItemUniqueness	
+C_Item.GetItemUniqueness	{ITEM1}
+C_Item.GetItemUniquenessByID	
+C_Item.GetItemUniquenessByID	{ITEM1}
+C_Item.GetItemUpgradeInfo	
+C_Item.GetItemUpgradeInfo	{ITEM1}
+C_Item.GetLimitedCurrencyItemInfo	
+C_Item.GetLimitedCurrencyItemInfo	{ITEM1}
+C_Item.GetSetBonusesForSpecializationByItemID	
+C_Item.GetSetBonusesForSpecializationByItemID	1, {ITEM1}
+C_Item.GetStackCount	
+C_Item.GetStackCount	{ITEMLOC}
+C_Item.GetWeaponEnchantInfo	
+C_Item.GetWeaponEnchantInfo	0
+C_Item.IsAnimaItemByID	
+C_Item.IsAnimaItemByID	{ITEM1}
+C_Item.IsArtifactPowerItem	
+C_Item.IsArtifactPowerItem	{ITEM1}
+C_Item.IsBound	
+C_Item.IsBound	{ITEMLOC}
+C_Item.IsBoundToAccountUntilEquip	
+C_Item.IsBoundToAccountUntilEquip	{ITEMLOC}
+C_Item.IsConsumableItem	
+C_Item.IsConsumableItem	{ITEM1}
+C_Item.IsCorruptedItem	
+C_Item.IsCorruptedItem	{ITEM1}
+C_Item.IsCosmeticItem	
+C_Item.IsCosmeticItem	{ITEM1}
+C_Item.IsCurioItem	
+C_Item.IsCurioItem	{ITEM1}
+C_Item.IsCurrentItem	
+C_Item.IsCurrentItem	{ITEM1}
+C_Item.IsDecorItem	
+C_Item.IsDecorItem	{ITEM1}
+C_Item.IsDressableItemByID	
+C_Item.IsDressableItemByID	{ITEM1}
+C_Item.IsEquippableItem	
+C_Item.IsEquippableItem	{ITEM1}
+C_Item.IsEquippedItem	
+C_Item.IsEquippedItem	{ITEM1}
+C_Item.IsEquippedItemType	
+C_Item.IsEquippedItemType	"x"
+C_Item.IsHarmfulItem	
+C_Item.IsHarmfulItem	{ITEM1}
+C_Item.IsHelpfulItem	
+C_Item.IsHelpfulItem	{ITEM1}
+C_Item.IsItemBindToAccount	
+C_Item.IsItemBindToAccount	{ITEM1}
+C_Item.IsItemBindToAccountUntilEquip	
+C_Item.IsItemBindToAccountUntilEquip	{ITEM1}
+C_Item.IsItemConduit	
+C_Item.IsItemConduit	{ITEMLOC}
+C_Item.IsItemConvertibleAndValidForPlayer	
+C_Item.IsItemConvertibleAndValidForPlayer	{ITEMLOC}
+C_Item.IsItemCorrupted	
+C_Item.IsItemCorrupted	{ITEMLOC}
+C_Item.IsItemCorruptionRelated	
+C_Item.IsItemCorruptionRelated	{ITEMLOC}
+C_Item.IsItemCorruptionResistant	
+C_Item.IsItemCorruptionResistant	{ITEMLOC}
+C_Item.IsItemDataCached	
+C_Item.IsItemDataCached	{ITEMLOC}
+C_Item.IsItemDataCachedByID	
+C_Item.IsItemDataCachedByID	{ITEM1}
+C_Item.IsItemGUIDInInventory	
+C_Item.IsItemGUIDInInventory	UnitGUID("player")
+C_Item.IsItemInRange	
+C_Item.IsItemInRange	{ITEM1}, "player"
+C_Item.IsItemKeystoneByID	
+C_Item.IsItemKeystoneByID	{ITEM1}
+C_Item.IsItemSpecificToPlayerClass	
+C_Item.IsItemSpecificToPlayerClass	{ITEM1}
+C_Item.IsLocked	
+C_Item.IsLocked	{ITEMLOC}
+C_Item.IsRelicItem	
+C_Item.IsRelicItem	{ITEM1}
+C_Item.IsUsableItem	
+C_Item.IsUsableItem	{ITEM1}
+C_Item.ItemHasRange	
+C_Item.ItemHasRange	{ITEM1}
+C_Item.RequestLoadItemData	
+C_Item.RequestLoadItemData	{ITEMLOC}
+C_Item.RequestLoadItemDataByID	
+C_Item.RequestLoadItemDataByID	{ITEM1}
+C_ItemInteraction.GetChargeInfo	
+C_ItemInteraction.GetItemConversionCurrencyCost	
+C_ItemInteraction.GetItemConversionCurrencyCost	{ITEMLOC}
+C_ItemInteraction.GetItemInteractionInfo	
+C_ItemInteraction.GetItemInteractionSpellId	
+C_ItemSocketInfo.GetCurrUIType	
+C_ItemSocketInfo.GetExistingSocketInfo	
+C_ItemSocketInfo.GetExistingSocketInfo	1
+C_ItemSocketInfo.GetExistingSocketLink	
+C_ItemSocketInfo.GetExistingSocketLink	1
+C_ItemSocketInfo.GetNewSocketInfo	
+C_ItemSocketInfo.GetNewSocketInfo	1
+C_ItemSocketInfo.GetNewSocketLink	
+C_ItemSocketInfo.GetNewSocketLink	1
+C_ItemSocketInfo.GetNumSockets	
+C_ItemSocketInfo.GetSocketItemBoundTradeable	
+C_ItemSocketInfo.GetSocketItemInfo	
+C_ItemSocketInfo.GetSocketItemRefundable	
+C_ItemSocketInfo.GetSocketTypes	
+C_ItemSocketInfo.GetSocketTypes	1
+C_ItemSocketInfo.HasBoundGemProposed	
+C_ItemSocketInfo.IsArtifactRelicItem	
+C_ItemSocketInfo.IsArtifactRelicItem	{ITEM1}
+C_KeyBindings.GetBindingByKey	
+C_KeyBindings.GetBindingByKey	"x", 0
+C_KeyBindings.GetBindingContextForAction	
+C_KeyBindings.GetBindingContextForAction	"x"
+C_KeyBindings.GetBindingIndex	
+C_KeyBindings.GetBindingIndex	"x"
+C_KeyBindings.GetCustomBindingType	
+C_KeyBindings.GetCustomBindingType	1
+C_KeyBindings.GetSearchTagsForAction	
+C_KeyBindings.GetSearchTagsForAction	"x"
+C_KeyBindings.GetTurnStrafeStyle	
+C_KeyBindings.IsBindingContextActive	
+C_KeyBindings.IsBindingContextActive	0
+C_LFGInfo.AreCrossFactionGroupQueuesAllowed	
+C_LFGInfo.AreCrossFactionGroupQueuesAllowed	1
+C_LFGInfo.CanPlayerUseGroupFinder	
+C_LFGInfo.CanPlayerUseLFD	
+C_LFGInfo.CanPlayerUseLFR	
+C_LFGInfo.CanPlayerUsePVP	
+C_LFGInfo.CanPlayerUsePremadeGroup	
+C_LFGInfo.CanPlayerUseScenarioFinder	
+C_LFGInfo.DoesActivePartyMeetPremadeLaunchCount	
+C_LFGInfo.DoesActivePartyMeetPremadeLaunchCount	1
+C_LFGInfo.DoesCrossFactionQueueRequireFullPremade	
+C_LFGInfo.DoesCrossFactionQueueRequireFullPremade	1
+C_LFGInfo.GetActiveLFGDungeonName	
+C_LFGInfo.GetAllEntriesForCategory	
+C_LFGInfo.GetAllEntriesForCategory	1
+C_LFGInfo.GetDungeonInfo	
+C_LFGInfo.GetDungeonInfo	1
+C_LFGInfo.GetLFDLockStates	
+C_LFGInfo.GetLevelUpInstances	
+C_LFGInfo.GetLevelUpInstances	1, true
+C_LFGInfo.GetRoleCheckDifficultyDetails	
+C_LFGInfo.IsGroupFinderEnabled	
+C_LFGInfo.IsInLFGFollowerDungeon	
+C_LFGInfo.IsInMatchmadeRaidWithoutRoleRequirements	
+C_LFGInfo.IsLFDEnabled	
+C_LFGInfo.IsLFGFollowerDungeon	
+C_LFGInfo.IsLFGFollowerDungeon	1
+C_LFGInfo.IsLFREnabled	
+C_LFGList.CanActiveEntryUseAutoAccept	
+C_LFGList.CanCreateQuestGroup	
+C_LFGList.CanCreateQuestGroup	{QUEST1}
+C_LFGList.CanCreateScenarioGroup	
+C_LFGList.CanCreateScenarioGroup	1
+C_LFGList.DoesCensoredTextMatch	
+C_LFGList.DoesCensoredTextMatch	UnitName("player"), "x"
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, 0, 0
+C_LFGList.GetActiveEntryInfo	
+C_LFGList.GetActivityFullName	
+C_LFGList.GetActivityFullName	1, {QUEST1}, true
+C_LFGList.GetActivityGroupInfo	
+C_LFGList.GetActivityGroupInfo	1
+C_LFGList.GetActivityIDForQuestID	
+C_LFGList.GetActivityInfoExpensive	
+C_LFGList.GetActivityInfoTable	
+C_LFGList.GetActivityInfoTable	1, {QUEST1}, true
+C_LFGList.GetAdvancedFilter	
+C_LFGList.GetApplicantBestDungeonScore	
+C_LFGList.GetApplicantBestDungeonScore	1, 1
+C_LFGList.GetApplicantDungeonScoreForListing	
+C_LFGList.GetApplicantDungeonScoreForListing	1, 1, 1
+C_LFGList.GetApplicantInfo	
+C_LFGList.GetApplicantInfo	1
+C_LFGList.GetApplicantMemberInfo	
+C_LFGList.GetApplicantMemberStats	
+C_LFGList.GetApplicantPvpRatingInfoForListing	
+C_LFGList.GetApplicantPvpRatingInfoForListing	1, 1, 1
+C_LFGList.GetApplicants	
+C_LFGList.GetApplicationInfo	
+C_LFGList.GetApplications	
+C_LFGList.GetAvailableActivities	
+C_LFGList.GetAvailableActivityGroups	
+C_LFGList.GetAvailableActivityGroups	1, 1
+C_LFGList.GetAvailableCategories	
+C_LFGList.GetAvailableLanguageSearchFilter	
+C_LFGList.GetAvailableRoles	
+C_LFGList.GetDefaultLanguageSearchFilter	
+C_LFGList.GetFilteredSearchResults	
+C_LFGList.GetGroupLeaverCountsByRole	
+C_LFGList.GetKeystoneForActivity	
+C_LFGList.GetKeystoneForActivity	1
+C_LFGList.GetLanguageSearchFilter	
+C_LFGList.GetLfgCategoryInfo	
+C_LFGList.GetLfgCategoryInfo	1
+C_LFGList.GetNumApplicants	
+C_LFGList.GetNumApplications	
+C_LFGList.GetNumInvitedApplicantMembers	
+C_LFGList.GetNumPendingApplicantMembers	
+C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel	
+C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel	true
+C_LFGList.GetPlaystyleString	
+C_LFGList.GetPlaystyleString	0, 0, { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetPremadeGroupFinderStyle	
+C_LFGList.GetRoleCheckInfo	
+C_LFGList.GetSearchResultEncounterInfo	
+C_LFGList.GetSearchResultFriends	
+C_LFGList.GetSearchResultInfo	
+C_LFGList.GetSearchResultInfo	1
+C_LFGList.GetSearchResultLeaderInfo	
+C_LFGList.GetSearchResultLeaderInfo	1
+C_LFGList.GetSearchResultMemberCounts	
+C_LFGList.GetSearchResultPlayerInfo	
+C_LFGList.GetSearchResultPlayerInfo	1, 1
+C_LFGList.GetSearchResults	
+C_LFGList.HasActiveEntryInfo	
+C_LFGList.HasActivityList	
+C_LFGList.HasSearchResultInfo	
+C_LFGList.HasSearchResultInfo	1
+C_LFGList.IsCensoredActiveEntryUnresolved	
+C_LFGList.IsCurrentlyApplying	
+C_LFGList.IsPlayerAuthenticatedForLFG	
+C_LFGList.IsPlayerAuthenticatedForLFG	1
+C_LFGList.IsPlayerValidForEndgameFieldEdits	
+C_LFGList.IsPremadeGroupFinderEnabled	
+C_LFGList.ListingUsesEndgameEditRestrictions	
+C_LFGList.ListingUsesEndgameEditRestrictions	1
+C_LFGList.RequestAvailableActivities	
+C_LFGListRoles.GetRoles	
+C_LFGListRoles.GetSavedRoles	
+C_LevelLink.IsActionLocked	
+C_LevelLink.IsActionLocked	{ACTIONSLOT1}
+C_LevelLink.IsSpellLocked	
+C_LevelLink.IsSpellLocked	{SPELL1}
+C_LobbyMatchmakerInfo.GetCurrQueuePlaylistEntry	
+C_LobbyMatchmakerInfo.GetCurrQueueState	
+C_LobbyMatchmakerInfo.GetQueueFromMainlineEnabled	
+C_LobbyMatchmakerInfo.GetQueueStartTime	
+C_LobbyMatchmakerInfo.IsInQueue	
+C_Loot.GetLootRollDuration	
+C_Loot.GetLootRollDuration	1
+C_Loot.IsLegacyLootModeEnabled	
+C_LootHistory.GetAllEncounterInfos	
+C_LootHistory.GetInfoForEncounter	
+C_LootHistory.GetInfoForEncounter	1
+C_LootHistory.GetLootHistoryTime	
+C_LootHistory.GetSortedDropsForEncounter	
+C_LootHistory.GetSortedDropsForEncounter	1
+C_LootHistory.GetSortedInfoForDrop	
+C_LootHistory.GetSortedInfoForDrop	1, 1
+C_LootJournal.GetItemSetItems	
+C_LootJournal.GetItemSetItems	1
+C_LootJournal.GetItemSets	
+C_LootJournal.GetItemSets	{CLASSID}, 1
+C_LoreText.RequestLoreTextForCampaignID	
+C_LoreText.RequestLoreTextForCampaignID	1
+C_LossOfControl.GetActiveLossOfControlData	
+C_LossOfControl.GetActiveLossOfControlData	1
+C_LossOfControl.GetActiveLossOfControlDataByUnit	
+C_LossOfControl.GetActiveLossOfControlDataByUnit	"player", 1
+C_LossOfControl.GetActiveLossOfControlDataCount	
+C_LossOfControl.GetActiveLossOfControlDataCountByUnit	
+C_LossOfControl.GetActiveLossOfControlDataCountByUnit	"player"
+C_LossOfControl.GetActiveLossOfControlDuration	
+C_LossOfControl.GetActiveLossOfControlDuration	"player", 1
+C_MacOptions.AreOSShortcutsDisabled	
+C_MacOptions.GetGameBundleName	
+C_MacOptions.HasNewStyleInputMonitoring	
+C_MacOptions.IsInputMonitoringEnabled	
+C_MacOptions.IsMicrophoneEnabled	
+C_MacOptions.IsUniversalAccessEnabled	
+C_Macro.GetMacroName	
+C_Macro.GetMacroName	1
+C_Macro.GetSelectedMacroIcon	
+C_Macro.GetSelectedMacroIcon	1
+C_Mail.CanCheckInbox	
+C_Mail.GetCraftingOrderMailInfo	
+C_Mail.GetCraftingOrderMailInfo	1
+C_Mail.HasInboxMoney	
+C_Mail.HasInboxMoney	1
+C_Mail.IsCommandPending	
+C_Map.CanSetUserWaypointOnMap	
+C_Map.CanSetUserWaypointOnMap	{MAP1}
+C_Map.GetAreaInfo	
+C_Map.GetAreaInfo	1
+C_Map.GetBestMapForUnit	
+C_Map.GetBestMapForUnit	"player"
+C_Map.GetBountySetMaps	
+C_Map.GetBountySetMaps	1
+C_Map.GetFallbackWorldMapID	
+C_Map.GetMapArtBackgroundAtlas	
+C_Map.GetMapArtBackgroundAtlas	{MAP1}
+C_Map.GetMapArtHelpTextPosition	
+C_Map.GetMapArtHelpTextPosition	{MAP1}
+C_Map.GetMapArtID	
+C_Map.GetMapArtID	{MAP1}
+C_Map.GetMapArtLayerTextures	
+C_Map.GetMapArtLayerTextures	{MAP1}, 1
+C_Map.GetMapArtLayers	
+C_Map.GetMapArtLayers	{MAP1}
+C_Map.GetMapArtZoneTextPosition	
+C_Map.GetMapArtZoneTextPosition	{MAP1}
+C_Map.GetMapBannersForMap	
+C_Map.GetMapBannersForMap	{MAP1}
+C_Map.GetMapChildrenInfo	
+C_Map.GetMapChildrenInfo	{MAP1}, 0, true
+C_Map.GetMapDisplayInfo	
+C_Map.GetMapDisplayInfo	{MAP1}
+C_Map.GetMapGroupID	
+C_Map.GetMapGroupID	{MAP1}
+C_Map.GetMapGroupMembersInfo	
+C_Map.GetMapGroupMembersInfo	1
+C_Map.GetMapHighlightInfoAtPosition	
+C_Map.GetMapHighlightInfoAtPosition	{MAP1}, 1, 1
+C_Map.GetMapHighlightPulseInfo	
+C_Map.GetMapHighlightPulseInfo	{MAP1}
+C_Map.GetMapInfo	
+C_Map.GetMapInfo	{MAP1}
+C_Map.GetMapInfoAtPosition	
+C_Map.GetMapInfoAtPosition	{MAP1}, 1, 1, true
+C_Map.GetMapLevels	
+C_Map.GetMapLevels	{MAP1}
+C_Map.GetMapLinksForMap	
+C_Map.GetMapLinksForMap	{MAP1}
+C_Map.GetMapPosFromWorldPos	
+C_Map.GetMapPosFromWorldPos	1, CreateVector2D(0.5, 0.5), 1
+C_Map.GetMapRectOnMap	
+C_Map.GetMapRectOnMap	{MAP1}, 1
+C_Map.GetMapWorldSize	
+C_Map.GetMapWorldSize	{MAP1}
+C_Map.GetPlayerMapPosition	
+C_Map.GetPlayerMapPosition	{MAP1}, "player"
+C_Map.GetUserWaypoint	
+C_Map.GetUserWaypointFromHyperlink	
+C_Map.GetUserWaypointFromHyperlink	{ITEMLINK1}
+C_Map.GetUserWaypointHyperlink	
+C_Map.GetUserWaypointPositionForMap	
+C_Map.GetUserWaypointPositionForMap	{MAP1}
+C_Map.GetWorldPosFromMapPos	
+C_Map.GetWorldPosFromMapPos	{MAP1}, CreateVector2D(0.5, 0.5)
+C_Map.HasUserWaypoint	
+C_Map.IsCityMap	
+C_Map.IsCityMap	{MAP1}
+C_Map.IsMapValidForNavBarDropdown	
+C_Map.IsMapValidForNavBarDropdown	{MAP1}
+C_Map.MapHasArt	
+C_Map.MapHasArt	{MAP1}
+C_AreaPoiInfo.GetAreaPOIInfo	"x", 1
+C_AreaPoiInfo.GetAreaPOIInfo	{MAP1}, "x"
+C_AreaPoiInfo.GetAreaPOIInfo	{MAP1}, nil
+C_AreaPoiInfo.GetAreaPOIInfo	{MAP1}, 0
+C_AreaPoiInfo.GetAreaPOIInfo	{MAP2}, 1
+C_AreaPoiInfo.GetAreaPOIInfo	{MAP2}, 0
+C_AreaPoiInfo.GetAreaPOIInfo	1, 1
+C_AreaPoiInfo.GetAreaPOIInfo	1, 0
+C_AreaPoiInfo.GetAreaPOIInfo	0, 1
+C_AreaPoiInfo.GetAreaPOIInfo	0, 0
+C_AreaPoiInfo.GetAreaPOIInfo	nil, 1
+C_AreaPoiInfo.GetAreaPOIInfo	nil, 0
+C_AreaPoiInfo.GetAreaPOISecondsLeft	"x"
+C_AreaPoiInfo.GetAreaPOISecondsLeft	0
+C_AreaPoiInfo.GetDelvesForMap	"x"
+C_AreaPoiInfo.GetDelvesForMap	{MAP2}
+C_AreaPoiInfo.GetDelvesForMap	1
+C_AreaPoiInfo.GetDelvesForMap	0
+C_AreaPoiInfo.GetDragonridingRacesForMap	"x"
+C_AreaPoiInfo.GetDragonridingRacesForMap	{MAP2}
+C_AreaPoiInfo.GetDragonridingRacesForMap	1
+C_AreaPoiInfo.GetDragonridingRacesForMap	0
+C_AreaPoiInfo.GetEventsForMap	"x"
+C_AreaPoiInfo.GetEventsForMap	{MAP2}
+C_AreaPoiInfo.GetEventsForMap	1
+C_AreaPoiInfo.GetEventsForMap	0
+C_AreaPoiInfo.GetQuestHubsForMap	"x"
+C_AreaPoiInfo.GetQuestHubsForMap	{MAP2}
+C_AreaPoiInfo.GetQuestHubsForMap	1
+C_AreaPoiInfo.GetQuestHubsForMap	0
+C_AreaPoiInfo.IsAreaPOITimed	"x"
+C_AreaPoiInfo.IsAreaPOITimed	0
+C_AssistedCombat.GetNextCastSpell	false
+C_AssistedCombat.GetNextCastSpell	nil
+C_AuctionHouse.CalculateCommodityDeposit	"x", 1, 1
+C_AuctionHouse.CalculateCommodityDeposit	{ITEM1}, "x", 1
+C_AuctionHouse.CalculateCommodityDeposit	{ITEM1}, nil, 1
+C_AuctionHouse.CalculateCommodityDeposit	{ITEM1}, 1, "x"
+C_AuctionHouse.CalculateCommodityDeposit	{ITEM1}, 1, nil
+C_AuctionHouse.CalculateCommodityDeposit	{ITEM2}, 1, 1
+C_AuctionHouse.CalculateCommodityDeposit	{ITEM1}, 0, 1
+C_AuctionHouse.CalculateCommodityDeposit	{ITEM1}, 1, 0
+C_AuctionHouse.CalculateCommodityDeposit	1, 1, 1
+C_AuctionHouse.CalculateCommodityDeposit	0, 1, 1
+C_AuctionHouse.CalculateItemDeposit	"x", 1, 1
+C_AuctionHouse.CalculateItemDeposit	{ITEMLOC}, "x", 1
+C_AuctionHouse.CalculateItemDeposit	{ITEMLOC}, nil, 1
+C_AuctionHouse.CalculateItemDeposit	{ITEMLOC}, 1, "x"
+C_AuctionHouse.CalculateItemDeposit	{ITEMLOC}, 1, nil
+C_AuctionHouse.CalculateItemDeposit	{EQUIPLOC}, 1, 1
+C_AuctionHouse.CalculateItemDeposit	{ITEMLOC}, 0, 1
+C_AuctionHouse.CalculateItemDeposit	{ITEMLOC}, 1, 0
+C_AuctionHouse.CalculateItemDeposit	ItemLocation:CreateEmpty(), 1, 1
+C_AuctionHouse.CanCancelAuction	"x"
+C_AuctionHouse.CanCancelAuction	0
+C_AuctionHouse.GetAuctionInfoByID	"x"
+C_AuctionHouse.GetAuctionInfoByID	0
+C_AuctionHouse.GetAuctionItemSubClasses	"x"
+C_AuctionHouse.GetAuctionItemSubClasses	1
+C_AuctionHouse.GetAuctionItemSubClasses	0
+C_AuctionHouse.GetAvailablePostCount	"x"
+C_AuctionHouse.GetAvailablePostCount	{EQUIPLOC}
+C_AuctionHouse.GetAvailablePostCount	ItemLocation:CreateEmpty()
+C_AuctionHouse.GetBidInfo	"x"
+C_AuctionHouse.GetBidInfo	0
+C_AuctionHouse.GetBidType	"x"
+C_AuctionHouse.GetBidType	0
+C_AuctionHouse.GetCancelCost	"x"
+C_AuctionHouse.GetCancelCost	0
+C_AuctionHouse.GetCommoditySearchResultInfo	"x", 1
+C_AuctionHouse.GetCommoditySearchResultInfo	{ITEM1}, "x"
+C_AuctionHouse.GetCommoditySearchResultInfo	{ITEM1}, nil
+C_AuctionHouse.GetCommoditySearchResultInfo	{ITEM1}, 0
+C_AuctionHouse.GetCommoditySearchResultInfo	{ITEM2}, 1
+C_AuctionHouse.GetCommoditySearchResultInfo	{ITEM2}, 0
+C_AuctionHouse.GetCommoditySearchResultInfo	1, 1
+C_AuctionHouse.GetCommoditySearchResultInfo	1, 0
+C_AuctionHouse.GetCommoditySearchResultInfo	0, 1
+C_AuctionHouse.GetCommoditySearchResultInfo	0, 0
+C_AuctionHouse.GetCommoditySearchResultsQuantity	"x"
+C_AuctionHouse.GetCommoditySearchResultsQuantity	{ITEM2}
+C_AuctionHouse.GetCommoditySearchResultsQuantity	1
+C_AuctionHouse.GetCommoditySearchResultsQuantity	0
+C_AuctionHouse.GetExtraBrowseInfo	"x"
+C_AuctionHouse.GetExtraBrowseInfo	{}
+C_AuctionHouse.GetItemCommodityStatus	"x"
+C_AuctionHouse.GetItemCommodityStatus	{EQUIPLOC}
+C_AuctionHouse.GetItemCommodityStatus	ItemLocation:CreateEmpty()
+C_AuctionHouse.GetItemKeyFromItem	"x"
+C_AuctionHouse.GetItemKeyFromItem	{EQUIPLOC}
+C_AuctionHouse.GetItemKeyFromItem	ItemLocation:CreateEmpty()
+C_AuctionHouse.GetItemKeyInfo	"x", true
+C_AuctionHouse.GetItemKeyInfo	C_AuctionHouse.MakeItemKey({ITEM1})
+C_AuctionHouse.GetItemKeyInfo	C_AuctionHouse.MakeItemKey({ITEM1}), false
+C_AuctionHouse.GetItemKeyInfo	C_AuctionHouse.MakeItemKey({ITEM1}), nil
+C_AuctionHouse.GetItemKeyInfo	{}, true
+C_AuctionHouse.GetItemKeyInfo	{}, false
+C_AuctionHouse.GetItemKeyInfo	{}, nil
+C_AuctionHouse.GetItemKeyRequiredLevel	"x"
+C_AuctionHouse.GetItemKeyRequiredLevel	{}
+C_AuctionHouse.GetItemKeySampleLink	"x"
+C_AuctionHouse.GetItemKeySampleLink	{}
+C_AuctionHouse.GetItemSearchResultInfo	"x", 1
+C_AuctionHouse.GetItemSearchResultInfo	C_AuctionHouse.MakeItemKey({ITEM1}), "x"
+C_AuctionHouse.GetItemSearchResultInfo	C_AuctionHouse.MakeItemKey({ITEM1}), nil
+C_AuctionHouse.GetItemSearchResultInfo	C_AuctionHouse.MakeItemKey({ITEM1}), 0
+C_AuctionHouse.GetItemSearchResultInfo	{}, 1
+C_AuctionHouse.GetItemSearchResultInfo	{}, 0
+C_AuctionHouse.GetItemSearchResultsQuantity	"x"
+C_AuctionHouse.GetItemSearchResultsQuantity	{}
+C_AuctionHouse.GetMaxCommoditySearchResultPrice	"x"
+C_AuctionHouse.GetMaxCommoditySearchResultPrice	{ITEM2}
+C_AuctionHouse.GetMaxCommoditySearchResultPrice	1
+C_AuctionHouse.GetMaxCommoditySearchResultPrice	0
+C_AuctionHouse.GetMaxItemSearchResultBid	"x"
+C_AuctionHouse.GetMaxItemSearchResultBid	{}
+C_AuctionHouse.GetMaxItemSearchResultBuyout	"x"
+C_AuctionHouse.GetMaxItemSearchResultBuyout	{}
+C_AuctionHouse.GetNumCommoditySearchResults	"x"
+C_AuctionHouse.GetNumCommoditySearchResults	{ITEM2}
+C_AuctionHouse.GetNumCommoditySearchResults	1
+C_AuctionHouse.GetNumCommoditySearchResults	0
+C_AuctionHouse.GetNumItemSearchResults	"x"
+C_AuctionHouse.GetNumItemSearchResults	{}
+C_AuctionHouse.GetOwnedAuctionInfo	"x"
+C_AuctionHouse.GetOwnedAuctionInfo	0
+C_AuctionHouse.GetOwnedAuctionType	"x"
+C_AuctionHouse.GetOwnedAuctionType	0
+C_AuctionHouse.GetReplicateItemBattlePetInfo	"x"
+C_AuctionHouse.GetReplicateItemBattlePetInfo	0
+C_AuctionHouse.GetReplicateItemInfo	"x"
+C_AuctionHouse.GetReplicateItemInfo	0
+C_AuctionHouse.GetReplicateItemLink	"x"
+C_AuctionHouse.GetReplicateItemLink	0
+C_AuctionHouse.GetReplicateItemTimeLeft	"x"
+C_AuctionHouse.GetReplicateItemTimeLeft	0
+C_AuctionHouse.GetTimeLeftBandInfo	"x"
+C_AuctionHouse.GetTimeLeftBandInfo	1
+C_AuctionHouse.GetTimeLeftBandInfo	2
+C_AuctionHouse.GetTimeLeftBandInfo	3
+C_AuctionHouse.GetTimeLeftBandInfo	4
+C_AuctionHouse.HasFullCommoditySearchResults	"x"
+C_AuctionHouse.HasFullCommoditySearchResults	{ITEM2}
+C_AuctionHouse.HasFullCommoditySearchResults	1
+C_AuctionHouse.HasFullCommoditySearchResults	0
+C_AuctionHouse.HasFullItemSearchResults	"x"
+C_AuctionHouse.HasFullItemSearchResults	{}
+C_AuctionHouse.HasSearchResults	"x"
+C_AuctionHouse.HasSearchResults	{}
+C_AuctionHouse.IsFavoriteItem	"x"
+C_AuctionHouse.IsFavoriteItem	{}
+C_AuctionHouse.IsSellItemValid	"x", true
+C_AuctionHouse.IsSellItemValid	{ITEMLOC}
+C_AuctionHouse.IsSellItemValid	{ITEMLOC}, false
+C_AuctionHouse.IsSellItemValid	{ITEMLOC}, nil
+C_AuctionHouse.IsSellItemValid	{EQUIPLOC}, true
+C_AuctionHouse.IsSellItemValid	{EQUIPLOC}, false
+C_AuctionHouse.IsSellItemValid	{EQUIPLOC}, nil
+C_AuctionHouse.IsSellItemValid	ItemLocation:CreateEmpty(), true
+C_AuctionHouse.IsSellItemValid	ItemLocation:CreateEmpty(), false
+C_AuctionHouse.IsSellItemValid	ItemLocation:CreateEmpty(), nil
+C_AuctionHouse.RequestMoreCommoditySearchResults	"x"
+C_AuctionHouse.RequestMoreItemSearchResults	"x"
+C_AuctionHouse.RequestOwnedAuctionBidderInfo	"x"
+C_AutoComplete.GetAutoCompletePresenceID	{}
+C_AutoComplete.GetAutoCompletePresenceID	"Nobody"
+C_AutoComplete.GetAutoCompletePresenceID	"x"
+C_AutoComplete.GetAutoCompletePresenceID	""
+C_AutoComplete.GetAutoCompleteResults	{}, 1, 1, true, 1, 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), "x", 1, true, 1, 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), nil, 1, true, 1, 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), 1, "x", true, 1, 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), 1, nil, true, 1, 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), 1, 1, nil, 1, 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), 1, 1, true, "x", 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), 1, 1, true, nil, 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), 1, 1, true, 1, "x"
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), 1, 1, true, 1, nil
+C_AutoComplete.GetAutoCompleteResults	"Nobody", 1, 1, true, 1, 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), 0, 1, true, 1, 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), 1, 0, true, 1, 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), 1, 1, false, 1, 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), 1, 1, true, 0, 1
+C_AutoComplete.GetAutoCompleteResults	UnitName("player"), 1, 1, true, 1, 0
+C_AutoComplete.GetAutoCompleteResults	"x", 1, 1, true, 1, 1
+C_AutoComplete.GetAutoCompleteResults	"", 1, 1, true, 1, 1
+C_AutoComplete.IsRecognizedName	{}, 1, 1
+C_AutoComplete.IsRecognizedName	UnitName("player"), "x", 1
+C_AutoComplete.IsRecognizedName	UnitName("player"), nil, 1
+C_AutoComplete.IsRecognizedName	UnitName("player"), 1, "x"
+C_AutoComplete.IsRecognizedName	UnitName("player"), 1, nil
+C_AutoComplete.IsRecognizedName	"Nobody", 1, 1
+C_AutoComplete.IsRecognizedName	UnitName("player"), 0, 1
+C_AutoComplete.IsRecognizedName	UnitName("player"), 1, 0
+C_AutoComplete.IsRecognizedName	"x", 1, 1
+C_AutoComplete.IsRecognizedName	"", 1, 1
+C_Bank.CanDepositMoney	"x"
+C_Bank.CanDepositMoney	1
+C_Bank.CanDepositMoney	2
+C_Bank.CanDepositMoney	3
+C_Bank.CanPurchaseBankTab	"x"
+C_Bank.CanPurchaseBankTab	1
+C_Bank.CanPurchaseBankTab	2
+C_Bank.CanPurchaseBankTab	3
+C_Bank.CanUseBank	"x"
+C_Bank.CanUseBank	1
+C_Bank.CanUseBank	2
+C_Bank.CanUseBank	3
+C_Bank.CanViewBank	"x"
+C_Bank.CanViewBank	1
+C_Bank.CanViewBank	2
+C_Bank.CanViewBank	3
+C_Bank.CanWithdrawMoney	"x"
+C_Bank.CanWithdrawMoney	1
+C_Bank.CanWithdrawMoney	2
+C_Bank.CanWithdrawMoney	3
+C_Bank.DoesBankTypeSupportAutoDeposit	"x"
+C_Bank.DoesBankTypeSupportAutoDeposit	1
+C_Bank.DoesBankTypeSupportAutoDeposit	2
+C_Bank.DoesBankTypeSupportAutoDeposit	3
+C_Bank.DoesBankTypeSupportMoneyTransfer	"x"
+C_Bank.DoesBankTypeSupportMoneyTransfer	1
+C_Bank.DoesBankTypeSupportMoneyTransfer	2
+C_Bank.DoesBankTypeSupportMoneyTransfer	3
+C_Bank.HasMaxBankTabs	"x"
+C_Bank.HasMaxBankTabs	1
+C_Bank.HasMaxBankTabs	2
+C_Bank.HasMaxBankTabs	3
+C_Bank.IsItemAllowedInBankType	"x", {ITEMLOC}
+C_Bank.IsItemAllowedInBankType	0, "x"
+C_Bank.IsItemAllowedInBankType	0, nil
+C_Bank.IsItemAllowedInBankType	0, {EQUIPLOC}
+C_Bank.IsItemAllowedInBankType	0, ItemLocation:CreateEmpty()
+C_Bank.IsItemAllowedInBankType	1, {ITEMLOC}
+C_Bank.IsItemAllowedInBankType	1, {EQUIPLOC}
+C_Bank.IsItemAllowedInBankType	1, ItemLocation:CreateEmpty()
+C_Bank.IsItemAllowedInBankType	2, {ITEMLOC}
+C_Bank.IsItemAllowedInBankType	2, {EQUIPLOC}
+C_Bank.IsItemAllowedInBankType	2, ItemLocation:CreateEmpty()
+C_Bank.IsItemAllowedInBankType	3, {ITEMLOC}
+C_Bank.IsItemAllowedInBankType	3, {EQUIPLOC}
+C_Bank.IsItemAllowedInBankType	3, ItemLocation:CreateEmpty()
+C_BarberShop.HasCustomizationFeature	"x"
+C_BarberShop.HasCustomizationFeature	1
+C_BarberShop.HasCustomizationFeature	2
+C_BarberShop.HasCustomizationFeature	4
+C_BarberShop.HasCustomizationFeature	8
+C_BarberShop.HasCustomizationFeature	16
+C_BarberShop.HasCustomizationFeature	32
+C_BarberShop.HasCustomizationFeature	64
+C_BarberShop.HasCustomizationFeature	65
+C_BattleNet.GetAccountInfoByGUID	{}
+C_BattleNet.GetAccountInfoByGUID	""
+C_BattleNet.GetAccountInfoByGUID	"x"
+C_BattleNet.GetAccountInfoByGUID	"Creature-0-0-0-0-0-0000000000"
+C_BattleNet.GetAccountInfoByID	"x", UnitGUID("player")
+C_BattleNet.GetAccountInfoByID	1, {}
+C_BattleNet.GetAccountInfoByID	1
+C_BattleNet.GetAccountInfoByID	1, ""
+C_BattleNet.GetAccountInfoByID	1, "x"
+C_BattleNet.GetAccountInfoByID	1, "Creature-0-0-0-0-0-0000000000"
+C_BattleNet.GetAccountInfoByID	1, nil
+C_BattleNet.GetAccountInfoByID	0, UnitGUID("player")
+C_BattleNet.GetAccountInfoByID	0, ""
+C_BattleNet.GetAccountInfoByID	0, "x"
+C_BattleNet.GetAccountInfoByID	0, "Creature-0-0-0-0-0-0000000000"
+C_BattleNet.GetAccountInfoByID	0, nil
+C_BattleNet.GetCustomTitleFriendName	"x"
+C_BattleNet.GetCustomTitleFriendName	0
+C_BattleNet.GetFriendAccountInfo	"x", UnitGUID("player")
+C_BattleNet.GetFriendAccountInfo	1, {}
+C_BattleNet.GetFriendAccountInfo	1
+C_BattleNet.GetFriendAccountInfo	1, ""
+C_BattleNet.GetFriendAccountInfo	1, "x"
+C_BattleNet.GetFriendAccountInfo	1, "Creature-0-0-0-0-0-0000000000"
+C_BattleNet.GetFriendAccountInfo	1, nil
+C_BattleNet.GetFriendAccountInfo	0, UnitGUID("player")
+C_BattleNet.GetFriendAccountInfo	0, ""
+C_BattleNet.GetFriendAccountInfo	0, "x"
+C_BattleNet.GetFriendAccountInfo	0, "Creature-0-0-0-0-0-0000000000"
+C_BattleNet.GetFriendAccountInfo	0, nil
+C_BattleNet.GetFriendGameAccountInfo	"x", 1
+C_BattleNet.GetFriendGameAccountInfo	1, "x"
+C_BattleNet.GetFriendGameAccountInfo	1, nil
+C_BattleNet.GetFriendGameAccountInfo	1, 0
+C_BattleNet.GetFriendGameAccountInfo	0, 1
+C_BattleNet.GetFriendGameAccountInfo	0, 0
+C_BattleNet.GetFriendInviteInfo	"x"
+C_BattleNet.GetFriendInviteInfo	0
+C_BattleNet.GetFriendLevelFromInviteText	{}
+C_BattleNet.GetFriendLevelFromInviteText	""
+C_BattleNet.GetFriendNumGameAccounts	"x"
+C_BattleNet.GetFriendNumGameAccounts	0
+C_BattleNet.GetGameAccountInfoByGUID	{}
+C_BattleNet.GetGameAccountInfoByGUID	""
+C_BattleNet.GetGameAccountInfoByGUID	"x"
+C_BattleNet.GetGameAccountInfoByGUID	"Creature-0-0-0-0-0-0000000000"
+C_BattleNet.GetGameAccountInfoByID	"x"
+C_BattleNet.GetGameAccountInfoByID	0
+C_BattleNet.IsFriendTagSupportedForCurrentGameType	"x"
+C_BattleNet.IsFriendTagSupportedForCurrentGameType	1
+C_BattleNet.IsFriendTagSupportedForCurrentGameType	2
+C_BattleNet.IsFriendTagSupportedForCurrentGameType	3
+C_BattleNet.IsFriendTagSupportedForCurrentGameType	4
+C_BattleNet.IsFriendTagSupportedForCurrentGameType	5
+C_BattleNet.IsFriendTagSupportedForCurrentGameType	6
+C_BattleNet.IsFriendTagSupportedForCurrentGameType	7
+C_BattleNet.IsFriendTagSupportedForCurrentGameType	8
+C_BattleNet.IsFriendTagSupportedForCurrentGameType	9
+C_BattleNet.IsFriendTagSupportedForCurrentGameType	10
+C_CVar.GetCVar	{}
+C_CVar.GetCVar	"nameplateShowEnemies"
+C_CVar.GetCVar	"ActionButtonUseKeyDown"
+C_CVar.GetCVar	"closedInfoFrames"
+C_CVar.GetCVar	"stdtestNoSuchCVar"
+C_CVar.GetCVar	""
+C_CVar.GetCVar	"x"
+C_CVar.GetCVarBitfield	{}, 1
+C_CVar.GetCVarBitfield	"autoLootDefault", "x"
+C_CVar.GetCVarBitfield	"autoLootDefault", nil
+C_CVar.GetCVarBitfield	"autoLootDefault", 0
+C_CVar.GetCVarBitfield	"nameplateShowEnemies", 1
+C_CVar.GetCVarBitfield	"nameplateShowEnemies", 0
+C_CVar.GetCVarBitfield	"ActionButtonUseKeyDown", 1
+C_CVar.GetCVarBitfield	"ActionButtonUseKeyDown", 0
+C_CVar.GetCVarBitfield	"closedInfoFrames", 1
+C_CVar.GetCVarBitfield	"closedInfoFrames", 0
+C_CVar.GetCVarBitfield	"stdtestNoSuchCVar", 1
+C_CVar.GetCVarBitfield	"stdtestNoSuchCVar", 0
+C_CVar.GetCVarBitfield	"", 1
+C_CVar.GetCVarBitfield	"", 0
+C_CVar.GetCVarBitfield	"x", 1
+C_CVar.GetCVarBitfield	"x", 0
+C_CVar.GetCVarBool	{}
+C_CVar.GetCVarBool	"nameplateShowEnemies"
+C_CVar.GetCVarBool	"ActionButtonUseKeyDown"
+C_CVar.GetCVarBool	"closedInfoFrames"
+C_CVar.GetCVarBool	"stdtestNoSuchCVar"
+C_CVar.GetCVarBool	""
+C_CVar.GetCVarBool	"x"
+C_CVar.GetCVarDefault	{}
+C_CVar.GetCVarDefault	"nameplateShowEnemies"
+C_CVar.GetCVarDefault	"ActionButtonUseKeyDown"
+C_CVar.GetCVarDefault	"closedInfoFrames"
+C_CVar.GetCVarDefault	"stdtestNoSuchCVar"
+C_CVar.GetCVarDefault	""
+C_CVar.GetCVarDefault	"x"
+C_CVar.GetCVarInfo	{}
+C_CVar.GetCVarInfo	"nameplateShowEnemies"
+C_CVar.GetCVarInfo	"ActionButtonUseKeyDown"
+C_CVar.GetCVarInfo	"closedInfoFrames"
+C_CVar.GetCVarInfo	"stdtestNoSuchCVar"
+C_CVar.GetCVarInfo	""
+C_CVar.GetCVarInfo	"x"
+C_Calendar.ContextMenuEventCanComplain	"x", 1, 1
+C_Calendar.ContextMenuEventCanComplain	1, "x", 1
+C_Calendar.ContextMenuEventCanComplain	1, nil, 1
+C_Calendar.ContextMenuEventCanComplain	1, 1, "x"
+C_Calendar.ContextMenuEventCanComplain	1, 1, nil
+C_Calendar.ContextMenuEventCanComplain	0, 1, 1
+C_Calendar.ContextMenuEventCanComplain	1, 0, 1
+C_Calendar.ContextMenuEventCanComplain	1, 1, 0
+C_Calendar.ContextMenuEventCanEdit	"x", 1, 1
+C_Calendar.ContextMenuEventCanEdit	1, "x", 1
+C_Calendar.ContextMenuEventCanEdit	1, nil, 1
+C_Calendar.ContextMenuEventCanEdit	1, 1, "x"
+C_Calendar.ContextMenuEventCanEdit	1, 1, nil
+C_Calendar.ContextMenuEventCanEdit	0, 1, 1
+C_Calendar.ContextMenuEventCanEdit	1, 0, 1
+C_Calendar.ContextMenuEventCanEdit	1, 1, 0
+C_Calendar.ContextMenuEventCanRemove	"x", 1, 1
+C_Calendar.ContextMenuEventCanRemove	1, "x", 1
+C_Calendar.ContextMenuEventCanRemove	1, nil, 1
+C_Calendar.ContextMenuEventCanRemove	1, 1, "x"
+C_Calendar.ContextMenuEventCanRemove	1, 1, nil
+C_Calendar.ContextMenuEventCanRemove	0, 1, 1
+C_Calendar.ContextMenuEventCanRemove	1, 0, 1
+C_Calendar.ContextMenuEventCanRemove	1, 1, 0
+C_Calendar.EventGetInvite	"x"
+C_Calendar.EventGetInvite	0
+C_Calendar.EventGetInviteResponseTime	"x"
+C_Calendar.EventGetInviteResponseTime	0
+C_Calendar.EventGetStatusOptions	"x"
+C_Calendar.EventGetStatusOptions	0
+C_Calendar.EventGetTextures	"x"
+C_Calendar.EventGetTextures	1
+C_Calendar.EventGetTextures	2
+C_Calendar.EventGetTextures	3
+C_Calendar.EventGetTextures	4
+C_Calendar.EventGetTextures	5
+C_Calendar.EventGetTextures	6
+C_Calendar.GetClubCalendarEvents	{}, C_DateAndTime.GetCurrentCalendarTime(), C_DateAndTime.GetCurrentCalendarTime()
+C_Calendar.GetClubCalendarEvents	"x", "x", C_DateAndTime.GetCurrentCalendarTime()
+C_Calendar.GetClubCalendarEvents	"x", nil, C_DateAndTime.GetCurrentCalendarTime()
+C_Calendar.GetClubCalendarEvents	"x", C_DateAndTime.GetCurrentCalendarTime(), "x"
+C_Calendar.GetClubCalendarEvents	"x", C_DateAndTime.GetCurrentCalendarTime(), nil
+C_Calendar.GetClubCalendarEvents	"x", C_DateAndTime.GetCurrentCalendarTime(), {}
+C_Calendar.GetClubCalendarEvents	"x", {}, C_DateAndTime.GetCurrentCalendarTime()
+C_Calendar.GetClubCalendarEvents	"x", {}, {}
+C_Calendar.GetClubCalendarEvents	"", C_DateAndTime.GetCurrentCalendarTime(), C_DateAndTime.GetCurrentCalendarTime()
+C_Item.IsDressableItemByID	"item:6948"
+C_Item.IsDressableItemByID	0
+C_Item.IsDressableItemByID	"x"
+C_Item.IsEquippableItem	{}
+C_Item.IsEquippableItem	{ITEMLINK1}
+C_Item.IsEquippableItem	"item:6948"
+C_Item.IsEquippableItem	0
+C_Item.IsEquippableItem	"x"
+C_Item.IsEquippedItem	{}
+C_Item.IsEquippedItem	{ITEMLINK1}
+C_Item.IsEquippedItem	"item:6948"
+C_Item.IsEquippedItem	0
+C_Item.IsEquippedItem	"x"
+C_Item.IsEquippedItemType	{}
+C_Item.IsEquippedItemType	""
+C_Item.IsHarmfulItem	{}
+C_Item.IsHarmfulItem	{ITEMLINK1}
+C_Item.IsHarmfulItem	"item:6948"
+C_Item.IsHarmfulItem	0
+C_Item.IsHarmfulItem	"x"
+C_Item.IsHelpfulItem	{}
+C_Item.IsHelpfulItem	{ITEMLINK1}
+C_Item.IsHelpfulItem	"item:6948"
+C_Item.IsHelpfulItem	0
+C_Item.IsHelpfulItem	"x"
+C_Item.IsItemBindToAccount	{}
+C_Item.IsItemBindToAccount	{ITEMLINK1}
+C_Item.IsItemBindToAccount	"item:6948"
+C_Item.IsItemBindToAccount	0
+C_Item.IsItemBindToAccount	"x"
+C_Item.IsItemBindToAccountUntilEquip	{}
+C_Item.IsItemBindToAccountUntilEquip	{ITEMLINK1}
+C_Item.IsItemBindToAccountUntilEquip	"item:6948"
+C_Item.IsItemBindToAccountUntilEquip	0
+C_Item.IsItemBindToAccountUntilEquip	"x"
+C_Item.IsItemConduit	"x"
+C_Item.IsItemConduit	{EQUIPLOC}
+C_Item.IsItemConduit	ItemLocation:CreateEmpty()
+C_Item.IsItemConvertibleAndValidForPlayer	"x"
+C_Item.IsItemConvertibleAndValidForPlayer	{EQUIPLOC}
+C_Item.IsItemConvertibleAndValidForPlayer	ItemLocation:CreateEmpty()
+C_Item.IsItemCorrupted	"x"
+C_Item.IsItemCorrupted	{EQUIPLOC}
+C_Item.IsItemCorrupted	ItemLocation:CreateEmpty()
+C_Item.IsItemCorruptionRelated	"x"
+C_Item.IsItemCorruptionRelated	{EQUIPLOC}
+C_Item.IsItemCorruptionRelated	ItemLocation:CreateEmpty()
+C_Item.IsItemCorruptionResistant	"x"
+C_Item.IsItemCorruptionResistant	{EQUIPLOC}
+C_Item.IsItemCorruptionResistant	ItemLocation:CreateEmpty()
+C_Item.IsItemDataCached	"x"
+C_Item.IsItemDataCached	{EQUIPLOC}
+C_Item.IsItemDataCached	ItemLocation:CreateEmpty()
+C_Item.IsItemDataCachedByID	{}
+C_Item.IsItemDataCachedByID	{ITEMLINK1}
+C_Item.IsItemDataCachedByID	"item:6948"
+C_Item.IsItemDataCachedByID	0
+C_Item.IsItemDataCachedByID	"x"
+C_Item.IsItemGUIDInInventory	{}
+C_Item.IsItemGUIDInInventory	""
+C_Item.IsItemGUIDInInventory	"x"
+C_Item.IsItemGUIDInInventory	"Creature-0-0-0-0-0-0000000000"
+C_Item.IsItemInRange	{}, "player"
+C_Item.IsItemInRange	{ITEM1}, {}
+C_Item.IsItemInRange	{ITEM1}, nil
+C_Item.IsItemInRange	{ITEM1}, "target"
+C_Item.IsItemInRange	{ITEM1}, "pet"
+C_Item.IsItemInRange	{ITEM1}, "party1"
+C_Item.IsItemInRange	{ITEM1}, "none"
+C_Item.IsItemInRange	{ITEM1}, UnitGUID("player")
+C_Item.IsItemInRange	{ITEM1}, "x"
+C_Item.IsItemInRange	{ITEM1}, ""
+C_Item.IsItemInRange	{ITEMLINK1}, "player"
+C_Item.IsItemInRange	{ITEMLINK1}, "target"
+C_Item.IsItemInRange	{ITEMLINK1}, "pet"
+C_Item.IsItemInRange	{ITEMLINK1}, "party1"
+C_Item.IsItemInRange	{ITEMLINK1}, "none"
+C_Item.IsItemInRange	{ITEMLINK1}, UnitGUID("player")
+C_Item.IsItemInRange	{ITEMLINK1}, "x"
+C_Item.IsItemInRange	{ITEMLINK1}, ""
+C_Item.IsItemInRange	"item:6948", "player"
+C_Item.IsItemInRange	"item:6948", "target"
+C_Item.IsItemInRange	"item:6948", "pet"
+C_Item.IsItemInRange	"item:6948", "party1"
+C_Item.IsItemInRange	"item:6948", "none"
+C_Item.IsItemInRange	"item:6948", UnitGUID("player")
+C_Item.IsItemInRange	"item:6948", "x"
+C_Item.IsItemInRange	"item:6948", ""
+C_Item.IsItemInRange	0, "player"
+C_Item.IsItemInRange	0, "target"
+C_Item.IsItemInRange	0, "pet"
+C_Item.IsItemInRange	0, "party1"
+C_Item.IsItemInRange	0, "none"
+C_Item.IsItemInRange	0, UnitGUID("player")
+C_Item.IsItemInRange	0, "x"
+C_Item.IsItemInRange	0, ""
+C_Item.IsItemInRange	"x", "player"
+C_Item.IsItemInRange	"x", "target"
+C_Item.IsItemInRange	"x", "pet"
+C_Item.IsItemInRange	"x", "party1"
+C_Item.IsItemInRange	"x", "none"
+C_Item.IsItemInRange	"x", UnitGUID("player")
+C_Item.IsItemInRange	"x", "x"
+C_Item.IsItemInRange	"x", ""
+C_Item.IsItemKeystoneByID	{}
+C_Item.IsItemKeystoneByID	{ITEMLINK1}
+C_Item.IsItemKeystoneByID	"item:6948"
+C_Item.IsItemKeystoneByID	0
+C_Item.IsItemKeystoneByID	"x"
+C_Item.IsItemSpecificToPlayerClass	{}
+C_Item.IsItemSpecificToPlayerClass	{ITEMLINK1}
+C_Item.IsItemSpecificToPlayerClass	"item:6948"
+C_Item.IsItemSpecificToPlayerClass	0
+C_Item.IsItemSpecificToPlayerClass	"x"
+C_Item.IsLocked	"x"
+C_Item.IsLocked	{EQUIPLOC}
+C_Item.IsLocked	ItemLocation:CreateEmpty()
+C_Item.IsRelicItem	{}
+C_Item.IsRelicItem	{ITEMLINK1}
+C_Item.IsRelicItem	"item:6948"
+C_Item.IsRelicItem	0
+C_Item.IsRelicItem	"x"
+C_Item.IsUsableItem	{}
+C_Item.IsUsableItem	{ITEMLINK1}
+C_Item.IsUsableItem	"item:6948"
+C_Item.IsUsableItem	0
+C_Item.IsUsableItem	"x"
+C_Item.ItemHasRange	{}
+C_Item.ItemHasRange	{ITEMLINK1}
+C_Item.ItemHasRange	"item:6948"
+C_Item.ItemHasRange	0
+C_Item.ItemHasRange	"x"
+C_Item.RequestLoadItemData	"x"
+C_Item.RequestLoadItemDataByID	{}
+C_ItemInteraction.GetItemConversionCurrencyCost	"x"
+C_ItemInteraction.GetItemConversionCurrencyCost	{EQUIPLOC}
+C_ItemInteraction.GetItemConversionCurrencyCost	ItemLocation:CreateEmpty()
+C_ItemSocketInfo.GetExistingSocketInfo	"x"
+C_ItemSocketInfo.GetExistingSocketInfo	0
+C_ItemSocketInfo.GetExistingSocketLink	"x"
+C_ItemSocketInfo.GetExistingSocketLink	0
+C_ItemSocketInfo.GetNewSocketInfo	"x"
+C_ItemSocketInfo.GetNewSocketInfo	0
+C_ItemSocketInfo.GetNewSocketLink	"x"
+C_ItemSocketInfo.GetNewSocketLink	0
+C_ItemSocketInfo.GetSocketTypes	"x"
+C_ItemSocketInfo.GetSocketTypes	0
+C_ItemSocketInfo.IsArtifactRelicItem	{}
+C_ItemSocketInfo.IsArtifactRelicItem	{ITEMLINK1}
+C_ItemSocketInfo.IsArtifactRelicItem	"item:6948"
+C_ItemSocketInfo.IsArtifactRelicItem	0
+C_ItemSocketInfo.IsArtifactRelicItem	"x"
+C_KeyBindings.GetBindingByKey	{}, 0
+C_KeyBindings.GetBindingByKey	"x", "x"
+C_KeyBindings.GetBindingByKey	"x"
+C_KeyBindings.GetBindingByKey	"x", 1
+C_KeyBindings.GetBindingByKey	"x", 2
+C_KeyBindings.GetBindingByKey	"x", 3
+C_KeyBindings.GetBindingByKey	"x", 4
+C_KeyBindings.GetBindingByKey	"x", 5
+C_KeyBindings.GetBindingByKey	"x", 6
+C_KeyBindings.GetBindingByKey	"x", 7
+C_KeyBindings.GetBindingByKey	"x", 8
+C_KeyBindings.GetBindingByKey	"x", 9
+C_KeyBindings.GetBindingByKey	"x", 10
+C_KeyBindings.GetBindingByKey	"x", nil
+C_KeyBindings.GetBindingByKey	"", 0
+C_KeyBindings.GetBindingByKey	"", 1
+C_KeyBindings.GetBindingByKey	"", 2
+C_KeyBindings.GetBindingByKey	"", 3
+C_KeyBindings.GetBindingByKey	"", 4
+C_KeyBindings.GetBindingByKey	"", 5
+C_KeyBindings.GetBindingByKey	"", 6
+C_KeyBindings.GetBindingByKey	"", 7
+C_KeyBindings.GetBindingByKey	"", 8
+C_KeyBindings.GetBindingByKey	"", 9
+C_KeyBindings.GetBindingByKey	"", 10
+C_KeyBindings.GetBindingByKey	"", nil
+C_KeyBindings.GetBindingContextForAction	{}
+C_KeyBindings.GetBindingContextForAction	""
+C_KeyBindings.GetBindingIndex	{}
+C_KeyBindings.GetBindingIndex	""
+C_KeyBindings.GetCustomBindingType	"x"
+C_KeyBindings.GetCustomBindingType	0
+C_KeyBindings.GetSearchTagsForAction	{}
+C_KeyBindings.GetSearchTagsForAction	""
+C_KeyBindings.IsBindingContextActive	"x"
+C_KeyBindings.IsBindingContextActive	1
+C_KeyBindings.IsBindingContextActive	2
+C_KeyBindings.IsBindingContextActive	3
+C_KeyBindings.IsBindingContextActive	4
+C_KeyBindings.IsBindingContextActive	5
+C_KeyBindings.IsBindingContextActive	6
+C_KeyBindings.IsBindingContextActive	7
+C_KeyBindings.IsBindingContextActive	8
+C_KeyBindings.IsBindingContextActive	9
+C_KeyBindings.IsBindingContextActive	10
+C_LFGInfo.AreCrossFactionGroupQueuesAllowed	"x"
+C_LFGInfo.AreCrossFactionGroupQueuesAllowed	0
+C_LFGInfo.DoesActivePartyMeetPremadeLaunchCount	"x"
+C_LFGInfo.DoesActivePartyMeetPremadeLaunchCount	0
+C_LFGInfo.DoesCrossFactionQueueRequireFullPremade	"x"
+C_LFGInfo.DoesCrossFactionQueueRequireFullPremade	0
+C_LFGInfo.GetAllEntriesForCategory	"x"
+C_LFGInfo.GetAllEntriesForCategory	0
+C_LFGInfo.GetDungeonInfo	"x"
+C_LFGInfo.GetDungeonInfo	0
+C_LFGInfo.GetLevelUpInstances	"x", true
+C_LFGInfo.GetLevelUpInstances	1, nil
+C_LFGInfo.GetLevelUpInstances	1, false
+C_LFGInfo.GetLevelUpInstances	0, true
+C_LFGInfo.GetLevelUpInstances	0, false
+C_LFGInfo.IsLFGFollowerDungeon	"x"
+C_LFGInfo.IsLFGFollowerDungeon	0
+C_LFGList.CanCreateQuestGroup	"x"
+C_LFGList.CanCreateQuestGroup	{QUEST2}
+C_LFGList.CanCreateQuestGroup	1
+C_LFGList.CanCreateQuestGroup	0
+C_LFGList.CanCreateScenarioGroup	"x"
+C_LFGList.CanCreateScenarioGroup	0
+C_LFGList.DoesCensoredTextMatch	{}, "x"
+C_LFGList.DoesCensoredTextMatch	UnitName("player"), {}
+C_LFGList.DoesCensoredTextMatch	UnitName("player"), nil
+C_LFGList.DoesCensoredTextMatch	UnitName("player"), ""
+C_LFGList.DoesCensoredTextMatch	"Nobody", "x"
+C_LFGList.DoesCensoredTextMatch	"Nobody", ""
+C_LFGList.DoesCensoredTextMatch	"x", "x"
+C_LFGList.DoesCensoredTextMatch	"x", ""
+C_LFGList.DoesCensoredTextMatch	"", "x"
+C_LFGList.DoesCensoredTextMatch	"", ""
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	"x", 1, 0, 0
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, "x", 0, 0
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, nil, 0, 0
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, "x", 0
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, 0, "x"
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	0, 1, 0, 0
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 0, 0, 0
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, 1, 0
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, 0, 1
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, 2, 0
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, 0, 2
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, 3, 0
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, 0, 3
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, 4, 0
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, 0, 4
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, 0, 5
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, nil, 0
+C_LFGList.DoesEntryTitleMatchPrebuiltTitle	1, 1, 0, nil
+C_LFGList.GetActivityFullName	"x", {QUEST1}, true
+C_LFGList.GetActivityFullName	1, "x", true
+C_LFGList.GetActivityFullName	1
+C_LFGList.GetActivityFullName	0, {QUEST1}, true
+C_LFGList.GetActivityFullName	1, {QUEST2}, true
+C_LFGList.GetActivityFullName	1, {QUEST1}, false
+C_LFGList.GetActivityFullName	1, 1, true
+C_LFGList.GetActivityFullName	1, {QUEST1}, nil
+C_LFGList.GetActivityFullName	1, 0, true
+C_LFGList.GetActivityFullName	1, nil, true
+C_LFGList.GetActivityGroupInfo	"x"
+C_LFGList.GetActivityGroupInfo	0
+C_LFGList.GetActivityInfoTable	"x", {QUEST1}, true
+C_LFGList.GetActivityInfoTable	1, "x", true
+C_LFGList.GetActivityInfoTable	1
+C_LFGList.GetActivityInfoTable	0, {QUEST1}, true
+C_LFGList.GetActivityInfoTable	1, {QUEST2}, true
+C_LFGList.GetActivityInfoTable	1, {QUEST1}, false
+C_LFGList.GetActivityInfoTable	1, 1, true
+C_LFGList.GetActivityInfoTable	1, {QUEST1}, nil
+C_LFGList.GetActivityInfoTable	1, 0, true
+C_LFGList.GetActivityInfoTable	1, nil, true
+C_LFGList.GetApplicantBestDungeonScore	"x", 1
+C_LFGList.GetApplicantBestDungeonScore	1, "x"
+C_LFGList.GetApplicantBestDungeonScore	1, nil
+C_LFGList.GetApplicantBestDungeonScore	1, 0
+C_LFGList.GetApplicantBestDungeonScore	0, 1
+C_LFGList.GetApplicantBestDungeonScore	0, 0
+C_LFGList.GetApplicantDungeonScoreForListing	"x", 1, 1
+C_LFGList.GetApplicantDungeonScoreForListing	1, "x", 1
+C_LFGList.GetApplicantDungeonScoreForListing	1, nil, 1
+C_LFGList.GetApplicantDungeonScoreForListing	1, 1, "x"
+C_LFGList.GetApplicantDungeonScoreForListing	1, 1, nil
+C_LFGList.GetApplicantDungeonScoreForListing	0, 1, 1
+C_LFGList.GetApplicantDungeonScoreForListing	1, 0, 1
+C_LFGList.GetApplicantDungeonScoreForListing	1, 1, 0
+C_LFGList.GetApplicantInfo	"x"
+C_LFGList.GetApplicantInfo	0
+C_LFGList.GetApplicantPvpRatingInfoForListing	"x", 1, 1
+C_LFGList.GetApplicantPvpRatingInfoForListing	1, "x", 1
+C_LFGList.GetApplicantPvpRatingInfoForListing	1, nil, 1
+C_LFGList.GetApplicantPvpRatingInfoForListing	1, 1, "x"
+C_LFGList.GetApplicantPvpRatingInfoForListing	1, 1, nil
+C_LFGList.GetApplicantPvpRatingInfoForListing	0, 1, 1
+C_LFGList.GetApplicantPvpRatingInfoForListing	1, 0, 1
+C_LFGList.GetApplicantPvpRatingInfoForListing	1, 1, 0
+C_LFGList.GetAvailableActivityGroups	"x", 1
+C_LFGList.GetAvailableActivityGroups	1, "x"
+C_LFGList.GetAvailableActivityGroups	1
+C_LFGList.GetAvailableActivityGroups	1, 0
+C_LFGList.GetAvailableActivityGroups	1, nil
+C_LFGList.GetAvailableActivityGroups	0, 1
+C_LFGList.GetAvailableActivityGroups	0, 0
+C_LFGList.GetAvailableActivityGroups	0, nil
+C_LFGList.GetKeystoneForActivity	"x"
+C_LFGList.GetKeystoneForActivity	0
+C_LFGList.GetLfgCategoryInfo	"x"
+C_LFGList.GetLfgCategoryInfo	0
+C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel	false
+C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel	nil
+C_LFGList.GetPlaystyleString	"x", 0, { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetPlaystyleString	0, "x", { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetPlaystyleString	0, nil, { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetPlaystyleString	0, 0, "x"
+C_LFGList.GetPlaystyleString	0, 0, nil
+C_LFGList.GetPlaystyleString	1, 0, { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetPlaystyleString	0, 1, { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetPlaystyleString	0, 0, {}
+C_LFGList.GetPlaystyleString	2, 0, { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetPlaystyleString	0, 2, { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetPlaystyleString	3, 0, { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetPlaystyleString	0, 3, { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetPlaystyleString	4, 0, { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetPlaystyleString	0, 4, { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetPlaystyleString	0, 5, { fullName = UnitName("player"), shortName = "x", categoryID = 1, groupFinderActivityGroupID = 1, ilvlSuggestion = 1, filters = 1, minLevel = 1, minLevelSuggestion = 1, maxLevelSuggestion = 1, maxNumPlayers = 1, displayType = 0, orderIndex = 1, useHonorLevel = true, showQuickJoinToast = true, isMythicPlusActivity = true, isRatedPvpActivity = true, isCurrentRaidActivity = true, isPvpActivity = true, isMythicActivity = true, allowCrossFaction = true, isHeroicActivity = true, isNormalActivity = true, mapID = {MAP1}, difficultyID = 1, redirectedDifficultyID = 1, useDungeonRoleExpectations = true }
+C_LFGList.GetSearchResultInfo	"x"
+C_LFGList.GetSearchResultInfo	0
+C_LFGList.GetSearchResultLeaderInfo	"x"
+C_LFGList.GetSearchResultLeaderInfo	0
+C_LFGList.GetSearchResultPlayerInfo	"x", 1
+C_LFGList.GetSearchResultPlayerInfo	1, "x"
+C_LFGList.GetSearchResultPlayerInfo	1, nil
+C_LFGList.GetSearchResultPlayerInfo	1, 0
+C_LFGList.GetSearchResultPlayerInfo	0, 1
+C_LFGList.GetSearchResultPlayerInfo	0, 0
+C_LFGList.HasSearchResultInfo	"x"
+C_LFGList.HasSearchResultInfo	0
+C_LFGList.IsPlayerAuthenticatedForLFG	"x"
+C_LFGList.IsPlayerAuthenticatedForLFG	0
+C_LFGList.IsPlayerAuthenticatedForLFG	nil
+C_LFGList.ListingUsesEndgameEditRestrictions	"x"
+C_LFGList.ListingUsesEndgameEditRestrictions	0
+C_LevelLink.IsActionLocked	"x"
+C_LevelLink.IsActionLocked	1
+C_LevelLink.IsActionLocked	0
+C_LevelLink.IsSpellLocked	"x"
+C_LevelLink.IsSpellLocked	{SPELL2}
+C_LevelLink.IsSpellLocked	1
+C_LevelLink.IsSpellLocked	0
+C_Loot.GetLootRollDuration	"x"
+C_Loot.GetLootRollDuration	0
+C_LootHistory.GetInfoForEncounter	"x"
+C_LootHistory.GetInfoForEncounter	0
+C_LootHistory.GetSortedDropsForEncounter	"x"
+C_LootHistory.GetSortedDropsForEncounter	0
+C_LootHistory.GetSortedInfoForDrop	"x", 1
+C_LootHistory.GetSortedInfoForDrop	1, "x"
+C_LootHistory.GetSortedInfoForDrop	1, nil
+C_LootHistory.GetSortedInfoForDrop	1, 0
+C_LootHistory.GetSortedInfoForDrop	0, 1
+C_LootHistory.GetSortedInfoForDrop	0, 0
+C_LootJournal.GetItemSetItems	"x"
+C_LootJournal.GetItemSetItems	0
+C_LootJournal.GetItemSets	"x", 1
+C_LootJournal.GetItemSets	{CLASSID}, "x"
+C_LootJournal.GetItemSets	{CLASSID}, 0
+C_LootJournal.GetItemSets	{CLASSID}, nil
+C_LootJournal.GetItemSets	1, 1
+C_LootJournal.GetItemSets	1, 0
+C_LootJournal.GetItemSets	1, nil
+C_LootJournal.GetItemSets	0, 1
+C_LootJournal.GetItemSets	0, 0
+C_LootJournal.GetItemSets	0, nil
+C_LootJournal.GetItemSets	nil, 1
+C_LootJournal.GetItemSets	nil, 0
+C_LootJournal.GetItemSets	nil, nil
+C_LoreText.RequestLoreTextForCampaignID	"x"
+C_LossOfControl.GetActiveLossOfControlData	"x"
+C_LossOfControl.GetActiveLossOfControlData	0
+C_LossOfControl.GetActiveLossOfControlDataByUnit	{}, 1
+C_LossOfControl.GetActiveLossOfControlDataByUnit	"player", "x"
+C_LossOfControl.GetActiveLossOfControlDataByUnit	"player", nil
+C_LossOfControl.GetActiveLossOfControlDataByUnit	"player", 0
+C_LossOfControl.GetActiveLossOfControlDataByUnit	"target", 1
+C_LossOfControl.GetActiveLossOfControlDataByUnit	"target", 0
+C_LossOfControl.GetActiveLossOfControlDataByUnit	"pet", 1
+C_LossOfControl.GetActiveLossOfControlDataByUnit	"pet", 0
+C_LossOfControl.GetActiveLossOfControlDataByUnit	"party1", 1
+C_LossOfControl.GetActiveLossOfControlDataByUnit	"party1", 0
+C_LossOfControl.GetActiveLossOfControlDataByUnit	"none", 1
+C_LossOfControl.GetActiveLossOfControlDataByUnit	"none", 0
+C_LossOfControl.GetActiveLossOfControlDataByUnit	UnitGUID("player"), 1
+C_LossOfControl.GetActiveLossOfControlDataByUnit	UnitGUID("player"), 0
+C_LossOfControl.GetActiveLossOfControlDataCountByUnit	{}
+C_LossOfControl.GetActiveLossOfControlDataCountByUnit	"target"
+C_LossOfControl.GetActiveLossOfControlDataCountByUnit	"pet"
+C_LossOfControl.GetActiveLossOfControlDataCountByUnit	"party1"
+C_LossOfControl.GetActiveLossOfControlDataCountByUnit	"none"
+C_LossOfControl.GetActiveLossOfControlDataCountByUnit	UnitGUID("player")
+C_LossOfControl.GetActiveLossOfControlDuration	{}, 1
+C_LossOfControl.GetActiveLossOfControlDuration	"player", "x"

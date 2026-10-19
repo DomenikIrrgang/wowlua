@@ -204,6 +204,7 @@ export type Entry = { text: string, fn: string, setter: boolean, missing: string
 local function entries(values: { [string]: string }): Entry[]
     const p = plan()
     const out: Entry[] = {}
+    const suspects: Entry[] = {}
     for _, c in ipairs(p.calls :: string[][]) do
         const fn = c[1]
         for i = 2, #c do
@@ -224,13 +225,24 @@ local function entries(values: { [string]: string }): Entry[]
             }
         end
     end
-    -- The calls most likely to crash the client, after everything else.
+    -- The calls most likely to crash the client, after everything else;
+    -- last the calls of stretches that crashed it in a run.
+    for _, c in ipairs((p.suspect or {}) :: string[][]) do
+        const fn = c[1]
+        for i = 2, #c do
+            local args, missing = resolve(c[i], values)
+            suspects[#suspects + 1] = { text = `{fn}({args})`, fn = fn, setter = false, missing = missing }
+        end
+    end
     for _, c in ipairs((p.risky or {}) :: string[][]) do
         const fn = c[1]
         for i = 2, #c do
             local args, missing = resolve(c[i], values)
             out[#out + 1] = { text = `{fn}({args})`, fn = fn, setter = false, missing = missing }
         end
+    end
+    for _, e in ipairs(suspects) do
+        out[#out + 1] = e
     end
     return out
 end
