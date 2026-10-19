@@ -517,6 +517,12 @@ pub const STATS: &[Stat] = &[
         Some("QUEST_LOG_UPDATE"),
     ),
     stat(
+        "questCompletionText",
+        "GetQuestLogCompletionText",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
         "selectedQuest",
         "C_QuestLog.GetSelectedQuest",
         Plain,

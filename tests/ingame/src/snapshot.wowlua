@@ -242,6 +242,7 @@ const STATS: { key: string, fn: string, ask: string }[] = {
     { key = "backpackCurrency", fn = "C_CurrencyInfo.GetBackpackCurrencyInfo", ask = "index" },
     { key = "questLogEntries", fn = "C_QuestLog.GetNumQuestLogEntries", ask = "plain" },
     { key = "questLogInfo", fn = "C_QuestLog.GetInfo", ask = "index" },
+    { key = "questCompletionText", fn = "GetQuestLogCompletionText", ask = "index" },
     { key = "selectedQuest", fn = "C_QuestLog.GetSelectedQuest", ask = "plain" },
     { key = "questWatches", fn = "C_QuestLog.GetNumQuestWatches", ask = "plain" },
     { key = "questWatchID", fn = "C_QuestLog.GetQuestIDForQuestWatchIndex", ask = "index" },
@@ -324,7 +325,7 @@ local function counted(key: string): number[]?
         return upTo(A.C_CurrencyInfo.GetCurrencyListSize())
     elseif key == "backpackCurrency" then
         return upTo(3)
-    elseif key == "questLogInfo" then
+    elseif key == "questLogInfo" or key == "questCompletionText" then
         return upTo(A.C_QuestLog.GetNumQuestLogEntries())
     elseif key == "questWatchID" then
         return upTo(A.C_QuestLog.GetNumQuestWatches())
